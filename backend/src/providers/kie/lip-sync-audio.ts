@@ -22,9 +22,11 @@
  *     (decided 2026-11-12: never encoded from the source again — a file that
  *     changes format mid-stream keeps a different number of samples in every
  *     ffmpeg run that resamples it differently). Audio shorter than the minimum
- *     is padded with silence to a hair PAST it (`LIP_SYNC_PAD_MARGIN_SEC`) —
- *     on the PCM, one shape, so the pad cannot restart — billed the minimum
- *     all the same.
+ *     is padded with silence to exactly the minimum (`LIP_SYNC_PAD_MARGIN_SEC`
+ *     is 0) — on the PCM, one shape, so the pad cannot restart — and billed the
+ *     minimum. The provider bills whole seconds rounded up: a clip padded past
+ *     4 s was billed 5 (staging, 2026-11-12), while exactly 4.000 s, as WAV and
+ *     as our MP3, was accepted and billed 4.
  *  4. Measure OUR encode the same way: one that plays longer than the run was
  *     held for (the padded minimum aside) is refused, deterministic, and never
  *     sent. And what is sent must be under the model's 15 MB (decided
@@ -48,8 +50,13 @@ import {
   type DecodedAudioLength,
 } from "../video/decoded-audio-length.js"
 
-/** How far past the minimum a padded clip runs: an MP3 frame is ~26 ms, so this keeps a whole margin of frames. */
-export const LIP_SYNC_PAD_MARGIN_SEC = 0.1
+/**
+ * How far past the minimum a padded clip runs: none. The provider rounds the
+ * audio it is sent up to whole seconds, so any margin bills a fifth second;
+ * our MP3 of exactly 4.000 s (its encoder delay marked for removal) is taken
+ * and billed as 4 (decided 2026-11-12, from staging and a direct check).
+ */
+export const LIP_SYNC_PAD_MARGIN_SEC = 0
 
 /**
  * How far our encode may measure past what it is held to — a margin, not

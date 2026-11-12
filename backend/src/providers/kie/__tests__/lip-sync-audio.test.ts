@@ -152,7 +152,7 @@ describe("an honest file runs, billed as reserved, and the model gets OUR encode
   it("3.2 s is padded past 4 s and billed 4 s — the padded encode's length never bills", async () => {
     serve({ bytes: 100_000 })
     state.measures = [3.2, 4 + LIP_SYNC_PAD_MARGIN_SEC]
-    expect(await prepare(4)).toMatchObject({ padded: true, measuredSec: 3.2, billedSeconds: 4, sentSec: 4.1 })
+    expect(await prepare(4)).toMatchObject({ padded: true, measuredSec: 3.2, billedSeconds: 4, sentSec: 4 })
     expect(state.ffmpegArgs[0]).toEqual(expect.arrayContaining(["-af", `apad=whole_dur=${4 + LIP_SYNC_PAD_MARGIN_SEC}`]))
   })
 
@@ -222,7 +222,7 @@ describe("a file that is not the one priced is refused — deterministic, nothin
     expect(state.uploaded).toEqual([])
   })
 
-  it("a padded encode past 4.1 s (and the tolerance) is never sent", async () => {
+  it("a padded encode past 4 s (and the tolerance) is never sent", async () => {
     serve({ bytes: 100_000 })
     state.measures = [3.2, 4.2]
     expect(isDeterministicJobError(await prepare(4).catch((e: unknown) => e))).toBe(true)

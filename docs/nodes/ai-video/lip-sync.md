@@ -45,7 +45,7 @@ It has none of 1.5's other options: no resolution choice, no fast mode and no se
 | Image (required) | One image, under 30 MB, each side 300 to 6,000 pixels, width ÷ height between 0.4 and 2.5. JPEG, PNG, WebP, GIF or TIFF (an image whose size Nodaro cannot read — for example a HEIC photo or a BMP — is refused; convert it to JPEG or PNG first) |
 | Audio (required) | Up to **300 seconds** (under 4 seconds is padded, below), in a file under **100 MB**, in any common audio format: MP3 (or MP2), WAV (or RF64), Wave64, AIFF, CAF, AU, M4A (or MP4/MOV), AAC, AC-3, E-AC-3, AMR, Ogg (Vorbis, Opus or FLAC), FLAC, WebM/MKA, WMA, MPEG-TS, AVI, MPG/VOB, FLV, DTS, WavPack, Monkey's Audio (APE), TTA, Musepack (MPC) or LATM AAC. A playlist, a stream manifest or other file that points at further files is refused. Every file is converted to a 44.1 kHz stereo MP3 before it is sent. The model takes audio under 15 MB, so the audio sent is held to that after conversion — an MP3 of 300 seconds is about 7 MB |
 
-**Short audio is padded.** Audio shorter than 4 seconds is padded with silence to just over 4 seconds (4.1 seconds) before it is sent, so the video runs about 4 seconds and the avatar holds still for the padded part. It is billed as 4 seconds.
+**Short audio is padded.** Audio shorter than 4 seconds is padded with silence to exactly 4 seconds before it is sent, so the video runs 4 seconds and the avatar holds still for the padded part. It is billed as 4 seconds.
 
 **Long audio is refused, never trimmed.** Audio longer than 300 seconds is refused before anything is held — trim it first (for example with Trim Audio).
 

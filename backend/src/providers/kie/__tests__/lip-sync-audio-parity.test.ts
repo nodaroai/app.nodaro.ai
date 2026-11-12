@@ -187,7 +187,7 @@ describe.skipIf(!hasFfmpeg)("the hold equals what the encode bills — real file
     expect(prepared.padded).toBe(false)
   }, REAL_MEDIA_TIMEOUT_MS)
 
-  it("3.2 s of WAV is held as 4 s and sent padded to exactly 4.1 s", async () => {
+  it("3.2 s of WAV is held as 4 s and sent padded to exactly 4 s", async () => {
     const f = join(dir, "short.wav")
     ffmpeg("-f", "lavfi", "-i", "sine=f=440:r=44100", "-t", "3.2", "-ac", "1", f)
     const url = serve(f)
@@ -255,7 +255,7 @@ describe.skipIf(!hasFfmpeg)("the hold equals what the encode bills — real file
       expect(prepared.measuredSec).toBeLessThanOrEqual(max)
     }, REAL_MEDIA_TIMEOUT_MS)
 
-    it("a clip under 4 s that changes rate (1.5 s at 44.1 kHz, then 1.2 s at 22.05 kHz) is held as 4 s and sent padded to exactly 4.1 s — padded once", async () => {
+    it("a clip under 4 s that changes rate (1.5 s at 44.1 kHz, then 1.2 s at 22.05 kHz) is held as 4 s and sent padded to exactly 4 s — padded once", async () => {
       const f = await joinBytes(join(dir, "c-short.mp3"), [mp3Piece("s44.mp3", 44100, 1, 1.5, "128k"), mp3Piece("s22.mp3", 22050, 1, 1.2, "64k")])
       const { billedSeconds, prepared } = await priceThenRun(serve(f))
       expect(billedSeconds).toBe(4)

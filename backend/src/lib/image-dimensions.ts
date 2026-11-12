@@ -29,7 +29,7 @@ export interface ImageDimensions {
   readonly height: number
 }
 
-/** First decode attempt on a partial read: covers PNG / WebP / GIF / AVIF headers and most JPEGs. */
+/** First decode attempt on a partial read: covers PNG / WebP / GIF / AVIF headers and most JPEGs (a WebP's from its own header). */
 export const IMAGE_HEADER_FIRST_READ_BYTES = 64 * 1024
 
 /**
@@ -41,6 +41,45 @@ export const IMAGE_HEADER_MAX_READ_BYTES = 512 * 1024
 
 function isPixelSize(width: unknown, height: unknown): boolean {
   return Number.isSafeInteger(width) && Number.isSafeInteger(height) && (width as number) > 0 && (height as number) > 0
+}
+
+/** VP8X feature flag: the file carries EXIF, which may hold an orientation. */
+const WEBP_VP8X_EXIF_FLAG = 0x08
+
+/**
+ * A WebP's pixel size read from its first 30 bytes, for the leading bytes of a
+ * file sharp will not open (its WebP loader needs the whole file). The RIFF
+ * header names one of three first chunks, each of which states the size:
+ *  - `VP8 ` (lossy): the key frame's 14-bit width and height after its start code;
+ *  - `VP8L` (lossless): width − 1 and height − 1, 14 bits each, after its signature;
+ *  - `VP8X` (extended): the canvas width − 1 and height − 1, 24 bits each.
+ * A `VP8X` file that carries EXIF may be displayed turned, which the header
+ * cannot tell, so it answers `undefined` and the size stays unread.
+ */
+export function webpHeaderDimensions(bytes: Buffer): ImageDimensions | undefined {
+  if (bytes.length < 30) return undefined
+  if (bytes.toString("latin1", 0, 4) !== "RIFF" || bytes.toString("latin1", 8, 12) !== "WEBP") return undefined
+  const chunk = bytes.toString("latin1", 12, 16)
+  let width: number
+  let height: number
+  if (chunk === "VP8 ") {
+    // Frame tag (3 bytes) at 20, then the start code 9d 01 2a.
+    if (bytes[23] !== 0x9d || bytes[24] !== 0x01 || bytes[25] !== 0x2a) return undefined
+    width = bytes.readUInt16LE(26) & 0x3fff
+    height = bytes.readUInt16LE(28) & 0x3fff
+  } else if (chunk === "VP8L") {
+    if (bytes[20] !== 0x2f) return undefined
+    const bits = bytes.readUInt32LE(21)
+    width = (bits & 0x3fff) + 1
+    height = ((bits >>> 14) & 0x3fff) + 1
+  } else if (chunk === "VP8X") {
+    if ((bytes[20] & WEBP_VP8X_EXIF_FLAG) !== 0) return undefined
+    width = bytes.readUIntLE(24, 3) + 1
+    height = bytes.readUIntLE(27, 3) + 1
+  } else {
+    return undefined
+  }
+  return isPixelSize(width, height) ? { width, height } : undefined
 }
 
 /**
@@ -63,8 +102,9 @@ export async function imageDimensionsOf(input: Buffer | string): Promise<ImageDi
     const height = meta.autoOrient?.height ?? meta.height
     return isPixelSize(width, height) ? { width, height } : undefined
   } catch {
-    // Not enough of the header, or not a format sharp reads.
-    return undefined
+    // Not enough of the header, or not a format sharp reads. sharp opens a
+    // WebP only whole, so the leading bytes of one are read from its header.
+    return typeof input === "string" ? undefined : webpHeaderDimensions(input)
   }
 }
 

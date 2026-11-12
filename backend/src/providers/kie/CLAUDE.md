@@ -297,20 +297,21 @@ generic `lipSync()` / `buildLipSyncInput`, shaped by its config:
   refunded now, KIE never called) one that bills more than the job's
   `lipSyncBilledSeconds` (passed as `LipSyncOptions.billedSeconds`) or runs
   past 300 s. Then it encodes that PCM to MP3 — audio under 4 s padded with
-  silence to 4.1 s ON THE PCM (`apad=whole_dur` in a graph that never rebuilds,
+  silence to exactly 4.000 s ON THE PCM (`apad=whole_dur` in a graph that never rebuilds,
   so it pads once; it never measures under 4 s upstream) and billed 4 s —
   measures THE ENCODE (read as MP3 only), and refuses (deterministic) one that
-  plays past the held seconds (or the padded 4.1 s) by more than
+  plays past the held seconds (or the padded 4 s) by more than
   `LIP_SYNC_ENCODE_TOLERANCE_SEC`, or that is 15 MB or more. The MP3 of the PCM
   decodes back to exactly its sample count; `lip-sync-audio-parity.test.ts`
   holds the price check's count EQUAL to the samples sent, on files that change
   format mid-stream too. Only the encode, stored in the job's scratch folder
   (`lip-sync-prepared`), is sent. Never trimmed.
-- **Staging check (open):** what KIE bills for a padded 4.1 s clip (4 s, or 5),
-  and for an MP3 whose decoded length sits just under a whole second (a
-  decoder that does not drop the encoder's ~25 ms of priming reads it a
-  frame longer). `provider_cost` assumes the billed seconds; confirm on one
-  staging run of each before relying on it.
+- **Staging check (2026-11-12):** KIE bills the audio it is sent in whole
+  seconds, rounded up, and its output runs that long. A clip padded to 4.1 s
+  was billed 5 s (70 credits) while we billed 4, so padding is now to exactly
+  4.000 s: an exact 4.000 s WAV and our 4.000 s MP3 (LAME's gapless tag) were
+  both accepted and billed 4 s (56 credits). 8.08 s billed 9 and 5.04 s billed
+  6, as we bill. `provider_cost` = the billed seconds holds.
 - **Billing:** KIE bills 14 credits per second of output (`kieCreditsPerAudioSecond`),
   so `provider_cost` = 14 × the billed seconds × `KIE_CREDIT_USD`
   (`lipSyncKieCostUsd`), not the flat `cost` anchor. The run is charged the
