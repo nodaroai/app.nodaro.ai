@@ -152,6 +152,7 @@ async function matchedAssetsOf(ids: readonly string[]): Promise<MatchedAsset[]> 
     // restricted row — the case is about it.
     supabase
       .from("assets") // tenant-scope-ignore: the administrator's case view reaches the matched rows of any account
+      // fileless-read: the administrator's case view shows each matched row as it is, a missing address as null
       .select("id, user_id, r2_key, r2_url, filename, type, job_id, created_at, restricted_at")
       .in("id", chunk),
   )

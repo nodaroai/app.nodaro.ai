@@ -81,6 +81,7 @@ export async function ownedAssetUrlsById(
     // restricted-read: the column is read and a restricted file resolves to nothing, below
     const { data, error } = await supabase
       .from("assets")
+      // fileless-read: an ownership lookup by id; a row with no address answers null, which every caller reads as none
       .select(`id, r2_url, ${RESTRICTED_ASSET_COLUMN}`)
       .in("id", chunk)
       .eq("user_id", ownerId)

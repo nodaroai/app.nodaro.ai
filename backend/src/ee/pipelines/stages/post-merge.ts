@@ -90,6 +90,7 @@ export async function runPostMergeStage(
   // restricted-read: the column is read and a restricted output fails the stage, below
   const { data: assetRow, error: assetErr } = await supabase
     .from("assets")
+    // fileless-read: the final output this run just stored, read back by id (a reaper clears only an aged file's address)
     .select(`r2_url, ${RESTRICTED_ASSET_COLUMN}`)
     .eq("id", finalAssetId)
     .single()

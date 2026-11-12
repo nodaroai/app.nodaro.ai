@@ -175,6 +175,7 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
       // restricted-read: a delete's referrer count; a restricted row still refers to its bytes
       const { count: otherAssetRefs, error: assetRefError } = await supabase
         .from("assets")
+        // fileless-read: a referrer count by key; a row with no file has no key and never matches
         .select("id", { count: "exact", head: true })
         .eq("r2_key", sourceKey)
         .neq("id", owned.id)

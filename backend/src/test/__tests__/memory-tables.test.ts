@@ -3,8 +3,8 @@
  * Postgres do where tests lean on it: NULL compares to nothing, NULLs sort
  * last ascending and first descending, `maybeSingle` over several rows and
  * `single` over any count but one are PGRST116, a select projects its
- * columns, an array literal's quoted elements keep their commas, `not`
- * supports only what it can run, a guard's refusal writes nothing, and a
+ * columns, an array literal's quoted elements keep their commas, `not` and
+ * `or` support only what they can run, a guard's refusal writes nothing, and a
  * table the database does not have yet answers 42P01 to a read and a write.
  */
 import { describe, it, expect } from "vitest"
@@ -67,6 +67,26 @@ describe("memory-tables", () => {
 
   it("a not it cannot run throws, rather than letting every row through", () => {
     expect(() => from(fresh()).select("id").not("n", "gt", 1)).toThrow(/not supported/)
+  })
+
+  it("or runs a PostgREST logic tree: terms, nested and(…), quoted values, NULL matching nothing", async () => {
+    const db = fresh()
+    expect(ids(await from(db).select("id").or("s.eq.open,n.lt.2"))).toEqual(["a", "c"])
+    expect(ids(await from(db).select("id").or("and(s.eq.closed,tags.is.null),and(n.eq.2,d.eq.2026-12-09)"))).toEqual(["a"])
+    expect(ids(await from(db).select("id").or("d.lt.2026-12-05,and(d.eq.2026-12-09,id.lt.b)"))).toEqual(["a", "c"])
+    expect(ids(await from(db).select("id").or('s.eq."clo,sed",s.is.null'))).toEqual(["c"])
+    // NULL compares to nothing in a term too: b's s is "closed", its n is NULL.
+    expect(ids(await from(db).select("id").or("n.neq.2"))).toEqual(["c"])
+    // Against a number column the text is read as a number: 2 < 10.
+    expect(ids(await from(db).select("id").or("n.lt.10"))).toEqual(["a", "c"])
+    // Two calls AND together, as two `or=` parameters do.
+    expect(ids(await from(db).select("id").or("s.eq.open,s.eq.closed").or("n.gte.1"))).toEqual(["a"])
+  })
+
+  it("an or term it cannot run throws, rather than letting every row through", () => {
+    expect(() => from(fresh()).select("id").or("s.imatch.open")).toThrow(/not supported/)
+    expect(() => from(fresh()).select("id").or("s.is.maybe")).toThrow(/not supported/)
+    expect(() => from(fresh()).select("id").or("nonsense")).toThrow(/not a filter/)
   })
 
   it("a guard's refusal writes nothing", async () => {

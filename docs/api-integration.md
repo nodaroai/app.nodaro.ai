@@ -4076,7 +4076,9 @@ The answer is `{ data, nextCursor, totalCount }`: each item carries `id`,
 `type`, `filename`, `mimeType`, `sizeBytes`, `url`, `thumbnailUrl`,
 `metadata`, `isLibraryItem`, `uploadSource`, `source`, `sourceDetail`,
 `jobId` (the job that made the file; `null` for an upload) and `createdAt`; `nextCursor` is `null` on the last page; `totalCount`, the number
-of matching files, comes with the first page only. SDK:
+of matching files, comes with the first page only. A library row whose file is
+missing (its stored copy is gone) is not listed and not counted, so every item
+has a `url`. SDK:
 `client.library.list(params)`. The MCP tool `browse_uploads` reads the
 `owned=true` view, with the same filename search as its `search` argument.
 

@@ -1610,7 +1610,7 @@ Your own gallery (`scope: "mine"`) also lists your Apply EDL renders: a video re
 Browse assets you've uploaded (source files — distinct from generated
 outputs). Use to retrieve existing upload URLs to feed into generation
 tools. An item that is an Apply EDL preview (a render at `proxy` quality)
-carries `preview: true`, and its text line says `(preview)`. A render stored before the label existed takes it from the job that made it.
+carries `preview: true`, and its text line says `(preview)`. A render stored before the label existed takes it from the job that made it. A file whose stored copy is gone is not listed and not counted.
 
 **Input:** `kind`, `limit`, `cursor`, `search` — up to 5 words that must all appear in the filename, ignoring case, each matched as written (the `q` of `GET /v1/library`).
 
