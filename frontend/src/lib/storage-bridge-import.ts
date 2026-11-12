@@ -1,15 +1,18 @@
-import { runtimeIsOnFlowUiHost, runtimeLinkOrigin } from "@/lib/runtime-config"
+import { runtimeSettingsSourceOrigin } from "@/lib/runtime-config"
 
 /**
- * Carries a browser's saved settings across a move of the app's pages to a
- * host of their own (per-origin storage stays behind on the old host). On the
- * first load on the new host, a hidden frame of the old host's
+ * Carries a browser's saved settings to the app's pages' own host
+ * (FLOW_UI_ORIGIN, with or without the move: per-origin storage stays on the
+ * kept host, PUBLIC_URL, which keeps serving the pages unless they moved). On
+ * the first load on the Flow host, a hidden frame of the kept host's
  * `/storage-bridge.html` hands them over; this writes only the keys that are
  * not already here, sets a flag, and removes the frame. The flag is set only
  * when the old host's storage could be read and every write here succeeded;
  * otherwise the next load asks again. Three seconds at most, and never in the
- * way of anything else. On a deployment without such a move nothing runs, no
- * frame is made and no request is sent.
+ * way of anything else. Once per browser: a setting changed on the kept host
+ * afterwards stays there. On any other host, and on a deployment whose pages
+ * have no host of their own, nothing runs, no frame is made and no request is
+ * sent.
  *
  * The keys are the settings a person would otherwise lose: remembered node
  * settings, the org workspace, accessibility, language, recents. Never a
@@ -63,8 +66,8 @@ function writeMissing(keys: Record<string, unknown>): void {
 
 /** Asks the old host's bridge page for the saved settings, once per browser. Fire and forget. */
 export function importLegacyStorage(timeoutMs: number = STORAGE_BRIDGE_TIMEOUT_MS): void {
-  if (typeof window === "undefined" || !runtimeIsOnFlowUiHost()) return
-  const keptOrigin = runtimeLinkOrigin()
+  if (typeof window === "undefined") return
+  const keptOrigin = runtimeSettingsSourceOrigin()
   if (keptOrigin === "" || importAlreadyDone()) return
 
   const frame = document.createElement("iframe")

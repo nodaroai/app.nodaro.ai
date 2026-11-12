@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { checkMovedPagesSettings } from "../moved-pages-check.js"
+import { checkMovedPagesSettings, flowHostState } from "../moved-pages-check.js"
 
 /**
  * The image's start script runs the server's own check of the settings that
@@ -8,11 +8,26 @@ import { checkMovedPagesSettings } from "../moved-pages-check.js"
  * would otherwise run Caddy with it while the API stays down).
  */
 describe("checkMovedPagesSettings", () => {
-  it("passes on no settings, or a whole move", () => {
+  it("passes on no settings, silently", () => {
     const log = vi.fn()
     expect(checkMovedPagesSettings({}, log)).toBe(0)
-    expect(checkMovedPagesSettings({ FLOW_UI_ORIGIN: "https://flow.example.com", LEGACY_UI_HOSTS: "app.example.com", PUBLIC_URL: "https://app.example.com" }, log)).toBe(0)
     expect(log).not.toHaveBeenCalled()
+  })
+
+  it("passes on a whole move, or on the Flow host alone, and names which one is on", () => {
+    const log = vi.fn()
+    expect(checkMovedPagesSettings({ FLOW_UI_ORIGIN: "https://flow.example.com", LEGACY_UI_HOSTS: "app.example.com", PUBLIC_URL: "https://app.example.com" }, log)).toBe(0)
+    expect(log.mock.calls[0][0]).toMatch(/moved to https:\/\/flow\.example\.com: app\.example\.com redirect them there/)
+    // A misspelled LEGACY_UI_HOSTS reads as "none redirects" in the log, never passes unseen.
+    expect(checkMovedPagesSettings({ FLOW_UI_ORIGIN: "https://flow.example.com", LEGACY_UI_HOST: "app.example.com", PUBLIC_URL: "https://app.example.com" }, log)).toBe(0)
+    expect(log.mock.calls[1][0]).toMatch(/own host, https:\/\/flow\.example\.com: every host still serves them and none redirects there \(LEGACY_UI_HOSTS is empty\)/)
+    expect(log.mock.calls[1][0]).toMatch(/carry over from https:\/\/app\.example\.com once/)
+    expect(log).toHaveBeenCalledTimes(2)
+  })
+
+  it("flowHostState names nothing when no Flow host is set", () => {
+    expect(flowHostState({})).toBeNull()
+    expect(flowHostState({ PUBLIC_URL: "https://app.example.com" })).toBeNull()
   })
 
   it("refuses the two Flow names disagreeing, or FLOW_PUBLIC_URL set to spaces, before the proxy or /config.js can turn the move on", () => {
@@ -26,7 +41,9 @@ describe("checkMovedPagesSettings", () => {
 
   it("refuses what the server refuses, naming the setting", () => {
     const log = vi.fn()
-    expect(checkMovedPagesSettings({ FLOW_UI_ORIGIN: "https://flow.example.com", PUBLIC_URL: "https://app.example.com" }, log)).toBe(1)
-    expect(log.mock.calls[0][0]).toMatch(/LEGACY_UI_HOSTS/)
+    expect(checkMovedPagesSettings({ LEGACY_UI_HOSTS: "app.example.com", PUBLIC_URL: "https://app.example.com" }, log)).toBe(1)
+    expect(log.mock.calls[0][0]).toMatch(/^\[start\.sh\] refusing to start: LEGACY_UI_HOSTS/)
+    expect(checkMovedPagesSettings({ FLOW_UI_ORIGIN: "https://flow.example.com", PUBLIC_URL: "http://localhost:3000" }, log)).toBe(1)
+    expect(log.mock.calls[1][0]).toMatch(/refusing to start: PUBLIC_URL/)
   })
 })

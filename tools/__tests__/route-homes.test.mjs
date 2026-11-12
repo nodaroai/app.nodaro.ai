@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
-import { renderBlock, spliceBlock, loadHomes, CADDYFILE_PATH } from "../gen-route-homes.mjs"
+import { renderBlock, spliceBlock, loadHomes, CADDYFILE_PATH, canonicalHomes, canonicalPattern } from "../gen-route-homes.mjs"
 
 /**
  * frontend/src/route-homes.json says where every page of the app lives once a
@@ -80,4 +80,28 @@ test("the files list is the one the proxy's @missing_file block treats as files"
   const line = block.slice(0, block.indexOf("\n", block.indexOf("path ")))
   const extensions = line.slice(line.indexOf("path ") + "path ".length).trim().split(/\s+/).map((pattern) => pattern.replace(/^\*\./, ""))
   assert.deepEqual(homes.files, extensions)
+})
+
+test("the indexable list is the Caddyfile's @spa_noindex allow-list", () => {
+  const caddyfile = readFileSync(CADDYFILE_PATH, "utf8")
+  const block = caddyfile.slice(caddyfile.indexOf("@spa_noindex {"))
+  const line = block.split("\n").find((text) => text.trim().startsWith("not path / "))
+  assert.ok(line, "@spa_noindex has its allow-list line")
+  assert.deepEqual(line.trim().slice("not path ".length).split(/\s+/), homes.indexable)
+})
+
+test("every indexable page has one home, moved or kept, so it names one canonical", () => {
+  const { flow, kept } = canonicalHomes(homes)
+  assert.deepEqual([...flow, ...kept].sort(), [...homes.indexable].sort())
+  assert.throws(() => canonicalHomes({ ...homes, indexable: [...homes.indexable, "/nowhere"] }), /\/nowhere/)
+})
+
+test("a canonical names only an exact listed address: a page as written, a section and one lowercase slug", () => {
+  const pattern = new RegExp(canonicalPattern(["/", "/gallery", "/tutorials/*"]))
+  for (const path of ["/", "/gallery", "/tutorials/getting-started", "/tutorials/a1-b2"]) assert.ok(pattern.test(path), path)
+  for (const path of ["", "//", "/gallery/", "/Gallery", "/tutorials", "/tutorials/", "/tutorials/a/b", "/tutorials/a.b", "/tutorials/A", "/tutorials/a_b", "/tutorials/a>b", "/x/../gallery"]) {
+    assert.equal(pattern.test(path), false, path)
+  }
+  // A listed address that is not a plain lowercase one is refused when the block is written.
+  for (const entry of ["/Gallery", "/a b", "/a/*/b", "gallery", "/gallery/", "/a.b"]) assert.throws(() => canonicalPattern([entry]), new RegExp(entry.replace(/[.*+?^$()|[\]\\]/g, "\\$&")))
 })

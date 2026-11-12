@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { httpsOriginOf, legacyUiHostList, movedFlowOrigin, movedPagesSettingsProblem } from "../moved-pages-settings.js"
+import { flowHostOrigins, httpsOriginOf, legacyUiHostList, movedFlowOrigin, movedPagesSettingsProblem } from "../moved-pages-settings.js"
 
 /**
  * The settings that move a deployment's pages to their own host
@@ -36,13 +36,23 @@ describe("movedPagesSettingsProblem", () => {
     expect(movedPagesSettingsProblem({ LEGACY_UI_HOSTS: "  ", PUBLIC_URL: "http://localhost:3000" })).toBeNull()
   })
 
-  it("a partial set is refused: the move is on only with both settings, as the proxy and the browser read it", () => {
+  it("a half-set state is refused: LEGACY_UI_HOSTS without a Flow host, or naming only the Flow host", () => {
     expect(movedPagesSettingsProblem({ LEGACY_UI_HOSTS: HOSTS, PUBLIC_URL: "https://app.example.com" })).toMatch(/^LEGACY_UI_HOSTS /)
-    expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com", PUBLIC_URL: "https://app.example.com" })).toMatch(/^LEGACY_UI_HOSTS /)
-    expect(movedPagesSettingsProblem({ FLOW_PUBLIC_URL: "https://flow.example.com", PUBLIC_URL: "https://app.example.com" })).toMatch(/^LEGACY_UI_HOSTS /)
     // Naming only the Flow host is no legacy host at all.
     expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com", LEGACY_UI_HOSTS: "Flow.example.com", PUBLIC_URL: "https://app.example.com" })).toMatch(/^LEGACY_UI_HOSTS /)
     expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com", LEGACY_UI_HOSTS: HOSTS, PUBLIC_URL: "https://app.example.com" })).toBeNull()
+  })
+
+  it("the Flow host alone runs: the pages have their own host, every host keeps serving them, nothing redirects", () => {
+    expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com", PUBLIC_URL: "https://app.example.com" })).toBeNull()
+    expect(movedPagesSettingsProblem({ FLOW_PUBLIC_URL: "https://flow.example.com", PUBLIC_URL: "https://app.example.com" })).toBeNull()
+    // An empty or blank LEGACY_UI_HOSTS is no host: the same state.
+    expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com", LEGACY_UI_HOSTS: " , ", PUBLIC_URL: "https://app.example.com" })).toBeNull()
+    // It is held to the same origin rules as the move.
+    expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "flow.example.com", PUBLIC_URL: "https://app.example.com" })).toMatch(/^FLOW_UI_ORIGIN /)
+    for (const PUBLIC_URL of ["", "http://app.example.com", "https://app.example.com/v1", "https://flow.example.com"]) {
+      expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com", PUBLIC_URL }), PUBLIC_URL).toMatch(/^PUBLIC_URL /)
+    }
   })
 
   it("every LEGACY_UI_HOSTS entry must be a bare host name, by the runtime config contract's rule", () => {
@@ -105,6 +115,23 @@ describe("FLOW_UI_ORIGIN and FLOW_PUBLIC_URL: two names, one origin", () => {
   })
 })
 
+describe("flowHostOrigins: the pages' own host, with or without the move", () => {
+  const PUBLIC_URL = "https://app.example.com/"
+
+  it("gives both origins once the Flow host and a different kept host are https origins", () => {
+    expect(flowHostOrigins({ FLOW_UI_ORIGIN: "https://flow.example.com/", PUBLIC_URL })).toEqual({ flow: "https://flow.example.com", kept: "https://app.example.com" })
+    expect(flowHostOrigins({ FLOW_PUBLIC_URL: "https://flow.example.com", PUBLIC_URL })).toEqual({ flow: "https://flow.example.com", kept: "https://app.example.com" })
+    expect(flowHostOrigins({ FLOW_UI_ORIGIN: "https://flow.example.com", LEGACY_UI_HOSTS: "app.example.com", PUBLIC_URL })).toEqual({ flow: "https://flow.example.com", kept: "https://app.example.com" })
+  })
+
+  it("is null without a Flow origin, or without a kept origin of its own", () => {
+    expect(flowHostOrigins({ PUBLIC_URL })).toBeNull()
+    expect(flowHostOrigins({ FLOW_UI_ORIGIN: "http://flow.example.com", PUBLIC_URL })).toBeNull()
+    expect(flowHostOrigins({ FLOW_UI_ORIGIN: "https://flow.example.com", PUBLIC_URL: "http://localhost:3000" })).toBeNull()
+    expect(flowHostOrigins({ FLOW_UI_ORIGIN: "https://app.example.com", PUBLIC_URL })).toBeNull()
+  })
+})
+
 describe("the server refuses to start on a setting it cannot run", () => {
   afterEach(() => {
     vi.unstubAllEnvs()
@@ -119,10 +146,11 @@ describe("the server refuses to start on a setting it cannot run", () => {
     await expect(import("../config.js")).rejects.toThrow(/PUBLIC_URL/)
   })
 
-  it("refuses a partial set", async () => {
+  it("refuses a half-set state", async () => {
     vi.resetModules()
-    vi.stubEnv("FLOW_UI_ORIGIN", "https://flow.example.com")
-    vi.stubEnv("LEGACY_UI_HOSTS", "")
+    vi.stubEnv("FLOW_UI_ORIGIN", "")
+    vi.stubEnv("FLOW_PUBLIC_URL", "")
+    vi.stubEnv("LEGACY_UI_HOSTS", "app.example.com")
     vi.stubEnv("PUBLIC_URL", "https://app.example.com")
     await expect(import("../config.js")).rejects.toThrow(/LEGACY_UI_HOSTS/)
   })

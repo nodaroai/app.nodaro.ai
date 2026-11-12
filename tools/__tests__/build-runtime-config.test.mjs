@@ -426,7 +426,7 @@ test("CLI entry: a white-label deployment gets exactly one more key, after every
   )
 })
 
-test("the moved-pages keys exist exactly when the proxy's half is on, all three together", () => {
+test("the Flow host's keys exist exactly when the proxy's rules are on: two for the pages' own host, the host list with the move", () => {
   const on = { RUNTIME_FLOW_UI_ORIGIN: "https://flow.example.com", RUNTIME_LEGACY_UI_HOSTS: "app.example.com, next.app.example.com", RUNTIME_LINK_ORIGIN: "https://app.example.com" }
   const cfg = buildRuntimeConfig(on)
   assert.equal(cfg.flowUiOrigin, "https://flow.example.com")
@@ -436,15 +436,23 @@ test("the moved-pages keys exist exactly when the proxy's half is on, all three 
     const c = buildRuntimeConfig(env)
     return !("flowUiOrigin" in c) && !("legacyUiHosts" in c) && !("linkOrigin" in c)
   }
-  // PUBLIC_URL alone (the usual case), FLOW_UI_ORIGIN alone, or hosts alone: nothing.
+  // PUBLIC_URL alone (the usual case), FLOW_UI_ORIGIN with no kept origin, or hosts alone: nothing.
   assert.ok(none({ RUNTIME_LINK_ORIGIN: "https://app.example.com" }))
-  assert.ok(none({ RUNTIME_FLOW_UI_ORIGIN: "https://flow.example.com", RUNTIME_LINK_ORIGIN: "https://app.example.com" }))
+  assert.ok(none({ RUNTIME_FLOW_UI_ORIGIN: "https://flow.example.com" }))
   assert.ok(none({ RUNTIME_LEGACY_UI_HOSTS: "app.example.com" }))
+  // The pages' own host with nothing moved (no legacy host, or only the Flow host itself): the two origins, no host
+  // list, so the browser carries settings over and does nothing else.
+  for (const RUNTIME_LEGACY_UI_HOSTS of [undefined, "", " , ", "flow.example.com"]) {
+    assert.deepEqual(
+      buildRuntimeConfig({ RUNTIME_FLOW_UI_ORIGIN: "https://flow.example.com/", RUNTIME_LINK_ORIGIN: "https://app.example.com", RUNTIME_LEGACY_UI_HOSTS }),
+      { flowUiOrigin: "https://flow.example.com", linkOrigin: "https://app.example.com" },
+      String(RUNTIME_LEGACY_UI_HOSTS),
+    )
+  }
   // What the Caddy block refuses, the browser never acts on either.
   assert.ok(none({ ...on, RUNTIME_FLOW_UI_ORIGIN: "http://flow.example.com" }))
   assert.ok(none({ ...on, RUNTIME_FLOW_UI_ORIGIN: " https://flow.example.com" }))
   assert.ok(none({ ...on, RUNTIME_FLOW_UI_ORIGIN: "https://flow.example.com/x" }))
-  assert.ok(none({ ...on, RUNTIME_LEGACY_UI_HOSTS: "flow.example.com" }))
   // With no kept origin to name, the move never turns on in the browser: no public link may name the Flow host
   // (and the server refuses to start in this state: backend/src/lib/moved-pages-settings.ts).
   assert.ok(none({ ...on, RUNTIME_LINK_ORIGIN: "" }))
@@ -463,6 +471,13 @@ test("both origins are read as the proxy reads them: a trailing slash is allowed
 test("the host list is split by the proxy's one rule: commas are spaces, runs of spaces separate, letter case is ignored", () => {
   const cfg = buildRuntimeConfig({ RUNTIME_FLOW_UI_ORIGIN: "https://flow.example.com", RUNTIME_LEGACY_UI_HOSTS: " App.Example.com,,Next.app.example.com  flow.example.com ", RUNTIME_LINK_ORIGIN: "https://app.example.com" })
   assert.deepEqual(cfg.legacyUiHosts, ["app.example.com", "next.app.example.com", "flow.example.com"])
+})
+
+test("CLI entry: the pages' own host alone adds its two keys, after every existing byte", () => {
+  assert.equal(
+    configJs({ ...NODARO_DEPLOYMENT_ENV, RUNTIME_FLOW_UI_ORIGIN: "https://flow.nodaro.ai", RUNTIME_LEGACY_UI_HOSTS: "", RUNTIME_LINK_ORIGIN: "https://app.nodaro.ai" }),
+    'window.__NODARO_RUNTIME__={"apiUrl":"https://app.nodaro.ai","supabaseAnonKey":"public-anon-key","flowUiOrigin":"https://flow.nodaro.ai","linkOrigin":"https://app.nodaro.ai"};\n',
+  )
 })
 
 test("CLI entry: a move it cannot turn on says why, on stderr, and writes the rest of /config.js", () => {

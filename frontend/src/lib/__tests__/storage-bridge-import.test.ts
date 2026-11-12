@@ -107,6 +107,28 @@ describe("importLegacyStorage", () => {
     expect(lastFrame().src).toBe(`${KEPT}/storage-bridge.html`)
   })
 
+  it("runs with the pages' own host alone, when nothing moves and the kept host keeps serving them", () => {
+    window.__NODARO_RUNTIME__ = { flowUiOrigin: FLOW, linkOrigin: KEPT }
+    importLegacyStorage()
+    expect(lastFrame().src).toBe(`${KEPT}/storage-bridge.html`)
+  })
+
+  it("makes no frame on the kept host itself, or on any other host", () => {
+    for (const origin of [KEPT, "https://sai.example.test"]) {
+      vi.stubGlobal("location", { origin } as Location)
+      importLegacyStorage()
+      expect(document.querySelector("iframe"), origin).toBeNull()
+    }
+  })
+
+  it("makes no frame without a kept origin of its own to read from", () => {
+    for (const runtime of [{ flowUiOrigin: FLOW }, { flowUiOrigin: FLOW, linkOrigin: FLOW }, { flowUiOrigin: FLOW, linkOrigin: "http://app.example.test" }, { flowUiOrigin: "http://flow.example.test", linkOrigin: KEPT }]) {
+      window.__NODARO_RUNTIME__ = runtime
+      importLegacyStorage()
+      expect(document.querySelector("iframe"), JSON.stringify(runtime)).toBeNull()
+    }
+  })
+
   it("does nothing a second time once done", () => {
     window.localStorage.setItem(STORAGE_BRIDGE_DONE_KEY, "2026-11-10")
     importLegacyStorage()
