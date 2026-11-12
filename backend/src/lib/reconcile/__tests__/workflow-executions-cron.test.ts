@@ -161,7 +161,16 @@ vi.mock("../../orchestration-queue.js", () => ({
   },
 }))
 
-import { reconcileWorkflowExecutionsTick } from "../workflow-executions-cron.js"
+// The never-started sweep has its own suite (never-started-executions.test.ts);
+// here only that the cron calls it.
+const neverStarted = vi.hoisted(() => ({ sweep: vi.fn(async () => 0) }))
+vi.mock("../never-started-executions.js", () => ({ sweepNeverStartedExecutions: neverStarted.sweep }))
+
+import {
+  reconcileWorkflowExecutionsTick,
+  startWorkflowExecutionsReconcileCron,
+  stopWorkflowExecutionsReconcileCron,
+} from "../workflow-executions-cron.js"
 
 describe("reconcileWorkflowExecutionsTick", () => {
   const SAVED_ENV: Record<string, string | undefined> = {}
@@ -968,5 +977,41 @@ describe("reconcileWorkflowExecutionsTick", () => {
     expect(mocks.updates).toHaveLength(1)
     expect(mocks.updates[0].updates.status).toBe("completed")
     expect(mocks.updates[0].updates.error_message).toBeNull()
+  })
+})
+
+describe("the 90-second cron", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    neverStarted.sweep.mockClear()
+    vi.spyOn(console, "log").mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    stopWorkflowExecutionsReconcileCron()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it("settles runs that never started on every tick, not only claimed runs", async () => {
+    startWorkflowExecutionsReconcileCron()
+    expect(neverStarted.sweep).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(90_000)
+    expect(neverStarted.sweep).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(90_000)
+    expect(neverStarted.sweep).toHaveBeenCalledTimes(2)
+  })
+
+  it("a sweep that throws is logged and the cron keeps ticking", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {})
+    neverStarted.sweep.mockRejectedValueOnce(new Error("database unreachable"))
+    startWorkflowExecutionsReconcileCron()
+
+    await vi.advanceTimersByTimeAsync(180_000)
+
+    expect(neverStarted.sweep).toHaveBeenCalledTimes(2)
+    expect(logged).toHaveBeenCalledWith("[reconcile/never-started] tick failed:", expect.objectContaining({ message: "database unreachable" }))
   })
 })

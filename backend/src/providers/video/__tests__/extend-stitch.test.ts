@@ -72,6 +72,9 @@ const toSdr = (tags: string): string =>
   `setparams=${tags},zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,` +
   "zscale=t=bt709:m=bt709:r=tv:d=error_diffusion,format=yuv420p"
 
+/** A full-range SDR source's picture taken to limited range: its frames tagged full range, the levels converted, 4:2:0. */
+const TO_LIMITED = "setparams=range=pc,scale=out_range=tv,format=yuv420p"
+
 /** The source's picture as the graph receives it: square pixels, no rotation. */
 const SHAPE: VideoOverlayBaseProbe = { width: 854, height: 480, rotation: 0, sar: 1, streamDurationSec: 3, startTimeSec: 0, frameCount: 72, audioCodec: "aac" }
 
@@ -428,6 +431,26 @@ describe("extendStitchArgs", () => {
     }
   })
 
+  // A full-range SDR source's picture is taken to limited range in its own chain, as an HDR
+  // source's is taken to SDR, so the boundary proxy, the encode and the extend's tail all read
+  // the same limited-range picture. The extension (limited range, as Seedance returns it) is left as it is.
+  it.each<[string, Partial<MatchedProbe>]>([
+    ["yuvj420p, pc", { pixFmt: "yuvj420p", colorRange: "pc" }],
+    ["yuvj420p reporting no range", { pixFmt: "yuvj420p" }],
+    ["yuvj444p", { pixFmt: "yuvj444p" }],
+    ["yuv420p, pc", { colorRange: "pc" }],
+  ])("takes a full-range SDR source (%s) to limited range in its own picture chain", (_label, range) => {
+    const args = extendStitchArgs({ ...BASE, source: { ...SOURCE, colorPrimaries: "bt709", colorTransfer: "bt709", colorSpace: "bt709", ...range } })
+    const chains = chainsOf(args)
+    expect(chains["[sv]"]).toBe(`[0:v:0]fps=24/1,tpad=stop_mode=clone:stop=-1,trim=end_frame=68,setpts=PTS-STARTPTS,${TO_LIMITED}[sv]`)
+    expect(valueOf(args, "-filter_complex")).not.toMatch(/zscale|tonemap/)
+    expect(chains["[ev]"]).toBe(chainsOf(extendStitchArgs(BASE))["[ev]"])
+    // Delivered limited range, its own colour otherwise.
+    expect(valueOf(args, "-pix_fmt")).toBe("yuv420p")
+    expect(valueOf(args, "-color_range")).toBe("tv")
+    expect(valueOf(args, "-colorspace")).toBe("bt709")
+  })
+
   it("leaves the shared matched encode's pixel-format rule as it is (the reference re-encode keeps 4:4:4)", () => {
     expect(valueOf(matchedPictureArgs({ ...SOURCE, pixFmt: "yuv444p" }), "-pix_fmt")).toBe("yuv444p")
     expect(valueOf(matchedPictureArgs({ ...SOURCE, pixFmt: "yuv422p" }), "-pix_fmt")).toBe("yuv422p")
@@ -598,6 +621,19 @@ describe("stitchExtension", () => {
     expect(ffmpegRuns()).toHaveLength(3)
   })
 
+  // The matcher compares the proxies' raw planes: a full-range source's proxy at full range
+  // never scores against the extension's limited-range frames.
+  it("makes a full-range source's boundary proxy limited range, as the stitch reads it; the extension's as it is", async () => {
+    const matcher = vi.fn().mockResolvedValue(cut({}))
+    mocks.getSmartCutMatcher.mockReturnValue(matcher)
+    mocks.probeMatched.mockImplementation(async (p: string) => (p === ARGS.extensionPath ? EXTENSION : { ...SOURCE, pixFmt: "yuvj420p", colorRange: "pc" }))
+    await stitchExtension(ARGS)
+    const [prevProxy, nextProxy] = ffmpegRuns()
+    expect(valueOf(prevProxy!, "-vf")).toBe(`fps=24/1,tpad=stop_mode=clone:stop=-1,trim=start_frame=64:end_frame=72,setpts=PTS-STARTPTS,${TO_LIMITED}`)
+    expect(valueOf(nextProxy!, "-vf")).not.toMatch(/setparams|out_range/)
+    expect(encodeChains()["[sv]"]).toContain(`,${TO_LIMITED}[sv]`)
+  })
+
   it("admits an HDR source's stitch with its tone-map's buffers on top: about 72 MiB per megapixel", async () => {
     const uhd = { width: 3840, height: 2160 }
     mocks.probeVideoOverlayBase.mockResolvedValue({ ...SHAPE, ...uhd })
@@ -703,7 +739,27 @@ describe("extendTailPicture", () => {
     expect(tail.launch!.peakMemoryMiB - defaultLaunchPeakMiB()).toBe(Math.ceil(8.2944 * 72))
   })
 
-  it("leaves an SDR or untagged source's tail as it always was: no filter, no estimate of its own", () => {
+  // A full-range SDR source's tail goes through the stitch's own conversion to limited range,
+  // so the model is given the picture the result shows. No tone-map: no estimate of its own.
+  it("cuts a full-range SDR source's tail to limited range, the stitch's own conversion, at the default launch", () => {
+    for (const source of [
+      { ...SOURCE, pixFmt: "yuvj420p", colorRange: "pc" },
+      { ...SOURCE, pixFmt: "yuvj420p" },
+      { ...SOURCE, colorRange: "pc" },
+      { ...SOURCE, ...uhd, pixFmt: "yuvj420p", colorPrimaries: "bt709", colorTransfer: "bt709", colorSpace: "bt709", colorRange: "pc" },
+    ]) {
+      const tail = extendTailPicture(source)
+      expect(tail).toEqual({ pictureFilter: TO_LIMITED })
+      // Exactly the picture the stitch delivers the source as.
+      expect(chainsOf(extendStitchArgs({ ...BASE, source }))["[sv]"]!.endsWith(`,${tail.pictureFilter}[sv]`)).toBe(true)
+    }
+    // An HDR source read as full range is tone-mapped as before, its range in the tone-map's tags.
+    const hdr = extendTailPicture({ ...HLG_SOURCE, ...uhd, pixFmt: "yuvj420p", colorRange: "pc" })
+    expect(hdr.pictureFilter).toBe(toSdr("color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=pc"))
+    expect(hdr.launch!.peakMemoryMiB - defaultLaunchPeakMiB()).toBe(Math.ceil(8.2944 * 72))
+  })
+
+  it("leaves a limited-range SDR or untagged source's tail as it always was: no filter, no estimate of its own", () => {
     for (const source of [
       SOURCE,
       {},

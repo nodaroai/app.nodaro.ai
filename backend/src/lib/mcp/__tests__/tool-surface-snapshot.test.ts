@@ -1538,6 +1538,16 @@ const PIXVERSE_V6_MAX_MODELS_BYTES = 34
 // (9_884 → 9_916 B). No tool was added, so the fixture does NOT move.
 const MINIMAX_H3_IMAGE_PER_TOOL_BYTES = 32
 
+// RAISED 2026-11-11 by OmniHuman 2.0, and nothing else: `omnihuman-2-0` joins lip_sync's
+// derived model list with its per-second price (15 s and the 4 s minimum), and the
+// `audio_duration_sec` / `resolution` notes say 2.0 measures its audio itself and is always
+// 720p. No tool was added, so the fixture does NOT move. All on lip_sync, which is the only
+// tool that names the model: on the tree merged with dev (2026-11-12) it measures 4_950 B;
+// dev's own code measures 4_839 B against this tree's packages, where the model is listed as
+// `, omnihuman-2-0 (duration-tiered)` (33 B), so 4_806 B without it — 144 B. (An earlier
+// measure, against an older dev, read 139.)
+const OMNIHUMAN_2_0_LIP_SYNC_BYTES = 144
+
 // RAISED 2026-11-11 by one NEW tool, `split_into_layers` (verbs-split-into-layers.ts: the Split into
 // Layers node's verb — one image split into a base picture and separate layers, with the output's
 // shape, the layer-pixel caveat and the default run's charged price in its description), and nothing
@@ -1768,6 +1778,7 @@ export const TOOL_WIRE_BUDGET = {
     SEEDREAM_5_5_TOTAL_BYTES +
     VIDEO_OVERLAY_VIDEO_LAYERS_BYTES +
     KLING_4_FLASH_MODELS_BYTES +
+    OMNIHUMAN_2_0_LIP_SYNC_BYTES +
     PIXVERSE_V6_MAX_MODELS_BYTES +
     SPLIT_INTO_LAYERS_TOOL_BYTES +
     NODARO_IMAGE_UPSCALE_BYTES +

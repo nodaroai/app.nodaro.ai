@@ -1725,6 +1725,56 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
     }
   })
 
+  it("does NOT re-stamp a pending execution that already carries the install that created it", async () => {
+    const saved = process.env.RUNTIME_ENV
+    process.env.RUNTIME_ENV = "staging"
+    try {
+      const mockFrom = vi.mocked(supabase.from)
+      const updateSpy = vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+      })
+      let callNum = 0
+      mockFrom.mockImplementation(() => {
+        callNum++
+        if (callNum === 1) {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({
+                    data: { id: TEST_EXEC_ID, status: "pending", runtime_env: "production" },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          } as never
+        }
+        if (callNum === 2) return { update: updateSpy } as never
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              in: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          }),
+        } as never
+      })
+
+      await authedPost(`/v1/workflow-executions/${TEST_EXEC_ID}/cancel`, {
+        mode: "after_current",
+      })
+
+      // Its queue job lives in the creating install's Redis: only that
+      // install's sweep can tell whether it is gone.
+      const payload = updateSpy.mock.calls[0][0] as Record<string, unknown>
+      expect(payload.status).toBe("stopping")
+      expect(payload).not.toHaveProperty("runtime_env")
+    } finally {
+      if (saved === undefined) delete process.env.RUNTIME_ENV
+      else process.env.RUNTIME_ENV = saved
+    }
+  })
+
   it("does NOT re-stamp runtime_env when stopping an already-claimed (running) execution", async () => {
     const saved = process.env.RUNTIME_ENV
     process.env.RUNTIME_ENV = "staging"

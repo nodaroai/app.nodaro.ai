@@ -25,9 +25,17 @@ const SEEDREAM_5_5 = ["seedream-5-5", "seedream-5-5-i2i"]
 const DECLARING = [...MINIMAX, ...SEEDREAM_5_5]
 
 describe("the declared default size", () => {
-  it("is declared by MiniMax H3 Image's and Seedream 5.5's two ids each and by two video models only", () => {
+  it("is declared by MiniMax H3 Image's and Seedream 5.5's two ids each and by video models only", () => {
     const declaring = Object.values(MODEL_CATALOG).filter((m) => m.defaultResolution).map((m) => m.id).sort()
-    expect(declaring).toEqual(["gemini-omni-flash-1-2", "minimax-h3-image", "minimax-h3-image-i2i", "nodaro-video-upscale", "pixverse-v6-max", "seedream-5-5", "seedream-5-5-i2i"])
+    expect(declaring).toEqual(["gemini-omni-flash-1-2", "minimax-h3-image", "minimax-h3-image-i2i", "nodaro-video-upscale", "pixverse-v6-max", "seedream-5-5", "seedream-5-5-i2i", "wan-animate-move", "wan-animate-replace"])
+    // Wan Animate's 720p, its largest size: the size a request naming none runs
+    // at, and the one a size it does not have (1080p) runs, and is charged, at
+    // (`motionTransferResolution`, decided 2026-11-12). Its panel is not read
+    // from it; no other editor surface reads a motion model's sizes.
+    for (const id of ["wan-animate-move", "wan-animate-replace"]) {
+      expect(MODEL_CATALOG[id]!.kind, id).toBe("video")
+      expect(defaultResolutionFor(id), id).toBe("720p")
+    }
     // Both generation models start their ladder on a 360p preview tier and default to 720p.
     for (const id of ["gemini-omni-flash-1-2", "pixverse-v6-max"]) {
       expect(MODEL_CATALOG[id]!.kind, id).toBe("video")

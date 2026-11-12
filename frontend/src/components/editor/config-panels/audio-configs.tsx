@@ -66,9 +66,9 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, dialogueProviderOf, getDialogueCapabilities, SUNO_SEPARATE_TYPES, SUNO_STEM_NAMES, DEFAULT_SUNO_STEM_NAME, SUNO_SEPARATE_STEM_FIELDS, type SunoSeparateType, type SunoStemName } from "@nodaro/shared/models"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, lipSyncLeverClearPatch, lipSyncTakesLever, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, dialogueProviderOf, getDialogueCapabilities, SUNO_SEPARATE_TYPES, SUNO_STEM_NAMES, DEFAULT_SUNO_STEM_NAME, SUNO_SEPARATE_STEM_FIELDS, type SunoSeparateType, type SunoStemName } from "@nodaro/shared/models"
 import { AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, type AudioFxPreset } from "@nodaro/shared/media"
-import { isPerSecondLipSyncProvider, sunoCreditType } from "@nodaro/shared/credits"
+import { lipSyncFifteenSecondCreditId, sunoCreditType } from "@nodaro/shared/credits"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts/assembly"
 import { MappableField } from "./mappable-field"
 import { CompareModelsLink } from "@/components/editor/node-docs/compare-models-link"
@@ -1725,6 +1725,14 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
     !FAL_LIP_SYNC_PROVIDERS.has(provider as never)
   // Per-provider resolution shape (values + default). See lipSyncResolutionOptions.
   const resOpts = lipSyncResolutionOptions(provider)
+  // A model that takes no resolution (OmniHuman 2.0 is always 720p) shows no
+  // dropdown and keeps no value — the shared lever table decides
+  // (`lipSyncTakesLever`), the one the route and the workflow run drop by.
+  const takesResolution = lipSyncTakesLever(provider, "resolution")
+  // A dedicated lip-sync model with a prompt limit of its own (OmniHuman 2.0:
+  // 300 characters, cut to it before the request) shows its counter. The
+  // Seedance / Hailuo lanes keep their video-model limits, unshown here.
+  const promptCap = SEEDANCE_LIP_SYNC_PROVIDERS.has(provider) ? undefined : MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER[provider]
 
   // Volcengine is KIE-hosted but VIDEO-input dubbing — no resolution lever and
   // no motion prompt. The image-input KIE talking-head set (kling-avatar*,
@@ -1740,7 +1748,15 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   // the user switches to a Replicate/fal provider, to Volcengine (video-input,
   // no resolution), or the cached resolution isn't valid for the current
   // provider, clear/snap so the lip-sync route's Zod enum never sees a stale value.
+  //
+  // A model that does not take a lever at all (OmniHuman 2.0: no resolution,
+  // fast mode or seed) has every such value cleared, whichever model left it.
   useEffect(() => {
+    const notTaken = lipSyncLeverClearPatch(provider, data)
+    if (Object.keys(notTaken).length > 0) {
+      onUpdate(notTaken as Partial<LipSyncData>)
+      return
+    }
     if (!imageInputKie) {
       if (data.resolution !== undefined) onUpdate({ resolution: undefined })
       return
@@ -1753,19 +1769,19 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={provider} onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"] })}>
+        <Select value={provider} onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"], ...lipSyncLeverClearPatch(v, data) } as Partial<LipSyncData>)}>
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {offeredLipSyncModels.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} perSecond={isPerSecondLipSyncProvider(m.value)} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} perSecondCreditId={lipSyncFifteenSecondCreditId(m.value)} />
             ))}
           </SelectContent>
         </Select>
       </MappableField>
       <ModelDescriptionHint modelId={provider} />
 
-      {/* Resolution — image-input KIE providers only (per-provider option set) */}
-      {imageInputKie && (
+      {/* Resolution — image-input KIE providers that take one (per-provider option set) */}
+      {imageInputKie && takesResolution && (
         <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Select value={data.resolution || resOpts.def} onValueChange={(v) => onUpdate({ resolution: v as LipSyncData["resolution"] })}>
             <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
@@ -1805,6 +1821,9 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
               refMap={refMap}
               snippets={promptSnippets}
             />
+          )}
+          {promptCap !== undefined && (
+            <PromptLengthCounter value={data.prompt || ""} max={promptCap} modelLabel={provider} />
           )}
         </MappableField>
       )}

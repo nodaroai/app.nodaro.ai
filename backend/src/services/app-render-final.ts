@@ -14,6 +14,7 @@
  * until it ends (the orchestrator settles them: `settleAppRunFinalEdits`).
  */
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { payloadBillingContext, type BillingContext } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
@@ -63,6 +64,7 @@ export async function executeAppRenderFinal(params: ExecuteAppRenderFinalParams)
       status: "pending",
       // An app's execution: kept out of the editor's own run list.
       trigger_type: "app_run",
+      runtime_env: getRuntimeEnv(),
       // The run it finishes, the version, and what it continues: a later
       // final continues from this one, and a run view walks the chain back.
       trigger_data: appRenderFinalStamp({

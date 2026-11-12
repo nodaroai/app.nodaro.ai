@@ -14,11 +14,12 @@
  * (`RENDER_NODE_TYPES[*].creditIds`), every video utility the shared estimator
  * prices per unit, Mask Composite, Video Overlay's video row, the LTX per-second rows, and the dubbing
  * per-minute rows (whole started minutes only, at most the longest span a dub
- * may cover — `<row>:2.5u` is not a count a dub is charged at), and Speaker
- * Frames' per-block row (whole started blocks of 1,000 sampled frames), and the
- * Nodaro Video Upscale tiers' four-second rows (a quarter-unit per billed
- * second). A speech
- * request's quote (`<model>:per-100-chars:<N>u`) is priced through its own,
+ * may cover — `<row>:2.5u` is not a count a dub is charged at), Speaker
+ * Frames' per-block row (whole started blocks of 1,000 sampled frames), each
+ * per-second lip-sync rate (`LIP_SYNC_AUDIO_RATES`: whole seconds, from the
+ * model's minimum to its maximum — OmniHuman 2.0's 4 to 300), and the Nodaro
+ * Video Upscale tiers' four-second rows (a quarter-unit per billed second). A
+ * speech request's quote (`<model>:per-100-chars:<N>u`) is priced through its own,
  * stricter reader (`parseSpeechQuoteCreditId`), which bounds N by the model's
  * cap and follows the length-pricing flag.
  *
@@ -28,6 +29,7 @@
  * the parity suites fail.
  */
 import {
+  LIP_SYNC_AUDIO_RATES,
   LTX_EXTEND_PER_SECOND_CREDIT_ID,
   LTX_RETAKE_PER_SECOND_CREDIT_ID,
   VIDEO_OVERLAY_PRICING,
@@ -51,6 +53,8 @@ export const UNIT_QUOTE_MAX_UNITS = 100_000
 export interface UnitQuoteRule {
   /** The most units a run of this rate can have. */
   readonly maxUnits: number
+  /** The fewest units a run of this rate can have (a per-second lip-sync rate's minimum); 0 when any count goes. */
+  readonly minUnits?: number
   /** Whether a run is charged whole units only (started minutes of a dub), so a fractional count is no run's. */
   readonly wholeUnits: boolean
 }
@@ -80,6 +84,10 @@ export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
   ] as const),
   ...DUBBING_MODEL_IDENTIFIERS.map((id) => [id, DUB_MINUTES] as const),
   [SPEAKER_FRAMES_CREDIT_ID, FRAME_BLOCKS] as const,
+  // A per-second lip-sync rate: the whole seconds a run of it can be billed.
+  ...Object.values(LIP_SYNC_AUDIO_RATES).map(
+    (rate) => [rate.rateId, { maxUnits: rate.maxSeconds, minUnits: rate.minSeconds, wholeUnits: true }] as const,
+  ),
 ])
 
 /** The rates a whole-run quote may name. */
@@ -94,7 +102,7 @@ export function parseRateQuoteCreditId(id: string): UnitQuoteCreditIdParts | und
   if (isSpeechLengthPriceId(id)) return undefined
   const parts = parseUnitQuoteCreditId(id)
   const rule = parts && UNIT_QUOTE_RATES.get(parts.rateId)
-  if (!parts || !rule || parts.units > rule.maxUnits || (rule.wholeUnits && !Number.isInteger(parts.units))) return undefined
+  if (!parts || !rule || parts.units > rule.maxUnits || parts.units < (rule.minUnits ?? 0) || (rule.wholeUnits && !Number.isInteger(parts.units))) return undefined
   return parts
 }
 

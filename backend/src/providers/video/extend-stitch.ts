@@ -15,11 +15,11 @@ import { join } from "node:path"
 import { probeAudioSampleRate, probeVideoOverlayBase, runFfmpeg, type VideoOverlayBaseProbe } from "./ffmpeg-utils.js"
 import { probeMatched, type MatchedProbe } from "./matched-encode.js"
 import {
+  deliveredPictureFilter,
   extendStitchArgs,
   extensionPicture,
   isHdr,
   pictureSize,
-  sdrPictureFilter,
   sourcePicture,
   stitchEncodesAtBitRate,
   stitchProxyArgs,
@@ -131,17 +131,20 @@ function extendPeakMemoryMiB(canvas: PictureShape, decoded: readonly PictureShap
 
 /**
  * How the extend's tail (its `@video_1` reference, and the last frame taken
- * from it) is cut from `source` (`extractTailToFile`'s options). An HDR source:
- * its picture through the stitch's own SDR conversion (`sdrPictureFilter`), so
- * the model continues the very picture the result shows and the boundary match
- * compares like with like, admitted at what a tail cut reserves (the default
- * launch, `defaultLaunchPeakMiB`) plus the tone-map's buffers at the source's
- * stored size (4K when it reports none). Any other source: nothing, the tail
- * cut exactly as it always was.
+ * from it) is cut from `source` (`extractTailToFile`'s options). An HDR or a
+ * full-range source: its picture through the stitch's own conversion
+ * (`deliveredPictureFilter`: to SDR, or to limited range), so the model
+ * continues the very picture the result shows and the boundary match compares
+ * like with like. An HDR source's cut is admitted at what a tail cut reserves
+ * (the default launch, `defaultLaunchPeakMiB`) plus the tone-map's buffers at
+ * the source's stored size (4K when it reports none); a full-range one's at
+ * the default. Any other source: nothing, the tail cut exactly as it always
+ * was.
  */
 export function extendTailPicture(source: MatchedProbe): { pictureFilter?: string; launch?: { peakMemoryMiB: number } } {
-  const pictureFilter = sdrPictureFilter(source)
+  const pictureFilter = deliveredPictureFilter(source)
   if (!pictureFilter) return {}
+  if (!isHdr(source)) return { pictureFilter }
   const size: PictureShape = source.width && source.height ? { width: source.width, height: source.height } : { ...UHD_CANVAS }
   return { pictureFilter, launch: { peakMemoryMiB: defaultLaunchPeakMiB() + Math.ceil(toneMapPeakMemoryMiB(size)) } }
 }

@@ -26,6 +26,7 @@
    "elevenlabs-dubbing": 40,
    "speaker-frames": 2,
    "topaz-video:per-unit": 40,
+   "omnihuman-2-0:per-second": 35,
    "nodaro-video-upscale:2k:per-4s": 30
   }
  },
@@ -1137,6 +1138,46 @@
     "servedUnit": 45,
     "credits": 314,
     "perUnitQuote": 315
+   }
+  },
+  {
+   "name": "Lip Sync (OmniHuman 2.0): a 10.04 s audio upload is billed 11 seconds",
+   "nodes": [
+    {
+     "id": "a",
+     "type": "upload-audio",
+     "data": {
+      "url": "https://m.test/voice.mp3",
+      "metadata": {
+       "durationSeconds": 10.04
+      }
+     }
+    },
+    {
+     "id": "x",
+     "type": "lip-sync",
+     "data": {
+      "provider": "omnihuman-2-0",
+      "prompt": ""
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "a-x",
+     "source": "a",
+     "target": "x",
+     "targetHandle": "audio"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "omnihuman-2-0:per-second",
+    "units": 11,
+    "quoteId": "omnihuman-2-0:per-second:11u",
+    "servedUnit": 41,
+    "credits": 443,
+    "perUnitQuote": 451
    }
   }
  ]

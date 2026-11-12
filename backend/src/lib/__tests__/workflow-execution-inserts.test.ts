@@ -49,7 +49,7 @@ import { billingPairColumns } from "../insert-job.js"
 import { inlineExecutionColumns } from "../execution-inline-graph.js"
 import { executionContentRedaction } from "../app-run-content.js"
 
-/** Calls whose output may be a row or a spread in one (checked to hold neither key below). */
+/** Calls whose output may be a row or a spread in one (checked below to hold neither key, nor the install stamp `runtime_env`). */
 const COLUMN_BUILDERS = new Set(["billingPairColumns", "inlineExecutionColumns", "executionContentRedaction"])
 /** The platform's stamp builders: what a stamp-writing lane's insert may store in `trigger_data`. */
 const STAMP_BUILDERS = new Set(["appRunStamp", "appRunResumeStamp", "appRenderFinalStamp", "continueFromFailedStamp", "nodeSelectionData"])
@@ -285,7 +285,7 @@ describe("every workflow_executions insert names its lane", { timeout: SCAN_TIME
     expect(Object.fromEntries([...scan.inserts.entries()].sort(([a], [b]) => a.localeCompare(b))), "add the new insert's lane to INSERTS").toEqual(INSERTS)
   })
 
-  it("the column builders a row may spread write neither key", () => {
+  it("the column builders a row may spread write neither key, nor the install stamp", () => {
     const outputs = [
       billingPairColumns(undefined),
       billingPairColumns({ payer: "workspace", workspaceId: "w", orgId: "o" } as never),
@@ -295,6 +295,9 @@ describe("every workflow_executions insert names its lane", { timeout: SCAN_TIME
     for (const out of outputs) {
       expect(Object.keys(out)).not.toContain("trigger_type")
       expect(Object.keys(out)).not.toContain("trigger_data")
+      // A spread written after the row's own stamp would override it, out of sight of
+      // workflow-execution-install-stamp.test.ts, which cannot read a builder's output.
+      expect(Object.keys(out)).not.toContain("runtime_env")
     }
     expect([...COLUMN_BUILDERS].sort()).toEqual(["billingPairColumns", "executionContentRedaction", "inlineExecutionColumns"])
   })

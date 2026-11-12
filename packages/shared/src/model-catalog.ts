@@ -3564,6 +3564,50 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "kling-3.0-motion:1080p:10s", credits: 500 },
     ],
   },
+  // Wan Animate (decided 2026-11-12): catalog entries so a deployment's model
+  // restriction can name them. Before, `models.allow` could not withhold them
+  // while the Motion Transfer node and /v1/motion-transfer kept running them
+  // beside the Kling models. The sizes are the three each runs at and is priced
+  // on today (one flat row per size, any clip length); a size it does not have
+  // (the route's 1080p) runs, and is charged, as 720p — `defaultResolution`, the
+  // size `normalizeModelInput` moves it to (`motionTransferResolution`), and
+  // the size a request naming none has always run at.
+  "wan-animate-move": {
+    id: "wan-animate-move",
+    kind: "video",
+    modes: ["motion-transfer"] as const,
+    family: "Alibaba",
+    maker: "alibaba",
+    label: "Wan Animate Move",
+    series: "Wan",
+    description: "Wan 2.2 Animate: moves the subject of a still image with the motion of a driving video.",
+    useCases: ["motion-transfer", "cheap"],
+    resolutions: ["480p", "580p", "720p"],
+    defaultResolution: "720p",
+    pricing: [
+      { identifier: "wan-animate-move", credits: 255, note: "480p" },
+      { identifier: "wan-animate-move:580p", credits: 330, note: "580p" },
+      { identifier: "wan-animate-move:720p", credits: 410, note: "720p" },
+    ],
+  },
+  "wan-animate-replace": {
+    id: "wan-animate-replace",
+    kind: "video",
+    modes: ["motion-transfer"] as const,
+    family: "Alibaba",
+    maker: "alibaba",
+    label: "Wan Animate Replace",
+    series: "Wan",
+    description: "Wan 2.2 Animate: replaces the person in a driving video with the subject of a still image, keeping the motion.",
+    useCases: ["motion-transfer", "character-swap"],
+    resolutions: ["480p", "580p", "720p"],
+    defaultResolution: "720p",
+    pricing: [
+      { identifier: "wan-animate-replace", credits: 255, note: "480p" },
+      { identifier: "wan-animate-replace:580p", credits: 330, note: "580p" },
+      { identifier: "wan-animate-replace:720p", credits: 410, note: "720p" },
+    ],
+  },
 
   // ── Lip sync / talking-head ──
   "kling-avatar": {
@@ -3623,6 +3667,25 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "omnihuman-1-5:15s", credits: 1020 },
       { identifier: "omnihuman-1-5:30s", credits: 2030 },
       { identifier: "omnihuman-1-5:60s", credits: 4050 },
+    ],
+  },
+  // A different model from 1.5, offered beside it (decided 2026-11-11): one
+  // image, 4 to 300 seconds of audio, 720p output, an optional prompt. It has
+  // none of 1.5's levers — no speaker mask, no resolution, no fast mode, no
+  // seed — so it declares no `resolutions` (`normalizeModelInput` drops one).
+  // Charged per second of its audio at one rate (LIP_SYNC_AUDIO_RATES).
+  "omnihuman-2-0": {
+    id: "omnihuman-2-0",
+    kind: "video",
+    modes: ["lip-sync"] as const,
+    family: "Bytedance",
+    maker: "bytedance",
+    label: "OmniHuman 2.0",
+    series: "OmniHuman",
+    description: "Talking avatar from one still image + audio, driven by the voice with an optional prompt for the scene, motion and camera. 720p, 4 seconds to 5 minutes, charged per second of audio.",
+    useCases: ["lip-sync", "talking-head", "long-form"],
+    pricing: [
+      { identifier: "omnihuman-2-0:per-second", credits: 35, note: "per second of audio, rounded up; at least 4 seconds" },
     ],
   },
   "hailuo-avatar": {

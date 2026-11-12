@@ -14,6 +14,8 @@ import { billingPairColumns } from "./insert-job.js"
 import { recordTriggerFireRefusal } from "./trigger-fire-refusal.js"
 import { refusePreviewFire } from "./preview-fire-refusal.js"
 import { refuseUnpricedFire } from "./llm-unpriced-fire-refusal.js"
+import { getRuntimeEnv } from "./runtime-env.js"
+import { failWaitingExecution } from "./concurrency-lanes/run-failure.js"
 import type { ScheduleRetryStamp } from "./schedule-retry.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
@@ -117,9 +119,23 @@ export interface ScheduleExecutionArgs {
   readonly retry?: ScheduleRetryStamp
 }
 
+/**
+ * `keepClaim` (on a run that was not started) tells the caller what to do with
+ * its claim on the trigger:
+ *   - true: a row now holds this fire's idempotency key. Either the fire
+ *     already had its run (a duplicate key), or this call wrote the row and
+ *     the queue refused it, and the row was settled as failed. A released
+ *     claim would only collide with that key on the next due tick, so the
+ *     claim stays and the schedule moves on;
+ *   - false: no row was written, so the claim goes back and a later tick
+ *     may fire.
+ */
 export type ScheduleExecutionInsert =
   | { readonly ok: true; readonly executionId: string }
-  | { readonly ok: false; readonly duplicate: boolean }
+  | { readonly ok: false; readonly keepClaim: boolean }
+
+/** What a run the queue refused shows in its history (rendered verbatim). */
+export const UNQUEUED_RUN_MESSAGE = "Execution failed — it could not be queued to start. Run it again."
 
 /**
  * Write the execution row and hand it to the orchestrator. The row's
@@ -127,8 +143,12 @@ export type ScheduleExecutionInsert =
  * time, the schedule, the previous fire, and a retry's stamp.
  *
  * A duplicate key means this fire (or this retry attempt) already has its
- * run — `duplicate: true`, nothing enqueued. Any other insert failure leaves
- * no run behind (`duplicate: false`), so the caller may give its claim back.
+ * run: nothing is enqueued. Any other insert failure leaves no run behind.
+ * A hand-off the queue refuses never leaves the row `pending`, which every
+ * later fire would read as "already running" (`hasActiveExecution`): the run
+ * is failed on the spot. A process that stops between the insert and the
+ * hand-off leaves it to the never-started sweep
+ * (`reconcile/never-started-executions.ts`).
  */
 export async function createScheduleExecution(args: ScheduleExecutionArgs): Promise<ScheduleExecutionInsert> {
   const { trigger, now, previousLastTriggeredAt, billingContext } = args
@@ -140,6 +160,7 @@ export async function createScheduleExecution(args: ScheduleExecutionArgs): Prom
       user_id: trigger.user_id,
       status: "pending",
       trigger_type: "schedule",
+      runtime_env: getRuntimeEnv(),
       ...billingPairColumns(billingContext),
       trigger_data: {
         timestamp: now.toISOString(),
@@ -154,26 +175,59 @@ export async function createScheduleExecution(args: ScheduleExecutionArgs): Prom
     .single()
 
   if (execError || !execution) {
-    return { ok: false, duplicate: execError?.code === UNIQUE_VIOLATION }
+    return { ok: false, keepClaim: execError?.code === UNIQUE_VIOLATION }
   }
 
-  // Whether this schedule's runs count as the workflow OWNER'S OWN — the
-  // only lane a PLAIN stored credential may travel on (plan D3) — is a
-  // stored fact about the trigger, writable only by the backend
-  // (migration 436): stamped when the owner's own browser session created
-  // the row — the editor's sync after a save that ADDED the node
-  // (POST /v1/workflows/:id/sync-triggers), or POST /v1/workflow-triggers.
-  // A token's or an app's graph write, and every other lane, leaves the
-  // default. Never re-derived here: uuid equality would say "owner" for a
-  // token-created schedule too. Read best-effort: on a database the column
-  // has not reached yet this fails closed and the schedule still fires.
-  const ownerInitiated = await readOwnerInitiated(trigger.id)
+  try {
+    // Whether this schedule's runs count as the workflow OWNER'S OWN — the
+    // only lane a PLAIN stored credential may travel on (plan D3) — is a
+    // stored fact about the trigger, writable only by the backend
+    // (migration 436): stamped when the owner's own browser session created
+    // the row — the editor's sync after a save that ADDED the node
+    // (POST /v1/workflows/:id/sync-triggers), or POST /v1/workflow-triggers.
+    // A token's or an app's graph write, and every other lane, leaves the
+    // default. Never re-derived here: uuid equality would say "owner" for a
+    // token-created schedule too. Read best-effort: on a database the column
+    // has not reached yet this fails closed and the schedule still fires.
+    const ownerInitiated = await readOwnerInitiated(trigger.id)
 
-  await orchestrationQueue.add("workflow-execution", buildScheduleJob(args, execution.id, ownerInitiated), {
-    jobId: execution.id,
-  })
+    await orchestrationQueue.add("workflow-execution", buildScheduleJob(args, execution.id, ownerInitiated), {
+      jobId: execution.id,
+    })
+  } catch (err) {
+    console.error(
+      `[schedule-fire] execution ${execution.id} of trigger ${trigger.id} could not be queued: ${err instanceof Error ? err.message : String(err)}`,
+    )
+    // The row left `pending` meanwhile: the job reached the queue after all
+    // (only the reply was lost) and an orchestrator claimed it, or its owner
+    // cancelled it. Either way the run exists, and it is not this call's to fail.
+    if ((await settleUnqueuedRun(execution.id)) === "moved-on") return { ok: true, executionId: execution.id }
+    return { ok: false, keepClaim: true }
+  }
 
   return { ok: true, executionId: execution.id }
+}
+
+/**
+ * What became of a run the queue refused:
+ *   - "failed": this call failed it, through the run's own failure path (a
+ *     compare-and-set from `pending`);
+ *   - "moved-on": the row was no longer `pending`, so the compare-and-set
+ *     matched nothing;
+ *   - "unsettled": the failure write itself failed. The row stays `pending`
+ *     and the never-started sweep settles it later.
+ */
+type UnqueuedRunOutcome = "failed" | "moved-on" | "unsettled"
+
+async function settleUnqueuedRun(executionId: string): Promise<UnqueuedRunOutcome> {
+  try {
+    return (await failWaitingExecution(executionId, UNQUEUED_RUN_MESSAGE)) ? "failed" : "moved-on"
+  } catch (err) {
+    console.error(
+      `[schedule-fire] could not fail unqueued execution ${executionId}; the never-started sweep will: ${err instanceof Error ? err.message : String(err)}`,
+    )
+    return "unsettled"
+  }
 }
 
 /** The orchestrator job for a scheduled execution (a fire's or a retry's). */

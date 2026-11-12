@@ -1180,6 +1180,20 @@ describe("LipSyncConfig — provider-snap useEffect", () => {
       expect.objectContaining({ resolution: "720p" }),
     )
   })
+
+  it("clears 1.5's 1080p, fast mode and seed on a node switched to OmniHuman 2.0 (it takes none of them)", () => {
+    const onUpdate = vi.fn()
+    const data = baseLipSyncData({ provider: "omnihuman-2-0", resolution: "1080p", fastMode: true, seed: 42 })
+    render(<LipSyncConfig {...commonProps(onUpdate, data)} />)
+    expect(onUpdate).toHaveBeenCalledWith({ resolution: undefined, fastMode: undefined, seed: undefined })
+  })
+
+  it("keeps OmniHuman 1.5's 1080p, fast mode and seed", () => {
+    const onUpdate = vi.fn()
+    const data = baseLipSyncData({ provider: "omnihuman-1-5", resolution: "1080p", fastMode: true, seed: 42 })
+    render(<LipSyncConfig {...commonProps(onUpdate, data)} />)
+    expect(onUpdate).not.toHaveBeenCalled()
+  })
 })
 
 // =============================================================================

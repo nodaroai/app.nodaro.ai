@@ -31,6 +31,7 @@ import {
   clampCinematicDuration,
   estimateScriptDurationSec,
   getLipSyncMaxAudioSeconds,
+  lipSyncAudioRateOf,
   ltxExtendDurationSec,
 } from "@nodaro/shared/credits"
 import {
@@ -218,11 +219,19 @@ function extendLength(node: LengthNode, inputs: readonly WireInput[]): WireLengt
   return "unknown"
 }
 
-/** Lip Sync: the audio's length, capped at the most its provider takes (`getLipSyncMaxAudioSeconds`, trimmed server-side); a video-driven mode renders the video's. */
+/**
+ * Lip Sync: the audio's length, capped at the most its provider takes
+ * (`getLipSyncMaxAudioSeconds`, trimmed server-side — refused past it on a
+ * per-second-rate model) and, on a per-second-rate model, at least its minimum
+ * (shorter audio is padded with silence to it: OmniHuman 2.0 renders 4 s); a
+ * video-driven mode renders the video's.
+ */
 function lipSyncLength(node: LengthNode, inputs: readonly WireInput[]): WireLength {
-  const cap = getLipSyncMaxAudioSeconds(((dataOf(node).provider as string | undefined) ?? "kling-avatar"))
+  const provider = (dataOf(node).provider as string | undefined) ?? "kling-avatar"
+  const cap = getLipSyncMaxAudioSeconds(provider)
+  const floor = lipSyncAudioRateOf(provider)?.minSeconds ?? 0
   const audio = knownLength(audioIn(inputs))
-  const audioBound = audio ? capped(audio, cap) : fixed(cap)
+  const audioBound = audio ? maxLen(capped(audio, cap), fixed(floor)) : fixed(cap)
   const videoWire = wireOf(inputs, "video", "video")
   if (!videoWire) return audioBound
   const video = knownLength(videoWire.length)

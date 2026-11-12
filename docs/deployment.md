@@ -160,7 +160,7 @@ here for each one anyway.
 | `SCENE3D_PRIVATE_S3_ENDPOINT` / `SCENE3D_PRIVATE_S3_REGION` | existing R2 settings | S3-compatible endpoint and region for the private scene bucket. No public bucket URL is used. |
 | `SCENE3D_PRIVATE_S3_ACCESS_KEY_ID` / `SCENE3D_PRIVATE_S3_SECRET_ACCESS_KEY` | existing R2 credentials | Server-side credentials for the private scene bucket. Prefer credentials restricted to that bucket. |
 | `SCENE3D_PRIVATE_S3_FORCE_PATH_STYLE` | existing R2 setting | Enable with `true` or `1` for an S3-compatible store that requires path-style addressing. |
-| `RUNTIME_ENV` | `RAILWAY_ENVIRONMENT_NAME`, else `local` | Names this deployment. Only matters when two installs share ONE database but have SEPARATE Redis instances (a staging + production pair): each install's stale-execution sweeps then reconcile only the runs its own orchestrator claimed, instead of marking the other install's healthy executions "orphaned". On Railway, `RAILWAY_ENVIRONMENT_NAME` already supplies it — set `RUNTIME_ENV` yourself only elsewhere. Every container of one install (API, workers, orchestrator) must use the SAME value. A [webhook endpoint](./webhooks.md) belongs to the install that created it (only that install lists it, sends to it and can open its secret), so renaming `RUNTIME_ENV` hides the endpoints created under the old name |
+| `RUNTIME_ENV` | `RAILWAY_ENVIRONMENT_NAME`, else `local` | Names this deployment. Only matters when two installs share ONE database but have SEPARATE Redis instances (a staging + production pair): each install's stale-execution sweeps then reconcile only the runs it created or its own orchestrator claimed, instead of marking the other install's healthy executions "orphaned". On Railway, `RAILWAY_ENVIRONMENT_NAME` already supplies it — set `RUNTIME_ENV` yourself only elsewhere. Every container of one install (API, workers, orchestrator) must use the SAME value. A [webhook endpoint](./webhooks.md) belongs to the install that created it (only that install lists it, sends to it and can open its secret), so renaming `RUNTIME_ENV` hides the endpoints created under the old name |
 | `SCHEDULE_TRIGGERS_ENABLED` | on — except on a Railway environment not named `production` | Whether this install fires scheduled workflows (Schedule Trigger nodes and schedule triggers made through the API). Unset: an install off Railway fires them, and on Railway only the environment named `production` does — a staging environment that shares production's database must not run production users' schedules on its own build. `true` / `1` turns it on anywhere, `false` / `0` turns it off anywhere; any other value stops the API from starting. Two installs that both fire the same database are still safe: each tick is claimed atomically, so only one of them starts the run. Restart to apply |
 | `CLIENT_IP_HEADER` | unset (Railway: `x-real-ip`, set by the image) | A header your platform's edge proxy uses to state the real client address. Trusted only from `CLIENT_IP_HEADER_FROM` hops — see §3, "How the backend picks the client address". `none` (or empty) switches it off, also on Railway |
 | `CLIENT_IP_HEADER_FROM` | unset (Railway: `100.64.0.0/10`) | Comma-separated ranges the edge connects from. Required with `CLIENT_IP_HEADER`: unset (or no valid range) and the API refuses to start; `any` trusts the header from every hop — only safe when nothing but your edge can reach the container |
@@ -836,11 +836,15 @@ optional; each array empty = "keep the default"):
   A model allow list withholds the models `GET /v1/models` lists (and the
   LLMs). A model it does not list is not withheld by omission: withhold its
   node with `nodes.allow` / `nodes.deny`. FLUX Fill Pro (`flux-fill`, a
-  Modify Image and Image to Image model) is listed, so an allow list that
-  leaves it out refuses it on `/v1/image-to-image` and in workflow runs
+  Modify Image and Image to Image model) and Wan Animate Move and Replace
+  (`wan-animate-move`, `wan-animate-replace`, Motion Transfer models) are
+  listed, so an allow list that leaves one out refuses it on its route
+  (`/v1/image-to-image`, `/v1/motion-transfer`) and in workflow runs
   (`403 model_not_available`), while the node's other models keep running.
-  A models override saved in Admin → Availability before FLUX Fill Pro was
-  listed does not tick it, so it stays off there until an admin ticks it.
+  A models override saved in Admin → Availability before a model was listed
+  does not tick a model listed later, so it stays off there until an admin
+  ticks it. The models listed later so far: `flux-fill`, `wan-animate-move`
+  and `wan-animate-replace`.
 
   A model restriction holds on the model a request RUNS on, not only on the
   one it names. A request that names no model is judged as the default its
@@ -895,7 +899,7 @@ optional; each array empty = "keep the default"):
   run, as the run does: Generate Music's MiniMax engine is offered even where
   the MiniMax video model is withheld, and Motion Transfer's Kling options
   follow the motion models they run (Kling 2.6 is `motion-transfer`, Kling 3.0
-  `kling-3.0-motion`). Some menus list their models by hand or by values that
+  `kling-3.0-motion`; the Wan Animate options are the models of the same id). Some menus list their models by hand or by values that
   are not model ids — Suno's versions,
   the voice changers, Video Upscale, Transcribe, Text to
   Audio, Voice Design, Generate Music, Reference Board and the Generate Video
@@ -1853,13 +1857,19 @@ point.
 staging copy, a preview environment) at the SAME Supabase project but
 give it its OWN Redis, name each install with `RUNTIME_ENV` — on
 Railway `RAILWAY_ENVIRONMENT_NAME` already does this for you. Workflow
-executions record the name of the install whose orchestrator claimed
-them, and each install's stale-execution sweeps only reconcile its own.
-Without distinct names, each install looks for the other's
+executions record the name of the install that created them (and whose
+orchestrator claimed them), and each install's stale-execution sweeps
+only reconcile its own. That includes a run that was created but never
+started: once it is 4 hours old (time spent waiting for a free run slot
+does not count) and its install's queue no longer holds it, that install
+marks it failed, so it cannot block its workflow's schedule or webhook
+trigger. Without distinct names, each install looks for the other's
 orchestration jobs in its own Redis, fails to find them, and marks
-perfectly healthy runs failed with "Execution orphaned". Rows already
-running at the moment you upgrade carry no name yet; the install named
-`production` reconciles those.
+perfectly healthy runs failed with "Execution orphaned". Rows written
+before an install recorded its name carry none; the install named
+`production` reconciles those. On any other install, such a run left
+`pending` stays so until it is cancelled
+(`POST /v1/workflow-executions/:id/cancel`).
 
 Scheduled workflows are stored in that shared database too, so only one
 of the installs should fire them. On Railway that is automatic: only the

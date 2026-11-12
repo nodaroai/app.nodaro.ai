@@ -14,6 +14,9 @@ import {
   estimateTrimVideoCredits,
   VIDEO_UTIL_PRICING,
   PITCH_TEMPO_PRICING,
+  LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS,
+  lipSyncAudioRateOf,
+  lipSyncEstimateSeconds,
   videoOverlayVideoUnits,
   type CombineVideosEstimatorInput,
   type LoopVideoEstimatorInput,
@@ -512,4 +515,57 @@ export function videoUpscalePricingUnits(
     fps: typeof data.targetFps === "number" && Number.isFinite(data.targetFps) ? clampTopazVideoFps(data.targetFps) : undefined,
     durationSec: topazVideoQuotedSourceSec(node, nodes, edges, rerunIds),
   })
+}
+
+/**
+ * The length, in seconds, of the audio a Lip Sync is QUOTED on, or `undefined`
+ * when it is not known yet: its `audio` wire's length where a run estimate
+ * follows it (the rule the server's run estimate reads), else what the
+ * upstream node itself reports (an audio upload's recorded length), else the
+ * length the node measured of its audio at its last run (`audioDurationSec`).
+ * The server measures the real audio before it holds anything; this is only
+ * what the editor shows.
+ */
+export function lipSyncQuotedAudioSec(
+  node: Pick<WorkflowNode, "id" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | undefined {
+  const wire = edges.find((e) => e.target === node.id && e.targetHandle === "audio")
+  const fromGraph = wire
+    ? wireDurationReader(nodes, edges, rerunIds)(wire.source) ?? upstreamVideoDurationSec(node.id, "audio", nodes, edges) ?? undefined
+    : undefined
+  const own = (node.data as { audioDurationSec?: unknown } | undefined)?.audioDurationSec
+  return fromGraph ?? (typeof own === "number" && Number.isFinite(own) && own > 0 ? own : undefined)
+}
+
+/**
+ * The seconds a Lip Sync on a model charged per second of its audio
+ * (OmniHuman 2.0) is QUOTED at — the billed seconds of the audio
+ * ({@link lipSyncQuotedAudioSec}), or, while its length is not known, the
+ * 15 seconds every model priced by its audio shows (an estimate) — and 1 for
+ * every other model, whose row is the whole price. The node's pill, its Run
+ * button, the confirm and the workflow badge all read this.
+ */
+export function lipSyncPricingUnits(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number {
+  const rate = lipSyncAudioRateOf((withWiredSettings(node, nodes, edges).data as { provider?: unknown } | undefined)?.provider)
+  if (!rate) return 1
+  return lipSyncEstimateSeconds(rate, lipSyncQuotedAudioSec(node, nodes, edges, rerunIds), LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS)
+}
+
+/** Is this Lip Sync quoted on a length it does not know yet (a per-second-rate model with no audio length)? Its figure is then an estimate. */
+export function lipSyncQuoteIsEstimate(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): boolean {
+  const rate = lipSyncAudioRateOf((withWiredSettings(node, nodes, edges).data as { provider?: unknown } | undefined)?.provider)
+  return rate !== undefined && lipSyncQuotedAudioSec(node, nodes, edges, rerunIds) === undefined
 }

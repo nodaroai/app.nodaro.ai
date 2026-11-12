@@ -29,6 +29,8 @@ export {
   videoGenerationCreditId,
   pricedVideoSelection,
   buildMotionCreditModelIdentifier,
+  motionTransferResolution,
+  type MotionTransferResolution,
   speedRampCreditId,
   applyEdlCreditId,
   speakerViewCreditId,
@@ -71,8 +73,15 @@ export {
   getLipSyncMaxAudioSeconds,
   isPerSecondLipSyncProvider,
   buildLipSyncCreditId,
+  LIP_SYNC_AUDIO_RATES,
+  OMNIHUMAN_2_0_PER_SECOND_CREDIT_ID,
+  lipSyncAudioRateOf,
+  lipSyncBilledSeconds,
+  lipSyncEstimateSeconds,
+  lipSyncFifteenSecondCreditId,
+  LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS,
 } from "../lip-sync-pricing.js"
-export type { LipSyncDurationBucket } from "../lip-sync-pricing.js"
+export type { LipSyncDurationBucket, LipSyncAudioRate } from "../lip-sync-pricing.js"
 export {
   AI_AVATAR_MAX_DURATION_SEC,
   AI_AVATAR_MAX_AUDIO_SEC,

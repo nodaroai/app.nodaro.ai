@@ -80,6 +80,8 @@ import { topazVideoHoldBaseCredits } from "../../../lib/topaz-video-plan.js"
 import { nodaroVideoUpscaleBaseCredits } from "../../../lib/nodaro-video-upscale-plan.js"
 import { isNodaroVideoUpscaleCreditId, NODARO_VIDEO_UPSCALE_RATE_SECONDS } from "@nodaro/render-rules"
 import { UNIT_QUOTE_MAX_UNITS, UNIT_QUOTE_RATE_IDS, parseRateQuoteCreditId } from "../../../lib/unit-quote-rates.js"
+import { lipSyncRateBaseCredits } from "../../../lib/lip-sync-inputs.js"
+import { lipSyncAudioRateOf } from "@nodaro/shared/credits"
 
 type Case = {
   name: string
@@ -145,6 +147,10 @@ async function routeBase(nodeType: string, rateId: string, units: number): Promi
     case "text-to-dialogue":
       // lib/speech-credits.ts: the unit row × the started hundreds.
       return STATIC_CREDIT_COSTS[rateId]! * units
+    case "lip-sync":
+      // routes/lip-sync.ts computeCredits and the workflow run's computeLipSyncRateCreditOverride:
+      // the model's per-second row × the billed seconds of the measured audio.
+      return lipSyncRateBaseCredits(lipSyncAudioRateOf("omnihuman-2-0")!, units)
     default:
       throw new Error(`no route rule for ${nodeType} — add one with its case`)
   }

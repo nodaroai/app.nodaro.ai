@@ -36,7 +36,7 @@ import { carriedEdges } from "./carried-edges"
 import { runLinesUnpriced, type RunUnpriced } from "./run-unpriced"
 import { seedanceRefQuoteKeyFor } from "@/lib/seedance-ref-quote"
 import { seedanceHdQuoteIdFor } from "@/lib/seedance-hd-quote"
-import { nodaroVideoUpscaleRefusedSec } from "@/lib/video-utility-estimate"
+import { lipSyncQuoteIsEstimate, nodaroVideoUpscaleRefusedSec } from "@/lib/video-utility-estimate"
 import { NODARO_VIDEO_UPSCALE_MAX_SEC } from "@nodaro/shared/models"
 import { tx } from "@/lib/i18n"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText, wiredVideoFrames } from "@/lib/video-start-frame-only"
@@ -168,6 +168,9 @@ function isMeteredEstimate(
     const id = getModelIdentifier(node, edges, allNodes, rerunIds)
     return id === TOPAZ_VIDEO_UNIT_CREDIT_ID || isNodaroVideoUpscaleCreditId(id)
   }
+  // A Lip Sync charged per second of its audio, quoted before its audio's length is known
+  // (15 s): an estimate — the run measures the audio and holds what it costs.
+  if (node.type === "lip-sync") return lipSyncQuoteIsEstimate(node, allNodes, edges, rerunIds)
   if (!llmNodePriceIds(node)) return false
   const id = getModelIdentifier(node, edges, allNodes, rerunIds)
   return isModelEstimate(id) && cachedCost(id) !== undefined

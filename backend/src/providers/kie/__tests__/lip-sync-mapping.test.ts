@@ -54,3 +54,46 @@ describe("buildLipSyncInput — omnihuman-1-5 param mapping", () => {
     expect(input.seed).toBeUndefined()
   })
 })
+
+// OmniHuman 2.0 (KIE `omnihuman-2-0`, schema read 2026-11-11): exactly four
+// keys — `image_urls` (ONE image, as a one-element array), `audio_url`,
+// `prompt` (≤ 300 chars), `enable_watermark` (TRUE upstream by default, so
+// always sent false). None of 1.5's levers ever reaches it.
+describe("buildLipSyncInput — omnihuman-2-0 body", () => {
+  const omni2 = KIE_LIP_SYNC_MODELS["omnihuman-2-0"]
+  const omni15 = KIE_LIP_SYNC_MODELS["omnihuman-1-5"]
+
+  it("sends exactly the four keys, the image as a one-element array, the watermark off", () => {
+    const input = buildLipSyncInput(omni2, { imageUrl: "https://m.test/face.png", audioUrl: "https://m.test/voice.mp3", prompt: "a museum guide" })
+    expect(input).toEqual({
+      image_urls: ["https://m.test/face.png"],
+      audio_url: "https://m.test/voice.mp3",
+      prompt: "a museum guide",
+      enable_watermark: false,
+    })
+    expect(omni2.model).toBe("omnihuman-2-0")
+  })
+
+  it("drops a resolution, fast mode or seed a node kept from 1.5", () => {
+    const input = buildLipSyncInput(omni2, {
+      imageUrl: "i",
+      audioUrl: "a",
+      resolution: "1080p",
+      options: { fastMode: true, seed: 42 },
+    })
+    expect(Object.keys(input).sort()).toEqual(["audio_url", "enable_watermark", "image_urls", "prompt"])
+  })
+
+  it("cuts a prompt past 300 characters to its first 300 (code points), never sends it whole", () => {
+    expect(omni2.maxPromptChars).toBe(300)
+    const long = "é".repeat(299) + "🙂🙂"
+    const prompt = buildLipSyncInput(omni2, { imageUrl: "i", audioUrl: "a", prompt: long }).prompt as string
+    expect(Array.from(prompt)).toHaveLength(300)
+    expect(prompt.endsWith("🙂")).toBe(true)
+  })
+
+  it("leaves 1.5's body as it was: a string image_url, its levers, no watermark key", () => {
+    const input = buildLipSyncInput(omni15, { imageUrl: "i", audioUrl: "a", resolution: "1080p", options: { fastMode: true, seed: 3 } })
+    expect(input).toEqual({ image_url: "i", audio_url: "a", prompt: "A person speaking naturally", output_resolution: "1080", pe_fast_mode: true, seed: 3 })
+  })
+})

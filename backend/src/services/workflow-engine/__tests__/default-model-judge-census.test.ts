@@ -220,13 +220,11 @@ describe("every dispatchable node type that names no model resolves a default a 
 const PROBE = "zz-not-a-model"
 
 const LIP_SYNC_AWAITING = "LatentSync, Wav2Lip, VideoReTalking, SadTalker, HeyGen Lipsync Precision and Lipsync 2 Pro run beside its catalog models and have no catalog entry. An entry needs each one's maker: two are not makers in MODEL_MAKERS yet, and Wav2Lip is a research release. Awaiting that decision (2026-11-12)"
-const MOTION_AWAITING = "Wan Animate Move and Replace run beside the catalog's Kling motion models and have no catalog entry. An entry is straightforward (Alibaba, motion transfer, 480p / 580p / 720p on its existing flat rows; nothing normalizes a motion-transfer request), and was left out only because a models override saved before a model is listed withholds it (pinned for FLUX Fill Pro in payload-builder-flux-fill-restriction.test.ts): pending that decision (2026-11-12)"
 const SUNO_AWAITING = "Suno V4_5PLUS, V4_5ALL and V4_5 run beside the catalog's Suno versions and have no catalog entry; each is charged under its operation's row (`sunoCreditType`), so an entry needs a price row of its own, or one it is not charged under. Awaiting that decision (2026-11-12)"
 
 /** Node types that run catalog models AND accept options with no catalog entry, each with what deciding it needs. Only shrinks. */
 const MIXED_AWAITING_DECISION: Readonly<Record<string, string>> = {
   "lip-sync": LIP_SYNC_AWAITING,
-  "motion-transfer": MOTION_AWAITING,
   "suno-generate": SUNO_AWAITING,
   "suno-cover": SUNO_AWAITING,
   "suno-extend": SUNO_AWAITING,
@@ -301,6 +299,9 @@ describe("every option a workflow node accepts runs a model a restriction can na
       expect(byType(type)!.gateable, type).toContain("flux-fill")
       expect(byType(type)!.outside.size, type).toBe(0)
     }
+    // Wan Animate on Motion Transfer, beside the Kling motion models (decided 2026-11-12).
+    expect([...byType("motion-transfer")!.gateable]).toEqual(expect.arrayContaining(["wan-animate-move", "wan-animate-replace", "motion-transfer", "kling-3.0-motion"]))
+    expect(byType("motion-transfer")!.outside.size).toBe(0)
     expect([...byType("lip-sync")!.outside.keys()]).toContain("provider=latentsync")
   })
 

@@ -576,6 +576,29 @@ describe("lip-sync handler", () => {
     )
   })
 
+  it("OmniHuman 2.0 runs through the KIE image lipSync with the measured length, and commits its reservation (never metered)", async () => {
+    mocks.mockLipSync.mockResolvedValueOnce({ ...VIDEO_RESULT, cost: 0.77 })
+    const job = makeJob("lip-sync", {
+      imageUrl: "https://face.png",
+      audioUrl: "https://speech.mp3",
+      provider: "omnihuman-2-0",
+      audioDurationSec: 10.04,
+      lipSyncBilledSeconds: 11,
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockLipSync).toHaveBeenCalledWith(
+      "https://face.png", "https://speech.mp3", "omnihuman-2-0", undefined, undefined, 10.04,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+      // The seconds the run was held for: the provider refuses audio that bills more.
+      { fastMode: undefined, seed: undefined, billedSeconds: 11 },
+    )
+    const { result } = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
+    // The provider's cost is recorded; the charge is the reservation (no metered true-up).
+    expect(result.cost).toBe(0.77)
+    expect(result).not.toHaveProperty("meteredCost")
+  })
+
   // --- fal branch (sync-lipsync-v3) -------------------------------------------
   it("routes sync-lipsync-v3 to the fal branch (falLipSync), NOT the KIE lipSync", async () => {
     const job = makeJob("lip-sync", {

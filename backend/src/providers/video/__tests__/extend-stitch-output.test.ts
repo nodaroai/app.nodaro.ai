@@ -6,7 +6,9 @@
  * build).
  *
  * No smart-cut matcher registers in this repo's own processes (the matcher is
- * the cloud plugin's), so every stitch here takes the fixed trims (4 and 3).
+ * the cloud plugin's), so every stitch here takes the fixed trims (4 and 3),
+ * but the one test that registers a stand-in matcher for its own stitch
+ * (`standInMatcher`).
  *
  * The sound is cut to the picture's frame count, sample for sample, so the
  * result's sound and picture end together: to within one AAC frame (1024
@@ -21,6 +23,7 @@ import { needsTranscode, runFfmpeg, runFfmpegCapture, runFfprobe } from "../ffmp
 import { stitchExtension } from "../extend-stitch.js"
 import { extendStitchArgs } from "../extend-stitch-args.js"
 import { probeMatched } from "../matched-encode.js"
+import { getSmartCutMatcher, registerSmartCutMatcher, type SmartCutMatcher } from "../smart-cut.js"
 import { colourTagArgs, hdrTags, writeTaggedClip, type ColourTags } from "./colour-tagged-clip.js"
 
 function isFfmpegAvailable(): boolean {
@@ -93,6 +96,59 @@ async function x264Settings(file: string): Promise<string> {
 function expectLocked(p: Probed): void {
   expect(p.audio, "the result has sound").toBeDefined()
   expect(Math.abs(Number(p.audio!.duration) - Number(p.video.duration))).toBeLessThan(LOCKED_WITHIN_SEC)
+}
+
+/**
+ * The PSNR at which `standInMatcher` calls a pair a match. Not the extend's
+ * documented 24 dB: one picture compared at full range against limited range
+ * scores right about there (each level moves by at most 20, about 22 dB where
+ * every pixel is white; 24 dB on the test's fixture), so 24 dB could not tell
+ * the two apart. A pair at the same levels scores far above 32.
+ */
+const STAND_IN_MATCH_DB = 32
+
+/** Every picture frame's luma plane in `file` (an 8-bit 4:2:0 picture), raw as decoded: no conversion of any kind. */
+async function lumaPlanes(file: string): Promise<Buffer[]> {
+  const stream = (JSON.parse(await runFfprobe([
+    "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,pix_fmt", "-of", "json", file,
+  ])) as { streams: Array<{ width: number; height: number; pix_fmt: string }> }).streams[0]!
+  expect(["yuv420p", "yuvj420p"]).toContain(stream.pix_fmt)
+  const luma = stream.width * stream.height
+  const frame = luma + 2 * Math.ceil(stream.width / 2) * Math.ceil(stream.height / 2)
+  // `rawvideo` in the decoded pixel format: the planes as they are stored.
+  const raw = execFileSync("ffmpeg", ["-v", "error", "-i", file, "-map", "0:v:0", "-fps_mode", "passthrough", "-f", "rawvideo", "-"], { maxBuffer: 256 * 1024 * 1024 })
+  return Array.from({ length: Math.floor(raw.length / frame) }, (_, n) => raw.subarray(n * frame, n * frame + luma))
+}
+
+/** Two luma planes' PSNR, in dB (identical: Infinity). */
+function lumaPsnr(a: Buffer, b: Buffer): number {
+  expect(a.length).toBe(b.length)
+  let squared = 0
+  for (let k = 0; k < a.length; k++) squared += (a[k]! - b[k]!) ** 2
+  return squared === 0 ? Infinity : 10 * Math.log10((255 * 255) / (squared / a.length))
+}
+
+/**
+ * A stand-in for the cloud plugin's boundary matcher, which never registers in
+ * this repo: the best pair of the two proxies' frames by the PSNR of their raw
+ * luma planes, a match at `STAND_IN_MATCH_DB` or more. It tells whether the
+ * stitch's two proxies carry the same levels, not how the plugin's own search
+ * scores them.
+ */
+const standInMatcher: SmartCutMatcher = async (prevPath, nextPath, framesFromPrev, framesFromNext) => {
+  const prev = (await lumaPlanes(prevPath)).slice(-framesFromPrev)
+  const next = (await lumaPlanes(nextPath)).slice(0, framesFromNext)
+  const best = prev
+    .flatMap((p, i) => next.map((n, j) => ({ i, j, psnr: lumaPsnr(p, n) })))
+    .reduce((a, b) => (b.psnr > a.psnr ? b : a))
+  return {
+    trimEndFrames: prev.length - 1 - best.i,
+    trimStartFrames: best.j + 1,
+    psnr: best.psnr,
+    matched: best.psnr >= STAND_IN_MATCH_DB,
+    searchedPrevFrames: prev.length,
+    searchedNextFrames: next.length,
+  }
 }
 
 describe.skipIf(!ffmpegAvailable)("stitchExtension (real ffmpeg)", () => {
@@ -248,6 +304,52 @@ describe.skipIf(!ffmpegAvailable)("stitchExtension (real ffmpeg)", () => {
     expect(white).toBeGreaterThanOrEqual(230)
     expect(white).toBeLessThanOrEqual(240)
     expect(Number(probed.video.nb_read_frames)).toBe(72 - 4 + (48 - 3))
+  }, 60_000)
+
+  // A full-range source and an extension that starts with the source's own last frames in
+  // limited range, as Seedance returns its picture. The matcher compares the two boundary
+  // proxies' raw planes, so the source's proxy must be limited range too for the twins to match.
+  it("finds the matched cut on a full-range source whose extension starts with its last frames, limited range", async () => {
+    // Flat black and white panels (full range's 0 and 255) beside a moving one, 5 s of it.
+    const panels = "color=c=black:s=160x90:r=24:d=5[b];color=c=white:s=160x90:r=24:d=5[w];testsrc2=s=160x90:r=24:d=5[t];[b][w][t]hstack=inputs=3"
+    const bt709 = { primaries: "bt709", transfer: "bt709", matrix: "bt709" }
+    const fullTags = colourTagArgs({ ...bt709, range: "pc" })
+    const limitedTags = colourTagArgs({ ...bt709, range: "tv" })
+    const full = join(dir, "source-full-twins.mp4")
+    const twins = join(dir, "extension-twins.mp4")
+    // The source: its first 72 frames (3 s), full range.
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", panels,
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3:sample_rate=48000",
+      "-vf", `trim=end_frame=72,format=yuvj420p,${fullTags.filter}`,
+      "-c:v", "libx264", "-pix_fmt", "yuvj420p", "-b:v", "300k", ...fullTags.encoder,
+      "-c:a", "aac", "-shortest",
+      full,
+    ])
+    // The extension: the same picture from the source's last 4 frames on (frames 68–115), limited range.
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", panels,
+      "-vf", `trim=start_frame=68:end_frame=116,setpts=PTS-STARTPTS,format=yuv420p,${limitedTags.filter}`,
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "14", ...limitedTags.encoder, "-an",
+      twins,
+    ])
+    expect((await probeMatched(full)).colorRange).toBe("pc")
+    expect((await probeMatched(twins)).colorRange).toBe("tv")
+
+    const registered = getSmartCutMatcher()
+    registerSmartCutMatcher(standInMatcher)
+    try {
+      const { boundary, probed } = await stitch(full, twins)
+      expect(boundary.matched, JSON.stringify(boundary)).toBe(true)
+      expect(boundary.psnrDb).toBeGreaterThanOrEqual(STAND_IN_MATCH_DB)
+      // A twin pair: the source's frame 64 + 7 − end trim is the extension's 68 + start trim − 1.
+      expect(boundary.trimEndFrames + boundary.trimStartFrames, JSON.stringify(boundary)).toBe(4)
+      expect(Number(probed.video.nb_read_frames)).toBe(72 + 48 - 4)
+    } finally {
+      registerSmartCutMatcher(registered as SmartCutMatcher)
+    }
   }, 60_000)
 
   it("delivers a 4:4:4 PCM MOV source (a chained raw clip) as an H.264 4:2:0 MP4 with AAC, at its size", async () => {

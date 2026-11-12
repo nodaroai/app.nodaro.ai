@@ -1,6 +1,6 @@
-// @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,video-overlay,extend-video,video-retake,dubbing}.ts
+// @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,video-overlay,extend-video,video-retake,dubbing,lip-sync}.ts
 // @test-watches backend/src/services/workflow-engine/node-executor.ts
-// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,video-overlay-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span,nodaro-video-upscale-plan}.ts backend/src/lib/private-plugins/toolkit.ts
+// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,video-overlay-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span,lip-sync-inputs,nodaro-video-upscale-plan}.ts backend/src/lib/private-plugins/toolkit.ts
 /**
  * A per-unit run is CHARGED from the same price source it is QUOTED from.
  *
@@ -95,6 +95,8 @@ import { applyEdlCreditOverride } from "../../../lib/apply-edl-plan.js"
 import { speakerViewCreditOverride } from "../../../lib/speaker-view-plan.js"
 import { speakerFramesCreditOverride } from "../../../lib/speaker-frames-plan.js"
 import { dubbingBaseCredits } from "../../../lib/dubbing-span.js"
+import { lipSyncRateBaseCredits } from "../../../lib/lip-sync-inputs.js"
+import { LIP_SYNC_AUDIO_RATES, OMNIHUMAN_2_0_PER_SECOND_CREDIT_ID } from "@nodaro/shared/credits"
 import { buildToolkit } from "../../../lib/private-plugins/toolkit.js"
 import { SRC, parseText, walk } from "../../../lib/__tests__/source-ast.js"
 
@@ -169,6 +171,12 @@ const CHARGES: Readonly<Record<string, Charge>> = {
   // routes/video-upscale.ts (computeCredits) and the workflow run's computeTopazVideoCreditOverride:
   // a Topaz plan holding 7 units.
   [TOPAZ_VIDEO_UNIT_CREDIT_ID]: { units: 7, charge: async () => markedUp(TOPAZ_VIDEO_UNIT_CREDIT_ID, await topazVideoHoldBaseCredits({ holdUnits: 7 })) },
+  // routes/lip-sync.ts (computeCredits) and the workflow run's computeLipSyncRateCreditOverride:
+  // OmniHuman 2.0 billed 7 seconds of its measured audio.
+  [OMNIHUMAN_2_0_PER_SECOND_CREDIT_ID]: {
+    units: 7,
+    charge: async () => markedUp(OMNIHUMAN_2_0_PER_SECOND_CREDIT_ID, await lipSyncRateBaseCredits(LIP_SYNC_AUDIO_RATES["omnihuman-2-0"]!, 7)),
+  },
   // routes/video-upscale.ts (computeCredits) and the workflow run's computeNodaroVideoUpscaleCreditOverride:
   // a Nodaro Video Upscale plan billed 10 s — 2.5 units of its tier's four-second row.
   ...Object.fromEntries(
@@ -312,6 +320,7 @@ describe("each charge site prices through the function this suite drives", () =>
     "routes/extend-video.ts": ["ltxExtendBaseCredits"],
     "routes/video-retake.ts": ["ltxRetakeBaseCredits"],
     "routes/dubbing.ts": ["dubbingBaseCredits"],
+    "routes/lip-sync.ts": ["lipSyncRateBaseCredits"],
     "services/workflow-engine/node-executor.ts": [
       "videoUtilityChargeBaseCredits",
       "maskCompositeBaseCredits",
@@ -320,6 +329,7 @@ describe("each charge site prices through the function this suite drives", () =>
       "ltxRetakeBaseCredits",
       "applyEdlCreditOverride",
       "speakerViewCreditOverride",
+      "lipSyncRateBaseCredits",
     ],
     // The library functions the sites call: each reads the row through the shared lookup.
     "lib/video-utility-credits.ts": ["unitRateBaseCredits"],
@@ -332,6 +342,7 @@ describe("each charge site prices through the function this suite drives", () =>
     // The cloud plugin's Speaker View route reserves through this member.
     "lib/private-plugins/toolkit.ts": ["unitRatePrice"],
     "lib/dubbing-span.ts": ["baseCreditCostFor"],
+    "lib/lip-sync-inputs.ts": ["unitRateBaseCredits"],
     "lib/nodaro-video-upscale-plan.ts": ["unitRateBaseCredits"],
   }
 

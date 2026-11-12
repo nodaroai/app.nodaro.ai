@@ -14,7 +14,7 @@
  * the migration is complete.
  */
 
-import { requestImageLimit } from "@nodaro/shared/models"
+import { MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, requestImageLimit } from "@nodaro/shared/models"
 import { SEEDREAM_5_5_DEFAULT_RESOLUTION, type Seedream55Resolution } from "@nodaro/shared/model-catalog"
 import { confirmedByRun, ENABLE_SAFETY_CHECKER_LEVER, NSFW_CHECKER_LEVER, NSFW_CHECKER_SENT_FALSE_LEVER, type SafetyLever, MODERATION_LEVER } from "../safety-levers.js"
 
@@ -203,6 +203,16 @@ export interface KieModelConfig {
   /** The most `input_urls` this model accepts: what a request holds past it is not sent. */
   maxInputImages?: number
   requiresDuration?: boolean             // Model schema lists `duration` as REQUIRED — bespoke runners must emit it even in modes where it is ignored (gemini-omni-flash)
+  /** Lip-sync: the image goes under `imageParam` as a one-element array (OmniHuman 2.0's `image_urls`), not a string. */
+  imageAsList?: true
+  /** Lip-sync: the most prompt characters (code points) the schema takes; a longer prompt is cut to it before the request. */
+  maxPromptChars?: number
+  /**
+   * Lip-sync charged per second of audio: what KIE bills per second of the
+   * output, in KIE credits. The job's provider cost is this × the run's billed
+   * seconds × `KIE_CREDIT_USD`, not the flat `cost`.
+   */
+  kieCreditsPerAudioSecond?: number
 }
 
 /**
@@ -2190,6 +2200,28 @@ export const KIE_LIP_SYNC_MODELS: Record<string, KieModelConfig> = {
     supportsFastMode: true,
     supportsSeed: true,
     extraParams: {},
+  },
+
+  // OmniHuman 2.0 (ByteDance) — a different model from 1.5, offered beside it.
+  // docs: docs.kie.ai/market/omnihuman-2-0 (schema read 2026-11-11).
+  // input: image_urls (exactly ONE image, as a one-element array), audio_url
+  // (wav/mp3, 4–300 s, < 15 MB), prompt (optional, ≤ 300 chars),
+  // enable_watermark (defaults to TRUE upstream — always sent false). No
+  // mask_url, output_resolution, pe_fast_mode or seed: the body is exactly
+  // those four keys (`inputFields`). Output: a 720p MP4 as long as the audio.
+  // KIE bills 14 credits per second of output. The run is charged per second
+  // of its audio at the `omnihuman-2-0:per-second` row (LIP_SYNC_AUDIO_RATES);
+  // `credits` / `cost` below are a 15 s display anchor only.
+  "omnihuman-2-0": {
+    model: "omnihuman-2-0",
+    credits: 210,
+    cost: 1.05,
+    imageParam: "image_urls",
+    imageAsList: true,
+    maxPromptChars: MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER["omnihuman-2-0"],
+    kieCreditsPerAudioSecond: 14,
+    inputFields: ["image_urls", "audio_url", "prompt", "enable_watermark"],
+    extraParams: { enable_watermark: false },
   },
 
   // Volcengine video-to-video lip sync (AI dubbing). VIDEO input (video_url +

@@ -25,6 +25,7 @@ import {
   VIDEO_GEN_PROVIDERS,
   VIDEO_TO_VIDEO_PROVIDERS,
   EXTEND_VIDEO_PROVIDERS,
+  LIP_SYNC_PROVIDERS,
 } from "../model-constants.js"
 
 describe("per-model prompt length limits", () => {
@@ -177,6 +178,9 @@ describe("per-model prompt length limits", () => {
       ...VIDEO_GEN_PROVIDERS,
       ...VIDEO_TO_VIDEO_PROVIDERS,
       ...EXTEND_VIDEO_PROVIDERS,
+      // A lip-sync model is a video model too: OmniHuman 2.0's prompt is cut to
+      // its own 300-character limit (KIE schema) through this same table.
+      ...LIP_SYNC_PROVIDERS,
     ])
 
     it("every image-cap key is a real image provider id", () => {

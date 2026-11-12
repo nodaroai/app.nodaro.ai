@@ -71,7 +71,7 @@ async function sweepTrigger(trigger: ScheduleTriggerRow, now: Date): Promise<voi
   // type), so the stamp is the platform's own.
   const { data: rows, error } = await supabase
     .from("workflow_executions")
-    .select("id, status, trigger_type, idempotency_key, trigger_data, completed_at, updated_at")
+    .select("id, status, trigger_type, idempotency_key, trigger_data, completed_at, updated_at, started_at, created_at")
     .eq("workflow_id", trigger.workflow_id)
     .eq("user_id", trigger.user_id)
     .eq("trigger_type", "schedule")
@@ -120,9 +120,10 @@ async function sweepTrigger(trigger: ScheduleTriggerRow, now: Date): Promise<voi
     retry: stamp,
   })
   if (!created.ok) {
-    // A duplicate means another sweep made this attempt: its row stands, the
-    // claim stays. Any other failure left no run, so the claim goes back.
-    if (!created.duplicate) {
+    // A row holds this attempt's key (another sweep made it, or the queue
+    // refused this one and it was failed on the spot): the claim stays. No
+    // row at all left no run, so the claim goes back.
+    if (!created.keepClaim) {
       console.error(`[schedule-retry] could not create retry ${stamp.attempt} of ${stamp.chainRoot} (trigger ${trigger.id})`)
       await releaseTick(trigger.id, claimedAt, trigger.last_triggered_at)
     }

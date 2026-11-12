@@ -103,6 +103,9 @@ export interface RetryCandidateRow {
   readonly trigger_data: unknown
   readonly completed_at: string | null
   readonly updated_at?: string | null
+  /** Null on a run that never started (no orchestrator claimed it); absent when not read. */
+  readonly started_at?: string | null
+  readonly created_at?: string | null
 }
 
 export type ScheduleRetrySkip =
@@ -159,7 +162,11 @@ export function scheduleRetryDue(args: {
   if (endedAt === null) return { skip: "no_end_time" }
   const since = args.now.getTime() - endedAt
   if (since < policy.afterMinutes * 60_000) return { skip: "too_soon" }
-  if (since > SCHEDULE_RETRY_WINDOW_MS) return { skip: "too_old" }
+  // A run that never started is failed by a sweep hours or weeks after its
+  // fire was due (reconcile/never-started-executions.ts), so its end time says
+  // nothing about how old the fire is: its window counts from its creation.
+  const windowFrom = row.started_at === null ? (parseTime(row.created_at ?? null) ?? endedAt) : endedAt
+  if (args.now.getTime() - windowFrom > SCHEDULE_RETRY_WINDOW_MS) return { skip: "too_old" }
 
   const attempt = (stamp?.attempt ?? 0) + 1
   if (attempt > policy.maxAttempts) return { skip: "attempts_exhausted" }

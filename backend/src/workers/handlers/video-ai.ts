@@ -887,6 +887,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement,
     syncMode, temperature, activeSpeaker,
     mode, separateVocal, openScenedet, alignAudio, alignAudioReverse, templStartSeconds,
+    lipSyncBilledSeconds,
   } = job.data as {
     jobId: string
     imageUrl?: string
@@ -922,6 +923,8 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     alignAudio?: boolean
     alignAudioReverse?: boolean
     templStartSeconds?: number
+    // A per-second-rate model (OmniHuman 2.0): the seconds the run was held for.
+    lipSyncBilledSeconds?: number
   }
 
   const resolvedProvider = provider ?? LIP_SYNC_DEFAULT_PROVIDER
@@ -1058,7 +1061,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       resolution,
       audioDurationSec,
       { onTaskCreated: lipSyncOnTaskCreated },
-      { fastMode, seed },
+      { fastMode, seed, ...(lipSyncBilledSeconds !== undefined ? { billedSeconds: lipSyncBilledSeconds } : {}) },
     )
     resultUrl = result.url
     resultCost = result.cost
@@ -1552,11 +1555,12 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       const srcProbe = await probeVideoSource(srcLocal)
       const pictureSec = srcProbe.videoDurationSeconds ?? srcProbe.durationSeconds
       if (pictureSec < recipe.minSourceSec) throw new Error(extendSourceTooShortMessage(provider, pictureSec))
-      // An HDR source's tail, and so the last frame taken from it below, goes
-      // through the stitch's own SDR conversion (`extendTailPicture`): the
-      // result shows the source in SDR, so the model continues that picture
-      // and the seam matches. Any other source's tail is cut as it always
-      // was, and so is a chained MOV reference (Seedance's own SDR clip).
+      // An HDR or full-range source's tail, and so the last frame taken from
+      // it below, goes through the stitch's own conversion
+      // (`extendTailPicture`): the result shows the source in SDR, limited
+      // range, so the model continues that picture and the seam matches. Any
+      // other source's tail is cut as it always was, and so is a chained MOV
+      // reference (Seedance's own SDR clip).
       const tailPicture = extendTailPicture(await probeMatched(srcLocal))
       const tailPath = await extractTailToFile(srcLocal, recipe.tailSec, { measureFrom: "picture", ...tailPicture })
       // Generation inputs only, never the deliverable: the tail, the frame and

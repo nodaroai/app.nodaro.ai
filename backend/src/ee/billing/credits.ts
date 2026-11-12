@@ -1,5 +1,7 @@
 import {
   usdToCredits,
+  lipSyncAudioRateOf,
+  lipSyncEstimateSeconds,
   TEXT_TO_AUDIO_SFX_CREDIT_IDS,
   textToAudioCreditId,
   LTX_EXTEND_PER_SECOND_CREDIT_ID,
@@ -1898,6 +1900,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "omnihuman-1-5:15s": 1020,
   "omnihuman-1-5:30s": 2030,
   "omnihuman-1-5:60s": 4050,
+  // OmniHuman 2.0 — ONE row: the base per second of audio. A run is charged
+  // this × its billed seconds (the audio rounded up to a whole second, at
+  // least 4; `lipSyncBilledSeconds`), rounded up once and marked up once
+  // (`unitRateBaseCredits` → the guard's / the run's markup). Never bucketed.
+  "omnihuman-2-0:per-second": 35,
   // HeyGen Lipsync Precision + Sync Lipsync 2 Pro (Replicate, video-input dubbing).
   // Billed per second of output; bucketed like kling-avatar via buildLipSyncCreditId.
   // Base (markup applies at read time): credits. lip-sync
@@ -6039,6 +6046,24 @@ function videoOverlayVideoCredits(
 }
 
 /**
+ * The length of the audio a Lip Sync is driven by when a run is estimated: its
+ * `audio` wire's length where a run estimate knows it, else the length the
+ * audio's source node records (an audio upload's included, `mediaLengthSecOf`).
+ * Undefined when unknown.
+ */
+function lipSyncAudioWireSecOf(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+): number | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const wire = edges.find((e) => e.target === node.id && e.targetHandle === "audio")
+  if (wire === undefined) return undefined
+  return wireSec(wire.source ?? "") ?? mediaLengthSecOf(nodes.find((n) => n.id === wire.source)?.data)
+}
+
+/**
  * The length a Mask Composite is priced at when a run is estimated: its
  * leading video's wire (`maskCompositeLeadSec`, @nodaro/render-rules).
  */
@@ -6615,6 +6640,15 @@ export function graphPricingUnits(
       ? edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source ?? "")).find((v) => v !== undefined)
       : undefined
     return topazVideoEstimateUnits(topazVideoEstimateTarget(wired.data ?? {}, sec))
+  }
+  // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): the
+  // billed seconds of the audio its wire gives — the length a run estimate
+  // follows, else what the audio's source node records — or, not known, the
+  // model's maximum: an estimate never quotes below what the run may hold.
+  // The run measures the real audio before it reserves (lib/lip-sync-inputs.ts).
+  if (node.type === "lip-sync") {
+    const rate = lipSyncAudioRateOf(withWiredSettings(node, nodes, edges ?? []).data?.provider)
+    if (rate) return lipSyncEstimateSeconds(rate, lipSyncAudioWireSecOf(node, nodes, edges, runWireLengthOf(nodes, edges, rerunIds)))
   }
   // Nodaro Video Upscale: its tier's four-second row × the billed seconds ÷ 4,
   // at the length its video wire gives (else the estimate's 10 s), billed as a
@@ -7337,6 +7371,14 @@ export function getNodeModelIdentifier(
   // Nodaro Video Upscale: its tier's four-second row; its units (the clip's
   // billed seconds ÷ 4): graphPricingUnits.
   if (nodeType === "video-upscale" && isNodaroVideoUpscaleNode(node)) return nodaroVideoUpscaleCreditId(nodaroVideoUpscaleTierOf(data.targetResolution))
+
+  // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): its
+  // one-second row, which the estimate multiplies by the seconds
+  // (graphPricingUnits). It has no bare row and no buckets.
+  if (nodeType === "lip-sync") {
+    const rate = lipSyncAudioRateOf(data.provider)
+    if (rate) return rate.rateId
+  }
 
   // A node naming no model whose default is priced per input image: the node-type
   // row would quote below what the run reserves. An Extend Video node naming no

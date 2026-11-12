@@ -21,6 +21,7 @@ import {
   normalizeScheduleRules,
 } from "@nodaro/shared/workflow"
 import { supabase } from "../lib/supabase.js"
+import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
@@ -343,6 +344,7 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
         user_id: trigger.user_id,
         status: "pending",
         trigger_type: "webhook",
+        runtime_env: getRuntimeEnv(),
         trigger_data: triggerData,
         idempotency_key: idempotencyKey,
         ...billingPairColumns(billingContext),

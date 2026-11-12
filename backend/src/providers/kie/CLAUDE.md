@@ -155,6 +155,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `kling-avatar-pro` | `kling/ai-avatar-pro` | [kling avatar pro](https://docs.kie.ai/market/kling/ai-avatar-pro.md) |
 | `infinitalk` | `infinitalk/from-audio` | [infinitalk](https://docs.kie.ai/market/infinitalk/from-audio.md) |
 | `omnihuman-1-5` | `omnihuman-1-5` | [omnihuman 1.5](https://kie.ai/model/omnihuman-1-5.md) |
+| `omnihuman-2-0` | `omnihuman-2-0` | [omnihuman 2.0](https://docs.kie.ai/market/omnihuman-2-0.md) — wire notes below |
 | `suno` (music) | `suno/v4` | [suno generate](https://docs.kie.ai/suno-api/generate-music.md) |
 | `suno-v5` (music) | `suno/v5` | [suno generate](https://docs.kie.ai/suno-api/generate-music.md) |
 | `suno-v5_5` (music) | `suno/v5_5` | [suno generate](https://docs.kie.ai/suno-api/generate-music.md) |
@@ -162,6 +163,153 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `elevenlabs-turbo` | `elevenlabs/text-to-speech-turbo-2-5` | [11labs turbo](https://docs.kie.ai/market/elevenlabs/text-to-speech-turbo-2-5.md) |
 | `elevenlabs-multilingual` | `elevenlabs/text-to-speech-multilingual-v2` | [11labs multilingual](https://docs.kie.ai/market/elevenlabs/text-to-speech-multilingual-v2.md) |
 | `elevenlabs-stt` | `elevenlabs/speech-to-text` | [11labs stt](https://docs.kie.ai/market/elevenlabs/speech-to-text.md) |
+
+### OmniHuman 2.0 wire notes (`omnihuman-2-0`, the generic `lipSync`)
+
+A different model from OmniHuman 1.5, offered beside it in the Lip Sync node
+(decided 2026-11-11); 1.5 keeps its id, rows and levers. It runs through the
+generic `lipSync()` / `buildLipSyncInput`, shaped by its config:
+
+- **Body: exactly four keys** (`inputFields`): `image_urls`, `audio_url`,
+  `prompt`, `enable_watermark`. The image goes as a ONE-element array
+  (`imageAsList`; 1.5 takes a string `image_url`). `enable_watermark` defaults
+  to TRUE upstream, so the config always sends `false` (`extraParams`). 2.0 has
+  no `mask_url`, `output_resolution`, `pe_fast_mode` or `seed`: a resolution,
+  fast mode or seed a node kept from 1.5 is dropped by the allow-list, and
+  before that by the route, the payload builder and the panel
+  (`lipSyncLeverClearPatch` in `@nodaro/shared/models`).
+- **Prompt:** optional upstream, up to 300 characters
+  (`MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER`, `maxPromptChars`): cut to its first
+  300 code points, never refused. A promptless run sends the platform's default
+  sentence, as every lip-sync model does.
+- **Image:** one, < 30 MB, each side 300–6,000 px, width ÷ height 0.4–2.5
+  (jpeg, png, webp, bmp, tiff, gif, heic, heif upstream). Checked before any
+  hold (`lib/lip-sync-inputs.ts`, from the header and the server's declared
+  size, `lib/image-source-probe.ts`); an image sharp cannot read (HEIC, BMP)
+  cannot be measured and is refused. An animated GIF is sent as it is.
+- **Audio — price and send the same bytes:** 4–300 s, wav or mp3, < 15 MB as
+  SENT (decided 2026-11-11: held after conversion); a source up to 100 MB
+  (`LIP_SYNC_AUDIO_SOURCE_MAX_BYTES`) in one of the containers the lane takes
+  (`CALLER_AUDIO_FORMATS`: MP3/MP2, WAV/RF64, Wave64, AIFF, CAF, AU,
+  MP4/M4A/MOV, ADTS AAC, AC-3/E-AC-3, AMR, Ogg, FLAC, Matroska/WebM, WMA/ASF,
+  MPEG-TS, AVI, MPEG-PS (MPG/VOB), FLV, raw DTS, WavPack, APE, TTA, Musepack,
+  LOAS/LATM) is accepted and ALWAYS converted to MP3 (192 kb/s, decided
+  2026-11-12). Every ffmpeg launch that reads the caller's bytes runs with
+  `-protocol_whitelist file` and that `-format_whitelist`, so an HLS playlist,
+  a DASH manifest or an ffconcat script cannot make it read another file.
+  Every listed demuxer keeps its audio in the file itself EXCEPT `mov`: a MOV
+  can name another file for its samples (a data-reference alias), and only the
+  mov demuxer's `enable_drefs` default of 0 stops ffmpeg following it (such a
+  file decodes nothing and is refused; `decoded-audio-length.test.ts` builds
+  one). `-enable_drefs 0` cannot be passed — every non-mov input then fails
+  with "Option enable_drefs not found". Read a demuxer's source for a second
+  open before adding it to the list.
+  **Gaps play as silence (decided 2026-11-12):** the one decode runs
+  `gapFillFilter` — convert to the PCM shape, clamp timestamps so they never
+  step back (else `aresample` async would DROP audio) nor jump more than the
+  cap + 1 s, then `aresample=async=1:min_hard_comp=0.1` fills with silence
+  whatever the timestamps run ahead of the samples once it passes 0.1 s —
+  small gaps add up, so 40 ms a second is filled too (no `first_pts`: a late
+  start is not padded). The
+  price and the MP3 follow the filled length; a jump past the cap fills to it
+  and is refused as too long (~140 MiB peak, under `audioPeakMemoryMiB`),
+  unless ffmpeg collapses it first — its 10 s `dts_delta_threshold` for
+  formats that allow timestamp breaks (TS/PS), its 30-hour
+  `dts_error_threshold` elsewhere — and the audio is priced without it.
+  Either way price = samples sent. At 0.1 s no gap-free file
+  of the corpus changes by a sample (at 0.02 s MP3s that change rate do). Not
+  filled: a gap where the format changes (the filter graph restarts there).
+  **Read to its end, or refused (decided 2026-11-12):** `decodeAudioToPcm`
+  checks, in this order: (1) past the cap → `overCap` (a chained Ogg whose join
+  lies past 300 s is too long, not damaged); (2) the decode is more than
+  `DECLARED_LENGTH_TOLERANCE_SEC` (0.5 s; honest files measured ≤ 0.075 s)
+  shorter than the length the file STATES → `AudioReadStoppedError`. Stated
+  lengths are read by one ffprobe through the same whitelist
+  (`declared-audio-length.ts`), only for formats whose stated length is exact,
+  never when ffmpeg says "Estimating duration from bitrate" (a cut-off
+  WAV/W64/CAF, a WMA cut well short), and per format: Matroska's
+  Duration/DURATION are end times (start taken off), a Matroska stream
+  `duration` beside other streams is ffprobe's copy of the file's (audio ≥ 5 s
+  after the video: nothing stated), and Matroska counts only when its muxer
+  finished the file (its SeekHead names a Cues index, `matroska-index.ts` — a
+  live recording with an app-patched Duration states nothing); ASF's stream
+  duration is the file's play time (only for an audio-only file); Ogg Opus is
+  an end time less its start and pre-skip (`initial_padding`) — FLAC-in-Ogg
+  that starts mid-stream reports start 0 and stays refused. Stated lengths
+  only ever refuse — a file stating LESS than it plays is priced on what it
+  plays. Catches a cut-off FLAC/M4A/WebM/TTA/AIFF/AU, a cut-off WMA. (3)
+  Damage the demuxer reports (`DAMAGE_REPORTED`: "CRC mismatch!" from the Ogg
+  demuxer "[in#N(/ogg) @" — not a decoder's, e.g. Monkey's Audio — and a
+  Matroska EBML structure error once the file is open "[in#N/matroska,webm @";
+  fftools adds the format to the log name right after `avformat_open_input`,
+  before `avformat_find_stream_info`) → `AudioReadStoppedError` — the jump the
+  dropped audio leaves would otherwise fill and pass. The same EBML words
+  while the HEADER is read ("[in#N @": a stale SeekHead entry) lose nothing
+  and do not count, nor does a Matroska line followed only by 0x00 bytes to the
+  end of the file (zero padding after the audio, e.g. a recording recovered
+  after a crash: `onlyZeroBytesFrom`). (4)
+  "Error during demuxing" on stderr (`runFfmpegCapture`; ffmpeg treats the
+  demuxer's error as the end and exits 0 — a chained Ogg that changes channels
+  or sample rate) → `AudioReadStoppedError`, unless nothing was lost: the
+  decode reached the length the WHOLE file states (not Ogg: a chain states its
+  last link only), or the file is ADTS and fewer than 10 stray bytes follow its
+  last frame (`adts-frames.ts`, the demuxer's own tail error). The price check
+  refuses with `audio_unreadable` ("re-export the audio as one complete,
+  continuous file"), the worker with a `DeterministicJobError`. Not `-xerror`:
+  it refuses files ffmpeg reads to the end past one bad packet (a damaged MP3
+  frame, a dropped MPEG-TS packet, a stream-written WAV, the crafted MP3
+  fixtures). NOT caught, priced and sent as what decodes (gaps filled): a
+  cut-off or codec-joined file in a format with no exact length (MP3, ADTS,
+  AC-3, DTS, TS/PS, AVI, FLV — e.g. MP3 then ADTS), a cut-off WAV/W64/CAF (or
+  a WMA cut well short: estimated) or Ogg (its granule follows the cut),
+  unreported damage that only leaves a jump (a TTA or FLAC frame: plays as
+  silence), WV/TTA joined byte for byte (the first part only), Matroska with
+  video and no per-track DURATION. Still refused though complete: a WavPack
+  written to a pipe (it states no length) with a tag after its audio (the
+  demux line, nothing to forgive it by), FLAC-in-Ogg that starts mid-stream.
+  **One decode prices and sends (decided 2026-11-12):** the first audio track
+  is decoded ONCE into one PCM shape — 44.1 kHz stereo s16le
+  (`providers/video/decoded-audio-length.ts`, `decodeAudioToPcm`, capped just
+  past 300 s) — and the length is that PCM's sample frames: never the
+  container's declared duration (a crafted MP3 can understate it by minutes),
+  and the MP3 the model gets is encoded from THAT PCM. Never price on one
+  ffmpeg run and encode in another that resamples differently: at every
+  mid-stream sample-rate or channel-layout change ffmpeg rebuilds its filter
+  graph and drops what a resampler held, so two such runs keep different
+  sample counts (an 8 kHz measure lost ~2 ms a change against the MP3 encode,
+  and an encode could keep MORE than the decoder produced), and honest files
+  measured just under a whole second were refused. The route and the workflow
+  run download the audio to measure it (`downloadLipSyncAudio`: the 100 MB cap
+  on the stream and on disk, `LIP_SYNC_AUDIO_DOWNLOAD_LIMITS`' minimum rate,
+  under `lipSyncMeasureSlots`) and price a URL the caller controls, so the
+  model is NEVER sent that URL. `providers/kie/lip-sync-audio.ts` downloads it
+  again by the same rule, decodes it with the same decode (same bytes → same
+  samples, by construction), and refuses (`DeterministicJobError`: failed and
+  refunded now, KIE never called) one that bills more than the job's
+  `lipSyncBilledSeconds` (passed as `LipSyncOptions.billedSeconds`) or runs
+  past 300 s. Then it encodes that PCM to MP3 — audio under 4 s padded with
+  silence to 4.1 s ON THE PCM (`apad=whole_dur` in a graph that never rebuilds,
+  so it pads once; it never measures under 4 s upstream) and billed 4 s —
+  measures THE ENCODE (read as MP3 only), and refuses (deterministic) one that
+  plays past the held seconds (or the padded 4.1 s) by more than
+  `LIP_SYNC_ENCODE_TOLERANCE_SEC`, or that is 15 MB or more. The MP3 of the PCM
+  decodes back to exactly its sample count; `lip-sync-audio-parity.test.ts`
+  holds the price check's count EQUAL to the samples sent, on files that change
+  format mid-stream too. Only the encode, stored in the job's scratch folder
+  (`lip-sync-prepared`), is sent. Never trimmed.
+- **Staging check (open):** what KIE bills for a padded 4.1 s clip (4 s, or 5),
+  and for an MP3 whose decoded length sits just under a whole second (a
+  decoder that does not drop the encoder's ~25 ms of priming reads it a
+  frame longer). `provider_cost` assumes the billed seconds; confirm on one
+  staging run of each before relying on it.
+- **Billing:** KIE bills 14 credits per second of output (`kieCreditsPerAudioSecond`),
+  so `provider_cost` = 14 × the billed seconds × `KIE_CREDIT_USD`
+  (`lipSyncKieCostUsd`), not the flat `cost` anchor. The run is charged the
+  `omnihuman-2-0:per-second` row × the billed seconds (`LIP_SYNC_AUDIO_RATES`,
+  `lipSyncBilledSeconds`: the decoded audio rounded up, at least 4), measured
+  by the server on every path; the commit is the reservation.
+- No content-filter field in the schema, so no `safetyLevers`.
+- Poll budget: the long lip-sync budget above 30 s of audio, as kling-avatar.
 
 ### Wan 3.0 wire notes (`wan-3` / `wan-3-prime`, bespoke `runWan3`)
 

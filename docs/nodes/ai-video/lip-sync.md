@@ -13,7 +13,7 @@ It can also **dub an existing video**: HeyGen Lipsync Precision, Sync Lipsync 2 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Provider | Select | kling-avatar | AI model for lip sync |
-| Resolution | Select | 720p | Output resolution: 480p/720p (most KIE providers); OmniHuman 1.5 is 720p/1080p (default 1080p); the full `seedance-2` adds **1080p / 4K** and `seedance-2-5` adds **1080p** (`seedance-2-fast` and `seedance-2-mini` are 480p/720p only) |
+| Resolution | Select | 720p | Output resolution: 480p/720p (most KIE providers); OmniHuman 1.5 is 720p/1080p (default 1080p); OmniHuman 2.0 has no choice (always 720p, the field is hidden); the full `seedance-2` adds **1080p / 4K** and `seedance-2-5` adds **1080p** (`seedance-2-fast` and `seedance-2-mini` are 480p/720p only) |
 | Motion Prompt | Textarea | — | Optional: describe head/expression motions (KIE providers only) |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
@@ -27,6 +27,43 @@ It can also **dub an existing video**: HeyGen Lipsync Precision, Sync Lipsync 2 
 | Resolution | Select | 1080p | 720p or 1080p (no 480p) |
 | Fast Mode | Toggle | Off | Trade some quality for faster generation (`pe_fast_mode`) |
 | Seed | Number | -1 | Reproducibility — same seed + inputs → near-identical result. -1 = random |
+
+### OmniHuman 2.0
+
+`omnihuman-2-0` is ByteDance's OmniHuman 2.0, offered beside OmniHuman 1.5 (it is a different model, not a replacement). It animates one still image from an audio track: the voice drives the lips and the motion, and the optional prompt steers the scene, the character's movement and the camera. The output is a **720p** MP4 as long as the audio — up to **5 minutes**.
+
+It has none of 1.5's other options: no resolution choice, no fast mode and no seed. Switching a node from 1.5 to 2.0 clears those values, and a request that sends them anyway (API, SDK, MCP, workflow JSON) has them dropped before the run.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| Motion Prompt | Textarea | — | Optional: the scene, the character's motion and the camera. Up to **300 characters** — a longer prompt is cut to its first 300 |
+
+**What it takes.** Each limit is checked before any credits are held; a run outside them is refused with a message that says which limit, and nothing is charged.
+
+| Input | Limits |
+|-------|--------|
+| Image (required) | One image, under 30 MB, each side 300 to 6,000 pixels, width ÷ height between 0.4 and 2.5. JPEG, PNG, WebP, GIF or TIFF (an image whose size Nodaro cannot read — for example a HEIC photo or a BMP — is refused; convert it to JPEG or PNG first) |
+| Audio (required) | Up to **300 seconds** (under 4 seconds is padded, below), in a file under **100 MB**, in any common audio format: MP3 (or MP2), WAV (or RF64), Wave64, AIFF, CAF, AU, M4A (or MP4/MOV), AAC, AC-3, E-AC-3, AMR, Ogg (Vorbis, Opus or FLAC), FLAC, WebM/MKA, WMA, MPEG-TS, AVI, MPG/VOB, FLV, DTS, WavPack, Monkey's Audio (APE), TTA, Musepack (MPC) or LATM AAC. A playlist, a stream manifest or other file that points at further files is refused. Every file is converted to a 44.1 kHz stereo MP3 before it is sent. The model takes audio under 15 MB, so the audio sent is held to that after conversion — an MP3 of 300 seconds is about 7 MB |
+
+**Short audio is padded.** Audio shorter than 4 seconds is padded with silence to just over 4 seconds (4.1 seconds) before it is sent, so the video runs about 4 seconds and the avatar holds still for the padded part. It is billed as 4 seconds.
+
+**Long audio is refused, never trimmed.** Audio longer than 300 seconds is refused before anything is held — trim it first (for example with Trim Audio).
+
+**The length is the length it plays.** Nodaro downloads the audio and decodes it to measure it: the run is priced on how long the audio actually plays, never on the length its file declares (a file's header can be wrong). The link must answer directly and keep sending: a download that stalls or trickles is stopped, and the run is refused before anything is held.
+
+**The audio priced is the audio sent.** Nodaro measures the audio to price the run, then downloads it once more for the run, checks that this copy is the one it priced (no longer, under 100 MB), converts it to MP3, checks that the MP3 plays no longer than the run was priced for, and sends the model that MP3. The price and the MP3 come from the same decoding of the file, so a file that changes its sample rate or channels part-way through (MP3 or AAC clips joined together, for example) is priced on exactly the audio that is sent. If the file at the link changed in between — it now runs longer than the run was priced for — the run is stopped before the model is asked and nothing is charged; run it again to price the new audio.
+
+**Gaps in the audio are played as silence.** When the audio's timeline has gaps — a recording that dropped packets or paused its microphone, clips joined without re-encoding — Nodaro fills the gaps with silence, the way a player plays them (time missing is filled once it adds up to a tenth of a second). The run is priced on that length, silence included (it counts toward the 300 seconds), and that is the audio the model is sent. Audio whose timestamps step back or start over is never cut, and audio that starts later than zero is not padded at its start. In some formats a very large jump is collapsed as the file is read rather than filled (MPEG-TS and MPG: a jump over 10 seconds); that audio is priced and sent without the jump.
+
+**Audio that does not decode to its end is refused.** Rather than price a file on only the part that decodes, Nodaro refuses it before anything is held (`400`, `audio_unreadable`), with a message to re-export the audio as one complete, continuous file. That happens when:
+
+- the file reports damage as it is read: a WebM/MKA file with a damaged block, or an Ogg file with a corrupted page. Zero bytes after the end of a WebM/MKA file's audio (as a recording recovered after a crash can have) are not damage;
+- the audio decodes clearly shorter — by more than half a second — than the length the file states. The length is taken only from formats that state it exactly: WebM/MKA when the program that wrote it finished the file (a recording a browser streamed, even one whose length an app added afterwards, states none Nodaro relies on), M4A/MP4/MOV, Ogg, FLAC, WAV, Wave64, AIFF, CAF, AU, WavPack, TTA, Monkey's Audio, Musepack, and WMA when the audio is its only track. A cut-off file in one of these formats is refused this way. A file that states a shorter length than it plays is not refused: it is priced on what it plays;
+- reading stops on an error part-way, for example in an Ogg file joined from parts with different channel counts or sample rates. A few stray bytes after the end of the audio (an AAC file with a broken last header, a WavPack file with a tag after its audio) do not count: nothing is lost.
+
+Some damage cannot be told from a complete file. Such a file is priced on, and sent as, exactly the audio that decodes, with any gap filled: a file in a format that states no exact length (MP3, AAC, AC-3, DTS, MPEG-TS, MPG, AVI, FLV) that was cut off, or that joins two formats (an MP3 followed by AAC, for example); a cut-off WAV, Wave64 or CAF (their length is taken from the file's size, not stated) or Ogg (its stated length follows the cut); a WMA cut off well before its end (one cut off near its end is refused); damage that leaves only a gap in the timeline (a damaged TTA or FLAC frame), which is played as silence; and two WavPack or TTA files joined byte for byte (only the first is read).
+
+**Busy.** Only a few audio files are downloaded and measured at once. If they are all taken for a moment, the run is refused before anything is held (`429`, `lip_sync_audio_busy`) with a message to try again in a moment. `POST /v1/lip-sync` also takes at most 30 `omnihuman-2-0` requests a minute from one caller (one signed-in session, API key or MCP user); past that it answers `429` (`rate_limit_exceeded`). Requests for the other lip-sync models are not limited this way.
 
 ### Seedance 2 (image + audio avatar)
 
@@ -76,7 +113,7 @@ It can also **dub an existing video**: HeyGen Lipsync Precision, Sync Lipsync 2 
 
 **Inputs:**
 - Portrait Image (required for most providers) — clear face photo
-- Video (required for HeyGen Lipsync Precision, Sync Lipsync 2 Pro, Sync Lipsync v3, and Volcengine Lip Sync) — the source clip to dub
+- Video (required for HeyGen Lipsync Precision, Sync Lipsync 2 Pro, Sync Lipsync v3, and Volcengine Lip Sync) — the source clip to dub. OmniHuman 2.0 takes an image only
 - Audio (required) — speech or voiceover track
 
 **Outputs:**
@@ -92,12 +129,13 @@ It can also **dub an existing video**: HeyGen Lipsync Precision, Sync Lipsync 2 
 | `kling-avatar-pro` (Pro) | 5 minutes |
 | `infinitalk` | 15 seconds |
 | `omnihuman-1-5` | 60 seconds |
+| `omnihuman-2-0` | 5 minutes (at least 4 seconds — shorter is padded) |
 | `heygen-lipsync-precision` | 5 minutes* |
 | `lipsync-2-pro` | 5 minutes* |
 | `sync-lipsync-v3` | 5 minutes* |
 | `volcengine-lipsync` | 5 minutes |
 
-For the KIE providers (`kling-avatar(-pro)`, `infinitalk`, `volcengine-lipsync`), audio longer than the cap is auto-trimmed before the upstream call. Long-audio runs on `kling-avatar(-pro)` and `volcengine-lipsync` can take tens of minutes — the editor polls for up to ~1 hour before timing out.
+For the KIE providers (`kling-avatar(-pro)`, `infinitalk`, `volcengine-lipsync`), audio longer than the cap is auto-trimmed before the upstream call. `omnihuman-2-0` is the exception: audio past its 5 minutes is refused before anything is held, not trimmed. Long-audio runs on `kling-avatar(-pro)` and `volcengine-lipsync` can take tens of minutes — the editor polls for up to ~1 hour before timing out.
 
 \* For HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 the 5-minute figure is the **per-second credit-reservation ceiling**, not a hard trim — longer clips reserve at the 5-minute tier.
 
@@ -112,6 +150,22 @@ Kling AI Avatar and OmniHuman 1.5 bill per-second. Credit reservation buckets to
 | `omnihuman-1-5` (720p/1080p) | ~74 CR/s | 1,122<!-- credits: omnihuman-1-5:15s --> | 2,233<!-- credits: omnihuman-1-5:30s --> | 4,455<!-- credits: omnihuman-1-5:60s --> | — | — |
 
 `omnihuman-1-5` is capped at 60s of audio (longer is auto-trimmed), so only the 15s / 30s / 60s tiers apply. Resolution (720p vs 1080p) does not change the price.
+
+### OmniHuman 2.0 pricing
+
+`omnihuman-2-0` is charged **per second of its audio**, with no tiers: 38.5<!-- credits-rate: omnihuman-2-0:per-second --> credits per second. The audio's length is rounded **up** to a whole second, at least 4 seconds, and the whole run is rounded up to a whole credit once. Nodaro measures the audio itself before it holds anything, on every path (the editor's Run, a workflow or app run, the API, the SDK and MCP); a length a request sends (`audioDurationSec`) is ignored for this model. The hold is the charge: nothing is refunded or added afterwards.
+
+| Audio | Billed as | Credits |
+|-------|-----------|--------:|
+| 3.2 s (padded to 4 s) | 4 s | 154<!-- credits: omnihuman-2-0:per-second@4 --> |
+| 10 s | 10 s | 385<!-- credits: omnihuman-2-0:per-second@10 --> |
+| 10.04 s | 11 s | 424<!-- credits: omnihuman-2-0:per-second@11 --> |
+| 15 s | 15 s | 578<!-- credits: omnihuman-2-0:per-second@15 --> |
+| 1 min | 60 s | 2,310<!-- credits: omnihuman-2-0:per-second@60 --> |
+| 5 min | 300 s | 11,550<!-- credits: omnihuman-2-0:per-second@300 --> |
+| over 5 min | — | refused, nothing charged |
+
+Before the audio's length is known, the node's credit chip shows the 15-second price marked `≈`; it updates once the audio is wired. An app or a component lists a run whose audio length it cannot know at the 5-minute price, the most a run can hold.
 
 HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 also bill per second of output, bucketed to the same 15s / 30s / 1min / 2min / 5min tiers:
 

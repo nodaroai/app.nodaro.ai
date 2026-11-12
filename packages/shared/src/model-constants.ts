@@ -378,6 +378,9 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   "happyhorse-ref2v": 5000,
   "happyhorse-edit": 5000,
   "runway-kie": 1800,
+  // OmniHuman 2.0 (lip-sync) — "Up to 300 characters" (maxLength 300 in KIE's
+  // omnihuman-2-0 schema, read 2026-11-11). Cut to it before the request.
+  "omnihuman-2-0": 300,
   // NB: `wan-2.7` / `wan-2.7-pro` are IMAGE models (see the image registry), not
   //   video. The motion-transfer route's prompt is capped at the motion-control
   //   limit (2500) inside the route itself — its provider values are the shared
@@ -1530,6 +1533,11 @@ export const LIP_SYNC_PROVIDERS = [
   // performance, per-second billed, 60s audio cap. Routes the default KIE
   // path (not in any replicate/fal/seedance/video-input set).
   "omnihuman-1-5",
+  // ByteDance OmniHuman 2.0 — a different model from 1.5 (no speaker mask, no
+  // resolution choice, no fast mode, no seed; 720p output). KIE image+audio
+  // avatar on the default KIE path, charged per second of its audio at a rate
+  // (LIP_SYNC_AUDIO_RATES), never by bucket.
+  "omnihuman-2-0",
   "latentsync",
   "wav2lip",
   "video-retalking",

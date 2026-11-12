@@ -9,8 +9,11 @@
  * - videoUrl: Motion source video
  * - prompt: Optional text prompt (max 2500 chars)
  * - characterOrientation: "image" or "video" — both Kling 2.6 and 3.0
- * - resolution: "720p" or "1080p"
- * - provider: "kling" (2.6) or "kling-3.0"
+ * - resolution: "480p" / "580p" / "720p" (Wan Animate) or "720p" / "1080p" (Kling);
+ *   a size the model does not have runs, and is charged, as the size
+ *   `motionTransferResolution` moves it to (Wan Animate's 1080p as 720p),
+ *   and the answer's `adjustments` says so
+ * - provider: "kling" (2.6), "kling-3.0", "wan-animate-move" or "wan-animate-replace"
  * - backgroundSource: "input_video" or "input_image" — Kling 3.0 only
  */
 
@@ -28,9 +31,10 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { MOTION_TRANSFER_PROVIDERS, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
-import { buildMotionCreditModelIdentifier } from "@nodaro/shared/credits"
+import { buildMotionCreditModelIdentifier, motionTransferResolution } from "@nodaro/shared/credits"
 import { formatZodError } from "../lib/zod-error.js"
 import { jobRunModel } from "../lib/run-model.js"
+import { withAdjustments } from "../lib/image-gen-normalize.js"
 
 export const motionTransferBody = z.object({
   imageUrl: safeUrlSchema,
@@ -62,7 +66,12 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, videoUrl, prompt, negativePrompt, characterOrientation, resolution, provider, backgroundSource, videoDuration } = parsed.data
+    const { imageUrl, videoUrl, prompt, negativePrompt, characterOrientation, provider, backgroundSource, videoDuration } = parsed.data
+    // The size the model runs at, sent, recorded and charged alike (the guard
+    // above prices through the same rule).
+    const sized = motionTransferResolution(provider, parsed.data.resolution)
+    const resolution = sized.resolution as typeof parsed.data.resolution
+    parsed.data.resolution = resolution
     const userId = req.userId
 
     if (!userId) {
@@ -116,6 +125,6 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       usageLogId,
     })
 
-    return { jobId: job.id }
+    return withAdjustments({ jobId: job.id }, sized.adjustments)
   })
 }

@@ -119,6 +119,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Nodaro Video Upscale | Nodaro Upscale | — | 17<!-- credits: nodaro-video-upscale:1080p:per-4s --> | video-upscale | Upscale any clip of up to 60 seconds and 50 MB into a 1080p, 2K or 4K frame. It keeps the clip's shape (nothing is cropped), frame rate, length and sound. Priced per second of the clip; the listed price is four seconds at 1080p. Offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it. |
 | VEO 1080p Upscale | Google | Everyday | 22<!-- credits: veo-1080p --> | video-upscale | Upscale VEO output to 1080p. |
 | Runway (via KIE) | Runway | Everyday | 33<!-- credits: runway-kie --> | i2v, t2v | Runway Gen-3 routed through KIE. 5/10s at 720p/1080p. |
+| OmniHuman 2.0 | Bytedance | Everyday | 39<!-- credits: omnihuman-2-0:per-second --> | lip-sync | Talking avatar from one still image + audio, driven by the voice with an optional prompt for the scene, motion and camera. 720p, 4 seconds to 5 minutes, charged per second of audio. |
 | Topaz Video Upscale | Topaz | Everyday | 44<!-- credits: topaz-video:per-unit --> | video-upscale | High-quality video upscale and enhancement to 720p, 1080p or 4K at 15–60 fps (frames are interpolated). Metered: the price is per Topaz unit, and a run uses a few units per output gigapixel. |
 | Grok Imagine Video 1.5 | xAI | Everyday | 55<!-- credits: grok-imagine-video-1.5 --> | i2v | Grok Imagine Video 1.5 — 1–15s at 480p, 720p or 1080p, per-second pricing. An exact first and last frame (the same image as both makes a seamless loop) and up to 4 in-between frames. Requires an input image. |
 | Bytedance Lite I2V | Bytedance | Everyday | 63<!-- credits: bytedance-lite --> | i2v, t2v | Cheapest Bytedance video tier with end-frame support. |
@@ -150,6 +151,8 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Kling 4.0 Flash | Kuaishou | Standard | 242<!-- credits: kling-4-flash --> | i2v, t2v | Kling 4.0 Flash — the faster, lower-cost Kling 4.0 at 720p, up to 20s with native audio; a start frame, reference images, videos and characters (each can carry a voice clip), or plain text. |
 | LTX 2.3 Pro | Lightricks | Standard | 264<!-- credits: ltx-2.3-pro --> | i2v, t2v | Lightricks LTX 2.3 Pro — text/image/audio→video up to 4K, 6/8/10s, end-frame interpolation. |
 | Kling 3 Omni | Kuaishou | Standard | 275<!-- credits: kling-3-omni --> | i2v | Kling 3 Omni via Replicate — 3-15s, 720p/1080p, end frame + reference images, native audio. |
+| Wan Animate Move | Alibaba | Standard | 281<!-- credits: wan-animate-move --> | motion-transfer | Wan 2.2 Animate: moves the subject of a still image with the motion of a driving video. |
+| Wan Animate Replace | Alibaba | Standard | 281<!-- credits: wan-animate-replace --> | motion-transfer | Wan 2.2 Animate: replaces the person in a driving video with the subject of a still image, keeping the motion. |
 | Gemini Omni Flash | Google | Standard | 297<!-- credits: gemini-omni-flash --> | i2v, t2v | Google Gemini Omni Flash — faster/cheaper Omni tier: multimodal video with native audio, text/image-to-video + video-edit. |
 | Kling 2.6 | Kuaishou | Standard | 308<!-- credits: kling --> | i2v, t2v | Kling 2.6 I2V — strong motion realism. 5s/10s, optional native audio. |
 | Kling Avatar Standard | Kuaishou | Standard | 308<!-- credits: kling-avatar --> | lip-sync | Lip-sync a still portrait to driving audio. Standard quality. |
@@ -163,8 +166,8 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Runway Extend | Runway | Standard | 352<!-- credits: runway-extend --> | extend | Extend a Runway video by another clip. |
 | Wan 2.7 VideoEdit | Alibaba | Standard | 352<!-- credits: wan-videoedit --> | v2v | Guided video editing with optional reference image, audio control, and prompt expansion. |
 | Wan 3.0 Prime | Alibaba | Standard | 352<!-- credits: wan-3-prime --> | i2v, t2v | Wan 3.0 Prime — Alibaba's high-speed Wan 3.0 tier: same multimodal surface and 2-30s range, faster turnaround at a higher per-second rate. |
-| HappyHorse Edit | HappyHorse | Standard | 385<!-- credits: happyhorse-edit --> | v2v | HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output. |
-| Runway Aleph V2V | Runway | Standard | 385<!-- credits: runway-aleph --> | v2v | Runway Aleph — video-to-video conversion. |
+| HappyHorse Edit | HappyHorse | Premium | 385<!-- credits: happyhorse-edit --> | v2v | HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output. |
+| Runway Aleph V2V | Runway | Premium | 385<!-- credits: runway-aleph --> | v2v | Runway Aleph — video-to-video conversion. |
 | Kling 4.0 | Kuaishou | Premium | 396<!-- credits: kling-4 --> | i2v, t2v | Kling 4.0 — up to 30s with native audio and lip-sync; reference images, videos, characters and voices, or plain text. |
 | Kling 4.0 Keyframes | Kuaishou | Premium | 396<!-- credits: kling-4-keyframes --> | i2v, t2v | Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; up to 30s with native audio. |
 | Seedance 2 | Bytedance | Premium | 418<!-- credits: seedance-2 --> | i2v, t2v | Seedance 2 — premium tier with native audio. Per-second pricing by resolution. |

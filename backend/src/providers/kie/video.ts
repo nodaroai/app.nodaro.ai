@@ -61,6 +61,8 @@ import {
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
 import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
+import { lipSyncRateModelOf } from "../../lib/lip-sync-inputs.js"
+import { prepareRateLipSyncAudio } from "./lip-sync-audio.js"
 import { ensureVideoFitsSize, KLING_4_REF_VIDEO_LIMIT } from "./reference-video-size.js"
 import { reencodeReferenceVideos } from "./reference-video-reencode.js"
 import { fetchOwnMedia } from "../../lib/fetch-own-media.js"
@@ -539,14 +541,23 @@ export function buildLipSyncInput(
     options?: LipSyncOptions
   },
 ): Record<string, unknown> {
+  // The image under the model's own key: a string for most avatars, a
+  // one-element array where the schema takes a list (OmniHuman 2.0's
+  // `image_urls`).
+  const imageKey = modelConfig.imageParam ?? "image_url"
   const input: Record<string, unknown> = {
     ...(modelConfig.extraParams ?? {}),
-    image_url: args.imageUrl,
+    [imageKey]: modelConfig.imageAsList ? [args.imageUrl] : args.imageUrl,
     audio_url: args.audioUrl,
   }
 
   // KIE requires a prompt for all lip-sync models — default if none provided.
-  input.prompt = args.prompt || "A person speaking naturally"
+  // A schema with a shorter limit gets the prompt cut to it (code points, as a
+  // JSON-schema maxLength counts) rather than a refusal after the hold.
+  const prompt = args.prompt || "A person speaking naturally"
+  input.prompt = modelConfig.maxPromptChars !== undefined
+    ? Array.from(prompt).slice(0, modelConfig.maxPromptChars).join("")
+    : prompt
 
   // Resolution: per-model param name + value mapping (OmniHuman uses
   // output_resolution "720"|"1080"; others send `resolution` verbatim).
@@ -567,7 +578,19 @@ export function buildLipSyncInput(
     input.seed = args.options.seed
   }
 
+  // A schema that takes a fixed set of keys (OmniHuman 2.0: image_urls,
+  // audio_url, prompt, enable_watermark) is sent exactly those: a resolution
+  // or any other lever a node carried for another model never reaches it.
+  if (modelConfig.inputFields) {
+    const allowed = new Set(modelConfig.inputFields)
+    return Object.fromEntries(Object.entries(input).filter(([key]) => allowed.has(key)))
+  }
   return input
+}
+
+/** What KIE bills for `billedSeconds` of a model priced per second of output, in USD (KIE credits × `KIE_CREDIT_USD`). */
+export function lipSyncKieCostUsd(kieCreditsPerSecond: number, billedSeconds: number): number {
+  return Math.round(kieCreditsPerSecond * billedSeconds * KIE_CREDIT_USD * 1_000_000) / 1_000_000
 }
 
 /**
@@ -3597,10 +3620,19 @@ export class KieVideoProvider
       `[KIE.ai] Image: ${imageUrl}, Audio: ${audioUrl}`
     )
 
-    // Auto-trim audio to the provider's upstream cap (300s for kling-avatar(-pro),
+    // A model charged per second of its audio at a rate (OmniHuman 2.0): the
+    // audio is downloaded once under the byte cap, its decoded length held to
+    // the seconds the run was priced at, ALWAYS encoded to MP3 (padded to the
+    // minimum when shorter — never trimmed), the encode measured and held too,
+    // and the model is sent OUR stored encode, never the caller's URL
+    // (lip-sync-audio.ts: price and send the same bytes). Every other model:
+    // auto-trim to the provider's upstream cap (300s for kling-avatar(-pro),
     // 15s for infinitalk).
-    const audioCapSec = lipSyncAudioCapFor(provider)
-    const effectiveAudioUrl = await ensureAudioDuration(audioUrl, audioCapSec)
+    const rateModel = lipSyncRateModelOf(provider)
+    const prepared = rateModel
+      ? await prepareRateLipSyncAudio(audioUrl, rateModel.rate, rateModel.rule, getModel(provider)?.label ?? provider, options?.billedSeconds)
+      : undefined
+    const effectiveAudioUrl = prepared?.url ?? await ensureAudioDuration(audioUrl, lipSyncAudioCapFor(provider))
 
     const input = buildLipSyncInput(modelConfig, {
       imageUrl,
@@ -3614,8 +3646,9 @@ export class KieVideoProvider
     // 2026-05-11 upgrade notes — extend the poll budget for those providers.
     // We use the long budget whenever the requested audio exceeds 30s so
     // shorter runs still fail fast.
-    const isLongCapableProvider = provider === "kling-avatar" || provider === "kling-avatar-pro"
-    const usesLongBudget = isLongCapableProvider && (audioDurationSec === undefined || audioDurationSec > 30)
+    const isLongCapableProvider = provider === "kling-avatar" || provider === "kling-avatar-pro" || prepared !== undefined
+    const longAudioSec = prepared?.measuredSec ?? audioDurationSec
+    const usesLongBudget = isLongCapableProvider && (longAudioSec === undefined || longAudioSec > 30)
     const pollAttempts = usesLongBudget ? MAX_POLL_ATTEMPTS_LIP_SYNC_LONG : MAX_POLL_ATTEMPTS_VIDEO
     if (audioDurationSec !== undefined) {
       console.log(`[KIE.ai] Lip-sync audio duration: ${audioDurationSec.toFixed(1)}s, poll budget: ${pollAttempts}`)
@@ -3638,11 +3671,16 @@ export class KieVideoProvider
       )
     }
 
+    // A per-second model's provider cost is what KIE bills for the seconds the
+    // run is charged, never the flat display anchor.
+    const cost = prepared && modelConfig.kieCreditsPerAudioSecond !== undefined
+      ? lipSyncKieCostUsd(modelConfig.kieCreditsPerAudioSecond, prepared.billedSeconds)
+      : modelConfig.cost
     console.log(
-      `[KIE.ai] Lip sync completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      `[KIE.ai] Lip sync completed: ${videoUrl} (cost: $${cost.toFixed(4)})`
     )
 
-    return { url: videoUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
+    return { url: videoUrl, cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
   /**

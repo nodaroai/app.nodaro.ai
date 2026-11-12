@@ -447,3 +447,11 @@ export {
   audioSoundtrackClipSec,
   audioSoundtrackPrompt,
 } from "../audio-soundtrack.js"
+export {
+  LIP_SYNC_MODEL_LEVERS,
+  lipSyncLeversNotTaken,
+  lipSyncTakesLever,
+  lipSyncLeverClearPatch,
+  withoutLipSyncLeversNotTaken,
+} from "../lip-sync-levers.js"
+export type { LipSyncModelLever } from "../lip-sync-levers.js"

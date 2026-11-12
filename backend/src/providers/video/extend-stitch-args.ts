@@ -28,9 +28,10 @@
  *   MP4, whatever the source's pixel format, sound or container, so the
  *   upload takes it as it is (`needsTranscode`) and its picture is encoded
  *   once, never again at a fixed quality. A full-range source is delivered
- *   limited range, its levels converted in that one encode. An HDR source
- *   (PQ or HLG) is delivered in SDR BT.709, the extension's own: its picture
- *   is tone-mapped in the graph (`toSdr`), the extension's left as it is.
+ *   limited range, the extension's own: its levels are converted in the graph
+ *   (`toLimited`). An HDR source (PQ or HLG) is delivered in SDR BT.709, the
+ *   extension's own: its picture is tone-mapped in the graph (`toSdr`). The
+ *   extension's picture is left as it is.
  *
  * Both pictures are held to the frame count their length gives at the output
  * rate: the last frame is cloned for as long as `fps` comes up short, so each
@@ -186,22 +187,41 @@ function toSdr(source: MatchedProbe): string[] {
 }
 
 /**
- * `toSdr` as one filter (`-vf`): what an HDR source's picture goes through
- * wherever the extend reads it, so the extend's tail (`extendTailPicture`) is
- * the very picture the stitch delivers. Undefined for any other source.
+ * A full-range SDR source's picture taken to limited range, 4:2:0, the
+ * extension's own: nothing for any other source. Its frames are first tagged
+ * full range, as the probe reads the file, so the levels are converted from
+ * what the file says whatever the decoder set.
  */
-export function sdrPictureFilter(source: MatchedProbe): string | undefined {
-  const chain = toSdr(source)
+function toLimited(source: MatchedProbe): string[] {
+  if (isHdr(source) || !isFullRange(source)) return []
+  return ["setparams=range=pc", "scale=out_range=tv", `format=${DELIVERY_PIX_FMT}`]
+}
+
+/**
+ * The source's picture as the stitch delivers it: an HDR source's in SDR
+ * (`toSdr`), a full-range one's in limited range (`toLimited`), any other
+ * source's as it is (no filter).
+ */
+const deliveredChain = (source: MatchedProbe): string[] => (isHdr(source) ? toSdr(source) : toLimited(source))
+
+/**
+ * `deliveredChain` as one filter (`-vf`): what the source's picture goes
+ * through wherever the extend reads it, so the extend's tail
+ * (`extendTailPicture`) is the very picture the stitch delivers. Undefined
+ * for a source delivered as it is.
+ */
+export function deliveredPictureFilter(source: MatchedProbe): string | undefined {
+  const chain = deliveredChain(source)
   return chain.length > 0 ? chain.join(",") : undefined
 }
 
 /**
  * The source's picture over frames [start, end), conformed to the output rate
- * (its own), and in SDR when it is HDR (`toSdr`): the encode and the boundary
- * proxy read it alike.
+ * (its own), as the stitch delivers it (`deliveredChain`): the encode and the
+ * boundary proxy read it alike.
  */
 export function sourcePicture(source: MatchedProbe, rate: StitchRate, start: number, end: number): string {
-  return [conformTo(rate), frameSpan(start, end), ...toSdr(source)].join(",")
+  return [conformTo(rate), frameSpan(start, end), ...deliveredChain(source)].join(",")
 }
 
 /**
@@ -310,10 +330,11 @@ function flooredBitRate(source: MatchedProbe, own: number): number {
  *
  * Its range: a full-range source (`isFullRange`) is delivered limited range
  * (`tv`). A full-range H.264 result probes as yuvj420p, which `needsTranscode`
- * would send through a second encode at a fixed quality; asking the encoder
- * for `tv` makes ffmpeg convert the levels (0–255 to 16–235) in the one
- * encode, which costs far less. Any other range is the one the source
- * reports, and none when it reports none.
+ * would send through a second encode at a fixed quality. Its picture reaches
+ * the encoder already limited range (`toLimited`, 0–255 to 16–235), so the
+ * `tv` asked for here converts nothing more: the levels are converted once.
+ * Any other range is the one the source reports, and none when it reports
+ * none.
  *
  * An HDR source's picture reaches the encoder in SDR BT.709, limited range
  * (`toSdr`), and is tagged so (`SDR_TAGS`).

@@ -60,14 +60,6 @@ import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
  * under a different id, and the KIE config is the routing target.
  */
 const KIE_MODELS_WITHOUT_CATALOG: ReadonlySet<string> = new Set<string>([
-  // L1#4-allowlist surfaced 2026-05-08 — KIE registers these motion-transfer
-  // models but they're not in MODEL_CATALOG. The frontend exposes them
-  // directly via the motion-transfer config panel (`MOTION_TRANSFER_PROVIDERS`
-  // in shared) rather than through the catalog. Follow-up: decide whether to
-  // add catalog entries (consistency) or document the catalog as image/video-
-  // generation-only (clearer scope).
-  "wan-animate-move",
-  "wan-animate-replace",
   // L1#4-allowlist surfaced 2026-05-08 — KIE registers `topaz`
   // (video-upscale) and `elevenlabs` (TTS alias) without catalog entries.
   // Same reason as above — frontend wires them via dedicated config panels,
