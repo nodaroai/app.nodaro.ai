@@ -10,6 +10,7 @@ import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { surfaceAllowsPublicOutputs } from "../../surface-profile.js"
+import { publishedAppWithheld } from "../../published-app-access.js"
 import type { ComponentMetadata } from "@nodaro/shared/apps"
 import {
   extractComponentInputSchema,
@@ -181,9 +182,12 @@ export function registerComponents({
             isError: true,
           }
         }
+        // Where public work is not allowed, every component is its creator's
+        // alone (lib/published-app-access.ts); run_component meets the same
+        // rule in /v1/component/execute.
         if (
-          !data.is_listed &&
-          (!session.userId || data.creator_id !== session.userId)
+          (!data.is_listed && (!session.userId || data.creator_id !== session.userId)) ||
+          publishedAppWithheld(session.userId, data.creator_id)
         ) {
           return {
             content: [

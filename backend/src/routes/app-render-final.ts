@@ -87,6 +87,7 @@ import {
 import { executeAppRenderFinal } from "../services/app-render-final.js"
 import { RENDER_FINAL_ALREADY_RUNNING, RENDER_FINAL_NOT_PREVIEW } from "../lib/render-final-codes.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
+import { APP_NOT_FOUND, publishedAppWithheld } from "../lib/published-app-access.js"
 
 /** Stable refusal codes of this route (clients branch on the code). */
 export const APP_RENDER_FINAL_NOT_A_RENDER = "not_a_render"
@@ -158,6 +159,12 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
     }
     if (await isUserBlocked(appRow.creator_id ?? null)) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
+    }
+    // A run of someone else's app is not re-rendered on a deployment that does
+    // not allow public work: the app answers as one that does not exist
+    // (lib/published-app-access.ts). The runner's own past run stays readable.
+    if (publishedAppWithheld(userId, appRow.creator_id)) {
+      return reply.status(404).send(APP_NOT_FOUND)
     }
     // A component never stops for a review (permanent): it runs inside its caller's run.
     if (appRow.publish_type === "component") {

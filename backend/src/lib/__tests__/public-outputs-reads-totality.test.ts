@@ -6,7 +6,7 @@
  * one person's work to someone else as if nothing were public. A new such
  * read fails this build until someone writes down what it does there.
  *
- * Three nets:
+ * Four nets:
  *  1. every row of the public-route list (middleware/auth.ts — the routes that
  *     take no sign-in) is classified below, live, from the array itself;
  *  2. every MCP tool parameter `scope` that offers more than "mine" (a public
@@ -14,7 +14,12 @@
  *  3. every file that reads other people's work by its publication flag —
  *     `is_public` jobs, `is_listed` apps, `listed_in` templates, a public
  *     shot, the `studio.shared` workflow opt-in, a shared asset, the shared
- *     library, the Keepers shelf — is classified by its file.
+ *     library, the Keepers shelf — is classified by its file;
+ *  4. every route that serves or runs a published app or component by its
+ *     name (`/v1/app/…`, `/v1/component/…`, its card and its embed) and the
+ *     MCP tools that read one, each checked IN ITS OWN HANDLER: it asks the
+ *     switch (lib/published-app-access.ts), or it reads only the caller's own
+ *     runs, or it reaches one through a route that asks.
  *
  * Kinds:
  *  - `asks`: the read asks the switch (verified: the file calls the predicate
@@ -25,7 +30,8 @@
  *    an administrator's curation, or the presentation share links (out of
  *    scope by decision) — named in `why`;
  *  - `judgment`: a read of someone's work left as it is on purpose, awaiting a
- *    product decision (the options are in the PR that added this guard).
+ *    product decision (none today: the app pages were the last, decided
+ *    2026-11-11).
  * A file named under a kind other than `asks` that starts asking moves to
  * `asks`, so the census never claims less than the code does.
  */
@@ -50,8 +56,8 @@ function walk(dir: string, out: string[] = []): string[] {
   return out
 }
 
-/** Asking the switch: the predicate itself, or the by-id job filter built on it. */
-const ASKS_THE_SWITCH = /\b(?:surfaceAllowsPublicOutputs|readableJobsFilter|jobReadableBy)\s*\(/
+/** Asking the switch: the predicate itself, or a check built on it (lib/public-job-read.ts, lib/published-app-access.ts). */
+const ASKS_THE_SWITCH = /\b(?:surfaceAllowsPublicOutputs|readableJobsFilter|jobReadableBy|publishedAppWithheld|publishedAppSlugWithheld|publishedAppRunWithheld|componentWithheld)\s*\(/
 
 type Kind = "asks" | "none" | "published" | "judgment"
 interface Read {
@@ -64,14 +70,13 @@ interface Read {
 const asks = (why: string, ...files: string[]): Read => ({ kind: "asks", why, files })
 const none = (why: string, ...files: string[]): Read => ({ kind: "none", why, files })
 const published = (why: string, ...files: string[]): Read => ({ kind: "published", why, files })
-const judgment = (why: string, ...files: string[]): Read => ({ kind: "judgment", why, files })
 
 const OAUTH = none("an OAuth / plugin-connect step: a code, a token or app metadata, never anyone's work")
 const DISCOVERY = none("OAuth discovery metadata for MCP clients: the deployment's own endpoints")
 const CATALOG = none("the deployment's own catalog, the same for every caller: no user's work")
 const CALLBACK = none("a provider's callback or webhook into this server: it answers no one's work")
-const APP_PAGE = judgment(
-  "a published app's own page by its slug (its graph, so the app can run) and the caller's own runs of it; whether private outputs close an app's page, or only its listing, awaits a product decision",
+const APP_PAGE = asks(
+  "a published app's page by its slug: everyone but its creator (and an admin's preview) gets the missing-app answer; starting a run is refused the same way, the runner's own past runs stay readable",
   "routes/app-runner.ts",
 )
 
@@ -139,8 +144,8 @@ const PUBLIC_ROUTE_READS: Readonly<Record<string, Read>> = {
     "routes/presentation.ts",
   ),
   "GET /v1/app/*": APP_PAGE,
-  "GET /og/app/*": judgment("an app's social card (name, description, picture) by its slug: follows the app page's decision", "routes/og-tags.ts"),
-  "GET /v1/embed/*": judgment("an app's embed frame by its slug: follows the app page's decision", "routes/embed.ts"),
+  "GET /og/app/*": asks("an app's social card by its slug: everyone but its signed-in creator gets the card of an app that does not exist", "routes/og-tags.ts"),
+  "GET /v1/embed/*": asks("an app's embed frame by its slug: everyone but its signed-in creator gets the missing-app answer", "routes/embed.ts"),
   "GET /v1/apps/browse": asks("the app and component marketplace: lists nothing", "routes/published-apps.ts"),
   "GET /v1/templates/browse": asks("the template marketplace: lists nothing", "routes/workflow-templates.ts"),
   "GET /v1/tutorials": published("the tutorial channel: templates and videos an administrator lists (Admin → Tutorials)", "routes/tutorials.ts"),
@@ -348,5 +353,127 @@ describe("every read of other people's work by its publication flag is classifie
       .filter((f) => f.rel !== "lib/public-job-read.ts" && /\bis_public\.eq\.true\b|\bis_public\s*===\s*true\b/.test(f.source))
       .map((f) => f.rel)
     expect(inline, "an inline `is_public` read of another person's job: use readableJobsFilter / jobReadableBy (lib/public-job-read.ts)").toEqual([])
+  })
+})
+
+/**
+ * Net 4: every route that serves or runs a published app or component by its
+ * name, read HANDLER BY HANDLER (a file-level check would let one gated route
+ * vouch for its neighbours). `asks`: the handler itself calls a check built on
+ * the switch. `own`: the handler reads or changes only the caller's own runs
+ * or job — never the app's page — so it stays as it is (decided 2026-11-11: a
+ * runner keeps their own past runs).
+ */
+type EntranceKind = "asks" | "own"
+interface Entrance {
+  readonly kind: EntranceKind
+  readonly why: string
+}
+const gate = (why: string): Entrance => ({ kind: "asks", why })
+const own = (why: string): Entrance => ({ kind: "own", why })
+
+const APP_ENTRANCES: Readonly<Record<string, Entrance>> = {
+  "GET /v1/app/:slug": gate("the app's page: its creator's alone (an admin keeps a preview), asked before the in-memory cache"),
+  "POST /v1/app/:slug/run": gate("starts a run of the app: its creator's alone"),
+  "POST /v1/app/:slug/runs": gate("creates a run of the app: its creator's alone"),
+  "POST /v1/app/:slug/runs/:runId/restore": gate("restores an archived run of the app: refused for someone else's app"),
+  "POST /v1/app/:slug/runs/:runId/resume": gate("continues a run of the app (and quotes it): refused for someone else's app"),
+  "POST /v1/app/:slug/runs/:runId/render-final": gate("re-renders a run of the app: refused for someone else's app"),
+  "GET /og/app/:slug": gate("the app's social card: its signed-in creator's alone"),
+  "GET /v1/embed/:slug": gate("the app's embed frame: its signed-in creator's alone"),
+  "POST /v1/component/execute": gate("runs a component: its creator, or the orchestrator's run of a workflow holding the component node"),
+  "POST /v1/component/estimate-credits": gate("prices a component by its name: the same rule as its run"),
+  "GET /v1/app/:slug/runs": own("the caller's own runs of the app (runner_id = caller)"),
+  "GET /v1/app/:slug/runs/:runId": own("one of the caller's own runs (runner_id = caller)"),
+  "PATCH /v1/app/:slug/runs/:runId": own("edits the caller's own run (name, inputs, hidden nodes)"),
+  "DELETE /v1/app/:slug/runs/:runId": own("archives the caller's own run"),
+  "DELETE /v1/app/:slug/runs/:runId/permanent": own("deletes the caller's own settled run"),
+  "GET /v1/component/execute/:jobId/wait-limit": own("the wait limit of the caller's own component job"),
+}
+
+/** The MCP tools that read or run a published app or component, and how each meets the rule. */
+const MCP_APP_TOOLS: Readonly<Record<string, { file: string; via: "asks" | string; why: string }>> = {
+  get_app_inputs: { file: "lib/mcp/tools/apps.ts", via: "asks", why: "the app's input schema: its creator's alone" },
+  run_app: { file: "lib/mcp/tools/apps.ts", via: "/run`", why: "runs through POST /v1/app/:slug/run, which asks" },
+  retry_app_run: { file: "lib/mcp/tools/apps.ts", via: "/resume`", why: "runs through POST /v1/app/:slug/runs/:runId/resume, which asks" },
+  get_component_inputs: { file: "lib/mcp/tools/components.ts", via: "asks", why: "the component's input schema: its creator's alone" },
+  run_component: { file: "lib/mcp/tools/components.ts", via: "/v1/component/execute", why: "runs through POST /v1/component/execute, which asks" },
+}
+
+/** A route registration: `app.<method>("<path>"`, generics allowed. */
+const ROUTE_REGISTRATION = /\bapp\.(get|post|put|patch|delete)(?:<[^>]*>)?\(\s*["'`]([^"'`]+)["'`]/g
+const APP_PATH = /^\/(?:v1\/app\/|v1\/component\/|og\/app\/|v1\/embed\/)/
+
+/** Every app / component route, with its handler's source: from its registration to the next one. */
+function appRoutes(): Array<{ key: string; file: string; handler: string }> {
+  const out: Array<{ key: string; file: string; handler: string }> = []
+  for (const dir of ["routes", "ee/routes", "nodes"]) {
+    if (!existsSync(join(SRC_DIR, dir))) continue
+    for (const full of walk(join(SRC_DIR, dir))) {
+      const file = relative(SRC_DIR, full).split("\\").join("/")
+      const source = withoutComments(readFileSync(full, "utf8"))
+      const registrations = [...source.matchAll(ROUTE_REGISTRATION)]
+      registrations.forEach((match, i) => {
+        const path = match[2]!
+        if (!APP_PATH.test(path)) return
+        const end = registrations[i + 1]?.index ?? source.length
+        out.push({ key: `${match[1]!.toUpperCase()} ${path}`, file, handler: source.slice(match.index!, end) })
+      })
+    }
+  }
+  return out
+}
+
+/** A tool's handler: from its `registerTool(` name to the next registration. */
+function toolHandler(source: string, tool: string): string | null {
+  const start = source.search(new RegExp(`registerTool\\(\\s*["'\`]${tool}["'\`]`))
+  if (start < 0) return null
+  const rest = source.slice(start + 1)
+  const next = rest.search(/registerTool\(/)
+  return next < 0 ? source.slice(start) : source.slice(start, start + 1 + next)
+}
+
+describe("every entrance to a published app or component is classified, handler by handler", () => {
+  const routes = appRoutes()
+
+  it("finds the routes it counts", () => {
+    expect(routes.length, "found almost no app route: the scan is wired to nothing").toBeGreaterThan(10)
+    expect(new Set(routes.map((r) => r.key)).size, "two app routes share a key").toBe(routes.length)
+  })
+
+  it("every app / component route is classified, and no classification is stale", () => {
+    expect(
+      routes.map((r) => r.key).filter((key) => !(key in APP_ENTRANCES)),
+      "a route serves or runs a published app or component but is not classified: if it reaches someone else's app, " +
+        "ask the switch through lib/published-app-access.ts in its handler and classify it as asks; if it reads only the caller's own runs, say so",
+    ).toEqual([])
+    expect(Object.keys(APP_ENTRANCES).filter((key) => !routes.some((r) => r.key === key)), "APP_ENTRANCES lists a route that no longer exists").toEqual([])
+  })
+
+  it("an `asks` handler really asks, and an `own` one is not gated (so the census never claims less than the code)", () => {
+    for (const route of routes) {
+      const entrance = APP_ENTRANCES[route.key]!
+      expect(entrance.why.length, `${route.key}: say why`).toBeGreaterThan(15)
+      const asksHere = ASKS_THE_SWITCH.test(route.handler)
+      if (entrance.kind === "asks") expect(asksHere, `${route.key} (${route.file}) is marked asks but its handler never asks the switch`).toBe(true)
+      else expect(asksHere, `${route.key} (${route.file}) now asks the switch: classify it as asks`).toBe(false)
+    }
+  })
+
+  it("each MCP tool that reads or runs one asks in its handler, or reaches it through a route that asks", () => {
+    for (const [tool, entry] of Object.entries(MCP_APP_TOOLS)) {
+      const handler = toolHandler(read(entry.file), tool)
+      expect(handler, `${entry.file} no longer registers ${tool}`).not.toBeNull()
+      if (entry.via === "asks") expect(ASKS_THE_SWITCH.test(handler!), `${tool} must ask the switch in its handler`).toBe(true)
+      else expect(handler, `${tool} no longer goes through the route that asks (${entry.why})`).toContain(entry.via)
+    }
+  })
+
+  it("the orchestrator's component dispatch is the lane that keeps a placed component running: it names its execution", () => {
+    const executor = read("services/workflow-engine/node-executor.ts")
+    const dispatch = executor.slice(executor.indexOf("/v1/component/execute`"))
+    expect(dispatch, "the component dispatch must call /v1/component/execute").not.toBe("")
+    expect(dispatch.slice(0, 1500)).toMatch(/\[PARENT_EXECUTION_HEADER\]:\s*ctx\.executionId/)
+    expect(read("lib/published-app-access.ts")).toMatch(/parentExecutionIdOf\(req\) !== undefined\) return false/)
   })
 })

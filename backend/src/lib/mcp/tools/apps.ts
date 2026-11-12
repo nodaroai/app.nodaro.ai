@@ -19,6 +19,7 @@ import { isPreviewRefusalCode } from "@nodaro/shared/nodes"
 import { isUuid } from "./_id-guard.js"
 import { hasCredits } from "../../config.js"
 import { surfaceAllowsPublicOutputs } from "../../surface-profile.js"
+import { publishedAppWithheld } from "../../published-app-access.js"
 import { LISTING_ESTIMATE_FLAG_COLUMN, listingEstimateFlag, selectWithEstimateFlag } from "../../listing-estimate-flag-column.js"
 
 const appsReadGate: ToolGate = { required: ["apps:read"] }
@@ -191,9 +192,11 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           }
         }
         // Auth check: public apps are world-readable; private apps only the creator.
+        // Where public work is not allowed, every app is its creator's alone
+        // (lib/published-app-access.ts).
         if (
-          !data.is_listed &&
-          (!session.userId || data.creator_id !== session.userId)
+          (!data.is_listed && (!session.userId || data.creator_id !== session.userId)) ||
+          publishedAppWithheld(session.userId, data.creator_id)
         ) {
           return {
             content: [{ type: "text", text: `App "${args.slug}" not found.` }],

@@ -1978,7 +1978,9 @@ carry it too.
 
 Returns the typed input schema for a published app (the same schema the
 published-app page renders). Use this before `run_app` to learn the
-available input keys and their types.
+available input keys and their types. On a deployment that does not allow
+public work (`outputs.allowPublic: false`) an app is its creator's alone:
+another person's app answers `App "<slug>" not found.`, as an unknown slug does.
 
 **Input:** `{ slug: string }`
 
@@ -2027,7 +2029,9 @@ input keys (from `get_app_inputs`). Returns an `execution_id`, and the run's
 `promptSuffix` per run; a field set to `null` there is cleared for the run (the
 node runs with no value there, not the creator's saved one). It cannot set a destination on an outbound node (a
 Webhook Output's `url`, a publisher's account, a scraper's target) — the run is
-refused with `400 locked_field`.
+refused with `400 locked_field`. On a deployment that does not allow public work
+(`outputs.allowPublic: false`) only your own apps run: another person's app is
+refused with the `404 not_found` of an app that does not exist.
 
 **Input:** `slug`, `inputs?`, `inputOverrides?`, `client_request_id?` (retry token — reuse it when retrying after a timeout so the run is not started or charged twice)
 
@@ -2043,7 +2047,9 @@ step it completed hands on its result, and a UGC Clip that failed renders only
 the clips it did not finish. The Retry runs the app version the run ran, with
 the inputs the run applied: it takes none of its own. The run's execution moves
 to the Retry's, so a Retry of a Retry continues from what the latest one
-completed.
+completed. On a deployment that does not allow public work, a run of another
+person's app is not retried (`404 not_found`, as for an app that does not
+exist); [`get_app_run`](#get_app_run) still reads it.
 
 Price confirmation works as in [`render_final`](#render_final): without
 `confirm` the tool returns the **quote** only — the steps it would run again,
@@ -2114,7 +2120,10 @@ unchanged.
 **Scope:** `workflows:read`
 
 Returns the typed input schema for a saved component. Use before
-`run_component` to learn available input keys.
+`run_component` to learn available input keys. On a deployment that does not
+allow public work (`outputs.allowPublic: false`) a component is its creator's
+alone: another person's answers `Component "<slug>" not found.`, as an unknown
+slug does.
 
 **Input:** `{ component_id: uuid }`
 
@@ -2125,7 +2134,11 @@ Returns the typed input schema for a saved component. Use before
 **Scope:** `workflows:execute`
 
 Execute a saved component by id. `inputs` is a FLAT object keyed by the
-component's input schema keys. Returns an `execution_id`.
+component's input schema keys. Returns an `execution_id`. On a deployment that
+does not allow public work (`outputs.allowPublic: false`) it runs your own
+components only: another person's is refused with `404 not_found`
+"Component not found". A component placed in a workflow still runs as part of
+that workflow's run (`run_workflow`).
 
 **Input:** `component_id`, `inputs?`, `client_request_id?` (retry token — reuse it when retrying after a timeout so the run is not started or charged twice)
 

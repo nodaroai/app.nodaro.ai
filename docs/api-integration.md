@@ -155,8 +155,25 @@ clone (`POST /v1/templates/:slug/clone`): `404 not_found`. Its creator reads
 and clones it as before, an admin still previews its page, and a template in
 the tutorial channel (`GET /v1/tutorials`, which an administrator curates) is
 read and cloned by anyone as before. Your own apps and templates stay listed by
-`GET /v1/apps/mine` and `GET /v1/templates/mine`. A published app's own page
-(`GET /v1/app/:slug`) and its runs are unchanged.
+`GET /v1/apps/mine` and `GET /v1/templates/mine`.
+
+There, a published app is also its creator's alone:
+
+- `GET /v1/app/:slug` answers everyone but the app's signed-in creator (and an
+  admin's preview) with the `404 not_found` "App not found" of an app that does
+  not exist. The creator's answer is sent `Cache-Control: private, no-store` with
+  `Vary: Authorization`; with public work allowed the headers are unchanged.
+- `GET /og/app/:slug` gives everyone but the signed-in creator the card of an app
+  that does not exist, and `GET /v1/embed/:slug` the missing app's `404`.
+- `POST /v1/app/:slug/run`, `POST /v1/app/:slug/runs`, and `/restore`, `/resume`
+  (the Retry and its quote) and `/render-final` on a run answer someone else's
+  app with the same `404 not_found`. Your own past runs of it stay readable
+  (`GET /v1/app/:slug/runs`, `GET /v1/app/:slug/runs/:runId`).
+- `POST /v1/component/execute` and `POST /v1/component/estimate-credits` run and
+  price a component for its creator, and inside a full run of a workflow that
+  holds the component node, whoever owns the component. Any other call (by its
+  name, the editor's "Run this node" included) gets `404 not_found`
+  "Component not found".
 
 ### HTTP credentials (Webhook Output)
 
@@ -4630,7 +4647,9 @@ The same fields are on every job read above, on `GET /v1/jobs/:id` and
 ### How long a component run may take
 
 `POST /v1/component/execute` answers `202 { jobId }` and runs the component in the
-background; poll that wrapper job like any other. With an OAuth app token it needs
+background; poll that wrapper job like any other. On a deployment that does not
+allow public work it runs only your own components, or a component inside a full
+run of a workflow that holds it (see the marketplace note above). With an OAuth app token it needs
 `workflows:execute` (and the wait-limit read below, `jobs:read`). The server gives the run 90 minutes,
 plus the time budget of any long render inside it (today: an Apply EDL final render,
 whose budget is sized from its edit), plus any time the run spends waiting for a free slot. A client that polls with its own time limit can ask

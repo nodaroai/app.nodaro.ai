@@ -5500,8 +5500,10 @@ list(params?: ListAppsParams): Promise<ListAppsResult>
 Cursor-paginated browse of published apps (`GET /v1/apps/browse`). Optional
 `search`, `category`, and `limit` (server caps at 50). On a deployment that does
 not allow public work (`outputs.allowPublic: false`) the marketplace lists
-nothing: `{ data: [], nextCursor: null }`. `get()` and `run()` by slug are
-unchanged there.
+nothing: `{ data: [], nextCursor: null }`, and an app is its creator's alone:
+`get()`, `run()` and `resume()` of someone else's app throw `NotFoundError`, as
+for an app that does not exist (an admin can still `get()` one). Your own past
+runs of it (`listRuns()`, `getRun()`) stay readable.
 
 Each app's `estimatedCredits` is its listed price per run. When its price
 follows the length of the recording the app is given (an Edit Plan pass, the

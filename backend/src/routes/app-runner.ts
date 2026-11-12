@@ -53,6 +53,8 @@ import { PREVIEW_RENDER_NESTED } from "@nodaro/shared/nodes"
 import { clientRunUpdates, executionBelongsToRun } from "../lib/app-run-ownership.js"
 import { requireAnyAppScope, requireAppScope } from "../lib/scope-prehandler.js"
 import { APP_RUN_READ_SCOPES } from "../lib/app-run-scopes.js"
+import { APP_NOT_FOUND, publishedAppRunWithheld, publishedAppSlugWithheld } from "../lib/published-app-access.js"
+import { surfaceAllowsPublicOutputs } from "../lib/surface-profile.js"
 
 // In-memory cache for published app data (30min TTL — explicit invalidation on publish)
 const APP_CACHE_TTL_MS = 30 * 60_000
@@ -272,10 +274,24 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const { slug } = parsed.data
     const cacheKey = requestedVersion ? `${slug}:v${requestedVersion}` : slug
 
+    // A deployment that does not allow public work (`outputs.allowPublic:
+    // false`) serves an app's page to its creator alone (an admin keeps a
+    // preview, as on a template's page): anyone else gets the answer of an app
+    // that does not exist. Asked before the in-memory cache, which holds one
+    // answer for every caller; and the creator's answer is never stored by a
+    // shared cache. With public work allowed, nothing here changes.
+    if (await publishedAppSlugWithheld(slug, req.userId, { adminPreview: true })) {
+      return reply.status(404).send(APP_NOT_FOUND)
+    }
+    const setPageCacheHeaders = () =>
+      surfaceAllowsPublicOutputs()
+        ? reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=86400")
+        : reply.header("Cache-Control", "private, no-store").header("Vary", "Authorization")
+
     // Check in-memory cache
     const cached = appCache.get(cacheKey)
     if (cached && Date.now() < cached.expiry) {
-      reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=86400")
+      setPageCacheHeaders()
       return reply.send(await withEditPlanPerMinute(cached.data))
     }
 
@@ -379,7 +395,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       }
     }
 
-    reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=86400")
+    setPageCacheHeaders()
     return reply.send(await withEditPlanPerMinute(responseData))
   })
 
@@ -408,6 +424,12 @@ export async function appRunnerRoutes(app: FastifyInstance) {
 
     const { slug } = paramsParsed.data
     const { inputOverrides: nestedOverrides, inputs: flatInputs, runId, version, headless, reviewer } = bodyParsed.data
+
+    // Someone else's app is not run on a deployment that does not allow public
+    // work: it answers as an app that does not exist (lib/published-app-access.ts).
+    if (await publishedAppSlugWithheld(slug, req.userId)) {
+      return reply.status(404).send(APP_NOT_FOUND)
+    }
 
     const workflowId = await resolveSlug(slug)
     if (!workflowId) {
@@ -833,6 +855,12 @@ export async function appRunnerRoutes(app: FastifyInstance) {
 
     const { slug } = paramsParsed.data
     const { inputValues, version } = bodyParsed.data
+
+    // A run of someone else's app is not started on a deployment that does not
+    // allow public work (lib/published-app-access.ts).
+    if (await publishedAppSlugWithheld(slug, req.userId)) {
+      return reply.status(404).send(APP_NOT_FOUND)
+    }
 
     const workflowId = await resolveSlug(slug)
     if (!workflowId) {
@@ -1376,6 +1404,12 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const { runId } = parsed.data
+
+    // A run of someone else's app is not restored on a deployment that does
+    // not allow public work: the app answers as one that does not exist.
+    if (await publishedAppRunWithheld(runId, req.userId)) {
+      return reply.status(404).send(APP_NOT_FOUND)
+    }
 
     const { data: updated, error: updateError } = await supabase
       .from("app_runs")

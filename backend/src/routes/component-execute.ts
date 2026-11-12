@@ -29,6 +29,7 @@ import { requireScope } from "../lib/scopes.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
+import { componentWithheld } from "../lib/published-app-access.js"
 
 
 const bodySchema = z.object({
@@ -124,7 +125,11 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     const { data: appRows } = await appQuery
     const appRow = appRows?.[0]
     // A blocked author's component answers like a missing one (lib/access-blocks.ts).
-    if (!appRow || (await isUserBlocked((appRow.creator_id as string | null) ?? null))) {
+    // So does someone else's, on a deployment that does not allow public work,
+    // unless a full run of a workflow holding the component node calls it (the
+    // orchestrator's lane: lib/published-app-access.ts) — a component placed in
+    // a workflow keeps running there, and is not reached by its name.
+    if (!appRow || componentWithheld(req, appRow.creator_id) || (await isUserBlocked((appRow.creator_id as string | null) ?? null))) {
       return reply.status(404).send({ error: { code: "not_found", message: "Component not found" } })
     }
 
@@ -381,7 +386,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("published_apps")
-      .select("snapshot_nodes, snapshot_edges, component_metadata")
+      .select("snapshot_nodes, snapshot_edges, component_metadata, creator_id")
       .eq("slug", appSlug)
       .eq("publish_type", "component")
       .eq("is_active", true)
@@ -394,7 +399,9 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     }
 
     const { data: app } = await query.single()
-    if (!app) {
+    // Someone else's component is not priced by its name on a deployment that
+    // does not allow public work: the same rule as its run (componentWithheld).
+    if (!app || componentWithheld(req, app.creator_id)) {
       return reply.status(404).send({ error: { code: "not_found", message: "Component not found" } })
     }
 
