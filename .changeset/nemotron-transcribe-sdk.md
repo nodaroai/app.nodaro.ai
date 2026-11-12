@@ -1,5 +1,0 @@
----
-"@nodaro/sdk": minor
----
-
-`audio.transcribe` takes `provider: "nemotron-3-5-transcribe"` (NVIDIA Nemotron 3.5 Transcribe: 40 languages detected automatically, word timings with a speaker per word when `wordTimestamps: true`) and a new `targetLanguage` (a `TranscribeTargetLanguage`, exported beside `TranscribeProvider`): on that engine only, it translates the speech instead, to or from English, with no word timings. A translation on another engine, or beside `wordTimestamps: true`, is a `400 validation_error`. The engine is priced per started minute of the audio: the file is measured before anything is held, and the run is charged for the length the model decoded (up or down; a file whose length cannot be read up front holds 60 minutes). Anything but an https link to a public host, a file over 60 minutes or 200 MB, or a link to a video's page is a `400` before anything is charged. `media.addCaptions`'s `transcribeProvider` is typed `CaptionTranscribeLane` (exported from `@nodaro/sdk/media`), the three lanes it takes, as before.
