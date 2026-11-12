@@ -866,6 +866,20 @@ export {
   topazImageSizeUnits,
   type TopazVideoHoldInput,
 } from "./topaz-pricing.js"
+// Nodaro Image Upscale: the output's size, its price tier and the limits a run is refused past.
+export {
+  NODARO_IMAGE_UPSCALE_HOLD_CREDIT_ID,
+  NODARO_IMAGE_UPSCALE_MAX_OUTPUT_PIXELS,
+  NODARO_IMAGE_UPSCALE_MAX_OUTPUT_SIDE,
+  NODARO_IMAGE_UPSCALE_TIERS,
+  NODARO_IMAGE_UPSCALE_CREDIT_IDS,
+  nodaroImageUpscaleTierCreditId,
+  nodaroImageUpscaleSizing,
+  nodaroImageUpscaleCreditId,
+  nodaroImageUpscaleTooLargeMessage,
+  type NodaroImageUpscaleImageSize,
+  type NodaroImageUpscaleSizing,
+} from "./nodaro-image-upscale-pricing.js"
 // Background scrapes on the video worker: the worker's lock geometry, one attempt's bound, and a client's poll budget.
 export {
   VIDEO_WORKER_LOCK_DURATION_MS,

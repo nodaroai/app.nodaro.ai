@@ -9,13 +9,15 @@
  *   poll budget by its margin, and stays inside the reconcile envelope
  *   (18 attempts on the 5-minute cron), so the cron can never take a job over
  *   while its worker still polls, and a job is still exhausted in time.
- * - With no own-label catalog entry, every house-model branch is unreachable:
- *   no model is denied by the rule, no recommendation changes, no job is
- *   attributed to the house name.
+ * - The shipped catalog's one house model, Nodaro Image Upscale, is the only
+ *   model the house rule reaches: no other model is denied by it, only its
+ *   own recommendation changes, only its jobs count under the house name.
  */
 import { describe, it, expect, vi } from "vitest"
 import { LLM_MODELS } from "@nodaro/shared/llm-models"
-import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, safetyRetryPolicy } from "@nodaro/shared/model-catalog"
+import { IMAGE_MODEL_ROLE_DEFAULTS, MODEL_CATALOG, MODEL_RECOMMENDATIONS, safetyRetryPolicy } from "@nodaro/shared/model-catalog"
+import { DEFAULT_TTS_PROVIDER, DEFAULT_VIDEO_PROVIDER } from "@nodaro/shared/models"
+import { EDIT_IMAGE_DEFAULT_PROVIDER, NODE_MODEL_LEVERS } from "@nodaro/render-rules"
 import {
   HOUSE_MODEL_POLL_INTERVAL_MS,
   HOUSE_MODEL_STALE_MARGIN_MS,
@@ -26,7 +28,8 @@ import {
 import { HOUSE_MODEL_LANES, houseModelLane, houseModelLaneProblems } from "../house-model-lanes.js"
 import { ownLabelModelIds } from "../house-models-served.js"
 import { MAX_ATTEMPTS, STALE_THRESHOLD_MS, HOUSE_MODEL_RECOVER_KINDS, ASYNC_RECOVERABLE_KINDS, isReconcileRecoverable } from "../reconcile/types.js"
-import { isHouseModelUnserved, recommendationsServedHere } from "../surface-deny.js"
+import { isHouseModelUnserved, modelRestrictionConfigured, recommendationsServedHere } from "../surface-deny.js"
+import { RESOLVED_MODEL_OF_JOB } from "../job-resolved-model.js"
 import { _resetPluginServicesForTests } from "../private-plugins/services-registry.js"
 import { refreshHouseModelsServed, setHouseModelsServedSource, resetOwnLabelModelIdsForTests } from "../house-models-served.js"
 import { buildPayloadWithSourceSize } from "../../services/workflow-engine/source-size-build.js"
@@ -64,6 +67,25 @@ describe("the per-id tables", () => {
     expect(houseModelLaneProblems({ inputUrlArgs: [] })).toEqual([])
   })
 
+  it("refuse failure sentences of an unknown class or with no words (the validator, on fixtures)", () => {
+    const row = { inputUrlArgs: ["imageUrl"] }
+    expect(houseModelLaneProblems({ ...row, failureSentences: { contentPolicy: "Blocked.", inputRefused: "Unreadable." } })).toEqual([])
+    expect(houseModelLaneProblems({ ...row, failureSentences: {} })).toEqual([])
+    expect(houseModelLaneProblems({ ...row, failureSentences: "Blocked." })).toEqual(["failureSentences is not an object"])
+    expect(houseModelLaneProblems({ ...row, failureSentences: null })).toEqual(["failureSentences is not an object"])
+    expect(houseModelLaneProblems({ ...row, failureSentences: { contentPolicy: " " } })).toEqual(["failureSentences.contentPolicy is not a sentence"])
+    expect(houseModelLaneProblems({ ...row, failureSentences: { inputRefused: 7 } })).toEqual(["failureSentences.inputRefused is not a sentence"])
+    expect(houseModelLaneProblems({ ...row, failureSentences: { timeout: "Slow." } })).toEqual(["failureSentences.timeout is not a failure class"])
+  })
+
+  it("give failure sentences that carry no link, so a person reads plain words only", () => {
+    for (const [id, row] of Object.entries(HOUSE_MODEL_LANES)) {
+      for (const [cls, sentence] of Object.entries(row.failureSentences ?? {})) {
+        expect(sentence, `${id} ${cls}`).not.toMatch(/https?:|www\.|\.(com|ai|io|net)\b/i)
+      }
+    }
+  })
+
   it("hold positive budgets, each poll interval below its budget", () => {
     for (const [id, ms] of Object.entries(HOUSE_MODEL_TIMEOUT_MS)) expect(ms, id).toBeGreaterThan(0)
     for (const [id, ms] of Object.entries(HOUSE_MODEL_POLL_INTERVAL_MS)) {
@@ -97,41 +119,123 @@ describe("the house-model reconcile kind", () => {
   })
 })
 
-describe("with no own-label catalog entry, every house-model branch is unreachable", () => {
-  it("the shipped catalog marks no model own-label", () => {
-    expect([...ownLabelModelIds()]).toEqual([])
+describe("the shipped catalog's one house model, and nothing else, is reached by the house rule", () => {
+  const HOUSE = "nodaro-image-upscale"
+
+  it("the shipped catalog marks exactly Nodaro Image Upscale own-label", () => {
+    expect([...ownLabelModelIds()]).toEqual([HOUSE])
   })
 
-  it("no catalog or LLM model is denied by the house rule", () => {
+  it("where it is not served, the house rule denies it and no other catalog or LLM model", () => {
+    _resetPluginServicesForTests()
     for (const id of [...Object.keys(MODEL_CATALOG), ...LLM_MODELS.map((m) => m.id)]) {
-      expect(isHouseModelUnserved(id), id).toBe(false)
+      expect(isHouseModelUnserved(id), id).toBe(id === HOUSE)
     }
   })
 
-  it("every recommendation is returned as it came", () => {
+  it("where it is not served, only its own recommendation changes; every other is returned as it came", () => {
+    _resetPluginServicesForTests()
     const out = recommendationsServedHere(MODEL_RECOMMENDATIONS)
-    expect(out).toHaveLength(MODEL_RECOMMENDATIONS.length)
-    out.forEach((r, i) => expect(r).toBe(MODEL_RECOMMENDATIONS[i]))
+    const untouched = MODEL_RECOMMENDATIONS.filter((r) => !r.modelIds.includes(HOUSE))
+    expect(untouched.every((r) => out.includes(r))).toBe(true)
+    expect(out.flatMap((r) => r.modelIds)).not.toContain(HOUSE)
   })
 
-  it("the orchestrator never asks its API: no refresh, and no node build waits on it", async () => {
+  it("the orchestrator never asks its API for a node that names no house model: a plain build neither asks nor waits", async () => {
     _resetPluginServicesForTests()
     resetOwnLabelModelIdsForTests()
     const ask = vi.fn(async () => [] as string[])
     setHouseModelsServedSource(ask)
     try {
-      await refreshHouseModelsServed()
-      const node = { id: "n-1", type: "upscale-image", data: { provider: "recraft-upscale" } }
-      await buildPayloadWithSourceSize(node, "job-1", { imageUrl: "https://in.example/a.png" }, undefined, { nodes: [node], edges: [], nodeStates: {} })
+      const image = { id: "n-1", type: "generate-image", data: { prompt: "a lighthouse", provider: "gpt-image-2" } }
+      const built = await buildPayloadWithSourceSize(image, "job-1", { prompt: "a lighthouse" }, undefined, { nodes: [image], edges: [], nodeStates: {} })
+      expect(built.jobName).toBeTruthy()
+      const upscale = { id: "n-2", type: "upscale-image", data: { provider: "recraft-upscale", upscaleFactor: "4" } }
+      await buildPayloadWithSourceSize(upscale, "job-2", { imageUrl: "https://in.example/a.png" }, undefined, { nodes: [upscale], edges: [], nodeStates: {} })
       expect(ask).not.toHaveBeenCalled()
     } finally {
       resetOwnLabelModelIdsForTests()
     }
   })
 
-  it("no job is attributed to the house name", () => {
-    for (const id of Object.keys(MODEL_CATALOG)) {
-      expect(primaryProviderOfJob("edit-image", { provider: id }), id).not.toBe("house-models")
+  it("a node that names a house model asks once before its build, and the next build reuses the answer", async () => {
+    _resetPluginServicesForTests()
+    resetOwnLabelModelIdsForTests()
+    const ask = vi.fn(async () => [] as string[])
+    setHouseModelsServedSource(ask)
+    try {
+      const named = { id: "n-1", type: "upscale-image", data: { provider: HOUSE } }
+      const build = (jobId: string) =>
+        buildPayloadWithSourceSize(named, jobId, { imageUrl: "https://in.example/a.png" }, undefined, { nodes: [named], edges: [], nodeStates: {} })
+      // The API answered "not served": the node is refused before anything is held.
+      await expect(build("job-1")).rejects.toMatchObject({ code: "model_not_available" })
+      expect(ask).toHaveBeenCalledTimes(1)
+      await expect(build("job-2")).rejects.toMatchObject({ code: "model_not_available" })
+      expect(ask).toHaveBeenCalledTimes(1)
+    } finally {
+      resetOwnLabelModelIdsForTests()
     }
+  })
+
+  it("only its jobs count under the house name", () => {
+    for (const id of Object.keys(MODEL_CATALOG)) {
+      expect(primaryProviderOfJob("edit-image", { provider: id }) === "house-models", id).toBe(id === HOUSE)
+    }
+  })
+
+  it("where it is not served, it withholds only itself: no model restriction", () => {
+    _resetPluginServicesForTests()
+    expect(isHouseModelUnserved(HOUSE)).toBe(true)
+    expect(modelRestrictionConfigured()).toBe(false)
+  })
+})
+
+/**
+ * No default model is a house model, so a request or a node runs one only by
+ * naming it — which is what lets an install that does not serve it judge
+ * nothing but the house model (`namesHouseModel`, `withheldRunModels`).
+ */
+describe("no default model is a house model", () => {
+  const own = (id: unknown) => typeof id === "string" && ownLabelModelIds().has(id)
+
+  it("the model every job runs on when its request names none", () => {
+    for (const [job, resolve] of Object.entries(RESOLVED_MODEL_OF_JOB)) expect(own(resolve({})), job).toBe(false)
+  })
+
+  it("the model every job runs on when its request names any OTHER model (an alias, a swap or a remap never lands on a house model)", () => {
+    const REF = "https://cdn.example/ref.png"
+    const others = [...Object.keys(MODEL_CATALOG), ...LLM_MODELS.map((m) => m.id)].filter((id) => !own(id))
+    const reached: string[] = []
+    for (const [job, resolve] of Object.entries(RESOLVED_MODEL_OF_JOB)) {
+      for (const id of others) {
+        for (const data of [{ provider: id }, { provider: id, imageUrl: REF, referenceImageUrls: [REF] }, { model: id }, { llmModel: id }]) {
+          let runs: unknown
+          try {
+            runs = resolve(data)
+          } catch {
+            continue
+          }
+          if (own(runs)) reached.push(`${job}: ${String(runs)} for ${JSON.stringify(data)}`)
+        }
+      }
+    }
+    expect(reached).toEqual([])
+  })
+
+  it("the model every node's model lever runs from its empty data", () => {
+    for (const [type, levers] of Object.entries(NODE_MODEL_LEVERS)) {
+      for (const lever of levers) expect(own(lever.runs({})), `${type}.${lever.field}`).toBe(false)
+    }
+  })
+
+  it("the named defaults", () => {
+    const defaults = [
+      EDIT_IMAGE_DEFAULT_PROVIDER,
+      DEFAULT_VIDEO_PROVIDER,
+      DEFAULT_TTS_PROVIDER,
+      ...Object.values(IMAGE_MODEL_ROLE_DEFAULTS),
+    ]
+    expect(defaults.length).toBeGreaterThan(3)
+    for (const id of defaults) expect(own(id), String(id)).toBe(false)
   })
 })

@@ -18,7 +18,7 @@ import { setEditPlanPerMinuteSource } from "./lib/private-plugins/edit-plan-per-
 import { askApiEditPlanPerMinute } from "./services/workflow-engine/edit-plan-per-minute-loopback.js"
 import { setPluginNodeVoicesSource } from "./lib/private-plugins/plugin-node-voices.js"
 import { askApiPluginNodeVoices } from "./services/workflow-engine/plugin-node-voices-loopback.js"
-import { refreshHouseModelsServed, setHouseModelsServedSource } from "./lib/house-models-served.js"
+import { setHouseModelsServedSource } from "./lib/house-models-served.js"
 import { askApiHouseModelsServed } from "./services/workflow-engine/house-models-served-loopback.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
 import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
@@ -71,10 +71,10 @@ setPluginNodeVoicesSource((type, data, inputs) => askApiPluginNodeVoices(type, d
 // it asks this container's API which house models the deployment serves — the
 // availability rule the payload build applies before a reservation reads it
 // (while the API cannot be asked the answer is unknown, and a run on a house
-// model is handed back, never refused). The engine refreshes the answer before
-// each payload build; the first ask starts now (a drain during it is nobody's).
+// model is handed back, never refused). Nothing is asked at boot: the engine
+// asks before the build of a node that names a house model, so a run of every
+// other model never asks or waits (source-size-build.ts).
 setHouseModelsServedSource(() => askApiHouseModelsServed())
-void refreshHouseModelsServed().catch(() => {})
 
 // Concurrency lanes: promote this queue's parked runs when a slot is reserved
 // for them (a release in any process publishes the wake), and wake every

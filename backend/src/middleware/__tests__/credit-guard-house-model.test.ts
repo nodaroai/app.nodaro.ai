@@ -2,11 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
 
 /**
- * The house rule (lib/house-models-served.ts) counts as a model restriction
- * (`modelRestrictionConfigured`): with no profile and no override, a route
- * that runs a house model this install does not serve through `runModel` is
- * refused before its hold — the resolver is asked at all only because the
- * rule counts. Served, it runs. Against a catalog with one own-label fixture.
+ * The house rule (lib/house-models-served.ts) withholds ONLY the house model:
+ * it is no model restriction (`modelRestrictionConfigured` stays false), so a
+ * deployment that does not serve it judges every other model exactly as one
+ * with no house model. Where a request could run an unserved house model —
+ * its body names one, outside the `provider` the deny judges first — the
+ * guard asks `runModel` and refuses that model alone, before the handler and
+ * any hold; a body that names none never has `runModel` asked (no default
+ * model is a house model: house-models-tables.test.ts). Served, it runs.
+ * Against a catalog with one own-label fixture.
  */
 
 vi.mock("@/lib/config.js", () => ({
@@ -77,31 +81,58 @@ afterEach(async () => {
   resetOwnLabelModelIdsForTests()
 })
 
-const post = () => app.inject({ method: "POST", url: "/v1/upscale", payload: { imageUrl: "https://in.example/a.png" } })
+const post = (extra: Record<string, unknown> = {}) =>
+  app.inject({ method: "POST", url: "/v1/upscale", payload: { imageUrl: "https://in.example/a.png", ...extra } })
 
-describe("the house rule is a model restriction", () => {
-  it("counts while the catalog's house model is not served here, and not once it is", () => {
+describe("the house rule withholds only the house model", () => {
+  it("is no model restriction, served or not", () => {
     setPluginServices({})
-    expect(modelRestrictionConfigured()).toBe(true)
+    expect(modelRestrictionConfigured()).toBe(false)
     serving([])
-    expect(modelRestrictionConfigured()).toBe(true)
-    serving(["house-fixture"])
+    expect(modelRestrictionConfigured()).toBe(false)
+    serving(["house-fixture", "nodaro-image-upscale"])
     expect(modelRestrictionConfigured()).toBe(false)
   })
 
-  it("refuses, before the handler and any hold, a route that runs an unserved house model through runModel", async () => {
+  it("refuses, before the handler and any hold, a body that names an unserved house model the route runs through runModel", async () => {
     serving([])
-    const res = await post()
+    const res = await post({ model: "house-fixture" })
     expect(runModel).toHaveBeenCalled()
     expect(handled).toBe(0)
-    expect(res.statusCode).toBeGreaterThanOrEqual(400)
+    expect(res.statusCode).toBe(403)
     expect(res.json()).toMatchObject({ error: { code: "model_not_available" } })
   })
 
-  it("lets the same route run where the house model is served", async () => {
-    serving(["house-fixture"])
+  it("never asks runModel for a body that names no house model, and the route runs", async () => {
+    serving([])
     const res = await post()
+    expect(runModel).not.toHaveBeenCalled()
     expect(res.statusCode).toBe(200)
     expect(handled).toBe(1)
+  })
+
+  it("an answer that is not an unserved house model, or a throw, changes nothing", async () => {
+    serving([])
+    runModel.mockReturnValueOnce("z-image")
+    expect((await post({ model: "house-fixture" })).statusCode).toBe(200)
+    runModel.mockImplementationOnce(() => {
+      throw new Error("bad body")
+    })
+    expect((await post({ model: "house-fixture" })).statusCode).toBe(200)
+    expect(handled).toBe(2)
+  })
+
+  it("lets the same request run where the house model is served", async () => {
+    serving(["house-fixture"])
+    const res = await post({ model: "house-fixture" })
+    expect(res.statusCode).toBe(200)
+    expect(handled).toBe(1)
+  })
+
+  it("an install that serves every house model reads no body and never asks runModel", async () => {
+    serving(["house-fixture", "nodaro-image-upscale"])
+    const res = await post({ model: "house-fixture" })
+    expect(res.statusCode).toBe(200)
+    expect(runModel).not.toHaveBeenCalled()
   })
 })

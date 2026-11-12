@@ -1528,6 +1528,12 @@ const KLING_4_FLASH_MODELS_BYTES = 138
 // (9_884 → 9_916 B). No tool was added, so the fixture does NOT move.
 const MINIMAX_H3_IMAGE_PER_TOOL_BYTES = 32
 
+// RAISED 2026-11-11 by Nodaro Image Upscale on edit_image (the model in its `model` enum and its
+// one line in the description, and `upscale_factor`'s 8 with which model takes which factors),
+// and nothing else. No tool was added, so the fixture does NOT move. Measured by this suite:
+// 523_132 total − 522_874 = 258 B, all on edit_image.
+const NODARO_IMAGE_UPSCALE_BYTES = 258
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES,
   totalBytes:
@@ -1719,7 +1725,8 @@ export const TOOL_WIRE_BUDGET = {
     SEEDANCE_REFERENCE_TASK_TYPE_ARG_BYTES +
     SEEDREAM_5_5_TOTAL_BYTES +
     VIDEO_OVERLAY_VIDEO_LAYERS_BYTES +
-    KLING_4_FLASH_MODELS_BYTES,
+    KLING_4_FLASH_MODELS_BYTES +
+    NODARO_IMAGE_UPSCALE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

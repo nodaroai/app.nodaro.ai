@@ -125,6 +125,7 @@ import {
   seedanceExtendCreditId,
   seedanceExtendResolution,
   resolveTopazUpscale,
+  resolveUpscaleFactor,
   resolveNormalizedImageGen,
   imageFormatInputOf,
 } from "@nodaro/shared/credits"
@@ -274,8 +275,9 @@ import { maskFormatConflict } from "../../lib/image-format-schema.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config, llmMeteredPricing } from "../../lib/config.js"
 import { resolveScriptModelId, type ScriptProvider } from "../../providers/script/script-generator.js"
-import { isNodeDenied, nodeNotAvailableError, isModelDenied, modelNotAvailableError, modelRestrictionConfigured, USER_VIEWER, type AvailabilityViewer } from "../../lib/surface-deny.js"
+import { isNodeDenied, nodeNotAvailableError, isModelDenied, modelNotAvailableError, modelRestrictionConfigured, namesHouseModel, unservedHouseModelsOf, USER_VIEWER, type AvailabilityViewer } from "../../lib/surface-deny.js"
 import { jobRunModelOfBuild } from "../../lib/run-model.js"
+import { servesEveryHouseModel } from "../../lib/house-models-served.js"
 import { providerIsItsModel } from "../../lib/provider-model.js"
 import { VIDEO_RETAKE_MODEL } from "../../workers/handlers/default-models.js"
 import { safeUrlSchema } from "../../lib/url-validator.js"
@@ -2885,8 +2887,9 @@ function voiceLockRefusal(message: string): Error & { code?: string } {
  * ratio, by text length, by feature — `jobRunModelOfBuild` reads it off the
  * built job), and a model the deployment withholds is refused the way a named
  * one is refused at the top of the build (`model_not_available`), before the
- * executor reserves anything. Without a restriction the build is returned as
- * it was built, and nothing is judged.
+ * executor reserves anything. Without a restriction only the house rule is
+ * judged (`refuseUnservedHouseDefaultModel`): a house model this install does
+ * not serve, and nothing else.
  */
 export function buildPayload(
   rawNode: SimpleNode,
@@ -2897,10 +2900,41 @@ export function buildPayload(
 ): PayloadResult {
   const restricted = modelRestrictionConfigured()
   // The provider the node was handed, read before the build (which may rewrite `resolvedInputs`).
-  const handed = restricted ? { provider: resolvedInputs.provider } : undefined
+  const handed = { provider: resolvedInputs.provider }
   const built = buildPayloadOf(rawNode, jobId, resolvedInputs, usageLogId, buildCtx)
-  if (handed) refuseWithheldDefaultModel(rawNode, handed, buildCtx, built)
+  if (restricted) refuseWithheldDefaultModel(rawNode, handed, buildCtx, built)
+  else refuseUnservedHouseDefaultModel(rawNode, handed, buildCtx, built)
   return built
+}
+
+/**
+ * Without a model restriction, the house rule alone (`unservedHouseModelsOf`):
+ * a node that runs a house model this install does not serve without naming
+ * it in its provider is refused like a named one; every other model it runs is
+ * not judged, exactly as on an install with no house model. Asked only where
+ * one is possible: the catalog has one not known to be served, and the node's
+ * data or handed provider names one (`namesHouseModel`; no default model is a
+ * house model). In the orchestrator the served ids may not be known yet:
+ * `houseModelServed` then throws its hand-back, which reaches the executor as
+ * it does from the build's own named-model judge.
+ */
+function refuseUnservedHouseDefaultModel(
+  rawNode: SimpleNode,
+  handed: Pick<ResolvedInputs, "provider">,
+  buildCtx: PayloadBuildContext | undefined,
+  built: PayloadResult,
+): void {
+  // Read first, and never an ask: an install known to serve every house model judges nothing.
+  if (servesEveryHouseModel() || !namesHouseModel([rawNode.data, handed.provider])) return
+  const unserved = unservedHouseModelsOf(() => {
+    const node = nodeAsBuilt(rawNode, buildCtx?.edges ?? [])
+    const named = effectiveDispatchProvider(node.type, node.data, handed)
+    // Judged at the top of the build: a provider that IS the model it runs.
+    if (named && providerIsItsModel([node.type], named, node.data ?? {})) return []
+    const runsOn = jobRunModelOfBuild(built.jobName, built.payload, built.modelIdentifier)
+    return runsOn ? [runsOn] : []
+  })
+  if (unserved && unserved.length > 0) throw modelNotAvailableError(unserved)
 }
 
 /**
@@ -3554,6 +3588,12 @@ function buildPayloadOf(
       const topaz = provider === "topaz-image-upscale"
         ? resolveTopazUpscale({ upscaleFactor: data.upscaleFactor as string | undefined, targetResolution })
         : undefined
+      // The factor sent is `resolveUpscaleFactor`'s, the one the editor's Run
+      // sends: Topaz's as above, Nodaro Image Upscale's always (2 for a missing
+      // or unknown one; its id here is the hold, and the run's reservation reads
+      // the image's size and reserves the output's tier — node-executor,
+      // nodaroImageUpscaleReserveId), and any other model's value as given,
+      // except an 8, which only the house model takes and is never sent elsewhere.
       return {
         jobName: "edit-image",
         queueName: "video-generation",
@@ -3563,7 +3603,7 @@ function buildPayloadOf(
           imageUrl: mainImageUrl,
           prompt: editPolicied.prompt,
           provider,
-          upscaleFactor: topaz ? topaz.upscaleFactor : (data.upscaleFactor as string | undefined),
+          upscaleFactor: resolveUpscaleFactor(provider, { upscaleFactor: data.upscaleFactor, targetResolution }),
           targetResolution,
           aspectRatio: editParams.aspectRatio,
           negativePrompt: editPolicied.nativeNegativePrompt,
@@ -3962,7 +4002,8 @@ function buildPayloadOf(
           jobId,
           imageUrl: resolvedInputs.imageUrl,
           provider,
-          upscaleFactor: topaz ? topaz.upscaleFactor : (data.upscaleFactor as string | undefined),
+          // As the edit-image case above: Recraft's own value as given, never an 8.
+          upscaleFactor: resolveUpscaleFactor(provider, { upscaleFactor: data.upscaleFactor, targetResolution }),
           targetResolution,
           usageLogId,
         },

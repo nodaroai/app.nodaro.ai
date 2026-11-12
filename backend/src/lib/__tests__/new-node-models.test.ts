@@ -22,6 +22,8 @@ import { EXTEND_VIDEO_DEFAULT_PROVIDER, EXTEND_VIDEO_MODELS, NODE_MODEL_LEVERS, 
 import { describeServerNodeModelMoves, withOfferedServerNodeModels } from "../new-node-models.js"
 import { __resetSurfaceProfileCacheForTests } from "../surface-profile.js"
 import { __availabilityUniverseReadyForTests, __resetAvailabilityOverridesForTests } from "../availability-override.js"
+import { __resetModelSwitchForTests } from "../model-switch.js"
+import { isHouseModelUnserved } from "../surface-deny.js"
 
 beforeAll(() => __availabilityUniverseReadyForTests())
 
@@ -50,6 +52,21 @@ describe("withOfferedServerNodeModels", () => {
     expect(out.moved).toEqual([])
     expect(reader).not.toHaveBeenCalled()
     expect(limits.asked).toBe(0)
+  })
+
+  it("an install that serves no house model, with an admin's switch-off of the default: nothing moves, nothing read, as on an install with no house model", async () => {
+    expect(isHouseModelUnserved("nodaro-image-upscale")).toBe(true)
+    __resetModelSwitchForTests([DEFAULT_VIDEO_PROVIDER])
+    try {
+      const nodes = [{ id: "a", type: "generate-video", data: { prompt: "x" } }]
+      const reader = vi.fn(async () => [])
+      const out = await withOfferedServerNodeModels(nodes, { userId: "u1", storedIds: reader })
+      expect(out.nodes).toBe(nodes)
+      expect(out.moved).toEqual([])
+      expect(reader).not.toHaveBeenCalled()
+    } finally {
+      __resetModelSwitchForTests()
+    }
   })
 
   it("a new node that names no model starts on the first row its menu offers when its default is withheld", async () => {

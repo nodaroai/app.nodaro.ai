@@ -58,6 +58,7 @@ import {
   HouseModelsTemporarilyUnavailableError,
   houseRuleWithholdsAModel,
   resetOwnLabelModelIdsForTests,
+  servesEveryHouseModel,
 } from "../house-models-served.js"
 import { DrainAbortError } from "../worker-drain.js"
 import { isModelDenied } from "../surface-deny.js"
@@ -205,19 +206,45 @@ describe("(c) the orchestrator with its API unreachable", () => {
 })
 
 describe("(e) a house model the node does not name", () => {
-  it("is made current before the build of a node that names none: its model may arrive through a FieldMapping, an app input or a remap", async () => {
+  it("is not asked about before the build of a node that names none: every other model runs as on an install with no house model", async () => {
     const ask = vi.fn(async () => [ID])
     setHouseModelsServedSource(ask)
     await expect(buildUpscaleMapped()).resolves.toBeDefined()
+    expect(ask).not.toHaveBeenCalled()
+  })
+
+  it("is made current before the build of a node that names one, in its data or in the provider it was handed", async () => {
+    const ask = vi.fn(async () => [ID])
+    setHouseModelsServedSource(ask)
+    const node: SimpleNode = { id: "n-3", type: "upscale-image", data: { provider: ID, upscaleFactor: "2" } }
+    await buildPayloadWithSourceSize(node, "job-3", { imageUrl: "https://in.example/a.png" }, undefined, { nodes: [node], edges: [], nodeStates: {} }).catch(() => undefined)
     expect(ask).toHaveBeenCalledTimes(1)
     // Current, so the synchronous answer the build's availability rule reads is the API's.
     expect(houseModelServed(ID)).toBe(true)
   })
 
+  it("servesEveryHouseModel: known from the loaded plugin, or from a held answer — never asked for", async () => {
+    // The plugin process.
+    setPluginServices({ houseModels: { ...fakeService(), ids: () => [ID] } })
+    expect(servesEveryHouseModel()).toBe(false)
+    setPluginServices({ houseModels: { ...fakeService(), ids: () => [ID, "nodaro-image-upscale"] } })
+    expect(servesEveryHouseModel()).toBe(true)
+    // The orchestrator: no answer yet is not knowing — and reading it starts no ask.
+    _resetPluginServicesForTests()
+    const ask = vi.fn(async () => [ID, "nodaro-image-upscale"])
+    setHouseModelsServedSource(ask)
+    expect(servesEveryHouseModel()).toBe(false)
+    expect(ask).not.toHaveBeenCalled()
+    await refreshHouseModelsServed()
+    expect(servesEveryHouseModel()).toBe(true)
+    expect(ask).toHaveBeenCalledTimes(1)
+  })
+
   it("the house rule counts as a model restriction only while a house model is not known to be served", async () => {
     setPluginServices({ houseModels: { ...fakeService(), ids: () => [] } })
     expect(houseRuleWithholdsAModel()).toBe(true)
-    setPluginServices({ houseModels: fakeService() })
+    // Every own-label model served (the fixture and the shipped catalog's own).
+    setPluginServices({ houseModels: { ...fakeService(), ids: () => [ID, "nodaro-image-upscale"] } })
     expect(houseRuleWithholdsAModel()).toBe(false)
   })
 })
@@ -289,16 +316,18 @@ describe("(d) no source registered", () => {
 
 describe("wiring", () => {
   const backend = resolve(dirname(fileURLToPath(import.meta.url)), "../../..")
-  it("the orchestrator registers the API source at boot, beside the other two", () => {
+  it("the orchestrator registers the API source at boot, beside the other two, and asks nothing at boot", () => {
     const boot = readFileSync(join(backend, "src/orchestrator.ts"), "utf8")
     expect(boot).toMatch(/setHouseModelsServedSource\(\(\) => askApiHouseModelsServed\(\)\)/)
     expect(boot).toMatch(/setEditPlanPerMinuteSource\(/)
+    expect(boot).not.toMatch(/refreshHouseModelsServed\(/)
   })
 
-  it("the engine's payload build makes the answer current before it builds, whatever the node names", () => {
+  it("the engine's payload build makes the answer current before it builds a node that names a house model, and only then", () => {
     const build = readFileSync(join(backend, "src/services/workflow-engine/source-size-build.ts"), "utf8")
-    const refresh = build.indexOf("if (ownLabelModelIds().size > 0) await refreshHouseModelsServed()")
+    const refresh = build.indexOf("if (namesHouseModel([node.data, resolvedInputs.provider])) await refreshHouseModelsServed()")
     expect(refresh).toBeGreaterThan(-1)
     expect(refresh).toBeLessThan(build.indexOf("buildPayload(node"))
+    expect(build.match(/refreshHouseModelsServed\(\)/g)).toHaveLength(1)
   })
 })

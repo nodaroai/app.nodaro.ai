@@ -43,7 +43,7 @@ import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, isUseCaseNodeType, renderEstimateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, isUseCaseNodeType, nodaroImageUpscaleCreditId, renderEstimateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsReferenceVideo } from "@/lib/audio-reference-handles"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
@@ -828,7 +828,8 @@ export function getModelIdentifier(
  * `wiredImageRefs`: reference images wired into the node, for a model priced per input image.
  * `photo`: whether the node carries a mask and the size of its photo, when
  * known: a masked edit on a model that follows its photo (GPT Image 2.6 Flare
- * and Sunburst) runs, and is priced, at the size nearest the photo.
+ * and Sunburst) runs, and is priced, at the size nearest the photo; Nodaro
+ * Upscale is priced by the photo's size × its factor, mask or no mask.
  */
 export function buildCreditModelIdentifier(
   provider: string,
@@ -836,6 +837,10 @@ export function buildCreditModelIdentifier(
   wiredImageRefs = 0,
   photo?: { masked?: boolean; sourceImage?: SourceImageSize },
 ): string {
+  // Nodaro Image Upscale is priced by the OUTPUT's size: the wired photo's recorded
+  // size × the factor, by the one sizing every lane uses — the hold when the
+  // photo's size is not known (what the run reserves until it reads it).
+  if (provider === "nodaro-image-upscale") return nodaroImageUpscaleCreditId(photo?.sourceImage, data.upscaleFactor)
   // flux-2-max bills per reference image — the UI cost preview pulls the
   // ref count from `data.referenceImageUrls` (panel-local mirror of the wired
   // refs) so the displayed credit number matches what the route will charge.

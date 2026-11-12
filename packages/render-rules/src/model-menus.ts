@@ -104,6 +104,7 @@ export const MODIFY_IMAGE_MODELS = [
 export const UPSCALE_IMAGE_MODELS = [
   { value: "recraft-upscale", label: "Recraft Upscale", description: "Fast, high-quality upscaling" },
   { value: "topaz-image-upscale", label: "Topaz Upscale", description: "Premium AI upscaling with a 1x / 2x / 4x factor" },
+  { value: "nodaro-image-upscale", label: "Nodaro Image Upscale", description: "Upscale up to 8x, lettering kept exactly as written" },
 ]
 
 export const VIDEO_I2V_MODELS = [

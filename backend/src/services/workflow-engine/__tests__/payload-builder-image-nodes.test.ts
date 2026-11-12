@@ -7,7 +7,7 @@
  * file is one top-level describe named after it, with its own helpers, setup
  * and teardown; test names and assertions are unchanged.
  */
-import { describe, it, expect, vi, afterEach } from "vitest"
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
 import { buildPayload, type PayloadBuildContext } from "../payload-builder.js"
 import type { SimpleNode, ResolvedInputs, NodeExecutionState, SimpleEdge } from "../types.js"
 import { buildCreditModelIdentifier } from "@nodaro/shared/credits"
@@ -17,6 +17,7 @@ import { MODEL_CATALOG, autoAspectNeedsSourceImage, normalizeModelInput } from "
 import { SOURCE_IMAGE_NODE_TYPES, PHOTO_AUTO_ASPECT_NODE_TYPES } from "@nodaro/shared/nodes"
 import { autoAspectSourceImageUrl, generateImageMayUsePhotoSize } from "../source-image.js"
 import { kieImageModelSent } from "../../../providers/kie/image-edit-sibling.js"
+import { serveEveryHouseModel, serveNoHouseModel } from "../../../test/house-models.js"
 
 describe("payload-builder-image-collage.test.ts", () => {
   /**
@@ -269,6 +270,34 @@ describe("payload-builder-image-lever-snap.test.ts", () => {
       )
       expect(result.payload.aspectRatio).toBe("21:9")
       expect(result.modelIdentifier).toBe("nano-banana-edit")
+    })
+  })
+
+  describe("buildPayload — the upscale factor a workflow run sends", () => {
+    const input = { imageUrl: "https://r2.nodaro.ai/in.png" }
+
+    it.each(["upscale-image", "edit-image"])("%s: a Nodaro Image Upscale 8x left on Recraft sends no factor", (type) => {
+      const result = buildPayload(node("u1", type, { provider: "recraft-upscale", upscaleFactor: "8" }), jobId, input)
+      expect(result.payload.provider).toBe("recraft-upscale")
+      expect(result.payload.upscaleFactor).toBeUndefined()
+    })
+
+    it.each(["upscale-image", "edit-image"])("%s: a Recraft node's own 1/2/4 is sent as it always was", (type) => {
+      for (const f of ["1", "2", "4"]) {
+        expect(buildPayload(node("u5", type, { provider: "recraft-upscale", upscaleFactor: f }), jobId, input).payload.upscaleFactor, f).toBe(f)
+      }
+    })
+
+    it("an upscale-image node with no model runs as Recraft and sends no 8", () => {
+      const result = buildPayload(node("u2", "upscale-image", { upscaleFactor: "8" }), jobId, input)
+      expect(result.payload.provider).toBe("recraft-upscale")
+      expect(result.payload.upscaleFactor).toBeUndefined()
+    })
+
+    it("Topaz sends the factor its run renders, a stale 8 as 2", () => {
+      const result = buildPayload(node("u3", "upscale-image", { provider: "topaz-image-upscale", upscaleFactor: "8" }), jobId, input)
+      expect(result.payload.upscaleFactor).toBe("2")
+      expect(buildPayload(node("u4", "upscale-image", { provider: "topaz-image-upscale", upscaleFactor: "4" }), jobId, input).payload.upscaleFactor).toBe("4")
     })
   })
 })
@@ -879,6 +908,11 @@ describe("Scene: only a strict model's ratio is checked; every other model's goe
       { prompt: "a quiet harbour at dawn", ...(withReference ? { referenceImageUrls: [REF] } : {}) },
       "u",
     ).payload.aspectRatio
+
+  // Every catalog image model is built here, the house model included: an
+  // install that serves it (one that does not refuses it before the build).
+  beforeEach(() => serveEveryHouseModel())
+  afterEach(() => serveNoHouseModel())
 
   it("covers the catalog", () => {
     expect(Object.values(MODEL_CATALOG).filter((m) => m.kind === "image" && !m.strictAspectRatios).length).toBeGreaterThan(30)

@@ -549,6 +549,7 @@ export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
   { intent: "highest fidelity image", modelIds: ["gpt-image-2", "gpt-image-2-6-sunburst", "imagen4-ultra"], note: "GPT Image 2 for characters and identity; GPT Image 2.6 Sunburst for wide or in-between ratios GPT Image 2 can't draw." },
   { intent: "image edit / restyle", modelIds: ["gpt-image-2-6-flare-i2i", "gpt-image-2-i2i", "seedream-5-pro-i2i"], note: "GPT Image 2.6 Flare changes what you ask and keeps the rest; GPT Image 2 i2i for identity-critical edits; Seedream 5 Pro for instruction-based edits." },
   { intent: "highest-resolution image", modelIds: ["topaz-image-upscale", "gpt-image-2", "gpt-image-2-6-sunburst"], note: "Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor)." },
+  { intent: "upscale an image with text, labels or logos", modelIds: ["nodaro-image-upscale"], note: "Keeps lettering exactly as written. 1x enhances at the same size; up to 8x. Priced by the output's size, so a small picture costs little." },
   { intent: "background removal / cutout", modelIds: ["recraft-remove-bg"], note: "Cheap, no prompt needed." },
   // video
   { intent: "best cinematic video", modelIds: ["veo3", "kling-3.0", "seedance-2"], note: "VEO 3.1 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency." },
@@ -2036,6 +2037,28 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     pricing: [
       { identifier: "topaz-image-upscale", credits: 25, note: "1x / 2x" },
       { identifier: "topaz-image-upscale:4K", credits: 50, note: "4x (legacy identifier)" },
+    ],
+  },
+  "nodaro-image-upscale": {
+    id: "nodaro-image-upscale",
+    kind: "image",
+    modes: ["upscale"] as const,
+    family: "Nodaro Upscale",
+    ownLabel: true,
+    label: "Nodaro Image Upscale",
+    series: "Nodaro Upscale",
+    description: "Image upscale at 1x (enhance only), 2x, 4x or 8x. Restores detail and keeps lettering exactly as written; the output is the input times the factor, nothing cropped. Priced by the output's size.",
+    useCases: ["upscale", "high-res", "typography", "utility"],
+    features: ["reference-image"],
+    // No `resolutions`: the one lever is the upscale factor (`NODARO_IMAGE_UPSCALE_FACTORS`).
+    // The price follows the OUTPUT's total pixels (`@nodaro/render-rules`
+    // nodaro-image-upscale-pricing.ts); the bare id is the hold when the image's size
+    // cannot be read before the run, settled to the delivered output's tier.
+    pricing: [
+      { identifier: "nodaro-image-upscale:2K", credits: 4, note: "output up to 4,194,304 pixels (2048 × 2048)" },
+      { identifier: "nodaro-image-upscale:4K", credits: 10, note: "output up to 16,777,216 pixels (4096 × 4096)" },
+      { identifier: "nodaro-image-upscale:8K", credits: 30, note: "output up to 67,108,864 pixels (8192 × 8192)" },
+      { identifier: "nodaro-image-upscale", credits: 30, note: "held when the image's size cannot be read before the run; the output's tier is charged" },
     ],
   },
 }

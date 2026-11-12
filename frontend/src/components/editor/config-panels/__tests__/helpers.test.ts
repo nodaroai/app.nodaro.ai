@@ -890,6 +890,30 @@ describe("buildCreditModelIdentifier", () => {
     expect(buildCreditModelIdentifier("topaz-image-upscale", { upscaleFactor: "2", targetResolution: "8K" })).toBe("topaz-image-upscale")
   })
 
+  // Nodaro Image Upscale is priced by its OUTPUT's size: the photo's recorded size × the factor.
+  it("prices Nodaro Image Upscale by the output's size (the docs' 1024 × 1024 examples), the hold when the size is unknown", () => {
+    const photo = { sourceImage: { width: 1024, height: 1024 } }
+    expect(buildCreditModelIdentifier("nodaro-image-upscale", { upscaleFactor: "1" }, 0, photo)).toBe("nodaro-image-upscale:2K")
+    expect(buildCreditModelIdentifier("nodaro-image-upscale", { upscaleFactor: "2" }, 0, photo)).toBe("nodaro-image-upscale:2K")
+    expect(buildCreditModelIdentifier("nodaro-image-upscale", { upscaleFactor: "4" }, 0, photo)).toBe("nodaro-image-upscale:4K")
+    expect(buildCreditModelIdentifier("nodaro-image-upscale", { upscaleFactor: "8" }, 0, photo)).toBe("nodaro-image-upscale:8K")
+    // No factor stored: the run's 2x.
+    expect(buildCreditModelIdentifier("nodaro-image-upscale", {}, 0, photo)).toBe("nodaro-image-upscale:2K")
+    // A stored tier from another model never prices it; no size known is the hold.
+    expect(buildCreditModelIdentifier("nodaro-image-upscale", { upscaleFactor: "2", targetResolution: "8K" })).toBe("nodaro-image-upscale")
+    // An output past the limits: the hold (the run refuses it).
+    expect(buildCreditModelIdentifier("nodaro-image-upscale", { upscaleFactor: "8" }, 0, { sourceImage: { width: 1100, height: 1100 } })).toBe("nodaro-image-upscale")
+  })
+
+  it("an Upscale Image node's estimate reads the size its wired source records", () => {
+    const source = (data: Record<string, unknown>) => ({ id: "src", type: "upload-image", position: { x: 0, y: 0 }, data }) as unknown as WorkflowNode
+    const node = (data: Record<string, unknown>) => ({ id: "n", type: "upscale-image", position: { x: 0, y: 0 }, data: { label: "u", provider: "nodaro-image-upscale", ...data } }) as unknown as WorkflowNode
+    const image = { id: "e1", source: "src", target: "n", targetHandle: "image" } as WorkflowEdge
+    expect(getModelIdentifier(node({ upscaleFactor: "4" }), [image], [source({ width: 1024, height: 1024 })])).toBe("nodaro-image-upscale:4K")
+    expect(getModelIdentifier(node({ upscaleFactor: "2" }), [image], [source({ generatedResults: [{ url: "https://a/r.png", width: 1025, height: 1025 }] })])).toBe("nodaro-image-upscale:4K")
+    expect(getModelIdentifier(node({ upscaleFactor: "4" }), [image], [source({})])).toBe("nodaro-image-upscale")
+  })
+
   it("returns 'ideogram-v3:TURBO' for TURBO renderingSpeed", () => {
     expect(buildCreditModelIdentifier("ideogram-v3", { renderingSpeed: "TURBO" })).toBe("ideogram-v3:TURBO")
   })

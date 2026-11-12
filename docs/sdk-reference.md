@@ -3323,6 +3323,12 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 >   or a `taskId` on another provider, does not compile. The provider defaults
 >   to `recraft-upscale`; `prompt` is required for `nano-banana-edit` and
 >   `grok-2-edit` (a `400` without one); `maskIndexes` is for `grok-2-edit` only.
+>   `upscaleFactor` (`UpscaleFactor`: `"1"`, `"2"`, `"4"`, `"8"`) is 1, 2 or 4 on
+>   `topaz-image-upscale` and 1, 2, 4 or 8 on `nodaro-image-upscale` (a factor the
+>   model does not take is a `400 validation_error`). `nodaro-image-upscale` is
+>   priced by its output's size and refuses an output past 67,108,864 pixels or
+>   16,384 pixels on a side with a `400 image_too_large` before anything is
+>   charged — see [Upscale Image → Nodaro Image Upscale](./nodes/ai-image/upscale-image.md#nodaro-image-upscale).
 > - `split-image` is free and synchronous: it creates no job, so `runAndWait`
 >   does not apply (it would throw — the answer has no `jobId`). `run` answers
 >   `SplitImageResult` — `{ images: { name, url }[] }`, one PNG per tile, in
@@ -3358,6 +3364,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > await client.nodes.runAndWait("generate-image", { prompt: "a blue car", baseImageUrl: imageUrl, maskUrl } satisfies GenerateImageParams)
 > await client.nodes.runAndWait("generate-image", { prompt: "a waving flag", provider: "gpt-image-2-6-flare", outputFormat: "gif", gifFrames: 12 } satisfies GenerateImageParams)
 > const { jobId } = await client.nodes.run("edit-image", { imageUrl, provider: "topaz-image-upscale", upscaleFactor: "4" } satisfies EditImageParams)
+> await client.nodes.runAndWait("edit-image", { imageUrl, provider: "nodaro-image-upscale", upscaleFactor: "8" } satisfies EditImageParams)
 > ```
 
 > **Seedance 2.5 Draft.** `GenerateVideoParams` and `TextToVideoParams` take

@@ -35,7 +35,7 @@ import {
   IMAGE_RESOLUTION_VALUES,
   MODIFY_IMAGE_PROVIDERS,
 } from "@nodaro/shared/models"
-import { TOPAZ_UPSCALE_FACTORS } from "@nodaro/shared/credits"
+import { UPSCALE_FACTORS } from "@nodaro/shared/credits"
 import { IMAGE_TO_IMAGE_ATTACH_COLUMNS } from "@nodaro/shared/entities"
 import { GENERATE_MASK_LIMITS } from "@nodaro/shared/media"
 import { imageToImageBody } from "../image-to-image.js"
@@ -182,7 +182,8 @@ const LEVERS: Array<[string, string, Record<string, z.ZodType>, readonly string[
   ["ImageToImageParams", "aspectRatio", imageToImageBody.shape, IMAGE_ASPECT_RATIO_VALUES, ["ImageAspectRatio"]],
   ["ImageToImageParams", "attachToColumn", imageToImageBody.shape, IMAGE_TO_IMAGE_ATTACH_COLUMNS, ["ImageToImageAttachColumn"]],
   ["EditImageParams", "provider", editImageBody.shape, IMAGE_EDIT_PROVIDERS, ["Exclude<ImageEditProvider, TaskChainedEditProvider>", "TaskChainedEditProvider"]],
-  ["EditImageParams", "upscaleFactor", editImageBody.shape, TOPAZ_UPSCALE_FACTORS, ["TopazUpscaleFactor"]],
+  // Every upscaler's factors; the route holds each model to its own list (8 is Nodaro Image Upscale's alone).
+  ["EditImageParams", "upscaleFactor", editImageBody.shape, UPSCALE_FACTORS, ["UpscaleFactor"]],
   ["EditImageParams", "targetResolution", editImageBody.shape, IMAGE_EDIT_TARGET_RESOLUTION_VALUES, ["ImageEditTargetResolution"]],
   ["EditImageParams", "aspectRatio", editImageBody.shape, IMAGE_ASPECT_RATIO_VALUES, ["ImageAspectRatio"]],
 ]

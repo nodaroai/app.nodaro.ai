@@ -66,3 +66,9 @@ ffd6dc89479c59b6ab90ec2eadb945a14d34f2a6:frontend/src/ee/app/billing-admin/__tes
 061b62e353849b6370fa4b5c3ef042c20d3b0ae0:backend/src/lib/__tests__/stripe-mode-settings.test.ts:generic-api-key:11
 061b62e353849b6370fa4b5c3ef042c20d3b0ae0:backend/src/lib/__tests__/stripe-mode-settings.test.ts:generic-api-key:23
 061b62e353849b6370fa4b5c3ef042c20d3b0ae0:backend/src/lib/__tests__/stripe-mode-settings.test.ts:generic-api-key:42
+
+# backend/src/middleware/__tests__/credit-guard-before-pricing.test.ts: a test's made-up
+# Idempotency-Key (a click id with digits) read as a credential by generic-api-key. It is no
+# secret. This pins the PR-branch commit that introduced it; the line now uses a plain-word
+# key, so no later commit or squash repeats the match.
+4a2f6ee907114f6111a81a92a07cae1263429eaf:backend/src/middleware/__tests__/credit-guard-before-pricing.test.ts:generic-api-key:79

@@ -424,10 +424,10 @@ Transform or upscale an existing image.
 }
 ```
 
-**Providers:** `recraft-upscale`, `topaz-image-upscale`, `recraft-remove-bg`, `nano-banana-edit`
+**Providers:** `recraft-upscale`, `topaz-image-upscale`, `nodaro-image-upscale`, `recraft-remove-bg`, `nano-banana-edit`
 
 **Optional fields:**
-- `upscaleFactor`: `"1"`, `"2"`, `"4"` (topaz-image-upscale — its only quality lever)
+- `upscaleFactor`: `"1"`, `"2"`, `"4"` (topaz-image-upscale — its only quality lever); `"1"`, `"2"`, `"4"`, `"8"` (nodaro-image-upscale — default `"2"`; priced by the output's size)
 
 | Input Handles | Output Handles |
 |---------------|----------------|

@@ -300,20 +300,63 @@ export function isModelDenied(id: string): boolean {
 }
 
 /**
+ * The house rule ALONE, for a deployment that does not restrict models
+ * (`modelRestrictionConfigured()` false): of the ids `ids()` reads, the house
+ * models this install does not serve. Any model that is not own-label is no
+ * concern of it and is never judged here, so an admin's switch-off or a
+ * profile list keeps exactly the effect it has on an install with no house
+ * model. Undefined, without calling `ids`, when there is nothing to ask: the
+ * catalog has no house model this process does not know to be served
+ * (`houseRuleWithholdsAModel`). `houseModelServed` may throw where the served
+ * ids are not known yet (the orchestrator); that is the caller's to handle.
+ */
+export function unservedHouseModelsOf(ids: () => readonly unknown[]): string[] | undefined {
+  if (!houseRuleWithholdsAModel()) return undefined
+  return [...new Set(ids())].filter((id): id is string => typeof id === "string" && isHouseModelUnserved(id))
+}
+
+/** How deep {@link namesHouseModel} reads a request body: a field, an item of a list, or a field one object down. */
+const NAMES_HOUSE_MODEL_MAX_DEPTH = 3
+
+/**
+ * True when a request body names a house model anywhere a string can stand
+ * (a field, an item of a list, a field of a nested object, up to
+ * {@link NAMES_HOUSE_MODEL_MAX_DEPTH} levels). Where an own-label id is
+ * POSSIBLE for a request without a model restriction: no default model is a
+ * house model (house-models-tables.test.ts holds every default), so a request
+ * runs one only by naming it. Never throws.
+ */
+export function namesHouseModel(body: unknown, depth = 0): boolean {
+  try {
+    if (typeof body === "string") return isOwnLabelModel(body)
+    if (depth >= NAMES_HOUSE_MODEL_MAX_DEPTH || body === null || typeof body !== "object") return false
+    const values = Array.isArray(body) ? body : Object.values(body as Record<string, unknown>)
+    return values.some((v) => namesHouseModel(v, depth + 1))
+  } catch {
+    return false
+  }
+}
+
+/**
  * True when this deployment RESTRICTS models: its profile names `models.allow`
- * or `models.deny`, an admin's stored models override (Admin → Availability)
- * leaves at least one gateable model off — an override that ticks every model
- * withholds nothing — or the catalog has a house model this install does not
- * serve (`houseRuleWithholdsAModel`, false while the catalog has none): a
- * route that runs one through `runModel` is refused before its hold, and a
- * new node does not start on one. What gates the credit guard's run-model check
- * (`CreditGuardOpts.runModel`): a deployment with no restriction never asks
- * which model a request runs on, so nothing it answers changes. The admin's
- * per-row model switch is not a restriction in this sense — a run priced on a
- * switched-off row is refused by the credit check, as it always was.
+ * or `models.deny`, or an admin's stored models override (Admin →
+ * Availability) leaves at least one gateable model off — an override that
+ * ticks every model withholds nothing. What gates the credit guard's run-model
+ * check (`CreditGuardOpts.runModel`), the workflow's default-model judge, the
+ * new-node model moves and `models.restricted`: a deployment with no
+ * restriction never asks which model a request runs on, so nothing it answers
+ * changes. The admin's per-row model switch is not a restriction in this sense
+ * — a run priced on a switched-off row is refused by the credit check, as it
+ * always was.
+ *
+ * A house model this install does not serve is NOT a restriction: it withholds
+ * only itself. It is hidden from every listing and refused before any hold
+ * wherever it is named (`isModelDenied`), and where a request could run one
+ * without naming it the narrow house-only judgment (`unservedHouseModelsOf`)
+ * refuses it alone — every other model behaves exactly as on an install with
+ * no house model.
  */
 export function modelRestrictionConfigured(): boolean {
-  if (houseRuleWithholdsAModel()) return true
   const { allow, deny } = runtimeSurfaceProfile().models
   if (allow.length > 0 || deny.length > 0) return true
   const override = availabilityOverride("models")

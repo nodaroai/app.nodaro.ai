@@ -132,6 +132,6 @@ export type {
   ImageEditTargetResolution,
 } from "@nodaro/shared/models"
 
-export type { TopazUpscaleFactor } from "@nodaro/shared/credits"
+export type { TopazUpscaleFactor, UpscaleFactor } from "@nodaro/shared/credits"
 
 export type { ImageToImageAttachColumn } from "@nodaro/shared/entities"

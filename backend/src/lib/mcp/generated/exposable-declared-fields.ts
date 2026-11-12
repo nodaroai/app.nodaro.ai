@@ -76,7 +76,7 @@ export const EXPOSABLE_DECLARED_FIELDS: Readonly<Record<string, Readonly<Record<
     "language": { kind: "select", values: ["en","he"] },
   },
   "upscale-image": {
-    "provider": { kind: "select", values: ["recraft-upscale","topaz-image-upscale"] },
+    "provider": { kind: "select", values: ["recraft-upscale","topaz-image-upscale","nodaro-image-upscale"] },
   },
   "video-retake": {
     "aspectRatio": { kind: "select", values: ["16:9","9:16"] },

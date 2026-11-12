@@ -100,7 +100,7 @@ import {
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, type UseCaseViewerFlags } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, nodaroImageUpscaleCreditId, type UseCaseViewerFlags } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -772,6 +772,14 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "topaz-image-upscale": 25,      // (2K default)
   "topaz-image-upscale:4K": 50,
   "topaz-image-upscale:8K": 100,
+  // Nodaro Image Upscale — by the OUTPUT's total pixels (@nodaro/render-rules
+  // nodaro-image-upscale-pricing.ts, written to model_pricing by migration 627).
+  // The bare id is the hold when the image's size cannot be read before the
+  // run (the top tier's price), settled to the delivered output's tier.
+  "nodaro-image-upscale:2K": 4,         // output up to 4,194,304 px (2048²)
+  "nodaro-image-upscale:4K": 10,        // up to 16,777,216 px (4096²)
+  "nodaro-image-upscale:8K": 30,        // up to 67,108,864 px (8192²)
+  "nodaro-image-upscale": 30,           // the hold
   // Grok Imagine 2 task-chained ops (prior grok-2 task_id, not an image URL)
   "grok-2-edit": 10,
   "grok-2-i2i": 10, // segment(free) + edit chain — same provider cost as t2i              // prompt/region edit ($0.02)
@@ -7236,6 +7244,12 @@ export function getNodeModelIdentifier(
     })
     return buildCreditModelIdentifier(provider, undefined, undefined, undefined, creditTier)
   }
+
+  // Nodaro Image Upscale is priced by the OUTPUT's size: the wired photo's recorded
+  // size × the factor, as the run reads it (`nodaroImageUpscaleCreditId`, the one
+  // sizing every lane uses). A photo whose size the graph does not record —
+  // or an output the run will refuse — is quoted at the hold the run reserves.
+  if (provider === "nodaro-image-upscale") return nodaroImageUpscaleCreditId(graph.sourceImage, data.upscaleFactor)
 
   // Image/edit nodes with quality/resolution variable pricing. The input images
   // reach the id for a model priced per image. The size is the one the run

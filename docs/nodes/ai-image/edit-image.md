@@ -5,17 +5,17 @@
 
 ## Overview
 
-Edit Image takes an existing image as input and applies a transformation operation. It supports AI upscaling (Recraft and Topaz), background removal (Recraft), context-aware prompt-based editing (Nano Banana Edit), and the Grok Imagine 2 task-chained operations — a free segment map and region-targeted prompt edits of a prior Grok 2 generation (see [Grok Imagine 2 Task-Chained Editing](#grok-imagine-2-task-chained-editing)). Unlike Generate Image or Image to Image, this node focuses on non-destructive enhancement and utility operations rather than creative generation. The default operation is Recraft Upscale.
+Edit Image takes an existing image as input and applies a transformation operation. It supports AI upscaling (Recraft, Topaz and Nodaro Image Upscale), background removal (Recraft), context-aware prompt-based editing (Nano Banana Edit), and the Grok Imagine 2 task-chained operations — a free segment map and region-targeted prompt edits of a prior Grok 2 generation (see [Grok Imagine 2 Task-Chained Editing](#grok-imagine-2-task-chained-editing)). Unlike Generate Image or Image to Image, this node focuses on non-destructive enhancement and utility operations rather than creative generation. The default operation is Recraft Upscale.
 
 ## Configuration
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider / Operation | select | `recraft-upscale` | The edit operation to apply (5 options, see providers table) |
+| Provider / Operation | select | `recraft-upscale` | The edit operation to apply (see providers table) |
 | Prompt | text | `""` | Edit instructions (only used by nano-banana-edit) |
 | Style | select | `""` | Style preset or custom text (only used by nano-banana-edit) |
 | Negative Prompt | text | `""` | Elements to exclude (only used by nano-banana-edit) |
-| Upscale Factor | select | 2 | Topaz only: 1x, 2x, 4x |
+| Upscale Factor | select | 2 | Topaz: 1x, 2x, 4x. Nodaro Image Upscale: 1x, 2x, 4x, 8x. A factor the model does not take is refused with a `400 validation_error`. |
 | Aspect Ratio | select | -- | Available for nano-banana-edit. **Auto** keeps your photo's shape; on models without a native auto it picks the closest supported shape. |
 | Seed | number | -- | Reproducibility seed (nano-banana-edit) |
 | Connected Media Order | list | -- | Order of connected input media assets |
@@ -41,6 +41,7 @@ The interactive **Mask Painter** UI (Paint Mask / Edit Mask buttons, brush/erase
 |----------|-------|-------------|
 | recraft-upscale | Recraft Upscale | AI-powered upscaling and enhancement. Simple one-click operation with no additional configuration. |
 | topaz-image-upscale | Topaz Upscale | Advanced upscaling with a configurable factor (1x/2x/4x). |
+| nodaro-image-upscale | Nodaro Image Upscale | Upscaling at 1x/2x/4x/8x that restores detail and keeps lettering exactly as written. Priced by the output's size; an output past 67,108,864 pixels or 16,384 pixels on a side is refused with a `400 image_too_large` before anything is charged. See [Upscale Image → Nodaro Image Upscale](./upscale-image.md#nodaro-image-upscale). |
 | recraft-remove-bg | Recraft Remove BG | Removes the background and outputs a transparent PNG. No additional configuration needed. |
 | nano-banana-edit | Nano Banana Edit | Context-aware image editing using a text prompt. Supports style presets, negative prompts, aspect ratio, seed, and character/asset references. |
 | grok-2-edit | Grok Imagine 2 Edit | Prompt-based edit of a prior Grok 2 generation (`taskId` + `prompt` required). Optional `maskIndexes` restrict the edit to named regions from a segment map. Priced the same as a Grok 2 generation. |
@@ -66,6 +67,7 @@ In the editor, this flow is built into the **Generate Image** node: with the gro
 
 - Use Recraft Upscale for quick, low-cost enhancement when precise resolution control is not needed.
 - Use Topaz Upscale for production-quality upscaling at 2x or 4x.
+- Use Nodaro Image Upscale for pictures with text, labels or logos, or for 8x; a small picture costs little because the price follows the output's size.
 - Recraft Remove BG outputs transparent PNGs suitable for compositing workflows.
 - Nano Banana Edit and Grok Imagine 2 Edit are the Edit Image operations that accept a text prompt -- use them for targeted modifications (e.g., "change the sky to sunset", "add a hat to the person").
 - Chain Edit Image nodes for multi-step operations: remove background first, then upscale.

@@ -609,6 +609,7 @@ const MODEL_DESCRIPTIONS_PT_BR: Record<string, string> = {
   "Greater musical expression with more natural vocals and richer details.": "Maior expressividade musical, com vocais mais naturais e detalhes mais ricos.",
   "Lightweight and fast, balancing quality and speed for effortless creation.": "Leve e rápido, equilibra qualidade e velocidade para criar sem esforço.",
   "Premium AI upscaling with a 1x / 2x / 4x factor": "Aumento de resolução premium com IA, fator 1x / 2x / 4x",
+  "Upscale up to 8x, lettering kept exactly as written": "Aumento de resolução de até 8x, com o texto mantido exatamente como está",
   "Alibaba Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs": "Alibaba Wan 3.0, 2–30 s, 480p/720p/1080p, áudio nativo, refs. de imagem/vídeo/áudio",
   "Avatar-inference dubbing on a video. Dynamic duration, premium.": "Dublagem por inferência de avatar em um vídeo. Duração dinâmica, premium.",
   "BFL FLUX Fill Pro via Replicate — dedicated masked inpainting (white = edit area)": "BFL FLUX Fill Pro via Replicate — inpainting dedicado com máscara (branco = área de edição)",

@@ -6,10 +6,13 @@ import {
   deniedModelRejectionMessage,
   deniedNodeRejectionMessage,
   modelRestrictionConfigured,
+  namesHouseModel,
+  unservedHouseModelsOf,
 } from "../lib/surface-deny.js"
 import { deniedRouteCapabilityForUser } from "../lib/availability-viewer.js"
 import { childStepNodeType } from "../lib/child-step-node.js"
 import { ROUTE_GATES_GENERATION } from "../lib/availability-override.js"
+import { servesEveryHouseModel } from "../lib/house-models-served.js"
 import {
   refusesUnclassifiedRoutes,
   reportUnclassifiedRoute,
@@ -166,10 +169,13 @@ export interface CreditGuardOpts {
    *  as `llm-chat`), or whose request names its model outside `provider`
    *  (`llmModel`, Suno's `model`). A list is judged id by id.
    *
-   *  Asked ONLY when the deployment restricts models
-   *  (`modelRestrictionConfigured()`): one with no restriction never calls it,
-   *  so its answers are unchanged — the admin's per-row model switch stays with
-   *  the credit check. `denyResolvedModel` runs the deny whatever the
+   *  Asked when the deployment restricts models
+   *  (`modelRestrictionConfigured()`). One with no restriction asks it only
+   *  where a house model this install does not serve is possible (the body
+   *  names one), and then refuses nothing but that house model
+   *  (`withheldRunModels`); everywhere else it never calls it, so its answers
+   *  are unchanged — the admin's per-row model switch stays with the credit
+   *  check. `denyResolvedModel` runs the deny whatever the
    *  configuration, and is kept as it is for the routes that already declare
    *  it. Must never throw: it reads the RAW body, before validation. Every
    *  credit-guarded route declares one of the two or carries a reason
@@ -186,6 +192,15 @@ export interface CreditGuardOpts {
    *  price. An empty list is a batch with nothing left to pay for (checked at
    *  0). Mutually exclusive with `computeCredits` (this wins). */
   batchIdentifiers?: (req: FastifyRequest) => readonly string[] | undefined
+  /** A step of the route's own that prepares what its price reads and that is
+   *  too costly to run for a request a cheaper gate refuses — copying an
+   *  outside input file to measure it (Nodaro Image Upscale). The guard runs
+   *  it after the model and node denies, the app-token scope gate and the
+   *  Idempotency-Key dedup, and before `modelResolver`, the storage check and
+   *  the balance; in every edition. It may answer the request itself (the
+   *  guard then stops). `POST /v1/quote` runs it at the same point of the
+   *  run's pricing chain. */
+  beforePricing?: (req: FastifyRequest, reply: FastifyReply) => Promise<unknown>
 }
 
 /**
@@ -205,10 +220,21 @@ export interface RoutePricing {
   readonly opts?: CreditGuardOpts
 }
 
+/** The ids a `runModel` answer names. */
+function runModelIds(runsOn: string | readonly string[] | undefined): readonly unknown[] {
+  return typeof runsOn === "string" ? [runsOn] : Array.isArray(runsOn) ? runsOn : []
+}
+
 /**
  * The models `req` RUNS on (`CreditGuardOpts.runModel`) that this deployment
- * withholds — empty without a model restriction, and then `runModel` is never
- * called. `alreadyJudged` is the raw `provider` the deny has already passed.
+ * withholds. Where models are restricted, every model it runs on is judged.
+ * Without a restriction, only the house rule: a house model this install does
+ * not serve (`unservedHouseModelsOf`), asked only where one is possible — this
+ * install is not known to serve every house model (`servesEveryHouseModel`,
+ * read first: it never asks), and the body names one (`namesHouseModel`; no
+ * default model is a house model). Anywhere else `runModel` is never
+ * called, and any answer but an unserved house model (or a throw) changes
+ * nothing. `alreadyJudged` is the raw `provider` the deny has already passed.
  * The guard refuses with these; `POST /v1/quote` asks the same question of the
  * run's own pricing chain, so a quote never prices what the run refuses.
  */
@@ -217,10 +243,21 @@ export function withheldRunModels(
   runModel: CreditGuardOpts["runModel"],
   alreadyJudged?: string,
 ): string[] {
-  if (!runModel || !modelRestrictionConfigured()) return []
-  const runsOn = runModel(req)
-  const ids: readonly unknown[] = typeof runsOn === "string" ? [runsOn] : Array.isArray(runsOn) ? runsOn : []
-  return [...new Set(ids)].filter(
+  if (!runModel) return []
+  if (!modelRestrictionConfigured()) {
+    // An install that serves every house model reads nothing more; one that
+    // does not reads the body, and only a body naming one asks `runModel`.
+    if (servesEveryHouseModel() || !namesHouseModel(req.body)) return []
+    const unserved = unservedHouseModelsOf(() => {
+      try {
+        return runModelIds(runModel(req))
+      } catch {
+        return []
+      }
+    })
+    return (unserved ?? []).filter((id) => id !== alreadyJudged)
+  }
+  return [...new Set(runModelIds(runModel(req)))].filter(
     (id): id is string => typeof id === "string" && id !== "" && id !== alreadyJudged && isModelDenied(id),
   )
 }
@@ -472,6 +509,16 @@ export function creditGuard(
       }
       // else: no idempotency key at all. Route's insertWithIdempotencyKey
       // sees `undefined` and does a plain INSERT — no dedup whatsoever.
+    }
+
+    // The route's own step that prepares what its price reads
+    // (`CreditGuardOpts.beforePricing`): past every gate above — the model and
+    // node denies, the app-token scope, a repeated Idempotency-Key — so a
+    // request any of them answers never runs it, and before the resolver, the
+    // storage check and the balance. In every edition.
+    if (opts?.beforePricing) {
+      await opts.beforePricing(req, reply)
+      if (reply.sent) return
     }
 
     if (!cloud) return

@@ -5,7 +5,9 @@
 // replacing it with the generic safety message — whose "adjust the prompt"
 // advice is wrong for a run whose prompt the user never wrote. Only a
 // plugin-served job type honours the marker; a built-in handler keeps today's
-// behaviour.
+// behaviour. A house-model run's failure (the seam's own error,
+// lib/house-model-failure.ts) keeps its sentence too, whatever job type ran it:
+// the lane's for its class, or the seam's fixed one.
 //
 // Scaffold copied from video-worker-safety-block.test.ts.
 import { describe, it, expect, vi, beforeEach } from "vitest"
@@ -135,7 +137,7 @@ vi.mock("../inline-reconcile.js", () => ({
 }))
 
 vi.mock("../handlers/image-ai.js", () => ({
-  imageAIHandlers: { "generate-image": mocks.mockHandler },
+  imageAIHandlers: { "generate-image": mocks.mockHandler, "edit-image": mocks.mockHandler },
 }))
 vi.mock("../handlers/video-ai.js", () => ({
   videoAIHandlers: {
@@ -196,6 +198,7 @@ vi.mock("@/providers/kie/client.js", () => {
 import { createVideoWorker } from "../video-worker.js"
 import { KieError } from "../../providers/kie/client.js"
 import { UnrecoverableError } from "bullmq"
+import { houseModelFailureError } from "../../lib/house-model-failure.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -358,5 +361,69 @@ describe("video worker — a plugin's user-safe failure message", () => {
       error_message: PLUGIN_SENTENCE,
       error_hint: { kind: "safety-block", class: "copyright", retried: false },
     }))
+  })
+
+  describe("a house-model run's failure (a built-in job type, the seam's own error)", () => {
+    const WORDS = "UPSTREAM-WORDS-91c: flagged, see https://upstream.example/task?token=sec-123"
+    const LANE_CONTENT_POLICY =
+      "This picture was blocked by the content policy, so Nodaro Image Upscale could not upscale it. Topaz Upscale or Recraft Upscale may accept it."
+    const LANE_INPUT_REFUSED =
+      "Nodaro Image Upscale could not read this picture. Send a PNG, JPEG or WebP image, or try Topaz Upscale or Recraft Upscale."
+    const CTX = { id: "nodaro-image-upscale", jobId: "job-1" }
+    const upscaleJob = () =>
+      makeBullJob("edit-image", { provider: "nodaro-image-upscale", imageUrl: "https://cdn.example/p.png", upscaleFactor: "2" })
+
+    beforeEach(() => {
+      vi.spyOn(console, "warn").mockImplementation(() => {})
+    })
+
+    it("a content-policy failure keeps the lane's sentence, gets the safety hint, and is final", async () => {
+      mocks.mockHandler.mockRejectedValueOnce(houseModelFailureError({ message: WORDS, contentPolicy: true }, CTX))
+
+      const rejection = await processor(upscaleJob()).catch((e) => e)
+
+      expect(rejection).toBeInstanceOf(UnrecoverableError)
+      expect(rejection.message).toBe(LANE_CONTENT_POLICY)
+      const failed = failedUpdate()
+      expect(failed).toEqual(expect.objectContaining({
+        status: "failed",
+        error_message: LANE_CONTENT_POLICY,
+        error_hint: { kind: "safety-block", class: "safety", retried: false },
+      }))
+      expect(failed?.error_message).not.toBe(GENERIC_SAFETY)
+      expect(JSON.stringify(failed)).not.toMatch(/UPSTREAM-WORDS|upstream\.example|sec-123/)
+      // One attempt: a house model never takes the inline safety retry.
+      expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
+      expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
+    })
+
+    it("a refused input picture keeps the lane's input-refused sentence", async () => {
+      mocks.mockHandler.mockRejectedValueOnce(houseModelFailureError({ message: WORDS, inputImageRefused: true, deterministic: true }, CTX))
+
+      await processor(upscaleJob()).catch(() => {})
+
+      expect(failedUpdate()?.error_message).toBe(LANE_INPUT_REFUSED)
+      expect(JSON.stringify(failedUpdate())).not.toMatch(/UPSTREAM-WORDS|upstream\.example|sec-123/)
+    })
+
+    it("a lane with no sentence for the class keeps the seam's fixed sentence, not the generic safety one", async () => {
+      mocks.mockHandler.mockRejectedValueOnce(houseModelFailureError({ message: WORDS, contentPolicy: true }, CTX, { failureSentences: {} }))
+
+      await processor(upscaleJob()).catch(() => {})
+
+      expect(failedUpdate()).toEqual(expect.objectContaining({
+        error_message: "Nodaro Image Upscale could not complete this run.",
+        error_hint: { kind: "safety-block", class: "safety", retried: false },
+      }))
+    })
+
+    it("a wrapper around the seam's error does not vouch for its own text: generic safety message", async () => {
+      const inner = houseModelFailureError({ message: WORDS, contentPolicy: true }, CTX)
+      mocks.mockHandler.mockRejectedValueOnce(Object.assign(new Error("wrapped", { cause: inner }), { contentPolicyClass: "safety" }))
+
+      await processor(upscaleJob()).catch(() => {})
+
+      expect(failedUpdate()?.error_message).toBe(GENERIC_SAFETY)
+    })
   })
 })

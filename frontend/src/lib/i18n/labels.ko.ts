@@ -609,6 +609,7 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "Greater musical expression with more natural vocals and richer details.": "더 자연스러운 보컬과 풍부한 디테일로 한층 향상된 음악 표현.",
   "Lightweight and fast, balancing quality and speed for effortless creation.": "가볍고 빠르며 품질과 속도의 균형이 잡혀 손쉽게 창작 가능.",
   "Premium AI upscaling with a 1x / 2x / 4x factor": "1x / 2x / 4x 배율의 프리미엄 AI 업스케일링",
+  "Upscale up to 8x, lettering kept exactly as written": "최대 8x 업스케일, 글자는 쓰인 그대로 유지",
   "Alibaba Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs": "Alibaba Wan 3.0, 2–30초, 480p/720p/1080p, 네이티브 오디오, 이미지/동영상/오디오 레퍼런스",
   "Avatar-inference dubbing on a video. Dynamic duration, premium.": "아바타 추론 방식의 동영상 더빙. 가변 길이, 프리미엄.",
   "BFL FLUX Fill Pro via Replicate — dedicated masked inpainting (white = edit area)": "Replicate를 통한 BFL FLUX Fill Pro — 마스크 전용 인페인팅(흰색 = 편집 영역)",

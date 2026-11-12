@@ -1568,6 +1568,7 @@ export const ptBR: ChromeDict = {
   "imgcfg.upscaleEnhanceOnly": "1x (só aprimorar)",
   "imgcfg.upscaleDesc": "Aumenta a resolução da imagem de entrada e melhora a qualidade dela.",
   "imgcfg.topazUpscaleDesc": "Aumento de resolução com IA via Topaz. Fatores maiores geram imagens maiores.",
+  "imgcfg.nodaroImageUpscaleDesc": "Restaura detalhes e mantém o texto exatamente como está. A saída tem o tamanho da imagem multiplicado pelo fator (1x melhora no mesmo tamanho), até 67.108.864 pixels no total e 16.384 pixels de lado. O preço segue o tamanho da saída.",
   "imgcfg.removeBackgroundDesc": "Remove automaticamente o fundo da imagem de entrada e gera um PNG transparente.",
   "imgcfg.generateMaskDesc": "Gera uma máscara de segmentação binária a partir de um prompt de texto (Grounded SAM). Conecte uma imagem de entrada e descreva o assunto a ser mascarado.",
   "imgcfg.maskPromptExamples": "ex.: “the blonde woman”, “the red car”, “the background”",

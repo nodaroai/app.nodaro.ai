@@ -669,6 +669,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "recraft-remove-bg",
   "recraft-upscale",
   "topaz-image-upscale",
+  "nodaro-image-upscale",
   // Wan 2.7 — accepts up to 9 optional ref images via input_urls (pure T2I when omitted)
   "wan-2.7",
   // Replicate "Open" (uncensored) image models
@@ -763,6 +764,7 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "recraft-remove-bg": 1,
   "recraft-upscale": 1,
   "topaz-image-upscale": 1,
+  "nodaro-image-upscale": 1,
   // Replicate Open models — Klein takes an optional single ref; Kontext Multi
   // (multi-image-kontext-pro) is a two-image combiner (input_image_1/2 only);
   // Flux 2 Pro up to 4; Max up to 8.
@@ -1005,6 +1007,8 @@ export const IMAGE_EDIT_PROVIDERS = [
   "recraft-remove-bg",
   "nano-banana-edit",
   "topaz-image-upscale",
+  // Nodaro Image Upscale: 1x to 8x, priced by the output's size.
+  "nodaro-image-upscale",
   // Grok Imagine 2 task-chained ops — a prior grok-2 generation's task_id (NOT
   // an image URL); see the edit-image route for the taskId-vs-imageUrl
   // branching. grok-2-edit: prompt edit of a prior grok-2 generation,
@@ -1044,6 +1048,7 @@ export type ModifyImageProvider = typeof MODIFY_IMAGE_PROVIDERS[number]
 export const UPSCALE_IMAGE_PROVIDERS = [
   "recraft-upscale",
   "topaz-image-upscale",
+  "nodaro-image-upscale",
 ] as const
 export type UpscaleImageProvider = typeof UPSCALE_IMAGE_PROVIDERS[number]
 

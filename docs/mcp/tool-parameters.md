@@ -763,8 +763,8 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `image_url` | string (URL) |  | Source image URL (all providers except the task-chained grok ops). |
 | `image_asset_id` | string |  | Nodaro image job id. |
-| `model` | string |  | Edit operation. Default recraft-upscale. One of `recraft-upscale`, `topaz-image-upscale`, `recraft-remove-bg`, `nano-banana-edit`, `grok-2-edit`, `grok-2-segment`. |
-| `upscale_factor` | string |  | Upscale factor (for topaz-image-upscale). Default 2. One of `1`, `2`, `4`. |
+| `model` | string |  | Edit operation. Default recraft-upscale. One of `recraft-upscale`, `topaz-image-upscale`, `nodaro-image-upscale`, `recraft-remove-bg`, `nano-banana-edit`, `grok-2-edit`, `grok-2-segment`. |
+| `upscale_factor` | string |  | Upscale factor: 1, 2 or 4 for topaz-image-upscale; 1, 2, 4 or 8 for nodaro-image-upscale. Default 2. One of `1`, `2`, `4`, `8`. |
 | `target_resolution` | string |  | Deprecated for topaz-image-upscale — maps to an upscale factor (2K→2, 4K→4, 8K→4). Prefer upscale_factor. One of `2K`, `4K`, `8K`. |
 | `prompt` | string |  | Edit prompt (required for nano-banana-edit and grok-2-edit). At most 2000 characters. |
 | `task_id` | string |  | Task id of a prior grok-2 generation, its output providerTaskId (grok-2-edit / grok-2-segment). |

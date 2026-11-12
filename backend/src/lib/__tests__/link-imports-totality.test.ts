@@ -156,7 +156,9 @@ const LANES: Readonly<Record<string, Lane>> = {
   "routes/combine-videos.ts": PROCESSING_INPUT,
   "routes/creatures.ts": ENTITY_REFERENCE,
   "routes/describe-to-picker.ts": GENERATION_REFERENCE,
-  "routes/edit-image.ts": GENERATION_REFERENCE,
+  "routes/edit-image.ts": asks(
+    "Nodaro Image Upscale's image goes through the outside-input copy (lib/nodaro-image-upscale-lane.ts), which asks the switch before any fetch; the other edit models' images await the generation-reference decision",
+  ),
   "routes/extend-video.ts": GENERATION_REFERENCE,
   "routes/extract-audio.ts": PROCESSING_INPUT,
   "routes/extract-frame.ts": PROCESSING_INPUT,

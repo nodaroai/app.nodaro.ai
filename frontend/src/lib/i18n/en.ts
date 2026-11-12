@@ -1634,6 +1634,7 @@ export const en = {
   "imgcfg.upscaleEnhanceOnly": "1x (Enhance only)",
   "imgcfg.upscaleDesc": "Upscale and enhance the input image to higher resolution.",
   "imgcfg.topazUpscaleDesc": "AI-powered upscaling via Topaz. Higher factors produce larger images.",
+  "imgcfg.nodaroImageUpscaleDesc": "Restores detail and keeps lettering exactly as written. The output is the picture's size times the factor (1x enhances at the same size), up to 67,108,864 pixels in total and 16,384 pixels on a side. Priced by the output's size.",
   "imgcfg.removeBackgroundDesc": "Automatically removes the background from the input image, leaving a transparent PNG.",
   "imgcfg.generateMaskDesc": "Generates a binary segmentation mask from a text prompt (Grounded SAM). Connect an input image and describe the subject to mask.",
   "imgcfg.maskPromptExamples": "e.g. \"the blonde woman\", \"the red car\", \"the background\"",

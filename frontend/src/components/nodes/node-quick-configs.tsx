@@ -72,6 +72,7 @@ import {
   TOPAZ_VIDEO_RESOLUTIONS,
 } from "@nodaro/shared/models"
 import { TOPAZ_VIDEO_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
+import { upscaleFactorSnapPatch } from "@/lib/upscale-factor-snap"
 import { isTopazVideoUpscaleProvider } from "@/lib/video-utility-estimate"
 import { SUNO_SEPARATE_TYPE_LABEL_KEYS } from "@/lib/suno-separate-labels"
 import {
@@ -414,6 +415,18 @@ const providerControl = (
   icon: Sparkles,
   options: toOptions(list),
   ...(runsAs !== undefined ? { defaultValue: runsAs } : {}),
+})
+
+/** Upscale Image model dropdown. Switching to a model that does not take the
+ *  stored factor also writes what the run would render there
+ *  (`upscaleFactorSnapPatch`, what the config panel's dropdown and fail-safe
+ *  write): a Nodaro Image Upscale 8x moved to Topaz snaps to 2, and one moved
+ *  to Recraft drops the 8 (only the house model takes it); any other factor
+ *  stands. The fail-safe snap calls `write` without data and so writes the
+ *  provider alone. */
+const upscaleImageProviderControl = (): QuickConfigControl => ({
+  ...providerControl(UPSCALE_IMAGE_MODELS),
+  write: (value, data) => ({ provider: value, ...(data ? upscaleFactorSnapPatch(value, data) : undefined) }),
 })
 
 /** Text-to-speech model dropdown. The user's choice also clears the voice
@@ -1194,7 +1207,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   // `edit-image` / `image-to-image` are legacy types folded into `modify-image`
   // (not creatable, never mounted) — no quick-config entry; guard test enforces.
   "modify-image": [providerControl(MODIFY_IMAGE_MODELS, IMAGE_MODEL_ROLE_DEFAULTS.edit)],
-  "upscale-image": [providerControl(UPSCALE_IMAGE_MODELS)],
+  "upscale-image": [upscaleImageProviderControl()],
   "video-to-video": [providerControl(VIDEO_V2V_MODELS, "wan"), v2vResolutionControl(), seedanceDraftControl("v2vResolution", "wan")],
   // SwitchX (Beeble) — mirrors Generate Video's strip: mode · keyframe (select-only)
   // · resolution · runs. The prompt button + Run come from NodeQuickStrip itself.

@@ -48,6 +48,7 @@ vi.mock("../storage-delete.js", () => ({ deleteKeysRecordingFailures: h.deleteKe
 vi.mock("../job-cancellation.js", () => ({ getJobId: () => h.jobId }))
 
 import {
+  discardDeletedJobScratch,
   discardJobScratch,
   jobScratchKey,
   jobScratchPrefix,
@@ -214,5 +215,44 @@ describe("discardJobScratch: when the job ends", () => {
     await discardJobScratch("")
     await discardJobScratch("../videos")
     expect(h.listObjectsByPrefixWithMeta).not.toHaveBeenCalled()
+  })
+})
+
+describe("discardDeletedJobScratch: a job whose row was deleted before it ran", () => {
+  const mine = () => [{ key: `${jobScratchPrefix(JOB)}outside-input-aaaaaaaa-bbbbbbbb.png`, size: 10 }]
+
+  it("deletes the folder once the row is gone: nothing will read it again", async () => {
+    h.status = { data: null, error: null }
+    h.listed = [...mine(), { key: `${jobScratchPrefix(OTHER)}mask-cccccccc.png` }]
+    await discardDeletedJobScratch(JOB)
+    expect(h.deleteKeysRecordingFailures).toHaveBeenCalledWith(mine().map((o) => o.key), "job-scratch", expect.anything())
+  })
+
+  it("discardJobScratch keeps it in that case, as it always did", async () => {
+    h.status = { data: null, error: null }
+    h.listed = mine()
+    await discardJobScratch(JOB)
+    expect(h.deleteKeysRecordingFailures).not.toHaveBeenCalled()
+  })
+
+  it.each(["pending", "queued", "processing"])("a row still %s is judged as discardJobScratch judges it: kept", async (status) => {
+    h.status = { data: { status }, error: null }
+    h.listed = mine()
+    await discardDeletedJobScratch(JOB)
+    expect(h.deleteKeysRecordingFailures).not.toHaveBeenCalled()
+  })
+
+  it("a row that ended, deleted; a status that cannot be read, kept; never throws", async () => {
+    h.status = { data: { status: "failed" }, error: null }
+    h.listed = mine()
+    await discardDeletedJobScratch(JOB)
+    expect(h.deleteKeysRecordingFailures).toHaveBeenCalledTimes(1)
+    vi.clearAllMocks()
+    h.status = { data: null, error: { code: "500", message: "boom" } }
+    await discardDeletedJobScratch(JOB)
+    expect(h.deleteKeysRecordingFailures).not.toHaveBeenCalled()
+    h.listError = new Error("listing down")
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    await expect(discardDeletedJobScratch(JOB)).resolves.toBeUndefined()
   })
 })

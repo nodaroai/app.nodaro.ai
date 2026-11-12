@@ -1,6 +1,17 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { hasCredits } from "../lib/config.js"
 import { readTopazImageSize, topazImageSizeBaseCredits, topazImageTier, topazImageTooLargeMessage } from "../lib/topaz-image-size.js"
+import { NODARO_IMAGE_UPSCALE_TOO_LARGE_CODE } from "../lib/nodaro-image-upscale-size.js"
+import {
+  measureNodaroImageUpscaleInput,
+  nodaroImageUpscaleArgs,
+  nodaroImageUpscaleCopyOptions,
+  nodaroImageUpscaleInputRefusal,
+  nodaroImageUpscaleStamp,
+} from "../lib/nodaro-image-upscale-lane.js"
+import { copyOutsideInput, inspectOutsideInput } from "../lib/outside-input-copy.js"
+import { houseModelInvalidRunError, houseModelServed, planHouseModelRun } from "../lib/house-models.js"
+import { NODARO_IMAGE_UPSCALE_HOLD_CREDIT_ID, nodaroImageUpscaleTooLargeMessage } from "@nodaro/render-rules"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -16,7 +27,16 @@ import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { retiredEditProviderReason } from "../lib/retired-edit-providers.js"
 import { IMAGE_ASPECT_RATIO_VALUES, IMAGE_EDIT_PROVIDERS, IMAGE_EDIT_TARGET_RESOLUTION_VALUES, TASK_CHAINED_EDIT_PROVIDERS, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
-import { buildCreditModelIdentifier, resolveNormalizedImageGen, resolveTopazUpscale, TOPAZ_UPSCALE_FACTORS } from "@nodaro/shared/credits"
+import {
+  buildCreditModelIdentifier,
+  NODARO_IMAGE_UPSCALE_MODEL_ID,
+  resolveNodaroImageUpscaleFactor,
+  resolveNormalizedImageGen,
+  resolveTopazUpscale,
+  TOPAZ_UPSCALE_FACTORS,
+  UPSCALE_FACTORS,
+  upscaleFactorsFor,
+} from "@nodaro/shared/credits"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
@@ -39,8 +59,9 @@ export const editImageBody = z.object({
   prompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   provider: z.enum(IMAGE_EDIT_PROVIDERS).optional(),
-  // topaz-image-upscale's factors — the same list its resolver reads.
-  upscaleFactor: z.enum(TOPAZ_UPSCALE_FACTORS).optional(),
+  // Every upscaler's factors; the refinement below holds each model to its
+  // own list (`upscaleFactorsFor`) — 8 is Nodaro Image Upscale's alone.
+  upscaleFactor: z.enum(UPSCALE_FACTORS).optional(),
   targetResolution: z.enum(IMAGE_EDIT_TARGET_RESOLUTION_VALUES).optional(),
   // The SAME vocabulary /v1/generate-image and /v1/image-to-image declare —
   // one shared tuple, not three drifting literal lists. This bounds the
@@ -71,7 +92,20 @@ export const editImageBody = z.object({
     return Boolean(data.imageUrl)
   },
   { message: "imageUrl is required (or taskId for grok-2-edit / grok-2-segment)" },
-)
+).superRefine((data, ctx) => {
+  // A factor the model does not take is refused, as the enum refused it before
+  // 8 joined: Nodaro Image Upscale takes 1/2/4/8; every other provider keeps the
+  // 1/2/4 it always accepted (Topaz's list), with the enum's own wording.
+  if (data.upscaleFactor === undefined) return
+  const accepted = upscaleFactorsFor(data.provider ?? "recraft-upscale") ?? TOPAZ_UPSCALE_FACTORS
+  if (!(accepted as readonly string[]).includes(data.upscaleFactor)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["upscaleFactor"],
+      message: `Invalid option: expected one of ${accepted.map((f) => `"${f}"`).join("|")}`,
+    })
+  }
+})
 
 /**
  * The credit-CHECK model-identifier resolver (preHandler side). Named + exported
@@ -97,6 +131,10 @@ export const editImageBody = z.object({
 export function resolveEditImageCreditIdentifier(req: FastifyRequest): string {
   const body = req.body as Record<string, unknown> | null
   const provider = (body?.provider as string) ?? "recraft-upscale"
+  // Nodaro Image Upscale is priced by its output's size: the tier the size
+  // preHandler stamped, else the hold (a size that could not be read). Never
+  // `targetResolution` — a tier stored for another model says nothing of it.
+  if (provider === NODARO_IMAGE_UPSCALE_MODEL_ID) return req.nodaroImageUpscale?.creditId ?? NODARO_IMAGE_UPSCALE_HOLD_CREDIT_ID
   const targetResolution = typeof body?.targetResolution === "string" ? body.targetResolution : undefined
   const creditTier = provider === "topaz-image-upscale"
     ? resolveTopazUpscale({
@@ -128,6 +166,53 @@ async function topazImageSizePreHandler(req: FastifyRequest, reply: FastifyReply
 }
 
 /**
+ * Nodaro Image Upscale, a house model (lib/nodaro-image-upscale-lane.ts), run
+ * by the credit guard as its `beforePricing` step: after the model deny (an
+ * install that does not serve it refuses it there, with nothing copied), the
+ * app-token scope gate and the Idempotency-Key dedup, and before the price is
+ * resolved and the balance checked — so a request a cheaper gate refuses never
+ * stores a copy. Its image goes through the copy helper — copied to our
+ * storage under the lane's size limit, or, for a quote, checked with nothing
+ * stored — and is measured there. An output past the limits is refused, and
+ * so is one the plugin finds no valid run for (`planHouseModelRun`), before
+ * anything is reserved. The caller's `imageUrl` is kept as it was sent; the
+ * stored copy, its bytes and the tier its output is charged are stamped for
+ * the resolver and the handler (`nodaroImageUpscaleStoredUrl` and friends). An
+ * image whose size cannot be read stamps the hold (settled to what the run
+ * delivers).
+ */
+async function nodaroImageUpscaleBeforePricing(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const body = req.body as Record<string, unknown> | null
+  if (body?.provider !== NODARO_IMAGE_UPSCALE_MODEL_ID) return
+  const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl : undefined
+  if (!imageUrl || !safeUrlSchema.safeParse(imageUrl).success) return
+  if (!houseModelServed(NODARO_IMAGE_UPSCALE_MODEL_ID)) return
+  const userId = req.userId
+  if (!userId) return
+  const quote = req.quoteOnly === true
+  let input: Awaited<ReturnType<typeof measureNodaroImageUpscaleInput>>
+  try {
+    // A quote stores nothing: the same checks and the same measurement, on the caller's URL.
+    const stored = quote
+      ? { url: imageUrl, ...(await inspectOutsideInput(imageUrl, nodaroImageUpscaleCopyOptions(userId))) }
+      : await copyOutsideInput(imageUrl, nodaroImageUpscaleCopyOptions(userId))
+    input = await measureNodaroImageUpscaleInput(stored.url, stored, body.upscaleFactor)
+  } catch (err) {
+    const refusal = nodaroImageUpscaleInputRefusal(err)
+    if (refusal) return reply.status(refusal.status).send({ error: { code: refusal.code, message: refusal.message } })
+    return sendInternalError(reply, req, err)
+  }
+  if (input.sizing?.kind === "too-large") {
+    return reply.status(400).send({ error: { code: NODARO_IMAGE_UPSCALE_TOO_LARGE_CODE, message: nodaroImageUpscaleTooLargeMessage(input.sizing) } })
+  }
+  if (input.sizing?.kind === "sized" && !planHouseModelRun(NODARO_IMAGE_UPSCALE_MODEL_ID, nodaroImageUpscaleArgs(input.url, body.upscaleFactor, input.sizing.pixels))) {
+    return reply.status(400).send({ error: { code: "validation_error", message: houseModelInvalidRunError(NODARO_IMAGE_UPSCALE_MODEL_ID).message } })
+  }
+  // The stored copy rides beside the caller's link: priced, inserted and sent as the stamp.
+  req.nodaroImageUpscale = { creditId: input.creditId, stamp: nodaroImageUpscaleStamp(input) }
+}
+
+/**
  * A provider this route no longer serves (`lib/retired-edit-providers.ts`) is
  * answered BEFORE the credit guard — the id has no price any more, and the
  * guard's 503 "price not configured" would hide the reason from a client that
@@ -143,6 +228,7 @@ async function retiredEditProviderPreHandler(req: FastifyRequest, reply: Fastify
 
 const editImageGuard = creditGuard(resolveEditImageCreditIdentifier, {
   runModel: jobRunModel("edit-image"),
+  beforePricing: nodaroImageUpscaleBeforePricing,
   computeCredits: async (_body, req) =>
     req.topazImageSizeUnits !== undefined
       ? topazImageSizeBaseCredits(resolveEditImageCreditIdentifier(req), req.topazImageSizeUnits)
@@ -189,14 +275,24 @@ export async function editImageRoutes(app: FastifyInstance) {
     const topaz = baseProvider === "topaz-image-upscale"
       ? resolveTopazUpscale({ upscaleFactor, targetResolution })
       : undefined
-    const modelIdentifier = buildCreditModelIdentifier(
-      baseProvider, undefined, undefined, undefined, topaz ? topaz.creditTier : targetResolution,
-    )
+    const nodaroImageUpscale = baseProvider === NODARO_IMAGE_UPSCALE_MODEL_ID
+    // Nodaro Image Upscale reserves the id its CHECK priced — the tier stamped from
+    // the output's size, or the hold — through the same resolver (CHECK === DEBIT).
+    const modelIdentifier = nodaroImageUpscale
+      ? resolveEditImageCreditIdentifier(req)
+      : buildCreditModelIdentifier(
+          baseProvider, undefined, undefined, undefined, topaz ? topaz.creditTier : targetResolution,
+        )
     // The factor the worker renders. `targetResolution` stays on the payload
     // below so the worker's own resolveTopazUpscale call is a no-op agreement
     // rather than a second opinion, and so `input_data` keeps the evidence of
-    // what the caller asked for.
-    const effectiveUpscaleFactor = topaz ? topaz.upscaleFactor : upscaleFactor
+    // what the caller asked for. Nodaro Image Upscale always sends its factor (2
+    // when none was given), never the provider's default.
+    const effectiveUpscaleFactor = topaz
+      ? topaz.upscaleFactor
+      : nodaroImageUpscale
+        ? resolveNodaroImageUpscaleFactor(upscaleFactor)
+        : upscaleFactor
 
     // Aspect-ONLY catalog snap. Billing-neutral on this route (pricing keys on
     // `targetResolution`, which is NOT passed here — see
@@ -236,7 +332,13 @@ export async function editImageRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: withResolvedModel(buildJobInputData(parsed.data, "edit-image"), "edit-image"),
+        // Nodaro Image Upscale: its stored image, bytes, output size and the id it
+        // reserves ride on the job, so the worker's payload and `input_data` agree
+        // and the worker and the reconcile settle only a hold (lib/nodaro-image-upscale-lane.ts).
+        input_data: withResolvedModel({
+          ...buildJobInputData(parsed.data, "edit-image"),
+          ...(nodaroImageUpscale ? { ...req.nodaroImageUpscale?.stamp, nodaroImageUpscaleCreditId: modelIdentifier } : {}),
+        }, "edit-image"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -264,6 +366,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       maskUrl,
       maskIndexes,
       usageLogId,
+      ...(nodaroImageUpscale ? { ...req.nodaroImageUpscale?.stamp, nodaroImageUpscaleCreditId: modelIdentifier } : {}),
     })
 
     return withAdjustments({ jobId: job.id }, normalized.adjustments)

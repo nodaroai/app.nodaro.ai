@@ -64,6 +64,14 @@ declare module "fastify" {
     /** A Topaz image upscale's output size in the provider's units, set by
      *  `/v1/edit-image`'s preHandler BEFORE creditGuard. */
     topazImageSizeUnits?: number
+    /** A Nodaro Image Upscale's stored, measured image, set by `/v1/edit-image`'s
+     *  preHandler BEFORE creditGuard (lib/nodaro-image-upscale-lane.ts): the id
+     *  the run reserves (its output's tier, else the hold) and what the job
+     *  carries (the stored URL, its bytes, the output's pixels). */
+    nodaroImageUpscale?: { creditId: string; stamp: Record<string, unknown> }
+    /** Set by `POST /v1/quote` before it runs a route's pre-checks: a pre-check
+     *  that would store something (the copy helper) checks it without storing. */
+    quoteOnly?: boolean
     /** The source photo's size, read ONCE by `/v1/image-to-image`'s preHandler
      *  BEFORE creditGuard when it can change what the run sends ("auto" that
      *  keeps the photo's shape, a masked edit that follows its photo), so the

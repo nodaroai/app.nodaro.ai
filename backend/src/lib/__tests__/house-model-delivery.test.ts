@@ -79,6 +79,7 @@ import { HOUSE_MODEL_MAX_POLL_READ_FAILURES, runHouseModelTask } from "../house-
 import { resetOwnLabelModelIdsForTests } from "../house-models-served.js"
 import { deliverHouseModelRun } from "../house-model-delivery.js"
 import { reconcileHouseModelJob } from "../reconcile/house-model.js"
+import { isHouseModelRunError } from "../house-model-failure.js"
 import { providerDetailOf, redactProviderDetail } from "../provider-error-detail.js"
 import { isPostProcessingError } from "../post-processing-error.js"
 import { userFacingMessage } from "../user-facing-error.js"
@@ -138,8 +139,10 @@ async function workerPath(): Promise<void> {
 function workerFailureFields(err: unknown): Record<string, unknown> {
   const message = err instanceof Error ? err.message : "Unknown error"
   const block = safetyBlockOf(err, jobModelIdOf(INPUT))
+  // "edit-image" is no plugin-served job type: only the house-model half of the keep rule applies.
+  const keepOwnMessage = isHouseModelRunError(err)
   const errorMessage =
-    block && block.class === "safety"
+    block && block.class === "safety" && !keepOwnMessage
       ? safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, false)
       : userFacingMessage(err, message)
   const hint =
@@ -373,6 +376,24 @@ describe("an upstream failure's words stay out of the row", () => {
     expect(recovery.error_message).toBe(worker.error_message)
     expect(recovery.error_hint).toEqual(worker.error_hint)
     expect(recovery.error_detail).toBe(worker.error_detail)
+    // A lane with no sentences: the seam's fixed sentence, never the generic safety one.
+    expect(worker.error_message).toBe("House Fixture could not complete this run.")
+  })
+
+  it("a lane's content-policy sentence reaches error_message on the worker path and the recovery alike", async () => {
+    const SENTENCE = "LANE: this picture was blocked by the content policy; another upscaler may accept it."
+    m.lane = { inputUrlArgs: ["imageUrl"], failureSentences: { contentPolicy: SENTENCE } }
+    serve(async () => ({ state: "failed", ...leaky({ contentPolicy: true }) }) as PluginHouseModelPoll)
+    const err = await runHouseModelTask(ID, { scale: 2 }, RUN_OPTS).catch((e: unknown) => e)
+    const worker = workerFailureFields(err)
+    expect(worker.error_message).toBe(SENTENCE)
+    expect(worker.error_hint).toMatchObject({ kind: "safety-block", class: "safety" })
+    expectClean(worker, "worker")
+    await reconcileHouseModelJob(ROW)
+    const recovery = m.markJobFailed.mock.calls[0]![1]
+    expect(recovery.error_message).toBe(SENTENCE)
+    expect(recovery.error_hint).toEqual(worker.error_hint)
+    expectClean(recovery, "reconcile")
   })
 
   it.each(FLAGS)("a failed poll (%s), reconcile path", async (_name, flags) => {
@@ -479,5 +500,7 @@ describe("the worker path's fields are the video worker's own", () => {
     )
     expect(src).toContain("const block = safetyBlockOf(err, modelId)")
     expect(src).toContain("safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, safetyRetried)")
+    expect(src).toContain("isHouseModelRunError(err) ||")
+    expect(src).toContain('block && block.class === "safety" && !keepOwnMessage')
   })
 })

@@ -262,7 +262,7 @@ import {
 import {
   clampContentIdeasCount,
   CONTENT_IDEAS_MAX_RECIPE_INPUTS,
-  resolveTopazUpscale,
+  resolveUpscaleFactor,
   ltxExtendDurationSec
 } from "@nodaro/shared/credits";
 import {
@@ -2128,10 +2128,9 @@ function executeNodeCore(
     return runEditImage(node.id, imageUrl, ctx, prompt, provider, {
       // Single-node Run must send the SAME factor the badge priced and the
       // route will reserve — forwarding the raw legacy targetResolution here
-      // was a live CHECK != SENT gap. resolveTopazUpscale is the one authority.
-      ...(editData.provider === "topaz-image-upscale"
-        ? { upscaleFactor: resolveTopazUpscale({ upscaleFactor: editData.upscaleFactor, targetResolution: editData.targetResolution }).upscaleFactor }
-        : { upscaleFactor: editData.upscaleFactor }),
+      // was a live CHECK != SENT gap. resolveUpscaleFactor is the one authority
+      // (Topaz through resolveTopazUpscale; Nodaro Image Upscale always sends one).
+      upscaleFactor: resolveUpscaleFactor(editData.provider, editData),
       targetResolution: editData.targetResolution,
       aspectRatio: editData.aspectRatio,
       negativePrompt: editData.negativePrompt,
@@ -2474,9 +2473,7 @@ function executeNodeCore(
       {
         // Same resolver as the badge, the route and the worker — see the edit
         // lane above.
-        ...(upData.provider === "topaz-image-upscale"
-          ? { upscaleFactor: resolveTopazUpscale({ upscaleFactor: upData.upscaleFactor, targetResolution: upData.targetResolution }).upscaleFactor }
-          : { upscaleFactor: upData.upscaleFactor }),
+        upscaleFactor: resolveUpscaleFactor(upData.provider, upData),
         targetResolution: upData.targetResolution,
       },
     );

@@ -50,7 +50,7 @@ import { isHouseModelReference } from "../house-model-claim.js"
 import { houseModelTiming } from "../house-model-timeouts.js"
 import { getPluginServices } from "../private-plugins/services-registry.js"
 import type { PluginHouseModelPoll } from "../private-plugins/types.js"
-import { houseModelFailureError, houseModelFailureOf, houseModelLabel } from "../house-model-failure.js"
+import { houseModelFailureError, houseModelFailureOf, houseModelLabel, isHouseModelRunError } from "../house-model-failure.js"
 import { deliverHouseModelRun } from "../house-model-delivery.js"
 import { houseModelServed, isOwnLabelModel } from "../house-models-served.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
@@ -86,14 +86,17 @@ function hintOf(err: unknown, input: Record<string, unknown> | null): ErrorHint 
 
 /**
  * The `error_message` the video worker writes for this failure (its final
- * catch, workers/video-worker.ts): a safety-class block gets the platform's
- * own safety sentence, anything else its user-facing message. `retried` is
- * false: a house model never takes the worker's inline safety retry (its
- * catalog entry declares no stochastic filter — house-models-tables.test.ts).
+ * catch, workers/video-worker.ts): a house-model run's failure keeps its own
+ * sentence (`isHouseModelRunError`: the lane's for its class, or the seam's
+ * fixed one), a content-policy block included; any other safety-class block
+ * would get the platform's own safety sentence, anything else its user-facing
+ * message. `retried` is false: a house model never takes the worker's inline
+ * safety retry (its catalog entry declares no stochastic filter —
+ * house-models-tables.test.ts).
  */
 export function houseModelFailureMessage(err: Error, input: Record<string, unknown> | null): string {
   const block = safetyBlockOf(err, jobModelIdOf(input))
-  return block && block.class === "safety"
+  return block && block.class === "safety" && !isHouseModelRunError(err)
     ? safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, false)
     : userFacingMessage(err, err.message)
 }

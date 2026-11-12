@@ -8,7 +8,7 @@ import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellati
 // NOTE: imported from their CORE modules, not re-exported through ./shared.js —
 // the test harness mocks shared.js wholesale and would undefine them.
 import { isPostProcessingError } from "../lib/post-processing-error.js"
-import { isHouseModelRunPending } from "../lib/house-model-failure.js"
+import { isHouseModelRunError, isHouseModelRunPending } from "../lib/house-model-failure.js"
 import { isDeterministicJobError } from "../lib/deterministic-job-error.js"
 import { declaredJobBudgetMs } from "../lib/job-budget.js"
 import { providerDetailOf } from "../lib/provider-error-detail.js"
@@ -711,10 +711,15 @@ export function createVideoWorker() {
         // wrote. Built-in handlers never get this: only a job type the
         // plugins serve (the key, not the handler identity — the map's
         // entries are wrapped by the edit-plan gate and the heartbeat).
-        const keepPluginMessage =
-          Object.hasOwn(privatePluginHandlers, job.name) && hasUserSafeMessage(err)
+        // A house-model run's failure (`isHouseModelRunError`, built by the
+        // seam's one mapper) keeps its sentence the same way, whatever job
+        // type ran it: the lane's own for its class, or the seam's fixed one —
+        // the same sentence the reconcile writes for the same failure.
+        const keepOwnMessage =
+          isHouseModelRunError(err) ||
+          (Object.hasOwn(privatePluginHandlers, job.name) && hasUserSafeMessage(err))
         const errorMessage =
-          block && block.class === "safety" && !keepPluginMessage
+          block && block.class === "safety" && !keepOwnMessage
             ? safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, safetyRetried)
             : userFacingMessage(err, message)
         // THE failure writer (lib/job-failure.ts). Its CAS is what keeps a job

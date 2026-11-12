@@ -1672,6 +1672,7 @@ export const ja: ChromeDict = {
   "imgcfg.upscaleEnhanceOnly": "1x（画質向上のみ）",
   "imgcfg.upscaleDesc": "入力画像をアップスケールして画質を向上させ、より高い解像度にします。",
   "imgcfg.topazUpscaleDesc": "Topaz による AI アップスケーリングです。倍率が高いほど大きな画像になります。",
+  "imgcfg.nodaroImageUpscaleDesc": "細部を復元し、文字は書かれたとおりに保持します。出力は画像のサイズ × 倍率です（1x は同じサイズのまま画質を向上）。上限は合計 67,108,864 ピクセル、1 辺 16,384 ピクセルです。料金は出力サイズで決まります。",
   "imgcfg.removeBackgroundDesc": "入力画像の背景を自動的に削除し、透過 PNG を出力します。",
   "imgcfg.generateMaskDesc": "テキストプロンプトから二値のセグメンテーションマスクを生成します（Grounded SAM）。入力画像を接続し、マスクする被写体を説明してください。",
   "imgcfg.maskPromptExamples": "例：「the blonde woman」「the red car」「the background」",

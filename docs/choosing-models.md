@@ -29,6 +29,7 @@ Don't know where to start? Find your goal here, then jump to the model in the ta
 | highest fidelity image | GPT Image 2, GPT Image 2.6 Sunburst, Imagen 4 Ultra | GPT Image 2 for characters and identity; GPT Image 2.6 Sunburst for wide or in-between ratios GPT Image 2 can't draw. |
 | image edit / restyle | GPT Image 2.6 Flare (I2I), GPT Image 2 (I2I), Seedream 5 Pro (I2I) | GPT Image 2.6 Flare changes what you ask and keeps the rest; GPT Image 2 i2i for identity-critical edits; Seedream 5 Pro for instruction-based edits. |
 | highest-resolution image | Topaz Image Upscale, GPT Image 2, GPT Image 2.6 Sunburst | Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor). |
+| upscale an image with text, labels or logos | Nodaro Image Upscale | Keeps lettering exactly as written. 1x enhances at the same size; up to 8x. Priced by the output's size, so a small picture costs little. |
 | background removal / cutout | Recraft Remove BG | Cheap, no prompt needed. |
 | best cinematic video | VEO 3.1 Quality, Kling 3.0, Seedance 2 | VEO 3.1 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency. |
 | cheap batch video clips | VEO 3.1 Fast, Wan 2.2 Turbo, Bytedance Lite I2V | VEO 3.1 Fast is the best price/quality balance with native audio. |
@@ -52,6 +53,7 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | ⭐ Z-Image | Tongyi-MAI | Everyday | 3<!-- credits: z-image --> | t2i | Cheapest model in catalog. Fast, stylized output. Limited aspect ratios. |
 | Flux 2 Klein (Open) | Black Forest Labs | Everyday | 4<!-- credits: flux-2-klein --> | t2i | Open Flux 2 9B from BFL — fast. Runs direct on Replicate. |
 | Recraft Remove BG | Recraft | Everyday | 4<!-- credits: recraft-remove-bg --> | remove-bg | Remove image background. Cheap utility. |
+| Nodaro Image Upscale | Nodaro Upscale | Everyday | 5<!-- credits: nodaro-image-upscale:2K --> | upscale | Image upscale at 1x (enhance only), 2x, 4x or 8x. Restores detail and keeps lettering exactly as written; the output is the input times the factor, nothing cropped. Priced by the output's size. Offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it. |
 | MiniMax H3 Image | MiniMax | Everyday | 6<!-- credits: minimax-h3-image --> | t2i | MiniMax H3 Image: detailed pictures up to about 16 MP at 4K, with readable text inside the picture. Ten shapes plus auto, the same price at 1K and 2K (2K by default), PNG or JPEG. |
 | MiniMax H3 Image (I2I) | MiniMax | Everyday | 7<!-- credits: minimax-h3-image-i2i --> | i2i | MiniMax H3 Image edits: change or combine up to 16 reference images in one edit, with readable text, up to about 16 MP at 4K. Priced by size and by reference image; auto keeps the first image's shape. |
 | Grok Imagine | xAI | Everyday | 11<!-- credits: grok --> | t2i, t2v | Expressive, high-contrast output. Supports both image and video. |

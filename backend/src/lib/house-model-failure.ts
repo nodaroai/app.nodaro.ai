@@ -4,12 +4,14 @@
  *
  * The plugin hands core the upstream's own words and the failure flags a
  * `PluginHandlerFn` error already carries (`PluginHouseModelFailure`). Core
- * builds a FRESH error from them: a fixed sentence the person reads, a neutral
- * operator detail (`internalDetails`, what `providerDetailOf` writes to
+ * builds a FRESH error from them: a fixed sentence the person reads (the
+ * lane's own for the failure's class, `failureSentences` in
+ * house-model-lanes.ts, else the seam's), a neutral operator detail (`internalDetails`, what `providerDetailOf` writes to
  * `jobs.error_detail`, which a deployment may show the job's owner), and the
  * flags as own properties — so the worker's catch and the reconcile cron map
  * it to `error_hint` exactly as they map a plugin handler's error
- * (`refusalHintFor` and friends in lib/safety-block.ts). The plugin's error is
+ * (`refusalHintFor` and friends in lib/safety-block.ts), while both keep the
+ * sentence as `error_message` (`isHouseModelRunError`). The plugin's error is
  * never rethrown or chained as `cause`: its message is the upstream's words,
  * and every user-facing reader walks the cause chain.
  *
@@ -20,6 +22,7 @@ import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import type { PluginHouseModelFailure } from "./private-plugins/types.js"
 import { redactProviderDetail } from "./provider-error-detail.js"
 import { isDeterministicJobError } from "./deterministic-job-error.js"
+import { houseModelLane, type HouseModelLane } from "./house-model-lanes.js"
 
 /** A house-model run that failed upstream, as the job fails with it. */
 export class HouseModelRunError extends Error {
@@ -72,12 +75,44 @@ export function houseModelLabel(id: string): string {
 }
 
 /**
+ * The sentence the person reads for this failure: the lane's own sentence for
+ * its class (`failureSentences`, house-model-lanes.ts) when the lane gives
+ * one, else the seam's fixed sentence. A content-policy block is the
+ * `contentPolicy` class even when the input was refused too; a refused input
+ * file (an image or a video, or a request refused for its input video) is
+ * `inputRefused`.
+ */
+function houseModelFailureSentence(
+  failure: PluginHouseModelFailure,
+  label: string,
+  sentences: HouseModelLane["failureSentences"],
+): string {
+  const inputRefused =
+    failure.inputImageRefused === true ||
+    failure.inputVideoRefused === true ||
+    failure.requestRefusedSubject === "input_video"
+  const own = failure.contentPolicy === true
+    ? sentences?.contentPolicy
+    : inputRefused
+      ? sentences?.inputRefused
+      : undefined
+  if (typeof own === "string" && own.trim().length > 0) return own
+  return failure.requestRefused
+    ? `${label} refused this request as it was sent.`
+    : `${label} could not complete this run.`
+}
+
+/**
  * The error a job fails with for this upstream failure. Logs the upstream's
- * words (redacted of URLs and secrets) once, with the job id.
+ * words (redacted of URLs and secrets) once, with the job id. Its message is
+ * the lane's sentence for the failure's class, or the seam's fixed sentence;
+ * every failure writer keeps it as the job's `error_message`
+ * (`isHouseModelRunError`), a content-policy block included.
  */
 export function houseModelFailureError(
   failure: PluginHouseModelFailure,
   ctx: { readonly id: string; readonly jobId: string },
+  lane: Pick<HouseModelLane, "failureSentences"> | undefined = houseModelLane(ctx.id),
 ): HouseModelRunError {
   const flags: string[] = FLAG_NAMES.filter((name) => failure[name] === true)
   if (failure.requestRefusedSubject) flags.push(`requestRefusedSubject=${failure.requestRefusedSubject}`)
@@ -85,10 +120,7 @@ export function houseModelFailureError(
     `[house-models] job ${ctx.jobId} (${ctx.id}) failed upstream` +
       `${flags.length ? ` [${flags.join(", ")}]` : ""}: ${redactProviderDetail(failure.message) ?? "(no words)"}`,
   )
-  const label = houseModelLabel(ctx.id)
-  const sentence = failure.requestRefused
-    ? `${label} refused this request as it was sent.`
-    : `${label} could not complete this run.`
+  const sentence = houseModelFailureSentence(failure, houseModelLabel(ctx.id), lane?.failureSentences)
   const err = new HouseModelRunError(
     sentence,
     ctx.id,
@@ -102,6 +134,18 @@ export function houseModelFailureError(
   if (failure.promptRefused) err.promptRefused = true
   if (failure.contentPolicy) err.contentPolicyClass = "safety"
   return err
+}
+
+/**
+ * True when `err` is a house-model run's failure (`houseModelFailureError`):
+ * its message is the lane's or the seam's fixed sentence, which the video
+ * worker's final catch and the reconcile keep as `error_message` — never the
+ * generic safety sentence, whose "adjust the prompt" advice is wrong for a run
+ * with no prompt. Read on the TOP-LEVEL error only: a wrapper's text is not
+ * the seam's. The `error_hint` is still the shared mapping's.
+ */
+export function isHouseModelRunError(err: unknown): err is HouseModelRunError {
+  return err instanceof HouseModelRunError
 }
 
 /**

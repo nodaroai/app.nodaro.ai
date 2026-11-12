@@ -13,6 +13,8 @@ const m = vi.hoisted(() => ({
   refund: vi.fn(async () => {}),
   finalize: vi.fn(async () => ({ ok: true })),
   settledBase: vi.fn(async () => 4),
+  /** The fixture lane's own failure sentences; none by default. */
+  failureSentences: undefined as { contentPolicy?: string; inputRefused?: string } | undefined,
 }))
 
 vi.mock("@nodaro/shared/model-catalog", async (importOriginal) => {
@@ -36,7 +38,8 @@ vi.mock("@/lib/job-finalize.js", () => ({
   isFinalizeJobType: (t: unknown) => t === "edit-image",
 }))
 vi.mock("@/lib/house-model-lanes.js", () => ({
-  houseModelLane: (id: string) => (id === "house-fixture" ? { inputUrlArgs: ["imageUrl"], settledBase: m.settledBase } : undefined),
+  houseModelLane: (id: string) =>
+    id === "house-fixture" ? { inputUrlArgs: ["imageUrl"], settledBase: m.settledBase, failureSentences: m.failureSentences } : undefined,
 }))
 
 import { setPluginServices } from "../../private-plugins/services-registry.js"
@@ -70,6 +73,7 @@ function serve(poll: () => Promise<PluginHouseModelPoll>): { start: ReturnType<t
 
 beforeEach(() => {
   vi.clearAllMocks()
+  m.failureSentences = undefined
   // The reconcile runs where the plugins are loaded (the API's cron, the video worker's re-pick).
   setPluginServices({})
   resetOwnLabelModelIdsForTests()
@@ -136,12 +140,36 @@ describe("reconcileHouseModelJob", () => {
     expect(m.bump).not.toHaveBeenCalled()
   })
 
-  it("a content-policy failure writes the worker's own safety sentence", async () => {
-    serve(async () => ({ state: "failed", message: "flagged", contentPolicy: true }))
+  it("a content-policy failure keeps the seam's fixed sentence when the lane gives none — never the generic safety one", async () => {
+    serve(async () => ({ state: "failed", message: "UPSTREAM-WORDS flagged https://upstream.example/t/1", contentPolicy: true }))
     await reconcileHouseModelJob(ROW)
     const fields = (m.markJobFailed.mock.calls[0] as unknown[])[1] as Record<string, unknown>
-    expect(fields.error_message).toBe(safetyBlockMessage(undefined, false))
+    expect(fields.error_message).toBe("House Fixture could not complete this run.")
+    expect(fields.error_message).not.toBe(safetyBlockMessage(undefined, false))
     expect(fields.error_hint).toMatchObject({ kind: "safety-block", class: "safety", retried: false })
+    expect(JSON.stringify(fields)).not.toMatch(/UPSTREAM-WORDS|upstream\.example/)
+  })
+
+  it("a content-policy failure writes the lane's own sentence, with the safety hint, and no upstream words", async () => {
+    m.failureSentences = { contentPolicy: "LANE: blocked by the content policy; try another model.", inputRefused: "LANE: unreadable picture." }
+    serve(async () => ({ state: "failed", message: "UPSTREAM-WORDS flagged https://upstream.example/t/1", contentPolicy: true }))
+    await reconcileHouseModelJob(ROW)
+    expect(m.markJobFailed).toHaveBeenCalledWith("job-7", {
+      error_message: "LANE: blocked by the content policy; try another model.",
+      error_detail: "House model run failed (contentPolicy).",
+      reconcile_last_error: "upstream_failed",
+      error_hint: { kind: "safety-block", class: "safety", retried: false },
+    })
+    expect(JSON.stringify(m.markJobFailed.mock.calls)).not.toMatch(/UPSTREAM-WORDS|upstream\.example/)
+    expect(m.refund).toHaveBeenCalledWith("job-7")
+  })
+
+  it("a refused input picture writes the lane's input-refused sentence", async () => {
+    m.failureSentences = { contentPolicy: "LANE: blocked.", inputRefused: "LANE: unreadable picture." }
+    serve(async () => ({ state: "failed", message: "UPSTREAM-WORDS", inputImageRefused: true }))
+    await reconcileHouseModelJob(ROW)
+    const fields = (m.markJobFailed.mock.calls[0] as unknown[])[1] as Record<string, unknown>
+    expect(fields.error_message).toBe("LANE: unreadable picture.")
   })
 
   it("not served here (no plugin, or a job whose model is no house model): counted toward exhaustion, nothing read", async () => {

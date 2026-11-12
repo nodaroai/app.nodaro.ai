@@ -33,6 +33,7 @@ import { imageFormatArgs, imageFormatBody } from "./_image-format-args.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodaro/shared/model-catalog"
 import { I2I_MASK_SUPPORT, IMAGE_BACKGROUND_VALUES, IMAGE_K_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, requestImageLimit } from "@nodaro/shared/models"
+import { UPSCALE_FACTORS } from "@nodaro/shared/credits"
 import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { imageToImageLevers, normalizeImageInput, requestedAspectRatio, savedGenerationModel } from "../normalize.js"
@@ -781,6 +782,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         "**Models by operation**:\n" +
         "  • `recraft-upscale` (default) — high-quality upscale, no prompt needed.\n" +
         "  • `topaz-image-upscale` — Topaz AI upscale (1×/2×/4×).\n" +
+        "  • `nodaro-image-upscale` — Nodaro Image Upscale (1×/2×/4×/8×): keeps lettering exactly as written; priced by the output's size; refused past 67,108,864 pixels or 16,384 on a side.\n" +
         "  • `recraft-remove-bg` — remove background, returns PNG with transparency.\n" +
         "  • `nano-banana-edit` — AI-guided edit with a prompt (inpainting/outpainting).\n" +
         "  • `grok-2-segment` — FREE named segment-mask map of a prior grok-2 generation (task_id required). Result masks land as the job's images; segment {index,name} pairs land in the job's output `segments` (read via get_job).\n" +
@@ -788,8 +790,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       inputSchema: {
         image_url: z.string().url().optional().describe("Source image URL (all providers except the task-chained grok ops)."),
         image_asset_id: z.string().optional().describe("Nodaro image job id."),
-        model: z.enum(["recraft-upscale", "topaz-image-upscale", "recraft-remove-bg", "nano-banana-edit", "grok-2-edit", "grok-2-segment"]).optional().describe("Edit operation. Default recraft-upscale."),
-        upscale_factor: z.enum(["1", "2", "4"]).optional().describe("Upscale factor (for topaz-image-upscale). Default 2."),
+        model: z.enum(["recraft-upscale", "topaz-image-upscale", "nodaro-image-upscale", "recraft-remove-bg", "nano-banana-edit", "grok-2-edit", "grok-2-segment"]).optional().describe("Edit operation. Default recraft-upscale."),
+        upscale_factor: z.enum(UPSCALE_FACTORS).optional().describe("Upscale factor: 1, 2 or 4 for topaz-image-upscale; 1, 2, 4 or 8 for nodaro-image-upscale. Default 2."),
         target_resolution: z.enum(["2K", "4K", "8K"]).optional().describe("Deprecated for topaz-image-upscale — maps to an upscale factor (2K→2, 4K→4, 8K→4). Prefer upscale_factor."),
         prompt: z.string().max(2000).optional().describe("Edit prompt (required for nano-banana-edit and grok-2-edit)."),
         task_id: z.string().optional().describe("Task id of a prior grok-2 generation, its output providerTaskId (grok-2-edit / grok-2-segment)."),

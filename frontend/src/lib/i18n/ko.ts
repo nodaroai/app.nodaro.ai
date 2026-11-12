@@ -1568,6 +1568,7 @@ export const ko: ChromeDict = {
   "imgcfg.upscaleEnhanceOnly": "1x(화질 개선만)",
   "imgcfg.upscaleDesc": "입력 이미지를 더 높은 해상도로 업스케일하고 화질을 개선합니다.",
   "imgcfg.topazUpscaleDesc": "Topaz를 이용한 AI 업스케일링입니다. 배율이 높을수록 더 큰 이미지가 만들어집니다.",
+  "imgcfg.nodaroImageUpscaleDesc": "디테일을 복원하고 글자는 쓰인 그대로 유지합니다. 출력 크기는 이미지 크기에 배율을 곱한 값이며(1x는 같은 크기에서 화질만 개선), 최대 총 67,108,864픽셀, 한 변 16,384픽셀까지입니다. 가격은 출력 크기에 따라 정해집니다.",
   "imgcfg.removeBackgroundDesc": "입력 이미지의 배경을 자동으로 제거해 투명 PNG로 만듭니다.",
   "imgcfg.generateMaskDesc": "텍스트 프롬프트로 이진 분할 마스크를 생성합니다(Grounded SAM). 입력 이미지를 연결하고 마스크할 피사체를 설명하세요.",
   "imgcfg.maskPromptExamples": "예: “the blonde woman”, “the red car”, “the background”",

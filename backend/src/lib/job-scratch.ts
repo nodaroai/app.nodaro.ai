@@ -81,6 +81,22 @@ function hasEnded(status: string): boolean {
  * costs one listing and no database read. Never throws.
  */
 export async function discardJobScratch(jobId: string): Promise<void> {
+  await discardScratchIf(jobId, (status) => status !== undefined && hasEnded(status))
+}
+
+/**
+ * Empty the scratch folder of a job whose row was deleted before it ran — a
+ * workflow node refused at its input stamp after its copy was stored
+ * (node-executor.ts): with no row, nothing will read the folder again. A row
+ * that is still there is judged as `discardJobScratch` judges it (kept while
+ * the job is in flight). Never throws.
+ */
+export async function discardDeletedJobScratch(jobId: string): Promise<void> {
+  await discardScratchIf(jobId, (status) => status === undefined || hasEnded(status))
+}
+
+/** Empty the job's scratch folder when `mayDelete` says so of its row's status (undefined: no row). Never throws. */
+async function discardScratchIf(jobId: string, mayDelete: (status: string | undefined) => boolean): Promise<void> {
   // Everything inside the try: this runs in the worker's `finally`, where a
   // throw would replace the error it is unwinding (a drain hand-back).
   try {
@@ -92,8 +108,9 @@ export async function discardJobScratch(jobId: string): Promise<void> {
     if (keys.length === 0) return
 
     const { data, error } = await supabase.from("jobs").select("status").eq("id", jobId).maybeSingle()
-    const status = (data as { status?: string } | null)?.status
-    if (error || !status || !hasEnded(status)) return
+    if (error) return
+    const status = (data as { status?: unknown } | null)?.status
+    if (!mayDelete(typeof status === "string" ? status : undefined)) return
 
     const { failed } = await deleteKeysRecordingFailures(keys, "job-scratch", { jobIdOf: () => jobId })
     if (failed.length > 0) {
