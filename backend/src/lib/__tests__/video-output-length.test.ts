@@ -252,6 +252,15 @@ describe("Lip Sync: the audio, capped at what its provider takes", () => {
     expect(run("lip-sync", [video(fixed(500)), audio(fixed(20))], { provider: "sync-lipsync-v3" })).toEqual(fixed(500))
     expect(run("lip-sync", [video("unknown"), audio(fixed(20))], { provider: "sync-lipsync-v3" })).toBe("unknown")
   })
+  it("OmniHuman 2.0: its audio, up to 5 minutes (longer is refused, so never above); 1.5 keeps its 60 s", () => {
+    expect(run("lip-sync", [audio(fixed(120))], { provider: "omnihuman-2-0" })).toEqual(fixed(120))
+    expect(run("lip-sync", [audio(fixed(400))], { provider: "omnihuman-2-0" })).toEqual(fixed(300))
+    expect(run("lip-sync", [audio(undefined)], { provider: "omnihuman-2-0" })).toEqual(fixed(300))
+    expect(run("lip-sync", [audio(fixed(90))], { provider: "omnihuman-1-5" })).toEqual(fixed(60))
+    // Under 4 s the clip is padded to 4 s; every listed length is floored at the
+    // estimators' 8 s anyway (`floorLength`), so 2.0 and 1.5 list the same there.
+    expect(run("lip-sync", [audio(fixed(3.2))], { provider: "omnihuman-2-0" })).toEqual(run("lip-sync", [audio(fixed(3.2))], { provider: "omnihuman-1-5" }))
+  })
 })
 
 describe("AI Avatar", () => {

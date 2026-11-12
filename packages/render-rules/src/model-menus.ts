@@ -276,6 +276,7 @@ export const LIP_SYNC_MODELS: readonly { value: LipSyncProvider; label: string; 
   { value: "kling-avatar-pro", label: "Kling Avatar Pro", desc: "Premium talking head, 1080p" },
   { value: "infinitalk", label: "Infinitalk", desc: "KIE flexible resolution, 480p\u2013720p" },
   { value: "omnihuman-1-5", label: "OmniHuman 1.5", desc: "Prompt-directed talking avatar, 720p\u20131080p, premium" },
+  { value: "omnihuman-2-0", label: "OmniHuman 2.0", desc: "Voice-driven talking avatar, 720p, up to 5 min, billed per second" },
   { value: "latentsync", label: "LatentSync", desc: "Diffusion-based, best for singing" },
   { value: "wav2lip", label: "Wav2Lip", desc: "Fastest and cheapest, image or video input" },
   { value: "video-retalking", label: "Video-Retalking", desc: "Built-in face enhancement, clean output" },

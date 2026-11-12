@@ -288,6 +288,14 @@ export interface VideoUpscaleProvider {
 export interface LipSyncOptions {
   fastMode?: boolean
   seed?: number
+  /**
+   * A model charged per second of its audio (OmniHuman 2.0): the seconds the
+   * run was held for (the route's or the workflow run's measurement, carried
+   * on the job as `lipSyncBilledSeconds`). The provider downloads the audio,
+   * measures those bytes, and refuses a file that bills more — the price and
+   * the bytes sent are the same file.
+   */
+  billedSeconds?: number
 }
 
 /** Optional dubbing toggles for video-input lip-sync (e.g. volcengine). */

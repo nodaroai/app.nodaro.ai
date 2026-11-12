@@ -27,6 +27,7 @@ import {
   seedanceExtendCreditId,
   pitchTempoQuoteCreditId,
   videoGenerationCreditId,
+  lipSyncAudioRateOf,
   videoOverlayCreditId,
 } from "@nodaro/shared/credits"
 import {
@@ -810,6 +811,14 @@ export function getModelIdentifier(
     if (isSeedanceExtendProvider(runsAs)) {
       return seedanceExtendCreditId(runsAs, data.duration as number | string | undefined, data.resolution as string | undefined)
     }
+  }
+
+  // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): its
+  // one-second row, which every estimate multiplies by the billed seconds
+  // (PRICING_UNIT_ESTIMATORS → lipSyncPricingUnits). It has no bare row.
+  if (nodeType === "lip-sync") {
+    const rate = lipSyncAudioRateOf(provider)
+    if (rate) return rate.rateId
   }
 
   // Motion transfer: duration-tiered pricing

@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -11,9 +11,10 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { LIP_SYNC_DEFAULT_PROVIDER } from "../workers/handlers/default-models.js"
-import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, isMinimaxH3Provider } from "@nodaro/shared/models"
+import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, isMinimaxH3Provider, lipSyncLeverClearPatch } from "@nodaro/shared/models"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
-import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared/credits"
+import { buildLipSyncCreditId, isPerSecondLipSyncProvider, lipSyncAudioRateOf } from "@nodaro/shared/credits"
+import { checkLipSyncInputs, lipSyncRateBaseCredits } from "../lib/lip-sync-inputs.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
@@ -73,6 +74,11 @@ const lipSyncBody = z.object({
  */
 export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefined): string {
   const provider = (body?.provider as string) ?? LIP_SYNC_DEFAULT_PROVIDER
+  // A model charged per second of its audio at a rate (OmniHuman 2.0): its
+  // one-second row, which `computeCredits` multiplies by the seconds the
+  // preHandler measured. Before the bucket branch below, which would bucket it.
+  const rate = lipSyncAudioRateOf(provider)
+  if (rate) return rate.rateId
   if (provider === "infinitalk") {
     return `infinitalk:${(body?.resolution as string) ?? "720p"}`
   }
@@ -111,9 +117,104 @@ export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefin
   return provider
 }
 
+/** The body keys the preHandler stashes the measured audio under (the credit guard sees only the body). */
+const MEASURED_AUDIO_SEC = "__lipSyncAudioSec"
+const BILLED_SECONDS = "__lipSyncBilledSeconds"
+
+/** The seconds the preHandler measured for a per-second-rate run, read off the body. */
+function stashedBilledSeconds(body: Record<string, unknown> | undefined): number | undefined {
+  const s = body?.[BILLED_SECONDS]
+  return typeof s === "number" && Number.isInteger(s) && s > 0 ? s : undefined
+}
+
+/**
+ * Fastify preHandler, before the credit guard: for a model charged per second
+ * of its audio at a rate (OmniHuman 2.0), validate the body (the handler's own
+ * schema — a request that would 400 there never costs a download), measure the
+ * audio and the image (`checkLipSyncInputs`, the rule the workflow run
+ * shares), refuse what the model cannot take with a 400 before anything is
+ * held, and stash the measured length and the billed seconds on the body for
+ * the guard. A length the request sent (`audioDurationSec`) is never trusted
+ * for these models, and the stash keys are cleared from EVERY request first,
+ * whatever its model: only this check may set them. Every other model passes
+ * straight through, unprobed.
+ */
+export async function lipSyncInputPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const body = (req.body ?? {}) as Record<string, unknown>
+  delete body[MEASURED_AUDIO_SEC]
+  delete body[BILLED_SECONDS]
+  if (!lipSyncAudioRateOf(body.provider ?? LIP_SYNC_DEFAULT_PROVIDER)) return
+  const parsed = lipSyncBody.safeParse(body)
+  if (!parsed.success) {
+    return void reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
+  }
+  const checked = await checkLipSyncInputs({
+    provider: body.provider ?? LIP_SYNC_DEFAULT_PROVIDER,
+    audioUrl: body.audioUrl,
+    imageUrl: body.imageUrl,
+    userId: req.userId,
+  })
+  if (!checked) return
+  if (!checked.ok) {
+    // Busy (this process's measuring downloads are all taken): a 429, try again in a moment.
+    const status = checked.code === "lip_sync_audio_busy" ? 429 : 400
+    return void reply.status(status).send({ error: { code: checked.code, message: checked.message } })
+  }
+  body[MEASURED_AUDIO_SEC] = checked.audioSec
+  body[BILLED_SECONDS] = checked.billedSeconds
+}
+
+/**
+ * BASE credits for a per-second-rate run: the rate's row × the seconds the
+ * preHandler measured (`lipSyncRateBaseCredits`, rounded up once); undefined
+ * for every other model, which the guard prices from its row as before. A rate
+ * model whose audio was not measured is never priced at a guess.
+ */
+export async function lipSyncComputeCredits(body: unknown): Promise<number | undefined> {
+  const b = body as Record<string, unknown> | undefined
+  const rate = lipSyncAudioRateOf(b?.provider ?? LIP_SYNC_DEFAULT_PROVIDER)
+  if (!rate) return undefined
+  const billed = stashedBilledSeconds(b)
+  if (billed === undefined) throw new Error("lip-sync: a per-second-rate run reached the credit guard without its measured audio")
+  return lipSyncRateBaseCredits(rate, billed)
+}
+
+/** At most this many requests a minute per caller for a per-second-rate model (decided 2026-11-12). */
+export const LIP_SYNC_RATE_MODEL_REQUESTS_PER_MINUTE = 30
+
+/**
+ * Whether the route's rate limit lets a request through uncounted: every
+ * request but one for a per-second-rate model (OmniHuman 2.0), which downloads
+ * and decodes its audio before anything is held. Every other model — an
+ * editor list fanning out into Kling Avatar, a connected self-hosted install —
+ * is never limited here.
+ */
+export function lipSyncRateLimitSkips(req: Pick<FastifyRequest, "body">): boolean {
+  const body = req.body as Record<string, unknown> | undefined
+  return lipSyncAudioRateOf(body?.provider ?? LIP_SYNC_DEFAULT_PROVIDER) === undefined
+}
+
 export async function lipSyncRoutes(app: FastifyInstance) {
   app.post("/v1/lip-sync", {
-    preHandler: creditGuard((req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined), { runModel: jobRunModel("lip-sync") }),
+    // Per user / credential (`rateLimitKeyGenerator`), for per-second-rate
+    // models only (`lipSyncRateLimitSkips`). Checked at preValidation: the body
+    // is parsed by then (the model is in it), and it runs before every
+    // preHandler — before the audio is downloaded.
+    config: {
+      rateLimit: {
+        max: LIP_SYNC_RATE_MODEL_REQUESTS_PER_MINUTE,
+        timeWindow: "1 minute",
+        hook: "preValidation",
+        allowList: (req) => lipSyncRateLimitSkips(req),
+      },
+    },
+    preHandler: [
+      lipSyncInputPreHandler,
+      creditGuard((req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined), {
+        runModel: jobRunModel("lip-sync"),
+        computeCredits: lipSyncComputeCredits,
+      }),
+    ],
   }, async (req, reply) => {
     const parsed = lipSyncBody.safeParse(req.body)
     if (!parsed.success) {
@@ -123,9 +224,8 @@ export async function lipSyncRoutes(app: FastifyInstance) {
     }
 
     const {
-      imageUrl, videoUrl, audioUrl, prompt, provider, resolution,
-      audioDurationSec,
-      guidanceScale, inferenceSteps, seed, fastMode,
+      imageUrl, videoUrl, audioUrl, prompt, provider,
+      guidanceScale, inferenceSteps,
       pads, smooth, fps, resizeFactor,
       enhancer, preprocess, still, poseStyle, expressionScale,
       enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement,
@@ -164,6 +264,22 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       : prompt
     parsed.data.prompt = finalPrompt
 
+    // A per-second-rate model (OmniHuman 2.0): the job records the length the
+    // preHandler measured, never one the request sent, and none of the levers
+    // the model does not take (a resolution, fast mode or seed left from
+    // another model).
+    // The held seconds are read off the body only for such a model (the
+    // preHandler cleared them from every request and set them only for these).
+    const rawBody = req.body as Record<string, unknown> | undefined
+    const isRateModel = lipSyncAudioRateOf(provider ?? LIP_SYNC_DEFAULT_PROVIDER) !== undefined
+    const billedSeconds = isRateModel ? stashedBilledSeconds(rawBody) : undefined
+    if (isRateModel) {
+      const measured = rawBody?.[MEASURED_AUDIO_SEC]
+      parsed.data.audioDurationSec = typeof measured === "number" ? measured : undefined
+      Object.assign(parsed.data, lipSyncLeverClearPatch(provider, parsed.data))
+    }
+    const { resolution: sentResolution, seed: sentSeed, fastMode: sentFastMode, audioDurationSec: sentAudioDurationSec } = parsed.data
+
     const mcpClient = extractMcpClient(req.body)
 
     const { data: job, error } = await insertJob(req, {
@@ -172,7 +288,12 @@ export async function lipSyncRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: withResolvedModel(buildJobInputData(parsed.data, "lip-sync"), "lip-sync"),
+        // The held seconds ride the row as well as the queue payload (as a
+        // workflow run's do), so a job rebuilt from its row still carries them.
+        input_data: withResolvedModel({
+          ...buildJobInputData(parsed.data, "lip-sync"),
+          ...(billedSeconds !== undefined ? { lipSyncBilledSeconds: billedSeconds } : {}),
+        }, "lip-sync"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -193,9 +314,10 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       audioUrl,
       prompt: finalPrompt,
       provider: baseProvider,
-      resolution,
-      audioDurationSec,
-      guidanceScale, inferenceSteps, seed, fastMode,
+      resolution: sentResolution,
+      audioDurationSec: sentAudioDurationSec,
+      ...(billedSeconds !== undefined ? { lipSyncBilledSeconds: billedSeconds } : {}),
+      guidanceScale, inferenceSteps, seed: sentSeed, fastMode: sentFastMode,
       pads, smooth, fps, resizeFactor,
       enhancer, preprocess, still, poseStyle, expressionScale,
       enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement,

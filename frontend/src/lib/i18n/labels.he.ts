@@ -780,6 +780,7 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "Previous-gen Opus, long-horizon work": "Opus מהדור הקודם, לעבודה ארוכת טווח",
   "Pro Seedream image-to-image, multi-reference edits": "Seedream Pro, תמונה לתמונה, עריכות מרובות ייחוסים",
   "Prompt-directed talking avatar, 720p\u20131080p, premium": "אווטאר מדבר בהכוונת פרומפט, 720p–1080p, פרימיום",
+  "Voice-driven talking avatar, 720p, up to 5 min, billed per second": "אווטאר מדבר שמונע מהקול, 720p, עד 5 דקות, חיוב לפי שנייה",
   "Pushes creative boundaries for bolder, more distinctive musical expression.": "מרחיב את הגבולות היצירתיים להבעה מוזיקלית נועזת ומובחנת יותר.",
   "Remove background, transparent PNG output": "הסרת רקע, פלט PNG שקוף",
   "Replace subjects with motion": "החלפת נושאים תוך שמירה על התנועה",

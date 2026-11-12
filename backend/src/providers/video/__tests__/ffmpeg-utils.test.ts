@@ -168,6 +168,7 @@ import {
   runFfmpegWithProgress,
   withFfmpegSlot,
   runFfprobe,
+  runFfprobeCapture,
   getVideoDuration,
   getVideoStreamDuration,
   getVideoFps,
@@ -1880,6 +1881,22 @@ describe("runFfmpeg / runFfprobe — the watchdog flags", () => {
   it("runFfprobe carries the same flags", async () => {
     execFileOnce("", Object.assign(new Error("Command failed"), { killed: true }) as NodeJS.ErrnoException, "")
     await expect(runFfprobe(["x"])).rejects.toMatchObject({ killed: true, timedOut: true })
+  })
+
+  it("runFfprobeCapture resolves stdout AND stderr, and carries the same flags when it fails", async () => {
+    execFileOnce("{}", null, "Estimating duration from bitrate, this may be inaccurate")
+    await expect(runFfprobeCapture(["x"])).resolves.toEqual({ stdout: "{}", stderr: "Estimating duration from bitrate, this may be inaccurate" })
+    execFileOnce("", Object.assign(new Error("Command failed"), { killed: true }) as NodeJS.ErrnoException, "")
+    await expect(runFfprobeCapture(["x"])).rejects.toMatchObject({ killed: true, timedOut: true })
+    execFileOnce("", new Error("exit 1") as NodeJS.ErrnoException, "Invalid data found when processing input")
+    await expect(runFfprobeCapture(["x"])).rejects.toMatchObject({ killed: false, timedOut: false, message: expect.stringMatching(/ffprobe failed: Invalid data/) })
+  })
+
+  it("runFfmpegCapture carries the same flags, beside the full stderr", async () => {
+    execFileOnce("", Object.assign(new Error("Command failed"), { killed: true }) as NodeJS.ErrnoException, "size=1kB")
+    await expect(runFfmpegCapture(["-i", "x"])).rejects.toMatchObject({ killed: true, timedOut: true, stderr: "size=1kB" })
+    execFileOnce("", new Error("exit 1") as NodeJS.ErrnoException, "Invalid data found when processing input")
+    await expect(runFfmpegCapture(["-i", "x"])).rejects.toMatchObject({ killed: false, timedOut: false, stderr: "Invalid data found when processing input" })
   })
 })
 

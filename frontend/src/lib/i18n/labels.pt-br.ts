@@ -764,6 +764,7 @@ const MODEL_DESCRIPTIONS_PT_BR: Record<string, string> = {
   "Previous-gen Opus, long-horizon work": "Opus da geração anterior, tarefas longas",
   "Pro Seedream image-to-image, multi-reference edits": "Seedream Pro, imagem para imagem, edições com várias referências",
   "Prompt-directed talking avatar, 720p–1080p, premium": "Avatar falante dirigido por prompt, 720p–1080p, premium",
+  "Voice-driven talking avatar, 720p, up to 5 min, billed per second": "Avatar falante guiado pela voz, 720p, até 5 min, cobrado por segundo",
   "Pushes creative boundaries for bolder, more distinctive musical expression.": "Amplia os limites criativos para uma expressão musical mais ousada e marcante.",
   "Remove background, transparent PNG output": "Remoção de fundo, saída em PNG transparente",
   "Replace subjects with motion": "Substitui personagens mantendo o movimento",

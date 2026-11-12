@@ -1405,7 +1405,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .min(0.1)
           .max(MAX_LIP_SYNC_AUDIO_SEC)
           .optional()
-          .describe("Length of the audio in seconds. Models billed by the second reserve and charge by this length; when it is left out, the audio is measured first."),
+          .describe("Length of the audio in seconds. Models billed by the second reserve and charge by this length; when it is left out, the audio is measured first. omnihuman-2-0 always measures the audio itself."),
         prompt: z
           .string()
           .max(500)
@@ -1425,7 +1425,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Resolution lever. infinitalk: 480p|720p. seedance-2(-fast): 480p|720p|1080p. " +
-            "omnihuman-1-5: 720p|1080p (default 1080p). Other models ignore this.",
+            "omnihuman-1-5: 720p|1080p (default 1080p). omnihuman-2-0 is always 720p. Other models ignore this.",
           ),
         seed: z
           .number()

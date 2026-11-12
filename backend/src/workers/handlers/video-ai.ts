@@ -887,6 +887,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement,
     syncMode, temperature, activeSpeaker,
     mode, separateVocal, openScenedet, alignAudio, alignAudioReverse, templStartSeconds,
+    lipSyncBilledSeconds,
   } = job.data as {
     jobId: string
     imageUrl?: string
@@ -922,6 +923,8 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     alignAudio?: boolean
     alignAudioReverse?: boolean
     templStartSeconds?: number
+    // A per-second-rate model (OmniHuman 2.0): the seconds the run was held for.
+    lipSyncBilledSeconds?: number
   }
 
   const resolvedProvider = provider ?? LIP_SYNC_DEFAULT_PROVIDER
@@ -1058,7 +1061,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       resolution,
       audioDurationSec,
       { onTaskCreated: lipSyncOnTaskCreated },
-      { fastMode, seed },
+      { fastMode, seed, ...(lipSyncBilledSeconds !== undefined ? { billedSeconds: lipSyncBilledSeconds } : {}) },
     )
     resultUrl = result.url
     resultCost = result.cost

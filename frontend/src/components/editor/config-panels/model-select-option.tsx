@@ -12,6 +12,7 @@ export function ModelSelectOption({
   desc,
   tooltip,
   perSecond,
+  perSecondCreditId,
   creditId,
   badge: badgeOverride,
 }: {
@@ -29,24 +30,29 @@ export function ModelSelectOption({
    *  (durations / resolutions / ratios) without forcing the user to re-read
    *  the same marketing copy in two places. */
   tooltip?: string
-  /** Opt-in: this provider bills per second (per-second lip-sync). Show a
-   *  "≈N CR/s" rate (from the `:15s` bucket ÷15) instead of the bare ceiling,
-   *  which would otherwise read as an alarming flat price. */
+  /** Opt-in: this provider bills per second, its 15-second price at
+   *  `<id>:15s` (Video Depth). Shorthand for `perSecondCreditId={`${id}:15s`}`. */
   perSecond?: boolean
+  /** Opt-in: this provider bills per second of its audio (lip-sync). The id
+   *  whose price is a 15-second run — a bucketed model's `:15s` row, a
+   *  per-second-rate model's 15-second quote (`lipSyncFifteenSecondCreditId`).
+   *  Shows a "≈N CR/s" rate (÷15) instead of the bare ceiling, which would
+   *  otherwise read as an alarming flat price. */
+  perSecondCreditId?: string
   /** A badge the caller priced itself, shown instead of this row's own price
    *  (a Choose Best judge's metered estimate, `≈N CR`). Unset: priced as above. */
   badge?: string
 }) {
-  // Both hooks run unconditionally (Rules of Hooks). When not per-second the
-  // second call resolves the same id as the first (cached, no extra fetch).
+  // A per-second row is priced by its 15-second id alone: a per-second-rate
+  // model has no row of its own id to look up.
   const localizeDesc = useLocalizeModelDescription()
   const priceId = creditId ?? value
-  const baseCredits = useModelCredits(priceId)
-  const perSecondCredits = useModelCredits(perSecond ? `${priceId}:15s` : priceId)
+  const fifteenSecondId = perSecondCreditId ?? (perSecond ? `${priceId}:15s` : undefined)
+  const credits = useModelCredits(fifteenSecondId ?? priceId)
   const range = useModelCreditRange(priceId)
-  const badge = badgeOverride ?? (perSecond
-    ? formatPerSecondCreditBadge(perSecondCredits)
-    : formatCreditBadge(priceId, baseCredits, range))
+  const badge = badgeOverride ?? (fifteenSecondId !== undefined
+    ? formatPerSecondCreditBadge(credits)
+    : formatCreditBadge(priceId, credits, range))
 
   return (
     <SelectItemWithMeta

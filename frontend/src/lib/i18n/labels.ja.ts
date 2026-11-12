@@ -764,6 +764,7 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Previous-gen Opus, long-horizon work": "前世代の Opus、長期的なタスク向け",
   "Pro Seedream image-to-image, multi-reference edits": "Pro 版 Seedream の画像から画像、複数リファレンスによる編集",
   "Prompt-directed talking avatar, 720p–1080p, premium": "プロンプトで演出する話すアバター、720p〜1080p、プレミアム",
+  "Voice-driven talking avatar, 720p, up to 5 min, billed per second": "音声で動く話すアバター、720p、最長5分、秒単位の課金",
   "Pushes creative boundaries for bolder, more distinctive musical expression.": "創造性の限界を押し広げ、より大胆で個性的な音楽表現に。",
   "Remove background, transparent PNG output": "背景を削除し、透過 PNG で出力",
   "Replace subjects with motion": "動きを保ったまま被写体を置き換え",

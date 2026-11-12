@@ -764,6 +764,7 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "Previous-gen Opus, long-horizon work": "이전 세대 Opus, 장기 작업용",
   "Pro Seedream image-to-image, multi-reference edits": "Pro Seedream 이미지→이미지 변환, 다중 레퍼런스 편집",
   "Prompt-directed talking avatar, 720p–1080p, premium": "프롬프트로 연출하는 말하는 아바타, 720p–1080p, 프리미엄",
+  "Voice-driven talking avatar, 720p, up to 5 min, billed per second": "음성으로 움직이는 말하는 아바타, 720p, 최대 5분, 초 단위 과금",
   "Pushes creative boundaries for bolder, more distinctive musical expression.": "창의성의 한계를 넓혀 더 과감하고 개성 있는 음악 표현.",
   "Remove background, transparent PNG output": "배경 제거, 투명 PNG 출력",
   "Replace subjects with motion": "모션을 유지하며 피사체 교체",

@@ -534,11 +534,14 @@ export async function runFfmpegCapture(
           // Some filters (e.g. `-f null -`) exit non-zero after writing useful
           // stderr; let the caller decide whether to parse anyway — so the FULL
           // stderr stays on the error object even though the message carries
-          // only its tail.
+          // only its tail. Flagged like `runFfmpeg`'s rejection, so a launch
+          // that was stopped (`killed`, `timedOut`) is told apart from ffmpeg
+          // refusing its input.
           reject(
             Object.assign(new Error(ffmpegFailureMessage(stderr, error.message)), {
               stdout,
               stderr,
+              ...execFailureFlags(error),
             }),
           )
         } else {
@@ -683,6 +686,24 @@ export function runFfprobe(args: readonly string[], opts: { readonly timeoutMs?:
         reject(Object.assign(new Error(`ffprobe failed: ${stderr || error.message}`), execFailureFlags(error)))
       } else {
         resolve(stdout)
+      }
+    })
+  })
+}
+
+/**
+ * Same as `runFfprobe`, but resolves BOTH stdout and stderr — for a caller
+ * that reads ffprobe's warnings (e.g. "Estimating duration from bitrate").
+ * Same watchdog, same rejection (`killed` / `timedOut` flags).
+ */
+export function runFfprobeCapture(args: readonly string[], opts?: { timeoutMs?: number }): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const timeout = Math.min(FFPROBE_TIMEOUT_MS, opts?.timeoutMs ?? FFPROBE_TIMEOUT_MS)
+    execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout }, (error, stdout, stderr) => {
+      if (error) {
+        reject(Object.assign(new Error(`ffprobe failed: ${stderr || error.message}`), execFailureFlags(error)))
+      } else {
+        resolve({ stdout, stderr })
       }
     })
   })

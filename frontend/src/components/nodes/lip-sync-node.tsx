@@ -29,7 +29,9 @@ import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { LipSyncData, GeneratedResult } from "@/types/nodes"
 import { VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS } from "@nodaro/shared/models"
 import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
-import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared/credits"
+import { buildLipSyncCreditId, isPerSecondLipSyncProvider, lipSyncAudioRateOf } from "@nodaro/shared/credits"
+import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
+import { useLipSyncQuoteIsEstimate, useLipSyncQuotedSeconds } from "@/hooks/use-lip-sync-quote"
 import { probeAudioDuration } from "@/lib/audio-duration"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 
@@ -148,6 +150,9 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
 
   const lipSyncProvider = nodeData.provider ?? "kling-avatar"
   const creditModelId = useMemo(() => {
+    // A per-second-rate model has no row of its own id: its one-second row (priced below as the whole run).
+    const rate = lipSyncAudioRateOf(lipSyncProvider)
+    if (rate) return rate.rateId
     if (lipSyncProvider === "infinitalk") return `infinitalk:${nodeData.resolution ?? "720p"}`
     if (isPerSecondLipSyncProvider(lipSyncProvider)) {
       // With a probed duration, show the accurate bucket. BEFORE audio is wired
@@ -160,7 +165,15 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
     }
     return lipSyncProvider
   }, [lipSyncProvider, nodeData.resolution, nodeData.audioDurationSec])
-  const credits = useModelCredits(creditModelId, lipSyncProvider === "kling-avatar" ? 28 : 42)
+  const bucketCredits = useModelCredits(creditModelId, lipSyncProvider === "kling-avatar" ? 28 : 42)
+  // A model charged per second of its audio (OmniHuman 2.0): the whole run's
+  // price for the billed seconds (`<rate>:<N>u`, marked up once, as the run is
+  // charged) — the reading the Run button, the confirm and the workflow badge
+  // share. Until the audio's length is known it quotes 15 s, shown as `≈`.
+  const audioRate = lipSyncAudioRateOf(lipSyncProvider)
+  const rateCredits = useUnitQuoteCredits(audioRate?.rateId, useLipSyncQuotedSeconds(id), 35)
+  const quoteIsEstimate = useLipSyncQuoteIsEstimate(id)
+  const credits = audioRate ? rateCredits : bucketCredits
 
   // Get all connected nodes to this node (deduplicated by node ID). Reads
   // live arrays from getState(); memoized on the connected-source fingerprint.
@@ -346,6 +359,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
       icon={<Users className="h-4 w-4" />}
       category="ai"
       credits={credits}
+      creditsEstimate={quoteIsEstimate}
       selected={selected}
       isRunning={status === "running"}
       {...videoNodeSizing(mediaAspectRatio)}
@@ -389,7 +403,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       topToolbarContent={
-                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+                  <NodeQuickStrip nodeId={id} credits={credits} creditsEstimate={quoteIsEstimate} isRunning={status === "running"} />
       }
       handles={[
         { id: "audio", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

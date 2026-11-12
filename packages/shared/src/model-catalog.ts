@@ -3669,6 +3669,25 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "omnihuman-1-5:60s", credits: 4050 },
     ],
   },
+  // A different model from 1.5, offered beside it (decided 2026-11-11): one
+  // image, 4 to 300 seconds of audio, 720p output, an optional prompt. It has
+  // none of 1.5's levers — no speaker mask, no resolution, no fast mode, no
+  // seed — so it declares no `resolutions` (`normalizeModelInput` drops one).
+  // Charged per second of its audio at one rate (LIP_SYNC_AUDIO_RATES).
+  "omnihuman-2-0": {
+    id: "omnihuman-2-0",
+    kind: "video",
+    modes: ["lip-sync"] as const,
+    family: "Bytedance",
+    maker: "bytedance",
+    label: "OmniHuman 2.0",
+    series: "OmniHuman",
+    description: "Talking avatar from one still image + audio, driven by the voice with an optional prompt for the scene, motion and camera. 720p, 4 seconds to 5 minutes, charged per second of audio.",
+    useCases: ["lip-sync", "talking-head", "long-form"],
+    pricing: [
+      { identifier: "omnihuman-2-0:per-second", credits: 35, note: "per second of audio, rounded up; at least 4 seconds" },
+    ],
+  },
   "hailuo-avatar": {
     id: "hailuo-avatar",
     kind: "video",

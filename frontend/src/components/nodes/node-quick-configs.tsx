@@ -72,6 +72,7 @@ import {
   SUNO_SEPARATE_TYPES,
   TOPAZ_VIDEO_DEFAULT_RESOLUTION,
   TOPAZ_VIDEO_RESOLUTIONS,
+  lipSyncLeverClearPatch,
   NODARO_VIDEO_UPSCALE_PROVIDER,
 } from "@nodaro/shared/models"
 import { nodaroVideoUpscaleTierOf } from "@nodaro/render-rules"
@@ -420,6 +421,16 @@ const providerControl = (
   icon: Sparkles,
   options: toOptions(list),
   ...(runsAs !== undefined ? { defaultValue: runsAs } : {}),
+})
+
+/** Lip Sync model dropdown. The user's choice also clears the levers the new
+ *  model does not take (OmniHuman 2.0: a resolution, fast mode or seed left
+ *  from 1.5) — the shared table the config panel's dropdown and fail-safe
+ *  effect clear by (`lipSyncLeverClearPatch`). The fail-safe snap calls
+ *  `write` without data and so writes the provider alone. */
+const lipSyncProviderControl = (): QuickConfigControl => ({
+  ...providerControl(LIP_SYNC_MODELS, "kling-avatar"),
+  write: (value, data) => ({ provider: value, ...lipSyncLeverClearPatch(value, data ?? {}) }),
 })
 
 /** Upscale Image model dropdown. Switching to a model that does not take the
@@ -1279,7 +1290,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     },
   ],
   "extend-video": [extendVideoProviderControl()],
-  "lip-sync": [providerControl(LIP_SYNC_MODELS, "kling-avatar")],
+  "lip-sync": [lipSyncProviderControl()],
   "text-to-speech": [ttsProviderControl()],
   "motion-transfer": [providerControl(MOTION_TRANSFER_MODELS)],
   // ── Suno (model: SunoModel) ──

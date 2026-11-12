@@ -114,6 +114,7 @@ import {
   motionTransferResolution,
   buildLipSyncCreditId,
   isPerSecondLipSyncProvider,
+  lipSyncAudioRateOf,
   resolveAiAvatarCreditId,
   resolveSwitchXCreditId,
   resolveCinematicCreditId,
@@ -182,6 +183,7 @@ import {
   isTopazVideoResolution,
   clampTopazVideoFps,
   audioSoundtrackActive,
+  withoutLipSyncLeversNotTaken,
   NODARO_VIDEO_UPSCALE_PROVIDER,
 } from "@nodaro/shared/models"
 import {
@@ -5573,6 +5575,32 @@ function buildPayloadOf(
 
     case "lip-sync": {
       const provider = (data.provider as string) ?? "kling-avatar"
+      // A model charged per second of its audio at a rate (OmniHuman 2.0)
+      // reserves on its one-second row; the run measures the audio before the
+      // hold (`stampLipSyncInputs`) and multiplies it by the billed seconds
+      // (`computeLipSyncRateCreditOverride`). It takes none of the levers it
+      // does not take — a resolution, fast mode or seed a node kept from
+      // another model is dropped here, as the route drops it.
+      const audioRate = lipSyncAudioRateOf(provider)
+      if (audioRate) {
+        const levers = withoutLipSyncLeversNotTaken(provider, { resolution: data.resolution, seed: data.seed, fastMode: data.fastMode })
+        return {
+          jobName: "lip-sync",
+          queueName: "video-generation",
+          modelIdentifier: audioRate.rateId,
+          payload: {
+            jobId,
+            imageUrl: resolvedInputs.imageUrl || data.imageUrl,
+            videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+            audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+            prompt: applyPromptAffixes((resolvedInputs.prompt || data.prompt) as string | undefined, readPromptAffixes(data), refMap) || "A person talking naturally",
+            provider,
+            resolution: levers.resolution,
+            seed: levers.seed,
+            usageLogId,
+          },
+        }
+      }
       // infinitalk is tier-priced by resolution. Per-second providers
       // (kling-avatar(-pro), heygen-lipsync-precision, lipsync-2-pro) bucket by
       // the persisted audio duration when it's known — mirroring the route's

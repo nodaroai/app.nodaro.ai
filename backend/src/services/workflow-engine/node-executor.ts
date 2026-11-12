@@ -9,7 +9,7 @@ import { speakerFramesCreditOverride } from "../../lib/speaker-frames-plan.js"
 import { isPreviewRender } from "../../lib/preview-render.js"
 import { LLM_NODE_MAX_TOKENS_DEFAULTS } from "../../lib/llm-node-output-cap.js"
 import { assertCanvasExecutionAllowed } from "@nodaro/shared/pipeline"
-import { imageOverlayCredits } from "@nodaro/shared/credits"
+import { imageOverlayCredits, lipSyncAudioRateOf } from "@nodaro/shared/credits"
 import {
   applySettingsInput,
   SETTINGS_INPUT_CONSUMERS,
@@ -123,6 +123,7 @@ import { stampVideoMaskLength, videoMaskReserveId } from "../../lib/video-mask-l
 import { maskCompositeBaseCredits, maskCompositeReserveUnits, stampMaskCompositeLength } from "../../lib/mask-composite-length.js"
 import { stampVideoOverlayLength, videoOverlayBaseCredits, videoOverlayReserveId, videoOverlayReserveUnits } from "../../lib/video-overlay-length.js"
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
+import { lipSyncRateBaseCredits, stampLipSyncInputs, stampedLipSyncBilledSeconds } from "../../lib/lip-sync-inputs.js"
 import { stampTopazVideoUpscale, topazVideoStampedBaseCredits } from "../../lib/topaz-video-plan.js"
 import { isNodaroVideoUpscaleJob, nodaroVideoUpscaleReserveId, nodaroVideoUpscaleStampedBaseCredits, stampNodaroVideoUpscale } from "../../lib/nodaro-video-upscale-plan.js"
 import { stampTopazImageSize, topazImageStampedBaseCredits } from "../../lib/topaz-image-size.js"
@@ -1692,6 +1693,28 @@ export async function computeLtxExtendCreditOverride(
 }
 
 /**
+ * A lip-sync model charged per second of its audio at a rate (OmniHuman 2.0)
+ * is priced at the rate's row × the seconds `stampLipSyncInputs` measured —
+ * what the route's guard charges for the same audio (`lipSyncRateBaseCredits`)
+ * — instead of the one-second row alone. Undefined for every other job. A
+ * rate run that reached here unmeasured is refused, never priced at a guess.
+ */
+export async function computeLipSyncRateCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  if (jobName !== "lip-sync") return undefined
+  const rate = lipSyncAudioRateOf(payload.provider)
+  if (!rate) return undefined
+  const billed = stampedLipSyncBilledSeconds(payload)
+  if (billed === undefined) throw new Error("lip-sync: a per-second-rate run reached its reservation without its measured audio")
+  const base = await lipSyncRateBaseCredits(rate, billed)
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
+}
+
+/**
  * LTX 2.3 Pro Retake is priced per second of the replaced window. The workflow
  * run reserves what the route's guard charges for the same request — the
  * per-second row times the window the payload sends (lib/ltx-retake-credits.ts)
@@ -2427,6 +2450,19 @@ async function executeWorkerNode(
     err.errorCode = sfxRefusal.code
     throw err
   }
+  // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): the
+  // route's own rule — measure the audio and the image, refuse what the model
+  // cannot take, stamp the measured length and the billed seconds — before
+  // input_data is written and before anything is reserved. Every edition: the
+  // length a node carried (a browser's reading, maybe of an older clip) is
+  // never what the run is priced on. A refusal leaves no jobs row.
+  const lipSyncRefusal = await stampLipSyncInputs(jobName, payload, ctx.userId)
+  if (lipSyncRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(lipSyncRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = lipSyncRefusal.code
+    throw err
+  }
   // Video Mask: the same — measure the clip by the route's rule and stamp the
   // price row before input_data is written; a clip the route refuses (unreadable,
   // over the cap) leaves no jobs row.
@@ -2745,6 +2781,7 @@ async function executeWorkerNode(
         (await computeMaskCompositeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeVideoOverlayCreditOverride(jobName, payload)) ??
         (await computeLtxExtendCreditOverride(jobName, payload, modelIdentifier)) ??
+        (await computeLipSyncRateCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeGenerateVideoProCreditOverride(payload, modelIdentifier))?.override ??
         (await computeEditVideoProCreditOverride(payload, modelIdentifier))?.override ??
