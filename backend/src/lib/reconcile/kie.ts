@@ -39,7 +39,7 @@ import {
   type FinalizeClaimant,
 } from "../job-finalize.js"
 import { loopTrimAddonForReconcile } from "./loop-trim-refund.js"
-import { measureSeedance2RefVideoBaseCredits } from "../seedance2-ref-video-settle.js"
+import { measureSeedance2Settle } from "../seedance2-ref-video-settle.js"
 import { gptImage26AutoSettledBase } from "../gpt-image-2-6-settle.js"
 import { kieTaskCreditsConsumed } from "../../providers/kie/image-cost.js"
 import { isGptImage26AutoRun } from "@nodaro/shared/model-catalog"
@@ -550,17 +550,24 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     // reservation's probe of them); `undefined` = not such a run, or
     // unmeasurable → the reservation is committed as before.
     const input = (row.input_data ?? {}) as Record<string, unknown>
-    const meteredBaseCredits = await gptImage26AutoSettledBase(autoQualityCreditsOf(row, result.kieCredits)) ?? await measureSeedance2RefVideoBaseCredits({
-      provider: typeof input.provider === "string" ? input.provider : undefined,
-      resolution: typeof input.resolution === "string" ? input.resolution : undefined,
-      outputUrl: result.url,
-      referenceVideoUrls: input.referenceVideoUrls,
-      refVideoDurationsSec: input.refVideoDurationsSec,
-      duration: input.duration,
-      // Recorded only when a type was declared: the hold the reservation sized.
-      referenceTaskType: input.referenceTaskType,
-      jobId: row.id,
-    })
+    const gptImageBase = await gptImage26AutoSettledBase(autoQualityCreditsOf(row, result.kieCredits))
+    // One measurement of the recovered clip: the settlement's credits and, for
+    // a run that records its length, that length (finalize records it from
+    // this instead of probing the clip again).
+    const settle = gptImageBase === undefined
+      ? await measureSeedance2Settle({
+        provider: typeof input.provider === "string" ? input.provider : undefined,
+        resolution: typeof input.resolution === "string" ? input.resolution : undefined,
+        outputUrl: result.url,
+        referenceVideoUrls: input.referenceVideoUrls,
+        refVideoDurationsSec: input.refVideoDurationsSec,
+        duration: input.duration,
+        // Recorded only when a type was declared: the hold the reservation sized.
+        referenceTaskType: input.referenceTaskType,
+        jobId: row.id,
+      })
+      : undefined
+    const meteredBaseCredits = gptImageBase ?? settle?.baseCredits
     // A recovered clip is the RAW take, so a Seedance draft records its length
     // here exactly as the worker would (the 1080p finalize bills it).
     const draftRenderSec = await measureSeedanceDraftRenderSec({
@@ -578,6 +585,8 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     // catch below, never a redraw finalized as the result).
     const composite = await recoveredMaskComposite(row, result.url)
 
+    // The measured clip is the one stored, unless a draft finalize re-muxed it.
+    const deliveredVideoSec = mediaUrl === undefined ? settle?.deliveredSec : undefined
     await finalizeJobWithMedia({
       jobId: row.id,
       jobType: row.job_type,
@@ -585,6 +594,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
       ...(mediaUrl !== undefined && { mediaUrl }),
       ...(loopTrimAddon > 0 && { loopTrimAddonRefundCredits: loopTrimAddon }),
       ...(meteredBaseCredits !== undefined && { meteredBaseCredits }),
+      ...(deliveredVideoSec !== undefined && { deliveredVideoSec }),
       result: {
         url: composite?.url ?? result.url,
         ...(composite ? {} : { extraUrls: result.extraUrls }),

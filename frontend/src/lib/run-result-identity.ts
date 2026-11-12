@@ -3,7 +3,8 @@
  * thumbnail and, for a render, what the render stamped — `quality` ("proxy" is
  * a Preview), `clipKey` (the plan clip it cut), `planBasis` (the plan value it
  * cut), `renderBasis` (its own settings) and `duration` (the cut's length, what
- * a length-priced step after it is charged by). Every lane that lands a take
+ * a length-priced step after it is charged by; a generated video's real length
+ * when its run recorded one). Every lane that lands a take
  * writes it — the single-node run, the browser fan-out, a server run (live and
  * at reopen) and the job restores — so the Preview label and the latest-batch
  * reader (@nodaro/shared savedRenderBatch) see the same take whichever lane
@@ -13,7 +14,7 @@
  * where `quality` is the node's own setting.
  */
 import { isRenderNodeType, renderResultStamp, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes"
-import { isUseCaseNodeType, usecaseListsItsResult } from "@nodaro/render-rules"
+import { isUseCaseNodeType, LENGTH_RECORDING_VIDEO_NODE_TYPES, usecaseListsItsResult } from "@nodaro/render-rules"
 
 export interface RunResultIdentity {
   readonly thumbnailUrl?: string
@@ -21,27 +22,39 @@ export interface RunResultIdentity {
   readonly clipKey?: string
   readonly planBasis?: string
   readonly renderBasis?: string
-  /** A render's cut length (a use-case node's episode length), in seconds — what the step after it is charged by (`runForwardedVideoLengthSec`). */
+  /** A render's cut length (a use-case node's episode length; a generated video's real length, when its run recorded one), in seconds — what the step after it is charged by (`runForwardedVideoLengthSec`). */
   readonly duration?: number
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
 
+/**
+ * The length a job recorded (`durationSec`, in seconds) as a result row's
+ * `duration` — the length a Trim / Loop / Combine Videos after the take is
+ * charged by. Nothing when it recorded none (a fixed-length generation, an
+ * older job). On the RESULT only: a node's own `duration` is its setting.
+ */
+export function recordedVideoLengthField(output: unknown): { readonly duration?: number } {
+  const sec = output && typeof output === "object" ? (output as { durationSec?: unknown }).durationSec : undefined
+  return typeof sec === "number" && Number.isFinite(sec) && sec > 0 ? { duration: sec } : {}
+}
+
 /** The identity of a take landed from a job's `output_data` or a run's node output. */
 export function runResultIdentity(nodeType: string | null | undefined, output: unknown): RunResultIdentity {
   const o = (output && typeof output === "object" ? output : {}) as Record<string, unknown>
   const thumbnailUrl = str(o.thumbnailUrl)
-  const durationSec = typeof o.durationSec === "number" && Number.isFinite(o.durationSec) && o.durationSec > 0 ? o.durationSec : undefined
   return {
     ...(thumbnailUrl ? { thumbnailUrl } : {}),
     // Only a render's stamps are a render's — and a use-case node's (Tighten
     // Episode): its take is its render's, "proxy" while it waits on review,
     // stamped with that render's plan and settings bases.
     ...(isRenderNodeType(nodeType) || isUseCaseNodeType(nodeType) ? renderResultStamp(o) : {}),
-    // A render records the length of its cut, a use-case node its episode's;
+    // A render records the length of its cut, a use-case node its episode's,
+    // and a video generation node the length its video really is when its run
+    // followed its own length (an automatic length, a Seedance Edit / Extend);
     // on the result row it is the length a Trim / Loop / Combine Videos after
     // it is charged by.
-    ...((isRenderNodeType(nodeType) || isUseCaseNodeType(nodeType)) && durationSec !== undefined ? { duration: durationSec } : {}),
+    ...(isRenderNodeType(nodeType) || isUseCaseNodeType(nodeType) || LENGTH_RECORDING_VIDEO_NODE_TYPES.has(nodeType ?? "") ? recordedVideoLengthField(o) : {}),
   }
 }
 

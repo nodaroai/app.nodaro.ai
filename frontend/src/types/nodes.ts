@@ -2123,6 +2123,14 @@ export type ImageToVideoData = PromptAffixFields & {
    *  draft whose same take Video Upscale → "Seedance 2.5 HD (from draft)"
    *  re-renders at 1080p. Forces 480p; ignored by every other model. */
   draft?: boolean
+  /** Seedance 2.5 reference task type: what the reference video is for —
+   *  `reference` (it guides a new clip), `edit` (the clip is an edit of it, in
+   *  its own shape and length) or `extend` (the clip continues it). Auto is the
+   *  key being absent: nothing is declared and the model guesses from the
+   *  prompt. Only Seedance 2.5 reads it; a workflow run and a single run resolve
+   *  it by the same rule (a draft, or media that does not qualify, declares
+   *  nothing). */
+  referenceTaskType?: "reference" | "edit" | "extend"
   resolution?: string
   grokMode?: "fun" | "normal" | "spicy"
   videoSize?: "standard" | "high"
@@ -2293,6 +2301,14 @@ export type TextToVideoData = PromptAffixFields & {
    *  draft whose same take Video Upscale → "Seedance 2.5 HD (from draft)"
    *  re-renders at 1080p. Forces 480p; ignored by every other model. */
   draft?: boolean
+  /** Seedance 2.5 reference task type: what the reference video is for —
+   *  `reference` (it guides a new clip), `edit` (the clip is an edit of it, in
+   *  its own shape and length) or `extend` (the clip continues it). Auto is the
+   *  key being absent: nothing is declared and the model guesses from the
+   *  prompt. Only Seedance 2.5 reads it; a workflow run and a single run resolve
+   *  it by the same rule (a draft, or media that does not qualify, declares
+   *  nothing). */
+  referenceTaskType?: "reference" | "edit" | "extend"
   seed?: number                      // VEO 3.1: reproducible generation (10000-99999)
   // VEO 3.x: opt out of KIE's auto-translate-to-English. Same semantics
   // as on ImageToVideoData.

@@ -29,12 +29,16 @@ const settle = vi.hoisted(() => ({
   refSeconds: vi.fn(async (_args: Record<string, unknown>) => ({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 30 })),
   actual: vi.fn(async (_args: Record<string, unknown>, _measured?: unknown) => 7193),
   autoSeconds: vi.fn(async (_args: Record<string, unknown>) => 9),
+  autoMeasured: {} as { measuredSec?: number },
   auto: vi.fn(async (_args: Record<string, unknown>, _measuredSec?: unknown) => 311),
 }))
 vi.mock("../../ee/billing/seedance2-ref-video-credits.js", () => ({
   seedance2RefVideoActualSeconds: settle.refSeconds,
   seedance2RefVideoActualBaseCredits: settle.actual,
   seedance2AutoDurationActualSeconds: settle.autoSeconds,
+  // The one measurement of an Auto run: its billed seconds (and, when a case
+  // sets one, its unrounded length).
+  seedance2AutoDurationMeasure: async (a: Record<string, unknown>) => ({ outputSec: await settle.autoSeconds(a), ...settle.autoMeasured }),
   seedance2AutoDurationActualBaseCredits: settle.auto,
 }))
 
@@ -58,6 +62,7 @@ beforeEach(() => {
   settle.autoSeconds.mockResolvedValue(9)
   settle.auto.mockClear()
   settle.auto.mockResolvedValue(311)
+  settle.autoMeasured = {}
   edition.hasCredits.value = true
 })
 
@@ -247,5 +252,19 @@ describe("measureSeedance2Settle", () => {
     await expect(measureSeedance2Settle(args)).resolves.toEqual(NOT_MEASURED)
     settle.autoSeconds.mockRejectedValueOnce(new Error("ffprobe failed"))
     await expect(measureSeedance2Settle({ ...args, referenceVideoUrls: undefined, duration: -1 })).resolves.toEqual(NOT_MEASURED)
+  })
+
+  it("the delivered clip's unrounded length rides along, for the run to record (one measurement, never a second probe)", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    // A reference run: the measurement's own unrounded length.
+    settle.refSeconds.mockResolvedValue({ ...REF_SECONDS, measuredSec: 12.04 } as typeof REF_SECONDS)
+    await expect(measureSeedance2Settle(args)).resolves.toStrictEqual({ baseCredits: 7193, seconds: { outputSec: 12, inputSec: 30 }, deliveredSec: 12.04 })
+    // An Auto run with nothing wired: billed by the whole second, recorded as measured.
+    settle.autoMeasured = { measuredSec: 8.62 }
+    const auto = { ...args, referenceVideoUrls: undefined, duration: -1 }
+    await expect(measureSeedance2Settle(auto)).resolves.toStrictEqual({ baseCredits: 311, seconds: { outputSec: 9, inputSec: 0 }, deliveredSec: 8.62 })
+    // Kept when only the pricing failed, like the seconds.
+    settle.auto.mockRejectedValueOnce(new Error("price not configured"))
+    await expect(measureSeedance2Settle(auto)).resolves.toStrictEqual({ baseCredits: undefined, seconds: { outputSec: 9, inputSec: 0 }, deliveredSec: 8.62 })
   })
 })

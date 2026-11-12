@@ -53,11 +53,14 @@ interface RefVideoEstimateRequest {
   draft: boolean
   /**
    * The reference task type the run's payload requests, as the workflow
-   * builder sets it (`payload-builder.ts`): Video to Video's Seedance edit lane
-   * requests `edit`; a generation node's payload carries none, so neither does
-   * its estimate. The quote resolves it on the clips, as the run does.
+   * builder sets it (`payload-builder.ts`): a generation node's payload
+   * requests the node's own setting as stored, and Video to Video's Seedance
+   * edit lane requests `edit` (its request is already in the edit's shape, so
+   * that declaration moves nothing priced). Unvalidated: the quote declares it
+   * on the clips by the run's own rule and prices the length the run is sent
+   * at, with the resolved type sizing the hold.
    */
-  referenceTaskType: typeof SEEDANCE_VIDEO_EDIT_TASK_TYPE | undefined
+  referenceTaskType: unknown
   /** One entry per clip wire: the upstream node, when the estimate has it. */
   clipSources: ReadonlyArray<EstimateNode | undefined>
   /**
@@ -108,7 +111,7 @@ function refVideoEstimateRequest(
     provider = sel.provider
     resolution = data.resolution as string | undefined
     duration = sel.duration
-    referenceTaskType = undefined
+    referenceTaskType = data.referenceTaskType
   } else {
     provider = (data.provider as string | undefined) ?? ""
     if (!isSeedanceVideoEditProvider(provider)) return undefined

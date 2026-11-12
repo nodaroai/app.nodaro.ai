@@ -28,6 +28,7 @@ import {
   billsReferenceVideoSeconds,
   isGeminiOmniPerSecondProvider,
   isSeedanceVideoEditProvider,
+  listedSeedanceTaskType,
 } from "@nodaro/shared/models"
 import {
   referenceModalityForHandle,
@@ -113,11 +114,20 @@ export function seedanceRefQuoteRequest(
     ? (inputs.referenceAudioUrls ?? []).find((u): u is string => typeof u === "string" && u.length > 0)
     : undefined
 
+  // Seedance 2.5's reference task type: the server resolves it by the run's
+  // own rule (it measures the clips, an unknown one at the worst case), so the
+  // request carries only the node's value — and only one the model takes.
+  // Video to Video's edit lane sends none: its request is already the edit's
+  // shape, so a declaration moves nothing priced (the server's estimate of
+  // that lane requests `edit`, as its run does, and prices the same).
+  const taskType = isGeneration ? listedSeedanceTaskType(provider, data.referenceTaskType) : undefined
+
   return {
     provider,
     ...(resolution !== undefined ? { resolution } : {}),
     ...(duration !== undefined ? { duration } : {}),
     ...(data.draft === true ? { draft: true } : {}),
+    ...(taskType ? { referenceTaskType: taskType } : {}),
     referenceVideoUrls: urls,
     ...(unknown > 0 ? { unknownReferenceVideos: unknown } : {}),
     ...(soundtrack ? (soundtrackAudioUrl ? { soundtrackAudioUrl } : { unknownSoundtrack: true }) : {}),

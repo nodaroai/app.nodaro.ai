@@ -128,7 +128,7 @@ import {
   withProgressRamp,
   type HandlerFn,
 } from "../shared.js"
-import { measureSeedance2RefVideoBaseCredits, measureSeedance2Settle, type Seedance2Settle } from "../../lib/seedance2-ref-video-settle.js"
+import { measureSeedance2Settle, type Seedance2Settle } from "../../lib/seedance2-ref-video-settle.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { handleAiAvatar } from "./heygen-avatar.js"
 import { handleCinematicAvatar } from "./heygen-cinematic.js"
@@ -589,6 +589,12 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
 
   const thumbUrl = await generateAndUploadThumbnail(finalVideoUrl, ctx.jobId, ctx.jobUserId)
 
+  // The settlement measured the provider's take. The stored video has its length
+  // when nothing after it changed the length: the watermark re-encode and the
+  // upload keep it, a loop cut or an audio merge may not. Otherwise finalize
+  // measures the stored file itself, if the run records a length.
+  const deliveredVideoSec = providerOutputUrl === result.url && !audioMerge ? settle.deliveredSec : undefined
+
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "image-to-video",
@@ -600,6 +606,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     extraNonProviderCredits: loopTrimAddonToCharge,
     loopTrimAddonRefundCredits: loopTrimAddonToRefund,
     meteredBaseCredits,
+    ...(deliveredVideoSec !== undefined && { deliveredVideoSec }),
     extraOutputData: {
       thumbnailUrl: thumbUrl,
       ...buildProviderMeta(result),
@@ -840,12 +847,18 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
+  // The settlement measured the provider's take: the stored video's length (the
+  // watermark re-encode and the upload keep it) unless a post-process (VEO's 4K
+  // chain or sound strip) replaced the file.
+  const deliveredVideoSec = providerOutputUrl === result.url ? settle.deliveredSec : undefined
+
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "text-to-video",
     result: recorded,
     mediaUrl: r2Url,
     meteredBaseCredits,
+    ...(deliveredVideoSec !== undefined && { deliveredVideoSec }),
     extraOutputData: {
       thumbnailUrl: thumbUrl,
       ...buildProviderMeta(result),
@@ -2088,7 +2101,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
   // delivered — before the voice mux / revoice — exactly as the unvoiced
   // handlers do. `undefined` = not such a run, or unmeasurable → the
   // reservation is committed.
-  const meteredBaseCredits = await measureSeedance2RefVideoBaseCredits({
+  const settle = await measureSeedance2Settle({
     provider,
     resolution: d.resolution,
     outputUrl: result.url,
@@ -2098,6 +2111,11 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     referenceTaskType: d.referenceTaskType,
     jobId: ctx.jobId,
   })
+  const meteredBaseCredits = settle.baseCredits
+  // That measurement is the stored video's length (the upload and its
+  // watermark keep it) only when no voice was muxed onto it; otherwise
+  // finalize measures the stored file, if the run records a length.
+  const deliveredVideoSec = voiceApplied ? undefined : settle.deliveredSec
   // Seedance DRAFT: the raw take length (before the voice mux) the finalize bills.
   const draftRenderSec = await measureSeedanceDraftRenderSec({ draft: d.draft, provider, outputUrl: result.url })
 
@@ -2113,6 +2131,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     // video provider cost and the reserved addon is refunded automatically.
     extraNonProviderCredits: voiceApplied ? audioAddon : 0,
     meteredBaseCredits,
+    ...(deliveredVideoSec !== undefined && { deliveredVideoSec }),
     extraOutputData: {
       thumbnailUrl: thumbUrl,
       voiceApplied,

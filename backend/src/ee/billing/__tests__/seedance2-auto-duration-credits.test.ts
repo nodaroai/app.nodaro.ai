@@ -17,7 +17,7 @@ vi.mock("../credits.js", async (importOriginal) => ({
 }))
 
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
-import { seedance2AutoDurationActualBaseCredits, seedance2AutoDurationActualSeconds } from "../seedance2-ref-video-credits.js"
+import { seedance2AutoDurationActualBaseCredits, seedance2AutoDurationActualSeconds, seedance2AutoDurationMeasure } from "../seedance2-ref-video-credits.js"
 
 const OUT = "https://kie.example/out.mp4"
 const pricedId = () => pricing.getModelCreditBaseCost.mock.calls.at(-1)![0]
@@ -98,5 +98,13 @@ describe("seedance2AutoDurationActualSeconds (what the settlement measures)", ()
       probe.probeMediaDuration.mockResolvedValue(bad)
       await expect(seedance2AutoDurationActualSeconds({ outputUrl: OUT })).rejects.toThrow(/unusable/)
     }
+  })
+
+  it("one probe gives both the seconds it bills and the length as measured, unrounded", async () => {
+    probe.probeMediaDuration.mockResolvedValue(12.3)
+    await expect(seedance2AutoDurationMeasure({ outputUrl: OUT })).resolves.toStrictEqual({ outputSec: 13, measuredSec: 12.3 })
+    expect(probe.probeMediaDuration).toHaveBeenCalledTimes(1)
+    probe.probeMediaDuration.mockResolvedValue(Number.NaN)
+    await expect(seedance2AutoDurationMeasure({ outputUrl: OUT })).rejects.toThrow(/unusable/)
   })
 })

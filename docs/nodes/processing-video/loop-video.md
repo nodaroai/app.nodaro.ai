@@ -42,7 +42,7 @@ Examples:
 | Loop to 30s + smart cut, lookback 16 | 30s | 77<!-- credits: loop-video@7 --> (66<!-- credits-rate: loop-video@6 --> base + 11<!-- credits-rate: loop-video --> cut) |
 | Loop to 60s + smart cut, lookback 64 | 60s | 165<!-- credits: loop-video@15 --> (132<!-- credits-rate: loop-video@12 --> base + 33<!-- credits-rate: loop-video@3 --> cut) |
 
-The Run button on the node displays the live credit estimate. When the upstream node hasn't generated yet, an 8-second fallback duration is used for the estimate.
+The Run button on the node displays the live credit estimate. A video that is not made yet counts at its node's Duration, and one made at an automatic length (or by a Seedance 2.5 Edit or Extend) at the most it can be, as the list below says. When no length is known, an 8-second fallback duration is used for the estimate. Every estimate reads the upstream video this way: the editor's, a workflow's and a published app's, the credit check before a run, and the API and MCP estimates.
 
 **The upstream length a run is charged by** (in the editor, in a workflow run, and in a published app) is the length of the video the wire hands on:
 
@@ -52,6 +52,7 @@ The Run button on the node displays the live credit estimate. When the upstream 
 - a [Tighten Episode](./tighten-episode.md#steps-after-the-node)'s episode: the length of the cut it rendered, captioned or with its music bed;
 - the output of a step whose output is exactly as long as its input and that records no length of its own (Add Captions, Resize Video, Fade Video, Transcode Video, Remove Audio; a Merge Video Audio whose tracks are all that same video): its input's length, read by these same rules. The estimate before the run reads it the same way, and also reads a step that may return less than it is given (Face Swap, Video Upscale, Social Media Format, …) at its input's length, so it never quotes less than the run is charged;
 - a list of clips on one wire (a Bundle, such as UGC Finish's finished clips): each clip at its own length;
+- a generated video made at an automatic length, or by a Seedance 2.5 Edit or Extend (on [Generate Video](../ai-video/generate-video.md#steps-after-a-video-of-automatic-length), Image to Video, Text to Video, or Video to Video's Seedance lane): the length it really is, measured when it was made (a file that reads at most a quarter second past a whole second counts as that second) and never above the longest that run could make. Until it exists, and whenever the run makes it again, the estimate counts it at that longest length, so the run never costs more than its estimate. A video whose length could not be measured, or that was made before lengths were recorded, is charged as before (its Duration, else the fallback below);
 - anything else: the length the source recorded, else its configured duration.
 
 When none of these is known, the run is charged at an 8-second fallback per clip.

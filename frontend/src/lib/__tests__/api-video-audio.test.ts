@@ -166,6 +166,28 @@ describe("generateVideo", () => {
     expect(body.attachReferenceVideoVariant).toBe("happy")
   })
 
+  it("sends referenceTaskType when given, and the body is otherwise today's", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j-tt" })
+    vi.stubGlobal("fetch", mock)
+    const opts = {
+      startFrameUrl: "http://start.png",
+      provider: "seedance-2-5",
+      aspectRatio: "16:9",
+      duration: 5,
+      referenceVideoUrls: ["http://clip.mp4"],
+    }
+
+    await generateVideo({ ...opts, referenceTaskType: "edit" })
+    await generateVideo(opts)
+
+    const [edit, today] = mock.mock.calls.map((c) => JSON.parse(c[1].body as string))
+    expect(edit).toStrictEqual({ ...today, referenceTaskType: "edit" })
+    expect(today).not.toHaveProperty("referenceTaskType")
+    // The stored ratio and length are sent as stored: the server coerces them.
+    expect(edit).toMatchObject({ aspectRatio: "16:9", duration: 5 })
+  })
+
   it("omits attachReferenceVideoVariant when not provided", async () => {
     noSession()
     const mock = mockFetchJson({ jobId: "j-noatt" })
@@ -254,6 +276,20 @@ describe("textToVideo", () => {
     expect(body.prompt).toBe("sunset")
     expect(body.provider).toBe("minimax")
     expect(body.duration).toBe(5)
+  })
+
+  it("sends referenceTaskType when given, and the body is otherwise today's", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j-tt" })
+    vi.stubGlobal("fetch", mock)
+    const opts = { duration: 5, aspectRatio: "16:9", referenceVideoUrls: ["http://clip.mp4"] }
+
+    await textToVideo("a shot", "seedance-2-5", undefined, { ...opts, referenceTaskType: "extend" })
+    await textToVideo("a shot", "seedance-2-5", undefined, opts)
+
+    const [extend, today] = mock.mock.calls.map((c) => JSON.parse(c[1].body as string))
+    expect(extend).toStrictEqual({ ...today, referenceTaskType: "extend" })
+    expect(today).not.toHaveProperty("referenceTaskType")
   })
 
   it("throws on error response", async () => {

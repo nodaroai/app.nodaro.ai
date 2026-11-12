@@ -1778,6 +1778,32 @@ describe("video-to-video", () => {
     })
   })
 
+  it("seedance-2-5: the edit request says the source clip is the video to edit, as the workflow run does", async () => {
+    // The whole options object: the edit shape, the node's levers, the clips
+    // and the declared task type (payload-builder's "video-to-video" case
+    // requests it the same way; the server declares it only for a 4–30 s clip).
+    const v2vNode = makeNode("video-to-video", { provider: "seedance-2-5", prompt: "make it black and white", v2vResolution: "720p", seed: 3 })
+    mockNodes = [v2vNode]
+    mockEdges = []
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(v2vNode as any, makeCtx())
+
+    const options = mockRunTextToVideoGeneration.mock.calls[0][4]
+    expect(options).toStrictEqual({
+      aspectRatio: "adaptive",
+      duration: -1,
+      resolution: "720p",
+      generateAudio: undefined,
+      seed: 3,
+      referenceVideoUrls: ["http://vid.mp4"],
+      referenceImageUrls: undefined,
+      referenceAudioUrls: undefined,
+      referenceTaskType: "edit",
+    })
+  })
+
   it("seedance-2-5: an already-instructed prompt is not double-prefixed", async () => {
     const v2vNode = makeNode("video-to-video", {
       provider: "seedance-2-5",
@@ -2254,6 +2280,74 @@ describe("generate-video — reference images + mode-alias dispatch", () => {
       makeCtx(),
     )
     expect(mockRunTextToVideoGeneration.mock.calls[0][3]).toBe("happyhorse")
+  })
+})
+
+describe("generate-video — Seedance 2.5 reference task type", () => {
+  // The node's "Use the reference video as" value rides the request only when
+  // the model takes it; the stored ratio and length are sent as stored (the
+  // server resolves the declaration and coerces them). Every other request is
+  // exactly today's, compared whole.
+  const CLIP = "http://cdn.example/clip.mp4"
+  const stored = { provider: "seedance-2-5", aspectRatio: "16:9", duration: 5, resolution: "720p" }
+  const ctx = makeCtx()
+
+  // Image path: a start frame + a reference video → runVideoGeneration (extras at index 24).
+  async function i2vCall(data: Record<string, unknown>): Promise<unknown[]> {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a shot", imageUrl: "http://frame.png", referenceVideoUrls: [CLIP] })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+    mockRunVideoGeneration.mockClear()
+    mockRunTextToVideoGeneration.mockClear()
+    await executeNode(makeNode("generate-video", data), ctx)
+    expect(mockRunTextToVideoGeneration).not.toHaveBeenCalled()
+    return mockRunVideoGeneration.mock.calls[0] as unknown[]
+  }
+  // Text path: a reference video, no frame → runTextToVideoGeneration (options at index 4).
+  async function t2vCall(data: Record<string, unknown>): Promise<unknown[]> {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a shot", referenceVideoUrls: [CLIP] })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    mockRunTextToVideoGeneration.mockClear()
+    mockRunVideoGeneration.mockClear()
+    await executeNode(makeNode("generate-video", data), ctx)
+    expect(mockRunVideoGeneration).not.toHaveBeenCalled()
+    return mockRunTextToVideoGeneration.mock.calls[0] as unknown[]
+  }
+  const withOption = (call: unknown[], index: number, extra: Record<string, unknown>): unknown[] =>
+    call.map((arg, i) => (i === index ? { ...(arg as Record<string, unknown>), ...extra } : arg))
+
+  it("image path: Edit sends referenceTaskType with the stored ratio and length, nothing else moves", async () => {
+    const today = await i2vCall(stored)
+    const edit = await i2vCall({ ...stored, referenceTaskType: "edit" })
+    expect(edit).toStrictEqual(withOption(today, 24, { referenceTaskType: "edit" }))
+    expect(edit[11]).toBe("16:9")
+    expect(edit[7]).toBe(5)
+    expect(today[24]).not.toHaveProperty("referenceTaskType")
+  })
+
+  it("text path: Edit sends referenceTaskType with the stored ratio and length, nothing else moves", async () => {
+    const today = await t2vCall(stored)
+    const edit = await t2vCall({ ...stored, referenceTaskType: "edit" })
+    expect(edit).toStrictEqual(withOption(today, 4, { referenceTaskType: "edit" }))
+    expect(edit[4]).toMatchObject({ aspectRatio: "16:9", duration: 5, referenceTaskType: "edit" })
+    expect(today[4]).not.toHaveProperty("referenceTaskType")
+  })
+
+  it("Extend and A reference ride the request the same way", async () => {
+    const today = await t2vCall(stored)
+    expect(await t2vCall({ ...stored, referenceTaskType: "extend" })).toStrictEqual(withOption(today, 4, { referenceTaskType: "extend" }))
+    expect(await t2vCall({ ...stored, referenceTaskType: "reference" })).toStrictEqual(withOption(today, 4, { referenceTaskType: "reference" }))
+  })
+
+  it("Auto, an unknown value and another model send exactly today's request", async () => {
+    const todayI2v = await i2vCall(stored)
+    const todayT2v = await t2vCall(stored)
+    for (const value of ["auto", "Edit", 7]) {
+      expect(await i2vCall({ ...stored, referenceTaskType: value }), String(value)).toStrictEqual(todayI2v)
+      expect(await t2vCall({ ...stored, referenceTaskType: value }), String(value)).toStrictEqual(todayT2v)
+    }
+    const other = { ...stored, provider: "seedance-2" }
+    expect(await i2vCall({ ...other, referenceTaskType: "edit" })).toStrictEqual(await i2vCall(other))
+    expect(await t2vCall({ ...other, referenceTaskType: "edit" })).toStrictEqual(await t2vCall(other))
   })
 })
 

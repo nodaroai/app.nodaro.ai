@@ -12,6 +12,7 @@ import {
   supportsAutoVideoDuration,
 } from "@nodaro/shared/models"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
+import { CONTAINER_OVERHANG_SEC } from "@nodaro/shared/video"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, getModelCreditBaseCost } from "./credits.js"
 // The probe lives in CORE (lib/ref-video-probe.ts) because the routes' duration
 // pre-check — plain input validation, not a credit feature — must run in
@@ -19,24 +20,12 @@ import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, getModelCreditBaseCost } 
 // ee -> core is the allowed direction; re-exported so existing importers of
 // this module are unaffected.
 import { probeRefVideoDurations, refVideoProbeCandidates } from "../../lib/ref-video-probe.js"
+import { refVideoWorstCaseSecFor } from "../../lib/ref-video-worst-case.js"
 import { geminiOmni12LadderSec, videoRefBilledDurations, type VideoSourceTrim } from "../../lib/gemini-omni-12-source.js"
 import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
 
 export { probeRefVideoDurations, refVideoCapFor } from "../../lib/ref-video-probe.js"
-
-/**
- * A reference clip we could not measure (rejected ffprobe, NaN/≤0 duration)
- * counts as the LONGEST clip the provider accepts — the per-clip cap in
- * `VIDEO_REF_VIDEO_DURATION_LIMITS` (30s on Seedance 2.5), or the 2.0 family's
- * 15s total-input ceiling when the provider declares no bound. We must NEVER
- * under-reserve, because `commit_credits` only refunds a surplus and can never
- * collect an upward delta.
- */
-const REF_VIDEO_WORST_CASE_SEC = 15
-
-export function refVideoWorstCaseSecFor(provider: string): number {
-  return VIDEO_REF_VIDEO_DURATION_LIMITS[provider]?.maxSec ?? REF_VIDEO_WORST_CASE_SEC
-}
+export { refVideoWorstCaseSecFor } from "../../lib/ref-video-worst-case.js"
 
 const isUsableDuration = (d: number): boolean => Number.isFinite(d) && d > 0
 
@@ -408,6 +397,8 @@ export interface Seedance2RefVideoActualSeconds {
   chargedOutputSec: number
   /** The reference clips' seconds, as the run bills them ({@link billedInputSeconds}). */
   inputSec: number
+  /** The delivered clip's length as it was measured, unrounded — the length it really is. */
+  measuredSec: number
 }
 
 /**
@@ -458,15 +449,8 @@ export async function seedance2RefVideoActualSeconds(args: Seedance2RefVideoActu
   } else if (heldSec === undefined) {
     alertOverrunPastHold(args, deliveredSec, heldClipsSec)
   }
-  return { deliveredSec, chargedOutputSec, inputSec: billedInputSeconds(provider, durationsSec).totalSec }
+  return { deliveredSec, chargedOutputSec, inputSec: billedInputSeconds(provider, durationsSec).totalSec, measuredSec: measuredOutputSec }
 }
-
-/**
- * How far past its nominal length a delivered clip's container may read
- * without counting as longer (8.04 s for an 8 s clip): a quarter second, the
- * slop the Auto-duration settlement below rounds by.
- */
-const CONTAINER_OVERHANG_SEC = 0.25
 
 /**
  * The output seconds the reservation held for a run that is NOT an Auto edit
@@ -624,9 +608,20 @@ export async function seedance2AutoDurationActualBaseCredits(
  * Throws when the clip cannot be measured.
  */
 export async function seedance2AutoDurationActualSeconds(args: { outputUrl: string }): Promise<number> {
+  return (await seedance2AutoDurationMeasure(args)).outputSec
+}
+
+/**
+ * One measurement of an AUTO-duration run's delivered clip: `outputSec`, the
+ * whole seconds it bills ({@link seedance2AutoDurationActualSeconds}), and
+ * `measuredSec`, its length as measured, unrounded — the length it really is,
+ * which the run records for the step after it. Throws when the clip cannot be
+ * measured.
+ */
+export async function seedance2AutoDurationMeasure(args: { outputUrl: string }): Promise<{ outputSec: number; measuredSec: number }> {
   const measured = await probeMediaDuration(args.outputUrl)
   if (!isUsableDuration(measured)) throw new Error(`unusable output duration: ${measured}`)
-  return Math.max(1, Math.ceil(measured - 0.25))
+  return { outputSec: Math.max(1, Math.ceil(measured - CONTAINER_OVERHANG_SEC)), measuredSec: measured }
 }
 
 /**
@@ -675,7 +670,7 @@ export interface SeedanceDraftFinalizeRefArgs {
  */
 export function seedanceDraftFinalizeRefBilledSec(args: SeedanceDraftFinalizeRefArgs): number {
   const wholeSec = args.refVideoDurationsSec.map((d) =>
-    typeof d === "number" && isUsableDuration(d) ? Math.max(1, Math.ceil(d - 0.25)) : d,
+    typeof d === "number" && isUsableDuration(d) ? Math.max(1, Math.ceil(d - CONTAINER_OVERHANG_SEC)) : d,
   )
   // The draft's model decides the input-side bounds (per-clip cap, total cap).
   const { totalSec } = billedInputSeconds(SEEDANCE_DRAFT_MODELS[0], wholeSec)

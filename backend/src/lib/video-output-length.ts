@@ -50,7 +50,8 @@ import {
   extractVideoDurationFromNode,
 } from "@nodaro/shared/video"
 import { maskCompositeLeadHandle } from "@nodaro/shared/media"
-import { LENGTH_KEEPING_VIDEO_TYPES, USE_CASE_NODE_TYPES, usecaseDescriptor, utilityOutputLength, type UseCaseOutputLength } from "@nodaro/render-rules"
+import { LENGTH_KEEPING_VIDEO_TYPES, lengthFollowingBoundSec, USE_CASE_NODE_TYPES, usecaseDescriptor, utilityOutputLength, type UseCaseOutputLength } from "@nodaro/render-rules"
+import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE } from "@nodaro/shared/models"
 import { isTailRecipeProvider, tailRecipeSeconds } from "./extend-recipe.js"
 import { generatedVideoLengthSec } from "./generated-video-length.js"
 import { generateVideoProLengthSec } from "./generate-video-pro-length.js"
@@ -622,6 +623,27 @@ export function floorLength(length: WireLength, data: unknown): WireLength {
   if (typeof length !== "object" || length.perEpisodeSec > 0) return length
   const read = extractVideoDurationFromNode(data as Record<string, unknown> | undefined) ?? VIDEO_UTIL_PRICING.FALLBACK_DURATION_SECONDS
   return length.fixedSec >= read ? length : fixed(read)
+}
+
+/**
+ * The length a node delivers as a step CHARGED by the length it is handed
+ * (Trim, Loop, Combine Videos) reads it, where that differs from its rule:
+ * the Video to Video node's Seedance edit runs at an automatic length and
+ * records the length it makes (decided 2026-11-11), at most its run's bound
+ * (`lengthFollowingBoundSec`), and such a step is charged by that record — so
+ * it is never listed below that bound, nor below the input's length.
+ * `undefined` for every other node, and for every other reader (a step that
+ * measures the clip it is given): the rule ({@link videoOutputLength}) stands,
+ * so an edit whose input the listing does not know stays `"unknown"`.
+ */
+export function chargedVideoOutputLength(node: LengthNode, inputs: readonly WireInput[]): WireLength | undefined {
+  if (node.type !== "video-to-video") return undefined
+  const data = dataOf(node)
+  const provider = typeof data.provider === "string" && data.provider !== "" ? data.provider : DEFAULT_VIDEO_TO_VIDEO_PROVIDER
+  if (!isSeedanceVideoEditProvider(provider)) return undefined
+  const bound = lengthFollowingBoundSec({ provider, duration: SEEDANCE_VIDEO_EDIT_SHAPE.duration })
+  if (bound === undefined) return undefined
+  return floorLength(maxLen(knownLength(videoIn(inputs)) ?? fixed(0), fixed(bound)), node.data)
 }
 
 /**

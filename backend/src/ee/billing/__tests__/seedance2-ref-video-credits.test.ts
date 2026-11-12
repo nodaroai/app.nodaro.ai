@@ -341,7 +341,7 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
       probe.durations.set(OUT, 12)
       probe.durations.set(REF, 6)
       const run = { ...unread, requestedDuration: 8, referenceTaskType: undefined }
-      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 6 })
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 6, measuredSec: 12 })
       expect(alert).not.toHaveBeenCalled()
     })
 
@@ -349,7 +349,7 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
       probe.durations.set(OUT, 12)
       probe.durations.set(REF, 5)
       const run = { ...unread, requestedDuration: VIDEO_DURATION_AUTO, referenceTaskType: undefined }
-      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 5 })
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 5, measuredSec: 12 })
       expect(alert).not.toHaveBeenCalled()
     })
 
@@ -357,10 +357,10 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
       probe.durations.set(REF, 5)
       const run = { ...unread, requestedDuration: VIDEO_DURATION_AUTO, referenceTaskType: "reference" }
       probe.durations.set(OUT, 12)
-      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 5 })
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 5, measuredSec: 12 })
       expect(alert).not.toHaveBeenCalled()
       probe.durations.set(OUT, 31.5)
-      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 31.5, chargedOutputSec: 30, inputSec: 5 })
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 31.5, chargedOutputSec: 30, inputSec: 5, measuredSec: 31.5 })
       expect(alert).toHaveBeenCalledTimes(1)
       expect(String(alert.mock.calls[0]?.[0])).toContain("heldSec=30")
     })
@@ -441,7 +441,7 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
     it("several clips: held for the longest clip, so a delivery of that clip's length is charged as delivered, with no alert", async () => {
       probe.durations.set(OUT, 25.04)
       const several = { ...auto, durationsSec: [5, 25] }
-      await expect(seedance2RefVideoActualSeconds(several)).resolves.toEqual({ deliveredSec: 25.04, chargedOutputSec: 25.04, inputSec: 30 })
+      await expect(seedance2RefVideoActualSeconds(several)).resolves.toEqual({ deliveredSec: 25.04, chargedOutputSec: 25.04, inputSec: 30, measuredSec: 25.04 })
       expect(alert).not.toHaveBeenCalled()
       probe.durations.set(OUT, 27)
       await expect(seedance2RefVideoActualSeconds(several)).resolves.toMatchObject({ deliveredSec: 27, chargedOutputSec: 26 })
@@ -468,7 +468,7 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
     it("alerts with the job, held and delivered seconds, and charges exactly what it charged before", async () => {
       probe.durations.set(OUT, 14.04)
       const seconds = await seedance2RefVideoActualSeconds(extend)
-      expect(seconds).toEqual({ deliveredSec: 14.04, chargedOutputSec: 14.04, inputSec: 6 })
+      expect(seconds).toEqual({ deliveredSec: 14.04, chargedOutputSec: 14.04, inputSec: 6, measuredSec: 14.04 })
       await expect(seedance2RefVideoActualBaseCredits(extend, seconds)).resolves.toBe(Math.ceil(S25_720P_PER_SEC * (6 + 14.04)))
       expect(alert).toHaveBeenCalledTimes(1)
       const line = String(alert.mock.calls[0]?.[0])
@@ -523,7 +523,7 @@ describe("seedance2RefVideoActualSeconds (what the settlement measures)", () => 
   it("a style run: rendered as asked, charged as rendered, the reference clips as the input", async () => {
     probe.durations.set(OUT, 12)
     await expect(seedance2RefVideoActualSeconds({ ...run, durationsSec: [30] }))
-      .resolves.toEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 30 })
+      .resolves.toEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 30, measuredSec: 12 })
   })
 
   it("a Seedance length is kept as measured; Kling 4.0's rounds to the whole second it billed", async () => {
@@ -531,14 +531,14 @@ describe("seedance2RefVideoActualSeconds (what the settlement measures)", () => 
     await expect(seedance2RefVideoActualSeconds({ ...run, durationsSec: [30] })).resolves.toMatchObject({ deliveredSec: 12.04, chargedOutputSec: 12.04 })
     probe.durations.set(OUT, 3.04)
     await expect(seedance2RefVideoActualSeconds({ ...run, provider: "kling-4", resolution: "720p", requestedDuration: 3, referenceTaskType: undefined, durationsSec: [5] }))
-      .resolves.toMatchObject({ deliveredSec: 3, chargedOutputSec: 3 })
+      .resolves.toMatchObject({ deliveredSec: 3, chargedOutputSec: 3, measuredSec: 3.04 })
   })
 
   it("with no stored probe, the reference clips are probed under the same worst-case rule", async () => {
     probe.durations.set(OUT, 12)
     probe.durations.set(REF, new Error("ffprobe: connection reset"))
     await expect(seedance2RefVideoActualSeconds({ ...run, resolution: "720p" }))
-      .resolves.toEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 30 })
+      .resolves.toEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 30, measuredSec: 12 })
   })
 
   it("a delivery past an Auto edit's hold: deliveredSec > chargedOutputSec, and its credits are the hold's, as today", async () => {
@@ -547,7 +547,7 @@ describe("seedance2RefVideoActualSeconds (what the settlement measures)", () => 
       probe.durations.set(OUT, 9.5)
       const auto = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [4.1], requestedDuration: VIDEO_DURATION_AUTO, referenceTaskType: undefined, jobId: "job-evidence" }
       const seconds = await seedance2RefVideoActualSeconds(auto)
-      expect(seconds).toEqual({ deliveredSec: 9.5, chargedOutputSec: 6, inputSec: 4.1 })
+      expect(seconds).toEqual({ deliveredSec: 9.5, chargedOutputSec: 6, inputSec: 4.1, measuredSec: 9.5 })
       expect(seconds.deliveredSec).toBeGreaterThan(seconds.chargedOutputSec)
       expect(alert).toHaveBeenCalledTimes(1)
       expect(String(alert.mock.calls[0]?.[0])).toContain("job=job-evidence")
@@ -598,7 +598,7 @@ describe("measureSeedance2Settle over the real settlement", () => {
     probe.durations.set(OUT, 12)
     const args = { provider: "seedance-2-5", resolution: "1080p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [30], duration: 12, referenceTaskType: undefined, jobId: "job-1" }
     const baseCredits = Math.ceil(S25_1080P_PER_SEC * 42)
-    await expect(measureSeedance2Settle(args)).resolves.toEqual({ baseCredits, seconds: { outputSec: 12, inputSec: 30 } })
+    await expect(measureSeedance2Settle(args)).resolves.toEqual({ baseCredits, seconds: { outputSec: 12, inputSec: 30 }, deliveredSec: 12 })
     expect(probe.probeMediaDuration.mock.calls.map((c) => c[0])).toEqual([OUT])
     // The old entry point (the reconcile cron's) answers the same credits.
     await expect(measureSeedance2RefVideoBaseCredits(args)).resolves.toBe(baseCredits)
@@ -609,7 +609,7 @@ describe("measureSeedance2Settle over the real settlement", () => {
     try {
       probe.durations.set(OUT, 9.5)
       const args = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [4.1], duration: VIDEO_DURATION_AUTO, referenceTaskType: undefined, jobId: "job-evidence" }
-      await expect(measureSeedance2Settle(args)).resolves.toEqual({ baseCredits: 960, seconds: { outputSec: 9.5, inputSec: 4.1 } })
+      await expect(measureSeedance2Settle(args)).resolves.toEqual({ baseCredits: 960, seconds: { outputSec: 9.5, inputSec: 4.1 }, deliveredSec: 9.5 })
       expect(probe.probeMediaDuration).toHaveBeenCalledTimes(1)
       expect(alert).toHaveBeenCalledTimes(1)
     } finally {
@@ -716,14 +716,14 @@ describe("a declared reference with an automatic length", () => {
 
     it("a delivered 30 s is charged as 30 s, not capped at the edit's 6 s", async () => {
       probe.durations.set(OUT, 30)
-      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 30, chargedOutputSec: 30, inputSec: 5 })
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 30, chargedOutputSec: 30, inputSec: 5, measuredSec: 30 })
       await expect(seedance2RefVideoActualBaseCredits(run)).resolves.toBe(worst([5]))
       expect(alert).not.toHaveBeenCalled()
     })
 
     it("a delivered 12 s is charged as 12 s", async () => {
       probe.durations.set(OUT, 12)
-      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 5 })
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 5, measuredSec: 12 })
       await expect(seedance2RefVideoActualBaseCredits(run)).resolves.toBe(Math.ceil(S25_720P_PER_SEC * (5 + 12)))
       expect(alert).not.toHaveBeenCalled()
     })
@@ -731,20 +731,20 @@ describe("a declared reference with an automatic length", () => {
     it("two clips: a delivered 30 s is charged as 30 s, both clips as input", async () => {
       probe.durations.set(OUT, 30)
       const two = { ...run, durationsSec: [5, 12] }
-      await expect(seedance2RefVideoActualSeconds(two)).resolves.toStrictEqual({ deliveredSec: 30, chargedOutputSec: 30, inputSec: 17 })
+      await expect(seedance2RefVideoActualSeconds(two)).resolves.toStrictEqual({ deliveredSec: 30, chargedOutputSec: 30, inputSec: 17, measuredSec: 30 })
       await expect(seedance2RefVideoActualBaseCredits(two)).resolves.toBe(worst([5, 12]))
     })
 
     it("a container's hair past the hold (30.04 s) is charged at the hold, with no alert", async () => {
       probe.durations.set(OUT, 30.04)
-      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 30.04, chargedOutputSec: 30, inputSec: 5 })
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 30.04, chargedOutputSec: 30, inputSec: 5, measuredSec: 30.04 })
       await expect(seedance2RefVideoActualBaseCredits(run)).resolves.toBe(seedance2RefVideoBaseCreditsFromDurations({ ...s25, durationsSec: [5], referenceTaskType: "reference" }))
       expect(alert).not.toHaveBeenCalled()
     })
 
     it("past the hold by more than that: charged at the hold and alerted with the job, held and delivered seconds", async () => {
       probe.durations.set(OUT, 31.5)
-      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 31.5, chargedOutputSec: 30, inputSec: 5 })
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 31.5, chargedOutputSec: 30, inputSec: 5, measuredSec: 31.5 })
       expect(alert).toHaveBeenCalledTimes(1)
       const line = String(alert.mock.calls[0]?.[0])
       expect(line).toMatch(/^\[ALERT\]/)
@@ -763,9 +763,9 @@ describe("a declared reference with an automatic length", () => {
     it("the core shim reads the job's recorded type: the settle lanes charge the delivered 30 s", async () => {
       probe.durations.set(OUT, 30)
       const lane = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [5], duration: AUTO, referenceTaskType: "reference", jobId: "job-ref" }
-      await expect(measureSeedance2Settle(lane)).resolves.toStrictEqual({ baseCredits: worst([5]), seconds: { outputSec: 30, inputSec: 5 } })
+      await expect(measureSeedance2Settle(lane)).resolves.toStrictEqual({ baseCredits: worst([5]), seconds: { outputSec: 30, inputSec: 5 }, deliveredSec: 30 })
       // Without the recorded type (undeclared), the same delivery is charged at the edit hold, as before.
-      await expect(measureSeedance2Settle({ ...lane, referenceTaskType: undefined })).resolves.toStrictEqual({ baseCredits: 1045, seconds: { outputSec: 30, inputSec: 5 } })
+      await expect(measureSeedance2Settle({ ...lane, referenceTaskType: undefined })).resolves.toStrictEqual({ baseCredits: 1045, seconds: { outputSec: 30, inputSec: 5 }, deliveredSec: 30 })
     })
   })
 

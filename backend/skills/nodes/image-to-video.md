@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-11-12T08:24:21.803Z
-generated_from: 593e33c93
+generated_at: 2026-11-12T09:39:00.728Z
+generated_from: 4e8ee8fb2
 ---
 
 # image-to-video
@@ -36,6 +36,7 @@ generated_from: 593e33c93
 - `aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto"`
 - `multiShot?: boolean`
 - `draft?: boolean`
+- `referenceTaskType?: "reference" | "edit" | "extend"`
 - `resolution?: string`
 - `grokMode?: "fun" | "normal" | "spicy"`
 - `videoSize?: "standard" | "high"`

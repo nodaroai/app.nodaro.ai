@@ -1,4 +1,5 @@
 import { resolveVideoRequestNorm, videoRequestAsRun, videoRequestReferenceMedia } from "./video-request-norm.js"
+import { videoCreditIdOf, type VideoCreditIdArgs } from "./video-credit-id.js"
 
 /**
  * The workflow run's twin of the video routes' reference task type resolution.
@@ -25,7 +26,8 @@ import { resolveVideoRequestNorm, videoRequestAsRun, videoRequestReferenceMedia 
  *    the ratio and length a declaration moves (`videoRequestAsRun`). The edit
  *    lane already runs at the edit shape, so a requested edit moves neither.
  *    A lane whose request CAN be moved must also recompute its credit id from
- *    the moved length before the reservation; this stamp does not.
+ *    the moved length before the reservation; this stamp does not —
+ *    {@link stampSeedanceReferenceTaskTypeForRun} does, and is what the executor calls.
  *
  * Never mutates `payload`.
  */
@@ -46,4 +48,68 @@ export function stampSeedanceReferenceTaskType(
   })
   const asRun = videoRequestAsRun(rest, norm)
   return norm.referenceTaskType ? { ...asRun, referenceTaskType: norm.referenceTaskType } : asRun
+}
+
+/** A built job as the executor holds it when the reference clips are measured. */
+export interface SeedanceTaskTypeBuiltRun {
+  readonly payload: Readonly<Record<string, unknown>>
+  /** The id the build priced the run at. */
+  readonly modelIdentifier: string
+  /** The arguments that id was built from (`PayloadResult.videoCreditIdArgs`). */
+  readonly videoCreditIdArgs?: VideoCreditIdArgs
+}
+
+/** The run the executor records, reserves and queues. */
+export interface SeedanceTaskTypeRun {
+  payload: Record<string, unknown>
+  /** The id the run is reserved under: the built one, unless the length moved. */
+  modelIdentifier: string
+  /**
+   * The declaration would have moved the length, but the build carried no
+   * arguments to re-price from: it was dropped and the run goes out as built.
+   * The caller says so in its log.
+   */
+  droppedUnpriced: boolean
+}
+
+/** A length as the pricing reads it: a numeric string is its number. */
+function lengthOf(duration: unknown): unknown {
+  return typeof duration === "string" ? parseInt(duration, 10) : duration
+}
+
+/**
+ * {@link stampSeedanceReferenceTaskType}, and the credit id that follows the
+ * run it resolves. When the resolution moves the length (`edit` runs at Auto;
+ * `extend` turns an Auto length into a fixed one), the id is rebuilt from the
+ * lane's own price arguments with the moved length (`videoCreditIdOf`), so the
+ * reservation is made for the length that runs — the id the video routes
+ * reserve for the same request. A ratio alone is not priced and needs nothing.
+ *
+ * Fail safe, never mis-priced: when the length would move but the build carries
+ * no price arguments, the payload goes out AS BUILT with the request removed
+ * (undeclared, at the built ratio and length) and the built id, and
+ * `droppedUnpriced` says so.
+ *
+ * Pure; never mutates `built`.
+ */
+export function stampSeedanceReferenceTaskTypeForRun(
+  built: SeedanceTaskTypeBuiltRun,
+  refVideoDurationsSec: readonly number[] | undefined,
+): SeedanceTaskTypeRun {
+  const asBuilt = { payload: built.payload as Record<string, unknown>, modelIdentifier: built.modelIdentifier, droppedUnpriced: false }
+  const stamped = stampSeedanceReferenceTaskType(built.payload, refVideoDurationsSec)
+  if (stamped === built.payload) return asBuilt
+  if (Object.is(lengthOf(stamped.duration), lengthOf(built.payload.duration))) {
+    return { ...asBuilt, payload: stamped }
+  }
+  const args = built.videoCreditIdArgs
+  if (!args) {
+    const { referenceTaskType: _dropped, ...undeclared } = built.payload
+    return { ...asBuilt, payload: undeclared, droppedUnpriced: true }
+  }
+  return {
+    payload: stamped,
+    modelIdentifier: videoCreditIdOf({ ...args, duration: stamped.duration as number | string | undefined }),
+    droppedUnpriced: false,
+  }
 }

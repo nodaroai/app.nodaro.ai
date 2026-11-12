@@ -273,3 +273,16 @@ logo at 4K, 2880 a side). None carries anything the sanitizer removes, so
 `svg-sanitize.test.ts` holds each to the same elements, attributes and pixels
 after sanitizing; `image-output-store.test.ts` and `still-input-image.test.ts`
 store and draw them.
+
+## `seedance-reference-auto-quote.json`
+
+A Generate Video node on Seedance 2.5 with **Use the reference video as** set
+to **A reference** and Duration on Auto, fed one uploaded 6 s clip, and the
+request the editor's quote sends for it (`editorRequest`). Two halves read it:
+`frontend/src/lib/__tests__/seedance-ref-quote.test.ts` holds the editor's
+`seedanceRefQuoteRequest` for `nodes`/`edges` to `editorRequest`, key for key;
+`backend/src/ee/billing/__tests__/seedance-task-type-estimate.test.ts` holds
+the workflow estimate of the same graph, and the estimate route's quote of
+`editorRequest`, to what the run reserves — the worst case a declared
+reference with an automatic length holds. The clip's URL is that test file's
+`CLIP`. Edit it by hand; every figure is computed by the tests.

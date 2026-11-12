@@ -3,6 +3,7 @@ import { getJobStatus, type Job } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 import { nonEmptyString } from "@/lib/utils"
 import { isValidUuid } from "@/lib/uuid"
+import { listedSeedanceTaskType, supportsReferenceTaskType, type SeedanceReferenceTaskType } from "@nodaro/shared/models"
 
 /**
  * The generation config that produced a single output, read back from the
@@ -30,6 +31,12 @@ export interface ResultGenerationSettings {
   readonly duration?: number
   readonly videoSize?: string
   readonly generateAudio?: boolean
+  /** Seedance 2.5's reference task type, for a model that takes it: the type
+   *  the run declared, or `"auto"` when it declared none. Absent for every
+   *  other model (and every image result), and for a draft, which never
+   *  carries the field (its "none" is not the user's choice). Re-applied with
+   *  the ratio and length, so applying a past run reproduces it. */
+  readonly referenceTaskType?: SeedanceReferenceTaskType
   /** A Seedance 2.5 DRAFT (480p) — display-only (the tile's "Draft" badge);
    *  never re-applied, since the node's Draft toggle is its own setting. */
   readonly draft?: boolean
@@ -46,6 +53,16 @@ export interface ResultGenerationSettings {
    *  Display-only — used to show "what was actually used". */
   readonly finalPrompt?: string
   readonly negativePrompt?: string
+}
+
+/**
+ * The task type a job ran with, for a model that takes one (`"auto"` = none
+ * declared). A draft never carries the field, so the "none" it recorded is not
+ * the user's choice: nothing, and applying the draft leaves the node's own.
+ */
+function recordedTaskType(provider: string | undefined, recorded: unknown, draft: boolean): SeedanceReferenceTaskType | undefined {
+  if (draft || !supportsReferenceTaskType(provider)) return undefined
+  return listedSeedanceTaskType(provider, recorded) ?? "auto"
 }
 
 export function selectSettings(job: Job): ResultGenerationSettings {
@@ -67,6 +84,7 @@ export function selectSettings(job: Job): ResultGenerationSettings {
     videoSize: str(d.videoSize),
     // boolean — `false` is a real value (audio explicitly off), so guard on type.
     generateAudio: typeof d.generateAudio === "boolean" ? d.generateAudio : undefined,
+    referenceTaskType: recordedTaskType(str(d.provider), d.referenceTaskType, d.draft === true),
     draft: d.draft === true ? true : undefined,
     warningCode: str((job.output_data ?? {}).warningCode),
     prompt: str(d.userPrompt) ?? str(d.prompt),
@@ -106,7 +124,7 @@ export function useResultGenerationSettings(
  * its Generate Image / Generate Video node. Only generation *parameters* are
  * restored — never the reference/character wiring (that's graph-edge-derived,
  * not node config). Image-only fields (renderingSpeed/styleType/expandPrompt)
- * and video-only fields (duration/videoSize/generateAudio) coexist here: each
+ * and video-only fields (duration/videoSize/generateAudio/referenceTaskType) coexist here: each
  * is gated on `!== undefined`, so a job only restores what it actually recorded.
  *
  * `providers` is cleared so a stale multi-provider cohort can't override the
@@ -129,6 +147,13 @@ export function buildAppliedConfigPatch(
   if (s.duration !== undefined) patch.duration = s.duration
   if (s.videoSize !== undefined) patch.videoSize = s.videoSize
   if (s.generateAudio !== undefined) patch.generateAudio = s.generateAudio
+  // Seedance 2.5: the declared type comes back with the ratio and length it ran
+  // at; a run that declared none sets the node back to Auto (the key removed).
+  // A draft records none (`selectSettings`), so the node keeps its own choice.
+  if (s.referenceTaskType !== undefined) patch.referenceTaskType = s.referenceTaskType === "auto" ? undefined : s.referenceTaskType
+  // A result from a model that takes no task type moves the node onto that
+  // model: a choice left on it would come back, unseen, on a switch back.
+  else if (s.provider !== undefined && !supportsReferenceTaskType(s.provider)) patch.referenceTaskType = undefined
   if (opts.includePrompt) {
     patch.prompt = s.prompt ?? ""
     patch.negativePrompt = s.negativePrompt ?? ""

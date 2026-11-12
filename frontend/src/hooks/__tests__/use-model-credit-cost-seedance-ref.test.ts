@@ -53,6 +53,15 @@ describe("price cache — Seedance reference-video quote keys", () => {
     expect(api.quotes).toHaveLength(1)
   })
 
+  it("asks the quote endpoint with the node's reference task type, under its own key", async () => {
+    const declared = { ...REQUEST, referenceTaskType: "edit" as const }
+    const key = seedanceRefQuoteKey(declared)
+    expect(key).not.toBe(KEY)
+    await prefetchModelCreditCosts([key])
+    expect(api.quotes).toStrictEqual([declared])
+    expect(getCachedModelCredits(key)).toBe(1911)
+  })
+
   it("remembers a refused quote and does not ask again", async () => {
     api.refuse = true
     await prefetchModelCreditCosts([KEY])

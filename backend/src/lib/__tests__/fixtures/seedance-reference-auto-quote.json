@@ -1,0 +1,28 @@
+{
+  "clipSec": 6,
+  "nodes": [
+    { "id": "clip", "type": "upload-video", "data": { "url": "https://cdn.example/ref.mp4" } },
+    {
+      "id": "gv",
+      "type": "generate-video",
+      "data": {
+        "provider": "seedance-2-5",
+        "prompt": "a cat in the style of @video_1",
+        "aspectRatio": "16:9",
+        "duration": -1,
+        "resolution": "720p",
+        "referenceTaskType": "reference"
+      }
+    }
+  ],
+  "edges": [
+    { "id": "clip->gv", "source": "clip", "target": "gv", "sourceHandle": "video", "targetHandle": "videoReferences" }
+  ],
+  "editorRequest": {
+    "provider": "seedance-2-5",
+    "resolution": "720p",
+    "duration": -1,
+    "referenceTaskType": "reference",
+    "referenceVideoUrls": ["https://cdn.example/ref.mp4"]
+  }
+}

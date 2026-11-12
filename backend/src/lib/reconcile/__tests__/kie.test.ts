@@ -166,13 +166,17 @@ vi.mock("../../credits-job-lifecycle.js", () => ({
 // died pays the whole worst-case reservation.
 const settle = vi.hoisted(() => ({
   measure: vi.fn(async (_args: Record<string, unknown>): Promise<number | undefined> => undefined),
+  delivered: {} as { deliveredSec?: number },
 }))
 vi.mock("../../gpt-image-2-6-settle.js", () => ({
   gptImage26AutoSettledBase: async (k: number | undefined) => (k === undefined ? undefined : Math.ceil(k * 2.5)),
 }))
 
+// The recovery takes one measurement (`measureSeedance2Settle`); `settle.measure`
+// answers its credits, as the credits-only shim did (and `settle.delivered` its
+// unrounded length, when a case sets one).
 vi.mock("../../seedance2-ref-video-settle.js", () => ({
-  measureSeedance2RefVideoBaseCredits: settle.measure,
+  measureSeedance2Settle: async (args: Record<string, unknown>) => ({ baseCredits: await settle.measure(args), seconds: undefined, ...settle.delivered }),
 }))
 
 // Seedance Draft: the raw take is measured (ffprobe stubbed) and a recovered

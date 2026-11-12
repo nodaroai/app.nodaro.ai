@@ -5,6 +5,10 @@ import { render, screen } from "@testing-library/react"
 // Mocks — all declared before component imports
 // ---------------------------------------------------------------------------
 
+// The graph the store holds (a test may wire clips in), and the price ids the
+// node asked for, newest last.
+const graph = vi.hoisted(() => ({ nodes: [] as unknown[], edges: [] as unknown[], creditIds: [] as unknown[] }))
+
 vi.mock("@xyflow/react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@xyflow/react")>()
   return {
@@ -121,17 +125,20 @@ vi.mock("@/hooks/use-workflow-store", () => ({
         runSingleNode: () => {},
         selectNode: () => {},
         openFreeCut: () => {},
-        nodes: [],
-        edges: [],
+        nodes: graph.nodes,
+        edges: graph.edges,
         videoAutoplay: false,
         selectedNodeId: null,
       }),
-    { getState: () => ({ nodes: [], edges: [] }) },
+    { getState: () => ({ nodes: graph.nodes, edges: graph.edges }) },
   ),
 }))
 
 vi.mock("@/ee/hooks/use-model-credits", () => ({
-  useModelCredits: () => 25,
+  useModelCredits: (id: unknown) => {
+    graph.creditIds.push(id)
+    return 25
+  },
 }))
 
 vi.mock("@/hooks/use-result-aspect-ratio", () => ({
@@ -178,6 +185,8 @@ vi.mock("@/components/ui/cached-image", () => ({
 // ---------------------------------------------------------------------------
 
 import { GenerateVideoNode } from "../generate-video-node"
+import { videoGenerationCreditId } from "@nodaro/shared/credits"
+import { VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -319,5 +328,41 @@ describe("GenerateVideoNode", () => {
       expect(screen.getByTestId("pip-audioReferences")).toHaveAttribute("data-order-matters", "true")
       expect(screen.getByTestId("pip-assets")).toHaveAttribute("data-order-matters", "true")
     })
+  })
+})
+
+describe("GenerateVideoNode — the cost pill's price id", () => {
+  // Seedance 2.5's "Use the reference video as": the pill names the row of the
+  // length the run is priced at (the same helper as the run-level estimate).
+  const CLIP = "https://cdn.example/clip.mp4"
+  const STORED = { provider: "seedance-2-5", resolution: "720p", aspectRatio: "16:9", duration: 5 }
+  const idAt = (duration: number) =>
+    videoGenerationCreditId({ provider: "seedance-2-5", duration, nodeType: "image-to-video", resolution: "720p", hasVideoRef: true })
+  function pillIdFor(data: Record<string, unknown>, clipSec: number): unknown {
+    const clip = { id: "clip", type: "upload-video", position: { x: 0, y: 0 }, data: { label: "clip", url: CLIP, generatedResults: [{ url: CLIP, duration: clipSec }] } }
+    const node = { id: "gv-1", type: "generate-video", position: { x: 0, y: 0 }, data: { label: "Generate Video", ...data } }
+    graph.nodes.splice(0, graph.nodes.length, clip, node)
+    graph.edges.splice(0, graph.edges.length, { id: "e1", source: "clip", target: "gv-1", sourceHandle: "video", targetHandle: "videoReferences" })
+    graph.creditIds.length = 0
+    try {
+      renderNode(data)
+      return graph.creditIds.at(-1)
+    } finally {
+      graph.nodes.length = 0
+      graph.edges.length = 0
+    }
+  }
+
+  it("Edit with a 6 s clip names the automatic-length row", () => {
+    expect(pillIdFor({ ...STORED, referenceTaskType: "edit" }, 6)).toBe(idAt(VIDEO_DURATION_AUTO))
+  })
+
+  it("Extend at an automatic length names the model's default-length row", () => {
+    expect(pillIdFor({ ...STORED, duration: VIDEO_DURATION_AUTO, referenceTaskType: "extend" }, 6)).toBe(idAt(8))
+  })
+
+  it("a node without the setting, or Edit with a 3 s clip, names the stored length's row", () => {
+    expect(pillIdFor(STORED, 6)).toBe(idAt(5))
+    expect(pillIdFor({ ...STORED, referenceTaskType: "edit" }, 3)).toBe(idAt(5))
   })
 })

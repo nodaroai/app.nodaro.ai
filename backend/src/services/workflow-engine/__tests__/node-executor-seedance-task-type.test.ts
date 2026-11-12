@@ -84,6 +84,7 @@ vi.mock("../sub-workflow-handler.js", () => ({ executeSubWorkflow: vi.fn() }))
 vi.mock("../reference-sheet-stage-a.js", () => ({ ensureWorkflowSheetPanels: vi.fn() }))
 
 import { executeNode } from "../node-executor.js"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import type { SimpleNode, OrchestratorContext } from "../types.js"
 
 const node: SimpleNode = { id: "v2v", type: "video-to-video", data: { provider: "seedance-2-5" } }
@@ -183,6 +184,149 @@ describe("node-executor — the Seedance edit's requested task type is resolved 
 
     expect(writtenInputData()).not.toHaveProperty("referenceTaskType")
     expect(queuedPayload()).not.toHaveProperty("referenceTaskType")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A Generate Video node that carries a task type. The builder REQUESTS it and
+// returns its price arguments; the executor resolves it once the clip is
+// measured and, when the resolution moves the length, reserves for the length
+// that runs — the id `/v1/generate-video` reserves for the same request.
+// ---------------------------------------------------------------------------
+
+const { buildPayload: realBuildPayload } = await vi.importActual<typeof import("../payload-builder.js")>("../payload-builder.js")
+const { generateVideoPricing } = await import("../../../routes/generate-video.js")
+
+const CLIP = "https://cdn.example.com/clip.mp4"
+const GV_DATA = { provider: "seedance-2-5", prompt: "make it black and white", aspectRatio: "16:9", duration: 5, resolution: "720p" }
+const gvNode = (extra: Record<string, unknown> = {}): SimpleNode => ({ id: "gv", type: "generate-video", data: { ...GV_DATA, ...extra } })
+
+/** What one run of `n` recorded, reserved and queued, with the build it ran on. */
+async function runGenerateVideo(n: SimpleNode) {
+  vi.clearAllMocks()
+  mockGetAppSettings.mockResolvedValue({ cost_markup_percent: 0 })
+  mockSeedance2FromUrls.mockResolvedValue(500)
+  mockSeedance2FromDurations.mockReturnValue(500)
+  mockCheckCredits.mockResolvedValue({ allowed: true, balance: 50000, watermark: false })
+  mockReserveCredits.mockResolvedValue({ usageLogId: "usage-1", creditsReserved: 500, watermark: false })
+  mockQueueAdd.mockRejectedValue(new Error("enqueue-sentinel"))
+  const build = realBuildPayload(n, "test-job-id", { referenceVideoUrls: [CLIP] })
+  built.result = build as unknown as Record<string, unknown>
+  await expect(executeNode(n, {}, [], [], {}, makeCtx())).rejects.toThrow(/enqueue-sentinel/)
+  return {
+    build,
+    inputData: writtenInputData(),
+    queued: queuedPayload(),
+    checkedId: (mockCheckCredits.mock.calls[0] as unknown[])[1] as string,
+    reservedId: (mockReserveCredits.mock.calls[0] as unknown[])[2] as string,
+  }
+}
+
+/** The id `/v1/generate-video` checks and reserves for `body` with its clips measured at `measured`. */
+function routeId(body: Record<string, unknown>, measured: number[]): string {
+  return generateVideoPricing.modelResolver({ body: { referenceVideoUrls: [CLIP], ...body }, refVideoDurationsSec: measured } as never)
+}
+
+const withoutKey = (record: Record<string, unknown>): Record<string, unknown> => {
+  const { referenceTaskType: _dropped, ...rest } = record
+  return rest
+}
+
+describe("node-executor — a Generate Video node's Seedance 2.5 task type", () => {
+  it("edit, 16:9 at 5 s, a 6 s clip: recorded and queued adaptive at Auto length, reserved for Auto — the route's own id", async () => {
+    mockProbeMediaDuration.mockResolvedValue(6)
+    const run = await runGenerateVideo(gvNode({ referenceTaskType: "edit" }))
+
+    for (const sent of [run.queued, run.inputData]) {
+      expect(sent).toMatchObject({ referenceTaskType: "edit", aspectRatio: "adaptive", duration: -1 })
+    }
+    const args = run.build.videoCreditIdArgs!
+    const autoId = buildVideoCreditModelIdentifier(args.provider, -1, args.sound, args.mode, args.sizeOrMode, args.resolution, args.hasVideoRef)
+    expect(run.reservedId).toBe(autoId)
+    expect(run.checkedId).toBe(autoId)
+    expect(autoId).not.toBe(run.build.modelIdentifier)
+    expect(run.reservedId).toBe(routeId({ ...GV_DATA, referenceTaskType: "edit" }, [6]))
+    // The reference-video amount is priced on the run as sent.
+    expect(mockSeedance2FromDurations).toHaveBeenCalledWith(expect.objectContaining({ durationsSec: [6], requestedDuration: -1 }))
+  })
+
+  it.each([
+    ["a 3 s clip", () => mockProbeMediaDuration.mockResolvedValue(3)],
+    ["an unmeasured clip", () => mockProbeMediaDuration.mockRejectedValue(new Error("probe failed"))],
+  ])("edit with %s: recorded, queued and reserved exactly as the node without the setting", async (_name, probe) => {
+    probe()
+    const asked = await runGenerateVideo(gvNode({ referenceTaskType: "edit" }))
+    probe()
+    const plain = await runGenerateVideo(gvNode())
+    expect(asked.queued).toStrictEqual(plain.queued)
+    expect(asked.inputData).toStrictEqual(plain.inputData)
+    expect(asked.reservedId).toBe(plain.reservedId)
+    expect(asked.reservedId).toBe(plain.build.modelIdentifier)
+  })
+
+  it("extend at Auto length: adaptive at 8 s, reserved for 8 s", async () => {
+    mockProbeMediaDuration.mockResolvedValue(6)
+    const run = await runGenerateVideo(gvNode({ referenceTaskType: "extend", duration: -1 }))
+    expect(run.queued).toMatchObject({ referenceTaskType: "extend", aspectRatio: "adaptive", duration: 8 })
+    expect(run.inputData).toMatchObject({ referenceTaskType: "extend", aspectRatio: "adaptive", duration: 8 })
+    const args = run.build.videoCreditIdArgs!
+    expect(run.reservedId).toBe(buildVideoCreditModelIdentifier(args.provider, 8, args.sound, args.mode, args.sizeOrMode, args.resolution, args.hasVideoRef))
+    expect(run.reservedId).toBe(routeId({ ...GV_DATA, duration: -1, referenceTaskType: "extend" }, [6]))
+  })
+
+  it("extend at 5 s: adaptive at 5 s, the built id", async () => {
+    mockProbeMediaDuration.mockResolvedValue(6)
+    const run = await runGenerateVideo(gvNode({ referenceTaskType: "extend" }))
+    expect(run.queued).toMatchObject({ referenceTaskType: "extend", aspectRatio: "adaptive", duration: 5 })
+    expect(run.reservedId).toBe(run.build.modelIdentifier)
+  })
+
+  it("reference: only the key is added — ratio, length and id as without it", async () => {
+    mockProbeMediaDuration.mockResolvedValue(6)
+    const asked = await runGenerateVideo(gvNode({ referenceTaskType: "reference" }))
+    const plain = await runGenerateVideo(gvNode())
+    expect(asked.queued).toStrictEqual({ ...plain.queued, referenceTaskType: "reference" })
+    expect(asked.inputData).toStrictEqual({ ...plain.inputData, referenceTaskType: "reference" })
+    expect(asked.reservedId).toBe(plain.reservedId)
+  })
+
+  it("a draft edit: no key, and nothing else changes", async () => {
+    mockProbeMediaDuration.mockResolvedValue(6)
+    const asked = await runGenerateVideo(gvNode({ draft: true, referenceTaskType: "edit" }))
+    const plain = await runGenerateVideo(gvNode({ draft: true }))
+    expect(asked.queued).not.toHaveProperty("referenceTaskType")
+    expect(asked.queued).toStrictEqual(plain.queued)
+    expect(asked.inputData).toStrictEqual(plain.inputData)
+    expect(asked.reservedId).toBe(plain.reservedId)
+  })
+
+  it("fail safe: a requested edit with no price arguments goes out as built, undeclared, at the built id, with one warning", async () => {
+    mockProbeMediaDuration.mockResolvedValue(6)
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    try {
+      const n = gvNode({ referenceTaskType: "edit" })
+      const build = realBuildPayload(n, "test-job-id", { referenceVideoUrls: [CLIP] })
+      const { videoCreditIdArgs: _args, ...withoutArgs } = build
+      vi.clearAllMocks()
+      mockGetAppSettings.mockResolvedValue({ cost_markup_percent: 0 })
+      mockSeedance2FromDurations.mockReturnValue(500)
+      mockCheckCredits.mockResolvedValue({ allowed: true, balance: 50000, watermark: false })
+      mockReserveCredits.mockResolvedValue({ usageLogId: "usage-1", creditsReserved: 500, watermark: false })
+      mockQueueAdd.mockRejectedValue(new Error("enqueue-sentinel"))
+      built.result = withoutArgs as unknown as Record<string, unknown>
+      await expect(executeNode(n, {}, [], [], {}, makeCtx())).rejects.toThrow(/enqueue-sentinel/)
+
+      const queued = queuedPayload()
+      expect(queued).not.toHaveProperty("referenceTaskType")
+      expect(build.payload.referenceTaskType, "the build requested it").toBe("edit")
+      expect(queued).toMatchObject({ ...withoutKey(build.payload), usageLogId: "usage-1", aspectRatio: "16:9", duration: 5 })
+      expect(writtenInputData()).not.toHaveProperty("referenceTaskType")
+      expect((mockReserveCredits.mock.calls[0] as unknown[])[2]).toBe(build.modelIdentifier)
+      const unpricedWarnings = warn.mock.calls.filter((c) => String(c[0]).includes("generate-video") && String(c[0]).includes("price"))
+      expect(unpricedWarnings).toHaveLength(1)
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
 

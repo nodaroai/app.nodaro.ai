@@ -688,6 +688,7 @@
         "backend/src/lib/redis-lease.ts",
         "backend/src/lib/reduce-request.ts",
         "backend/src/lib/ref-video-probe.ts",
+        "backend/src/lib/ref-video-worst-case.ts",
         "backend/src/lib/reference-format.ts",
         "backend/src/lib/relay-possible.ts",
         "backend/src/lib/render-queue.ts",

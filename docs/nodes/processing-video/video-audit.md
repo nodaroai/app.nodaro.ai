@@ -120,6 +120,11 @@ Wiring an analysis whenever you already have one is always the cheaper path —
 the `video-audit:auto` family's extra cost is the fast analysis pass it runs
 on your behalf before auditing, on top of the audit itself.
 
+After a video made at an automatic length, or by a Seedance 2.5 Edit or
+Extend, a workflow run prices this node by that video's recorded length, as
+the editor's own run already does, rather than the ≤600s bucket (see
+[Steps after a video of automatic length](../ai-video/generate-video.md#steps-after-a-video-of-automatic-length)).
+
 ## Limits
 
 - **Maximum duration:** 600 seconds (10 minutes), same cap as Video Analysis.

@@ -504,20 +504,8 @@ describe("buildPayload", () => {
     })
   })
 
-  // The Generate Video lanes do not read the field from node data yet: a node
-  // that carries it builds exactly the payload it builds without it.
-  describe("generate-video ignores a referenceTaskType in node data", () => {
-    it.each<[string, ResolvedInputs]>([
-      ["text-to-video, with a reference video", { referenceVideoUrls: ["https://ref.mp4"] }],
-      ["image-to-video, with a start frame", { startFrameUrl: "https://cdn/f.png" }],
-    ])("%s", (_name, inputs) => {
-      const data = { provider: "seedance-2-5", prompt: "she turns to camera", resolution: "480p", duration: 5 }
-      const plain = buildPayload(node("n1", "generate-video", data), jobId, { ...inputs })
-      const asked = buildPayload(node("n1", "generate-video", { ...data, referenceTaskType: "edit" }), jobId, { ...inputs })
-      expect(asked).toStrictEqual(plain)
-      expect(asked.payload).not.toHaveProperty("referenceTaskType")
-    })
-  })
+  // A Generate Video, Image to Video or Text to Video node's own
+  // `referenceTaskType`: payload-builder-seedance-task-type.test.ts.
 
   // --- Audio ---
   describe("text-to-speech", () => {

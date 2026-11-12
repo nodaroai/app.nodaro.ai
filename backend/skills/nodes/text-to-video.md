@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-11-12T08:24:21.980Z
-generated_from: 593e33c93
+generated_at: 2026-11-12T09:39:00.886Z
+generated_from: 4e8ee8fb2
 ---
 
 # Text to Video
@@ -31,6 +31,7 @@ generated_from: 593e33c93
 - `generatedResults?: GeneratedResult[]`
 - `activeResultIndex?: number`
 - `draft?: boolean`
+- `referenceTaskType?: "reference" | "edit" | "extend"`
 - `seed?: number`
 - `enableTranslation?: boolean`
 - `resolution?: string`

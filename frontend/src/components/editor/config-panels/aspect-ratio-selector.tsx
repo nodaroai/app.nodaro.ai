@@ -16,6 +16,9 @@ interface AspectRatioSelectorProps {
   readonly value: string
   readonly onValueChange: (value: string) => void
   readonly className?: string
+  /** The value is decided elsewhere (e.g. a Seedance Edit keeps the video's
+   *  own shape): the tiles show it and cannot be changed. */
+  readonly disabled?: boolean
 }
 
 /** Parse W:H ratio from value or label. Returns null for non-ratio values like "Auto". */
@@ -56,12 +59,12 @@ function displayText(value: string, label: string): string {
   return label.split(/[\s(（]/)[0] || value
 }
 
-export function AspectRatioSelector({ options, value, onValueChange, className }: AspectRatioSelectorProps) {
+export function AspectRatioSelector({ options, value, onValueChange, className, disabled = false }: AspectRatioSelectorProps) {
   const t = useT()
   const localizeOption = useLocalizeOptionLabel()
   const cols = options.length <= 2 ? "grid-cols-2" : "grid-cols-3"
   return (
-    <div role="radiogroup" aria-label={t("field.aspectRatio")} className={cn("grid gap-1.5", cols, className)}>
+    <div role="radiogroup" aria-label={t("field.aspectRatio")} aria-disabled={disabled || undefined} className={cn("grid gap-1.5", cols, disabled && "opacity-50", className)}>
       {options.map((opt) => {
         const selected = opt.value === value
         const label = localizeOption(opt.label)
@@ -71,10 +74,11 @@ export function AspectRatioSelector({ options, value, onValueChange, className }
             type="button"
             role="radio"
             aria-checked={selected}
+            disabled={disabled}
             onClick={() => onValueChange(opt.value)}
             title={label !== opt.value ? label : undefined}
             className={cn(
-              "flex items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer",
+              "flex items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer disabled:cursor-not-allowed",
               selected
                 ? "border-[#ff0073] bg-[#ff0073]/10 text-white"
                 : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] text-gray-600 dark:text-[#94A3B8] hover:border-gray-300 dark:hover:border-[#3D3D3D] hover:text-gray-800 dark:hover:text-[#E2E8F0]",

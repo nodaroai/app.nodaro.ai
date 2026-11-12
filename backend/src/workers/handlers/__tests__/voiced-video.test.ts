@@ -87,8 +87,10 @@ vi.mock("../../../lib/job-finalize.js", () => ({
   finalizeJobWithMedia: mocks.mockFinalizeJobWithMedia,
 }))
 
+// The lane takes one measurement (`measureSeedance2Settle`); `mockMeasure`
+// answers its credits, as the credits-only shim did.
 vi.mock("../../../lib/seedance2-ref-video-settle.js", () => ({
-  measureSeedance2RefVideoBaseCredits: mocks.mockMeasure,
+  measureSeedance2Settle: async (args: unknown) => ({ baseCredits: await mocks.mockMeasure(args), seconds: undefined }),
 }))
 
 vi.mock("../../shared.js", async (importOriginal) => {

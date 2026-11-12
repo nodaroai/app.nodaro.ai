@@ -80,6 +80,9 @@ import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { ModelSelectOption } from "./model-select-option"
 import { SeedanceDraftToggle, SeedanceDraftResolutionHint, isSeedanceDraftOn, hasStaleSeedanceDraft } from "./seedance-draft-toggle"
+import { SeedanceTaskTypeSelect, SeedanceExtendAutoLengthHint, seedanceTaskTypePanelState, hasStaleSeedanceTaskType } from "./seedance-task-type-select"
+import { useWiredSettingField } from "./wired-settings-context"
+import { useSeedanceTaskTypeAsRun } from "@/hooks/use-seedance-task-type-as-run"
 import { generateVideoProviderSnap } from "@/lib/generate-video-provider-snap"
 import { Switch } from "@/components/ui/switch"
 import { MappableField } from "./mappable-field"
@@ -512,6 +515,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       updates.aspectRatio = aspectOpts[0]?.value as ImageToVideoData["aspectRatio"]
     }
     if (hasStaleSeedanceDraft(currentI2VProvider, data.draft)) updates.draft = undefined
+    if (hasStaleSeedanceTaskType(currentI2VProvider, data.referenceTaskType)) updates.referenceTaskType = undefined
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
@@ -2465,6 +2469,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       updates.aspectRatio = aspectOpts[0]?.value as TextToVideoData["aspectRatio"]
     }
     if (hasStaleSeedanceDraft(currentProvider, data.draft)) updates.draft = undefined
+    if (hasStaleSeedanceTaskType(currentProvider, data.referenceTaskType)) updates.referenceTaskType = undefined
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
@@ -3018,9 +3023,9 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   const soundtrackOn = soundtrackModel && data.audioSoundtrack !== false
   const refCaps = VIDEO_REF_LIMITS_BY_PROVIDER[currentProvider]
 
-  // Fail-safe: snap stale resolution / duration / fps / aspect / frame / draft
-  // values that don't apply to the current provider (Provider Enum Sync step
-  // 12b). The rules live in `generateVideoProviderSnap` — the SAME function the
+  // Fail-safe: snap stale resolution / duration / fps / aspect / frame / draft /
+  // reference task type values that don't apply to the current provider
+  // (Provider Enum Sync step 12b). The rules live in `generateVideoProviderSnap` — the SAME function the
   // node's run strip applies on a model switch, so the two surfaces cannot
   // disagree about what a model accepts.
   useEffect(() => {
@@ -3110,6 +3115,28 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     () => sources.filter((s) => s.targetHandle === "audioReferences"),
     [sources],
   )
+  // Seedance 2.5 "Use the reference video as": the controls the RUN's
+  // declaration decides are locked, read from the wired clips' lengths through
+  // the same answer the node's price reads (`seedanceTaskTypeAsRun`); one line
+  // under the select says why. The stored ratio and length are never
+  // rewritten — the server resolves the declaration and coerces them.
+  const taskTypeAsRun = useSeedanceTaskTypeAsRun(nodeId ?? "", currentProvider, data.duration, data as Record<string, unknown>)
+  const taskTypeState = seedanceTaskTypePanelState({
+    provider: currentProvider,
+    value: data.referenceTaskType,
+    hasReferenceVideo: connectedRefVideos.length > 0,
+    draft: data.draft,
+    asRun: taskTypeAsRun,
+  })
+  const taskTypeLock = taskTypeState.lock
+  // A Duration wired in from a Settings node is what the panel shows (and what
+  // runs) in place of the stored one, so the line below says nothing then.
+  const wiredDuration = useWiredSettingField("duration")
+  // Extend with Duration on Auto runs at a set length: the Duration line names it.
+  const extendAutoSeconds =
+    !wiredDuration && taskTypeLock === "extend" && isAutoVideoDuration(data.duration) && typeof taskTypeAsRun.duration === "number"
+      ? taskTypeAsRun.duration
+      : undefined
 
   // Gemini Omni shares a 7-unit input budget: images (1 each) + startFrame (1) +
   // videos (2 each) ≤ 7. Surface the remaining image budget in the label and an
@@ -3551,7 +3578,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           <Select
             value={String(allowedDurations.includes(data.duration as number) ? data.duration : allowedDurations[0])}
             onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
-            disabled={isGeminiOmni && connectedRefVideos.length > 0}
+            disabled={(isGeminiOmni && connectedRefVideos.length > 0) || taskTypeLock === "edit"}
           >
             <SelectTrigger aria-label={t("field.durationSeconds")}><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -3567,13 +3594,16 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             max={30}
             value={data.duration ?? ""}
             onChange={(e) => onUpdate({ duration: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+            disabled={taskTypeLock === "edit"}
           />
         )}
       </MappableField>
       {isGeminiOmni && connectedRefVideos.length > 0 && (
         <p className="text-[11px] text-muted-foreground">{t("vidcfg.durationAutoFromClip")}</p>
       )}
-      {isAutoVideoDuration(data.duration) && allowedDurations?.includes(data.duration as number) && (
+      {extendAutoSeconds !== undefined ? (
+        <SeedanceExtendAutoLengthHint seconds={extendAutoSeconds} />
+      ) : isAutoVideoDuration(data.duration) && allowedDurations?.includes(data.duration as number) && (
         <p className="text-[11px] text-muted-foreground">{t("vidcfg.durationAutoHint")}</p>
       )}
       {allowedDurations && allowedDurations.length === 1 && (
@@ -3784,6 +3814,17 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {isSeedance2 && (
         <>
           <SeedanceDraftToggle provider={currentProvider} draft={data.draft} resolutionField="resolution" onUpdate={onUpdate} />
+          {/* Shown only on a model that takes a task type, with a reference
+              video wired; disabled (never cleared) while Draft is on. The one
+              line under it explains the locks (or why Edit does not apply). */}
+          <SeedanceTaskTypeSelect
+            provider={currentProvider}
+            value={data.referenceTaskType}
+            draft={data.draft}
+            hasReferenceVideo={connectedRefVideos.length > 0}
+            note={taskTypeState.note}
+            onUpdate={onUpdate}
+          />
           <div>
             <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
@@ -3806,6 +3847,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               options={SEEDANCE_2_VIDEO_RATIOS}
               value={data.aspectRatio || defaultVideoAspectRatio(currentProvider)}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+              disabled={taskTypeLock !== undefined}
             />
           </MappableField>
           <div className="flex items-center gap-2 px-1">

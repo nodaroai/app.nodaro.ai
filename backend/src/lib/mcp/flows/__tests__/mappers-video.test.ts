@@ -239,3 +239,27 @@ describe("a video call the node cannot reproduce maps to no node", () => {
     expect(flowNodeFor("/v1/text-to-video", { prompt: "x", provider: "seedance-2-5" }, "modify_video")).toBeNull()
   })
 })
+
+describe("generate_video records the Seedance 2.5 task type it was called with", () => {
+  const body = { prompt: "make it black and white", provider: "seedance-2-5", duration: 5, referenceVideoUrls: [VIDEO] }
+
+  for (const route of ["/v1/generate-video", "/v1/text-to-video"]) {
+    it(`${route}: a declared value is kept on the node, and its run requests it`, () => {
+      for (const value of ["reference", "edit", "extend"]) {
+        const spec = flowNodeFor(route, { ...TRANSPORT, ...body, referenceTaskType: value }, "generate_video")
+        expect(spec?.data.referenceTaskType, value).toBe(value)
+      }
+      const spec = flowNodeFor(route, { ...TRANSPORT, ...body, referenceTaskType: "edit" }, "generate_video")
+      const payload = buildPayload({ id: "n1", type: spec!.type, data: { ...spec!.data } }, "job1", { referenceVideoUrls: [VIDEO] }, "usage1").payload
+      expect(payload.referenceTaskType).toBe("edit")
+    })
+
+    it(`${route}: "auto", absent or anything else records no key`, () => {
+      for (const value of ["auto", undefined, "bogus", "Edit", 3]) {
+        const spec = flowNodeFor(route, { ...TRANSPORT, ...body, ...(value === undefined ? {} : { referenceTaskType: value }) }, "generate_video")
+        expect(spec, String(value)).not.toBeNull()
+        expect(spec!.data, String(value)).not.toHaveProperty("referenceTaskType")
+      }
+    })
+  }
+})

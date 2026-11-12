@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-11-12T08:24:21.827Z
-generated_from: 593e33c93
+generated_at: 2026-11-12T09:39:00.751Z
+generated_from: 4e8ee8fb2
 ---
 
 # Generate Video
@@ -35,6 +35,7 @@ generated_from: 593e33c93
 - `activeResultIndex?: number`
 - `multiShot?: boolean`
 - `draft?: boolean`
+- `referenceTaskType?: "reference" | "edit" | "extend"`
 - `resolution?: string`
 - `grokMode?: "fun" | "normal" | "spicy"`
 - `videoSize?: "standard" | "high"`

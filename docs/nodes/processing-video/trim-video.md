@@ -59,7 +59,7 @@ Examples:
 | Frames mode on a 10s clip, trim 24+24 frames | ~8s | 22<!-- credits: trim-video@2 --> |
 | Smart loop cut on a 10s clip, lookback 16 | ≤10s | 33<!-- credits: trim-video@3 --> |
 
-The Run button shows the live estimate. When the upstream isn't generated yet, an 8-second fallback is used.
+The Run button shows the live estimate. A video that is not made yet counts at its node's Duration, and one made at an automatic length (or by a Seedance 2.5 Edit or Extend) at the most it can be, as the list below says. When no length is known, an 8-second fallback is used. Every estimate reads the upstream video this way: the editor's, a workflow's and a published app's, the credit check before a run, and the API and MCP estimates.
 
 **The upstream length a run is charged by** (in the editor, in a workflow run, and in a published app) is the length of the video the wire hands on:
 
@@ -69,6 +69,7 @@ The Run button shows the live estimate. When the upstream isn't generated yet, a
 - a [Tighten Episode](./tighten-episode.md#steps-after-the-node)'s episode: the length of the cut it rendered, captioned or with its music bed;
 - the output of a step whose output is exactly as long as its input and that records no length of its own (Add Captions, Resize Video, Fade Video, Transcode Video, Remove Audio; a Merge Video Audio whose tracks are all that same video): its input's length, read by these same rules. The estimate before the run reads it the same way, and also reads a step that may return less than it is given (Face Swap, Video Upscale, Social Media Format, …) at its input's length, so it never quotes less than the run is charged;
 - a list of clips on one wire (a Bundle, such as UGC Finish's finished clips): each clip at its own length;
+- a generated video made at an automatic length, or by a Seedance 2.5 Edit or Extend (on [Generate Video](../ai-video/generate-video.md#steps-after-a-video-of-automatic-length), Image to Video, Text to Video, or Video to Video's Seedance lane): the length it really is, measured when it was made (a file that reads at most a quarter second past a whole second counts as that second) and never above the longest that run could make. Until it exists, and whenever the run makes it again, the estimate counts it at that longest length, so the run never costs more than its estimate. A video whose length could not be measured, or that was made before lengths were recorded, is charged as before (its Duration, else the fallback below);
 - anything else: the length the source recorded, else its configured duration.
 
 When none of these is known, the run is charged at an 8-second fallback per clip.

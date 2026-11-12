@@ -17,6 +17,7 @@ import {
 import { relayFieldsFrom } from "../providers/nodaro/relay-cost.js"
 import { heldCommitArgs, type HeldCommitReplay } from "./job-policy.js"
 import { gptImage26AutoSettledBase } from "./gpt-image-2-6-settle.js"
+import { recordedLengthBoundSec, recordedVideoLengthSec } from "./generated-video-recorded-length.js"
 // @registry-enumerates NOT_GENERIC_RECOVERABLE carries every node unit with the "finalize:own-writer" capability
 import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
 import { composeSet, unitsWith } from "./unit-compose.js"
@@ -440,6 +441,14 @@ export interface FinalizeInput {
    *  extra image sets stored and dropped, so the charge counts only the images
    *  really stored (a split image settles on its base plus its stored layers). */
   meteredBaseCredits?: number | ((stored: StoredExtraImages, dropped: DroppedExtraImages) => Promise<number | undefined>)
+  /** The length, in seconds, of the video stored as this job's output, from a
+   *  measurement the handler already took: of the provider's take, passed only
+   *  when nothing after it changed the take's length (a watermark re-encode or a
+   *  re-upload keeps it; a loop cut, an audio merge or a voice mux may not, and
+   *  then nothing is passed). Read only for a length-following video generation
+   *  run (`recordedLengthBoundSec`), which records its length; without it that
+   *  run's stored file is probed once. Every other job ignores it. */
+  deliveredVideoSec?: number
 }
 
 /**
@@ -618,6 +627,19 @@ export async function finalizeJobWithMedia(
       await releaseJobFinalizeClaim(jobId, fenced ?? claim.ts)
     }
     throw err
+  }
+
+  // 3b. A length-following video generation run (its model offers an
+  //    automatic length, and it went out at one or declared a reference task
+  //    type) records the length its video really is, at most the run's upper
+  //    bound, so the step after it is charged by that (Trim, Loop, Combine
+  //    Videos — the run reads `durationSec` first). Before the completion
+  //    write, so a held completion's approve replays it too. A failed probe
+  //    records nothing; every other job is neither probed nor changed.
+  const lengthBoundSec = videoR2Url !== undefined ? recordedLengthBoundSec(job.job_type, jobType, job.input_data) : undefined
+  if (lengthBoundSec !== undefined && videoR2Url !== undefined) {
+    const durationSec = await recordedVideoLengthSec({ boundSec: lengthBoundSec, measuredSec: input.deliveredVideoSec, videoUrl: videoR2Url, jobId })
+    if (durationSec !== undefined) outputData = { ...outputData, durationSec }
   }
 
   // 4. CAS-guarded markJobCompleted (live statuses only). Null provider /
