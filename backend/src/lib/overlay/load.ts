@@ -159,6 +159,17 @@ async function loadOverlayOnce(name: string, opts: LoadOverlayOpts): Promise<Loa
   // Where the plugins loaded first (the video worker), the house models are looked at now.
   logHouseModelWarnings(name, presetPackHouseModelWarnings())
 
+  // The deployment's own picker pictures, judged the same way and at the same
+  // point: against the catalogs as its catalog packs left them. An option with
+  // no picture is not a problem; one summary line says how many have one.
+  const { pickerPictureProblems, pickerPictureSummary } = await import("../picker-pictures-check.js")
+  const pictureProblems = pickerPictureProblems()
+  if (pictureProblems.length > 0) {
+    return fail(`overlay "${name}" registered picker pictures for options this deployment does not have — ${pictureProblems.join("; ")}`, exit)
+  }
+  const pictureSummary = pickerPictureSummary()
+  if (pictureSummary) console.log(`[overlay] ${name}: ${pictureSummary}`)
+
   console.log(`[overlay] loaded ${name}`)
   return { loaded: name }
 }

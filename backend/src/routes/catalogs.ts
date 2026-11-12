@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { projectAllCatalogs } from "@nodaro/prompts/picker-catalogs"
 import { getRegisteredCatalogPacks, catalogPacksVersion } from "@nodaro/prompts/catalog-packs"
-import { pickerImageOptions } from "../lib/picker-images.js"
+import { ownPickerPicturesShown, pickerImageOptions } from "../lib/picker-images.js"
 
 const query = z.object({ detail: z.enum(["compact", "full"]).optional() })
 
@@ -24,10 +24,15 @@ export async function catalogsRoutes(app: FastifyInstance) {
     // hits this route, and serializing the whole catalog set to say "nothing
     // to see" would be the one measurable cost of the feature on deployments
     // that never use it. `version` lets a client discard a stale registration.
+    //
+    // One exception: a deployment that shows its own picker pictures
+    // (`catalogs.images: "own"` with pictures registered) gets the body with
+    // `curated: false` — the catalogs are still the bundle's, but their
+    // pictures are the deployment's, and the editor reads them from here.
     const packs = getRegisteredCatalogPacks().length
     const version = catalogPacksVersion()
     reply.header("Cache-Control", "public, max-age=300")
-    if (packs === 0) return reply.send({ curated: false, packs: 0, version })
-    return reply.send({ data: projectAllCatalogs({ ...q.data, images: pickerImageOptions({ srcSet: true }) }), curated: true, packs, version })
+    if (packs === 0 && !ownPickerPicturesShown()) return reply.send({ curated: false, packs: 0, version })
+    return reply.send({ data: projectAllCatalogs({ ...q.data, images: pickerImageOptions({ srcSet: true }) }), curated: packs > 0, packs, version })
   })
 }

@@ -1619,25 +1619,91 @@ logo is dropped with a warning and the rest of `brand` is kept.
   `"default"`; any other value reads as `"none"`, with a warning.
 
   **The platform applies it.** With any value but `"default"`:
-  - the API leaves every picture out of the picker catalogs. No option carries
-    an `imageUrl` or `imageSrcSet`, no Person / Styling topic carries an
-    `imageUrl`, and every `imageCount` in the directory is `0`. This covers
-    `GET /v1/picker-catalogs`, `GET /v1/picker-catalogs/{nodeType}`,
-    `GET /v1/catalogs` and the MCP tool `get_picker_catalog`. Everything else
-    in those replies is unchanged.
+  - the API leaves every one of the platform's pictures out of the picker
+    catalogs. No option carries an `imageUrl` or `imageSrcSet`, no Person /
+    Styling topic carries an `imageUrl`, and every `imageCount` in the
+    directory is `0`. This covers `GET /v1/picker-catalogs`,
+    `GET /v1/picker-catalogs/{nodeType}`, `GET /v1/catalogs` and the MCP tool
+    `get_picker_catalog`. Everything else in those replies is unchanged.
   - the editor shows none of the platform's pictures: no rendered preview from
     the Nodaro CDN, and none of the photos, emoji and flags it serves itself.
     Each picker, the canvas nodes and the app input cards show what they show
     for an option with no picture (a drawn preview, an icon or the label), and
     the Person card on the home screen shows no photos.
 
-  `"own"` shows no pictures for now, exactly like `"none"`: there is no way
-  yet to give a deployment's own pictures. Setting it states the intent, and
-  the platform's pictures never show.
+  `"own"` then shows the pictures the deployment registered in their place
+  (below). With none registered it is exactly `"none"`. With `"none"`,
+  registered pictures are not shown either; with `"default"` they are
+  ignored and the platform's show.
 
   Absent or `"default"`, every reply and the editor are exactly as before.
   The Community edition does not read the profile, so its pictures always
   show.
+
+  **Registering the deployment's own pictures.** A deployment registers them
+  at its composition root, in its overlay's `register()` (the same place it
+  registers preset packs), one entry per picker option
+  (`registerPickerPictures`, `backend/src/lib/picker-pictures.ts`):
+
+  ```ts
+  registerPickerPictures([
+    {
+      catalogId: "style", // a catalog id, as GET /v1/picker-catalogs lists it
+      optionId: "cinematic", // an option of that catalog
+      pictureUrl: "https://media.example.com/pictures/style/cinematic.webp",
+      // Optional: the larger version, where a picker shows the option big.
+      enlargedPictureUrl: "https://media.example.com/pictures/style/cinematic-large.webp",
+    },
+  ])
+  ```
+
+  The platform registers none of its own. The rules:
+  - **The media host.** Every address must be an `https` address on this
+    install's own media host: the origin of `R2_PUBLIC_URL`, or the
+    `R2_PUBLIC_FALLBACK_DOMAIN` host, the same rule the platform applies to
+    its other "our own media" checks. An address on any other host, the
+    Nodaro CDN included, is refused, and so is one that names a clip (`.mp4`,
+    `.webm`, `.mov`, `.m4v`): an entry carries pictures only. Installs with
+    different media hosts (a staging and a production install, say) register
+    different addresses.
+  - **Refused at registration.** A call with an entry that is not an object, a
+    missing or blank `catalogId` / `optionId`, a key an entry does not carry
+    (a misspelt one), an address that breaks the host rule, or an option
+    registered twice (in that call or an earlier one) registers none of its
+    entries and throws, naming every problem. The overlay loader turns that
+    into a refused boot, as it does for a preset pack.
+  - **The boot check.** Once the overlay's `register()` has returned, each
+    entry's catalog must be a picker catalog of this deployment, and its
+    option an option of that catalog as the deployment's catalog packs left
+    it, whatever order `register()` made its calls in: an option a pack added
+    counts, one a pack removed does not. Any other entry refuses the boot,
+    every problem in one message.
+  - **A missing picture is not an error.** An option the deployment gave no
+    picture shows none: the API sends no `imageUrl` for it, and the editor
+    shows what it shows for an option without a picture. The boot logs one
+    line saying how many options have a picture, of how many, per catalog that
+    has any (and that they are not shown when `catalogs.images` is not
+    `"own"`). A deployment that registers none logs nothing.
+  - **What shows where.** The API's `imageUrl` is the picture. The REST
+    replies also carry the enlarged picture as `imageLargeUrl`; the MCP tool
+    leaves it out, as it leaves out `imageSrcSet`. In the editor, the pictures
+    replace the platform's wherever the platform's would be: the character
+    pickers' photos, the look pickers' previews and the music / voice
+    pickers' pictures, in the pickers, on the canvas nodes, on the app input
+    cards and on the Person card on the home screen. A picker the editor
+    draws no platform picture for (Setting, say) draws none of the
+    deployment's either; the API still serves them. The enlarged picture is
+    drawn where a picture is drawn large (a canvas node, a large picker tile);
+    a character photo is drawn from `pictureUrl` alone. Without an enlarged
+    picture, the picture serves there too.
+  - **Keys.** A picture belongs to a catalog and an option id. An option id
+    that appears in several of one catalog's settings (the `auto` of a
+    Transition's position, duration and intensity) gets the same picture in
+    each. A Person / Styling topic is not an option, so it has no picture
+    under `"own"`.
+  - `GET /v1/catalogs` sends its body whenever the deployment shows pictures
+    of its own, with `curated: false` when it registered no catalog pack: the
+    editor reads the pictures from it.
 
   **Known limit:** the picture files themselves are still served. With
   `"none"`, a file under `/picker-art/` (or a render on the Nodaro CDN) still

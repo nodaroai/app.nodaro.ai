@@ -3793,6 +3793,17 @@ pickers show:
   directory. The same holds for `GET /v1/catalogs` and the MCP
   `get_picker_catalog` tool. Everything else is unchanged, so a client that
   draws a label when an option has no `imageUrl` needs nothing more.
+- **A deployment's own pictures (`imageLargeUrl`).** A deployment can show
+  pictures of its own instead (`catalogs.images: "own"`, with pictures it
+  registered). Then an option's `imageUrl` is the deployment's picture, on the
+  deployment's own media host, and only an option it gave a picture has one;
+  `imageCount` counts those. No option carries `imageSrcSet` and no topic
+  carries an `imageUrl`. Where the deployment also gave an **enlarged**
+  picture, the REST replies carry it as `imageLargeUrl`: the larger version
+  to show where your picker shows the option big (on hover, zoomed, in a
+  detail view). Draw `imageUrl` everywhere else, and wherever an option has
+  no `imageLargeUrl`. The MCP tool leaves `imageLargeUrl` out, as it leaves
+  out `imageSrcSet`. Only such a deployment ever sends `imageLargeUrl`.
 
 ```bash
 curl -s https://app.nodaro.ai/v1/picker-catalogs/person | jq '.data.sections[0], .data.dimensions[0].options[0]'
@@ -3830,13 +3841,13 @@ catalogs. Public, no auth, same 5-minute cache (`Cache-Control: public, max-age=
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/catalogs` | Every registered catalog: `{ curated, packs, version, data? }`. `data: ProjectedCatalog[]` is present only when the deployment registered catalog packs (`curated: true`); with none (`curated: false`) the catalogs are the bundled ones, served per picker by `/v1/picker-catalogs/:nodeType`. |
+| `GET` | `/v1/catalogs` | Every registered catalog: `{ curated, packs, version, data? }`. `data: ProjectedCatalog[]` is present when the deployment registered catalog packs (`curated: true`). With none (`curated: false`) the catalogs are the bundled ones, served per picker by `/v1/picker-catalogs/:nodeType`, and `data` is absent — unless the deployment shows its own picker pictures (`catalogs.images: "own"` with pictures registered): then `data` is present with `curated: false`, the bundled catalogs carrying the deployment's pictures. |
 
 Query param (a bad value returns 400 `validation_error`):
 
 | Param | Values | Purpose |
 |---|---|---|
-| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`, `imageUrl` (when the option has a picture). `full`: additionally includes each option's `description` and `promptHint`. |
+| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`, `imageUrl` (when the option has a picture), `imageSrcSet` / `imageLargeUrl` (see [Pictures](#pictures-imageurl-sections)). `full`: additionally includes each option's `description` and `promptHint`. |
 
 Each `ProjectedCatalog` is `{ nodeType, label, catalogId, kind, valueField?, defaultValue?, categoryOrder?, categoryLabels?, detail, options?, fields?, dimensions?, sections? }` — single-dim catalogs carry `options`; multi-dim catalogs carry `dimensions` (one `{ field, label, options }` per field); a single-dim catalog with secondary parameter fields (`transition`, `character-fx`: `position` / `duration` / `intensity`; `character-motion`: `position` / `pace`) carries both. Each option is `{ id, label, category?, term, icon?, imageUrl?, description?, promptHint? }` — `imageUrl` and `sections` follow the [picture rules above](#pictures-imageurl-sections); `term` rides at **both** detail levels so a thin client can render `label` and inject the compact professional term without a second `detail=full` fetch. The shape is deliberately tag/policy-free.
 

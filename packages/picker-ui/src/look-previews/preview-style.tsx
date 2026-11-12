@@ -101,7 +101,8 @@ export function useShowsLookRenders(pickerKey: string): boolean {
 /**
  * Whether the real/illustration switch should be offered for this picker: it
  * has a drawing, this edition registered renders for it (never true on a
- * self-hosted install), and the scope is editable.
+ * self-hosted install) or the deployment shows its own pictures there, and
+ * the scope is editable.
  */
 export function useCanSwitchLookPreviewStyle(pickerKey: string): boolean {
   const registered = useHasLookPreviews(pickerKey)

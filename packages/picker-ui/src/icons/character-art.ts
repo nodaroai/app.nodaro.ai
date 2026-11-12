@@ -7,6 +7,7 @@ import {
   type CharacterArtFamily,
 } from "@nodaro/prompts/picker-art"
 import { platformPickerPicturesShown } from "./platform-pictures"
+import { hasOwnPickerPictures, ownPickerPicture } from "./own-pictures"
 
 /**
  * Photos for the options of the character pickers (Person, Styling, Held Prop,
@@ -30,20 +31,26 @@ export { characterSectionSlug }
 export const CHARACTER_ART_BASE = CHARACTER_ART_PATH
 
 /**
- * The photo of one option, or undefined (the caller shows its fallback):
- * always undefined when the deployment shows no platform pictures
- * (platform-pictures.ts).
+ * The photo of one option, or undefined (the caller shows its fallback). When
+ * the deployment shows no platform pictures (platform-pictures.ts), the
+ * deployment's own picture of the option, if it registered one
+ * (own-pictures.ts: only under `catalogs.images: "own"`), and otherwise none.
  */
 export function characterArtUrl(family: CharacterArtFamily, id: string): string | undefined {
-  return platformPickerPicturesShown() ? characterArtPath(family, id) : undefined
+  return platformPickerPicturesShown() ? characterArtPath(family, id) : ownPickerPicture(family, id)?.url
 }
 
-/** Whether any option of the family has a photo this deployment shows. */
+/** Whether any option of the family has a photo this deployment shows (the platform's, or its own). */
 export function hasCharacterArt(family: string): family is CharacterArtFamily {
-  return platformPickerPicturesShown() && family !== "sections" && Object.keys(CHARACTER_ART_FILES[family] ?? {}).length > 0
+  if (family === "sections" || !Object.hasOwn(CHARACTER_ART_FILES, family)) return false
+  return platformPickerPicturesShown() ? Object.keys(CHARACTER_ART_FILES[family] ?? {}).length > 0 : hasOwnPickerPictures(family)
 }
 
-/** The round icon of a picker topic (by its English label), or undefined (also when the deployment shows no platform pictures). */
+/**
+ * The round icon of a picker topic (by its English label), or undefined —
+ * also when the deployment shows no platform pictures: a topic is not an
+ * option, so a deployment's own pictures give it none.
+ */
 export function characterSectionIconUrl(sectionLabel: string): string | undefined {
   return platformPickerPicturesShown() ? characterSectionArtPath(sectionLabel) : undefined
 }

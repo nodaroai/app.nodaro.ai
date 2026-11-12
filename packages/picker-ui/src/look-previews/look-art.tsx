@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore, t
 import { cn } from "../lib/cn"
 import { optimizedImageUrl } from "../prompt-editor/lib/image"
 import { cdnVideoUrl, isVideoPreview } from "./media-url"
-import { useLookPreviewUrl } from "./registry"
+import { getLookPreviewLargeUrl, useLookPreviewUrl } from "./registry"
 import { useEffectiveLookPreviewStyle } from "./preview-style"
 
 interface LookArtProps {
@@ -31,6 +31,13 @@ interface LookArtProps {
  * transform's first request can take seconds).
  */
 const WIDTH_LADDER = [240, 480, 960, 1920] as const
+/**
+ * A deployment's own picture comes in two files (icons/own-pictures.ts): the
+ * picture serves the ladder's small rungs, up to this width, and its enlarged
+ * version — when it gave one — the large rungs, where the box is big (the
+ * canvas node, a large picker tile).
+ */
+const PICTURE_MAX_RUNG = 480
 const CLIP_WIDTHS = [420, 640, 960] as const
 /**
  * Below this on-screen width a clip render shows its still only: the icon
@@ -197,6 +204,8 @@ function LoopingClip({ src, onFail }: { readonly src: string; readonly onFail: (
  */
 export const LookArt = memo(function LookArt({ pickerKey, id, className, width = 240, fallback }: LookArtProps) {
   const registeredUrl = useLookPreviewUrl(pickerKey, id)
+  // Read after the hook above, which re-renders this when it arrives.
+  const largeUrl = getLookPreviewLargeUrl(pickerKey, id)
   const illustrated = useEffectiveLookPreviewStyle(pickerKey) === "illustration" && fallback !== null && fallback !== undefined
   const url = illustrated ? undefined : registeredUrl
   // Keyed by URL, so moving to another option retries instead of sticking to the fallback.
@@ -223,11 +232,12 @@ export const LookArt = memo(function LookArt({ pickerKey, id, className, width =
   const widths = candidateWidths(width)
 
   if (!video) {
+    const at = (w: number): string => optimizedImageUrl(largeUrl !== undefined && w > PICTURE_MAX_RUNG ? largeUrl : url, { width: w })
     return (
       <img
         ref={imgRef}
-        src={optimizedImageUrl(url, { width: widths[0] })}
-        srcSet={widths.map((w) => `${optimizedImageUrl(url, { width: w })} ${w}w`).join(", ")}
+        src={at(widths[0])}
+        srcSet={widths.map((w) => `${at(w)} ${w}w`).join(", ")}
         sizes={`${slot}px`}
         alt=""
         aria-hidden="true"

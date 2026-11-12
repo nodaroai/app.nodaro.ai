@@ -8905,7 +8905,12 @@ previews come from the Nodaro CDN and only Nodaro Cloud returns them. Use the
 URLs as given — file names carry a content hash, so they can be cached for good,
 and any origin may load them. A deployment that turned the platform's pictures
 off (`catalogs.images` in its surface profile) returns no `imageUrl` at all, so
-draw the `label` whenever an option has none. See
+draw the `label` whenever an option has none. A deployment that shows its own
+pictures (`catalogs.images: "own"`) returns its own `imageUrl` for the options
+it gave one, on its own media host, and may add **`imageLargeUrl`**
+(`PickerOption.imageLargeUrl`): the option's enlarged picture, for where your
+picker shows it big (on hover, zoomed, in a detail view). Only such a
+deployment sends it; draw `imageUrl` wherever an option has none. See
 [Pictures](./api-integration.md#pictures-imageurl-sections) for the full rules.
 
 ```ts
@@ -8971,11 +8976,13 @@ list(opts?: { detail?: "compact" | "full" }): Promise<CatalogsListResponse>
 ```
 
 `GET /v1/catalogs` → every registered catalog projected to one flat shape.
-`data` is present only when the deployment registered catalog packs
+`data` is present when the deployment registered catalog packs
 (`curated: true`); with none (`curated: false`) the catalogs are the bundled
-ones — read them per picker with `client.pickerCatalogs.get(nodeType)`.
-Options carry the same `imageUrl`, and person / styling the same `sections`, as
-`client.pickerCatalogs.get`.
+ones — read them per picker with `client.pickerCatalogs.get(nodeType)`. One
+exception: a deployment that shows its own picker pictures returns `data` with
+`curated: false` — the bundled catalogs, carrying its pictures.
+Options carry the same `imageUrl` (and, on such a deployment, `imageLargeUrl`),
+and person / styling the same `sections`, as `client.pickerCatalogs.get`.
 `detail: "compact"` (default) carries `id`, `label`, `category`, `term`, `icon`;
 `detail: "full"` additionally carries each option's `description` and
 `promptHint`. A single-dim catalog carries `options`; a multi-dim catalog

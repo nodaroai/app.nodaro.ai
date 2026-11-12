@@ -9,6 +9,7 @@ import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { useCuratedEntries } from "../curated.js"
 import { characterArtShape, characterArtUrl, type CharacterArtShape } from "../icons/character-art"
+import { useOwnPickerPicturesVersion } from "../icons/own-pictures"
 import { PickerTopicHeading, PickerTopicNav, useTopicJump } from "./picker-topics"
 import { StylingDimensionSection } from "./styling-dimension-section"
 import { STYLING_TOPICS } from "./styling-topics"
@@ -122,10 +123,12 @@ export const StylingPicker = memo(function StylingPicker({ value, onChange, clas
   // Photo tiles for a setting when any of its options has a photo. Read from
   // the whole catalog, not the search results, so the layout never flips while
   // the user types.
+  // A deployment's own photos arrive after the first render (icons/own-pictures.ts).
+  const ownPictures = useOwnPickerPicturesVersion()
   const photoShapes = useMemo(() => {
     const withArt = new Set(STYLINGS.filter((s) => characterArtUrl("styling", s.id) !== undefined).map((s) => s.dimension))
     return new Map([...withArt].map((dim) => [dim, characterArtShape("styling", dim)] as const))
-  }, [STYLINGS])
+  }, [STYLINGS, ownPictures])
 
   const counts = new Map(STYLING_TOPICS.map((t) => [t.label, t.dimensions.filter((d) => pickedIn(value, d).length > 0).length] as const))
   const shown = STYLING_TOPICS.map((topic) => ({
