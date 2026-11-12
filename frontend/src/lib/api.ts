@@ -11,6 +11,7 @@ import {
   type TtsProvider,
   type SunoSeparateType,
   type SunoStemName,
+  type DeclaredSeedanceTaskType,
 } from "@nodaro/shared/models"
 import { isKineticCaptionStyle, KINETIC_ONLY_CAPTION_LEVER_KEYS } from "@nodaro/shared/captions"
 import { ugcFailure } from "@nodaro/shared/ugc"
@@ -3247,6 +3248,10 @@ export interface GenerateVideoOptions {
   /** Seedance Draft (draft-capable models only): a 480p draft the
    *  `seedance-2-5-hd` Video Upscale can finalize as the same take at 1080p. */
   draft?: boolean
+  /** Seedance 2.5: what the reference media is for (`reference` / `edit` /
+   *  `extend`). Absent = Auto: nothing is sent and the model reads the prompt.
+   *  The server resolves it and coerces the ratio and length it decides. */
+  referenceTaskType?: DeclaredSeedanceTaskType
   grokMode?: string        // Grok I2V mode: fun/normal/spicy
   videoSize?: string       // Video size/quality setting
   seed?: number            // Seed (Wan Turbo, Bytedance)
@@ -3337,6 +3342,7 @@ export async function generateVideo(
       elements: opts.elements,
       resolution: opts.resolution,
       draft: opts.draft || undefined,
+      ...(opts.referenceTaskType ? { referenceTaskType: opts.referenceTaskType } : {}),
       grokMode: opts.grokMode,
       videoSize: opts.videoSize,
       seed: opts.seed,
@@ -3596,6 +3602,8 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   resolution?: string
   /** Seedance Draft — see GenerateVideoOptions.draft. */
   draft?: boolean
+  /** Seedance 2.5 — see GenerateVideoOptions.referenceTaskType. */
+  referenceTaskType?: DeclaredSeedanceTaskType
   generateAudio?: boolean
   referenceImageUrls?: string[]
   referenceVideoUrls?: string[]
@@ -11259,6 +11267,9 @@ export interface SeedanceRefEstimateRequest {
   readonly resolution?: string
   readonly duration?: number | string
   readonly draft?: boolean
+  /** Seedance 2.5: the node's reference task type, when the model takes it —
+   *  the server resolves it by the run's own rule before it prices. */
+  readonly referenceTaskType?: DeclaredSeedanceTaskType
   readonly referenceVideoUrls: readonly string[]
   readonly unknownReferenceVideos?: number
   /** Kling 4.0: the audio clip the run plays as its soundtrack (one more reference video). */

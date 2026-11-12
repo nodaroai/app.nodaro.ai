@@ -292,6 +292,46 @@ describe("runVideoGeneration", () => {
     expect(mockToastSuccess).toHaveBeenCalledWith("Video generation complete")
   })
 
+  it("forwards a Seedance reference task type, and sends no key when there is none", () => {
+    mockGenerateVideo.mockReturnValue(new Promise(() => {}))
+    const run = (extras?: { referenceTaskType?: "edit"; draft?: boolean }) =>
+      runVideoGeneration("n1", "http://frame.png", makeCtx(), undefined, undefined, "seedance-2-5", undefined, 5, "p",
+        undefined, undefined, "16:9", undefined, undefined, undefined, undefined, undefined, "720p",
+        undefined, undefined, undefined, undefined, undefined, undefined, extras)
+    run({ referenceTaskType: "edit" })
+    run({})
+    const [withType, without] = mockGenerateVideo.mock.calls.map((c) => c[0] as Record<string, unknown>)
+    expect(withType).toStrictEqual({ ...without, referenceTaskType: "edit" })
+    expect(without).not.toHaveProperty("referenceTaskType")
+  })
+
+  it("a run that recorded its real length puts it on the RESULT (never the node's own Duration); one that recorded none, nothing", async () => {
+    vi.useFakeTimers()
+    let run = 0
+    const land = async (outputData: Record<string, unknown>, extras?: { draft?: boolean }) => {
+      mockUpdateNodeData.mockClear()
+      // Each run its own job: a poll of a job id already in flight joins it.
+      mockGenerateVideo.mockResolvedValue({ jobId: `j-length-${++run}` })
+      mockGetJobStatusLean.mockResolvedValue({ status: "completed", output_data: outputData })
+      mockNodes = [{ id: "n1", data: { generatedResults: [], duration: -1 } }]
+      const promise = runVideoGeneration("n1", "http://frame.png", makeCtx(), undefined, undefined, "seedance-2-5", undefined, -1, "p",
+        undefined, undefined, "16:9", undefined, undefined, undefined, undefined, undefined, "720p",
+        undefined, undefined, undefined, undefined, undefined, undefined, extras)
+      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(2000)
+      await promise
+      return mockNodes[0].data as { duration: unknown; generatedResults: Array<Record<string, unknown>> }
+    }
+    const recorded = await land({ videoUrl: "http://vid.mp4", durationSec: 23.4 })
+    expect(recorded.generatedResults[0]).toMatchObject({ url: "http://vid.mp4", duration: 23.4 })
+    expect(recorded.duration).toBe(-1)
+    const plain = await land({ videoUrl: "http://vid.mp4" })
+    expect(plain.generatedResults[0]).not.toHaveProperty("duration")
+    // A draft keeps its badge beside the length.
+    const draft = await land({ videoUrl: "http://vid.mp4", durationSec: 8.2 }, { draft: true })
+    expect(draft.generatedResults[0]).toMatchObject({ draft: true, duration: 8.2 })
+  })
+
   it("rejects when API call fails", async () => {
     mockGenerateVideo.mockRejectedValue(new Error("API down"))
     const promise = runVideoGeneration("n1", "http://frame.png", makeCtx())
@@ -390,6 +430,20 @@ describe("runTextToVideoGeneration", () => {
       }),
     )
     expect(mockToastSuccess).toHaveBeenCalledWith("Text-to-video generation complete")
+  })
+
+  it("a run that recorded its real length (a Seedance edit, an automatic length) puts it on the result", async () => {
+    vi.useFakeTimers()
+    mockTextToVideo.mockResolvedValue({ jobId: "j6" })
+    mockGetJobStatusLean.mockResolvedValue({ status: "completed", output_data: { videoUrl: "http://t2v.mp4", durationSec: 24.3 } })
+    mockNodes = [{ id: "n1", data: { generatedResults: [] } }]
+    const promise = runTextToVideoGeneration("n1", "edit @video_1", makeCtx(), "seedance-2-5", { duration: -1 })
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(2000)
+    await promise
+    const data = mockNodes[0].data as { duration?: unknown; generatedResults: Array<Record<string, unknown>> }
+    expect(data.generatedResults[0]).toMatchObject({ url: "http://t2v.mp4", duration: 24.3 })
+    expect(data).not.toHaveProperty("duration")
   })
 
   it("rejects when API call fails", async () => {

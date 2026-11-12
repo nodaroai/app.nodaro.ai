@@ -1,3 +1,12 @@
+/**
+ * How far past a whole second a delivered clip's container may read without
+ * counting as longer: a quarter second (8.04 s for an 8 s clip). Read by the
+ * rules that turn a delivered clip's measured length into the length it is
+ * charged as, or compare one with a length held for it. (Clip-priced steps
+ * that measure their own input use a smaller grace of their own.)
+ */
+export const CONTAINER_OVERHANG_SEC = 0.25
+
 /** Read a video node's duration (in seconds) from its data shape.
  *  Tries `generatedResults[activeResultIndex].duration` (post-execution
  *  metadata) first, then `data.duration` (configured at design time on

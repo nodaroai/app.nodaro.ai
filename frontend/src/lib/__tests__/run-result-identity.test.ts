@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { runResultIdentity, runResultRowIdentity } from "../run-result-identity"
+import { recordedVideoLengthField, runResultIdentity, runResultRowIdentity } from "../run-result-identity"
 
 describe("runResultIdentity — what a landed take carries (A1b)", () => {
   it("a render's thumbnail, quality and clip", () => {
@@ -20,7 +20,28 @@ describe("runResultIdentity — what a landed take carries (A1b)", () => {
   it("a render's cut length, as the result row's duration (what a Trim after it is charged by)", () => {
     expect(runResultIdentity("apply-edl", { videoUrl: "v", quality: "final", durationSec: 190 })).toEqual({ quality: "final", duration: 190 })
     expect(runResultIdentity("apply-edl", { videoUrl: "v", durationSec: 0 })).toEqual({})
-    expect(runResultIdentity("generate-video", { videoUrl: "v", durationSec: 190 })).toEqual({})
+    expect(runResultIdentity("lip-sync", { videoUrl: "v", durationSec: 190 })).toEqual({})
+  })
+
+  it("a generated video's recorded length (an automatic length, a Seedance Edit / Extend), as the result row's duration", () => {
+    for (const type of ["generate-video", "image-to-video", "text-to-video", "video-to-video"]) {
+      expect(runResultIdentity(type, { videoUrl: "v", thumbnailUrl: "t", durationSec: 23.4 }), type).toEqual({ thumbnailUrl: "t", duration: 23.4 })
+      // A run that recorded nothing (a fixed length, an older job): nothing, as before.
+      expect(runResultIdentity(type, { videoUrl: "v", thumbnailUrl: "t" }), type).toEqual({ thumbnailUrl: "t" })
+      // Never a render's stamps.
+      expect(runResultIdentity(type, { videoUrl: "v", quality: "proxy", durationSec: 23.4 }), type).toEqual({ duration: 23.4 })
+    }
+    // Another video producer's `durationSec` (an avatar's) is not a generation's record.
+    for (const type of ["ai-avatar", "extend-video", "speech-to-video"]) {
+      expect(runResultIdentity(type, { videoUrl: "v", durationSec: 23.4 }), type).toEqual({})
+    }
+  })
+
+  it("recordedVideoLengthField reads the recorded length only", () => {
+    expect(recordedVideoLengthField({ durationSec: 23.4 })).toStrictEqual({ duration: 23.4 })
+    for (const bad of [undefined, null, {}, { durationSec: 0 }, { durationSec: -1 }, { durationSec: Number.NaN }, { durationSec: "23" }]) {
+      expect(recordedVideoLengthField(bad), String(bad)).toStrictEqual({})
+    }
   })
 
   it("a use-case node's episode length (Tighten Episode: its cut's), as the result row's duration", () => {

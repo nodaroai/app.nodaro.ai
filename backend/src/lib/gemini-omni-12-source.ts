@@ -1,4 +1,5 @@
 import { GEMINI_OMNI_12_MAX_SOURCE_SEC, isGeminiOmniPerSecondProvider } from "@nodaro/shared/models"
+import { CONTAINER_OVERHANG_SEC } from "@nodaro/shared/video"
 
 /** A request's trim of its source clip, as the routes and the DAG carry it. */
 export interface VideoSourceTrim {
@@ -73,5 +74,5 @@ export function videoRefBilledDurations(
 
 /** The rung of the 3–15 s ladder a length bills at. A delivered clip reads a hair over its nominal length. */
 export function geminiOmni12LadderSec(sec: number): number {
-  return Math.min(GEMINI_OMNI_12_MAX_SOURCE_SEC, Math.max(3, Math.ceil(sec - 0.25)))
+  return Math.min(GEMINI_OMNI_12_MAX_SOURCE_SEC, Math.max(3, Math.ceil(sec - CONTAINER_OVERHANG_SEC)))
 }

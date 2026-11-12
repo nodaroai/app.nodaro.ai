@@ -22,9 +22,14 @@ const estimateBody = z.object({
   /** Seedance 2.5 Draft: priced at 480p. */
   draft: z.boolean().optional(),
   /**
-   * Seedance 2.5: the `referenceTaskType` the run will send, resolved as the run
+   * Seedance 2.5: the `referenceTaskType` the run will send (`auto`,
+   * `reference`, `edit`, `extend`; omitted = `auto`), resolved as the run
    * resolves it. A declared `reference` with an automatic length is priced at
-   * the model's longest output; `edit` and `extend` at the length they run at.
+   * the model's longest output; `edit` and `extend` at the length they run at:
+   * an `edit` of clips 4-30 s long runs at Auto, an `extend` at Auto runs at the
+   * model's default length. A clip not produced yet is counted at the model's
+   * longest clip. Ignored by every other model, and an unknown value is
+   * ignored, never refused (`ignoringUnknownTaskType`).
    */
   referenceTaskType: z.enum(SEEDANCE_REFERENCE_TASK_TYPES).optional(),
   /** The reference clips the run will send, in order. */
@@ -45,6 +50,18 @@ const estimateBody = z.object({
 })
 
 /**
+ * The body with a `referenceTaskType` the schema does not list taken off, so
+ * an unknown value prices as Auto rather than refusing the quote (an editor
+ * newer than this server must not lose its price). Done before validation
+ * because the documented schema stays a plain optional enum.
+ */
+function ignoringUnknownTaskType(body: unknown): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body
+  const { referenceTaskType, ...rest } = body as Record<string, unknown>
+  return (SEEDANCE_REFERENCE_TASK_TYPES as readonly unknown[]).includes(referenceTaskType) ? body : rest
+}
+
+/**
  * Read-only price of a Seedance 2 run with reference video(s) — nothing is
  * created or reserved.
  *
@@ -54,7 +71,7 @@ const estimateBody = z.object({
  * `video_too_long`) and prices the probed lengths through the reservation's own
  * arithmetic (`seedance2RefVideoChargedQuote`), so `credits` equals what a run
  * of the same request reserves. Clips not produced yet (`unknownReferenceVideos`)
- * are quoted at the provider's worst case with the shortest clip as `min`, and
+ * are quoted at the provider's worst case with the cheapest run their lengths allow as `min`, and
  * `exact: false` — never a figure below the reservation.
  */
 export function registerSeedanceRefEstimate(app: FastifyInstance): void {
@@ -63,7 +80,7 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
     description:
       "Credits for a Seedance 2 generation with reference video(s), without creating a job. " +
       "The reference clips are probed and priced exactly as the run's reservation prices them (input + output seconds). " +
-      "Clips not produced yet (unknownReferenceVideos) are quoted at the provider's worst case (exact: false; min = the shortest clip).",
+      "Clips not produced yet (unknownReferenceVideos) are quoted at the provider's worst case (exact: false; min = the least the run can reserve, whatever their length). Both are reservations: a run whose length the model decides is charged what it makes, which can be below min.",
     security: [{ bearerAuth: [] }],
     request: { body: { content: { "application/json": { schema: estimateBody } } } },
     responses: {
@@ -82,7 +99,7 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
-    const parsed = estimateBody.safeParse(req.body ?? {})
+    const parsed = estimateBody.safeParse(ignoringUnknownTaskType(req.body ?? {}))
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }

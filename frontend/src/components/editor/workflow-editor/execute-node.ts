@@ -51,6 +51,8 @@ import {
   canonicalVideoProvider,
   pricedOutputDurationSec,
   SEEDANCE_VIDEO_EDIT_SHAPE,
+  SEEDANCE_VIDEO_EDIT_TASK_TYPE,
+  listedSeedanceTaskType,
   supportsExtendRender,
   isMinimaxH3Provider,
   isVeoProvider,
@@ -3212,6 +3214,10 @@ function executeNodeCore(
     const effectiveResolution = i2vDraft
       ? SEEDANCE_DRAFT_RESOLUTION
       : i2vData.resolution ?? (isSeedance2I2V ? MODEL_CATALOG[nodeProvider ?? ""]?.resolutions?.[0] : undefined)
+    // Seedance 2.5 reference task type: sent only when the model takes the
+    // node's value, with the stored ratio and length as they are — the server
+    // resolves the declaration and coerces both (payload-builder sends the same).
+    const i2vTaskType = listedSeedanceTaskType(nodeProvider, i2vData.referenceTaskType)
     setUserPromptTemplate(i2vData.prompt?.trim() || undefined);
     return runVideoGeneration(
       node.id,
@@ -3253,6 +3259,7 @@ function executeNodeCore(
         frameFit: i2vData.frameFit,
         frameDelivery: i2vData.frameDelivery,
         ...(i2vDraft ? { draft: true } : {}),
+        ...(i2vTaskType ? { referenceTaskType: i2vTaskType } : {}),
         // Kling 4.0: wired characters as named subjects (the same shared
         // grouping payload-builder sends) and the keep-original-sound lever.
         ...(nodeProvider && hasFeature(nodeProvider, "character-subjects")
@@ -3361,6 +3368,10 @@ function executeNodeCore(
           referenceVideoUrls: [sourceVideoUrl],
           referenceImageUrls: editImageUrls.length > 0 ? editImageUrls : undefined,
           referenceAudioUrls: editAudioUrls?.length ? editAudioUrls : undefined,
+          // Requested as the route and the workflow run request it: the server
+          // declares it once it has measured the clip (4–30 s), and it moves
+          // nothing priced here (the edit shape is already its own).
+          referenceTaskType: SEEDANCE_VIDEO_EDIT_TASK_TYPE,
         },
         idempotencyKey,
       );
@@ -3598,6 +3609,7 @@ function executeNodeCore(
     // silently submits without aspectRatio/resolution. Fill the defaults
     // explicitly so the request matches what the user sees.
     const effectiveT2vAspect = (t2vData.aspectRatio as string | undefined) ?? (isSeedance2T2V || isMinimaxH3Provider(t2vProvider) ? "adaptive" : undefined)
+    const t2vTaskType = listedSeedanceTaskType(t2vProvider, t2vRaw.referenceTaskType)
     // generate-video (re-typed, carries `__appendWired`): typed + wired negative
     // both emitted. Standalone text-to-video keeps legacy wired-wins.
     const t2vTypedNeg = (t2vData.negativePrompt as string | undefined) || undefined;
@@ -3657,6 +3669,8 @@ function executeNodeCore(
         : {}),
       keepOriginalSound: t2vRaw.keepOriginalSound as boolean | undefined,
       audioSoundtrack: t2vRaw.audioSoundtrack as boolean | undefined,
+      // Seedance 2.5 reference task type — see the image path above.
+      ...(t2vTaskType ? { referenceTaskType: t2vTaskType } : {}),
     };
     setUserPromptTemplate(t2vData.prompt?.trim() || undefined);
     return runTextToVideoGeneration(

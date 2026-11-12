@@ -13,6 +13,7 @@
  * Every surface (generation routes, the workflow engine, MCP, the editor's
  * toggle) gates on {@link isSeedanceDraftCapable}; never hand-list the model.
  */
+import { CONTAINER_OVERHANG_SEC } from "./video-duration.js"
 
 /** Models that accept the draft flag. */
 export const SEEDANCE_DRAFT_MODELS = ["seedance-2-5"] as const
@@ -43,7 +44,7 @@ export const SEEDANCE_DRAFT_FINALIZE_MAX_SEC = 30
  * auto-duration settlement uses — and land on the seeded ladder (4–30 s).
  */
 export function seedanceDraftFinalizeBillableSec(measuredSec: number): number {
-  const whole = Math.max(1, Math.ceil(measuredSec - 0.25))
+  const whole = Math.max(1, Math.ceil(measuredSec - CONTAINER_OVERHANG_SEC))
   return Math.min(SEEDANCE_DRAFT_FINALIZE_MAX_SEC, Math.max(SEEDANCE_DRAFT_FINALIZE_MIN_SEC, whole))
 }
 

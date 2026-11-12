@@ -144,6 +144,59 @@ describe("selectSettings — video fields", () => {
   })
 })
 
+describe("Apply settings — Seedance 2.5 reference task type", () => {
+  // Applying a past video result reproduces that run: the task type it
+  // declared comes back with the ratio and length it ran at, and a run of a
+  // model that takes the field but declared none sets the node back to Auto
+  // (the key removed). Anything else gets no such key at all.
+  const applied = (input: Record<string, unknown>) =>
+    buildAppliedConfigPatch(selectSettings({ input_data: input } as unknown as Job), { includePrompt: false })
+
+  it("a declared Edit comes back with the ratio and length it ran at", () => {
+    expect(applied({ provider: "seedance-2-5", aspectRatio: "adaptive", resolution: "720p", duration: -1, referenceTaskType: "edit" })).toStrictEqual({
+      providers: undefined, provider: "seedance-2-5", aspectRatio: "adaptive", resolution: "720p", duration: -1, referenceTaskType: "edit",
+    })
+    expect(applied({ provider: "seedance-2-5", aspectRatio: "adaptive", duration: 8, referenceTaskType: "extend" })).toStrictEqual({
+      providers: undefined, provider: "seedance-2-5", aspectRatio: "adaptive", duration: 8, referenceTaskType: "extend",
+    })
+  })
+
+  it("a run of a model that takes it and declared none sets the node back to Auto (the key removed)", () => {
+    for (const recorded of [undefined, "auto", "Edit"]) {
+      const patch = applied({ provider: "seedance-2-5", aspectRatio: "16:9", duration: 5, referenceTaskType: recorded })
+      expect(patch, String(recorded)).toStrictEqual({ providers: undefined, provider: "seedance-2-5", aspectRatio: "16:9", duration: 5, referenceTaskType: undefined })
+      expect(patch).toHaveProperty("referenceTaskType")
+    }
+  })
+
+  it("a result of a model that does not take it clears the node's choice (the key removed)", () => {
+    // The node moves onto that model: a choice left on it would come back,
+    // unseen, on a switch back to Seedance 2.5.
+    expect(applied({ provider: "nano-banana-pro", aspectRatio: "1:1", referenceTaskType: "edit" })).toStrictEqual({
+      providers: undefined, provider: "nano-banana-pro", aspectRatio: "1:1", referenceTaskType: undefined,
+    })
+    const kling = applied({ provider: "kling-3.0", aspectRatio: "16:9", duration: 5, referenceTaskType: "edit" })
+    expect(kling).toStrictEqual({
+      providers: undefined, provider: "kling-3.0", aspectRatio: "16:9", duration: 5, referenceTaskType: undefined,
+    })
+    expect(kling).toHaveProperty("referenceTaskType")
+  })
+
+  it("a result with no model recorded leaves the node's choice alone", () => {
+    expect(applied({ aspectRatio: "16:9" })).not.toHaveProperty("referenceTaskType")
+  })
+
+  it("a draft result leaves the node's choice alone: its patch has no such key at all", () => {
+    // A draft never carries the field, so the "none" it recorded is not the
+    // user's choice: applying it keeps whatever the node is set to.
+    for (const recorded of [undefined, "auto", "edit"]) {
+      const patch = applied({ provider: "seedance-2-5", aspectRatio: "16:9", resolution: "480p", duration: 5, draft: true, referenceTaskType: recorded })
+      expect(patch, String(recorded)).toStrictEqual({ providers: undefined, provider: "seedance-2-5", aspectRatio: "16:9", resolution: "480p", duration: 5 })
+      expect(patch).not.toHaveProperty("referenceTaskType")
+    }
+  })
+})
+
 describe("useResultGenerationSettings — backend-id guard", () => {
   beforeEach(() => vi.clearAllMocks())
 

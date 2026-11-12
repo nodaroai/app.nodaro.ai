@@ -32,7 +32,8 @@
  * and the same providers.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { parseUnitQuoteCreditId, videoSfxCreditId } from "@nodaro/shared/credits"
+import { parseUnitQuoteCreditId, videoGenerationCreditId, videoSfxCreditId } from "@nodaro/shared/credits"
+import { VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
 import { PREVIEW_RENDER_NODE_TYPES, REVIEW_HOLDING_USE_CASE_TYPES, rendersAsPreview, withRunOverrides } from "@nodaro/shared/nodes"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -157,6 +158,83 @@ describe("several providers on one node", () => {
   })
   it("one provider in the list is a single-provider run", () => {
     expect(lines(img({ provider: "gpt-image-2", providers: ["nano-banana-pro"] }))[0]!.credits).toBe(15)
+  })
+})
+
+describe("a Seedance 2.5 node's reference task type is quoted at the length it runs at", () => {
+  // The editor's half: the price id names the row of the length the shared
+  // resolver gives the run (an Edit whose clips are all 4–30 s runs at Auto; an
+  // Extend at Auto runs at the model's default length), and the server's quote
+  // of the run is keyed with the declaration, so switching the setting
+  // re-quotes. These rows use a local price table and the same shared id
+  // builder, so they pin which ROW the editor names, not an amount. That the
+  // server RESERVES under that same row is pinned on the server side:
+  // backend/src/routes/__tests__/video-priced-selection.test.ts and
+  // backend/src/ee/billing/__tests__/seedance-task-type-estimate.test.ts.
+  const CLIP = "https://cdn.example/clip.mp4"
+  const upload = (sec?: number): WorkflowNode => ({
+    id: "clip", type: "upload-video", position: { x: 0, y: 0 },
+    data: { label: "clip", url: CLIP, ...(sec !== undefined ? { generatedResults: [{ url: CLIP, duration: sec }] } : {}) },
+  }) as WorkflowNode
+  const gv = (data: Record<string, unknown> = {}): WorkflowNode => ({
+    id: "gv", type: "generate-video", position: { x: 0, y: 0 },
+    data: { label: "gv", provider: "seedance-2-5", resolution: "720p", aspectRatio: "16:9", duration: 5, prompt: "a shot", ...data },
+  }) as WorkflowNode
+  const wired = [{ id: "e1", source: "clip", target: "gv", sourceHandle: "video", targetHandle: "videoReferences" }] as WorkflowEdge[]
+  // The rows, built with the one shared builder the server's route uses too.
+  const idAt = (duration: number) =>
+    videoGenerationCreditId({ provider: "seedance-2-5", duration, nodeType: "image-to-video", resolution: "720p", hasVideoRef: true })
+  const AUTO_ID = idAt(VIDEO_DURATION_AUTO)
+  const PRICES: Record<string, number> = { [idAt(5)]: 500, [idAt(8)]: 800, [AUTO_ID]: 3000 }
+  const quoted = (nodes: WorkflowNode[], edges: WorkflowEdge[] = wired): number =>
+    estimateRunCredits(nodes.filter(isExecutableNode), nodes, edges, (id) => PRICES[id])
+
+  it("the three rows are distinct ids", () => {
+    expect(new Set([idAt(5), idAt(8), AUTO_ID]).size).toBe(3)
+  })
+
+  it("Edit with a 6 s clip, stored 16:9 at 5 s, is quoted the automatic-length price", () => {
+    expect(quoted([upload(6), gv({ referenceTaskType: "edit" })])).toBe(PRICES[AUTO_ID])
+  })
+
+  it("Edit with a 3 s clip is quoted as the node without the setting", () => {
+    expect(quoted([upload(3), gv({ referenceTaskType: "edit" })])).toBe(quoted([upload(3), gv()]))
+    expect(quoted([upload(3), gv()])).toBe(PRICES[idAt(5)])
+  })
+
+  it("Extend with an automatic length is quoted at 8 s", () => {
+    expect(quoted([upload(6), gv({ referenceTaskType: "extend", duration: VIDEO_DURATION_AUTO })])).toBe(PRICES[idAt(8)])
+  })
+
+  it("Edit with a clip whose length the editor does not know is quoted the automatic-length price", () => {
+    expect(quoted([upload(), gv({ referenceTaskType: "edit" })])).toBe(PRICES[AUTO_ID])
+  })
+
+  it("Edit on a draft is quoted as the node without the setting", () => {
+    // A draft never carries the field (and is priced at 480p either way).
+    const draft = { draft: true }
+    const ids = (n: WorkflowNode) => runModelIds([n], [upload(6), n], wired).filter((id) => !id.startsWith("seedance-ref-quote:"))
+    expect(ids(gv({ ...draft, referenceTaskType: "edit" }))).toEqual(ids(gv(draft)))
+  })
+
+  it("a node without the setting asks for exactly today's ids", () => {
+    const ids = runModelIds([gv()], [upload(6), gv()], wired)
+    expect(ids).toContain(idAt(5))
+    expect(ids).not.toContain(AUTO_ID)
+    const key = ids.find((id) => id.startsWith("seedance-ref-quote:"))!
+    expect(key).not.toContain("referenceTaskType")
+  })
+
+  it("the server's quote is asked with the declaration, and is what the run is quoted when it is in", () => {
+    const node = gv({ referenceTaskType: "edit" })
+    const ids = runModelIds([node], [upload(6), node], wired)
+    expect(ids).toContain(AUTO_ID)
+    const key = ids.find((id) => id.startsWith("seedance-ref-quote:"))!
+    expect(JSON.parse(key.slice("seedance-ref-quote:".length))).toMatchObject({ referenceTaskType: "edit" })
+    const withoutSetting = runModelIds([gv()], [upload(6), gv()], wired).find((id) => id.startsWith("seedance-ref-quote:"))
+    expect(key).not.toBe(withoutSetting)
+    const cachedCost = (id: string) => (id === key ? 4321 : PRICES[id])
+    expect(estimateRunCredits([node], [upload(6), node], wired, cachedCost)).toBe(4321)
   })
 })
 

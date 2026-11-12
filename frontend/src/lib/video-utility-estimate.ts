@@ -20,7 +20,7 @@ import {
   type TrimVideoEstimatorInput,
 } from "@nodaro/shared/credits"
 import { maskCompositeUnits } from "@nodaro/shared/media"
-import { fanInClipCount, forwardedVideoLengthSec, maskCompositeLeadSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo } from "@nodaro/render-rules"
+import { fanInClipCount, forwardedVideoLengthSec, generationSourceEstimateSec, maskCompositeLeadSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, withoutRecordedVideoLength, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo } from "@nodaro/render-rules"
 import { clampTopazVideoFps, isTopazVideoResolution, resolveTopazVideoTarget, type TopazVideoResolution, type TopazVideoSource } from "@nodaro/shared/models"
 import { withWiredSettings } from "@nodaro/shared/nodes"
 import { resolveGraphOrigin, topazVideoEstimateUnits } from "@nodaro/render-rules"
@@ -39,6 +39,11 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
  * (`forwardedVideoLengthSec`: an upload's length, a generation's duration).
  * Unknown stays `undefined`: the estimators' fallback length stands in.
  *
+ * A generated video is read as it was before its runs recorded a length
+ * (`withoutRecordedVideoLength`): the steps priced through this reader
+ * measure the clip they are given, and a recorded length is capped at its run's
+ * bound, so it can sit under the file they measure.
+ *
  * @param rerunIds the nodes about to EXECUTE (empty for a single node's own price).
  */
 function wireDurationReader(
@@ -49,7 +54,31 @@ function wireDurationReader(
   return (sourceId) =>
     runWireLengthSec(sourceId, nodes, edges, rerunIds, {
       planOutputOf: readPlan,
-      otherSec: forwardedVideoLengthSec,
+      otherSec: (origin) => forwardedVideoLengthSec(withoutRecordedVideoLength(origin)),
+    })
+}
+
+/**
+ * {@link wireDurationReader} for the steps CHARGED by the length they are
+ * handed (Trim, Loop, Combine Videos): a generated video by the shared rule
+ * (`generationSourceEstimateSec`, the server's run estimate reads it too) —
+ * a generation that runs in the estimated run and follows its own length (an
+ * automatic length, a Seedance Edit / Extend) at the most it can make, the
+ * length its record is capped at, so the quote is never below the charge; one
+ * that does not run at the length its result recorded. Every other source as
+ * before, so a fixed-length generation is quoted as it always was.
+ *
+ * @param rerunIds the nodes about to EXECUTE (empty for a single node's own price).
+ */
+function utilityWireDurationReader(
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string>,
+): WireDurationReader {
+  return (sourceId) =>
+    runWireLengthSec(sourceId, nodes, edges, rerunIds, {
+      planOutputOf: readPlan,
+      otherSec: (origin) => generationSourceEstimateSec(origin, nodes, edges, rerunIds, forwardedVideoLengthSec),
     })
 }
 
@@ -172,7 +201,8 @@ export function estimateVideoUtilityBaseCredits(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | undefined {
   const data = node.data as Record<string, unknown>
-  const durationOf = wireDurationReader(nodes, edges, rerunIds)
+  // Charged by the length handed to them: a generated video by the shared rule.
+  const durationOf = utilityWireDurationReader(nodes, edges, rerunIds)
   switch (node.type) {
     case "loop-video":
       return estimateLoopVideoCredits(data as LoopVideoEstimatorInput, getUpstreamDuration(node.id, nodes, edges, durationOf))

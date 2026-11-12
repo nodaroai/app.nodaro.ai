@@ -60,9 +60,18 @@ export interface Seedance2Settle {
    *  as billed (0 without one). Undefined when nothing was measured; kept when only the
    *  pricing failed (`baseCredits` undefined: the reservation is committed). */
   seconds: { outputSec: number; inputSec: number } | undefined
+  /** The delivered clip's length as measured, unrounded — what a length-following
+   *  run records for the step after it (`finalizeJobWithMedia`'s
+   *  `deliveredVideoSec`), so the clip is probed once. Absent when nothing was
+   *  measured (and kept when only the pricing failed, like `seconds`). */
+  deliveredSec?: number
 }
 
 const NOT_MEASURED: Seedance2Settle = { baseCredits: undefined, seconds: undefined }
+
+/** `{ deliveredSec }` when the measurement carries one, else nothing (the shape stays today's). */
+const deliveredOf = (measuredSec: unknown): { deliveredSec?: number } =>
+  typeof measuredSec === "number" && Number.isFinite(measuredSec) && measuredSec > 0 ? { deliveredSec: measuredSec } : {}
 
 const everyClipMeasured = (durationsSec: unknown): boolean =>
   Array.isArray(durationsSec) && durationsSec.length > 0
@@ -77,12 +86,14 @@ async function priceMeasured(
   seconds: { outputSec: number; inputSec: number },
   price: () => Promise<number>,
   run: string,
+  measuredSec: unknown,
 ): Promise<Seedance2Settle> {
+  const delivered = deliveredOf(measuredSec)
   try {
-    return { baseCredits: await price(), seconds }
+    return { baseCredits: await price(), seconds, ...delivered }
   } catch (err) {
     console.warn(`[billing] could not price the delivered Seedance ${run}; committing the reservation:`, err)
-    return { baseCredits: undefined, seconds }
+    return { baseCredits: undefined, seconds, ...delivered }
   }
 }
 
@@ -111,12 +122,13 @@ export async function measureSeedance2Settle(args: Seedance2SettleArgs): Promise
     // settle to the tier of the length the model actually chose.
     if (!isAutoVideoDuration(args.duration)) return NOT_MEASURED
     try {
-      const { seedance2AutoDurationActualSeconds, seedance2AutoDurationActualBaseCredits } = await import("../ee/billing/seedance2-ref-video-credits.js")
-      const outputSec = await seedance2AutoDurationActualSeconds({ outputUrl: args.outputUrl })
+      const { seedance2AutoDurationMeasure, seedance2AutoDurationActualBaseCredits } = await import("../ee/billing/seedance2-ref-video-credits.js")
+      const { outputSec, measuredSec } = await seedance2AutoDurationMeasure({ outputUrl: args.outputUrl })
       return await priceMeasured(
         { outputSec, inputSec: 0 },
         () => seedance2AutoDurationActualBaseCredits({ provider: provider as string, resolution: args.resolution, outputUrl: args.outputUrl }, outputSec),
         "auto-duration run",
+        measuredSec,
       )
     } catch (err) {
       console.warn(`[billing] could not measure the delivered Seedance auto-duration run; committing the reservation:`, err)
@@ -140,6 +152,7 @@ export async function measureSeedance2Settle(args: Seedance2SettleArgs): Promise
       { outputSec: measured.deliveredSec, inputSec: measured.inputSec },
       () => seedance2RefVideoActualBaseCredits(run, measured),
       "reference run",
+      measured.measuredSec,
     )
   } catch (err) {
     console.warn(`[billing] could not measure the delivered Seedance reference run; committing the reservation:`, err)

@@ -20,6 +20,11 @@
  *      LTX's seeded duration tiers, at the node's resolution or the UI fill);
  *   3. `pricedOutputDurationSec`: the requested seconds, else the length the
  *      run prices an unset duration at, the longest clip for AUTO.
+ * A Seedance reference task type the node declares can move that length (an
+ * `edit` runs at AUTO, an `extend` turns AUTO into a set length), but only
+ * when a reference clip qualifies — which the listing cannot see. So the
+ * length is read both ways, as declared with a clip assumed wired and as
+ * undeclared, and the longer kept: never shorter than either run.
  *
  * The listing reads the result to price a Trim, Loop, Combine Videos or Video SFX fed
  * by the generation (`wireInputLength` in ee/billing/credits.ts). A node that
@@ -40,24 +45,37 @@ import {
 import {
   VIDEO_UTIL_PRICING,
 } from "@nodaro/shared/credits"
-import { nodeProviders } from "@nodaro/render-rules"
-import { resolveVideoRequestNorm } from "./video-request-norm.js"
+import { LEGACY_VIDEO_NODE_DEFAULT_PROVIDER, nodeProviders } from "@nodaro/render-rules"
+import { resolveVideoRequestNorm, videoRequestReferenceMedia } from "./video-request-norm.js"
+import { refVideoWorstCaseSecFor } from "./ref-video-worst-case.js"
 
-/** The provider a legacy Image to Video / Text to Video node runs when it names none. */
-export const LEGACY_VIDEO_NODE_DEFAULT_PROVIDER = "kling"
+/** The provider a legacy Image to Video / Text to Video node runs when it names none (one definition, shared with the run estimates). */
+export { LEGACY_VIDEO_NODE_DEFAULT_PROVIDER }
 
 /** The generation nodes whose output length is their configured duration. */
 export const CONFIGURED_DURATION_VIDEO_TYPES: ReadonlySet<string> = new Set(["generate-video", "image-to-video", "text-to-video"])
 
-/** The seconds one provider renders for this node's settings, as its run prices them. */
+/**
+ * The seconds one provider renders for this node's settings, as its run prices
+ * them. A declared reference task type is read with one reference clip assumed
+ * wired, at the provider's worst-case length (the convention the reservation
+ * counts an unknown clip by), and the longer of that and the undeclared length
+ * is kept — whether a clip is wired, and qualifies, is a graph fact.
+ */
 function providerLengthSec(provider: string, data: Record<string, unknown>): number {
   const duration = data.duration as number | string | undefined
-  const norm = resolveVideoRequestNorm({
-    provider,
-    resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
-    duration,
-  })
-  return pricedOutputDurationSec(provider, norm.duration ?? duration)
+  const lengthOf = (referenceTaskType: unknown): number => {
+    const clips = referenceTaskType === undefined ? undefined : [refVideoWorstCaseSecFor(provider)]
+    const norm = resolveVideoRequestNorm({
+      provider,
+      resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
+      duration,
+      // Undeclared: exactly the call the length was always read by. A draft declares nothing.
+      ...(clips ? { draft: data.draft === true, referenceTaskType, referenceMedia: videoRequestReferenceMedia({ referenceVideoUrls: clips }, clips) } : {}),
+    })
+    return pricedOutputDurationSec(provider, norm.duration ?? duration)
+  }
+  return Math.max(lengthOf(undefined), lengthOf(data.referenceTaskType))
 }
 
 /**

@@ -1,4 +1,8 @@
+// @test-watches backend/src/lib/__tests__/fixtures/seedance-reference-auto-quote.json
 import { describe, it, expect } from "vitest"
+import { readFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
 import {
   seedanceRefQuoteRequest,
@@ -56,6 +60,63 @@ describe("seedanceRefQuoteRequest — Generate Video", () => {
     expect(seedanceRefQuoteRequest(k, [upload, k], [edge("clip", "gv", "videoReferences")])).toBeUndefined()
     // A clip on the start frame is not a reference video.
     expect(seedanceRefQuoteRequest(g, [upload, g], [edge("clip", "gv", "startFrame")])).toBeUndefined()
+  })
+})
+
+describe("seedanceRefQuoteRequest — Seedance 2.5 reference task type", () => {
+  // The server resolves the declaration by the run's own rule (it measures the
+  // clips), so the editor only hands it the node's value — and only a value the
+  // model takes; anything else is exactly today's request.
+  const gv = (data: Record<string, unknown>) => node("gv", "generate-video", { provider: "seedance-2-5", duration: 5, aspectRatio: "16:9", ...data })
+  const wires = [edge("clip", "gv", "videoReferences")]
+  const today = seedanceRefQuoteRequest(gv({}), [upload, gv({})], wires)
+
+  it("carries the node's declared value", () => {
+    for (const value of ["reference", "edit", "extend"] as const) {
+      const g = gv({ referenceTaskType: value })
+      expect(seedanceRefQuoteRequest(g, [upload, g], wires)).toStrictEqual({ ...today, referenceTaskType: value })
+    }
+  })
+
+  it("an absent, auto or unknown value is today's request, key for key", () => {
+    for (const value of [undefined, "auto", "Edit", 3]) {
+      const g = gv({ referenceTaskType: value })
+      expect(seedanceRefQuoteRequest(g, [upload, g], wires), String(value)).toStrictEqual(today)
+    }
+  })
+
+  it("a model that takes no task type sends none", () => {
+    const g = node("gv", "generate-video", { provider: "seedance-2", duration: 5, referenceTaskType: "edit" })
+    const plain = node("gv", "generate-video", { provider: "seedance-2", duration: 5 })
+    expect(seedanceRefQuoteRequest(g, [upload, g], wires)).toStrictEqual(seedanceRefQuoteRequest(plain, [upload, plain], wires))
+  })
+
+  it("keys the declaration, so switching the setting re-quotes; no setting keeps today's key", () => {
+    const edit = gv({ referenceTaskType: "edit" })
+    const extend = gv({ referenceTaskType: "extend" })
+    const keyOf = (g: WorkflowNode) => seedanceRefQuoteKeyFor(g, [upload, g], wires)!
+    expect(new Set([keyOf(gv({})), keyOf(edit), keyOf(extend)]).size).toBe(3)
+    expect(keyOf(gv({}))).toBe(seedanceRefQuoteKey(today!))
+    expect(keyOf(gv({}))).not.toContain("referenceTaskType")
+    expect(parseSeedanceRefQuoteKey(keyOf(edit))).toStrictEqual({ ...today, referenceTaskType: "edit" })
+  })
+
+  // The editor's half of a shared fixture: a node with A reference and Duration
+  // on Auto, whose run is held at the model's longest output. The server's half
+  // (backend/src/ee/billing/__tests__/seedance-task-type-estimate.test.ts) posts
+  // `editorRequest` to the estimate route and holds its answer, and the workflow
+  // estimate of the same graph, to what that run reserves.
+  it("A reference with Duration on Auto: the request is the fixture's, key for key — the one the server prices at the run's reservation", () => {
+    const here = dirname(fileURLToPath(import.meta.url))
+    const fixture = JSON.parse(readFileSync(join(here, "../../../../backend/src/lib/__tests__/fixtures/seedance-reference-auto-quote.json"), "utf8")) as {
+      nodes: Array<{ id: string; type: string; data: Record<string, unknown> }>
+      edges: WorkflowEdge[]
+      editorRequest: Record<string, unknown>
+    }
+    const nodes = fixture.nodes.map((n) => node(n.id, n.type, n.data))
+    const g = nodes.find((n) => n.type === "generate-video")!
+    expect(g.data).toMatchObject({ referenceTaskType: "reference", duration: VIDEO_DURATION_AUTO })
+    expect(seedanceRefQuoteRequest(g, nodes, fixture.edges)).toStrictEqual(fixture.editorRequest)
   })
 })
 

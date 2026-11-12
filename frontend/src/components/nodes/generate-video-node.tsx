@@ -48,6 +48,7 @@ import { getHandleConnectionLimit } from "@/lib/handle-limits"
 import { buildVideoCreditModelIdentifier, videoGenerationCreditId } from "@nodaro/shared/credits"
 import { applyDefaultVideoSelection } from "@nodaro/shared/models"
 import { audioReferencesLabel, sendsReferenceVideo } from "@/lib/audio-reference-handles"
+import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
 import { SETTINGS_INPUT_HANDLE } from "@nodaro/shared/nodes"
 import { copyToClipboard, computeDeleteResultUpdates } from "@/lib/utils"
 import type { GenerateVideoNodeData, GeneratedResult, WorkflowNode } from "@/types/nodes"
@@ -149,6 +150,13 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   // A Kling 4.0 soundtrack is sent as a reference video too (sendsReferenceVideo).
   const audioSoundtrack = typeof runData.audioSoundtrack === "boolean" ? runData.audioSoundtrack : undefined
   const hasVideoRef = useWorkflowStore((s) => sendsReferenceVideo(id, provider, audioSoundtrack, s.edges))
+  // The length the run is priced at once a Seedance reference task type is
+  // resolved (Edit: automatic length; Extend at automatic length: the model's
+  // default) — the same helper the run estimate reads. A primitive, so the
+  // store selector is stable; a node without the setting gets its own length.
+  const runDuration = useWorkflowStore((s) => seedanceTaskTypeRunDuration({
+    nodeId: id, provider, duration: providerSelection.duration, data: runData as Record<string, unknown>, nodes: s.nodes as WorkflowNode[], edges: s.edges,
+  }))
   // Credit identifier — the "image-to-video" string is a FE DISPLAY DEFAULT.
   // The actual mode is decided by the backend payload-builder at run-time
   // based on connected inputs. Using i2v as the display estimate matches the
@@ -157,7 +165,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   // and the one Video to Video's Seedance edit lane quotes for the same call.
   const creditIdentifier = videoGenerationCreditId({
     provider,
-    duration: providerSelection.duration,
+    duration: runDuration,
     sound: runData.sound as boolean | undefined,
     nodeType: "image-to-video",
     mode: (runData.videoSize as string | undefined) ?? (runData.mode as string | undefined),

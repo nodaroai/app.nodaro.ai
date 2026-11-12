@@ -131,7 +131,7 @@ import { runStopSignal } from "./run-stop-signal.js"
 import { discardDeletedJobScratch } from "../../lib/job-scratch.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
-import { stampSeedanceReferenceTaskType } from "../../lib/seedance-task-type-stamp.js"
+import { stampSeedanceReferenceTaskTypeForRun } from "../../lib/seedance-task-type-stamp.js"
 import { applyAudioSoundtrack } from "../../lib/audio-soundtrack.js"
 import { probeAndCheckRefAudio } from "../../lib/ref-audio-probe.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
@@ -2287,10 +2287,13 @@ async function executeWorkerNode(
       ? err
       : new Error(`Failed to build payload for ${node.type}: ${String(err)}`)
   }
-  const { jobName, queueName, modelIdentifier } = buildResult
+  const { jobName, queueName } = buildResult
   // `let`: the reference task type stamp (2b+) and the Seedance draft-finalize
-  // stamp (2b'++) rebind it to a copy.
-  let { payload } = buildResult
+  // stamp (2b'++) rebind the payload to a copy, and the reference task type
+  // stamp rebinds the id when the length it resolves moves the price. Every
+  // reader below — the reservation, its preflight, the overrides, the usage
+  // log — reads these two bindings, never the build's own payload or id.
+  let { payload, modelIdentifier } = buildResult
 
   // 2. The restriction gate, FIRST: a file an administrator restricted after
   // a complaint is not an input to any job, and not fetched by the steps
@@ -2368,12 +2371,27 @@ async function executeWorkerNode(
   // privately and the settlement to probe again.
   const refVideoDurationsSec = refVideoCheck.durationsSec ?? (await probeRefVideosForReservation(payload))
 
-  // 2b+. A requested reference task type (the Video to Video node's Seedance
-  // edit requests `edit`), resolved by the routes' own rule now that the clips
-  // are measured — BEFORE input_data, the reservation and the queued payload
-  // below, which all read this `payload`. Undeclared → no key at all. A payload
-  // that requests nothing is the same object (lib/seedance-task-type-stamp.ts).
-  payload = stampSeedanceReferenceTaskType(payload, refVideoDurationsSec)
+  // 2b+. A requested reference task type (the video lanes request the node's
+  // setting; the Video to Video node's Seedance edit requests `edit`), resolved
+  // by the routes' own rule now that the clips are measured — BEFORE input_data,
+  // the reservation and the queued payload below, which all read this `payload`
+  // and this `modelIdentifier`. Undeclared → no key at all. A resolution that
+  // moves the length is re-priced from the lane's own price arguments, so the
+  // reservation is for the length that runs; without them the run goes out as
+  // built, undeclared (lib/seedance-task-type-stamp.ts). A payload that requests
+  // nothing is the same object at the same id.
+  const taskTypeRun = stampSeedanceReferenceTaskTypeForRun(
+    { payload, modelIdentifier, videoCreditIdArgs: buildResult.videoCreditIdArgs },
+    refVideoDurationsSec,
+  )
+  if (taskTypeRun.droppedUnpriced) {
+    console.warn(
+      `[node-executor] ${node.type} node ${node.id}: its reference task type would change the length the run is priced at, ` +
+      "but the build carried no price arguments — sent undeclared, as built",
+    )
+  }
+  payload = taskTypeRun.payload
+  modelIdentifier = taskTypeRun.modelIdentifier
 
   // 2b'. Video SFX: measure the clip by the route's own rule and stamp the
   // length (what the model scores) and its price row on the payload, BEFORE
@@ -2626,8 +2644,10 @@ async function executeWorkerNode(
       // `payload.reservedCreditId`, which the plugin gate reads). We key BOTH
       // the preflight and the reservation — hence the usage log — off that id so
       // the reserve, the gate, and the usage log agree on the exact bucket.
-      // `modelIdentifier` is const (buildPayload's transcript/ceiling basis); an
-      // unprobeable master falls back to it, the safe over-reserve direction.
+      // `modelIdentifier` is buildPayload's (the transcript/ceiling basis for
+      // edit-plan; only the reference task type stamp above ever rebinds it, for
+      // a video job); an unprobeable master falls back to it, the safe
+      // over-reserve direction.
       //
       // video-sfx and video-depth are the same shape: a row per clip length,
       // and the length was measured and stamped above, so the reservation keys

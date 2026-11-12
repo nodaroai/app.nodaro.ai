@@ -15,6 +15,8 @@ export function seedanceRefQuoteKey(request: SeedanceRefEstimateRequest): string
     resolution: request.resolution,
     duration: request.duration,
     draft: request.draft,
+    // Absent on a node without the setting, so its key is unchanged.
+    referenceTaskType: request.referenceTaskType,
     referenceVideoUrls: request.referenceVideoUrls,
     unknownReferenceVideos: request.unknownReferenceVideos,
     soundtrackAudioUrl: request.soundtrackAudioUrl,

@@ -638,7 +638,7 @@ So at 8s: 1080p = **3476**<!-- credits: seedance-2-5:8s:1080p --> no-ref / **209
 
 **Seedance 2 reference runs reserve for an edit and settle to what was delivered.** With a video wired, Seedance may treat the run as an **edit** of that clip (see *Seedance 2.5 video editing* below), and an edit renders the clip's own length rather than the node's Duration. The reservation therefore bills the output at the **longer of the requested duration and the longest reference clip** (with Duration **Auto**, at the longest reference clip plus a second instead — see *Auto duration* below). When the run completes, the platform measures the delivered clip and settles to the price of `Σ reference_video_seconds + delivered_seconds` seconds at that rate, refunding the rest — so a style run pays exactly its requested duration and an edit pays for the length it rendered. Example, `seedance-2-5` @1080p (the 8 s `-ref` price ÷ 8 a second) with a 30 s clip wired and Duration 12 s: reserved for 30 + 30 seconds = **15675**<!-- credits: seedance-2-5:8s:1080p-ref@7.5 -->; a style run that delivers 12 s settles to 30 + 12 seconds = **10973**<!-- credits: seedance-2-5:8s:1080p-ref@5.25 -->; an edit that delivers the full 30 s settles at the reservation. The reference clips are measured once, when the run is reserved, and the settlement prices the input side from those same measurements — only the delivered clip is measured at the end. A reference clip that could not be measured counts as the provider's per-clip cap both ways (30 s on Seedance 2.5, 15 s otherwise), the summed input never above the provider's total cap; a delivered clip that cannot be measured settles at the reservation. The settlement is never above the reservation, and it applies whether the run is completed by the worker or by the recovery sweep that finishes a run whose worker died.
 
-**Auto duration (Seedance 2 family).** Duration **Auto** (`duration: -1` on the API, SDK and MCP) lets the model pick the clip length: the source clip's own length when Seedance treats the run as a video edit, a length within the model's range otherwise. Because only the model knows the length, an Auto run is **reserved at the model's longest clip** — 30 s on `seedance-2-5`, 15 s on `seedance-2` / `seedance-2-fast` / `seedance-2-mini` — and **settled to what was delivered**, refunding the rest. With no reference video wired, the delivered clip is priced exactly as a fixed-duration request of that length: its seconds (rounded up, ignoring a container overhang under a quarter second) select the same `<id>:<N>s:<resolution>` tier. Example, `seedance-2-5` @480p: reserved at `seedance-2-5:30s:480p` = **2310**<!-- credits: seedance-2-5:30s:480p -->; a delivered 5 s clip settles at `seedance-2-5:5s:480p` = **385**<!-- credits: seedance-2-5:5s:480p -->. On the 2.0 family the delivered length lands on the 4 / 8 / 12 / 15 s ladder like any fixed request — a 6 s clip from `seedance-2` @720p settles at `seedance-2:8s:720p` = **902**<!-- credits: seedance-2:8s:720p -->, against a `seedance-2:15s:720p` = **1694**<!-- credits: seedance-2:15s:720p --> reservation. With a reference video wired, an Auto run is usually an **edit of the first clip** (`@video_1`), which renders that clip's own length, but the model may edit another clip — so once every reference clip is measured, the output is reserved for the **longest** clip's length **rounded up to a whole second, plus one second**, never above the model's longest clip; every wired clip still counts on the input side. With one clip, that clip is the longest. It then rides the reference-video settlement above. Example, `seedance-2-5` @720p (the 8 s `-ref` price ÷ 8 a second) with a 4.1 s clip: reserved for 4.1 + 6 seconds = **1056**<!-- credits: seedance-2-5:8s:720p-ref@1.2625 -->; an edit that delivers 4.1 s settles to 4.1 + 4.1 seconds = **857**<!-- credits: seedance-2-5:8s:720p-ref@1.025 -->. With a second, longer clip wired (say 12 s), the output is reserved for that clip's 13 s and the input counts both clips: 16.1 + 13 seconds = **3042**<!-- credits: seedance-2-5:8s:720p-ref@3.6375 -->; an edit of the first clip still settles to the length it delivers. A request that declares the reference task type `reference` (API / SDK / MCP, see below) with Duration Auto is not held as an edit: it is reserved at the longest output the model can make, and charged what it makes. A reference clip that cannot be measured is reserved at the worst case: the model's longest clip out and the per-clip cap in. On completion it is measured again: a clip that can be read then counts at its real length on the input side, and one that still cannot keeps the cap. Should a run deliver more than its reserved seconds, it is charged the reservation, never more. A delivered clip that cannot be measured settles at the reservation. Your balance must cover the reservation for the run to start. Models outside the Seedance 2 family ignore Auto and render their default duration.
+**Auto duration (Seedance 2 family).** Duration **Auto** (`duration: -1` on the API, SDK and MCP) lets the model pick the clip length: the source clip's own length when Seedance treats the run as a video edit, a length within the model's range otherwise. Because only the model knows the length, an Auto run is **reserved at the model's longest clip** — 30 s on `seedance-2-5`, 15 s on `seedance-2` / `seedance-2-fast` / `seedance-2-mini` — and **settled to what was delivered**, refunding the rest. With no reference video wired, the delivered clip is priced exactly as a fixed-duration request of that length: its seconds (rounded up, ignoring a container overhang under a quarter second) select the same `<id>:<N>s:<resolution>` tier. Example, `seedance-2-5` @480p: reserved at `seedance-2-5:30s:480p` = **2310**<!-- credits: seedance-2-5:30s:480p -->; a delivered 5 s clip settles at `seedance-2-5:5s:480p` = **385**<!-- credits: seedance-2-5:5s:480p -->. On the 2.0 family the delivered length lands on the 4 / 8 / 12 / 15 s ladder like any fixed request — a 6 s clip from `seedance-2` @720p settles at `seedance-2:8s:720p` = **902**<!-- credits: seedance-2:8s:720p -->, against a `seedance-2:15s:720p` = **1694**<!-- credits: seedance-2:15s:720p --> reservation. With a reference video wired, an Auto run is usually an **edit of the first clip** (`@video_1`), which renders that clip's own length, but the model may edit another clip — so once every reference clip is measured, the output is reserved for the **longest** clip's length **rounded up to a whole second, plus one second**, never above the model's longest clip; every wired clip still counts on the input side. With one clip, that clip is the longest. It then rides the reference-video settlement above. Example, `seedance-2-5` @720p (the 8 s `-ref` price ÷ 8 a second) with a 4.1 s clip: reserved for 4.1 + 6 seconds = **1056**<!-- credits: seedance-2-5:8s:720p-ref@1.2625 -->; an edit that delivers 4.1 s settles to 4.1 + 4.1 seconds = **857**<!-- credits: seedance-2-5:8s:720p-ref@1.025 -->. With a second, longer clip wired (say 12 s), the output is reserved for that clip's 13 s and the input counts both clips: 16.1 + 13 seconds = **3042**<!-- credits: seedance-2-5:8s:720p-ref@3.6375 -->; an edit of the first clip still settles to the length it delivers. A request that declares the reference task type `reference` (**A reference** under [Use the reference video as](#seedance-25-use-the-reference-video-as) on the node, or `referenceTaskType` on the API / SDK / MCP, see below) with Duration Auto is not held as an edit: it is reserved at the longest output the model can make, and charged what it makes. A reference clip that cannot be measured is reserved at the worst case: the model's longest clip out and the per-clip cap in. On completion it is measured again: a clip that can be read then counts at its real length on the input side, and one that still cannot keeps the cap. Should a run deliver more than its reserved seconds, it is charged the reservation, never more. A delivered clip that cannot be measured settles at the reservation. Your balance must cover the reservation for the run to start. Models outside the Seedance 2 family ignore Auto and render their default duration. A Trim, Loop or Combine Videos after an Auto video is charged by the length it came out at; see [Steps after a video of automatic length](#steps-after-a-video-of-automatic-length).
 
 **Wan 3.0** (`wan-3`) and **Wan 3.0 Prime** (`wan-3-prime`) are per-second priced via the composite identifier `<id>:<N>s:<resolution>` (N = 2–30, resolution = `480p` / `720p` / `1080p` — lowercase in the identifier even though the provider's own wire enum is uppercase; the platform normalizes it). Each length has its own price — about these many credits a second:
 
@@ -760,6 +760,7 @@ Common fields:
 | Loop Trim | Group | off | Enable + framesToTest + quality |
 | Frame fit | Select | `Match output size` | How a wired start/end frame is reshaped before the model sees it |
 | Send frames as | Select | `Auto` | Whether that frame rides as a frame or as a bound reference image |
+| Use the reference video as | Select | `Auto` | Seedance 2.5 only, shown once a reference video is connected: what the clip is for. See [Seedance 2.5: Use the reference video as](#seedance-25-use-the-reference-video-as) |
 | Inject Character Context | Checkbox | off | When an upstream Character has identity-injection on |
 | Motion hint | Checkbox + Select (`subtle` / `moderate` / `dynamic`) | off; `moderate` once ticked | Adds "<step> motion" (e.g. `dynamic motion`) to the prompt, before the Look hints, with or without a start frame. Separate from a [Motion](../parameters/motion.md) node wired into the `settings` input, which adds its own fuller clause. |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
@@ -830,25 +831,23 @@ so a reference run keeps the ratio and duration you chose; only a run Seedance
 itself classified as an edit is re-shaped. The source clip must still be **4–30
 seconds** for edit mode to be available at all.
 
-To ask for an edit **up front** instead of relying on the resubmit, set Aspect
-ratio to **Adaptive** and Duration to **Auto** — that is exactly the shape edit
-mode requires, so the run goes through on the first submit.
+To ask for an edit **up front** instead of relying on the resubmit, set
+**Use the reference video as** to **The video to edit** (see
+[Seedance 2.5: Use the reference video as](#seedance-25-use-the-reference-video-as)
+below). When the edit applies (every connected reference video is 4 to 30
+seconds long), the model is then told the run is an edit, and the run goes out
+in the shape edit mode requires on the first submit.
 
-API / SDK: `referenceTaskType` on `POST /v1/generate-video` or `POST /v1/text-to-video`
-says what the reference media is for (`reference`, `edit` or `extend`; `auto`, the
-default, leaves it to the prompt). `edit` runs in the video's own shape and length
-when every reference video is 4–30 s long and the run is not a draft; otherwise
-nothing is declared and the run goes out as with `auto`. `extend` comes back without
-the source joined to it; [Extend Video](extend-video.md) returns both as one video. See
-[Seedance 2.5 reference task type](../../api-integration.md#seedance-25-reference-task-type).
-MCP: `reference_task_type` on `generate_video`.
-
-**Credits for an edit.** Because an edit renders the source clip's length, the
-run is reserved as if it were one — the output billed at the longer of your
-Duration and the clip — and settled to the length actually delivered once the
-run completes (a style run is refunded down to its Duration). The formula and a
-worked example are under *Reference videos bill input + output duration* in the
-pricing section above.
+**Credits for an edit Seedance finds in your prompt.** With **Use the reference
+video as** on **Auto**, the model may still read the run as an edit, which renders
+the source clip's length. So the run is reserved as if it were one — the output
+billed at the longer of your Duration and the clip — and settled to the length
+actually delivered once the run completes (a style run is refunded down to its
+Duration). An edit you ask for with **The video to edit** is different: when the
+edit applies (every connected reference video is 4 to 30 seconds long), your
+Duration is not used at all, and the run is priced and reserved as an
+automatic-length run from the start. The formula and a worked example are under
+*Reference videos bill input + output duration* in the pricing section above.
 
 ### Seedance 2.5 Draft mode
 
@@ -880,6 +879,107 @@ Use it to iterate cheaply on a shot and only pay for 1080p once you like the tak
 API / SDK: `draft: true` on `POST /v1/generate-video` or `POST /v1/text-to-video`
 (and on the Seedance 2.5 Edit lane of Video to Video). MCP: `draft: true` on
 `generate_video`, `animate_image` and `modify_video`.
+
+### Seedance 2.5: Use the reference video as
+
+Once a video is connected to `videoReferences` on a **Seedance 2.5**
+(`seedance-2-5`) node, the settings show **Use the reference video as**. It tells
+the model what the clip is for, instead of leaving it to guess from your prompt
+(which it sometimes gets wrong):
+
+| Choice | What the clip is for |
+|---|---|
+| **Auto** (default) | Nothing is said about the clip; the model decides from your prompt. |
+| **A reference** | A guide for a new video: take its motion, camera or style. Nothing else changes. |
+| **The video to edit** | Change the clip itself ("remove the sign", "make it black and white"). |
+| **The video to extend (new footage only)** | Continue the clip from where it ends. |
+
+- **The video to edit** keeps the clip's own shape and length: the run goes out
+  in the clip's ratio at an automatic length. It applies only when every
+  connected reference video is **4 to 30 seconds** long; otherwise the node runs
+  as with **Auto**, with your Aspect ratio and Duration. While the edit applies,
+  Aspect ratio and Duration are locked. When the node knows a connected clip is
+  outside 4 to 30 seconds (an uploaded clip, say), they stay editable and a line
+  under the setting says the node runs as with Auto. A clip whose length is not
+  known yet (one a node before it still has to make) is counted as an edit, the
+  way its price is.
+- **The video to extend** keeps the clip's own shape: Aspect ratio is locked.
+  Duration stays yours, except that **Auto** becomes **8 seconds**, the model's
+  default length, because a continuation needs a set length. With Duration on
+  Auto, the line under Duration says so and names that length; the run is
+  made, and priced, at it.
+- **What an extend returns.** The platform returns the model's clip as
+  delivered and does not join the source clip to it, so expect the continuation
+  only. For the source and the continuation as one video, use
+  [Extend Video](extend-video.md).
+- **Your settings stay as you left them.** Choosing Edit or Extend does not
+  change the Aspect ratio and Duration stored on the node; switch back to Auto
+  and they are shown again. Disconnecting the reference video hides the setting
+  and keeps your choice for when a video is connected again (a run without a
+  reference video ignores it). Switching to a model that does not take the
+  setting clears it.
+- **Apply settings restores it.** Applying the settings of an earlier Seedance
+  2.5 result sets this choice back to what that run used (Auto when it said
+  nothing about the clip), together with its Aspect ratio and Duration, so the
+  node makes the same run again. Applying a **draft** result leaves the choice
+  as it is: a draft never says anything about the clip, so it has no choice to
+  restore.
+- **A draft ignores it.** With **Draft** on, the setting is greyed out and the
+  run says nothing about the clip.
+- **Credits follow the run that is made.** An edit is priced as an
+  automatic-length run with a reference video, and an extend at the length it
+  runs at (see *Reference videos bill input + output duration* under pricing).
+  **A reference** with Duration on **Auto** is reserved at the longest output
+  the model can make, since the model picks a reference's length, and charged
+  what it makes (see *Auto duration* under pricing).
+  The node's price is the server's quote for the clips that are connected; a
+  connected clip that has not been produced yet counts as the longest clip the
+  model accepts, so the figure is never below what the run reserves.
+- **The same rule everywhere.** A single run, a workflow run and a published
+  app run declare the same thing for the same node and clips.
+- **The step after it.** A clip made with a declared task type (at any
+  Duration) is charged downstream by the length it really is; see
+  [Steps after a video of automatic length](#steps-after-a-video-of-automatic-length).
+
+API / SDK: `referenceTaskType` (`auto`, `reference`, `edit` or `extend`) on
+`POST /v1/generate-video` or `POST /v1/text-to-video`; see
+[Seedance 2.5 reference task type](../../api-integration.md#seedance-25-reference-task-type).
+MCP: `reference_task_type` on `generate_video`.
+
+### Steps after a video of automatic length
+
+A video made at an automatic length (Duration **Auto**, on the Seedance 2
+family), by a Seedance 2.5 **edit** (which takes the clip's own length), or by
+a Seedance 2.5 **extend** with Duration on Auto (which runs at the model's
+default) is usually not the Duration stored on the node. Such a video records
+the length it really is when it is made: the delivered file's measured length,
+never above the longest that run could make (on Auto, the model's longest clip:
+30 seconds on `seedance-2-5`, 15 seconds on the 2.0 family; on an extend, its
+set length). A Seedance 2.5 run that declares **A reference** or **The video to
+extend** at a set Duration records its length the same way, never above that
+Duration. A file that reads at most a quarter second past a whole second
+counts as that second (10.04 seconds is a 10-second clip). The same holds on the older Image to Video and
+Text to Video nodes, and on Video to Video's Seedance lane.
+
+- **The step after it is charged by that length.** Trim Video, Loop Video and
+  Combine Videos are priced by the length of the video they receive. After such
+  a video they are charged by its recorded length, in a single-node run, a
+  workflow run and a published app run alike.
+- **Every quote counts the most it can be until the video exists.** The Run
+  button, the workflow's total, a published app's price and the credit check
+  before a run count such a video at that longest length while it is still to
+  be made (or the run will make it again), and at its recorded length once it
+  exists. A quote can be above the charge, never below it. For example,
+  Seedance 2.5 on Auto into Combine Videos is quoted as a 30-second clip until
+  the clip exists, and charged for the length it came out at.
+- **Video Analysis and AI Audit follow it too.** In a workflow run, after
+  such a video, they are priced by its recorded length, as the editor's own
+  run already does, rather than their longest bucket.
+- **Everything else is unchanged.** A run at a set Duration that declares no
+  task type hands on its Duration, as before. Steps that measure the clip they are given (Video SFX,
+  Video Mask, Mask Composite, Pitch & Tempo) price it by their own
+  measurement, as before. A video whose length could not be measured, or that
+  was made before lengths were recorded, is charged as before.
 
 ### Start and end frame handling
 

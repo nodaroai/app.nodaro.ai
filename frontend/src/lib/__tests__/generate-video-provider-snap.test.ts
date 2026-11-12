@@ -8,10 +8,11 @@ import {
   getVideoResolutionOptions,
 } from "@/components/editor/config-panels/model-options"
 import { isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
+import { supportsReferenceTaskType } from "@nodaro/shared/models"
 
 /** Stale states a node can carry from ANOTHER model (or an import / agent write). */
 const STALE: ReadonlyArray<Record<string, unknown>> = [
-  { resolution: "480p", aspectRatio: "21:9", duration: 4, draft: true },
+  { resolution: "480p", aspectRatio: "21:9", duration: 4, draft: true, referenceTaskType: "edit" },
   { resolution: "2K", aspectRatio: "adaptive", duration: 30, fps: 50 },
   { resolution: "4k", aspectRatio: "Auto", duration: -1, fps: 24 },
   { resolution: "1080P", aspectRatio: "9:16", duration: 15, draft: false },
@@ -31,6 +32,7 @@ describe("generateVideoProviderSnap — every model ends on values it accepts", 
         const fps = VIDEO_FPS_OPTIONS[provider]?.map((o) => o.value)
         if (after.fps !== undefined) expect(fps, `${provider} fps`).toContain(after.fps)
         if (!isSeedanceDraftCapable(provider)) expect(after.draft, `${provider} draft`).toBeUndefined()
+        if (!supportsReferenceTaskType(provider)) expect(after.referenceTaskType, `${provider} referenceTaskType`).toBeUndefined()
       }
     })
   }
@@ -51,6 +53,18 @@ describe("generateVideoProviderSnap — every model ends on values it accepts", 
 
   it("MiniMax H3 takes 480p onto its 2K default", () => {
     expect(generateVideoProviderSnap({ resolution: "480p" }, "minimax-h3").resolution).toBe("2K")
+  })
+
+  // Seedance 2.5's reference task type: a model that takes none clears it, so a
+  // stale Edit never rides a later switch back unnoticed.
+  it("clears a reference task type when the new model takes none", () => {
+    const snap = generateVideoProviderSnap({ resolution: "720p", aspectRatio: "16:9", duration: 5, referenceTaskType: "edit" }, "kling-3.0")
+    expect(snap).toHaveProperty("referenceTaskType")
+    expect(snap.referenceTaskType).toBeUndefined()
+  })
+
+  it("keeps a reference task type on a model that takes it", () => {
+    expect(generateVideoProviderSnap({ resolution: "720p", aspectRatio: "16:9", duration: 8, referenceTaskType: "edit" }, "seedance-2-5")).toEqual({})
   })
 })
 

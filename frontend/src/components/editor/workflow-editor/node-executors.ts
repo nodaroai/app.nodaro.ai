@@ -1,4 +1,5 @@
 import type { FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared/video";
+import type { DeclaredSeedanceTaskType } from "@nodaro/shared/models";
 import type { ScriptSettings } from "@nodaro/shared/nodes";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
@@ -34,7 +35,7 @@ import {
 } from "./types";
 import { jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, RUN_START_RESET } from "./poll-job";
-import { runResultIdentity } from "@/lib/run-result-identity";
+import { recordedVideoLengthField, runResultIdentity } from "@/lib/run-result-identity";
 import { shouldAbandonNode } from "./abandon-guard";
 import { tx } from "@/lib/i18n";
 import { failedJobError } from "@/lib/failed-job-error";
@@ -45,10 +46,14 @@ const extractKieTaskId = (od: Record<string, unknown>) => {
   return kieTaskId ? { kieTaskId } : {};
 };
 
-/** A Seedance draft's result is marked `draft` (the tile's "Draft" badge) —
- *  on the RESULT only, never the node: the node's `draft` is its setting. */
-const draftResultFields = (draft: boolean | undefined) =>
-  draft === true ? { resultFields: () => ({ draft: true }) } : {};
+/** A video generation's result: a Seedance draft is marked `draft` (the tile's
+ *  "Draft" badge), and the length its run recorded (an automatic length, a
+ *  Seedance Edit / Extend) is the row's `duration`, what a Trim / Loop / Combine
+ *  Videos after it is charged by. Both on the RESULT only, never the node: the
+ *  node's `draft` and `duration` are its settings. */
+const videoGenerationResultFields = (draft: boolean | undefined) => ({
+  resultFields: (od: Record<string, unknown>) => ({ ...(draft === true ? { draft: true } : {}), ...recordedVideoLengthField(od) }),
+});
 
 // --- Image generation ---
 
@@ -338,6 +343,8 @@ export function runVideoGeneration(
     frameDelivery?: FrameDelivery;
     /** Seedance Draft: a 480p draft the Seedance 2.5 HD upscale can finalize. */
     draft?: boolean;
+    /** Seedance 2.5: what the reference video is for. Absent = Auto (nothing sent). */
+    referenceTaskType?: DeclaredSeedanceTaskType;
     /** Kling 4.0: wired characters as named subjects. */
     characterReferences?: VideoCharacterReference[];
     /** Kling 4.0: keep the reference videos' own sound. */
@@ -369,6 +376,7 @@ export function runVideoGeneration(
         elements,
         resolution,
         draft: extras?.draft,
+        ...(extras?.referenceTaskType ? { referenceTaskType: extras.referenceTaskType } : {}),
         grokMode,
         videoSize,
         seed,
@@ -401,7 +409,7 @@ export function runVideoGeneration(
     ctx,
     extractKieTaskId,
     undefined,
-    draftResultFields(extras?.draft),
+    videoGenerationResultFields(extras?.draft),
   );
 }
 
@@ -488,6 +496,8 @@ export function runTextToVideoGeneration(
     resolution?: string;
     /** Seedance Draft — see runVideoGeneration's `extras.draft`. */
     draft?: boolean;
+    /** Seedance 2.5 — see runVideoGeneration's `extras.referenceTaskType`. */
+    referenceTaskType?: DeclaredSeedanceTaskType;
     generateAudio?: boolean;
     referenceImageUrls?: string[];
     referenceVideoUrls?: string[];
@@ -516,7 +526,7 @@ export function runTextToVideoGeneration(
     ctx,
     extractKieTaskId,
     undefined,
-    draftResultFields(kling3Options?.draft),
+    videoGenerationResultFields(kling3Options?.draft),
   );
 }
 

@@ -73,6 +73,11 @@ on the node is dispatched as a **text-to-video** job in edit shape:
 - Aspect ratio is `adaptive` and duration is `Auto` — the result **keeps the
   source clip's own length and aspect ratio**. That is why the node offers no
   Duration and no Aspect Ratio field for this model.
+- The run also tells Seedance outright that the clip is the video to edit (the
+  same choice as **The video to edit** on
+  [Generate Video](generate-video.md#seedance-25-use-the-reference-video-as)),
+  when every clip is 4–30 seconds long and the run is not a draft. A single
+  run, a workflow run and an app run do the same.
 
 **From the API or SDK**, send it to `POST /v1/video-to-video` like any other
 model of this node — `{ videoUrl, prompt, provider: "seedance-2-5",

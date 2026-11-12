@@ -23,7 +23,7 @@ export {
   VIDEO_CHARACTER_VOICE_EXAMPLE_MAX,
 } from "../video-character-refs.js"
 export type { VideoCharacterReference, VideoCharacterVoice, VideoCharacterRefProblem } from "../video-character-refs.js"
-export { extractVideoDurationFromNode, editPlanSourceDurationSec } from "../video-duration.js"
+export { CONTAINER_OVERHANG_SEC, extractVideoDurationFromNode, editPlanSourceDurationSec } from "../video-duration.js"
 // --- Video URL node + social-video import (host allowlist, node output rule) ---
 export {
   SOCIAL_VIDEO_HOSTS,

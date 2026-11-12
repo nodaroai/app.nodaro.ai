@@ -1,4 +1,4 @@
-import { canonicalVideoProvider, isSeedanceExtendProvider, isSeedanceVideoEditProvider } from "@nodaro/shared/models"
+import { canonicalVideoProvider, isSeedanceExtendProvider, isSeedanceVideoEditProvider, SEEDANCE_REFERENCE_TASK_TYPES, type DeclaredSeedanceTaskType } from "@nodaro/shared/models"
 import { bool, defined, inputsOf, num, str, urls, type Body, type FlowNodeSpec, type RouteMapper, type RouteMappers } from "./kit.js"
 
 /** `loopTrim`: the route takes a Loop trim (the text-to-video route drops one, so its node must not keep it). */
@@ -6,7 +6,7 @@ const generateVideo = (tools: readonly string[], { loopTrim = false } = {}): Rou
   tools,
   fields: new Set([
     "prompt", "provider", "duration", "aspectRatio", "resolution", "sound", "generateAudio",
-    "negativePrompt", "seed", "draft", "keepOriginalSound",
+    "negativePrompt", "seed", "draft", "referenceTaskType", "keepOriginalSound",
     "imageUrl", "endFrameUrl", "referenceImageUrls", "referenceVideoUrls", "referenceAudioUrls",
     ...(loopTrim ? ["loopTrim"] : []),
   ]),
@@ -39,6 +39,7 @@ const generateVideo = (tools: readonly string[], { loopTrim = false } = {}): Rou
         negativePrompt: str(body.negativePrompt),
         seed: num(body.seed),
         draft: body.draft === true ? true : undefined,
+        referenceTaskType: declaredTaskTypeOf(body.referenceTaskType),
         keepOriginalSound: bool(body.keepOriginalSound),
         loopTrim: loopTrimOf(body.loopTrim),
         fieldMappings: {},
@@ -46,6 +47,16 @@ const generateVideo = (tools: readonly string[], { loopTrim = false } = {}): Rou
     }
   },
 })
+
+/**
+ * The Seedance reference task type a call declared, as the node keeps it: one
+ * of the declared values, or nothing for `auto` (the node's Auto is the key
+ * being absent), an absent field or anything else. Whether the model takes it
+ * is decided when the node runs, as the route decides it.
+ */
+function declaredTaskTypeOf(value: unknown): DeclaredSeedanceTaskType | undefined {
+  return SEEDANCE_REFERENCE_TASK_TYPES.find((t): t is DeclaredSeedanceTaskType => t !== "auto" && t === value)
+}
 
 /** The node's Loop trim (the smart-loop-cut after the generation), as the route takes it. */
 function loopTrimOf(value: unknown): Record<string, unknown> | undefined {

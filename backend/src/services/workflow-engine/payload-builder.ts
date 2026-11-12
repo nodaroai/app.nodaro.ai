@@ -154,6 +154,7 @@ import {
   canonicalVideoProvider,
   SEEDANCE_VIDEO_EDIT_SHAPE,
   SEEDANCE_VIDEO_EDIT_TASK_TYPE,
+  listedSeedanceTaskType,
   isMinimaxH3Provider,
   isWan3Provider,
   isGeminiOmniProvider,
@@ -214,6 +215,7 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
+import { videoCreditIdOf, type VideoCreditIdArgs } from "../../lib/video-credit-id.js"
 import { LEGACY_VIDEO_NODE_DEFAULT_PROVIDER } from "../../lib/generated-video-length.js"
 import {
   PLUGIN_NODE_VOICES_UNREAD_MESSAGE,
@@ -2043,6 +2045,45 @@ export interface PayloadResult {
   payload: Record<string, unknown>
   /** Model identifier for credit reservation */
   modelIdentifier: string
+  /**
+   * The arguments a video lane built `modelIdentifier` from (`videoCreditIdOf`),
+   * present only when its payload REQUESTS a Seedance reference task type. The
+   * executor resolves the request once the reference clips are measured, and a
+   * resolution that moves the length (`edit` runs at Auto, `extend` fixes an
+   * Auto length) is re-priced from these with the moved length
+   * (lib/seedance-task-type-stamp.ts). The aspect ratio a resolution also moves
+   * is not a pricing input of these lanes, so it is not here. Plain data, never
+   * a function: a build result stays safe to clone and to compare.
+   */
+  videoCreditIdArgs?: VideoCreditIdArgs
+}
+
+/**
+ * The result of a general video lane (Generate Video, Image to Video, Text to
+ * Video): its credit id is built from `creditArgs` (`videoCreditIdOf`, the
+ * builder the executor re-prices with), and a reference task type the node
+ * requests rides the payload — REQUESTED, never resolved here: the builder
+ * cannot measure the reference clips (lib/seedance-task-type-stamp.ts resolves
+ * it in the executor). Only a value the lane's model lists is requested
+ * (`listedSeedanceTaskType`, judged on the model the payload is sent to, which
+ * is `creditArgs.provider`); with it come the price arguments. Anything else —
+ * no setting, `auto`, a value the model does not list, a model that takes none —
+ * builds exactly the result the lane built before the setting existed.
+ */
+function videoGenerationResult(
+  jobName: "image-to-video" | "text-to-video",
+  creditArgs: VideoCreditIdArgs,
+  payload: Record<string, unknown>,
+  requestedTaskType: unknown,
+): PayloadResult {
+  const taskType = listedSeedanceTaskType(creditArgs.provider, requestedTaskType)
+  return {
+    jobName,
+    queueName: "video-generation",
+    modelIdentifier: videoCreditIdOf(creditArgs),
+    payload: taskType ? { ...payload, referenceTaskType: taskType } : payload,
+    ...(taskType ? { videoCreditIdArgs: creditArgs } : {}),
+  }
 }
 
 /** Parse a JSON string, returning undefined (never throwing) on bad input —
@@ -4192,19 +4233,18 @@ function buildPayloadOf(
         endFrameUrl: resolvedInputs.endFrameUrl,
         inBetweenFrameUrls: i2vReferenceImageUrls,
       })
-      return {
-        jobName: "image-to-video",
-        queueName: "video-generation",
-        modelIdentifier: buildVideoCreditModelIdentifier(
+      return videoGenerationResult(
+        "image-to-video",
+        {
           provider,
-          i2vNorm.duration ?? (data.duration as number | string | undefined),
-          (data.sound ?? data.kling3Sound) as boolean | undefined,
-          "image-to-video",
-          (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
-          i2vNorm.resolution,
-          hasVideoRef || playsAudioSoundtrack(provider, data, resolvedInputs.referenceAudioUrls),
-        ),
-        payload: {
+          duration: i2vNorm.duration ?? (data.duration as number | string | undefined),
+          sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+          mode: "image-to-video",
+          sizeOrMode: (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
+          resolution: i2vNorm.resolution,
+          hasVideoRef: hasVideoRef || playsAudioSoundtrack(provider, data, resolvedInputs.referenceAudioUrls),
+        },
+        {
           jobId,
           imageUrl: i2vImageUrl,
           endFrameUrl: resolvedInputs.endFrameUrl,
@@ -4268,7 +4308,8 @@ function buildPayloadOf(
           ...scene3DWarningsField({ references: i2vScene3D, node, buildCtx, data, provider }),
           usageLogId,
         },
-      }
+        data.referenceTaskType,
+      )
     }
 
     case "text-to-video": {
@@ -4341,19 +4382,18 @@ function buildPayloadOf(
           t2vNorm.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to ?? "removed"}`).join("; "),
         )
       }
-      return {
-        jobName: "text-to-video",
-        queueName: "video-generation",
-        modelIdentifier: buildVideoCreditModelIdentifier(
+      return videoGenerationResult(
+        "text-to-video",
+        {
           provider,
-          t2vNorm.duration ?? (data.duration as number | string | undefined),
-          (data.sound ?? data.kling3Sound) as boolean | undefined,
-          "text-to-video",
-          (data.mode ?? data.kling3Mode ?? data.videoSize) as string | undefined,
-          t2vNorm.resolution,
-          hasVideoRef || playsAudioSoundtrack(provider, data, resolvedInputs.referenceAudioUrls),
-        ),
-        payload: {
+          duration: t2vNorm.duration ?? (data.duration as number | string | undefined),
+          sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+          mode: "text-to-video",
+          sizeOrMode: (data.mode ?? data.kling3Mode ?? data.videoSize) as string | undefined,
+          resolution: t2vNorm.resolution,
+          hasVideoRef: hasVideoRef || playsAudioSoundtrack(provider, data, resolvedInputs.referenceAudioUrls),
+        },
+        {
           jobId,
           prompt: t2vPrompt,
           provider,
@@ -4382,7 +4422,8 @@ function buildPayloadOf(
           ...scene3DWarningsField({ references: t2vScene3D, node, buildCtx, data, provider }),
           usageLogId,
         },
-      }
+        data.referenceTaskType,
+      )
     }
 
     // Unified video node — dispatches `jobName` dynamically based on whether
@@ -4724,21 +4765,20 @@ function buildPayloadOf(
         endFrameUrl,
         inBetweenFrameUrls: referenceImageUrls,
       })
-      return {
-        jobName: effectiveMode,
-        queueName: "video-generation",
-        modelIdentifier: buildVideoCreditModelIdentifier(
-          resolvedProvider,
-          gvNorm.duration ?? (data.duration as number | string | undefined),
-          (data.sound ?? data.kling3Sound) as boolean | undefined,
-          effectiveMode,
-          (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
-          gvNorm.resolution,
+      return videoGenerationResult(
+        effectiveMode,
+        {
+          provider: resolvedProvider,
+          duration: gvNorm.duration ?? (data.duration as number | string | undefined),
+          sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+          mode: effectiveMode,
+          sizeOrMode: (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
+          resolution: gvNorm.resolution,
           // A soundtrack clip is a reference video by the time the run is
           // dispatched (node-executor applies lib/audio-soundtrack.ts).
-          hasVideoRef || playsAudioSoundtrack(resolvedProvider, data, resolvedInputs.referenceAudioUrls),
-        ),
-        payload: {
+          hasVideoRef: hasVideoRef || playsAudioSoundtrack(resolvedProvider, data, resolvedInputs.referenceAudioUrls),
+        },
+        {
           jobId,
           provider: resolvedProvider,
           prompt: composedPrompt,
@@ -4790,7 +4830,8 @@ function buildPayloadOf(
           enableTranslation: data.enableTranslation,
           usageLogId,
         },
-      }
+        data.referenceTaskType,
+      )
     }
 
     // Replicate MMAudio — generates synchronized SFX/foley/ambient audio for a

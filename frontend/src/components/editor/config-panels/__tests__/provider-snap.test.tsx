@@ -22,6 +22,11 @@ import { GenerateImageConfig, ModifyImageConfig, UpscaleImageConfig } from "../i
 import { ImageToVideoConfig, TextToVideoConfig, GenerateVideoConfig, VideoDepthConfig, VideoToVideoConfig } from "../video-configs"
 import { LipSyncConfig } from "../audio-configs"
 import { getAspectRatiosForVideoModel, getVideoResolutionOptions } from "../model-options"
+import { getModelIdentifier } from "../helpers"
+import { WiredSettingsScope } from "../wired-settings-context"
+import { videoGenerationCreditId } from "@nodaro/shared/credits"
+import { MODEL_CATALOG, VIDEO_DURATION_AUTO, isAutoVideoDuration } from "@nodaro/shared/model-catalog"
+import { SEEDANCE_EDIT_REF_VIDEO_SEC } from "@nodaro/shared/models"
 
 // =============================================================================
 // Module-level mocks — keep these as thin as possible. We only care about the
@@ -46,7 +51,9 @@ vi.mock("@/components/ui/separator", () => ({
   Separator: () => <hr />,
 }))
 vi.mock("@/components/ui/select", () => ({
-  Select: ({ children }: any) => <div>{children}</div>,
+  // `disabled` and `value` ride along as attributes so a test can find a
+  // locked control and what it shows; no other case reads them.
+  Select: ({ children, disabled, value }: any) => <div data-select-disabled={disabled ? "true" : "false"} data-value={value}>{children}</div>,
   SelectContent: ({ children }: any) => <div>{children}</div>,
   SelectItem: ({ children, value, disabled }: any) => <option value={value} disabled={disabled}>{children}</option>,
   SelectTrigger: ({ children }: any) => <div>{children}</div>,
@@ -85,7 +92,7 @@ vi.mock("@/components/editor/config-panels/mappable-field", () => ({
   MappableField: ({ children }: any) => <div>{children}</div>,
 }))
 vi.mock("@/components/editor/config-panels/aspect-ratio-selector", () => ({
-  AspectRatioSelector: () => <div data-testid="aspect-ratio-selector" />,
+  AspectRatioSelector: ({ disabled, value }: any) => <div data-testid="aspect-ratio-selector" data-disabled={disabled ? "true" : "false"} data-value={value} />,
 }))
 vi.mock("@/components/editor/config-panels/reference-image-list", () => ({
   ReferenceImageList: () => <div />,
@@ -154,6 +161,9 @@ vi.mock("@/components/editor/media-editor", () => ({
 
 // Hooks / stores — useWorkflowStore is used BOTH as a hook (selector) AND
 // statically (`.getState()`). Provide both APIs on the mock.
+// The graph the store holds — a test may wire clips in (the panel reads the
+// reference clips' lengths from it, as the node's price does).
+const storeGraph = vi.hoisted(() => ({ nodes: [] as any[], edges: [] as any[] }))
 vi.mock("@/hooks/use-workflow-store", () => {
   const state = {
     characterDefinitions: [],
@@ -161,8 +171,8 @@ vi.mock("@/hooks/use-workflow-store", () => {
     addNode: vi.fn(),
     selectNode: vi.fn(),
     deleteEdge: vi.fn(),
-    nodes: [],
-    edges: [],
+    get nodes() { return storeGraph.nodes },
+    get edges() { return storeGraph.edges },
   }
   const useWorkflowStore: any = (selector: any) => selector(state)
   useWorkflowStore.getState = () => state
@@ -291,6 +301,8 @@ function commonProps(onUpdate: any, data: any): any {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  storeGraph.nodes = []
+  storeGraph.edges = []
 })
 
 // =============================================================================
@@ -865,6 +877,174 @@ describe("GenerateVideoConfig — Seedance 2 resolved-mode indicator", () => {
   })
 })
 
+describe("GenerateVideoConfig — Seedance 2.5 reference task type", () => {
+  // The locks follow the RUN: Aspect ratio and Duration lock only while the
+  // shared resolver says the declaration holds, read from the clips' lengths
+  // the node's price reads (a clip of unknown length counts as the model's
+  // longest, so it locks). Each explanation is ONE line, under the select.
+  // Nothing rewrites the node's stored ratio or length.
+  const CLIP_URL = "https://cdn.example/clip.mp4"
+  const STORED = { provider: "seedance-2-5", aspectRatio: "16:9", duration: 5, resolution: "720p" }
+  const EDIT_LINE = "Edit keeps the video's own shape and length."
+  const EXTEND_LINE = "Extend keeps the video's own shape."
+  const NOT_APPLIED = `Edit needs a reference video of ${SEEDANCE_EDIT_REF_VIDEO_SEC.min}–${SEEDANCE_EDIT_REF_VIDEO_SEC.max} seconds. This one runs as with Auto.`
+  const DEFAULT_LENGTH = MODEL_CATALOG["seedance-2-5"]!.defaultDuration as number
+  const EXTEND_AUTO_LINE = `Extend runs at ${DEFAULT_LENGTH} seconds when Duration is Auto.`
+
+  /** A wired reference video whose recorded length is `sec` (undefined = not known). */
+  function wireClip(sec: number | undefined) {
+    storeGraph.nodes = [
+      { id: "clip", type: "upload-video", position: { x: 0, y: 0 }, data: { label: "Clip", url: CLIP_URL, ...(sec !== undefined ? { generatedResults: [{ url: CLIP_URL, duration: sec }] } : {}) } },
+    ]
+    storeGraph.edges = [{ id: "e-clip", source: "clip", target: "n1", sourceHandle: "video", targetHandle: "videoReferences" }]
+    return [{ id: "clip", type: "upload-video", label: "Clip", targetHandle: "videoReferences" }]
+  }
+
+  function open(extra: Record<string, unknown>, clipSec: number | undefined | "none" = 6) {
+    const sources = clipSec === "none" ? [] : wireClip(clipSec)
+    const onUpdate = vi.fn()
+    const data = baseGenerateVideoData({ ...STORED, ...extra })
+    const utils = render(<GenerateVideoConfig {...commonProps(onUpdate, data)} sources={sources} />)
+    const ratio = () => utils.getByTestId("aspect-ratio-selector")
+    // The length select: the one whose options are the model's lengths in seconds.
+    const length = () => utils.container.querySelector('option[value="5"]')!.closest("[data-select-disabled]")!
+    const ratioLocked = () => ratio().getAttribute("data-disabled") === "true"
+    const lengthLocked = () => length().getAttribute("data-select-disabled") === "true"
+    // What the panel WROTE: never an aspect ratio or a length.
+    const wroteRatioOrLength = () => onUpdate.mock.calls.some(([u]: any) => "aspectRatio" in u || "duration" in u)
+    return { ...utils, onUpdate, data, ratio, length, ratioLocked, lengthLocked, wroteRatioOrLength }
+  }
+
+  it("Edit with a 6 s clip: ratio and length locked, the Edit line once, nothing written", () => {
+    const p = open({ referenceTaskType: "edit" }, 6)
+    expect(p.getByText("Use the reference video as")).toBeTruthy()
+    expect(p.ratioLocked()).toBe(true)
+    expect(p.lengthLocked()).toBe(true)
+    expect(p.getAllByText(EDIT_LINE)).toHaveLength(1)
+    expect(p.queryByText(NOT_APPLIED)).toBeNull()
+    expect(p.wroteRatioOrLength()).toBe(false)
+  })
+
+  it("Edit with a clip of unknown length locks too (the price assumes the same)", () => {
+    const p = open({ referenceTaskType: "edit" }, undefined)
+    expect(p.ratioLocked()).toBe(true)
+    expect(p.lengthLocked()).toBe(true)
+    expect(p.getAllByText(EDIT_LINE)).toHaveLength(1)
+  })
+
+  it("Edit with a 3 s clip: the run is not an edit — editable, the not-applied line once, priced at the stored length", () => {
+    const p = open({ referenceTaskType: "edit" }, 3)
+    expect(p.ratioLocked()).toBe(false)
+    expect(p.lengthLocked()).toBe(false)
+    expect(p.getAllByText(NOT_APPLIED)).toHaveLength(1)
+    expect(NOT_APPLIED).toContain("4")
+    expect(NOT_APPLIED).toContain("30")
+    expect(p.queryByText(EDIT_LINE)).toBeNull()
+    expect(p.wroteRatioOrLength()).toBe(false)
+    // The run estimate (and the node's pill, generate-video-node.test.tsx) name the stored length's row.
+    const node = { id: "n1", type: "generate-video", position: { x: 0, y: 0 }, data: p.data } as any
+    expect(getModelIdentifier(node, storeGraph.edges, [...storeGraph.nodes, node])).toBe(
+      videoGenerationCreditId({ provider: "seedance-2-5", duration: 5, nodeType: "image-to-video", resolution: "720p", hasVideoRef: true }),
+    )
+  })
+
+  it("Extend: only the ratio is locked, the Extend line once", () => {
+    const p = open({ referenceTaskType: "extend" })
+    expect(p.ratioLocked()).toBe(true)
+    expect(p.lengthLocked()).toBe(false)
+    expect(p.getAllByText(EXTEND_LINE)).toHaveLength(1)
+    expect(p.queryByText(EDIT_LINE)).toBeNull()
+    expect(p.queryByText(EXTEND_AUTO_LINE)).toBeNull()
+    expect(p.wroteRatioOrLength()).toBe(false)
+  })
+
+  it("Extend with Duration on Auto says the length that runs, in place of the Auto hint; the stored Auto stays", () => {
+    const p = open({ referenceTaskType: "extend", duration: VIDEO_DURATION_AUTO })
+    expect(p.getAllByText(EXTEND_AUTO_LINE)).toHaveLength(1)
+    expect(p.queryByText(/^Auto: the model picks the length/)).toBeNull()
+    expect(p.length().getAttribute("data-value")).toBe(String(VIDEO_DURATION_AUTO))
+    expect(p.wroteRatioOrLength()).toBe(false)
+    p.unmount()
+    // Auto without Extend keeps the ordinary Auto hint.
+    const q = open({ duration: VIDEO_DURATION_AUTO })
+    expect(q.queryByText(EXTEND_AUTO_LINE)).toBeNull()
+    expect(q.getByText(/^Auto: the model picks the length/)).toBeTruthy()
+  })
+
+  it("Extend at a stored Auto with a Duration wired in from a Settings node: no Extend line (the panel shows the wired length)", () => {
+    // The panel inside the scope the settings panel opens it in, with or
+    // without a Duration node on the Settings input.
+    const openScoped = (wiredSeconds: number | undefined) => {
+      const sources = wireClip(6)
+      if (wiredSeconds !== undefined) {
+        storeGraph.nodes = [...storeGraph.nodes, { id: "len", type: "duration", position: { x: 0, y: 0 }, data: { label: "Length", seconds: wiredSeconds } }]
+        storeGraph.edges = [...storeGraph.edges, { id: "e-len", source: "len", target: "n1", targetHandle: "settings" }]
+      }
+      const data = baseGenerateVideoData({ ...STORED, referenceTaskType: "extend", duration: VIDEO_DURATION_AUTO })
+      return render(
+        <WiredSettingsScope nodeId="n1" nodeType="generate-video" data={data}>
+          <GenerateVideoConfig {...commonProps(vi.fn(), data)} sources={sources} />
+        </WiredSettingsScope>,
+      )
+    }
+    const wiredLength = (MODEL_CATALOG["seedance-2-5"]!.durations as number[]).find((d) => !isAutoVideoDuration(d) && d !== DEFAULT_LENGTH)!
+    const wired = openScoped(wiredLength)
+    expect(wired.queryByText(EXTEND_AUTO_LINE)).toBeNull()
+    wired.unmount()
+    // No Duration wired: the line is there, as before.
+    storeGraph.nodes = []
+    storeGraph.edges = []
+    expect(openScoped(undefined).getAllByText(EXTEND_AUTO_LINE)).toHaveLength(1)
+  })
+
+  it("Edit, then back to Auto: the stored ratio and length are shown and editable", () => {
+    const p = open({ referenceTaskType: "edit" })
+    expect(p.ratioLocked()).toBe(true)
+    p.rerender(<GenerateVideoConfig {...commonProps(p.onUpdate, baseGenerateVideoData({ ...STORED }))} sources={wireClip(6)} />)
+    expect(p.ratioLocked()).toBe(false)
+    expect(p.lengthLocked()).toBe(false)
+    expect(p.ratio().getAttribute("data-value")).toBe(STORED.aspectRatio)
+    expect(p.length().getAttribute("data-value")).toBe(String(STORED.duration))
+    expect(p.queryByText(EDIT_LINE)).toBeNull()
+    expect(p.wroteRatioOrLength()).toBe(false)
+  })
+
+  it("Auto and A reference lock nothing and say nothing", () => {
+    for (const extra of [{}, { referenceTaskType: "reference" }]) {
+      const p = open(extra)
+      expect(p.ratioLocked()).toBe(false)
+      expect(p.lengthLocked()).toBe(false)
+      for (const line of [EDIT_LINE, EXTEND_LINE, NOT_APPLIED]) expect(p.queryByText(line)).toBeNull()
+      p.unmount()
+    }
+  })
+
+  it("with no reference video the select is gone, nothing is locked, and the stored choice is kept", () => {
+    const p = open({ referenceTaskType: "edit" }, "none")
+    expect(p.queryByText("Use the reference video as")).toBeNull()
+    expect(p.ratioLocked()).toBe(false)
+    expect(p.lengthLocked()).toBe(false)
+    expect(p.queryByText(NOT_APPLIED)).toBeNull()
+    expect(p.onUpdate.mock.calls.some(([u]: any) => "referenceTaskType" in u)).toBe(false)
+  })
+
+  it("with Draft on, nothing is locked or explained (a draft never carries the setting) and the stored choice is kept", () => {
+    const p = open({ referenceTaskType: "edit", draft: true, resolution: "480p" })
+    expect(p.getByText("Use the reference video as")).toBeTruthy()
+    expect(p.ratioLocked()).toBe(false)
+    expect(p.lengthLocked()).toBe(false)
+    for (const line of [EDIT_LINE, NOT_APPLIED]) expect(p.queryByText(line)).toBeNull()
+    expect(p.onUpdate.mock.calls.some(([u]: any) => "referenceTaskType" in u)).toBe(false)
+  })
+
+  it("is not offered on a model that takes no task type, and the panel clears a stale value", () => {
+    const p = open({ provider: "seedance-2", referenceTaskType: "edit" })
+    expect(p.queryByText("Use the reference video as")).toBeNull()
+    expect(p.ratioLocked()).toBe(false)
+    expect(p.onUpdate).toHaveBeenCalledWith(expect.objectContaining({ referenceTaskType: undefined }))
+  })
+})
+
 // =============================================================================
 // TextToVideoConfig
 // =============================================================================
@@ -902,6 +1082,24 @@ describe("TextToVideoConfig — provider-snap useEffect", () => {
     expect(onUpdate).not.toHaveBeenCalledWith(
       expect.objectContaining({ resolution: expect.anything() }),
     )
+  })
+})
+
+describe("ImageToVideoConfig / TextToVideoConfig — a stale Seedance 2.5 reference task type", () => {
+  // The legacy panels show no "Use the reference video as" select, but both run
+  // engines honour the stored value on these node types, so their provider
+  // snap clears it on a model that takes none (as Generate Video's does).
+  it.each<[string, any, (o: any) => any]>([
+    ["Image to Video", ImageToVideoConfig, baseImageToVideoData],
+    ["Text to Video", TextToVideoConfig, baseTextToVideoData],
+  ])("%s: kept on Seedance 2.5, cleared on a switch to a model that takes none", (_name, Config, baseData) => {
+    const onUpdate = vi.fn()
+    const wroteTaskType = () => onUpdate.mock.calls.some(([u]: any) => "referenceTaskType" in u)
+    const on25 = baseData({ provider: "seedance-2-5", referenceTaskType: "edit" })
+    const { rerender } = render(<Config {...commonProps(onUpdate, on25)} />)
+    expect(wroteTaskType()).toBe(false)
+    rerender(<Config {...commonProps(onUpdate, { ...on25, provider: "seedance-2" })} />)
+    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ referenceTaskType: undefined }))
   })
 })
 

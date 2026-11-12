@@ -335,6 +335,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`activeResultIndex?: number\`
 - \`multiShot?: boolean\`
 - \`draft?: boolean\`
+- \`referenceTaskType?: "reference" | "edit" | "extend"\`
 - \`resolution?: string\`
 - \`grokMode?: "fun" | "normal" | "spicy"\`
 - \`videoSize?: "standard" | "high"\`
@@ -862,6 +863,7 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
 - \`aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto"\`
 - \`multiShot?: boolean\`
 - \`draft?: boolean\`
+- \`referenceTaskType?: "reference" | "edit" | "extend"\`
 - \`resolution?: string\`
 - \`grokMode?: "fun" | "normal" | "spicy"\`
 - \`videoSize?: "standard" | "high"\`

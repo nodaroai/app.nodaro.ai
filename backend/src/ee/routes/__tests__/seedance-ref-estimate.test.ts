@@ -44,6 +44,7 @@ import { registerSeedanceRefEstimate } from "../seedance-ref-estimate.js"
 import { STATIC_CREDIT_COSTS } from "../../billing/credits.js"
 import { seedance2RefVideoBaseCreditsFromDurations } from "../../billing/seedance2-ref-video-credits.js"
 import { applyServiceMarkup } from "../../billing/service-margin.js"
+import { generateOpenApiDoc } from "../../../lib/openapi-registry.js"
 
 const URL_ = "/v1/credits/seedance-ref-estimate"
 const CLIP_10 = "https://cdn.example/clip-10.mp4"
@@ -138,6 +139,38 @@ describe("POST /v1/credits/seedance-ref-estimate", () => {
     expect(res.json().error.code).toBe("video_too_long")
   })
 
+  // Seedance 2.5 `referenceTaskType` (optional): the quote prices the run the
+  // declaration sends, by the run's own rule. An unknown value is ignored —
+  // never a 400 that would break an editor that sends something new.
+  it("an edit of a measured clip at a stored 5 s is quoted as the run sends it: the Auto edit's price", async () => {
+    const edit = await post({ provider: "seedance-2-5", resolution: "720p", duration: 5, referenceTaskType: "edit", referenceVideoUrls: [CLIP_10] })
+    const auto = await post({ provider: "seedance-2-5", resolution: "720p", duration: VIDEO_DURATION_AUTO, referenceVideoUrls: [CLIP_10] })
+    expect(edit.statusCode).toBe(200)
+    expect(edit.json()).toStrictEqual(auto.json())
+    const stored = await post({ provider: "seedance-2-5", resolution: "720p", duration: 5, referenceVideoUrls: [CLIP_10] })
+    expect(edit.json()).not.toStrictEqual(stored.json())
+  })
+
+  it("an extend at Auto with a 4 s clip is quoted at the 8 s it runs", async () => {
+    const extend = await post({ provider: "seedance-2-5", resolution: "720p", duration: VIDEO_DURATION_AUTO, referenceTaskType: "extend", referenceVideoUrls: [CLIP_4] })
+    const eight = await post({ provider: "seedance-2-5", resolution: "720p", duration: 8, referenceVideoUrls: [CLIP_4] })
+    expect(extend.json()).toStrictEqual(eight.json())
+  })
+
+  it("the OpenAPI document shows referenceTaskType as an optional enum of the four values", () => {
+    const doc = generateOpenApiDoc() as { paths: Record<string, { post?: { requestBody?: { content?: Record<string, { schema?: { properties?: Record<string, { enum?: unknown[] }>; required?: string[] } }> } } }> }
+    const schema = doc.paths[URL_]?.post?.requestBody?.content?.["application/json"]?.schema
+    expect(schema?.properties?.referenceTaskType?.enum).toStrictEqual(["auto", "reference", "edit", "extend"])
+    expect(schema?.required ?? []).not.toContain("referenceTaskType")
+  })
+
+  it.each([["auto"], ["bogus"], [3], [null]])("referenceTaskType %j: accepted, and the body is the one without the field", async (value) => {
+    const body = { provider: "seedance-2-5", resolution: "720p", duration: 5, referenceVideoUrls: [CLIP_10] }
+    const asked = await post({ ...body, referenceTaskType: value })
+    expect(asked.statusCode).toBe(200)
+    expect(asked.json()).toStrictEqual((await post(body)).json())
+  })
+
   it("refuses a provider whose reference-video runs are not priced this way, and an empty request", async () => {
     expect((await post({ provider: "kling", referenceVideoUrls: [CLIP_10] })).statusCode).toBe(400)
     expect((await post({ provider: "seedance-2-5", referenceVideoUrls: [] })).statusCode).toBe(400)
@@ -197,8 +230,12 @@ describe("POST /v1/credits/seedance-ref-estimate", () => {
       }
     })
 
-    it("a value outside the vocabulary is a 400", async () => {
-      expect((await post({ ...auto, referenceTaskType: "Edit", referenceVideoUrls: [CLIP_5] })).statusCode).toBe(400)
+    // An unknown value is taken off the body and priced as Auto, never a 400
+    // (`ignoringUnknownTaskType`: an editor newer than this server keeps its price).
+    it("a value outside the vocabulary is ignored: the answer of the request without the field", async () => {
+      const asked = await post({ ...auto, referenceTaskType: "Edit", referenceVideoUrls: [CLIP_5] })
+      expect(asked.statusCode).toBe(200)
+      expect(asked.json()).toStrictEqual((await post({ ...auto, referenceVideoUrls: [CLIP_5] })).json())
     })
   })
 })

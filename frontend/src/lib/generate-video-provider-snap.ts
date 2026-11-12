@@ -6,6 +6,7 @@ import {
 } from "@/components/editor/config-panels/model-options"
 import { isFrameDelivery, isFrameFit, supportsReferenceDelivery } from "@/components/editor/config-panels/frame-fit-fields"
 import { hasStaleSeedanceDraft } from "@/components/editor/config-panels/seedance-draft-toggle"
+import { hasStaleSeedanceTaskType } from "@/lib/seedance-task-type"
 import { openVideoDuration, openVideoResolution, type FreeVideoLimits } from "@/lib/free-video-locks"
 import {
   isAutoVideoDuration,
@@ -138,5 +139,6 @@ export function generateVideoProviderSnap(
     if (data.videoTrimEnd - start > widest) updates.videoTrimEnd = start + widest
   }
   if (hasStaleSeedanceDraft(provider, data.draft)) updates.draft = undefined
+  if (hasStaleSeedanceTaskType(provider, data.referenceTaskType)) updates.referenceTaskType = undefined
   return updates
 }

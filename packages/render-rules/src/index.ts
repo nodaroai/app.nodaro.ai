@@ -280,6 +280,9 @@ export {
   type RunWireLengthOptions,
   type WireLength,
 } from "./utility-wire-length"
+export { LENGTH_RECORDING_VIDEO_NODE_TYPES, lengthFollowingBoundSec, withoutRecordedVideoLength, type VideoRunRequest } from "./length-following-video"
+export { seedanceTaskTypeAsRun, wiredReferenceVideoSec, type SeedanceTaskTypeAsRun } from "./seedance-task-type-as-run"
+export { generationSourceEstimateSec, LEGACY_VIDEO_NODE_DEFAULT_PROVIDER } from "./generation-source-length"
 export { videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo } from "./video-overlay-pricing"
 export {
   UGC_CREATOR_NO_IMAGE_MESSAGE,

@@ -45,6 +45,7 @@ import { isRenderNodeType, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { EXTEND_VIDEO_DEFAULT_PROVIDER, isUseCaseNodeType, nodaroImageUpscaleCreditId, renderEstimateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsReferenceVideo } from "@/lib/audio-reference-handles"
+import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
@@ -648,10 +649,14 @@ export function getModelIdentifier(
     // never node data (nothing writes `referenceVideoUrls` into these nodes).
     // The shared builder applies the resolution fill + Seedance Draft the run
     // applies, so Generate Video and Video to Video's Seedance edit lane quote
-    // one id for one KIE call.
+    // one id for one KIE call. The length is the one the run is priced at once
+    // a Seedance reference task type is resolved (the node's pill reads the
+    // same helper).
     return videoGenerationCreditId({
       provider: sel.provider,
-      duration: sel.duration,
+      duration: seedanceTaskTypeRunDuration({
+        nodeId: node.id, provider: sel.provider, duration: sel.duration, data, nodes: nodes ?? [], edges: edges ?? [], rerunIds: reruns,
+      }),
       sound,
       nodeType: videoNodeType,
       mode: (data.videoSize ?? data.mode) as string | undefined,
