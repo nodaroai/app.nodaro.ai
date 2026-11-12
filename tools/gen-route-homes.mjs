@@ -7,8 +7,11 @@
  *   npm run gen:route-homes   rewrites the block (tools/__tests__/route-homes.test.mjs
  *                             fails CI when it is out of date)
  *
- * The block is inert: it answers only for hosts LEGACY_UI_HOSTS names, and only
- * with FLOW_UI_ORIGIN an https origin (docs/deployment.md). Only the pages the
+ * The block is inert without FLOW_UI_ORIGIN an https origin and PUBLIC_URL another
+ * one (docs/deployment.md). With those two alone, the pages have their own host
+ * but every host still serves them: the settings bridge page is served, and each
+ * page search engines may index names its home as canonical. Redirects answer
+ * only for hosts LEGACY_UI_HOSTS also names (the move). Only the pages the
  * list moves ever move: an unknown path, another app's route (sites.d) and every
  * file stay. Every setting is read per request ({env.…}), never pasted into the
  * config's text, so no value (a quote, a backslash) can stop Caddy from starting:
@@ -49,14 +52,44 @@ const KEPT = "{nodaro_kept_origin}"
 const HERE = `"https://" + {http.request.host}.lowerAscii()`
 // A framed load (Sec-Fetch-Dest iframe, frame, embed or object) is never redirected: every product's account pop-up frames these pages.
 const NOT_FRAMED = `!({http.request.header.Sec-Fetch-Dest} in ["iframe", "frame", "embed", "object"])`
-// The move is on with a valid Flow origin, a valid kept origin (PUBLIC_URL) that is not the Flow origin, and at
-// least one legacy host that is not the Flow host itself: the one rule the /config.js writer, the browser and the
-// server's boot check also read (tools/build-runtime-config.mjs, frontend/src/lib/runtime-config.ts,
-// backend/src/lib/moved-pages-settings.ts).
-const MOVE_ON = `${FLOW} != "" && ${KEPT} != "" && ${KEPT} != ${FLOW} && ${HOSTS}.exists(h, h != "" && "https://" + h != ${FLOW})`
+// The pages have their own host with a valid Flow origin and a valid kept origin (PUBLIC_URL) that is not the
+// Flow origin. The move is on when, besides, at least one legacy host is not the Flow host itself. Both are the
+// rules the /config.js writer, the browser and the server's boot check also read (tools/build-runtime-config.mjs,
+// frontend/src/lib/runtime-config.ts, backend/src/lib/moved-pages-settings.ts).
+const OWN_HOST = `${FLOW} != "" && ${KEPT} != "" && ${KEPT} != ${FLOW}`
+const MOVE_ON = `${OWN_HOST} && ${HOSTS}.exists(h, h != "" && "https://" + h != ${FLOW})`
+// The request's own path, decoded and NOT cleaned: what the canonical header writes. Caddy's `path` matchers test the
+// cleaned path (`..` resolved, `//` merged, letter case ignored), so a crafted address could pass one while this
+// placeholder carries `>`, `;` or `,` into the header. The canonical check therefore reads this very value.
+const RAW_PATH = "{http.request.uri.path}"
+// One segment of a page's own address, the way the platform spells its slugs (tutorials, published apps).
+const SLUG = "[a-z0-9-]+"
+
+/**
+ * The exact addresses an indexable list names, as one RE2 pattern for the raw path: an exact page as written (`/`,
+ * `/gallery`), and a section (`/tutorials/*`) followed by exactly one slug. Any other spelling (another letter case,
+ * `//`, a dot segment, a file, a deeper path, an encoded character) names no canonical: none, rather than a wrong one.
+ */
+export function canonicalPattern(entries) {
+  for (const entry of entries) {
+    if (!/^\/([a-z0-9-]+(\/[a-z0-9-]+)*(\/\*)?)?$/.test(entry)) throw new Error(`frontend/src/route-homes.json: an indexable page must be a plain lowercase address: ${entry}`)
+  }
+  const alternatives = entries.map((entry) => (entry.endsWith("/*") ? `${entry.slice(0, -2)}/${SLUG}` : entry))
+  return `^(?:${alternatives.join("|")})$`
+}
+
+/** The indexable pages by their home: `flow` for a moved page, `kept` for a kept one. Throws on a page placed in neither. */
+export function canonicalHomes(homes) {
+  const flow = homes.indexable.filter((entry) => homes.moved.includes(entry))
+  const kept = homes.indexable.filter((entry) => homes.kept.includes(entry))
+  const nowhere = homes.indexable.filter((entry) => !flow.includes(entry) && !kept.includes(entry))
+  if (nowhere.length > 0) throw new Error(`frontend/src/route-homes.json: an indexable page must also be listed, as written, in "moved" or "kept": ${nowhere.join(", ")}`)
+  return { flow, kept }
+}
 
 /** The generated block, for the top level of the site. */
 export function renderBlock(homes) {
+  const canonical = canonicalHomes(homes)
   const lines = [
     BEGIN,
     "\t# A page of the app moved to its own host: a top-level visit to a moved page on a",
@@ -107,21 +140,37 @@ export function renderBlock(homes) {
     `\t\tredir @legacy_ui_temporary ${KEPT}{uri} 302`,
     "\t}",
     "\t# The page that hands a browser's saved settings to the Flow host",
-    "\t# (frontend/public/storage-bridge.html) is there only while the move is on,",
-    "\t# framable only by the Flow origin. Otherwise the path answers exactly as on",
+    "\t# (frontend/public/storage-bridge.html) is there only while the pages have their",
+    "\t# own host, framable only by the Flow origin. Otherwise the path answers exactly as on",
     "\t# an install without the file: as any unknown page, the app's index.",
     "\t@storage_bridge_on {",
     "\t\tpath /storage-bridge.html",
-    `\t\texpression \`${MOVE_ON}\``,
+    `\t\texpression \`${OWN_HOST}\``,
     "\t}",
     `\theader @storage_bridge_on Content-Security-Policy "frame-ancestors ${FLOW}"`,
     "\t# Its trailing-slash form too: the proxy would redirect it to the file, which",
-    "\t# an install without the move does not have.",
+    "\t# an install without its own host does not have.",
     "\t@storage_bridge_off {",
     "\t\tpath /storage-bridge.html /storage-bridge.html/",
-    `\t\texpression \`!(${MOVE_ON})\``,
+    `\t\texpression \`!(${OWN_HOST})\``,
     "\t}",
     "\trewrite @storage_bridge_off /index.html",
+    "\t# Once the pages have their own host, every host serves them, so each page search",
+    "\t# engines may index names its one home (a Link header, rel=canonical): the Flow host",
+    "\t# for a moved page, PUBLIC_URL for a kept one, on every host. The pages are",
+    "\t# route-homes.json's \"indexable\" list (@spa_noindex's allow-list), matched on the",
+    "\t# request's own path, exactly as listed (a section: one lowercase slug), never the",
+    "\t# query: the header writes that same path, so nothing else can reach it.",
+    "\t@canonical_on_flow_host {",
+    `\t\texpression \`${OWN_HOST} && ${RAW_PATH}.matches("${canonicalPattern(canonical.flow)}")\``,
+    "\t\tmethod GET HEAD",
+    "\t}",
+    `\theader @canonical_on_flow_host Link \`<${FLOW}${RAW_PATH}>; rel="canonical"\``,
+    "\t@canonical_on_kept_host {",
+    `\t\texpression \`${OWN_HOST} && ${RAW_PATH}.matches("${canonicalPattern(canonical.kept)}")\``,
+    "\t\tmethod GET HEAD",
+    "\t}",
+    `\theader @canonical_on_kept_host Link \`<${KEPT}${RAW_PATH}>; rel="canonical"\``,
     END,
     "",
   ]

@@ -32,11 +32,14 @@ import {
   KLING_4_FLASH_RESOLUTION,
   isGrokVideo15Provider,
   normalizeGrokVideo15Resolution,
+  isPixverseV6MaxProvider,
+  normalizePixverseV6MaxQuality,
   VIDEO_REF_RATE_PROVIDERS,
   normalizeMinimaxH3Resolution,
   normalizeWan3Resolution,
   normalizeViduQ4Resolution,
-  getVideoAudioCapability,
+  videoAudioPricedOn,
+  type VideoAudioRequest,
   canonicalVideoProvider,
   isSeedanceExtendProvider,
   type SeedanceExtendProvider,
@@ -450,7 +453,9 @@ const T2V_CREDIT_OVERRIDES: Record<string, string> = {
  *
  * @param provider - Video model key (e.g., "kling-3.0")
  * @param duration - Video duration in seconds
- * @param sound - Whether audio/sound is enabled
+ * @param sound - The request's audio: its `sound` flag, or the whole audio
+ *   request (`{ sound, generateAudio }`) — read through `videoAudioIntent`, the
+ *   same reading the provider runner sends the model's switch from
  * @param nodeType - Node type for T2V-specific cost overrides
  * @param mode - Quality variant that affects pricing
  * @param resolution - Output resolution (used by Seedance 2 for 480p/720p pricing)
@@ -509,18 +514,20 @@ function wireNormalizedResolution(provider: string, resolution: string | undefin
   // Kling 4.0 Flash renders 720p whatever it is asked (its runner sends 720p).
   if (isKling4FlashProvider(provider)) return KLING_4_FLASH_RESOLUTION
   if (isGrokVideo15Provider(provider)) return normalizeGrokVideo15Resolution(resolution)
+  if (isPixverseV6MaxProvider(provider)) return normalizePixverseV6MaxQuality(resolution)
   return resolution
 }
 
 export function buildVideoCreditModelIdentifier(
   rawProvider: string,
   duration?: number | string,
-  sound?: boolean,
+  sound?: boolean | VideoAudioRequest,
   nodeType?: "image-to-video" | "text-to-video",
   mode?: string,
   resolution?: string,
   hasVideoRef?: boolean,
 ): string {
+  const audio: VideoAudioRequest = typeof sound === "object" && sound !== null ? sound : { sound }
   // A retired model (RETIRED_VIDEO_PROVIDERS) is priced as the model it runs as.
   const provider = canonicalVideoProvider(rawProvider) as string
   // A Seedance Extend Video provider is priced on its own rows — the one
@@ -596,16 +603,6 @@ export function buildVideoCreditModelIdentifier(
   const tier = tiers.find(t => durationSec <= t.maxSeconds) ?? tiers[tiers.length - 1]
   let identifier = `${effectiveProvider}:${tier.suffix}`
 
-  // Append audio suffix if applicable. When the caller expressed no intent
-  // (sound === undefined), fall back to the model's own default (capability
-  // `defaultOn` — kling-3.0 generates audio unless explicitly disabled), so an
-  // intent-less request is billed for the audio it actually produces instead
-  // of reserving the cheaper no-audio tier against an audio-on generation.
-  const soundOn = sound ?? (getVideoAudioCapability(effectiveProvider).defaultOn === true)
-  if (AUDIO_ADDON_PROVIDERS.has(effectiveProvider) && soundOn) {
-    identifier += ":audio"
-  }
-
   // Append mode suffix for providers with quality-tiered pricing
   // "high" comes from I2V videoSize field, "pro" comes from T2V mode field
   if (MODE_ADDON_PROVIDERS.has(effectiveProvider) && (mode === "high" || mode === "pro")) {
@@ -660,7 +657,7 @@ export function buildVideoCreditModelIdentifier(
     // Collapsing through the SAME normalizer the runner uses makes render == billed
     // by construction for every spelling, including garbage (→ the declared 720p).
     // Scoped to the families whose runner normalizes on purpose (Wan 3.0, Vidu
-    // Q4, Kling 4.0, Grok Imagine Video 1.5): the other RESOLUTION_DURATION_PRICING members pass `resolution` to
+    // Q4, Kling 4.0, Grok Imagine Video 1.5, PixVerse V6 Max): the other RESOLUTION_DURATION_PRICING members pass `resolution` to
     // their wire verbatim, so case-folding their billing without probing their
     // wire would reprice live models.
     const requested = wireNormalizedResolution(effectiveProvider, resolution)
@@ -678,6 +675,17 @@ export function buildVideoCreditModelIdentifier(
   // omitted/unknown value, so billing can never undercut the render.
   if (isMinimaxH3Provider(effectiveProvider) && normalizeMinimaxH3Resolution(resolution) === "768P") {
     identifier += ":768p"
+  }
+
+  // Append the audio suffix LAST, after every other dimension
+  // (`kling-3.0:10s:audio`, `pixverse-v6-max:5s:720p:audio`). The request's
+  // audio is read by `videoAudioIntent` — the reading `applyVideoAudioToggle`
+  // sends the model's switch from — and with no intent falls back to the
+  // model's own default (capability `defaultOn` — kling-3.0 and PixVerse V6 Max
+  // generate audio unless explicitly disabled), so a request is billed for the
+  // audio it actually produces.
+  if (AUDIO_ADDON_PROVIDERS.has(effectiveProvider) && videoAudioPricedOn(effectiveProvider, audio)) {
+    identifier += ":audio"
   }
 
   return identifier
@@ -706,6 +714,8 @@ export function videoGenerationCreditId(args: {
   provider: string
   duration?: number | string
   sound?: boolean
+  /** The request's `generateAudio`, read after `sound` where the model reads it (`videoAudioIntent`). */
+  generateAudio?: boolean
   nodeType?: "image-to-video" | "text-to-video"
   mode?: string
   resolution?: string
@@ -719,7 +729,7 @@ export function videoGenerationCreditId(args: {
   return buildVideoCreditModelIdentifier(
     args.provider,
     args.duration,
-    args.sound,
+    { sound: args.sound, generateAudio: args.generateAudio },
     args.nodeType ?? "image-to-video",
     args.mode,
     resolution,

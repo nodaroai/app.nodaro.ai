@@ -1,6 +1,6 @@
 // @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,video-overlay,extend-video,video-retake,dubbing}.ts
 // @test-watches backend/src/services/workflow-engine/node-executor.ts
-// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,video-overlay-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span}.ts backend/src/lib/private-plugins/toolkit.ts
+// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,video-overlay-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span,nodaro-video-upscale-plan}.ts backend/src/lib/private-plugins/toolkit.ts
 /**
  * A per-unit run is CHARGED from the same price source it is QUOTED from.
  *
@@ -32,8 +32,9 @@
  * host that lacks the member.)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { NODARO_VIDEO_UPSCALE_CREDIT_IDS, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { topazVideoHoldBaseCredits } from "@/lib/topaz-video-plan.js"
+import { nodaroVideoUpscaleBaseCredits } from "@/lib/nodaro-video-upscale-plan.js"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -168,6 +169,14 @@ const CHARGES: Readonly<Record<string, Charge>> = {
   // routes/video-upscale.ts (computeCredits) and the workflow run's computeTopazVideoCreditOverride:
   // a Topaz plan holding 7 units.
   [TOPAZ_VIDEO_UNIT_CREDIT_ID]: { units: 7, charge: async () => markedUp(TOPAZ_VIDEO_UNIT_CREDIT_ID, await topazVideoHoldBaseCredits({ holdUnits: 7 })) },
+  // routes/video-upscale.ts (computeCredits) and the workflow run's computeNodaroVideoUpscaleCreditOverride:
+  // a Nodaro Video Upscale plan billed 10 s — 2.5 units of its tier's four-second row.
+  ...Object.fromEntries(
+    Object.values(NODARO_VIDEO_UPSCALE_CREDIT_IDS).map((id): [string, Charge] => [
+      id,
+      { units: 2.5, charge: async () => markedUp(id, await nodaroVideoUpscaleBaseCredits({ creditId: id, billedSec: 10 })) },
+    ]),
+  ),
 }
 
 beforeEach(() => {
@@ -323,6 +332,7 @@ describe("each charge site prices through the function this suite drives", () =>
     // The cloud plugin's Speaker View route reserves through this member.
     "lib/private-plugins/toolkit.ts": ["unitRatePrice"],
     "lib/dubbing-span.ts": ["baseCreditCostFor"],
+    "lib/nodaro-video-upscale-plan.ts": ["unitRateBaseCredits"],
   }
 
   it("this file's @test-watches name every site it reads, so a change to one selects it", () => {

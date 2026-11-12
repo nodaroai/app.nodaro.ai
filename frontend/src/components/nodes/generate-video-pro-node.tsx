@@ -25,6 +25,7 @@ import { isValidGenerateVideoProConnection } from "@/lib/generate-video-pro-hand
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { SETTINGS_INPUT_HANDLE } from "@nodaro/shared/nodes"
+import { gvpRenderResolution, gvpSegmentAudio } from "@nodaro/render-rules"
 import { useWiredSettings } from "@/hooks/use-wired-settings"
 import { SettingsChips, SettingsPriceNote } from "./settings-chips"
 import { estimateGenerateVideoProCredits } from "@/components/editor/workflow-editor/types"
@@ -205,14 +206,16 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
   // return values are intentionally unused. Previously the strip showed the
   // single-segment 8s composite regardless of duration, so a 60s run
   // displayed ~1/6th of the real reservation (user bug report).
-  const resolution = runData.resolution || "720p"
+  // The tier the run renders and is billed at (the pro pricing's own rule), so
+  // the rows warmed here are the ones the estimate reads.
+  const resolution = gvpRenderResolution(provider, runData.resolution || "720p")
   const creditIdentifier = buildVideoCreditModelIdentifier(
     provider,
     runData.duration,
-    false,
+    gvpSegmentAudio(runData.generateAudio),
     "text-to-video",
     undefined,
-    runData.resolution,
+    resolution,
     false,
   )
   useModelCredits(creditIdentifier, 82)

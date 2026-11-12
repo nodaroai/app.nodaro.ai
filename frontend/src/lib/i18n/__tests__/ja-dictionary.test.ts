@@ -94,6 +94,8 @@ const LATIN_OK: ReadonlySet<string> = new Set<string>([
   "tut.countZero",
   "tut.ofTotal",
   "utilcfg.webhookUrl",
+  // The Nodaro Video Upscale provider's name in the upscale menu: a product name.
+  "vidcfg.nodaroUpscale",
 ])
 
 const dict = ja as Record<string, string>

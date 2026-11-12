@@ -63,6 +63,8 @@ export {
   videoModelSupportsAudio,
   videoModelCanSpeakDialogue,
   applyVideoAudioToggle,
+  videoAudioIntent,
+  videoAudioPricedOn,
   VIDEO_VARIABLE_PRICING,
   VIDEO_DURATION_TIERS,
   ASPECT_RATIO_DIMENSIONS,
@@ -196,6 +198,10 @@ export {
   normalizeGrokVideo15Resolution,
   GROK_VIDEO_15_MAX_MIDDLE_FRAMES,
   grokVideo15MiddleFrameSlots,
+  PIXVERSE_V6_MAX_PROVIDER,
+  isPixverseV6MaxProvider,
+  PIXVERSE_V6_MAX_DEFAULT_QUALITY,
+  normalizePixverseV6MaxQuality,
   videoKeyframesMiddleCap,
   VIDEO_REF_RATE_PROVIDERS,
   billsReferenceVideoSeconds,
@@ -327,6 +333,7 @@ export type {
   ModelPromptingStyle,
   VideoModelCapabilities,
   VideoAudioMode,
+  VideoAudioRequest,
   VideoAudioCapability,
   GvpAnchorChoice,
   GvpAnchorWireMode,
@@ -421,6 +428,18 @@ export type {
   TopazVideoTargetInput,
   TopazVideoTarget,
 } from "../topaz-video.js"
+// --- Nodaro Video Upscale (tiers, limits) ---
+export {
+  NODARO_VIDEO_UPSCALE_PROVIDER,
+  NODARO_VIDEO_UPSCALE_TIERS,
+  NODARO_VIDEO_UPSCALE_DEFAULT_TIER,
+  NODARO_VIDEO_UPSCALE_BOX,
+  NODARO_VIDEO_UPSCALE_MAX_SEC,
+  NODARO_VIDEO_UPSCALE_MAX_BYTES,
+  isNodaroVideoUpscaleTier,
+  isNodaroVideoUpscaleProvider,
+} from "../nodaro-video-upscale.js"
+export type { NodaroVideoUpscaleTier } from "../nodaro-video-upscale.js"
 export {
   AUDIO_SOUNDTRACK_MIN_SEC,
   AUDIO_SOUNDTRACK_FPS,

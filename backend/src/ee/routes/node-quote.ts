@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { openApiRegistry } from "../../lib/openapi-registry.js"
 import { formatZodError } from "../../lib/zod-error.js"
-import { deniedModelRejectionMessage, isModelDenied } from "../../lib/surface-deny.js"
+import { deniedModelRejectionMessage, isHouseModelUnserved, isModelDenied } from "../../lib/surface-deny.js"
 import { EMPTY_PRICE_NOTES, type PriceNotes } from "../../lib/price-notes.js"
 import { withheldRunModels, type RoutePricing } from "../../middleware/credit-guard.js"
 import { handlePriceNotConfigured, markedUpCredits, reservedCreditsFor } from "../lib/credit-guard-impl.js"
@@ -88,13 +88,23 @@ export function registerNodeQuote(app: FastifyInstance): void {
       })
     }
     // A model this deployment does not offer is refused as the run refuses it.
+    // A house model this deployment does not serve is the run's pre-checks'
+    // to refuse (the same 403 `model_not_available`, in the route's own
+    // sentence), so it goes on to them.
     const provider = typeof params.provider === "string" ? params.provider : undefined
-    if (provider && isModelDenied(provider)) {
+    const unservedHouseModel = provider !== undefined && isHouseModelUnserved(provider)
+    if (provider && isModelDenied(provider) && !unservedHouseModel) {
       return reply.status(403).send({ error: { code: "model_not_available", message: deniedModelRejectionMessage([provider]) } })
     }
     // The run answers an invalid body with this same 400.
     const valid = entry.schema.safeParse(params)
     if (!valid.success) {
+      // …except for an unserved house model: the run's pre-check answers only a
+      // body it can fetch, so a body it cannot reaches the run's credit guard,
+      // which refuses the model before the body is validated (decided 2026-11-12).
+      if (unservedHouseModel) {
+        return reply.status(403).send({ error: { code: "model_not_available", message: deniedModelRejectionMessage([provider]) } })
+      }
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(valid.error) } })
     }
 

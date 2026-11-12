@@ -1,10 +1,10 @@
 # Upscale Video
 
-> Upscale a video to 720p, 1080p or 4K at the frame rate you choose with Topaz, re-render a VEO generation at 1080p or 4K, or finalize a Seedance 2.5 draft at 1080p.
+> Upscale a video to 720p, 1080p or 4K at the frame rate you choose with Topaz, upscale a clip of up to 60 seconds to 1080p, 2K or 4K with Nodaro Video Upscale, re-render a VEO generation at 1080p or 4K, or finalize a Seedance 2.5 draft at 1080p.
 
 ## Overview
 
-The Video Upscale node enhances video resolution using AI upscaling. Choose between Topaz (any video, to a target resolution and frame rate, with quality enhancement), VEO (fixed target resolutions), or **Seedance 2.5 HD (from draft)**, which finalizes a Seedance 2.5 draft at 1080p. Unlike most processing nodes, upscaling uses AI processing.
+The Video Upscale node enhances video resolution using AI upscaling. Choose between Topaz (any video, to a target resolution and frame rate, with quality enhancement), **Nodaro Video Upscale** (any clip of up to 60 seconds and 50 MB, into a 1080p, 2K or 4K frame, priced per second), VEO (fixed target resolutions), or **Seedance 2.5 HD (from draft)**, which finalizes a Seedance 2.5 draft at 1080p. Unlike most processing nodes, upscaling uses AI processing.
 
 ## Configuration
 
@@ -45,6 +45,42 @@ Holds for a 16:9 clip (the charge is at most this):
 For example, a 5-second 720p clip upscaled to 1080p at 30 fps holds 176 credits<!-- credits: topaz-video:per-unit@4 --> and, at the 3 units Topaz used for it, is charged **132**<!-- credits: topaz-video:per-unit@3 -->.
 
 **The price you see before you run** is the hold, marked as an estimate (≈). The editor reads the clip's length from the node wired into it when it knows it (an upload, a generation's duration), and otherwise prices a 10-second clip; it assumes a 16:9 frame and, with "Same as source", 30 fps. The run itself measures the real clip, so the amount held can differ from the estimate.
+
+### Nodaro Video Upscale
+
+Provider id `nodaro-video-upscale`. Upscales any clip of up to **60 seconds** and **50 MB** into a **1080p**, **2K** or **4K** frame:
+
+| Resolution | Landscape clip | Portrait clip |
+|---|---|---|
+| 1080p (the default) | 1920×1080 | 1080×1920 |
+| 2K | 2560×1440 | 1440×2560 |
+| 4K | 3840×2160 | 2160×3840 |
+
+The clip is fitted into that frame and never cropped, so it keeps its shape. A clip that is already that size is enhanced at the same size. The result keeps the clip's frame rate, length and sound, delivered as an MP4 (H.264 with AAC sound) that plays in every browser and works as an input to every other node. There is no frame-rate setting and no 720p resolution: choose Topaz for those.
+
+**Where it is offered.** Nodaro Video Upscale is offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it. An install that does not offer it leaves it out of the provider list, `GET /v1/models` and MCP `list_models`, and refuses a request or a workflow run that names it before anything is held.
+
+**Clips from a link.** A clip that is not already a file of your Nodaro storage (a link to another site) is first copied to Nodaro's storage, and that copy is what is measured, priced and upscaled; reading a file past 50 MB stops at 50 MB and the clip is refused. A deployment that has turned off links to other sites refuses such a clip with its standard message (upload the file instead). When many clips are being fetched at once, a run can be refused with "try again in a moment": nothing is held, and the same request can be sent again.
+
+**Limits.** A clip longer than 60 seconds, or a file larger than 50 MB, is refused before any credits are held, with a message that says the limit. Use Topaz for longer or larger clips. The length limit is exact, read from the longer of the clip's picture and sound: a clip cut to 60 seconds can measure 60.02 seconds and is then refused, so cut it a little shorter. A clip whose length or size cannot be read, or a file that is not a video, is refused too.
+
+A resolution this provider does not take (720p, saved by another provider or sent through the API) is read as 1080p; a 2K value saved on a Topaz node is ignored when the node runs, like any value Topaz does not take: Topaz then uses its 1080p default, or the node's older factor when it has one. A request sent straight to the API that names 2K for Topaz (or any provider but this one) is refused with a 400, as it always was.
+
+#### Credits (Nodaro Video Upscale)
+
+Priced by the second: the clip's length, rounded up to a whole second, at the resolution's rate, rounded up once to a whole credit. The clip is measured before the run starts, and the amount held is the amount charged.
+
+| Resolution | Per second | 10 s clip | 60 s clip |
+|---|---:|---:|---:|
+| 1080p | 4.125<!-- credits-rate: nodaro-video-upscale:1080p:per-4s@0.25 --> | **42**<!-- credits: nodaro-video-upscale:1080p:per-4s@2.5 --> | **248**<!-- credits: nodaro-video-upscale:1080p:per-4s@15 --> |
+| 2K | 8.25<!-- credits-rate: nodaro-video-upscale:2k:per-4s@0.25 --> | **83**<!-- credits: nodaro-video-upscale:2k:per-4s@2.5 --> | **495**<!-- credits: nodaro-video-upscale:2k:per-4s@15 --> |
+| 4K | 16.5<!-- credits-rate: nodaro-video-upscale:4k:per-4s@0.25 --> | **165**<!-- credits: nodaro-video-upscale:4k:per-4s@2.5 --> | **990**<!-- credits: nodaro-video-upscale:4k:per-4s@15 --> |
+
+For example, a clip of 10.2 seconds is billed as 11 seconds: at 1080p that is **47** credits<!-- credits: nodaro-video-upscale:1080p:per-4s@2.75 -->.
+
+**The price you see before you run** is marked as an estimate (≈). The editor reads the clip's length from the node wired into it when it knows it (an upload, a generation's duration), and otherwise prices a 10-second clip. The run itself measures the real clip. When the wired clip is known to be longer than 60 seconds, no price is shown at all: that run would be refused, so the node's Run button shows no figure, the run confirmation lists the node as not priced (saying the clip is too long), and a workflow estimate from the API leaves it out.
+
+Through the API: `POST /v1/video-upscale` with `{ "provider": "nodaro-video-upscale", "videoUrl": "<clip>", "targetResolution": "2k" }`. Every refusal comes before anything is held: `403 model_not_available` where the model is not offered; `400` for a clip past a limit or one that cannot be read (`video_too_long`, `video_too_large`, `video_unreadable`); `403 link_imports_disabled` for a link to another site where the deployment turned such links off; `422 upload_blocked` where its upload policy refuses the clip; `429 input_busy`, or `503 input_timed_out` / `input_failed`, when the clip could not be fetched just now. Via MCP: `video_upscale` with `model: "nodaro-video-upscale"` and `target_resolution` (`1080p`, `2k` or `4k`).
 
 ### VEO Options
 
@@ -100,12 +136,13 @@ Through the API: `POST /v1/video-upscale` with `{ "provider": "seedance-2-5-hd",
 
 ## Inputs & Outputs
 
-**Inputs:** Video (required). With a VEO provider it must come from a VEO generation node in this workflow; with Seedance 2.5 HD, from a Seedance 2.5 node with Draft on.
+**Inputs:** Video (required). With a VEO provider it must come from a VEO generation node in this workflow; with Seedance 2.5 HD, from a Seedance 2.5 node with Draft on; with Nodaro Video Upscale, any clip of up to 60 seconds and 50 MB.
 **Outputs:** Upscaled video
 ## Best Practices
 
 - VEO 1080p is a good option for moderate upscaling
 - Use Topaz at 1080p for most publishing; pick 4K only for deliverables that need it
+- For a short clip (up to 60 s) whose frame rate should stay as it is, Nodaro Video Upscale's per-second price is easy to predict: the amount held is the amount charged
 - Upscale after all other processing is complete to avoid re-processing at higher resolution
 - Topaz at the source's own resolution (e.g. 1080p for a 1080p clip) enhances quality without resizing
 

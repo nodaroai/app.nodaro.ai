@@ -29,6 +29,9 @@ const DELIBERATELY_GENERIC: ReadonlyMap<string, string> = new Map([
   ["ltx-2.3-pro", "no vendor prompt guide published"],
   ["sora2", "roster utility — no first-party guide via KIE"],
   ["sora2-pro", "roster utility — no first-party guide via KIE"],
+  // A new maker on the platform (decided 2026-11-12): no sourced prompting
+  // guide yet, so it runs on the platform default until one is written.
+  ["pixverse-v6-max", "no vendor prompt guide sourced yet"],
 ])
 
 /** Utility modes that are driven by inputs, not prose prompting — doctrine

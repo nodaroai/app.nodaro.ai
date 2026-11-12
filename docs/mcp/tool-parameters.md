@@ -133,7 +133,7 @@ Needs `workflows:execute`.
 | `prompt` | string |  | At most 8000 characters. |
 | `image_url` | string (URL) |  |  |
 | `image_asset_id` | string |  |  |
-| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, bytedance-pro-fast, gemini-omni-flash, gemini-omni-flash-1-2, gemini-omni-video, grok-i2v, grok-imagine-video-1.5, hailuo-2.3, hailuo-2.3-pro, hailuo-standard, happyhorse-i2v, happyhorse-ref2v, kling, kling-3-omni, kling-3.0, kling-4, kling-4-flash, kling-4-keyframes, kling-master, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, vidu-q4, wan-2.7-i2v, wan-3, wan-3-prime, wan-i2v, wan-turbo. Unknown values silently fall back. Call list_models { kind: "video", mode: "i2v" } for capabilities + recommendations. |
+| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, bytedance-pro-fast, gemini-omni-flash, gemini-omni-flash-1-2, gemini-omni-video, grok-i2v, grok-imagine-video-1.5, hailuo-2.3, hailuo-2.3-pro, hailuo-standard, happyhorse-i2v, happyhorse-ref2v, kling, kling-3-omni, kling-3.0, kling-4, kling-4-flash, kling-4-keyframes, kling-master, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, pixverse-v6-max, runway-kie, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, vidu-q4, wan-2.7-i2v, wan-3, wan-3-prime, wan-i2v, wan-turbo. Unknown values silently fall back. Call list_models { kind: "video", mode: "i2v" } for capabilities + recommendations. |
 | `duration` | number |  | Duration (seconds). Snaps to nearest supported. |
 | `aspect_ratio` | string |  | Aspect ratio. Variations / unsupported fall back. |
 | `resolution` | string |  | Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k. Unknown values fall back to the model's default. |
@@ -1366,7 +1366,7 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `prompt` | string |  | From 1 to 8000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your prompt. From 1 to 200 characters. |
-| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, gemini-omni-flash, gemini-omni-flash-1-2, gemini-omni-video, grok, hailuo-standard, happyhorse, kling, kling-3.0, kling-4, kling-4-flash, kling-4-keyframes, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, wan, wan-2.7-t2v, wan-3, wan-3-prime, wan-turbo. Unknown values silently fall back to the default. Call list_models { kind: "video", mode: "t2v" } for capability details. |
+| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, gemini-omni-flash, gemini-omni-flash-1-2, gemini-omni-video, grok, hailuo-standard, happyhorse, kling, kling-3.0, kling-4, kling-4-flash, kling-4-keyframes, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, pixverse-v6-max, runway-kie, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, wan, wan-2.7-t2v, wan-3, wan-3-prime, wan-turbo. Unknown values silently fall back to the default. Call list_models { kind: "video", mode: "t2v" } for capability details. |
 | `duration` | number |  | Duration (seconds). Snaps to nearest supported value. -1 = Auto (Seedance 2): the model picks the length. |
 | `aspect_ratio` | string |  | Aspect ratio (16:9, 9:16, 1:1, etc.). Variations and unsupported values fall back. |
 | `resolution` | string |  | Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k. |
@@ -1763,7 +1763,7 @@ Needs `workflows:execute`.
 | `image_url` | string (URL) |  | Source image URL. |
 | `image_asset_id` | string |  | Nodaro image job id. |
 | `prompt` | string | yes | Transformation description. From 1 to 2000 characters. |
-| `model` | string |  | img2img model. Default gpt-image-2-6-flare-i2i. Options: flux-2-max, flux-2-pro, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, minimax-h3-image-i2i, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-5-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. An unknown model is refused. |
+| `model` | string |  | img2img model. Default gpt-image-2-6-flare-i2i. Options: flux-2-max, flux-2-pro, flux-fill, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, minimax-h3-image-i2i, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-5-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. An unknown model is refused. |
 | `reference_image_urls` | string[] or string |  | Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6 or MiniMax H3, 9 on Seedream 5.5) for multi-ref models — asset ids are resolved server-side. Accepts an array; a lone URL or a JSON-stringified array is coerced. |
 | `resolution` | string |  | One of `1K`, `1.5K`, `2K`, `4K`. |
 | `quality` | string |  | One of `auto`, `low`, `medium`, `high`, `xhigh`, `max`, `basic`. |
@@ -2247,7 +2247,7 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | From 1 to 8000 characters. |
 | `image_url` | string (URL) |  |  |
 | `image_asset_id` | string |  |  |
-| `model` | string |  | I2I / edit model. Default gpt-image-2-6-flare-i2i. Recommended: flux-2-max, flux-2-pro, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, minimax-h3-image-i2i, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-5-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. For identity-preserving edits use gpt-image-2-i2i. Unknown values fall back. Call list_models for capability details. |
+| `model` | string |  | I2I / edit model. Default gpt-image-2-6-flare-i2i. Recommended: flux-2-max, flux-2-pro, flux-fill, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, minimax-h3-image-i2i, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-5-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. For identity-preserving edits use gpt-image-2-i2i. Unknown values fall back. Call list_models for capability details. |
 | `resolution` | string |  | Resolution: falls back to nearest supported. |
 | `quality` | string |  | Quality by model (list_models). Auto bills real cost, up to Max. |
 | `background` | string |  | Models that list it. Transparent: 1K on GPT Image. One of `auto`, `opaque`, `transparent`. |
@@ -3603,10 +3603,10 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `video_url` | string (URL) |  | Source video URL (required for topaz). |
-| `video_asset_id` | string |  | Nodaro video job id (required for topaz). |
-| `model` | string |  | Upscale model. Default topaz. One of `topaz`, `veo-1080p`, `veo-4k`, `seedance-2-5-hd`. |
-| `target_resolution` | string |  | topaz: short side. Default 1080p. One of `720p`, `1080p`, `4k`. |
+| `video_url` | string (URL) |  | Source video URL (required for topaz and nodaro-video-upscale). |
+| `video_asset_id` | string |  | Nodaro video job id (required for topaz and nodaro-video-upscale). |
+| `model` | string |  | Upscale model. Default topaz. One of `topaz`, `veo-1080p`, `veo-4k`, `seedance-2-5-hd`, `nodaro-video-upscale`. |
+| `target_resolution` | string |  | topaz: 720p/1080p/4k (short side; 2k is refused); nodaro-video-upscale: 1080p/2k/4k (720p runs at 1080p). Default 1080p. One of `720p`, `1080p`, `2k`, `4k`. |
 | `target_fps` | integer |  | topaz: output fps. Default: the source's. From 15 to 60. |
 | `upscale_factor` | string |  | Legacy; use target_resolution. One of `1`, `2`, `4`. |
 | `task_id` | string |  | Task id of the original VEO generation, its output providerTaskId (veo-1080p / veo-4k), or of the Seedance 2.5 draft (seedance-2-5-hd). |

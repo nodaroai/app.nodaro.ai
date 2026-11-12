@@ -57,6 +57,7 @@ import {
   KIE_TTS_MODELS,
   KIE_STT_MODELS,
 } from "../kie/models.js"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { IMAGE_GEN_PROVIDERS, IMAGE_I2I_PROVIDERS, IMAGE_EDIT_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS, VIDEO_UPSCALE_PROVIDERS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, TTS_PROVIDERS, TRANSCRIBE_PROVIDERS, VIDEO_PROVIDERS_REQUIRING_IMAGE } from "@nodaro/shared/models"
 
 /**
@@ -66,6 +67,11 @@ import { IMAGE_GEN_PROVIDERS, IMAGE_I2I_PROVIDERS, IMAGE_EDIT_PROVIDERS, IMAGE_T
  * supportedModels. Add a comment per entry so future readers know why.
  */
 const DIRECT_API_EXEMPTIONS = new Set<string>([
+  // ── House models ───────────────────────────────────────────────────────
+  // The catalog's `ownLabel` models run behind the house-model seam
+  // (lib/house-models.ts), never through the provider registry. Derived from
+  // the catalog, the one list of them.
+  ...Object.values(MODEL_CATALOG).filter((m) => m.ownLabel === true).map((m) => m.id),
   // ── Video upscale ──────────────────────────────────────────────────────
   // VEO upscale uses the special VEO endpoint via workers/handlers/video-ai.ts,
   // NOT the standard KIE jobs/createTask flow. They appear in the route Zod

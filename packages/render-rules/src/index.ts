@@ -858,6 +858,19 @@ export {
   TREND_PICTURE_WORST_BYTES_PER_PIXEL,
   trendPictureUpscaleFits,
 } from "./trend-picture-upscale"
+// Nodaro Video Upscale pricing: per second of the clip, each tier's row the price of four seconds.
+export {
+  NODARO_VIDEO_UPSCALE_RATE_SECONDS,
+  NODARO_VIDEO_UPSCALE_CREDIT_IDS,
+  NODARO_VIDEO_UPSCALE_ESTIMATE_FALLBACK_SEC,
+  nodaroVideoUpscaleCreditId,
+  isNodaroVideoUpscaleCreditId,
+  nodaroVideoUpscaleBilledSec,
+  nodaroVideoUpscaleUnits,
+  nodaroVideoUpscaleEstimateUnits,
+  nodaroVideoUpscaleRefusesLength,
+  nodaroVideoUpscaleTierOf,
+} from "./nodaro-video-upscale-pricing"
 // Topaz upscale pricing: the video hold (output gigapixels) and the image size units.
 export {
   TOPAZ_VIDEO_UNIT_CREDIT_ID,
@@ -974,3 +987,9 @@ export {
   type LayerSplitSize,
   type LayerSplitTier,
 } from "./layer-split"
+// Generate Video Pro's resolution rule: the tier a run renders, and the menus derived from it.
+export { gvpOfferedResolutions, gvpRenderResolution, gvpRendersResolutionAsNamed } from "./gvp-resolution"
+// The audio a Generate Video Pro segment is sent with and priced at (the plugin toolkit, the pro pricing, the editor's estimate).
+export { GVP_GENERATE_AUDIO_DEFAULT, gvpSegmentAudio, pluginVideoAudioRequest } from "./gvp-audio"
+// The anchor choices Generate Video Pro's panel offers for a model (no "reference" where the model takes no reference images).
+export { gvpAnchorChoicesFor } from "./gvp-anchor-choices"

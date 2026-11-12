@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-11-12T09:39:00.886Z
-generated_from: 4e8ee8fb2
+generated_at: 2026-11-12T10:25:03.742Z
+generated_from: 17d481df2
 ---
 
 # Text to Video
@@ -18,7 +18,7 @@ generated_from: 4e8ee8fb2
 - `prompt: string`
 - `provider: TextToVideoProvider`
 - `duration: number`
-- `aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive"`
+- `aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "2:3" | "3:2" | "21:9" | "9:21" | "adaptive"`
 - `negativePrompt: string`
 - `fieldMappings: FieldMappings`
 

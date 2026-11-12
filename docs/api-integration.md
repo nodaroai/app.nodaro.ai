@@ -1116,7 +1116,7 @@ Three video-specific rules:
 
 A few models **ignore** an unsupported resolution and render a fixed default
 instead of the nearest band — `minimax-h3` renders 2K for anything that is not
-`768P`, the `wan-3` family, `vidu-q4` and `kling-4` / `kling-4-keyframes` / `kling-4-flash` render 720p, and `grok-imagine-video-1.5` renders 480p (all described under
+`768P`, the `wan-3` family, `vidu-q4`, `kling-4` / `kling-4-keyframes` / `kling-4-flash` and `pixverse-v6-max` render 720p, and `grok-imagine-video-1.5` renders 480p (all described under
 [Seedance 2 video capabilities](#seedance-2-video-capabilities)).
 For those the correction targets the band the provider will actually produce, so
 the price still matches the render. Each such model declares this in the catalog
@@ -2974,6 +2974,21 @@ so a value the model doesn't support is ignored, never a 400:
   **output + max(output, total reference-video seconds)** at its `-ref` rate.
   Unlike the other Kling models it runs on free credits, as a 3 or 4 second
   clip.
+- **`pixverse-v6-max`** (PixVerse V6 Max) is one id over two provider
+  endpoints: `POST /v1/generate-video` with an `imageUrl` runs image-to-video,
+  where the image is the **exact first frame** and the clip takes its shape
+  (`aspectRatio` is not sent); `POST /v1/text-to-video` runs text-to-video at
+  `aspectRatio` `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `2:3`, `3:2` or `21:9` —
+  16:9 when none is sent, and another ratio is moved to the nearest of them. `duration` 1–15
+  (default 5); `resolution` `360p` / `540p` / `720p` (default) / `1080p`, and
+  anything else renders and bills 720p; `seed` a whole number 0–2147483647
+  (anything else, `-1` included, is left out); `prompt` up to 5,000
+  characters. **Native audio is on unless `sound: false`** (or, with no
+  `sound`, `generateAudio: false`; `sound` wins when both are sent), and it
+  changes the price: each length and resolution has a silent row and an
+  `:audio` row, read from the same fields as the model's switch. No end frame and no
+  `referenceImageUrls` / `referenceVideoUrls` / `referenceAudioUrls`: they are
+  not sent to the model. Runs on free credits at 360p for 1–4 s.
 - **`grok-imagine-video-1.5`** (Grok Imagine 1.5) needs an `imageUrl`: it is
   the exact first frame. An `endFrameUrl` is the exact last frame, and the
   **same URL as both** makes a seamless loop. Up to **4** in-between frames go
@@ -3039,8 +3054,8 @@ for, instead of leaving the model to guess it from the prompt:
 
 - **Ignored, never an error,** on any other model (the models that take it
   list the values they take in `referenceTaskTypes` in
-  [`GET /v1/models`](#model-catalog)), on a draft (`draft: true`)
-  and on a request with no reference media. A start or end frame (`imageUrl`,
+  [`GET /v1/models`](#model-catalog)) and on a request with no reference
+  media. A start or end frame (`imageUrl`,
   `endFrameUrl`) is not reference media, so a first-frame or
   first-and-last-frame request without references declares nothing. A value
   other than the four above is a `400 validation_error`.
@@ -3052,16 +3067,21 @@ for, instead of leaving the model to guess it from the prompt:
   with the same body as its `params` prices it the same way. An Auto length is reserved and
   settled as described for `duration: -1` under
   [On the video routes](#on-the-video-routes).
+- **A draft declares it too.** A `draft: true` request declares, and is
+  forced, exactly as the same request without `draft`, at 480p: the same
+  ratio, length, reservation, quote and settlement as that request at 480p.
+  An `edit` draft's 1080p finalize (`POST /v1/video-upscale` with `provider:
+  "seedance-2-5-hd"`) re-renders the same edit, at the source clip's length.
 - **A dropped declaration is not reported.** A request that asked for a type
-  and did not get it (a draft, missing reference media, a clip outside 4–30 s
-  for `edit`) answers like any other, so a response with no adjustment does
+  and did not get it (missing reference media, a clip outside 4–30 s for
+  `edit`) answers like any other, so a response with no adjustment does
   not mean the type was declared. The job's `input_data.referenceTaskType` is
   set only when one was.
 - **`POST /v1/video-to-video`** with `provider: "seedance-2-5"` asks for `edit`
   itself, whatever `referenceTaskType` the body carries. The edit is declared
   when every clip, the source `videoUrl` and any `referenceVideoUrls`, is
-  4–30 s long (not on a draft); otherwise it goes out undeclared and the model
-  reads the prompt.
+  4–30 s long (a draft included); otherwise it goes out undeclared and the
+  model reads the prompt.
 
 MCP: `reference_task_type` on `generate_video`.
 
@@ -4710,7 +4730,7 @@ Send `{}` (no draft) for the lowest price any draft can finalize for, returned w
 | `resolution` | string? | As the run sends it; omitted = the model's default. |
 | `duration` | number? | Output seconds; `-1` = Auto, priced as the run reserves it: the longest clip's length rounded up to a whole second plus one second (never above the model's longest clip), or the model's longest clip while a clip is unmeasured or unknown, or when `referenceTaskType` is `reference`. Omitted = the model's default. |
 | `draft` | boolean? | Seedance 2.5 Draft: priced at 480p. |
-| `referenceTaskType` | string? | Seedance 2.5: the [reference task type](#seedance-25-reference-task-type) the run will send — `auto` (the default), `reference`, `edit` or `extend` — decided as the run decides it. `reference` with an Auto `duration` is priced at the model's longest output; `edit` and `extend` at the length they run at: an `edit` whose clips are all 4–30 s runs at Auto, and an `extend` at Auto runs at the model's default length. A clip not produced yet counts as the model's longest clip. Ignored by other models and by a draft; an unknown value is ignored, not refused. |
+| `referenceTaskType` | string? | Seedance 2.5: the [reference task type](#seedance-25-reference-task-type) the run will send — `auto` (the default), `reference`, `edit` or `extend` — decided as the run decides it. `reference` with an Auto `duration` is priced at the model's longest output; `edit` and `extend` at the length they run at: an `edit` whose clips are all 4–30 s runs at Auto, and an `extend` at Auto runs at the model's default length. A clip not produced yet counts as the model's longest clip. A draft is quoted as the same request at 480p without `draft`. Ignored by other models; an unknown value is ignored, not refused. |
 | `referenceVideoUrls` | string[] | The reference clips the run will send, in order. |
 | `unknownReferenceVideos` | number? | Wired clips whose file does not exist yet (their upstream node has not produced them). |
 

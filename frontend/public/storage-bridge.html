@@ -8,10 +8,11 @@
   </head>
   <body>
     <script>
-      // When a deployment moves the app's pages to a host of their own, the
-      // browser's saved settings (per origin) stay behind on the old host. The
-      // new host frames this file once and carries them over. Inert without a
-      // moved deployment: flowUiOrigin is absent and nothing runs. The list of
+      // When a deployment gives the app's pages a host of their own
+      // (FLOW_UI_ORIGIN, with or without the move), the browser's saved
+      // settings (per origin) stay on this, the kept host. The Flow host frames
+      // this file once and carries them over. Inert otherwise: flowUiOrigin is
+      // absent and nothing runs, and the proxy serves the app's index here. The list of
       // keys is frontend/src/lib/storage-bridge-import.ts's; a test holds the
       // two equal. No Supabase session key is ever read here.
       ;(function () {

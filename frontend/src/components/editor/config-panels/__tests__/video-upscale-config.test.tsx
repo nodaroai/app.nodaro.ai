@@ -39,6 +39,12 @@ vi.mock("@/ee/hooks/use-model-credits", async (importOriginal) => ({
   useSeedanceHdMinimumCredits: () => undefined,
 }))
 vi.mock("@/components/editor/node-docs/compare-models-link", () => ({ CompareModelsLink: () => null }))
+// Whether the deployment serves Nodaro Video Upscale, as the fetched availability answers it.
+const offered = vi.hoisted(() => ({ nodaro: false }))
+vi.mock("@/lib/surface-availability", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  isModelUnavailable: (id: string) => id === "nodaro-video-upscale" && !offered.nodaro,
+}))
 
 import { VideoUpscaleConfig } from "../video-configs"
 
@@ -127,5 +133,49 @@ describe("VideoUpscaleConfig — other providers", () => {
     expect(screen.queryByLabelText("Resolution")).toBeNull()
     expect(screen.queryByLabelText("FPS")).toBeNull()
     expect(onUpdate).toHaveBeenCalledWith({ targetResolution: undefined, targetFps: undefined, upscaleFactor: undefined })
+  })
+})
+
+describe("VideoUpscaleConfig — Nodaro Video Upscale", () => {
+  it("is not offered where the deployment does not serve it, and is where it does", () => {
+    offered.nodaro = false
+    const { unmount } = render(<VideoUpscaleConfig data={data()} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(screen.queryByRole("button", { name: "Nodaro Video Upscale" })).toBeNull()
+    unmount()
+    offered.nodaro = true
+    render(<VideoUpscaleConfig data={data()} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(screen.getByRole("button", { name: "Nodaro Video Upscale" })).toBeTruthy()
+    offered.nodaro = false
+  })
+
+  it("a node that already holds it keeps it listed, with its own tiers and no frame rate", () => {
+    render(<VideoUpscaleConfig data={data({ provider: "nodaro-video-upscale", targetResolution: "2k" })} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(screen.getByRole("button", { name: "Nodaro Video Upscale" })).toBeTruthy()
+    expect(screen.getByLabelText("Resolution").textContent).toBe("2k")
+    expect(screen.getByRole("button", { name: "1080p" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "2K" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "4K" })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "720p" })).toBeNull()
+    expect(screen.queryByLabelText("FPS")).toBeNull()
+    expect(screen.getByText(/up to 60 seconds and 50 MB/)).toBeTruthy()
+  })
+
+  it("fail-safe: Topaz's 720p snaps to its 1080p, and the frame rate and factor it lacks are cleared", () => {
+    const onUpdate = vi.fn()
+    render(<VideoUpscaleConfig data={data({ provider: "nodaro-video-upscale", targetResolution: "720p", targetFps: 30, upscaleFactor: "2" })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(onUpdate).toHaveBeenCalledWith({ targetResolution: "1080p", targetFps: undefined, upscaleFactor: undefined })
+  })
+
+  it("choosing a tier stores it", () => {
+    const onUpdate = vi.fn()
+    render(<VideoUpscaleConfig data={data({ provider: "nodaro-video-upscale", targetResolution: "1080p" })} onUpdate={onUpdate} {...EXTRA} />)
+    fireEvent.click(screen.getByRole("button", { name: "2K" }))
+    expect(onUpdate).toHaveBeenLastCalledWith({ targetResolution: "2k" })
+  })
+
+  it("Topaz given its 2K box clears it (the run reads Topaz's 1080p)", () => {
+    const onUpdate = vi.fn()
+    render(<VideoUpscaleConfig data={data({ targetResolution: "2k" as never })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(onUpdate).toHaveBeenCalledWith({ targetResolution: undefined })
   })
 })

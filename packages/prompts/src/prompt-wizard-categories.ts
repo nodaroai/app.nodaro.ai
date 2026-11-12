@@ -287,6 +287,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "kling-4-keyframes": "Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; native audio, 3–30s, 720p/1080p",
     "kling-4-flash": "Kling 4.0 Flash — text, or up to 10 reference images / 5 videos / 7 characters (a voice clip per character); native audio, 3–20s, 720p",
     "grok-imagine-video-1.5": "Grok Imagine 1.5 — image-to-video only; exact start and end frame (the same image loops), up to 4 in-between frames; requires an input image",
+    "pixverse-v6-max": "PixVerse V6 Max — cinematic text-to-video, 8 aspect ratios incl. 21:9, optional native audio, 1–15s, 360p–1080p",
   },
   "image-to-video": {
     "minimax": "Versatile animation from still images",
@@ -327,6 +328,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "kling-4-keyframes": "Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; native audio, 3–30s, 720p/1080p",
     "kling-4-flash": "Kling 4.0 Flash — a start frame alone is the exact opening frame; beside up to 10 reference images, 5 videos and 7 characters it joins them; native audio, 3–20s, 720p",
     "grok-imagine-video-1.5": "Grok Imagine 1.5 — stylized animation, 1–15s, 480p/720p/1080p, start + up to 4 in-between + end frames (image required)",
+    "pixverse-v6-max": "PixVerse V6 Max — the image is the exact first frame and sets the shape; optional native audio, 1–15s, 360p–1080p",
   },
   "video-to-video": {
     "wan": "Style transfer and video transformation",

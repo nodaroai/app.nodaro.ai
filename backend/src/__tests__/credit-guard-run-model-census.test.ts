@@ -35,6 +35,8 @@ import { join } from "node:path"
 const h = vi.hoisted(() => {
   const routes: Array<{ method: string; url: string; preHandlers: unknown[] }> = []
   const created: Array<{ guard: unknown; site: string }> = []
+  /** Every Zod object schema the app built at boot, with the backend file that built it. */
+  const schemas: Array<{ schema: unknown; file: string }> = []
   function chain(): unknown {
     const proxy: unknown = new Proxy(() => {}, {
       get(_t, prop) {
@@ -56,6 +58,7 @@ const h = vi.hoisted(() => {
   return {
     routes,
     created,
+    schemas,
     callerFile,
     supabase: { from: () => chain(), rpc: () => chain(), auth: { getUser: async () => ({ data: { user: null }, error: null }) } },
   }
@@ -74,6 +77,19 @@ vi.mock("@/middleware/credit-guard.js", async (importOriginal) => {
       return guard
     },
   }
+})
+// Pass-through: the REAL object schemas, each recorded with the file that built
+// it, so a route's own schema says which values its model fields accept.
+vi.mock("zod", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("zod")>()
+  const record = <F extends (...args: never[]) => unknown>(make: F): F =>
+    ((...args: Parameters<F>) => {
+      const schema = make(...args)
+      h.schemas.push({ schema, file: h.callerFile(new Error().stack) })
+      return schema
+    }) as F
+  const z = { ...actual.z, object: record(actual.z.object), strictObject: record(actual.z.strictObject), looseObject: record(actual.z.looseObject) }
+  return { ...actual, z }
 })
 vi.mock("fastify", async (importOriginal) => {
   const actual = await importOriginal<typeof import("fastify")>()
@@ -95,7 +111,10 @@ import { GATEABLE_MODEL_IDS } from "../lib/availability-override.js"
 import { ownLabelModelIds } from "../lib/house-models-served.js"
 import { RESOLVED_MODEL_OF_JOB, resolvedModelOfJob } from "../lib/job-resolved-model.js"
 import { llmFeatureDefault } from "../lib/run-model.js"
-import { PLUGIN_CREDIT_GUARDED_ROUTES } from "../lib/route-node-gate.js"
+import { PLUGIN_CREDIT_GUARDED_ROUTES, routeNodeGate } from "../lib/route-node-gate.js"
+import { providerIsItsModel } from "../lib/provider-model.js"
+import { KIE_IMAGE_MODELS } from "../providers/kie/models.js"
+import { REPLICATE_IMAGE_MODEL_IDS } from "../providers/replicate/image.js"
 
 // ── The reasons a guard may leave its run model undeclared ───────────────────
 
@@ -481,6 +500,276 @@ describe("a house model is reached only by naming it", () => {
     expect(priced).toEqual([])
   })
 })
+
+// ── Every option a route accepts names a model a restriction can name ────────
+
+/**
+ * TOTALITY for "a route that runs catalog models runs no model a restriction
+ * cannot name" (decided 2026-11-12). An allow list withholds only the ids the
+ * model catalog (and the LLM list) knows, so a route that runs catalog models
+ * AND accepts an option with no catalog entry runs that model wherever the
+ * allow list leaves it out — and its node is no lever, since withholding it
+ * withholds every other model with it (FLUX Fill Pro on /v1/image-to-image,
+ * until it had an entry). A route whose EVERY model is outside the catalog is
+ * the existing rule: its node is the lever (OUTSIDE_CATALOG above).
+ *
+ * The options come from each route's own Zod schema, read at boot: every value
+ * of every enum or literal field of the object schemas built in the guard's
+ * file (and its same-stem siblings, `generate-image-body.ts`), each sent alone
+ * through what the guard's door judges — the raw `provider` where it is the
+ * node's model, `models`, the resolved id (`denyResolvedModel`) and `runModel`.
+ * A field that takes any string is probed with a value no list holds: one the
+ * judge sees verbatim is an OPEN field, listed below with what can run there.
+ */
+const PROBE = "zz-not-a-model"
+
+/** A schema field's accepted values: a finite set, or any string. */
+interface Accepts {
+  readonly values: ReadonlySet<string>
+  readonly anyString: boolean
+  readonly inArray: boolean
+}
+
+type ZodDef = { type?: string; innerType?: unknown; in?: unknown; entries?: Record<string, unknown>; values?: readonly unknown[]; options?: readonly unknown[]; element?: unknown; shape?: unknown }
+const defOf = (schema: unknown): ZodDef | undefined => (schema as { _zod?: { def?: ZodDef } } | undefined)?._zod?.def
+
+function accepts(schema: unknown, depth = 0, inArray = false): Accepts {
+  const none = { values: new Set<string>(), anyString: false, inArray }
+  const def = defOf(schema)
+  if (!def || depth > 8) return none
+  switch (def.type) {
+    case "optional": case "default": case "nullable": case "catch": case "prefault": case "readonly": case "nonoptional":
+      return accepts(def.innerType, depth + 1, inArray)
+    case "pipe":
+      return accepts(def.in, depth + 1, inArray)
+    case "enum":
+      return { values: new Set(Object.values(def.entries ?? {}).filter((v): v is string => typeof v === "string")), anyString: false, inArray }
+    case "literal":
+      return { values: new Set((def.values ?? []).filter((v): v is string => typeof v === "string")), anyString: false, inArray }
+    case "string":
+      return { values: new Set(), anyString: true, inArray }
+    case "array":
+      return accepts(def.element, depth + 1, true)
+    case "union": {
+      const parts = (def.options ?? []).map((o) => accepts(o, depth + 1, inArray))
+      return { values: new Set(parts.flatMap((p) => [...p.values])), anyString: parts.some((p) => p.anyString), inArray: inArray || parts.some((p) => p.inArray) }
+    }
+    default:
+      return none
+  }
+}
+
+/** The top-level fields of the object schemas built in `files`, merged by name. */
+function schemaFieldsOf(files: ReadonlySet<string>): Map<string, Accepts> {
+  const out = new Map<string, Accepts>()
+  for (const { schema, file } of h.schemas) {
+    if (!files.has(file)) continue
+    const shape = (schema as { shape?: Record<string, unknown> }).shape
+    if (!shape || typeof shape !== "object") continue
+    for (const [field, fieldSchema] of Object.entries(shape)) {
+      const a = accepts(fieldSchema)
+      const prev = out.get(field)
+      out.set(field, prev
+        ? { values: new Set([...prev.values, ...a.values]), anyString: prev.anyString || a.anyString, inArray: prev.inArray || a.inArray }
+        : a)
+    }
+  }
+  return out
+}
+
+/** The guard's file and its same-stem siblings (`routes/generate-image.ts` → `routes/generate-image-body.ts`). */
+function schemaFilesOf(site: string): Set<string> {
+  const stem = site.replace(/\.ts$/, "")
+  return new Set([site, ...h.schemas.map((s) => s.file).filter((f) => f.startsWith(`${stem}-`) || f.startsWith(`${stem}.`))])
+}
+
+/** What the guard's door judges for this body on a deployment that restricts models (middleware/credit-guard.ts). */
+function judgedIds(model: CreditGuardModel, url: string, body: Record<string, unknown>): string[] {
+  const out = new Set<string>()
+  const req = fakeRequest(url, body)
+  const gate = routeNodeGate(url, body)
+  const raw = typeof body.provider === "string" ? body.provider : undefined
+  if (raw && providerIsItsModel(gate.kind === "node" ? gate.types : [], raw, body)) out.add(raw)
+  if (Array.isArray(body.models)) for (const m of body.models) if (typeof m === "string") out.add(m)
+  if (model.denyResolvedModel) {
+    const resolved = model.modelResolver(req)
+    if (typeof resolved === "string" && resolved && resolved !== raw) out.add(resolved)
+  }
+  if (typeof model.runModel === "function") for (const id of ids(model.runModel(req))) if (typeof id === "string" && id) out.add(id)
+  return [...out]
+}
+
+interface OptionCensus {
+  readonly name: string
+  /** Catalog / LLM ids some accepted option runs. */
+  readonly gateable: ReadonlySet<string>
+  /** Ids an accepted option runs that no restriction can name, with the option. */
+  readonly outside: ReadonlyMap<string, string>
+  /** Fields that take any string and whose value the judge sees verbatim. */
+  readonly open: readonly string[]
+  /** How many schema fields and values were probed. */
+  readonly probed: number
+}
+
+function optionCensusOf(name: string, url: string, site: string, model: CreditGuardModel): OptionCensus {
+  const gateable = new Set<string>()
+  const outside = new Map<string, string>()
+  const open: string[] = []
+  const note = (ids: readonly string[], option: string) => {
+    for (const id of ids) {
+      if (GATEABLE_MODEL_IDS.has(id)) gateable.add(id)
+      else if (!outside.has(id)) outside.set(id, option)
+    }
+  }
+  const judge = (body: Record<string, unknown>): string[] => {
+    try {
+      return judgedIds(model, url, body)
+    } catch {
+      return []
+    }
+  }
+  note(judge({}), "(no option)")
+  let probed = 0
+  for (const [field, a] of schemaFieldsOf(schemaFilesOf(site))) {
+    for (const value of a.values) {
+      probed += 1
+      note(judge({ [field]: a.inArray ? [value] : value }), `${field}=${value}`)
+    }
+    if (a.anyString) {
+      const seen = judge({ [field]: a.inArray ? [PROBE] : PROBE })
+      if (seen.includes(PROBE)) open.push(field)
+      note(seen.filter((id) => id !== PROBE), `${field}=(any)`)
+    }
+  }
+  return { name, gateable, outside, open, probed }
+}
+
+/**
+ * Routes that run catalog models AND accept options with no catalog entry, each
+ * with what deciding it needs. Only shrinks: an entry here is a model a
+ * deployment's allow list cannot withhold on a route it cannot withhold either.
+ */
+const LIP_SYNC_AWAITING = "LatentSync, Wav2Lip, VideoReTalking, SadTalker, HeyGen Lipsync Precision and Lipsync 2 Pro run beside its catalog models and have no catalog entry. An entry needs each one's maker: two are not makers in MODEL_MAKERS yet, and Wav2Lip is a research release. Awaiting that decision (2026-11-12)"
+const MOTION_AWAITING = "Wan Animate Move and Replace run beside the catalog's Kling motion models and have no catalog entry. An entry is straightforward (Alibaba, motion transfer, 480p / 580p / 720p on its existing flat rows; nothing normalizes a motion-transfer request), and was left out only because a models override saved before a model is listed withholds it (pinned for FLUX Fill Pro in payload-builder-flux-fill-restriction.test.ts): pending that decision (2026-11-12)"
+const SUNO_AWAITING = "Suno V4_5PLUS, V4_5ALL and V4_5 run beside the catalog's Suno versions and have no catalog entry; each is charged under its operation's row (`sunoCreditType`), so an entry needs a price row of its own, or one it is not charged under. Awaiting that decision (2026-11-12)"
+const LORA_AWAITING = "`flux-lora-character` (a trained character's Flux LoRA, Cloud, behind CHARACTER_LORA_ROUTING_ENABLED) is a literal of the body's `provider` and what `_internalLora` runs, and has no catalog entry. Awaiting a decision (2026-11-12) on naming it or judging it as the model the request names"
+const MIXED_AWAITING_DECISION: Readonly<Record<string, string>> = {
+  "POST /v1/lip-sync": LIP_SYNC_AWAITING,
+  "POST /v1/motion-transfer": MOTION_AWAITING,
+  "POST /v1/suno/generate": SUNO_AWAITING,
+  "POST /v1/suno/cover": SUNO_AWAITING,
+  "POST /v1/suno/extend": SUNO_AWAITING,
+  "POST /v1/suno/mashup": SUNO_AWAITING,
+  "POST /v1/suno/upload-extend": SUNO_AWAITING,
+  "POST /v1/suno/add-instrumental": SUNO_AWAITING,
+  "POST /v1/suno/add-vocals": SUNO_AWAITING,
+  "POST /v1/generate-image": LORA_AWAITING,
+}
+
+/**
+ * The image ids the image router can run that the catalog does not list. A
+ * route whose `provider` takes any string runs only what the router serves, so
+ * this is what such a route could run unjudged.
+ */
+const SERVED_IMAGE_IDS_OUTSIDE_CATALOG = [...new Set([...Object.keys(KIE_IMAGE_MODELS), ...REPLICATE_IMAGE_MODEL_IDS])]
+  .filter((id) => !GATEABLE_MODEL_IDS.has(id))
+  .sort()
+
+/** An image route whose `provider` takes any string: what can run there is what the image router serves. */
+const OPEN_IMAGE_PROVIDER =
+  "`provider` takes any string, and what runs is what the image router serves: catalog ids, and `flux-lora-character`, which runs only with a trained character's LoRA version (held below)"
+
+/** A structured-LLM route whose wrapper schema takes any `llmModel` string. */
+const OPEN_STRUCTURED_LLM =
+  "the wrapper takes any string, and the request is then validated against the LLM list (lib/llm-structured-request.ts): an unknown id is refused 400 before any job, and every LLM id is one a restriction names"
+
+/** Routes with a model field that takes any string the judge sees verbatim, by field — and why that is safe. */
+const OPEN_MODEL_FIELDS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  "POST /v1/llm/structured": { llmModel: OPEN_STRUCTURED_LLM },
+  "POST /v1/llm/structured/jobs": { llmModel: OPEN_STRUCTURED_LLM },
+  "POST /v1/prompt-helper/wizard": {
+    provider:
+      "names the model the prompt is written for, not one the request runs (that is its LLM, judged through `runModel`); the door judges it as a model, so a withheld one is refused, and any other string runs nothing",
+  },
+  "POST /v1/generate-character": { provider: OPEN_IMAGE_PROVIDER },
+  "POST /v1/generate-character-asset": { provider: OPEN_IMAGE_PROVIDER },
+  "POST /v1/generate-face": { provider: OPEN_IMAGE_PROVIDER },
+  "POST /v1/generate-object": { provider: OPEN_IMAGE_PROVIDER },
+  "POST /v1/generate-object-asset": { provider: OPEN_IMAGE_PROVIDER },
+  "POST /v1/generate-creature": { provider: OPEN_IMAGE_PROVIDER },
+  "POST /v1/generate-creature-asset": { provider: OPEN_IMAGE_PROVIDER },
+  "POST /v1/generate-location": { provider: OPEN_IMAGE_PROVIDER },
+  "POST /v1/generate-location-asset": { provider: OPEN_IMAGE_PROVIDER },
+  "POST /v1/generate-surround-continuation": { provider: OPEN_IMAGE_PROVIDER },
+}
+
+describe("every option a credit-guarded route accepts runs a model a restriction can name, or its node is the lever", () => {
+  const censuses = (): OptionCensus[] => [
+    ...attached().map((g) => optionCensusOf(g.key, g.url, siteOf(g.key), g.model)),
+    ...inline().map((g) => optionCensusOf(`INLINE ${g.site}`, "", g.site, g.model)),
+  ]
+  let all: OptionCensus[] = []
+  const byName = (name: string) => all.find((c) => c.name === name)
+
+  beforeAll(() => {
+    all = censuses()
+  })
+
+  it("read the routes' schemas, and sees the case it guards: FLUX Fill Pro on /v1/image-to-image is a model a restriction names", () => {
+    expect(h.schemas.length).toBeGreaterThan(300)
+    expect(all.reduce((n, c) => n + c.probed, 0)).toBeGreaterThan(1_000)
+    const i2i = byName("POST /v1/image-to-image")!
+    expect(i2i.gateable).toContain("flux-fill")
+    expect(i2i.outside.size).toBe(0)
+    // A mixed route is visible to it.
+    expect([...byName("POST /v1/lip-sync")!.outside.keys()]).toContain("latentsync")
+  })
+
+  it("no route runs both a catalog model and one no restriction can name, unless it awaits a decision listed above", () => {
+    const mixed = all
+      .filter((c) => c.gateable.size > 0 && c.outside.size > 0 && !Object.hasOwn(MIXED_AWAITING_DECISION, c.name))
+      .map((c) => `${c.name}: ${[...c.outside].map(([id, option]) => `${id} (${option})`).join(", ")} — give each a catalog entry`)
+    expect(mixed).toEqual([])
+  })
+
+  it("a route whose every model is outside the catalog is exempt as OUTSIDE_CATALOG (its node is the lever)", () => {
+    const unlisted = all
+      .filter((c) => c.gateable.size === 0 && c.outside.size > 0 && RUN_MODEL_EXEMPT[c.name] !== OUTSIDE_CATALOG)
+      .map((c) => `${c.name}: ${[...c.outside.keys()].join(", ")}`)
+    expect(unlisted).toEqual([])
+  })
+
+  it("an OUTSIDE_CATALOG route runs no catalog model for any option it accepts", () => {
+    const named = all.filter((c) => RUN_MODEL_EXEMPT[c.name] === OUTSIDE_CATALOG && c.gateable.size > 0).map((c) => `${c.name}: ${[...c.gateable].join(", ")}`)
+    expect(named).toEqual([])
+  })
+
+  it("every open model field is listed with its reason, and the image router serves nothing outside the catalog but the LoRA id", () => {
+    const unlisted = all.flatMap((c) => c.open.filter((f) => !Object.hasOwn(OPEN_MODEL_FIELDS[c.name] ?? {}, f)).map((f) => `${c.name}: ${f}`))
+    expect(unlisted).toEqual([])
+    expect(SERVED_IMAGE_IDS_OUTSIDE_CATALOG).toEqual(["flux-lora-character"])
+  })
+
+  it("no listed entry is stale", () => {
+    const staleMixed = Object.keys(MIXED_AWAITING_DECISION).filter((name) => {
+      const c = byName(name)
+      return !c || c.gateable.size === 0 || c.outside.size === 0
+    })
+    expect(staleMixed).toEqual([])
+    const staleOpen = Object.entries(OPEN_MODEL_FIELDS).flatMap(([name, fields]) =>
+      Object.keys(fields).filter((f) => !byName(name)?.open.includes(f)).map((f) => `${name}: ${f}`),
+    )
+    expect(staleOpen).toEqual([])
+  })
+})
+
+/** The file that created an attached guard. */
+function siteOf(key: string): string {
+  const [method, url] = key.split(" ")
+  const route = h.routes.find((r) => r.method === method && r.url === url)
+  const guard = route?.preHandlers.find((fn) => creditGuardModelOf(fn))
+  return h.created.find((c) => c.guard === guard)?.site ?? "?"
+}
 
 /**
  * The host's routes whose handler hands the request to a plugin engine that

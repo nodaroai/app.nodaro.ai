@@ -3195,6 +3195,15 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > dropped, as is any clip past the last character. `duration` 3–20 (default 5), 720p only
 > (anything else → 720p), no end frame, no seed, no `audioSoundtrack`. See
 > [Kling 4.0 Flash](nodes/ai-video/generate-video.md#kling-40-flash).
+> **PixVerse V6 Max** (`pixverse-v6-max`) runs `run("generate-video")` with an
+> `imageUrl` as the exact first frame (no `aspectRatio` is sent), and
+> `run("text-to-video")` with `aspectRatio` `16:9` / `4:3` / `1:1` / `3:4` /
+> `9:16` / `2:3` / `3:2` / `21:9`, 16:9 when unset. `duration` 1–15 (default 5),
+> `resolution` `360p` / `540p` / `720p` (default) / `1080p` (anything else →
+> 720p), `seed` 0–2147483647. Native audio is on unless `sound: false` (or,
+> with no `sound`, `generateAudio: false`), and it changes the price. No end
+> frame, no references. See
+> [PixVerse V6 Max](nodes/ai-video/generate-video.md#pixverse-v6-max).
 > **Grok Imagine 1.5** (`grok-imagine-video-1.5`) needs `imageUrl` (the exact
 > first frame); `endFrameUrl` is the exact last frame, the same URL as both
 > makes a seamless loop, and up to 4 in-between frames go in
@@ -3382,9 +3391,10 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > **Seedance 2.5 reference task type.** `GenerateVideoParams` and
 > `TextToVideoParams` take `referenceTaskType?: "auto" | "reference" | "edit" | "extend"`,
 > which tells `seedance-2-5` what the reference media is for instead of leaving
-> it to the prompt; every other model ignores it, and so does a draft
-> (`draft: true`) or a run with no reference media (a start or end frame does
-> not count). `"auto"` (the default) declares nothing. `"reference"` keeps your
+> it to the prompt; every other model ignores it, and so does a run with no
+> reference media (a start or end frame does not count). A draft
+> (`draft: true`) declares it exactly as the same run without `draft`, at
+> 480p. `"auto"` (the default) declares nothing. `"reference"` keeps your
 > `aspectRatio` and `duration`; with an Auto `duration` (`-1`) the run is
 > reserved at the longest output the model can make, and charged what it makes.
 > `"edit"` edits the reference video in its own
@@ -3416,6 +3426,23 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > It is metered — see [Credits (Topaz)](./nodes/processing-video/video-upscale.md#credits-topaz).
 > `upscaleFactor` is deprecated; it is still accepted and applied to the
 > source's short side.
+
+> **Nodaro Video Upscale.** `provider: "nodaro-video-upscale"` with
+> `targetResolution` (`"1080p" | "2k" | "4k"`, the output frame, default 1080p;
+> a value it does not take, such as `"720p"`, runs at 1080p):
+> `run("video-upscale", { provider: "nodaro-video-upscale", videoUrl, targetResolution: "2k" })`.
+> Clips of up to 60 seconds and 50 MB; priced per second of the clip, and the
+> amount held is the amount charged. Offered only where `models.list` lists it;
+> elsewhere the request is refused with `403 model_not_available` (a
+> `ForbiddenError`). Its other refusals: `400` for a clip past a limit or one
+> that cannot be read (`video_too_long`, `video_too_large`, `video_unreadable`),
+> `403 link_imports_disabled` for a link to another site where the deployment
+> turned such links off, `422 upload_blocked` where its upload policy refuses
+> the clip, and `429 input_busy` or `503 input_timed_out` / `input_failed` when
+> the clip could not be fetched just now (send the same request again). Every
+> refusal comes before anything is charged. `"2k"` is this provider's target
+> only: Topaz and VEO still answer it with a 400. See
+> [Nodaro Video Upscale](./nodes/processing-video/video-upscale.md#nodaro-video-upscale).
 
 > **Copyright refusals.** `TextToVideoParams` takes `contentPolicyRewrite?: boolean`.
 > Absent or `true`, a copyright refusal is retried once with a reworded prompt;

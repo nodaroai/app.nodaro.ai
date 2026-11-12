@@ -76,6 +76,8 @@ const LATIN_OK: ReadonlySet<string> = new Set<string>([
   "tgacct.apiId",
   "utilcfg.webhookUrl",
   "vidcfg.fps824",
+  // The Nodaro Video Upscale provider's name in the upscale menu: a product name.
+  "vidcfg.nodaroUpscale",
   "vidcfg.youtubeUrl",
   // Numbers and counters: the tutorial number words render as digits.
   "copilot.runProgress",

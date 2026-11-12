@@ -5,6 +5,7 @@ import { isVariablePricedModel, type CreditRange } from "@/lib/model-credit-rang
 import { VIDEO_DURATION_AUTO, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, backgroundOptionsByKind, outputFormatOptionsByKind, svgLevelOptionsByKind, normalizeModelInput, TRANSPARENT_OUTPUT_FORMATS, getModel, durationsByMode, modelsWithFeature, isFlux2Model, resolutionsAtAspectRatio, type LabeledOption } from "@nodaro/shared/model-catalog"
 import {
   supportsAutoVideoDuration,
+  GVP_SUPPORTED_PROVIDERS,
   type ImageToVideoProvider,
   type SunoModel,
 } from "@nodaro/shared/models"
@@ -28,6 +29,9 @@ import {
   DIALOGUE_MODELS,
   MOTION_TRANSFER_MODELS,
   VIDEO_DEPTH_MODELS,
+  gvpOfferedResolutions,
+  gvpRenderResolution,
+  gvpRendersResolutionAsNamed,
 } from "@nodaro/render-rules"
 export { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, NATIVE_NEGATIVE_PROMPT_MODELS, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, IMAGE_MASK_MODE, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "@nodaro/shared/models"
 export type { ImageMaskMode } from "@nodaro/shared/models"
@@ -289,6 +293,50 @@ export function getVideoResolutionOptions(
   provider: string,
 ): readonly LabeledOption[] | undefined {
   return VIDEO_RESOLUTION_OPTIONS[provider]
+}
+
+/**
+ * A model's resolution menu in Generate Video Pro (the config panel, the node's
+ * run strip and a published app's field read it): the catalog tiers a pro run
+ * renders AS NAMED — `gvpOfferedResolutions` (`@nodaro/render-rules`), derived
+ * from the rule the run resolves its resolution by (the tier the pricing echoes
+ * and the engine renders), so the menu never offers a tier that runs as another (Vidu Q4's
+ * 540p and 2K, Gemini Omni Flash 1.2's 360p, PixVerse V6 Max's 360p and 540p
+ * all run at 720p).
+ */
+export function gvpVideoResolutionOptions(provider: string): readonly LabeledOption[] | undefined {
+  const offered = gvpOfferedResolutions(provider)
+  return VIDEO_RESOLUTION_OPTIONS[provider]?.filter((o) => offered.includes(o.value))
+}
+
+/**
+ * The catalog tiers some Generate Video Pro model lists but a pro run renders
+ * as another — no menu offers them, but a node that already carries one keeps
+ * it and runs exactly as before (at the tier {@link gvpShownResolution} shows):
+ * never snapped away, never rewritten.
+ */
+export const GVP_RETAINED_RESOLUTION_OPTIONS: readonly LabeledOption[] = (() => {
+  const byValue = new Map<string, LabeledOption>()
+  for (const provider of GVP_SUPPORTED_PROVIDERS) {
+    for (const o of VIDEO_RESOLUTION_OPTIONS[provider] ?? []) {
+      if (!gvpRendersResolutionAsNamed(provider, o.value) && !byValue.has(o.value)) byValue.set(o.value, o)
+    }
+  }
+  return [...byValue.values()]
+})()
+
+/**
+ * The menu entry a Generate Video Pro node's stored resolution reads as: the
+ * value itself when the menu offers it, else the tier a run renders it at (a
+ * retained 540p on Vidu Q4 shows as 720p — what it runs at). Display only:
+ * the stored value is never rewritten.
+ */
+export function gvpShownResolution(provider: string, value: string | undefined): string | undefined {
+  const opts = gvpVideoResolutionOptions(provider)
+  if (!value || !opts) return undefined
+  if (opts.some((o) => o.value === value)) return value
+  const rendered = gvpRenderResolution(provider, value)
+  return opts.some((o) => o.value === rendered) ? rendered : undefined
 }
 
 // =============================================================================

@@ -513,8 +513,9 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
    *   without joining the source to it, so expect the continuation only; for
    *   both as one video, run `extend-video`. Needs a reference video.
    *
-   * Ignored on a draft and on a run with no reference media (a start or end
-   * frame is not reference media). Every ratio or length it changes is
+   * Ignored on a run with no reference media (a start or end frame is not
+   * reference media). A draft (`draft: true`) declares it exactly as the same
+   * run without `draft`, at 480p. Every ratio or length it changes is
    * reported in the response's `adjustments`, and the run is priced, reserved
    * and sent at the ratio and length it runs at. A dropped declaration is not
    * reported.
@@ -593,14 +594,31 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
  *   price comes from the draft (its length, and whether it used a reference
  *   video), never from this body. A foreign, unfinished or non-draft source is
  *   refused with a 4xx before anything is charged.
+ * - `nodaro-video-upscale`: upscale any `videoUrl` of up to 60 s and 50 MB
+ *   into a `targetResolution` frame (1080p / 2k / 4k, default 1080p), keeping
+ *   its shape, frame rate, length and sound; a `targetResolution` it does not
+ *   take (720p) runs at 1080p. Priced per second of the clip, measured before
+ *   anything is held (the hold is the charge). Offered only where the server
+ *   lists it (`models.list`). Every refusal comes before anything is charged:
+ *   `403 model_not_available` where it is not offered (a `ForbiddenError`, as
+ *   for any model the deployment does not offer); `400` for the clip
+ *   (`video_too_long`, `video_too_large`, `video_unreadable`) or a body
+ *   without a `videoUrl` (`validation_error`); `403 link_imports_disabled` for
+ *   a link to another site where the deployment turned such links off;
+ *   `422 upload_blocked` where its upload policy refuses the clip; and
+ *   `429 input_busy`, `503 input_timed_out` or `503 input_failed` when the
+ *   clip could not be fetched just now — send the same request again.
  *
+ * Every provider but `nodaro-video-upscale` takes Topaz's `targetResolution`
+ * values only (720p / 1080p / 4k): `2k` is a 400 for them.
  * Any other route field passes through.
  */
 export interface VideoUpscaleParams extends GenerationSessionParams {
-  provider?: "topaz" | "veo-1080p" | "veo-4k" | "seedance-2-5-hd"
+  provider?: "topaz" | "veo-1080p" | "veo-4k" | "seedance-2-5-hd" | "nodaro-video-upscale"
   videoUrl?: string
-  /** topaz: output resolution — the frame's short side. Default "1080p". */
-  targetResolution?: "720p" | "1080p" | "4k"
+  /** topaz: the frame's short side (720p / 1080p / 4k; "2k" is a 400);
+   *  nodaro-video-upscale: the output frame (1080p / 2k / 4k). Default "1080p". */
+  targetResolution?: "720p" | "1080p" | "2k" | "4k"
   /** topaz: output frame rate, 15–60. Default: the source's own rate. */
   targetFps?: number
   /** @deprecated Legacy topaz lever — use `targetResolution`. */

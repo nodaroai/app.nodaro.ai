@@ -12,6 +12,7 @@ Every table on this page is **generated from Nodaro's model catalog** — it nev
   - **Everyday** — cheap and fast; the right default for drafts, iteration, and most work.
   - **Standard** — a step up in quality for a moderate cost.
   - **Premium** — top quality, highest cost; reach for these on hero shots and final renders.
+  - **—** — a model offered under Nodaro's own label (Nodaro Image Upscale, Nodaro Video Upscale) is not ranked, and its price does not move any other model's tier. Its row's description says what its credit figure buys.
 - A **Premium image still costs far less than a Premium video** — don't compare tiers across modalities. Use the credit number for that.
 - **⭐ marks the best-in-tier pick** for that family — a safe default when you're unsure.
 
@@ -53,7 +54,7 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | ⭐ Z-Image | Tongyi-MAI | Everyday | 3<!-- credits: z-image --> | t2i | Cheapest model in catalog. Fast, stylized output. Limited aspect ratios. |
 | Flux 2 Klein (Open) | Black Forest Labs | Everyday | 4<!-- credits: flux-2-klein --> | t2i | Open Flux 2 9B from BFL — fast. Runs direct on Replicate. |
 | Recraft Remove BG | Recraft | Everyday | 4<!-- credits: recraft-remove-bg --> | remove-bg | Remove image background. Cheap utility. |
-| Nodaro Image Upscale | Nodaro Upscale | Everyday | 5<!-- credits: nodaro-image-upscale:2K --> | upscale | Image upscale at 1x (enhance only), 2x, 4x or 8x. Restores detail and keeps lettering exactly as written; the output is the input times the factor, nothing cropped. Priced by the output's size. Offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it. |
+| Nodaro Image Upscale | Nodaro Upscale | — | 5<!-- credits: nodaro-image-upscale:2K --> | upscale | Image upscale at 1x (enhance only), 2x, 4x or 8x. Restores detail and keeps lettering exactly as written; the output is the input times the factor, nothing cropped. Priced by the output's size. Offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it. |
 | MiniMax H3 Image | MiniMax | Everyday | 6<!-- credits: minimax-h3-image --> | t2i | MiniMax H3 Image: detailed pictures up to about 16 MP at 4K, with readable text inside the picture. Ten shapes plus auto, the same price at 1K and 2K (2K by default), PNG or JPEG. |
 | MiniMax H3 Image (I2I) | MiniMax | Everyday | 7<!-- credits: minimax-h3-image-i2i --> | i2i | MiniMax H3 Image edits: change or combine up to 16 reference images in one edit, with readable text, up to about 16 MP at 4K. Priced by size and by reference image; auto keeps the first image's shape. |
 | Grok Imagine | xAI | Everyday | 11<!-- credits: grok --> | t2i, t2v | Expressive, high-contrast output. Supports both image and video. |
@@ -96,6 +97,7 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Flux 2 Pro (Safety Tolerance) | Black Forest Labs | Premium | 26<!-- credits: flux-2-pro --> | t2i, i2i | BFL Flux 2 Pro flagship via Replicate. Accepts up to 4 reference images. |
 | Flux Kontext Max | Black Forest Labs | Premium | 28<!-- credits: flux-kontext-max --> | t2i, edit | Premium Kontext — highest fidelity context-aware edits. |
 | Topaz Image Upscale | Topaz | Premium | 28<!-- credits: topaz-image-upscale --> | upscale | High-quality image upscale at 1x (enhance only), 2x or 4x. Best for production-ready output. |
+| FLUX Fill Pro | Black Forest Labs | Premium | 33<!-- credits: flux-fill --> | edit | Masked inpainting from BFL via Replicate: repaints the mask's white area; the result keeps the image's size. |
 | Imagen 4 Ultra | Google | Premium | 33<!-- credits: imagen4-ultra --> | t2i | Premium Imagen 4 — highest fidelity, slower / more credits. |
 | Kontext Multi (Open) | Black Forest Labs | Premium | 33<!-- credits: kontext-multi --> | i2i, edit | Multi-image Flux Kontext Pro via Replicate — up to 4 input images. |
 | Flux 2 Flex | Black Forest Labs | Premium | 39<!-- credits: flux-flex --> | t2i | Flux 2 Flex — premium fidelity, more flexible composition. Pricier than Pro. |
@@ -114,6 +116,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 <!-- AUTO-GEN:START model-table-video -->
 | Model | Family | Tier | Credits | Modes | Best for |
 | --- | --- | --- | --- | --- | --- |
+| Nodaro Video Upscale | Nodaro Upscale | — | 17<!-- credits: nodaro-video-upscale:1080p:per-4s --> | video-upscale | Upscale any clip of up to 60 seconds and 50 MB into a 1080p, 2K or 4K frame. It keeps the clip's shape (nothing is cropped), frame rate, length and sound. Priced per second of the clip; the listed price is four seconds at 1080p. Offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it. |
 | VEO 1080p Upscale | Google | Everyday | 22<!-- credits: veo-1080p --> | video-upscale | Upscale VEO output to 1080p. |
 | Runway (via KIE) | Runway | Everyday | 33<!-- credits: runway-kie --> | i2v, t2v | Runway Gen-3 routed through KIE. 5/10s at 720p/1080p. |
 | Topaz Video Upscale | Topaz | Everyday | 44<!-- credits: topaz-video:per-unit --> | video-upscale | High-quality video upscale and enhancement to 720p, 1080p or 4K at 15–60 fps (frames are interpolated). Metered: the price is per Topaz unit, and a run uses a few units per output gigapixel. |
@@ -129,6 +132,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Hailuo 02 I2V Pro | MiniMax | Everyday | 158<!-- credits: minimax --> | i2v, t2v | Hailuo 02 Pro — strong photoreal motion, fixed 5-second clips. Supports end frame. |
 | Grok Imagine (I2V) | xAI | Everyday | 165<!-- credits: grok-i2v --> | i2v | Grok image-to-video — stylized motion. Up to 15s. |
 | Kling 2.6 Motion Transfer | Kuaishou | Everyday | 165<!-- credits: motion-transfer --> | motion-transfer | Transfer the motion from a driving video onto a still subject. Kling 2.6 base. |
+| PixVerse V6 Max | PixVerse | Everyday | 165<!-- credits: pixverse-v6-max --> | i2v, t2v | PixVerse V6 Max — cinematic video from text or from an exact first frame, 1–15s at 360p to 1080p, with optional native audio (on by default; it changes the price). Strong prompt following, camera control and on-screen text. |
 | ⭐ VEO 3.1 Fast | Google | Everyday | 165<!-- credits: veo3.1 --> | i2v, t2v | VEO 3.1 Fast — cheaper VEO 3.1 tier, 4/6/8s with audio. Good balance for most uses. Flat per-generation pricing across durations. |
 | Depth Anything (per frame) | Depth Anything | Everyday | 176<!-- credits: depth-anything-frames --> | video-depth | Depth Anything v1 run on each frame. Grayscale or inferno colormap; may flicker between frames. Up to 80 s. |
 | Bytedance Pro I2V | Bytedance | Everyday | 193<!-- credits: bytedance-pro --> | i2v, t2v | Pro Bytedance video tier — better quality. |

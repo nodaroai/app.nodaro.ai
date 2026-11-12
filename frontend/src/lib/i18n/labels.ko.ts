@@ -712,6 +712,8 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "Kuaishou Kling 4.0, 3\u201330s, 720p/1080p, native audio, image/video/character/voice refs": "Kuaishou Kling 4.0, 3–30초, 720p/1080p, 네이티브 오디오, 이미지/동영상/캐릭터/보이스 레퍼런스",
   "Kuaishou Kling 4.0, 3\u201330s, start + up to 8 in-between + end frames, native audio": "Kuaishou Kling 4.0, 3–30초, 시작 프레임 + 중간 프레임 최대 8장 + 끝 프레임, 네이티브 오디오",
   "Kuaishou Kling 4.0 Flash, 3\u201320s, 720p, native audio, start frame or image/video/character refs, voice per character": "Kuaishou Kling 4.0 Flash, 3–20초, 720p, 네이티브 오디오, 시작 프레임 또는 이미지/동영상/캐릭터 레퍼런스, 캐릭터별 보이스",
+  "PixVerse, 1\u201315s, 360p\u20131080p, optional native audio, text or an exact first frame": "PixVerse, 1–15초, 360p–1080p, 켜고 끌 수 있는 네이티브 오디오, 텍스트 또는 정확한 첫 프레임",
+  "PixVerse, 1\u201315s, 360p\u20131080p, 8 aspect ratios, optional native audio": "PixVerse, 1–15초, 360p–1080p, 8가지 화면 비율, 켜고 끌 수 있는 네이티브 오디오",
   "Higher detail, production images": "디테일이 높은 프로덕션용 이미지",
   "Higher detail, production-ready images": "디테일이 높고 실무에 바로 쓸 수 있는 이미지",
   "Higher quality Bytedance": "더 높은 품질의 Bytedance",

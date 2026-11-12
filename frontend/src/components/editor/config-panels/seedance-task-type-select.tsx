@@ -3,7 +3,6 @@ import type { SeedanceTaskTypeAsRun } from "@/lib/seedance-task-type"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useT, type MessageKey } from "@/lib/i18n"
-import { isSeedanceDraftOn } from "./seedance-draft-toggle"
 
 /**
  * Seedance 2.5 "Use the reference video as" — what a wired reference video is
@@ -20,8 +19,9 @@ import { isSeedanceDraftOn } from "./seedance-draft-toggle"
  * Shown only when it can do something: the model takes a task type (a catalog
  * capability) and a reference video is wired. Disconnecting the last clip
  * hides it without clearing the stored value (reconnecting restores it; the
- * server drops a declaration with no reference video). While Draft is on it is
- * disabled, also without clearing: a draft never carries the field.
+ * server drops a declaration with no reference video). Draft changes nothing
+ * here: a draft declares exactly as the same run without Draft, so the select,
+ * its locks and its line are the same with Draft on or off.
  */
 
 /** The select's value for "declare nothing" — never written to node data. */
@@ -52,38 +52,34 @@ export interface SeedanceTaskTypePanelState {
  * The locks follow the RUN, not the selection: a control is locked only while
  * the run declares Edit or Extend (`asRun`, from `seedanceTaskTypeAsRun` — the
  * answer the node's price reads, so a clip of unknown length locks, as it is
- * priced). When Edit is chosen with a reference video wired and Draft off but
- * the run does not declare it (a clip the editor knows is outside the edit
- * window), the controls stay editable and the note says why. Without a
- * reference video, or with Draft on, the run uses the stored values and
- * nothing is said.
+ * priced). When Edit is chosen with a reference video wired but the run does
+ * not declare it (a clip the editor knows is outside the edit window), the
+ * controls stay editable and the note says why. Without a reference video the
+ * run uses the stored values and nothing is said. Draft is not read: a draft
+ * declares as any other run does.
  */
 export function seedanceTaskTypePanelState(args: {
   readonly provider: string | undefined
   readonly value: unknown
   readonly hasReferenceVideo: boolean
-  readonly draft: unknown
   readonly asRun: SeedanceTaskTypeAsRun
 }): SeedanceTaskTypePanelState {
   const { provider, asRun } = args
   if (!args.hasReferenceVideo) return { lock: undefined, note: undefined }
   if (asRun.taskType === "edit" || asRun.taskType === "extend") return { lock: asRun.taskType, note: asRun.taskType }
-  const editNotApplied = listedSeedanceTaskType(provider, args.value) === "edit" && !isSeedanceDraftOn(provider, args.draft)
+  const editNotApplied = listedSeedanceTaskType(provider, args.value) === "edit"
   return { lock: undefined, note: editNotApplied ? "edit-not-applied" : undefined }
 }
 
 export function SeedanceTaskTypeSelect({
   provider,
   value,
-  draft,
   hasReferenceVideo,
   note,
   onUpdate,
 }: {
   provider: string | undefined
   value: unknown
-  /** The node's Draft toggle: while it is on, the select is disabled. */
-  draft?: unknown
   hasReferenceVideo: boolean
   /** The one line shown under the select ({@link seedanceTaskTypePanelState}). */
   note?: SeedanceTaskTypeNote
@@ -98,7 +94,6 @@ export function SeedanceTaskTypeSelect({
       <Select
         value={selected}
         onValueChange={(v) => onUpdate({ referenceTaskType: v === AUTO ? undefined : listedSeedanceTaskType(provider, v) })}
-        disabled={isSeedanceDraftOn(provider, draft)}
       >
         <SelectTrigger className="h-8 text-xs" aria-label={t("vidcfg.seedanceTaskType")}><SelectValue /></SelectTrigger>
         <SelectContent>

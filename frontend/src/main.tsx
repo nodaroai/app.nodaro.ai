@@ -14,8 +14,8 @@ import { bootstrapLookPreviews } from "@/lib/look-previews-bootstrap"
 // Which sibling site (e.g. a community's chat) the user arrived from — read
 // from the referrer before anything navigates. See lib/sibling-origin.ts.
 import { rememberSiblingOrigin } from "@/lib/sibling-origin"
-// A deployment that moved the app's pages to a host of their own carries a
-// browser's saved settings over, once. Inert anywhere else. See lib/storage-bridge-import.ts.
+// A deployment that gives the app's pages a host of their own carries a
+// browser's saved settings over to it, once. Inert anywhere else. See lib/storage-bridge-import.ts.
 import { importLegacyStorage } from "@/lib/storage-bridge-import"
 
 rememberSiblingOrigin()

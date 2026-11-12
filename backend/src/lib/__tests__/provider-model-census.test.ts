@@ -16,54 +16,20 @@
  *
  * Vocabularies: every node registry descriptor's `providers`, and for the
  * node types it lists none for, the shared enum their route validates
- * (`DECLARED_VOCABULARIES`). Every node type whose workflow build reads its
- * `provider` must have one.
+ * (`DECLARED_PROVIDER_VOCABULARIES`, shared with the workflow census in
+ * lib/__tests__/model-option-vocabularies.ts). Every node type whose workflow build
+ * reads its `provider` must have one.
  */
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { LLM_MODELS } from "@nodaro/shared/llm-models"
-import {
-  DIALOGUE_PROVIDERS,
-  EXTEND_VIDEO_PROVIDERS,
-  FACE_SWAP_PROVIDERS,
-  IMAGE_GEN_PROVIDERS,
-  IMAGE_TO_VIDEO_PROVIDERS,
-  MODIFY_IMAGE_PROVIDERS,
-  MOTION_TRANSFER_PROVIDERS,
-  QA_CHECK_PROVIDERS,
-  SCRIPT_PROVIDERS,
-  TEXT_TO_AUDIO_PROVIDERS,
-  TEXT_TO_VIDEO_PROVIDERS,
-  TTS_PROVIDERS,
-  UPSCALE_IMAGE_PROVIDERS,
-  VIDEO_TO_VIDEO_NODE_PROVIDERS,
-  VIDEO_UPSCALE_PROVIDERS,
-  modelToNodeTarget,
-} from "@nodaro/shared/models"
+import { modelToNodeTarget } from "@nodaro/shared/models"
+import { DECLARED_PROVIDER_VOCABULARIES } from "./model-option-vocabularies.js"
 import { NODE_REGISTRY } from "../node-registry.js"
 import { GATEABLE_MODEL_IDS } from "../availability-override.js"
 import { PROVIDER_MODEL_OF_NODE, providerModelOf } from "../provider-model.js"
-
-/** Node types the registry lists no `providers` for, with the enum their route validates `provider` against. */
-const DECLARED_VOCABULARIES: Readonly<Record<string, readonly string[]>> = {
-  "generate-image": IMAGE_GEN_PROVIDERS,
-  "modify-image": MODIFY_IMAGE_PROVIDERS,
-  "upscale-image": UPSCALE_IMAGE_PROVIDERS,
-  "image-to-video": IMAGE_TO_VIDEO_PROVIDERS,
-  "text-to-video": TEXT_TO_VIDEO_PROVIDERS,
-  "video-to-video": VIDEO_TO_VIDEO_NODE_PROVIDERS,
-  "extend-video": EXTEND_VIDEO_PROVIDERS,
-  "motion-transfer": MOTION_TRANSFER_PROVIDERS,
-  "video-upscale": VIDEO_UPSCALE_PROVIDERS,
-  "face-swap": FACE_SWAP_PROVIDERS,
-  "text-to-speech": TTS_PROVIDERS,
-  "text-to-audio": TEXT_TO_AUDIO_PROVIDERS,
-  "text-to-dialogue": DIALOGUE_PROVIDERS,
-  "generate-script": SCRIPT_PROVIDERS,
-  "qa-check": QA_CHECK_PROVIDERS,
-}
 
 /** Node types that run another node type's models (the catalog sends each model to one node). */
 const RUNS_MODELS_OF: Readonly<Record<string, string>> = {
@@ -88,7 +54,6 @@ const PROVIDER_IS_ITS_MODEL: Readonly<Record<string, string>> = {
   "lip-sync": "each value is the model it runs: lip-sync models outside the catalog, and video models it runs in lip-sync mode under their own ids",
   "extend-video": "an extension runs the catalog model it names (LTX 2.3 Pro's extend task is `ltx-2.3-pro`)",
   "video-retake": "it runs LTX 2.3 Pro's retake task, the catalog's `ltx-2.3-pro`",
-  "modify-image": "Flux Fill is its own model outside the catalog: only an explicit `models.deny` names it",
   "face-swap": "its engine is its own model outside the catalog: only an explicit `models.deny` names it",
   "video-sfx": "its engine is its own model outside the catalog: only an explicit `models.deny` names it",
   "switchx": "its engine is its own model outside the catalog: only an explicit `models.deny` names it",
@@ -123,7 +88,7 @@ function runsModel(type: string, value: string): boolean {
 
 const vocabularies: ReadonlyMap<string, readonly string[]> = new Map([
   ...NODE_REGISTRY.filter((d) => Array.isArray(d.providers) && d.providers.length > 0).map((d) => [d.type, d.providers!] as const),
-  ...Object.entries(DECLARED_VOCABULARIES),
+  ...Object.entries(DECLARED_PROVIDER_VOCABULARIES),
 ])
 
 /** Values of a vocabulary that are not the id of a model the node runs: `type → values`. */

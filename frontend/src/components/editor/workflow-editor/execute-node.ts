@@ -70,6 +70,7 @@ import {
   DEFAULT_SUNO_STEM_NAME,
   clampTopazVideoFps,
   isTopazVideoResolution,
+  NODARO_VIDEO_UPSCALE_PROVIDER,
 } from "@nodaro/shared/models";
 import { sunoSeparateRunOutputFields } from "@/lib/named-run-outputs";
 import {
@@ -104,7 +105,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { UNIT_EXECUTORS } from "@/nodes/_generated/executors";
 import { createUnitExecKit } from "./unit-exec-kit";
 import { runGraph } from "./run-graph";
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, pickSunoSeparateSource } from "@nodaro/render-rules";
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, nodaroVideoUpscaleTierOf, pickSunoSeparateSource } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -2730,7 +2731,7 @@ function executeNodeCore(
       // stills. Translated through the SAME shared resolver payload-builder
       // uses, so the Run button and a workflow run request the identical mode.
       // "auto"/absent resolves to undefined, keeping older payloads unchanged.
-      anchorMode: resolveGvpAnchorWire(gvpData.anchorMode),
+      anchorMode: resolveGvpAnchorWire(gvpData.anchorMode, gvpData.provider),
       audioTail: gvpData.audioTail === true ? true : undefined,
       overlapAnchor: gvpData.overlapAnchor === true ? true : undefined,
       overlapAnchorMode: gvpData.overlapAnchor === true && gvpData.overlapAnchorMode === "last-frame" ? ("last-frame" as const) : undefined,
@@ -6699,6 +6700,31 @@ function executeNodeCore(
       return runProcessingNode(
         node.id,
         () => videoUpscaleApi({ userId: ctx.userId, provider, kieTaskId }),
+        "generatedVideoUrl",
+        "Upscale Video",
+        ctx,
+      );
+    }
+
+    // Nodaro Video Upscale - requires videoUrl; the tier the node is set to
+    // (a value it does not take is its 1080p, as the server reads it). It has
+    // no frame rate or factor. The server measures the clip and refuses one
+    // past 60 s / 50 MB, or where it is not offered, before anything is held.
+    if (provider === NODARO_VIDEO_UPSCALE_PROVIDER) {
+      const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
+      if (!videoUrl) {
+        toast.error(nodeRunError(vuData.label, "nodeRun.noVideoInputFound"));
+        return Promise.reject(new Error("No video input"));
+      }
+      setUserPromptTemplate(undefined);
+      return runProcessingNode(
+        node.id,
+        () => videoUpscaleApi({
+          videoUrl,
+          targetResolution: nodaroVideoUpscaleTierOf(vuData.targetResolution),
+          userId: ctx.userId,
+          provider,
+        }),
         "generatedVideoUrl",
         "Upscale Video",
         ctx,

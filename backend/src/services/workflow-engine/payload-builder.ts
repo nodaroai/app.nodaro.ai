@@ -63,7 +63,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, pickSunoSeparateSource, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -181,6 +181,7 @@ import {
   isTopazVideoResolution,
   clampTopazVideoFps,
   audioSoundtrackActive,
+  NODARO_VIDEO_UPSCALE_PROVIDER,
 } from "@nodaro/shared/models"
 import {
   isRenderNodeType,
@@ -4239,6 +4240,9 @@ function buildPayloadOf(
           provider,
           duration: i2vNorm.duration ?? (data.duration as number | string | undefined),
           sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+          // `generateAudio` too: the same two audio fields the payload sends, read as
+          // the provider runner reads them (videoAudioIntent).
+          generateAudio: data.generateAudio as boolean | undefined,
           mode: "image-to-video",
           sizeOrMode: (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
           resolution: i2vNorm.resolution,
@@ -4388,6 +4392,9 @@ function buildPayloadOf(
           provider,
           duration: t2vNorm.duration ?? (data.duration as number | string | undefined),
           sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+          // `generateAudio` too: the same two audio fields the payload sends, read as
+          // the provider runner reads them (videoAudioIntent).
+          generateAudio: data.generateAudio as boolean | undefined,
           mode: "text-to-video",
           sizeOrMode: (data.mode ?? data.kling3Mode ?? data.videoSize) as string | undefined,
           resolution: t2vNorm.resolution,
@@ -4771,6 +4778,9 @@ function buildPayloadOf(
           provider: resolvedProvider,
           duration: gvNorm.duration ?? (data.duration as number | string | undefined),
           sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+          // `generateAudio` too: the same two audio fields the payload sends, read as
+          // the provider runner reads them (videoAudioIntent).
+          generateAudio: data.generateAudio as boolean | undefined,
           mode: effectiveMode,
           sizeOrMode: (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
           resolution: gvNorm.resolution,
@@ -5834,6 +5844,27 @@ function buildPayloadOf(
 
     case "video-upscale": {
       const vuProvider = (data.provider as string) ?? "topaz"
+      // Nodaro Video Upscale: the tier the node asks for, coerced as every lane
+      // coerces it (a value it does not take is 1080p), priced at that tier's
+      // row. node-executor measures the clip and holds the exact price
+      // (stampNodaroVideoUpscale); this row is only the build-time basis. Its
+      // job carries no frame rate, factor or task id: it has none of them.
+      if (vuProvider === NODARO_VIDEO_UPSCALE_PROVIDER) {
+        const vuTier = nodaroVideoUpscaleTierOf(data.targetResolution)
+        return {
+          jobName: "video-upscale",
+          queueName: "video-generation",
+          modelIdentifier: nodaroVideoUpscaleCreditId(vuTier),
+          payload: {
+            jobId,
+            videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+            provider: vuProvider,
+            tier: vuTier,
+            targetResolution: vuTier,
+            usageLogId,
+          },
+        }
+      }
       const vuModel = vuProvider === "veo-1080p" ? "veo-1080p"
         : vuProvider === "veo-4k" ? "veo-4k"
         // The draft finalize's exact per-length id is stamped by node-executor
@@ -5874,6 +5905,9 @@ function buildPayloadOf(
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
           // Topaz target: resolution + fps (absent fps = the source's rate);
           // the legacy factor is read only when no resolution is set.
+          // Another provider's target (Nodaro Video Upscale's 2k) is not
+          // Topaz's: dropped like any value it does not take, so the run uses
+          // its own default (1080p) or a saved legacy factor.
           ...(isTopazVideoResolution(data.targetResolution) ? { targetResolution: data.targetResolution } : {}),
           // A number, or a numeric string (a mapped value); "source"/absent = the source's rate.
           ...(topazFpsOf(data.targetFps) !== undefined ? { targetFps: topazFpsOf(data.targetFps) } : {}),
@@ -6463,7 +6497,7 @@ function buildPayloadOf(
         // canvas Run path uses, so a workflow run and the Run button request
         // the identical mode. "auto"/absent → undefined (dropped by JSON
         // serialization), keeping pre-anchorMode payloads byte-identical.
-        anchorMode: resolveGvpAnchorWire(typeof data.anchorMode === "string" ? data.anchorMode : undefined),
+        anchorMode: resolveGvpAnchorWire(typeof data.anchorMode === "string" ? data.anchorMode : undefined, gvpProvider),
         audioTail: data.audioTail === true ? true : undefined,
         overlapAnchor: data.overlapAnchor === true ? true : undefined,
         overlapAnchorMode: data.overlapAnchor === true && data.overlapAnchorMode === "last-frame" ? "last-frame" : undefined,

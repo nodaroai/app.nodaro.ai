@@ -26,22 +26,27 @@ function legacyHostList(value) {
 }
 
 /**
- * The moved-pages keys: all three exactly when the proxy's half is on (a Flow
- * origin, a legacy host that is not the Flow host) and PUBLIC_URL gives a kept
- * origin that is not the Flow origin; else none. The browser then never acts
- * where the proxy does not, and no public link it writes can name the Flow
- * host. `problem` says why a move that is asked for stays off: the server
+ * The keys of a deployment whose pages have a host of their own, by the
+ * proxy's two rules (tools/gen-route-homes.mjs). flowUiOrigin and linkOrigin
+ * exactly when the pages have their own host (a Flow origin, and PUBLIC_URL a
+ * kept origin that is not it): a page on the Flow host then carries a
+ * browser's saved settings over. legacyUiHosts too exactly when the move is on
+ * (a legacy host that is not the Flow host): only then does the browser send a
+ * legacy host's pages home, call the API same-origin on the Flow host, or name
+ * linkOrigin in public links, so it never acts where the proxy does not.
+ * `problem` says why a Flow host that is asked for stays off: the server
  * refuses to start in that state too (backend/src/lib/moved-pages-settings.ts).
  */
 export function movedPages(env) {
   const flow = proxyOrigin(env.RUNTIME_FLOW_UI_ORIGIN)
-  const hosts = legacyHostList(env.RUNTIME_LEGACY_UI_HOSTS)
-  if (!flow || !hosts.some((host) => `https://${host}` !== flow)) return { keys: {} }
+  if (!flow) return { keys: {} }
   const link = proxyOrigin(env.RUNTIME_LINK_ORIGIN)
   if (!link || link === flow) {
     return { keys: {}, problem: "PUBLIC_URL is not an https origin other than FLOW_UI_ORIGIN's, so the browser leaves the app's pages where they are" }
   }
-  return { keys: { flowUiOrigin: flow, legacyUiHosts: hosts, linkOrigin: link } }
+  const hosts = legacyHostList(env.RUNTIME_LEGACY_UI_HOSTS)
+  const moved = hosts.some((host) => `https://${host}` !== flow)
+  return { keys: moved ? { flowUiOrigin: flow, legacyUiHosts: hosts, linkOrigin: link } : { flowUiOrigin: flow, linkOrigin: link } }
 }
 
 /**
@@ -92,10 +97,11 @@ export function buildRuntimeConfig(env) {
     // --media-origin): the https origin of the deployment's media host on a
     // white-label surface, "" everywhere else, so no other /config.js changes.
     mediaOrigin: pick(env.RUNTIME_MEDIA_ORIGIN),
-    // A deployment that moved its pages to their own host (FLOW_UI_ORIGIN with
-    // LEGACY_UI_HOSTS): the page's own calls go same-origin on that host, a
-    // navigation on a legacy host goes to its page's home, and the addresses
-    // developers are handed keep naming linkOrigin, PUBLIC_URL. Absent on every
+    // A deployment whose pages have their own host (FLOW_UI_ORIGIN): a page
+    // there carries a browser's saved settings over from linkOrigin, PUBLIC_URL.
+    // With the move on too (LEGACY_UI_HOSTS), the page's own calls go same-origin
+    // on that host, a navigation on a legacy host goes to its page's home, and
+    // the addresses developers are handed keep naming linkOrigin. Absent on every
     // other deployment, so nothing changes there.
     ...movedPages(env).keys,
   }

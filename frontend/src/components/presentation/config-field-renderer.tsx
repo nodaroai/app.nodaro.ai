@@ -11,6 +11,8 @@ import {
   getSourcePhotoAspectRatios,
   getAspectRatiosForVideoModel,
   getVideoResolutionOptions,
+  gvpVideoResolutionOptions,
+  gvpShownResolution,
   IMAGE_QUALITY_OPTIONS,
   IMAGE_RESOLUTION_OPTIONS,
   declaredDefaultResolution,
@@ -743,7 +745,7 @@ function renderGenerateVideoPro(
         />
       )
     case "resolution": {
-      const resOpts = getVideoResolutionOptions(provider)
+      const resOpts = gvpVideoResolutionOptions(provider)
       if (!resOpts) return null
       return (
         <OptionSelect
@@ -754,6 +756,9 @@ function renderGenerateVideoPro(
           allowedValues={allowedValues}
           readOnly={readOnly}
           autoReset
+          // A stored tier the menu does not offer moves to the tier it already
+          // renders at (Vidu Q4's 540p → 720p), so the run is unchanged.
+          resetTo={gvpShownResolution(provider, typeof value === "string" ? value : undefined)}
         />
       )
     }

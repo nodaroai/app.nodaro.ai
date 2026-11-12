@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { runtimeApiUrl, runtimeDefaultLocale, runtimeFlowUiOrigin, runtimeIsOnFlowUiHost, runtimeIsOnMovedHost, runtimeLegacyUiHosts, runtimeLinkOrigin, runtimeMediaOrigin, runtimeSupabaseAnonKey, runtimeSupabaseUrl, runtimeUploadModerationEnabled, runtimePreviewStopRule } from "../runtime-config"
+import { runtimeApiUrl, runtimeDefaultLocale, runtimeFlowUiOrigin, runtimeIsOnFlowUiHost, runtimeIsOnMovedHost, runtimeLegacyUiHosts, runtimeLinkOrigin, runtimeMediaOrigin, runtimeSettingsSourceOrigin, runtimeSupabaseAnonKey, runtimeSupabaseUrl, runtimeUploadModerationEnabled, runtimePreviewStopRule } from "../runtime-config"
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 
@@ -220,6 +220,27 @@ describe("runtimeFlowUiOrigin / runtimeIsOnFlowUiHost / runtimeLinkOrigin", () =
       expect(runtimeLegacyUiHosts(), JSON.stringify(runtime)).toEqual([])
       expect(runtimeIsOnFlowUiHost(FLOW), JSON.stringify(runtime)).toBe(false)
       expect(runtimeApiUrl(FLOW), JSON.stringify(runtime)).toBe(APP)
+    }
+  })
+
+  it("the pages' own host alone (no legacy host) carries settings over and changes nothing else: API calls, links and the move stay off", () => {
+    window.__NODARO_RUNTIME__ = { apiUrl: APP, flowUiOrigin: FLOW, linkOrigin: APP }
+    expect(runtimeSettingsSourceOrigin(FLOW)).toBe(APP)
+    expect(runtimeSettingsSourceOrigin(APP)).toBe("")
+    expect(runtimeSettingsSourceOrigin("https://sai.example.test")).toBe("")
+    expect(runtimeFlowUiOrigin()).toBe("")
+    expect(runtimeLinkOrigin()).toBe("")
+    expect(runtimeIsOnFlowUiHost(FLOW)).toBe(false)
+    expect(runtimeIsOnMovedHost(FLOW)).toBe(false)
+    expect(runtimeApiUrl(FLOW)).toBe(APP)
+  })
+
+  it("runtimeSettingsSourceOrigin: also on with the move, never without a kept origin of its own", () => {
+    window.__NODARO_RUNTIME__ = ON
+    expect(runtimeSettingsSourceOrigin(FLOW)).toBe(APP)
+    for (const runtime of [{ apiUrl: APP }, { flowUiOrigin: FLOW }, { flowUiOrigin: FLOW, linkOrigin: FLOW }, { flowUiOrigin: FLOW, linkOrigin: `${APP}/` }, { flowUiOrigin: "http://flow.example.test", linkOrigin: APP }]) {
+      window.__NODARO_RUNTIME__ = runtime
+      expect(runtimeSettingsSourceOrigin(FLOW), JSON.stringify(runtime)).toBe("")
     }
   })
 

@@ -134,6 +134,20 @@ export function runtimeLinkOrigin(): string {
   return movedPages()?.link ?? ""
 }
 
+/**
+ * Where this page takes a browser's saved settings from (lib/storage-bridge-import.ts):
+ * the kept origin (PUBLIC_URL), when the deployment gives its pages a host of
+ * their own (FLOW_UI_ORIGIN, with or without the move) and this page is on it;
+ * else "". The proxy serves the kept host's bridge page by the same rule (a Flow
+ * origin, and a kept origin that is not it: tools/gen-route-homes.mjs). Nothing
+ * else follows it: API calls, links and navigation still follow the move alone.
+ */
+export function runtimeSettingsSourceOrigin(currentOrigin: string = pageOrigin()): string {
+  const { flowUiOrigin: flow, linkOrigin: kept } = runtime()
+  if (!isHttpsOrigin(flow) || !isHttpsOrigin(kept) || kept === flow) return ""
+  return currentOrigin === flow ? kept : ""
+}
+
 /** The Supabase URL the BROWSER uses (auth + PostgREST). */
 export function runtimeSupabaseUrl(): string {
   const picked = pick(runtime().supabaseUrl, import.meta.env.VITE_SUPABASE_URL as string | undefined)

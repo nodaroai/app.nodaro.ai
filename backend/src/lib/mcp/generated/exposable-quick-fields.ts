@@ -80,7 +80,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "generate-video": {
-    "aspectRatio": { valueType: "string", fixed: false, values: ["16:9","1:1","21:9","3:4","4:3","4:5","5:4","9:16","9:21","adaptive","auto"] },
+    "aspectRatio": { valueType: "string", fixed: false, values: ["16:9","1:1","21:9","2:3","3:2","3:4","4:3","4:5","5:4","9:16","9:21","adaptive","auto"] },
     "draft": { valueType: "boolean", fixed: false, values: [true] },
     "duration": { valueType: "number", fixed: false, values: [-1,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30] },
     "resolution": { valueType: "string", fixed: false, values: ["1080P","1080p","2K","2k","360p","480p","4k","512P","540p","720P","720p","768P"] },
@@ -189,8 +189,8 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "v2vResolution": { valueType: "string", fixed: false, values: ["1080p","480p","720p"] },
   },
   "video-upscale": {
-    "provider": { valueType: "string", fixed: true, values: ["seedance-2-5-hd","topaz","veo-1080p","veo-4k"] },
-    "targetResolution": { valueType: "string", fixed: false, values: ["1080p","4k","720p"] },
+    "provider": { valueType: "string", fixed: true, values: ["nodaro-video-upscale","seedance-2-5-hd","topaz","veo-1080p","veo-4k"] },
+    "targetResolution": { valueType: "string", fixed: false, values: ["1080p","2k","4k","720p"] },
   },
   "voice-changer": {
     "model": { valueType: "string", fixed: true, values: ["eleven_english_sts_v2","eleven_multilingual_sts_v2"] },

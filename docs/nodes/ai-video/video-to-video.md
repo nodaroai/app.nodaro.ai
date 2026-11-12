@@ -76,8 +76,8 @@ on the node is dispatched as a **text-to-video** job in edit shape:
 - The run also tells Seedance outright that the clip is the video to edit (the
   same choice as **The video to edit** on
   [Generate Video](generate-video.md#seedance-25-use-the-reference-video-as)),
-  when every clip is 4–30 seconds long and the run is not a draft. A single
-  run, a workflow run and an app run do the same.
+  when every clip is 4–30 seconds long, a draft included. A single run, a
+  workflow run and an app run do the same.
 
 **From the API or SDK**, send it to `POST /v1/video-to-video` like any other
 model of this node — `{ videoUrl, prompt, provider: "seedance-2-5",
@@ -88,7 +88,7 @@ reference-video lane, so the price, the clip-length check and the settlement
 are the ones described here. `480p`, `draft` and the three reference lists are
 accepted for this model only (any other model answers `400`). Price it first
 with `POST /v1/quote` (`type: "video-to-video"`). When every clip, the source and
-any extra `referenceVideoUrls`, is 4–30 seconds long (not on a draft), the server also tells Seedance
+any extra `referenceVideoUrls`, is 4–30 seconds long (a draft included), the server also tells Seedance
 outright that the run is an edit, instead of leaving the model to read that from
 the prompt.
 

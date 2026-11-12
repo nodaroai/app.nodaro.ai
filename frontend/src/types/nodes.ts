@@ -17,6 +17,7 @@ import type {
   FanOutItemMeta
 } from "@nodaro/shared/nodes"
 import type { Node, Edge } from "@xyflow/react"
+import type { VideoUpscaleResolution } from "@nodaro/shared/model-catalog"
 // Node units (frontend/src/nodes/<type>/, tools/units/README.md): this file is
 // the reviewed composer of the definitions aggregate — NODE_DEFINITIONS is the
 // legacy literal below ∪ every unit, each at its position.after.
@@ -35,7 +36,6 @@ import {
   type VideoToVideoNodeProvider,
   type VideoGenProvider,
   type VideoUpscaleProvider,
-  type TopazVideoResolution,
   type ExtendVideoProvider,
   type FaceSwapProvider,
   type TtsProvider,
@@ -2117,7 +2117,7 @@ export type ImageToVideoData = PromptAffixFields & {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
-  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto"
+  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "2:3" | "3:2" | "21:9" | "9:21" | "adaptive" | "Auto"
   multiShot?: boolean
   /** Seedance Draft (`isSeedanceDraftCapable` models only): render a 480p
    *  draft whose same take Video Upscale → "Seedance 2.5 HD (from draft)"
@@ -2128,8 +2128,8 @@ export type ImageToVideoData = PromptAffixFields & {
    *  its own shape and length) or `extend` (the clip continues it). Auto is the
    *  key being absent: nothing is declared and the model guesses from the
    *  prompt. Only Seedance 2.5 reads it; a workflow run and a single run resolve
-   *  it by the same rule (a draft, or media that does not qualify, declares
-   *  nothing). */
+   *  it by the same rule (media that does not qualify declares nothing; a draft
+   *  declares as any other run). */
   referenceTaskType?: "reference" | "edit" | "extend"
   resolution?: string
   grokMode?: "fun" | "normal" | "spicy"
@@ -2289,7 +2289,7 @@ export type TextToVideoData = PromptAffixFields & {
   prompt: string
   provider: TextToVideoProvider
   duration: number
-  aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive"
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "2:3" | "3:2" | "21:9" | "9:21" | "adaptive"
   negativePrompt: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -2306,8 +2306,8 @@ export type TextToVideoData = PromptAffixFields & {
    *  its own shape and length) or `extend` (the clip continues it). Auto is the
    *  key being absent: nothing is declared and the model guesses from the
    *  prompt. Only Seedance 2.5 reads it; a workflow run and a single run resolve
-   *  it by the same rule (a draft, or media that does not qualify, declares
-   *  nothing). */
+   *  it by the same rule (media that does not qualify declares nothing; a draft
+   *  declares as any other run). */
   referenceTaskType?: "reference" | "edit" | "extend"
   seed?: number                      // VEO 3.1: reproducible generation (10000-99999)
   // VEO 3.x: opt out of KIE's auto-translate-to-English. Same semantics
@@ -2360,7 +2360,7 @@ export type GenerateVideoNodeData =
   & {
     provider: VideoGenProvider
     /** Unified aspect ratio — superset of i2v and t2v values. */
-    aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto" | "auto"
+    aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "2:3" | "3:2" | "21:9" | "9:21" | "adaptive" | "Auto" | "auto"
     /** Kling 4.0: keep the reference videos' own sound instead of generating
      *  new sound (KIE `keep_original_sound`). Ignored without a reference video
      *  and by every other model. */
@@ -3027,13 +3027,17 @@ export type MotionTransferData = PromptAffixFields & {
   pausedAtTime?: number
 }
 
-// Video Upscale: Upscale video resolution using Topaz or VEO
+// Video Upscale: Upscale video resolution using Topaz, VEO, the Seedance 2.5 HD
+// finalize or Nodaro Video Upscale
 export type VideoUpscaleData = {
   [key: string]: unknown
   label: string
   provider: VideoUpscaleProvider
-  /** Topaz: the output resolution — the frame's SHORT side (default 1080p). */
-  targetResolution?: TopazVideoResolution
+  /** The output resolution, from the provider's own set: Topaz 720p / 1080p / 4k
+   *  (the frame's SHORT side, default 1080p); Nodaro Video Upscale 1080p / 2k /
+   *  4k (an output box, default 1080p; a value it does not take is read as its
+   *  default, `normalizeVideoUpscaleResolution`). */
+  targetResolution?: VideoUpscaleResolution
   /** Topaz: the output frame rate, 15–60; absent = the source's own rate. */
   targetFps?: number
   /** Legacy Topaz lever (1×/2×/4× of the source). The run reads it only when

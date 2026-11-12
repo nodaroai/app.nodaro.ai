@@ -43,6 +43,7 @@ import {
   normalizeGrokVideo15Resolution,
 } from "@nodaro/shared/models"
 import { getModel } from "@nodaro/shared/model-catalog"
+import { neutralizeImageMentions } from "./image-mentions.js"
 
 /** How the start image travels — see the module docstring. */
 export type GrokVideo15StartFrameTransport = "first-frame-only" | "first-frame-and-image-urls"
@@ -98,17 +99,12 @@ export function grokVideo15KeyframeTimestamps(count: number, durationSec: number
   return Array.from({ length: n }, (_, i) => Math.round(((i + 1) * durationSec) / (n + 1)))
 }
 
-/** `@image_N`, `@imageN`, `@image(N)` — every spelling of an image mention. */
-const IMAGE_MENTION = /@(image(?:_\d+|\(\d+\)|\d+))(?![\p{L}\p{N}_])/giu
-
 /**
  * Drop the `@` from every image mention the body does not carry: only `@image1`
  * stays live, and only when the start image rides `image_urls`.
  */
 export function neutralizeGrokVideo15Mentions(prompt: string, startImageInImageUrls: boolean): string {
-  return prompt.replace(IMAGE_MENTION, (whole, word: string) =>
-    startImageInImageUrls && word === "image1" ? whole : word,
-  )
+  return neutralizeImageMentions(prompt, (word) => startImageInImageUrls && word === "image1")
 }
 
 const clean = (u: string | undefined): string | undefined => u?.trim() || undefined

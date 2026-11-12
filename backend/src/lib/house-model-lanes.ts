@@ -14,8 +14,10 @@
  * catalog id, beside its rows in `house-model-timeouts.ts`. Every field is
  * neutral data about OUR model — never an upstream's name, request or rate.
  */
+import { NODARO_VIDEO_UPSCALE_MAX_BYTES, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import type { HouseModelDeliveryOutcome, HouseModelPricedDelivery } from "./house-model-delivery.js"
 import { NODARO_IMAGE_UPSCALE_LANE } from "./nodaro-image-upscale-size.js"
+import { NODARO_VIDEO_UPSCALE_FAILURE_SENTENCES } from "./nodaro-video-upscale-sentences.js"
 
 /**
  * The rule every input file of a run must meet — the ONE place its numbers
@@ -133,6 +135,18 @@ export interface HouseModelLane {
 export const HOUSE_MODEL_LANES: Readonly<Record<string, HouseModelLane>> = Object.freeze({
   // Nodaro Image Upscale (lib/nodaro-image-upscale-size.ts): one image, at most 20 MB.
   "nodaro-image-upscale": NODARO_IMAGE_UPSCALE_LANE,
+  // Nodaro Video Upscale: one clip of up to 50 MB, sent
+  // as a file of our storage (copied there first when it was not). Its one
+  // delivery re-hosts the clip, stores its thumbnail and writes the output
+  // fields (lib/nodaro-video-upscale-delivery.ts, loaded on use so this table
+  // stays light). No `settledBase`: the price is flat, the hold IS the charge.
+  [NODARO_VIDEO_UPSCALE_PROVIDER]: {
+    inputUrlArgs: ["videoUrl"],
+    input: { media: "video", maxBytes: NODARO_VIDEO_UPSCALE_MAX_BYTES },
+    deliver: async (delivery) => (await import("./nodaro-video-upscale-delivery.js")).deliverNodaroVideoUpscale(delivery),
+    // Its own sentences for a run refused for its clip (lib/nodaro-video-upscale-sentences.ts).
+    failureSentences: NODARO_VIDEO_UPSCALE_FAILURE_SENTENCES,
+  },
 })
 
 /** The lane row of `id`, or undefined when the table has none. */

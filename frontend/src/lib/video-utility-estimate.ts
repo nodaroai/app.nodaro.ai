@@ -20,10 +20,10 @@ import {
   type TrimVideoEstimatorInput,
 } from "@nodaro/shared/credits"
 import { maskCompositeUnits } from "@nodaro/shared/media"
-import { fanInClipCount, forwardedVideoLengthSec, generationSourceEstimateSec, maskCompositeLeadSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, withoutRecordedVideoLength, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo } from "@nodaro/render-rules"
-import { clampTopazVideoFps, isTopazVideoResolution, resolveTopazVideoTarget, type TopazVideoResolution, type TopazVideoSource } from "@nodaro/shared/models"
+import { fanInClipCount, forwardedVideoLengthSec, maskCompositeLeadSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, generationSourceEstimateSec, withoutRecordedVideoLength } from "@nodaro/render-rules"
+import { clampTopazVideoFps, isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER, resolveTopazVideoTarget, type TopazVideoResolution, type TopazVideoSource } from "@nodaro/shared/models"
 import { withWiredSettings } from "@nodaro/shared/nodes"
-import { resolveGraphOrigin, topazVideoEstimateUnits } from "@nodaro/render-rules"
+import { nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, resolveGraphOrigin, topazVideoEstimateUnits } from "@nodaro/render-rules"
 import { readNodeOutput } from "@/lib/node-output-reader"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
@@ -461,6 +461,28 @@ export function topazVideoQuotedResolution(
 }
 
 /**
+ * The length of the clip a Nodaro Video Upscale node is given, when the graph
+ * knows it is past the longest clip a run takes — such a run is refused before
+ * anything is held, so the node's pill shows no figure and the Run confirm
+ * says the node is not priced (`nodaroVideoUpscaleRefusesLength`, the rule the
+ * server's run estimate reads too). Undefined for any other node, provider or
+ * length (a length the graph does not know is measured by the run).
+ */
+export function nodaroVideoUpscaleRefusedSec(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | undefined {
+  if (node.type !== "video-upscale") return undefined
+  // As it runs: a wired Settings input can set the provider.
+  const data = (withWiredSettings(node, nodes, edges).data ?? {}) as Record<string, unknown>
+  if (data.provider !== NODARO_VIDEO_UPSCALE_PROVIDER) return undefined
+  const sec = topazVideoQuotedSourceSec(node, nodes, edges, rerunIds)
+  return nodaroVideoUpscaleRefusesLength(sec) ? sec : undefined
+}
+
+/**
  * The Topaz units a Video Upscale is QUOTED at (`topazVideoEstimateUnits`, the
  * rule the server's run estimate reads): its resolution as
  * {@link topazVideoQuotedResolution} reads it, and its frame rate (else 30
@@ -476,6 +498,14 @@ export function videoUpscalePricingUnits(
 ): number {
   // Priced as it runs: a wired Settings input can set the provider and the target.
   const data = (withWiredSettings(node, nodes, edges).data ?? {}) as Record<string, unknown>
+  // Nodaro Video Upscale: a quarter of its tier's four-second row per billed
+  // second of the clip, at the length the graph gives (else 10 s) — the rule
+  // the server's run estimate reads (`nodaroVideoUpscaleEstimateUnits`). A clip
+  // past the limit has no units: no estimate prices it
+  // ({@link nodaroVideoUpscaleRefusedSec}), so the one unit here is never priced.
+  if (data.provider === NODARO_VIDEO_UPSCALE_PROVIDER) {
+    return nodaroVideoUpscaleEstimateUnits(topazVideoQuotedSourceSec(node, nodes, edges, rerunIds)) ?? 1
+  }
   if (!isTopazVideoUpscaleProvider(data.provider)) return 1
   return topazVideoEstimateUnits({
     resolution: topazVideoQuotedResolution(node, nodes, edges),

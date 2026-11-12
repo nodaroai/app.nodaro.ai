@@ -16,6 +16,8 @@ const estimateBody=z.object({
   renderMethod:z.enum(["extend","keyframes"]).optional(),
   anchorMode:z.enum(["upfront","progressive","none"]).optional(),
   contextTailSec:z.number().min(2).max(15).optional(),planOnly:z.boolean().optional(),
+  // The run's audio: priced where the model's price follows it (PixVerse V6 Max).
+  generateAudio:z.boolean().optional(),
 })
 
 /** Read-only estimate through the same pricing and markup as reservation. */
@@ -38,6 +40,7 @@ export function registerVideoProEstimate(app:FastifyInstance):void {
         aspectRatio:!p.aspectRatio||p.aspectRatio==="adaptive"?"16:9":p.aspectRatio,
         segmentMode:p.segmentMode,preferredSegmentSec:p.preferredSegmentSec,segmentDurations:p.segmentDurations,sourceSegmentDurations:p.sourceSegmentDurations,
         renderMethod:p.renderMethod,tailSec:p.contextTailSec,anchorsSeeded:p.anchorMode==="none"?true:undefined,
+        generateAudio:p.generateAudio,
       })
       const credits=applyServiceMarkup(p.planOnly?Math.max(2,price.feeBase):price.reserveBase,await getAppSettings(),"generate-video-pro")
       return {data:{credits,upperBound:!p.planOnly&&!!price.segmentPlanning}}

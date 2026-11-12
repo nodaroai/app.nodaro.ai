@@ -68,7 +68,28 @@ describe("GVP_SUPPORTED_PROVIDERS", () => {
       "wan-3-prime",
       "happyhorse-ref2v",
       "vidu-q4",
+      // Admitted by its explicit catalog opt-in, `gvpWithoutReferences` (decided
+      // 2026-11-12): a start frame and no reference images.
+      "pixverse-v6-max",
     ])
+  })
+
+  it("the reference-image bar admits nothing new: the explicit opt-in adds exactly pixverse-v6-max", () => {
+    const optedIn = Object.values(MODEL_CATALOG).filter((m) => m.gvpWithoutReferences === true).map((m) => m.id)
+    expect(optedIn).toEqual(["pixverse-v6-max"])
+    const byCapability = GVP_SUPPORTED_PROVIDERS.filter((p) => MODEL_CATALOG[p]?.features?.includes("reference-image") === true)
+    expect(GVP_SUPPORTED_PROVIDERS.filter((p) => !byCapability.includes(p))).toEqual(["pixverse-v6-max"])
+    // The opt-in is never redundant: a model that takes reference images needs none.
+    for (const id of optedIn) {
+      expect(MODEL_CATALOG[id]!.features ?? [], id).not.toContain("reference-image")
+      // Keyframes only and no end anchor: it takes neither a reference video nor an end frame.
+      expect(supportsExtendRender(id), id).toBe(false)
+      expect(supportsEndAnchor(id), id).toBe(false)
+    }
+    // The start-frame-only models the bar keeps out stay out.
+    for (const id of ["wan-i2v", "hailuo-2.3-pro", "hailuo-2.3", "bytedance-pro", "bytedance-pro-fast", "kling-turbo", "minimax"]) {
+      expect(isGvpSupportedProvider(id), id).toBe(false)
+    }
   })
 
   it("lists the default SKU first (dropdowns render this order)", () => {
@@ -81,7 +102,8 @@ describe("GVP_SUPPORTED_PROVIDERS", () => {
       expect(m, `${p} must be in the catalog`).toBeDefined()
       expect(m!.kind).toBe("video")
       expect(m!.modes as readonly string[]).toContain("i2v")
-      expect(m!.features ?? [], `${p} must accept reference images`).toContain("reference-image")
+      // Reference images, or the explicit opt-in for a model that has none.
+      if (m!.gvpWithoutReferences !== true) expect(m!.features ?? [], `${p} must accept reference images`).toContain("reference-image")
       // Segmentable: a model with no declared durations cannot be split, and a
       // silent 4-15s fallback would send lengths the provider rejects.
       expect(segmentDurationsFor(p).length, `${p} must declare durations`).toBeGreaterThan(0)
@@ -107,7 +129,10 @@ describe("GVP_SUPPORTED_PROVIDERS", () => {
         !VIDEO_PROVIDERS_WITHOUT_DISPATCH.has(id) &&
         !MODEL_CATALOG[id]?.features?.includes("keyframes"),
     )
-    expect([...GVP_SUPPORTED_PROVIDERS].sort()).toEqual(withRefLimits.sort())
+    // A model opted in without reference images has no forwarding path by design.
+    const optedIn = GVP_SUPPORTED_PROVIDERS.filter((p) => MODEL_CATALOG[p]?.gvpWithoutReferences === true)
+    expect(optedIn.every((p) => VIDEO_REF_LIMITS_BY_PROVIDER[p] === undefined)).toBe(true)
+    expect(GVP_SUPPORTED_PROVIDERS.filter((p) => !optedIn.includes(p)).sort()).toEqual(withRefLimits.sort())
   })
 
   /**

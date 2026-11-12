@@ -33,6 +33,11 @@ const ON = {
   FLOW_UI_ORIGIN: FLOW_ORIGIN,
   PUBLIC_URL: `https://${LEGACY}`,
 }
+// The pages have their own host, and nothing moves: every host keeps serving every page.
+const OWN_HOST = {
+  FLOW_UI_ORIGIN: FLOW_ORIGIN,
+  PUBLIC_URL: `https://${LEGACY}`,
+}
 
 async function withSite(env, run) {
   const temp = mkdtempSync(join(tmpdir(), "legacy-ui-"))
@@ -204,8 +209,8 @@ test("on the Flow host, the public pages that live on the kept host go back ther
 /** A response as a browser would compare it: status, body and every header but the clock's. */
 const answer = (res) => ({ status: res.status, body: res.body, headers: Object.fromEntries(Object.entries(res.headers).filter(([name]) => name !== "date")) })
 
-test("the settings bridge page exists only while the move is on, framable only by the Flow origin", { skip: !available }, async () => {
-  for (const env of [ON, { ...ON, FLOW_UI_ORIGIN: `${FLOW_ORIGIN}/` }]) {
+test("the settings bridge page exists while the pages have their own host, with or without the move, framable only by the Flow origin", { skip: !available }, async () => {
+  for (const env of [ON, { ...ON, FLOW_UI_ORIGIN: `${FLOW_ORIGIN}/` }, OWN_HOST, { ...ON, LEGACY_UI_HOSTS: "" }, { ...OWN_HOST, PUBLIC_URL: `https://${LEGACY}/` }]) {
     await withSite(env, async (get) => {
       for (const host of [LEGACY, FLOW]) {
         const res = await get("/storage-bridge.html", { host })
@@ -218,8 +223,8 @@ test("the settings bridge page exists only while the move is on, framable only b
   }
 })
 
-test("without the move (unset, or a value the proxy cannot use), /storage-bridge.html answers exactly as an install without the file", { skip: !available }, async () => {
-  for (const env of [{}, { ...ON, FLOW_UI_ORIGIN: "*" }, { ...ON, FLOW_UI_ORIGIN: "https://*.example.test" }, { ...ON, LEGACY_UI_HOSTS: "" }, { ...ON, PUBLIC_URL: `http://${LEGACY}` }]) {
+test("without the pages' own host (unset, or a value the proxy cannot use), /storage-bridge.html answers exactly as an install without the file", { skip: !available }, async () => {
+  for (const env of [{}, { LEGACY_UI_HOSTS: LEGACY, PUBLIC_URL: `https://${LEGACY}` }, { ...ON, FLOW_UI_ORIGIN: "*" }, { ...ON, FLOW_UI_ORIGIN: "https://*.example.test" }, { ...ON, PUBLIC_URL: `http://${LEGACY}` }, { ...ON, PUBLIC_URL: FLOW_ORIGIN }]) {
     await withSite(env, async (get) => {
       for (const host of [LEGACY, FLOW]) {
         const bridge = await get("/storage-bridge.html", { host })
@@ -243,7 +248,6 @@ test("with no setting, or an incomplete one, every host answers as before", { sk
     { LEGACY_UI_HOSTS: LEGACY },
     { FLOW_UI_ORIGIN: FLOW_ORIGIN },
     { LEGACY_UI_HOSTS: LEGACY, FLOW_UI_ORIGIN: "not-an-origin", PUBLIC_URL: `https://${LEGACY}` },
-    { LEGACY_UI_HOSTS: "", FLOW_UI_ORIGIN: FLOW_ORIGIN, PUBLIC_URL: `https://${LEGACY}` },
     // No kept origin, or the Flow origin as the kept one: the move is off, as the browser and the server read it.
     { ...ON, PUBLIC_URL: "" },
     { ...ON, PUBLIC_URL: `http://${LEGACY}` },
@@ -258,6 +262,85 @@ test("with no setting, or an incomplete one, every host answers as before", { sk
           assert.equal(res.status, 200, `${JSON.stringify(env)} ${host}${path} ${logs()}`)
           assert.equal(res.headers.location, undefined, `${JSON.stringify(env)} ${host}${path}`)
         }
+      }
+    })
+  }
+})
+
+test("with the pages' own host alone, nothing redirects: every host serves every page", { skip: !available }, async () => {
+  for (const env of [OWN_HOST, { ...OWN_HOST, LEGACY_UI_HOSTS: " , " }, { ...OWN_HOST, LEGACY_UI_REDIRECT_STATUS: "301" }]) {
+    await withSite(env, async (get, logs) => {
+      for (const host of [LEGACY, FLOW]) {
+        for (const path of [...MOVED, ...KEPT]) {
+          const res = await get(path, { host })
+          assert.equal(res.status, 200, `${JSON.stringify(env)} ${host}${path} ${logs()}`)
+          assert.equal(res.headers.location, undefined, `${host}${path}`)
+        }
+      }
+    })
+  }
+})
+
+const CANONICAL = (origin, path) => `<${origin}${path}>; rel="canonical"`
+
+test("each page search engines may index names its one home as canonical, on both hosts, with or without the move", { skip: !available }, async () => {
+  const kept = `https://${LEGACY}`
+  const homes = [
+    ["/", FLOW_ORIGIN],
+    ["/gallery", FLOW_ORIGIN],
+    ["/tutorials/getting-started", FLOW_ORIGIN],
+    ["/login", kept],
+    ["/signup", kept],
+    ["/app/my-app", kept],
+  ]
+  for (const env of [OWN_HOST, ON, { ...OWN_HOST, FLOW_UI_ORIGIN: `${FLOW_ORIGIN}/`, PUBLIC_URL: `${kept}/` }]) {
+    await withSite(env, async (get, logs) => {
+      for (const host of [LEGACY, FLOW]) {
+        for (const [path, home] of homes) {
+          for (const method of ["GET", "HEAD"]) {
+            const res = await get(path, { host, method })
+            assert.equal(res.headers.link, CANONICAL(home, path), `${JSON.stringify(env)} ${method} ${host}${path} ${logs()}`)
+          }
+        }
+      }
+    })
+  }
+})
+
+test("a canonical never carries the query, and only an address spelled exactly as listed gets one", { skip: !available }, async () => {
+  await withSite(OWN_HOST, async (get) => {
+    assert.equal((await get("/gallery?utm_source=x&tab=new")).headers.link, CANONICAL(FLOW_ORIGIN, "/gallery"))
+    assert.equal((await get("/app/my-app-x1y2z3?run=1", { host: FLOW })).headers.link, CANONICAL(`https://${LEGACY}`, "/app/my-app-x1y2z3"))
+    const none = [
+      // Any character a header could misread, encoded or not.
+      "/tutorials/a%20b", "/tutorials/a%3Eb", "/tutorials/a%22b", "/app/x%2Cy", "/tutorials/%C3%A9",
+      // The proxy's path matchers see these cleaned (dot segments resolved, `//` merged, letter case ignored); the
+      // header would write them as sent.
+      "/tutorials/x%3E;%20rel=%22stylesheet%22,%20%3Chttps:%2F%2Fevil.test%2Fs.css%3E;%20rel=%22stylesheet%22,%20%3Cy%2F..%2F..%2F..%2Fok",
+      "/gallery%2F..%2Fgallery", "/tutorials/x%2F..%2Fy", "//gallery", "/./", "/gallery/.", "/tutorials/./x", "/tutorials/x/..",
+      "/Gallery", "/LOGIN", "/Tutorials/x", "/app/My-App",
+      // Not a page: a file, a section's own root, a deeper path, an empty segment, a trailing slash.
+      "/tutorials/missing.png", "/tutorials/", "/tutorials", "/tutorials/a/b", "/tutorials/a%2Fb", "/app//x", "/gallery/", "/login/",
+    ]
+    for (const path of none) {
+      for (const host of [LEGACY, FLOW]) {
+        const res = await get(path, { host })
+        assert.equal(res.headers.link, undefined, `${host}${path}: ${res.headers.link}`)
+      }
+    }
+  })
+})
+
+test("only the pages search engines may index name a canonical; nothing does without the pages' own host", { skip: !available }, async () => {
+  await withSite(OWN_HOST, async (get) => {
+    for (const path of ["/projects", "/gallery/", "/pricing", "/embed/x", "/present/t", "/settings/api", "/storage-bridge.html", "/robots.txt", "/assets/index-Abc.js", "/v1/x"]) {
+      for (const host of [LEGACY, FLOW]) assert.equal((await get(path, { host })).headers.link, undefined, `${host}${path}`)
+    }
+  })
+  for (const env of [{}, { LEGACY_UI_HOSTS: LEGACY, PUBLIC_URL: `https://${LEGACY}` }, { FLOW_UI_ORIGIN: FLOW_ORIGIN }, { ...OWN_HOST, PUBLIC_URL: FLOW_ORIGIN }, { ...OWN_HOST, FLOW_UI_ORIGIN: "flow.example.test" }]) {
+    await withSite(env, async (get) => {
+      for (const path of ["/", "/gallery", "/tutorials/x", "/login", "/app/x"]) {
+        for (const host of [LEGACY, FLOW]) assert.equal((await get(path, { host })).headers.link, undefined, `${JSON.stringify(env)} ${host}${path}`)
       }
     })
   }

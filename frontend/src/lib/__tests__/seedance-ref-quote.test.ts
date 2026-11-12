@@ -1,4 +1,4 @@
-// @test-watches backend/src/lib/__tests__/fixtures/seedance-reference-auto-quote.json
+// @test-watches backend/src/lib/__tests__/fixtures/seedance-reference-auto-quote.json backend/src/lib/__tests__/fixtures/seedance-draft-edit-quote.json
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -116,6 +116,24 @@ describe("seedanceRefQuoteRequest — Seedance 2.5 reference task type", () => {
     const nodes = fixture.nodes.map((n) => node(n.id, n.type, n.data))
     const g = nodes.find((n) => n.type === "generate-video")!
     expect(g.data).toMatchObject({ referenceTaskType: "reference", duration: VIDEO_DURATION_AUTO })
+    expect(seedanceRefQuoteRequest(g, nodes, fixture.edges)).toStrictEqual(fixture.editorRequest)
+  })
+
+  // The editor's half of a second shared fixture: a Seedance 2.5 DRAFT that
+  // declares The video to edit, fed one 6 s clip. The server's half (the same
+  // backend test file) holds the estimate route's answer to `editorRequest`,
+  // the run's reservation and the workflow estimate to one figure. The request
+  // carries the draft and the declaration: the server resolves both, as the run does.
+  it("a draft edit: the request is the fixture's, key for key, with Draft and the declaration both sent", () => {
+    const here = dirname(fileURLToPath(import.meta.url))
+    const fixture = JSON.parse(readFileSync(join(here, "../../../../backend/src/lib/__tests__/fixtures/seedance-draft-edit-quote.json"), "utf8")) as {
+      nodes: Array<{ id: string; type: string; data: Record<string, unknown> }>
+      edges: WorkflowEdge[]
+      editorRequest: Record<string, unknown>
+    }
+    const nodes = fixture.nodes.map((n) => node(n.id, n.type, n.data))
+    const g = nodes.find((n) => n.type === "generate-video")!
+    expect(g.data).toMatchObject({ referenceTaskType: "edit", draft: true })
     expect(seedanceRefQuoteRequest(g, nodes, fixture.edges)).toStrictEqual(fixture.editorRequest)
   })
 })

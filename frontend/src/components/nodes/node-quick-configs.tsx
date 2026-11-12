@@ -57,6 +57,8 @@ import {
   getAspectRatiosForVideoModel,
   getDurationsForVideoModel,
   getVideoResolutionOptions,
+  gvpVideoResolutionOptions,
+  GVP_RETAINED_RESOLUTION_OPTIONS,
   VIDEO_RESOLUTION_OPTIONS,
   isMenuRowWithheld,
 } from "@/components/editor/config-panels/model-options"
@@ -70,15 +72,18 @@ import {
   SUNO_SEPARATE_TYPES,
   TOPAZ_VIDEO_DEFAULT_RESOLUTION,
   TOPAZ_VIDEO_RESOLUTIONS,
+  NODARO_VIDEO_UPSCALE_PROVIDER,
 } from "@nodaro/shared/models"
-import { TOPAZ_VIDEO_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
-import { upscaleFactorSnapPatch } from "@/lib/upscale-factor-snap"
+import { nodaroVideoUpscaleTierOf } from "@nodaro/render-rules"
+import { TOPAZ_VIDEO_RESOLUTION_LABELS, VIDEO_UPSCALE_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { isTopazVideoUpscaleProvider } from "@/lib/video-utility-estimate"
+import { upscaleFactorSnapPatch } from "@/lib/upscale-factor-snap"
 import { SUNO_SEPARATE_TYPE_LABEL_KEYS } from "@/lib/suno-separate-labels"
 import {
   isSeedanceDraftCapable,
   SEEDANCE_DRAFT_RESOLUTION,
-  IMAGE_MODEL_ROLE_DEFAULTS
+  IMAGE_MODEL_ROLE_DEFAULTS,
+  videoUpscaleResolutionsFor,
 } from "@nodaro/shared/model-catalog"
 import { SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin } from "@nodaro/shared/entities"
 import { SCENE3D_LIMITS } from "@nodaro/shared/scene3d"
@@ -625,6 +630,8 @@ const videoUpscaleProviderControl = (): QuickConfigControl => ({
     { value: "veo-1080p", label: "VEO 1080p" },
     { value: "veo-4k", label: "VEO 4K" },
     { value: "seedance-2-5-hd", label: "Seedance 2.5 HD (from draft)" },
+    // Withheld (like every model row) where this deployment does not serve it.
+    { value: NODARO_VIDEO_UPSCALE_PROVIDER, label: tx("vidcfg.nodaroUpscale") },
   ], (v, limits) => lockedVideoModel(limits, v)),
 })
 /** Extend Video model — mirrors video-configs.tsx `ExtendVideoConfig`: each
@@ -633,10 +640,14 @@ const extendVideoProviderControl = (): QuickConfigControl => ({
   ...providerControl(EXTEND_VIDEO_MODELS, "veo-extend"),
   options: (_data) => withFreeVideoLocks(toOptions(EXTEND_VIDEO_MODELS), (v, limits) => lockedVideoModel(limits, v, EXTEND_VIDEO_ROW_LOCK)),
 })
-/** video-upscale target resolution — Topaz's lever only (the shared
- *  `TOPAZ_VIDEO_RESOLUTIONS`, as `VideoUpscaleConfig` lists it): `[]` on every
- *  other provider, so the strip hides it and clears the stale value. Choosing
- *  one clears the old 1×/2×/4× factor, which the run reads only without it. */
+/** video-upscale target resolution — Topaz's lever (the shared
+ *  `TOPAZ_VIDEO_RESOLUTIONS`, as `VideoUpscaleConfig` lists it) and Nodaro
+ *  Video Upscale's (its catalog entry's 1080p / 2K / 4K): `[]` on every other
+ *  provider, so the strip hides it and clears the stale value. A stale Topaz
+ *  value snaps to the first option, as every control does; a Nodaro Video
+ *  Upscale one to its default tier (`nodaroVideoUpscaleTierOf`, the catalog's).
+ *  Choosing one clears the old 1×/2×/4× factor, which the run reads only
+ *  without it. */
 const videoUpscaleResolutionControl = (): QuickConfigControl => ({
   field: "targetResolution", ariaLabel: tx("field.resolution"), icon: Maximize2,
   defaultValue: TOPAZ_VIDEO_DEFAULT_RESOLUTION,
@@ -644,7 +655,12 @@ const videoUpscaleResolutionControl = (): QuickConfigControl => ({
   options: (data) =>
     isTopazVideoUpscaleProvider(data.provider)
       ? TOPAZ_VIDEO_RESOLUTIONS.map((r) => ({ value: r, label: TOPAZ_VIDEO_RESOLUTION_LABELS[r] }))
-      : [],
+      : data.provider === NODARO_VIDEO_UPSCALE_PROVIDER
+        ? videoUpscaleResolutionsFor(NODARO_VIDEO_UPSCALE_PROVIDER)
+          .map((r) => ({ value: r, label: (VIDEO_UPSCALE_RESOLUTION_LABELS as Readonly<Record<string, string>>)[r] ?? r }))
+        : [],
+  // A value that is no option falls back to the first option (Topaz's rule).
+  snap: (value, data) => (data.provider === NODARO_VIDEO_UPSCALE_PROVIDER ? nodaroVideoUpscaleTierOf(value) : ""),
 })
 /** Video Depth levers. The valid set per provider comes from the shared
  *  contract (`videoDepthLevers` / `videoDepthColormaps`) — the same functions
@@ -1107,11 +1123,14 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       icon: Maximize2,
       // Provider-aware: seedance-2 exposes 480p/720p/1080p/4k, fast/mini stop
       // at 720p. Same VIDEO_RESOLUTION_OPTIONS source the config panel's
-      // fail-safe useEffect reads, so the two can't drift.
+      // fail-safe useEffect reads, so the two can't drift. Only the tiers a
+      // pro run renders as named are offered; a node already carrying one it
+      // renders as another (Vidu Q4's 540p) keeps it and runs as before.
       options: (data) => {
         const provider = typeof data.provider === "string" ? data.provider : "seedance-2"
-        return VIDEO_RESOLUTION_OPTIONS[provider] ?? []
+        return gvpVideoResolutionOptions(provider) ?? []
       },
+      retainedOptions: GVP_RETAINED_RESOLUTION_OPTIONS,
     },
   ],
   // ── Edit Video Pro (model only — no resolution lever, both are

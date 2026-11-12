@@ -23,11 +23,17 @@ export const DEFAULT_HOUSE_MODEL_POLL_INTERVAL_MS = 5_000
 export const HOUSE_MODEL_TIMEOUT_MS: Readonly<Record<string, number>> = Object.freeze({
   // Nodaro Image Upscale: an 8x of a large image is the longest run.
   "nodaro-image-upscale": 12 * MIN,
+  // Nodaro Video Upscale: generous for its longest, largest run (a 60 s clip to
+  // 4K) with room for a queue, and it leaves the rest of the worker's 90-minute
+  // node budget to re-host and thumbnail the result.
+  "nodaro-video-upscale": 60 * MIN,
 })
 
 /** Per-id pause between two status reads, in ms. */
 export const HOUSE_MODEL_POLL_INTERVAL_MS: Readonly<Record<string, number>> = Object.freeze({
   "nodaro-image-upscale": 5_000,
+  // A run of minutes: a finer check only adds requests.
+  "nodaro-video-upscale": 10_000,
 })
 
 /** The poll budget and cadence a run of `id` uses. */

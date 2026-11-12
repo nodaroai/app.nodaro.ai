@@ -3,7 +3,7 @@ import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes, speakerFramesEstimateBlocks } from "@/lib/apply-edl-estimate";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
-import { EACH_WIRE_FAN_OUT as SHARED_EACH_WIRE_FAN_OUT, nodeFanOut, PRODUCER_FAN_OUT as SHARED_PRODUCER_FAN_OUT, renderEstimateCreditId, type ProducerFanOut } from "@nodaro/render-rules";
+import { EACH_WIRE_FAN_OUT as SHARED_EACH_WIRE_FAN_OUT, gvpRenderResolution, gvpSegmentAudio, nodeFanOut, PRODUCER_FAN_OUT as SHARED_PRODUCER_FAN_OUT, renderEstimateCreditId, type ProducerFanOut } from "@nodaro/render-rules";
 import { dubbingQuotedMinutesOf, maskCompositePricingUnits, videoOverlayPricingUnits, videoUpscalePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
@@ -367,10 +367,12 @@ function gvpIsPerSecPriced(provider: string): boolean {
  *  exactly one plain image-to-video generation, through the same canonical
  *  identifier the backend's `segmentCost` builds. 0 while the cache is cold
  *  (the badge fills in once `useModelCredits` resolves) rather than a
- *  borrowed number from another model. */
-function gvpSegmentCost(provider: string, resolution: string, durationSec: number): number {
+ *  borrowed number from another model. The audio is the backend's
+ *  (`gvpSegmentAudio`): what the model renders from the node's
+ *  `generateAudio` (on when unset) — the same row the run reserves. */
+function gvpSegmentCost(provider: string, resolution: string, durationSec: number, generateAudio: boolean | undefined): number {
   const identifier = buildVideoCreditModelIdentifier(
-    provider, durationSec, false, "image-to-video", undefined, resolution, false,
+    provider, durationSec, gvpSegmentAudio(generateAudio), "image-to-video", undefined, resolution, false,
   )
   return getCachedCredits(identifier) ?? getCachedCredits(provider) ?? 0
 }
@@ -425,7 +427,10 @@ export function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData):
     if (quoted!==undefined) return quoted
   }
   const provider = data.provider || "seedance-2"
-  const resolution = data.resolution || "720p"
+  // The tier the run renders and is billed at (the pro pricing's own rule): a
+  // stored tier the model renders as another (Vidu Q4's 540p, a 360p written
+  // into JSON) is quoted at the tier it runs at, never at its own row.
+  const resolution = gvpRenderResolution(provider, data.resolution || "720p")
   const duration = data.duration ?? 8
   const explicit =
     Array.isArray(data.segmentDurations) && data.segmentDurations.length > 0
@@ -441,7 +446,7 @@ export function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData):
     // backend's single-mode path uses, so the cached composite (when warm)
     // tracks the real reservation exactly for the common ≤15s case.
     const identifier = buildVideoCreditModelIdentifier(
-      provider, split.clampedD, false, "text-to-video", undefined, resolution, false,
+      provider, split.clampedD, gvpSegmentAudio(data.generateAudio), "text-to-video", undefined, resolution, false,
     )
     const cached = getCachedCredits(identifier)
     if (cached !== undefined) return cached
@@ -477,7 +482,7 @@ export function estimateGenerateVideoProCredits(data: GenerateVideoProNodeData):
     // slider's own limit.
     const n = Math.min(GVP_MAX_SEGMENTS, Math.max(1, Math.ceil(split.clampedD / maxSeg)))
     const per = Math.max(1, Math.round(split.clampedD / n))
-    return fee + n * gvpSegmentCost(provider, resolution, per)
+    return fee + n * gvpSegmentCost(provider, resolution, per, data.generateAudio)
   }
 
   const noRefPerSec = gvpPerSecRate(provider, resolution, false)
@@ -1148,11 +1153,12 @@ export interface RunCreditLine {
   readonly credits: number;
   /** `credits` includes a metered LLM call's ESTIMATE (charged its actual usage after the run): shown `≈N`. */
   readonly estimate?: true;
-  /** The node's metered LLM call is on a model the server refuses to price (`llm_model_unpriced`):
+  /** The node's metered LLM call is on a model the server refuses to price (`llm_model_unpriced`),
+   *  or it is a Nodaro Video Upscale of a clip the graph knows is past its 60-second limit:
    *  it adds nothing here — never its tier's figure — and the run itself is refused. Every total
    *  this line is part of then says it is unpriced (`runLinesUnpriced`). */
   readonly unpriced?: true;
-  /** With `unpriced`: the server's sentence for the refusal (`llm_model_unpriced`'s message), when it gave one. */
+  /** With `unpriced`: the sentence for the refusal (`llm_model_unpriced`'s message from the server, or the clip's length limit), when there is one. */
   readonly unpricedMessage?: string;
 }
 

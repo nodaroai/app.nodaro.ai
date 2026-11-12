@@ -101,6 +101,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `kling-4` | `kling-4.0/reference-to-video` (bespoke `runKling4`, body from `kling4.ts`) | [kling 4.0 reference](https://docs.kie.ai/market/kling/v4-reference-to-video.md) |
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (bespoke `runKling4`) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
 | `kling-4-flash` | `kling-4.0/flash-reference-to-video` (bespoke `runKling4`; swaps to `kling-4.0/flash-keyframe-to-video` — `KLING_4_FLASH_KEYFRAME_MODEL` — for a start frame alone, see `kling4FlashEndpoint`) | [flash reference](https://docs.kie.ai/market/kling/v4-flash-reference-to-video.md) / [flash keyframe](https://docs.kie.ai/market/kling/v4-flash-keyframe-to-video.md) |
+| `pixverse-v6-max` | `pixverse-v6-max/image-to-video` (bespoke `runPixverseV6Max`, body from `pixverse-v6-max.ts`; a run with no start frame takes the t2v config's `pixverse-v6-max/text-to-video`) | [pixverse v6 max i2v](https://docs.kie.ai/market/pixverse/v6-max-image-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (via `runGeminiOmni`; the pro sibling's id is the bare `gemini-omni-video`) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `gemini-omni-flash-1-2` | `google/gemini-omni-flash-1-2` (bespoke `runGeminiOmni12`, body from `gemini-omni-12.ts`) | [gemini omni flash 1.2](https://docs.kie.ai/market/google/gemini-omni-flash-1-2.md) |
 | `gemini-omni-video` | `gemini-omni-video` (via `runGeminiOmni`; the pro sibling of flash) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
@@ -132,6 +133,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `kling-4` | `kling-4.0/reference-to-video` (ONE KIE id serves both modes) | [kling 4.0 reference](https://docs.kie.ai/market/kling/v4-reference-to-video.md) |
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (ONE KIE id serves both modes) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
 | `kling-4-flash` | `kling-4.0/flash-reference-to-video` (text-only runs; the keyframe endpoint needs a start frame) | [flash reference](https://docs.kie.ai/market/kling/v4-flash-reference-to-video.md) |
+| `pixverse-v6-max` | `pixverse-v6-max/text-to-video` (bespoke `runPixverseV6Max`; the i2v config carries the image endpoint) | [pixverse v6 max t2v](https://docs.kie.ai/market/pixverse/v6-max-text-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (ONE KIE id serves both modes) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `gemini-omni-flash-1-2` | `google/gemini-omni-flash-1-2` (ONE KIE id serves every mode) | [gemini omni flash 1.2](https://docs.kie.ai/market/google/gemini-omni-flash-1-2.md) |
 | `gemini-omni-video` | `gemini-omni-video` (ONE KIE id serves both modes) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
@@ -387,6 +389,60 @@ generic frame normalization in `imageToVideo` for the same reason.
   reports `GROK_VIDEO_15_RATE_USD_PER_SEC` × seconds as the provider cost and
   writes a credit-audit row.
 
+### PixVerse V6 Max wire notes (`pixverse-v6-max`, bespoke `runPixverseV6Max`)
+
+ONE Nodaro id over two KIE ids, registered in BOTH model maps under that id:
+`KIE_VIDEO_MODELS["pixverse-v6-max"]` is `pixverse-v6-max/image-to-video`,
+`KIE_TEXT_TO_VIDEO_MODELS["pixverse-v6-max"]` is `pixverse-v6-max/text-to-video`.
+The pure `buildPixverseV6MaxRequest` (`pixverse-v6-max.ts`) builds both bodies
+and names the endpoint: a start frame → image-to-video, none → text-to-video.
+The i2v dispatch sits AFTER the shared frame normalization (our 2048 px / 10 MB
+/ JPEG-PNG-WebP step is inside KIE's 10,000 px / 20 MB / JPG-PNG-WebP limits),
+and an `imageToVideo` call with no frame falls to the t2v config.
+
+- Explicit allow-list on both bodies (`PIXVERSE_V6_MAX_*_FIELDS`): `prompt`
+  (1-5000; `applyVideoNegativePrompt` already clamps it and folds a negative in
+  as "Avoid: …"; an empty one is sent as the platform default),
+  `image_urls` (i2v only, exactly one — the start frame), `aspect_ratio` (t2v
+  only — the catalog's eight, anything else snapped to the nearest, 16:9 for no
+  shape), `quality` (OUR `resolution`, through `normalizePixverseV6MaxQuality`:
+  lowercase 360p / 540p / 720p / 1080p, anything else → 720p — KIE requires a
+  quality and has no default), INTEGER `duration` 1-15 (default 5),
+  `generate_audio_switch`, `seed` (only 0-2147483647; a route's `-1` is left
+  out). Never `resolution`, `negative_prompt`, an end frame or reference lists
+  — the runner logs ignored references.
+- **Audio is cost-affecting.** `VIDEO_AUDIO_CAPABILITY` `field:
+  "generateAudioSwitch"`, `affectsCost: true`, `defaultOn: true`,
+  `readsGenerateAudio: true`. KIE's default is OFF, so the builder ALWAYS sends
+  `generate_audio_switch: true` and then `applyVideoAudioToggle` overrides it
+  from `videoAudioIntent` — `sound`, else `generateAudio` (the Generate Video
+  Pro engine sends only `generateAudio`; decided 2026-11-12). Every pricing path
+  resolves the SAME fields through the same function (the credit builder takes
+  `{ sound, generateAudio }`), so the switch and the `:audio` row cannot
+  disagree. An intent-less request renders and bills audio on (decided
+  2026-11-11). `extraParams: { generate_audio_switch: true }` on both configs is
+  declarative only (the video-audio-capability guard reads it).
+- **Generate Video Pro** admits it through the catalog's `gvpWithoutReferences`
+  (keyframes only): segment references and any end frame reach the runner and
+  are dropped there (logged); a stored "reference" anchor choice is sent as
+  Auto (`resolveGvpAnchorWire`). Its segments price through `gvpSegmentAudio` (`@nodaro/render-rules`):
+  the provider fields the plugin toolkit hands a segment
+  (`pluginVideoAudioRequest`, the same mapping `toProviderOptions` uses) for
+  the pricing call's `generateAudio`, else on (the engine's own default), read
+  by the resolver the runner renders from — so every Pro model is charged the
+  audio it renders (Kling 3.0, which reads only `sound`, its sound row). The
+  prompt's `@image_N` mentions lose their `@` (`image-mentions.ts`, shared
+  with Grok Imagine Video 1.5): no reference image is sent for them to name.
+- **Billing:** per second by quality and audio state, the same on both
+  endpoints (KIE 4.8 / 7.2 / 8.8 / 17.6 cr/s silent, 7.2 / 8.8 / 12 / 22.4 with
+  audio, at 360p / 540p / 720p / 1080p, read 2026-11-11). Seeded
+  `pixverse-v6-max:<N>s:<quality>` and `…:<quality>:audio` rows, the bare id =
+  5 s @720p with audio. The runner reports
+  `PIXVERSE_V6_MAX_RATE_USD_PER_SEC` × seconds as the provider cost, names the
+  `resolution` / `audio` egress dimensions itself (`quality` is not a size on
+  the image lanes, so the shared reader leaves it alone) and writes a
+  credit-audit row.
+
 ### Gemini Omni Flash 1.2 wire notes (`gemini-omni-flash-1-2`, bespoke `runGeminiOmni12`)
 
 One KIE id, four modes picked by the inputs. It is in `GEMINI_OMNI_PROVIDERS` for
@@ -457,7 +513,7 @@ resolved value; the i2v, t2v and voiced-video handlers pass it on as
 `resolveSeedance2Inputs`, on the body as it will be sent, only when ALL hold:
 the model's catalog `referenceTaskTypes` lists the value
 (`listedSeedanceTaskType` — `seedance-2-5` today; never a hand-written model
-id), the run is not a draft, the body's `reference_*_urls` are the media the
+id), the body's `reference_*_urls` are the media the
 type needs (`seedanceTaskTypeFitsMedia`, the resolver's own rule: `edit` and
 `extend` need `reference_video_urls`, since both act on a reference video,
 while `reference` takes any reference media), `first_frame_url` is not on the
@@ -466,10 +522,11 @@ run still takes it), and an `edit` or `extend` body is in its shape (`edit`:
 `isSeedance2EditModeInput`, `adaptive` + `-1`; `extend`: `adaptive`). A route
 request always is; one that skipped the routes and is not gets no key and one
 warning. It is NEVER sent on a text-only body or in either frame mode (KIE:
-"only supported in multimodal reference tasks"), on a draft, on an
+"only supported in multimodal reference tasks"), on an
 `edit`/`extend` without a reference video or out of its shape, or on another
 model; no option means no key, so the body is byte-identical to the
-undeclared one. **An edit-mode re-send drops the declaration:** when the
+undeclared one. A draft (`draft: true`) is no exception: it declares exactly as
+the same request without Draft, and its 1080p finalize re-renders that take. **An edit-mode re-send drops the declaration:** when the
 provider answers with its edit-mode words it has overridden the declared type,
 so both re-send lanes — the retry above and the reconcile resend
 (`lib/reconcile/seedance-edit-resubmit.ts`) — send

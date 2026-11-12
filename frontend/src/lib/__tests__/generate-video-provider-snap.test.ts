@@ -41,6 +41,17 @@ describe("generateVideoProviderSnap — every model ends on values it accepts", 
     expect(generateVideoProviderSnap({}, "gemini-omni-flash-1-2")).toMatchObject({ duration: 8, resolution: "720p" })
   })
 
+  it("PixVerse V6 Max opens on 5s at 720p, never its 1s / 360p first entries", () => {
+    expect(generateVideoProviderSnap({}, "pixverse-v6-max")).toMatchObject({ duration: 5, resolution: "720p" })
+    // A value it offers is kept; a stale one is moved onto what it renders.
+    expect(generateVideoProviderSnap({ resolution: "540p", duration: 9 }, "pixverse-v6-max")).toEqual({})
+    expect(generateVideoProviderSnap({ resolution: "4k", duration: 9 }, "pixverse-v6-max")).toMatchObject({ resolution: "720p" })
+    // A ratio the text-to-video endpoint does not take is snapped; 21:9 and 2:3 are kept.
+    expect(generateVideoProviderSnap({ resolution: "720p", duration: 5, aspectRatio: "21:9" }, "pixverse-v6-max")).toEqual({})
+    expect(generateVideoProviderSnap({ resolution: "720p", duration: 5, aspectRatio: "2:3" }, "pixverse-v6-max")).toEqual({})
+    expect(generateVideoProviderSnap({ resolution: "720p", duration: 5, aspectRatio: "adaptive" }, "pixverse-v6-max")).toMatchObject({ aspectRatio: "16:9" })
+  })
+
   it("narrows a 15 s source trim for the Omni models that allow 10 s, and only then", () => {
     expect(generateVideoProviderSnap({ videoTrimStart: 2, videoTrimEnd: 17 }, "gemini-omni-flash")).toMatchObject({ videoTrimEnd: 12 })
     expect(generateVideoProviderSnap({ videoTrimStart: 2, videoTrimEnd: 17 }, "gemini-omni-flash-1-2")).not.toHaveProperty("videoTrimEnd")

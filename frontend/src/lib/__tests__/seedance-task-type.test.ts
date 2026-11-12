@@ -79,11 +79,21 @@ describe("seedanceTaskTypeRunDuration", () => {
     expect(runDuration({ referenceTaskType: "reference" }, VIDEO_DURATION_AUTO, [6])).toBe(VIDEO_DURATION_AUTO)
   })
 
-  it("Edit or Extend without a reference video, on a draft, or on another model moves nothing", () => {
+  it("Edit or Extend without a reference video, or on another model, moves nothing", () => {
     expect(runDuration({ referenceTaskType: "edit" }, 5, [])).toBe(5)
     expect(runDuration({ referenceTaskType: "extend" }, VIDEO_DURATION_AUTO, [])).toBe(VIDEO_DURATION_AUTO)
-    expect(runDuration({ referenceTaskType: "edit", draft: true }, 5, [6])).toBe(5)
     expect(runDuration({ referenceTaskType: "edit" }, 5, [6], { provider: "seedance-2" })).toBe(5)
+  })
+
+  it("a draft runs at the length the same node without Draft runs at", () => {
+    expect(runDuration({ referenceTaskType: "edit", draft: true }, 5, [6])).toBe(VIDEO_DURATION_AUTO)
+    expect(runDuration({ referenceTaskType: "extend", draft: true }, VIDEO_DURATION_AUTO, [6])).toBe(DEFAULT_LENGTH)
+    for (const [extra, duration, clips] of [
+      [{ referenceTaskType: "edit" }, 5, [6]], [{ referenceTaskType: "edit" }, 5, [3]],
+      [{ referenceTaskType: "extend" }, VIDEO_DURATION_AUTO, [6]], [{ referenceTaskType: "reference" }, VIDEO_DURATION_AUTO, [6]],
+    ] as Array<[Record<string, unknown>, number, number[]]>) {
+      expect(runDuration({ ...extra, draft: true }, duration, clips)).toBe(runDuration(extra, duration, clips))
+    }
   })
 })
 
@@ -115,12 +125,21 @@ describe("seedanceTaskTypeAsRun — what the run declares and the length it runs
     expect(asRun({ referenceTaskType: "reference" }, VIDEO_DURATION_AUTO, [6])).toStrictEqual({ taskType: "reference", duration: VIDEO_DURATION_AUTO })
   })
 
-  it("nothing is declared without the setting, without a clip, on a draft or on another model", () => {
+  it("nothing is declared without the setting, without a clip or on another model", () => {
     expect(asRun({}, 5, [6])).toStrictEqual({ taskType: undefined, duration: 5 })
     expect(asRun({ referenceTaskType: "auto" }, 5, [6])).toStrictEqual({ taskType: undefined, duration: 5 })
     expect(asRun({ referenceTaskType: "edit" }, 5, [])).toStrictEqual({ taskType: undefined, duration: 5 })
-    expect(asRun({ referenceTaskType: "edit", draft: true }, 5, [6])).toStrictEqual({ taskType: undefined, duration: 5 })
     expect(asRun({ referenceTaskType: "edit" }, 5, [6], "seedance-2")).toStrictEqual({ taskType: undefined, duration: 5 })
+  })
+
+  it("a draft declares exactly as the same node without Draft", () => {
+    expect(asRun({ referenceTaskType: "edit", draft: true }, 5, [6])).toStrictEqual({ taskType: "edit", duration: VIDEO_DURATION_AUTO })
+    for (const type of ["edit", "extend", "reference"]) {
+      for (const duration of [5, VIDEO_DURATION_AUTO]) {
+        expect(asRun({ referenceTaskType: type, draft: true }, duration, [6]), `${type} ${duration}`)
+          .toStrictEqual(asRun({ referenceTaskType: type }, duration, [6]))
+      }
+    }
   })
 
   it("seedanceTaskTypeRunDuration is its length, for the clips wired in the graph", () => {

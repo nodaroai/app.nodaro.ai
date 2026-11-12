@@ -1,4 +1,4 @@
-// @test-units-by-name prices only the three video run routes it names (text-to-video, generate-video, video-to-video)
+// @test-units-by-name prices only the video run routes it names (text-to-video, generate-video, video-to-video, video-upscale)
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { z } from "zod"
@@ -481,6 +481,51 @@ describe("POST /v1/quote refusals", () => {
       deniedModels.delete(DEFAULT_VIDEO_PROVIDER)
       delete process.env.NODARO_SURFACE_PROFILE
       __resetSurfaceProfileCacheForTests()
+    }
+  })
+
+  it("answers a house model this deployment does not serve as the run does: the same 403 every refused model gets, in the route's own sentence", async () => {
+    // The real surface-deny denies an unserved house model; this stub's set stands in for it.
+    deniedModels.add("nodaro-video-upscale")
+    try {
+      const app = await buildApp()
+      const { videoUpscaleRoutes } = await import("../../../routes/video-upscale.js")
+      await videoUpscaleRoutes(app)
+      const params = { videoUrl: CLIP, provider: "nodaro-video-upscale", targetResolution: "2k" }
+      const quote = await app.inject({ method: "POST", url: "/v1/quote", payload: { type: "video-upscale", params } })
+      const run = await app.inject({ method: "POST", url: "/v1/video-upscale", payload: params })
+      expect(quote.statusCode).toBe(403)
+      expect(quote.json().error).toEqual({
+        code: "model_not_available",
+        message: "Nodaro Video Upscale is not available on this server. Choose Topaz to upscale this clip. You were not charged.",
+      })
+      expect(run.statusCode).toBe(403)
+      expect(run.json().error).toEqual(quote.json().error)
+      expect(reserveSpy).not.toHaveBeenCalled()
+      await app.close()
+    } finally {
+      deniedModels.delete("nodaro-video-upscale")
+    }
+  })
+
+  it("answers an unserved house model with no usable link as the run does too: the guard's 403, never the body's 400", async () => {
+    deniedModels.add("nodaro-video-upscale")
+    try {
+      const app = await buildApp()
+      const { videoUpscaleRoutes } = await import("../../../routes/video-upscale.js")
+      await videoUpscaleRoutes(app)
+      for (const params of [{ provider: "nodaro-video-upscale" }, { provider: "nodaro-video-upscale", videoUrl: "not a link" }]) {
+        const quote = await app.inject({ method: "POST", url: "/v1/quote", payload: { type: "video-upscale", params } })
+        const run = await app.inject({ method: "POST", url: "/v1/video-upscale", payload: params })
+        expect(quote.statusCode, JSON.stringify(params)).toBe(403)
+        expect(quote.json().error.code).toBe("model_not_available")
+        expect(run.statusCode, JSON.stringify(params)).toBe(403)
+        expect(run.json().error).toEqual(quote.json().error)
+      }
+      expect(reserveSpy).not.toHaveBeenCalled()
+      await app.close()
+    } finally {
+      deniedModels.delete("nodaro-video-upscale")
     }
   })
 

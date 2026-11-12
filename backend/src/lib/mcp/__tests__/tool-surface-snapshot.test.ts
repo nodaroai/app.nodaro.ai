@@ -1502,6 +1502,11 @@ const MODIFY_IMAGE_MASK_BYTES = 238
 // added, so the fixture does NOT move. Measured by this suite: 523_128 total − 522_874 = 254 B, all
 // on generate_video (9_470 → 9_724 B, under the per-tool budget).
 const SEEDANCE_REFERENCE_TASK_TYPE_ARG_BYTES = 254
+// RAISED 2026-11-11 by video_upscale's `nodaro-video-upscale` model (its line in the
+// description, its target_resolution values 1080p / 2k / 4k, and the two source arguments
+// naming it), and nothing else. No tool was added, so the fixture does NOT move. Measured by
+// this suite: 523_307 total − 522_874 = 433 B, all on video_upscale.
+const NODARO_VIDEO_UPSCALE_BYTES = 433
 // RAISED 2026-11-11 by Seedream 5.5 (`seedream-5-5` t2i + `seedream-5-5-i2i`), and nothing else:
 // it widens the model lists generate_image / modify_image / image_to_image already carry, adds
 // `1.5K` (its middle size) to generate_image's resolution note and image_to_image's resolution
@@ -1521,6 +1526,11 @@ const SEEDREAM_5_5_TOTAL_BYTES = 89
 // the reference-audio clause gained "if it has 2-4 images" (the clip goes to character N only when
 // that character can carry a voice): 138 B.
 const KLING_4_FLASH_MODELS_BYTES = 138
+// RAISED 2026-11-12 by PixVerse V6 Max (`pixverse-v6-max`) and nothing else: the id joins the
+// catalog-derived model lists of generate_video and animate_image (", pixverse-v6-max", 17 B each).
+// No tool was added, so the fixture does NOT move. Measured by this suite on the same tree with and
+// without it: 524_890 total − 524_856 = 34 B.
+const PIXVERSE_V6_MAX_MODELS_BYTES = 34
 
 // RAISED 2026-11-11 by MiniMax H3 Image, and nothing else: `minimax-h3-image` joins
 // generate_image's derived model list, and its reference-image limit names the model beside
@@ -1545,6 +1555,12 @@ const SPLIT_INTO_LAYERS_TOOL_BYTES = 2_911
 // and nothing else. No tool was added, so the fixture does NOT move. Measured by this suite:
 // 523_132 total − 522_874 = 258 B, all on edit_image.
 const NODARO_IMAGE_UPSCALE_BYTES = 258
+
+// RAISED 2026-11-12 by FLUX Fill Pro's model-catalog entry (a deployment's model allow list can
+// now name it): `flux-fill` joins the catalog-derived model lists of image_to_image and
+// modify_image ("flux-fill, " in each), and nothing else. No tool was added, so the fixture does
+// NOT move. Measured by this suite: 528_052 total − 528_030 = 22 B.
+const FLUX_FILL_CATALOG_ENTRY_BYTES = 22
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES,
@@ -1735,11 +1751,14 @@ export const TOOL_WIRE_BUDGET = {
     I2I_MASK_MODELS_BYTES +
     MODIFY_IMAGE_MASK_BYTES +
     SEEDANCE_REFERENCE_TASK_TYPE_ARG_BYTES +
+    NODARO_VIDEO_UPSCALE_BYTES +
     SEEDREAM_5_5_TOTAL_BYTES +
     VIDEO_OVERLAY_VIDEO_LAYERS_BYTES +
     KLING_4_FLASH_MODELS_BYTES +
+    PIXVERSE_V6_MAX_MODELS_BYTES +
     SPLIT_INTO_LAYERS_TOOL_BYTES +
-    NODARO_IMAGE_UPSCALE_BYTES,
+    NODARO_IMAGE_UPSCALE_BYTES +
+    FLUX_FILL_CATALOG_ENTRY_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

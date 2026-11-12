@@ -9,9 +9,10 @@
  *   poll budget by its margin, and stays inside the reconcile envelope
  *   (18 attempts on the 5-minute cron), so the cron can never take a job over
  *   while its worker still polls, and a job is still exhausted in time.
- * - The shipped catalog's one house model, Nodaro Image Upscale, is the only
- *   model the house rule reaches: no other model is denied by it, only its
- *   own recommendation changes, only its jobs count under the house name.
+ * - The shipped catalog's house models, Nodaro Image Upscale and Nodaro Video
+ *   Upscale, are the only models the house rule reaches: no other model is
+ *   denied by it, only their own recommendations change, only their jobs
+ *   count under the house name.
  */
 import { describe, it, expect, vi } from "vitest"
 import { LLM_MODELS } from "@nodaro/shared/llm-models"
@@ -119,26 +120,27 @@ describe("the house-model reconcile kind", () => {
   })
 })
 
-describe("the shipped catalog's one house model, and nothing else, is reached by the house rule", () => {
+describe("the shipped catalog's house models, and nothing else, are reached by the house rule", () => {
   const HOUSE = "nodaro-image-upscale"
+  const HOUSES: ReadonlySet<string> = new Set([HOUSE, "nodaro-video-upscale"])
 
-  it("the shipped catalog marks exactly Nodaro Image Upscale own-label", () => {
-    expect([...ownLabelModelIds()]).toEqual([HOUSE])
+  it("the shipped catalog marks exactly Nodaro Image Upscale and Nodaro Video Upscale own-label", () => {
+    expect([...ownLabelModelIds()].sort()).toEqual([...HOUSES].sort())
   })
 
-  it("where it is not served, the house rule denies it and no other catalog or LLM model", () => {
+  it("where they are not served, the house rule denies them and no other catalog or LLM model", () => {
     _resetPluginServicesForTests()
     for (const id of [...Object.keys(MODEL_CATALOG), ...LLM_MODELS.map((m) => m.id)]) {
-      expect(isHouseModelUnserved(id), id).toBe(id === HOUSE)
+      expect(isHouseModelUnserved(id), id).toBe(HOUSES.has(id))
     }
   })
 
-  it("where it is not served, only its own recommendation changes; every other is returned as it came", () => {
+  it("where they are not served, only their own recommendations change; every other is returned as it came", () => {
     _resetPluginServicesForTests()
     const out = recommendationsServedHere(MODEL_RECOMMENDATIONS)
-    const untouched = MODEL_RECOMMENDATIONS.filter((r) => !r.modelIds.includes(HOUSE))
+    const untouched = MODEL_RECOMMENDATIONS.filter((r) => !r.modelIds.some((id) => HOUSES.has(id)))
     expect(untouched.every((r) => out.includes(r))).toBe(true)
-    expect(out.flatMap((r) => r.modelIds)).not.toContain(HOUSE)
+    for (const house of HOUSES) expect(out.flatMap((r) => r.modelIds)).not.toContain(house)
   })
 
   it("the orchestrator never asks its API for a node that names no house model: a plain build neither asks nor waits", async () => {
@@ -152,21 +154,25 @@ describe("the shipped catalog's one house model, and nothing else, is reached by
       expect(built.jobName).toBeTruthy()
       const upscale = { id: "n-2", type: "upscale-image", data: { provider: "recraft-upscale", upscaleFactor: "4" } }
       await buildPayloadWithSourceSize(upscale, "job-2", { imageUrl: "https://in.example/a.png" }, undefined, { nodes: [upscale], edges: [], nodeStates: {} })
+      const video = { id: "n-3", type: "video-upscale", data: { provider: "topaz", targetResolution: "1080p" } }
+      await buildPayloadWithSourceSize(video, "job-3", { videoUrl: "https://in.example/a.mp4" }, undefined, { nodes: [video], edges: [], nodeStates: {} })
       expect(ask).not.toHaveBeenCalled()
     } finally {
       resetOwnLabelModelIdsForTests()
     }
   })
 
-  it("a node that names a house model asks once before its build, and the next build reuses the answer", async () => {
+  it.each([
+    { id: "n-1", type: "upscale-image", data: { provider: HOUSE }, inputs: { imageUrl: "https://in.example/a.png" } },
+    { id: "n-1", type: "video-upscale", data: { provider: "nodaro-video-upscale" }, inputs: { videoUrl: "https://in.example/a.mp4" } },
+  ])("a $type node that names a house model asks once before its build, and the next build reuses the answer", async ({ inputs, ...named }) => {
     _resetPluginServicesForTests()
     resetOwnLabelModelIdsForTests()
     const ask = vi.fn(async () => [] as string[])
     setHouseModelsServedSource(ask)
     try {
-      const named = { id: "n-1", type: "upscale-image", data: { provider: HOUSE } }
       const build = (jobId: string) =>
-        buildPayloadWithSourceSize(named, jobId, { imageUrl: "https://in.example/a.png" }, undefined, { nodes: [named], edges: [], nodeStates: {} })
+        buildPayloadWithSourceSize(named, jobId, inputs, undefined, { nodes: [named], edges: [], nodeStates: {} })
       // The API answered "not served": the node is refused before anything is held.
       await expect(build("job-1")).rejects.toMatchObject({ code: "model_not_available" })
       expect(ask).toHaveBeenCalledTimes(1)
@@ -177,15 +183,16 @@ describe("the shipped catalog's one house model, and nothing else, is reached by
     }
   })
 
-  it("only its jobs count under the house name", () => {
+  it("only their jobs count under the house name", () => {
     for (const id of Object.keys(MODEL_CATALOG)) {
-      expect(primaryProviderOfJob("edit-image", { provider: id }) === "house-models", id).toBe(id === HOUSE)
+      expect(primaryProviderOfJob("edit-image", { provider: id }) === "house-models", id).toBe(HOUSES.has(id))
+      expect(primaryProviderOfJob("video-upscale", { provider: id }) === "house-models", id).toBe(HOUSES.has(id))
     }
   })
 
-  it("where it is not served, it withholds only itself: no model restriction", () => {
+  it("where they are not served, each withholds only itself: no model restriction", () => {
     _resetPluginServicesForTests()
-    expect(isHouseModelUnserved(HOUSE)).toBe(true)
+    for (const house of HOUSES) expect(isHouseModelUnserved(house), house).toBe(true)
     expect(modelRestrictionConfigured()).toBe(false)
   })
 })

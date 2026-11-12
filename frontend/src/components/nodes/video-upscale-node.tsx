@@ -1,8 +1,8 @@
 "use client"
 
 import { SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
-import { isTopazVideoResolution } from "@nodaro/shared/models"
-import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
@@ -17,8 +17,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits, useSeedanceHdDraftCredits, useSeedanceHdMinimumCredits } from "@/ee/hooks/use-model-credits"
-import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
-import { useVideoUpscaleQuotedUnits } from "@/hooks/use-video-upscale-quoted-units"
+import { useExactUnitQuote, useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
+import { useNodaroVideoUpscaleRefusedSec, useVideoUpscaleQuotedUnits } from "@/hooks/use-video-upscale-quoted-units"
 import { isTopazVideoUpscaleProvider } from "@/lib/video-utility-estimate"
 import { topazVideoResolutionLabel } from "@/lib/topaz-video-labels"
 import { resolveUpstreamKieTaskId } from "@/components/editor/workflow-editor/upstream-kie-task-id"
@@ -59,8 +59,20 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
   // confirm and the workflow badge price it by). The run measures the clip,
   // holds what it needs and is charged the units Topaz reports, so the figure
   // is an estimate (≈).
-  const topazUnits = useVideoUpscaleQuotedUnits(id)
-  const topazCredits = useUnitQuoteCredits(isTopaz ? TOPAZ_VIDEO_UNIT_CREDIT_ID : undefined, topazUnits, isTopaz ? 40 : 0)
+  const quotedUnits = useVideoUpscaleQuotedUnits(id)
+  const topazCredits = useUnitQuoteCredits(isTopaz ? TOPAZ_VIDEO_UNIT_CREDIT_ID : undefined, quotedUnits, isTopaz ? 40 : 0)
+  // Nodaro Video Upscale is priced per second of the clip: its tier's
+  // four-second row × the billed seconds ÷ 4 at the length the graph gives
+  // (else 10 s), rounded up once and marked up once — the server's whole-run
+  // quote, and no figure until it arrives (never a one-unit price × whole
+  // units, which reads above the charge). The run measures the clip and holds
+  // exactly its price, so the figure is an estimate (≈). A clip the graph
+  // knows is past the 60-second limit shows no figure: that run is refused
+  // before anything is held (the confirm says it is not priced).
+  const isNodaro = upscaleProvider === NODARO_VIDEO_UPSCALE_PROVIDER
+  const nodaroTier = nodaroVideoUpscaleTierOf(nodeData.targetResolution)
+  const nodaroRefused = useNodaroVideoUpscaleRefusedSec(id) !== undefined
+  const nodaroCredits = useExactUnitQuote(isNodaro && !nodaroRefused ? nodaroVideoUpscaleCreditId(nodaroTier) : undefined, quotedUnits)
   // The Seedance draft finalize is priced by the DRAFT (its length, its
   // reference video), so the server prices it: once a draft is wired, the
   // exact credits its run reserves (named by the same task id the run sends —
@@ -72,7 +84,8 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
   const draftCredits = useSeedanceHdDraftCredits(draftTaskId, isSeedanceHd)
   const minimumCredits = useSeedanceHdMinimumCredits(isSeedanceHd && draftCredits === undefined)
   const creditsFrom = isSeedanceHd && draftCredits === undefined
-  const credits = isSeedanceHd ? draftCredits ?? minimumCredits : isTopaz ? topazCredits : veoCredits
+  const credits = isSeedanceHd ? draftCredits ?? minimumCredits : isTopaz ? topazCredits : isNodaro ? nodaroCredits : veoCredits
+  const creditsEstimate = isTopaz || isNodaro
 
   const hasResult = status !== "running" && !!activeUrl
 
@@ -96,14 +109,14 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
         icon={<ArrowUpFromLine className="h-4 w-4" />}
         category="processing"
         credits={creditsFrom ? undefined : credits}
-        creditsEstimate={isTopaz}
+        creditsEstimate={creditsEstimate}
         selected={selected}
         isRunning={status === "running"}
         hideHeader
         {...videoNodeSizing(mediaAspectRatio)}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         topToolbarContent={
-                      <RunNodeButton nodeId={id} credits={credits} creditsFrom={creditsFrom} creditsEstimate={isTopaz} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+                      <RunNodeButton nodeId={id} credits={credits} creditsFrom={creditsFrom} creditsEstimate={creditsEstimate} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
           { id: "video", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
@@ -201,7 +214,9 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
                     ? t("node.veo4kUpscale")
                     : upscaleProvider === SEEDANCE_DRAFT_FINALIZE_PROVIDER
                       ? t("node.seedanceHdUpscale")
-                      : !isTopazVideoResolution(nodeData.targetResolution) && nodeData.upscaleFactor
+                      : isNodaro
+                        ? t("node.nodaroUpscaleTo", { resolution: topazVideoResolutionLabel(nodaroTier) })
+                        : !isTopazVideoResolution(nodeData.targetResolution) && nodeData.upscaleFactor
                         // A saved node that still holds only the old factor: the run maps it over the source.
                         ? t("node.topazUpscale", { factor: nodeData.upscaleFactor })
                         : t("node.topazUpscaleTo", { resolution: topazVideoResolutionLabel(nodeData.targetResolution ?? "1080p") })}

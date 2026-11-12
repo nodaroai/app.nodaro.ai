@@ -41,7 +41,7 @@ import { creditGuard } from "../credit-guard.js"
 import { modelRestrictionConfigured } from "../../lib/surface-deny.js"
 import { setPluginServices } from "../../lib/private-plugins/services-registry.js"
 import type { PluginHouseModelsService } from "../../lib/private-plugins/types.js"
-import { resetOwnLabelModelIdsForTests } from "../../lib/house-models-served.js"
+import { ownLabelModelIds, resetOwnLabelModelIdsForTests } from "../../lib/house-models-served.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 
@@ -90,7 +90,7 @@ describe("the house rule withholds only the house model", () => {
     expect(modelRestrictionConfigured()).toBe(false)
     serving([])
     expect(modelRestrictionConfigured()).toBe(false)
-    serving(["house-fixture", "nodaro-image-upscale"])
+    serving([...ownLabelModelIds()])
     expect(modelRestrictionConfigured()).toBe(false)
   })
 
@@ -130,7 +130,8 @@ describe("the house rule withholds only the house model", () => {
   })
 
   it("an install that serves every house model reads no body and never asks runModel", async () => {
-    serving(["house-fixture", "nodaro-image-upscale"])
+    // Every own-label model: the fixture and the shipped catalog's own.
+    serving([...ownLabelModelIds()])
     const res = await post({ model: "house-fixture" })
     expect(res.statusCode).toBe(200)
     expect(runModel).not.toHaveBeenCalled()

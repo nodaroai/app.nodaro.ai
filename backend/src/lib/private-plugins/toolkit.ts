@@ -176,6 +176,7 @@ import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
 import { LANE_LEASE_HEADER } from "../concurrency-lanes/request-scope.js"
 import { LANE_PARENT_HEADER } from "../concurrency-lanes/lane-parent.js"
 import { DEFAULT_SUNO_MODEL, billsReferenceVideoSeconds } from "@nodaro/shared/models"
+import { pluginVideoAudioRequest } from "@nodaro/render-rules"
 import { WORKFLOW_ACCESS_COLS, loadWorkflowFor, loadStudioEditableCopySource } from "../workflow-route-access.js"
 import { writeCompatible } from "../compatible-workflow-writes.js"
 import { canChangeWorkflowVisibility } from "../workflow-access.js"
@@ -254,10 +255,12 @@ function toReconcileOpts(
  * no positional slot and reads it exclusively via `options.aspectRatio` (the
  * KIE i2v generic path otherwise infers aspect ratio from the input image).
  */
-function toProviderOptions(options: PluginVideoGenOptions | undefined, aspectRatio?: string): ProviderOptions {
+export function toProviderOptions(options: PluginVideoGenOptions | undefined, aspectRatio?: string): ProviderOptions {
   return {
     resolution: options?.resolution,
-    generateAudio: options?.generateAudio,
+    // The audio fields, through the ONE mapping Generate Video Pro prices its
+    // segments from (`gvpSegmentAudio`): what a segment renders is what it costs.
+    ...pluginVideoAudioRequest(options?.generateAudio),
     referenceImageUrls: options?.referenceImageUrls,
     referenceVideoUrls: options?.referenceVideoUrls,
     referenceAudioUrls: options?.referenceAudioUrls,

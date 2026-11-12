@@ -58,6 +58,17 @@ describe("free-credit video locks in the editor", () => {
     expect(lockedVideoModel(LIMITS, "kling-4-flash", { extend: true })).toBe(lockedVideoModel(LIMITS, "seedance-2-5-extend"))
   })
 
+  it("PixVerse V6 Max is open within the limits: 360p for 1-4 s, every other quality and length locked", () => {
+    expect(lockedVideoModel(LIMITS, "pixverse-v6-max")).toBeNull()
+    for (const d of [1, 2, 3, 4]) expect(lockedVideoDuration(LIMITS, "pixverse-v6-max", d), `${d}s`).toBeNull()
+    expect(lockedVideoDuration(LIMITS, "pixverse-v6-max", 5)).not.toBeNull()
+    expect(lockedVideoResolution(LIMITS, "pixverse-v6-max", "360p")).toBeNull()
+    for (const r of ["540p", "720p", "1080p"]) expect(lockedVideoResolution(LIMITS, "pixverse-v6-max", r), r).not.toBeNull()
+    // A snap on free credits lands on what is open, never the locked 720p default.
+    expect(openVideoResolution(LIMITS, "pixverse-v6-max", ["720p", "360p", "540p", "720p", "1080p"])).toBe("360p")
+    expect(openVideoDuration(LIMITS, "pixverse-v6-max", [5, 1, 2, 3, 4, 5])).toBe(1)
+  })
+
   it("a length of 0 or below that is not Auto is the model's default (5 s on Flash, 8 s on Seedance 2 Fast): locked", () => {
     for (const d of [0, -2]) {
       expect(lockedVideoDuration(LIMITS, "kling-4-flash", d)).not.toBeNull()

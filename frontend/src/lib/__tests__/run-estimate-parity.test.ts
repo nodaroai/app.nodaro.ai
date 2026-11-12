@@ -210,11 +210,15 @@ describe("a Seedance 2.5 node's reference task type is quoted at the length it r
     expect(quoted([upload(), gv({ referenceTaskType: "edit" })])).toBe(PRICES[AUTO_ID])
   })
 
-  it("Edit on a draft is quoted as the node without the setting", () => {
-    // A draft never carries the field (and is priced at 480p either way).
+  it("Edit on a draft is quoted as Edit without Draft, at the draft's 480p rows", () => {
+    // A draft declares as any other run does: the automatic-length row, at 480p.
     const draft = { draft: true }
     const ids = (n: WorkflowNode) => runModelIds([n], [upload(6), n], wired).filter((id) => !id.startsWith("seedance-ref-quote:"))
-    expect(ids(gv({ ...draft, referenceTaskType: "edit" }))).toEqual(ids(gv(draft)))
+    const draftAutoId = videoGenerationCreditId({ provider: "seedance-2-5", duration: VIDEO_DURATION_AUTO, nodeType: "image-to-video", resolution: "720p", draft: true, hasVideoRef: true })
+    expect(ids(gv({ ...draft, referenceTaskType: "edit" }))).toEqual([draftAutoId])
+    expect(ids(gv({ ...draft, referenceTaskType: "edit" }))).not.toEqual(ids(gv(draft)))
+    // The same node at 480p without Draft asks for the same row.
+    expect(ids(gv({ ...draft, referenceTaskType: "edit" }))).toEqual(ids(gv({ referenceTaskType: "edit", resolution: "480p" })))
   })
 
   it("a node without the setting asks for exactly today's ids", () => {

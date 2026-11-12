@@ -151,6 +151,7 @@ export const VIDEO_I2V_MODELS = [
   { value: "kling-4-flash", label: "Kling 4.0 Flash", desc: "Kuaishou Kling 4.0 Flash, 3–20s, 720p, native audio, start frame or image/video/character refs, voice per character" },
   { value: "gemini-omni-flash", label: "Gemini Omni Flash", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
   { value: "gemini-omni-flash-1-2", label: "Gemini Omni Flash 1.2", desc: "Google, 3–15s, 360p to 4K, native audio, refs + video-edit" },
+  { value: "pixverse-v6-max", label: "PixVerse V6 Max", desc: "PixVerse, 1–15s, 360p–1080p, optional native audio, text or an exact first frame" },
 ]
 
 export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: string; desc: string }[] = [
@@ -187,6 +188,7 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "kling-4-flash", label: "Kling 4.0 Flash", desc: "Kuaishou Kling 4.0 Flash, 3–20s, 720p, native audio, start frame or image/video/character refs, voice per character" },
   { value: "gemini-omni-flash", label: "Gemini Omni Flash", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
   { value: "gemini-omni-flash-1-2", label: "Gemini Omni Flash 1.2", desc: "Google, 3–15s, 360p to 4K, native audio, refs + video-edit" },
+  { value: "pixverse-v6-max", label: "PixVerse V6 Max", desc: "PixVerse, 1–15s, 360p–1080p, 8 aspect ratios, optional native audio" },
 ]
 
 /** Unified generate-video model list — VIDEO_I2V_MODELS ∪ VIDEO_T2V_MODELS,

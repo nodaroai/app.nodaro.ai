@@ -185,21 +185,37 @@
 		redir @legacy_ui_temporary {nodaro_kept_origin}{uri} 302
 	}
 	# The page that hands a browser's saved settings to the Flow host
-	# (frontend/public/storage-bridge.html) is there only while the move is on,
-	# framable only by the Flow origin. Otherwise the path answers exactly as on
+	# (frontend/public/storage-bridge.html) is there only while the pages have their
+	# own host, framable only by the Flow origin. Otherwise the path answers exactly as on
 	# an install without the file: as any unknown page, the app's index.
 	@storage_bridge_on {
 		path /storage-bridge.html
-		expression `{nodaro_flow_origin} != "" && {nodaro_kept_origin} != "" && {nodaro_kept_origin} != {nodaro_flow_origin} && {env.LEGACY_UI_HOSTS}.lowerAscii().replace(",", " ").split(" ").exists(h, h != "" && "https://" + h != {nodaro_flow_origin})`
+		expression `{nodaro_flow_origin} != "" && {nodaro_kept_origin} != "" && {nodaro_kept_origin} != {nodaro_flow_origin}`
 	}
 	header @storage_bridge_on Content-Security-Policy "frame-ancestors {nodaro_flow_origin}"
 	# Its trailing-slash form too: the proxy would redirect it to the file, which
-	# an install without the move does not have.
+	# an install without its own host does not have.
 	@storage_bridge_off {
 		path /storage-bridge.html /storage-bridge.html/
-		expression `!({nodaro_flow_origin} != "" && {nodaro_kept_origin} != "" && {nodaro_kept_origin} != {nodaro_flow_origin} && {env.LEGACY_UI_HOSTS}.lowerAscii().replace(",", " ").split(" ").exists(h, h != "" && "https://" + h != {nodaro_flow_origin}))`
+		expression `!({nodaro_flow_origin} != "" && {nodaro_kept_origin} != "" && {nodaro_kept_origin} != {nodaro_flow_origin})`
 	}
 	rewrite @storage_bridge_off /index.html
+	# Once the pages have their own host, every host serves them, so each page search
+	# engines may index names its one home (a Link header, rel=canonical): the Flow host
+	# for a moved page, PUBLIC_URL for a kept one, on every host. The pages are
+	# route-homes.json's "indexable" list (@spa_noindex's allow-list), matched on the
+	# request's own path, exactly as listed (a section: one lowercase slug), never the
+	# query: the header writes that same path, so nothing else can reach it.
+	@canonical_on_flow_host {
+		expression `{nodaro_flow_origin} != "" && {nodaro_kept_origin} != "" && {nodaro_kept_origin} != {nodaro_flow_origin} && {http.request.uri.path}.matches("^(?:/|/gallery|/tutorials/[a-z0-9-]+)$")`
+		method GET HEAD
+	}
+	header @canonical_on_flow_host Link `<{nodaro_flow_origin}{http.request.uri.path}>; rel="canonical"`
+	@canonical_on_kept_host {
+		expression `{nodaro_flow_origin} != "" && {nodaro_kept_origin} != "" && {nodaro_kept_origin} != {nodaro_flow_origin} && {http.request.uri.path}.matches("^(?:/login|/signup|/app/[a-z0-9-]+)$")`
+		method GET HEAD
+	}
+	header @canonical_on_kept_host Link `<{nodaro_kept_origin}{http.request.uri.path}>; rel="canonical"`
 	# END GENERATED: page homes
 
 	# Self-host media path: proxies the bundled MinIO so ONE origin serves both
@@ -445,6 +461,8 @@
 	# in-app pricing and MCP pages (nodaro.ai has the public ones) and unknown
 	# paths. robots.txt still allows these paths, because a crawler has to
 	# fetch a page to read its noindex. Backend and proxied paths are left alone.
+	# The allow-list is frontend/src/route-homes.json's "indexable" (a test holds
+	# the two equal): the page-homes block above names each page's canonical home.
 	@spa_noindex {
 		path_regexp spa_route ^([^.]*|/.*\.html)$
 		not path / /login /signup /gallery /app/* /tutorials/*

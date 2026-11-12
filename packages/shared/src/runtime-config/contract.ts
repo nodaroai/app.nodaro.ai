@@ -142,17 +142,20 @@ export interface NodaroRuntimeConfig {
    */
   readonly mediaOrigin?: string
   /**
-   * The https origin the app's own pages live on, when this deployment moved
-   * them to a host of their own. A page on it calls the API same-origin.
-   * Absent: the deployment has one host.
+   * The https origin of the app's pages' own host, when this deployment gives
+   * them one. Alone (with `linkOrigin`), every host keeps serving the pages
+   * and only a browser's saved settings carry over to it. With
+   * `legacyUiHosts` too, the pages have moved there, and a page on it calls
+   * the API same-origin. Absent: the deployment has one host.
    */
   readonly flowUiOrigin?: string
-  /** The hosts the app's pages moved away from (with `flowUiOrigin`): a navigation on one goes to the page's home. */
+  /** The hosts the app's pages moved away from (with `flowUiOrigin`): a navigation on one goes to the page's home. Absent: nothing moved. */
   readonly legacyUiHosts?: readonly string[]
   /**
-   * The https origin developer-facing links name (published apps, embeds, API
-   * examples) when the app's pages live elsewhere. Absent: the page's own
-   * origin, as ever.
+   * The https origin the API keeps, with `flowUiOrigin`: where a browser's
+   * saved settings are carried over from and, once the pages have moved
+   * (`legacyUiHosts`), the origin developer-facing links name (published
+   * apps, embeds, API examples). Absent: the page's own origin, as ever.
    */
   readonly linkOrigin?: string
 }

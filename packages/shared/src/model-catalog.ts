@@ -181,6 +181,7 @@ export const MODEL_MAKERS = {
   minimax: { name: "MiniMax" },
   nodaro: { name: "Nodaro" },
   openai: { name: "OpenAI" },
+  pixverse: { name: "PixVerse" },
   recraft: { name: "Recraft" },
   runway: { name: "Runway" },
   shengshu: { name: "ShengShu" },
@@ -481,6 +482,18 @@ export interface ModelCatalogEntryFields {
    * `omitSeed` in both directions by `seed-capability-parity.test.ts`.
    */
   noSeed?: boolean
+  /**
+   * Generate Video Pro may use this video model although it takes no reference
+   * images (decided 2026-11-12, PixVerse V6 Max). The pro engine's bar is a
+   * model that takes a start still AND reference images (it attaches identity
+   * and continuity references to every segment), so a model without
+   * `"reference-image"` is out unless it says so here. With it, each segment
+   * runs from its start anchor or from text alone: the references a segment
+   * carries are not sent, the "reference" anchor choice is not offered
+   * (`gvpAnchorChoicesFor`, `@nodaro/render-rules`), and the run is keyframes only. Never set it on a
+   * model that has `"reference-image"` (`gvp-supported-providers.test.ts`).
+   */
+  gvpWithoutReferences?: true
   pricing: readonly PriceVariant[]
   /** Editorial highlight — "best in tier". Surfaces in MCP output as a ⭐. */
   featured?: boolean
@@ -715,6 +728,11 @@ const VIDEO_RATIOS_VIDU_Q4 = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const
 // /v4-keyframe-to-video). `auto` follows the materials; with none it renders 16:9.
 // The keyframe endpoint ignores the ratio once any frame is attached.
 const VIDEO_RATIOS_KLING_4 = ["auto", "16:9", "9:16", "1:1", "21:9"] as const
+// PixVerse V6 Max — the text-to-video enum, in KIE's own order
+// (docs.kie.ai/market/pixverse/v6-max-text-to-video). The image-to-video
+// endpoint takes NO aspect ratio: its output follows the start frame, so these
+// apply to text-only runs.
+const VIDEO_RATIOS_PIXVERSE_V6_MAX = ["16:9", "4:3", "1:1", "3:4", "9:16", "2:3", "3:2", "21:9"] as const
 
 // =============================================================================
 // IMAGE MODELS
@@ -1003,6 +1021,28 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "flux-2-max:0.5MP:0ref", credits: 18 },  // min
       { identifier: "flux-2-max:4MP:8ref",   credits: 620 }, // max
     ],
+  },
+  // A catalog entry so a deployment's model restriction can name it (decided
+  // 2026-11-12): before it, `models.allow` could not withhold it while the
+  // Modify Image node and /v1/image-to-image kept running it. It repaints the
+  // mask's white area of the image it is given, and its result is that image's
+  // size, so it takes no aspect ratio, size or quality: none is listed, and a
+  // value a request carries for one is dropped with an adjustment (as for
+  // Ideogram Edit). It never read one, so what it is sent is unchanged
+  // (backend flux-fill-requests-parity.test.ts). One input image, no
+  // reference images: no "reference-image" feature.
+  "flux-fill": {
+    id: "flux-fill",
+    kind: "image",
+    modes: ["edit"] as const,
+    family: "Black Forest Labs",
+    maker: "black-forest-labs",
+    label: "FLUX Fill Pro",
+    series: "Flux",
+    description: "Masked inpainting from BFL via Replicate: repaints the mask's white area; the result keeps the image's size.",
+    useCases: ["edit", "inpaint"],
+    features: ["mask"],
+    pricing: [{ identifier: "flux-fill", credits: 30 }],
   },
 
   // ── OpenAI (GPT Image) ──
@@ -3187,6 +3227,49 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "vidu-q4:16s:4k", credits: 2500, note: "16s 4K (max)" },
     ],
   },
+  // ── PixVerse ──
+  // PixVerse V6 Max — ONE id over two KIE endpoints, picked by what is wired
+  // (backend kie/pixverse-v6-max.ts): a start frame runs on
+  // docs.kie.ai/market/pixverse/v6-max-image-to-video, where it is the exact
+  // first frame and the output takes its shape (no aspect ratio is sent); no
+  // image runs on docs.kie.ai/market/pixverse/v6-max-text-to-video, with one of
+  // eight aspect ratios. No end frame, no reference images, videos or audio.
+  // 1-15s, 360p-1080p (`quality` on the wire). Native audio behind the
+  // `generate_audio_switch` lever: the price depends on it, so it bills on the
+  // `:audio` rows (AUDIO_ADDON_PROVIDERS), and a request that names no audio
+  // setting renders and bills audio ON (decided 2026-11-11). `resolutions` is
+  // ascending (repo convention); the default tier (720p) is declared, never
+  // carried by array position — 360p is the cheapest preview tier.
+  "pixverse-v6-max": {
+    id: "pixverse-v6-max",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "PixVerse",
+    maker: "pixverse",
+    label: "PixVerse V6 Max",
+    series: "PixVerse",
+    description: "PixVerse V6 Max — cinematic video from text or from an exact first frame, 1–15s at 360p to 1080p, with optional native audio (on by default; it changes the price). Strong prompt following, camera control and on-screen text.",
+    useCases: ["cinematic", "narrative", "typography", "motion"],
+    features: ["audio"],
+    aspectRatios: VIDEO_RATIOS_PIXVERSE_V6_MAX,
+    durations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 5,
+    resolutions: ["360p", "540p", "720p", "1080p"],
+    defaultResolution: "720p",
+    // normalizePixverseV6MaxQuality sends 720p for anything off the list.
+    unlistedResolutionRendersAs: "720p",
+    // Generate Video Pro runs it from a start anchor or text (decided 2026-11-12).
+    gvpWithoutReferences: true,
+    pricing: [
+      { identifier: "pixverse-v6-max", credits: 150, note: "default 5s 720p with audio — see :Ns:res and :Ns:res:audio variants for exact" },
+      { identifier: "pixverse-v6-max:5s:720p:audio", credits: 150, note: "5s 720p with audio (the default tier)" },
+      { identifier: "pixverse-v6-max:5s:720p", credits: 110, note: "5s 720p, no audio" },
+      { identifier: "pixverse-v6-max:5s:360p", credits: 60, note: "5s 360p, no audio" },
+      { identifier: "pixverse-v6-max:5s:1080p:audio", credits: 280, note: "5s 1080p with audio" },
+      { identifier: "pixverse-v6-max:1s:360p", credits: 20, note: "1s 360p, no audio (min)" },
+      { identifier: "pixverse-v6-max:15s:1080p:audio", credits: 840, note: "15s 1080p with audio (max)" },
+    ],
+  },
   // ── Bytedance video lite/pro ──
   "bytedance-lite": {
     id: "bytedance-lite",
@@ -3412,6 +3495,32 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     // Metered: a run holds its output-gigapixel ceiling and is charged the
     // Topaz units the provider reports, never above the hold.
     pricing: [{ identifier: "topaz-video:per-unit", credits: 40, note: "per Topaz unit (metered)" }],
+  },
+  // Nodaro Video Upscale (decided 2026-11-11): offered under the deployment's
+  // own label, so it names no maker, and only where the deployment serves it
+  // (the backend's house-model seam). Priced per second of the clip
+  // (the clip's length rounded up to a whole second): each tier's row is the
+  // price of FOUR seconds, so a per-second rate that is not a whole credit
+  // still fits a whole-credit row, and a run is charged row × seconds ÷ 4,
+  // rounded up once (`@nodaro/render-rules` nodaro-video-upscale-pricing.ts).
+  "nodaro-video-upscale": {
+    id: "nodaro-video-upscale",
+    kind: "video",
+    modes: ["video-upscale"] as const,
+    family: "Nodaro Upscale",
+    ownLabel: true,
+    label: "Nodaro Video Upscale",
+    series: "Nodaro Upscale",
+    description: "Upscale any clip of up to 60 seconds and 50 MB into a 1080p, 2K or 4K frame. It keeps the clip's shape (nothing is cropped), frame rate, length and sound. Priced per second of the clip; the listed price is four seconds at 1080p.",
+    useCases: ["upscale", "high-res"],
+    // An output box (1920×1080, 2560×1440, 3840×2160; turned for a portrait clip).
+    resolutions: ["1080p", "2k", "4k"],
+    defaultResolution: "1080p",
+    pricing: [
+      { identifier: "nodaro-video-upscale:1080p:per-4s", credits: 15, note: "per 4 seconds of the clip at 1080p; charged per whole second" },
+      { identifier: "nodaro-video-upscale:2k:per-4s", credits: 30, note: "per 4 seconds of the clip at 2K; charged per whole second" },
+      { identifier: "nodaro-video-upscale:4k:per-4s", credits: 60, note: "per 4 seconds of the clip at 4K; charged per whole second" },
+    ],
   },
 
   // ── Motion transfer ──

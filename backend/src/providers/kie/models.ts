@@ -82,6 +82,14 @@ export const KLING_4_KEYFRAME_MODEL = "kling-4.0/keyframe-to-video"
 export const KLING_4_FLASH_REFERENCE_MODEL = "kling-4.0/flash-reference-to-video"
 export const KLING_4_FLASH_KEYFRAME_MODEL = "kling-4.0/flash-keyframe-to-video"
 
+/** PixVerse V6 Max's two KIE endpoints under ONE Nodaro id (`pixverse-v6-max`):
+ *  the image-to-video config carries the first, the text-to-video config the
+ *  second, and the request builder (pixverse-v6-max.ts) names the one a run
+ *  uses. Exported so every reverse map of KIE ids (the admin credit audit)
+ *  resolves both back to `pixverse-v6-max`. */
+export const PIXVERSE_V6_MAX_IMAGE_TO_VIDEO_MODEL = "pixverse-v6-max/image-to-video"
+export const PIXVERSE_V6_MAX_TEXT_TO_VIDEO_MODEL = "pixverse-v6-max/text-to-video"
+
 export interface KieModelConfig {
   model: string           // KIE.ai model identifier
   cost: number            // Cost in USD per generation
@@ -1559,6 +1567,31 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
   },
 
+  // PixVerse V6 Max — ONE Nodaro id over two KIE endpoints, registered in BOTH
+  // maps under that id: this image-to-video config serves a run with a start
+  // frame, the KIE_TEXT_TO_VIDEO_MODELS one a run without. Dispatched through
+  // the bespoke `runPixverseV6Max` in video.ts (bodies built by
+  // pixverse-v6-max.ts): an explicit allow-list with an INTEGER duration and
+  // `quality` (our `resolution`), so the generic builder never runs and
+  // `extraParams` is DECLARATIVE ONLY — the `generate_audio_switch` cross-check
+  // in video-audio-capability.test.ts; the builder sends the switch on every
+  // run. 1-15s, 360p/540p/720p/1080p, seed 0-2147483647, no end frame, no
+  // references. KIE per second, both endpoints: 4.8 / 7.2 / 8.8 / 17.6 cr/s
+  // without audio and 7.2 / 8.8 / 12 / 22.4 cr/s with it, at 360p / 540p /
+  // 720p / 1080p. `credits`/`cost` are the default tier (5s @720p with audio)
+  // for audit logging only; the runner reports each tier's cost.
+  // See: docs.kie.ai/market/pixverse/v6-max-image-to-video.md + v6-max-text-to-video.md
+  "pixverse-v6-max": {
+    model: PIXVERSE_V6_MAX_IMAGE_TO_VIDEO_MODEL,
+    credits: 60,              // KIE: 12 cr/s × 5 (5s @720p with audio)
+    cost: 0.3,
+    imageParam: "image_urls",
+    acceptsResolution: true,  // the lever exists (KIE `quality`, sent by the bespoke builder)
+    supportsEndFrame: false,
+    extraParams: { generate_audio_switch: true },
+    allowedDurations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  },
+
   // Wan 3.0 Prime — KIE's HIGH-SPEED Wan 3.0 tier (faster turnaround at a higher
   // per-second rate, NOT a higher-quality tier). Identical request surface to
   // wan-3; same bespoke runWan3 dispatch and the same declarative-only
@@ -1903,6 +1936,18 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     omitSeed: true,
     acceptsResolution: true,  // `resolution` 720p (both Flash schemas; the only value)
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+  },
+
+  // PixVerse V6 Max — the t2v twin of the i2v entry (same id, same bespoke
+  // runPixverseV6Max), on KIE's text-to-video endpoint: `aspect_ratio` is
+  // required here and never sent on the image endpoint. Same rates on both.
+  "pixverse-v6-max": {
+    model: PIXVERSE_V6_MAX_TEXT_TO_VIDEO_MODEL,
+    credits: 60,              // KIE: 12 cr/s × 5 (5s @720p with audio)
+    cost: 0.3,
+    acceptsResolution: true,  // the lever exists (KIE `quality`, sent by the bespoke builder)
+    extraParams: { generate_audio_switch: true },
+    allowedDurations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 
   // Wan 3.0 Prime T2V — the high-speed tier (faster, higher per-second rate).

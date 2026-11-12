@@ -26,7 +26,7 @@ import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapa
 import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs, placeFramesAfterReferences } from "@nodaro/prompts/assembly"
-import { isGeminiOmniPerSecondProvider } from "@nodaro/shared/models"
+import { isGeminiOmniPerSecondProvider, isPixverseV6MaxProvider } from "@nodaro/shared/models"
 import { GEMINI_OMNI_12_RATE_USD_PER_SEC, buildGeminiOmni12Request, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames, prepareGeminiOmni12Source } from "./gemini-omni-12.js"
 import {
   createSanitizedError,
@@ -42,6 +42,7 @@ import { resolveOmniCharacterIds, forgetOmniCharacters, isInvalidOmniCharacterEr
 import { kling3Generate } from "./kling3-client.js"
 import { buildKling4Request } from "./kling4.js"
 import { buildGrokVideo15Request } from "./grok-video-15.js"
+import { buildPixverseV6MaxRequest } from "./pixverse-v6-max.js"
 import { kling4CostUsd } from "./kling4-cost.js"
 import { runRunwayTask, runAlephTask } from "./runway-client.js"
 import { runLumaModifyTask } from "./luma-client.js"
@@ -270,7 +271,6 @@ const SEEDANCE_2_DEFAULT_ASPECT = "16:9"
  * holds:
  *   - the model's catalog `referenceTaskTypes` lists the value
  *     (`listedSeedanceTaskType`: an unknown model, `auto` and junk are none);
- *   - the run is not a draft (the platform's rule: a draft never declares);
  *   - no `first_frame_url` — KIE refuses the field on a text-only body and in
  *     both frame modes ("only supported in multimodal reference tasks");
  *   - the body's `reference_*_urls` are the media the type needs
@@ -290,7 +290,7 @@ function seedanceTaskTypeForBody(
   provider: string | undefined,
 ): DeclaredSeedanceTaskType | undefined {
   const taskType = listedSeedanceTaskType(provider, options?.referenceTaskType)
-  if (taskType === undefined || options?.draft === true) return undefined
+  if (taskType === undefined) return undefined
   if (input.first_frame_url !== undefined) return undefined
   const count = (key: string): number => {
     const urls = input[key]
@@ -2066,6 +2066,93 @@ async function runGrokVideo15(
   return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
 }
 
+/**
+ * PixVerse V6 Max's provider rate (USD/s) by WIRE quality and audio state, the
+ * same on both endpoints: 4.8 / 7.2 / 8.8 / 17.6 KIE cr/s without audio and
+ * 7.2 / 8.8 / 12 / 22.4 with it, at 360p / 540p / 720p / 1080p (KIE's product
+ * pages and price list, read 2026-11-11; $0.005 per KIE credit). Audit /
+ * provider_cost only — the USER charge is the seeded per-second composite.
+ */
+const PIXVERSE_V6_MAX_RATE_USD_PER_SEC: Record<"360p" | "540p" | "720p" | "1080p", { readonly silent: number; readonly audio: number }> = {
+  "360p": { silent: 0.024, audio: 0.036 },
+  "540p": { silent: 0.036, audio: 0.044 },
+  "720p": { silent: 0.044, audio: 0.06 },
+  "1080p": { silent: 0.088, audio: 0.112 },
+}
+
+/**
+ * PixVerse V6 Max (`pixverse-v6-max`) on both lanes. The body is built by the
+ * pure `buildPixverseV6MaxRequest` (pixverse-v6-max.ts), which picks the
+ * endpoint: image-to-video when a start frame is passed (already normalized by
+ * imageToVideo's shared frame step — 10 MB, 2048 px, JPEG/PNG/WebP, inside
+ * KIE's 20 MB / 10,000 px / JPG-PNG-WebP limits), text-to-video otherwise.
+ */
+async function runPixverseV6Max(
+  modelConfig: KieModelConfig,
+  /** OUR Nodaro key (NOT modelConfig.model, the KIE id) for the egress seam. */
+  modelKey: "pixverse-v6-max",
+  prompt: string,
+  duration: number | undefined,
+  aspectRatioValue: string | undefined,
+  startFrameUrl: string | undefined,
+  options: ProviderOptions | undefined,
+  reconcileOpts: ReconcileOpts | undefined,
+  logLabel: string,
+): Promise<ProviderResult> {
+  const requested = duration !== undefined && duration > 0 ? duration : 5
+  const snapped = snapToAllowedDuration(requested, modelConfig.allowedDurations ?? [])
+  if (duration !== undefined && duration > 0 && snapped !== duration) {
+    console.log(`[KIE.ai] ${logLabel}: duration ${duration}s not allowed, snapped to ${snapped}s`)
+  }
+  const { model, input } = buildPixverseV6MaxRequest({
+    prompt,
+    durationSec: snapped,
+    resolution: options?.resolution,
+    aspectRatio: aspectRatioValue,
+    startFrameUrl,
+    // Both audio fields: the Generate Video Pro engine sends `generateAudio` only.
+    audio: { sound: options?.sound, generateAudio: options?.generateAudio },
+    seed: options?.seed,
+  })
+  const ignored = [
+    (options?.referenceImageUrls?.length ?? 0) > 0 ? "reference images" : undefined,
+    (options?.referenceVideoUrls?.length ?? 0) > 0 ? "reference videos" : undefined,
+    (options?.referenceAudioUrls?.length ?? 0) > 0 ? "reference audio" : undefined,
+    (options?.characterReferences?.length ?? 0) > 0 ? "character references" : undefined,
+  ].filter(Boolean)
+  if (ignored.length > 0) console.log(`[KIE.ai] ${logLabel}: ignored ${ignored.join(", ")} — this model takes none`)
+
+  const quality = input.quality as "360p" | "540p" | "720p" | "1080p"
+  const withAudio = input.generate_audio_switch === true
+  const rate = PIXVERSE_V6_MAX_RATE_USD_PER_SEC[quality]
+  const tierCostUsd = (withAudio ? rate.audio : rate.silent) * snapped
+
+  console.log(`[KIE.ai] ${logLabel} (${model}) input:`, JSON.stringify(input, null, 2))
+  // The resolution dimension is named here: the wire calls it `quality`, a key
+  // the shared reader leaves alone (on an image lane `quality` is not a size).
+  const dimensions = { ...deriveKieEgressDimensions(input), resolution: quality }
+  const { resultJson, taskId, providerMs, rawRecordInfo } = await runKieTask(
+    model, input, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
+    { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...dimensions } },
+  )
+  const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!videoUrl) {
+    throw createSanitizedError(`${logLabel} task succeeded but no URL found`, "Video generation")
+  }
+  console.log(`[KIE.ai] ${logLabel} completed: ${videoUrl} (tier cost: $${tierCostUsd.toFixed(4)})`)
+  // What KIE should bill (the tier cost in KIE credits) beside what it reports,
+  // so a staging run measures the rate this model is priced from.
+  logCreditAudit({
+    modelKey,
+    expectedKieCredits: Math.round((tierCostUsd / KIE_CREDIT_USD) * 10) / 10,
+    modelConfig: { duration: snapped, resolution: quality, provider: modelKey, audio: withAudio },
+    rawResponseSample: rawRecordInfo,
+    actualKieCredits: extractCreditFields(rawRecordInfo)?.credits as number | undefined,
+    notes: `${startFrameUrl ? "i2v" : "t2v"} pixverse-v6-max ${quality}${withAudio ? " audio" : ""}`,
+  })
+  return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
+}
+
 export class KieVideoProvider
   implements
     ImageToVideoProvider,
@@ -2487,6 +2574,30 @@ export class KieVideoProvider
         options,
         reconcileOpts,
         `Vidu Q4 (${provider})`,
+      )
+    }
+
+    // PixVerse V6 Max — bespoke builder (pixverse-v6-max.ts): an allow-listed
+    // body with an integer duration, `quality` and the audio switch. MUST stay
+    // above the generic createTask path, which would spread extraParams and send
+    // a string duration. The start frame is the one normalized above; neither
+    // endpoint takes an end frame (the catalog declares none, so the editor
+    // offers none), so it is not forwarded. With no start frame the run takes
+    // the text-to-video endpoint under the t2v config.
+    if (isPixverseV6MaxProvider(provider)) {
+      if (effectiveEndFrameUrl) {
+        console.log(`[KIE.ai] PixVerse V6 Max: end frame ignored — neither endpoint accepts one`)
+      }
+      return runPixverseV6Max(
+        effectiveImageUrl ? modelConfig : (KIE_TEXT_TO_VIDEO_MODELS[provider] ?? modelConfig),
+        provider,
+        effectivePrompt ?? "smooth cinematic motion",
+        duration,
+        options?.aspectRatio,
+        effectiveImageUrl,
+        options,
+        reconcileOpts,
+        `PixVerse V6 Max (${provider})`,
       )
     }
 
@@ -2912,6 +3023,23 @@ export class KieVideoProvider
         options,
         reconcileOpts,
         `Wan 3 t2v (${provider})`,
+      )
+    }
+
+    // PixVerse V6 Max — the same bespoke builder as its image lane, on the
+    // text-to-video endpoint (no start frame). MUST stay above the generic
+    // createTask path.
+    if (isPixverseV6MaxProvider(provider)) {
+      return runPixverseV6Max(
+        modelConfig,
+        provider,
+        effectivePrompt,
+        duration,
+        aspectRatio ?? options?.aspectRatio,
+        undefined,
+        options,
+        reconcileOpts,
+        `PixVerse V6 Max t2v (${provider})`,
       )
     }
 

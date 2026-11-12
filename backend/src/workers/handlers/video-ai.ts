@@ -75,7 +75,10 @@ import {
 import { unitRateBaseCredits } from "../../lib/credit-base-cost.js"
 import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import type { DeclaredSeedanceTaskType, TopazVideoResolution } from "@nodaro/shared/models"
-import { isKling4RunnerProvider } from "@nodaro/shared/models"
+import { isKling4RunnerProvider, isNodaroVideoUpscaleTier, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { runHouseModelTask } from "../../lib/house-models.js"
+import { houseModelTiming } from "../../lib/house-model-timeouts.js"
+import { deliverHouseModelRun } from "../../lib/house-model-delivery.js"
 import { applySmartLoopCutToR2Url } from "../../providers/video/apply-smart-loop-cut.js"
 import { join } from "node:path"
 import { readFile, rm } from "node:fs/promises"
@@ -1208,6 +1211,42 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
+/**
+ * Nodaro Video Upscale, a house model (decided 2026-11-11): the run of exactly
+ * what was measured and priced — the stored clip, the tier, the billed seconds
+ * — happens behind the house-model seam (lib/house-models.ts), on the poll
+ * cadence and budget of its row in house-model-timeouts.ts, and its result is
+ * delivered by the lane's ONE delivery (`deliverHouseModelRun`, the same the
+ * reconcile calls): never this handler's own finalize. The clip's one
+ * measurement (its stored size) goes to the run as its input facts. A failure
+ * is rethrown unchanged: the seam marks what is final (failed and refunded
+ * now) and what is left for the reconcile to read again.
+ */
+async function runNodaroVideoUpscale(job: Parameters<HandlerFn>[0], ctx: Parameters<HandlerFn>[1]): Promise<void> {
+  const request = job.data as Record<string, unknown>
+  const { videoUrl, tier, billedSec, sourceSizeBytes } = request
+  if (
+    typeof videoUrl !== "string" || !isNodaroVideoUpscaleTier(tier) ||
+    typeof billedSec !== "number" || typeof sourceSizeBytes !== "number"
+  ) {
+    throw new DeterministicJobError("Couldn't read the video to upscale.")
+  }
+  const run = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 90 }, () => runHouseModelTask(
+    NODARO_VIDEO_UPSCALE_PROVIDER,
+    { videoUrl, tier, billedSec },
+    { jobId: ctx.jobId, ...houseModelTiming(NODARO_VIDEO_UPSCALE_PROVIDER), inputFacts: { [videoUrl]: { bytes: sourceSizeBytes } } },
+  ))
+  const { ok } = await deliverHouseModelRun({
+    id: NODARO_VIDEO_UPSCALE_PROVIDER,
+    jobId: ctx.jobId,
+    jobType: "video-upscale",
+    job: request,
+    ...run,
+    claimant: "worker",
+  })
+  if (ok) console.log(`[worker] Job ${ctx.jobId} completed (provider: ${NODARO_VIDEO_UPSCALE_PROVIDER})`)
+}
+
 const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx) {
   const { videoUrl, upscaleFactor, targetResolution, targetFps, provider, kieTaskId, draftAudioMux, draftNsfwChecker, draftVideoUrl, draftHasRefVideo } = job.data as {
     jobId: string
@@ -1234,6 +1273,7 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
   }
   const upscaleProvider = provider ?? VIDEO_UPSCALE_DEFAULT_PROVIDER
   console.log(`[worker] video-upscale ${ctx.jobId} (provider: ${upscaleProvider})`)
+  if (upscaleProvider === NODARO_VIDEO_UPSCALE_PROVIDER) return runNodaroVideoUpscale(job, ctx)
 
   // Wrap each branch in a progress ramp — none of these (VEO upscale,
   // Topaz, etc.) reliably surface live progress; without the ramp the
@@ -1325,7 +1365,10 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
     ? await applyDraftAudioMux({ videoUrl: outputUrl, mux: finalizeMux, draftVideoUrl, jobId: ctx.jobId, userId: ctx.jobUserId, watermark: ctx.shouldWatermark })
     : undefined
   // Topaz delivers HEVC 10-bit: the delivery transcodes it to browser-safe
-  // H.264 at the visually lossless CRF — the user paid for detail.
+  // H.264 at the visually lossless CRF — the user paid for detail. Every other
+  // upscaler here delivers H.264, which is
+  // uploaded as delivered (the transcode runs only for a codec browsers
+  // cannot play).
   const isTopaz = upscaleProvider === "topaz"
   const r2Url = muxed?.url ?? (isTopaz
     ? await uploadVideoMaybeWatermark(outputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark, { crf: COMBINE_DELIVERY_CRF })
@@ -1358,7 +1401,10 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
     mediaUrl: r2Url,
     // The finalize's audio could not be re-applied: the render is delivered
     // (and charged) silent, with a visible warning on the result.
-    extraOutputData: { thumbnailUrl: thumbUrl, ...(muxed ? draftAudioWarningOutputData(muxed) : {}) },
+    extraOutputData: {
+      thumbnailUrl: thumbUrl,
+      ...(muxed ? draftAudioWarningOutputData(muxed) : {}),
+    },
   })
   if (!ok) return
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${upscaleProvider})`)

@@ -33,8 +33,9 @@ export interface VideoRequestNorm {
   /** Levers the caller asked for and did not get, for disclosure. */
   adjustments: ModelInputAdjustment[]
   /** The reference task type this request declares, resolved
-   *  (`resolveSeedanceTaskType`). Absent: nothing is declared (`auto`, a model
-   *  that takes none, a draft, media that does not qualify). */
+   *  (`resolveSeedanceTaskType`; a draft declares as any other run). Absent:
+   *  nothing is declared (`auto`, a model that takes none, media that does not
+   *  qualify). */
   referenceTaskType?: DeclaredSeedanceTaskType
   /** The ratio and length the declared task type moved the request to, as the
    *  resolver returned them (before the catalog steps). Present only when it
@@ -134,7 +135,6 @@ export function resolveVideoRequestNorm(input: {
   const task = resolveSeedanceTaskType({
     provider: input.provider,
     requested: media ? input.referenceTaskType : undefined,
-    draft: input.draft === true,
     referenceImageCount: media?.imageCount ?? 0,
     referenceAudioCount: media?.audioCount ?? 0,
     referenceVideoSec: media?.videoSec ?? [],

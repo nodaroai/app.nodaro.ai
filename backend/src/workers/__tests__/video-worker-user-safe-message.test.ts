@@ -143,6 +143,7 @@ vi.mock("../handlers/video-ai.js", () => ({
   videoAIHandlers: {
     "image-to-video": mocks.mockHandler,
     "text-to-video": mocks.mockHandler,
+    "video-upscale": mocks.mockHandler,
   },
 }))
 vi.mock("../handlers/ffmpeg.js", () => ({
@@ -199,6 +200,7 @@ import { createVideoWorker } from "../video-worker.js"
 import { KieError } from "../../providers/kie/client.js"
 import { UnrecoverableError } from "bullmq"
 import { houseModelFailureError } from "../../lib/house-model-failure.js"
+import { NODARO_VIDEO_UPSCALE_FAILURE_SENTENCES } from "../../lib/nodaro-video-upscale-sentences.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -415,6 +417,31 @@ describe("video worker — a plugin's user-safe failure message", () => {
         error_message: "Nodaro Image Upscale could not complete this run.",
         error_hint: { kind: "safety-block", class: "safety", retried: false },
       }))
+    })
+
+    describe("Nodaro Video Upscale's lane (its own failure sentences, lib/nodaro-video-upscale-sentences.ts)", () => {
+      const VIDEO_CTX = { id: "nodaro-video-upscale", jobId: "job-1" }
+      const videoJob = () =>
+        makeBullJob("video-upscale", { provider: "nodaro-video-upscale", videoUrl: "https://cdn.example/c.mp4", tier: "1080p", billedSec: 10, sourceSizeBytes: 1_000 })
+
+      it("a content-policy failure keeps the video lane's sentence, never the generic safety one", async () => {
+        mocks.mockHandler.mockRejectedValueOnce(houseModelFailureError({ message: WORDS, contentPolicy: true }, VIDEO_CTX))
+
+        await processor(videoJob()).catch(() => {})
+
+        expect(failedUpdate()?.error_message).toBe(NODARO_VIDEO_UPSCALE_FAILURE_SENTENCES.contentPolicy)
+        expect(failedUpdate()?.error_message).not.toBe(GENERIC_SAFETY)
+        expect(JSON.stringify(failedUpdate())).not.toMatch(/UPSTREAM-WORDS|upstream\.example|sec-123/)
+      })
+
+      it("a refused input clip keeps the video lane's input-refused sentence", async () => {
+        mocks.mockHandler.mockRejectedValueOnce(houseModelFailureError({ message: WORDS, inputVideoRefused: true, deterministic: true }, VIDEO_CTX))
+
+        await processor(videoJob()).catch(() => {})
+
+        expect(failedUpdate()?.error_message).toBe(NODARO_VIDEO_UPSCALE_FAILURE_SENTENCES.inputRefused)
+        expect(JSON.stringify(failedUpdate())).not.toMatch(/UPSTREAM-WORDS|upstream\.example|sec-123/)
+      })
     })
 
     it("a wrapper around the seam's error does not vouch for its own text: generic safety message", async () => {

@@ -1,19 +1,24 @@
 /**
- * The settings that move a deployment's pages to their own host
+ * The settings that give a deployment's pages a host of their own
  * (docs/deployment.md, "Moving the app's pages to their own host"):
- * FLOW_UI_ORIGIN (where the pages go), LEGACY_UI_HOSTS (the hosts they leave)
+ * FLOW_UI_ORIGIN (the pages' own host), LEGACY_UI_HOSTS (the hosts they leave)
  * and PUBLIC_URL (the host the API, OAuth and published pages keep).
  * FLOW_PUBLIC_URL is the Flow host's other name, the one the API's links read:
  * either one gives the Flow origin, both set must agree, and the image's
- * start.sh hands FLOW_PUBLIC_URL to the proxy as FLOW_UI_ORIGIN when that is
+ * start.sh hands FLOW_UI_ORIGIN to the proxy from FLOW_PUBLIC_URL when that is
  * unset.
  *
- * ONE RULE for whether the move is on, the proxy's (tools/gen-route-homes.mjs),
- * also read by the /config.js writer and the browser: a Flow origin, a legacy
- * host that is not the Flow host, and PUBLIC_URL another https origin. The
- * server's links follow it (movedFlowOrigin), and any partial set is refused
- * at boot, naming the setting (lib/config.ts): a typo must not leave the move
- * half on, with links or redirects naming the wrong host.
+ * TWO STATES, each by one rule that the proxy (tools/gen-route-homes.mjs), the
+ * /config.js writer and the browser also read:
+ *   - The pages have their own host: a Flow origin, and PUBLIC_URL another https
+ *     origin. Every host still serves every page; a browser's saved settings
+ *     carry over to the Flow host once (the storage bridge), and each public
+ *     page names its one home to search engines (a canonical link).
+ *   - The move is on: that, plus a legacy host that is not the Flow host. The
+ *     legacy hosts redirect the moved pages to the Flow host, and links name it.
+ * The server's links follow the second (movedFlowOrigin). Anything that is
+ * neither is refused at boot, naming the setting (lib/config.ts): a typo must
+ * not leave a half-set state on, with links or redirects naming the wrong host.
  *
  * Pure, and kept in step with the proxy's reading: the same origin pattern
  * (a trailing slash allowed, the value read whole) and the same host-list rule.
@@ -55,24 +60,35 @@ function flowSetting(env: MovedPagesSettings): { readonly name: "FLOW_UI_ORIGIN"
 }
 
 /**
- * The origin the app's pages have moved to, when the move is on by the one
- * rule (a Flow origin from either name, a legacy host that is not the Flow
- * host, PUBLIC_URL another https origin); else null, and every link stays on
- * PUBLIC_URL. A partial set never gets this far: the server refuses it at boot.
+ * The two origins when the deployment's pages have a host of their own (the
+ * first state above: a Flow origin from either name, and PUBLIC_URL another
+ * https origin), whether or not the move is on; else null.
  */
-export function movedFlowOrigin(env: MovedPagesSettings): string | null {
+export function flowHostOrigins(env: MovedPagesSettings): { readonly flow: string; readonly kept: string } | null {
   const setting = flowSetting(env)
   const flow = setting ? httpsOriginOf(setting.value) : null
   if (flow === null) return null
   const kept = httpsOriginOf(env.PUBLIC_URL)
-  if (kept === null || kept === flow) return null
-  return legacyUiHostList(env.LEGACY_UI_HOSTS).some((host) => `https://${host}` !== flow) ? flow : null
+  return kept === null || kept === flow ? null : { flow, kept }
+}
+
+/**
+ * The origin the app's pages have moved to, when the move is on by the one
+ * rule (their own host, plus a legacy host that is not the Flow host); else
+ * null, and every link stays on PUBLIC_URL. A half-set state never gets this
+ * far: the server refuses it at boot.
+ */
+export function movedFlowOrigin(env: MovedPagesSettings): string | null {
+  const origins = flowHostOrigins(env)
+  if (origins === null) return null
+  return legacyUiHostList(env.LEGACY_UI_HOSTS).some((host) => `https://${host}` !== origins.flow) ? origins.flow : null
 }
 
 /**
  * Why these settings cannot run, starting with the setting's name; null when
- * they can, or are all unset. Anything short of the move being on by the one
- * rule is refused, so no part of it is ever on alone.
+ * they can, or are all unset. Only the two states run: the pages' own host
+ * alone (LEGACY_UI_HOSTS empty), or the whole move. Anything in between is
+ * refused, so no part of either is ever on by accident.
  */
 export function movedPagesSettingsProblem(env: MovedPagesSettings): string | null {
   const setting = flowSetting(env)
@@ -88,12 +104,14 @@ export function movedPagesSettingsProblem(env: MovedPagesSettings): string | nul
   if (kept === null || kept === flow) {
     return `PUBLIC_URL must be the https origin the API keeps (not ${setting.name}'s) while ${setting.name} is set: published apps, embeds and API addresses name it`
   }
+  // The pages' own host alone: every host keeps serving them, and none redirects.
+  if (hosts.length === 0) return null
   const notAHost = hosts.find((host) => !isLegacyUiHost(host))
   if (notAHost !== undefined) {
     return `LEGACY_UI_HOSTS must list bare host names (no scheme, port, path, tab or line break), separated by commas or spaces: ${JSON.stringify(notAHost)} is not one`
   }
   if (!hosts.some((host) => `https://${host}` !== flow)) {
-    return `LEGACY_UI_HOSTS must name at least one host the pages move away from (not ${setting.name}'s) while ${setting.name} is set: set both, or neither`
+    return `LEGACY_UI_HOSTS must name at least one host the pages move away from (not ${setting.name}'s), or be empty to keep every host serving them`
   }
   return null
 }

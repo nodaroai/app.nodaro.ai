@@ -1028,13 +1028,32 @@ describe("GenerateVideoConfig — Seedance 2.5 reference task type", () => {
     expect(p.onUpdate.mock.calls.some(([u]: any) => "referenceTaskType" in u)).toBe(false)
   })
 
-  it("with Draft on, nothing is locked or explained (a draft never carries the setting) and the stored choice is kept", () => {
-    const p = open({ referenceTaskType: "edit", draft: true, resolution: "480p" })
-    expect(p.getByText("Use the reference video as")).toBeTruthy()
-    expect(p.ratioLocked()).toBe(false)
-    expect(p.lengthLocked()).toBe(false)
-    for (const line of [EDIT_LINE, NOT_APPLIED]) expect(p.queryByText(line)).toBeNull()
-    expect(p.onUpdate.mock.calls.some(([u]: any) => "referenceTaskType" in u)).toBe(false)
+  it("with Draft on, the select is enabled and locks and explains exactly as with Draft off (a draft declares as any run)", () => {
+    const cases: Array<[Record<string, unknown>, number]> = [
+      [{ referenceTaskType: "edit" }, 6],
+      [{ referenceTaskType: "edit" }, 3],
+      [{ referenceTaskType: "extend" }, 6],
+      [{ referenceTaskType: "extend", duration: VIDEO_DURATION_AUTO }, 6],
+      [{ referenceTaskType: "reference" }, 6],
+    ]
+    const seen = (p: ReturnType<typeof open>) => ({
+      // The task type select: the one whose options are its four choices.
+      selectDisabled: p.getByText("The video to edit").closest("[data-select-disabled]")!.getAttribute("data-select-disabled") === "true",
+      ratioLocked: p.ratioLocked(),
+      lengthLocked: p.lengthLocked(),
+      lines: [EDIT_LINE, EXTEND_LINE, NOT_APPLIED, EXTEND_AUTO_LINE].filter((line) => p.queryByText(line) !== null),
+      wroteTaskType: p.onUpdate.mock.calls.some(([u]: any) => "referenceTaskType" in u),
+      wroteRatioOrLength: p.wroteRatioOrLength(),
+    })
+    for (const [extra, clipSec] of cases) {
+      const off = open({ ...extra, resolution: "480p" }, clipSec)
+      const withoutDraft = seen(off)
+      off.unmount()
+      const on = open({ ...extra, draft: true, resolution: "480p" }, clipSec)
+      expect(seen(on), JSON.stringify({ extra, clipSec })).toStrictEqual(withoutDraft)
+      expect(withoutDraft.selectDisabled).toBe(false)
+      on.unmount()
+    }
   })
 
   it("is not offered on a model that takes no task type, and the panel clears a stale value", () => {

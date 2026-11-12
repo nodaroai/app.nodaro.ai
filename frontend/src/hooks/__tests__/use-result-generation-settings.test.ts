@@ -186,13 +186,28 @@ describe("Apply settings — Seedance 2.5 reference task type", () => {
     expect(applied({ aspectRatio: "16:9" })).not.toHaveProperty("referenceTaskType")
   })
 
-  it("a draft result leaves the node's choice alone: its patch has no such key at all", () => {
-    // A draft never carries the field, so the "none" it recorded is not the
-    // user's choice: applying it keeps whatever the node is set to.
-    for (const recorded of [undefined, "auto", "edit"]) {
+  it("a draft result restores its choice like any other result", () => {
+    // A draft declares as any other run does, so what it recorded is the
+    // node's choice: a declared type comes back with the ratio and length it
+    // ran at, and none sets the node back to Auto (the key removed). The
+    // draft flag itself is never re-applied.
+    expect(applied({ provider: "seedance-2-5", aspectRatio: "adaptive", resolution: "480p", duration: -1, draft: true, referenceTaskType: "edit" })).toStrictEqual({
+      providers: undefined, provider: "seedance-2-5", aspectRatio: "adaptive", resolution: "480p", duration: -1, referenceTaskType: "edit",
+    })
+    expect(applied({ provider: "seedance-2-5", aspectRatio: "adaptive", resolution: "480p", duration: 8, draft: true, referenceTaskType: "extend" })).toStrictEqual({
+      providers: undefined, provider: "seedance-2-5", aspectRatio: "adaptive", resolution: "480p", duration: 8, referenceTaskType: "extend",
+    })
+    for (const recorded of [undefined, "auto"]) {
       const patch = applied({ provider: "seedance-2-5", aspectRatio: "16:9", resolution: "480p", duration: 5, draft: true, referenceTaskType: recorded })
-      expect(patch, String(recorded)).toStrictEqual({ providers: undefined, provider: "seedance-2-5", aspectRatio: "16:9", resolution: "480p", duration: 5 })
-      expect(patch).not.toHaveProperty("referenceTaskType")
+      expect(patch, String(recorded)).toStrictEqual({ providers: undefined, provider: "seedance-2-5", aspectRatio: "16:9", resolution: "480p", duration: 5, referenceTaskType: undefined })
+      expect(patch).toHaveProperty("referenceTaskType")
+    }
+  })
+
+  it("a draft result's patch is the patch of the same result without Draft, whole", () => {
+    for (const recorded of [undefined, "auto", "reference", "edit", "extend"]) {
+      const input = { provider: "seedance-2-5", aspectRatio: "16:9", resolution: "480p", duration: 5, referenceTaskType: recorded }
+      expect(applied({ ...input, draft: true }), String(recorded)).toStrictEqual(applied(input))
     }
   })
 })

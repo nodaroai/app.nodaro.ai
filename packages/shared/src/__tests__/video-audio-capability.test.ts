@@ -159,18 +159,34 @@ describe("seedance-2-mini is a full Seedance 2 family member", () => {
 })
 
 describe("VIDEO_AUDIO_CAPABILITY internal consistency", () => {
-  it("every AUDIO_ADDON provider is cost-affecting on the canonical `sound` lever", () => {
+  it("every AUDIO_ADDON provider is cost-affecting on the canonical `sound` intent", () => {
     // The billing-critical invariant: the `:audio` surcharge keys off `sound`,
-    // so every surcharged model must declare audio, be marked cost-affecting,
-    // and carry its toggle on that exact field (applyVideoAudioToggle then
-    // refuses the generateAudio alias for these, making a billed/generated
-    // divergence structurally impossible).
+    // so every surcharged model must declare audio, be marked cost-affecting
+    // (applyVideoAudioToggle then reads ONLY `sound` for it and refuses the
+    // generateAudio alias), and have a switch to write it to — Kling's wire
+    // key is `sound`, PixVerse V6 Max's `generate_audio_switch`. A
+    // billed/generated divergence is then structurally impossible.
     for (const m of AUDIO_ADDON_PROVIDERS) {
       const cap = getVideoAudioCapability(m)
       expect(cap.mode, m).not.toBe("none")
-      expect(cap.field, m).toBe("sound")
+      expect(cap.field, m).toBeDefined()
+      expect(cap.alwaysOn, m).toBeUndefined()
       expect(cap.affectsCost, m).toBe(true)
+      for (const sound of [true, false]) {
+        const viaSound: Record<string, unknown> = {}
+        applyVideoAudioToggle(viaSound, m, { sound })
+        expect(Object.values(viaSound), m).toEqual([sound])
+      }
+      // The alias turns the switch only on a model that declares it reads it
+      // (PixVerse V6 Max) — its price reads the same field (videoAudioIntent).
+      const viaAlias: Record<string, unknown> = {}
+      applyVideoAudioToggle(viaAlias, m, { generateAudio: true })
+      expect(viaAlias, m).toEqual(getVideoAudioCapability(m).readsGenerateAudio ? { generate_audio_switch: true } : {})
     }
+    expect(getVideoAudioCapability("kling").field).toBe("sound")
+    expect(getVideoAudioCapability("kling-3.0").field).toBe("sound")
+    expect(getVideoAudioCapability("kling").readsGenerateAudio).toBeUndefined()
+    expect(getVideoAudioCapability("kling-3.0").readsGenerateAudio).toBeUndefined()
   })
 
   it("every VEO provider is native_speech", () => {
@@ -296,5 +312,18 @@ describe("applyVideoAudioToggle — neutral audio intent → per-model KIE field
     const input: Record<string, unknown> = { generate_audio: true }
     applyVideoAudioToggle(input, "seedance-2", {})
     expect(input.generate_audio).toBe(true)
+  })
+})
+
+describe("readsGenerateAudio", () => {
+  it("is declared only by a cost-affecting model with a switch (today PixVerse V6 Max alone)", () => {
+    const declaring = Object.entries(VIDEO_AUDIO_CAPABILITY).filter(([, cap]) => cap.readsGenerateAudio).map(([m]) => m)
+    expect(declaring).toEqual(["pixverse-v6-max"])
+    for (const m of declaring) {
+      const cap = getVideoAudioCapability(m)
+      expect(cap.affectsCost, m).toBe(true)
+      expect(cap.field, m).toBeDefined()
+      expect(AUDIO_ADDON_PROVIDERS.has(m), m).toBe(true)
+    }
   })
 })

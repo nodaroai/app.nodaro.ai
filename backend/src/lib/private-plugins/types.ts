@@ -2482,6 +2482,15 @@ export interface PluginHttpToolkit {
      *  nano-banana-pro. Additive-optional — absent prices at that fallback,
      *  which is exactly what a plugin predating the field spends. */
     aspectRatio?: string
+    /** AUDIO (2026-11-12) — the `generateAudio` the run passes in every
+     *  segment's `providers.imageToVideo` / `textToVideo` options (its
+     *  effective value: false on a lane that renders silent). Each segment is
+     *  priced at the audio its model renders from exactly that field, the
+     *  options the toolkit hands the provider: PixVerse V6 Max follows it,
+     *  Kling 3.0 renders its sound whatever it says, and a model whose price
+     *  does not depend on audio ignores it. Absent → the engine's own default,
+     *  on. Additive-optional. */
+    generateAudio?: boolean
   }): Promise<GenerateVideoProPricing>
   /**
    * Mirrors `computeEditVideoProPricing` (`ee/billing/edit-video-pro-credits.ts`)
@@ -2524,6 +2533,15 @@ export interface PluginHttpToolkit {
      *  reserve (the parent's anchors are re-used). Omitted / "extend" → the
      *  classic continuation, byte-identical. Additive-optional. */
     renderMethod?: "extend" | "keyframes"
+    /** AUDIO (2026-11-12) — the `generateAudio` the run passes in every
+     *  segment's `providers.imageToVideo` / `textToVideo` options (its
+     *  effective value: false on a lane that renders silent). Each segment is
+     *  priced at the audio its model renders from exactly that field, the
+     *  options the toolkit hands the provider: PixVerse V6 Max follows it,
+     *  Kling 3.0 renders its sound whatever it says, and a model whose price
+     *  does not depend on audio ignores it. Absent → the engine's own default,
+     *  on. Additive-optional. */
+    generateAudio?: boolean
   }): Promise<GenerateVideoProPricing>
   /**
    * Mirrors `sendInternalError` (`lib/http-errors.ts`) — logs `err` server-side

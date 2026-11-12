@@ -1,5 +1,5 @@
 // @test-units-by-name prices the node types it names (upload-video, generate-video)
-// @test-watches backend/src/lib/__tests__/fixtures/seedance-reference-auto-quote.json
+// @test-watches backend/src/lib/__tests__/fixtures/seedance-reference-auto-quote.json backend/src/lib/__tests__/fixtures/seedance-draft-edit-quote.json
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify from "fastify"
 import { readFileSync } from "node:fs"
@@ -141,8 +141,11 @@ describe("the workflow estimate prices a declared Seedance 2.5 node at the run t
     expect(await estimate(extra, 6)).toStrictEqual(await estimate({}, 6))
   })
 
-  it("a draft edit: unchanged", async () => {
-    expect(await estimate({ draft: true, referenceTaskType: "edit" }, 6)).toStrictEqual(await estimate({ draft: true }, 6))
+  it("a draft edit: the run's Auto-length hold, at the draft's 480p — as the same node without Draft at 480p", async () => {
+    const asked = await estimate({ draft: true, referenceTaskType: "edit" }, 6)
+    expect(asked.perNode.gv!.credits).toBe(await runReserves({ draft: true, referenceTaskType: "edit" }, 6))
+    expect(asked.perNode.gv!.credits).not.toBe((await estimate({ draft: true }, 6)).perNode.gv!.credits)
+    expect(asked).toStrictEqual(await estimate({ referenceTaskType: "edit", resolution: "480p" }, 6))
   })
 
   it("a model that takes no task type: unchanged", async () => {
@@ -269,11 +272,21 @@ describe("the quote route's request: a declared task type is priced at the run i
     expect(asked).toStrictEqual(shaped)
   })
 
+  it.each(["edit", "extend", "reference"])("a draft %s: both quotes are the same request's without Draft at 480p, and the charged one is the run's reservation", async (referenceTaskType) => {
+    const plain = { provider: "seedance-2-5", resolution: "480p", duration: 5, referenceTaskType }
+    const draft = { ...plain, resolution: "720p", draft: true }
+    expect(await seedance2RefVideoChargedQuote({ ...draft, durationsSec: [6], unknownClips: 1 }))
+      .toStrictEqual(await seedance2RefVideoChargedQuote({ ...plain, durationsSec: [6], unknownClips: 1 }))
+    expect(await seedance2RefVideoChargedHoldQuote({ ...draft, durationsSec: [6] }))
+      .toStrictEqual(await seedance2RefVideoChargedHoldQuote({ ...plain, durationsSec: [6] }))
+    const exact = await seedance2RefVideoChargedQuote({ ...draft, durationsSec: [6], unknownClips: 0 })
+    expect(exact).toStrictEqual({ credits: await runReserves({ draft: true, referenceTaskType }, 6), min: exact.credits, exact: true })
+  })
+
   it.each<[string, Record<string, unknown>]>([
     ["absent", {}],
     ['"auto"', { referenceTaskType: "auto" }],
     ["bogus", { referenceTaskType: "bogus" }],
-    ["a draft edit", { referenceTaskType: "edit", draft: true }],
   ])("%s: both quotes are today's", async (_name, extra) => {
     const base = { provider: "seedance-2-5", resolution: "720p", duration: 5, draft: extra.draft === true }
     const req = { ...base, referenceTaskType: extra.referenceTaskType }
@@ -312,11 +325,21 @@ describe("the length a declared generation forwards to the step after it", () =>
   })
 
   it.each<[string, Record<string, unknown>]>([
+    ["edit at a stored 5 s", { referenceTaskType: "edit" }],
+    ["extend at a stored Auto", { referenceTaskType: "extend", duration: VIDEO_DURATION_AUTO }],
+    ["reference", { referenceTaskType: "reference" }],
+  ])("a draft %s forwards the length the same node without Draft forwards", (_name, extra) => {
+    for (const type of ["generate-video", "image-to-video", "text-to-video"]) {
+      const data = { ...GV, ...extra }
+      expect(generatedVideoLengthSec({ type, data: { ...data, draft: true } }), type).toBe(generatedVideoLengthSec({ type, data }))
+    }
+  })
+
+  it.each<[string, Record<string, unknown>]>([
     ["absent", {}],
     ["bogus", { referenceTaskType: "bogus" }],
     ["reference", { referenceTaskType: "reference" }],
     ["extend at a stored 5 s", { referenceTaskType: "extend" }],
-    ["a draft edit", { referenceTaskType: "edit", draft: true }],
     ["a model that takes none", { referenceTaskType: "edit", provider: "seedance-2", duration: 8 }],
   ])("%s: the forwarded length is today's", (_name, extra) => {
     for (const type of ["generate-video", "image-to-video", "text-to-video"]) {
@@ -418,5 +441,95 @@ describe("A reference with Duration on Auto: the workflow estimate and the edito
     expect(await workflowEstimate(undeclared)).toBe(reserved)
     const { referenceTaskType: _declared, ...editorUndeclared } = fixture.editorRequest
     expect(await routeQuote(editorUndeclared)).toStrictEqual({ credits: reserved, min: reserved, exact: true })
+  })
+})
+
+/**
+ * A Seedance 2.5 DRAFT that declares **The video to edit**, fed one uploaded
+ * 6 s clip, at the draft's 480p: the run's reservation, the estimate route's
+ * quote of the request the editor sends for it (the editor's node price and
+ * Run button), and the server's workflow estimate are one figure — the Auto
+ * edit's hold (the clip rounded up plus a second, out, and the clip, in),
+ * computed below by the hold's own functions and marked up at the run's id.
+ *
+ * The node, its clip and the editor's request are one shared fixture
+ * (`seedance-draft-edit-quote.json`); the editor's half —
+ * frontend/src/lib/__tests__/seedance-ref-quote.test.ts — holds the editor's
+ * `seedanceRefQuoteRequest` for the same node to `editorRequest`.
+ */
+describe("a draft edit of one 6 s clip at 480p: the reservation, the quote, the workflow estimate and the editor's quote are one figure", () => {
+  const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "../../../lib/__tests__/fixtures/seedance-draft-edit-quote.json")
+  const fixture = JSON.parse(readFileSync(FIXTURE, "utf8")) as {
+    clipSec: number
+    nodes: Array<{ id: string; type: string; data: Record<string, unknown> }>
+    edges: Array<{ id: string; source: string; target: string; sourceHandle: string; targetHandle: string }>
+    editorRequest: Record<string, unknown>
+  }
+  const gv = fixture.nodes.find((n) => n.type === "generate-video")!
+  const clip = fixture.nodes.find((n) => n.type === "upload-video")!
+  const provider = gv.data.provider as string
+
+  async function workflowEstimate(data: Record<string, unknown>) {
+    probe.durations = new Map([[clip.data.url as string, fixture.clipSec]])
+    __forgetUploadClipLengths()
+    const nodes = fixture.nodes.map((n) => (n.id === gv.id ? { ...n, data } : n))
+    return (await estimateWorkflowCreditsDetailed(nodes, fixture.edges)).perNode[gv.id]!.credits
+  }
+
+  async function routeQuote(body: Record<string, unknown>) {
+    const app = Fastify({ logger: false })
+    app.addHook("preHandler", async (req) => { req.userId = "user-a" })
+    registerSeedanceRefEstimate(app)
+    await app.ready()
+    try {
+      probe.durations = new Map([[clip.data.url as string, fixture.clipSec]])
+      const res = await app.inject({ method: "POST", url: "/v1/credits/seedance-ref-estimate", payload: body })
+      expect(res.statusCode, res.body).toBe(200)
+      return (res.json() as { data: { credits: number; min: number; exact: boolean } }).data
+    } finally {
+      await app.close()
+    }
+  }
+
+  /** The figure, by the hold's own functions: the Auto edit's hold at 480p, marked up at the draft's Auto-length id. */
+  function figure(): number {
+    const base = seedance2RefVideoBaseCreditsFromDurations({
+      provider,
+      resolution: "480p",
+      outputDurationSec: pricedOutputDurationSec(provider, VIDEO_DURATION_AUTO),
+      requestedDuration: VIDEO_DURATION_AUTO,
+      referenceTaskType: "edit",
+      durationsSec: [fixture.clipSec],
+    })
+    // The hold is the clip rounded up plus a second, out, and the clip, in.
+    expect(seedance2RefVideoHeldOutputSec({
+      provider, outputDurationSec: pricedOutputDurationSec(provider, VIDEO_DURATION_AUTO), requestedDuration: VIDEO_DURATION_AUTO, referenceTaskType: "edit", durationsSec: [fixture.clipSec],
+    })).toBe(Math.ceil(fixture.clipSec) + 1)
+    const id = videoGenerationCreditId({ provider, duration: VIDEO_DURATION_AUTO, resolution: "480p", draft: true, hasVideoRef: true })
+    return applyServiceMarkup(base, settings.value as never, id)
+  }
+
+  it("all four equal the figure", async () => {
+    // The fixture's clip is the one `runReserves` sends, so the run is priced on the node's own clip.
+    expect(clip.data.url).toBe(CLIP)
+    const expected = figure()
+    expect(await runReserves(gv.data, fixture.clipSec)).toBe(expected)
+    expect(await routeQuote(fixture.editorRequest)).toStrictEqual({ credits: expected, min: expected, exact: true })
+    expect(await workflowEstimate(gv.data)).toBe(expected)
+  })
+
+  it("the declaration is what moves all of them: the same draft without it is priced at its stored 5 s, lower", async () => {
+    const { referenceTaskType: _declared, ...undeclared } = gv.data
+    const { referenceTaskType: _sent, ...editorUndeclared } = fixture.editorRequest
+    const reserved = await runReserves(undeclared, fixture.clipSec)
+    expect(reserved).toBeLessThan(figure())
+    expect(await routeQuote(editorUndeclared)).toStrictEqual({ credits: reserved, min: reserved, exact: true })
+    expect(await workflowEstimate(undeclared)).toBe(reserved)
+  })
+
+  it("Draft changes only the resolution: the figure is the same edit at 480p without Draft", async () => {
+    const { draft: _draft, ...plain } = gv.data
+    expect(await runReserves(plain, fixture.clipSec)).toBe(figure())
+    expect(await workflowEstimate(plain)).toBe(figure())
   })
 })

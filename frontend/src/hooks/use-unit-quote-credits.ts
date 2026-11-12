@@ -19,6 +19,23 @@ export function useUnitQuote(rateId: string | undefined, units: number): number 
   return whole ?? (unit === undefined ? undefined : unit * upperUnits(units))
 }
 
+/**
+ * The server's price for the whole run and nothing else: the charge's own
+ * arithmetic (the row's base × the units, rounded up once, marked up once),
+ * and undefined until it is known, on a build without credits, or where the
+ * server does not price that many units. No interim figure: for a run priced
+ * per fraction of a row (Nodaro Video Upscale bills a quarter of its
+ * four-second row per second), the one-unit price × the units rounded up
+ * reads well above the charge, so a pill shows no price until it can show the
+ * charge's. A single unit is the row's own price.
+ */
+export function useExactUnitQuote(rateId: string | undefined, units: number): number | undefined {
+  const wholeId = unitQuoteIdFor(rateId, units)
+  const { data } = useModelCreditCost(wholeId ?? (units === 1 ? rateId : undefined))
+  if (!hasCredits()) return undefined
+  return data
+}
+
 /** {@link useUnitQuote} as a plain number: `fallback` stands in for the one-unit row until it is fetched; 0 without credits. */
 export function useUnitQuoteCredits(rateId: string | undefined, units: number, fallback = 0): number {
   const quote = useUnitQuote(rateId, units)

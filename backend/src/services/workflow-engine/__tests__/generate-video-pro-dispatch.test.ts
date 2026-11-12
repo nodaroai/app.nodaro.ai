@@ -487,6 +487,43 @@ describe("computeGenerateVideoProCreditOverride", () => {
   })
 })
 
+describe("generate-video-pro × pixverse-v6-max (a model with no reference images)", () => {
+  it("a stored reference anchor choice runs as Auto, every other choice as on any model", () => {
+    const wire = (anchorMode: string) => {
+      const n = gvpNode({ prompt: "a lighthouse in a storm", provider: "pixverse-v6-max", anchorMode })
+      return buildPayload(n, JOB_ID, {}, undefined, { nodes: [n], edges: [], nodeStates: {} }).payload.anchorMode
+    }
+    expect(wire("reference")).toBeUndefined()
+    expect(wire("start-end")).toBe("upfront")
+    expect(wire("start-only")).toBe("progressive")
+    expect(wire("auto")).toBeUndefined()
+    // A model that takes references keeps the reference-driven mode.
+    const n = gvpNode({ prompt: "a lighthouse in a storm", provider: "seedance-2", anchorMode: "reference" })
+    expect(buildPayload(n, JOB_ID, {}, undefined, { nodes: [n], edges: [], nodeStates: {} }).payload.anchorMode).toBe("none")
+  })
+
+  it("prices the run at the audio it sends: the node's generateAudio reaches the pricing, absent when unset", async () => {
+    mockGetAppSettings.mockResolvedValue({ cost_markup_percent: 0 })
+    mockComputeGvpPricing.mockResolvedValue({
+      mode: "multi", clampedDurationSec: 23, segmentCount: 3, totalRawSec: 24, segmentDurations: [10, 8, 6],
+      feeBase: 10, noRefPerSec: 0, refPerSec: 0, tailSec: 2, reserveBase: 730, renderMethod: "keyframes",
+    })
+    for (const generateAudio of [true, false]) {
+      mockComputeGvpPricing.mockClear()
+      await computeGenerateVideoProCreditOverride({ type: "generate-video-pro", provider: "pixverse-v6-max", duration: 23, renderMethod: "keyframes", generateAudio })
+      expect(mockComputeGvpPricing).toHaveBeenCalledWith(expect.objectContaining({ provider: "pixverse-v6-max", renderMethod: "keyframes", generateAudio }))
+    }
+    mockComputeGvpPricing.mockClear()
+    await computeGenerateVideoProCreditOverride({ type: "generate-video-pro", provider: "pixverse-v6-max", duration: 23, renderMethod: "keyframes" })
+    expect((mockComputeGvpPricing.mock.calls[0]![0] as Record<string, unknown>).generateAudio).toBeUndefined()
+  })
+
+  it("is a keyframes run: the payload never asks it to extend", () => {
+    const n = gvpNode({ prompt: "a lighthouse in a storm", provider: "pixverse-v6-max", renderMethod: "extend" })
+    expect(buildPayload(n, JOB_ID, {}, undefined, { nodes: [n], edges: [], nodeStates: {} }).payload.renderMethod).toBe("keyframes")
+  })
+})
+
 // ---------------------------------------------------------------------------
 // 2b. node-executor wiring — real payload-builder + real executeNode(),
 // only the credit/queue/supabase/app-settings/ee-helper layer mocked.

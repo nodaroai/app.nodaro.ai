@@ -530,9 +530,22 @@ describe("a declared reference with an automatic length (both video routes)", ()
     return { declared, plain }
   }
 
-  it.each(routes)("$url: a draft, or a model that does not take the type, reserves exactly as undeclared", async (route) => {
-    await expectUndeclared(route, { ...auto, draft: true }, "reference")
+  it.each(routes)("$url: a model that does not take the type reserves exactly as undeclared", async (route) => {
     await expectUndeclared(route, { ...auto, provider: "seedance-2" }, "reference")
+  })
+
+  it.each(routes)("$url: a draft declares, records, queues and reserves as the same body at 480p without Draft", async (route) => {
+    for (const [referenceTaskType, extra] of [["reference", {}], ["edit", { aspectRatio: "adaptive" }], ["extend", { duration: 8, aspectRatio: "adaptive" }]] as const) {
+      const draft = await runOnce(route, { ...auto, ...extra, draft: true, referenceTaskType })
+      const plain = await runOnce(route, { ...auto, ...extra, resolution: "480p", referenceTaskType })
+      expect(draft.reserve, referenceTaskType).toStrictEqual(plain.reserve)
+      expect(draft.inputData, referenceTaskType).toMatchObject({ referenceTaskType, draft: true, resolution: "480p" })
+      expect(draft.queued, referenceTaskType).toMatchObject({ referenceTaskType, draft: true, resolution: "480p" })
+    }
+    // A declared reference at an automatic length is held at the worst case, not the undeclared edit's hold.
+    const declared = await runOnce(route, { ...auto, draft: true, referenceTaskType: "reference" })
+    const undeclared = await runOnce(route, { ...auto, draft: true })
+    expect(declared.reserve.creditOverride).toBeGreaterThan(undeclared.reserve.creditOverride!)
   })
 
   it.each(routes)("$url: edit + Auto, extend, a fixed-length reference and auto reserve exactly as undeclared", async (route) => {

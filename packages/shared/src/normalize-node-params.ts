@@ -22,6 +22,7 @@
 
 import { autoAspectNeedsSourceImage, normalizeModelInput, type ModelInputAdjustment } from "./model-catalog.js"
 import { imageGenAutoAspectNeedsSourceImage } from "./credit-identifiers.js"
+import { normalizeVideoUpscaleResolution, VIDEO_UPSCALE_RESOLUTIONS, videoUpscaleResolutionsFor } from "./video-upscale-params.js"
 
 /**
  * Node types whose `data` carries catalog-governed model parameters under the
@@ -140,6 +141,7 @@ export function normalizeNodeModelParams<T extends NodeLike>(
   const adjustments: NodeParamAdjustment[] = []
   const out = nodes.map((node) => {
     const type = typeof node.type === "string" ? node.type : ""
+    if (type === "video-upscale") return normalizeVideoUpscaleNode(node, adjustments)
     if (!MODEL_PARAM_NODE_TYPES.has(type)) return node
 
     const data = node.data
@@ -197,6 +199,32 @@ export function normalizeNodeModelParams<T extends NodeLike>(
   })
 
   return { nodes: out, adjustments }
+}
+
+/**
+ * A Video Upscale node: its `targetResolution` held to what its provider takes,
+ * only for a provider whose catalog entry declares its resolutions
+ * (`normalizeVideoUpscaleResolution`; today Nodaro Video Upscale's 1080p / 2K /
+ * 4K). Every other provider's node — Topaz's, VEO's, Seedance HD's — is
+ * returned as it came: its run reads the field by its own rules. Only that one
+ * key is rewritten, and only when it holds a value some Video Upscale provider
+ * takes (`VIDEO_UPSCALE_RESOLUTIONS`, spelled any way); an unset value and any
+ * other value are left alone.
+ */
+function normalizeVideoUpscaleNode<T extends NodeLike>(node: T, adjustments: NodeParamAdjustment[]): T {
+  const data = node.data
+  if (!data || typeof data !== "object" || Array.isArray(data)) return node
+  const d = data as Record<string, unknown>
+  if (typeof d.targetResolution !== "string" || d.targetResolution === "") return node
+  const provider = typeof d.provider === "string" && d.provider !== "" ? d.provider : "topaz"
+  if (videoUpscaleResolutionsFor(provider).length === 0) return node
+  const asked = d.targetResolution.trim().toLowerCase()
+  if (!(VIDEO_UPSCALE_RESOLUTIONS as readonly string[]).includes(asked)) return node
+  const normalized = normalizeVideoUpscaleResolution(provider, d.targetResolution)
+  if (normalized.targetResolution === d.targetResolution) return node
+  const nodeId = typeof node.id === "string" ? node.id : "(unknown node)"
+  if (normalized.adjustment) adjustments.push({ ...normalized.adjustment, nodeId, provider })
+  return { ...node, data: { ...d, targetResolution: normalized.targetResolution } }
 }
 
 /** One-line-per-change summary, for surfacing back to an agent or a log. */

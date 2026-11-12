@@ -17,6 +17,7 @@ import {
   supportsExtendRender,
   supportsEndAnchor,
 } from "@nodaro/shared/models"
+import { gvpRenderResolution, gvpSegmentAudio } from "@nodaro/render-rules"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, getModelCreditBaseCost } from "./credits.js"
 
 /**
@@ -519,52 +520,15 @@ export function clampContextTailSec(v: unknown): number {
 }
 
 /**
- * Clamp a requested resolution to the provider's catalog resolutions (single
- * source of truth) — an unsupported tier (e.g. a stale 1080p on
- * seedance-2-mini, which only exposes 480p/720p) snaps to a real one so every
- * downstream composite lookup is always seeded.
- * Mirrors `seedance2-ref-video-credits.ts` / `packages/shared/src/credit-identifiers.ts`.
- *
- * SNAPS TO THE NEAREST TIER, not the highest (2026-08-06). It used to take the
- * model's top tier, so asking for the CHEAPEST resolution a model lacks quoted
- * the priciest one it has: 480p on veo3 (720p/1080p/4k) priced and reserved
- * **4k**. Nobody asking for 480p wants to be billed for 4k, and the old rule
- * made the error worst exactly where the caller was trying to spend least.
- *
- * TIES GO TO THE CHEAPER TIER, for the same reason — charging above what was
- * asked for is the worse of the two mistakes.
- *
- * Nearest is only SAFE because the clamped value is echoed back
- * ({@link GenerateVideoProPricing.resolution}) and the render uses it. Snapping
- * DOWN while the provider still rendered the raw request would reserve less
- * than the run delivers, which is precisely why the old rule reached upward.
+ * The resolution a run renders and is priced at: `gvpRenderResolution`
+ * (`@nodaro/render-rules`) — the request read onto the 480p / 720p / 1080p /
+ * 4k ladder and snapped to the NEAREST catalog tier (ties to the cheaper), or
+ * MiniMax Hailuo 3's own two values. Echoed back as
+ * {@link GenerateVideoProPricing.resolution}, which the engine renders, and the
+ * rule every resolution menu of the pro node is derived from, so a menu offers
+ * only tiers a run renders as named.
  */
-const RESOLUTION_LADDER = ["480p", "720p", "1080p", "4k"] as const
-
-function clampResolution(provider: string, resolution: string): string {
-  // MiniMax Hailuo 3: its own two-value space ("2K" default / "768P") with its
-  // own collapse rule — anything not exactly 768P (incl. a stale Seedance
-  // "720p" carried across a provider switch) bills AND renders as 2K.
-  if (isMinimaxH3Provider(provider)) return normalizeMinimaxH3Resolution(resolution)
-  const supported = MODEL_CATALOG[provider]?.resolutions ?? ["480p", "720p", "1080p"]
-  const want = resolution === "4k" ? "4k" : resolution === "1080p" ? "1080p" : resolution === "720p" ? "720p" : "480p"
-  if (supported.includes(want)) return want
-  const wantAt = RESOLUTION_LADDER.indexOf(want)
-  let best: string | undefined
-  let bestDistance = Number.POSITIVE_INFINITY
-  // Walked low → high, so an equidistant pair settles on the cheaper tier.
-  for (const tier of RESOLUTION_LADDER) {
-    if (!supported.includes(tier)) continue
-    const distance = Math.abs(RESOLUTION_LADDER.indexOf(tier) - wantAt)
-    if (distance < bestDistance) {
-      best = tier
-      bestDistance = distance
-    }
-  }
-  // A catalog listing nothing this ladder knows keeps the old top-tier rule as
-  // the backstop: still seeded, still never under-reserving.
-  return best ?? supported[supported.length - 1] ?? "480p"
-}
+const clampResolution = gvpRenderResolution
 
 /**
  * Per-second BASE rate for a (provider, resolution, ref) combination, derived
@@ -647,12 +611,19 @@ function hasPerSecRate(provider: string, resolution: string): boolean {
  * identifier shape (VEO's resolution tiers, Gemini Omni's duration snap,
  * Kling's `:Ns`), and `getModelCreditBaseCost` keeps the lookup DB-override
  * aware, so an admin reprice moves the pro node with it.
+ *
+ * The audio is `gvpSegmentAudio`'s: the provider fields the segment is handed
+ * for the `generateAudio` the run sends it (on when unset), read by the same
+ * resolver the provider renders from — so a model whose price depends on its
+ * audio is charged the audio it renders (PixVerse V6 Max: that field; Kling
+ * 3.0, which reads only `sound`: its default, on), and every other model's row
+ * has no audio dimension at all.
  */
-async function segmentCost(provider: string, resolution: string, durationSec: number): Promise<number> {
+async function segmentCost(provider: string, resolution: string, durationSec: number, generateAudio: boolean | undefined): Promise<number> {
   const identifier = buildVideoCreditModelIdentifier(
     provider,
     durationSec,
-    false,
+    gvpSegmentAudio(generateAudio),
     "image-to-video",
     undefined,
     resolution,
@@ -710,6 +681,13 @@ export async function computeGenerateVideoProPricing(args: {
    *  predating the field still generates every anchor on nano-banana-pro, so
    *  that reserves exactly what it spends (today's number, byte-identical). */
   aspectRatio?: string
+  /** The `generateAudio` the run sends every segment (its effective value —
+   *  false on a lane that renders silent). Each segment is priced at the audio
+   *  its model renders from that field (`gvpSegmentAudio`): PixVerse V6 Max
+   *  follows it, Kling 3.0 renders (and is charged) its sound whatever it says,
+   *  and a model whose price does not depend on audio ignores it. Absent → the
+   *  engine's own default, on. Additive-optional (no contract bump). */
+  generateAudio?: boolean
 }): Promise<GenerateVideoProPricing> {
   if (args.segmentMode && (args.preferredSegmentSec !== undefined || args.segmentDurations !== undefined)) throw new Error("segmentMode is exclusive with explicit or preferred segment lengths")
   const { provider, durationSec } = args
@@ -777,7 +755,7 @@ export async function computeGenerateVideoProPricing(args: {
     const duration = Math.min(Math.max(Math.round(durationSec), bounds.minSeg), cap)
     const costs = new Map<number, number>()
     if (args.renderMethod === "keyframes" && !perSecPriced) {
-      await Promise.all(bounds.allowed.map(async d => costs.set(d, await segmentCost(provider, resolution, d))))
+      await Promise.all(bounds.allowed.map(async d => costs.set(d, await segmentCost(provider, resolution, d, args.generateAudio))))
     }
     const candidates = highestCostPartitions(duration, { ...bounds, lossSec: 0, maxCount: EXPLICIT_MAX_SEGMENTS }, (raw, index) => {
       const normalized = bounds.allowed.find(a => a >= raw)!
@@ -819,7 +797,7 @@ export async function computeGenerateVideoProPricing(args: {
     // does not exist for these SKUs.
     const segmentCosts = perSecPriced
       ? undefined
-      : await Promise.all(split.durations.map((d) => segmentCost(provider, resolution, d)))
+      : await Promise.all(split.durations.map((d) => segmentCost(provider, resolution, d, args.generateAudio)))
     const segmentsBase = segmentCosts
       ? segmentCosts.reduce((a, b) => a + b, 0)
       : keyframesSegmentsBase(split.durations, noRefPerSec)
@@ -857,7 +835,7 @@ export async function computeGenerateVideoProPricing(args: {
     const creditIdentifier = buildVideoCreditModelIdentifier(
       provider,
       split.clampedD,
-      false,
+      gvpSegmentAudio(args.generateAudio),
       "text-to-video",
       undefined,
       resolution,
@@ -962,6 +940,13 @@ export async function computeGenerateVideoProContinuationPricing(args: {
    *  throws rather than silently suffix-pricing). Deduped + sorted here; the
    *  echo rides back as `billSegments` (the capability signal). */
   segments?: number[]
+  /** The `generateAudio` the run sends every segment (its effective value —
+   *  false on a lane that renders silent). Each segment is priced at the audio
+   *  its model renders from that field (`gvpSegmentAudio`): PixVerse V6 Max
+   *  follows it, Kling 3.0 renders (and is charged) its sound whatever it says,
+   *  and a model whose price does not depend on audio ignores it. Absent → the
+   *  engine's own default, on. Additive-optional (no contract bump). */
+  generateAudio?: boolean
 }): Promise<GenerateVideoProPricing> {
   const { provider } = args
   const tailSec = clampContextTailSec(args.tailSec)
@@ -1016,7 +1001,7 @@ export async function computeGenerateVideoProContinuationPricing(args: {
   // index it by absolute segment number exactly like `segmentDurations`.
   const segmentCosts = perSecPriced
     ? undefined
-    : await Promise.all(durations.map((d) => segmentCost(provider, resolution, d)))
+    : await Promise.all(durations.map((d) => segmentCost(provider, resolution, d, args.generateAudio)))
   const billedCostsFor = (segs: number[]): number =>
     segs.reduce((sum, s) => sum + (segmentCosts![s - 1] ?? 0), 0)
   // KEYFRAMES continuation: the child re-renders scenes k..N from their OWN

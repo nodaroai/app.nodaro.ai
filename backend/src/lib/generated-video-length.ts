@@ -70,7 +70,8 @@ function providerLengthSec(provider: string, data: Record<string, unknown>): num
       provider,
       resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
       duration,
-      // Undeclared: exactly the call the length was always read by. A draft declares nothing.
+      // Undeclared: exactly the call the length was always read by. A draft
+      // declares as any other run does.
       ...(clips ? { draft: data.draft === true, referenceTaskType, referenceMedia: videoRequestReferenceMedia({ referenceVideoUrls: clips }, clips) } : {}),
     })
     return pricedOutputDurationSec(provider, norm.duration ?? duration)
