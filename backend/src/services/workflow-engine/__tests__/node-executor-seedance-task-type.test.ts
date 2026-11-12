@@ -167,13 +167,15 @@ describe("node-executor — the Seedance edit's requested task type is resolved 
     expect((mockReserveCredits.mock.calls[0] as unknown[])[2]).toBe("seedance-2-5:30s:480p-ref")
   })
 
-  it("a draft edit of a 6 s clip goes out undeclared", async () => {
+  it("a draft edit of a 6 s clip carries the resolved edit, as without Draft, and the reservation is unchanged", async () => {
     mockProbeMediaDuration.mockResolvedValue(6)
-    setEditPayload("https://cdn.example.com/draft.mp4", { draft: true })
+    const edit = setEditPayload("https://cdn.example.com/draft.mp4", { draft: true })
     await expect(executeNode(node, {}, [], [], {}, makeCtx())).rejects.toThrow(/enqueue-sentinel/)
 
-    expect(writtenInputData()).not.toHaveProperty("referenceTaskType")
-    expect(queuedPayload()).not.toHaveProperty("referenceTaskType")
+    expect(writtenInputData()).toMatchObject({ ...edit, draft: true, referenceTaskType: "edit", refVideoDurationsSec: [6] })
+    expect(queuedPayload()).toMatchObject({ ...edit, draft: true, referenceTaskType: "edit", usageLogId: "usage-1", refVideoDurationsSec: [6] })
+    expect((mockReserveCredits.mock.calls[0] as unknown[])[2]).toBe("seedance-2-5:30s:480p-ref")
+    expect(mockSeedance2FromDurations).toHaveBeenCalledWith(expect.objectContaining({ durationsSec: [6], requestedDuration: -1, referenceTaskType: "edit" }))
   })
 
   it("a payload that requests nothing is recorded and queued without the key", async () => {
@@ -290,14 +292,19 @@ describe("node-executor — a Generate Video node's Seedance 2.5 task type", () 
     expect(asked.reservedId).toBe(plain.reservedId)
   })
 
-  it("a draft edit: no key, and nothing else changes", async () => {
+  it("a draft edit: recorded, queued and reserved as the same edit at 480p without Draft — the route's own id", async () => {
     mockProbeMediaDuration.mockResolvedValue(6)
     const asked = await runGenerateVideo(gvNode({ draft: true, referenceTaskType: "edit" }))
-    const plain = await runGenerateVideo(gvNode({ draft: true }))
-    expect(asked.queued).not.toHaveProperty("referenceTaskType")
-    expect(asked.queued).toStrictEqual(plain.queued)
-    expect(asked.inputData).toStrictEqual(plain.inputData)
+    const plain = await runGenerateVideo(gvNode({ resolution: "480p", referenceTaskType: "edit" }))
+    for (const sent of [asked.queued, asked.inputData]) {
+      expect(sent).toMatchObject({ referenceTaskType: "edit", aspectRatio: "adaptive", duration: -1, resolution: "480p", draft: true })
+    }
+    expect(asked.queued).toStrictEqual({ ...plain.queued, draft: true })
+    expect(asked.inputData).toStrictEqual({ ...plain.inputData, draft: true })
     expect(asked.reservedId).toBe(plain.reservedId)
+    expect(asked.checkedId).toBe(plain.checkedId)
+    expect(asked.reservedId).toBe(routeId({ ...GV_DATA, draft: true, referenceTaskType: "edit" }, [6]))
+    expect(asked.reservedId).not.toBe((await runGenerateVideo(gvNode({ draft: true }))).reservedId)
   })
 
   it("fail safe: a requested edit with no price arguments goes out as built, undeclared, at the built id, with one warning", async () => {
@@ -344,13 +351,16 @@ describe("node-executor — the reservation override reads the resolved task typ
     expect(queuedPayload()).toMatchObject({ referenceTaskType: "reference" })
   })
 
-  it("the edit's resolved type, and none for a draft (dropped) or a payload that requests nothing", async () => {
+  it("the edit's resolved type, a draft's as any run's, and none for a payload that requests nothing", async () => {
     mockProbeMediaDuration.mockResolvedValue(6)
     setEditPayload("https://cdn.example.com/six.mp4")
     await expect(executeNode(node, {}, [], [], {}, makeCtx())).rejects.toThrow(/enqueue-sentinel/)
     expect(mockSeedance2FromDurations.mock.calls[0]![0]).toMatchObject({ referenceTaskType: "edit" })
 
-    for (const extra of [{ draft: true, referenceTaskType: "reference" }, { referenceTaskType: undefined }]) {
+    for (const [extra, priced] of [
+      [{ draft: true, referenceTaskType: "reference" }, "reference"],
+      [{ referenceTaskType: undefined }, undefined],
+    ] as const) {
       vi.clearAllMocks()
       mockSeedance2FromDurations.mockReturnValue(500)
       mockReserveCredits.mockResolvedValue({ usageLogId: "usage-1", creditsReserved: 500, watermark: false })
@@ -360,8 +370,8 @@ describe("node-executor — the reservation override reads the resolved task typ
       mockProbeMediaDuration.mockResolvedValue(6)
       setEditPayload("https://cdn.example.com/six.mp4", extra)
       await expect(executeNode(node, {}, [], [], {}, makeCtx())).rejects.toThrow(/enqueue-sentinel/)
-      const priced = mockSeedance2FromDurations.mock.calls[0]![0] as Record<string, unknown>
-      expect(priced, JSON.stringify(extra)).toHaveProperty("referenceTaskType", undefined)
+      const args = mockSeedance2FromDurations.mock.calls[0]![0] as Record<string, unknown>
+      expect(args, JSON.stringify(extra)).toHaveProperty("referenceTaskType", priced)
     }
   })
 })

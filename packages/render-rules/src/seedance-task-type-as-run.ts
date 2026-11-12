@@ -75,7 +75,8 @@ export interface SeedanceTaskTypeAsRun {
  *
  * @param provider the model the run uses.
  * @param duration the length the node asks for.
- * @param data the node's data: `referenceTaskType`, `draft`, `aspectRatio`.
+ * @param data the node's data: `referenceTaskType`, `aspectRatio` (a draft
+ *   declares as any other run does, so Draft is not read).
  * @param referenceVideoSec one entry per wired reference video
  *   ({@link wiredReferenceVideoSec}); `undefined` = its length is not known,
  *   counted as the model's longest accepted clip, as the server counts it.
@@ -95,7 +96,6 @@ export function seedanceTaskTypeAsRun(args: {
   const run = resolveSeedanceTaskType({
     provider,
     requested: data.referenceTaskType,
-    draft: data.draft === true,
     // Only Edit and Extend move anything, and both need a reference video, so
     // the other media counts change nothing read here.
     referenceImageCount: 0,

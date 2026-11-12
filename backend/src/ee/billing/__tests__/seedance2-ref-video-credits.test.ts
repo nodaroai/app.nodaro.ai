@@ -698,10 +698,12 @@ describe("a declared reference with an automatic length", () => {
     }
   })
 
-  it("the quote resolves the declaration as the run does: a draft, or a model that does not take it, declares nothing", () => {
+  it("the quote resolves the declaration as the run does: a model that does not take it declares nothing, a draft declares as any run", () => {
     const quote = (args: Record<string, unknown>) => seedance2RefVideoQuote({ resolution: "720p", duration: AUTO, durationsSec: [5], unknownClips: 0, charge, provider: "seedance-2-5", referenceTaskType: undefined, ...args })
-    expect(quote({ draft: true, referenceTaskType: "reference" })).toStrictEqual(quote({ draft: true }))
     expect(quote({ provider: "seedance-2", referenceTaskType: "reference" })).toStrictEqual(quote({ provider: "seedance-2" }))
+    // A draft: the declared reference's worst-case hold, at the draft's 480p — the same request at 480p without Draft.
+    expect(quote({ draft: true, referenceTaskType: "reference" })).toStrictEqual(quote({ resolution: "480p", referenceTaskType: "reference" }))
+    expect(quote({ draft: true, referenceTaskType: "reference" })).not.toStrictEqual(quote({ draft: true }))
   })
 
   describe("the settlement: charged what it makes, never above the hold", () => {

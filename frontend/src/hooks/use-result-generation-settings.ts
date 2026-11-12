@@ -32,10 +32,10 @@ export interface ResultGenerationSettings {
   readonly videoSize?: string
   readonly generateAudio?: boolean
   /** Seedance 2.5's reference task type, for a model that takes it: the type
-   *  the run declared, or `"auto"` when it declared none. Absent for every
-   *  other model (and every image result), and for a draft, which never
-   *  carries the field (its "none" is not the user's choice). Re-applied with
-   *  the ratio and length, so applying a past run reproduces it. */
+   *  the run declared, or `"auto"` when it declared none — a draft's as any
+   *  other run's, since a draft declares as any other run does. Absent for
+   *  every other model (and every image result). Re-applied with the ratio and
+   *  length, so applying a past run reproduces it. */
   readonly referenceTaskType?: SeedanceReferenceTaskType
   /** A Seedance 2.5 DRAFT (480p) — display-only (the tile's "Draft" badge);
    *  never re-applied, since the node's Draft toggle is its own setting. */
@@ -57,11 +57,10 @@ export interface ResultGenerationSettings {
 
 /**
  * The task type a job ran with, for a model that takes one (`"auto"` = none
- * declared). A draft never carries the field, so the "none" it recorded is not
- * the user's choice: nothing, and applying the draft leaves the node's own.
+ * declared). A draft is read as any other run: it declares as one does.
  */
-function recordedTaskType(provider: string | undefined, recorded: unknown, draft: boolean): SeedanceReferenceTaskType | undefined {
-  if (draft || !supportsReferenceTaskType(provider)) return undefined
+function recordedTaskType(provider: string | undefined, recorded: unknown): SeedanceReferenceTaskType | undefined {
+  if (!supportsReferenceTaskType(provider)) return undefined
   return listedSeedanceTaskType(provider, recorded) ?? "auto"
 }
 
@@ -84,7 +83,7 @@ export function selectSettings(job: Job): ResultGenerationSettings {
     videoSize: str(d.videoSize),
     // boolean — `false` is a real value (audio explicitly off), so guard on type.
     generateAudio: typeof d.generateAudio === "boolean" ? d.generateAudio : undefined,
-    referenceTaskType: recordedTaskType(str(d.provider), d.referenceTaskType, d.draft === true),
+    referenceTaskType: recordedTaskType(str(d.provider), d.referenceTaskType),
     draft: d.draft === true ? true : undefined,
     warningCode: str((job.output_data ?? {}).warningCode),
     prompt: str(d.userPrompt) ?? str(d.prompt),
@@ -149,7 +148,7 @@ export function buildAppliedConfigPatch(
   if (s.generateAudio !== undefined) patch.generateAudio = s.generateAudio
   // Seedance 2.5: the declared type comes back with the ratio and length it ran
   // at; a run that declared none sets the node back to Auto (the key removed).
-  // A draft records none (`selectSettings`), so the node keeps its own choice.
+  // A draft result restores its choice like any other result.
   if (s.referenceTaskType !== undefined) patch.referenceTaskType = s.referenceTaskType === "auto" ? undefined : s.referenceTaskType
   // A result from a model that takes no task type moves the node onto that
   // model: a choice left on it would come back, unseen, on a switch back.

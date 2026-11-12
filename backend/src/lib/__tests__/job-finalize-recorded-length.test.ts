@@ -45,6 +45,7 @@ const probe = vi.hoisted(() => ({ fn: vi.fn(async (_url: string): Promise<number
 vi.mock("@/providers/video/ffmpeg-utils.js", () => ({ probeMediaDuration: probe.fn }))
 
 import { finalizeJobWithMedia, type FinalizeJobType } from "@/lib/job-finalize.js"
+import { resolveVideoRequestNorm, videoRequestReferenceMedia } from "@/lib/video-request-norm.js"
 
 const R2 = "https://r2.example/vid-j1.mp4"
 const SEEDANCE_25 = "seedance-2-5"
@@ -149,6 +150,44 @@ describe("a length-following run records the length it really is", () => {
     probe.fn.mockResolvedValue(9.6)
     expect((await complete("image-to-video", { deliveredVideoSec: Number.NaN })).outputData?.durationSec).toBe(9.6)
     expect(probe.fn).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("a Seedance 2.5 draft whose length follows its source records it", () => {
+  /**
+   * The request's fields the job records, by the routes' own resolution
+   * (`resolveVideoRequestNorm`, what `/v1/generate-video` and `/v1/text-to-video`
+   * write to `input_data`): a draft at 16:9 and 5 s with one 6 s clip.
+   */
+  function recordedRequest(referenceTaskType: string | undefined): Record<string, unknown> {
+    const clips = ["https://cdn.example/clip.mp4"]
+    const norm = resolveVideoRequestNorm({
+      provider: SEEDANCE_25, aspectRatio: "16:9", resolution: "480p", duration: 5, draft: true,
+      referenceTaskType, referenceMedia: videoRequestReferenceMedia({ referenceVideoUrls: clips }, [6]),
+    })
+    return {
+      provider: SEEDANCE_25, aspectRatio: norm.aspectRatio, resolution: norm.resolution, duration: norm.duration ?? 5, draft: true,
+      referenceVideoUrls: clips, refVideoDurationsSec: [6],
+      ...(norm.referenceTaskType ? { referenceTaskType: norm.referenceTaskType } : {}),
+    }
+  }
+
+  it.each(["image-to-video", "text-to-video"] as const)("%s: a draft edit of a 6 s clip records its delivered length (6.04 s reads as 6), at most the Auto bound", async (jobType) => {
+    const input = recordedRequest("edit")
+    expect(input).toMatchObject({ referenceTaskType: "edit", duration: VIDEO_DURATION_AUTO, aspectRatio: "adaptive", resolution: "480p", draft: true })
+    expect(lengthFollowingBoundSec(input as never)).toBe(AUTO_BOUND_25)
+    jobRow(jobType, input)
+    const { outcome, outputData } = await complete(jobType, { deliveredVideoSec: 6.04 })
+    expect(outcome).toStrictEqual({ ok: true })
+    expect(outputData).toStrictEqual({ ...BEFORE, durationSec: 6 })
+  })
+
+  it("the same draft without the setting goes out at its 5 s and records nothing, as before", async () => {
+    const input = recordedRequest(undefined)
+    expect(input).not.toHaveProperty("referenceTaskType")
+    jobRow("image-to-video", input)
+    expect((await complete("image-to-video", { deliveredVideoSec: 6.04 })).outputData).toStrictEqual(BEFORE)
+    expect(probe.fn).not.toHaveBeenCalled()
   })
 })
 

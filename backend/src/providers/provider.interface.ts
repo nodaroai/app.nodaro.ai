@@ -164,7 +164,7 @@ export interface ProviderOptions {
   // Seedance 2.5 ONLY: what the reference media is for, as the route resolved
   // it (`resolveSeedanceTaskType`) — sent as KIE's `omni_reference_task_type`.
   // The KIE adapter writes it only on a body the provider takes it on (a model
-  // whose catalog lists the value, not a draft, reference media on the body —
+  // whose catalog lists the value, reference media on the body —
   // a reference video for `edit`/`extend` — and no start frame); absent = no
   // field, today's request. The Nodaro cloud relay forwards it as
   // `referenceTaskType`. Other models ignore it.

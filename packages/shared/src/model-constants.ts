@@ -3806,7 +3806,11 @@ export interface SeedanceTaskTypeFacts {
   provider: string | undefined
   /** The value the request carries, unvalidated: anything but a declared value is Auto. */
   requested: unknown
-  draft: boolean
+  /**
+   * @deprecated Not read: a draft declares exactly as any other run does. Kept
+   * so a caller that still passes it compiles; leave it out.
+   */
+  draft?: boolean
   /** Reference images only: a start or end frame is not counted. */
   referenceImageCount: number
   referenceAudioCount: number
@@ -3871,7 +3875,6 @@ function editReferenceVideosFit(referenceVideoSec: ReadonlyArray<number | undefi
  *     LISTS, matched exactly. The list is what is honoured: a model that lists
  *     nothing, a value it does not list (`auto`, a wrong case, a number) and a
  *     model that lists only some values are all Auto;
- *   - the run is not a draft;
  *   - it has the reference media the type needs
  *     ({@link seedanceTaskTypeFitsMedia}): `edit` and `extend` need a
  *     reference video;
@@ -3889,13 +3892,17 @@ function editReferenceVideosFit(referenceVideoSec: ReadonlyArray<number | undefi
  * Each value it changes is reported as one adjustment; a value it fills where
  * the request had none is not a correction and reports nothing, and neither is
  * a ratio that already runs at the forced one (`"Auto"` with a reference video
- * runs at `"adaptive"`). Pure.
+ * runs at `"adaptive"`).
+ *
+ * A draft (`draft: true`) is no exception: it declares, and is forced, exactly
+ * as the same request without Draft (a draft and its 1080p finalize keep an
+ * edit's own length and framing, measured). Pure.
  */
 export function resolveSeedanceTaskType(facts: SeedanceTaskTypeFacts): SeedanceTaskTypeResolution {
   const { provider, aspectRatio, duration, referenceVideoSec } = facts
   const unchanged: SeedanceTaskTypeResolution = { taskType: undefined, aspectRatio, duration, adjustments: [] }
   const taskType = listedSeedanceTaskType(provider, facts.requested)
-  if (!taskType || !provider || facts.draft) return unchanged
+  if (!taskType || !provider) return unchanged
   const media = {
     imageCount: facts.referenceImageCount,
     videoCount: referenceVideoSec.length,

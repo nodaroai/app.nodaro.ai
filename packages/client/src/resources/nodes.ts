@@ -513,8 +513,9 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
    *   without joining the source to it, so expect the continuation only; for
    *   both as one video, run `extend-video`. Needs a reference video.
    *
-   * Ignored on a draft and on a run with no reference media (a start or end
-   * frame is not reference media). Every ratio or length it changes is
+   * Ignored on a run with no reference media (a start or end frame is not
+   * reference media). A draft (`draft: true`) declares it exactly as the same
+   * run without `draft`, at 480p. Every ratio or length it changes is
    * reported in the response's `adjustments`, and the run is priced, reserved
    * and sent at the ratio and length it runs at. A dropped declaration is not
    * reported.

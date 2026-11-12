@@ -53,10 +53,11 @@ describe("SeedanceTaskTypeSelect", () => {
     expect(names).toEqual(["Auto", "A reference", "The video to edit", "The video to extend (new footage only)"])
   })
 
-  it("is disabled while Draft is on, and keeps showing the stored value", () => {
-    render(<SeedanceTaskTypeSelect provider="seedance-2-5" value="extend" draft hasReferenceVideo onUpdate={vi.fn()} />)
+  it("takes no Draft: it is never disabled, and shows the stored value", () => {
+    // A draft declares as any other run does, so the select has no Draft lock.
+    render(<SeedanceTaskTypeSelect provider="seedance-2-5" value="extend" hasReferenceVideo onUpdate={vi.fn()} />)
     const trigger = screen.getByRole("combobox")
-    expect(trigger).toBeDisabled()
+    expect(trigger).not.toBeDisabled()
     expect(trigger).toHaveTextContent("The video to extend (new footage only)")
   })
 })
@@ -98,21 +99,21 @@ describe("task type predicates", () => {
   })
 
   it("locks what the RUN declares: Edit locks, Extend locks; the note follows", () => {
-    const state = (value: unknown, asRun: { taskType?: "reference" | "edit" | "extend"; duration?: number }, opts: { hasReferenceVideo?: boolean; draft?: unknown; provider?: string } = {}) =>
+    const state = (value: unknown, asRun: { taskType?: "reference" | "edit" | "extend"; duration?: number }, opts: { hasReferenceVideo?: boolean; provider?: string } = {}) =>
       seedanceTaskTypePanelState({
-        provider: opts.provider ?? "seedance-2-5", value, hasReferenceVideo: opts.hasReferenceVideo ?? true, draft: opts.draft,
+        provider: opts.provider ?? "seedance-2-5", value, hasReferenceVideo: opts.hasReferenceVideo ?? true,
         asRun: { taskType: asRun.taskType, duration: asRun.duration ?? 5 },
       })
     expect(state("edit", { taskType: "edit", duration: -1 })).toStrictEqual({ lock: "edit", note: "edit" })
     expect(state("extend", { taskType: "extend", duration: 8 })).toStrictEqual({ lock: "extend", note: "extend" })
     expect(state("reference", { taskType: "reference" })).toStrictEqual({ lock: undefined, note: undefined })
     expect(state(undefined, {})).toStrictEqual({ lock: undefined, note: undefined })
-    // Edit chosen, a clip wired, no draft — but the run does not declare it
-    // (a clip the editor knows is outside the window): editable, and says why.
+    // Edit chosen, a clip wired — but the run does not declare it (a clip the
+    // editor knows is outside the window): editable, and says why. A draft is
+    // no exception: the panel's state reads the run, never Draft.
     expect(state("edit", {})).toStrictEqual({ lock: undefined, note: "edit-not-applied" })
-    // No reference video, or a draft: the run uses the stored values and nothing is said.
+    // No reference video: the run uses the stored values and nothing is said.
     expect(state("edit", {}, { hasReferenceVideo: false })).toStrictEqual({ lock: undefined, note: undefined })
-    expect(state("edit", {}, { draft: true })).toStrictEqual({ lock: undefined, note: undefined })
     expect(state("edit", {}, { provider: "kling-3.0" })).toStrictEqual({ lock: undefined, note: undefined })
   })
 })

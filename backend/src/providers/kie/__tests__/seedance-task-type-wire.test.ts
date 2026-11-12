@@ -7,7 +7,7 @@ import { applySeedance2Params } from "../video.js"
 //
 // The routes resolve the declaration before pricing; the adapter is the last
 // line of defence and writes the field only on a body the provider takes it
-// on: a model whose catalog lists the value, not a draft, at least one
+// on: a model whose catalog lists the value (a draft included), at least one
 // `reference_*_urls` on the body after the shared resolver ran (for `edit` and
 // `extend`, a `reference_video_urls`), no `first_frame_url` (KIE refuses
 // the field on text-only and frame-mode tasks: "only supported in multimodal
@@ -155,11 +155,16 @@ describe("applySeedance2Params — omni_reference_task_type", () => {
     expect("omni_reference_task_type" in input).toBe(false)
   })
 
-  it("a draft never gets it", () => {
-    const input = body(editInput(), { ...editOptions(), draft: true, referenceTaskType: "edit" }, "seedance-2-5")
-    expect(input.draft).toBe(true)
-    expect(input.reference_video_urls).toEqual([VIDEO])
-    expect("omni_reference_task_type" in input).toBe(false)
+  it("a draft gets it exactly as a run without Draft, at 480p", () => {
+    for (const taskType of ["reference", "edit", "extend"]) {
+      const input = body(editInput(), { ...editOptions(), draft: true, referenceTaskType: taskType }, "seedance-2-5")
+      expect(input, taskType).toEqual({ ...EDIT_BODY_TODAY, draft: true, resolution: "480p", omni_reference_task_type: taskType })
+    }
+  })
+
+  it("a draft without the option is the draft body of today (no field)", () => {
+    const input = body(editInput(), { ...editOptions(), draft: true }, "seedance-2-5")
+    expect(input).toEqual({ ...EDIT_BODY_TODAY, draft: true, resolution: "480p" })
   })
 
   it("seedance-2 never gets it", () => {

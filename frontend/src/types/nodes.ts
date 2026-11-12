@@ -2128,8 +2128,8 @@ export type ImageToVideoData = PromptAffixFields & {
    *  its own shape and length) or `extend` (the clip continues it). Auto is the
    *  key being absent: nothing is declared and the model guesses from the
    *  prompt. Only Seedance 2.5 reads it; a workflow run and a single run resolve
-   *  it by the same rule (a draft, or media that does not qualify, declares
-   *  nothing). */
+   *  it by the same rule (media that does not qualify declares nothing; a draft
+   *  declares as any other run). */
   referenceTaskType?: "reference" | "edit" | "extend"
   resolution?: string
   grokMode?: "fun" | "normal" | "spicy"
@@ -2306,8 +2306,8 @@ export type TextToVideoData = PromptAffixFields & {
    *  its own shape and length) or `extend` (the clip continues it). Auto is the
    *  key being absent: nothing is declared and the model guesses from the
    *  prompt. Only Seedance 2.5 reads it; a workflow run and a single run resolve
-   *  it by the same rule (a draft, or media that does not qualify, declares
-   *  nothing). */
+   *  it by the same rule (media that does not qualify declares nothing; a draft
+   *  declares as any other run). */
   referenceTaskType?: "reference" | "edit" | "extend"
   seed?: number                      // VEO 3.1: reproducible generation (10000-99999)
   // VEO 3.x: opt out of KIE's auto-translate-to-English. Same semantics

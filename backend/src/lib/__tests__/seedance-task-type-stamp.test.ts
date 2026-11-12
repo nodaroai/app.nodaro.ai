@@ -55,11 +55,16 @@ describe("stampSeedanceReferenceTaskType", () => {
     expect(stamped).toStrictEqual(withoutTaskType(payload))
   })
 
-  it("drops the requested edit on a draft, and changes nothing else", () => {
+  it("keeps the requested edit on a draft, as without Draft", () => {
     const payload = editPayload({ draft: true })
     const stamped = stampSeedanceReferenceTaskType(payload, [6])
-    expect(stamped).not.toHaveProperty("referenceTaskType")
-    expect(stamped).toStrictEqual(withoutTaskType(payload))
+    expect(stamped.referenceTaskType).toBe("edit")
+    expect(stamped).toStrictEqual(payload)
+  })
+
+  it("a draft drops an edit it cannot honour, as without Draft", () => {
+    const payload = editPayload({ draft: true })
+    expect(stampSeedanceReferenceTaskType(payload, [3])).toStrictEqual(withoutTaskType(payload))
   })
 
   it("drops it on a model that takes no task type", () => {
@@ -181,11 +186,16 @@ describe("stampSeedanceReferenceTaskTypeForRun", () => {
     expect(run.modelIdentifier).toBe(built.modelIdentifier)
   })
 
-  it("a draft edit goes out undeclared, nothing else moves", () => {
-    const built = builtRun(lanePayload({ draft: true }))
-    const run = stampSeedanceReferenceTaskTypeForRun(built, [6])
-    expect(run.payload).toStrictEqual(withoutTaskType(lanePayload({ draft: true })))
-    expect(run.modelIdentifier).toBe(built.modelIdentifier)
+  it.each([
+    ["edit at 5 s", {}],
+    ["extend at Auto", { referenceTaskType: "extend", duration: -1 }],
+    ["extend at 5 s", { referenceTaskType: "extend" }],
+    ["reference", { referenceTaskType: "reference" }],
+  ])("a draft %s runs, and is priced, as the same job without Draft", (_name, extra) => {
+    const plain = stampSeedanceReferenceTaskTypeForRun(builtRun(lanePayload(extra)), [6])
+    const draft = stampSeedanceReferenceTaskTypeForRun(builtRun(lanePayload({ ...extra, draft: true })), [6])
+    expect(draft).toStrictEqual({ ...plain, payload: { ...plain.payload, draft: true } })
+    expect(draft.payload.referenceTaskType).toBe(lanePayload(extra).referenceTaskType)
   })
 
   it("a payload that requests nothing is the very same object, at the built id", () => {

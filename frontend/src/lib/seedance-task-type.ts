@@ -56,7 +56,7 @@ export function hasStaleSeedanceTaskType(provider: string | undefined, value: un
  *
  * @param provider the model the run uses (wired Settings and the default model applied).
  * @param duration the length the node asks for, as the run reads it.
- * @param data the node's data (wired Settings applied): `referenceTaskType`, `draft`, `aspectRatio`.
+ * @param data the node's data (wired Settings applied): `referenceTaskType`, `aspectRatio`.
  * @param rerunIds the nodes the priced run executes (empty for a single node's own price).
  */
 export function seedanceTaskTypeRunDuration(args: {

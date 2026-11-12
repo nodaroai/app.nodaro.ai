@@ -3166,7 +3166,6 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     provider: currentProvider,
     value: data.referenceTaskType,
     hasReferenceVideo: connectedRefVideos.length > 0,
-    draft: data.draft,
     asRun: taskTypeAsRun,
   })
   const taskTypeLock = taskTypeState.lock
@@ -3856,12 +3855,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         <>
           <SeedanceDraftToggle provider={currentProvider} draft={data.draft} resolutionField="resolution" onUpdate={onUpdate} />
           {/* Shown only on a model that takes a task type, with a reference
-              video wired; disabled (never cleared) while Draft is on. The one
-              line under it explains the locks (or why Edit does not apply). */}
+              video wired; a draft declares as any other run, so Draft does
+              not disable it. The one line under it explains the locks (or
+              why Edit does not apply). */}
           <SeedanceTaskTypeSelect
             provider={currentProvider}
             value={data.referenceTaskType}
-            draft={data.draft}
             hasReferenceVideo={connectedRefVideos.length > 0}
             note={taskTypeState.note}
             onUpdate={onUpdate}

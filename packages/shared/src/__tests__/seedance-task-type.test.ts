@@ -11,7 +11,6 @@ import { isVideoAutoAspectToken, videoAutoAspectRunsAt } from "../model-catalog.
 
 const base: Omit<SeedanceTaskTypeFacts, "requested"> = {
   provider: "seedance-2-5",
-  draft: false,
   referenceImageCount: 0,
   referenceAudioCount: 0,
   referenceVideoSec: [6],
@@ -58,8 +57,19 @@ describe("resolveSeedanceTaskType", () => {
     expectUnchanged({ ...base, provider: "kling-4", requested: "edit" })
   })
 
-  it("a draft: unchanged", () => {
-    expectUnchanged({ ...base, draft: true, requested: "edit" })
+  // A draft declares, and is forced, exactly as the same request without Draft:
+  // the whole result, for each type, at a fixed and at an automatic length.
+  it.each([
+    ["edit", 5], ["edit", -1], ["extend", 5], ["extend", -1], ["reference", 5], ["reference", -1],
+  ] as const)("a draft declares %s at %s s exactly as a run without Draft", (requested, duration) => {
+    const run = resolveSeedanceTaskType({ ...base, requested, duration })
+    expect(run.taskType).toBe(requested)
+    expect(resolveSeedanceTaskType({ ...base, requested, duration, draft: true })).toStrictEqual(run)
+    expect(resolveSeedanceTaskType({ ...base, requested, duration, draft: false })).toStrictEqual(run)
+  })
+
+  it("a draft with an edit it cannot honour declares nothing, as a run without Draft", () => {
+    expectUnchanged({ ...base, draft: true, requested: "edit", referenceVideoSec: [3] })
   })
 
   it("no reference media at all: unchanged", () => {

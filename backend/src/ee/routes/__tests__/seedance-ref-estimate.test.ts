@@ -218,7 +218,6 @@ describe("POST /v1/credits/seedance-ref-estimate", () => {
         [{ ...auto, referenceVideoUrls: [CLIP_5] }, "auto"],
         [{ ...auto, duration: 8, referenceVideoUrls: [CLIP_5] }, "extend"],
         [{ ...auto, duration: 8, referenceVideoUrls: [CLIP_5] }, "reference"],
-        [{ ...auto, draft: true, referenceVideoUrls: [CLIP_5] }, "reference"],
         [{ ...auto, provider: "seedance-2", referenceVideoUrls: [CLIP_5] }, "reference"],
         [{ ...auto, referenceVideoUrls: [], unknownReferenceVideos: 1 }, "edit"],
       ]
@@ -228,6 +227,19 @@ describe("POST /v1/credits/seedance-ref-estimate", () => {
         expect(declared.statusCode, `${referenceTaskType} ${JSON.stringify(body)}`).toBe(200)
         expect(declared.json(), `${referenceTaskType} ${JSON.stringify(body)}`).toStrictEqual(plain.json())
       }
+    })
+
+    it("a draft answers what the same request at 480p without Draft answers — reference + Auto at the worst case", async () => {
+      const body = { ...auto, referenceVideoUrls: [CLIP_5] }
+      for (const referenceTaskType of ["reference", "edit", "extend"]) {
+        const draft = await post({ ...body, draft: true, referenceTaskType })
+        expect(draft.statusCode, referenceTaskType).toBe(200)
+        expect(draft.json(), referenceTaskType).toStrictEqual((await post({ ...body, resolution: "480p", referenceTaskType })).json())
+      }
+      const worst480 = seedance2RefVideoBaseCreditsFromDurations({
+        provider: "seedance-2-5", resolution: "480p", outputDurationSec: 30, requestedDuration: VIDEO_DURATION_AUTO, referenceTaskType: "reference", durationsSec: [5],
+      })
+      expect((await post({ ...body, draft: true, referenceTaskType: "reference" })).json().data).toStrictEqual({ credits: worst480, min: worst480, exact: true })
     })
 
     // An unknown value is taken off the body and priced as Auto, never a 400

@@ -270,7 +270,6 @@ const SEEDANCE_2_DEFAULT_ASPECT = "16:9"
  * holds:
  *   - the model's catalog `referenceTaskTypes` lists the value
  *     (`listedSeedanceTaskType`: an unknown model, `auto` and junk are none);
- *   - the run is not a draft (the platform's rule: a draft never declares);
  *   - no `first_frame_url` — KIE refuses the field on a text-only body and in
  *     both frame modes ("only supported in multimodal reference tasks");
  *   - the body's `reference_*_urls` are the media the type needs
@@ -290,7 +289,7 @@ function seedanceTaskTypeForBody(
   provider: string | undefined,
 ): DeclaredSeedanceTaskType | undefined {
   const taskType = listedSeedanceTaskType(provider, options?.referenceTaskType)
-  if (taskType === undefined || options?.draft === true) return undefined
+  if (taskType === undefined) return undefined
   if (input.first_frame_url !== undefined) return undefined
   const count = (key: string): number => {
     const urls = input[key]

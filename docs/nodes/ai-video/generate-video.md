@@ -921,11 +921,17 @@ the model what the clip is for, instead of leaving it to guess from your prompt
 - **Apply settings restores it.** Applying the settings of an earlier Seedance
   2.5 result sets this choice back to what that run used (Auto when it said
   nothing about the clip), together with its Aspect ratio and Duration, so the
-  node makes the same run again. Applying a **draft** result leaves the choice
-  as it is: a draft never says anything about the clip, so it has no choice to
-  restore.
-- **A draft ignores it.** With **Draft** on, the setting is greyed out and the
-  run says nothing about the clip.
+  node makes the same run again. A **draft** result restores it the same way.
+  (A draft made before drafts could declare a task type said nothing about the
+  clip, so applying one sets the choice back to Auto.)
+- **A draft takes it too.** With **Draft** on, the setting works exactly as with
+  Draft off: the same choices, the same locks and lines, and the run declares
+  the same thing at the draft's 480p. An edit draft keeps the clip's own shape
+  and length, and so does its 1080p finalize (Video Upscale → **Seedance 2.5 HD
+  (from draft)**), which re-renders that take shot for shot. A draft is priced,
+  reserved and charged by the same rules as the same run without Draft, at
+  480p, and a draft that declares a task type records its real length, never
+  above the most that run can make, as below.
 - **Credits follow the run that is made.** An edit is priced as an
   automatic-length run with a reference video, and an extend at the length it
   runs at (see *Reference videos bill input + output duration* under pricing).

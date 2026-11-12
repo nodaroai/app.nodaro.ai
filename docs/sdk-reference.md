@@ -3382,9 +3382,10 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > **Seedance 2.5 reference task type.** `GenerateVideoParams` and
 > `TextToVideoParams` take `referenceTaskType?: "auto" | "reference" | "edit" | "extend"`,
 > which tells `seedance-2-5` what the reference media is for instead of leaving
-> it to the prompt; every other model ignores it, and so does a draft
-> (`draft: true`) or a run with no reference media (a start or end frame does
-> not count). `"auto"` (the default) declares nothing. `"reference"` keeps your
+> it to the prompt; every other model ignores it, and so does a run with no
+> reference media (a start or end frame does not count). A draft
+> (`draft: true`) declares it exactly as the same run without `draft`, at
+> 480p. `"auto"` (the default) declares nothing. `"reference"` keeps your
 > `aspectRatio` and `duration`; with an Auto `duration` (`-1`) the run is
 > reserved at the longest output the model can make, and charged what it makes.
 > `"edit"` edits the reference video in its own

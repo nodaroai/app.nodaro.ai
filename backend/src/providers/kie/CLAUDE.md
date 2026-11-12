@@ -457,7 +457,7 @@ resolved value; the i2v, t2v and voiced-video handlers pass it on as
 `resolveSeedance2Inputs`, on the body as it will be sent, only when ALL hold:
 the model's catalog `referenceTaskTypes` lists the value
 (`listedSeedanceTaskType` — `seedance-2-5` today; never a hand-written model
-id), the run is not a draft, the body's `reference_*_urls` are the media the
+id), the body's `reference_*_urls` are the media the
 type needs (`seedanceTaskTypeFitsMedia`, the resolver's own rule: `edit` and
 `extend` need `reference_video_urls`, since both act on a reference video,
 while `reference` takes any reference media), `first_frame_url` is not on the
@@ -466,10 +466,11 @@ run still takes it), and an `edit` or `extend` body is in its shape (`edit`:
 `isSeedance2EditModeInput`, `adaptive` + `-1`; `extend`: `adaptive`). A route
 request always is; one that skipped the routes and is not gets no key and one
 warning. It is NEVER sent on a text-only body or in either frame mode (KIE:
-"only supported in multimodal reference tasks"), on a draft, on an
+"only supported in multimodal reference tasks"), on an
 `edit`/`extend` without a reference video or out of its shape, or on another
 model; no option means no key, so the body is byte-identical to the
-undeclared one. **An edit-mode re-send drops the declaration:** when the
+undeclared one. A draft (`draft: true`) is no exception: it declares exactly as
+the same request without Draft, and its 1080p finalize re-renders that take. **An edit-mode re-send drops the declaration:** when the
 provider answers with its edit-mode words it has overridden the declared type,
 so both re-send lanes — the retry above and the reconcile resend
 (`lib/reconcile/seedance-edit-resubmit.ts`) — send

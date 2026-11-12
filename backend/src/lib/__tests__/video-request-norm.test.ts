@@ -105,9 +105,17 @@ describe("resolveVideoRequestNorm — a declared reference task type", () => {
     expect(resolveVideoRequestNorm({ ...input, referenceTaskType: "edit", referenceMedia: ONE_VIDEO(3) })).toStrictEqual(todaysNorm(input))
   })
 
-  it("a draft declares nothing", () => {
-    const input = { provider: "seedance-2-5", aspectRatio: "16:9", duration: 5, draft: true }
-    expect(resolveVideoRequestNorm({ ...input, referenceTaskType: "edit", referenceMedia: ONE_VIDEO(6) })).toStrictEqual(todaysNorm(input))
+  it("a draft declares as the same request at 480p without Draft, whole", () => {
+    for (const referenceTaskType of ["edit", "extend", "reference"]) {
+      for (const duration of [5, -1]) {
+        const input = { provider: "seedance-2-5", aspectRatio: "16:9", duration, referenceTaskType, referenceMedia: ONE_VIDEO(6) }
+        const draft = resolveVideoRequestNorm({ ...input, resolution: "480p", draft: true })
+        expect(draft.referenceTaskType, `${referenceTaskType} ${duration}`).toBe(referenceTaskType)
+        expect(draft, `${referenceTaskType} ${duration}`).toStrictEqual(resolveVideoRequestNorm({ ...input, resolution: "480p" }))
+      }
+    }
+    expect(resolveVideoRequestNorm({ provider: "seedance-2-5", aspectRatio: "16:9", duration: 5, draft: true, referenceTaskType: "edit", referenceMedia: ONE_VIDEO(6) }))
+      .toMatchObject({ referenceTaskType: "edit", aspectRatio: "adaptive", duration: -1, resolution: "480p" })
   })
 
   it("edit reads a string length the way the pricing helpers do", () => {

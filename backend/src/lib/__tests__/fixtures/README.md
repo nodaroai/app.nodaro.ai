@@ -286,3 +286,16 @@ the workflow estimate of the same graph, and the estimate route's quote of
 `editorRequest`, to what the run reserves — the worst case a declared
 reference with an automatic length holds. The clip's URL is that test file's
 `CLIP`. Edit it by hand; every figure is computed by the tests.
+
+## `seedance-draft-edit-quote.json`
+
+A Generate Video node on Seedance 2.5 with **Draft** on and **Use the reference
+video as** set to **The video to edit**, fed one uploaded 6 s clip, and the
+request the editor's quote sends for it (`editorRequest`). Two halves read it:
+`frontend/src/lib/__tests__/seedance-ref-quote.test.ts` holds the editor's
+`seedanceRefQuoteRequest` for `nodes`/`edges` to `editorRequest`, key for key;
+`backend/src/ee/billing/__tests__/seedance-task-type-estimate.test.ts` holds
+the run's reservation, the estimate route's quote of `editorRequest` and the
+workflow estimate of the same graph to one figure — the Auto edit's hold at
+480p, computed by the hold's own functions. The clip's URL is that test file's
+`CLIP`. Edit it by hand; every figure is computed by the tests.

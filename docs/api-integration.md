@@ -3039,8 +3039,8 @@ for, instead of leaving the model to guess it from the prompt:
 
 - **Ignored, never an error,** on any other model (the models that take it
   list the values they take in `referenceTaskTypes` in
-  [`GET /v1/models`](#model-catalog)), on a draft (`draft: true`)
-  and on a request with no reference media. A start or end frame (`imageUrl`,
+  [`GET /v1/models`](#model-catalog)) and on a request with no reference
+  media. A start or end frame (`imageUrl`,
   `endFrameUrl`) is not reference media, so a first-frame or
   first-and-last-frame request without references declares nothing. A value
   other than the four above is a `400 validation_error`.
@@ -3052,16 +3052,21 @@ for, instead of leaving the model to guess it from the prompt:
   with the same body as its `params` prices it the same way. An Auto length is reserved and
   settled as described for `duration: -1` under
   [On the video routes](#on-the-video-routes).
+- **A draft declares it too.** A `draft: true` request declares, and is
+  forced, exactly as the same request without `draft`, at 480p: the same
+  ratio, length, reservation, quote and settlement as that request at 480p.
+  An `edit` draft's 1080p finalize (`POST /v1/video-upscale` with `provider:
+  "seedance-2-5-hd"`) re-renders the same edit, at the source clip's length.
 - **A dropped declaration is not reported.** A request that asked for a type
-  and did not get it (a draft, missing reference media, a clip outside 4–30 s
-  for `edit`) answers like any other, so a response with no adjustment does
+  and did not get it (missing reference media, a clip outside 4–30 s for
+  `edit`) answers like any other, so a response with no adjustment does
   not mean the type was declared. The job's `input_data.referenceTaskType` is
   set only when one was.
 - **`POST /v1/video-to-video`** with `provider: "seedance-2-5"` asks for `edit`
   itself, whatever `referenceTaskType` the body carries. The edit is declared
   when every clip, the source `videoUrl` and any `referenceVideoUrls`, is
-  4–30 s long (not on a draft); otherwise it goes out undeclared and the model
-  reads the prompt.
+  4–30 s long (a draft included); otherwise it goes out undeclared and the
+  model reads the prompt.
 
 MCP: `reference_task_type` on `generate_video`.
 
@@ -4710,7 +4715,7 @@ Send `{}` (no draft) for the lowest price any draft can finalize for, returned w
 | `resolution` | string? | As the run sends it; omitted = the model's default. |
 | `duration` | number? | Output seconds; `-1` = Auto, priced as the run reserves it: the longest clip's length rounded up to a whole second plus one second (never above the model's longest clip), or the model's longest clip while a clip is unmeasured or unknown, or when `referenceTaskType` is `reference`. Omitted = the model's default. |
 | `draft` | boolean? | Seedance 2.5 Draft: priced at 480p. |
-| `referenceTaskType` | string? | Seedance 2.5: the [reference task type](#seedance-25-reference-task-type) the run will send — `auto` (the default), `reference`, `edit` or `extend` — decided as the run decides it. `reference` with an Auto `duration` is priced at the model's longest output; `edit` and `extend` at the length they run at: an `edit` whose clips are all 4–30 s runs at Auto, and an `extend` at Auto runs at the model's default length. A clip not produced yet counts as the model's longest clip. Ignored by other models and by a draft; an unknown value is ignored, not refused. |
+| `referenceTaskType` | string? | Seedance 2.5: the [reference task type](#seedance-25-reference-task-type) the run will send — `auto` (the default), `reference`, `edit` or `extend` — decided as the run decides it. `reference` with an Auto `duration` is priced at the model's longest output; `edit` and `extend` at the length they run at: an `edit` whose clips are all 4–30 s runs at Auto, and an `extend` at Auto runs at the model's default length. A clip not produced yet counts as the model's longest clip. A draft is quoted as the same request at 480p without `draft`. Ignored by other models; an unknown value is ignored, not refused. |
 | `referenceVideoUrls` | string[] | The reference clips the run will send, in order. |
 | `unknownReferenceVideos` | number? | Wired clips whose file does not exist yet (their upstream node has not produced them). |
 
