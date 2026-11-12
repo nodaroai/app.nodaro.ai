@@ -1,13 +1,14 @@
 import { SEEDANCE_EDIT_REF_VIDEO_SEC, VIDEO_REF_VIDEO_DURATION_LIMITS, pricedOutputDurationSec } from "@nodaro/shared/models"
 import { uiResolutionFill } from "@nodaro/shared/video"
-import { isAutoVideoDuration } from "@nodaro/shared/model-catalog"
+import { isAutoVideoDuration, seedanceDraftFinalizeBillableSec, seedanceDraftFinalizeCreditId } from "@nodaro/shared/model-catalog"
 import { videoGenerationCreditId } from "@nodaro/shared/credits"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { refVideoCapFor } from "../../lib/ref-video-probe.js"
 import type { VideoSourceTrim } from "../../lib/gemini-omni-12-source.js"
 import { resolveVideoRequestNorm, videoRequestAsRun, videoRequestReferenceMedia } from "../../lib/video-request-norm.js"
 import { refVideoWorstCaseSecFor } from "../../lib/ref-video-worst-case.js"
-import { seedance2RefVideoBaseCreditsFromDurations, seedance2RefVideoExpectedBaseCredits } from "./seedance2-ref-video-credits.js"
+import type { SeedanceDraftFinalizePlan } from "../../lib/seedance-draft-finalize.js"
+import { seedance2RefVideoBaseCreditsFromDurations, seedance2RefVideoExpectedBaseCredits, seedanceDraftHeldOutputSec } from "./seedance2-ref-video-credits.js"
 import { applyServiceMarkup } from "./service-margin.js"
 
 /** What a Seedance 2 reference-video run is quoted at (charged credits). */
@@ -96,7 +97,7 @@ export function seedance2RefVideoQuote(
 
   // The ceiling: the declaration decided with every unknown clip at the
   // provider's worst case, whose amount counts them as unmeasurable.
-  const ceiling = quoteBasis(args, withUnknownAt(refVideoWorstCaseSecFor(provider)))
+  const ceiling = seedance2RefVideoQuoteBasis(args, withUnknownAt(refVideoWorstCaseSecFor(provider)))
   const ceilingBase = seedance2RefVideoBaseCreditsFromDurations({ ...ceiling.priceArgs, videoTrim, durationsSec: withUnknownAt(Number.NaN) })
   // Marked up once, at the identifier the run's reservation is marked up at.
   const credits = args.charge(ceiling.identifier, ceilingBase)
@@ -106,7 +107,7 @@ export function seedance2RefVideoQuote(
   // more as a clip grows, except where a longer clip flips the declaration —
   // an edit is declared only from the edit window's lower bound — so the floor
   // is the cheaper of those two runs, each declared (or not) and priced at its
-  // own length by `quoteBasis`. A request that declares nothing has only the first.
+  // own length by `seedance2RefVideoQuoteBasis`. A request that declares nothing has only the first.
   const shortest = VIDEO_REF_VIDEO_DURATION_LIMITS[provider]?.minSec ?? 1
   const editFrom = SEEDANCE_EDIT_REF_VIDEO_SEC.min
   const floorLengths = args.referenceTaskType !== undefined && editFrom > shortest && editFrom <= refVideoWorstCaseSecFor(provider)
@@ -114,7 +115,7 @@ export function seedance2RefVideoQuote(
     : [shortest]
   const min = Math.min(...floorLengths.map((sec) => {
     const clips = withUnknownAt(sec)
-    const { priceArgs, identifier } = quoteBasis(args, clips)
+    const { priceArgs, identifier } = seedance2RefVideoQuoteBasis(args, clips)
     return args.charge(identifier, seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, videoTrim, durationsSec: clips }))
   }))
   return { credits, min, exact: false }
@@ -133,7 +134,7 @@ export function seedance2RefVideoQuote(
  * markup identifier, and the resolved type (`priceArgs.referenceTaskType`)
  * sizes the hold. A request that declares nothing is priced exactly as before.
  */
-function quoteBasis(
+export function seedance2RefVideoQuoteBasis(
   args: Pick<Seedance2RefVideoQuoteRequest, "provider" | "resolution" | "duration" | "draft" | "referenceTaskType">,
   clips: readonly number[],
 ) {
@@ -194,7 +195,7 @@ export async function seedance2RefVideoChargedHoldQuote(args: {
   const request = { ...args, referenceTaskType: args.referenceTaskType, durationsSec }
   const hold = seedance2RefVideoQuote({ ...request, unknownClips: 0, charge }).credits
   const known = durationsSec.slice(0, refVideoCapFor(args.provider))
-  const { priceArgs, identifier, runDuration } = quoteBasis(request, known)
+  const { priceArgs, identifier, runDuration } = seedance2RefVideoQuoteBasis(request, known)
   const expectedBase = seedance2RefVideoExpectedBaseCredits({
     provider: priceArgs.provider,
     resolution: priceArgs.resolution,
@@ -203,4 +204,58 @@ export async function seedance2RefVideoChargedHoldQuote(args: {
     durationsSec: known,
   })
   return { hold, expected: expectedBase === undefined ? null : charge(identifier, expectedBase) }
+}
+
+/**
+ * The request of a Seedance 2.5 draft that does not exist yet — what its own
+ * run will send (`POST /v1/credits/seedance-ref-estimate`'s fields): the
+ * model, its levers, and its reference clips (the measured ones, in order, a
+ * NaN unmeasurable; and how many are not produced yet).
+ */
+export interface PlannedSeedanceDraft {
+  readonly provider: string
+  readonly resolution?: string
+  readonly duration?: number | string
+  /** The requested reference task type, unvalidated (resolved as the draft's run resolves it). */
+  readonly referenceTaskType: unknown
+  readonly durationsSec: readonly number[]
+  readonly unknownClips: number
+}
+
+/**
+ * The finalize of a draft that does not exist yet, priced at the length the
+ * DRAFT's run reserves for (decided 2026-11-12) — the plan
+ * `seedanceDraftFinalizeChargedCredits` prices, as for a named draft.
+ *
+ * - Output seconds: the draft's hold ({@link seedanceDraftHeldOutputSec}, the
+ *   one rule the finalize is also charged by: it never bills more output than
+ *   its draft reserved), for the run the draft's request makes — its length
+ *   and task type decided as its own quote decides them, a clip not produced
+ *   yet at the model's longest clip.
+ * - Input seconds: the draft's clips, a clip not produced yet (or unreadable)
+ *   at the per-clip worst case, the total capped as the finalize caps it.
+ *
+ * A true ceiling: whatever take the draft delivers, its finalize bills at
+ * most this output, plus the clips it was made with.
+ */
+export function plannedSeedanceDraftFinalizePlan(
+  draft: PlannedSeedanceDraft,
+): Pick<SeedanceDraftFinalizePlan, "creditId" | "hasRefVideo" | "outputSec" | "refVideoDurationsSec"> {
+  const { provider } = draft
+  const cap = refVideoCapFor(provider)
+  const known = draft.durationsSec.slice(0, cap)
+  const unknown = Math.max(0, Math.min(draft.unknownClips, cap - known.length))
+  if (known.length + unknown === 0) {
+    const outputSec = seedanceDraftFinalizeBillableSec(seedanceDraftHeldOutputSec({ provider, duration: draft.duration, referenceTaskType: undefined, refVideoDurationsSec: [] }))
+    return { creditId: seedanceDraftFinalizeCreditId(outputSec, false), hasRefVideo: false, outputSec, refVideoDurationsSec: [] }
+  }
+  const withUnknownAt = (sec: number) => [...known, ...Array<number>(unknown).fill(sec)]
+  // The draft's run, decided as its own quote decides it: a clip not produced
+  // yet at the worst case, so a declaration that may hold is priced as held.
+  const { priceArgs, runDuration } = seedance2RefVideoQuoteBasis({ ...draft, draft: true }, withUnknownAt(refVideoWorstCaseSecFor(provider)))
+  // Unmeasured clips (NaN) are the worst case on both sides of the price.
+  const clips = withUnknownAt(Number.NaN)
+  const held = seedanceDraftHeldOutputSec({ provider, duration: runDuration, referenceTaskType: priceArgs.referenceTaskType, refVideoDurationsSec: clips })
+  const outputSec = seedanceDraftFinalizeBillableSec(held)
+  return { creditId: seedanceDraftFinalizeCreditId(outputSec, true), hasRefVideo: true, outputSec, refVideoDurationsSec: clips }
 }

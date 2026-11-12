@@ -299,3 +299,24 @@ the run's reservation, the estimate route's quote of `editorRequest` and the
 workflow estimate of the same graph to one figure — the Auto edit's hold at
 480p, computed by the hold's own functions. The clip's URL is that test file's
 `CLIP`. Edit it by hand; every figure is computed by the tests.
+
+## `seedance-hd-draft-quote.json`
+
+Two Seedance 2.5 drafts of one uploaded 6 s clip — a Generate Video node with
+**Draft** on and **Use the reference video as** set to **The video to edit**,
+and a Video to Video node on its Seedance 2.5 Edit lane with **Draft** on —
+each wired into a Video Upscale node set to **Seedance 2.5 HD (from draft)**,
+and the planned-draft request the editor's Run total sends for each finalize
+(`editorPlannedDrafts`, by the finalize's id). The Generate Video draft has
+already run once: it holds a result and its task (`existingDraftTaskId`), so a
+run of its finalize alone finalizes that draft, while a whole run makes a new
+one. Two halves read it:
+`frontend/src/lib/__tests__/seedance-hd-quote.test.ts` holds the editor's
+quote key for each finalize in a whole run to `editorPlannedDrafts`, key for
+key, and the key of `hd` run alone to the existing draft's task;
+`backend/src/ee/billing/__tests__/seedance-draft-finalize-estimate.test.ts`
+holds the estimate route's quote of each request (`plannedDraft`), the
+server's workflow estimate of the same graph and what the finalize of the
+draft's longest take is charged to one figure, and the route's answer for
+`existingDraftTaskId` to the server's estimate of `hd` run alone and to that
+draft's charge. Edit it by hand; every figure is computed by the tests.

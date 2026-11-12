@@ -414,7 +414,7 @@ async function resumePrice(input: {
   readonly effective: Record<string, Record<string, unknown>> | undefined
 }): Promise<{ estimatedCredits: number; holdCredits: number; reusedClips: number; sufficient: boolean; available: number | null; message?: string }> {
   // Credits are enterprise: loaded only where the edition has them.
-  const { appRunResumeCredits } = await import("../ee/lib/app-run-resume-price.js")
+  const { appRunResumeCredits, appRunExistingDrafts } = await import("../ee/lib/app-run-resume-price.js")
   const { UgcEstimateUnavailable } = await import("../ee/lib/ugc-estimate.js")
   const { checkRunSetCredits, estimateRunSetFigures } = await import("../ee/billing/credits.js")
   const priced = withRunOverrides(input.nodes as Array<SnapshotNode & { type?: string }>, input.effective) as Array<{ id: string; type: string; data?: Record<string, unknown> }>
@@ -436,7 +436,8 @@ async function resumePrice(input: {
   } catch (err) {
     // No UGC pricing on this deployment: the run set as every estimate prices it.
     if (!(err instanceof UgcEstimateUnavailable)) throw err
-    const figures = await (flagged ? estimateRunSetFigures(priced, input.edges, runNodeIds, undefined, viewer) : estimateRunSetFigures(priced, input.edges, runNodeIds))
+    const existingDrafts = appRunExistingDrafts(input.userId, (input.source.nodeStates ?? {}) as Parameters<typeof appRunExistingDrafts>[1])
+    const figures = await estimateRunSetFigures(priced, input.edges, runNodeIds, undefined, flagged ? viewer : undefined, undefined, existingDrafts)
     base = { credits: figures.credits, hold: figures.hold, reusedClips: 0 }
   }
   // The creator's markup, settled by the run once on what it runs (never from the runner who made the app).

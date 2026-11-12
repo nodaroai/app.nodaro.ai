@@ -64,7 +64,7 @@ function generationRunRequests(
 }
 
 /** The result a node hands on (its active one), when it has one. */
-function activeResult(data: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+export function activeResult(data: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   const results = Array.isArray(data?.generatedResults) ? (data.generatedResults as unknown[]) : []
   const index = typeof data?.activeResultIndex === "number" ? data.activeResultIndex : 0
   const row = results[index]

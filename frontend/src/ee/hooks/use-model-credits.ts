@@ -6,6 +6,7 @@ import { estimateSeedanceHdCredits, estimateVideoProCredits, type VideoProEstima
 import { queryKeys } from "@/lib/query-keys"
 import type { GenerateVideoProNodeData } from "@/types/nodes"
 import { useModelCreditCost } from "./queries/use-credits-queries"
+import { seedanceHdDraftQuery } from "@/hooks/use-model-credit-cost"
 
 export { getCachedCredits, prefetchModelCredits, isModelUnpriced } from "./queries/use-credits-queries"
 export { useModelCreditCost } from "./queries/use-credits-queries"
@@ -43,15 +44,11 @@ export function getCachedVideoProCredits(data:GenerateVideoProNodeData):number|u
  * refused (not a draft, not finished, …), or with no draft wired.
  */
 export function useSeedanceHdDraftCredits(draftTaskId: string | undefined, enabled: boolean): number | undefined {
+  // The query a run estimate that only finalizes this draft reads too (`seedanceHdDraftQuery`).
   const { data } = useQuery({
-    queryKey: queryKeys.credits.seedanceHdDraft(draftTaskId ?? ""),
-    queryFn: () => estimateSeedanceHdCredits({ taskId: draftTaskId }),
+    ...seedanceHdDraftQuery(draftTaskId ?? ""),
     enabled: enabled && hasCredits() && !!draftTaskId,
-    staleTime: Infinity,
     gcTime: 30 * 60_000,
-    // A refusal is the draft's state (not ready, not a draft) — asking again
-    // will not change it; a new draft is a new key.
-    retry: false,
   })
   return data?.credits
 }

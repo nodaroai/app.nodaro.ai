@@ -4723,7 +4723,25 @@ Name the draft the way the finalize does, by `sourceJobId` (its job id) or `task
 {"sourceJobId":"<the draft's job id>"}
 ```
 
-The response is `{ "data": { "credits": 1580, "minimum": false } }` for a 4 s draft without a reference video. Read the live response for current prices. `credits` is exactly what `POST /v1/video-upscale` reserves for the same draft — the same checks, the same billable length, the same pricing. A draft the finalize would refuse is refused here with the same status and code (`403 forbidden`, `404 draft_not_found`, `409 draft_not_ready` / `draft_not_finalizable`, `422 not_a_draft` / `not_a_seedance_draft` / `invalid_media_duration`), and nothing is charged.
+The response is `{ "data": { "credits": 1580, "minimum": false } }` for a 4 s draft without a reference video. Read the live response for current prices. `credits` is exactly what `POST /v1/video-upscale` reserves for the same draft — the same checks, the same billable length, the same pricing. The billable length is the draft's take, never more than the length the draft's own run reserved: a take that came back longer is billed at that length. A draft the finalize would refuse is refused here with the same status and code (`403 forbidden`, `404 draft_not_found`, `409 draft_not_ready` / `draft_not_finalizable`, `422 not_a_draft` / `not_a_seedance_draft` / `invalid_media_duration`), and nothing is charged.
+
+With no draft named, send `plannedDraft` — the request of a draft that does not exist yet, in the fields of [Seedance reference-video estimates](#seedance-reference-video-estimates) — for the finalize of that draft at the length its run reserves for, plus its reference clips. A finalize is never charged for more output than its draft's run reserved, so this is the most a finalize of that draft can be charged, whatever take it delivers; it is what the workflow's cost estimate quotes for a run that makes the draft and finalizes it. A named draft wins: a request with `sourceJobId` or `taskId` is answered as above, whatever `plannedDraft` holds. Rate-limited to 60 requests a minute (only requests with a `plannedDraft` and no draft named).
+
+```json
+{"plannedDraft":{"provider":"seedance-2-5","resolution":"480p","duration":5,"draft":true,"referenceTaskType":"edit","referenceVideoUrls":["https://…/clip.mp4"]}}
+```
+
+| `plannedDraft` field | Type | Meaning |
+|---|---|---|
+| `provider` | string | The draft's model: `seedance-2-5`. Any other model is a `400 validation_error`. |
+| `resolution` | string? | As the draft's run sends it (a draft renders at 480p; it does not change the finalize's price). |
+| `duration` | number or string? | The draft's output seconds (a numeric string reads as its number); `-1` = Auto. Omitted = the model's default. |
+| `draft` | `true`? | Optional: a planned draft is always a draft (`false` is a `400`). |
+| `referenceTaskType` | string? | The draft's [reference task type](#seedance-25-reference-task-type), resolved as its run resolves it; an unknown value is ignored. |
+| `referenceVideoUrls` | string[]? | The draft's reference clips, in order; omitted = none. They are measured, and a clip the draft's run would refuse is a `400 video_too_long`. |
+| `unknownReferenceVideos` | number? | Wired clips whose file does not exist yet: each counted as the longest clip the model accepts. |
+
+The finalize's output is the draft's held length — with no reference video, its `duration` (Auto: the model's longest take); with reference videos, the hold the draft's own run reserves for those clips (see [Seedance 2.5 HD (from draft)](nodes/processing-video/video-upscale.md#seedance-25-hd-from-draft) for the rule and worked examples) — and its input is the clips' seconds, priced as a finalize is priced. The response is `{ "data": { "credits": …, "minimum": false } }`.
 
 Send `{}` (no draft) for the lowest price any draft can finalize for, returned with `minimum: true` — the editor's "from N". That is **1568**<!-- credits: seedance-2-5-hd:4s-ref@1.5 -->: the shortest reference clip Seedance 2.5 accepts (2 s) with the shortest draft (4 s), priced as 2 + 4 seconds. See [Seedance 2.5 HD (from draft)](nodes/processing-video/video-upscale.md#seedance-25-hd-from-draft) for the formula.
 

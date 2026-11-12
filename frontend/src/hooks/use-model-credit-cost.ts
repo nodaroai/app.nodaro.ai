@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
-import { getModelCreditCost, fetchBatchModelCreditCosts, estimateSeedanceRefCredits } from "@/lib/api"
+import { getModelCreditCost, fetchBatchModelCreditCosts, estimateSeedanceHdCredits, estimateSeedanceRefCredits } from "@/lib/api"
 import { isSeedanceRefQuoteKey, parseSeedanceRefQuoteKey } from "@/lib/seedance-ref-quote-key"
+import { isSeedanceHdDraftKey, isSeedanceHdQuoteKey, parseSeedanceHdDraftKey, parseSeedanceHdQuoteKey } from "@/lib/seedance-hd-quote-key"
 import { hasCredits } from "@/lib/edition"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
@@ -123,6 +124,64 @@ function seedanceRefQuoteQuery(quoteKey: string) {
 }
 
 /**
+ * The one query a Seedance 2.5 HD finalize of a draft not made yet is fetched
+ * through (`seedance-hd-quote-key.ts`): the server prices the finalize of the
+ * planned draft at the length its run reserves for.
+ */
+function seedanceHdQuoteQuery(quoteKey: string) {
+  return {
+    queryKey: queryKeys.credits.seedanceHdPlan(quoteKey),
+    queryFn: async (): Promise<number> => {
+      const plannedDraft = parseSeedanceHdQuoteKey(quoteKey)
+      if (!plannedDraft) throw new Error("not a Seedance 2.5 HD quote key")
+      return (await estimateSeedanceHdCredits({ plannedDraft })).credits
+    },
+    // A key names the draft's clips by URL: a new clip is a new key.
+    staleTime: Infinity,
+    retry: false,
+  }
+}
+
+/**
+ * The one query the exact finalize price of an existing Seedance draft is
+ * fetched through, by its provider task id: the Seedance 2.5 HD node's pill
+ * (`useSeedanceHdDraftCredits`) and a run estimate that only finalizes that
+ * draft (`seedanceHdDraftKey`) read the same answer, fetched once per draft.
+ */
+export function seedanceHdDraftQuery(draftTaskId: string) {
+  return {
+    queryKey: queryKeys.credits.seedanceHdDraft(draftTaskId),
+    queryFn: () => estimateSeedanceHdCredits({ taskId: draftTaskId }),
+    staleTime: Infinity,
+    // A refusal is the draft's state (not ready, not a draft) — asking again
+    // will not change it; a new draft is a new key.
+    retry: false,
+  }
+}
+
+/** A quote key priced by its own endpoint, never by the model-cost batch. */
+const isQuoteKey = (key: string): boolean => isSeedanceRefQuoteKey(key) || isSeedanceHdQuoteKey(key) || isSeedanceHdDraftKey(key)
+
+/** The machine-readable code an API refusal carries, when it carries one. */
+const refusalCode = (err: unknown): string | undefined => {
+  const code = err instanceof Error ? (err as { code?: unknown }).code : undefined
+  return typeof code === "string" ? code : undefined
+}
+
+/**
+ * Whether a failed Seedance 2.5 HD quote is the server's lasting answer for
+ * its key, so the key is not asked again this session: a planned draft whose
+ * clip its run would refuse (`video_too_long`), or an existing draft the
+ * finalize's gate refuses for good. Never a rate limit, a sign-in or network
+ * failure, or a draft still rendering: those are asked again on the next
+ * estimate.
+ */
+const HD_PLAN_LASTING_REFUSALS: ReadonlySet<string> = new Set(["video_too_long"])
+const HD_DRAFT_LASTING_REFUSALS: ReadonlySet<string> = new Set([
+  "forbidden", "draft_not_found", "not_a_draft", "not_a_seedance_draft", "draft_not_finalizable", "invalid_media_duration",
+])
+
+/**
  * The quote for a Seedance 2 run with reference video(s) — `undefined` while
  * it loads, when it failed (a clip the run would refuse), or with no key.
  * `exact: false` while a clip is not produced yet: `credits` is then the most
@@ -143,8 +202,8 @@ export function useSeedanceRefQuote(quoteKey: string | undefined): SeedanceRefQu
 export function useModelCreditCost(model: string | undefined) {
   return useQuery({
     ...modelCreditCostQuery(model ?? ""),
-    // A reference-video quote key is not a model id: `useSeedanceRefQuote`.
-    enabled: !!model && hasCredits() && !isSeedanceRefQuoteKey(model),
+    // A quote key is not a model id: `useSeedanceRefQuote`, or the run estimate's prefetch.
+    enabled: !!model && hasCredits() && !isQuoteKey(model),
     gcTime: 30 * 60_000,
   })
 }
@@ -178,6 +237,11 @@ export function getCachedModelCredits(model: string): number | undefined {
   // A reference-video quote key: what that run reserves (or, with a clip not
   // produced yet, the most it can) — `seedance-ref-quote-key.ts`.
   if (isSeedanceRefQuoteKey(model)) return queryClient.getQueryData<SeedanceRefQuote>(queryKeys.credits.seedanceRef(model))?.credits
+  // A Seedance 2.5 HD finalize of a draft not made yet: the server's price of it.
+  if (isSeedanceHdQuoteKey(model)) return queryClient.getQueryData<number>(queryKeys.credits.seedanceHdPlan(model))
+  // …and of a draft that exists: its exact price, the pill's own answer.
+  const draftTaskId = parseSeedanceHdDraftKey(model)
+  if (draftTaskId !== undefined) return queryClient.getQueryData<{ credits: number }>(queryKeys.credits.seedanceHdDraft(draftTaskId))?.credits
   return queryClient.getQueryData<number>(queryKeys.credits.modelCost(model))
 }
 
@@ -191,10 +255,20 @@ export async function prefetchModelCreditCosts(models: readonly string[]): Promi
   // Reference-video quote keys go to their own endpoint (the server probes the
   // clips); one it refuses (a clip the run would refuse too) is not asked again.
   const quotes = models.filter((m) => isSeedanceRefQuoteKey(m) && getCachedModelCredits(m) === undefined && !unpricedModelIds.has(m))
-  const quoted = Promise.allSettled(quotes.map((key) =>
-    queryClient.fetchQuery(seedanceRefQuoteQuery(key)).catch(() => rememberUnpricedModels([key])),
-  ))
-  const uncached = models.filter((m) => !isSeedanceRefQuoteKey(m) && queryClient.getQueryData(queryKeys.credits.modelCost(m)) === undefined && !unpricedModelIds.has(m))
+  // So do Seedance 2.5 HD keys: a finalize of a draft not made yet, or of one
+  // that exists. Only a lasting refusal is remembered (`HD_*_LASTING_REFUSALS`).
+  const hdQuotes = models.filter((m) => isSeedanceHdQuoteKey(m) && getCachedModelCredits(m) === undefined && !unpricedModelIds.has(m))
+  const hdDrafts = models.filter((m) => isSeedanceHdDraftKey(m) && getCachedModelCredits(m) === undefined && !unpricedModelIds.has(m))
+  const rememberLasting = (key: string, lasting: ReadonlySet<string>) => (err: unknown) => {
+    const code = refusalCode(err)
+    if (code !== undefined && lasting.has(code)) rememberUnpricedModels([key])
+  }
+  const quoted = Promise.allSettled([
+    ...quotes.map((key) => queryClient.fetchQuery(seedanceRefQuoteQuery(key)).catch(() => rememberUnpricedModels([key]))),
+    ...hdQuotes.map((key) => queryClient.fetchQuery(seedanceHdQuoteQuery(key)).catch(rememberLasting(key, HD_PLAN_LASTING_REFUSALS))),
+    ...hdDrafts.map((key) => queryClient.fetchQuery(seedanceHdDraftQuery(parseSeedanceHdDraftKey(key)!)).catch(rememberLasting(key, HD_DRAFT_LASTING_REFUSALS))),
+  ])
+  const uncached = models.filter((m) => !isQuoteKey(m) && queryClient.getQueryData(queryKeys.credits.modelCost(m)) === undefined && !unpricedModelIds.has(m))
   if (uncached.length === 0) {
     await quoted
     return
