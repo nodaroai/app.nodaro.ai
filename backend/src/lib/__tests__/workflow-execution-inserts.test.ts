@@ -44,7 +44,7 @@ import { describe, expect, it } from "vitest"
 import ts from "typescript"
 import { SCAN_TIMEOUT_MS, eachSourceFile, parseText } from "./source-scan.js"
 import { EXECUTIONS_TABLE, constInit, enclosingFunction, executionWrites, keyWrites, unwrap, type Ancestors, type ExecutionWrite } from "./execution-row-ast.js"
-import { SERVER_STAMPED_TRIGGER_TYPES } from "../server-started-runs.js"
+import { OUTER_RUN_LINK_TRIGGER_TYPE, SERVER_STAMPED_TRIGGER_TYPES } from "../server-started-runs.js"
 import { billingPairColumns } from "../insert-job.js"
 import { inlineExecutionColumns } from "../execution-inline-graph.js"
 import { executionContentRedaction } from "../app-run-content.js"
@@ -53,6 +53,11 @@ import { executionContentRedaction } from "../app-run-content.js"
 const COLUMN_BUILDERS = new Set(["billingPairColumns", "inlineExecutionColumns", "executionContentRedaction"])
 /** The platform's stamp builders: what a stamp-writing lane's insert may store in `trigger_data`. */
 const STAMP_BUILDERS = new Set(["appRunStamp", "appRunResumeStamp", "appRenderFinalStamp", "continueFromFailedStamp", "nodeSelectionData"])
+/**
+ * What a `use_case` insert may store in `trigger_data`: its outer-run link alone. That lane is no
+ * stamp-writing lane, but the narrower rule (lib/server-started-runs.ts) trusts the link on it.
+ */
+const USE_CASE_LINK_BUILDERS = new Set(["outerRunStamp"])
 
 /**
  * Each insert into `workflow_executions` and the lane it names, by file, in source order.
@@ -128,15 +133,15 @@ function laneLiterals(e: ts.Expression): string[] | null {
   return null
 }
 
-/** Whether a `trigger_data` value is built by a platform stamp builder (or is nothing). */
-function platformBuilt(e: ts.Expression, ancestors: Ancestors, depth = 0): boolean {
+/** Whether a `trigger_data` value is built by one of `builders` (or is nothing). */
+function platformBuilt(e: ts.Expression, ancestors: Ancestors, builders: ReadonlySet<string> = STAMP_BUILDERS, depth = 0): boolean {
   const at = unwrap(e)
   if (at.kind === ts.SyntaxKind.NullKeyword || (ts.isIdentifier(at) && at.text === "undefined")) return true
-  if (ts.isCallExpression(at) && ts.isIdentifier(at.expression)) return STAMP_BUILDERS.has(at.expression.text)
-  if (ts.isConditionalExpression(at)) return platformBuilt(at.whenTrue, ancestors, depth + 1) && platformBuilt(at.whenFalse, ancestors, depth + 1)
+  if (ts.isCallExpression(at) && ts.isIdentifier(at.expression)) return builders.has(at.expression.text)
+  if (ts.isConditionalExpression(at)) return platformBuilt(at.whenTrue, ancestors, builders, depth + 1) && platformBuilt(at.whenFalse, ancestors, builders, depth + 1)
   if (ts.isIdentifier(at) && depth < 8) {
     const bound = constInit(at.text, ancestors)
-    return !!bound && platformBuilt(bound.init, bound.ancestors, depth + 1)
+    return !!bound && platformBuilt(bound.init, bound.ancestors, builders, depth + 1)
   }
   return false
 }
@@ -224,6 +229,15 @@ function checkInsert(sf: ts.SourceFile, rel: string, w: ExecutionWrite, scan: Sc
     const data = [...(shape.direct.get("trigger_data") ?? []), ...(shape.spread.get("trigger_data") ?? [])]
     if (data.length === 0) continue
     const literals = laneLiterals(lane)
+    // A use_case row stores its outer-run link alone (the narrower rule, lib/server-started-runs.ts).
+    if (literals?.includes(OUTER_RUN_LINK_TRIGGER_TYPE)) {
+      for (const value of data) {
+        if (!platformBuilt(value, w.ancestors, USE_CASE_LINK_BUILDERS)) {
+          scan.findings.push(`${at} ${w.via}: a use_case run's trigger_data is not built by outerRunStamp — that lane stores its outer-run link and nothing else`)
+        }
+      }
+      continue
+    }
     const mayBeStampLane = literals === null ? typedLanes[rel] !== text : literals.some((l) => SERVER_STAMPED_TRIGGER_TYPES.includes(l))
     if (!mayBeStampLane) continue
     for (const value of data) {

@@ -146,6 +146,27 @@ describe("from-failed", () => {
     expect(m.execute.mock.calls[0]![0]).toMatchObject({ parentExecutionId: parent })
   })
 
+  it("the run it works for (the outer-run link): a continuation from outside a run keeps the link of the run it continues", async () => {
+    const outer = "00000000-0000-4000-8000-0000000000bb"
+    src.source = { ...failedSource, outerRun: outer }
+    await post({ jobId: ID, mode: "from-failed" })
+    expect(m.execute.mock.calls[0]![0]).toMatchObject({ outerRunId: outer })
+  })
+
+  it("the run it works for: a node of a running run continuing it links that running run", async () => {
+    const parent = "00000000-0000-4000-8000-0000000000aa"
+    src.source = { ...failedSource, outerRun: "00000000-0000-4000-8000-0000000000bb" }
+    m.authKind = "internal"
+    await post({ jobId: ID, mode: "from-failed", userId: USER, reviewerPresent: true }, { "x-nodaro-parent-execution": parent })
+    expect(m.execute.mock.calls[0]![0]).toMatchObject({ outerRunId: parent })
+  })
+
+  it("a continuation of a run with no link (a standalone run, or one from before the link) links none; a caller's header is never believed", async () => {
+    src.source = { ...failedSource, outerRun: null }
+    await post({ jobId: ID, mode: "from-failed" }, { "x-nodaro-parent-execution": "00000000-0000-4000-8000-0000000000aa" })
+    expect(m.execute.mock.calls[0]![0].outerRunId).toBeUndefined()
+  })
+
   it("internal lane: depth 5 is refused", async () => {
     m.authKind = "internal"
     const res = await post({ jobId: ID, mode: "from-failed", userId: USER, componentDepth: 5 })

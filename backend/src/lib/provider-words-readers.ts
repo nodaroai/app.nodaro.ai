@@ -1,5 +1,8 @@
 import { supabase } from "./supabase.js"
 import { workflowAccess } from "./workflow-access.js"
+import { outerRunTriggerData } from "./server-started-runs.js"
+import { outerRunOf } from "./use-case-outer-run.js"
+import { USE_CASE_MAX_DEPTH } from "./use-case/lanes.js"
 import {
   jobRowNeedsRunRelation,
   jobRowProviderWordsTo,
@@ -26,8 +29,10 @@ import {
  * of a run (`jobs.workflow_execution_id` set) belongs to whoever started the
  * run, so its owner reads its words only when they can open the run's
  * workflow (`runJobsProviderWords`). A job with no run is its owner's, as
- * before, and so is the job of a run that names no workflow (the inner run a
- * use-case node starts): its row does not say which workflow it served.
+ * before. The inner run a use-case node starts names no workflow: one started
+ * inside a workflow run links that run (`outerRun`), and its states and jobs
+ * are judged by the nearest linked run that names a workflow; one with no link
+ * (a use-case job run on its own, or one from before the link) is its owner's.
  *
  * Every lookup is made only when its answer can change a response (a state or
  * a run's job carries words, the reader is not an admin, and the deployment
@@ -88,19 +93,84 @@ export interface RunRelationRow {
  * which of these runs' provider words this reader may read.
  *
  *  - A run that names a workflow: when the reader can open that workflow.
- *  - A run that names none — the inner run a use-case node starts outside any
- *    workflow run (a standalone use-case job) — is its owner's, as a job with
- *    no run is.
+ *  - A run that names none — the inner run a use-case node starts — and links
+ *    the run it works for (`outerRun`, lib/use-case-outer-run.ts, trusted on a
+ *    `use_case` row alone): that run decides, followed up the links to the
+ *    nearest run that names a workflow, at most `USE_CASE_MAX_DEPTH` links (how
+ *    deep use-case runs nest). A link that cannot be followed — a run not
+ *    found, a read that fails, a chain past the bound — withholds.
+ *  - A run that names none and links none (a use-case job run on its own, or
+ *    an inner run from before the link was recorded) is its owner's, as a job
+ *    with no run is; so is a chain that ends at such a run.
  *
- * One access lookup per distinct workflow. A lookup that fails withholds.
+ * One read of the linked runs per level of links, for every run at once (none
+ * when no run links one), then one access lookup per distinct workflow.
  */
 export async function runsWordsReadable(readerId: string, runs: readonly RunRelationRow[]): Promise<Set<string>> {
-  const openable = await workflowsReaderCanOpen(readerId, runs.map((run) => run.workflow_id))
+  const verdicts = await runVerdicts(readerId, runs)
+  const workflows = [...verdicts.values()].flatMap((v) => (v.kind === "workflow" ? [v.workflowId] : []))
+  const openable = await workflowsReaderCanOpen(readerId, workflows)
   const readable = runs.filter((run) => {
-    if (typeof run.workflow_id === "string" && run.workflow_id !== "") return openable.has(run.workflow_id)
-    return run.workflow_id == null && run.user_id === readerId
+    const verdict = verdicts.get(run.id)
+    if (verdict?.kind === "workflow") return openable.has(verdict.workflowId)
+    return verdict?.kind === "owner" && run.user_id === readerId
   })
   return new Set(readable.map((run) => run.id))
+}
+
+/** What decides a run's words: a workflow, its owner, or nothing that could be told (withheld). */
+type RunVerdict = { readonly kind: "workflow"; readonly workflowId: string } | { readonly kind: "owner" } | { readonly kind: "unresolved" }
+
+/** One run row's own answer: the workflow it names, the run it links, or its owner. */
+function ownVerdict(run: RunRelationRow): RunVerdict | { readonly kind: "link"; readonly runId: string } {
+  if (typeof run.workflow_id === "string" && run.workflow_id !== "") return { kind: "workflow", workflowId: run.workflow_id }
+  if (run.workflow_id != null) return { kind: "unresolved" }
+  // The link, read only as the platform's own: on a use_case row (lib/server-started-runs.ts).
+  const link = outerRunOf(outerRunTriggerData(run))
+  return link ? { kind: "link", runId: link } : { kind: "owner" }
+}
+
+/**
+ * Each run's verdict, following links level by level: every run still on a
+ * link at one level is answered by ONE read of the runs it links (the
+ * reader's own: an inner run and the run it works for are one person's).
+ */
+async function runVerdicts(readerId: string, runs: readonly RunRelationRow[]): Promise<Map<string, RunVerdict>> {
+  const verdicts = new Map<string, RunVerdict>()
+  /** The runs still on a link: the run asked about → the run its chain links next. */
+  let following = new Map<string, string>()
+  for (const run of runs) {
+    const own = ownVerdict(run)
+    if (own.kind === "link") following.set(run.id, own.runId)
+    else verdicts.set(run.id, own)
+  }
+  for (let level = 0; following.size > 0; level++) {
+    const linked = level < USE_CASE_MAX_DEPTH ? await linkedRuns(readerId, new Set(following.values())) : null
+    const next = new Map<string, string>()
+    for (const [asked, linkId] of following) {
+      const row = linked?.get(linkId)
+      const own = row ? ownVerdict(row) : ({ kind: "unresolved" } as const)
+      if (own.kind === "link") next.set(asked, own.runId)
+      else verdicts.set(asked, own)
+    }
+    following = next
+  }
+  return verdicts
+}
+
+/** The reader's runs among `ids`, by id; null when they could not be read (every link through them withholds). */
+async function linkedRuns(readerId: string, ids: ReadonlySet<string>): Promise<Map<string, RunRelationRow> | null> {
+  try {
+    const { data, error } = await supabase
+      .from("workflow_executions")
+      .select(RUN_RELATION_COLUMNS)
+      .in("id", [...ids])
+      .eq("user_id", readerId)
+    if (error) return null
+    return new Map(((data ?? []) as unknown as RunRelationRow[]).map((row) => [row.id, row]))
+  } catch {
+    return null
+  }
 }
 
 /** `runsWordsReadable` for one run. */

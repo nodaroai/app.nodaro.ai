@@ -91,6 +91,15 @@ describe("executeInlineGraph", () => {
     expect(m.add.mock.calls[1]![1]).not.toHaveProperty("parentExecutionId")
   })
 
+  it("records the run it works for on trigger_data (the outer-run link); a standalone run's row carries no trigger_data at all", async () => {
+    await executeInlineGraph({ userId: "u1", graph, wrapperJobId: "job-1", reviewerPresent: false, webFreeMode: false, appRun: false, outerRunId: "exec-outer" })
+    expect(m.insert.mock.calls[0]![1]).toMatchObject({ trigger_type: "use_case", trigger_data: { outerRun: { executionId: "exec-outer" } } })
+    // The link rides the row only, never the orchestrator's payload.
+    expect(JSON.stringify(m.add.mock.calls[0]![1])).not.toContain("exec-outer")
+    await executeInlineGraph({ userId: "u1", graph, wrapperJobId: "job-2", reviewerPresent: false, webFreeMode: false, appRun: false })
+    expect(m.insert.mock.calls[1]![1]).not.toHaveProperty("trigger_data")
+  })
+
   it("a workspace payer's pair rides the row", async () => {
     await executeInlineGraph({
       userId: "u1",

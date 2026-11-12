@@ -300,6 +300,8 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
         mcpClient,
         // A node of a running run started it (internal lane only): no run slot of its own.
         parentExecutionId: parentExecutionIdOf(req),
+        // …and it works for that run: its provider words are judged by that run's workflow.
+        outerRunId: parentExecutionIdOf(req),
         // The run's steps reserve under the rules its balance check and fee hold used.
         webFreeMode,
         appRun: req.isAppRun === true,

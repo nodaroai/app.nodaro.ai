@@ -48,6 +48,28 @@ export function serverTriggerData(row: { readonly trigger_type?: unknown; readon
 }
 
 /**
+ * THE SECOND, NARROWER RULE (decided 2026-11-11): the one stamp a use-case
+ * node's inner run carries — `outerRun`, the run it works for
+ * (lib/use-case-outer-run.ts) — is the platform's only on a `use_case` row.
+ * That lane's one writer (services/use-case-execution.ts) stores nothing in
+ * `trigger_data` but that link (`__tests__/trigger-data-stamps.test.ts` and
+ * insert-guard rule 4 hold it), and no client writes the table. The rule above
+ * is left as it is: `use_case` is not a stamp-writing lane, so every other
+ * stamp still reads as absent on its rows, and `outerRun` reads as absent on
+ * every other lane's.
+ */
+export const OUTER_RUN_LINK_TRIGGER_TYPE = "use_case"
+
+/**
+ * A row's `trigger_data` for the outer-run link reader: the value itself on a
+ * use-case node's inner run, `null` on any other row. The row must carry its
+ * `trigger_type`.
+ */
+export function outerRunTriggerData(row: { readonly trigger_type?: unknown; readonly trigger_data?: unknown } | null | undefined): unknown {
+  return row?.trigger_type === OUTER_RUN_LINK_TRIGGER_TYPE ? (row.trigger_data ?? null) : null
+}
+
+/**
  * Narrow a `workflow_executions` query that finds rows BY a stamp
  * (`trigger_data->…`) to the lanes that write stamps, so a row another lane
  * stored cannot be found by one it carries.

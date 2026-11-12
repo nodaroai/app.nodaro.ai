@@ -1,13 +1,15 @@
 /**
  * The keys of `workflow_executions.trigger_data` that only the platform writes: the stamps a run is
  * found and continued by. An app run's (`appRun`), a Render final's (`appRenderFinal`), a
- * continue-from-failed's lineage (`continueFromFailed`) and a continuation chain's root (`runRoot`).
+ * continue-from-failed's lineage (`continueFromFailed`), a continuation chain's root (`runRoot`) and
+ * the run a use-case node's inner run works for (`outerRun`, lib/use-case-outer-run.ts).
  * Each is read back as fact — which app run an execution belongs to, which version it ran, which
  * run a continuation goes to — so none may ever come from a caller.
  *
  * Two locks on that door:
  * - a stamp is READ only on an execution a stamp-writing lane started (`serverStamps`, over
- *   lib/server-started-runs.ts) — the one that holds;
+ *   lib/server-started-runs.ts) — the one that holds; the use-case link (`outerRun`) only on a
+ *   use-case node's inner run, by the narrower rule beside it;
  * - a lane that stores caller-controlled data in `trigger_data` (a webhook's posted body, a plugin
  *   trigger's event payload) passes it through `withoutReservedStamps` first, so the stored row
  *   never carries one either.
@@ -24,7 +26,8 @@ import {
   type ContinueFromFailedStamp,
 } from "./continue-from-failed-lineage.js"
 import { RUN_ROOT_STAMP_KEY, runRootOf } from "./continuation-run-root.js"
-import { serverTriggerData } from "./server-started-runs.js"
+import { OUTER_RUN_STAMP_KEY, outerRunOf } from "./use-case-outer-run.js"
+import { outerRunTriggerData, serverTriggerData } from "./server-started-runs.js"
 
 /** Every `trigger_data` key only the platform writes. */
 export const RESERVED_TRIGGER_DATA_KEYS: readonly string[] = [
@@ -32,6 +35,7 @@ export const RESERVED_TRIGGER_DATA_KEYS: readonly string[] = [
   APP_RENDER_FINAL_STAMP_KEY,
   CONTINUE_FROM_FAILED_STAMP_KEY,
   RUN_ROOT_STAMP_KEY,
+  OUTER_RUN_STAMP_KEY,
 ]
 
 /** Caller-controlled `trigger_data` without any reserved stamp key (a copy; the input is left as it is). */
@@ -49,10 +53,13 @@ export interface ServerStamps {
   readonly runRoot: string | null
   /** The execution an app run's Retry continued (`appRun.resumedFrom`, lib/app-run-stamp.ts). */
   readonly resumedFrom: string | null
+  /** The run a use-case node's inner run works for (`outerRun.executionId`, lib/use-case-outer-run.ts). */
+  readonly outerRun: string | null
 }
 
 /**
- * The stamps on `row`, read only when a stamp-writing lane started it (lib/server-started-runs.ts):
+ * The stamps on `row`, read only when a stamp-writing lane started it (lib/server-started-runs.ts) —
+ * and `outerRun` only on a use-case node's inner run, the narrower rule beside it there:
  * on a webhook's, a schedule's, a plugin trigger's or any other row every one is `null`, whatever
  * its `trigger_data` holds. The row must carry `trigger_type`.
  */
@@ -63,5 +70,7 @@ export function serverStamps(row: { readonly trigger_type?: unknown; readonly tr
     appRenderFinal: appRenderFinalStampOf(serverTriggerData(row)),
     runRoot: runRootOf(serverTriggerData(row)),
     resumedFrom: appRunResumedFromOf(serverTriggerData(row)),
+    // Read on a use-case node's inner run alone: the second, narrower rule (lib/server-started-runs.ts).
+    outerRun: outerRunOf(outerRunTriggerData(row)),
   }
 }

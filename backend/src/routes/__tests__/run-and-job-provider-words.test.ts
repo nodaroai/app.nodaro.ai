@@ -101,6 +101,9 @@ vi.mock("@/lib/workflow-access.js", async (importOriginal) => ({
 import { workflowExecutionRoutes } from "../workflow-execution.js"
 import { jobRoutes } from "../jobs.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
+import { outerRunStamp } from "../../lib/use-case-outer-run.js"
+import { runsWordsReadable } from "../../lib/provider-words-readers.js"
+import { USE_CASE_MAX_DEPTH } from "../../lib/use-case/lanes.js"
 
 type Row = Record<string, unknown>
 
@@ -262,5 +265,128 @@ describe("a lookup that fails withholds the words on both reads", () => {
     mockWorkflowAccess.mockRejectedValue(new Error("boom"))
     const r = run({ workflow_id: OWN_WF })
     await expectBoth(r, [r], false)
+  })
+})
+
+/** A use-case node's inner run (no workflow), linked to `outer` when given. */
+function inner(outer?: Row): Row {
+  return run({ workflow_id: null, trigger_type: "use_case", trigger_data: outer ? outerRunStamp(outer.id as string) : null })
+}
+
+describe("a use-case node's inner run started inside a workflow run (it links that run)", () => {
+  it("the outer workflow's creator reads the words on both reads", async () => {
+    const outer = run({ workflow_id: OWN_WF })
+    const r = inner(outer)
+    await expectBoth(r, [outer, r], true)
+    expect(mockWorkflowAccess).toHaveBeenCalledWith(READER, OWN_WF)
+  })
+
+  it("a person who ran someone else's shared workflow reads them on neither", async () => {
+    const outer = run({ workflow_id: SHARED_WF })
+    const r = inner(outer)
+    await expectBoth(r, [outer, r], false)
+  })
+
+  it("a workspace member the outer workflow is shared with reads them on both", async () => {
+    const outer = run({ workflow_id: TEAM_WF })
+    const r = inner(outer)
+    await expectBoth(r, [outer, r], true)
+  })
+
+  it("an admin reads them on both, with no lookup", async () => {
+    const outer = run({ workflow_id: SHARED_WF })
+    const r = inner(outer)
+    await expectBoth(r, [outer, r], true, "admin")
+    expect(mockWorkflowAccess).not.toHaveBeenCalled()
+  })
+
+  it("a nested inner run walks up to the nearest run that names a workflow", async () => {
+    const shared = run({ workflow_id: SHARED_WF })
+    const middle = inner(shared)
+    const deepest = inner(middle)
+    await expectBoth(deepest, [shared, middle, deepest], false)
+    const own = run({ workflow_id: OWN_WF })
+    const ownMiddle = inner(own)
+    const ownDeepest = inner(ownMiddle)
+    await expectBoth(ownDeepest, [own, ownMiddle, ownDeepest], true)
+  })
+
+  it("a continuation of an inner run carries the same link, so it reads the same", async () => {
+    // A continuation started from outside a run is inserted with the link of the run it continues
+    // (routes/use-case-continue.ts); read side, it is an inner run linked to the same outer run.
+    const outer = run({ workflow_id: SHARED_WF })
+    const first = inner(outer)
+    const continued = inner(outer)
+    await expectBoth(first, [outer, first, continued], false)
+    await expectBoth(continued, [outer, first, continued], false)
+  })
+
+  it("a chain that ends at a run with no link (a standalone outer use-case run) is its owner's", async () => {
+    const standalone = inner()
+    const r = inner(standalone)
+    await expectBoth(r, [standalone, r], true)
+    expect(mockWorkflowAccess).not.toHaveBeenCalled()
+  })
+})
+
+describe("a link that cannot be followed withholds the words on both reads", () => {
+  it("the linked run is gone (its workflow deleted, the run with it): even its owner reads them on neither", async () => {
+    const r = inner(run({ workflow_id: OWN_WF }))
+    await expectBoth(r, [r], false)
+  })
+
+  it("the linked run cannot be read (a read that fails)", async () => {
+    const outer = run({ workflow_id: OWN_WF })
+    const r = inner(outer)
+    db.runReadsFail = true
+    await expectBoth(r, [outer, r], false)
+  })
+
+  it("the linked run is someone else's: never followed", async () => {
+    const theirs = run({ workflow_id: OWN_WF, user_id: "00000000-0000-4000-8000-000000000099" })
+    const r = inner(theirs)
+    await expectBoth(r, [theirs, r], false)
+  })
+
+  it(`a chain longer than the nesting limit (${USE_CASE_MAX_DEPTH} links) withholds`, async () => {
+    const outer = run({ workflow_id: OWN_WF })
+    const chain: Row[] = [outer]
+    for (let i = 0; i <= USE_CASE_MAX_DEPTH; i++) chain.push(inner(chain[chain.length - 1]))
+    await expectBoth(chain[chain.length - 1]!, chain, false)
+    // At the limit it is still followed.
+    const within: Row[] = [outer]
+    for (let i = 0; i < USE_CASE_MAX_DEPTH; i++) within.push(inner(within[within.length - 1]))
+    await expectBoth(within[within.length - 1]!, within, true)
+  })
+
+  it("a link on a row of another lane is no link: its owner's, as a run that names no workflow", async () => {
+    const outer = run({ workflow_id: SHARED_WF })
+    const r = run({ workflow_id: null, trigger_type: "webhook", trigger_data: outerRunStamp(outer.id as string) })
+    await expectBoth(r, [outer, r], true)
+  })
+})
+
+describe("cost: links are followed level by level, one read for every run at that level", () => {
+  it("many runs at once: one read of the linked runs per level, one access check per distinct workflow", async () => {
+    const shared = run({ workflow_id: SHARED_WF })
+    const own = run({ workflow_id: OWN_WF })
+    const a = inner(shared)
+    const b = inner(shared)
+    const c = inner(own)
+    const d = inner(a)
+    db.runs = [shared, own, a, b, c, d]
+    db.reads = []
+    const readable = await runsWordsReadable(READER, [a, b, c, d] as never)
+    expect([...readable].sort()).toEqual([c.id].sort())
+    // Level 1 (a, b, c link shared/own; d links a), level 2 (a's link): two reads in all.
+    expect(db.reads.filter((r) => r.table === "workflow_executions").length).toBe(2)
+    expect(mockWorkflowAccess).toHaveBeenCalledTimes(2)
+  })
+
+  it("no run links one: no read at all", async () => {
+    db.reads = []
+    const r = run({ workflow_id: OWN_WF })
+    await runsWordsReadable(READER, [r as never])
+    expect(db.reads.filter((x) => x.table === "workflow_executions")).toEqual([])
   })
 })

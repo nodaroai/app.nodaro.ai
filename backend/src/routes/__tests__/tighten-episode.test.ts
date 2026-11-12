@@ -182,6 +182,16 @@ describe("POST /v1/tighten-episode", () => {
     expect((m.execute.mock.calls[1]![0] as Record<string, unknown>).parentExecutionId).toBeUndefined()
   })
 
+  it("the run it works for (the outer-run link) is that internal parent; a caller's header is never believed", async () => {
+    const parent = "00000000-0000-4000-8000-0000000000aa"
+    m.authKind = "internal"
+    await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"], userId: USER }, { "x-nodaro-parent-execution": parent })
+    expect(m.execute.mock.calls[0]![0]).toMatchObject({ outerRunId: parent })
+    m.authKind = "jwt"
+    await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "x-nodaro-parent-execution": parent })
+    expect((m.execute.mock.calls[1]![0] as Record<string, unknown>).outerRunId).toBeUndefined()
+  })
+
   it("internal lane: depth 5 is refused", async () => {
     m.authKind = "internal"
     const deep = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"], componentDepth: 5, userId: USER })

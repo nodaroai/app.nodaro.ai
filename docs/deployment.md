@@ -1143,9 +1143,11 @@ optional; each array empty = "keep the default"):
   node states, and the jobs that belong to it — to a reader who can open the
   workflow the run executed (never to a published app's runner or a person
   running someone else's share link, nor on a share page to anyone but its
-  creator). A job that is not linked to the workflow run that started it (a few
-  node types; a use-case node's hidden run, states and jobs alike; and a run
-  whose workflow was deleted) is its owner's, like a job that belongs to no run.
+  creator). A use-case node's hidden run, states and jobs alike, is judged by
+  the workflow run whose node started it, which it is linked to. A job that is
+  not linked to the workflow run that started it (a few node types; a hidden run
+  made before these links were recorded; and a run whose workflow was deleted)
+  is its owner's, like a job that belongs to no run.
   Backend-only: stripped from `/config.js`. The key governs what the server
   serves from a job and from a run. Words an editor has already saved onto a
   workflow's nodes, before the key was set or on an administrator's own

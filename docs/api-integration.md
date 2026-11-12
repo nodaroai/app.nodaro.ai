@@ -1847,14 +1847,17 @@ belongs to a workflow run carries its words, on every job payload above and in
 the `job.failed` webhook event, only when its owner can open the run's
 workflow — so running someone else's share link gives you its jobs with
 `error_detail: null`. A job that belongs to no run (one node run on its own)
-carries its words to its owner, as before, and so does a run that executes no
-saved workflow — the hidden run a use-case node such as Tighten Episode starts —
-on its node states and on its jobs alike. Some jobs are their owner's even when
-a workflow run started them: those of a few node types, which are not linked to
-that run; a use-case node's hidden run and its jobs, which are not linked to the
-run whose node started them; and the jobs of a run whose workflow has since been
-deleted (the run is deleted with it). Their words go to their owner, as a job
-that belongs to no run does. The share
+carries its words to its owner, as before. The hidden run a use-case node such
+as Tighten Episode starts executes no saved workflow: when a node of a workflow
+run started it, it is linked to that run and judged by its workflow, on its node
+states and on its jobs alike (a hidden run inside another follows the links to
+the nearest run of a workflow); one run on its own is its owner's. Some jobs
+are their owner's even when a workflow run started them: those of a few node
+types, which are not linked to that run; a use-case node's hidden run made
+before these links were recorded, and its jobs; and the jobs of a run whose
+workflow has since been deleted (the run is deleted with it). Their words go to
+their owner, as a job that belongs to no run does — except a linked hidden run
+whose run is gone, which keeps its words from everyone but administrators. The share
 page (`GET /v1/present/:token`) leaves the words its creator's editor saved out
 of every node it shows anyone but the creator. A deployment can also keep these
 words for its administrators (`jobs.errorDetail` in its surface profile, see

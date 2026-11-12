@@ -312,6 +312,9 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
           mcpClient: extractMcpClient(req.body),
           // A node of a running run started it (internal lane only): no run slot of its own.
           parentExecutionId: parentExecutionIdOf(req),
+          // The run it works for: that running run, else the one the run it continues works for
+          // (a continuation from outside a run keeps its source's link; lib/use-case-outer-run.ts).
+          outerRunId: parentExecutionIdOf(req) ?? plan.source.outerRun ?? undefined,
           // The run's steps reserve under the rules its balance check and fee hold used.
           webFreeMode,
           appRun: req.isAppRun === true,

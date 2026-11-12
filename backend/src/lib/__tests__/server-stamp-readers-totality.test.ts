@@ -43,14 +43,15 @@ import { stringValue, unwrap } from "./execution-row-ast.js"
 
 // A run's node selection (`nodeSelection`, the scope a continue-from-failed of it considers) is
 // read as fact the same way: only off a run a stamp-writing lane started.
-const PARSERS = new Set(["continueFromFailedStampOf", "appRunStampOf", "appRenderFinalStampOf", "runRootOf", "appRunResumedFromOf", "nodeSelectionOf"])
-const STAMP_KEYS = new Set(["continueFromFailed", "appRun", "appRenderFinal", "runRoot", "nodeSelection"])
+const PARSERS = new Set(["continueFromFailedStampOf", "appRunStampOf", "appRenderFinalStampOf", "runRootOf", "appRunResumedFromOf", "nodeSelectionOf", "outerRunOf"])
+const STAMP_KEYS = new Set(["continueFromFailed", "appRun", "appRenderFinal", "runRoot", "nodeSelection", "outerRun"])
 /** The modules that define a stamp: their parser reads the key off the value it is handed. */
 const STAMP_MODULES = new Set([
   "lib/continue-from-failed-lineage.ts",
   "lib/app-run-stamp.ts",
   "lib/app-run-final-column.ts",
   "lib/continuation-run-root.ts",
+  "lib/use-case-outer-run.ts",
 ])
 
 const isCallTo = (node: ts.Node, name: string): node is ts.CallExpression =>
@@ -58,7 +59,13 @@ const isCallTo = (node: ts.Node, name: string): node is ts.CallExpression =>
   (ts.isIdentifier(node.expression) ? node.expression.text === name : ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === name)
 
 /** The trust decision's entry points (rule 4). */
-const TRUST_CALLS = new Set(["serverTriggerData", "serverStamps", "isServerStartedRun"])
+const TRUST_CALLS = new Set(["serverTriggerData", "serverStamps", "isServerStartedRun", "outerRunTriggerData"])
+/**
+ * The trust call each parser must be called on (rule 1): `serverTriggerData`, except the use-case
+ * link, which the narrower rule trusts on a `use_case` row alone (lib/server-started-runs.ts).
+ */
+const TRUST_FOR: Readonly<Record<string, string>> = { outerRunOf: "outerRunTriggerData" }
+const trustFor = (parser: string): string => TRUST_FOR[parser] ?? "serverTriggerData"
 /** A PostgREST filter string on the column: `trigger_data->…`, `trigger_data.cs.{…}`. */
 const STAMP_FILTER = /trigger_data(?:->|\.[a-z]+\.)/
 /** The query methods that select or order rather than filter: the bare column there is no find. */
@@ -184,7 +191,8 @@ function findings(sf: ts.SourceFile, rel: string): string[] {
             : null)
     if (callee && parserCalled && PARSERS.has(parserCalled)) {
       const arg = (node as ts.CallExpression).arguments[0]
-      if (!arg || !isCallTo(arg, "serverTriggerData")) out.push(`${rel}:${lineOf(sf, node)} ${parserCalled}(…) not on serverTriggerData(row) — call it as ${parserCalled}(serverTriggerData(row)), or read serverStamps(row)`)
+      const trust = trustFor(parserCalled)
+      if (!arg || !isCallTo(arg, trust)) out.push(`${rel}:${lineOf(sf, node)} ${parserCalled}(…) not on ${trust}(row) — call it as ${parserCalled}(${trust}(row)), or read serverStamps(row)`)
     }
     if (ts.isIdentifier(node) && PARSERS.has(node.text) && parent) {
       const isCallee = (ts.isCallExpression(parent) && parent.expression === node) || (ts.isPropertyAccessExpression(parent) && parent.name === node && ancestors.length > 1 && ts.isCallExpression(ancestors[ancestors.length - 2]!) && (ancestors[ancestors.length - 2] as ts.CallExpression).expression === parent)
@@ -270,6 +278,9 @@ describe("every stamp reader goes through lib/server-started-runs.ts", { timeout
     ["another parser on it", `const b = appRunStampOf(execution.trigger_data)`, "not on serverTriggerData"],
     ["a parser on a value of unknown origin", `const h = runRootOf(current)`, "not on serverTriggerData"],
     ["the resume parser", `const i = appRunResumedFromOf(execution.trigger_data)`, "not on serverTriggerData"],
+    ["the use-case link on a row's own trigger_data", `const o = outerRunOf(row.trigger_data)`, "not on outerRunTriggerData"],
+    ["the use-case link through the wider trust", `const o = outerRunOf(serverTriggerData(row))`, "not on outerRunTriggerData"],
+    ["another parser through the narrow trust", `const r = runRootOf(outerRunTriggerData(row))`, "not on serverTriggerData"],
     ["a parser through a namespace", `const n = stamps.appRunStampOf(row.trigger_data)`, "not on serverTriggerData"],
     ["a parser handed around", `const ids = rows.map(appRunStampOf)`, "handed around"],
     ["a parser held in a name", `const parse = appRunStampOf`, "handed around"],
@@ -333,6 +344,7 @@ describe("every stamp reader goes through lib/server-started-runs.ts", { timeout
       const sel = supabase.from("workflow_executions").select("id, trigger_type, trigger_data").order("created_at")
       const { appRunResumedFromOf } = await import("./app-run-stamp.js")
       const resumed = appRunResumedFromOf(serverTriggerData(row))
+      const link = outerRunOf(outerRunTriggerData(row))
       const td = serverStamps(row)
       const fine = td.appRun
       const t = source.continueFromFailed
