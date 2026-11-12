@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest"
+
 import { buildPayload, buildNodeRefMap, expandWiredLocationRefs, expandWiredObjectCreatureRefs } from "../payload-builder.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "../types.js"
+import { serveEveryHouseModel, serveNoHouseModel } from "../../../test/house-models.js"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared/models"
 import { setLlmMeteredSchemaReadyForTesting } from "../../../lib/llm-metered-schema-gate.js"
 import sunoSeparateSourceCases from "../../../../../packages/render-rules/fixtures/suno-separate-source.cases.json"
@@ -1238,6 +1240,33 @@ describe("buildPayload", () => {
       const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4" })
       expect(result.payload).not.toHaveProperty("targetResolution")
       expect(result.payload).toMatchObject({ upscaleFactor: "4" })
+    })
+
+    it("video-upscale on Topaz drops another provider's box (2k), so the run uses its default", () => {
+      const n = node("n1", "video-upscale", { provider: "topaz", targetResolution: "2k" })
+      const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4" })
+      expect(result.payload).not.toHaveProperty("targetResolution")
+    })
+
+    it("video-upscale on Nodaro Video Upscale (served, the run's plan unknown here): built — its tier's row, the tier coerced, no frame rate or factor", () => {
+      // The deployment's plugin serves it (lib/house-models.ts); without one, a house model is not served.
+      serveEveryHouseModel()
+      try {
+        const n = node("n1", "video-upscale", { provider: "nodaro-video-upscale", targetResolution: "720p", targetFps: 60, upscaleFactor: "2" })
+        const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4" })
+        expect(result.jobName).toBe("video-upscale")
+        expect(result.modelIdentifier).toBe("nodaro-video-upscale:1080p:per-4s")
+        expect(result.payload).toMatchObject({ provider: "nodaro-video-upscale", videoUrl: "https://v.mp4", tier: "1080p", targetResolution: "1080p" })
+        expect(result.payload).not.toHaveProperty("targetFps")
+        expect(result.payload).not.toHaveProperty("upscaleFactor")
+      } finally {
+        serveNoHouseModel()
+      }
+    })
+
+    it("video-upscale on Nodaro Video Upscale (not served): refused at build, before anything is held", () => {
+      const n = node("n1", "video-upscale", { provider: "nodaro-video-upscale", targetResolution: "2k" })
+      expect(() => buildPayload(n, jobId, { videoUrl: "https://v.mp4" })).toThrow(/not available on this deployment: nodaro-video-upscale/)
     })
 
     it("extend-video", () => {

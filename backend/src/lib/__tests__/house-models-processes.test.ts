@@ -57,6 +57,7 @@ import {
   HouseModelsServedUnknownError,
   HouseModelsTemporarilyUnavailableError,
   houseRuleWithholdsAModel,
+  ownLabelModelIds,
   resetOwnLabelModelIdsForTests,
   servesEveryHouseModel,
 } from "../house-models-served.js"
@@ -227,11 +228,12 @@ describe("(e) a house model the node does not name", () => {
     // The plugin process.
     setPluginServices({ houseModels: { ...fakeService(), ids: () => [ID] } })
     expect(servesEveryHouseModel()).toBe(false)
-    setPluginServices({ houseModels: { ...fakeService(), ids: () => [ID, "nodaro-image-upscale"] } })
+    // Every own-label model: the fixture and the shipped catalog's own.
+    setPluginServices({ houseModels: { ...fakeService(), ids: () => [...ownLabelModelIds()] } })
     expect(servesEveryHouseModel()).toBe(true)
     // The orchestrator: no answer yet is not knowing — and reading it starts no ask.
     _resetPluginServicesForTests()
-    const ask = vi.fn(async () => [ID, "nodaro-image-upscale"])
+    const ask = vi.fn(async () => [...ownLabelModelIds()])
     setHouseModelsServedSource(ask)
     expect(servesEveryHouseModel()).toBe(false)
     expect(ask).not.toHaveBeenCalled()
@@ -243,8 +245,8 @@ describe("(e) a house model the node does not name", () => {
   it("the house rule counts as a model restriction only while a house model is not known to be served", async () => {
     setPluginServices({ houseModels: { ...fakeService(), ids: () => [] } })
     expect(houseRuleWithholdsAModel()).toBe(true)
-    // Every own-label model served (the fixture and the shipped catalog's own).
-    setPluginServices({ houseModels: { ...fakeService(), ids: () => [ID, "nodaro-image-upscale"] } })
+    // Every house model of the catalog served (the fixture and the shipped ones).
+    setPluginServices({ houseModels: { ...fakeService(), ids: () => [...ownLabelModelIds()] } })
     expect(houseRuleWithholdsAModel()).toBe(false)
   })
 })

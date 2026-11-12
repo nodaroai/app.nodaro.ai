@@ -2,7 +2,7 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
 import { unitCreditIdOf } from "@/lib/unit-price-ids"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, isSeedanceExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId } from "@nodaro/shared/models"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, isSeedanceExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
 import { defaultImageModelForNode, imageFormatLeversOf, isPricedPerInputImage, maskedEditResolution, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { countImageInputEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
@@ -43,7 +43,7 @@ import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, isUseCaseNodeType, nodaroImageUpscaleCreditId, renderEstimateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsReferenceVideo } from "@/lib/audio-reference-handles"
 import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
@@ -762,6 +762,12 @@ export function getModelIdentifier(
   // units it quotes (PRICING_UNIT_ESTIMATORS → videoUpscalePricingUnits). ABOVE
   // the `!provider` bail, which quoted the node-type row.
   if (nodeType === "video-upscale" && isTopazVideoUpscaleProvider(data.provider)) return TOPAZ_VIDEO_UNIT_CREDIT_ID
+  // Video Upscale on Nodaro Video Upscale: its tier's four-second row; every
+  // estimate multiplies it by the clip's billed seconds ÷ 4
+  // (PRICING_UNIT_ESTIMATORS → videoUpscalePricingUnits), as the server does.
+  if (nodeType === "video-upscale" && data.provider === NODARO_VIDEO_UPSCALE_PROVIDER) {
+    return nodaroVideoUpscaleCreditId(nodaroVideoUpscaleTierOf(data.targetResolution))
+  }
 
   // A node naming no model whose default is priced per input image: as the server estimate.
   // An Extend Video node naming no provider runs on the node's default

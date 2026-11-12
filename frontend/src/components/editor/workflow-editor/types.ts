@@ -1148,11 +1148,12 @@ export interface RunCreditLine {
   readonly credits: number;
   /** `credits` includes a metered LLM call's ESTIMATE (charged its actual usage after the run): shown `≈N`. */
   readonly estimate?: true;
-  /** The node's metered LLM call is on a model the server refuses to price (`llm_model_unpriced`):
+  /** The node's metered LLM call is on a model the server refuses to price (`llm_model_unpriced`),
+   *  or it is a Nodaro Video Upscale of a clip the graph knows is past its 60-second limit:
    *  it adds nothing here — never its tier's figure — and the run itself is refused. Every total
    *  this line is part of then says it is unpriced (`runLinesUnpriced`). */
   readonly unpriced?: true;
-  /** With `unpriced`: the server's sentence for the refusal (`llm_model_unpriced`'s message), when it gave one. */
+  /** With `unpriced`: the sentence for the refusal (`llm_model_unpriced`'s message from the server, or the clip's length limit), when there is one. */
   readonly unpricedMessage?: string;
 }
 

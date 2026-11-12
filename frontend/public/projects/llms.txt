@@ -920,7 +920,7 @@ Upscale video resolution.
 }
 ```
 
-**Providers:** `topaz`, `veo-1080p`, `veo-4k`
+**Providers:** `topaz`, `veo-1080p`, `veo-4k`, `nodaro-video-upscale` (where offered)
 
 | Input Handles | Output Handles |
 |---------------|----------------|

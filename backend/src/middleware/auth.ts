@@ -61,6 +61,9 @@ declare module "fastify" {
     /** A Topaz upscale's measured plan (target + hold units), set by
      *  `/v1/video-upscale`'s preHandler BEFORE creditGuard. */
     topazVideoUpscale?: import("../lib/topaz-video-plan.js").TopazVideoUpscalePlan
+    /** A Nodaro Video Upscale's measured plan (tier, billed seconds), set by
+     *  `/v1/video-upscale`'s preHandler BEFORE creditGuard. */
+    nodaroVideoUpscale?: import("../lib/nodaro-video-upscale-plan.js").NodaroVideoUpscalePlan
     /** A Topaz image upscale's output size in the provider's units, set by
      *  `/v1/edit-image`'s preHandler BEFORE creditGuard. */
     topazImageSizeUnits?: number

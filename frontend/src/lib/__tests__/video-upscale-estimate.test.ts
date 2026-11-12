@@ -20,9 +20,9 @@ vi.mock("@/hooks/use-model-credit-cost", () => ({
 }))
 
 import { TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits } from "@nodaro/render-rules"
-import { topazVideoQuotedResolution, videoUpscalePricingUnits } from "@/lib/video-utility-estimate"
+import { nodaroVideoUpscaleRefusedSec, topazVideoQuotedResolution, videoUpscalePricingUnits } from "@/lib/video-utility-estimate"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
-import { estimateRunCreditLines } from "@/components/editor/workflow-editor/estimate-run-credits"
+import { estimateRunCreditLines, estimateWholeRun } from "@/components/editor/workflow-editor/estimate-run-credits"
 import { getExactPricingUnits, NO_RERUNS } from "@/components/editor/workflow-editor/types"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
@@ -141,5 +141,73 @@ describe("the run estimate", () => {
     const [line] = estimateRunCreditLines([x], [x], [], (id) => (id === "veo-1080p" ? 3 : undefined))
     expect(line!.credits).toBe(3)
     expect(line!.estimate).toBeUndefined()
+  })
+})
+
+describe("Nodaro Video Upscale", () => {
+  it("is quoted at its tier's four-second row, a quarter-unit per billed second of the wired clip", () => {
+    const x = upscale({ provider: "nodaro-video-upscale", targetResolution: "2k" })
+    expect(getModelIdentifier(x, [], [x])).toBe("nodaro-video-upscale:2k:per-4s")
+    expect(videoUpscalePricingUnits(x, [x, upload(8)], [wire])).toBe(2)
+    expect(getExactPricingUnits(x, [x, upload(8)], [wire], NO_RERUNS)).toBe(2)
+  })
+
+  it("nothing wired: a 10 s clip, as the server's estimate prices it", () => {
+    const x = upscale({ provider: "nodaro-video-upscale", targetResolution: "4k" })
+    expect(videoUpscalePricingUnits(x, [x], [])).toBe(2.5)
+  })
+
+  it("a value it does not take (Topaz's 720p) is quoted at its default tier", () => {
+    const x = upscale({ provider: "nodaro-video-upscale", targetResolution: "720p" })
+    expect(getModelIdentifier(x, [], [x])).toBe("nodaro-video-upscale:1080p:per-4s")
+  })
+
+  it("the run estimate prices the whole run (its quote id) and marks it an estimate", () => {
+    const x = upscale({ provider: "nodaro-video-upscale", targetResolution: "1080p" })
+    const prices: Record<string, number> = { "nodaro-video-upscale:1080p:per-4s:2.5u": 42, "nodaro-video-upscale:1080p:per-4s": 17 }
+    const [line] = estimateRunCreditLines([x], [x], [], (id) => prices[id])
+    expect(line!.credits).toBe(42)
+    expect(line!.estimate).toBe(true)
+  })
+})
+
+describe("Nodaro Video Upscale of a clip past its 60-second limit (refused before anything is held)", () => {
+  const prices: Record<string, number> = {
+    "nodaro-video-upscale:1080p:per-4s": 17,
+    "nodaro-video-upscale:1080p:per-4s:15u": 248,
+    "nodaro-video-upscale:1080p:per-4s:18.75u": 311,
+  }
+  const x = upscale({ provider: "nodaro-video-upscale", targetResolution: "1080p" })
+
+  it("a known 75 s clip: no units, and the Run confirm's line is priced nowhere, saying why", () => {
+    expect(nodaroVideoUpscaleRefusedSec(x, [x, upload(75)], [wire])).toBe(75)
+    const [line] = estimateRunCreditLines([x], [x, upload(75)], [wire], (id) => prices[id])
+    expect(line!.credits).toBe(0)
+    expect(line!.unpriced).toBe(true)
+    expect(line!.unpricedMessage).toMatch(/up to 60 s/)
+    expect(line!.unpricedMessage).toMatch(/75 s/)
+  })
+
+  it("the whole run's total leaves it out and says it is not priced", () => {
+    const run = estimateWholeRun([x, upload(75)], [wire], (id) => prices[id])
+    expect(run.total).toBe(0)
+    expect(run.unpriced).toBeDefined()
+  })
+
+  it("exactly 60 s is still priced (the limit is inclusive), as the run measures it", () => {
+    expect(nodaroVideoUpscaleRefusedSec(x, [x, upload(60)], [wire])).toBeUndefined()
+    expect(videoUpscalePricingUnits(x, [x, upload(60)], [wire])).toBe(15)
+    const [line] = estimateRunCreditLines([x], [x, upload(60)], [wire], (id) => prices[id])
+    expect(line!.credits).toBe(248)
+    expect(line!.unpriced).toBeUndefined()
+  })
+
+  it("an unknown length is never refused here: the run measures the clip", () => {
+    expect(nodaroVideoUpscaleRefusedSec(x, [x], [])).toBeUndefined()
+  })
+
+  it("only Nodaro Video Upscale: Topaz on the same 75 s clip is priced as before", () => {
+    const t = upscale({ provider: "topaz", targetResolution: "1080p" })
+    expect(nodaroVideoUpscaleRefusedSec(t, [t, upload(75)], [wire])).toBeUndefined()
   })
 })

@@ -49,15 +49,19 @@ import type {
   VideoAuditNodeData,
 } from "@/types/nodes"
 import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, EVP_PROVIDERS, MOTION_TRANSFER_MODELS, VIDEO_DEPTH_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip, withoutDeniedModels } from "./model-options"
+import { isMenuRowWithheld } from "./model-options"
 import {
   SEEDANCE_DRAFT_FINALIZE_PROVIDER,
   modelTakesSeed,
   isAutoVideoDuration,
   hasFeature,
-  MODEL_CATALOG
+  MODEL_CATALOG,
+  normalizeVideoUpscaleResolution,
+  videoUpscaleResolutionsFor,
 } from "@nodaro/shared/model-catalog"
-import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, type TopazVideoResolution } from "@nodaro/shared/models"
-import { TOPAZ_VIDEO_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
+import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER, type TopazVideoResolution } from "@nodaro/shared/models"
+import { nodaroVideoUpscaleTierOf } from "@nodaro/render-rules"
+import { TOPAZ_VIDEO_RESOLUTION_LABELS, VIDEO_UPSCALE_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText } from "@/lib/video-start-frame-only"
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
@@ -2230,6 +2234,12 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
   const seedanceHdMinimum = useSeedanceHdMinimumCredits()
   const provider = data.provider || "topaz"
   const isTopaz = provider === "topaz"
+  const isNodaro = provider === NODARO_VIDEO_UPSCALE_PROVIDER
+  // Nodaro Video Upscale is offered only where this deployment serves it (the
+  // fetched availability, which the server answers from the house-model seam);
+  // a node that already holds it keeps it listed (its run refuses it there).
+  useSurfaceAvailability()
+  const offerNodaro = isNodaro || !isMenuRowWithheld({ nodeType: "video-upscale" }, NODARO_VIDEO_UPSCALE_PROVIDER)
   // Shown: the resolution the node is quoted at — the one reading its price
   // reads (`topazVideoQuotedResolution`). A saved node that still holds only the
   // old 1×/2×/4× factor shows the target that factor maps to over the wired
@@ -2241,13 +2251,21 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
   const fpsChoices: readonly number[] = fps === undefined || (TOPAZ_VIDEO_FPS_CHOICES as readonly number[]).includes(fps)
     ? TOPAZ_VIDEO_FPS_CHOICES
     : [...TOPAZ_VIDEO_FPS_CHOICES, fps].sort((a, b) => a - b)
-  // Fail-safe (CLAUDE.md step 12b): the target is Topaz's lever only — cleared
-  // on any other provider; on Topaz a value it cannot take is cleared (the run
-  // then uses its default) and a frame rate out of range is clamped. An unset
-  // value is left unset.
+  // Fail-safe (CLAUDE.md step 12b): the target is Topaz's and Nodaro Video
+  // Upscale's lever — cleared on any other provider; on Topaz a value it cannot
+  // take is cleared (the run then uses its default) and a frame rate out of
+  // range is clamped; on Nodaro Video Upscale a value it cannot take snaps to
+  // its default (the catalog's, `normalizeVideoUpscaleResolution`), and the
+  // frame rate and the old factor, levers it does not have, are cleared. An
+  // unset value is left unset.
   useEffect(() => {
     const updates: Partial<VideoUpscaleData> = {}
-    if (!isTopaz) {
+    if (isNodaro) {
+      const snapped = normalizeVideoUpscaleResolution(provider, data.targetResolution).targetResolution
+      if (data.targetResolution !== undefined && snapped !== data.targetResolution) updates.targetResolution = snapped as VideoUpscaleData["targetResolution"]
+      if (data.targetFps !== undefined) updates.targetFps = undefined
+      if (data.upscaleFactor !== undefined) updates.upscaleFactor = undefined
+    } else if (!isTopaz) {
       if (data.targetResolution !== undefined) updates.targetResolution = undefined
       if (data.targetFps !== undefined) updates.targetFps = undefined
       if (data.upscaleFactor !== undefined) updates.upscaleFactor = undefined
@@ -2273,6 +2291,10 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
             <LockableSelectItem value="veo-1080p" locked={lockedVideoModel(freeVideoLimits, "veo-1080p")}>{`VEO 1080p${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-1080p") ?? 2)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</LockableSelectItem>
             <LockableSelectItem value="veo-4k" locked={lockedVideoModel(freeVideoLimits, "veo-4k")}>{`VEO 4K${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-4k") ?? 38)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</LockableSelectItem>
             <LockableSelectItem value={SEEDANCE_DRAFT_FINALIZE_PROVIDER} locked={lockedVideoModel(freeVideoLimits, SEEDANCE_DRAFT_FINALIZE_PROVIDER)}>{`${t("vidcfg.seedanceHdFromDraft")}${hasCredits() && seedanceHdMinimum != null ? ` (${t("vidcfg.seedanceHdFromPrice", { credits: `${creditUnits(seedanceHdMinimum)} ${creditUnitLabel(t("credits.unitShort"))}` })})` : ""}`}</LockableSelectItem>
+            {/* Priced per second of the clip, so the row quotes nothing; the node's pill and Run button show the clip's estimate. */}
+            {offerNodaro && (
+              <LockableSelectItem value={NODARO_VIDEO_UPSCALE_PROVIDER} locked={lockedVideoModel(freeVideoLimits, NODARO_VIDEO_UPSCALE_PROVIDER)}>{t("vidcfg.nodaroUpscale")}</LockableSelectItem>
+            )}
           </SelectContent>
         </Select>
       </MappableField>
@@ -2292,6 +2314,23 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
           {legacyFactor !== undefined && (
             <p className="mt-1 px-1 text-xs text-muted-foreground">{t("vidcfg.topazLegacyFactorNote", { factor: legacyFactor })}</p>
           )}
+        </MappableField>
+      )}
+
+      {isNodaro && (
+        <MappableField field="targetResolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Select
+            value={nodaroVideoUpscaleTierOf(data.targetResolution)}
+            onValueChange={(v) => onUpdate({ targetResolution: v as VideoUpscaleData["targetResolution"] })}
+          >
+            <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {/* The provider's own set, from the catalog (`videoUpscaleResolutionsFor`). */}
+              {videoUpscaleResolutionsFor(provider).map((r) => (
+                <SelectItem key={r} value={r}>{(VIDEO_UPSCALE_RESOLUTION_LABELS as Readonly<Record<string, string>>)[r] ?? r}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </MappableField>
       )}
 
@@ -2315,7 +2354,9 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
           ? t("vidcfg.descTopazUpscale")
           : provider === SEEDANCE_DRAFT_FINALIZE_PROVIDER
             ? t("vidcfg.descSeedanceHdUpscale")
-            : t("vidcfg.descVeoUpscale")}
+            : isNodaro
+              ? t("vidcfg.descNodaroUpscale")
+              : t("vidcfg.descVeoUpscale")}
       </p>
     </div>
   )

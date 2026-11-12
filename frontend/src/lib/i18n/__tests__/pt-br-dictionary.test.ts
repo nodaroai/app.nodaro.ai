@@ -28,6 +28,8 @@ const SAME_AS_EN: ReadonlySet<string> = new Set<string>([
   "integ.viaEnvKey",
   "pipe.cinemaCodec",
   "pipe.heading",
+  // The Nodaro Video Upscale provider's name in the upscale menu: a product name.
+  "vidcfg.nodaroUpscale",
 ])
 
 /**

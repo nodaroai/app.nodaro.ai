@@ -124,6 +124,7 @@ import { maskCompositeBaseCredits, maskCompositeReserveUnits, stampMaskComposite
 import { stampVideoOverlayLength, videoOverlayBaseCredits, videoOverlayReserveId, videoOverlayReserveUnits } from "../../lib/video-overlay-length.js"
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { stampTopazVideoUpscale, topazVideoStampedBaseCredits } from "../../lib/topaz-video-plan.js"
+import { isNodaroVideoUpscaleJob, nodaroVideoUpscaleReserveId, nodaroVideoUpscaleStampedBaseCredits, stampNodaroVideoUpscale } from "../../lib/nodaro-video-upscale-plan.js"
 import { stampTopazImageSize, topazImageStampedBaseCredits } from "../../lib/topaz-image-size.js"
 import { isNodaroImageUpscaleJob, nodaroImageUpscaleReserveId } from "../../lib/nodaro-image-upscale-size.js"
 import { stampNodaroImageUpscaleInput } from "../../lib/nodaro-image-upscale-lane.js"
@@ -1804,6 +1805,23 @@ async function computeTopazVideoCreditOverride(
 }
 
 /**
+ * A Nodaro Video Upscale holds exactly its charge: its tier's row × the billed
+ * seconds `stampNodaroVideoUpscale` measured ÷ 4, rounded up once, marked up
+ * once at the tier's row (the route's guard holds the same). Undefined for
+ * every other job.
+ */
+async function computeNodaroVideoUpscaleCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  reserveId: string,
+): Promise<number | undefined> {
+  const base = await nodaroVideoUpscaleStampedBaseCredits(jobName, payload)
+  if (base === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), reserveId)
+}
+
+/**
  * A Topaz image upscale whose output costs more by its size than by its tier:
  * the one-unit row × its size units (`stampTopazImageSize`), marked up once at
  * the tier id — what the route's guard charges. Undefined otherwise.
@@ -2455,6 +2473,35 @@ async function executeWorkerNode(
     throw err
   }
   if (Object.keys(topazStamp.patch).length > 0) payload = { ...payload, ...topazStamp.patch }
+  // Nodaro Video Upscale: copy the clip into this job's scratch folder (an
+  // outside clip; a stored one is used as it is), measure it by the route's
+  // own rule (lib/nodaro-video-upscale-plan.ts) and stamp the plan — the
+  // stored clip's URL included, so input_data and the worker's payload carry
+  // the same URL; a clip past 60 s / 50 MB, or unreadable, leaves no jobs row
+  // and charges nothing. A deployment that does not serve the model never gets
+  // here: the build above refused it (buildPayload's model check, the generic
+  // sentence); the stamp's own not-served refusal is a backstop. The copy
+  // stops when the run is cancelled or this worker drains (`runStopSignal`),
+  // and a stamp that throws instead of refusing leaves no jobs row either and
+  // is rethrown as it is; the copy stored for it goes with the row.
+  const nodaroVideoUpscaleStop = isNodaroVideoUpscaleJob(jobName, payload) ? runStopSignal(ctx) : undefined
+  const nodaroUpscaleStamp = await stampNodaroVideoUpscale(jobName, payload, {
+    userId: ctx.userId,
+    jobId,
+    ...(nodaroVideoUpscaleStop ? { signal: nodaroVideoUpscaleStop.signal } : {}),
+  })
+    .catch(async (err: unknown) => {
+      await dropRefusedStampedJob(jobId)
+      throw err
+    })
+    .finally(() => nodaroVideoUpscaleStop?.dispose())
+  if (!nodaroUpscaleStamp.ok) {
+    await dropRefusedStampedJob(jobId)
+    const err = new Error(nodaroUpscaleStamp.refusal.message) as Error & { errorCode?: string }
+    err.errorCode = nodaroUpscaleStamp.refusal.code
+    throw err
+  }
+  if (Object.keys(nodaroUpscaleStamp.patch).length > 0) payload = { ...payload, ...nodaroUpscaleStamp.patch }
   // Topaz image upscale: read the image's size by the route's rule and stamp
   // its units (a large output costs its size); refuse one past the largest size.
   const topazImageStamp = await stampTopazImageSize(jobName, payload, hasCredits())
@@ -2675,6 +2722,7 @@ async function executeWorkerNode(
         pitchTempoReserveId(jobName, payload) ??
         seedanceDraftFinalizeReserveId(jobName, payload) ??
         videoMaskReserveId(jobName, payload) ??
+        nodaroVideoUpscaleReserveId(jobName, payload) ??
         videoOverlayReserveId(jobName, payload) ??
         modelIdentifier
 
@@ -2687,6 +2735,7 @@ async function executeWorkerNode(
         computeImageOverlayCreditOverride(payload) ??
         (await computeSeedanceDraftFinalizeCreditOverride(jobName, payload)) ??
         (await computeTopazVideoCreditOverride(jobName, payload, modelIdentifier)) ??
+        (await computeNodaroVideoUpscaleCreditOverride(jobName, payload, reserveModelIdentifier)) ??
         (await computeTopazImageCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeSpeechCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeVideoUtilityCreditOverride(jobName, payload, modelIdentifier)) ??

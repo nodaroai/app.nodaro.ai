@@ -663,15 +663,17 @@ export function logFfmpegVersion(tag: string): void {
   console.log(`[${tag}] ${describeFfmpegMemoryBudget(ffmpegMemoryBudgetNow())}`)
 }
 
-export function runFfprobe(args: readonly string[], opts?: { timeoutMs?: number }): Promise<string> {
+export function runFfprobe(args: readonly string[], opts: { readonly timeoutMs?: number; readonly signal?: AbortSignal } = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     // Watchdog: ffprobe accepts remote http(s) inputs (probeVideoSource) and
     // a stalled edge/socket would otherwise hang the worker indefinitely —
     // there is no BullMQ-side rescue for a live-but-stuck handler. 120s
     // matches the safeFetch download timeout. A caller on a tighter budget
-    // (`opts.timeoutMs`, never above it) has the process killed sooner.
-    const timeout = Math.min(FFPROBE_TIMEOUT_MS, opts?.timeoutMs ?? FFPROBE_TIMEOUT_MS)
-    execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout }, (error, stdout, stderr) => {
+    // (`opts.timeoutMs`, never above it) has the process killed sooner, and
+    // `signal` kills it at once (a caller whose time is up, e.g. the
+    // outside-input copy's check).
+    const timeout = Math.min(FFPROBE_TIMEOUT_MS, opts.timeoutMs ?? FFPROBE_TIMEOUT_MS)
+    execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout, ...(opts.signal ? { signal: opts.signal } : {}) }, (error, stdout, stderr) => {
       if (error) {
         reject(Object.assign(new Error(`ffprobe failed: ${stderr || error.message}`), execFailureFlags(error)))
       } else {
@@ -1040,7 +1042,7 @@ export async function probeVideoOverlayBase(path: string): Promise<VideoOverlayB
  * the audio runs past the last frame; OPTIONAL, absent when the stream reports
  * none usable (some containers, e.g. a WebM, leave it out).
  */
-export async function probeVideoSource(srcUrlOrPath: string): Promise<{
+export async function probeVideoSource(srcUrlOrPath: string, opts: { readonly signal?: AbortSignal } = {}): Promise<{
   width: number
   height: number
   durationSeconds: number
@@ -1057,7 +1059,7 @@ export async function probeVideoSource(srcUrlOrPath: string): Promise<{
     "-show_entries", "stream=width,height,avg_frame_rate,r_frame_rate,duration:format=duration",
     "-of", "json",
     srcUrlOrPath,
-  ])
+  ], opts)
   // CSV inserts extra fields for stream side data (including an empty field
   // on Remotion MP4s). Read named fields so metadata cannot shift dimensions.
   let metadata: {

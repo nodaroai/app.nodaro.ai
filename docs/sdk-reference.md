@@ -3417,6 +3417,23 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `upscaleFactor` is deprecated; it is still accepted and applied to the
 > source's short side.
 
+> **Nodaro Video Upscale.** `provider: "nodaro-video-upscale"` with
+> `targetResolution` (`"1080p" | "2k" | "4k"`, the output frame, default 1080p;
+> a value it does not take, such as `"720p"`, runs at 1080p):
+> `run("video-upscale", { provider: "nodaro-video-upscale", videoUrl, targetResolution: "2k" })`.
+> Clips of up to 60 seconds and 50 MB; priced per second of the clip, and the
+> amount held is the amount charged. Offered only where `models.list` lists it;
+> elsewhere the request is refused with `403 model_not_available` (a
+> `ForbiddenError`). Its other refusals: `400` for a clip past a limit or one
+> that cannot be read (`video_too_long`, `video_too_large`, `video_unreadable`),
+> `403 link_imports_disabled` for a link to another site where the deployment
+> turned such links off, `422 upload_blocked` where its upload policy refuses
+> the clip, and `429 input_busy` or `503 input_timed_out` / `input_failed` when
+> the clip could not be fetched just now (send the same request again). Every
+> refusal comes before anything is charged. `"2k"` is this provider's target
+> only: Topaz and VEO still answer it with a 400. See
+> [Nodaro Video Upscale](./nodes/processing-video/video-upscale.md#nodaro-video-upscale).
+
 > **Copyright refusals.** `TextToVideoParams` takes `contentPolicyRewrite?: boolean`.
 > Absent or `true`, a copyright refusal is retried once with a reworded prompt;
 > `false` = a copyright refusal fails the job instead of retrying once with a

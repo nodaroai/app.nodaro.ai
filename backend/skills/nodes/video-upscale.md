@@ -1,7 +1,7 @@
 ---
 node_type: video-upscale
-generated_at: 2026-10-25T19:02:22.033Z
-generated_from: 24b4818ff
+generated_at: 2026-11-11T17:21:36.293Z
+generated_from: 0e5b1dff4
 ---
 
 # Upscale Video
@@ -19,7 +19,7 @@ generated_from: 24b4818ff
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
-- `targetResolution?: TopazVideoResolution`
+- `targetResolution?: VideoUpscaleResolution`
 - `targetFps?: number`
 - `upscaleFactor?: "1" | "2" | "4"`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`

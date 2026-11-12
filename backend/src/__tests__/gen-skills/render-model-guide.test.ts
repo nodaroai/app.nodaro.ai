@@ -2,10 +2,12 @@ import { describe, it, expect } from "vitest"
 import {
   costTier,
   costTierCuts,
+  isTierRanked,
   modelGuideDescription,
   OWN_LABEL_AVAILABILITY,
   renderModelTable,
   renderRecommendations,
+  UNRANKED_TIER,
 } from "../../../scripts/lib/gen-skills/render-model-guide.js"
 import { MODEL_CATALOG, type ModelCatalogEntry, type ModelRecommendation } from "@nodaro/shared/model-catalog"
 
@@ -182,6 +184,33 @@ describe("renderModelTable", () => {
     const out = renderModelTable(CATALOG, "image")
     const zLine = out.split("\n").find((l) => l.includes("Z-Image"))
     expect(zLine).toContain("Everyday")
+  })
+
+  it("leaves an own-label model out of the ranking: a dash for its tier, and no other model's tier moves", () => {
+    const ranked: Record<string, ModelCatalogEntry> = {}
+    for (const [i, credits] of [10, 20, 30, 40, 50, 60].entries()) {
+      ranked[`m${i}`] = { ...CATALOG["z-image"]!, id: `m${i}`, label: `Model ${i}`, pricing: [{ identifier: `m${i}`, credits }] }
+    }
+    const { maker: _maker, ...fields } = CATALOG["z-image"]!
+    const ownLabel = { ...fields, id: "own", label: "Own Label Model", ownLabel: true, pricing: [{ identifier: "own", credits: 25 }] } as ModelCatalogEntry
+    const tiersOf = (table: string) =>
+      Object.fromEntries(table.split("\n").filter((l) => l.startsWith("| Model ")).map((l) => [l.split(" | ")[0], l.split(" | ")[2]]))
+    const before = renderModelTable(ranked, "image")
+    const after = renderModelTable({ ...ranked, own: ownLabel }, "image")
+    expect(tiersOf(after)).toEqual(tiersOf(before))
+    const ownLine = after.split("\n").find((l) => l.includes("Own Label Model"))!
+    expect(ownLine.split(" | ")[2]).toBe(UNRANKED_TIER)
+    expect(UNRANKED_TIER).not.toMatch(/\d/)
+    // Its price is still stated, tied to its row.
+    expect(ownLine).toContain("25<!-- credits: own -->")
+  })
+
+  it("ranks every catalog model but an own-label one (the real catalog)", () => {
+    for (const e of Object.values(MODEL_CATALOG)) expect(isTierRanked(e), e.id).toBe(e.ownLabel !== true)
+    expect(isTierRanked(MODEL_CATALOG["nodaro-video-upscale"]!)).toBe(false)
+    for (const id of ["topaz-video", "seedance-2-5-hd", "veo-4k"]) {
+      if (MODEL_CATALOG[id]) expect(isTierRanked(MODEL_CATALOG[id]!), id).toBe(true)
+    }
   })
 })
 

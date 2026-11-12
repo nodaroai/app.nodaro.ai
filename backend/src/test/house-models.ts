@@ -1,9 +1,9 @@
 /**
  * A deployment that serves every house model the catalog has
  * (docs/design/house-models.md), for a test that really builds or runs one.
- * Without it the shipped catalog's house model is unserved, as on every
- * community and business install: it withholds only itself, so a test of the
- * stock deployment about any other model needs no plugin.
+ * Without it the shipped catalog's house models are unserved, as on every
+ * community and business install: each withholds only itself, so a test of
+ * the stock deployment about any other model needs no plugin.
  */
 import { setPluginServices } from "../lib/private-plugins/services-registry.js"
 import { ownLabelModelIds } from "../lib/house-models-served.js"

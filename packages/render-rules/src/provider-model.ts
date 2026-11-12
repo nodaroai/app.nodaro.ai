@@ -26,6 +26,7 @@
 import { buildMotionCreditModelIdentifier } from "@nodaro/shared/credits"
 import { LLM_FEATURE_DEFAULTS, llmDefaultsFeature, resolveScriptModelId } from "@nodaro/shared/llm-models"
 import { DEFAULT_TTS_PROVIDER, getMaxTtsChars, type TtsProvider } from "@nodaro/shared/models"
+import { videoUpscaleModelOf } from "@nodaro/shared/model-catalog"
 
 type Data = Readonly<Record<string, unknown>>
 
@@ -46,10 +47,8 @@ export function motionTransferModelOf(provider: string): string {
   return buildMotionCreditModelIdentifier(provider, "720p").split(":")[0]!
 }
 
-/** Video Upscale's option as the catalog model: its "topaz" is the catalog's `topaz-video`. */
-export function videoUpscaleModelOf(provider: string): string {
-  return provider === "topaz" ? "topaz-video" : provider
-}
+/** Video Upscale's option as the catalog model: its "topaz" is the catalog's `topaz-video` (one rule, in `@nodaro/shared`). */
+export { videoUpscaleModelOf }
 
 /**
  * The speech model a request runs on when nothing names one: the default

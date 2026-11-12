@@ -27,7 +27,7 @@ import { isModelEstimate, isModelRefused, refusedModelMessage } from "@/hooks/us
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
 import { NODE_CREDIT_COSTS, estimateNodeCredits, getCostFactors, isExecutableNode, type RunCreditLine, type RunCreditQuantity } from "./types"
 import { previewRunnable } from "./preview-gate"
-import { nodeProviders, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { isNodaroVideoUpscaleCreditId, nodeProviders, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { isExpandedClone } from "@nodaro/shared/workflow"
 import { USE_CASE_FEE_STATIC_CREDITS, expandUseCaseNodes, isUseCaseNodeType, usecaseFeeCreditId, withUseCaseMembers, type UseCaseExpansion } from "@nodaro/render-rules"
 import { speechPriceIdsFor } from "@/lib/speech-estimate"
@@ -35,6 +35,9 @@ import { unitQuoteIdFor, upperUnits } from "@/lib/unit-quote"
 import { carriedEdges } from "./carried-edges"
 import { runLinesUnpriced, type RunUnpriced } from "./run-unpriced"
 import { seedanceRefQuoteKeyFor } from "@/lib/seedance-ref-quote"
+import { nodaroVideoUpscaleRefusedSec } from "@/lib/video-utility-estimate"
+import { NODARO_VIDEO_UPSCALE_MAX_SEC } from "@nodaro/shared/models"
+import { tx } from "@/lib/i18n"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText, wiredVideoFrames } from "@/lib/video-start-frame-only"
 // @registry-lookup prices each node of a run by its own type (NODE_CREDIT_COSTS / estimateNodeCredits)
 
@@ -95,6 +98,20 @@ export function estimateRunCreditLines(
     // to is one the server marked `estimates`): the line, and every total it
     // is part of, is an estimate — shown `≈` (spec §8.5).
     const estimate = isMeteredEstimate(node, edges, allNodes, rerunIds, cachedCost)
+    // A Nodaro Video Upscale of a clip the graph knows is past its 60-second limit: the run is
+    // refused before anything is held, so it is priced nowhere — the rule the server's run
+    // estimate reads (`nodaroVideoUpscaleRefusesLength`) — and the line says why.
+    const refusedSec = nodaroVideoUpscaleRefusedSec(node, allNodes, edges, rerunIds)
+    if (refusedSec !== undefined) {
+      return {
+        nodeId: node.id,
+        label: runNodeLabel(node),
+        quantity,
+        credits: 0,
+        unpriced: true as const,
+        unpricedMessage: tx("vidcfg.nodaroUpscaleTooLong", { max: NODARO_VIDEO_UPSCALE_MAX_SEC, d: Math.ceil(refusedSec * 10) / 10 }),
+      }
+    }
     // A metered call on a model the server refuses to price (R49): no figure — never the tier's —
     // and the server's sentence for the refusal, which every total this line is in shows.
     const unpricedId = variants.map((v) => getModelIdentifier(v, edges, allNodes, rerunIds)).find((id) => isModelRefused(id))
@@ -145,7 +162,11 @@ function isMeteredEstimate(
   if (node.type === "component") return componentStoredEstimate(node) && isModelEstimate(meteredModeProbeId())
   // A Topaz Video Upscale is metered: quoted from its target and the length the graph gives, held
   // at what the measured clip needs and charged the units Topaz reports — its line is an estimate.
-  if (node.type === "video-upscale") return getModelIdentifier(node, edges, allNodes, rerunIds) === TOPAZ_VIDEO_UNIT_CREDIT_ID
+  // A Nodaro Video Upscale is priced by the clip's measured length, which the graph only estimates.
+  if (node.type === "video-upscale") {
+    const id = getModelIdentifier(node, edges, allNodes, rerunIds)
+    return id === TOPAZ_VIDEO_UNIT_CREDIT_ID || isNodaroVideoUpscaleCreditId(id)
+  }
   if (!llmNodePriceIds(node)) return false
   const id = getModelIdentifier(node, edges, allNodes, rerunIds)
   return isModelEstimate(id) && cachedCost(id) !== undefined

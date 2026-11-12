@@ -70,6 +70,7 @@ import {
   sunoSeparateCreditId,
   audioSoundtrackActive,
   applyDefaultVideoSelection,
+  NODARO_VIDEO_UPSCALE_PROVIDER,
 } from "@nodaro/shared/models"
 import {
   CAMERA_SWITCH_CREDIT_ID,
@@ -101,7 +102,7 @@ import {
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, generationSourceEstimateSec, type EstimateGraphNode, LENGTH_RECORDING_VIDEO_NODE_TYPES, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, nodaroImageUpscaleCreditId, type UseCaseViewerFlags } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, type UseCaseViewerFlags, generationSourceEstimateSec, type EstimateGraphNode, LENGTH_RECORDING_VIDEO_NODE_TYPES } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -1796,6 +1797,14 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // (@nodaro/render-rules topazVideoHoldUnits) and is charged the units
   // Replicate reports, never above the hold. Seeded by migration 563.
   "topaz-video:per-unit": 40,
+  // Nodaro Video Upscale (decided 2026-11-11): per second of the clip, 3.75 /
+  // 7.5 / 15 base credits a second at 1080p / 2K / 4K. Each row is the price of
+  // FOUR seconds (whole credits); a run is charged row × billed seconds ÷ 4,
+  // rounded up once (@nodaro/render-rules nodaro-video-upscale-pricing.ts).
+  // The hold is the charge. Seeded by migration 632.
+  "nodaro-video-upscale:1080p:per-4s": 15,
+  "nodaro-video-upscale:2k:per-4s": 30,
+  "nodaro-video-upscale:4k:per-4s": 60,
   // ── Motion Transfer (per-second pricing, duration-tiered) ──
   // Kling 3.0 720p: /sec
   "kling-3.0-motion": 300,        // 10s default
@@ -5281,7 +5290,8 @@ function listingHoldsMeteredEstimate(
     meteredLlmKeyOfNode(withWiredSettings(n, nodes, wires)) !== null ||
     componentHoldsMeteredEstimate(n) ||
     // A Topaz video upscale is metered too: quoted at its hold, charged the units it uses.
-    (n.type === "video-upscale" && isTopazVideoUpscaleNode(n))
+    // A Nodaro Video Upscale is priced by the clip's length, which a listing cannot read.
+    (n.type === "video-upscale" && (isTopazVideoUpscaleNode(n) || isNodaroVideoUpscaleNode(n)))
   ))
 }
 
@@ -5687,6 +5697,15 @@ function estimateNodeCredits(
   // lookups below would otherwise price as a run of that model. The editor's
   // estimate already counts executable nodes only.
   if (PARAMETER_NODE_TYPES.has(node.type)) return 0
+  // Nodaro Video Upscale on a clip the graph knows is past its 60-second limit:
+  // the run is refused before anything is held (`video_too_long`), so no
+  // estimate prices it (decided 2026-11-12) — it adds nothing here, as the
+  // editor leaves it out of its totals and its pill shows no figure
+  // (`nodaroVideoUpscaleRefusesLength`, the one rule all three read).
+  if (node.type === "video-upscale") {
+    const runs = withWiredSettings(node, nodes, edges)
+    if (isNodaroVideoUpscaleNode(runs) && nodaroVideoUpscaleRefusesLength(videoUpscaleWireSec(node, edges, wireSec))) return 0
+  }
   // Image Overlay is base + 2 per extra platform render — the shared formula,
   // marked up once as a whole, the way its route's creditGuard reserves it.
   if (node.type === "image-overlay") {
@@ -6486,6 +6505,14 @@ export function graphPricingUnits(
       : undefined
     return topazVideoEstimateUnits(topazVideoEstimateTarget(wired.data ?? {}, sec))
   }
+  // Nodaro Video Upscale: its tier's four-second row × the billed seconds ÷ 4,
+  // at the length its video wire gives (else the estimate's 10 s), billed as a
+  // run bills it (`nodaroVideoUpscaleEstimateUnits`). The run measures the clip.
+  // A clip the graph knows is past the limit has no units: `estimateNodeCredits`
+  // leaves that run out before it asks for them (the 0 is never priced).
+  if (node.type === "video-upscale" && isNodaroVideoUpscaleNode(node)) {
+    return nodaroVideoUpscaleEstimateUnits(videoUpscaleWireSec(node, edges, runWireLengthOf(nodes, edges, rerunIds))) ?? 0
+  }
   if (!isRenderNodeType(node.type)) return estimatePricingUnits(withWiredSettings(node, nodes, edges ?? []))
   if (!node.id) return EDIT_PLAN_MAX_MINUTES
   // No wiring sent (the route's `edges` omitted): the render may be wired to
@@ -6801,6 +6828,18 @@ function listingParts(
  * Pro extend adds (its row is per second — the same product the route's guard
  * and the workflow run reserve, lib/ltx-extend-credits.ts), else one.
  */
+/** A Video Upscale node on Nodaro Video Upscale. */
+function isNodaroVideoUpscaleNode(node: EstimateNode): boolean {
+  return node.data?.provider === NODARO_VIDEO_UPSCALE_PROVIDER
+}
+
+/** The length of the clip a Video Upscale node's wires give, when a run estimate knows it. */
+function videoUpscaleWireSec(node: EstimateNode, edges: ReadonlyArray<EstimateEdge> | undefined, wireSec: WireSecOf): number | undefined {
+  return edges && node.id
+    ? edges.filter((e) => e.target === node.id).map((e) => wireSec(e.source ?? "")).find((v) => v !== undefined)
+    : undefined
+}
+
 /** A Video Upscale node on Topaz (the node's default provider). */
 function isTopazVideoUpscaleNode(node: EstimateNode): boolean {
   const provider = node.data?.provider
@@ -7184,6 +7223,9 @@ export function getNodeModelIdentifier(
   // Topaz video upscale (the node's default provider) holds per unit — its
   // units: graphPricingUnits. Above the `!provider` bail: no provider IS Topaz.
   if (nodeType === "video-upscale" && isTopazVideoUpscaleNode(node)) return TOPAZ_VIDEO_UNIT_CREDIT_ID
+  // Nodaro Video Upscale: its tier's four-second row; its units (the clip's
+  // billed seconds ÷ 4): graphPricingUnits.
+  if (nodeType === "video-upscale" && isNodaroVideoUpscaleNode(node)) return nodaroVideoUpscaleCreditId(nodaroVideoUpscaleTierOf(data.targetResolution))
 
   // A node naming no model whose default is priced per input image: the node-type
   // row would quote below what the run reserves. An Extend Video node naming no

@@ -421,6 +421,18 @@ export type {
   TopazVideoTargetInput,
   TopazVideoTarget,
 } from "../topaz-video.js"
+// --- Nodaro Video Upscale (tiers, limits) ---
+export {
+  NODARO_VIDEO_UPSCALE_PROVIDER,
+  NODARO_VIDEO_UPSCALE_TIERS,
+  NODARO_VIDEO_UPSCALE_DEFAULT_TIER,
+  NODARO_VIDEO_UPSCALE_BOX,
+  NODARO_VIDEO_UPSCALE_MAX_SEC,
+  NODARO_VIDEO_UPSCALE_MAX_BYTES,
+  isNodaroVideoUpscaleTier,
+  isNodaroVideoUpscaleProvider,
+} from "../nodaro-video-upscale.js"
+export type { NodaroVideoUpscaleTier } from "../nodaro-video-upscale.js"
 export {
   AUDIO_SOUNDTRACK_MIN_SEC,
   AUDIO_SOUNDTRACK_FPS,

@@ -77,6 +77,8 @@ import type { SimpleEdge, SimpleNode } from "../../../services/workflow-engine/t
 import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE } from "../../../lib/speaker-view-plan.js"
 import { dubbingBaseCredits } from "../../../lib/dubbing-span.js"
 import { topazVideoHoldBaseCredits } from "../../../lib/topaz-video-plan.js"
+import { nodaroVideoUpscaleBaseCredits } from "../../../lib/nodaro-video-upscale-plan.js"
+import { isNodaroVideoUpscaleCreditId, NODARO_VIDEO_UPSCALE_RATE_SECONDS } from "@nodaro/render-rules"
 import { UNIT_QUOTE_MAX_UNITS, UNIT_QUOTE_RATE_IDS, parseRateQuoteCreditId } from "../../../lib/unit-quote-rates.js"
 
 type Case = {
@@ -131,7 +133,10 @@ async function routeBase(nodeType: string, rateId: string, units: number): Promi
       // routes/dubbing.ts computeCredits: the language's per-minute row × the span's whole minutes.
       return dubbingBaseCredits(rateId === "elevenlabs-dubbing-v2" ? "he" : "es", units * 60)
     case "video-upscale":
-      // lib/topaz-video-plan.ts topazVideoHoldBaseCredits: the unit's row × the hold units.
+      // Nodaro Video Upscale (lib/nodaro-video-upscale-plan.ts nodaroVideoUpscaleBaseCredits):
+      // its tier's four-second row × the billed seconds ÷ 4. Topaz (lib/topaz-video-plan.ts
+      // topazVideoHoldBaseCredits): the unit's row × the hold units.
+      if (isNodaroVideoUpscaleCreditId(rateId)) return nodaroVideoUpscaleBaseCredits({ creditId: rateId, billedSec: units * NODARO_VIDEO_UPSCALE_RATE_SECONDS })
       return topazVideoHoldBaseCredits({ holdUnits: units })
     case "speaker-frames":
       // The cloud plugin's route and the workflow run (lib/speaker-frames-plan.ts): the row × the blocks.
@@ -245,6 +250,30 @@ describe("which wires the server's run estimate reads a length off", () => {
   it("a fixed-length generation that runs: its stored 40 s (keep 23 s → 5 units), never its last take's 12 s", async () => {
     const generated = { id: "v", type: "generate-video", data: { duration: 40, generatedResults: [{ url: "https://m.test/g.mp4", duration: 12 }] } }
     expect(await CreditsService.estimateWorkflowCredits([trim, generated], edges, { runNodeIds: new Set(["v", "x"]) })).toBe(applyServiceMarkup(50, settings.current as never, "trim-video"))
+  })
+})
+
+describe("a Nodaro Video Upscale of a clip the graph knows is past its 60-second limit", () => {
+  // The run refuses such a clip before anything is held (`video_too_long`), so the server's run
+  // estimate prices it nowhere, as the editor's Run confirm leaves it out and its pill shows no figure.
+  const x = { id: "x", type: "video-upscale", data: { provider: "nodaro-video-upscale", targetResolution: "1080p" } }
+  const upload = (sec: number) => ({ id: "v", type: "upload-video", data: { url: "https://m.test/v.mp4", duration: sec, videoDurationSec: sec } })
+  const edges = [{ id: "v-x", source: "v", target: "x", targetHandle: "video" }]
+
+  it("a 75 s upload: priced nowhere (never the 75 s price, never the 60 s one)", async () => {
+    expect(await CreditsService.estimateWorkflowCredits([x, upload(75)], edges)).toBe(0)
+  })
+
+  it("a 60 s upload is still priced, at the 60 s charge", async () => {
+    const table = await getChargedPriceTable()
+    const sixty = chargedCredits(table, "nodaro-video-upscale:1080p:per-4s", 15)
+    expect(sixty).toBeGreaterThan(0)
+    expect(await CreditsService.estimateWorkflowCredits([x, upload(60)], edges)).toBe(sixty)
+  })
+
+  it("a clip of unknown length is priced at the estimate's 10 s, as before", async () => {
+    const table = await getChargedPriceTable()
+    expect(await CreditsService.estimateWorkflowCredits([x], [])).toBe(chargedCredits(table, "nodaro-video-upscale:1080p:per-4s", 2.5))
   })
 })
 

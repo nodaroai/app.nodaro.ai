@@ -63,7 +63,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, pickSunoSeparateSource, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -181,6 +181,7 @@ import {
   isTopazVideoResolution,
   clampTopazVideoFps,
   audioSoundtrackActive,
+  NODARO_VIDEO_UPSCALE_PROVIDER,
 } from "@nodaro/shared/models"
 import {
   isRenderNodeType,
@@ -5834,6 +5835,27 @@ function buildPayloadOf(
 
     case "video-upscale": {
       const vuProvider = (data.provider as string) ?? "topaz"
+      // Nodaro Video Upscale: the tier the node asks for, coerced as every lane
+      // coerces it (a value it does not take is 1080p), priced at that tier's
+      // row. node-executor measures the clip and holds the exact price
+      // (stampNodaroVideoUpscale); this row is only the build-time basis. Its
+      // job carries no frame rate, factor or task id: it has none of them.
+      if (vuProvider === NODARO_VIDEO_UPSCALE_PROVIDER) {
+        const vuTier = nodaroVideoUpscaleTierOf(data.targetResolution)
+        return {
+          jobName: "video-upscale",
+          queueName: "video-generation",
+          modelIdentifier: nodaroVideoUpscaleCreditId(vuTier),
+          payload: {
+            jobId,
+            videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+            provider: vuProvider,
+            tier: vuTier,
+            targetResolution: vuTier,
+            usageLogId,
+          },
+        }
+      }
       const vuModel = vuProvider === "veo-1080p" ? "veo-1080p"
         : vuProvider === "veo-4k" ? "veo-4k"
         // The draft finalize's exact per-length id is stamped by node-executor
@@ -5874,6 +5896,9 @@ function buildPayloadOf(
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
           // Topaz target: resolution + fps (absent fps = the source's rate);
           // the legacy factor is read only when no resolution is set.
+          // Another provider's target (Nodaro Video Upscale's 2k) is not
+          // Topaz's: dropped like any value it does not take, so the run uses
+          // its own default (1080p) or a saved legacy factor.
           ...(isTopazVideoResolution(data.targetResolution) ? { targetResolution: data.targetResolution } : {}),
           // A number, or a numeric string (a mapped value); "source"/absent = the source's rate.
           ...(topazFpsOf(data.targetFps) !== undefined ? { targetFps: topazFpsOf(data.targetFps) } : {}),

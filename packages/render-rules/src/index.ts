@@ -858,6 +858,19 @@ export {
   TREND_PICTURE_WORST_BYTES_PER_PIXEL,
   trendPictureUpscaleFits,
 } from "./trend-picture-upscale"
+// Nodaro Video Upscale pricing: per second of the clip, each tier's row the price of four seconds.
+export {
+  NODARO_VIDEO_UPSCALE_RATE_SECONDS,
+  NODARO_VIDEO_UPSCALE_CREDIT_IDS,
+  NODARO_VIDEO_UPSCALE_ESTIMATE_FALLBACK_SEC,
+  nodaroVideoUpscaleCreditId,
+  isNodaroVideoUpscaleCreditId,
+  nodaroVideoUpscaleBilledSec,
+  nodaroVideoUpscaleUnits,
+  nodaroVideoUpscaleEstimateUnits,
+  nodaroVideoUpscaleRefusesLength,
+  nodaroVideoUpscaleTierOf,
+} from "./nodaro-video-upscale-pricing"
 // Topaz upscale pricing: the video hold (output gigapixels) and the image size units.
 export {
   TOPAZ_VIDEO_UNIT_CREDIT_ID,

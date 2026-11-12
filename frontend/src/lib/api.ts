@@ -3,11 +3,11 @@ import { pollClipMeasure, type ClipMeasureAnswer, type MeasuredClipAnswer } from
 import { usecaseContinuePath, usecaseDescriptor, type SpeakerViewWireSettings, type UgcEstimateInput, type UgcEstimatePart, type UgcReuseClaim, type UseCaseNodeType } from "@nodaro/render-rules"
 import { createClient } from "@/lib/supabase"
 import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
+import type { VideoUpscaleResolution } from "@nodaro/shared/model-catalog"
 import {
   DEFAULT_SUNO_MODEL,
   FLUX_LORA_CHARACTER_MODEL_ID,
   type VideoUpscaleProvider,
-  type TopazVideoResolution,
   type TtsProvider,
   type SunoSeparateType,
   type SunoStemName,
@@ -6647,8 +6647,9 @@ export async function motionTransferApi(
 
 export async function videoUpscaleApi(opts: {
   videoUrl?: string
-  /** Topaz: the output resolution (the frame's short side). */
-  targetResolution?: TopazVideoResolution
+  /** Topaz: the output resolution (the frame's short side); Nodaro Video
+   *  Upscale: the output box (1080p, 2k or 4k). */
+  targetResolution?: VideoUpscaleResolution
   /** Topaz: the output frame rate (15–60); absent = the source's own rate. */
   targetFps?: number
   /** Legacy Topaz lever — sent only by a saved node that has no `targetResolution`. */

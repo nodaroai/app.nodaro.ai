@@ -49,6 +49,22 @@ function escapeCell(s: string): string {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ")
 }
 
+/**
+ * The Tier cell of a model that takes no part in the ranking (below): a dash,
+ * never a figure, so it cannot read as a price.
+ */
+export const UNRANKED_TIER = "—"
+
+/**
+ * Does `e` take part in its kind's tier ranking? A model offered under the
+ * deployment's own label (`ownLabel`) does not (decided 2026-11-11): it is
+ * shown with {@link UNRANKED_TIER} and its price is left out of the cut
+ * points, so adding one never moves another model's tier.
+ */
+export function isTierRanked(e: Pick<ModelCatalogEntry, "ownLabel">): boolean {
+  return e.ownLabel !== true
+}
+
 /** The price a run is charged for `credits` of the price row `identifier`. */
 export type ChargedCreditsOf = (identifier: string, credits: number) => number
 
@@ -90,7 +106,7 @@ export function renderModelTable(
       return a.e.label.localeCompare(b.e.label)
     })
 
-  const cuts = costTierCuts(rows.map((r) => r.credits))
+  const cuts = costTierCuts(rows.filter((r) => isTierRanked(r.e)).map((r) => r.credits))
   const lines: string[] = []
   lines.push("| Model | Family | Tier | Credits | Modes | Best for |")
   lines.push("| --- | --- | --- | --- | --- | --- |")
@@ -99,8 +115,9 @@ export function renderModelTable(
     const modes = e.modes.join(", ")
     // The price id rides along invisibly, so docs-charged-prices.test.ts holds the figure to it.
     const price = identifier ? `${credits}<!-- credits: ${identifier} -->` : `${credits}`
+    const tier = isTierRanked(e) ? costTier(credits, cuts) : UNRANKED_TIER
     lines.push(
-      `| ${escapeCell(name)} | ${escapeCell(e.family)} | ${costTier(credits, cuts)} | ${price} | ${escapeCell(modes)} | ${escapeCell(modelGuideDescription(e))} |`,
+      `| ${escapeCell(name)} | ${escapeCell(e.family)} | ${tier} | ${price} | ${escapeCell(modes)} | ${escapeCell(modelGuideDescription(e))} |`,
     )
   }
   return lines.join("\n")

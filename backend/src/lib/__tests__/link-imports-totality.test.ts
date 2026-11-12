@@ -237,7 +237,13 @@ const LANES: Readonly<Record<string, Lane>> = {
   "routes/video-scene-cuts.ts": PROCESSING_INPUT,
   "routes/video-sfx.ts": GENERATION_REFERENCE,
   "routes/video-to-video.ts": GENERATION_REFERENCE,
-  "routes/video-upscale.ts": PROCESSING_INPUT,
+  // Marked `asks` because part of the file does (a file that asks cannot stay `open`), but only
+  // ONE provider asks: the rest of the route is still the open processing-input question.
+  "routes/video-upscale.ts": asks(
+    "only the nodaro-video-upscale provider asks the switch (before its clip is copied to our storage; the outside-input copy asks again); " +
+      "Topaz still probes an outside videoUrl's length here and hands the link to its provider WITHOUT asking — the open processing-input question; " +
+      "VEO and Seedance 2.5 HD take a task id, not a link",
+  ),
   "routes/voice-changer.ts": GENERATION_REFERENCE,
 }
 

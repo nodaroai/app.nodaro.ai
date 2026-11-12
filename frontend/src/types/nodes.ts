@@ -17,6 +17,7 @@ import type {
   FanOutItemMeta
 } from "@nodaro/shared/nodes"
 import type { Node, Edge } from "@xyflow/react"
+import type { VideoUpscaleResolution } from "@nodaro/shared/model-catalog"
 // Node units (frontend/src/nodes/<type>/, tools/units/README.md): this file is
 // the reviewed composer of the definitions aggregate — NODE_DEFINITIONS is the
 // legacy literal below ∪ every unit, each at its position.after.
@@ -35,7 +36,6 @@ import {
   type VideoToVideoNodeProvider,
   type VideoGenProvider,
   type VideoUpscaleProvider,
-  type TopazVideoResolution,
   type ExtendVideoProvider,
   type FaceSwapProvider,
   type TtsProvider,
@@ -3027,13 +3027,17 @@ export type MotionTransferData = PromptAffixFields & {
   pausedAtTime?: number
 }
 
-// Video Upscale: Upscale video resolution using Topaz or VEO
+// Video Upscale: Upscale video resolution using Topaz, VEO, the Seedance 2.5 HD
+// finalize or Nodaro Video Upscale
 export type VideoUpscaleData = {
   [key: string]: unknown
   label: string
   provider: VideoUpscaleProvider
-  /** Topaz: the output resolution — the frame's SHORT side (default 1080p). */
-  targetResolution?: TopazVideoResolution
+  /** The output resolution, from the provider's own set: Topaz 720p / 1080p / 4k
+   *  (the frame's SHORT side, default 1080p); Nodaro Video Upscale 1080p / 2k /
+   *  4k (an output box, default 1080p; a value it does not take is read as its
+   *  default, `normalizeVideoUpscaleResolution`). */
+  targetResolution?: VideoUpscaleResolution
   /** Topaz: the output frame rate, 15–60; absent = the source's own rate. */
   targetFps?: number
   /** Legacy Topaz lever (1×/2×/4× of the source). The run reads it only when

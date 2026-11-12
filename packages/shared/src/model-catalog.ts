@@ -3413,6 +3413,32 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     // Topaz units the provider reports, never above the hold.
     pricing: [{ identifier: "topaz-video:per-unit", credits: 40, note: "per Topaz unit (metered)" }],
   },
+  // Nodaro Video Upscale (decided 2026-11-11): offered under the deployment's
+  // own label, so it names no maker, and only where the deployment serves it
+  // (the backend's house-model seam). Priced per second of the clip
+  // (the clip's length rounded up to a whole second): each tier's row is the
+  // price of FOUR seconds, so a per-second rate that is not a whole credit
+  // still fits a whole-credit row, and a run is charged row × seconds ÷ 4,
+  // rounded up once (`@nodaro/render-rules` nodaro-video-upscale-pricing.ts).
+  "nodaro-video-upscale": {
+    id: "nodaro-video-upscale",
+    kind: "video",
+    modes: ["video-upscale"] as const,
+    family: "Nodaro Upscale",
+    ownLabel: true,
+    label: "Nodaro Video Upscale",
+    series: "Nodaro Upscale",
+    description: "Upscale any clip of up to 60 seconds and 50 MB into a 1080p, 2K or 4K frame. It keeps the clip's shape (nothing is cropped), frame rate, length and sound. Priced per second of the clip; the listed price is four seconds at 1080p.",
+    useCases: ["upscale", "high-res"],
+    // An output box (1920×1080, 2560×1440, 3840×2160; turned for a portrait clip).
+    resolutions: ["1080p", "2k", "4k"],
+    defaultResolution: "1080p",
+    pricing: [
+      { identifier: "nodaro-video-upscale:1080p:per-4s", credits: 15, note: "per 4 seconds of the clip at 1080p; charged per whole second" },
+      { identifier: "nodaro-video-upscale:2k:per-4s", credits: 30, note: "per 4 seconds of the clip at 2K; charged per whole second" },
+      { identifier: "nodaro-video-upscale:4k:per-4s", credits: 60, note: "per 4 seconds of the clip at 4K; charged per whole second" },
+    ],
+  },
 
   // ── Motion transfer ──
   "motion-transfer": {

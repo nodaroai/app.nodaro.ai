@@ -25,7 +25,8 @@
    "elevenlabs-dialogue:per-100-chars": 4,
    "elevenlabs-dubbing": 40,
    "speaker-frames": 2,
-   "topaz-video:per-unit": 40
+   "topaz-video:per-unit": 40,
+   "nodaro-video-upscale:2k:per-4s": 30
   }
  },
  "cases": [
@@ -1074,6 +1075,45 @@
     "servedUnit": 45,
     "credits": 1792,
     "perUnitQuote": 1800
+   }
+  },
+  {
+   "name": "Video Upscale (Nodaro Video Upscale): a 10.2 s upload to 2K \u2014 11 billed seconds, a quarter-unit each",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "video-upscale",
+     "data": {
+      "provider": "nodaro-video-upscale",
+      "targetResolution": "2k"
+     }
+    },
+    {
+     "id": "v",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/v.mp4",
+      "videoDurationSec": 10.2,
+      "duration": 10.2
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-video",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "video"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "nodaro-video-upscale:2k:per-4s",
+    "units": 2.75,
+    "quoteId": "nodaro-video-upscale:2k:per-4s:2.75u",
+    "servedUnit": 35,
+    "credits": 96,
+    "perUnitQuote": 105
    }
   },
   {

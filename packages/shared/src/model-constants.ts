@@ -1479,6 +1479,10 @@ export const VIDEO_UPSCALE_PROVIDERS = [
   // Seedance 2.5 Draft finalize: re-renders a Seedance 2.5 DRAFT (by its task
   // id) as the same take at 1080p. See seedance-draft.ts.
   "seedance-2-5-hd",
+  // Nodaro Video Upscale: any clip up to 60 s / 50 MB into a 1080p, 2K or 4K
+  // box, priced per second. Offered only where the deployment serves it (see
+  // nodaro-video-upscale.ts).
+  "nodaro-video-upscale",
 ] as const
 export type VideoUpscaleProvider = typeof VIDEO_UPSCALE_PROVIDERS[number]
 

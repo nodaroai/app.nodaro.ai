@@ -167,3 +167,12 @@ export {
 export type { ImageModelRole } from "../image-model-roles.js"
 export type { SafetyRetryPolicy } from "../safety-retry-policy.js"
 export { VIDEO_DURATION_AUTO, isAutoVideoDuration } from "../video-duration-auto.js"
+// Video Upscale's target resolution per provider, coerced from the catalog
+// (`resolutions` / `defaultResolution`) on every lane.
+export {
+  VIDEO_UPSCALE_RESOLUTIONS,
+  videoUpscaleModelOf,
+  videoUpscaleResolutionsFor,
+  normalizeVideoUpscaleResolution,
+} from "../video-upscale-params.js"
+export type { VideoUpscaleResolution, NormalizedVideoUpscaleResolution } from "../video-upscale-params.js"

@@ -88,3 +88,42 @@ describe("quick-strip model menus and the deployment's model availability", () =
     expect(quickConfigSnapPatch(control, hidden, resolveQuickConfigOptions(control, { model: hidden }), { model: hidden })).toBeUndefined()
   })
 })
+
+describe("Video Upscale's strip and Nodaro Video Upscale (a house model, offered only where the deployment serves it)", () => {
+  const control = () => providerControlOf("video-upscale")
+  const resolution = () => getQuickConfigs("video-upscale").find((c) => c.field === "targetResolution")!
+
+  it("before the availability answer lands, and where it is not served, the row is withheld", () => {
+    expect(resolveQuickConfigOptions(control(), {}).map((o) => o.value)).not.toContain("nodaro-video-upscale")
+    __resetSurfaceAvailabilityForTests({ nodes: [], models: ["nodaro-video-upscale"] })
+    expect(resolveQuickConfigOptions(control(), {}).map((o) => o.value)).not.toContain("nodaro-video-upscale")
+  })
+
+  it("where it is served, the row is offered", () => {
+    __resetSurfaceAvailabilityForTests({ nodes: [], models: [] })
+    expect(resolveQuickConfigOptions(control(), {}).map((o) => o.value)).toContain("nodaro-video-upscale")
+  })
+
+  it("a node that already holds it keeps it, not moved to Topaz", () => {
+    __resetSurfaceAvailabilityForTests({ nodes: [], models: ["nodaro-video-upscale"] })
+    const data = { provider: "nodaro-video-upscale" }
+    expect(quickConfigSnapPatch(control(), "nodaro-video-upscale", resolveQuickConfigOptions(control(), data), data)).toBeUndefined()
+  })
+
+  it("its resolution menu lists its own tiers, and snaps another provider's value to its default", () => {
+    const data = { provider: "nodaro-video-upscale" }
+    expect(resolveQuickConfigOptions(resolution(), data).map((o) => o.value)).toEqual(["1080p", "2k", "4k"])
+    expect(quickConfigSnapPatch(resolution(), "720p", resolveQuickConfigOptions(resolution(), data), data)).toEqual({ targetResolution: "1080p" })
+    expect(quickConfigSnapPatch(resolution(), "2K", resolveQuickConfigOptions(resolution(), data), data)).toEqual({ targetResolution: "2k" })
+    expect(resolveQuickConfigOptions(resolution(), { provider: "veo-4k" })).toEqual([])
+  })
+
+  it("Topaz's resolution menu is as it always was: its own three, and a stale value snaps to the first (720p)", () => {
+    for (const topaz of [{ provider: "topaz" }, {}]) {
+      expect(resolveQuickConfigOptions(resolution(), topaz).map((o) => [o.value, o.label])).toEqual([["720p", "720p"], ["1080p", "1080p"], ["4k", "4K"]])
+      for (const stale of ["2k", "4K", "8k"]) {
+        expect(quickConfigSnapPatch(resolution(), stale, resolveQuickConfigOptions(resolution(), topaz), topaz), stale).toEqual({ targetResolution: "720p" })
+      }
+    }
+  })
+})

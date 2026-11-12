@@ -41,6 +41,7 @@ import {
   VIDEO_UPSCALE_PROVIDERS,
 } from "@nodaro/shared/models"
 import {
+  MODEL_CATALOG,
   SEEDANCE_DRAFT_FINALIZE_PROVIDER,
 } from "@nodaro/shared/model-catalog"
 
@@ -75,7 +76,9 @@ const nodaroInfo: ProviderInfo = {
     // Minus the Seedance draft finalize: it re-renders a draft by the KIE task
     // THIS install rendered, and a relayed draft has none here — the route
     // refuses it (`draft_not_finalizable`), so the connection must not claim it.
-    "video-upscale": VIDEO_UPSCALE_PROVIDERS.filter((p) => p !== SEEDANCE_DRAFT_FINALIZE_PROVIDER),
+    // Minus the house models (the catalog's `ownLabel`): they run only where
+    // the deployment serves them, never through this connection.
+    "video-upscale": VIDEO_UPSCALE_PROVIDERS.filter((p) => p !== SEEDANCE_DRAFT_FINALIZE_PROVIDER && MODEL_CATALOG[p]?.ownLabel !== true),
     "lip-sync": [...LIP_SYNC_PROVIDERS],
     // Single-model node (Wan S2V) — the cloud's /v1/speech-to-video route
     // takes no provider field, so the routing id is the node's own name.

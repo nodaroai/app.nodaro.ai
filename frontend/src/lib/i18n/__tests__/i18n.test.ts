@@ -27,6 +27,8 @@ const LEGIT_LATIN_HE: readonly string[] = [
   "cfgext.injRefImageN",
   "cfgext.sceneCriticScore",
   "vidcfg.pro1080p",
+  // The Nodaro Video Upscale provider's name in the upscale menu: a product name.
+  "vidcfg.nodaroUpscale",
   "audiocfg.providerElevenLabsStt",
   "audiocfg.providerWhisper",
   "audiocfg.providerIncrediblyFastWhisper",

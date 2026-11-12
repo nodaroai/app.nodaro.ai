@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react"
 import { isWorldId, type WorldId } from "@nodaro/shared/runtime-config"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { runtimeSurfaceProfile } from "./surface-profile"
 
 /**
@@ -245,9 +246,15 @@ export function isWebScrapeSourceHiddenFromUsers(source: string): boolean {
   return fetched?.webScrapeSources.hiddenFromUsers.has(source) ?? false
 }
 
-/** True when this deployment does not offer this model id in dropdowns. */
+/**
+ * True when this deployment does not offer this model id in dropdowns. Before
+ * the answer lands, a house model (the catalog's `ownLabel`, offered only
+ * where the deployment serves it — the server decides) is withheld: it is
+ * never shown to an install that turns out not to serve it.
+ */
 export function isModelUnavailable(id: string): boolean {
   if (fetched) return fetched.models.has(id)
+  if (Object.hasOwn(MODEL_CATALOG, id) && MODEL_CATALOG[id]!.ownLabel === true) return true
   return runtimeSurfaceProfile().models.deny.includes(id)
 }
 

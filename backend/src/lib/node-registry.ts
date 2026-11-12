@@ -1645,7 +1645,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "video-upscale",
     label: "Upscale Video",
     category: "ai-video",
-    description: "Upscale a video to 720p, 1080p or 4K at 15–60 fps with Topaz, re-render a VEO generation at 1080p or 4K, or finalize a Seedance 2.5 draft at 1080p (same take).",
+    description: "Upscale a video to 720p, 1080p or 4K at 15–60 fps with Topaz, or a clip of up to 60 s to 1080p, 2K or 4K with Nodaro Video Upscale (where offered), re-render a VEO generation at 1080p or 4K, or finalize a Seedance 2.5 draft at 1080p (same take).",
     outputType: "video",
   },
   {

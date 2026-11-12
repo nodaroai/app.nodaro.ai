@@ -1502,6 +1502,11 @@ const MODIFY_IMAGE_MASK_BYTES = 238
 // added, so the fixture does NOT move. Measured by this suite: 523_128 total − 522_874 = 254 B, all
 // on generate_video (9_470 → 9_724 B, under the per-tool budget).
 const SEEDANCE_REFERENCE_TASK_TYPE_ARG_BYTES = 254
+// RAISED 2026-11-11 by video_upscale's `nodaro-video-upscale` model (its line in the
+// description, its target_resolution values 1080p / 2k / 4k, and the two source arguments
+// naming it), and nothing else. No tool was added, so the fixture does NOT move. Measured by
+// this suite: 523_307 total − 522_874 = 433 B, all on video_upscale.
+const NODARO_VIDEO_UPSCALE_BYTES = 433
 // RAISED 2026-11-11 by Seedream 5.5 (`seedream-5-5` t2i + `seedream-5-5-i2i`), and nothing else:
 // it widens the model lists generate_image / modify_image / image_to_image already carry, adds
 // `1.5K` (its middle size) to generate_image's resolution note and image_to_image's resolution
@@ -1735,6 +1740,7 @@ export const TOOL_WIRE_BUDGET = {
     I2I_MASK_MODELS_BYTES +
     MODIFY_IMAGE_MASK_BYTES +
     SEEDANCE_REFERENCE_TASK_TYPE_ARG_BYTES +
+    NODARO_VIDEO_UPSCALE_BYTES +
     SEEDREAM_5_5_TOTAL_BYTES +
     VIDEO_OVERLAY_VIDEO_LAYERS_BYTES +
     KLING_4_FLASH_MODELS_BYTES +
