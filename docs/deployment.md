@@ -833,6 +833,15 @@ optional; each array empty = "keep the default"):
   `preview`) and workflow-internal pseudo-types are never denied by omission,
   only by an explicit `deny` entry.
 
+  A model allow list withholds the models `GET /v1/models` lists (and the
+  LLMs). A model it does not list is not withheld by omission: withhold its
+  node with `nodes.allow` / `nodes.deny`. FLUX Fill Pro (`flux-fill`, a
+  Modify Image and Image to Image model) is listed, so an allow list that
+  leaves it out refuses it on `/v1/image-to-image` and in workflow runs
+  (`403 model_not_available`), while the node's other models keep running.
+  A models override saved in Admin → Availability before FLUX Fill Pro was
+  listed does not tick it, so it stays off there until an admin ticks it.
+
   A model restriction holds on the model a request RUNS on, not only on the
   one it names. A request that names no model is judged as the default its
   route would run — the image default for its aspect ratio, a feature's

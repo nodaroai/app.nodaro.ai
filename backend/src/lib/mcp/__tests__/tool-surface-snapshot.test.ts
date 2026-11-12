@@ -1556,6 +1556,12 @@ const SPLIT_INTO_LAYERS_TOOL_BYTES = 2_911
 // 523_132 total − 522_874 = 258 B, all on edit_image.
 const NODARO_IMAGE_UPSCALE_BYTES = 258
 
+// RAISED 2026-11-12 by FLUX Fill Pro's model-catalog entry (a deployment's model allow list can
+// now name it): `flux-fill` joins the catalog-derived model lists of image_to_image and
+// modify_image ("flux-fill, " in each), and nothing else. No tool was added, so the fixture does
+// NOT move. Measured by this suite: 528_052 total − 528_030 = 22 B.
+const FLUX_FILL_CATALOG_ENTRY_BYTES = 22
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES,
   totalBytes:
@@ -1751,7 +1757,8 @@ export const TOOL_WIRE_BUDGET = {
     KLING_4_FLASH_MODELS_BYTES +
     PIXVERSE_V6_MAX_MODELS_BYTES +
     SPLIT_INTO_LAYERS_TOOL_BYTES +
-    NODARO_IMAGE_UPSCALE_BYTES,
+    NODARO_IMAGE_UPSCALE_BYTES +
+    FLUX_FILL_CATALOG_ENTRY_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -21,13 +21,15 @@
 import { describe, it, expect, beforeAll } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { buildPayload } from "../payload-builder.js"
+import { buildPayload, effectiveDispatchProvider } from "../payload-builder.js"
 import type { ResolvedInputs, SimpleNode } from "../types.js"
 import { JOB_LANE_CLASSES, laneClassOf } from "../../../lib/concurrency-lanes/registry.js"
 import { UNIT_NODE_DESCRIPTORS, laneOf } from "../../../lib/unit-descriptors.js"
 import { __availabilityUniverseReadyForTests, GATEABLE_MODEL_IDS, GATEABLE_NODE_TYPES } from "../../../lib/availability-override.js"
 import { FIXED_MODEL_JOBS, jobRunModelOfBuild, judgesJobRunModel } from "../../../lib/run-model.js"
 import { RESOLVED_MODEL_OF_JOB } from "../../../lib/job-resolved-model.js"
+import { providerIsItsModel } from "../../../lib/provider-model.js"
+import { nodeModelOptions } from "../../../lib/__tests__/model-option-vocabularies.js"
 
 // ── Why a job that runs a model needs no judging on the workflow lane ────────
 
@@ -194,5 +196,138 @@ describe("every dispatchable node type that names no model resolves a default a 
   it("each node listed as judged outside the catalog still builds a judged job", () => {
     const byType = new Map(built.map((b) => [b.type, b]))
     expect(Object.keys(JUDGED_OUTSIDE_CATALOG).filter((t) => !byType.get(t) || !judgesJobRunModel(byType.get(t)!.jobName))).toEqual([])
+  })
+})
+
+// ── 3. Every option a node accepts ───────────────────────────────────────────
+
+/**
+ * TOTALITY for "a node that runs catalog models runs no model a restriction
+ * cannot name" (decided 2026-11-12) — the workflow lane's half of the rule the
+ * route census holds for credit guards (src/__tests__/credit-guard-run-model-census.test.ts).
+ * An allow list withholds only ids the catalog (and the LLM list) knows, so a
+ * node that runs catalog models AND accepts an option with no catalog entry
+ * runs that model wherever the list leaves it out, and the node is no lever:
+ * withholding it withholds every other model with it.
+ *
+ * Every value a node type's model fields accept (lib/__tests__/model-option-vocabularies.ts:
+ * the shared lists its route schema and its node are built from) is built as a
+ * server-run workflow builds it, and judged as the build judges it — the named
+ * provider where it is the node's model, else the model the built job runs. A
+ * node whose every option is outside the catalog is exempt in part 1 (or judged
+ * outside the catalog in part 2): its node is the lever.
+ */
+const PROBE = "zz-not-a-model"
+
+const LIP_SYNC_AWAITING = "LatentSync, Wav2Lip, VideoReTalking, SadTalker, HeyGen Lipsync Precision and Lipsync 2 Pro run beside its catalog models and have no catalog entry. An entry needs each one's maker: two are not makers in MODEL_MAKERS yet, and Wav2Lip is a research release. Awaiting that decision (2026-11-12)"
+const MOTION_AWAITING = "Wan Animate Move and Replace run beside the catalog's Kling motion models and have no catalog entry. An entry is straightforward (Alibaba, motion transfer, 480p / 580p / 720p on its existing flat rows; nothing normalizes a motion-transfer request), and was left out only because a models override saved before a model is listed withholds it (pinned for FLUX Fill Pro in payload-builder-flux-fill-restriction.test.ts): pending that decision (2026-11-12)"
+const SUNO_AWAITING = "Suno V4_5PLUS, V4_5ALL and V4_5 run beside the catalog's Suno versions and have no catalog entry; each is charged under its operation's row (`sunoCreditType`), so an entry needs a price row of its own, or one it is not charged under. Awaiting that decision (2026-11-12)"
+
+/** Node types that run catalog models AND accept options with no catalog entry, each with what deciding it needs. Only shrinks. */
+const MIXED_AWAITING_DECISION: Readonly<Record<string, string>> = {
+  "lip-sync": LIP_SYNC_AWAITING,
+  "motion-transfer": MOTION_AWAITING,
+  "suno-generate": SUNO_AWAITING,
+  "suno-cover": SUNO_AWAITING,
+  "suno-extend": SUNO_AWAITING,
+  "suno-mashup": SUNO_AWAITING,
+  "suno-upload-extend": SUNO_AWAITING,
+  "suno-add-instrumental": SUNO_AWAITING,
+  "suno-add-vocals": SUNO_AWAITING,
+}
+
+interface NodeOptionCensus {
+  readonly type: string
+  readonly jobName: string
+  /** Catalog / LLM ids some accepted option runs. */
+  readonly gateable: ReadonlySet<string>
+  /** Options whose job runs a model no restriction can name (or none it can tell), with what it runs. */
+  readonly outside: ReadonlyMap<string, string>
+  /** Model fields whose value the built job runs verbatim. */
+  readonly echoes: readonly string[]
+  readonly probed: number
+}
+
+/** The node built with `data`, and the model the build judges it on; undefined when it does not build or calls no model. */
+function judgedBuild(type: string, data: Record<string, unknown>): { jobName: string; judged: string | undefined; runsVerbatim: string | undefined } | undefined {
+  const node: SimpleNode = { id: `${type}-1`, type, data: { label: "My Node", ...data } }
+  let result: ReturnType<typeof buildPayload>
+  try {
+    result = buildPayload(node, "job-census", { ...WIRED } as ResolvedInputs, undefined, { nodes: [node], edges: [], nodeStates: {} })
+  } catch {
+    return undefined
+  }
+  const cls = laneClassOf(result.queueName, result.jobName, result.payload)
+  const lane = cls.kind === "leaf" ? cls.lane : cls.kind
+  if (lane !== "provider" && lane !== "llm") return undefined
+  const runs = jobRunModelOfBuild(result.jobName, result.payload, result.modelIdentifier)
+  const named = effectiveDispatchProvider(type, node.data, { provider: undefined })
+  const judged = named && providerIsItsModel([type], named, node.data ?? {}) ? named : runs
+  return { jobName: result.jobName, judged, runsVerbatim: runs }
+}
+
+let options: NodeOptionCensus[] = []
+
+beforeAll(async () => {
+  await __availabilityUniverseReadyForTests()
+  const types = [...new Set([...GATEABLE_NODE_TYPES, ...UNIT_NODE_DESCRIPTORS.map((d) => d.type), ...editorExecutableTypes()])].sort()
+  options = []
+  for (const type of types) {
+    const gateable = new Set<string>()
+    const outside = new Map<string, string>()
+    let jobName = ""
+    let probed = 0
+    const note = (option: string, built: ReturnType<typeof judgedBuild>) => {
+      if (!built) return
+      jobName ||= built.jobName
+      probed += 1
+      if (built.judged !== undefined && GATEABLE_MODEL_IDS.has(built.judged)) gateable.add(built.judged)
+      else outside.set(option, built.judged ?? "(no model a restriction can tell)")
+    }
+    note("(no option)", judgedBuild(type, {}))
+    const fields = nodeModelOptions(type)
+    for (const [field, values] of fields) for (const value of values) note(`${field}=${value}`, judgedBuild(type, { [field]: value }))
+    const echoes = ["provider", "model"].filter((field) => judgedBuild(type, { [field]: PROBE })?.runsVerbatim === PROBE)
+    if (probed > 0) options.push({ type, jobName, gateable, outside, echoes, probed })
+  }
+}, 120_000)
+
+describe("every option a workflow node accepts runs a model a restriction can name, or its node is the lever", () => {
+  const byType = (type: string) => options.find((o) => o.type === type)
+
+  it("built every option, and sees the case it guards: FLUX Fill Pro on Modify Image is a model a restriction names", () => {
+    expect(options.reduce((n, o) => n + o.probed, 0)).toBeGreaterThan(300)
+    for (const type of ["modify-image", "image-to-image"]) {
+      expect(byType(type)!.gateable, type).toContain("flux-fill")
+      expect(byType(type)!.outside.size, type).toBe(0)
+    }
+    expect([...byType("lip-sync")!.outside.keys()]).toContain("provider=latentsync")
+  })
+
+  it("a model field the built job runs verbatim has its accepted values declared", () => {
+    const undeclared = options.flatMap((o) => o.echoes.filter((f) => !nodeModelOptions(o.type).has(f)).map((f) => `${o.type}: ${f}`))
+    expect(undeclared).toEqual([])
+  })
+
+  it("no node runs both a catalog model and one no restriction can name, unless it awaits a decision listed above", () => {
+    const mixed = options
+      .filter((o) => o.gateable.size > 0 && o.outside.size > 0 && !Object.hasOwn(MIXED_AWAITING_DECISION, o.type))
+      .map((o) => `${o.type} (job ${o.jobName}): ${[...o.outside].map(([option, runs]) => `${option} → ${runs}`).join(", ")} — give each a catalog entry`)
+    expect(mixed).toEqual([])
+  })
+
+  it("a node whose every option is outside the catalog is one part 1 exempts as OUTSIDE_CATALOG, or judged outside the catalog", () => {
+    const unlisted = options
+      .filter((o) => o.gateable.size === 0 && o.outside.size > 0)
+      .filter((o) => JOB_JUDGE_EXEMPT[o.jobName] !== OUTSIDE_CATALOG && !Object.hasOwn(JUDGED_OUTSIDE_CATALOG, o.type))
+      .map((o) => `${o.type} (job ${o.jobName}): ${[...o.outside.values()].join(", ")}`)
+    expect(unlisted).toEqual([])
+  })
+
+  it("no entry awaiting a decision is stale", () => {
+    expect(Object.keys(MIXED_AWAITING_DECISION).filter((t) => {
+      const o = byType(t)
+      return !o || o.gateable.size === 0 || o.outside.size === 0
+    })).toEqual([])
   })
 })

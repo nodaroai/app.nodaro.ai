@@ -97,6 +97,7 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Flux 2 Pro (Safety Tolerance) | Black Forest Labs | Premium | 26<!-- credits: flux-2-pro --> | t2i, i2i | BFL Flux 2 Pro flagship via Replicate. Accepts up to 4 reference images. |
 | Flux Kontext Max | Black Forest Labs | Premium | 28<!-- credits: flux-kontext-max --> | t2i, edit | Premium Kontext — highest fidelity context-aware edits. |
 | Topaz Image Upscale | Topaz | Premium | 28<!-- credits: topaz-image-upscale --> | upscale | High-quality image upscale at 1x (enhance only), 2x or 4x. Best for production-ready output. |
+| FLUX Fill Pro | Black Forest Labs | Premium | 33<!-- credits: flux-fill --> | edit | Masked inpainting from BFL via Replicate: repaints the mask's white area; the result keeps the image's size. |
 | Imagen 4 Ultra | Google | Premium | 33<!-- credits: imagen4-ultra --> | t2i | Premium Imagen 4 — highest fidelity, slower / more credits. |
 | Kontext Multi (Open) | Black Forest Labs | Premium | 33<!-- credits: kontext-multi --> | i2i, edit | Multi-image Flux Kontext Pro via Replicate — up to 4 input images. |
 | Flux 2 Flex | Black Forest Labs | Premium | 39<!-- credits: flux-flex --> | t2i | Flux 2 Flex — premium fidelity, more flexible composition. Pricier than Pro. |

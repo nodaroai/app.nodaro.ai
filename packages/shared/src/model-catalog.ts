@@ -1022,6 +1022,28 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "flux-2-max:4MP:8ref",   credits: 620 }, // max
     ],
   },
+  // A catalog entry so a deployment's model restriction can name it (decided
+  // 2026-11-12): before it, `models.allow` could not withhold it while the
+  // Modify Image node and /v1/image-to-image kept running it. It repaints the
+  // mask's white area of the image it is given, and its result is that image's
+  // size, so it takes no aspect ratio, size or quality: none is listed, and a
+  // value a request carries for one is dropped with an adjustment (as for
+  // Ideogram Edit). It never read one, so what it is sent is unchanged
+  // (backend flux-fill-requests-parity.test.ts). One input image, no
+  // reference images: no "reference-image" feature.
+  "flux-fill": {
+    id: "flux-fill",
+    kind: "image",
+    modes: ["edit"] as const,
+    family: "Black Forest Labs",
+    maker: "black-forest-labs",
+    label: "FLUX Fill Pro",
+    series: "Flux",
+    description: "Masked inpainting from BFL via Replicate: repaints the mask's white area; the result keeps the image's size.",
+    useCases: ["edit", "inpaint"],
+    features: ["mask"],
+    pricing: [{ identifier: "flux-fill", credits: 30 }],
+  },
 
   // ── OpenAI (GPT Image) ──
   "gpt-image": {
