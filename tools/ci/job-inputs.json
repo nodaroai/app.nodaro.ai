@@ -445,6 +445,7 @@
         "backend/src/lib/import-gate.ts",
         "backend/src/lib/import-source-policy.ts",
         "backend/src/lib/import-via.ts",
+        "backend/src/lib/input-override-lock.ts",
         "backend/src/lib/insert-job.ts",
         "backend/src/lib/instance-cipher.ts",
         "backend/src/lib/ip-address.ts",

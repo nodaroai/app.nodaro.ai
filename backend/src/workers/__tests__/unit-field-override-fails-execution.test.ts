@@ -16,6 +16,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { Job } from "bullmq"
 import type { WorkflowExecutionJob } from "../../services/workflow-engine/types.js"
 
+/** Credits on for one case: a refused run must hold, reserve or charge nothing. */
+const creditsOn = vi.hoisted(() => ({ value: false }))
+
 const mocks = vi.hoisted(() => {
   const executeNode = vi.fn(async () => ({ output: { text: "x" }, creditsUsed: 0 }))
   const updateExecutionWithRetry = vi.fn().mockResolvedValue({ ok: true, cancelledRace: false, attempts: 1 })
@@ -65,7 +68,7 @@ vi.mock("@/lib/config.js", () => ({
     ORCHESTRATOR_CONCURRENCY: 2,
     MAX_CONCURRENT_NODES_PER_EXECUTION: 12,
   },
-  hasCredits: () => false,
+  hasCredits: () => creditsOn.value,
   isCloud: () => false,
   isCommunity: () => true,
   isBusiness: () => false,
@@ -125,6 +128,9 @@ function makeJob(inputOverrides: Record<string, Record<string, unknown>>): Job<W
   } as unknown as Job<WorkflowExecutionJob>
 }
 
+/** Well-formed UTF-16: no lone surrogate (one with no partner has no UTF-8 encoding, so no column can hold it). */
+const wellFormed = (text: string) => !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(text)
+
 function failedWrite(): Record<string, unknown> | undefined {
   const call = mocks.updateExecutionWithRetry.mock.calls.find(
     (c) => (c[1] as Record<string, unknown> | undefined)?.status === "failed",
@@ -148,6 +154,30 @@ describe("orchestrator — an override outside a unit's app-field declaration fa
     await processWorkflowExecution(makeJob({ split: { size: null } }))
     expect(mocks.executeNode).not.toHaveBeenCalled()
     expect(failedWrite()?.error_message).toBe("Invalid value for size: null. Allowed: auto, 1K, 1.5K, 2K")
+  })
+
+  it("a value the column could not hold (a NUL, a lone surrogate, a megabyte) is written escaped and bounded, so the run still ends failed", async () => {
+    await processWorkflowExecution(makeJob({ split: { size: `\u0000\ud800${"x".repeat(1_000_000)}` } }))
+    expect(mocks.executeNode).not.toHaveBeenCalled()
+    const message = String(failedWrite()?.error_message)
+    expect(message.startsWith("Invalid value for size: \\u0000\\ud800x")).toBe(true)
+    expect(wellFormed(message)).toBe(true)
+    expect(message.length).toBeLessThan(300)
+  })
+
+  it("with credits on, a refused run holds and charges nothing: no node runs, no credit table is touched", async () => {
+    creditsOn.value = true
+    try {
+      mocks.from.mockClear()
+      await processWorkflowExecution(makeJob({ split: { maxLayers: 500 } }))
+      expect(mocks.executeNode).not.toHaveBeenCalled()
+      expect(failedWrite()?.error_message).toBe("Invalid value for maxLayers: 500. Use a whole number between 1 and 99.")
+      const tables = mocks.from.mock.calls.map((c) => String(c[0]))
+      expect(tables, "the spy sees the run's own reads").toContain("workflows")
+      expect(tables.filter((t) => /credit|reservation|usage|ledger|transaction/i.test(t))).toEqual([])
+    } finally {
+      creditsOn.value = false
+    }
   })
 
   it("a declared value runs the graph as usual", async () => {

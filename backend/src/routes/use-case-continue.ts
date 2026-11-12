@@ -37,6 +37,7 @@ import { ensureInlineGraphColumns } from "../lib/execution-inline-graph.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { RENDER_FINAL_ALREADY_RUNNING } from "../lib/render-final-codes.js"
@@ -128,6 +129,11 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
       if (internal && plan.reviewBeforeRender && body.reviewerPresent !== true) {
         return reply.status(409).send({ error: { code: PREVIEW_REVIEW_REQUIRED, message: previewRefusalMessage("headless", "review") } })
       }
+      // A node unit's app fields (unit.json appFields) take only the values they declare, on the overrides
+      // this continuation applies — the earlier run's pin with this run's own over it, as the orchestrator
+      // merges them (lib/exposed-unit-field-check.ts). Refused before any balance check, claim or fee.
+      const unitRefusals = findUnitFieldOverrideRefusals(plan.graph.nodes, continuationInputOverrides(plan.source, plan.inputOverrides))
+      if (unitRefusals.length > 0) return reply.status(400).send({ error: unitFieldOverrideErrorBody(unitRefusals) })
       const billingContext = req.billingContext
 
       const webFreeMode = req.webFreeMode === true || (await resolveWebSurfaceFlag(req))

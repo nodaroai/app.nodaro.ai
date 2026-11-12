@@ -53,9 +53,9 @@ describe("an override of a unit's app field at the merge every run shares", () =
     expect(() => applyInputOverridesToNodes(graph(), { split: { size: null } })).toThrow("Invalid value for size: null. Allowed: auto, 1K, 1.5K, 2K")
   })
 
-  it("every refused value is named, in graph order", () => {
+  it("every refused value is named, in graph order, each its own sentence", () => {
     expect(() => applyInputOverridesToNodes(graph(), { split: { size: "4K", maxLayers: 0 } })).toThrow(
-      "Invalid value for size: 4K. Allowed: auto, 1K, 1.5K, 2K Invalid value for maxLayers: 0. Use a whole number between 1 and 99.",
+      "Invalid value for size: 4K. Allowed: auto, 1K, 1.5K, 2K. Invalid value for maxLayers: 0. Use a whole number between 1 and 99.",
     )
   })
 

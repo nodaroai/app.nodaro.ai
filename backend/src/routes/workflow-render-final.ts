@@ -22,6 +22,7 @@ import { workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { deriveRenderFinalRun, isRenderFinalRefusal, renderFinalCredits } from "../lib/render-final-run.js"
+import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { resolveBillingContext } from "../lib/billing-context.js"
 import { hasCredits } from "../lib/config.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
@@ -131,6 +132,15 @@ export async function workflowRenderFinalRoutes(app: FastifyInstance) {
         })
       }
 
+      // The overrides the run applies: the earlier run's pin with the render's
+      // Final over it (`continuationInputOverrides`, as the orchestrator merges).
+      const effective = continuationInputOverrides(source!, derived.inputOverrides)
+      // A node unit's app fields (unit.json appFields) take only the values they
+      // declare: a pin that sets one outside them is refused here, as the run
+      // would refuse it (lib/exposed-unit-field-check.ts).
+      const unitRefusals = findUnitFieldOverrideRefusals(nodes, effective)
+      if (unitRefusals.length > 0) return reply.status(400).send({ error: unitFieldOverrideErrorBody(unitRefusals) })
+
       // The graph the run executes (the earlier run's pin, the render's Final
       // over it), priced and checked through the funnel the run's 402 reads,
       // under the payer the run would resolve.
@@ -139,7 +149,7 @@ export async function workflowRenderFinalRoutes(app: FastifyInstance) {
         nodes,
         edges,
         runNodeIds: derived.nodeIds,
-        overrides: continuationInputOverrides(source!, derived.inputOverrides),
+        overrides: effective,
         // A use-case node the run would resume is priced as the run prices it,
         // on the states the run seeds from (read only for such a node).
         continuation: {

@@ -471,9 +471,17 @@ legacy nodes' sources:
   key of `defaultData` whose value is one of its options (or a whole number in
   its range, on its step), never an input's `field` or an output's `from`,
   never a field the run override merge deletes (`RUN_OVERRIDE_CLEARED_FIELDS`
-  and `RUN_ONLY_NODE_FIELDS` of `@nodaro/shared`, read from their source, so a
-  field added to either is refused here with no second list), nor `label` or
-  `fieldMappings`, and exposed once; `types.ts` is required beside it. The
+  and `RUN_ONLY_NODE_FIELDS` of `@nodaro/shared`) or one the server writes
+  into a run's overrides itself (`SERVER_RUN_OVERRIDE_FIELDS` of
+  `@nodaro/render-rules`: a render's `quality`, a plan's `editedEdl`, a
+  component's `__injectedPortValues` —
+  `backend/src/lib/__tests__/server-run-override-fields.test.ts` finds every
+  server writer with the TypeScript parser and fails a key not declared
+  there), nor `label` or `fieldMappings`, and exposed once; `types.ts` is
+  required beside it. The lists are read from their source as text, strictly
+  (`readConstList`: either quote; a spread, a reference, a missing list or a
+  missing file throws), so a field added to any is refused here with no second
+  list. The
   definitions aggregate writes one `UnitAppFieldsFit<Data, typeof
   definition.appFields>` line per unit that declares them: a field must be a
   key the `<Pascal>Data` type DECLARES (its `[key: string]: unknown` index
@@ -489,34 +497,56 @@ legacy nodes' sources:
   `get_app_inputs` and the SDK's flat inputs type a select by its values and
   an integer as a number with its range and step (`extract-app-inputs.ts`, so
   the listing's "up to" prices every option and both ends of a range).
-- **The declaration is a guarantee on every lane.** A run may set a unit's app
-  field only to a value it declares — exposed by the app or not, by any lane,
-  and `null` is refused too (the merge would delete the key, and the unit's
-  `payload.ts` and `creditId(data)` would read no value instead of the
-  default). `lib/exposed-unit-field-check.ts` holds it in two places, as the
+- **The declaration is a guarantee on every run lane.** It covers a run's
+  OVERRIDES — what a run request, or a continuation re-applying a stored run,
+  writes over the saved node. A run may set a unit's app field only to a value
+  it declares — exposed by the app or not, by any lane, and `null` is refused
+  too (the merge would delete the key, and the unit's `payload.ts` and
+  `creditId(data)` would read no value instead of the default).
+  `lib/exposed-unit-field-check.ts` holds it in two places, as the
   outbound-node lock is held:
   - at the ONE merge of a run's overrides into node data,
     `applyInputOverridesToNodes` (`workers/apply-input-overrides.ts`, called
     once, by the orchestrator, for every lane's job and every continuation):
     it throws before touching a node, and the run fails with the message;
   - up front, a 400 `validation_error` before any row exists, on every route
-    that takes overrides — the app run (`/v1/app/:slug/run`, its flat
-    `inputs` and nested `inputOverrides` alike) and a draft run
-    (`/v1/app/:slug/runs`), a Retry (`app-run-resume.ts`) and a Render final
-    (`app-render-final.ts`) re-applying a stored run's inputs, a share-token
-    run (`/v1/present/:token/run`), a component's run (`/v1/component/execute`),
-    the workflow run API (`workflow-execution.ts`) and an API token run
-    (`api-tokens.ts`). `unit-field-override-lanes.test.ts` holds both: one
-    product caller of the merge, and every route that checks the lock
-    checks app fields too.
+    that takes or re-applies overrides — the app run (`/v1/app/:slug/run`, its
+    flat `inputs` and nested `inputOverrides` alike) and a draft run
+    (`/v1/app/:slug/runs`); the app's Retry (`app-run-resume.ts`) and Render
+    final (`app-render-final.ts`), on the stored run's inputs; a share-token
+    run (`/v1/present/:token/run`); a component's run
+    (`/v1/component/execute`); the workflow run API (`workflow-execution.ts`),
+    which an editor's or an agent's Render final runs through, and its quote
+    (`workflow-render-final.ts`), on the stored pin with the Final over it; a
+    use-case node's continue (`use-case-continue.ts`, from-failed and Render
+    final, on the stored pin with the continuation's own over it); and an
+    API token run (`api-tokens.ts`). A route that re-applies a stored run
+    checks what the run will APPLY (`continuationInputOverrides`), never only
+    what the request sent. `unit-field-override-lanes.test.ts` holds it with
+    the TypeScript parser: one product caller of the merge; every route that
+    names `inputOverrides` or calls `continuationInputOverrides` checks; and
+    each such check reads the applied overrides.
   The wording is a legacy fixed-list strip field's (`Invalid value for
   maxLayers: 500. Use a whole number between 1 and 99.`), and it applies under
-  a publisher's restriction too. A flat input naming a field the app does not
+  a publisher's restriction too. The refused value is caller-shaped and
+  reaches a run's `error_message` column, so it is escaped (a NUL, a lone
+  surrogate) and cut to 120 code points, at most ten refusals are spelled out,
+  and each is its own sentence. A flat input naming a field the app does not
   expose is dropped, as on any node. Only a run's override is held: a value
   the creator SAVED on the node keeps running. The value lands in the node's
   data like any override, where the unit's `payload.ts` reads it — no seam of
   its own. A legacy node is never read by any of this: its fields keep their
   own rules (an unexposed raw override on one still passes unchecked).
+  A direct node run is not an override: `POST /v1/<type>` (the unit's own
+  route, which a canvas Run and an API call use) is held by that route's own
+  Zod body, not by this check. Derive that body's enum and bounds from the
+  same declaration — the unit's own projection, `./descriptor.generated.js`
+  (`descriptor.appFields`), which `route.ts` may import (its own folder, G5) —
+  built inside the route plugin rather than at the top level (G7 allows no
+  computed call there): `z.enum(values as [string, ...string[]])` from a
+  select's options, `z.number().int().min(min).max(max)` (and a step check)
+  from an integer. The route then can never take a value the declaration
+  refuses, or refuse one it takes.
 - **Narrowing a declaration is a breaking change.** Removing a select value,
   or raising `min` / lowering `max` (or changing `step`), makes every run that
   sets the old value refuse — a published app whose publisher restricted the

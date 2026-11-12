@@ -13,8 +13,18 @@
 // frontend/src/nodes/kit.ts), so types.ts is required beside it.
 import { APP_FIELD_KINDS } from "./vocabulary.mjs"
 
-/** Where the run override merge's own field lists live (@nodaro/shared). */
-export const OVERRIDE_FIELD_LISTS_FILE = "packages/shared/src/preview-gate.ts"
+/**
+ * The lists of node fields an app field may never name, read as text where they are defined (the validator
+ * runs on built-ins only): what the run override merge deletes (@nodaro/shared) and what the server itself
+ * writes into a run's overrides (@nodaro/render-rules). Each list's entries say why.
+ */
+export const RESERVED_FIELD_LISTS = [
+  { file: "packages/shared/src/preview-gate.ts", name: "RUN_OVERRIDE_CLEARED_FIELDS", why: "a run's override clears it (RUN_OVERRIDE_CLEARED_FIELDS) — a cached result, not a setting" },
+  { file: "packages/shared/src/preview-gate.ts", name: "RUN_ONLY_NODE_FIELDS", why: "a field one run's own override sets and saved data drops (RUN_ONLY_NODE_FIELDS)" },
+  { file: "packages/render-rules/src/render-final-set.ts", name: "SERVER_RUN_OVERRIDE_FIELDS", why: "the server writes it into a run's overrides itself (SERVER_RUN_OVERRIDE_FIELDS) — a caller never sets it" },
+]
+/** The files those lists live in. */
+export const RESERVED_FIELD_FILES = [...new Set(RESERVED_FIELD_LISTS.map((l) => l.file))]
 
 /** Node fields that are never a setting an app may set: the node's own label, and its field-mapping wires. */
 const NOT_A_SETTING = {
@@ -23,25 +33,59 @@ const NOT_A_SETTING = {
 }
 
 /**
- * The field names an app field may not take, each with why: the node's label and field mappings, and the
- * fields the override merge deletes — `RUN_OVERRIDE_CLEARED_FIELDS` (a run's override clears these cached
- * results) and `RUN_ONLY_NODE_FIELDS` (set by one run's own override, dropped from saved data), read from
- * their source in @nodaro/shared as text, as the validator reads every product list (built-ins only).
- * frontend/src/__tests__/units-app-field-reserved.test.ts holds the repo's read to the runtime constants, and
- * a source that no longer declares either list throws, so the rule cannot go quietly empty.
+ * The string literals of `export const <name> = [ … ]` (optionally typed, optionally `as const`) in `source`.
+ * Strict: it throws — naming the list and the file — on a list it cannot find, and on any element it cannot
+ * read as a plain string literal (`"x"` or `'x'`): a spread, a reference, a template, a nested value. A list
+ * the validator cannot read whole must fail the build, never shrink in silence.
  */
-export function reservedAppFieldsFrom(source) {
-  const out = new Map(Object.entries(NOT_A_SETTING))
-  // A tree without @nodaro/shared's source (a fixture tree): the fixed names alone. The repo always has it,
-  // and units-app-field-reserved.test.ts fails if the repo's read loses either list.
-  if (!source) return out
-  const read = (name, why) => {
-    const m = source.match(new RegExp(`export const ${name} = \\[([^\\]]*)\\] as const`))
-    if (!m) throw new Error(`tools/units/app-field-rules.mjs: ${OVERRIDE_FIELD_LISTS_FILE} declares no "export const ${name} = [...] as const" — update reservedAppFieldsFrom`)
-    for (const f of m[1].matchAll(/"([^"]+)"/g)) if (!out.has(f[1])) out.set(f[1], why)
+export function readConstList(source, name, file) {
+  const head = new RegExp(`export const ${name}\\s*(?::[^=]+)?=\\s*\\[`).exec(source)
+  if (!head) throw new Error(`tools/units/app-field-rules.mjs: ${file} declares no "export const ${name} = [...]" — update RESERVED_FIELD_LISTS`)
+  // The body up to the matching "]", comments dropped, strings kept whole.
+  let body = ""
+  let quote = null
+  let i = head.index + head[0].length
+  for (; i < source.length; i++) {
+    const c = source[i]
+    if (quote) {
+      body += c
+      if (c === "\\") { body += source[++i] ?? ""; continue }
+      if (c === quote) quote = null
+      continue
+    }
+    if (c === "/" && source[i + 1] === "/") { i = source.indexOf("\n", i); if (i < 0) { i = source.length; break } body += "\n"; continue }
+    if (c === "/" && source[i + 1] === "*") { const close = source.indexOf("*/", i + 2); if (close < 0) { i = source.length; break } i = close + 1; continue }
+    if (c === "]") break
+    if (c === '"' || c === "'" || c === "`") quote = c
+    body += c
   }
-  read("RUN_OVERRIDE_CLEARED_FIELDS", "a run's override clears it (RUN_OVERRIDE_CLEARED_FIELDS) — a cached result, not a setting")
-  read("RUN_ONLY_NODE_FIELDS", "a field one run's own override sets and saved data drops (RUN_ONLY_NODE_FIELDS)")
+  if (i >= source.length) throw new Error(`tools/units/app-field-rules.mjs: ${name} in ${file} has no closing "]" the reader can find`)
+  const values = []
+  for (const raw of body.split(",")) {
+    const el = raw.trim()
+    if (el === "") continue
+    const m = /^(["'])([^"'\\\n]*)\1$/.exec(el)
+    if (!m) throw new Error(`tools/units/app-field-rules.mjs: cannot read "${el}" in ${name} (${file}) — the list must hold plain string literals (a spread, a reference or a template is not read)`)
+    values.push(m[2])
+  }
+  return values
+}
+
+/**
+ * The field names an app field may not take, each with why: the node's label and field mappings, and every
+ * entry of `RESERVED_FIELD_LISTS`, read through `readText(file)` (repo path → its text, or null when absent).
+ * A list file that is absent throws: the repo always has them, and a validator that read nothing would let a
+ * reserved name through. frontend/src/__tests__/units-app-field-reserved.test.ts holds the read to the
+ * runtime constants. A context with no reserved map (a fixture tree's) still refuses the label and the field
+ * mappings (`appFieldProblems`'s default).
+ */
+export function reservedAppFieldsFrom(readText) {
+  const out = new Map(Object.entries(NOT_A_SETTING))
+  for (const { file, name, why } of RESERVED_FIELD_LISTS) {
+    const source = readText(file)
+    if (source === null || source === undefined) throw new Error(`tools/units/app-field-rules.mjs: ${file} is missing — it holds ${name}, which an app field may not name`)
+    for (const field of readConstList(source, name, file)) if (!out.has(field)) out.set(field, why)
+  }
   return out
 }
 

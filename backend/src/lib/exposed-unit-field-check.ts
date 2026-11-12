@@ -23,6 +23,7 @@
  */
 import { canonicalExposedFieldKey } from "@nodaro/shared/apps"
 import type { UnitAppField } from "../nodes/kit.js"
+import { MESSAGE_MAX_ENTRIES, MESSAGE_MAX_PATH_CHARS, clip } from "./input-override-lock.js"
 import { unitDescriptorOf } from "./unit-descriptors.js"
 
 /** The app field of node unit `nodeType` stored under `storedKey`; undefined for a legacy node or a field it does not declare. */
@@ -44,6 +45,22 @@ export function isUnitIntegerValue(field: Extract<UnitAppField, { kind: "integer
 }
 
 /**
+ * A refused value as the message shows it. The message reaches a 400 body and, on the merge path, a run's
+ * `error_message` column, so it is caller-shaped text made safe to write: a string with its control characters
+ * (NUL included) and lone surrogates escaped, anything else as JSON (a number or a boolean as written), and
+ * the whole cut to `MESSAGE_MAX_PATH_CHARS` code points — a megabyte value cannot echo itself back.
+ */
+export function shownRefusedValue(submitted: unknown): string {
+  const text =
+    typeof submitted === "string"
+      ? JSON.stringify(submitted).slice(1, -1)
+      : typeof submitted === "number" || typeof submitted === "boolean" || submitted === null
+        ? String(submitted)
+        : (JSON.stringify(submitted) ?? String(submitted))
+  return clip(text, MESSAGE_MAX_PATH_CHARS)
+}
+
+/**
  * Why a submitted value for a node unit's app field is refused, or null when it is accepted (or the field
  * is not a unit's app field: a legacy node's is checked by its own rules). `null` is a value like any other
  * here, and refused: it would clear the field.
@@ -54,10 +71,10 @@ export function unitFieldRefusal(nodeType: string | undefined, storedKey: string
   if (field.kind === "select") {
     const values = unitSelectValues(field)
     if (typeof submitted === "string" && values.includes(submitted)) return null
-    return `Invalid value for ${storedKey}: ${String(submitted)}. Allowed: ${values.join(", ")}`
+    return `Invalid value for ${storedKey}: ${shownRefusedValue(submitted)}. Allowed: ${values.join(", ")}`
   }
   if (isUnitIntegerValue(field, submitted)) return null
-  return `Invalid value for ${storedKey}: ${String(submitted)}. Use a whole number between ${field.min} and ${field.max}${field.step > 1 ? ` in steps of ${field.step}` : ""}.`
+  return `Invalid value for ${storedKey}: ${shownRefusedValue(submitted)}. Use a whole number between ${field.min} and ${field.max}${field.step > 1 ? ` in steps of ${field.step}` : ""}.`
 }
 
 export interface UnitFieldOverrideRefusal {
@@ -100,9 +117,16 @@ export function findUnitFieldOverrideRefusals(
   return found
 }
 
-/** The refusal a request (or a run) answers with: each refused value's sentence, in graph order. */
+/**
+ * The refusal a request (or a run) answers with: each refused value's sentence, in graph order. One refusal
+ * is its sentence as written; several are each closed with a full stop, so two never run together. Bounded
+ * like the outbound-node lock's: at most `MESSAGE_MAX_ENTRIES` spelled out, the rest counted.
+ */
 export function describeUnitFieldOverrideRefusals(refusals: ReadonlyArray<UnitFieldOverrideRefusal>): string {
-  return refusals.map((r) => r.message).join(" ")
+  if (refusals.length === 1) return refusals[0]!.message
+  const shown = refusals.slice(0, MESSAGE_MAX_ENTRIES).map((r) => (/[.!?]$/.test(r.message) ? r.message : `${r.message}.`))
+  const rest = refusals.length - MESSAGE_MAX_ENTRIES
+  return [...shown, ...(rest > 0 ? [`${rest} more refused.`] : [])].join(" ")
 }
 
 /** Thrown by the merge; the orchestrator turns it into a failed execution carrying the message. */

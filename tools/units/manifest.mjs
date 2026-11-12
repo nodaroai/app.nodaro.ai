@@ -3,7 +3,7 @@
 // and gen:skills (backend/scripts/lib/gen-skills/parse-node-definitions.ts)
 // both read units through it, so they can never disagree about what a unit
 // is. Built-ins only: the tools self-test job runs it without npm install.
-// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json tools/units/reserved-credit-ids.json frontend/src/lib/node-families.ts docs/nodes/README.md frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts packages/render-rules/src/use-case-specs.ts packages/shared/src/preview-gate.ts
+// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json tools/units/reserved-credit-ids.json frontend/src/lib/node-families.ts docs/nodes/README.md frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts packages/render-rules/src/use-case-specs.ts packages/shared/src/preview-gate.ts packages/render-rules/src/render-final-set.ts
 //
 // A unit is one node type, named by its type id. Its manifest,
 // frontend/src/nodes/<type>/unit.json, is the source of truth; the backend
@@ -14,7 +14,7 @@ import path from "node:path"
 import { CAPABILITIES } from "./capabilities.mjs"
 import { AGGREGATES, EXECUTION_SEAMS, UNIT_FILES, UNIT_ROOTS, liveSeams } from "./seams.mjs"
 import { jsonOutputProblems } from "./json-output-rules.mjs"
-import { OVERRIDE_FIELD_LISTS_FILE, appFieldProblems, reservedAppFieldsFrom } from "./app-field-rules.mjs"
+import { appFieldProblems, reservedAppFieldsFrom } from "./app-field-rules.mjs"
 import { USE_CASE_SPECS_FILE, duplicateBuilderProblems, useCaseBuildersFrom, useCaseFileProblems, useCaseProblems, useCaseSeamNeeds } from "./use-case-rules.mjs"
 import { ACCEPTS_KINDS, CATEGORIES, CONTRACT_KEYS, DICT_LOCALES, LIST_OUTPUT_KINDS, MANY_KINDS, MEDIA_INPUT_KINDS, REGISTRY_CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, LABEL_LOCALES, NOT_A_UNIT, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES, SERVER_CATEGORIES } from "./vocabulary.mjs"
 
@@ -222,7 +222,8 @@ export function repoContext(root) {
     optionTypes: optionTypesFrom(text("frontend/src/lib/node-options.tsx")),
     useCaseBuilders: useCaseBuildersFrom(text(USE_CASE_SPECS_FILE)),
     // The field names an app field may not take (the label, the field mappings, what the override merge deletes).
-    reservedAppFields: reservedAppFieldsFrom(text(OVERRIDE_FIELD_LISTS_FILE)),
+    // Throws when a list file is absent: a real repo always has them.
+    reservedAppFields: reservedAppFieldsFrom((p) => (existsSync(path.join(root, p)) ? readFileSync(path.join(root, p), "utf8") : null)),
     live: liveSeams(),
     capabilities: CAPABILITIES,
     exists: (p) => existsSync(path.join(root, p)),

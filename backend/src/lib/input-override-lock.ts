@@ -191,11 +191,12 @@ export function findLockedOverrides(
 }
 
 /** How many refusals the message spells out; the rest are counted. */
-const MESSAGE_MAX_ENTRIES = 10
+export const MESSAGE_MAX_ENTRIES = 10
 /** Longest field path echoed back — a path is caller-shaped, so it is bounded too. */
-const MESSAGE_MAX_PATH_CHARS = 120
+export const MESSAGE_MAX_PATH_CHARS = 120
 
-function clip(value: string, max: number): string {
+/** `value` cut to at most `max` code points (an ellipsis marks the cut); shared with the unit app-field refusal. */
+export function clip(value: string, max: number): string {
   // Code points, not UTF-16 units — a cut inside a surrogate pair would put a
   // lone surrogate into an error_message column.
   const chars = [...value]

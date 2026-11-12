@@ -4,7 +4,7 @@
 // @test-watches tools/units/** packages/render-rules/src/use-case-*.ts frontend/src/lib/node-families.ts frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -832,9 +832,9 @@ test("appFields beside list outputs, a JSON pip, an AI category and a provider l
 })
 
 test("appFields: never a field the override merge deletes, the label or the field mappings (read from @nodaro/shared)", async () => {
-  const { reservedAppFieldsFrom, OVERRIDE_FIELD_LISTS_FILE } = await import("../units/app-field-rules.mjs")
-  const reservedAppFields = reservedAppFieldsFrom(readFileSync(path.join(REPO, OVERRIDE_FIELD_LISTS_FILE), "utf8"))
-  for (const name of ["generatedResults", "generatedVideoUrl", "useCaseContinue", "rightsConfirmationId", "label", "fieldMappings"]) {
+  const { reservedAppFieldsFrom } = await import("../units/app-field-rules.mjs")
+  const reservedAppFields = reservedAppFieldsFrom((p) => readFileSync(path.join(REPO, p), "utf8"))
+  for (const name of ["generatedResults", "generatedVideoUrl", "useCaseContinue", "rightsConfirmationId", "quality", "editedEdl", "__injectedPortValues", "label", "fieldMappings"]) {
     assert.ok(reservedAppFields.has(name), name)
     const errs = problemsAfter((root) => withManifest(root, (m) => {
       m.appFields[0].field = name
@@ -847,4 +847,30 @@ test("appFields: never a field the override merge deletes, the label or the fiel
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.appFields[0].field = "label"; m.appFields[0].options = [{ value: "Fixture Echo" }] })), /"label" cannot be an app field: the node's label/)
   // The repo's context reads it.
   assert.ok(repoContext(REPO).reservedAppFields.has("generatedResults"))
+})
+
+test("the reserved-name lists are read strictly: either quote; a spread, a reference or a missing list or file throws", async () => {
+  const { readConstList, reservedAppFieldsFrom, RESERVED_FIELD_LISTS } = await import("../units/app-field-rules.mjs")
+  assert.deepEqual(readConstList('export const L = ["a", \'b\'] as const\n', "L", "f.ts"), ["a", "b"])
+  // Typed, multi-line, with comments and a trailing comma.
+  assert.deepEqual(readConstList('export const L: readonly string[] = [\n  "a", // one\n  /* two */ "b",\n]\n', "L", "f.ts"), ["a", "b"])
+  assert.deepEqual(readConstList("export const L = [] as const\n", "L", "f.ts"), [])
+  assert.throws(() => readConstList('export const L = [...OTHER, "a"] as const\n', "L", "f.ts"), /cannot read "\.\.\.OTHER" in L \(f\.ts\)/)
+  assert.throws(() => readConstList('export const L = [A_FIELD] as const\n', "L", "f.ts"), /cannot read "A_FIELD" in L/)
+  assert.throws(() => readConstList("export const L = [`a`] as const\n", "L", "f.ts"), /cannot read "`a`" in L/)
+  assert.throws(() => readConstList('export const L = ["a,b"] as const\n', "L", "f.ts"), /cannot read/)
+  assert.throws(() => readConstList('export const M = ["a"] as const\n', "L", "f.ts"), /f\.ts declares no "export const L = \[\.\.\.\]"/)
+  // A list file that is absent throws: a validator that read nothing would let a reserved name through.
+  assert.throws(() => reservedAppFieldsFrom(() => null), /packages\/shared\/src\/preview-gate\.ts is missing/)
+  // A repo without the list's source: the repo context refuses it rather than read no reserved name.
+  const bare = mkdtempSync(path.join(tmpdir(), "units-bare-repo-"))
+  try {
+    mkdirSync(path.join(bare, "tools/units"), { recursive: true })
+    writeFileSync(path.join(bare, "tools/units/legacy-nodes.json"), '{"types":[]}')
+    assert.throws(() => repoContext(bare), /packages\/shared\/src\/preview-gate\.ts is missing — it holds/)
+  } finally { rmSync(bare, { recursive: true, force: true }) }
+  // Every list the validator reads is read from the repo.
+  const reserved = reservedAppFieldsFrom((p) => readFileSync(path.join(REPO, p), "utf8"))
+  assert.ok(RESERVED_FIELD_LISTS.length >= 3)
+  for (const name of ["quality", "editedEdl", "__injectedPortValues", "useCaseContinue", "generatedResults"]) assert.ok(reserved.has(name), name)
 })

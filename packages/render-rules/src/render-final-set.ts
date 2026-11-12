@@ -185,6 +185,18 @@ export function usecaseRenderFinalOverrides(
 }
 
 /**
+ * The node fields the server itself writes into a run's overrides — never a caller's to set: a render's
+ * one-shot `quality` (`renderRunOverrides`, and a held final's `quality: "final"`); the reviewed edit of a
+ * plan, `editedEdl`, which a Render final carries onto the plan (its app run's edits, a use-case final); and
+ * the values a component's handles carry into its inner run, `__injectedPortValues` (`applyHandleInputOverride`,
+ * @nodaro/shared). A use-case node's `useCaseContinue` is another and is listed with the run-only fields
+ * (`RUN_ONLY_NODE_FIELDS`, @nodaro/shared). A node unit may not declare any of them as an app field
+ * (tools/units/app-field-rules.mjs reads this list as text); backend
+ * `lib/__tests__/server-run-override-fields.test.ts` fails a server writer that writes any other key.
+ */
+export const SERVER_RUN_OVERRIDE_FIELDS = ["quality", "editedEdl", "__injectedPortValues"] as const
+
+/**
  * A one-shot quality override on the render, as the run's `inputOverrides`
  * (TA18): the node keeps its own Quality, so the toolbar Run always previews
  * and Render final always renders the final. An override clears the overridden

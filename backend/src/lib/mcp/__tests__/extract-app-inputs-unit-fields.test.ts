@@ -23,7 +23,7 @@ vi.mock("../../unit-descriptors.js", async (importOriginal) => {
 })
 
 const { extractAppInputSchema, flatInputsToOverrides } = await import("../extract-app-inputs.js")
-const { exposedUnitFieldSpec, findUnitFieldOverrideRefusals, unitFieldRefusal } = await import("../../exposed-unit-field-check.js")
+const { describeUnitFieldOverrideRefusals, exposedUnitFieldSpec, findUnitFieldOverrideRefusals, shownRefusedValue, unitFieldRefusal } = await import("../../exposed-unit-field-check.js")
 const { quickFieldRefusal } = await import("../../exposed-quick-field-check.js")
 const { listingFieldDomains } = await import("../../../ee/billing/listing-range.js")
 
@@ -113,5 +113,62 @@ describe("unitFieldRefusal — what an app run holds a unit's app field to", () 
     const legacy = quickFieldRefusal("video-to-video", "provider", "not-a-model")!
     expect(legacy).toMatch(/^Invalid value for provider: not-a-model\. Allowed: /)
     expect(unitFieldRefusal("fixture-echo", "size", "not-a-size")).toMatch(/^Invalid value for size: not-a-size\. Allowed: /)
+  })
+})
+
+/**
+ * The refusal reaches a 400 body and, on the merge path, a run's `error_message` column: the refused value is
+ * caller-shaped, so it is escaped and bounded before it is written (a NUL or a lone surrogate would break the
+ * write and leave the run `running`; a megabyte value would be echoed back whole).
+ */
+/** Well-formed UTF-16: no lone surrogate (one with no partner has no UTF-8 encoding, so no column can hold it). */
+const wellFormed = (text: string) => !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(text)
+
+describe("the refused value as a refusal shows it", () => {
+  /** Postgres text cannot hold NUL; a lone surrogate is not well-formed UTF-16 (it has no UTF-8 encoding). */
+  const writable = (text: string) => !text.includes("\u0000") && wellFormed(text)
+
+  it("a huge value is cut to a bounded number of code points", () => {
+    const message = unitFieldRefusal("fixture-echo", "size", "x".repeat(1_000_000))!
+    expect(message.length).toBeLessThan(300)
+    expect(message).toMatch(/^Invalid value for size: x+…\. Allowed: auto, 1K, 1\.5K, 2K$/)
+  })
+
+  it("a NUL is escaped, never written", () => {
+    const message = unitFieldRefusal("fixture-echo", "size", "a\u0000b")!
+    expect(writable(message)).toBe(true)
+    expect(message).toBe("Invalid value for size: a\\u0000b. Allowed: auto, 1K, 1.5K, 2K")
+  })
+
+  it("a lone surrogate is escaped, and a cut never splits a pair", () => {
+    // The check this relies on sees one (it is not vacuous).
+    expect(wellFormed("a\ud800b")).toBe(false)
+    expect(wellFormed("a\udc00b")).toBe(false)
+    const message = unitFieldRefusal("fixture-echo", "size", "a\ud800b")!
+    expect(writable(message)).toBe(true)
+    expect(message).toBe("Invalid value for size: a\\ud800b. Allowed: auto, 1K, 1.5K, 2K")
+    const emoji = shownRefusedValue("😀".repeat(500))
+    expect(wellFormed(emoji)).toBe(true)
+  })
+
+  it("a non-string is shown as JSON (an object, an array), a number or boolean as written", () => {
+    expect(shownRefusedValue({ a: 1 })).toBe('{"a":1}')
+    expect(shownRefusedValue([1, 2])).toBe("[1,2]")
+    expect(shownRefusedValue(9.5)).toBe("9.5")
+    expect(shownRefusedValue(true)).toBe("true")
+    expect(shownRefusedValue(null)).toBe("null")
+    expect(shownRefusedValue({ big: "y".repeat(10_000) }).length).toBeLessThanOrEqual(120)
+  })
+
+  it("several refusals are separate sentences, and a long list is counted after ten", () => {
+    const at = (field: string, value: unknown) => ({ nodeId: "split", nodeType: "fixture-echo", field, message: unitFieldRefusal("fixture-echo", field, value)! })
+    expect(describeUnitFieldOverrideRefusals([at("size", "4K"), at("maxLayers", 0)])).toBe(
+      "Invalid value for size: 4K. Allowed: auto, 1K, 1.5K, 2K. Invalid value for maxLayers: 0. Use a whole number between 1 and 99.",
+    )
+    expect(describeUnitFieldOverrideRefusals([at("size", "4K")])).toBe("Invalid value for size: 4K. Allowed: auto, 1K, 1.5K, 2K")
+    const many = Array.from({ length: 13 }, (_, i) => at("maxLayers", 100 + i))
+    const text = describeUnitFieldOverrideRefusals(many)
+    expect(text.match(/Invalid value/g)).toHaveLength(10)
+    expect(text.endsWith(" 3 more refused.")).toBe(true)
   })
 })
