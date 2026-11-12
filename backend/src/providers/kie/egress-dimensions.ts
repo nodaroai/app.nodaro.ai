@@ -26,12 +26,14 @@ export function deriveKieEgressDimensions(
   if (res != null) out.resolution = String(res)
 
   // Audio on/off is a real cost lever. Models spell the flag differently — Kling
-  // reads `sound`, Seedance/VEO read `generate_audio` — and the wire body carries
-  // whichever ONE the chosen model reads (written by `applyVideoAudioToggle`), so
-  // all three keys are honoured here or the lever is silently dropped on Kling.
+  // reads `sound`, Seedance/VEO read `generate_audio`, PixVerse V6 Max reads
+  // `generate_audio_switch` — and the wire body carries whichever ONE the chosen
+  // model reads (written by `applyVideoAudioToggle`), so every key is honoured
+  // here or the lever is silently dropped.
   if (typeof body.audio === "boolean") out.audio = body.audio
   else if (typeof body.generate_audio === "boolean") out.audio = body.generate_audio
   else if (typeof body.sound === "boolean") out.audio = body.sound
+  else if (typeof body.generate_audio_switch === "boolean") out.audio = body.generate_audio_switch
 
   // A supplied VIDEO (not image) is a distinct, cheaper cost tier on several
   // models ("with video input" vs generated-from-nothing). `video_urls` (plural)

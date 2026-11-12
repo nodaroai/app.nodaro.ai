@@ -987,3 +987,9 @@ export {
   type LayerSplitSize,
   type LayerSplitTier,
 } from "./layer-split"
+// Generate Video Pro's resolution rule: the tier a run renders, and the menus derived from it.
+export { gvpOfferedResolutions, gvpRenderResolution, gvpRendersResolutionAsNamed } from "./gvp-resolution"
+// The audio a Generate Video Pro segment is sent with and priced at (the plugin toolkit, the pro pricing, the editor's estimate).
+export { GVP_GENERATE_AUDIO_DEFAULT, gvpSegmentAudio, pluginVideoAudioRequest } from "./gvp-audio"
+// The anchor choices Generate Video Pro's panel offers for a model (no "reference" where the model takes no reference images).
+export { gvpAnchorChoicesFor } from "./gvp-anchor-choices"

@@ -6,7 +6,7 @@
 
 Generate Video Pro is a specialized sibling of [Generate Video](./generate-video.md), built for one thing: clips longer than a single provider call can produce. Ask for a duration beyond the model's single-segment limit and the node transparently generates multiple segments and stitches them into a single output video.
 
-You choose the model. Every video model that accepts a start still plus reference images is available — the Seedance 2 family, MiniMax H3, VEO 3.1 **Fast and Lite**, Gemini Omni, Grok, HappyHorse, Wan 3.0, Vidu Q4, Kling 4.0 and Kling 4.0 Flash. (VEO 3.1 **Quality** is not offered here: the provider has no reference-to-video mode on that SKU, and this node's anchor wave carries identity references into every segment. Use Fast or Lite, or the single [Generate Video](./generate-video.md) node for a one-off Quality clip.) — and each one contributes its own segment lengths and resolutions. See [Providers](#providers) for the full list and for which models additionally support the continuation-based **Extend** render method.
+You choose the model. Every video model that accepts a start still plus reference images is available — the Seedance 2 family, MiniMax H3, VEO 3.1 **Fast and Lite**, Gemini Omni, Grok, HappyHorse, Wan 3.0, Vidu Q4, Kling 4.0 and Kling 4.0 Flash — and PixVerse V6 Max, which takes a start still but no reference images (see [Providers](#providers)). (VEO 3.1 **Quality** is not offered here: the provider has no reference-to-video mode on that SKU, and this node's anchor wave carries identity references into every segment. Use Fast or Lite, or the single [Generate Video](./generate-video.md) node for a one-off Quality clip.) — and each one contributes its own segment lengths and resolutions. See [Providers](#providers) for the full list and for which models additionally support the continuation-based **Extend** render method.
 
 Below the model's single-segment limit, Generate Video Pro behaves like a normal single-shot run on that model and is priced the same way. Use it when you need one long clip; use [Generate Video](./generate-video.md) for everything else (single shots, video-to-video, first+last frame, or the full multimodal reference/prompt-token surface).
 
@@ -79,7 +79,7 @@ automatically; scripts without look bindings behave exactly as before.
 
 ## Providers
 
-Generate Video Pro offers every video model that can drive the engine's **keyframes** render method — that is, any model which accepts a generated start still plus reference images, and declares its own segment durations:
+Generate Video Pro offers every video model that can drive the engine's **keyframes** render method — that is, any model which accepts a generated start still plus reference images, and declares its own segment durations — and PixVerse V6 Max, which takes the start still without reference images:
 
 | Provider | Label | Segment lengths | Resolutions | Render methods |
 |---|---|---|---|---|
@@ -100,8 +100,11 @@ Generate Video Pro offers every video model that can drive the engine's **keyfra
 | `vidu-q4` | Vidu Q4 | 3–16s | 720p / 1080p / 4K | Keyframes |
 | `kling-4` | Kling 4.0 | 3–30s | 720p / 1080p | Keyframes |
 | `kling-4-flash` | Kling 4.0 Flash | 3–20s | 720p | Keyframes |
+| `pixverse-v6-max` | PixVerse V6 Max | 1–15s | 720p / 1080p | Keyframes |
 
 Kling 4.0 **Keyframes** (`kling-4-keyframes`) and Grok Imagine 1.5 (`grok-imagine-video-1.5`) are not offered: their Image References are in-between frames, so the identity references each segment carries would land in the clip as frames. Kling 4.0 (`kling-4`) is keyframes-only here — like Wan 3.0, it takes reference videos on Generate Video but the continuation transport is not wired for it. Kling 4.0 Flash (`kling-4-flash`) is keyframes-only for the same reason, at 720p, its only resolution.
+
+**PixVerse V6 Max** (`pixverse-v6-max`) is offered although it takes **no reference images**: each segment runs from its opening anchor still (the exact first frame) or, with no anchor, from the scene prompt alone. The identity and location references a segment carries are not sent to it, so the cast is held by the anchor stills and the prompt, not by references. It takes no end frame, so no closing anchor is generated and a wired end frame is not sent. **References only** is not offered for it — with no references a reference-driven shot has nothing to carry it — and a node already set to it runs as **Auto**. It renders keyframes only, at 720p or 1080p (the pro node's own resolution steps; a 540p or 360p request runs at 720p). Its native audio follows the node's **Generate Audio** setting and changes the price — see [Credit pricing](#credit-pricing).
 
 ### Render methods and why the list differs
 
@@ -278,7 +281,7 @@ reserve ≈ 110 (fee) + noRefPerSec × 15 + refPerSec × ((N − 1) × T + (S �
 
 **MiniMax H3 (`minimax-h3`) rates.** The same formula applies, but MiniMax H3 has no with-reference rate axis: **noRefPerSec = refPerSec**, both derived from the one 8s composite of the selected resolution tier — **100.375**<!-- credits-rate: minimax-h3:8s@0.125 --> credits/sec @2K (`minimax-h3:8s` = 803<!-- credits: minimax-h3:8s --> ÷ 8; the default, and what any non-768P resolution value collapses to) or **61.875**<!-- credits-rate: minimax-h3:8s:768p@0.125 --> credits/sec @768P (`minimax-h3:8s:768p` = 495<!-- credits: minimax-h3:8s:768p --> ÷ 8). Its reference-to-video rate equals its base rate; each continuation's T-second context tail is billed as input seconds at that same rate, which is exactly the formula's `refPerSec × (N − 1) × T` term. A 60s request (5 segments, S = 62) reserves 7137 credits<!-- credits: (generate-video-pro + minimax-h3:8s@1.875 + minimax-h3:8s@6.875) --> @2K, or 4442<!-- credits: (generate-video-pro + minimax-h3:8s:768p@1.875 + minimax-h3:8s:768p@6.875) --> @768P.
 
-#### Flat-priced providers (VEO 3.1 family, Gemini Omni Pro & Flash, Grok, HappyHorse, Wan 3.0, Vidu Q4, Kling 4.0, Kling 4.0 Flash)
+#### Flat-priced providers (VEO 3.1 family, Gemini Omni Pro & Flash, Grok, HappyHorse, Wan 3.0, Vidu Q4, Kling 4.0, Kling 4.0 Flash, PixVerse V6 Max)
 
 The per-second formula above applies only to models that publish a per-second rate the engine can multiply — the Seedance 2 family and MiniMax H3. The remaining providers are priced **per generation**: a flat price on some models, a published price per duration tier on others, but either way there is no rate to multiply. They render keyframes-only, where each segment is exactly one ordinary image-to-video generation, so each segment is billed at that model's own published price for its length and resolution:
 
@@ -287,6 +290,8 @@ reserve = feeBase + Σ segmentPrice(provider, resolution, dᵢ) + anchorBudget
 ```
 
 - `segmentPrice` is the same credit identifier a single-shot [Generate Video](./generate-video.md) run on that model would use — so an admin reprice moves the pro node with it.
+- Where a model's price depends on its audio, each segment is billed with the audio the model renders from the run's `generateAudio`: PixVerse V6 Max follows the setting; Kling 3.0 and Kling 2.6, which an API call can name, ignore it here — Kling 3.0 always renders its sound and is billed with it, Kling 2.6 renders silent and is billed silent. Every other model is priced the same with or without audio.
+- `resolution` is the tier the run renders, and every resolution menu offers only those tiers. A node still set to a tier the menu no longer lists (Vidu Q4's 540p or 2K, Gemini Omni Flash 1.2's 360p) keeps it and runs at 720p, as before.
 - `anchorBudget` is the worst case of two anchor stills per segment, exactly as for keyframes runs on any provider. The metered commit settles the real count, so it only ever refunds down.
 
 **Worked example (`veo3` @ 720p, three 8-second segments).** VEO is flat per generation regardless of clip length, so all three segments cost the same: `feeBase + 3 × veo3 + 3 × 2 × anchor`. The delivered duration is 23 seconds, not 24 — the 0.3s seam allowance per join is deducted from the raw 24s of footage. VEO offers 4/6/8s only, all even, so a total that needs an odd number of seconds simply isn't reachable; the node reports the length you will actually get.
@@ -300,6 +305,8 @@ reserve = feeBase + Σ segmentPrice(provider, resolution, dᵢ) + anchorBudget
 **Worked example (`kling-4` @ 720p, segments of 10 + 8 + 6s).** Kling 4.0 is priced the same way: its single-shot per-second ladder, one `kling-4:<N>s:<resolution>` composite per length, billed per segment — `kling-4:10s:720p` + `kling-4:8s:720p` + `kling-4:6s:720p` = 792<!-- credits-rate: kling-4:10s:720p --> + 627<!-- credits-rate: kling-4:8s:720p --> + 473<!-- credits-rate: kling-4:6s:720p --> = **1892** credits<!-- credits: (kling-4:10s:720p + kling-4:8s:720p + kling-4:6s:720p) --> of segment cost, plus the fee and anchor budget. Kling 4.0 is keyframes-only here: it takes reference videos on Generate Video, but the continuation transport is not wired for it. Its 3–30 s menu is contiguous; a requested 4K renders at 1080p, the nearest tier it offers. Each segment's anchor still and identity references reach Kling's reference endpoint, so the anchor is appended after the references and named in the prompt as the opening frame.
 
 **Worked example (`kling-4-flash`, segments of 10 + 8s).** Kling 4.0 Flash is priced the same way on its own 720p ladder — `kling-4-flash:10s:720p` + `kling-4-flash:8s:720p` = 473<!-- credits-rate: kling-4-flash:10s:720p --> + 374<!-- credits-rate: kling-4-flash:8s:720p --> = **847** credits<!-- credits: (kling-4-flash:10s:720p + kling-4-flash:8s:720p) --> of segment cost, plus the fee and anchor budget. Its 3–20 s menu is contiguous; any other resolution renders and bills 720p. A segment whose anchor still travels with identity references runs on Flash's reference endpoint (the anchor appended after the references and named as the opening frame); a segment with the anchor still alone runs on its start-frame endpoint, where the still is the exact opening frame.
+
+**Worked example (`pixverse-v6-max` @ 720p, segments of 10 + 8 + 6s).** PixVerse V6 Max is priced the same way on its own per-second ladder, and each segment is billed with or without audio as the run sends it: the node's **Generate Audio** setting (`generateAudio` through the API), on unless you turn it off. With audio, `pixverse-v6-max:10s:720p:audio` + `:8s:720p:audio` + `:6s:720p:audio` = 330<!-- credits-rate: pixverse-v6-max:10s:720p:audio --> + 264<!-- credits-rate: pixverse-v6-max:8s:720p:audio --> + 198<!-- credits-rate: pixverse-v6-max:6s:720p:audio --> = **792** credits<!-- credits: (pixverse-v6-max:10s:720p:audio + pixverse-v6-max:8s:720p:audio + pixverse-v6-max:6s:720p:audio) --> of segment cost; with audio off, `pixverse-v6-max:10s:720p` + `:8s:720p` + `:6s:720p` = 242<!-- credits-rate: pixverse-v6-max:10s:720p --> + 198<!-- credits-rate: pixverse-v6-max:8s:720p --> + 154<!-- credits-rate: pixverse-v6-max:6s:720p --> = **594** credits<!-- credits: (pixverse-v6-max:10s:720p + pixverse-v6-max:8s:720p + pixverse-v6-max:6s:720p) -->; plus the fee and anchor budget either way.
 
 #### Worked examples (720p, `seedance-2`)
 

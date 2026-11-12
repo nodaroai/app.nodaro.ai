@@ -92,7 +92,9 @@ const generateVideoPublicFields = z.object({
   negativePrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   motionPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   cfgScale: z.number().min(0).max(1).optional(),
-  aspectRatio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4", "21:9", "9:21", "adaptive", "Auto", "auto"]).optional(),
+  // 2:3 / 3:2: PixVerse V6 Max's text-to-video ratios (an image run snaps them
+  // to the model's own list, like every other ratio here).
+  aspectRatio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4", "2:3", "3:2", "21:9", "9:21", "adaptive", "Auto", "auto"]).optional(),
   multiShot: z.boolean().optional(),
   shots: shotsSchema.optional(),
   elements: elementsSchema.optional(),
@@ -839,7 +841,8 @@ export const generateVideoPricing: RoutePricing = {
     return buildVideoCreditModelIdentifier(
       sel.provider,
       norm.duration ?? sel.duration,
-      body?.sound as boolean | undefined,
+      // The request's both audio fields, read as the provider runner reads them (videoAudioIntent).
+      { sound: body?.sound as boolean | undefined, generateAudio: body?.generateAudio as boolean | undefined },
       "image-to-video",
       body?.videoSize as string | undefined,
       norm.resolution,
@@ -995,7 +998,7 @@ export const generateVideoPricing: RoutePricing = {
       const modelId = buildVideoCreditModelIdentifier(
         bSel.provider,
         req.videoNorm?.duration ?? bSel.duration,
-        b?.sound as boolean | undefined,
+        { sound: b?.sound as boolean | undefined, generateAudio: b?.generateAudio as boolean | undefined },
         "image-to-video",
         b?.videoSize as string | undefined,
         normResolution,
@@ -1428,7 +1431,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     const modelIdentifier = buildVideoCreditModelIdentifier(
       provider,
       normDuration,
-      sound,
+      { sound, generateAudio },
       "image-to-video",
       videoSize,
       normResolution,

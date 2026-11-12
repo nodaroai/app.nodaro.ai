@@ -712,6 +712,8 @@ const MODEL_DESCRIPTIONS_PT_BR: Record<string, string> = {
   "Kuaishou Kling 4.0, 3\u201330s, 720p/1080p, native audio, image/video/character/voice refs": "Kuaishou Kling 4.0, 3–30 s, 720p/1080p, áudio nativo, referências de imagem/vídeo/personagem/voz",
   "Kuaishou Kling 4.0, 3\u201330s, start + up to 8 in-between + end frames, native audio": "Kuaishou Kling 4.0, 3–30 s, quadro inicial + até 8 quadros intermediários + quadro final, áudio nativo",
   "Kuaishou Kling 4.0 Flash, 3\u201320s, 720p, native audio, start frame or image/video/character refs, voice per character": "Kuaishou Kling 4.0 Flash, 3–20 s, 720p, áudio nativo, quadro inicial ou referências de imagem/vídeo/personagem, voz por personagem",
+  "PixVerse, 1\u201315s, 360p\u20131080p, optional native audio, text or an exact first frame": "PixVerse, 1–15 s, 360p–1080p, áudio nativo opcional, texto ou um primeiro quadro exato",
+  "PixVerse, 1\u201315s, 360p\u20131080p, 8 aspect ratios, optional native audio": "PixVerse, 1–15 s, 360p–1080p, 8 proporções de tela, áudio nativo opcional",
   "Higher detail, production images": "Mais detalhes, imagens de produção",
   "Higher detail, production-ready images": "Mais detalhes, imagens prontas para produção",
   "Higher quality Bytedance": "Bytedance de maior qualidade",

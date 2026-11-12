@@ -55,6 +55,27 @@ describe("free-credit video limits — blocked models", () => {
     expect(freeVideoRefusal(freeVideoRequestOf({ provider: "kling-4-flash", duration: 4, resolution: "720p" })!, ON)).toBeNull()
   })
 
+  it("PixVerse V6 Max is open like any non-Kling model, within the limits: 1-4 s at 360p, audio on or off", () => {
+    const provider = "pixverse-v6-max"
+    // Nothing to open: it is in no paid-only series or list.
+    expect(FREE_OPEN_VIDEO_MODELS).not.toContain(provider)
+    expect(freeVideoModelRefusal(provider, ON)).toBeNull()
+    for (const duration of [1, 2, 3, 4]) {
+      expect(freeVideoRefusal({ provider, duration, resolution: "360p" }, ON), `${duration}s`).toBeNull()
+    }
+    // Above its lowest quality, past 4 s, with no length named (5 s default), or Auto: refused.
+    for (const resolution of ["540p", "720p", "1080p"]) {
+      expect(freeVideoRefusal({ provider, duration: 3, resolution }, ON), resolution).not.toBeNull()
+    }
+    expect(freeVideoRefusal({ provider, duration: 5, resolution: "360p" }, ON)).not.toBeNull()
+    expect(freeVideoRefusal({ provider, resolution: "360p" }, ON)).not.toBeNull()
+    expect(freeVideoRefusal({ provider, duration: VIDEO_DURATION_AUTO, resolution: "360p" }, ON)).not.toBeNull()
+    // An omitted resolution is its billed default, 720p.
+    expect(freeVideoRefusal({ provider, duration: 4 }, ON)).not.toBeNull()
+    // The workflow lane reads the same rule from the node payload.
+    expect(freeVideoRefusal(freeVideoRequestOf({ provider, duration: 4, resolution: "360p" })!, ON)).toBeNull()
+  })
+
   it("a length of 0 or below that is not Auto is the model's default, as pricing reads it — refused when the default is over the limit", () => {
     // Flash renders (and bills) its 5 s default for these; Seedance 2 Fast its 8 s.
     for (const duration of [0, "0", -2, "-3", -0.5]) {

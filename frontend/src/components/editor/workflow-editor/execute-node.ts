@@ -2731,7 +2731,7 @@ function executeNodeCore(
       // stills. Translated through the SAME shared resolver payload-builder
       // uses, so the Run button and a workflow run request the identical mode.
       // "auto"/absent resolves to undefined, keeping older payloads unchanged.
-      anchorMode: resolveGvpAnchorWire(gvpData.anchorMode),
+      anchorMode: resolveGvpAnchorWire(gvpData.anchorMode, gvpData.provider),
       audioTail: gvpData.audioTail === true ? true : undefined,
       overlapAnchor: gvpData.overlapAnchor === true ? true : undefined,
       overlapAnchorMode: gvpData.overlapAnchor === true && gvpData.overlapAnchorMode === "last-frame" ? ("last-frame" as const) : undefined,

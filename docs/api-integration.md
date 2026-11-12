@@ -1116,7 +1116,7 @@ Three video-specific rules:
 
 A few models **ignore** an unsupported resolution and render a fixed default
 instead of the nearest band — `minimax-h3` renders 2K for anything that is not
-`768P`, the `wan-3` family, `vidu-q4` and `kling-4` / `kling-4-keyframes` / `kling-4-flash` render 720p, and `grok-imagine-video-1.5` renders 480p (all described under
+`768P`, the `wan-3` family, `vidu-q4`, `kling-4` / `kling-4-keyframes` / `kling-4-flash` and `pixverse-v6-max` render 720p, and `grok-imagine-video-1.5` renders 480p (all described under
 [Seedance 2 video capabilities](#seedance-2-video-capabilities)).
 For those the correction targets the band the provider will actually produce, so
 the price still matches the render. Each such model declares this in the catalog
@@ -2974,6 +2974,21 @@ so a value the model doesn't support is ignored, never a 400:
   **output + max(output, total reference-video seconds)** at its `-ref` rate.
   Unlike the other Kling models it runs on free credits, as a 3 or 4 second
   clip.
+- **`pixverse-v6-max`** (PixVerse V6 Max) is one id over two provider
+  endpoints: `POST /v1/generate-video` with an `imageUrl` runs image-to-video,
+  where the image is the **exact first frame** and the clip takes its shape
+  (`aspectRatio` is not sent); `POST /v1/text-to-video` runs text-to-video at
+  `aspectRatio` `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `2:3`, `3:2` or `21:9` —
+  16:9 when none is sent, and another ratio is moved to the nearest of them. `duration` 1–15
+  (default 5); `resolution` `360p` / `540p` / `720p` (default) / `1080p`, and
+  anything else renders and bills 720p; `seed` a whole number 0–2147483647
+  (anything else, `-1` included, is left out); `prompt` up to 5,000
+  characters. **Native audio is on unless `sound: false`** (or, with no
+  `sound`, `generateAudio: false`; `sound` wins when both are sent), and it
+  changes the price: each length and resolution has a silent row and an
+  `:audio` row, read from the same fields as the model's switch. No end frame and no
+  `referenceImageUrls` / `referenceVideoUrls` / `referenceAudioUrls`: they are
+  not sent to the model. Runs on free credits at 360p for 1–4 s.
 - **`grok-imagine-video-1.5`** (Grok Imagine 1.5) needs an `imageUrl`: it is
   the exact first frame. An `endFrameUrl` is the exact last frame, and the
   **same URL as both** makes a seamless loop. Up to **4** in-between frames go

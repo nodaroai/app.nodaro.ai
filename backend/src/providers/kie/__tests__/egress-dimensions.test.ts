@@ -8,13 +8,16 @@ describe("deriveKieEgressDimensions", () => {
     expect(d({ video_resolution: "720p" }).resolution).toBe("720p")
   })
 
-  it("reads audio as a boolean from audio, generate_audio, or sound, else omits", () => {
+  it("reads audio as a boolean from audio, generate_audio, sound or generate_audio_switch, else omits", () => {
     expect(d({ audio: true }).audio).toBe(true)
     expect(d({ generate_audio: false }).audio).toBe(false)
     // Kling's native audio lever is `sound` (a real 2× cost lever); it must be
     // read or kling-2.6 audio is silently dropped from the priced dimensions.
     expect(d({ sound: true }).audio).toBe(true)
     expect(d({ sound: false }).audio).toBe(false)
+    // PixVerse V6 Max's lever (its with-audio rows cost more).
+    expect(d({ generate_audio_switch: true }).audio).toBe(true)
+    expect(d({ generate_audio_switch: false }).audio).toBe(false)
     expect("audio" in d({})).toBe(false)
   })
 

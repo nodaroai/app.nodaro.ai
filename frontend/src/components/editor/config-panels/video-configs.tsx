@@ -48,7 +48,7 @@ import type {
   VideoAnalysisNodeData,
   VideoAuditNodeData,
 } from "@/types/nodes"
-import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, EVP_PROVIDERS, MOTION_TRANSFER_MODELS, VIDEO_DEPTH_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip, withoutDeniedModels } from "./model-options"
+import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, EVP_PROVIDERS, MOTION_TRANSFER_MODELS, VIDEO_DEPTH_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, gvpVideoResolutionOptions, gvpShownResolution, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip, withoutDeniedModels } from "./model-options"
 import { isMenuRowWithheld } from "./model-options"
 import {
   SEEDANCE_DRAFT_FINALIZE_PROVIDER,
@@ -64,7 +64,8 @@ import { nodaroVideoUpscaleTierOf } from "@nodaro/render-rules"
 import { TOPAZ_VIDEO_RESOLUTION_LABELS, VIDEO_UPSCALE_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText } from "@/lib/video-start-frame-only"
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
-import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
+import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
+import { gvpAnchorChoicesFor } from "@nodaro/render-rules"
 import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec, isSeedanceExtendProvider, pricedOutputDurationSec, snapToNearestDuration, type SeedanceExtendProvider } from "@nodaro/shared/models"
 import { VIDEO_AUDIT_BUCKET_CREDITS, ltxExtendDurationSec, seedanceExtendCreditId } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, entityImageUrl, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
@@ -130,6 +131,7 @@ import { SnippetMenuButton } from "./snippet-menu-button"
 import { useFreeVideoLimits } from "@/hooks/use-free-video-limits"
 import { EXTEND_VIDEO_ROW_LOCK, lockedVideoDuration, lockedVideoModel, lockedVideoResolution, openVideoDuration, openVideoResolution } from "@/lib/free-video-locks"
 import { LockableSelectItem } from "./lockable-select-item"
+import { PixverseV6MaxFields, type PixverseV6MaxFieldData } from "./pixverse-v6-max-fields"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import { NsfwFilterCheckbox } from "./nsfw-filter-checkbox"
 
@@ -1292,6 +1294,23 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           </div>
           <p className="text-[11px] text-muted-foreground px-1">{t("vidcfg.viduQ4Note")}</p>
         </>
+      )}
+
+      {/* PixVerse V6 Max — quality (720p default, never the 360p first entry),
+          the audio switch (the price depends on it) and the seed. No aspect
+          ratio: an image-to-video run takes its frame's shape. */}
+      {isPixverseV6MaxProvider(currentI2VProvider) && (
+        <PixverseV6MaxFields
+          provider={currentI2VProvider}
+          data={data as unknown as PixverseV6MaxFieldData}
+          onUpdate={(u) => onUpdate(u as Partial<ImageToVideoData>)}
+          showAspectRatio={false}
+          idPrefix="i2v"
+          freeResLock={freeResLock}
+          sources={sources}
+          fieldMappings={fieldMappings}
+          onMapField={onMapField}
+        />
       )}
 
       {(data.provider === "wan-i2v" || data.provider === "wan-turbo") && (
@@ -2833,6 +2852,22 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         </>
       )}
 
+      {/* PixVerse V6 Max — quality, the audio switch and the seed; its eight
+          aspect ratios render in the panel's own selector below. */}
+      {isPixverseV6MaxProvider(currentProvider) && (
+        <PixverseV6MaxFields
+          provider={currentProvider}
+          data={data as unknown as PixverseV6MaxFieldData}
+          onUpdate={(u) => onUpdate(u as Partial<TextToVideoData>)}
+          showAspectRatio={false}
+          idPrefix="t2v"
+          freeResLock={freeResLock}
+          sources={sources}
+          fieldMappings={fieldMappings}
+          onMapField={onMapField}
+        />
+      )}
+
       {isMinimaxH3 && (
         <>
           {/* Two-rate resolution lever (2K default / 768P cheaper) — catalog-
@@ -2913,8 +2948,8 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           no adaptive member — the KIE layer coerces adaptive → 16:9 there.) */}
       <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <AspectRatioSelector
-          options={isSeedance2 ? SEEDANCE_2_VIDEO_RATIOS : isMinimaxH3 ? getAspectRatiosForVideoModel(currentProvider) : VIDEO_RATIOS}
-          value={data.aspectRatio || (isSeedance2 || isMinimaxH3 ? defaultVideoAspectRatio(currentProvider) : undefined)}
+          options={isSeedance2 ? SEEDANCE_2_VIDEO_RATIOS : isMinimaxH3 || isPixverseV6MaxProvider(currentProvider) ? getAspectRatiosForVideoModel(currentProvider) : VIDEO_RATIOS}
+          value={data.aspectRatio || (isSeedance2 || isMinimaxH3 || isPixverseV6MaxProvider(currentProvider) ? defaultVideoAspectRatio(currentProvider) : undefined)}
           onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}
         />
       </MappableField>
@@ -4105,6 +4140,23 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         </>
       )}
 
+      {/* PixVerse V6 Max — quality, the aspect ratio (text-only runs; a start
+          frame keeps its shape, the note says so), the audio switch (the
+          price depends on it) and the seed. */}
+      {isPixverseV6MaxProvider(currentProvider) && (
+        <PixverseV6MaxFields
+          provider={currentProvider}
+          data={data as unknown as PixverseV6MaxFieldData}
+          onUpdate={(u) => onUpdate(u as Partial<DataView>)}
+          showAspectRatio={true}
+          idPrefix="gv"
+          freeResLock={freeResLock}
+          sources={sources}
+          fieldMappings={fieldMappings}
+          onMapField={onMapField}
+        />
+      )}
+
       {(currentProvider === "wan-i2v" || currentProvider === "wan-turbo") && (
         <div>
           <Label className="text-xs">{t("field.resolution")}</Label>
@@ -4369,9 +4421,11 @@ function GVP_ANCHOR_MODE_HINTS(): Record<GvpAnchorChoice, string> {
 }
 }
 
-/** Generate Video Pro has no 360p tier (Gemini Omni Flash 1.2 offers one elsewhere). */
-function gvpResolutionOptions(provider: string) {
-  return getVideoResolutionOptions(provider)?.filter((o) => o.value !== "360p")
+/** A stored resolution the fail-safe below leaves alone: one the model's catalog
+ *  lists runs (as the tier `gvpShownResolution` shows) even when the Pro menu
+ *  does not offer it, so it is never rewritten. */
+function gvpKeepsResolution(provider: string, value: string): boolean {
+  return getVideoResolutionOptions(provider)?.some((o) => o.value === value) === true
 }
 
 function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap }: ConfigProps<GenerateVideoProNodeData> & { nodeId?: string }) {
@@ -4398,14 +4452,16 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
   // have no 1080p/4k — snap a stale resolution to the new provider's first
   // valid option, mirroring GenerateVideoConfig's / ImageToVideoConfig's snap
   // effect above (same VIDEO_RESOLUTION_OPTIONS source, so it can't drift).
+  // A value the model's catalog lists is kept even when the Pro menu does not
+  // offer it (it runs as the tier the select shows).
   useEffect(() => {
-    const opts = gvpResolutionOptions(currentProvider)
-    if (opts && data.resolution && !opts.some((o) => o.value === data.resolution)) {
+    const opts = gvpVideoResolutionOptions(currentProvider)
+    if (opts && data.resolution && !gvpKeepsResolution(currentProvider, data.resolution)) {
       onUpdate({ resolution: opts[0]?.value })
     }
   }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const resolutionOptions = gvpResolutionOptions(currentProvider)
+  const resolutionOptions = gvpVideoResolutionOptions(currentProvider)
   const aspectOptions = getAspectRatiosForVideoModel(currentProvider)
   const canExtend = supportsExtendRender(currentProvider)
   // Anchor frames are a KEYFRAMES concept — under the extend chain each segment
@@ -4423,9 +4479,11 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
   // a 400 on every run. Drop the choice while an end frame is connected rather
   // than offer one the run cannot honour.
   const hasWiredEndFrame = sources.some((s) => s.targetHandle === "endFrame")
+  // A model with no reference images offers no "reference" choice either
+  // (`gvpAnchorChoicesFor`): a reference-driven shot needs identity references.
   const anchorChoices = hasWiredEndFrame
-    ? GVP_ANCHOR_CHOICES.filter((choice) => choice !== "reference")
-    : GVP_ANCHOR_CHOICES
+    ? gvpAnchorChoicesFor(currentProvider).filter((choice) => choice !== "reference")
+    : gvpAnchorChoicesFor(currentProvider)
 
   // Fail-safe (Provider Enum Sync step 12b / CLAUDE.md pitfall 5): `extend`
   // sends the previous segment's tail as a reference VIDEO, which only the
@@ -4480,6 +4538,14 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
       onUpdate({ anchorMode: "auto" })
     }
   }, [hasWiredEndFrame]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The same snap on a switch to a model that takes no reference images: its
+  // menu has no "reference" (and the run would send it as Auto anyway).
+  useEffect(() => {
+    if (data.anchorMode === "reference" && !gvpAnchorChoicesFor(currentProvider).includes("reference")) {
+      onUpdate({ anchorMode: "auto" })
+    }
+  }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col gap-3">
@@ -4568,7 +4634,7 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
         <div>
           <Label className="text-xs">{t("field.resolution")}</Label>
           <Select
-            value={data.resolution || resolutionOptions[0].value}
+            value={gvpShownResolution(currentProvider, data.resolution) ?? resolutionOptions[0].value}
             onValueChange={(v) => onUpdate({ resolution: v })}
           >
             <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>

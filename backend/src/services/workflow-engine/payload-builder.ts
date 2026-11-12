@@ -4240,6 +4240,9 @@ function buildPayloadOf(
           provider,
           duration: i2vNorm.duration ?? (data.duration as number | string | undefined),
           sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+          // `generateAudio` too: the same two audio fields the payload sends, read as
+          // the provider runner reads them (videoAudioIntent).
+          generateAudio: data.generateAudio as boolean | undefined,
           mode: "image-to-video",
           sizeOrMode: (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
           resolution: i2vNorm.resolution,
@@ -4389,6 +4392,9 @@ function buildPayloadOf(
           provider,
           duration: t2vNorm.duration ?? (data.duration as number | string | undefined),
           sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+          // `generateAudio` too: the same two audio fields the payload sends, read as
+          // the provider runner reads them (videoAudioIntent).
+          generateAudio: data.generateAudio as boolean | undefined,
           mode: "text-to-video",
           sizeOrMode: (data.mode ?? data.kling3Mode ?? data.videoSize) as string | undefined,
           resolution: t2vNorm.resolution,
@@ -4772,6 +4778,9 @@ function buildPayloadOf(
           provider: resolvedProvider,
           duration: gvNorm.duration ?? (data.duration as number | string | undefined),
           sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+          // `generateAudio` too: the same two audio fields the payload sends, read as
+          // the provider runner reads them (videoAudioIntent).
+          generateAudio: data.generateAudio as boolean | undefined,
           mode: effectiveMode,
           sizeOrMode: (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
           resolution: gvNorm.resolution,
@@ -6488,7 +6497,7 @@ function buildPayloadOf(
         // canvas Run path uses, so a workflow run and the Run button request
         // the identical mode. "auto"/absent → undefined (dropped by JSON
         // serialization), keeping pre-anchorMode payloads byte-identical.
-        anchorMode: resolveGvpAnchorWire(typeof data.anchorMode === "string" ? data.anchorMode : undefined),
+        anchorMode: resolveGvpAnchorWire(typeof data.anchorMode === "string" ? data.anchorMode : undefined, gvpProvider),
         audioTail: data.audioTail === true ? true : undefined,
         overlapAnchor: data.overlapAnchor === true ? true : undefined,
         overlapAnchorMode: data.overlapAnchor === true && data.overlapAnchorMode === "last-frame" ? "last-frame" : undefined,

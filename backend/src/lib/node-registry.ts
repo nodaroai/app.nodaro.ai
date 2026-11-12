@@ -40,7 +40,7 @@ import { VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS, VIDEO_OVERLAY_LAYOUT_
 import type { OutputType } from "@nodaro/shared/apps"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared/social"
-import { SPEAKER_FRAMES_CREDIT_ID, isUseCaseNodeType, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { SPEAKER_FRAMES_CREDIT_ID, gvpRendersResolutionAsNamed, isUseCaseNodeType, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { STATIC_CREDIT_COSTS, meteredLlmDefaultKeyOfType, meteredLlmOptionKeyOfType } from "../ee/billing/credits.js"
 import { parseMeteredLlmId } from "../ee/billing/metered-llm-id.js"
 import { FIXED_ROW_CREDIT_IDS } from "./fixed-row-credit-ids.js"
@@ -632,22 +632,18 @@ const GVP_RESOLUTION_WIRE: Record<string, Record<string, string>> = Object.fromE
 )
 
 /**
- * The subset of that vocabulary a provider can actually render.
+ * The subset of that vocabulary a provider renders AS NAMED in a pro run —
+ * derived from the rule the run itself resolves its resolution by
+ * (`gvpRenderResolution`, the value the pricing echoes and the engine
+ * renders), so the list can never offer a tier that runs as another.
  *
- * A model with a wire mapping above offers exactly the tiers that mapping
- * names — its catalog `resolutions` are in its own vocabulary, so filtering
- * them against ours would (correctly) yield nothing.
- *
- * A provider the catalog has no resolutions for keeps the whole vocabulary:
- * refusing to offer tiers we cannot confirm are unsupported would be a
- * regression for a model we simply know nothing about.
+ * A model with a wire mapping above is asked in its own vocabulary: a tier is
+ * offered when the value it sends renders as that value (MiniMax Hailuo 3:
+ * 720p → 768P, 1080p → 2K).
  */
 function gvpResolutionsFor(provider: string): string[] {
   const wire = GVP_RESOLUTION_WIRE[provider]
-  if (wire) return GVP_RESOLUTION_VOCABULARY.filter((r) => r in wire)
-  const supported = MODEL_CATALOG[provider]?.resolutions as readonly string[] | undefined
-  if (!supported || supported.length === 0) return [...GVP_RESOLUTION_VOCABULARY]
-  return GVP_RESOLUTION_VOCABULARY.filter((r) => supported.includes(r))
+  return GVP_RESOLUTION_VOCABULARY.filter((r) => gvpRendersResolutionAsNamed(provider, wire?.[r] ?? r))
 }
 
 const GVP_PROVIDER_RESOLUTIONS: Record<string, string[]> = Object.fromEntries(

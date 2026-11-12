@@ -131,6 +131,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Hailuo 02 I2V Pro | MiniMax | Everyday | 158<!-- credits: minimax --> | i2v, t2v | Hailuo 02 Pro — strong photoreal motion, fixed 5-second clips. Supports end frame. |
 | Grok Imagine (I2V) | xAI | Everyday | 165<!-- credits: grok-i2v --> | i2v | Grok image-to-video — stylized motion. Up to 15s. |
 | Kling 2.6 Motion Transfer | Kuaishou | Everyday | 165<!-- credits: motion-transfer --> | motion-transfer | Transfer the motion from a driving video onto a still subject. Kling 2.6 base. |
+| PixVerse V6 Max | PixVerse | Everyday | 165<!-- credits: pixverse-v6-max --> | i2v, t2v | PixVerse V6 Max — cinematic video from text or from an exact first frame, 1–15s at 360p to 1080p, with optional native audio (on by default; it changes the price). Strong prompt following, camera control and on-screen text. |
 | ⭐ VEO 3.1 Fast | Google | Everyday | 165<!-- credits: veo3.1 --> | i2v, t2v | VEO 3.1 Fast — cheaper VEO 3.1 tier, 4/6/8s with audio. Good balance for most uses. Flat per-generation pricing across durations. |
 | Depth Anything (per frame) | Depth Anything | Everyday | 176<!-- credits: depth-anything-frames --> | video-depth | Depth Anything v1 run on each frame. Grayscale or inferno colormap; may flicker between frames. Up to 80 s. |
 | Bytedance Pro I2V | Bytedance | Everyday | 193<!-- credits: bytedance-pro --> | i2v, t2v | Pro Bytedance video tier — better quality. |

@@ -658,6 +658,7 @@ export function getModelIdentifier(
         nodeId: node.id, provider: sel.provider, duration: sel.duration, data, nodes: nodes ?? [], edges: edges ?? [], rerunIds: reruns,
       }),
       sound,
+      generateAudio: data.generateAudio as boolean | undefined,
       nodeType: videoNodeType,
       mode: (data.videoSize ?? data.mode) as string | undefined,
       resolution: data.resolution as string | undefined,

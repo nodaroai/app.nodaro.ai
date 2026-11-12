@@ -1,8 +1,9 @@
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 
 /**
- * The arguments a workflow video lane builds its credit id from — the seven
- * values `buildVideoCreditModelIdentifier` takes, as plain data. The aspect
+ * The arguments a workflow video lane builds its credit id from — the values
+ * `buildVideoCreditModelIdentifier` takes (its audio argument as its two
+ * fields), as plain data. The aspect
  * ratio is not one of them: it is not a pricing input of these lanes.
  *
  * Plain data on purpose: a build result carries it (`PayloadResult
@@ -14,7 +15,10 @@ export interface VideoCreditIdArgs {
   readonly provider: string
   /** The length the lane prices: a number, a numeric string, `-1` (Auto) or absent. */
   readonly duration: number | string | undefined
+  /** The run's audio fields: `sound`, and the older `generateAudio` a model like
+   *  PixVerse V6 Max also reads (`videoAudioIntent`) — both, as the payload sends them. */
   readonly sound: boolean | undefined
+  readonly generateAudio: boolean | undefined
   /** The job's mode. */
   readonly mode: "image-to-video" | "text-to-video"
   /** The fifth argument: the lane's own pick of size or quality mode. */
@@ -34,7 +38,7 @@ export function videoCreditIdOf(args: VideoCreditIdArgs): string {
   return buildVideoCreditModelIdentifier(
     args.provider,
     args.duration,
-    args.sound,
+    { sound: args.sound, generateAudio: args.generateAudio },
     args.mode,
     args.sizeOrMode,
     args.resolution,

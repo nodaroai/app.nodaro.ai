@@ -23,8 +23,8 @@ function videoProEstimateInput(data:GenerateVideoProNodeData):VideoProEstimateIn
   const provider=data.provider||"seedance-2"
   return {provider,resolution:data.resolution||"720p",duration:data.duration??8,aspectRatio:data.aspectRatio,
     segmentMode:data.segmentMode,preferredSegmentSec:data.preferredSegmentSec,segmentDurations:data.segmentDurations,sourceSegmentDurations:data.sourceSegmentDurations,
-    renderMethod:data.renderMethod==="keyframes"||!supportsExtendRender(provider)?"keyframes":"extend",anchorMode:resolveGvpAnchorWire(data.anchorMode),
-    contextTailSec:data.contextTailSec,planOnly:data.planOnly,
+    renderMethod:data.renderMethod==="keyframes"||!supportsExtendRender(provider)?"keyframes":"extend",anchorMode:resolveGvpAnchorWire(data.anchorMode,provider),
+    contextTailSec:data.contextTailSec,planOnly:data.planOnly,generateAudio:data.generateAudio,
   }
 }
 const videoProEstimateKey=(data:GenerateVideoProNodeData)=>["credits","video-pro",videoProEstimateInput(data)] as const

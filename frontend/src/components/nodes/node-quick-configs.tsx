@@ -57,6 +57,8 @@ import {
   getAspectRatiosForVideoModel,
   getDurationsForVideoModel,
   getVideoResolutionOptions,
+  gvpVideoResolutionOptions,
+  GVP_RETAINED_RESOLUTION_OPTIONS,
   VIDEO_RESOLUTION_OPTIONS,
   isMenuRowWithheld,
 } from "@/components/editor/config-panels/model-options"
@@ -1121,11 +1123,14 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       icon: Maximize2,
       // Provider-aware: seedance-2 exposes 480p/720p/1080p/4k, fast/mini stop
       // at 720p. Same VIDEO_RESOLUTION_OPTIONS source the config panel's
-      // fail-safe useEffect reads, so the two can't drift.
+      // fail-safe useEffect reads, so the two can't drift. Only the tiers a
+      // pro run renders as named are offered; a node already carrying one it
+      // renders as another (Vidu Q4's 540p) keeps it and runs as before.
       options: (data) => {
         const provider = typeof data.provider === "string" ? data.provider : "seedance-2"
-        return VIDEO_RESOLUTION_OPTIONS[provider] ?? []
+        return gvpVideoResolutionOptions(provider) ?? []
       },
+      retainedOptions: GVP_RETAINED_RESOLUTION_OPTIONS,
     },
   ],
   // ── Edit Video Pro (model only — no resolution lever, both are

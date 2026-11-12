@@ -1494,6 +1494,42 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "kling-4-flash:8s:720p-ref": 230, "kling-4-flash:9s:720p-ref": 260, "kling-4-flash:10s:720p-ref": 290, "kling-4-flash:11s:720p-ref": 320, "kling-4-flash:12s:720p-ref": 340,
   "kling-4-flash:13s:720p-ref": 370, "kling-4-flash:14s:720p-ref": 400, "kling-4-flash:15s:720p-ref": 430, "kling-4-flash:16s:720p-ref": 460, "kling-4-flash:17s:720p-ref": 490,
   "kling-4-flash:18s:720p-ref": 510, "kling-4-flash:19s:720p-ref": 540, "kling-4-flash:20s:720p-ref": 570,
+  // ── PixVerse V6 Max (KIE pixverse-v6-max/image-to-video + /text-to-video) ──
+  //    ONE id over both endpoints (a start frame picks image-to-video), ONE ROW
+  //    PER SECOND across 1-15s at each quality (360p / 540p / 720p / 1080p),
+  //    each with an `:audio` twin (the native-audio switch is cost-affecting,
+  //    AUDIO_ADDON_PROVIDERS): credits = KIE cr/s × seconds × 2.5, rounded UP to
+  //    the next 10 (the per-second ladder rule). KIE cr/s, both endpoints:
+  //    4.8 / 7.2 / 8.8 / 17.6 without audio, 7.2 / 8.8 / 12 / 22.4 with it.
+  //    The bare id is the DEFAULT render (5s @ 720p with audio — a request that
+  //    names no audio setting renders and bills audio on). Machine-generated
+  //    with its seed migration (`*_pixverse_v6_max_pricing.sql`) — never edit
+  //    one value by hand.
+  "pixverse-v6-max": 150,   // (5s 720p with audio, the default render)
+  "pixverse-v6-max:1s:360p": 20, "pixverse-v6-max:2s:360p": 30, "pixverse-v6-max:3s:360p": 40, "pixverse-v6-max:4s:360p": 50, "pixverse-v6-max:5s:360p": 60,
+  "pixverse-v6-max:6s:360p": 80, "pixverse-v6-max:7s:360p": 90, "pixverse-v6-max:8s:360p": 100, "pixverse-v6-max:9s:360p": 110, "pixverse-v6-max:10s:360p": 120,
+  "pixverse-v6-max:11s:360p": 140, "pixverse-v6-max:12s:360p": 150, "pixverse-v6-max:13s:360p": 160, "pixverse-v6-max:14s:360p": 170, "pixverse-v6-max:15s:360p": 180,
+  "pixverse-v6-max:1s:540p": 20, "pixverse-v6-max:2s:540p": 40, "pixverse-v6-max:3s:540p": 60, "pixverse-v6-max:4s:540p": 80, "pixverse-v6-max:5s:540p": 90,
+  "pixverse-v6-max:6s:540p": 110, "pixverse-v6-max:7s:540p": 130, "pixverse-v6-max:8s:540p": 150, "pixverse-v6-max:9s:540p": 170, "pixverse-v6-max:10s:540p": 180,
+  "pixverse-v6-max:11s:540p": 200, "pixverse-v6-max:12s:540p": 220, "pixverse-v6-max:13s:540p": 240, "pixverse-v6-max:14s:540p": 260, "pixverse-v6-max:15s:540p": 270,
+  "pixverse-v6-max:1s:720p": 30, "pixverse-v6-max:2s:720p": 50, "pixverse-v6-max:3s:720p": 70, "pixverse-v6-max:4s:720p": 90, "pixverse-v6-max:5s:720p": 110,
+  "pixverse-v6-max:6s:720p": 140, "pixverse-v6-max:7s:720p": 160, "pixverse-v6-max:8s:720p": 180, "pixverse-v6-max:9s:720p": 200, "pixverse-v6-max:10s:720p": 220,
+  "pixverse-v6-max:11s:720p": 250, "pixverse-v6-max:12s:720p": 270, "pixverse-v6-max:13s:720p": 290, "pixverse-v6-max:14s:720p": 310, "pixverse-v6-max:15s:720p": 330,
+  "pixverse-v6-max:1s:1080p": 50, "pixverse-v6-max:2s:1080p": 90, "pixverse-v6-max:3s:1080p": 140, "pixverse-v6-max:4s:1080p": 180, "pixverse-v6-max:5s:1080p": 220,
+  "pixverse-v6-max:6s:1080p": 270, "pixverse-v6-max:7s:1080p": 310, "pixverse-v6-max:8s:1080p": 360, "pixverse-v6-max:9s:1080p": 400, "pixverse-v6-max:10s:1080p": 440,
+  "pixverse-v6-max:11s:1080p": 490, "pixverse-v6-max:12s:1080p": 530, "pixverse-v6-max:13s:1080p": 580, "pixverse-v6-max:14s:1080p": 620, "pixverse-v6-max:15s:1080p": 660,
+  "pixverse-v6-max:1s:360p:audio": 20, "pixverse-v6-max:2s:360p:audio": 40, "pixverse-v6-max:3s:360p:audio": 60, "pixverse-v6-max:4s:360p:audio": 80, "pixverse-v6-max:5s:360p:audio": 90,
+  "pixverse-v6-max:6s:360p:audio": 110, "pixverse-v6-max:7s:360p:audio": 130, "pixverse-v6-max:8s:360p:audio": 150, "pixverse-v6-max:9s:360p:audio": 170, "pixverse-v6-max:10s:360p:audio": 180,
+  "pixverse-v6-max:11s:360p:audio": 200, "pixverse-v6-max:12s:360p:audio": 220, "pixverse-v6-max:13s:360p:audio": 240, "pixverse-v6-max:14s:360p:audio": 260, "pixverse-v6-max:15s:360p:audio": 270,
+  "pixverse-v6-max:1s:540p:audio": 30, "pixverse-v6-max:2s:540p:audio": 50, "pixverse-v6-max:3s:540p:audio": 70, "pixverse-v6-max:4s:540p:audio": 90, "pixverse-v6-max:5s:540p:audio": 110,
+  "pixverse-v6-max:6s:540p:audio": 140, "pixverse-v6-max:7s:540p:audio": 160, "pixverse-v6-max:8s:540p:audio": 180, "pixverse-v6-max:9s:540p:audio": 200, "pixverse-v6-max:10s:540p:audio": 220,
+  "pixverse-v6-max:11s:540p:audio": 250, "pixverse-v6-max:12s:540p:audio": 270, "pixverse-v6-max:13s:540p:audio": 290, "pixverse-v6-max:14s:540p:audio": 310, "pixverse-v6-max:15s:540p:audio": 330,
+  "pixverse-v6-max:1s:720p:audio": 30, "pixverse-v6-max:2s:720p:audio": 60, "pixverse-v6-max:3s:720p:audio": 90, "pixverse-v6-max:4s:720p:audio": 120, "pixverse-v6-max:5s:720p:audio": 150,
+  "pixverse-v6-max:6s:720p:audio": 180, "pixverse-v6-max:7s:720p:audio": 210, "pixverse-v6-max:8s:720p:audio": 240, "pixverse-v6-max:9s:720p:audio": 270, "pixverse-v6-max:10s:720p:audio": 300,
+  "pixverse-v6-max:11s:720p:audio": 330, "pixverse-v6-max:12s:720p:audio": 360, "pixverse-v6-max:13s:720p:audio": 390, "pixverse-v6-max:14s:720p:audio": 420, "pixverse-v6-max:15s:720p:audio": 450,
+  "pixverse-v6-max:1s:1080p:audio": 60, "pixverse-v6-max:2s:1080p:audio": 120, "pixverse-v6-max:3s:1080p:audio": 170, "pixverse-v6-max:4s:1080p:audio": 230, "pixverse-v6-max:5s:1080p:audio": 280,
+  "pixverse-v6-max:6s:1080p:audio": 340, "pixverse-v6-max:7s:1080p:audio": 400, "pixverse-v6-max:8s:1080p:audio": 450, "pixverse-v6-max:9s:1080p:audio": 510, "pixverse-v6-max:10s:1080p:audio": 560,
+  "pixverse-v6-max:11s:1080p:audio": 620, "pixverse-v6-max:12s:1080p:audio": 680, "pixverse-v6-max:13s:1080p:audio": 730, "pixverse-v6-max:14s:1080p:audio": 790, "pixverse-v6-max:15s:1080p:audio": 840,
   "wan-i2v": 175,                 // (5s 720p fallback)
   // Wan I2V duration-tiered pricing (720p default)
   "wan-i2v:5s": 180,
@@ -7298,6 +7334,7 @@ export function getNodeModelIdentifier(
       provider,
       duration: data.duration as number | string | undefined,
       sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+      generateAudio: data.generateAudio as boolean | undefined,
       nodeType: nodeType as "image-to-video" | "text-to-video",
       mode: (data.videoSize ?? data.mode) as string | undefined,
       resolution: data.resolution as string | undefined,
@@ -7316,6 +7353,7 @@ export function getNodeModelIdentifier(
       provider,
       duration: data.duration as number | string | undefined,
       sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+      generateAudio: data.generateAudio as boolean | undefined,
       nodeType: "image-to-video",
       mode: (data.videoSize ?? data.mode ?? data.kling3Mode) as string | undefined,
       resolution: data.resolution as string | undefined,

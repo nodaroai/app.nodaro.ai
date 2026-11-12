@@ -181,6 +181,7 @@ export const MODEL_MAKERS = {
   minimax: { name: "MiniMax" },
   nodaro: { name: "Nodaro" },
   openai: { name: "OpenAI" },
+  pixverse: { name: "PixVerse" },
   recraft: { name: "Recraft" },
   runway: { name: "Runway" },
   shengshu: { name: "ShengShu" },
@@ -481,6 +482,18 @@ export interface ModelCatalogEntryFields {
    * `omitSeed` in both directions by `seed-capability-parity.test.ts`.
    */
   noSeed?: boolean
+  /**
+   * Generate Video Pro may use this video model although it takes no reference
+   * images (decided 2026-11-12, PixVerse V6 Max). The pro engine's bar is a
+   * model that takes a start still AND reference images (it attaches identity
+   * and continuity references to every segment), so a model without
+   * `"reference-image"` is out unless it says so here. With it, each segment
+   * runs from its start anchor or from text alone: the references a segment
+   * carries are not sent, the "reference" anchor choice is not offered
+   * (`gvpAnchorChoicesFor`, `@nodaro/render-rules`), and the run is keyframes only. Never set it on a
+   * model that has `"reference-image"` (`gvp-supported-providers.test.ts`).
+   */
+  gvpWithoutReferences?: true
   pricing: readonly PriceVariant[]
   /** Editorial highlight — "best in tier". Surfaces in MCP output as a ⭐. */
   featured?: boolean
@@ -715,6 +728,11 @@ const VIDEO_RATIOS_VIDU_Q4 = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const
 // /v4-keyframe-to-video). `auto` follows the materials; with none it renders 16:9.
 // The keyframe endpoint ignores the ratio once any frame is attached.
 const VIDEO_RATIOS_KLING_4 = ["auto", "16:9", "9:16", "1:1", "21:9"] as const
+// PixVerse V6 Max — the text-to-video enum, in KIE's own order
+// (docs.kie.ai/market/pixverse/v6-max-text-to-video). The image-to-video
+// endpoint takes NO aspect ratio: its output follows the start frame, so these
+// apply to text-only runs.
+const VIDEO_RATIOS_PIXVERSE_V6_MAX = ["16:9", "4:3", "1:1", "3:4", "9:16", "2:3", "3:2", "21:9"] as const
 
 // =============================================================================
 // IMAGE MODELS
@@ -3185,6 +3203,49 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "vidu-q4:5s:4k", credits: 780, note: "5s 4K" },
       { identifier: "vidu-q4:3s:540p", credits: 60, note: "3s 540p (min)" },
       { identifier: "vidu-q4:16s:4k", credits: 2500, note: "16s 4K (max)" },
+    ],
+  },
+  // ── PixVerse ──
+  // PixVerse V6 Max — ONE id over two KIE endpoints, picked by what is wired
+  // (backend kie/pixverse-v6-max.ts): a start frame runs on
+  // docs.kie.ai/market/pixverse/v6-max-image-to-video, where it is the exact
+  // first frame and the output takes its shape (no aspect ratio is sent); no
+  // image runs on docs.kie.ai/market/pixverse/v6-max-text-to-video, with one of
+  // eight aspect ratios. No end frame, no reference images, videos or audio.
+  // 1-15s, 360p-1080p (`quality` on the wire). Native audio behind the
+  // `generate_audio_switch` lever: the price depends on it, so it bills on the
+  // `:audio` rows (AUDIO_ADDON_PROVIDERS), and a request that names no audio
+  // setting renders and bills audio ON (decided 2026-11-11). `resolutions` is
+  // ascending (repo convention); the default tier (720p) is declared, never
+  // carried by array position — 360p is the cheapest preview tier.
+  "pixverse-v6-max": {
+    id: "pixverse-v6-max",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "PixVerse",
+    maker: "pixverse",
+    label: "PixVerse V6 Max",
+    series: "PixVerse",
+    description: "PixVerse V6 Max — cinematic video from text or from an exact first frame, 1–15s at 360p to 1080p, with optional native audio (on by default; it changes the price). Strong prompt following, camera control and on-screen text.",
+    useCases: ["cinematic", "narrative", "typography", "motion"],
+    features: ["audio"],
+    aspectRatios: VIDEO_RATIOS_PIXVERSE_V6_MAX,
+    durations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 5,
+    resolutions: ["360p", "540p", "720p", "1080p"],
+    defaultResolution: "720p",
+    // normalizePixverseV6MaxQuality sends 720p for anything off the list.
+    unlistedResolutionRendersAs: "720p",
+    // Generate Video Pro runs it from a start anchor or text (decided 2026-11-12).
+    gvpWithoutReferences: true,
+    pricing: [
+      { identifier: "pixverse-v6-max", credits: 150, note: "default 5s 720p with audio — see :Ns:res and :Ns:res:audio variants for exact" },
+      { identifier: "pixverse-v6-max:5s:720p:audio", credits: 150, note: "5s 720p with audio (the default tier)" },
+      { identifier: "pixverse-v6-max:5s:720p", credits: 110, note: "5s 720p, no audio" },
+      { identifier: "pixverse-v6-max:5s:360p", credits: 60, note: "5s 360p, no audio" },
+      { identifier: "pixverse-v6-max:5s:1080p:audio", credits: 280, note: "5s 1080p with audio" },
+      { identifier: "pixverse-v6-max:1s:360p", credits: 20, note: "1s 360p, no audio (min)" },
+      { identifier: "pixverse-v6-max:15s:1080p:audio", credits: 840, note: "15s 1080p with audio (max)" },
     ],
   },
   // ── Bytedance video lite/pro ──

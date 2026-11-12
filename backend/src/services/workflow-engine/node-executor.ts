@@ -2015,6 +2015,9 @@ export async function computeGenerateVideoProCreditOverride(
     // absent/"extend" must leave the pricing args (and thus the reserve)
     // byte-identical to pre-renderMethod runs.
     ...(payload.renderMethod === "keyframes" ? { renderMethod: "keyframes" as const } : {}),
+    // The audio the run sends each segment: each is priced at the audio its
+    // model renders from it (gvpSegmentAudio).
+    ...(typeof payload.generateAudio === "boolean" ? { generateAudio: payload.generateAudio } : {}),
   })
 
   // DAG clamp (spec §5/§6 — the route's Zod clamp never runs on this path).

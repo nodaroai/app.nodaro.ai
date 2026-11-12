@@ -5752,6 +5752,7 @@ export const en = {
   "vidcfg.keepOriginalSound": "Keep the reference videos' own sound",
   "vidcfg.kling4Note": "Priced per second by length and resolution. A reference video adds its own seconds — at least as many as the clip's. Wired characters become named subjects you can write as @Name. Sound is always generated.",
   "vidcfg.kling4FlashNote": "Priced per second by length, at 720p. A reference video adds its own seconds — at least as many as the clip's. A start frame on its own is the exact opening frame; beside references it joins them. Wired characters become named subjects you can write as @Name. Voice Ref N becomes the voice of character N, in the order they are wired; a character needs 2 to 4 images to carry a voice, otherwise its clip is dropped. Sound is always generated.",
+  "vidcfg.pixverseV6MaxNote": "Priced per second by length and quality; generating audio costs more per second, and it is on unless you turn it off. A start frame is the exact first frame and the clip takes its shape — the aspect ratio applies to text-only runs. No end frame or reference inputs.",
   "vidcfg.kling4KeyframesNote": "Priced per second by length and resolution. Image References are the in-between frames, in order; the clip's length caps the frames in all (3s → 4 … 9s or longer → 10). Aspect ratio applies only when no frame is connected. Sound is always generated.",
   "vidcfg.matchResSeam": "Matching the source video's resolution gives the cleanest seam.",
   "vidcfg.sameSeedSimilar": "Same seed produces similar results. Leave empty for random.",

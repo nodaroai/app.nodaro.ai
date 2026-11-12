@@ -2117,7 +2117,7 @@ export type ImageToVideoData = PromptAffixFields & {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
-  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto"
+  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "2:3" | "3:2" | "21:9" | "9:21" | "adaptive" | "Auto"
   multiShot?: boolean
   /** Seedance Draft (`isSeedanceDraftCapable` models only): render a 480p
    *  draft whose same take Video Upscale → "Seedance 2.5 HD (from draft)"
@@ -2289,7 +2289,7 @@ export type TextToVideoData = PromptAffixFields & {
   prompt: string
   provider: TextToVideoProvider
   duration: number
-  aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive"
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "2:3" | "3:2" | "21:9" | "9:21" | "adaptive"
   negativePrompt: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -2360,7 +2360,7 @@ export type GenerateVideoNodeData =
   & {
     provider: VideoGenProvider
     /** Unified aspect ratio — superset of i2v and t2v values. */
-    aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto" | "auto"
+    aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "2:3" | "3:2" | "21:9" | "9:21" | "adaptive" | "Auto" | "auto"
     /** Kling 4.0: keep the reference videos' own sound instead of generating
      *  new sound (KIE `keep_original_sound`). Ignored without a reference video
      *  and by every other model. */

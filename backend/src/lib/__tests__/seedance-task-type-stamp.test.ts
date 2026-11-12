@@ -122,6 +122,7 @@ const laneArgs = (duration: number | string = 5): VideoCreditIdArgs => ({
   provider: "seedance-2-5",
   duration,
   sound: undefined,
+  generateAudio: undefined,
   mode: "text-to-video",
   sizeOrMode: undefined,
   resolution: "720p",

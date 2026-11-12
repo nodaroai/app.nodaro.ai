@@ -91,6 +91,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | Kling 3 Omni | `kling-3-omni` | I2V (input image required) | 3–15s; 720p / 1080p; end frame + up to 7 reference images; native audio; runs on Replicate |
 | Kling 4.0 | `kling-4` (Kling 4.0), `kling-4-keyframes` (Kling 4.0 Keyframes) | `kling-4`: T2V, reference (images, videos, characters, voices); `kling-4-keyframes`: T2V, start / in-between / end frames | **3–30s, any whole second** (default 5); **720p (default) / 1080p** — any other value renders and bills 720p; aspect **auto** (default; follows the materials, 16:9 with none) / 16:9 / 9:16 / 1:1 / 21:9; native audio always on (no toggle); no seed; prompt up to 8,000 characters. `kling-4` takes up to **10 image + 5 video refs, 7 characters and 3 voice clips — 15 materials in all**; `kling-4-keyframes` takes a start frame, up to **8 in-between frames** and an end frame, capped by duration. See [Kling 4.0](#kling-40-references-characters-and-keyframes) |
 | Kling 4.0 Flash | `kling-4-flash` | T2V, I2V (start frame), reference (images, videos, characters, each character's voice) | **3–20s, any whole second** (default 5); **720p only** — any other value renders and bills 720p; aspect **auto** (default) / 16:9 / 9:16 / 1:1 / 21:9; native audio always on (no toggle); no seed; no end frame; prompt up to 8,000 characters. One id over two provider endpoints, picked by what is wired: a **start frame alone** is the exact opening frame; anything else runs in reference mode with up to **10 image + 5 video refs and 7 characters — 15 materials in all**, reference videos **2–20s together**, and Audio Refs clip N becomes **character N's voice** (a character needs 2–4 images to carry one). See [Kling 4.0 Flash](#kling-40-flash) |
+| PixVerse V6 Max | `pixverse-v6-max` | T2V, I2V (start frame) | **1–15s, any whole second** (default 5); **360p / 540p / 720p / 1080p** (default **720p**) — any other value renders and bills 720p; a text-to-video run takes one of eight aspect ratios — 16:9, 4:3, 1:1, 3:4, 9:16, 2:3, 3:2 or 21:9 — and an image-to-video run takes its start frame's shape; native audio **on by default**, and the price depends on it — `sound: false` turns it off; a seed; no end frame, no reference images, videos or audio; prompt up to 5,000 characters; also offered by [Generate Video Pro](./generate-video-pro.md). See [PixVerse V6 Max](#pixverse-v6-max). |
 | LTX 2.3 | `ltx-2.3-pro`, `ltx-2.3-fast` | T2V, I2V, audio→V (Pro only) | Pro: 6 / 8 / 10s; Fast: 6–20s; 1080p / 2k / 4k; aspect 16:9 / 9:16; fps 24 / 25 / 48 / 50; supports `last_frame_image` (end-frame interpolation). Fast does not accept audio. |
 
 > **Seedance 1.5 (`seedance`) was retired on 2026-10-25** — the provider stopped serving it. A saved node, an app input or an API call that still names `seedance` runs, and is charged, as **`seedance-2-mini`**: same duration (4 / 8 / 12s are all within Mini's 4–15s), and 1080p runs, and is charged, as 720p, Mini's highest resolution (it renders 480p / 720p). A node that never set a resolution runs at Mini's default, 480p. The run confirmation quotes that Mini price.
@@ -208,6 +209,19 @@ circle the person from @image_1 wearing the jacket from @image_2 for a 360 spin
 - **Out-of-range tokens fall back to the bare label.** `{image:5:ghost}` on a node with only two references resolves to `ghost` (no dangling binding).
 - **Providers without reference support** ignore the tokens — they are stripped to their bare labels, so the prompt still reads naturally.
 - **API callers can address a reference by id instead of position.** A direct API / SDK / MCP call that passes `connectedReferences` may write `{ref:<id>}` (or `{ref:<id>:label}`) with the entry's own `id`; the platform substitutes the `@image_N` seat after numbering, so the client never computes `N`. Unattached references drop to the label or the entry's name. The editor itself always writes `{image:N}`. See [API Integration](../../api-integration.md#structured-references-connectedreferences-on-video).
+
+### PixVerse V6 Max
+
+PixVerse V6 Max (`pixverse-v6-max`) is tuned for film, short drama and advertising: strong prompt following and camera control, realistic lighting and materials, subjects that stay consistent across shots, and reliable product appearance and on-screen text. It runs **1–15 s** (any whole second, default 5) at **360p, 540p, 720p or 1080p** — the default is 720p, and any other value renders and bills 720p — with a prompt of up to 5,000 characters and an optional `seed`, a whole number from 0 to 2147483647; the same seed with the same settings gives a similar result.
+
+It is one model id over two provider endpoints, and the platform picks the endpoint from what is wired:
+
+- **A start frame** runs image-to-video. The image is the **exact first frame** and the clip takes its shape, so the aspect ratio is not used; the Image to Video panel hides it. The image is prepared like every start frame — converted to PNG, JPEG or WebP when it is another format, and scaled to at most 2048 px on its long side and 10 MB — which is within what the model accepts.
+- **No image** runs text-to-video at one of eight aspect ratios: 16:9, 4:3, 1:1, 3:4, 9:16, 2:3, 3:2 or 21:9. With none set it renders 16:9, and a ratio the model does not take is moved to the nearest one it does.
+
+**Native audio.** The model can generate sound with the clip. It is **on unless you turn it off** — the **Generate Audio** box in the settings panel, or `sound: false` through the API (`generateAudio: false` does the same when `sound` is not sent; `sound` wins when both are) — and it changes the price: each length and quality has a silent rate and a higher with-audio rate (see [Credit pricing](#credit-pricing)), read from the same fields the model's switch is. The sound is ambient audio and effects; scripted dialogue is not guaranteed, so a voiced character still goes through text-to-speech and lip-sync.
+
+There is no end frame and no reference image, video or audio input: the editor offers none, and one that arrives through the API is not sent to the model.
 
 ### LTX 2.3 — auto-dispatch by wired inputs
 
@@ -497,7 +511,7 @@ The run is charged that row at the deployment's own pricing settings — the pri
 
 If neither has the identifier, the route returns HTTP 503 `price_not_configured` — no silent fallback to 1 credit<!-- credits: n/a -->.
 
-**Audio default (`sound` omitted).** When the request doesn't set `sound`, the `:audio` composite follows the model's own default: `kling-3.0` generates audio by default, so an intent-less request is billed at the `:audio` rate (pass `sound: false` for the cheaper silent tier); `kling` (2.6) defaults to silent. Explicit `sound: true` / `false` always wins.
+**Audio default (`sound` omitted).** When the request doesn't set `sound`, the `:audio` composite follows the model's own default: `kling-3.0` generates audio by default, so an intent-less request is billed at the `:audio` rate (pass `sound: false` for the cheaper silent tier); `kling` (2.6) defaults to silent; `pixverse-v6-max` generates audio by default too, and is billed at its `:audio` rate unless the request sends `sound: false` (or, with no `sound`, `generateAudio: false`). Explicit `sound: true` / `false` always wins.
 
 ### When no duration is set
 
@@ -597,6 +611,10 @@ nearest length it does:
 | `kling-4-flash` | 20s | 720p | any | no ref video | 935<!-- credits: kling-4-flash:20s:720p --> |
 | `kling-4-flash` | 5s out | 720p | reference | + 4s reference video (billed 10s) | 317<!-- credits: kling-4-flash:8s:720p-ref@1.25 --> |
 | `kling-4-flash` | 10s out | 720p | reference | + 15s reference video (billed 25s) | 791<!-- credits: kling-4-flash:8s:720p-ref@3.125 --> |
+| `pixverse-v6-max` | 5s | 720p (default) | any | audio on (default) | 165<!-- credits: pixverse-v6-max:5s:720p:audio --> |
+| `pixverse-v6-max` | 5s | 720p | any | sound off | 121<!-- credits: pixverse-v6-max:5s:720p --> |
+| `pixverse-v6-max` | 1s | 360p | any | sound off | 22<!-- credits: pixverse-v6-max:1s:360p --> |
+| `pixverse-v6-max` | 15s | 1080p | any | audio on | 924<!-- credits: pixverse-v6-max:15s:1080p:audio --> |
 | `gemini-omni-flash` | 8s | 720p | any | no ref | 297<!-- credits: gemini-omni-flash:8 --> |
 | `gemini-omni-flash` | 10s | 4K | any | no ref | 583<!-- credits: gemini-omni-flash:4k:10 --> |
 | `gemini-omni-flash` | — | 720p | video-edit | 1 source video | 462<!-- credits: gemini-omni-flash:vref --> |
@@ -674,6 +692,17 @@ Examples — 5s: 540p = 99<!-- credits: vidu-q4:5s:540p -->, 720p = 209<!-- cred
 
 **Kling 4.0 Flash** (`kling-4-flash`) is per-second priced via `kling-4-flash:<N>s:720p` (N = 3–20) — one price per second of length, the same whether the run takes its start-frame endpoint or its reference endpoint. Audio is always on and included, and reference images, characters, voice clips and the start frame add nothing. Examples: 3s = 143<!-- credits: kling-4-flash:3s:720p -->, 5s = 242<!-- credits: kling-4-flash:5s:720p -->, 10s = 473<!-- credits: kling-4-flash:10s:720p -->, 20s = 935<!-- credits: kling-4-flash:20s:720p -->. **Whatever `resolution` is sent, the run renders *and* bills at 720p, and when `duration` is omitted it renders and bills 5s** — so the bare identifier `kling-4-flash` (242<!-- credits: kling-4-flash -->) is the 5s default. A run with a reference video bills **output + max(output, total reference-video seconds)** at its reference rate, the `kling-4-flash:8s:720p-ref` price ÷ 8 a second, the whole run priced once and rounded up to a credit — the same rule as `kling-4`. Examples: a 5 s output with a 4 s clip bills 5 + 5 = 10 s = **317**<!-- credits: kling-4-flash:8s:720p-ref@1.25 -->; a 10 s output with a 15 s clip bills 10 + 15 = 25 s = **791**<!-- credits: kling-4-flash:8s:720p-ref@3.125 -->. The clips are measured when the run is reserved (one that cannot be measured counts as 20 s, and is measured again on completion; the clips together count at most 20 s), the run reserves that worst case, and on completion it settles to the length actually delivered, refunding any difference. Unlike the other Kling models it runs on free credits, as a 3 or 4 second clip.
 
+**PixVerse V6 Max** (`pixverse-v6-max`) is per-second priced via `pixverse-v6-max:<N>s:<quality>` without audio and `pixverse-v6-max:<N>s:<quality>:audio` with it (N = 1–15; quality = `360p`, `540p`, `720p` or `1080p`) — one price per second of length at each quality and audio state, the same on both endpoints. A 5 s clip:
+
+| Quality | Sound off | Audio on |
+|---|---|---|
+| 360p | 66<!-- credits: pixverse-v6-max:5s:360p --> | 99<!-- credits: pixverse-v6-max:5s:360p:audio --> |
+| 540p | 99<!-- credits: pixverse-v6-max:5s:540p --> | 121<!-- credits: pixverse-v6-max:5s:540p:audio --> |
+| 720p | 121<!-- credits: pixverse-v6-max:5s:720p --> | 165<!-- credits: pixverse-v6-max:5s:720p:audio --> |
+| 1080p | 242<!-- credits: pixverse-v6-max:5s:1080p --> | 308<!-- credits: pixverse-v6-max:5s:1080p:audio --> |
+
+The longest clip, 15 s at 1080p with audio, is **924**<!-- credits: pixverse-v6-max:15s:1080p:audio -->. **A request that does not set `sound` renders and bills audio on**; a `resolution` outside the four renders and bills 720p, and an omitted `duration` renders and bills 5 s — so the bare identifier `pixverse-v6-max` (165<!-- credits: pixverse-v6-max -->) is the 5 s 720p default with audio. On free credits it runs like any other video model: at 360p, for 1 to 4 seconds, with or without audio.
+
 Every figure above is what a run is charged on Nodaro Cloud; `GET /v1/credits/model-cost?model=<composite>` returns the live price of any composite.
 
 ### Loop trim add-on
@@ -734,7 +763,7 @@ The clip and its add-on are priced as one run, so the add-on adds exactly the am
 
 ### Fallback behavior
 
-- **Provider can't voice dialogue** (`none` / `ambient` models — minimax, kling, hailuo, Gemini Omni, Wan 3.0, Vidu Q4, Kling 4.0, Kling 4.0 Flash, …): the spec is **ignored**, the clip still generates (never failed), and the response carries a non-fatal warning `{ code: "voice_unsupported_for_provider" }`. No audio add-on is charged. Clients should gate the voice UI on `videoModelCanSpeakDialogue` and confirm with the user before sending.
+- **Provider can't voice dialogue** (`none` / `ambient` models — minimax, kling, hailuo, Gemini Omni, Wan 3.0, Vidu Q4, Kling 4.0, Kling 4.0 Flash, PixVerse V6 Max, …): the spec is **ignored**, the clip still generates (never failed), and the response carries a non-fatal warning `{ code: "voice_unsupported_for_provider" }`. No audio add-on is charged. Clients should gate the voice UI on `videoModelCanSpeakDialogue` and confirm with the user before sending.
 - **No voice resolves** (dialogue / voices empty or unparseable): the clip generates silently and the reserved audio add-on is refunded automatically (committed at the video provider cost only).
 - **A chain step fails** (TTS / revoice / generation): the whole job fails and credits are fully refunded.
 
@@ -800,7 +829,7 @@ value actually sent to the provider.**
   nearest one — a 7s LTX request renders and bills 6s.
 - **A few models ignore an unsupported resolution** and render a fixed default
   rather than the nearest band: `minimax-h3` renders 2K for anything that is not
-  `768P`, and the `wan-3` family, `vidu-q4` and the Kling 4.0 ids (Flash included) render 720p. For those the correction targets
+  `768P`, and the `wan-3` family, `vidu-q4`, the Kling 4.0 ids (Flash included) and `pixverse-v6-max` render 720p. For those the correction targets
   the band the provider will actually produce, so the price still matches the
   render.
 

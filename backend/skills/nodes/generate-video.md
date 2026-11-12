@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-11-12T09:39:00.751Z
-generated_from: 4e8ee8fb2
+generated_at: 2026-11-12T10:25:03.387Z
+generated_from: 17d481df2
 ---
 
 # Generate Video
@@ -74,7 +74,7 @@ generated_from: 4e8ee8fb2
 - `extraRefs?: readonly ExtraRef[]`
 - `videoPlayState?: "loop" | "paused" | "stopped"`
 - `pausedAtTime?: number`
-- `aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto" | "auto"`
+- `aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "2:3" | "3:2" | "21:9" | "9:21" | "adaptive" | "Auto" | "auto"`
 - `keepOriginalSound?: boolean`
 - `referenceImageOrder?: readonly string[]`
 

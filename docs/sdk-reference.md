@@ -3195,6 +3195,15 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > dropped, as is any clip past the last character. `duration` 3–20 (default 5), 720p only
 > (anything else → 720p), no end frame, no seed, no `audioSoundtrack`. See
 > [Kling 4.0 Flash](nodes/ai-video/generate-video.md#kling-40-flash).
+> **PixVerse V6 Max** (`pixverse-v6-max`) runs `run("generate-video")` with an
+> `imageUrl` as the exact first frame (no `aspectRatio` is sent), and
+> `run("text-to-video")` with `aspectRatio` `16:9` / `4:3` / `1:1` / `3:4` /
+> `9:16` / `2:3` / `3:2` / `21:9`, 16:9 when unset. `duration` 1–15 (default 5),
+> `resolution` `360p` / `540p` / `720p` (default) / `1080p` (anything else →
+> 720p), `seed` 0–2147483647. Native audio is on unless `sound: false` (or,
+> with no `sound`, `generateAudio: false`), and it changes the price. No end
+> frame, no references. See
+> [PixVerse V6 Max](nodes/ai-video/generate-video.md#pixverse-v6-max).
 > **Grok Imagine 1.5** (`grok-imagine-video-1.5`) needs `imageUrl` (the exact
 > first frame); `endFrameUrl` is the exact last frame, the same URL as both
 > makes a seamless loop, and up to 4 in-between frames go in

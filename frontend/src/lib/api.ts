@@ -11239,6 +11239,8 @@ export interface VideoProEstimateInput {
   provider:string; resolution:string; duration:number; aspectRatio?:string
   segmentMode?:"short"|"long"|"max"; preferredSegmentSec?:number; segmentDurations?:number[]; sourceSegmentDurations?:number[]
   renderMethod?:"extend"|"keyframes"; anchorMode?:"upfront"|"progressive"|"none"; contextTailSec?:number; planOnly?:boolean
+  /** The run's audio, priced where the model's price follows it (PixVerse V6 Max). */
+  generateAudio?:boolean
 }
 export async function estimateVideoProCredits(input:VideoProEstimateInput):Promise<{credits:number;upperBound:boolean}> {
   const result=await apiJson<{data:{credits:number;upperBound:boolean}}>("/v1/credits/video-pro-estimate",{body:{...input},label:"apiErr.estimateVideoCredits"})

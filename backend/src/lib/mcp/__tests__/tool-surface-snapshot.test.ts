@@ -1526,6 +1526,11 @@ const SEEDREAM_5_5_TOTAL_BYTES = 89
 // the reference-audio clause gained "if it has 2-4 images" (the clip goes to character N only when
 // that character can carry a voice): 138 B.
 const KLING_4_FLASH_MODELS_BYTES = 138
+// RAISED 2026-11-12 by PixVerse V6 Max (`pixverse-v6-max`) and nothing else: the id joins the
+// catalog-derived model lists of generate_video and animate_image (", pixverse-v6-max", 17 B each).
+// No tool was added, so the fixture does NOT move. Measured by this suite on the same tree with and
+// without it: 524_890 total − 524_856 = 34 B.
+const PIXVERSE_V6_MAX_MODELS_BYTES = 34
 
 // RAISED 2026-11-11 by MiniMax H3 Image, and nothing else: `minimax-h3-image` joins
 // generate_image's derived model list, and its reference-image limit names the model beside
@@ -1744,6 +1749,7 @@ export const TOOL_WIRE_BUDGET = {
     SEEDREAM_5_5_TOTAL_BYTES +
     VIDEO_OVERLAY_VIDEO_LAYERS_BYTES +
     KLING_4_FLASH_MODELS_BYTES +
+    PIXVERSE_V6_MAX_MODELS_BYTES +
     SPLIT_INTO_LAYERS_TOOL_BYTES +
     NODARO_IMAGE_UPSCALE_BYTES,
 }

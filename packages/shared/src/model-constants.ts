@@ -350,6 +350,9 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // Kling 4.0 Flash — 8000 chars on both endpoints
   // (docs.kie.ai/market/kling/v4-flash-reference-to-video and /v4-flash-keyframe-to-video).
   "kling-4-flash": 8000,
+  // PixVerse V6 Max — 1-5000 chars on both endpoints
+  // (docs.kie.ai/market/pixverse/v6-max-text-to-video and /v6-max-image-to-video).
+  "pixverse-v6-max": 5000,
   "bytedance-lite": 10000,
   "bytedance-pro": 10000,
   "bytedance-pro-fast": 10000,
@@ -1105,6 +1108,10 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   // Kling 4.0 Flash — one id over KIE's two Flash endpoints (picked by what is
   // wired); both run with no image, so it is listed in both arrays too.
   "kling-4-flash",
+  // PixVerse V6 Max — one id over KIE's image-to-video and text-to-video
+  // endpoints (picked by whether a start frame is wired), so it is listed in
+  // this array AND in TEXT_TO_VIDEO_PROVIDERS's main section.
+  "pixverse-v6-max",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
   // xAI Grok Imagine Video 1.5 — KIE i2v (a start image required). Also listed in
@@ -1154,6 +1161,8 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "kling-4",
   "kling-4-keyframes",
   "kling-4-flash",
+  // PixVerse V6 Max — a real text-to-video endpoint runs an image-less request.
+  "pixverse-v6-max",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
   // ── i2v-only providers (image required) ──────────────────────────────────
@@ -2068,6 +2077,9 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   // only Omni SKU here: the per-clip SKUs price in their own branch of
   // buildVideoCreditModelIdentifier.
   "gemini-omni-flash-1-2",
+  // PixVerse V6 Max — per-second billing at four quality rates, each with and
+  // without native audio (the `:audio` rows, AUDIO_ADDON_PROVIDERS).
+  "pixverse-v6-max",
 ])
 
 /**
@@ -2324,6 +2336,36 @@ export function normalizeGrokVideo15Resolution(resolution: string | undefined): 
 export const GROK_VIDEO_15_MAX_MIDDLE_FRAMES = 4
 
 /**
+ * PixVerse V6 Max — ONE Nodaro id over KIE's two V6 Max endpoints
+ * (`pixverse-v6-max/image-to-video` with a start frame,
+ * `pixverse-v6-max/text-to-video` without one), built by the backend's bespoke
+ * runner (`kie/pixverse-v6-max.ts`).
+ */
+export const PIXVERSE_V6_MAX_PROVIDER = "pixverse-v6-max"
+
+export function isPixverseV6MaxProvider(provider: string | undefined): provider is "pixverse-v6-max" {
+  return provider === PIXVERSE_V6_MAX_PROVIDER
+}
+
+/** PixVerse V6 Max quality rendered when the param is omitted or unknown — the
+ *  tier the bare credit identifier prices. Never `resolutions[0]`, the 360p
+ *  preview tier. (KIE requires a quality; it has no default of its own.) */
+export const PIXVERSE_V6_MAX_DEFAULT_QUALITY = "720p"
+
+/**
+ * SINGLE normalization for the PixVerse V6 Max quality lever (KIE `quality`,
+ * the platform's `resolution`). The wire enum is lowercase (`360p` | `540p` |
+ * `720p` | `1080p`), the same spelling as the catalog and the credit
+ * identifiers; this folds case and collapses anything else to
+ * {@link PIXVERSE_V6_MAX_DEFAULT_QUALITY}. The runner sends what this returns
+ * and the credit identifier bills what this returns.
+ */
+export function normalizePixverseV6MaxQuality(resolution: string | undefined): "360p" | "540p" | "720p" | "1080p" {
+  const r = resolution?.trim().toLowerCase()
+  return r === "360p" || r === "540p" || r === "1080p" ? r : PIXVERSE_V6_MAX_DEFAULT_QUALITY
+}
+
+/**
  * How many in-between frames a Grok Imagine Video 1.5 clip of `durationSec`
  * seconds carries. The node has no per-frame time, so the frames sit at whole
  * seconds strictly inside the clip, no two on the same second (decided
@@ -2467,6 +2509,12 @@ export const GVP_DEFAULT_PROVIDER = "seedance-2"
  * `seedance-2-mini` re-enters selection here (it was withdrawn by hand on
  * 2026-07-21). It qualifies on capability and is the cheapest Seedance-2 SKU,
  * which makes it the natural pick for cheap iteration on long runs.
+ *
+ * The ONE exception to the reference-image bar is explicit, per model: a
+ * catalog `gvpWithoutReferences` (PixVerse V6 Max, decided 2026-11-12) admits
+ * a model that takes a start frame but no reference images, on keyframes from
+ * its start anchor or text alone. The capability bar itself is unchanged, so
+ * no other start-frame-only model (wan-i2v, hailuo, bytedance) rides in.
  */
 function deriveGvpSupportedProviders(): VideoGenProvider[] {
   const dispatchable = new Set<string>(VIDEO_GEN_PROVIDERS as readonly string[])
@@ -2475,7 +2523,7 @@ function deriveGvpSupportedProviders(): VideoGenProvider[] {
       (m) =>
         m.kind === "video" &&
         (m.modes as readonly string[]).includes("i2v") &&
-        m.features?.includes("reference-image") === true &&
+        (m.features?.includes("reference-image") === true || m.gvpWithoutReferences === true) &&
         (m.durations?.length ?? 0) > 0 &&
         // Must also be dispatchable by the unified video node — the pro route
         // hands the provider id straight to the app's imageToVideo.
@@ -2593,17 +2641,25 @@ export type GvpAnchorWireMode = "upfront" | "progressive" | "none"
  * here would mean duplicating the plugin's `MAX_SEGMENTS` cap in this repo
  * where nothing could keep the two in step.
  */
-export function resolveGvpAnchorWire(choice: string | undefined): GvpAnchorWireMode | undefined {
+export function resolveGvpAnchorWire(choice: string | undefined, provider?: string): GvpAnchorWireMode | undefined {
   switch (choice) {
     case "start-end":
       return "upfront"
     case "start-only":
       return "progressive"
     case "reference":
-      return "none"
+      // A model with no reference images has nothing to carry a reference-
+      // driven shot (`gvpWithoutReferences`): it runs as Auto instead.
+      return gvpTakesReferenceImages(provider) ? "none" : undefined
     default:
       return undefined
   }
+}
+
+/** Whether a Generate Video Pro segment can send reference images to this model. */
+function gvpTakesReferenceImages(provider: string | undefined): boolean {
+  if (!provider) return true // no model named: the choice is the caller's, as before
+  return MODEL_CATALOG[provider]?.gvpWithoutReferences !== true
 }
 
 // ---------------------------------------------------------------------------
@@ -3137,6 +3193,12 @@ export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
   // Gemini Omni Flash 1.2 — per-second billing at four resolution rates.
   // Ascending; the billed default (720p) is declared in PRICING_DEFAULT_RESOLUTION.
   "gemini-omni-flash-1-2": ["360p", "720p", "1080p", "4k"],
+  // PixVerse V6 Max — per-second billing at four quality rates on both
+  // endpoints. Ascending; the billed default (720p) is declared in
+  // PRICING_DEFAULT_RESOLUTION, and normalizePixverseV6MaxQuality pins the same
+  // 720p at the wire. The audio state is its own `:audio` suffix
+  // (AUDIO_ADDON_PROVIDERS), after the resolution.
+  "pixverse-v6-max": ["360p", "540p", "720p", "1080p"],
 }
 
 /**
@@ -3414,6 +3476,9 @@ export function videoStartFrameOnlyProblem(
 export const AUDIO_ADDON_PROVIDERS = new Set([
   "kling-3.0",
   "kling",
+  // PixVerse V6 Max — every (seconds × quality) row has an `:audio` twin at
+  // the with-audio rate (`pixverse-v6-max:5s:720p:audio`).
+  "pixverse-v6-max",
 ])
 
 /**
@@ -3453,8 +3518,9 @@ export type VideoAudioMode = "none" | "ambient" | "native_speech" | "audio_drive
 export interface VideoAudioCapability {
   mode: VideoAudioMode
   /** Provider-option field carrying the on/off toggle, when user-controllable.
-   *  `audio` is Wan 3.0's own boolean lever (KIE `input.audio`, default true). */
-  field?: "generateAudio" | "sound" | "audio"
+   *  `audio` is Wan 3.0's own boolean lever (KIE `input.audio`, default true);
+   *  `generateAudioSwitch` is PixVerse V6 Max's (KIE `input.generate_audio_switch`). */
+  field?: "generateAudio" | "sound" | "audio" | "generateAudioSwitch"
   /** Audio is always produced and can't be turned off by the user (VEO 3.x). */
   alwaysOn?: boolean
   /** Enabling audio raises the credit cost (Kling — see AUDIO_ADDON_PROVIDERS). */
@@ -3467,6 +3533,21 @@ export interface VideoAudioCapability {
    * (see buildVideoCreditModelIdentifier). Absent ⇒ default off.
    */
   defaultOn?: boolean
+  /**
+   * A cost-affecting model whose audio intent the `generateAudio` request field
+   * also carries, after `sound` (PixVerse V6 Max, decided 2026-11-12: the
+   * Generate Video Pro engine sends only `generateAudio`). Read through
+   * {@link videoAudioIntent}, so the switch the model gets and the `:audio`
+   * row the run is priced at follow the same fields. Absent on Kling, which
+   * keeps reading `sound` alone.
+   */
+  readsGenerateAudio?: true
+}
+
+/** The audio fields a video request carries: `sound` (canonical) and the older `generateAudio`. */
+export interface VideoAudioRequest {
+  readonly sound?: boolean
+  readonly generateAudio?: boolean
 }
 
 /**
@@ -3537,6 +3618,18 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   "kling-4-keyframes": { mode: "ambient", alwaysOn: true, defaultOn: true },
   // Kling 4.0 Flash — the same: native audio on both endpoints, no lever.
   "kling-4-flash": { mode: "ambient", alwaysOn: true, defaultOn: true },
+  // PixVerse V6 Max — a boolean `generate_audio_switch` lever on both
+  // endpoints. Cost-affecting: the with-audio rows bill at a higher per-second
+  // rate (`:audio` suffix, AUDIO_ADDON_PROVIDERS), so — like Kling — only the
+  // canonical `sound` intent turns it. `defaultOn`: a request that names no
+  // audio setting renders AND bills audio (decided 2026-11-11; KIE's own default
+  // is off, so the runner sends the switch explicitly). Classified "ambient" on
+  // the Wan 3.0 rule: the schema mentions dialogue and lip-sync, but no live
+  // probe has verified scripted speech, and `native_speech` would reroute the
+  // Story→Video dialogue pipeline past its lip-sync pass. `readsGenerateAudio`:
+  // the `generateAudio` field turns it too (after `sound`), and the price
+  // follows the same resolved intent (videoAudioIntent).
+  "pixverse-v6-max": { mode: "ambient", field: "generateAudioSwitch", affectsCost: true, defaultOn: true, readsGenerateAudio: true },
   // Gemini Omni Flash 1.2 — native audio with no on/off input in its schema.
   "gemini-omni-flash-1-2": { mode: "ambient", alwaysOn: true },
   // Gemini Omni (both SKUs — the pro `gemini-omni-video` and the faster
@@ -3606,6 +3699,33 @@ export function videoModelCanSpeakDialogue(model: string | undefined): boolean {
 }
 
 /**
+ * THE audio intent of a video request for one model — `undefined` when the
+ * request expresses none (the model's own default then applies). The ONE
+ * reading of the request's audio fields: {@link applyVideoAudioToggle} (what
+ * the model is SENT) and `buildVideoCreditModelIdentifier` (the `:audio` row
+ * it is PRICED at) both resolve through it, so the two cannot disagree.
+ *
+ * - A cost-affecting model reads `sound` alone (Kling: the field its `:audio`
+ *   surcharge has always keyed off), unless it declares `readsGenerateAudio`
+ *   (PixVerse V6 Max): then `sound`, else `generateAudio`.
+ * - Every other model reads `sound`, else the `generateAudio` alias.
+ */
+export function videoAudioIntent(provider: string | undefined, req: VideoAudioRequest | undefined): boolean | undefined {
+  const cap = getVideoAudioCapability(provider)
+  if (cap.affectsCost && cap.readsGenerateAudio !== true) return req?.sound
+  return req?.sound ?? req?.generateAudio
+}
+
+/**
+ * Whether a request PRICES with audio on a cost-affecting model: its intent
+ * ({@link videoAudioIntent}), else the model's own default (`defaultOn`). The
+ * provider runner of such a model renders the same state.
+ */
+export function videoAudioPricedOn(provider: string | undefined, req: VideoAudioRequest | undefined): boolean {
+  return videoAudioIntent(provider, req) ?? (getVideoAudioCapability(provider).defaultOn === true)
+}
+
+/**
  * Write the caller's neutral "enable native audio" intent onto a KIE provider
  * `input` under whichever field the chosen model actually reads, per
  * `VIDEO_AUDIO_CAPABILITY.field`. This is the single dispatch point that fixes
@@ -3616,12 +3736,12 @@ export function videoModelCanSpeakDialogue(model: string | undefined): boolean {
  * - `sound` is the canonical neutral name; `generateAudio` is accepted as a
  *   legacy alias (the workflow node + some clients send that key). `sound` wins
  *   if both are present.
- * - **Cost-affecting models (Kling) honour ONLY the canonical `sound` lever** —
- *   the same field the `:audio` credit surcharge keys off (`AUDIO_ADDON_PROVIDERS`
- *   in `credit-identifiers.ts`). This makes a billed-but-not-generated (or
- *   generated-but-not-billed) divergence structurally impossible: the model and
- *   the surcharge read the same flag. Free models accept the `generateAudio`
- *   alias too, where mis-billing isn't possible.
+ * - **The intent is {@link videoAudioIntent}'s** — the same reading the `:audio`
+ *   credit surcharge (`AUDIO_ADDON_PROVIDERS` in `credit-identifiers.ts`) is
+ *   built from. That makes a billed-but-not-generated (or generated-but-not-
+ *   billed) divergence structurally impossible: the model and the surcharge
+ *   read the same fields. Kling honours ONLY `sound`; PixVerse V6 Max
+ *   (`readsGenerateAudio`) and every free model also the `generateAudio` alias.
  * - No-op for `alwaysOn` models (VEO — audio can't be toggled) and silent /
  *   unlisted models (no `field`), and when the caller expressed no intent
  *   (leaves the model's own default in place).
@@ -3637,13 +3757,13 @@ export function applyVideoAudioToggle(
 ): void {
   const cap = getVideoAudioCapability(provider)
   if (!cap.field) return // alwaysOn (VEO) or silent/unlisted model — nothing to toggle
-  // Cost-affecting models stay on the canonical `sound` lever so the model and
-  // the credit surcharge can never read different flags; free models also accept
-  // the `generateAudio` alias. `sound` is canonical and wins when both are set.
-  const enabled = cap.affectsCost ? opts?.sound : (opts?.sound ?? opts?.generateAudio)
+  // The one reading of the request's audio fields, shared with the credit
+  // surcharge (see videoAudioIntent). `sound` is canonical and wins when both are set.
+  const enabled = videoAudioIntent(provider, opts)
   if (enabled === undefined) return // no intent — keep the model's own default
   if (cap.field === "generateAudio") input.generate_audio = enabled
   else if (cap.field === "audio") input.audio = enabled
+  else if (cap.field === "generateAudioSwitch") input.generate_audio_switch = enabled
   else input.sound = enabled
 }
 
@@ -3675,8 +3795,9 @@ export const VEO_RESOLUTION_TIERED_PROVIDERS = new Set<string>([
  * Video variable pricing config — which params affect credit cost per model.
  * "duration" = cost varies by video length
  * "duration+audio" = cost varies by length AND audio on/off
+ * "duration+resolution+audio" = cost varies by length, resolution AND audio on/off
  */
-export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio" | "duration+mode" | "duration+resolution+ref" | "duration+resolution"> = {
+export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio" | "duration+mode" | "duration+resolution+ref" | "duration+resolution" | "duration+resolution+audio"> = {
   "kling-3.0": "duration+audio",
   "kling-3-omni": "duration",
   "kling": "duration+audio",
@@ -3716,6 +3837,9 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   // Gemini Omni Flash 1.2 — per-second at four resolution rates; a video edit
   // bills the same rates over the source clip.
   "gemini-omni-flash-1-2": "duration+resolution",
+  // PixVerse V6 Max — per-second at four quality rates, each with and without
+  // native audio.
+  "pixverse-v6-max": "duration+resolution+audio",
 }
 
 /**
@@ -4003,6 +4127,10 @@ export const PRICING_DEFAULT_RESOLUTION: Record<string, string> = {
   // that names no resolution is judged at 480p by the free-tier check (decided
   // 2026-11-11) and is sent 480p by pricedVideoSelection.
   "grok-imagine-video-1.5": "480p",
+  // PixVerse V6 Max — KIE requires a quality and has no default; the runner
+  // sends 720p for an omitted or unknown one (normalizePixverseV6MaxQuality),
+  // never the 360p preview tier.
+  "pixverse-v6-max": "720p",
 }
 
 /** Gemini Omni Flash 1.2 per-second tiers — one per allowed duration (3–15s). */
@@ -4068,6 +4196,12 @@ const KLING_4_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Ar
 const KLING_4_FLASH_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
   { length: 18 },
   (_, i) => ({ maxSeconds: i + 3, suffix: `${i + 3}s` }),
+)
+
+/** PixVerse V6 Max per-second tiers — one per allowed duration (1-15s). */
+const PIXVERSE_V6_MAX_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
+  { length: 15 },
+  (_, i) => ({ maxSeconds: i + 1, suffix: `${i + 1}s` }),
 )
 
 /**
@@ -4155,6 +4289,7 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
   "kling-4": KLING_4_DURATION_TIERS,
   "kling-4-keyframes": KLING_4_DURATION_TIERS,
   "kling-4-flash": KLING_4_FLASH_DURATION_TIERS,
+  "pixverse-v6-max": PIXVERSE_V6_MAX_DURATION_TIERS,
   "gemini-omni-flash-1-2": GEMINI_OMNI_12_DURATION_TIERS,
   // MiniMax Hailuo 3 — true per-second billing (KIE 36.5 cr/s @2K, 22.5 cr/s
   // @768P). One tier per allowed second (4-15s) so the composite identifier

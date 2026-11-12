@@ -21,3 +21,14 @@ it("rejects malformed quotes before reading prices",async()=>{
   const res=await app.inject({method:"POST",url:"/v1/credits/video-pro-estimate",payload:{duration:-1,segmentMode:"nonsense"}})
   expect(res.statusCode).toBe(400);expect(pricing).not.toHaveBeenCalled()
 })
+it("passes the run's audio to the pricing, which reads it where the model's price follows it (PixVerse V6 Max)",async()=>{
+  pricing.mockClear();pricing.mockResolvedValue({reserveBase:600,feeBase:100})
+  const app=Fastify();registerVideoProEstimate(app)
+  for (const generateAudio of [true,false]) {
+    const res=await app.inject({method:"POST",url:"/v1/credits/video-pro-estimate",payload:{provider:"pixverse-v6-max",duration:23,renderMethod:"keyframes",generateAudio}})
+    expect(res.statusCode).toBe(200)
+    expect(pricing).toHaveBeenLastCalledWith(expect.objectContaining({provider:"pixverse-v6-max",generateAudio}))
+  }
+  await app.inject({method:"POST",url:"/v1/credits/video-pro-estimate",payload:{provider:"pixverse-v6-max",duration:23,renderMethod:"keyframes"}})
+  expect(pricing.mock.lastCall?.[0]?.generateAudio).toBeUndefined()
+})

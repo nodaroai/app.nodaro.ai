@@ -166,7 +166,9 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   const creditIdentifier = videoGenerationCreditId({
     provider,
     duration: runDuration,
-    sound: runData.sound as boolean | undefined,
+    // The audio fields the run reserves from (payload-builder: `sound ?? kling3Sound`, then `generateAudio`).
+    sound: (runData.sound ?? runData.kling3Sound) as boolean | undefined,
+    generateAudio: runData.generateAudio as boolean | undefined,
     nodeType: "image-to-video",
     mode: (runData.videoSize as string | undefined) ?? (runData.mode as string | undefined),
     resolution: runData.resolution as string | undefined,

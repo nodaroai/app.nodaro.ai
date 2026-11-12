@@ -49,6 +49,8 @@ describe("generate-video-pro node registry", () => {
       "wan-3-prime",
       "happyhorse-ref2v",
       "vidu-q4",
+      // Admitted by its catalog opt-in without reference images (decided 2026-11-12).
+      "pixverse-v6-max",
     ])
     // kling-3-omni is deliberately absent: it passes every capability check
     // but has no working dispatch path (VIDEO_PROVIDERS_WITHOUT_DISPATCH).
@@ -105,6 +107,12 @@ describe("generate-video-pro node registry", () => {
     expect(res!["veo3.1"]).toEqual(["720p", "1080p", "4k"])
     expect(res!["grok-i2v"]).toEqual(["480p", "720p"])
     expect(res!["happyhorse-ref2v"]).toEqual(["720p", "1080p"])
+    // PixVerse V6 Max: its 360p / 540p tiers are off this vocabulary (the pro
+    // engine renders them at 720p), so it offers the two it renders as named.
+    expect(res!["pixverse-v6-max"]).toEqual(["720p", "1080p"])
+    // The same for Vidu Q4's 540p / 2K and Gemini Omni Flash 1.2's 360p.
+    expect(res!["vidu-q4"]).toEqual(["720p", "1080p", "4k"])
+    expect(res!["gemini-omni-flash-1-2"]).toEqual(["720p", "1080p", "4k"])
   })
 
   it("gives Hailuo 3 both of its real tiers, and the strings that reach them", () => {
