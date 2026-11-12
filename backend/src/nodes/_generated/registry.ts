@@ -10,6 +10,7 @@ import { descriptor as unit_remove_audio } from "../remove-audio/descriptor.gene
 import { descriptor as unit_shot_cuts } from "../shot-cuts/descriptor.generated.js" // unit:shot-cuts
 import { descriptor as unit_speaker_layout } from "../speaker-layout/descriptor.generated.js" // unit:speaker-layout
 import { descriptor as unit_speaker_map } from "../speaker-map/descriptor.generated.js" // unit:speaker-map
+import { descriptor as unit_split_into_layers } from "../split-into-layers/descriptor.generated.js" // unit:split-into-layers
 import { descriptor as unit_tighten_episode } from "../tighten-episode/descriptor.generated.js" // unit:tighten-episode
 
 export const UNIT_REGISTRY: Readonly<Record<string, UnitDescriptor>> = Object.assign(Object.create(null), {
@@ -21,5 +22,6 @@ export const UNIT_REGISTRY: Readonly<Record<string, UnitDescriptor>> = Object.as
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "speaker-map": unit_speaker_map, // unit:speaker-map
+  "split-into-layers": unit_split_into_layers, // unit:split-into-layers
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

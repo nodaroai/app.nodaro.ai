@@ -140,6 +140,8 @@ const RUN_MODEL_EXEMPT: Readonly<Record<string, string>> = {
   "POST /v1/face-swap": OUTSIDE_CATALOG,
   "POST /v1/generate-mask": OUTSIDE_CATALOG,
   "POST /v1/video-mask": OUTSIDE_CATALOG,
+  // KIE's seedream-5-5-layer-decomposition, which has no catalog entry.
+  "POST /v1/split-into-layers": OUTSIDE_CATALOG,
   "POST /v1/audio-separation": OUTSIDE_CATALOG,
   "POST /v1/voice-remix": OUTSIDE_CATALOG,
   "POST /v1/speech-to-video": OUTSIDE_CATALOG,

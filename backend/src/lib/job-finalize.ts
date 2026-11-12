@@ -20,113 +20,13 @@ import { gptImage26AutoSettledBase } from "./gpt-image-2-6-settle.js"
 // @registry-enumerates NOT_GENERIC_RECOVERABLE carries every node unit with the "finalize:own-writer" capability
 import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
 import { composeSet, unitsWith } from "./unit-compose.js"
+import { AUDIO_TYPES, IMAGE_TYPES, VIDEO_TYPES, type FinalizeJobType, type ProviderFinalizeResult } from "./job-finalize-types.js"
+import { assertExtraImageSets, libraryImagesOf, storeExtraImageSets, storeWithAttempts, type DroppedExtraImages, type ExtraImageSet, type StoredExtraImages } from "./job-finalize-store.js"
+import { DISCARD_AFTER_MISSED_BLOCK, DISCARD_STATUSES, discardUnfinishedStores, storeLedger } from "./job-finalize-discard.js"
 
-/**
- * Provider-side input to `finalizeJobWithMedia`. Mirrors the relevant fields
- * of `ProviderResult` (`backend/src/providers/provider.interface.ts`) but
- * pared down to the keys this function actually reads.
- *
- * `extraUrls` carries additional image variants when the provider returned
- * multiple outputs (e.g., GPT-Image n=4). Audio/video providers return a
- * single `url`.
- */
-export interface ProviderFinalizeResult {
-  url: string
-  extraUrls?: readonly string[]
-  /** See ProviderResult.autoQualityKieCredits — GPT Image 2.6 at quality Auto. */
-  autoQualityKieCredits?: number
-  cost: number | null
-  /** See ProviderResult.meteredCost — true only for genuine GPU-time providers
-   *  (commit trues-up from cost); fixed/composite providers commit reserved. */
-  meteredCost?: boolean
-  displayCost?: number | null
-  providerUsed?: string | null
-  kieTaskId?: string
-  seed?: number
-  fallbackFlag?: boolean
-  providerMs?: number
-  /** See ProviderResult.relayJobId/relayCredits (provider.interface.ts) — set
-   *  ONLY by the NodaroCloud* providers, which relay the work to another
-   *  instance. Mirrored here because this is where a router-lane result becomes
-   *  a row: `relayFieldsFrom` turns the pair into migration 383's two columns
-   *  in the completion UPDATE below. Absent on every vendor-direct result, so
-   *  the mainline write is byte-identical to before. */
-  relayJobId?: string
-  relayCredits?: number | null
-}
-
-/**
- * The three `as const` arrays below are the SINGLE declaration each finalize
- * job-type category derives from: `FinalizeJobType` is `typeof` their union,
- * and the runtime `IMAGE_TYPES`/`VIDEO_TYPES`/`AUDIO_TYPES` sets are built
- * from the same arrays — so a job type added here updates the compile-time
- * union and the runtime set together, and cannot drift between them.
- * Exported so `job-finalize-types.test.ts` can assert the three arrays are
- * pairwise disjoint and jointly cover `FINALIZE_JOB_TYPES`.
- */
-export const IMAGE_JOB_TYPES = [
-  "generate-image", "image-to-image", "edit-image",
-  // `reference-board` is handleGenerateImage under another name
-  // (image-ai.ts:372) and finalizes as "generate-image" (:135); the reconcile
-  // crons read the ROW's job_type, which is the alias.
-  "reference-board",
-] as const
-
-export const VIDEO_JOB_TYPES = [
-  "image-to-video", "text-to-video", "video-to-video",
-  "motion-transfer", "video-upscale", "video-depth", "lip-sync", "extend-video",
-  "video-retake", "video-sfx", "ai-avatar", "cinematic-avatar", "switchx",
-  // Handlers whose job_type differs from the jobType they pass to finalize:
-  // speech-to-video → "image-to-video" (video-ai.ts:891);
-  // face-swap → "video-to-video" (video-ai.ts:1404);
-  // voiced-video → "image-to-video" (video-ai.ts:1679) — handleVoicedVideo
-  // (character-voice orchestration) has exactly ONE completion path, always
-  // through finalizeJobWithMedia with this hardcoded jobType (no branch calls
-  // its own markJobCompleted), so the alias is safe (Task 5 coverage guard).
-  // Sync today: none of its imageToVideo calls registers a reconcile task
-  // (video-ai.ts:1462-1469 — the 30-min pre-task sweep is the backstop), so
-  // no reconcile tick reaches it. If it ever gains async wiring, settle the
-  // voicedAudioAddon refund question (loop-trim P0.3 precedent) at that point:
-  // a generic recovery would deliver the raw pre-mux clip.
-  "speech-to-video", "face-swap", "voiced-video",
-] as const
-
-export const AUDIO_JOB_TYPES = [
-  "text-to-speech", "text-to-audio", "generate-music", "voice-clone",
-  // NB: "speech-to-text" has no producer today — `transcribe` is the job_type
-  // the route and handler map use (routes/transcribe.ts:71,
-  // audio-ai.ts:800). Kept for the union's shape; the coverage guard in
-  // reconcile/__tests__/finalize-job-type-coverage.test.ts asserts the
-  // producer→set direction ONLY, never the reverse.
-  "audio-isolation", "speech-to-text", "generate-dialogue",
-  // `text-to-dialogue` is handleTextToDialogue under another name
-  // (audio-ai.ts:804) and finalizes as "generate-dialogue" (:405). Sync today
-  // (no makeOnTaskCreated → no provider_kind), so no reconcile tick reaches
-  // it — but it is an ALIAS, not a denial, and listing it here rather than in
-  // NOT_GENERIC_RECOVERABLE keeps that honest (M-3a).
-  "text-to-dialogue",
-  // voice-remix (audio-ai.ts:684) and voice-design (audio-ai.ts:713) are each
-  // a single unconditional completion path through finalizeJobWithMedia with
-  // jobType "voice-clone" hardcoded — no branch writes its own
-  // markJobCompleted, so both are safe aliases (same M-3a shape; found by the
-  // Task 5 coverage guard). Contrast with voice-changer and dubbing below,
-  // which branch into an OWN markJobCompleted for video-mode output and so
-  // are NOT safe generic-finalize aliases. Both are sync today: voice-remix
-  // stamps no provider_kind at all; voice-design stamps "elevenlabs-sync"
-  // (audio-ai.ts:701), a SYNC kind — so no reconcile tick reaches either.
-  "voice-remix", "voice-design",
-] as const
-
-/**
- * The set of job types this function knows how to finalize. Anything outside
- * this union throws — by design, since the dispatch table has to know whether
- * to upload as image / video / audio. Derived from the three `as const`
- * arrays above via `typeof … [number]` so it cannot drift from them.
- */
-export type FinalizeJobType =
-  | (typeof IMAGE_JOB_TYPES)[number]
-  | (typeof VIDEO_JOB_TYPES)[number]
-  | (typeof AUDIO_JOB_TYPES)[number]
+// The job types, the provider result and the extra-image declarations live in their own modules; callers import them from here.
+export { AUDIO_JOB_TYPES, FINALIZE_JOB_TYPES, IMAGE_JOB_TYPES, VIDEO_JOB_TYPES, isFinalizeJobType, type FinalizeJobType, type ProviderFinalizeResult } from "./job-finalize-types.js"
+export { EXTRA_IMAGE_UPLOAD_CONCURRENCY, type DroppedExtraImages, type ExtraImageSet, type StoredExtraImages } from "./job-finalize-store.js"
 
 /**
  * Row shape we read from `jobs`. The orchestrator records the per-node owner
@@ -158,23 +58,6 @@ interface JobRow {
    *  auto-attach intent fields (`attachToCharacterId` +
    *  `attachReferenceVideoVariant`). */
   input_data: Record<string, unknown> | null
-}
-
-const IMAGE_TYPES: ReadonlySet<FinalizeJobType> = new Set(IMAGE_JOB_TYPES)
-
-const VIDEO_TYPES: ReadonlySet<FinalizeJobType> = new Set(VIDEO_JOB_TYPES)
-
-const AUDIO_TYPES: ReadonlySet<FinalizeJobType> = new Set(AUDIO_JOB_TYPES)
-
-/** Every job type `finalizeJobWithMedia` can dispatch — the runtime twin of
- *  `FinalizeJobType`. Reconcile writers narrow through `isFinalizeJobType`
- *  instead of casting `row.job_type`. */
-export const FINALIZE_JOB_TYPES: ReadonlySet<string> = new Set<string>([
-  ...IMAGE_TYPES, ...VIDEO_TYPES, ...AUDIO_TYPES,
-])
-
-export function isFinalizeJobType(v: string | null | undefined): v is FinalizeJobType {
-  return typeof v === "string" && FINALIZE_JOB_TYPES.has(v)
 }
 
 /**
@@ -221,6 +104,12 @@ export function isFinalizeJobType(v: string | null | undefined): v is FinalizeJo
  * previous cast (`(row.job_type ?? "generate-image") as FinalizeJobType`) sent
  * these rows into finalize, which threw, which rode `bumpAttemptsOrExhaust` to
  * 18 attempts and REFUNDED a job whose provider call had succeeded.
+ *
+ * One exception, decided before this set is consulted: an own-writer node unit
+ * with a recovery (its `recover.ts`, `lib/reconcile/unit-recovery.ts`) is still
+ * listed — no GENERIC finalize may take its row — but the KIE reconcile
+ * delivers its task's result through the unit's OWN delivery instead of
+ * bumping it.
  */
 // Legacy keys ∪ every node unit whose worker writes its own completion
 // (capability "finalize:own-writer", tools/units/capabilities.mjs).
@@ -377,6 +266,10 @@ export type FinalizeClaimant = "worker" | "cron"
  * failure-path delete removed from `uploadToR2`, a duplicate finalize is
  * benign — an idempotent overwrite plus a CAS-guarded `markJobCompleted` —
  * while refusing to finalize would strand a deliverable job on a DB hiccup.
+ * An unclaimed finalize never deletes what it stored (it has no claim to
+ * fence, lib/job-finalize-discard.ts), and a claimed one deletes only on a row
+ * that already went terminal without a completion (cancelled or failed) —
+ * never a live row another finalizer may still complete naming the same keys.
  */
 export async function claimJobFinalize(
   jobId: string,
@@ -484,82 +377,6 @@ async function reopenWorkflowExecutionIfSoleCause(
     .eq("status", "failed")  // CAS — preserve a user cancel that landed in this window
 }
 
-/**
- * A set of extra images a job delivers beside its result — every layer of a
- * split image. Finalize stores them exactly as it stores the result (the same
- * uploader: the watermark rule and the user's storage), each under its own key
- * in this job's key family (`<jobId>-<key>-<n>`), and writes their stored URLs,
- * in order, on `output_data[key]`.
- */
-export interface ExtraImageSet {
-  /** The `output_data` key the stored URLs land on: a plain word (letters and digits), never one finalize writes itself. */
-  readonly key: string
-  /** Each image: the provider's URL and, filed in the Library, the name it is filed under. */
-  readonly images: ReadonlyArray<{ readonly url: string; readonly name?: string }>
-  /** File each image in the Library beside the result, under its name (`output_data.libraryImages`, read by createAssetFromJob). */
-  readonly library?: true
-}
-
-/** The stored URLs of each extra image set, by its key, in its order. */
-export type StoredExtraImages = Readonly<Record<string, readonly string[]>>
-
-/** How many extra images are stored at once: a 100-layer split must not open 100 uploads together. */
-export const EXTRA_IMAGE_UPLOAD_CONCURRENCY = 6
-
-/** The output_data keys finalize writes on an image job, which an extra set may never take. */
-const FINALIZE_IMAGE_KEYS: ReadonlySet<string> = new Set([
-  "imageUrl", "imageUrls", "imageMimeType", "thumbnailUrl", "providerTaskId", "kieTaskId", "seed", "fallbackUsed", "providerMs", "libraryImages",
-])
-
-/** Refuses an extra-set declaration finalize cannot honour; thrown before any claim or write. */
-function assertExtraImageSets(jobType: FinalizeJobType, sets: ReadonlyArray<ExtraImageSet> | undefined): void {
-  if (!sets?.length) return
-  if (!IMAGE_TYPES.has(jobType)) throw new Error(`[job-finalize] ${jobType}: extra image sets are for an image job`)
-  const seen = new Set<string>()
-  for (const set of sets) {
-    if (!/^[a-z][A-Za-z0-9]*$/.test(set.key) || FINALIZE_IMAGE_KEYS.has(set.key) || seen.has(set.key)) {
-      throw new Error(`[job-finalize] extra image set key "${set.key}" must be a plain word, used once, and not one finalize writes`)
-    }
-    seen.add(set.key)
-  }
-}
-
-/**
- * Store every extra image set: each image through `uploadImageVariantsMaybeWatermark`
- * (the result's own uploader — watermark and storage accounting alike) under
- * `<jobId>-<key>-<n>` (n from 1), a few at a time. Post-provider, like the
- * result's upload: a failure is the uploader's PostProcessingError.
- */
-async function storeExtraImageSets(
-  sets: ReadonlyArray<ExtraImageSet>,
-  jobId: string,
-  userId: string | undefined,
-  watermark: boolean,
-): Promise<StoredExtraImages> {
-  const out: Record<string, readonly string[]> = {}
-  for (const set of sets) {
-    const stored: string[] = []
-    for (let i = 0; i < set.images.length; i += EXTRA_IMAGE_UPLOAD_CONCURRENCY) {
-      const batch = set.images.slice(i, i + EXTRA_IMAGE_UPLOAD_CONCURRENCY)
-      const urls = await Promise.all(batch.map(async (image, j) => {
-        const [url] = await uploadImageVariantsMaybeWatermark([image.url], `${jobId}-${set.key}-${i + j + 1}`, userId, watermark)
-        return url!
-      }))
-      stored.push(...urls)
-    }
-    out[set.key] = stored
-  }
-  return out
-}
-
-/** The Library entries of the sets that ask to be filed: each stored URL with its name. */
-function libraryImagesOf(sets: ReadonlyArray<ExtraImageSet>, stored: StoredExtraImages): Array<{ url: string; name?: string }> {
-  return sets.filter((set) => set.library).flatMap((set) => set.images.map((image, i) => ({
-    url: stored[set.key]![i]!,
-    ...(typeof image.name === "string" && image.name.trim() ? { name: image.name.trim() } : {}),
-  })))
-}
-
 export interface FinalizeInput {
   jobId: string
   jobType: FinalizeJobType
@@ -577,13 +394,20 @@ export interface FinalizeInput {
    *  provider-meta extras). Useful for video handlers that need to record
    *  a thumbnail alongside the main URL. A function is handed the stored URLs
    *  of `extraImageSets` (by key), for fields that name them (each layer's
-   *  data beside its stored file). */
-  extraOutputData?: Record<string, unknown> | ((stored: StoredExtraImages) => Record<string, unknown>)
+   *  data beside its stored file), and the result's own stored URL — exactly
+   *  what this finalize writes to `output_data.imageUrl` (`videoUrl` /
+   *  `audioUrl` for a video or audio job), for fields that name it (each
+   *  layer's data names the base it was cut from). */
+  extraOutputData?: Record<string, unknown> | ((stored: StoredExtraImages, dropped: DroppedExtraImages, resultUrl: string) => Record<string, unknown>)
   /** Extra images an IMAGE job delivers beside its result (every layer of a
    *  split image): stored like the result, their URLs on `output_data[key]`,
    *  and — for a set with `library` — filed in the Library under their names.
    *  Absent: finalize is exactly as before. */
   extraImageSets?: ReadonlyArray<ExtraImageSet>
+  /** How many times each image is tried before its store fails (an IMAGE job's
+   *  result, unless it asked for a format, and every extra image). Absent: 1,
+   *  exactly as before. A failed attempt stores and counts nothing. */
+  storeAttempts?: number
   /** Credits for work NOT reflected in the provider's USD cost (e.g. a
    *  successful loop-trim add-on). Passed through to commitJobCredits so the
    *  provider-cost reconciliation doesn't refund it. Defaults to none. */
@@ -612,8 +436,10 @@ export interface FinalizeInput {
    *  never above the reservation, `extraNonProviderCredits` on top. Parked in
    *  `held_completion_fields` so approve replays the same settlement. Takes
    *  precedence over `loopTrimAddonRefundCredits` — the measured charge already
-   *  excludes an add-on that was not delivered. */
-  meteredBaseCredits?: number
+   *  excludes an add-on that was not delivered. A function is handed what the
+   *  extra image sets stored and dropped, so the charge counts only the images
+   *  really stored (a split image settles on its base plus its stored layers). */
+  meteredBaseCredits?: number | ((stored: StoredExtraImages, dropped: DroppedExtraImages) => Promise<number | undefined>)
 }
 
 /**
@@ -627,14 +453,19 @@ export interface FinalizeInput {
  * download/upload of the same deterministic R2 key), and `markJobCompleted`'s
  * CAS UPDATE guarantees a single completion writer even if a claim expires
  * mid-flight. Never delete the deterministic key on a failed upload — see
- * uploadToR2's catch (incident 2026-06-10).
+ * uploadToR2's catch (incident 2026-06-10). What a finalize DID store and will
+ * not complete with (a later step threw, or a cancel won the completion) it
+ * deletes itself, under its claim and before releasing it
+ * (lib/job-finalize-discard.ts), so no object is left unreferenced and counted.
  *
  * Returns `{ ok: true }` only when the CAS UPDATE succeeded AND we committed
  * credits + created the asset. `{ ok: false }` covers five cases:
  *  - jobs row not found (callsite probably wrong)
  *  - jobs.status already terminal (cancelled / completed / failed)
  *  - finalize claim lost (another finalizer is mid-flight on this job)
- *  - markJobCompleted CAS missed (concurrent cancel won)
+ *  - markJobCompleted CAS missed (concurrent cancel won) — what this finalize
+ *    stored is deleted when the row is cancelled or failed
+ *  - the result gate held or blocked the result (`reason`)
  */
 export async function finalizeJobWithMedia(
   input: FinalizeInput,
@@ -688,8 +519,15 @@ export async function finalizeJobWithMedia(
   // Captured for the reference-video auto-attach below — set only on the video
   // path (the R2 URL we record as the clip's canonical location).
   let videoR2Url: string | undefined
-  // The extra image sets' stored URLs, by key (none without extraImageSets).
+  // The extra image sets' stored URLs and dropped images, by key (none without extraImageSets).
   let storedExtras: StoredExtraImages = {}
+  let droppedExtras: DroppedExtraImages = {}
+  // The handler's measured charge, resolved inside the claim (a function reads what was stored).
+  let meteredBaseCredits: number | undefined
+  // Every object THIS finalize stored, as each store lands — what it deletes
+  // again if it does not complete the job (lib/job-finalize-discard.ts).
+  const ledger = storeLedger()
+  const attempts = input.storeAttempts ?? 1
   try {
     if (IMAGE_TYPES.has(jobType) && requestedImageFormat(job.input_data)) {
       // A run that asked for JPEG, WebP, a GIF or an SVG: stored as what its
@@ -701,18 +539,20 @@ export async function finalizeJobWithMedia(
         userId: job.user_id ?? undefined,
         watermark,
       })
+      ledger.add(...stored.urls, ...(stored.thumbnailUrl !== undefined ? [stored.thumbnailUrl] : []))
       outputData = {
         ...buildImageOutputData(result as Parameters<typeof buildImageOutputData>[0], stored.urls),
         imageMimeType: stored.mimeType,
         ...(stored.thumbnailUrl !== undefined && { thumbnailUrl: stored.thumbnailUrl }),
       }
     } else if (IMAGE_TYPES.has(jobType)) {
-      const r2Urls = await uploadImageVariantsMaybeWatermark(
+      const r2Urls = await storeWithAttempts(attempts, () => uploadImageVariantsMaybeWatermark(
         [result.url, ...(result.extraUrls ?? [])],
         jobId,
         job.user_id ?? undefined,
         watermark,
-      )
+      ))
+      ledger.add(...r2Urls)
       outputData = buildImageOutputData(
         result as Parameters<typeof buildImageOutputData>[0],
         r2Urls,
@@ -726,6 +566,7 @@ export async function finalizeJobWithMedia(
             job.user_id ?? undefined,
             watermark,
           )
+      if (input.mediaUrl === undefined) ledger.add(r2Url)
       videoR2Url = r2Url
       outputData = { videoUrl: r2Url }
     } else if (AUDIO_TYPES.has(jobType)) {
@@ -736,30 +577,46 @@ export async function finalizeJobWithMedia(
       const r2Url = input.mediaUrl !== undefined
         ? input.mediaUrl
         : await runPostProcessing(() => uploadToR2(result.url, jobId, "audio", job.user_id ?? undefined))
+      if (input.mediaUrl === undefined) ledger.add(r2Url)
       outputData = { audioUrl: r2Url }
     } else {
       throw new Error(`[job-finalize] unknown jobType: ${jobType}`)
     }
+    // The result's stored URL, as written to output_data above — what a
+    // caller's extra fields may name (each layer's data names its base).
+    const resultUrl = String(outputData.imageUrl ?? outputData.videoUrl ?? outputData.audioUrl)
     // Extra images beside the result (an image job only — refused above
     // otherwise): stored inside the claim, so a failure releases it below.
     const sets = input.extraImageSets ?? []
     if (sets.length > 0) {
-      storedExtras = await storeExtraImageSets(sets, jobId, job.user_id ?? undefined, watermark)
-      const library = libraryImagesOf(sets, storedExtras)
+      const extras = await storeExtraImageSets(sets, jobId, job.user_id ?? undefined, watermark, attempts, ledger.add)
+      storedExtras = extras.stored
+      droppedExtras = extras.dropped
+      const library = libraryImagesOf(sets, storedExtras, droppedExtras)
       outputData = { ...outputData, ...storedExtras, ...(library.length > 0 ? { libraryImages: library } : {}) }
     }
     // The caller's extra fields — inside the claim too: a function handed the
     // stored URLs runs the caller's code, and a throw there must release the
     // claim like a failed upload, not leave the job waiting out its lifetime.
     if (input.extraOutputData) {
-      const extra = typeof input.extraOutputData === "function" ? input.extraOutputData(storedExtras) : input.extraOutputData
+      const extra = typeof input.extraOutputData === "function" ? input.extraOutputData(storedExtras, droppedExtras, resultUrl) : input.extraOutputData
       outputData = { ...outputData, ...extra }
     }
+    meteredBaseCredits = typeof input.meteredBaseCredits === "function"
+      ? await input.meteredBaseCredits(storedExtras, droppedExtras)
+      : input.meteredBaseCredits
   } catch (err) {
-    // Failed media step: release our claim so a BullMQ retry or the next
-    // reconcile tick can re-attempt immediately, then surface the error
-    // unchanged (refund classification stays the caller's concern).
-    if (claim.ts) await releaseJobFinalizeClaim(jobId, claim.ts)
+    // Failed media step. On a row that already went terminal without a
+    // completion (cancelled or failed while we stored), nothing will ever name
+    // what this finalize stored: delete it and give its bytes back. On a LIVE
+    // row leave it — a finalizer that took the row over may complete it naming
+    // the same keys; a retry re-stores them. Then release our claim so a
+    // BullMQ retry or the next reconcile tick can re-attempt immediately, and
+    // surface the error unchanged (refund classification stays the caller's).
+    if (claim.ts) {
+      const fenced = await discardUnfinishedStores(jobId, job.user_id ?? undefined, ledger.urls(), claim.ts, DISCARD_STATUSES)
+      await releaseJobFinalizeClaim(jobId, fenced ?? claim.ts)
+    }
     throw err
   }
 
@@ -778,7 +635,7 @@ export async function finalizeJobWithMedia(
     meteredCost: result.cost,
     loopTrimAddonRefundCredits: input.loopTrimAddonRefundCredits,
     // A handler's own measure wins; a GPT Image 2.6 Auto run settles on KIE's bill.
-    meteredBaseCredits: input.meteredBaseCredits ?? await gptImage26AutoSettledBase(result.autoQualityKieCredits),
+    meteredBaseCredits: meteredBaseCredits ?? await gptImage26AutoSettledBase(result.autoQualityKieCredits),
   }
   const outcome = await markJobCompletedDetailed(
     jobId,
@@ -813,9 +670,36 @@ export async function finalizeJobWithMedia(
   if (outcome !== "completed") {
     // A HELD row is not terminal: release OUR finalize claim so the approve
     // path (and any later re-pick) sees a clean row instead of waiting out
-    // FINALIZE_CLAIM_TTL_MS. A blocked row is terminal and keeps its claim
-    // (harmless — claim_job_finalize's own status gate refuses it anyway).
-    if (outcome === "held" && claim.ts) await releaseJobFinalizeClaim(jobId, claim.ts)
+    // FINALIZE_CLAIM_TTL_MS. Its objects stay: they are what the reviewer
+    // looks at.
+    // A gate that answers "held" may have missed its own compare-and-set: the
+    // row went cancelled while the verdict was being applied, and then nothing
+    // holds — or will ever name — what we stored. The fence tells the two
+    // apart in the database (it never matches pending_review), so a real hold
+    // keeps its objects and a missed one deletes and gives them back.
+    if (outcome === "held" && claim.ts) {
+      const fenced = await discardUnfinishedStores(jobId, job.user_id ?? undefined, ledger.urls(), claim.ts, DISCARD_STATUSES)
+      await releaseJobFinalizeClaim(jobId, fenced ?? claim.ts)
+    }
+    // A block the gate APPLIED already deleted every owned object and gave the
+    // bytes back (its row is failed with the policy's hint). A block that
+    // missed its compare-and-set (the row went cancelled first) deleted
+    // nothing: the cancelled row is fenced and discarded here. Only a
+    // cancelled row — a failed one is the applied block itself.
+    if (outcome === "blocked" && claim.ts) {
+      const fenced = await discardUnfinishedStores(jobId, job.user_id ?? undefined, ledger.urls(), claim.ts, DISCARD_AFTER_MISSED_BLOCK)
+      if (fenced) await releaseJobFinalizeClaim(jobId, fenced)
+    }
+    // A lost completion is a row that went terminal while we stored: a cancel
+    // (or a failure) — then nothing will ever name what we stored, so it is
+    // deleted and given back — or another finalizer's completion, which names
+    // the SAME keys and must keep them (incident 2026-06-10). The fence tells
+    // the two apart in the database: it matches a cancelled or failed row
+    // that still carries our claim, never a completed or held one.
+    if (outcome === "lost_race" && claim.ts) {
+      const fenced = await discardUnfinishedStores(jobId, job.user_id ?? undefined, ledger.urls(), claim.ts, DISCARD_STATUSES)
+      if (fenced) await releaseJobFinalizeClaim(jobId, fenced)
+    }
     return { ok: false, reason: outcome }
   }
 

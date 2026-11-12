@@ -12,6 +12,7 @@ import { parseListExpression, describeEdgeBehavior, type SelectorMode } from "@n
 import type { CSSProperties } from "react"
 import { useEdgeInsertAnimation } from "./workflow-editor/use-edge-insert-animation"
 import { pickEdgeAccent, ACCENT_PINK, ACCENT_BLUE } from "@/lib/edge-accent"
+import { MODE_OPTIONS, edgeModeMenu } from "./edge-mode-menu"
 
 type AnimatedFlowEdgeData = {
   isRunning?: boolean       // Output animation: source node is running (pink)
@@ -59,55 +60,6 @@ const UNUSED_PROMPT_TOOLTIP: Record<UnusedPromptReason, MessageKey> = {
 
 type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
 
-// NOTE: outputMode "last" is semantically "the currently selected result"
-// (reads activeResultIndex from the source node). This is DIFFERENT from the
-// word "last" appearing inside range/list expressions (e.g. rangeTo: "last",
-// listExpression: "1, 3, last"), where "last" means "the final index in the
-// array." Same word, different meanings.
-const MODE_OPTIONS = [
-  { value: "last", labelKey: "canvas.edgeModeSelected", descKey: "canvas.edgeModeSelectedDesc" },
-  { value: "item", labelKey: "canvas.edgeModeItem", descKey: "canvas.edgeModeItemDesc" },
-  { value: "each", labelKey: "canvas.edgeModeEach", descKey: "canvas.edgeModeEachDesc" },
-  { value: "all", labelKey: "canvas.edgeModeBundle", descKey: "canvas.edgeModeBundleDesc" },
-] as const
-
-// List/loop/split-text produce inherent items with no user-selection concept,
-// so "Selected" doesn't apply — those edges default to "Each" (fan-out).
-const LIST_LIKE_SOURCE_TYPES = new Set(["list", "split-text"])
-
-// When feeding INTO a list/loop column, Each (fan-out) doesn't apply — the
-// target accumulates items into the column as a bundle. Hide Each, default
-// to All. At runtime, resolveEdgeValuesForTableColumn treats Each and All
-// identically for list-like targets, so pre-existing "each" edges still
-// work while the UI steers new ones to "all".
-const LIST_LIKE_TARGET_TYPES = new Set(["list"])
-
-// Target node types that accept multiple items in a single invocation
-// (arrays/bundles). Only these can meaningfully receive Bundle mode — the
-// multiple items land in referenceImageUrls / videoUrls / audioUrls etc.
-// All other nodes collapse a Bundle to a single value, so offering it is
-// misleading; we hide it from the dropdown.
-const MULTI_INPUT_TARGET_TYPES = new Set([
-  // Image generators accept multiple reference images
-  "generate-image", "edit-image", "image-to-image", "modify-image",
-  // Audio mixers / combiners
-  "mix-audio", "combine-audio", "suno-mashup",
-  // Video combiners
-  "combine-videos",
-  // Slideshow: N ordered images in one node (the Bundle edge is the
-  // list → images lane; same mechanism as combine-videos' clips)
-  "slideshow",
-  // Manual edit / composite accept multiple inputs
-  "manual-edit", "composite",
-  // Text combiners
-  "combine-text",
-  // List targets collect into a column
-  "list",
-  // Social posts — carousels/galleries/threads accept multiple media items.
-  // The single-post modes collapse to one; users switch via the node's
-  // action field, so it's safe to allow Bundle here.
-  "instagram-post", "tiktok-post", "facebook-post", "x-post", "linkedin-post",
-])
 
 function AnimatedFlowEdgeComponent({
   id,
@@ -194,31 +146,15 @@ function AnimatedFlowEdgeComponent({
   const edgeData = data as AnimatedFlowEdgeData | undefined
   const isRunning = edgeData?.isRunning || false           // Pink: data flowing OUT from running node
   const isInputRunning = edgeData?.isInputRunning || false // Blue: data flowing IN to running node
-  // Default mode matches runtime semantics:
-  //   - Target is list/loop column → "all" (bundle items into the column)
-  //   - Source is list/loop/split-text → "each" (fan-out downstream)
-  //   - Otherwise → "last" (Selected)
-  // workflow-canvas.tsx already resolves list-like-source edges to "each"
-  // before passing edge data in, but we re-derive defaults here so the
-  // fallback is explicit and target-aware.
-  //   - Source is a node unit's list pip (sourceListPip) → "each", like a list source
-  const isListLikeSource = LIST_LIKE_SOURCE_TYPES.has(edgeData?.sourceNodeType ?? "") || edgeData?.sourceListPip === true
-  const isListLikeTarget = LIST_LIKE_TARGET_TYPES.has(edgeData?.targetNodeType ?? "")
-  const targetAcceptsMulti = MULTI_INPUT_TARGET_TYPES.has(edgeData?.targetNodeType ?? "")
-  const defaultMode = isListLikeTarget ? "all" : isListLikeSource ? "each" : "last"
+  // The menu and its default (workflow-canvas.tsx already resolves list-like
+  // sources to "each"; re-derived so the fallback is explicit and target-aware).
+  const menu = edgeModeMenu(edgeData)
+  const defaultMode = menu.defaultMode
   // If an edge has a mode that's been hidden for this target/source combo
   // (e.g. legacy "each" on a list-target edge), fall back to the default so
   // the dropdown shows something highlighted.
   const rawMode = edgeData?.outputMode
-  const modeOptions = MODE_OPTIONS.filter((opt) => {
-    if (opt.value === "last" && isListLikeSource) return false
-    if (opt.value === "each" && isListLikeTarget) return false
-    // Bundle only makes sense when the target accepts multiple items.
-    // Hide it elsewhere — otherwise users pick "all", the value gets
-    // collapsed to a joined string or dropped, and the result is unexpected.
-    if (opt.value === "all" && !targetAcceptsMulti) return false
-    return true
-  })
+  const modeOptions = MODE_OPTIONS.filter((opt) => menu.modes.includes(opt.value))
   const modeOptionValues = new Set<string>(modeOptions.map((o) => o.value))
   const currentMode = rawMode && modeOptionValues.has(rawMode.startsWith("item:") ? "item" : rawMode)
     ? rawMode

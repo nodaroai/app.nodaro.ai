@@ -2523,6 +2523,8 @@ export function buildNodeOutputFromJobData(
     const side = unitJobOutput(unit, outputData)
     if (side.unitLists) output.unitLists = side.unitLists
     if (side.unitOutputs) output.unitOutputs = side.unitOutputs
+    // How many items a list output's run could not store (its `<id>NotSaved`), so every lane can say so.
+    if (side.unitListsNotSaved) output.unitListsNotSaved = side.unitListsNotSaved
   }
 
   return output

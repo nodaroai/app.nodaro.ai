@@ -610,6 +610,34 @@ test("a list output: only true, only on an image/video/audio output, with from, 
   expectProblem(listAt((o) => { o[1].runtimeTyped = true }), /^fixture-echo: handles\.outputs\[1\]\.list: a list output's medium is its kind, never decided at run time — remove runtimeTyped$/)
 })
 
+test("listMax: only on a list output, naming a defaultData whole number of at least 1", () => {
+  const maxAt = (edit) => problemsAfter((root) => withManifest(root, (m) => { asListUnit(m); m.defaultData.maxLayers = 9; edit(m) }))
+  assert.deepEqual(maxAt((m) => { m.handles.outputs[1].listMax = "maxLayers" }), [])
+  expectProblem(maxAt((m) => { m.handles.outputs[0].listMax = "maxLayers" }), /^fixture-echo: handles\.outputs\[0\]\.listMax: only on a list output \(list: true\)$/)
+  expectProblem(maxAt((m) => { m.handles.outputs[1].listMax = "" }), /^fixture-echo: handles\.outputs\[1\]\.listMax must name a node-data field$/)
+  expectProblem(maxAt((m) => { m.handles.outputs[1].listMax = "nope" }), /^fixture-echo: handles\.outputs\[1\]\.listMax: defaultData\.nope must be a whole number of items, at least 1/)
+  expectProblem(maxAt((m) => { m.handles.outputs[1].listMax = "maxLayers"; m.defaultData.maxLayers = 0 }), /defaultData\.maxLayers must be a whole number of items, at least 1/)
+  expectProblem(maxAt((m) => { m.handles.outputs[1].listMax = "maxLayers"; m.defaultData.maxLayers = 2.5 }), /defaultData\.maxLayers must be a whole number of items, at least 1/)
+})
+
+test("alignedWith: only on a JSON (look) output, naming a list output of the same unit", () => {
+  const alignAt = (edit) => problemsAfter((root) => withManifest(root, (m) => { asListUnit(m); edit(m.handles.outputs) }))
+  // The fixture's Layer data lines up with its Layers.
+  assert.equal(LIST_UNIT.outputs[2].alignedWith, "layers")
+  assert.deepEqual(alignAt(() => {}), [])
+  // Optional: a JSON output beside the media need not line up with a list.
+  assert.deepEqual(alignAt((o) => { delete o[2].alignedWith }), [])
+  expectProblem(alignAt((o) => { o[1].alignedWith = "layers" }), /^fixture-echo: handles\.outputs\[1\]\.alignedWith: only on a JSON \(look\) output$/)
+  expectProblem(alignAt((o) => { o[2].alignedWith = "" }), /^fixture-echo: handles\.outputs\[2\]\.alignedWith must name a list output$/)
+  expectProblem(alignAt((o) => { o[2].alignedWith = "base" }), /^fixture-echo: handles\.outputs\[2\]\.alignedWith: "base" is not a list output \(list: true\) of this unit/)
+  expectProblem(alignAt((o) => { o[2].alignedWith = "nope" }), /^fixture-echo: handles\.outputs\[2\]\.alignedWith: "nope" is not a list output \(list: true\) of this unit/)
+  // A use-case node's outputs are read by the use-case reader, never row by row.
+  expectProblem(
+    problemsAfter((root) => withManifest(root, (m) => { m.handles.outputs.find((o) => o.kind === "look").alignedWith = "json" }, CASE)),
+    /^fixture-case: handles\.outputs\[\d+\]\.alignedWith: a use-case node's outputs are read by the use-case reader, never row by row — remove alignedWith$/,
+  )
+})
+
 test("side outputs ride on the media take: the first output is a plain media output", () => {
   const order = (edit) => problemsAfter((root) => withManifest(root, (m) => { asListUnit(m); edit(m.handles.outputs) }))
   const FIRST = /^fixture-echo: handles\.outputs\[0\]: a unit with list or JSON outputs beside its media puts the media take first/
@@ -641,6 +669,24 @@ test("provider:* — a worker in the provider lane names the one provider it cal
   expectProblem(caps(["lane:local", "provider:kie"]), /^fixture-echo: capability "provider:kie" attributes a provider-lane worker's job; this unit has no "lane:provider" worker job$/)
   expectProblem(caps(["provider:kie"], CASE), /^fixture-case: capability "provider:kie" attributes a provider-lane worker's job/)
   assert.deepEqual(CAPABILITIES["provider:kie"].seams, ["registry"])
+})
+
+test("recover.ts: only an own-writer worker on a provider whose reconcile reads it (RECOVERING_PROVIDERS) has one", () => {
+  const capabilities = CAPABILITIES
+  const withRecover = (list, dir = UNIT, backend = BACKEND) => problemsAfter((root) => {
+    if (list) withManifest(root, (m) => { m.capabilities = list }, dir)
+    writeFileSync(path.join(root, backend, "recover.ts"), "export const recover = async () => ({ ok: true })\n")
+  }, { capabilities })
+  const NOT_OWN_WRITER = /recover\.ts finishes an own-writer worker's job from its provider task: it needs execution\.kind "worker" and the "finalize:own-writer" capability$/
+  // An own-writer KIE worker: valid.
+  assert.ok(!withRecover(["lane:provider", "provider:kie", "finalize:own-writer"]).some((e) => /recover\.ts/.test(e)))
+  // The fixture worker as it is (lane:local, no own-writer), or a provider worker that finalizes generically.
+  expectProblem(withRecover(null), new RegExp(`^fixture-echo: ${NOT_OWN_WRITER.source}`))
+  expectProblem(withRecover(["lane:provider", "provider:kie"]), new RegExp(`^fixture-echo: ${NOT_OWN_WRITER.source}`))
+  // An own-writer worker on no provider a reconcile reads it for (a local one).
+  expectProblem(withRecover(["lane:local", "finalize:own-writer"]), /^fixture-echo: recover\.ts is read only by the reconcile of provider:kie \(backend\/src\/lib\/reconcile\/kie\.ts\)/)
+  // A use-case node runs no worker.
+  expectProblem(withRecover(null, CASE, CASE_BACKEND), new RegExp(`^fixture-case: ${NOT_OWN_WRITER.source}`))
 })
 
 test("price-id.ts: a worker whose price.ee.ts names its id from the node's data has the editor's twin, and only such a unit", () => {

@@ -230,6 +230,36 @@ describe("assembleFanOutResult", () => {
     expect(assembleFanOutResult([ok(0, "a", { output: { durationSec: 5 } })], 1, "generate-image").output).not.toHaveProperty("listResultMeta")
     expect(assembleFanOutResult([ok(0, "a")], 1).output).not.toHaveProperty("listResultMeta")
   })
+
+  // A node unit with side outputs (a split image's layers and layer data) run
+  // once per upstream item: each row keeps its own lists and JSON, row-aligned.
+  it("carries each row's side outputs row-aligned, null for a failed row or one with none", () => {
+    const side = (n: number) => ({
+      imageUrl: `https://r2/base${n}.png`,
+      unitLists: { layers: [`https://r2/${n}-l1.png`, `https://r2/${n}-l2.png`] },
+      unitOutputs: { layerData: `[{"zIndex":1,"n":${n}}]` },
+    })
+    const r = assembleFanOutResult(
+      [ok(2, "https://r2/base2.png", { output: side(2) }), fail("provider 503"), ok(0, "https://r2/base0.png", { output: side(0) })],
+      3,
+    )
+    expect(r.output.listResults).toEqual(["https://r2/base0.png", "", "https://r2/base2.png"])
+    expect(r.output.listResultSideOutputs).toEqual([
+      { unitLists: side(0).unitLists, unitOutputs: side(0).unitOutputs },
+      null,
+      { unitLists: side(2).unitLists, unitOutputs: side(2).unitOutputs },
+    ])
+    // A row whose run made only JSON (a base-only split: no layers) carries just that.
+    const baseOnly = assembleFanOutResult([ok(0, "https://r2/b.png", { output: { imageUrl: "https://r2/b.png", unitOutputs: { layerData: "[]" } } })], 1)
+    expect(baseOnly.output.listResultSideOutputs).toEqual([{ unitOutputs: { layerData: "[]" } }])
+    // A row's count of layers it could not store rides with its own side outputs.
+    const dropped = assembleFanOutResult([ok(0, "https://r2/b.png", { output: { imageUrl: "https://r2/b.png", unitLists: { layers: ["https://r2/l1.png"] }, unitListsNotSaved: { layers: 2 } } })], 1)
+    expect(dropped.output.listResultSideOutputs).toEqual([{ unitLists: { layers: ["https://r2/l1.png"] }, unitListsNotSaved: { layers: 2 } }])
+  })
+
+  it("no row carries side outputs → no listResultSideOutputs (every other node type)", () => {
+    expect(assembleFanOutResult([ok(0, "a"), ok(1, "b")], 2).output).not.toHaveProperty("listResultSideOutputs")
+  })
 })
 
 describe("assembleFanOutResult — what failed iterations already charged", () => {

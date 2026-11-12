@@ -86,6 +86,7 @@ const HOOKED_ROUTES: readonly string[] = [
 const EXCLUDED_ROUTES: Readonly<Record<string, string>> = {
   "generate-mask.ts": "prompt is a SEGMENTATION TARGET — a policy clause would corrupt masking",
   "video-mask.ts": "prompt is a SEGMENTATION TARGET (SAM 3 video) — a policy clause would corrupt masking",
+  "nodes/split-into-layers/route.ts": "prompt is a SEGMENTATION TARGET (which elements of the image to split into layers) — a policy clause would corrupt the split",
   "generate-face.ts": "polices at the entity image chokepoint (workers/handlers/entity.ts makeEntityImageHandler)",
   "generate-music.ts": "polices at the music assembly point (workers/handlers/suno.ts)",
   "suno.ts": "voice-persona routes; every music prompt assembles + polices in workers/handlers/suno.ts",

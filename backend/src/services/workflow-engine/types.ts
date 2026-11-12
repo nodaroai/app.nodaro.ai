@@ -253,6 +253,16 @@ export interface NodeOutput {
    *  string its pip hands on (`unitPipValue`, lib/unit-compose.ts). The first
    *  one's value also rides `json`, for the readers that read that. */
   unitOutputs?: Readonly<Record<string, string>>
+  /** A node unit with side outputs that ran once per upstream item: each row's
+   *  side outputs (`unitLists` / `unitOutputs` / `unitListsNotSaved`), row-aligned
+   *  with `listResults`, null where a row carries none — so each row's take keeps its own.
+   *  The output's own `unitLists` / `unitOutputs` / `unitListsNotSaved` then hold
+   *  every row's, row-aligned (`unitBatchSideOutputs`, @nodaro/render-rules). */
+  listResultSideOutputs?: ReadonlyArray<{ readonly unitLists?: Readonly<Record<string, readonly string[]>>; readonly unitOutputs?: Readonly<Record<string, string>>; readonly unitListsNotSaved?: Readonly<Record<string, number>> } | null>
+  /** A node unit's list outputs, by output id: how many items the run made on
+   *  that pip but could not store (the job's `<id>NotSaved`; 0 when it stored
+   *  every one) — so every lane can say "2 of 9 … could not be saved". */
+  unitListsNotSaved?: Readonly<Record<string, number>>
   /** A node unit's LIST outputs (`handles.outputs[].list`), by output id: the
    *  files one run made on that pip, in order — never empty (an empty list is
    *  no value, the key is absent). A plain wire from the pip carries the first

@@ -10,6 +10,7 @@ import { labels as unit_remove_audio } from "../remove-audio/labels.generated" /
 import { labels as unit_shot_cuts } from "../shot-cuts/labels.generated" // unit:shot-cuts
 import { labels as unit_speaker_layout } from "../speaker-layout/labels.generated" // unit:speaker-layout
 import { labels as unit_speaker_map } from "../speaker-map/labels.generated" // unit:speaker-map
+import { labels as unit_split_into_layers } from "../split-into-layers/labels.generated" // unit:split-into-layers
 import { labels as unit_tighten_episode } from "../tighten-episode/labels.generated" // unit:tighten-episode
 
 export const UNIT_LABELS: Readonly<Record<string, UnitLabels>> = Object.assign(Object.create(null), {
@@ -21,5 +22,6 @@ export const UNIT_LABELS: Readonly<Record<string, UnitLabels>> = Object.assign(O
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "speaker-map": unit_speaker_map, // unit:speaker-map
+  "split-into-layers": unit_split_into_layers, // unit:split-into-layers
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

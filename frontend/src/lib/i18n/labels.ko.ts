@@ -386,6 +386,8 @@ const HANDLE_LABELS_KO: Record<string, string> = {
   "Instructions": "지침",
   "Instrumental": "반주",
   "Isolated": "단독",
+  "Layer data": "레이어 데이터",
+  "Layers": "레이어",
   "Without": "제외",
   "JSON": "JSON",
   "Location": "장소",

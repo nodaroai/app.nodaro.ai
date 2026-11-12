@@ -2479,6 +2479,16 @@ const SAFETY_TABLES: ReadonlyArray<Record<string, KieModelConfig>> = [
 /** The Seedance 2.5 finalize endpoint carries no config of its own (seedance-draft.ts sends it directly). */
 const SEEDANCE_DRAFT_FINALIZE_WIRE_MODEL = "bytedance/seedance-2-5-draft"
 
+/**
+ * Seedream 5.5's layer decomposition: one image in, a base picture and its
+ * layers out. No routing config of its own — layer-decomposition.ts sends it
+ * directly — so it is no image model any menu offers. Its model key names it
+ * to the egress seam, the Admin → Provider Safety page and a job's `model`.
+ * Doc: https://docs.kie.ai/market/seedream/5-5-layer-decomposition (read 2026-11-11).
+ */
+export const LAYER_DECOMPOSITION_WIRE_MODEL = "seedream/5-5-layer-decomposition"
+export const LAYER_DECOMPOSITION_MODEL_KEY = "seedream-5-5-layer-decomposition"
+
 let entries: readonly ProviderSafetyEntry[] | null = null
 
 /** Every KIE model with a content-filter lever, one entry per endpoint. */
@@ -2491,6 +2501,8 @@ export function kieSafetyEntries(): readonly ProviderSafetyEntry[] {
     }
   }
   list.push({ modelId: "seedance-2-5-hd", wireModel: SEEDANCE_DRAFT_FINALIZE_WIRE_MODEL, levers: [NSFW_CHECKER_LEVER] })
+  // Its content filter (`nsfw_checker`) is not sent, as on the Seedream 5 models: KIE's default (off) applies until an admin sets it.
+  list.push({ modelId: LAYER_DECOMPOSITION_MODEL_KEY, wireModel: LAYER_DECOMPOSITION_WIRE_MODEL, levers: [NSFW_CHECKER_LEVER] })
   entries = list
   return list
 }

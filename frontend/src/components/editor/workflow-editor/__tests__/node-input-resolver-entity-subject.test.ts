@@ -26,12 +26,13 @@ import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
  * image. The table was recorded from origin/dev's resolver before the seam
  * (every type has one outcome for every entity and handle). gif-to-video, a
  * unit declaring "input:entity-subject" since its migration, keeps its outcome
- * (subject) through the capability instead of the legacy list.
+ * (subject) through the capability instead of the legacy list. split-into-layers,
+ * a new unit declaring it, splits the wired entity's image (subject).
  */
 type Outcome = "subject" | "reference" | "none"
 const LEGACY_ENTITY_SUBJECT_TARGETS = ["ai-avatar", "lip-sync", "motion-transfer", "speech-to-video", "still-to-video"]
 /** Units declaring "input:entity-subject": the same outcome, through the capability. */
-const UNIT_ENTITY_SUBJECT_TARGETS = ["gif-to-video"]
+const UNIT_ENTITY_SUBJECT_TARGETS = ["gif-to-video", "split-into-layers"]
 /** Takes an entity as its image in its own branch, before the entity branch reads the set. */
 const ROUTED_BEFORE_THE_ENTITY_BRANCH = ["image-overlay"]
 /** Targets the entity's image never reaches. */

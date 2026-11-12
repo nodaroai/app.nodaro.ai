@@ -55,7 +55,6 @@ import {
 import {
   allOwnedObjects,
   deleteOwnedObjects,
-  deleteOwnedOutputObjects,
   extractJobOutputs,
   mediaKindOf,
   ownedHeldObjects,
@@ -358,7 +357,9 @@ async function applyBlock(
   // mid-run checkpoint already wrote onto the row. `held_objects`' cap is a
   // review-UI bound; applying it here would leave a 25-segment job's tail live
   // at its public keys forever.
-  await deleteOwnedOutputObjects(jobId, fields.output_data as Record<string, unknown> | undefined, rowOutputData)
+  // Their bytes go back to the owner's storage too: the job stored them, and
+  // nothing will ever name them now.
+  await deleteOwnedObjects(jobId, allOwnedObjects(jobId, fields.output_data as Record<string, unknown> | undefined, rowOutputData), { refundOwner: true })
   // LAST, for the same reason as the hold: a row that is `failed` with a
   // policy-block hint while its decision still says `applied IS NULL` is a
   // block whose CAS landed and whose refund did not — the one residue this

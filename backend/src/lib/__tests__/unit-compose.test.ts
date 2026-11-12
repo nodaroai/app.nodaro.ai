@@ -221,6 +221,15 @@ describe("a media unit's side outputs (list and JSON beside the take)", () => {
     // A JSON-only worker keeps its json (its first output's value).
     expect(unitJobOutput(MAP, { json: { a: 1 } })).toEqual({ unitOutputs: { json: '{"a":1}' }, json: { a: 1 } })
   })
+  it("unitJobOutput: a list output's `<id>NotSaved` (a whole number, 0 included) on unitListsNotSaved; anything else is no value", () => {
+    expect(unitJobOutput(LAYERS, { imageUrl: "b", layers: ["l1"], layersNotSaved: 2 })).toEqual({ unitLists: { layers: ["l1"] }, unitListsNotSaved: { layers: 2 } })
+    expect(unitJobOutput(LAYERS, { imageUrl: "b", layers: ["l1"], layersNotSaved: 0 })).toEqual({ unitLists: { layers: ["l1"] }, unitListsNotSaved: { layers: 0 } })
+    for (const bad of [-1, 1.5, "2", null]) {
+      expect(unitJobOutput(LAYERS, { imageUrl: "b", layersNotSaved: bad }), String(bad)).toEqual({})
+    }
+    // Only a list output reports one: a look output's or the take's `<id>NotSaved` is not read.
+    expect(unitJobOutput(LAYERS, { imageUrl: "b", layerDataNotSaved: 1, baseNotSaved: 1 })).toEqual({})
+  })
   it("unitSavedOutput: the take from the active result, side outputs from the active take's own fields when it carries them, else the node's", () => {
     const node = { generatedImageUrl: "new", generatedLayerUrls: ["n1", "n2"], generatedLayerData: [{ n: "new" }] }
     expect(unitSavedOutput(LAYERS, node)).toEqual({ imageUrl: "new", unitLists: { layers: ["n1", "n2"] }, unitOutputs: { layerData: '[{"n":"new"}]' } })

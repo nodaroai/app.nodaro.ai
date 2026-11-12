@@ -1,0 +1,68 @@
+{
+  "$schema": "../../../../tools/units/unit.schema.json",
+  "schemaVersion": 1,
+  "type": "split-into-layers",
+  "label": "Split into Layers",
+  "category": "ai",
+  "position": {
+    "after": "remove-background"
+  },
+  "picker": {
+    "family": "image-edit-retouch",
+    "after": "remove-background",
+    "pickerCategory": "AI",
+    "keywords": ["layers", "split", "separate", "decompose", "layer decomposition", "cut out", "elements", "psd", "transparent", "png", "objects", "text layer"]
+  },
+  "handles": {
+    "inputs": [
+      { "id": "image", "label": "Image", "accepts": ["image"], "field": "imageUrl" }
+    ],
+    "outputs": [
+      { "id": "base", "label": "Base", "kind": "image", "from": "generatedImageUrl" },
+      { "id": "layers", "label": "Layers", "kind": "image", "from": "generatedLayerUrls", "list": true, "listMax": "maxLayers" },
+      { "id": "layerData", "label": "Layer data", "kind": "look", "from": "generatedLayerData", "alignedWith": "layers" }
+    ]
+  },
+  "defaultData": {
+    "label": "Split into Layers",
+    "maxLayers": 9,
+    "size": "1K",
+    "prompt": "",
+    "fieldMappings": {}
+  },
+  "execution": {
+    "kind": "worker",
+    "queue": "video",
+    "requires": {
+      "anyOf": ["imageUrl"],
+      "kind": "image",
+      "noun": "an image"
+    }
+  },
+  "capabilities": ["panel:generate-button", "finalize:own-writer", "input:entity-subject", "lane:provider", "provider:kie"],
+  "appFields": [
+    { "field": "maxLayers", "kind": "integer", "labelKey": "splitIntoLayers.maxLayers", "min": 1, "max": 20, "step": 1 },
+    {
+      "field": "size",
+      "kind": "select",
+      "labelKey": "splitIntoLayers.size",
+      "options": [{ "value": "auto", "labelKey": "splitIntoLayers.sizeAuto" }, { "value": "1K" }, { "value": "1.5K" }, { "value": "2K" }]
+    }
+  ],
+  "registry": {
+    "description": "Split one image into a base picture and separate layers, each element on its own transparent PNG, with each layer's name, description, position box and stacking order.",
+    "outputType": "image",
+    "category": "ai-image"
+  },
+  "contract": {
+    "producer": "image",
+    "jsonPips": { "layerData": "other" }
+  },
+  "mcp": {
+    "widgetModelFor": ["split_into_layers"]
+  },
+  "docs": {
+    "page": "docs/nodes/ai-image/split-into-layers.md",
+    "useCase": "Pull a picture apart into its elements — each on its own transparent PNG, with its name, position box and stacking order — to edit, animate or recompose them one by one"
+  }
+}

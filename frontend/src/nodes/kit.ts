@@ -53,6 +53,13 @@ export interface UnitOutputHandle {
    * default) and a plain wire reads the first.
    */
   readonly list?: true
+  /**
+   * A JSON (look) output only: the list output of this unit whose items its
+   * entries line up with, one for one. After a run once per upstream item both
+   * hand on every row's, each entry with its row (@nodaro/render-rules
+   * unitBatchSideOutputs).
+   */
+  readonly alignedWith?: string
 }
 
 /** `contract.producer` (tools/units/vocabulary.mjs PRODUCER_KINDS). */

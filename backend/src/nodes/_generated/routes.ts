@@ -6,10 +6,12 @@ import { route as unit_gif_to_video } from "../gif-to-video/route.js" // unit:gi
 import { route as unit_remove_audio } from "../remove-audio/route.js" // unit:remove-audio
 import { route as unit_shot_cuts } from "../shot-cuts/route.js" // unit:shot-cuts
 import { route as unit_speaker_map } from "../speaker-map/route.js" // unit:speaker-map
+import { route as unit_split_into_layers } from "../split-into-layers/route.js" // unit:split-into-layers
 
 export const UNIT_ROUTES: Readonly<Record<string, UnitRoute>> = Object.assign(Object.create(null), {
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
   "remove-audio": unit_remove_audio, // unit:remove-audio
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-map": unit_speaker_map, // unit:speaker-map
+  "split-into-layers": unit_split_into_layers, // unit:split-into-layers
 })

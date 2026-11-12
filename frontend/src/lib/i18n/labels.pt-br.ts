@@ -386,6 +386,8 @@ const HANDLE_LABELS_PT_BR: Record<string, string> = {
   "Instructions": "Instruções",
   "Instrumental": "Instrumental",
   "Isolated": "Isolado",
+  "Layer data": "Dados das camadas",
+  "Layers": "Camadas",
   "Without": "Sem ele",
   "JSON": "JSON",
   "Location": "Local",

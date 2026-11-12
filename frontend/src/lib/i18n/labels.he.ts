@@ -398,6 +398,8 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "Instructions": "הוראות",
   "Instrumental": "כלי",
   "Isolated": "מבודד",
+  "Layer data": "נתוני שכבות",
+  "Layers": "שכבות",
   "Without": "בלעדיו",
   "JSON": "JSON",
   "Location": "מיקום",

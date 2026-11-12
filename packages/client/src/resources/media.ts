@@ -400,6 +400,22 @@ export class MediaResource {
   }
 
   /**
+   * Split one image into a base picture and separate layers
+   * (`POST /v1/split-into-layers`): each element on its own transparent PNG,
+   * with its name, description, stacking order and the box it sits in on the
+   * base. `maxLayers` (1–99, default 9) caps the layers — more elements than
+   * that merge into fewer layers, none is dropped; `size` is each image's
+   * pixel budget (`1K` default, `auto` keeps the picture's own size between 1K
+   * and 2K); `prompt` names what to separate. A run holds the price of the
+   * most images it may return (`maxLayers` + 1, the base included) and is
+   * charged only for the images it returns. Poll `jobs.get(jobId)`; the
+   * completed job's `output_data` is a {@link SplitIntoLayersOutput}.
+   */
+  splitIntoLayers(input: SplitIntoLayersInput): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/split-into-layers", { body: input })
+  }
+
+  /**
    * Turn one still image + one audio track into an MP4
    * (`POST /v1/still-to-video`) — locally rendered (FFmpeg), no AI model,
    * zero credits. The output duration IS the audio's duration; there is no
@@ -722,6 +738,64 @@ export interface ShotCutsOutput {
   firstFrames?: string[]
   /** With `frames`: each shot's last frame, in shot order. */
   lastFrames?: string[]
+}
+
+/** A layer split's pixel budget per image: about one megapixel at `1K`; `auto` keeps the picture's own size (between 1K and 2K). */
+export type SplitIntoLayersSize = "1K" | "1.5K" | "2K" | "auto"
+
+/** Body of {@link MediaResource.splitIntoLayers} (`POST /v1/split-into-layers`). */
+export interface SplitIntoLayersInput {
+  /** The picture to split (an http or https URL). */
+  imageUrl: string
+  /** "Max layers", 1–99 (default 9): more elements than this merge into fewer layers; none is dropped. */
+  maxLayers?: number
+  /** Default `1K`. `1K` and `1.5K` are priced alike, as are `2K` and `auto`. */
+  size?: SplitIntoLayersSize
+  /** What to separate (up to 2,000 characters): the elements to split out; `<bbox>x1 y1 x2 y2</bbox>` marks (0–1000) may be typed in it. Empty: the main elements are found automatically. */
+  prompt?: string
+}
+
+/** A box on the base picture: `x1`/`y1` its top-left corner, `x2`/`y2` its bottom-right. */
+export interface SplitLayerBox { x1: number; y1: number; x2: number; y2: number }
+
+/**
+ * One layer of a {@link SplitIntoLayersOutput}. A layer is NOT in the base's
+ * pixels: it is a transparent PNG cropped to its element, at about the size
+ * setting's pixel budget and the element's own shape. To put it back in place,
+ * scale it to its `box`.
+ */
+export interface SplitLayer {
+  name?: string
+  description?: string
+  /** Stacking order: 1 sits on the base, higher is drawn above. */
+  zIndex: number
+  /** The layer file's own pixels (not the base's). */
+  width?: number
+  height?: number
+  /** Where the layer sits on the base picture, in the base's pixels. */
+  box?: SplitLayerBox
+  /** The same box on a 0–1000 scale of the base's width and height. */
+  boxNormalized?: SplitLayerBox
+  /** The layer's stored file. */
+  url: string
+  /** The stored base picture this layer was cut from: the job's own `imageUrl`. */
+  baseUrl?: string
+}
+
+/** A completed split-into-layers job's `output_data`. A run that finds no element returns the base only (`layers` empty). */
+export interface SplitIntoLayersOutput {
+  /** The base picture: an opaque PNG. */
+  imageUrl: string
+  /** Each layer's stored file, bottom to top. */
+  layers: string[]
+  /** One entry per layer, in the same order. */
+  layerData: SplitLayer[]
+  /** The number of layers saved. */
+  layerCount: number
+  /** Layers the model returned that could not be saved (each is tried a few times first); 0 when every layer was saved. The run is charged only for the images saved. */
+  layersNotSaved?: number
+  /** Each layer as it was filed in the Library, under its name. */
+  libraryImages?: Array<{ url: string; name?: string }>
 }
 
 export interface MediaProcessInput {

@@ -194,6 +194,8 @@ describe("adminReview.* keys (the operator review surface)", () => {
     "adminReview.showInput",
     "adminReview.previewFailed",
     "adminReview.previewLoading",
+    "adminReview.outputsNotShown",
+    "adminReview.moreOutputs",
     "adminReview.approve",
     "adminReview.reject",
     "adminReview.approveConfirmTitle",
@@ -226,9 +228,11 @@ describe("adminReview.* keys (the operator review surface)", () => {
 
   it("ships the whole namespace in the canonical English dict", () => {
     // The blueprint prose rounds this to "39 keys"; its table has 44 rows and
-    // the table is what the page renders. The count is the guard against a
-    // dropped row.
-    expect(KEYS.length).toBe(44)
+    // the table is what the page renders, plus `outputsNotShown` (the count of
+    // a held job's outputs past the previewable ones) and `moreOutputs` (the
+    // "+N more" control that reveals the held files past a card's first few).
+    // The count is the guard against a dropped row.
+    expect(KEYS.length).toBe(46)
     for (const k of KEYS) expect(typeof en[k as keyof typeof en], k).toBe("string")
   })
 
@@ -241,10 +245,18 @@ describe("adminReview.* keys (the operator review surface)", () => {
     for (const k of KEYS) expect(HEBREW.test(he[k as keyof typeof he] as string), k).toBe(true)
   })
 
-  it("the two counted strings keep their {n} placeholder in both locales", () => {
-    for (const k of ["adminReview.heldFor", "adminReview.creditsHeld"] as const) {
+  it("the counted strings keep their {n} placeholder in both locales", () => {
+    for (const k of ["adminReview.heldFor", "adminReview.creditsHeld", "adminReview.outputsNotShown", "adminReview.moreOutputs"] as const) {
       expect(en[k as keyof typeof en] as string, k).toContain("{n}")
       expect(he[k as keyof typeof he] as string, k).toContain("{n}")
+    }
+  })
+
+  it("the not-shown note names the total and the shown count too, in both locales", () => {
+    for (const dict of [en, he] as const) {
+      const s = dict["adminReview.outputsNotShown" as keyof typeof dict] as string
+      expect(s).toContain("{total}")
+      expect(s).toContain("{shown}")
     }
   })
 

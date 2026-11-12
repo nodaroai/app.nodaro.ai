@@ -16,7 +16,7 @@ import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { loadUnits, repoContext, validateUnits } from "./manifest.mjs"
 import { AGGREGATES, DATA_FILES, GENERATED_DIRS, PROJECTIONS, SPLICES, UNIT_ROOTS } from "./seams.mjs"
-import { aggregateSource, contractsSource, definitionSource, descriptorSource, docsRows, i18nLines, keptLengthsSource, labelsSource, spliceRegion, useCaseRowsSource } from "./templates.mjs"
+import { aggregateSource, contractsSource, definitionSource, descriptorSource, docsRows, i18nLines, keptLengthsSource, labelsSource, listOutputsSource, spliceRegion, useCaseRowsSource } from "./templates.mjs"
 import { scaffoldMain, USAGE as NEW_USAGE } from "./scaffold.mjs"
 import { GEN_UNITS_PRUNES, pruneUnitRows } from "./handle-prune.mjs"
 
@@ -92,7 +92,7 @@ export async function generate({ root = REPO_ROOT, ctx = repoContext(root), read
       outputs.set(f.path, spliceRegion(readFileSync(abs, "utf8"), s.start, s.end, lines, f.path))
     }
   }
-  const dataSource = { contracts: contractsSource, lengths: keptLengthsSource, "use-case-rows": useCaseRowsSource }
+  const dataSource = { contracts: contractsSource, lengths: keptLengthsSource, "use-case-rows": useCaseRowsSource, "list-outputs": listOutputsSource }
   for (const d of DATA_FILES.filter((x) => live.has(x.id))) outputs.set(d.out, dataSource[d.id](units, ctx.legacyTypes))
   // Orphans: generated files no unit or live seam produces any more (a
   // removed unit's projection, a seam switched off). --check fails on them;

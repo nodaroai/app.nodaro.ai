@@ -13,12 +13,14 @@
 //   price.ee.ts             → `price: UnitPrice` (Enterprise License, by filename)
 //   use-case.ts             → `useCase: UnitUseCase` (execution.kind "use-case")
 //   budget.ts               → `budget: UnitBudget` (execution.kind "worker"; a pure leaf)
+//   recover.ts              → `recover: UnitRecover` (an own-writer worker on a provider whose reconcile reads it)
 // The aggregates (backend/src/nodes/_generated/, backend/src/ee/nodes/_generated/)
 // are typed with these, so a unit whose export does not fit fails typecheck at
 // its aggregate line.
 import type { FastifyPluginAsync } from "fastify"
 import type { z } from "zod"
 import type { NodeDescriptor } from "../lib/node-registry.js"
+import type { FinalizeClaimant, FinalizeOutcome } from "../lib/job-finalize.js"
 import type { HandlerFn } from "../workers/shared.js"
 import type { PayloadResult } from "../services/workflow-engine/payload-builder.js"
 import type { ResolvedInputs, SimpleNode } from "../services/workflow-engine/types.js"
@@ -51,6 +53,13 @@ export interface UnitOutputHandle {
    * wire runs the next node once per item and a plain wire reads the first.
    */
   readonly list?: true
+  /**
+   * A JSON (look) output only: the list output of this unit whose items its
+   * entries line up with, one for one. After a run once per upstream item both
+   * hand on every row's, each entry with its row (@nodaro/render-rules
+   * unitBatchSideOutputs).
+   */
+  readonly alignedWith?: string
 }
 
 export interface UnitRequiredMedia {
@@ -147,6 +156,36 @@ export type UnitWorker = HandlerFn
  * storage, supabase or config (lib/__tests__/job-budget-leaf.test.ts).
  */
 export type UnitBudget = (data: unknown) => number | undefined
+
+/** What a reconcile hands a unit's recover.ts: the job, and its provider task as the poll read it, finished. */
+export interface UnitRecoverTask {
+  readonly jobId: string
+  /** The job's request, `jobs.input_data`: what its route or payload wrote, the settings the worker read off its queue payload included. */
+  readonly input: Readonly<Record<string, unknown>>
+  /** The task the worker saved (`jobs.provider_task_id`) and its kind (`provider_kind`). */
+  readonly taskId: string
+  readonly providerKind: string
+  /** The finished task's whole result as the provider's poll returned it (a KIE record-info task: its parsed `resultJson`). */
+  readonly result: unknown
+  /** What the task really cost, in the provider's own credits, from its record; undefined when it says nothing. */
+  readonly providerCredits?: number
+  readonly providerMs?: number
+  /** Who finalizes: the reconcile cron, or the worker's stall re-pick. */
+  readonly claimant: FinalizeClaimant
+}
+
+/**
+ * recover.ts — finish an own-writer worker's job (capability
+ * "finalize:own-writer") from its provider task's finished result, through the
+ * SAME delivery its worker runs after the provider call: the reconcile cron and
+ * the worker's stall re-pick (lib/reconcile/kie.ts, through
+ * lib/reconcile/unit-recovery.ts) call it instead of bumping the row toward its
+ * exhaustion. Resolves with the finalize's outcome (`{ ok: false }` — a lost
+ * claim, a held or blocked result — is not a failure). Throws when the result
+ * cannot be delivered (unreadable, no base, its store failed after its
+ * attempts): the reconcile then fails the job and refunds it at once.
+ */
+export type UnitRecover = (task: UnitRecoverTask) => Promise<FinalizeOutcome>
 
 /** use-case.ts — a use-case node's request body (the factory route POST /v1/<type> parses it) and its GET /v1/nodes input schema. */
 export interface UnitUseCase {

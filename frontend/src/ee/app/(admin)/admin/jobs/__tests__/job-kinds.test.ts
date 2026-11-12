@@ -246,6 +246,7 @@ const PINNED_UNREAD: ReadonlyArray<readonly [site: string, types: string]> = [
   ["backend/src/lib/meter-sync-llm.ts meterSyncLlmMetered(jobType)", "meterOptionalSyncLlm's jobType, read at each of its calls"],
   ["backend/src/routes/nodaro-exclusive.ts buildJobInputData(jobType)", "enqueueExclusive's jobType: each jobHandler(…) call's, read there, and the continue route's generate-video-pro"],
   ["backend/src/routes/social-post-reads.ts buildJobInputData(nodeType)", "the nodeType of each startJob(…) call, read there"],
+  ["backend/src/nodes/split-into-layers/route.ts buildJobInputData(descriptor.type)", "split-into-layers, the unit's own node type: its kind is its node's"],
 ]
 
 /** Literals the scan reads that are not row types. Each needs a reason. */

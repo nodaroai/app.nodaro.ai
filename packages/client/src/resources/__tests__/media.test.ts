@@ -124,6 +124,25 @@ describe("media resource", () => {
     expect(out.jobId).toBe("j-split")
   })
 
+  it("splitIntoLayers() POSTs /v1/split-into-layers with the body verbatim and returns { jobId }", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-layers" }))
+    const c = make(fetchMock)
+    const body = { imageUrl: "https://x/poster.png", maxLayers: 5, size: "2K" as const, prompt: "the title, the car, the sky" }
+    const out = await c.media.splitIntoLayers(body)
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/split-into-layers")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual(body)
+    expect(out.jobId).toBe("j-layers")
+  })
+
+  it("splitIntoLayers() sends only the image when nothing else is set (the server defaults apply)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-layers2" }))
+    const c = make(fetchMock)
+    await c.media.splitIntoLayers({ imageUrl: "https://x/poster.png" })
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({ imageUrl: "https://x/poster.png" })
+  })
+
   it("imageOverlay() POSTs /v1/image-overlay with the base + percent-placed layers and returns { jobId }", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j5" }))
     const c = make(fetchMock)

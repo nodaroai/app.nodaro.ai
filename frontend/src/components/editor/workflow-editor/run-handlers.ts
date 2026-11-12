@@ -58,7 +58,7 @@ import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-e
 import { usecaseResultIsText } from "@nodaro/render-rules"
 import { usecaseFailedRunFields, usecaseRestoredResults, usecaseTextRunPatch } from "@/lib/use-case-run-result"
 import { carriesRowStamps, runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
-import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitSideJobFields, unitSideRunFields } from "@/lib/json-run-result"
+import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitSideJobFields, unitSideListRowFields, unitSideRunFields } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, UGC_PATCH_REPLACES_GENERIC, isUgcFinishNode, ugcCreatorShowsRun, ugcJobMayLand, ugcJobNoOutputMessage, ugcJobResultPatch, ugcRunPatch, ugcStopPatch } from "@/lib/ugc-run-patch"
 import { serverNowIso } from "@/lib/server-clock"
 import { promptUgcCredits, ugcCreditStopOf } from "@/lib/ugc-creator-run"
@@ -2228,6 +2228,10 @@ export interface NodeExecutionState {
     unitOutputs?: Record<string, string>;
     /** A node unit's list outputs, by output id — the list one run made on that pip. Mirrors backend NodeOutput. */
     unitLists?: Record<string, string[]>;
+    /** A node unit's list outputs, by output id — how many of that list's items the run made but could not store. Mirrors backend NodeOutput. */
+    unitListsNotSaved?: Record<string, number>;
+    /** A node unit with side outputs run once per upstream item: each row's side outputs, row-aligned with listResults (null: none). Mirrors backend NodeOutput. */
+    listResultSideOutputs?: ReadonlyArray<{ readonly unitLists?: Record<string, string[]>; readonly unitOutputs?: Record<string, string>; readonly unitListsNotSaved?: Record<string, number> } | null>;
   };
   error?: string;
   /** Stable billing-refusal code (backend reserve-errors.ts) — branch on this, never on text. */
@@ -2578,9 +2582,11 @@ function syncNodeStatesToStore(
         const existingUrls = new Set(prev.map((r) => r.url));
 
         // List/loop fan-out: one URL per iteration, each with its own jobId
-        // (and, on Video Overlay, the key of its own composition).
+        // (and, on Video Overlay, the key of its own composition; on a node
+        // unit with side outputs, that row's own — a split image's layers).
         if (listResultUrls.length > 1) {
           const rowFields = videoOverlayListRowFields(nodeType, state.output);
+          const rowSide = unitSideListRowFields(nodeType, state.output);
           const newResults = listResultUrls
             .filter((url) => !existingUrls.has(url))
             .map((url, i) => {
@@ -2594,6 +2600,7 @@ function syncNodeStatesToStore(
                 jobId: rowJobId ?? `exec-${node.id}-${i}`,
                 ...rowIdentity,
                 ...rowFields(url),
+                ...rowSide(url),
                 // Apply EDL: only the render the output describes keeps its Transcript.
                 ...applyEdlTakeTranscriptField(nodeType, state.output, url),
               };

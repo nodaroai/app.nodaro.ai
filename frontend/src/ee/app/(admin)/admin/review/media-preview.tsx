@@ -64,9 +64,11 @@ export function MediaPreview({
     )
   }
 
-  // "other" is a download-only row rather than a broken <video>: a new
-  // generation type classifies as "other" until it is added to the finalize
-  // arrays, and a placeholder is honest where a black rectangle is not.
+  // `mediaKind` is the OBJECT's own kind; the server never substitutes the
+  // job's kind for a file it could not place. "other" — a file the result gate
+  // could not place, or an entry with no recorded kind — is a download-only row
+  // rather than a broken <video> or <img>: a download is honest about any
+  // file, a black rectangle is not.
   if (mediaKind === "image") {
     return <img data-testid="review-media" src={src} alt="" className="max-h-64 rounded-md object-contain" />
   }

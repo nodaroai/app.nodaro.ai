@@ -5,6 +5,7 @@
 // and the unit collection in — so frontend/src/lib/__tests__/unit-compose.test.ts
 // proves every seam on an in-memory fixture unit, and an EMPTY unit
 // collection returns every legacy table unchanged.
+import { unitBatchSideOutputs, type UnitSideOutputsRow } from "@nodaro/render-rules"
 import type { NodeOption } from "@/lib/node-compatibility"
 import type { NodeTypeDefinition, SceneNodeData, SceneNodeType } from "@/types/nodes"
 import type { UnitDefinition, UnitHandleKind, UnitLabels, UnitOutputHandle, UnitProducerKind } from "@/nodes/kit"
@@ -316,15 +317,31 @@ export function unitSideOutputs(u: UnitDefinition): UnitOutputHandle[] {
 const isSideOutput = (u: UnitDefinition, h: UnitOutputHandle): boolean => unitSideOutputs(u).some((s) => s.id === h.id)
 
 /**
+ * Whose side outputs a read takes: a wire's (`"wire"`, the default) — after a
+ * run once per upstream item, the batch's, every row's — or the active take's
+ * (`"take"`: what the node shows beside the take it shows, its own row's).
+ */
+export type UnitSideRead = "wire" | "take"
+
+/** Whether the node holds the batch of a run once per upstream item: its take pip's list (`__listResults`). */
+const holdsBatch = (data: Readonly<Record<string, unknown>>): boolean => unitListItems(data.__listResults).length > 0
+
+/**
  * The value of output `h` in node data: a side output reads the ACTIVE take's
  * own field when that take carries the key (`Object.hasOwn` — a take whose run
  * made none carries it as null, which is no value and survives a save), else the node's
  * field; every other output reads the node's field. The active take is
- * `generatedResults[activeResultIndex ?? 0]`, as the media read takes it.
+ * `generatedResults[activeResultIndex ?? 0]`, as the media read takes it. A
+ * wire's read of a node holding a batch (`holdsBatch`) takes the node's field:
+ * after a run once per upstream item it holds every row's, row-aligned
+ * (unitBatchSideOutputs, decided 2026-11-11), whichever take is active — as
+ * the take pip lists the batch whichever take is active. The server's twin is
+ * backend/src/lib/unit-compose.ts `unitSavedOutput`.
  */
-function unitOutputField(u: UnitDefinition, data: Readonly<Record<string, unknown>>, h: UnitOutputHandle): unknown {
+function unitOutputField(u: UnitDefinition, data: Readonly<Record<string, unknown>>, h: UnitOutputHandle, read: UnitSideRead = "wire"): unknown {
   if (!h.from) return undefined
   if (!isSideOutput(u, h)) return data[h.from]
+  if (read === "wire" && holdsBatch(data)) return data[h.from]
   const results = data.generatedResults
   const take = Array.isArray(results) ? (results as unknown[])[(data.activeResultIndex as number | undefined) ?? 0] : undefined
   if (typeof take === "object" && take !== null && Object.hasOwn(take, h.from)) return (take as Record<string, unknown>)[h.from]
@@ -392,29 +409,33 @@ const lookOutputs = (u: UnitDefinition) => u.handles.outputs.filter((h) => h.kin
  * — its field, a JSON string parsed — wrapped, `value` undefined when it holds
  * none. Undefined when the pip the wire reads (the one named, else the first)
  * is not a look output, or the unit is a use case. A look output beside a
- * media take reads the active take's own field when the take carries it. The
- * server's twin is backend/src/lib/unit-compose.ts `unitPipJson`.
+ * media take reads the active take's own field when the take carries it — on
+ * a wire's read of a node holding a batch, the node's (every row's entries,
+ * each with its row); `read: "take"` always the active take's. The server's
+ * twin is backend/src/lib/unit-compose.ts `unitPipJson`.
  */
-export function unitPipJson(u: UnitDefinition, data: Readonly<Record<string, unknown>>, sourceHandle: string | null | undefined): { readonly value: unknown } | undefined {
+export function unitPipJson(u: UnitDefinition, data: Readonly<Record<string, unknown>>, sourceHandle: string | null | undefined, read: UnitSideRead = "wire"): { readonly value: unknown } | undefined {
   if (u.execution.kind === "use-case") return undefined
   const h = unitOutputPip(u, sourceHandle)
   if (h?.kind !== "look") return undefined
-  const s = unitJsonString(unitOutputField(u, data, h))
+  const s = unitJsonString(unitOutputField(u, data, h, read))
   return { value: s === undefined ? undefined : unitJsonValue(s) }
 }
 
 /**
  * What an Each wire from a unit's media pip fans out over, for a unit whose
  * media take carries side outputs (`unitSideOutputs`): its list pip's items
- * (the active take's list when the take carries one, else the node's), and
- * NOTHING on its media take's pip — its takes are a history, not a list one
- * run made. Undefined for every other pip and unit (a JSON pip is read by
- * `unitPipJson`; a unit without side outputs keeps the generic list read).
+ * (the active take's list when the take carries one, else the node's — on a
+ * wire's read of a node holding a batch, the node's: every row's, row by row;
+ * `read: "take"` always the active take's), and on its media take's pip the
+ * last batch of a run once per upstream item, never its take history.
+ * Undefined for every other pip and unit (a JSON pip is read by `unitPipJson`;
+ * a unit without side outputs keeps the generic list read).
  */
-export function unitPipList(u: UnitDefinition, data: Readonly<Record<string, unknown>>, sourceHandle: string | null | undefined): { readonly items: readonly string[] } | undefined {
+export function unitPipList(u: UnitDefinition, data: Readonly<Record<string, unknown>>, sourceHandle: string | null | undefined, read: UnitSideRead = "wire"): { readonly items: readonly string[] } | undefined {
   if (unitSideOutputs(u).length === 0) return undefined
   const h = unitOutputPip(u, sourceHandle)
-  if (h?.list === true) return { items: unitListItems(unitOutputField(u, data, h)) }
+  if (h?.list === true) return { items: unitListItems(unitOutputField(u, data, h, read)) }
   // The media take's pip lists the last batch of a run once per upstream item
   // (`__listResults`, as a per-item node's each pip does) — never the take history.
   return isPlainMedia(h) ? { items: unitListItems(data.__listResults) } : undefined
@@ -510,23 +531,42 @@ export function unitJsonJobLanding(u: UnitDefinition): UnitJsonLanding {
 }
 
 /**
+ * The field that holds how many items of list output `h` its run made but could
+ * not store (each is retried; one that still fails is dropped and the run
+ * completes with the rest): `<output id>NotSaved` — the same name on the job
+ * row's output_data, on the node and on the take ("layersNotSaved" for a
+ * `layers` pip). A server run's node output carries the counts on
+ * `unitListsNotSaved`, by output id.
+ */
+export const unitListNotSavedField = (h: Pick<UnitOutputHandle, "id">): string => `${h.id}NotSaved`
+
+/** A not-saved count as it lands: a whole number from 0, else null (the run reported none). */
+function notSavedCount(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null
+}
+
+/**
  * A finished run's side outputs (`unitSideOutputs`), as node data — what every
  * lane writes beside the media take, on the node and on the take: each JSON
  * (look) output's `looks[<output id>]` on its `from` field as `unitJobLanding`
  * lands it, and each list output's `lists[<output id>]` as its non-empty
- * strings. A side output with no value (a list with no item, a JSON output the
- * run did not write) is written as null — no value to every reader — so a
- * field an earlier run filled is emptied, and a take keeps saying so after a
- * save (an undefined key is dropped by the save, and the reader would then fall
- * back to the node's field: another run's layers). A key that names no side output is dropped. The canvas run reads
- * both off the job row's output_data (each value under its output's id); a
- * server run's node output carries them on `unitOutputs` (JSON strings) and
- * `unitLists`. Empty for a unit without side outputs.
+ * strings, with `notSaved[<output id>]` — how many of its items the run could
+ * not store — on `unitListNotSavedField` (0 when every one was stored). A side
+ * output with no value (a list with no item, a JSON output the run did not
+ * write, a count the run did not report) is written as null — no value to every
+ * reader — so a field an earlier run filled is emptied, and a take keeps saying
+ * so after a save (an undefined key is dropped by the save, and the reader would
+ * then fall back to the node's field: another run's layers). A key that names
+ * no side output is dropped. The canvas run reads all three off the job row's
+ * output_data (each value under its output's id, each count under its field); a
+ * server run's node output carries them on `unitOutputs` (JSON strings),
+ * `unitLists` and `unitListsNotSaved`. Empty for a unit without side outputs.
  */
 export function unitSideLanding(
   u: UnitDefinition,
   looks: Readonly<Record<string, unknown>>,
   lists: Readonly<Record<string, unknown>>,
+  notSaved: Readonly<Record<string, unknown>> = {},
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const h of unitSideOutputs(u)) {
@@ -534,6 +574,7 @@ export function unitSideLanding(
     if (h.list === true) {
       const items = Object.hasOwn(lists, h.id) ? unitListItems(lists[h.id]) : []
       out[h.from] = items.length > 0 ? items : null
+      out[unitListNotSavedField(h)] = Object.hasOwn(notSaved, h.id) ? notSavedCount(notSaved[h.id]) : null
     } else {
       out[h.from] = Object.hasOwn(looks, h.id) && unitJsonString(looks[h.id]) !== undefined ? unitJsonValue(looks[h.id]) : null
     }
@@ -544,21 +585,61 @@ export function unitSideLanding(
 const carrier = (v: unknown): Readonly<Record<string, unknown>> =>
   typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Readonly<Record<string, unknown>>) : {}
 
-/** A server run's node output (`unitOutputs` for the JSON pips, `unitLists` for the list pips) as the side patch; undefined for a unit without side outputs. */
-export function unitSideRunPatch(u: UnitDefinition, output: { readonly unitOutputs?: unknown; readonly unitLists?: unknown } | null | undefined): Record<string, unknown> | undefined {
+/** A server run's node output (`unitOutputs` for the JSON pips, `unitLists` for the list pips, `unitListsNotSaved` for their counts) as the side patch; undefined for a unit without side outputs. */
+export function unitSideRunPatch(
+  u: UnitDefinition,
+  output: { readonly unitOutputs?: unknown; readonly unitLists?: unknown; readonly unitListsNotSaved?: unknown } | null | undefined,
+): Record<string, unknown> | undefined {
   if (unitSideOutputs(u).length === 0) return undefined
-  return unitSideLanding(u, carrier(output?.unitOutputs), carrier(output?.unitLists))
+  return unitSideLanding(u, carrier(output?.unitOutputs), carrier(output?.unitLists), carrier(output?.unitListsNotSaved))
 }
 
-/** A job row's output_data (each side output's value under its id) as the side patch; undefined for a unit without side outputs. */
+/** A job row's output_data (each side output's value under its id, each list's count under `unitListNotSavedField`) as the side patch; undefined for a unit without side outputs. */
 export function unitSideJobPatch(u: UnitDefinition, outputData: unknown): Record<string, unknown> | undefined {
-  if (unitSideOutputs(u).length === 0) return undefined
+  const side = unitSideOutputs(u)
+  if (side.length === 0) return undefined
   const o = carrier(outputData)
-  return unitSideLanding(u, o, o)
+  const notSaved: Record<string, unknown> = {}
+  for (const h of side) if (h.list === true && Object.hasOwn(o, unitListNotSavedField(h))) notSaved[h.id] = o[unitListNotSavedField(h)]
+  return unitSideLanding(u, o, o, notSaved)
 }
 
-/** The node fields a canvas run of a unit with side outputs empties at its start: each side output's field. */
-export const unitSideFields = (u: UnitDefinition): string[] => unitSideOutputs(u).flatMap((h) => (h.from ? [h.from] : []))
+/** The node fields a canvas run of a unit with side outputs empties at its start: each side output's field, and each list output's not-saved count. */
+export const unitSideFields = (u: UnitDefinition): string[] =>
+  unitSideOutputs(u).flatMap((h) => (h.from ? (h.list === true ? [h.from, unitListNotSavedField(h)] : [h.from]) : []))
+
+/** A take's side fields (the side outputs one run made, as every lane lands them) in the carrier a server node output uses, by output id. */
+function unitSideRowOf(side: ReadonlyArray<UnitOutputHandle>, row: object): UnitSideOutputsRow {
+  const take = row as Readonly<Record<string, unknown>>
+  const unitLists: Record<string, unknown> = {}
+  const unitOutputs: Record<string, unknown> = {}
+  const unitListsNotSaved: Record<string, unknown> = {}
+  for (const h of side) {
+    if (!h.from) continue
+    if (h.list === true) {
+      if (Object.hasOwn(take, h.from)) unitLists[h.id] = take[h.from]
+      if (Object.hasOwn(take, unitListNotSavedField(h))) unitListsNotSaved[h.id] = take[unitListNotSavedField(h)]
+    } else if (Object.hasOwn(take, h.from)) unitOutputs[h.id] = take[h.from]
+  }
+  return { unitLists, unitOutputs, unitListsNotSaved }
+}
+
+/**
+ * The node's side fields after a canvas run once per upstream item (decided
+ * 2026-11-11, row-aligned): every row's side outputs, from each row's take
+ * (`takes[i]` is row i's; null or undefined for a row that made none) —
+ * `unitBatchSideOutputs` (@nodaro/render-rules), the rule the server's fan-out
+ * output applies, landed as `unitSideLanding` lands it. Each take keeps its
+ * own. Undefined for a unit without side outputs.
+ */
+export function unitSideBatchPatch(
+  u: UnitDefinition,
+  takes: ReadonlyArray<object | null | undefined>,
+): Record<string, unknown> | undefined {
+  const side = unitSideOutputs(u)
+  if (side.length === 0) return undefined
+  return unitSideRunPatch(u, unitBatchSideOutputs(u.handles.outputs, takes.map((t) => (t ? unitSideRowOf(side, t) : null))))
+}
 
 /** The node-label tables' unit rows, by app locale ("pt-br" in strings.json is "pt-BR"). */
 export function unitNodeLabels(labels: ReadonlyArray<UnitLabels>): Partial<Record<"he" | "ja" | "ko" | "pt-BR", Record<string, string>>> {

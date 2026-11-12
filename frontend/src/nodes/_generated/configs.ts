@@ -10,6 +10,7 @@ import { ConfigPanel as unit_remove_audio } from "../remove-audio/config" // uni
 import { ConfigPanel as unit_shot_cuts } from "../shot-cuts/config" // unit:shot-cuts
 import { ConfigPanel as unit_speaker_layout } from "../speaker-layout/config" // unit:speaker-layout
 import { ConfigPanel as unit_speaker_map } from "../speaker-map/config" // unit:speaker-map
+import { ConfigPanel as unit_split_into_layers } from "../split-into-layers/config" // unit:split-into-layers
 import { ConfigPanel as unit_tighten_episode } from "../tighten-episode/config" // unit:tighten-episode
 
 export const UNIT_CONFIGS: Readonly<Record<string, UnitConfigPanel>> = Object.assign(Object.create(null), {
@@ -21,5 +22,6 @@ export const UNIT_CONFIGS: Readonly<Record<string, UnitConfigPanel>> = Object.as
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "speaker-map": unit_speaker_map, // unit:speaker-map
+  "split-into-layers": unit_split_into_layers, // unit:split-into-layers
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

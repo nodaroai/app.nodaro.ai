@@ -40,7 +40,7 @@ the foot of the list.
 |---|---|
 | **Add Your Own** | Upload Image |
 | **Create** | Generate Image |
-| **Edit & Retouch** | Modify Image · Upscale Image · Remove Background · Generate Mask · Paint Mask · Image Collage · Image Overlay · Extract Frame |
+| **Edit & Retouch** | Modify Image · Upscale Image · Remove Background · Split into Layers · Generate Mask · Paint Mask · Image Collage · Image Overlay · Extract Frame |
 | **References** | Reference Sheet · Reference Board |
 | **Understand** | Describe Image · Describe to Picker · Image Critic |
 
@@ -577,6 +577,7 @@ Helpers for debugging and workflow organization.
 | [Shot Cuts](./processing-video/shot-cuts.md) | Find where every shot of a video starts and ends, measured from the file (every decoded frame scored; clips up to 30 minutes). Optionally saves each shot's first and last frame as images. | Get a clip's shot list — every shot's start, end and length — and, on request, each shot's first and last frame |
 | [Speaker Layout](./processing-video/speaker-layout.md) | Frame a whole recording by speaker — the same length, no cut: one recording framed in turn, or several cameras of one conversation lined up with each speaker on their own camera. Its steps are priced at their own rates, plus a per-run fee. | A whole podcast or interview framed for 9:16 (or any shape) by speaker, nothing cut; with several cameras, each speaker on their own camera |
 | [Speaker Map](./processing-audio/speaker-map.md) | Work out which camera each speaker is on, from the cameras' own microphones: 2–6 recordings, their Audio Sync offsets and a diarized transcript. | Tell Camera Switch whose camera is whose in a multicam podcast, without filling in the speaker table by hand |
+| [Split into Layers](./ai-image/split-into-layers.md) | Split one image into a base picture and separate layers, each element on its own transparent PNG, with each layer's name, description, position box and stacking order. | Pull a picture apart into its elements — each on its own transparent PNG, with its name, position box and stacking order — to edit, animate or recompose them one by one |
 <!-- gen:units end -->
 
 ---

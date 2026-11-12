@@ -1,7 +1,10 @@
 import { FAN_OUT_ALL_OR_NOTHING_TYPES, fanOutItemMeta, type FanOutItemMeta, type RunResultRowStamp } from "@nodaro/shared/nodes"
+import { unitBatchSideOutputs } from "@nodaro/render-rules"
 import type { NodeOutput } from "../services/workflow-engine/types.js"
 import type { ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
+import { unitDescriptorOf } from "../lib/unit-descriptors.js"
+import { unitHasSideOutputs } from "../lib/unit-compose.js"
 import { chargedCreditsOfRejection, withChargedCredits, withFanOutProgress } from "../services/workflow-engine/failed-node-output.js"
 
 /** The fulfilled value of one fan-out iteration task. */
@@ -30,6 +33,39 @@ export interface FanOutAssembly {
 function isCancellationReason(reason: unknown): boolean {
   const msg = reason instanceof Error ? reason.message : String(reason)
   return msg === "Cancelled" || msg === "Execution cancelled"
+}
+
+/** A row's side outputs: what a node unit's list and JSON outputs carry beside its take (NodeOutput `unitLists` / `unitOutputs` / `unitListsNotSaved`). */
+type NodeOutputSide = Pick<NodeOutput, "unitLists" | "unitOutputs" | "unitListsNotSaved">
+
+/** One iteration's side outputs, or null when it carries none (every node but a unit with side outputs). */
+function sideOutputsOf(o: NodeOutput): NodeOutputSide | null {
+  if (!o.unitLists && !o.unitOutputs && !o.unitListsNotSaved) return null
+  return {
+    ...(o.unitLists ? { unitLists: o.unitLists } : {}),
+    ...(o.unitOutputs ? { unitOutputs: o.unitOutputs } : {}),
+    ...(o.unitListsNotSaved ? { unitListsNotSaved: o.unitListsNotSaved } : {}),
+  }
+}
+
+/**
+ * What a wire from a node unit's side pip reads after the node ran once per
+ * upstream item (decided 2026-11-11, row-aligned): EVERY row's side outputs —
+ * each list output's files row by row, a JSON output aligned with a list each
+ * row's entries tagged with their row, the not-stored counts summed
+ * (`unitBatchSideOutputs`, @nodaro/render-rules — the rule the editor's canvas
+ * run applies too). Undefined for every other node type, whose primary output
+ * stays iteration 0's.
+ */
+function batchSideOutputsOf(nodeType: string | undefined, rows: ReadonlyArray<NodeOutputSide | null>): NodeOutputSide | undefined {
+  const unit = unitDescriptorOf(nodeType)
+  return unit && unitHasSideOutputs(unit) ? unitBatchSideOutputs(unit.handles.outputs, rows) : undefined
+}
+
+/** `o` without its side outputs (`unitLists` / `unitOutputs` / `unitListsNotSaved`). */
+function withoutSideOutputs(o: NodeOutput): NodeOutput {
+  const { unitLists: _lists, unitOutputs: _looks, unitListsNotSaved: _notSaved, ...rest } = o
+  return rest
 }
 
 /** One iteration's identity: its job, its thumbnail, and what a render stamped. */
@@ -107,6 +143,11 @@ export function assembleFanOutResult(
   const allJobIds: string[] = []
   // The row each of `allJobIds` ran (index-aligned with it): what a failed all-or-nothing node names its finished jobs by.
   const allJobRows: number[] = []
+  // Each row's side outputs (a node unit's list and JSON outputs beside its
+  // take: a split image's layers) — row-aligned with allResults, null where the
+  // row carries none, so each row's take keeps its own (the editor's server-run
+  // lane spreads them on the row's take).
+  const allSideOutputs: (NodeOutputSide | null)[] = new Array(itemCount).fill(null)
   // Each row's notes (warnings + real length) — row-aligned with allResults.
   // Filled only for all-or-nothing types (UGC Clip); nothing else reads it.
   const allMeta: (FanOutItemMeta | null)[] = new Array(itemCount).fill(null)
@@ -128,6 +169,7 @@ export function assembleFanOutResult(
         anyCompositionKey = true
       }
       allStamps[index] = { ...allStamps[index], ...rowStampOf(result) }
+      allSideOutputs[index] = sideOutputsOf(result.output)
       if (allOrNothing) allMeta[index] = fanOutItemMeta(result.output)
       succeededCount++
       if (index === 0) firstOutput = result.output
@@ -176,13 +218,18 @@ export function assembleFanOutResult(
   // Prefer iteration 0's output as primary; fall back to the first successful
   // iteration so a failed/cancelled index 0 doesn't blank the primary output.
   const primaryOutput = firstOutput ?? firstSuccessfulOutput
+  // A node unit with side outputs: its side pips hand on every row's (row-aligned
+  // with listResults), never the primary's alone; each row keeps its own below.
+  const batchSide = batchSideOutputsOf(nodeType, allSideOutputs)
 
   const output: NodeOutput = {
-    ...(primaryOutput ?? {}),
+    ...(primaryOutput ? (batchSide ? withoutSideOutputs(primaryOutput) : primaryOutput) : {}),
+    ...batchSide,
     listResults: allResults,
     // The primary's `resultCompositionKey` is iteration 0's; the rows carry their own.
     ...(anyCompositionKey ? { listResultCompositionKeys: allCompositionKeys } : {}),
     listResultStamps: allStamps,
+    ...(allSideOutputs.some(Boolean) ? { listResultSideOutputs: allSideOutputs } : {}),
     ...(allMeta.some(Boolean)
       ? { listResultMeta: allMeta.map((m): FanOutItemMeta => m ?? { warnings: [], durationSec: null }) }
       : {}),

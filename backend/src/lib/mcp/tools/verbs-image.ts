@@ -39,6 +39,7 @@ import { getUserMcpPreferences } from "../user-preferences.js"
 import { imageToImageLevers, normalizeImageInput, requestedAspectRatio, savedGenerationModel } from "../normalize.js"
 import { imageToImageAspectRatio } from "../../image-auto-aspect.js"
 import { presetImageBody } from "./_image-preset-call.js"
+import { registerSplitIntoLayersVerb } from "./verbs-split-into-layers.js"
 import { OVERLAY_MAX_LAYERS } from "../../../providers/image/overlay-contract.js"
 import type { SuggestedPlacement } from "../../../routes/image-overlay-placement.js"
 import { OVERLAY_LAYER_KINDS, overlayTextStyleSchema, overlayQrStyleSchema, overlayShapeStyleSchema, overlayImageEffectsSchema, OVERLAY_PLATFORM_IDS, OVERLAY_MAX_VARIANTS, GENERATE_MASK_LIMITS } from "@nodaro/shared/media"
@@ -900,6 +901,9 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       return dispatchJob(fastify, session, { url: "/v1/generate-mask", payload, label: "generate mask", widgetKind: "image", widgetData: { prompt: args.prompt, model: "generate-mask" } })
     },
   )
+
+  // ── split_into_layers (Split into Layers) — its own module ──
+  registerSplitIntoLayersVerb({ server, session, fastify })
 
   // ── image_collage ──
   server.registerTool(

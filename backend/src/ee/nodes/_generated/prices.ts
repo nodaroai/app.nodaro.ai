@@ -10,6 +10,7 @@ import { price as unit_remove_audio } from "../../../nodes/remove-audio/price.ee
 import { price as unit_shot_cuts } from "../../../nodes/shot-cuts/price.ee.js" // unit:shot-cuts
 import { price as unit_speaker_layout } from "../../../nodes/speaker-layout/price.ee.js" // unit:speaker-layout
 import { price as unit_speaker_map } from "../../../nodes/speaker-map/price.ee.js" // unit:speaker-map
+import { price as unit_split_into_layers } from "../../../nodes/split-into-layers/price.ee.js" // unit:split-into-layers
 import { price as unit_tighten_episode } from "../../../nodes/tighten-episode/price.ee.js" // unit:tighten-episode
 
 export const UNIT_PRICES: Readonly<Record<string, UnitPrice>> = Object.assign(Object.create(null), {
@@ -21,5 +22,6 @@ export const UNIT_PRICES: Readonly<Record<string, UnitPrice>> = Object.assign(Ob
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "speaker-map": unit_speaker_map, // unit:speaker-map
+  "split-into-layers": unit_split_into_layers, // unit:split-into-layers
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

@@ -33,6 +33,13 @@ export const LANE_CAPABILITIES = Object.keys(CAPABILITIES).filter((c) => c.start
 const PROVIDER_PREFIX = "provider:"
 /** The provider-attribution capabilities: a worker in the provider lane names exactly one (concurrency-lanes/provider-of.ts). */
 export const PROVIDER_CAPABILITIES = Object.keys(CAPABILITIES).filter((c) => c.startsWith(PROVIDER_PREFIX))
+/**
+ * The providers whose reconcile reads a unit's recover.ts (the "recovers" seam):
+ * backend/src/lib/reconcile/kie.ts asks lib/reconcile/unit-recovery.ts before
+ * its NOT_GENERIC_RECOVERABLE bump. The fal and Replicate reconciles do not, so
+ * a recover.ts on a unit of theirs would never run — refused until theirs do.
+ */
+export const RECOVERING_PROVIDERS = ["provider:kie"]
 
 /**
  * Whether a unit's price.ee.ts names the id a run reserves from the node's data
@@ -286,6 +293,18 @@ function checkHandles(h, errors) {
             if (handle.runtimeTyped !== undefined) errors.push(`${at}.list: a list output's medium is its kind, never decided at run time — remove runtimeTyped`)
           }
         }
+        // The most items one run makes on a list output: a defaultData number the run estimate counts before a first run.
+        if (handle.listMax !== undefined) {
+          if (handle.list !== true) errors.push(`${at}.listMax: only on a list output (list: true)`)
+          if (!isNonEmptyString(handle.listMax)) errors.push(`${at}.listMax must name a node-data field`)
+        }
+        // A JSON output whose entries line up one for one with a list output's
+        // items: after a run once per upstream item both hand on every row's,
+        // each entry with its row (json-output-rules.mjs checks what it names).
+        if (handle.alignedWith !== undefined) {
+          if (handle.kind !== "look") errors.push(`${at}.alignedWith: only on a JSON (look) output`)
+          if (!isNonEmptyString(handle.alignedWith)) errors.push(`${at}.alignedWith must name a list output`)
+        }
       }
     })
     const dup = ids.filter((id, i) => ids.indexOf(id) !== i)
@@ -340,6 +359,17 @@ function checkFiles(unit, m, ctx, errors) {
   for (const f of ["payload.ts", "worker.ts"]) if (kind !== "worker" && kind !== "use-case" && has("backend", f)) errors.push(`${f} is only for execution.kind "worker"`)
   // The video worker sizes a job's liveness from it (declaredJobBudgetMs), so only a worker's job has one.
   if (kind !== "worker" && has("backend", "budget.ts")) errors.push(`budget.ts is only for execution.kind "worker" (the video worker's liveness budget)`)
+  // The reconcile finishes an own-writer worker's job from its saved provider
+  // task through recover.ts (the "recovers" seam): only such a worker has one,
+  // and only on a provider whose reconcile reads it.
+  if (has("backend", "recover.ts")) {
+    const caps = Array.isArray(m.capabilities) ? m.capabilities : []
+    if (kind !== "worker" || !caps.includes("finalize:own-writer")) {
+      errors.push(`recover.ts finishes an own-writer worker's job from its provider task: it needs execution.kind "worker" and the "finalize:own-writer" capability`)
+    } else if (!caps.some((c) => RECOVERING_PROVIDERS.includes(c))) {
+      errors.push(`recover.ts is read only by the reconcile of ${RECOVERING_PROVIDERS.join(", ")} (backend/src/lib/reconcile/kie.ts): a worker with one names that provider — another provider's reconcile must read the "recovers" seam first`)
+    }
+  }
   errors.push(...useCaseFileProblems(unit, kind, has, ctx))
   if (kind === "source" && has("frontend", "exec.ts")) errors.push("execution.kind \"source\" runs nothing — remove exec.ts or change the kind")
   // The add-node picker renders the icon of option.tsx (node-options.tsx composes it).
@@ -517,6 +547,12 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
   checkHandles(m.handles, errors)
   if (!isObject(m.defaultData)) errors.push("defaultData must be an object")
   else {
+    // A list output's listMax names a defaultData field holding a whole number of items, at least 1.
+    for (const [i, h] of (Array.isArray(m.handles?.outputs) ? m.handles.outputs : []).entries()) {
+      if (!isObject(h) || h.list !== true || typeof h.listMax !== "string" || !h.listMax) continue
+      const v = m.defaultData[h.listMax]
+      if (!Number.isInteger(v) || v < 1) errors.push(`handles.outputs[${i}].listMax: defaultData.${h.listMax} must be a whole number of items, at least 1 (the most a run makes, counted before a first run)`)
+    }
     for (const [k, v] of Object.entries(m.defaultData)) {
       if (PROMPT_KEY.test(k) && typeof v === "string" && v !== "") errors.push(`defaultData.${k}: no prompt text in a manifest — prompt content belongs in @nodaro/prompts`)
     }

@@ -106,9 +106,11 @@ describe("NOT_GENERIC_RECOVERABLE", () => {
   // four background scrapes (web-scrape, site-capture, meta-ads-scrape,
   // instagram-scrape: run to the end in the handler, own markJobCompleted) to 74,
   // and Shot Cuts (a worker unit declaring finalize:own-writer: a local analysis
-  // that writes its own completion) to 75.
-  it("has exactly 75 members", () => {
-    expect(NOT_GENERIC_RECOVERABLE.size).toBe(75)
+  // that writes its own completion) to 75, and Split into Layers (a worker unit
+  // declaring finalize:own-writer: the generic media finalize would keep only the
+  // base picture and settle the hold, losing the layers and the per-image row) to 76.
+  it("has exactly 76 members", () => {
+    expect(NOT_GENERIC_RECOVERABLE.size).toBe(76)
   })
 
   it("denies generate-script and no other entity handler key", () => {

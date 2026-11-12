@@ -750,6 +750,13 @@ export {
   type UnitInputValue,
   type UnitSourceRow,
 } from "./unit-input-lanes"
+// What a node unit's side outputs hand on after it ran once per upstream item: every row's, row-aligned (both engines).
+export {
+  UNIT_BATCH_ROW_KEY,
+  unitBatchSideOutputs,
+  type UnitBatchSideOutputs,
+  type UnitSideOutputsRow,
+} from "./unit-batch-side-outputs"
 // What one Speaker Map run is sent, and why it is refused (both engines).
 export {
   SPEAKER_MAP_MAX_MARGIN_DB,
@@ -945,3 +952,22 @@ export {
   type NodeModelLever,
   type NodeModelPlan,
 } from "./node-model-levers"
+// Split into Layers' run rules: sizes, Max layers, the images a run holds and its credit ids (the node, its route, its worker and its price).
+export {
+  LAYER_SPLIT_DEFAULT_SIZE,
+  LAYER_SPLIT_MAX_IMAGES,
+  LAYER_SPLIT_MAX_LAYERS,
+  LAYER_SPLIT_PROMPT_MAX,
+  LAYER_SPLIT_SIZES,
+  LAYER_SPLIT_TIERS,
+  layerSplitCreditId,
+  layerSplitCreditIds,
+  layerSplitHoldCreditId,
+  layerSplitImagesHeld,
+  layerSplitMaxLayers,
+  layerSplitPrompt,
+  layerSplitSize,
+  layerSplitTier,
+  type LayerSplitSize,
+  type LayerSplitTier,
+} from "./layer-split"

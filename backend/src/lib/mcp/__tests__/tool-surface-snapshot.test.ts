@@ -1528,6 +1528,18 @@ const KLING_4_FLASH_MODELS_BYTES = 138
 // (9_884 → 9_916 B). No tool was added, so the fixture does NOT move.
 const MINIMAX_H3_IMAGE_PER_TOOL_BYTES = 32
 
+// RAISED 2026-11-11 by one NEW tool, `split_into_layers` (verbs-split-into-layers.ts: the Split into
+// Layers node's verb — one image split into a base picture and separate layers, with the output's
+// shape, the layer-pixel caveat and the default run's charged price in its description), and nothing
+// else. Registered beside `generate_mask` and gated like it (no credits gate: the route is core), so
+// BOTH the cloud/all AND the community/all fixtures move by exactly that name. Measured from the
+// tool's own definition as tools/list serves it (cloud, all scopes): 2_864 B with `layersNotSaved` in
+// its output shape, far under the per-tool budget; +47 B (2026-11-12) for `baseUrl` in each layer's
+// data (", baseUrl" in the shape and "(`baseUrl`: the base it was cut from)"), 2_911 B. The price
+// figure is the bare row's charged credits, so a reprice that changes its digit count moves this by
+// that many bytes.
+const SPLIT_INTO_LAYERS_TOOL_BYTES = 2_911
+
 // RAISED 2026-11-11 by Nodaro Image Upscale on edit_image (the model in its `model` enum and its
 // one line in the description, and `upscale_factor`'s 8 with which model takes which factors),
 // and nothing else. No tool was added, so the fixture does NOT move. Measured by this suite:
@@ -1726,6 +1738,7 @@ export const TOOL_WIRE_BUDGET = {
     SEEDREAM_5_5_TOTAL_BYTES +
     VIDEO_OVERLAY_VIDEO_LAYERS_BYTES +
     KLING_4_FLASH_MODELS_BYTES +
+    SPLIT_INTO_LAYERS_TOOL_BYTES +
     NODARO_IMAGE_UPSCALE_BYTES,
 }
 

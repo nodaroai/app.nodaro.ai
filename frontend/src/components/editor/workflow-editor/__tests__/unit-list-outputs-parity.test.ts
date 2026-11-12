@@ -6,6 +6,26 @@ import { act } from "@testing-library/react"
 
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() }) }))
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
+// The canvas run once per item (list-execution.ts) runs each item through the
+// real executeNode, into the fixture unit's executor (its exec.ts: the unit
+// kit's runProcessingNode on its job), whose poll the batch test answers with
+// one finished job per item (`canvas.poll`). Every other poll is the real one.
+const canvas = vi.hoisted(() => ({ poll: undefined as undefined | ((...args: unknown[]) => Promise<string>) }))
+vi.mock("../poll-job", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../poll-job")>()
+  return { ...real, pollJobWithNodeUpdate: (...args: Parameters<typeof real.pollJobWithNodeUpdate>) => (canvas.poll ? canvas.poll(...args) : real.pollJobWithNodeUpdate(...args)) }
+})
+vi.mock("@/nodes/_generated/executors", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/nodes/_generated/executors")>()
+  const { readFileSync: read } = await import("node:fs")
+  const { resolve } = await import("node:path")
+  const unit = JSON.parse(read(resolve(__dirname, "../../../../../../tools/units/__fixtures__/unit-list-outputs.json"), "utf8")).unit
+  // The fixture unit's exec.ts: its job for the picture the item hands it, landed beside the take.
+  const executor = { execute: (_node: unknown, kit: import("@/nodes/exec-kit").UnitExecKit) => kit.runProcessingNode(async () => ({ jobId: `job:${kit.overrideMediaUrl}` }), "generatedImageUrl", unit.label) }
+  return { ...real, UNIT_EXECUTORS: Object.assign(Object.create(null), real.UNIT_EXECUTORS, { [unit.type]: executor }) }
+})
+// How many items run at once: no lane read in this test.
+vi.mock("../list-fan-out-width", async (importOriginal) => ({ ...(await importOriginal<typeof import("../list-fan-out-width")>()), listFanOutWidth: () => 4 }))
 
 /**
  * A worker unit whose media take carries SIDE outputs — a list of images on
@@ -14,7 +34,9 @@ vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
  * run's landing and the server-run lanes (`jobs`), what each pip hands on
  * (`pips`, `saved`), what an Each wire fans out over (`lists`), the mode an
  * edge has when none is set (`defaults`) and where each wire lands in a legacy
- * target (`routes`). The server's half proves the same file on the backend
+ * target (`routes`), and a run once per upstream item (`batches`: the
+ * server-run lane over the fan-out output, the canvas run once per item, and
+ * the node they leave). The server's half proves the same file on the backend
  * engine. The unit is the fixture's, added through the editor's one door to
  * the unit definitions; the list-pip table of @nodaro/shared is widened by the
  * same fixture (its generated rows hold no fixture unit).
@@ -70,8 +92,11 @@ import { createUnitExecKit } from "../unit-exec-kit"
 import { applyRestoredJobCompletion, paintRunStates } from "../run-handlers"
 import { detectPreviewItemType, extractNodeOutput } from "../execution-graph"
 import { executeNode } from "../execute-node"
+import { executeNodeForList } from "../list-execution"
 import { extractNodeOutputAsList, getListFanOutForNode, resolveNodeInputs, type FrontendResolvedInputs } from "../node-input-resolver"
 import { isJsonRunResultType, unitSideJobFields, unitSideRunFields } from "@/lib/json-run-result"
+import { unitPipJson, unitPipList } from "@/lib/unit-compose"
+import { unitDefinitionOf } from "@/lib/unit-definitions"
 import { IMAGE_SOURCE_TYPES } from "@/lib/preview-node-types"
 import { IMAGE_RESULT_TYPES, resultsGalleryDeclaresMedium, resultsGalleryMediaType } from "@/components/editor/config-panels/results-gallery-media"
 
@@ -109,15 +134,35 @@ interface BundleBranchCase {
   readonly targetHandle: string
   readonly inputs: Json
 }
+/** What a node shows, and each pip hands on, in one state of a batch. */
+interface BatchReads {
+  readonly pips: Readonly<Record<string, string | null>>
+  readonly lists: Readonly<Record<string, readonly string[] | null>>
+  readonly collected: Readonly<Record<string, readonly string[]>>
+  /** What the node shows beside its active take (`read: "take"`): its own row's. */
+  readonly shown: { readonly layers: readonly string[]; readonly layerData: unknown }
+}
+/** A run once per upstream item: its items, each row's job (or its failure), the server's fan-out output and the node every lane leaves. */
+interface BatchCase extends BatchReads {
+  readonly name: string
+  readonly items: readonly string[]
+  readonly rows: ReadonlyArray<{ readonly outputData: Json } | { readonly failed: string }>
+  readonly nodeOutput: Json
+  readonly data: Json
+  readonly routes: ReadonlyArray<RouteCase>
+  readonly selected: BatchReads & { readonly name: string; readonly activeResultIndex: number }
+}
 const FIXTURE = JSON.parse(readFileSync(path.resolve(__dirname, "../../../../../../tools/units/__fixtures__/unit-list-outputs.json"), "utf8")) as {
   readonly unit: { readonly type: string; readonly outputs: ReadonlyArray<{ readonly id: string; readonly from: string; readonly kind: string; readonly list?: boolean }> }
   readonly jobs: ReadonlyArray<JobCase>
   readonly saved: ReadonlyArray<SavedCase>
+  readonly batches: ReadonlyArray<BatchCase>
   readonly defaults: Readonly<Record<string, string>>
   readonly routes: { readonly data: Json; readonly cases: ReadonlyArray<RouteCase>; readonly bundleBranches: ReadonlyArray<BundleBranchCase> }
 }
 const TYPE = FIXTURE.unit.type
-const SIDE_FIELDS = FIXTURE.unit.outputs.filter((o) => o.list === true || o.kind === "look").map((o) => o.from)
+// A list output also lands `<id>NotSaved`: how many items its run could not store.
+const SIDE_FIELDS = FIXTURE.unit.outputs.flatMap((o) => (o.list === true ? [o.from, `${o.id}NotSaved`] : o.kind === "look" ? [o.from] : []))
 const pipOf = (key: string): string | undefined => (key === "" ? undefined : key)
 
 /** The side fields of `patch` are the case's landing, and each `cleared` field is written as null (it survives a save). */
@@ -203,30 +248,122 @@ describe("jobs — every editor lane lands the same side fields", () => {
   }
 })
 
+/** Each pip's plain value and what an Each wire from it fans out over, off a node's data. */
+function expectPipsAndLists(data: Json, pips: SavedCase["pips"], lists: SavedCase["lists"], where = ""): void {
+  const n = node("L", TYPE, data)
+  for (const [pip, value] of Object.entries(pips)) {
+    expect(extractNodeOutput(n, pipOf(pip)), `${where}pip "${pip}"`).toBe(value ?? undefined)
+  }
+  for (const [pip, items] of Object.entries(lists)) {
+    expect(extractNodeOutputAsList(n, pipOf(pip)), `${where}list "${pip}"`).toEqual(items ?? undefined)
+  }
+}
+
+/** The canvas's own Filter List executor (its upstream collector), per pip, off a node's data. */
+async function expectCollected(data: Json, collected: Readonly<Record<string, readonly string[]>>): Promise<void> {
+  for (const [pip, items] of Object.entries(collected)) {
+    const op = node("F", "filter-list", { conditions: [] })
+    const edges = [{ id: "e", source: "L", target: "F", ...(pip === "" ? {} : { sourceHandle: pip }), targetHandle: "in" }] as unknown as WorkflowEdge[]
+    act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, data), op], edges }))
+    await executeNode(op, RUN_CTX)
+    expect(stored("F").listResults, `pip "${pip}"`).toEqual(items)
+  }
+}
+
 describe("saved — a node's data: each pip, and what an Each wire fans out over", () => {
   for (const c of FIXTURE.saved) {
-    it(c.name, () => {
-      const n = node("L", TYPE, c.data)
-      for (const [pip, value] of Object.entries(c.pips)) {
-        expect(extractNodeOutput(n, pipOf(pip)), `pip "${pip}"`).toBe(value ?? undefined)
-      }
-      for (const [pip, items] of Object.entries(c.lists)) {
-        expect(extractNodeOutputAsList(n, pipOf(pip)), `list "${pip}"`).toEqual(items ?? undefined)
-      }
-    })
-    // The canvas's own Filter List executor (its upstream collector), per pip.
+    it(c.name, () => expectPipsAndLists(c.data, c.pips, c.lists))
     const collected = c.collected
     if (collected) {
-      it(`${c.name}: what a list operator (filter-list) collects from each pip`, async () => {
-        for (const [pip, items] of Object.entries(collected)) {
-          const op = node("F", "filter-list", { conditions: [] })
-          const edges = [{ id: "e", source: "L", target: "F", ...(pip === "" ? {} : { sourceHandle: pip }), targetHandle: "in" }] as unknown as WorkflowEdge[]
-          act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, c.data), op], edges }))
-          await executeNode(op, RUN_CTX)
-          expect(stored("F").listResults, `pip "${pip}"`).toEqual(items)
-        }
-      })
+      it(`${c.name}: what a list operator (filter-list) collects from each pip`, () => expectCollected(c.data, collected))
     }
+  }
+})
+
+/** The side fields and `__listResults` a lane lands on the node, and each take's side fields by its URL — the batch's `data`. */
+function expectBatchLanded(data: Json, c: BatchCase, where: string): void {
+  const nodeSide = (d: Json) => Object.fromEntries([...SIDE_FIELDS, "__listResults"].map((f) => [f, d[f] ?? null]))
+  expect(nodeSide(data), `${where}: the node`).toEqual(nodeSide(c.data))
+  const takes = (d: Json) => Object.fromEntries(((d.generatedResults ?? []) as Json[]).map((t) => [t.url, Object.fromEntries(SIDE_FIELDS.map((f) => [f, t[f] ?? null]))]))
+  expect(takes(data), `${where}: each take`).toEqual(takes(c.data))
+  expect(data.activeResultIndex ?? 0, `${where}: the active take`).toBe(0)
+}
+
+/** What the node shows beside its active take: that take's own row's layers and layer data, never the batch's. */
+function expectShown(data: Json, shown: BatchReads["shown"]): void {
+  const unit = unitDefinitionOf(TYPE)!
+  expect(unitPipList(unit, data, "layers", "take")?.items).toEqual(shown.layers)
+  expect(unitPipJson(unit, data, "layerData", "take")?.value).toEqual(shown.layerData)
+}
+
+describe("batches — a run once per upstream item: every lane lands the same node, and each pip hands on every row's", () => {
+  for (const c of FIXTURE.batches) {
+    it(`${c.name}: the server-run lane (its fan-out output) lands the node and each row's take`, () => {
+      act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, { executionStatus: "running", ...STALE })], edges: [] }))
+      act(() => paintRunStates({ L: { status: "completed", startedAt: "2026-11-11T10:00:00.000Z", completedAt: "2026-11-11T10:01:00.000Z", jobId: "j2", output: c.nodeOutput } } as never))
+      expectBatchLanded(stored("L"), c, "server run")
+      expectPipsAndLists(stored("L"), c.pips, c.lists, "server run: ")
+      expectShown(stored("L"), c.shown)
+    })
+
+    it(`${c.name}: the canvas run once per item (executeNodeForList) lands the same node`, async () => {
+      act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, { ...STALE })], edges: [] }))
+      // One finished job per item: the real executeNode runs the unit's own run
+      // (runProcessingNode, which empties the side fields at its start), and its
+      // poll lands the job as poll-job lands a finished one (handleJobCompleted):
+      // the take, and the side fields on the node and on the take.
+      canvas.poll = async (...args: unknown[]) => {
+        const [nodeId, start, outputKey, , , extra] = args as [string, () => Promise<{ jobId: string }>, string, string, unknown, ((od: Json) => Json) | undefined]
+        const { jobId } = await start()
+        const row = c.items.indexOf(jobId.slice("job:".length))
+        const r = c.rows[row]!
+        // A failed row's job fails (the batch completes with the others).
+        if ("failed" in r) throw new Error(r.failed)
+        const outputData = r.outputData
+        const fields = extra?.(outputData) ?? {}
+        const url = outputData.imageUrl as string
+        const prev = (stored(nodeId).generatedResults as Json[] | undefined) ?? []
+        useWorkflowStore.getState().updateNodeData(nodeId, {
+          executionStatus: "completed", [outputKey]: url, activeResultIndex: 0, ...fields,
+          generatedResults: [{ url, jobId, timestamp: "2026-11-11T10:00:00.000Z", ...fields }, ...prev],
+        })
+        return url
+      }
+      try {
+        await executeNodeForList(node("L", TYPE, {}), [...c.items], RUN_CTX)
+      } finally {
+        canvas.poll = undefined
+      }
+      const failed = c.rows.filter((r) => "failed" in r).length
+      if (failed === 0) expect(stored("L").errorMessage, "every item ran").toBeUndefined()
+      else expect(stored("L").errorMessage, "the failed items are named").toMatch(new RegExp(`^${c.items.length - failed}/${c.items.length} succeeded, ${failed} failed`))
+      expectBatchLanded(stored("L"), c, "canvas run")
+      // Each layer-data entry's row is its picture's place among the items, and
+      // its baseUrl that picture's own base (a failed picture's row has none).
+      const landedData = stored("L")
+      const takes = landedData.__listResults as string[]
+      for (const e of landedData.generatedLayerData as Array<{ row: number; baseUrl?: string }>) {
+        expect(takes[e.row], `row ${e.row} made a take`).toBeTruthy()
+        expect(e.baseUrl, `row ${e.row}`).toBe(takes[e.row])
+      }
+      expectPipsAndLists(stored("L"), c.pips, c.lists, "canvas run: ")
+      expectShown(stored("L"), c.shown)
+    })
+
+    it(`${c.name}: the node it leaves (saved, reloaded): each pip, and what an Each wire fans out over`, () => {
+      expectPipsAndLists(c.data, c.pips, c.lists)
+      expectShown(c.data, c.shown)
+    })
+    it(`${c.name}: what a list operator (filter-list) collects from each pip`, () => expectCollected(c.data, c.collected))
+    for (const r of c.routes) it(`${c.name}: ${r.name}`, () => expectRoute(c.data, r))
+
+    const sel = c.selected
+    const picked = { ...c.data, activeResultIndex: sel.activeResultIndex }
+    it(`${c.name}, ${sel.name}: each pip, what an Each wire fans out over, and what the node shows`, () => {
+      expectPipsAndLists(picked, sel.pips, sel.lists)
+      expectShown(picked, sel.shown)
+    })
+    it(`${c.name}, ${sel.name}: what a list operator collects`, () => expectCollected(picked, sel.collected))
   }
 })
 
@@ -253,32 +390,35 @@ function routed(inputs: FrontendResolvedInputs): Json {
   return out
 }
 
+/** A wire from a node holding `data` into a legacy target lands exactly what Upload Image wires holding `asUploads` land there, in order. */
+function expectRoute(data: Json, c: RouteCase): void {
+  const target = node("T", c.target, {})
+  const src = node("L", TYPE, data)
+  const edge = {
+    id: "e", source: "L", target: "T", ...(c.pip === null ? {} : { sourceHandle: c.pip }), targetHandle: c.targetHandle,
+    ...(c.mode ? { data: { outputMode: c.mode } } : {}),
+  } as unknown as WorkflowEdge
+  if (c.iteration !== undefined) {
+    expect(getListFanOutForNode(target, [src, target], [edge])?.items).toEqual(data.generatedLayerUrls)
+  }
+  const got = resolveNodeInputs(target, [src, target], [edge], c.iteration)
+
+  const uploads = c.asUploads.map((url, i) => node(`U${i}`, "upload-image", { url }))
+  const uploadEdges = uploads.map((u, i) => ({ id: `u${i}`, source: u.id, target: "T", targetHandle: c.targetHandle }) as unknown as WorkflowEdge)
+  const want = resolveNodeInputs(target, [...uploads, target], uploadEdges)
+
+  // The Upload Image wires land every image (the comparison is never of two empty results).
+  for (const url of c.asUploads) expect(JSON.stringify(want)).toContain(url)
+  expect(routed(got)).toEqual(routed(want))
+  // Every row a wire from the unit adds names the unit.
+  for (const k of ["imageUrlsWithSourceIds", "videoUrlsWithSourceIds", "audioUrlsWithSourceIds"] as const) {
+    for (const r of got[k] ?? []) expect(r.nodeId).toBe("L")
+  }
+}
+
 describe("routes — a wire lands exactly what Upload Image wires holding the same images land", () => {
   for (const c of FIXTURE.routes.cases) {
-    it(c.name, () => {
-      const target = node("T", c.target, {})
-      const src = node("L", TYPE, FIXTURE.routes.data)
-      const edge = {
-        id: "e", source: "L", target: "T", ...(c.pip === null ? {} : { sourceHandle: c.pip }), targetHandle: c.targetHandle,
-        ...(c.mode ? { data: { outputMode: c.mode } } : {}),
-      } as unknown as WorkflowEdge
-      if (c.iteration !== undefined) {
-        expect(getListFanOutForNode(target, [src, target], [edge])?.items).toEqual(FIXTURE.routes.data.generatedLayerUrls)
-      }
-      const got = resolveNodeInputs(target, [src, target], [edge], c.iteration)
-
-      const uploads = c.asUploads.map((url, i) => node(`U${i}`, "upload-image", { url }))
-      const uploadEdges = uploads.map((u, i) => ({ id: `u${i}`, source: u.id, target: "T", targetHandle: c.targetHandle }) as unknown as WorkflowEdge)
-      const want = resolveNodeInputs(target, [...uploads, target], uploadEdges)
-
-      // The Upload Image wires land every image (the comparison is never of two empty results).
-      for (const url of c.asUploads) expect(JSON.stringify(want)).toContain(url)
-      expect(routed(got)).toEqual(routed(want))
-      // Every row a wire from the unit adds names the unit.
-      for (const k of ["imageUrlsWithSourceIds", "videoUrlsWithSourceIds", "audioUrlsWithSourceIds"] as const) {
-        for (const r of got[k] ?? []) expect(r.nodeId).toBe("L")
-      }
-    })
+    it(c.name, () => expectRoute(FIXTURE.routes.data, c))
   }
 })
 

@@ -75,6 +75,7 @@ const JUDGES_NODES_ITSELF: Readonly<Record<string, string>> = {
   "lib/mcp/tools/verbs-site-capture.ts": "lists the MCP tool only where its node is offered",
   "lib/mcp/tools/verbs-speaker-map.ts": "lists the MCP tool only where its node is offered",
   "lib/mcp/tools/verbs-speaker-view.ts": "lists the MCP tool only where its node is offered",
+  "lib/mcp/tools/verbs-split-into-layers.ts": "lists the MCP tool only where its node is offered",
   "lib/mcp/tools/verbs-use-case.ts": "lists the MCP tools only where their node is offered",
   "lib/mcp/tools/pipelines.ts": "lists the pipeline tools only where the film pipeline is offered, and refuses a stale call before the services it calls directly (no route)",
   "lib/mcp/tools/video-director-tools.ts": "lists the MCP tools only where the Video Director is offered",

@@ -47,6 +47,70 @@ function useResolveFeedback() {
   }
 }
 
+/** How many of a job's files a card previews before the reviewer asks for the
+ *  rest. Every preview is a whole download, so a queue of layered jobs would
+ *  otherwise fetch up to 17 files per card the moment the page opens. */
+export const FIRST_PREVIEWS = 4
+
+/**
+ * The first FIRST_PREVIEWS objects the server can preview, then a "+N more"
+ * control that mounts — and so fetches — the rest of the held list only when
+ * clicked. Then, when the job owns more than the held list
+ * (`outputTotal`: the list is capped, a layered image job is not), how many
+ * are NOT on screen. Approve publishes all of them, so a reviewer must never
+ * be left believing the previews were the whole job.
+ *
+ * The note counts against what is on screen NOW (`shown`), so it reads true
+ * both before the reveal and after it; the control names only the held files
+ * a click can still bring up.
+ */
+function HeldOutputs({ job }: { readonly job: HeldJobSummary }) {
+  const t = useT()
+  const [revealed, setRevealed] = useState(false)
+  // At least one: a row with no previewable object still renders the
+  // "Preview unavailable" placeholder rather than nothing at all.
+  const previewable = Math.max(1, job.outputCount)
+  const visible = revealed ? previewable : Math.min(previewable, FIRST_PREVIEWS)
+  const hidden = previewable - visible
+  // Real held objects on screen — the placeholder of an empty list is not one.
+  const shown = Math.min(visible, job.outputCount)
+  const total = Math.max(job.outputTotal ?? job.outputCount, job.outputCount)
+  const beyondHeldList = total - job.outputCount
+  return (
+    <div className="space-y-2">
+      {/* One parent, keyed by index: the reveal appends previews, it never
+          remounts (and so never re-fetches) the first ones. */}
+      <div className={visible > 1 ? "grid grid-cols-2 gap-2" : undefined}>
+        {Array.from({ length: visible }, (_, index) => (
+          <MediaPreview
+            key={index}
+            jobId={job.jobId}
+            index={index}
+            mediaKind={job.outputKinds?.[index] ?? job.mediaKind}
+          />
+        ))}
+      </div>
+      {hidden > 0 && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full"
+          data-testid="review-outputs-reveal"
+          onClick={() => setRevealed(true)}
+        >
+          {t("adminReview.moreOutputs", { n: hidden })}
+        </Button>
+      )}
+      {beyondHeldList > 0 && (
+        <p data-testid="review-outputs-not-shown" className="text-xs font-medium text-amber-700 dark:text-amber-400">
+          {t("adminReview.outputsNotShown", { n: total - shown, total, shown })}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function RequestDetails({ jobId }: { readonly jobId: string }) {
   const { data, isLoading } = useQuery({
     queryKey: [...REVIEW_QUERY_KEY, "job", jobId],
@@ -94,7 +158,7 @@ export function HeldJobCard({ job }: { readonly job: HeldJobSummary }) {
     <div className="rounded-lg border bg-card p-4">
       <div className="flex flex-col gap-4 md:flex-row">
         <div className="w-full md:w-64">
-          <MediaPreview jobId={job.jobId} index={0} mediaKind={job.mediaKind} />
+          <HeldOutputs job={job} />
         </div>
 
         <div className="min-w-0 flex-1 space-y-3">

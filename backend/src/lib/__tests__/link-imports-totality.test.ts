@@ -136,6 +136,7 @@ const LANES: Readonly<Record<string, Lane>> = {
   "nodes/shot-cuts/route.ts": PROCESSING_INPUT,
   "nodes/speaker-map/payload.ts": PROCESSING_INPUT,
   "nodes/speaker-map/route.ts": PROCESSING_INPUT,
+  "nodes/split-into-layers/route.ts": PROCESSING_INPUT,
   "nodes/tighten-episode/use-case.ts": PROCESSING_INPUT,
   "routes/3d-scene.ts": GENERATION_REFERENCE,
   "routes/add-captions.ts": PROCESSING_INPUT,

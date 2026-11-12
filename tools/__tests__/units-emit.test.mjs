@@ -16,7 +16,7 @@ import { GEN_UNITS_PRUNES, NODE_HANDLES_TABLE, pruneUnitRows } from "../units/ha
 import { ALL_SEAM_IDS, AGGREGATES, DATA_FILES, SPLICES, liveSeams } from "../units/seams.mjs"
 import { LANE_CAPABILITIES, loadUnits } from "../units/manifest.mjs"
 import { CAPABILITIES } from "../units/capabilities.mjs"
-import { aggregateSource, contractsSource, importSpecifier, inPositionOrder, useCaseRowsSource } from "../units/templates.mjs"
+import { aggregateSource, contractsSource, importSpecifier, inPositionOrder, listOutputsSource, useCaseRowsSource } from "../units/templates.mjs"
 import { memberLineTypes } from "../test-select/registry.mjs"
 import { USE_CASE_INPUT_HANDLES } from "../units/vocabulary.mjs"
 
@@ -225,6 +225,33 @@ test("a worker's budget.ts: the budgets aggregate binds it, and the editor's def
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
+test("an own-writer worker's recover.ts: the recovers aggregate binds it under its type, typed by the kit", async () => {
+  const root = tree()
+  try {
+    const OUT = "backend/src/nodes/_generated/recovers.ts"
+    // The fixture has none: the aggregate is emitted with no member.
+    const bare = await run(root)
+    assert.deepEqual(bare.errors, [])
+    assert.doesNotMatch(bare.outputs.get(OUT), /unit:fixture-echo/)
+    // An own-writer KIE worker with one.
+    const file = path.join(root, "frontend/src/nodes/fixture-echo/unit.json")
+    const m = JSON.parse(readFileSync(file, "utf8"))
+    m.capabilities = ["lane:provider", "provider:kie", "finalize:own-writer"]
+    writeFileSync(file, JSON.stringify(m))
+    writeFileSync(path.join(root, "backend/src/nodes/fixture-echo/recover.ts"), "export const recover = async () => ({ ok: true })\n")
+    const caps = ["lane:provider", "provider:kie", "finalize:own-writer"]
+    const r = await run(root, { ...ctxFor(root), capabilities: Object.fromEntries(caps.map((c) => [c, CAPABILITIES[c]])) })
+    assert.deepEqual(r.errors, [])
+    const recovers = r.outputs.get(OUT)
+    assert.match(recovers, /^\/\/ @registry backend\/src\/nodes\/\*\/recover\.ts$/m)
+    assert.match(recovers, /^\/\/ @registry-exports recovers: UNIT_RECOVERS$/m)
+    assert.match(recovers, /^import type \{ UnitRecover \} from "\.\.\/kit\.js"$/m)
+    assert.match(recovers, /^import \{ recover as unit_fixture_echo \} from "\.\.\/fixture-echo\/recover\.js" \/\/ unit:fixture-echo$/m)
+    assert.match(recovers, /^export const UNIT_RECOVERS: Readonly<Record<string, UnitRecover>> = Object\.assign\(Object\.create\(null\), \{$/m)
+    assert.match(recovers, /^ {2}"fixture-echo": unit_fixture_echo, \/\/ unit:fixture-echo$/m)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
 test("an unknown argument is a usage error", async () => {
   const err = []
   assert.equal(await main(["--wat"], REPO, { write() {} }, { write: (s) => err.push(s) }), 2)
@@ -306,6 +333,22 @@ test("inPositionOrder: units by position.after over the (alphabetical) legacy li
   assert.deepEqual(inPositionOrder(units, new Set(["legacy-a", "legacy-b"])).map((x) => x.type), ["b-other", "z-tighten", "a-chapters"])
   assert.match(useCaseRowsSource(units, new Set(["legacy-a", "legacy-b"])), /"z-tighten".*\n.*"a-chapters"/)
   assert.match(contractsSource(units, new Set(["legacy-a", "legacy-b"])), /UNIT_USE_CASE_TYPES = \[\n {2}"z-tighten", \/\/ unit:z-tighten\n {2}"a-chapters", \/\/ unit:a-chapters\n\] as const/)
+})
+
+test("listOutputsSource: one row per list output, in position order, with its listMax field and default", () => {
+  const u = (type, after, outputs, defaultData = {}) => ({ type, manifest: { type, label: type, position: { after }, execution: { kind: "worker" }, defaultData, handles: { inputs: [], outputs } } })
+  const units = [
+    u("b-split", "a-plain", [
+      { id: "base", kind: "image", from: "generatedImageUrl" },
+      { id: "layers", kind: "image", from: "generatedLayerUrls", list: true, listMax: "maxLayers" },
+    ], { maxLayers: 9 }),
+    u("a-plain", "legacy-a", [{ id: "out", kind: "image", from: "generatedImageUrl" }]),
+    u("c-frames", "b-split", [{ id: "frames", kind: "image", from: "generatedFrameUrls", list: true }]),
+  ]
+  const src = listOutputsSource(units, new Set(["legacy-a"]))
+  assert.match(src, /UNIT_LIST_OUTPUTS: ReadonlyArray<\{ readonly type: string; readonly pip: string; readonly from: string; readonly max\?: \{ readonly field: string; readonly default: number \} \}> = \[\n/)
+  assert.match(src, /= \[\n {2}\{ type: "b-split", pip: "layers", from: "generatedLayerUrls", max: \{ field: "maxLayers", default: 9 \} \}, \/\/ unit:b-split\n {2}\{ type: "c-frames", pip: "frames", from: "generatedFrameUrls" \}, \/\/ unit:c-frames\n\]\n$/)
+  assert.doesNotMatch(src, /a-plain/)
 })
 
 test("useCaseRowsSource: a row's inputs are typed by the vocabulary's use-case input handles (one list, no second literal)", () => {

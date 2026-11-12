@@ -268,6 +268,33 @@ export function useCaseRowsSource(units, legacyTypes = []) {
   ].join("\n")
 }
 
+/**
+ * packages/render-rules/src/unit-list-outputs.generated.ts — each unit's list
+ * outputs (handles.outputs[].list) as the run estimate counts them
+ * (node-fan-out.ts): the field holding the list a run made, and — when
+ * declared (listMax) — the field holding the most items a run makes, with its
+ * default, counted before a first run.
+ */
+export function listOutputsSource(units, legacyTypes = []) {
+  const rows = inPositionOrder(units, legacyTypes).flatMap((u) => (Array.isArray(u.manifest.handles?.outputs) ? u.manifest.handles.outputs : [])
+    .filter((h) => h?.list === true)
+    .map((h) => {
+      const max = typeof h.listMax === "string" ? `, max: { field: ${JSON.stringify(h.listMax)}, default: ${Number(u.manifest.defaultData?.[h.listMax])} }` : ""
+      return `  { type: ${JSON.stringify(u.type)}, pip: ${JSON.stringify(h.id)}, from: ${JSON.stringify(h.from)}${max} }, ${tag(u.type)}`
+    }))
+  return [
+    GENERATED_HEADER,
+    "// The node units' list outputs (handles.outputs[].list), in position order, as the run estimate",
+    "// counts an Each wire from one (node-fan-out.ts): the list a run made (`from`), and the most items",
+    "// a run makes (`max`, listMax), counted before a first run. render-rules is private (never published).",
+    "",
+    "export const UNIT_LIST_OUTPUTS: ReadonlyArray<{ readonly type: string; readonly pip: string; readonly from: string; readonly max?: { readonly field: string; readonly default: number } }> = [",
+    ...rows,
+    "]",
+    "",
+  ].join("\n")
+}
+
 /** packages/render-rules/src/unit-kept-lengths.generated.ts — the units that hand on their video input's length. */
 export function keptLengthsSource(units) {
   const mode = (u) => (u.manifest.capabilities?.includes("length:exact-video") ? "exact" : u.manifest.capabilities?.includes("length:pass-video") ? "bound" : null)

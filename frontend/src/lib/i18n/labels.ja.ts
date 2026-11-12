@@ -386,6 +386,8 @@ const HANDLE_LABELS_JA: Record<string, string> = {
   "Instructions": "指示",
   "Instrumental": "インストゥルメンタル",
   "Isolated": "単体",
+  "Layer data": "レイヤーデータ",
+  "Layers": "レイヤー",
   "Without": "除外後",
   "JSON": "JSON",
   "Location": "ロケーション",

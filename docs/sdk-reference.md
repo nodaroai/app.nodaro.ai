@@ -6841,6 +6841,75 @@ const { jobId } = await client.media.shotCuts({ videoUrl: "https://example.com/a
 
 Full reference: [Shot Cuts](./nodes/processing-video/shot-cuts.md).
 
+#### `splitIntoLayers(input)`
+
+```ts
+splitIntoLayers(input: {
+  imageUrl: string
+  maxLayers?: number                       // 1–99, default 9
+  size?: "1K" | "1.5K" | "2K" | "auto"     // default "1K"
+  prompt?: string                          // what to separate, up to 2,000 characters
+}): Promise<{ jobId: string }>
+```
+
+Split one image into a base picture and separate layers
+(`POST /v1/split-into-layers`), each element on its own transparent PNG, with its
+name, description, stacking order and the box it sits in on the base.
+
+- `maxLayers` caps the layers: a picture with more elements than that gets them
+  merged into fewer layers (none is dropped).
+- `size` is each image's pixel budget: `1K` is about one megapixel; `auto` keeps
+  the picture's own size (between 1K and 2K).
+- `prompt` names which elements to split out, and may carry
+  `<bbox>x1 y1 x2 y2</bbox>` marks (0–1000) to point at a region. Left empty,
+  the main elements are found automatically.
+- A malformed body is a `400 validation_error` before any credits are held.
+
+On Nodaro Cloud a run holds the price of the most images it may return
+(`maxLayers` + 1, the base included) at its size, and is charged only for the
+images it really returns: `1K` and `1.5K` are priced alike, as are `2K` and
+`auto`. The default run (9 layers at 1K) holds 104 credits<!-- credits: split-into-layers:1k:10 -->;
+one that returns 3 layers at 1K is charged 44 credits<!-- credits: split-into-layers:1k:4 -->
+(74 credits<!-- credits: split-into-layers:2k:4 --> at 2K or `auto`); `maxLayers: 5`
+at 1K holds 64 credits<!-- credits: split-into-layers:1k:6 -->. A run that finds no
+element completes with the base picture only (`layers` empty) and is charged the
+one-image price.
+
+Poll `jobs.get(jobId)`; the completed job's `output_data` is a
+`SplitIntoLayersOutput`:
+
+```ts
+interface SplitIntoLayersOutput {
+  imageUrl: string        // the base picture: an opaque PNG
+  layers: string[]        // each layer's transparent PNG, bottom to top
+  layerData: Array<{      // one per layer, in the same order
+    name?: string
+    description?: string
+    zIndex: number        // stacking order: 1 sits on the base, higher is drawn above
+    width?: number        // the layer FILE's own pixels, not the base's
+    height?: number
+    box?: { x1: number; y1: number; x2: number; y2: number }           // where it sits on the base, in the base's pixels
+    boxNormalized?: { x1: number; y1: number; x2: number; y2: number } // the same box on a 0–1000 scale of the base
+    url: string
+    baseUrl?: string      // the base picture this layer was cut from: the same as imageUrl
+  }>
+  layerCount: number    // layers saved
+  layersNotSaved?: number // layers returned that could not be saved (0 when all were); the run is charged only for the images saved
+  libraryImages?: Array<{ url: string; name?: string }> // each layer as filed in the Library, under its name
+}
+```
+
+A layer is **not** in the base's pixels: it is cropped to its element, at about
+the size setting's pixel budget and the element's own shape. To put a layer back
+in place, scale it to its `box` (`x1`/`y1` the top-left corner, `x2`/`y2` the
+bottom-right).
+
+```ts
+const { jobId } = await client.media.splitIntoLayers({ imageUrl: "https://example.com/poster.png", maxLayers: 5 })
+```
+
+Full reference: [Split into Layers](./nodes/ai-image/split-into-layers.md).
+
 #### `stillToVideo(input)`
 
 ```ts

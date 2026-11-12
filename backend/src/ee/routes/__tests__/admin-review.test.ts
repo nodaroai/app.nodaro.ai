@@ -38,13 +38,17 @@ vi.mock("@/lib/job-policy-review.js", () => ({
 }))
 
 const streamR2Object = vi.fn()
+/** Our public base in these tests: a URL under it maps to its key, anything
+ *  else (every bait URL below) is not ours and maps to null. */
+const OUR_BASE = "https://r2.test/"
+const r2KeyFromOurUrl = vi.fn((url: string): string | null => (url.startsWith(OUR_BASE) ? url.slice(OUR_BASE.length) : null))
 vi.mock("@/lib/storage.js", () => ({
   streamR2Object: (...args: unknown[]) => streamR2Object(...args),
-  // Not used by the route (`admin-review-guard.test.ts` fails the build if it
-  // ever is) — declared because `lib/job-policy-outputs.js`, which the route
-  // imports for `isOwnedObjectKey`, imports it from this module, and a mocked
-  // module throws on an export it does not declare.
-  r2KeyFromOurUrl: vi.fn(() => null),
+  // Never named by the route (`admin-review-guard.test.ts` fails the build if
+  // it ever is) — `lib/job-policy-outputs.js` reads it, both for the ownership
+  // fence and for `extractJobOutputs`, which the queue's `outputTotal` count
+  // walks the withheld payload with.
+  r2KeyFromOurUrl: (url: string) => r2KeyFromOurUrl(url),
 }))
 
 // `lib/job-finalize.ts` imports `workers/shared.js`, which constructs IORedis at
@@ -144,6 +148,8 @@ const HELD_JOB_ROW = {
   // bait
   output_data: { videoUrl: "https://cdn.example.com/leaked-output.mp4" },
   held_output_data: { videoUrl: "https://cdn.example.com/leaked-held.mp4" },
+  // The queue selects this to find a relay stem; our provider cost rides in it.
+  held_completion_fields: { provider: "kie", provider_cost: 0.42 },
   input_data: { imageUrl: "https://cdn.example.com/leaked-input.png", prompt: "a cat" },
 }
 
@@ -268,6 +274,170 @@ describe("GET /v1/admin/review/jobs", () => {
     const res = await inject("GET", "/v1/admin/review/jobs?pageSize=101")
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
+  })
+})
+
+/** The queue's one row for `row`, read through the real route. */
+async function queueRowFor(row: Record<string, unknown>) {
+  setTable("jobs", { data: [row], count: 1 })
+  setTable("job_policy_decisions", { data: [HOLD_DECISION_ROW], count: 1 })
+  const res = await inject("GET", "/v1/admin/review/jobs")
+  expect(res.statusCode).toBe(200)
+  return { body: res.json().data[0] as Record<string, unknown>, raw: res.body }
+}
+
+describe("GET /v1/admin/review/jobs — what kind of media a held job is", () => {
+  // The REAL unit registry (lib/unit-descriptors.ts is not mocked): a node
+  // unit's job runs under its own type, which no finalize array lists.
+  it("previews a node unit whose producer is image as an image (Split into Layers)", async () => {
+    const { body } = await queueRowFor({ ...HELD_JOB_ROW, job_type: "split-into-layers" })
+    expect(body.mediaKind).toBe("image")
+  })
+
+  it("previews a node unit whose producer is video as a video", async () => {
+    const { body } = await queueRowFor({ ...HELD_JOB_ROW, job_type: "gif-to-video" })
+    expect(body.mediaKind).toBe("video")
+  })
+
+  it("still previews a legacy image job type as an image", async () => {
+    const { body } = await queueRowFor({ ...HELD_JOB_ROW, job_type: "generate-image" })
+    expect(body.mediaKind).toBe("image")
+  })
+
+  it("leaves a type nothing knows as other", async () => {
+    const { body } = await queueRowFor({ ...HELD_JOB_ROW, job_type: "no-such-type" })
+    expect(body.mediaKind).toBe("other")
+  })
+
+  it("gives each previewable object its own kind, and never the job's for one the gate recorded as other", async () => {
+    // A VIDEO job: were the job's kind still the fallback, the `.bin` would
+    // come back "video" and preview as a broken player.
+    const { body } = await queueRowFor({
+      ...HELD_JOB_ROW,
+      held_objects: [
+        { key: `generated/videos/${JOB_ID}.mp4`, kind: "video", index: 0 },
+        { key: `thumbnails/${JOB_ID}.jpg`, kind: "image", index: 1 },
+        { key: `generated/videos/${JOB_ID}-v2.bin`, kind: "other", index: 2 },
+      ],
+    })
+    expect(body.mediaKind).toBe("video")
+    expect(body.outputKinds).toEqual(["video", "image", "other"])
+  })
+
+  it("reads an object with no recorded kind as other, not as the job's kind", async () => {
+    // The gate has always stamped `kind`; an entry without one was not written
+    // by it, and nothing about it supports a guess.
+    const { body } = await queueRowFor({
+      ...HELD_JOB_ROW,
+      held_objects: [
+        { key: `generated/videos/${JOB_ID}.mp4`, kind: "video", index: 0 },
+        { key: `generated/videos/${JOB_ID}-v1.mp4`, index: 1 },
+      ],
+    })
+    expect(body.mediaKind).toBe("video")
+    expect(body.outputKinds).toEqual(["video", "other"])
+  })
+
+  it("gives the detail manifest the same per-object kinds, other included", async () => {
+    setTable("jobs", {
+      data: {
+        ...HELD_JOB_ROW,
+        held_objects: [
+          { key: `generated/videos/${JOB_ID}.mp4`, kind: "video", index: 0 },
+          { key: `generated/videos/${JOB_ID}-v1.bin`, kind: "other", index: 1 },
+          { key: `generated/videos/${JOB_ID}-v2.mp4`, index: 2 },
+        ],
+      },
+    })
+    setTable("job_policy_decisions", { data: [HOLD_DECISION_ROW] })
+    const res = await inject("GET", `/v1/admin/review/jobs/${JOB_ID}`)
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data.mediaKind).toBe("video")
+    expect(body.data.outputs.map((o: { mediaKind: string }) => o.mediaKind)).toEqual(["video", "other", "other"])
+    expect(body.data.outputKinds).toEqual(["video", "other", "other"])
+  })
+})
+
+describe("GET /v1/admin/review/jobs — how many objects a held job has, and how many can be previewed", () => {
+  const layerKey = (i: number) => `images/${JOB_ID}-layer${i}.png`
+  const BASE_KEY = `images/${JOB_ID}.png`
+  /** A base picture and 30 layers, as an image unit's job writes them: each
+   *  layer URL appears three times (the list, its data row and the Library
+   *  entry) and the input it was made from is echoed. */
+  const LAYERED_OUTPUT = {
+    imageUrl: `${OUR_BASE}${BASE_KEY}`,
+    layers: Array.from({ length: 30 }, (_, i) => `${OUR_BASE}${layerKey(i)}`),
+    layerData: Array.from({ length: 30 }, (_, i) => ({ name: `layer ${i}`, url: `${OUR_BASE}${layerKey(i)}` })),
+    libraryImages: Array.from({ length: 30 }, (_, i) => ({ url: `${OUR_BASE}${layerKey(i)}`, name: `layer ${i}` })),
+    layerCount: 30,
+    layersNotSaved: 0,
+    sourceImageUrl: `${OUR_BASE}uploads/someone-elses-input.png`,
+  }
+  /** What the result gate keeps of it: MAX_HELD_OBJECTS (17) entries. */
+  const HELD_17 = [BASE_KEY, ...Array.from({ length: 16 }, (_, i) => layerKey(i))].map((key, index) => ({ key, kind: "image", index }))
+
+  it("counts every owned object of a base + 30 layers job though only 17 are previewable", async () => {
+    const { body, raw } = await queueRowFor({
+      ...HELD_JOB_ROW,
+      job_type: "split-into-layers",
+      held_objects: HELD_17,
+      held_output_data: LAYERED_OUTPUT,
+    })
+    expect(body.outputCount).toBe(17)
+    // 1 base + 30 layers; the duplicates and the echoed input are not counted.
+    expect(body.outputTotal).toBe(31)
+    expect(body.outputKinds).toEqual(Array(17).fill("image"))
+    // The count is a number; the payload it was counted from never leaves.
+    for (const s of stringsIn(JSON.parse(raw))) expect(s, `leaked: ${s}`).not.toMatch(/^https?:/)
+    expect(raw).not.toContain("layer0")
+    expect(raw).not.toContain("held_output_data")
+  })
+
+  it("reports the same total on the detail row", async () => {
+    setTable("jobs", { data: { ...HELD_JOB_ROW, job_type: "split-into-layers", held_objects: HELD_17, held_output_data: LAYERED_OUTPUT } })
+    setTable("job_policy_decisions", { data: [HOLD_DECISION_ROW] })
+    const res = await inject("GET", `/v1/admin/review/jobs/${JOB_ID}`)
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data.outputCount).toBe(17)
+    expect(body.data.outputTotal).toBe(31)
+    expect(body.data.outputs).toHaveLength(17)
+    expect(body.data.outputs.every((o: { mediaKind: string }) => o.mediaKind === "image")).toBe(true)
+  })
+
+  it("reports a total equal to the previewable count when every object is held", async () => {
+    const { body } = await queueRowFor({
+      ...HELD_JOB_ROW,
+      held_output_data: {
+        videoUrl: `${OUR_BASE}generated/videos/${JOB_ID}.mp4`,
+        videoUrls: [`${OUR_BASE}generated/videos/${JOB_ID}.mp4`, `${OUR_BASE}generated/videos/${JOB_ID}-v1.mp4`],
+      },
+    })
+    expect(body.outputCount).toBe(2)
+    expect(body.outputTotal).toBe(2)
+  })
+
+  it("counts a relayed job's objects under the far end's stem, parked in the completion fields", async () => {
+    const farKey = (i: number) => `images/cloud-9-layer${i}.png`
+    const { body } = await queueRowFor({
+      ...HELD_JOB_ROW,
+      job_type: "split-into-layers",
+      relay_job_id: null,
+      held_completion_fields: { relay_job_id: "cloud-9" },
+      held_objects: Array.from({ length: 17 }, (_, i) => ({ key: farKey(i), kind: "image", index: i })),
+      held_output_data: { layers: Array.from({ length: 20 }, (_, i) => `${OUR_BASE}${farKey(i)}`) },
+    })
+    expect(body.outputCount).toBe(17)
+    expect(body.outputTotal).toBe(20)
+  })
+
+  it("never reads a total below the previewable count", async () => {
+    // A withheld payload whose URLs no longer map to keys (the public base was
+    // reconfigured after the hold): the held list is still the floor.
+    const { body } = await queueRowFor({ ...HELD_JOB_ROW, held_output_data: { videoUrl: "https://elsewhere.example/x.mp4" } })
+    expect(body.outputCount).toBe(2)
+    expect(body.outputTotal).toBe(2)
   })
 })
 

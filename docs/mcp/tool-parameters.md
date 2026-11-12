@@ -3005,6 +3005,18 @@ Needs `workflows:execute`.
 | `resolution` | string |  | Output resolution. Default 480p. One of `480p`, `580p`, `720p`. |
 | `negative_prompt` | string |  | At most 2500 characters. |
 
+## `split_into_layers`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `image_url` | string (URL) |  | Image to split. |
+| `image_asset_id` | string |  | Image to split, as a Nodaro image job id or an uploaded image's id. |
+| `max_layers` | integer |  | The most layers to make. Default 9. From 1 to 99. |
+| `size` | string |  | Each image's pixel budget. Default 1K. One of `1K`, `1.5K`, `2K`, `auto`. |
+| `prompt` | string |  | What to separate. At most 2000 characters. |
+
 ## `split_media`
 
 Needs `workflows:execute`.
