@@ -232,8 +232,8 @@ export async function nodePresetRoutes(app: FastifyInstance) {
   })
 
   // The catalog's CATEGORIES (its groups), for a menu or a shelf that lists them without the whole catalog:
-  // each group with its shelf (`presetShelf`, the one mapping every picker uses), how many presets it holds
-  // and its first example picture, in the order a picker shows them: shelf by shelf, a shelf's named groups
+  // each group with its shelf (`presetShelf`, the one mapping every picker uses), how many presets it holds,
+  // its first example picture and its first three (`previewUrls`), in the order a picker shows them: shelf by shelf, a shelf's named groups
   // in the design's order (`presetShelfRank`), then the rest in catalog order. PUBLIC like `/factory` (middleware/auth.ts PUBLIC_ROUTES):
   // derived from the same catalog, the same for every caller, cached as public; nothing here reads a user.
   app.get("/v1/node-presets/factory/groups", async (req, reply) => {
@@ -241,13 +241,17 @@ export async function nodePresetRoutes(app: FastifyInstance) {
     if (!nodeType) {
       return reply.status(400).send({ error: { code: "validation_error", message: "nodeType query param is required" } })
     }
-    const byGroup = new Map<string, { group: string; shelf: PresetShelf; count: number; previewUrl: string | null }>()
+    // previewUrls: the group's first pictures in catalog order (distinct, at most PREVIEWS_PER_GROUP), for a
+    // menu that shows a few examples of a category; previewUrl stays its first.
+    const PREVIEWS_PER_GROUP = 3
+    const byGroup = new Map<string, { group: string; shelf: PresetShelf; count: number; previewUrl: string | null; previewUrls: string[] }>()
     for (const preset of presetCatalog(nodeType).map((p) => factoryPresetView(nodeType, p))) {
       const group = preset.group
       if (!group) continue
-      const entry = byGroup.get(group) ?? { group, shelf: presetShelf(group), count: 0, previewUrl: null }
+      const entry = byGroup.get(group) ?? { group, shelf: presetShelf(group), count: 0, previewUrl: null, previewUrls: [] }
       entry.count += 1
       entry.previewUrl ??= preset.previewUrl ?? null
+      if (preset.previewUrl && entry.previewUrls.length < PREVIEWS_PER_GROUP && !entry.previewUrls.includes(preset.previewUrl)) entry.previewUrls.push(preset.previewUrl)
       byGroup.set(group, entry)
     }
     const rank = (group: string) => {

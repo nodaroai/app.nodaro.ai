@@ -269,7 +269,7 @@ describe("node-presets routes", () => {
     const res = await app.inject({ method: "GET", url: "/v1/node-presets/factory/groups?nodeType=generate-image" })
     expect(res.statusCode).toBe(200)
     expect(res.headers["cache-control"]).toBe("public, max-age=300")
-    const groups = res.json().data as Array<{ group: string; shelf: string; count: number; previewUrl: string | null }>
+    const groups = res.json().data as Array<{ group: string; shelf: string; count: number; previewUrl: string | null; previewUrls: string[] }>
     const catalog = (await app.inject({ method: "GET", url: "/v1/node-presets/factory?nodeType=generate-image" })).json().data as Array<{ group?: string; previewUrl?: string | null }>
     const named = [...new Set(catalog.map((preset) => preset.group).filter((group): group is string => typeof group === "string" && group.length > 0))]
     expect([...groups.map((entry) => entry.group)].sort()).toEqual([...named].sort())
@@ -283,6 +283,9 @@ describe("node-presets routes", () => {
       const presets = catalog.filter((preset) => preset.group === entry.group)
       expect(entry.count, entry.group).toBe(presets.length)
       expect(entry.previewUrl, entry.group).toBe(presets.find((preset) => preset.previewUrl)?.previewUrl ?? null)
+      // Its first three pictures, in catalog order, each once.
+      const pictures = [...new Set(presets.map((preset) => preset.previewUrl).filter((url): url is string => typeof url === "string" && url.length > 0))]
+      expect((entry as { previewUrls?: string[] }).previewUrls, entry.group).toEqual(pictures.slice(0, 3))
       expect(["video", "marketing", "photos", "creative", "life", "more", "pro"], entry.group).toContain(entry.shelf)
     }
     expect(groups.find((entry) => entry.group === "YouTube")?.shelf).toBe("video")

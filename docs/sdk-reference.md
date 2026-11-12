@@ -8311,8 +8311,9 @@ listFactoryGroups(nodeType: string): Promise<FactoryPresetGroupSummary[]>  // [{
 `nodeType`, in the order a picker shows them (shelf by shelf; a shelf's named groups in the design's order, the rest in catalog order): each group's name, the shelf a picker files it
 under (`"video"`, `"marketing"`, `"photos"`, `"creative"`, `"life"`, `"pro"`,
 or `"more"` for a group no shelf names yet; shown in that order), how many
-presets it holds, and the example picture of its first preset that has one
-(`previewUrl`, or `null`). A few KB where `listFactory()` is the whole
+presets it holds, the example picture of its first preset that has one
+(`previewUrl`, or `null`), and its first three example pictures in catalog
+order (`previewUrls`, each once; empty when none has one). A few KB where `listFactory()` is the whole
 catalog: for a menu or a shelf that lists the categories. **Public**, as
 `listFactory()` is.
 
