@@ -39,10 +39,14 @@ import { surfaceCatalogImages } from "./surface-profile.js"
  * - with `srcSet`, each CDN picture's widths as `imageSrcSet`: the REST routes
  *   ask for it (an app draws the picture), the MCP tools do not.
  */
-export function pickerImageOptions(opts: { readonly srcSet?: boolean } = {}): PickerImageOptions | undefined {
+export function pickerImageOptions(opts: { readonly srcSet?: boolean; readonly baseUrl?: string } = {}): PickerImageOptions | undefined {
   const pictures = shownPictures()
-  if (pictures === "platform") return { baseUrl: appBaseUrl(), lookPreviews: isCloud(), srcSet: opts.srcSet === true }
-  if (pictures === "own") return { baseUrl: appBaseUrl(), srcSet: opts.srcSet === true, own: ownPicture }
+  // The MCP tools pass their session's pictures host (lib/mcp-lane-addresses.ts:
+  // on a deployment that serves MCP by path, the host the client connected
+  // through); every other caller gets the install's own public origin.
+  const baseUrl = opts.baseUrl ?? appBaseUrl()
+  if (pictures === "platform") return { baseUrl, lookPreviews: isCloud(), srcSet: opts.srcSet === true }
+  if (pictures === "own") return { baseUrl, srcSet: opts.srcSet === true, own: ownPicture }
   return undefined
 }
 

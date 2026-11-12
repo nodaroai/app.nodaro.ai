@@ -162,6 +162,30 @@ authorization-server document advertises:
 - `token_endpoint_auth_methods_supported: ["client_secret_post"]`
 - all 11 entries in `scopes_supported`
 
+#### On a deployment that serves MCP by path
+
+A deployment can serve its MCP endpoint under a path on its own hosts
+instead of on a dedicated MCP host ([MCP by path](deployment.md#mcp-by-path-no-dedicated-mcp-host),
+default `https://<host>/v1/mcp`). There, every address in this flow is on the
+host the client connected through, when the deployment declared that host as
+its own (`PUBLIC_URL` or a `CORS_ORIGIN` entry); any other host gets
+`PUBLIC_URL`'s:
+
+- the endpoint's 401 challenge carries `resource_metadata`, the absolute
+  address of its protected-resource document
+  (`https://<host>/.well-known/oauth-protected-resource/v1/mcp`);
+- that document, and the root one, name `resource: https://<host>/v1/mcp` and
+  `authorization_servers: ["https://<host>"]`;
+- the authorization-server document (root, and `…/v1/mcp`) has the issuer
+  `https://<host>`, with the authorization, token, registration and
+  revocation endpoints under it;
+- `GET /v1/oauth/authorize` sends the browser to that host's consent page.
+
+Registration, the redirect-URI checks and PKCE are the same on every host.
+An access token is not tied to a host: one issued through any of the
+deployment's hosts works on the others. The path endpoint replaces `/mcp`
+there, so the `/mcp`-suffixed documents are not served.
+
 ### Dynamic Client Registration (DCR)
 
 ```

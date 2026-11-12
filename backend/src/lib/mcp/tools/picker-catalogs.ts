@@ -31,7 +31,7 @@ export const GET_PICKER_CATALOG_TOOL_DESCRIPTION =
 
 const NODE_TYPE_RE = /^[a-z0-9][a-z0-9-]*$/
 
-export function registerPickerCatalogs(server: McpServer, _session: McpSession): void {
+export function registerPickerCatalogs(server: McpServer, session: McpSession): void {
   server.registerTool(
     "get_picker_catalog",
     {
@@ -72,7 +72,7 @@ export function registerPickerCatalogs(server: McpServer, _session: McpSession):
       if (!args.node_type) {
         return {
           content: [
-            { type: "text" as const, text: JSON.stringify({ pickers: summarizePickerCatalogs({ images: pickerImageOptions() }) }, null, 2) },
+            { type: "text" as const, text: JSON.stringify({ pickers: summarizePickerCatalogs({ images: pickerImageOptions({ baseUrl: session.addresses.picturesBase }) }) }, null, 2) },
           ],
         }
       }
@@ -97,7 +97,7 @@ export function registerPickerCatalogs(server: McpServer, _session: McpSession):
         detail: args.detail,
         category: args.category,
         field: args.field,
-        images: pickerImageOptions(),
+        images: pickerImageOptions({ baseUrl: session.addresses.picturesBase }),
       })
       return { content: [{ type: "text" as const, text: JSON.stringify(projected, null, 2) }] }
     },

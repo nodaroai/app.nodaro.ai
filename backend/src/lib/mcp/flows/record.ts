@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import { supabase } from "../../supabase.js"
 import type { McpSession } from "../session.js"
 import { mcpFlowsEnabled } from "../user-preferences.js"
-import { workflowEditorUrl } from "../../deployment-urls.js"
+import { laneEditorUrl, type McpLaneAddresses } from "../../mcp-lane-addresses.js"
 import { flowNodeFor, type FlowNodeInput, type FlowNodeSpec, type FlowOutputKey } from "./node-mappers.js"
 import { countSteps, resolveConversation, type McpConversationSettings } from "./conversation-store.js"
 import { applyFlowDelta, loadFlow } from "./workflow-delta.js"
@@ -210,12 +210,12 @@ export async function abandonFlowNode(prepared: PreparedFlowNode, log: Log = def
 /** How long a refused call's new conversation is kept before it is checked for steps. */
 export const ABANDON_DELAY_MS = 60_000
 
-/** The line the assistant can quote: where the user sees this call as a node. */
-export function flowLinkText(prepared: PreparedFlowNode): string {
+/** The line the assistant can quote: where the user sees this call as a node (on the session's pages host, `addresses`). */
+export function flowLinkText(prepared: PreparedFlowNode, addresses: McpLaneAddresses): string {
   // The flow is the source of truth: the user may pick another result or change
   // a setting there, and the next step should build on that, not on memory.
   return (
-    `This step was added to the conversation's flow in Nodaro — open it in the editor: ${workflowEditorUrl(prepared.workflowId)} (flow id ${prepared.workflowId}). ` +
+    `This step was added to the conversation's flow in Nodaro — open it in the editor: ${laneEditorUrl(addresses, prepared.workflowId)} (flow id ${prepared.workflowId}). ` +
     `If the user changed the flow there, read it with get_workflow_json before the next step and build on the result selected in each node.`
   )
 }

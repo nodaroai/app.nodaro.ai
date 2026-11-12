@@ -102,7 +102,7 @@ describe("commitFlowNode", () => {
     expect(delta.settings.mcpConversation).toMatchObject({ key: "s-1", firstRequest: "make me two dolphins", steps: 1 })
     expect(delta.settings.mcpConversation.lastActivityAt).not.toBe("t0")
     expect(hydrate).toHaveBeenCalledWith("job-1")
-    expect(flowLinkText(prepared)).toContain("wf-1")
+    expect(flowLinkText(prepared, session().addresses)).toContain("wf-1")
   })
 
   it("counts the steps from the nodes it writes into", async () => {

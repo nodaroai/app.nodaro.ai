@@ -33,6 +33,7 @@ vi.mock("../../lib/config.js", () => ({
 import { pickerCatalogsRoutes } from "../picker-catalogs.js"
 import { catalogsRoutes } from "../catalogs.js"
 import { registerPickerCatalogs } from "../../lib/mcp/tools/picker-catalogs.js"
+import { mcpLaneAddresses } from "../../lib/mcp-lane-addresses.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 
 const savedProfile = process.env.NODARO_SURFACE_PROFILE
@@ -65,7 +66,7 @@ function deploy(edition: string, images: string | undefined): void {
 function mcpTool() {
   const tools: { handler: (args: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }[] = []
   const server = { registerTool: (_n: string, _c: unknown, handler: (typeof tools)[number]["handler"]) => tools.push({ handler }) }
-  registerPickerCatalogs(server as never, { userId: "u1", scopes: [] } as never)
+  registerPickerCatalogs(server as never, { userId: "u1", scopes: [], addresses: mcpLaneAddresses() } as never)
   return tools[0]!.handler
 }
 

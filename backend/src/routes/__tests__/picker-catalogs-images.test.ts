@@ -23,6 +23,7 @@ vi.mock("../../lib/config.js", () => ({
 
 import { pickerCatalogsRoutes } from "../picker-catalogs.js"
 import { registerPickerCatalogs } from "../../lib/mcp/tools/picker-catalogs.js"
+import { mcpLaneAddresses } from "../../lib/mcp-lane-addresses.js"
 
 let app: FastifyInstance
 beforeAll(async () => {
@@ -126,7 +127,7 @@ describe("get_picker_catalog (MCP) pictures", () => {
   function tool() {
     const tools: { handler: (args: Record<string, unknown>) => Promise<{ content: { text: string }[] }> }[] = []
     const server = { registerTool: (_n: string, _c: unknown, handler: (typeof tools)[number]["handler"]) => tools.push({ handler }) }
-    registerPickerCatalogs(server as never, { userId: "u1", scopes: [] } as never)
+    registerPickerCatalogs(server as never, { userId: "u1", scopes: [], addresses: mcpLaneAddresses() } as never)
     return tools[0].handler
   }
 

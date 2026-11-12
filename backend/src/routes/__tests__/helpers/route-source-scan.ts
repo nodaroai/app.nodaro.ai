@@ -36,6 +36,7 @@ export const DYNAMIC_ROUTE_FILES: Record<string, string> = {
   "routes/use-case-run.ts": "use-case node routes: one top-level path per use-case descriptor (`d.route`)",
   "routes/use-case-continue.ts": "use-case continue routes: one per use-case node (`usecaseContinuePath(type)`)",
   "ee/routes/keepers.ts": "the admin's Keepers shelf mark, one PUT per kind (`/v1/<kind's path>/:id/catalog`): an item route, never an app run or app-management path",
+  "routes/well-known.ts": "the OAuth metadata documents of an MCP endpoint served by path (`/.well-known/oauth-*<mcp.path>`, MCP by path): discovery documents, never an app run or app-management path",
 }
 
 const LITERAL = /^(["'`])((?:(?!\1)[^\\]|\\.)*)\1/

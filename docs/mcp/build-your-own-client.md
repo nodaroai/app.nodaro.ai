@@ -8,6 +8,13 @@ MCP-compatible client by:
 3. Performing the standard OAuth Dynamic Client Registration flow (RFC 7591) at
    `https://app.nodaro.ai/v1/oauth/register`.
 
+On a deployment that serves MCP by path
+([MCP by path](../deployment.md#mcp-by-path-no-dedicated-mcp-host)) all three
+are on the host you connect to: the endpoint is `https://<host>/v1/mcp`, its
+401 challenge names its metadata document in `resource_metadata`
+(`https://<host>/.well-known/oauth-protected-resource/v1/mcp`), and the issuer
+and registration endpoint are on `https://<host>`.
+
 ## Allowlist gate
 
 By default, dynamic registration only accepts known client names. The default

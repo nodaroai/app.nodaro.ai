@@ -13,6 +13,11 @@ https://mcp.nodaro.ai/mcp
 
 Sign in with your Nodaro account, consent, and the tools appear inline.
 
+On another deployment of Nodaro, use the MCP address its operator gives you.
+A deployment without a dedicated MCP host serves it on its own site, by
+default at `https://<its host>/v1/mcp`, and signs you in on that same site
+([MCP by path](../deployment.md#mcp-by-path-no-dedicated-mcp-host)).
+
 ## What's included
 
 - 131 tools across all media families (image / video / audio / Suno / character / location / object)

@@ -24,7 +24,7 @@
  */
 import { uiProtocolShim } from "./_common.js"
 import { WIDGET_MEDIA_ORIGINS } from "./csp-origins.js"
-import { flowBaseUrl } from "../../deployment-urls.js"
+import { mcpLaneAddresses } from "../../mcp-lane-addresses.js"
 
 const CARD_CSS = `
   :root { color-scheme: light dark; --fs-top-pad: 90px; }
@@ -246,9 +246,10 @@ function classifyJobOutput(sc, allowedOrigins) {
 
 /**
  * Builds the static job-auto widget HTML. Registered once per request by the
- * resource registrar under ui://nodaro/widget/v4/job-auto.
+ * resource registrar under ui://nodaro/widget/v4/job-auto, with the session's
+ * pages host (`pagesBase`, lib/mcp-lane-addresses.ts) for the library link.
  */
-export function buildJobAutoWidget(): string {
+export function buildJobAutoWidget(pagesBase: string = mcpLaneAddresses().pagesBase): string {
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8" />
@@ -490,7 +491,7 @@ ${uiProtocolShim()}
       libLink.textContent = 'Open Nodaro library';
       libLink.addEventListener('click', function() {
         if (window.NodaroMCP && window.NodaroMCP.openLink) {
-          window.NodaroMCP.openLink(${JSON.stringify(`${flowBaseUrl()}/gallery`)});
+          window.NodaroMCP.openLink(${JSON.stringify(`${pagesBase}/gallery`)});
         }
       });
       statusEl.appendChild(libLink);

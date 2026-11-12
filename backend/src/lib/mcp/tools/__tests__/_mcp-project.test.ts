@@ -8,9 +8,10 @@ vi.mock("@/lib/supabase.js", () => {
 import { ensureMcpProject } from "../_mcp-project.js"
 import { supabase } from "../../../supabase.js"
 import type { McpSession } from "../../session.js"
+import { mcpLaneAddresses } from "../../../mcp-lane-addresses.js"
 
 function makeSession(overrides: Partial<McpSession> = {}): McpSession {
-  return { userId: "user-1", scopes: [], clientName: "test", firstParty: false, ...overrides }
+  return { userId: "user-1", scopes: [], clientName: "test", firstParty: false, addresses: mcpLaneAddresses(), ...overrides }
 }
 
 // findOldestMcpProject: select.eq.eq.order.order.limit.maybeSingle

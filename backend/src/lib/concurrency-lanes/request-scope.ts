@@ -98,9 +98,19 @@ const lives = new WeakMap<FastifyRequest, RequestLife>()
  */
 const scoped = new WeakSet<FastifyRequest>()
 
+declare module "fastify" {
+  interface FastifyContextConfig {
+    /** This route is an MCP endpoint (routes/mcp.ts): its live waits, and those
+     *  of the routes its tools inject, are bounded by the `mcp` ceiling. Set on
+     *  every MCP endpoint, wherever it is served (`/mcp`, or a deployment's
+     *  path — MCP by path). */
+    mcpTransport?: true
+  }
+}
+
 /** The transport whose ceiling bounds a live wait. */
 function transportOf(req: FastifyRequest): Transport {
-  if (req.routeOptions?.url === "/mcp") return "mcp"
+  if (req.routeOptions?.config?.mcpTransport === true || req.routeOptions?.url === "/mcp") return "mcp"
   const accept = req.headers.accept
   const text = Array.isArray(accept) ? accept.join(",") : (accept ?? "")
   return text.includes("text/event-stream") ? "sse" : "json"

@@ -15,7 +15,7 @@
  * `setAttribute` only.
  */
 import { uiProtocolShim } from "./_common.js"
-import { flowBaseUrl } from "../../deployment-urls.js"
+import { mcpLaneAddresses } from "../../mcp-lane-addresses.js"
 
 const WF_CSS = `
   :root { color-scheme: light dark; }
@@ -40,7 +40,8 @@ const WF_CSS = `
   button { padding: 6px 14px; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 6px; font-size: 13px; cursor: pointer; }
 `
 
-export function buildWorkflowWidgetTemplate(): string {
+/** `pagesBase`: the session's pages host (lib/mcp-lane-addresses.ts) — the gallery link opens there. */
+export function buildWorkflowWidgetTemplate(pagesBase: string = mcpLaneAddresses().pagesBase): string {
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8" />
@@ -105,7 +106,7 @@ ${uiProtocolShim()}
     }
 
     document.getElementById('btn-open').addEventListener('click', function() {
-      window.NodaroMCP.openLink(${JSON.stringify(`${flowBaseUrl()}/gallery`)});
+      window.NodaroMCP.openLink(${JSON.stringify(`${pagesBase}/gallery`)});
     });
 
     window.addEventListener('mcp-tool-result', function(e) {

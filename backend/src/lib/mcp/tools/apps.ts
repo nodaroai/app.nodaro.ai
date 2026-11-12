@@ -8,7 +8,6 @@ import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
-import { flowBaseUrl } from "../../deployment-urls.js"
 import {
   extractAppInputSchema,
   flatInputsToOverrides,
@@ -478,7 +477,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
       "delete_app_run",
       {
         title: "Archive App Run",
-        description: `Move a published-app run to the user's archive. The run is removed from the active list but can be restored or permanently deleted from ${flowBaseUrl()}/archived-runs. Use when the user asks to delete or remove a run by ID.`,
+        description: `Move a published-app run to the user's archive. The run is removed from the active list but can be restored or permanently deleted from ${session.addresses.pagesBase}/archived-runs. Use when the user asks to delete or remove a run by ID.`,
         inputSchema: {
           slug: z.string().min(1).describe("The published app's slug (last path segment of the app URL)."),
           runId: z.string().uuid().describe("The run's UUID."),
@@ -502,7 +501,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           content: [
             {
               type: "text" as const,
-              text: `Archived run ${args.runId}. Restore or permanently delete from ${flowBaseUrl()}/archived-runs.`,
+              text: `Archived run ${args.runId}. Restore or permanently delete from ${session.addresses.pagesBase}/archived-runs.`,
             },
           ],
           structuredContent: {

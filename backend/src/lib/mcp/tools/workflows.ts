@@ -37,7 +37,7 @@ import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { config } from "../../config.js"
-import { workflowEditorUrl } from "../../deployment-urls.js"
+import { laneEditorUrl } from "../../mcp-lane-addresses.js"
 import { registerTask } from "../tasks.js"
 import { ensureMcpProject } from "./_mcp-project.js"
 import { ownedSettingsRefusal } from "./_settings-guard.js"
@@ -257,7 +257,7 @@ export function registerWorkflows({
           rows.length === limit && last?.created_at ? (last.created_at as string) : null
         // Every row carries its editor link, so an assistant can offer the
         // user the flow in the app without building an address itself.
-        const withLinks = rows.map((row) => ({ ...row, editorUrl: workflowEditorUrl(row.id as string) }))
+        const withLinks = rows.map((row) => ({ ...row, editorUrl: laneEditorUrl(session.addresses, row.id as string) }))
         return ok(JSON.stringify({ data: withLinks, next_cursor: nextCursor }, null, 2))
       },
     )
@@ -279,7 +279,7 @@ export function registerWorkflows({
           "id, project_id, name, description, version, thumbnail_url, created_at, updated_at",
         )
         if (!loaded.ok) return err(loaded.message)
-        return ok(JSON.stringify({ data: { ...loaded.row, editorUrl: workflowEditorUrl(args.workflow_id) } }, null, 2))
+        return ok(JSON.stringify({ data: { ...loaded.row, editorUrl: laneEditorUrl(session.addresses, args.workflow_id) } }, null, 2))
       },
     )
 
@@ -317,7 +317,7 @@ export function registerWorkflows({
               // The CAS token `update_workflow_json` asks for as `expected_version`
               // — the doc promised it here long before the read side supplied it.
               version: row.version,
-              editorUrl: workflowEditorUrl(args.workflow_id),
+              editorUrl: laneEditorUrl(session.addresses, args.workflow_id),
             },
             null,
             2,
@@ -456,7 +456,7 @@ export function registerWorkflows({
         if (error || !data) return err(`Error: ${error?.message ?? "Failed to create workflow"}`)
         const row = data as Record<string, unknown>
         await projectTriggers(row.id as string, session.userId, session.userId, storedNodes)
-        const editorUrl = workflowEditorUrl(row.id as string)
+        const editorUrl = laneEditorUrl(session.addresses, row.id as string)
         const createMoves = describeServerNodeModelMoves(offered.moved)
         return ok(
           `Created workflow "${row.name as string}" (id ${row.id as string}) in the mcp project. Open it in the editor: ${editorUrl}${createMoves ? `\n\n${createMoves}` : ""}${edgeNote(edgeResult.adjustments, createEdgeWarnings)}`,
@@ -653,7 +653,7 @@ export function registerWorkflows({
           // form does here; what it changed or doubted is relayed the same way.
           const deltaAdjustments = out.edgeAdjustments ?? []
           const deltaWarnings = out.edgeWarnings ?? []
-          const deltaEditorUrl = workflowEditorUrl(args.workflow_id)
+          const deltaEditorUrl = laneEditorUrl(session.addresses, args.workflow_id)
           return ok(`Applied delta to workflow ${args.workflow_id} (version ${out.version ?? "?"}). Open it in the editor: ${deltaEditorUrl}${edgeNote(deltaAdjustments, deltaWarnings)}`, {
             id: args.workflow_id,
             editorUrl: deltaEditorUrl,
@@ -862,7 +862,7 @@ export function registerWorkflows({
             ? `\n\nAdjusted ${nodeAdjustments.length} parameter(s) the selected model does not accept:\n` +
               describeNodeAdjustments(nodeAdjustments).map((l) => `  - ${l}`).join("\n")
             : ""
-        const updatedEditorUrl = workflowEditorUrl(args.workflow_id)
+        const updatedEditorUrl = laneEditorUrl(session.addresses, args.workflow_id)
         const moveNote = describeServerNodeModelMoves(modelMoves)
         return ok(
           `Updated workflow ${args.workflow_id} (${changed.join(", ")}). Open it in the editor: ${updatedEditorUrl}${moveNote ? `\n\n${moveNote}` : ""}${healNote}${edgeNote(edgeAdjustments, edgeWarnings)}`,
@@ -998,7 +998,7 @@ export function registerWorkflows({
             : "",
           ...(importReport.notes ?? []),
         ].filter(Boolean)
-        const editorUrl = workflowEditorUrl(row.id as string)
+        const editorUrl = laneEditorUrl(session.addresses, row.id as string)
         const importMoves = describeServerNodeModelMoves(importOffered.moved)
         return ok(
           [
@@ -1151,10 +1151,10 @@ export function registerWorkflows({
                 `it lists every node's status, text and media, and the run's outcome once it completes ` +
                 `("nothing_new" when the nodes had nothing to work on — a feed with no new posts — and nothing failed). ` +
                 `While the flow is open in the editor the run shows on the canvas live; otherwise its results land on the next open. ` +
-                `Watch it in the editor: ${workflowEditorUrl(args.workflow_id)}`,
+                `Watch it in the editor: ${laneEditorUrl(session.addresses, args.workflow_id)}`,
             },
           ],
-          structuredContent: { executionId, name: workflowName, editorUrl: workflowEditorUrl(args.workflow_id) },
+          structuredContent: { executionId, name: workflowName, editorUrl: laneEditorUrl(session.addresses, args.workflow_id) },
         }
       },
     )

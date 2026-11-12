@@ -155,7 +155,7 @@ function registerReads(server: McpServer, session: McpSession): void {
           } else {
             const nodeType = args.nodeType
             out.factory = presetCatalog(nodeType).map((p) => {
-              const view = factoryPresetView(nodeType, p)
+              const view = factoryPresetView(nodeType, p, session.addresses.picturesBase)
               return {
                 id: p.id,
                 name: p.name,
@@ -208,6 +208,7 @@ function registerReads(server: McpServer, session: McpSession): void {
         nodeType: args.nodeType,
         presetId: args.presetId,
         userId: session.userId,
+        picturesBase: session.addresses.picturesBase,
       })
       if (!preset) {
         return {

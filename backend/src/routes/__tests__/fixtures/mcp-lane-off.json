@@ -1,0 +1,1014 @@
+{
+  "mcp.nodaro.ai POST /mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "mcp.nodaro.ai GET /mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "mcp.nodaro.ai POST /mcp (unknown token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "mcp.nodaro.ai POST /v1/mcp (no token)": {
+    "status": 404,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "187",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Route POST:/v1/mcp not found on mcp.nodaro.ai. This subdomain only serves MCP — see https://mcp.nodaro.ai/.well-known/oauth-protected-resource\"}}"
+  },
+  "mcp.nodaro.ai GET /.well-known/oauth-authorization-server": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "856",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"issuer\":\"https://app.nodaro.ai\",\"authorization_endpoint\":\"https://app.nodaro.ai/v1/oauth/authorize\",\"token_endpoint\":\"https://app.nodaro.ai/v1/oauth/token\",\"registration_endpoint\":\"https://app.nodaro.ai/v1/oauth/register\",\"revocation_endpoint\":\"https://app.nodaro.ai/v1/oauth/revoke\",\"response_types_supported\":[\"code\"],\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"code_challenge_methods_supported\":[\"S256\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"revocation_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"service_documentation\":\"https://app.nodaro.ai/docs/oauth\"}"
+  },
+  "mcp.nodaro.ai GET /.well-known/oauth-protected-resource": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "381",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"resource\":\"https://mcp.nodaro.ai/mcp\",\"authorization_servers\":[\"https://app.nodaro.ai\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"bearer_methods_supported\":[\"header\"]}"
+  },
+  "mcp.nodaro.ai GET /.well-known/oauth-protected-resource/mcp": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "381",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"resource\":\"https://mcp.nodaro.ai/mcp\",\"authorization_servers\":[\"https://app.nodaro.ai\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"bearer_methods_supported\":[\"header\"]}"
+  },
+  "mcp.nodaro.ai GET /.well-known/oauth-authorization-server/mcp": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "856",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"issuer\":\"https://app.nodaro.ai\",\"authorization_endpoint\":\"https://app.nodaro.ai/v1/oauth/authorize\",\"token_endpoint\":\"https://app.nodaro.ai/v1/oauth/token\",\"registration_endpoint\":\"https://app.nodaro.ai/v1/oauth/register\",\"revocation_endpoint\":\"https://app.nodaro.ai/v1/oauth/revoke\",\"response_types_supported\":[\"code\"],\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"code_challenge_methods_supported\":[\"S256\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"revocation_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"service_documentation\":\"https://app.nodaro.ai/docs/oauth\"}"
+  },
+  "mcp.nodaro.ai GET /.well-known/oauth-protected-resource/v1/mcp": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "mcp.nodaro.ai GET /.well-known/oauth-authorization-server/v1/mcp": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "mcp.nodaro.ai GET /v1/oauth/authorize": {
+    "status": 404,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "198",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Route GET:/v1/oauth/authorize not found on mcp.nodaro.ai. This subdomain only serves MCP — see https://mcp.nodaro.ai/.well-known/oauth-protected-resource\"}}"
+  },
+  "mcp.nodaro.ai POST /v1/oauth/authorize (no session)": {
+    "status": 404,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "199",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Route POST:/v1/oauth/authorize not found on mcp.nodaro.ai. This subdomain only serves MCP — see https://mcp.nodaro.ai/.well-known/oauth-protected-resource\"}}"
+  },
+  "mcp.nodaro.ai POST /v1/oauth/register": {
+    "status": 404,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "198",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Route POST:/v1/oauth/register not found on mcp.nodaro.ai. This subdomain only serves MCP — see https://mcp.nodaro.ai/.well-known/oauth-protected-resource\"}}"
+  },
+  "mcp.nodaro.ai POST /v1/oauth/register (not allowlisted)": {
+    "status": 404,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "198",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Route POST:/v1/oauth/register not found on mcp.nodaro.ai. This subdomain only serves MCP — see https://mcp.nodaro.ai/.well-known/oauth-protected-resource\"}}"
+  },
+  "mcp.nodaro.ai POST /v1/oauth/token (form)": {
+    "status": 404,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "195",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Route POST:/v1/oauth/token not found on mcp.nodaro.ai. This subdomain only serves MCP — see https://mcp.nodaro.ai/.well-known/oauth-protected-resource\"}}"
+  },
+  "mcp.nodaro.ai POST /v1/oauth/revoke": {
+    "status": 404,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "196",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Route POST:/v1/oauth/revoke not found on mcp.nodaro.ai. This subdomain only serves MCP — see https://mcp.nodaro.ai/.well-known/oauth-protected-resource\"}}"
+  },
+  "mcp.nodaro.ai GET /v1/oauth/app-info": {
+    "status": 404,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "197",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Route GET:/v1/oauth/app-info not found on mcp.nodaro.ai. This subdomain only serves MCP — see https://mcp.nodaro.ai/.well-known/oauth-protected-resource\"}}"
+  },
+  "mcp.nodaro.ai POST /v1/upload-page (bad token)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "71",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"invalid_token\",\"message\":\"Link expired or invalid.\"}}"
+  },
+  "mcp.nodaro.ai GET /v1/upload-page (bad token)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "188",
+      "content-type": "text/html",
+      "vary": "Origin"
+    },
+    "body": "<!doctype html><html><body style=\"font-family:system-ui;text-align:center;padding:40px\"><h2>Link expired or invalid</h2><p>Ask the assistant to issue a fresh upload link.</p></body></html>"
+  },
+  "app.nodaro.ai POST /mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "app.nodaro.ai GET /mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "app.nodaro.ai POST /mcp (unknown token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "app.nodaro.ai POST /v1/mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "app.nodaro.ai GET /.well-known/oauth-authorization-server": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "856",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"issuer\":\"https://app.nodaro.ai\",\"authorization_endpoint\":\"https://app.nodaro.ai/v1/oauth/authorize\",\"token_endpoint\":\"https://app.nodaro.ai/v1/oauth/token\",\"registration_endpoint\":\"https://app.nodaro.ai/v1/oauth/register\",\"revocation_endpoint\":\"https://app.nodaro.ai/v1/oauth/revoke\",\"response_types_supported\":[\"code\"],\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"code_challenge_methods_supported\":[\"S256\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"revocation_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"service_documentation\":\"https://app.nodaro.ai/docs/oauth\"}"
+  },
+  "app.nodaro.ai GET /.well-known/oauth-protected-resource": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "381",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"resource\":\"https://mcp.nodaro.ai/mcp\",\"authorization_servers\":[\"https://app.nodaro.ai\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"bearer_methods_supported\":[\"header\"]}"
+  },
+  "app.nodaro.ai GET /.well-known/oauth-protected-resource/mcp": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "381",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"resource\":\"https://mcp.nodaro.ai/mcp\",\"authorization_servers\":[\"https://app.nodaro.ai\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"bearer_methods_supported\":[\"header\"]}"
+  },
+  "app.nodaro.ai GET /.well-known/oauth-authorization-server/mcp": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "856",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"issuer\":\"https://app.nodaro.ai\",\"authorization_endpoint\":\"https://app.nodaro.ai/v1/oauth/authorize\",\"token_endpoint\":\"https://app.nodaro.ai/v1/oauth/token\",\"registration_endpoint\":\"https://app.nodaro.ai/v1/oauth/register\",\"revocation_endpoint\":\"https://app.nodaro.ai/v1/oauth/revoke\",\"response_types_supported\":[\"code\"],\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"code_challenge_methods_supported\":[\"S256\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"revocation_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"service_documentation\":\"https://app.nodaro.ai/docs/oauth\"}"
+  },
+  "app.nodaro.ai GET /.well-known/oauth-protected-resource/v1/mcp": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "app.nodaro.ai GET /.well-known/oauth-authorization-server/v1/mcp": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "app.nodaro.ai GET /v1/oauth/authorize": {
+    "status": 302,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "0",
+      "location": "https://app.nodaro.ai/oauth/authorize?response_type=code&client_id=ndr_dcr_x&redirect_uri=https%3A%2F%2Fclient.example%2Fcb&state=s1&code_challenge=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&code_challenge_method=S256&resource=https%3A%2F%2Fmcp.nodaro.ai%2Fmcp",
+      "vary": "Origin"
+    },
+    "body": ""
+  },
+  "app.nodaro.ai POST /v1/oauth/authorize (no session)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "app.nodaro.ai POST /v1/oauth/register": {
+    "status": 201,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "602",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "x-ratelimit-limit": "60"
+    },
+    "body": "{\"client_id\":\"ndr_dcr_fixture_client\",\"client_secret\":\"<random>\",\"client_id_issued_at\":1794355200,\"client_secret_expires_at\":1802131200,\"token_endpoint_auth_method\":\"client_secret_post\",\"grant_types\":[\"authorization_code\"],\"response_types\":[\"code\"],\"client_name\":\"Claude\",\"redirect_uris\":[\"https://claude.ai/api/mcp/auth_callback\"],\"scope\":\"workflows:read workflows:write workflows:execute jobs:read assets:read assets:write credits:read apps:read pipelines:read pipelines:execute pipelines:approve presets:read workspaces:read workspaces:write\"}"
+  },
+  "app.nodaro.ai POST /v1/oauth/register (not allowlisted)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "192",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "x-ratelimit-limit": "60"
+    },
+    "body": "{\"error\":{\"code\":\"client_not_allowed\",\"message\":\"client_name \\\"Someone\\\" is not on the dynamic registration allowlist. Set MCP_DYNAMIC_REGISTRATION=open to disable, or contact the operator.\"}}"
+  },
+  "app.nodaro.ai POST /v1/oauth/token (form)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "63",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":\"invalid_client\",\"error_description\":\"Unknown client\"}"
+  },
+  "app.nodaro.ai POST /v1/oauth/revoke": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "16",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"success\":true}"
+  },
+  "app.nodaro.ai GET /v1/oauth/app-info": {
+    "status": 404,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "77",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "x-ratelimit-limit": "60"
+    },
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Unknown client_id or app suspended\"}}"
+  },
+  "app.nodaro.ai POST /v1/upload-page (bad token)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "71",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"invalid_token\",\"message\":\"Link expired or invalid.\"}}"
+  },
+  "app.nodaro.ai GET /v1/upload-page (bad token)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "188",
+      "content-type": "text/html",
+      "vary": "Origin"
+    },
+    "body": "<!doctype html><html><body style=\"font-family:system-ui;text-align:center;padding:40px\"><h2>Link expired or invalid</h2><p>Ask the assistant to issue a fresh upload link.</p></body></html>"
+  },
+  "studio.example.com POST /mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "studio.example.com GET /mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "studio.example.com POST /mcp (unknown token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "studio.example.com POST /v1/mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "studio.example.com GET /.well-known/oauth-authorization-server": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "856",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"issuer\":\"https://app.nodaro.ai\",\"authorization_endpoint\":\"https://app.nodaro.ai/v1/oauth/authorize\",\"token_endpoint\":\"https://app.nodaro.ai/v1/oauth/token\",\"registration_endpoint\":\"https://app.nodaro.ai/v1/oauth/register\",\"revocation_endpoint\":\"https://app.nodaro.ai/v1/oauth/revoke\",\"response_types_supported\":[\"code\"],\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"code_challenge_methods_supported\":[\"S256\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"revocation_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"service_documentation\":\"https://app.nodaro.ai/docs/oauth\"}"
+  },
+  "studio.example.com GET /.well-known/oauth-protected-resource": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "381",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"resource\":\"https://mcp.nodaro.ai/mcp\",\"authorization_servers\":[\"https://app.nodaro.ai\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"bearer_methods_supported\":[\"header\"]}"
+  },
+  "studio.example.com GET /.well-known/oauth-protected-resource/mcp": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "381",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"resource\":\"https://mcp.nodaro.ai/mcp\",\"authorization_servers\":[\"https://app.nodaro.ai\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"bearer_methods_supported\":[\"header\"]}"
+  },
+  "studio.example.com GET /.well-known/oauth-authorization-server/mcp": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "856",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"issuer\":\"https://app.nodaro.ai\",\"authorization_endpoint\":\"https://app.nodaro.ai/v1/oauth/authorize\",\"token_endpoint\":\"https://app.nodaro.ai/v1/oauth/token\",\"registration_endpoint\":\"https://app.nodaro.ai/v1/oauth/register\",\"revocation_endpoint\":\"https://app.nodaro.ai/v1/oauth/revoke\",\"response_types_supported\":[\"code\"],\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"code_challenge_methods_supported\":[\"S256\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"revocation_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"service_documentation\":\"https://app.nodaro.ai/docs/oauth\"}"
+  },
+  "studio.example.com GET /.well-known/oauth-protected-resource/v1/mcp": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "studio.example.com GET /.well-known/oauth-authorization-server/v1/mcp": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "studio.example.com GET /v1/oauth/authorize": {
+    "status": 302,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "0",
+      "location": "https://app.nodaro.ai/oauth/authorize?response_type=code&client_id=ndr_dcr_x&redirect_uri=https%3A%2F%2Fclient.example%2Fcb&state=s1&code_challenge=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&code_challenge_method=S256&resource=https%3A%2F%2Fmcp.nodaro.ai%2Fmcp",
+      "vary": "Origin"
+    },
+    "body": ""
+  },
+  "studio.example.com POST /v1/oauth/authorize (no session)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "studio.example.com POST /v1/oauth/register": {
+    "status": 201,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "602",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "x-ratelimit-limit": "60"
+    },
+    "body": "{\"client_id\":\"ndr_dcr_fixture_client\",\"client_secret\":\"<random>\",\"client_id_issued_at\":1794355200,\"client_secret_expires_at\":1802131200,\"token_endpoint_auth_method\":\"client_secret_post\",\"grant_types\":[\"authorization_code\"],\"response_types\":[\"code\"],\"client_name\":\"Claude\",\"redirect_uris\":[\"https://claude.ai/api/mcp/auth_callback\"],\"scope\":\"workflows:read workflows:write workflows:execute jobs:read assets:read assets:write credits:read apps:read pipelines:read pipelines:execute pipelines:approve presets:read workspaces:read workspaces:write\"}"
+  },
+  "studio.example.com POST /v1/oauth/register (not allowlisted)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "192",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "x-ratelimit-limit": "60"
+    },
+    "body": "{\"error\":{\"code\":\"client_not_allowed\",\"message\":\"client_name \\\"Someone\\\" is not on the dynamic registration allowlist. Set MCP_DYNAMIC_REGISTRATION=open to disable, or contact the operator.\"}}"
+  },
+  "studio.example.com POST /v1/oauth/token (form)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "63",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":\"invalid_client\",\"error_description\":\"Unknown client\"}"
+  },
+  "studio.example.com POST /v1/oauth/revoke": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "16",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"success\":true}"
+  },
+  "studio.example.com GET /v1/oauth/app-info": {
+    "status": 404,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "77",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "x-ratelimit-limit": "60"
+    },
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Unknown client_id or app suspended\"}}"
+  },
+  "studio.example.com POST /v1/upload-page (bad token)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "71",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"invalid_token\",\"message\":\"Link expired or invalid.\"}}"
+  },
+  "studio.example.com GET /v1/upload-page (bad token)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "188",
+      "content-type": "text/html",
+      "vary": "Origin"
+    },
+    "body": "<!doctype html><html><body style=\"font-family:system-ui;text-align:center;padding:40px\"><h2>Link expired or invalid</h2><p>Ask the assistant to issue a fresh upload link.</p></body></html>"
+  },
+  "unlisted.example.net POST /mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "unlisted.example.net GET /mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "unlisted.example.net POST /mcp (unknown token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "unlisted.example.net POST /v1/mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "unlisted.example.net GET /.well-known/oauth-authorization-server": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "856",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"issuer\":\"https://app.nodaro.ai\",\"authorization_endpoint\":\"https://app.nodaro.ai/v1/oauth/authorize\",\"token_endpoint\":\"https://app.nodaro.ai/v1/oauth/token\",\"registration_endpoint\":\"https://app.nodaro.ai/v1/oauth/register\",\"revocation_endpoint\":\"https://app.nodaro.ai/v1/oauth/revoke\",\"response_types_supported\":[\"code\"],\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"code_challenge_methods_supported\":[\"S256\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"revocation_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"service_documentation\":\"https://app.nodaro.ai/docs/oauth\"}"
+  },
+  "unlisted.example.net GET /.well-known/oauth-protected-resource": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "381",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"resource\":\"https://mcp.nodaro.ai/mcp\",\"authorization_servers\":[\"https://app.nodaro.ai\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"bearer_methods_supported\":[\"header\"]}"
+  },
+  "unlisted.example.net GET /.well-known/oauth-protected-resource/mcp": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "381",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"resource\":\"https://mcp.nodaro.ai/mcp\",\"authorization_servers\":[\"https://app.nodaro.ai\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"bearer_methods_supported\":[\"header\"]}"
+  },
+  "unlisted.example.net GET /.well-known/oauth-authorization-server/mcp": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "856",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"issuer\":\"https://app.nodaro.ai\",\"authorization_endpoint\":\"https://app.nodaro.ai/v1/oauth/authorize\",\"token_endpoint\":\"https://app.nodaro.ai/v1/oauth/token\",\"registration_endpoint\":\"https://app.nodaro.ai/v1/oauth/register\",\"revocation_endpoint\":\"https://app.nodaro.ai/v1/oauth/revoke\",\"response_types_supported\":[\"code\"],\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"code_challenge_methods_supported\":[\"S256\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"revocation_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"service_documentation\":\"https://app.nodaro.ai/docs/oauth\"}"
+  },
+  "unlisted.example.net GET /.well-known/oauth-protected-resource/v1/mcp": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "unlisted.example.net GET /.well-known/oauth-authorization-server/v1/mcp": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "unlisted.example.net GET /v1/oauth/authorize": {
+    "status": 302,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "0",
+      "location": "https://app.nodaro.ai/oauth/authorize?response_type=code&client_id=ndr_dcr_x&redirect_uri=https%3A%2F%2Fclient.example%2Fcb&state=s1&code_challenge=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&code_challenge_method=S256&resource=https%3A%2F%2Fmcp.nodaro.ai%2Fmcp",
+      "vary": "Origin"
+    },
+    "body": ""
+  },
+  "unlisted.example.net POST /v1/oauth/authorize (no session)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "unlisted.example.net POST /v1/oauth/register": {
+    "status": 201,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "602",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "x-ratelimit-limit": "60"
+    },
+    "body": "{\"client_id\":\"ndr_dcr_fixture_client\",\"client_secret\":\"<random>\",\"client_id_issued_at\":1794355200,\"client_secret_expires_at\":1802131200,\"token_endpoint_auth_method\":\"client_secret_post\",\"grant_types\":[\"authorization_code\"],\"response_types\":[\"code\"],\"client_name\":\"Claude\",\"redirect_uris\":[\"https://claude.ai/api/mcp/auth_callback\"],\"scope\":\"workflows:read workflows:write workflows:execute jobs:read assets:read assets:write credits:read apps:read pipelines:read pipelines:execute pipelines:approve presets:read workspaces:read workspaces:write\"}"
+  },
+  "unlisted.example.net POST /v1/oauth/register (not allowlisted)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "192",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "x-ratelimit-limit": "60"
+    },
+    "body": "{\"error\":{\"code\":\"client_not_allowed\",\"message\":\"client_name \\\"Someone\\\" is not on the dynamic registration allowlist. Set MCP_DYNAMIC_REGISTRATION=open to disable, or contact the operator.\"}}"
+  },
+  "unlisted.example.net POST /v1/oauth/token (form)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "63",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":\"invalid_client\",\"error_description\":\"Unknown client\"}"
+  },
+  "unlisted.example.net POST /v1/oauth/revoke": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "16",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"success\":true}"
+  },
+  "unlisted.example.net GET /v1/oauth/app-info": {
+    "status": 404,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "77",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "x-ratelimit-limit": "60"
+    },
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Unknown client_id or app suspended\"}}"
+  },
+  "unlisted.example.net POST /v1/upload-page (bad token)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "71",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"invalid_token\",\"message\":\"Link expired or invalid.\"}}"
+  },
+  "unlisted.example.net GET /v1/upload-page (bad token)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "188",
+      "content-type": "text/html",
+      "vary": "Origin"
+    },
+    "body": "<!doctype html><html><body style=\"font-family:system-ui;text-align:center;padding:40px\"><h2>Link expired or invalid</h2><p>Ask the assistant to issue a fresh upload link.</p></body></html>"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com POST /mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com GET /mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com POST /mcp (unknown token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "117",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "www-authenticate": "Bearer realm=\"mcp.nodaro.ai\", resource=\"https://mcp.nodaro.ai/mcp\"",
+      "x-ratelimit-limit": "600"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"MCP requires a Bearer token. See /.well-known/oauth-protected-resource.\"}}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com POST /v1/mcp (no token)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com GET /.well-known/oauth-authorization-server": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "856",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"issuer\":\"https://app.nodaro.ai\",\"authorization_endpoint\":\"https://app.nodaro.ai/v1/oauth/authorize\",\"token_endpoint\":\"https://app.nodaro.ai/v1/oauth/token\",\"registration_endpoint\":\"https://app.nodaro.ai/v1/oauth/register\",\"revocation_endpoint\":\"https://app.nodaro.ai/v1/oauth/revoke\",\"response_types_supported\":[\"code\"],\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"code_challenge_methods_supported\":[\"S256\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"revocation_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"service_documentation\":\"https://app.nodaro.ai/docs/oauth\"}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com GET /.well-known/oauth-protected-resource": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "381",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"resource\":\"https://mcp.nodaro.ai/mcp\",\"authorization_servers\":[\"https://app.nodaro.ai\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"bearer_methods_supported\":[\"header\"]}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com GET /.well-known/oauth-protected-resource/mcp": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "381",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"resource\":\"https://mcp.nodaro.ai/mcp\",\"authorization_servers\":[\"https://app.nodaro.ai\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"bearer_methods_supported\":[\"header\"]}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com GET /.well-known/oauth-authorization-server/mcp": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "cache-control": "public, max-age=3600",
+      "content-length": "856",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"issuer\":\"https://app.nodaro.ai\",\"authorization_endpoint\":\"https://app.nodaro.ai/v1/oauth/authorize\",\"token_endpoint\":\"https://app.nodaro.ai/v1/oauth/token\",\"registration_endpoint\":\"https://app.nodaro.ai/v1/oauth/register\",\"revocation_endpoint\":\"https://app.nodaro.ai/v1/oauth/revoke\",\"response_types_supported\":[\"code\"],\"grant_types_supported\":[\"authorization_code\"],\"token_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"code_challenge_methods_supported\":[\"S256\"],\"scopes_supported\":[\"workflows:read\",\"workflows:write\",\"workflows:execute\",\"jobs:read\",\"assets:read\",\"assets:write\",\"credits:read\",\"apps:read\",\"pipelines:read\",\"pipelines:execute\",\"pipelines:approve\",\"presets:read\",\"workspaces:read\",\"workspaces:write\"],\"revocation_endpoint_auth_methods_supported\":[\"client_secret_post\"],\"service_documentation\":\"https://app.nodaro.ai/docs/oauth\"}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com GET /.well-known/oauth-protected-resource/v1/mcp": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com GET /.well-known/oauth-authorization-server/v1/mcp": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com GET /v1/oauth/authorize": {
+    "status": 302,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "0",
+      "location": "https://app.nodaro.ai/oauth/authorize?response_type=code&client_id=ndr_dcr_x&redirect_uri=https%3A%2F%2Fclient.example%2Fcb&state=s1&code_challenge=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&code_challenge_method=S256&resource=https%3A%2F%2Fmcp.nodaro.ai%2Fmcp",
+      "vary": "Origin"
+    },
+    "body": ""
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com POST /v1/oauth/authorize (no session)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "69",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com POST /v1/oauth/register": {
+    "status": 201,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "602",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "x-ratelimit-limit": "60"
+    },
+    "body": "{\"client_id\":\"ndr_dcr_fixture_client\",\"client_secret\":\"<random>\",\"client_id_issued_at\":1794355200,\"client_secret_expires_at\":1802131200,\"token_endpoint_auth_method\":\"client_secret_post\",\"grant_types\":[\"authorization_code\"],\"response_types\":[\"code\"],\"client_name\":\"Claude\",\"redirect_uris\":[\"https://claude.ai/api/mcp/auth_callback\"],\"scope\":\"workflows:read workflows:write workflows:execute jobs:read assets:read assets:write credits:read apps:read pipelines:read pipelines:execute pipelines:approve presets:read workspaces:read workspaces:write\"}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com POST /v1/oauth/register (not allowlisted)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "192",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "x-ratelimit-limit": "60"
+    },
+    "body": "{\"error\":{\"code\":\"client_not_allowed\",\"message\":\"client_name \\\"Someone\\\" is not on the dynamic registration allowlist. Set MCP_DYNAMIC_REGISTRATION=open to disable, or contact the operator.\"}}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com POST /v1/oauth/token (form)": {
+    "status": 401,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "63",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":\"invalid_client\",\"error_description\":\"Unknown client\"}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com POST /v1/oauth/revoke": {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "16",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"success\":true}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com GET /v1/oauth/app-info": {
+    "status": 404,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "77",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin",
+      "x-ratelimit-limit": "60"
+    },
+    "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Unknown client_id or app suspended\"}}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com POST /v1/upload-page (bad token)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "71",
+      "content-type": "application/json; charset=utf-8",
+      "vary": "Origin"
+    },
+    "body": "{\"error\":{\"code\":\"invalid_token\",\"message\":\"Link expired or invalid.\"}}"
+  },
+  "app.nodaro.ai + x-forwarded-host studio.example.com GET /v1/upload-page (bad token)": {
+    "status": 403,
+    "headers": {
+      "access-control-allow-credentials": "true",
+      "content-length": "188",
+      "content-type": "text/html",
+      "vary": "Origin"
+    },
+    "body": "<!doctype html><html><body style=\"font-family:system-ui;text-align:center;padding:40px\"><h2>Link expired or invalid</h2><p>Ask the assistant to issue a fresh upload link.</p></body></html>"
+  }
+}

@@ -1,5 +1,5 @@
-import type { FastifyInstance } from "fastify"
-import { appBaseUrl, mcpBaseUrl } from "../lib/deployment-urls.js"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import { mcpLaneAddresses, mcpServedPath, metadataLane, type McpLane, type McpLaneAddresses } from "../lib/mcp-lane-addresses.js"
 import { ALL_SCOPES } from "../lib/scopes.js"
 
 /**
@@ -7,10 +7,11 @@ import { ALL_SCOPES } from "../lib/scopes.js"
  * https://www.rfc-editor.org/rfc/rfc8414
  *
  * Lets MCP clients (Claude.ai, Cursor, etc.) discover our OAuth endpoints
- * and supported flows without hardcoding them.
+ * and supported flows without hardcoding them. Every address in it is the
+ * lane's issuer (lib/mcp-lane-addresses.ts).
  */
-function authorizationServerMetadata() {
-  const issuer = appBaseUrl()
+function authorizationServerMetadata(addresses: McpLaneAddresses) {
+  const issuer = addresses.issuer
   return {
     issuer,
     authorization_endpoint: `${issuer}/v1/oauth/authorize`,
@@ -32,29 +33,52 @@ function authorizationServerMetadata() {
  * https://www.rfc-editor.org/rfc/rfc9728
  *
  * Tells the MCP client which authorization server is authoritative for the
- * MCP resource (mcp.nodaro.ai). The resource lives on a different host than
- * the auth server, so this binding is required.
+ * MCP resource. On the dedicated lane the resource lives on a different host
+ * (mcp.nodaro.ai) than the auth server, so this binding is required; on the
+ * path lane both are the host the client connected through.
  */
-function protectedResourceMetadata() {
-  const issuer = appBaseUrl()
+function protectedResourceMetadata(addresses: McpLaneAddresses) {
   return {
-    resource: `${mcpBaseUrl()}/mcp`,
-    authorization_servers: [issuer],
+    resource: addresses.mcpUrl,
+    authorization_servers: [addresses.issuer],
     scopes_supported: [...ALL_SCOPES],
     bearer_methods_supported: ["header"],
   }
 }
 
+/**
+ * The dedicated lane's documents are one answer for the whole install, as
+ * they always were: cacheable by anyone for an hour. The path lane's differ by
+ * the host asked — and that host may come from `X-Forwarded-Host`, which a
+ * shared cache does not key on — so they are private to the client that asked
+ * (no edge may serve one host's addresses on another), and say what they vary
+ * on.
+ */
+function sendMetadata(reply: FastifyReply, addresses: McpLaneAddresses, body: object) {
+  if (addresses.lane === "path") {
+    const vary = reply.getHeader("vary")
+    const varyOn = vary ? `${String(vary)}, Host, X-Forwarded-Host` : "Host, X-Forwarded-Host"
+    return reply.header("Cache-Control", "private, max-age=3600").header("Vary", varyOn).send(body)
+  }
+  return reply.header("Cache-Control", "public, max-age=3600").send(body)
+}
+
+function serve(lane: () => McpLane, document: (addresses: McpLaneAddresses) => object) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const addresses = mcpLaneAddresses(req, lane())
+    return sendMetadata(reply, addresses, document(addresses))
+  }
+}
+
 export async function registerWellKnown(app: FastifyInstance): Promise<void> {
+  // The ROOT documents describe the endpoint this install's hosts serve: the
+  // dedicated `/mcp` endpoint, or — on a deployment that serves MCP by path —
+  // the path endpoint on the host asked (`metadataLane`, read per request).
   // RFC 8414 — base path
-  app.get("/.well-known/oauth-authorization-server", async (_req, reply) => {
-    return reply.header("Cache-Control", "public, max-age=3600").send(authorizationServerMetadata())
-  })
+  app.get("/.well-known/oauth-authorization-server", serve(metadataLane, authorizationServerMetadata))
 
   // RFC 9728 — base path
-  app.get("/.well-known/oauth-protected-resource", async (_req, reply) => {
-    return reply.header("Cache-Control", "public, max-age=3600").send(protectedResourceMetadata())
-  })
+  app.get("/.well-known/oauth-protected-resource", serve(metadataLane, protectedResourceMetadata))
 
   // RFC 9728 §3.1 — resource-specific variant. When the protected resource
   // has a path component (here `/mcp` on mcp.nodaro.ai), the metadata MUST
@@ -66,10 +90,19 @@ export async function registerWellKnown(app: FastifyInstance): Promise<void> {
   //
   // We also mirror the auth-server metadata at the same suffix because some
   // discovery flows probe both endpoints with the resource path.
-  app.get("/.well-known/oauth-protected-resource/mcp", async (_req, reply) => {
-    return reply.header("Cache-Control", "public, max-age=3600").send(protectedResourceMetadata())
-  })
-  app.get("/.well-known/oauth-authorization-server/mcp", async (_req, reply) => {
-    return reply.header("Cache-Control", "public, max-age=3600").send(authorizationServerMetadata())
-  })
+  //
+  // These two describe the dedicated `/mcp` endpoint. On a deployment that
+  // serves MCP by path (lib/mcp-lane-addresses.ts) the same pair describes the
+  // path endpoint at its own resource path instead, and `/mcp` has none: that
+  // endpoint is not served there.
+  const path = mcpServedPath()
+  if (path) {
+    const onPath = (): McpLane => "path"
+    app.get(`/.well-known/oauth-protected-resource${path}`, serve(onPath, protectedResourceMetadata))
+    app.get(`/.well-known/oauth-authorization-server${path}`, serve(onPath, authorizationServerMetadata))
+    return
+  }
+  const dedicated = (): McpLane => "dedicated"
+  app.get("/.well-known/oauth-protected-resource/mcp", serve(dedicated, protectedResourceMetadata))
+  app.get("/.well-known/oauth-authorization-server/mcp", serve(dedicated, authorizationServerMetadata))
 }

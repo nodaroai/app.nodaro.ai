@@ -5,11 +5,13 @@ import { en } from "../../../../frontend/src/lib/i18n/en.js"
 import { PLATFORM_LANGUAGES } from "../../../../frontend/src/lib/i18n/platform-languages.js"
 import { config } from "../config.js"
 import {
+  MCP_PATH_DEFAULT,
   SURFACE_PROFILE_DEFAULT,
   parseSurfaceProfile,
   refineSurfaceEdition,
   runtimeSurfaceProfile,
   surfaceGateOpen,
+  surfaceMcpPath,
   surfaceProfileFailedToLoad,
   __resetSurfaceProfileCacheForTests,
 } from "../surface-profile.js"
@@ -965,5 +967,93 @@ describe("strings — carried raw by the server, validated only on the way to /c
     expect(out.strings).toEqual({ flow: { en: { [KEY]: EN_TEXT } } })
     expect(out.billing).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: true, unitLabel: "units", unitRate: 2000 })
     expect(JSON.stringify(out)).not.toContain("billing@example.com")
+  })
+})
+
+describe("mcp — MCP by path, off unless turned on", () => {
+  const REAL_EDITION = config.EDITION
+  const REAL_ENV = process.env.NODARO_SURFACE_PROFILE
+  afterEach(() => {
+    config.EDITION = REAL_EDITION
+    if (REAL_ENV === undefined) delete process.env.NODARO_SURFACE_PROFILE
+    else process.env.NODARO_SURFACE_PROFILE = REAL_ENV
+    __resetSurfaceProfileCacheForTests()
+    vi.restoreAllMocks()
+  })
+  const mcpOf = (value: unknown) => parseSurfaceProfile(JSON.stringify({ mcp: value })).mcp
+  const pathOf = (profile: unknown): string | null => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify(profile)
+    __resetSurfaceProfileCacheForTests()
+    return surfaceMcpPath()
+  }
+
+  it("is absent from the stock default and from a profile that leaves it out", () => {
+    expect(SURFACE_PROFILE_DEFAULT.mcp).toBeUndefined()
+    expect(parseSurfaceProfile("{}").mcp).toBeUndefined()
+    expect(JSON.stringify(parseSurfaceProfile("{}"))).not.toContain('"mcp"')
+  })
+
+  it("byPath true turns it on at the default path; a flag string counts", () => {
+    expect(mcpOf({ byPath: true })).toEqual({ byPath: true, path: MCP_PATH_DEFAULT })
+    expect(mcpOf({ byPath: "true" })).toEqual({ byPath: true, path: MCP_PATH_DEFAULT })
+    expect(MCP_PATH_DEFAULT).toBe("/v1/mcp")
+  })
+
+  it("/v1/mcp or a lower-case path under it is kept", () => {
+    expect(mcpOf({ byPath: true, path: "/v1/mcp" })).toEqual({ byPath: true, path: "/v1/mcp" })
+    expect(mcpOf({ byPath: true, path: "/v1/mcp/agents" })).toEqual({ byPath: true, path: "/v1/mcp/agents" })
+  })
+
+  it("anything else falls back to the default, warned — including paths under prefixes the auth hook treats specially", () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const bad = [
+      "/mcp", "/v1/", "/v1", "/v1/mcp/", "/v1/MCP", "/v1/../admin", "/v1/mcp?x=1", "v1/mcp", "/v1//mcp", "/.well-known/mcp", `/v1/mcp/${"a".repeat(80)}`, 42, null,
+      // A billing-key route prefix, public prefixes, a parametric route's slot, a lookalike.
+      "/v1/deployment-billing/mcp", "/v1/api/mcp", "/v1/webhooks/mcp", "/v1/workflows/mcp", "/v1/mcpx", "/v1/mcp-conversations", "/v1/agents/mcp",
+    ]
+    for (const path of bad) {
+      expect(mcpOf({ byPath: true, path }), String(path)).toEqual({ byPath: true, path: MCP_PATH_DEFAULT })
+    }
+    expect(spy).toHaveBeenCalled()
+  })
+
+  it("off unless byPath is a true flag: absent, false, or unparseable (warned) are off", () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    expect(mcpOf({})?.byPath).toBe(false)
+    expect(mcpOf({ byPath: false })?.byPath).toBe(false)
+    expect(mcpOf({ byPath: "yes" })?.byPath).toBe(false)
+    expect(mcpOf("on")).toBeUndefined()
+    expect(mcpOf([true])).toBeUndefined()
+    expect(spy).toHaveBeenCalled()
+  })
+
+  it("a bad mcp never takes the rest of the profile down", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const p = parseSurfaceProfile(JSON.stringify({ mcp: "on", brand: { productName: "Acme" } }))
+    expect(p.brand.productName).toBe("Acme")
+    expect(p.mcp).toBeUndefined()
+  })
+
+  it("surfaceMcpPath: the path while on, null otherwise — and null on Community, which ignores the profile", () => {
+    config.EDITION = "cloud"
+    expect(pathOf({ mcp: { byPath: true } })).toBe("/v1/mcp")
+    expect(pathOf({ mcp: { byPath: true, path: "/v1/mcp/x" } })).toBe("/v1/mcp/x")
+    expect(pathOf({ mcp: { byPath: false } })).toBeNull()
+    expect(pathOf({ brand: { productName: "Acme" } })).toBeNull()
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+    expect(surfaceMcpPath()).toBeNull()
+    config.EDITION = "community"
+    expect(pathOf({ mcp: { byPath: true } })).toBeNull()
+  })
+
+  it("never reaches /config.js", async () => {
+    const { renderSurfaceProfileForRuntimeConfig } = await import("../surface-profile-runtime-config.js")
+    config.EDITION = "cloud"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ brand: { productName: "Acme" }, mcp: { byPath: true, path: "/v1/mcp" } })
+    __resetSurfaceProfileCacheForTests()
+    const out = JSON.parse(renderSurfaceProfileForRuntimeConfig())
+    expect(out.brand.productName).toBe("Acme")
+    expect(out).not.toHaveProperty("mcp")
   })
 })

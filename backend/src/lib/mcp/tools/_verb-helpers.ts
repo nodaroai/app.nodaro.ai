@@ -500,7 +500,7 @@ export async function dispatchJob(
   }
   const result = jobResultWithWidget({ jobId, label: opts.label, session, widgetKind: opts.widgetKind, widgetData: opts.widgetData })
   const notes = opts.surfaceWarnings ? routeWarnings(res.body).map((n) => `Note: ${n}`) : []
-  if (flow && (await commitFlowNode(flow, jobId))) notes.push(flowLinkText(flow))
+  if (flow && (await commitFlowNode(flow, jobId))) notes.push(flowLinkText(flow, session.addresses))
   if (notes.length === 0) return result
   const [first, ...rest] = result.content
   return { ...result, content: [{ ...first, text: `${first.text}\n\n${notes.join("\n")}` }, ...rest] }

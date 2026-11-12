@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { registerPickerCatalogs } from "../picker-catalogs.js"
+import { mcpLaneAddresses } from "../../../mcp-lane-addresses.js"
 
 interface Captured {
   name: string
@@ -19,7 +20,7 @@ function fakeServer() {
   return { server, tools }
 }
 
-const session = { userId: "u1", scopes: [] } as never
+const session = { userId: "u1", scopes: [], addresses: mcpLaneAddresses() } as never
 
 describe("get_picker_catalog", () => {
   it("registers exactly one tool named get_picker_catalog", () => {

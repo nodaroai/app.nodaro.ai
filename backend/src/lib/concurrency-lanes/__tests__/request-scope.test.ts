@@ -137,14 +137,18 @@ async function buildApp(): Promise<FastifyInstance> {
   })
   // The real MCP door: the SDK's transport behind the route's own adapter, a
   // tool that reaches a route in-process as every MCP tool does.
-  a.post("/mcp", async (req: FastifyRequest, reply: FastifyReply) => {
+  const mcpDoor = async (req: FastifyRequest, reply: FastifyReply) => {
     const server = new McpServer({ name: "lanes-test", version: "1.0.0" })
     server.registerTool("work", { description: "reaches /work" }, async () => {
       const res = await a.inject({ method: "POST", url: "/work", headers: { "x-user": String(req.userId), "x-internal": "1" } })
       return { content: [{ type: "text" as const, text: JSON.stringify({ status: res.statusCode, retryAfter: res.headers["retry-after"] ?? null, body: res.json() }) }] }
     })
     await handleMcpRequest(server, req, reply)
-  })
+  }
+  a.post("/mcp", mcpDoor)
+  // The same door served by path (MCP by path, routes/mcp.ts): marked by its
+  // route config, as every MCP endpoint is, not by its address.
+  a.post("/v1/mcp", { config: { mcpTransport: true } }, mcpDoor)
   a.post("/detached", async () => {
     setTimeout(() => { void providerFetch(billing, "https://provider.test/late").then(() => { seen.detachedDone = true }) }, 0)
     return { ok: true }
@@ -389,10 +393,10 @@ describe("a real client", () => {
   const realFetch = (path: string, signal: AbortSignal) =>
     originalFetch(`${base}${path}`, { method: "POST", headers: { "x-user": "U", "content-type": "application/json" }, body: "{}", signal })
 
-  it("an MCP-injected route uses the mcp ceiling", async () => {
+  it.each(["/mcp", "/v1/mcp"])("an MCP-injected route uses the mcp ceiling (endpoint %s)", async (door) => {
     // Over a real socket: the MCP transport's node adapter needs one.
     const acquire = vi.spyOn(gate, "acquire")
-    const res = await originalFetch(`${base}/mcp`, {
+    const res = await originalFetch(`${base}${door}`, {
       method: "POST",
       headers: { "x-user": "U", accept: "application/json, text/event-stream", "content-type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "work", arguments: {} } }),
