@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 // ---------------------------------------------------------------------------
-// POST /v1/extend-video on its two Seedance providers: what each is priced at
+// POST /v1/extend-video on its tail-recipe providers (Seedance 2.5, Seedance
+// 2.0, Kling 4): what each is priced at
 // (the guard's id and the reservation's id), what is refused before anything
 // is reserved (a duration outside the provider's window, a source shorter than
 // the tail it sends), and what the worker is queued with. The earlier single
@@ -293,5 +294,91 @@ describe("checkExtendSource", () => {
     await expect(checkExtendSource("veo-extend", SOURCE)).resolves.toEqual({ ok: true })
     await expect(checkExtendSource("ltx-2.3-pro", SOURCE)).resolves.toEqual({ ok: true })
     expect(probeVideoSource).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /v1/extend-video — Kling 4 (kling-4-extend)", () => {
+  it("is priced on its own rows: the 5 s, 720p default, and any length and resolution it offers", async () => {
+    expect((await post({ provider: "kling-4-extend" })).statusCode).toBe(200)
+    expect(h.guarded.map((g) => g.id)).toEqual(["kling-4-extend:5s:720p"])
+    expect(reservedId()).toBe("kling-4-extend:5s:720p")
+    expect(queued()).toMatchObject({ provider: "kling-4-extend", duration: 5, video: SOURCE })
+    vi.mocked(videoQueue.add).mockClear()
+    vi.mocked(reserveCreditsForJob).mockClear()
+    expect((await post({ provider: "kling-4-extend", duration: 30, resolution: "1080p" })).statusCode).toBe(200)
+    expect(reservedId()).toBe("kling-4-extend:30s:1080p")
+    expect(queued()).toMatchObject({ duration: 30, resolution: "1080p" })
+  })
+
+  it("hands the guard the request's video, marked an extension (no extension on free credits)", async () => {
+    await post({ provider: "kling-4-extend", duration: 8, resolution: "720p" })
+    expect(h.guarded.map((g) => g.video)).toEqual([
+      { provider: "kling-4-extend", duration: 8, resolution: "720p", videoSize: null, extend: true },
+    ])
+  })
+
+  it("offers 3–30 s: refuses 1, 2 and anything past 30 before reserving, accepts 3", async () => {
+    for (const duration of [1, 2, 31]) {
+      const res = await post({ provider: "kling-4-extend", duration })
+      expect(res.statusCode, String(duration)).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    }
+    expect(h.guarded).toEqual([])
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+    expect((await post({ provider: "kling-4-extend", duration: 3 })).statusCode).toBe(200)
+    expect(reservedId()).toBe("kling-4-extend:3s:720p")
+  })
+
+  it("refuses a resolution Kling 4 does not render (480p) before reserving, never pricing it at another", async () => {
+    const res = await post({ provider: "kling-4-extend", resolution: "480p" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(res.json().error.message).toBe("resolution must be 720p or 1080p for kling-4-extend")
+    expect(h.guarded).toEqual([])
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("refuses a source shorter than 2 s on Kling before reserving", async () => {
+    vi.mocked(probeVideoSource).mockResolvedValue({ width: 1280, height: 720, durationSeconds: 1.97, videoDurationSeconds: 1.97 })
+    const res = await post({ provider: "kling-4-extend" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("video_too_short")
+    expect(res.json().error.message).toBe(
+      "Source video is too short to extend: Kling 4 Extend needs at least 2s of footage to continue from (got 1.97s).",
+    )
+    expect(supabase.from).not.toHaveBeenCalled()
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+    expect(h.guarded).toEqual([])
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  // Between Kling's 2 s reference floor and its 3 s tail the run sends the
+  // whole picture: the source is continued, at the same price.
+  it("accepts a 2.5 s source on Kling, priced as any other run", async () => {
+    vi.mocked(probeVideoSource).mockResolvedValue({ width: 1280, height: 720, durationSeconds: 2.6, videoDurationSeconds: 2.5 })
+    const res = await post({ provider: "kling-4-extend" })
+    expect(res.statusCode).toBe(200)
+    expect(reservedId()).toBe("kling-4-extend:5s:720p")
+    expect(videoQueue.add).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([2, 3])("continues a source of exactly %i s", async (seconds) => {
+    vi.mocked(probeVideoSource).mockResolvedValue({ width: 1280, height: 720, durationSeconds: seconds, videoDurationSeconds: seconds })
+    expect((await post({ provider: "kling-4-extend" })).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenCalledTimes(1)
+  })
+
+  it("takes no reference images (only the Seedance extend providers do)", async () => {
+    const res = await post({ provider: "kling-4-extend", referenceImageUrls: ["https://cdn.example.com/ref.png"] })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toMatch(/only supported by the Seedance extend providers \(seedance-2-5-extend, seedance-2-0-extend\)/)
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("requires the video and what happens next", async () => {
+    expect((await post({ provider: "kling-4-extend", videoUrl: undefined })).json().error.message).toBe("videoUrl is required for kling-4-extend")
+    expect((await post({ provider: "kling-4-extend", prompt: undefined })).json().error.message).toBe(
+      "prompt (what happens next) is required for kling-4-extend",
+    )
   })
 })

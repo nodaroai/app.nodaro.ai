@@ -162,7 +162,7 @@ const isFullRange = (source: MatchedProbe): boolean => readTag(source.colorRange
 
 /**
  * An HDR source's picture taken to SDR BT.709 4:2:0, limited range, the
- * extension's own (Seedance generates SDR): nothing for any other source.
+ * extension's own (every extend model generates SDR): nothing for any other source.
  * Its frames are first tagged as the probe reads the file (BT.2020 primaries
  * and matrix, and limited range, where it reads none), so zscale converts
  * from what the file says whatever the decoder set; then linear light at a

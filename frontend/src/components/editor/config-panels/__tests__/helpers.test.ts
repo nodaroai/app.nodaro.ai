@@ -9,7 +9,7 @@ import {
   getModelIdentifier,
   buildCreditModelIdentifier,
 } from "../helpers"
-import { sunoCreditType, SUNO_SELECT_OPERATIONS, buildVideoCreditModelIdentifier, seedanceExtendCreditId } from "@nodaro/shared/credits"
+import { sunoCreditType, SUNO_SELECT_OPERATIONS, buildVideoCreditModelIdentifier, tailExtendCreditId } from "@nodaro/shared/credits"
 import { SUNO_MODELS, applyDefaultVideoSelection, DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
 import { mergeNodeInputOverrides } from "@nodaro/shared/apps"
 import type { SourceNodeInfo } from "../types"
@@ -348,13 +348,20 @@ describe("getModelIdentifier", () => {
   it("prices a Seedance extend on its own provider's row — the one builder the route and the run reserve on", () => {
     const extend = (data: Record<string, unknown>) => makeNode({ type: "extend-video", data: { label: "Extend", ...data } as any })
     for (const provider of ["seedance-2-5-extend", "seedance-2-0-extend"] as const) {
-      expect(getModelIdentifier(extend({ provider, duration: 12, resolution: "1080p" }))).toBe(seedanceExtendCreditId(provider, 12, "1080p"))
-      expect(getModelIdentifier(extend({ provider }))).toBe(seedanceExtendCreditId(provider, undefined, undefined))
+      expect(getModelIdentifier(extend({ provider, duration: 12, resolution: "1080p" }))).toBe(tailExtendCreditId(provider, 12, "1080p"))
+      expect(getModelIdentifier(extend({ provider }))).toBe(tailExtendCreditId(provider, undefined, undefined))
     }
     expect(getModelIdentifier(extend({ provider: "seedance-2-5-extend", duration: 22, resolution: "480p" }))).toBe("seedance-2-5-extend:22s:480p")
     expect(getModelIdentifier(extend({ provider: "seedance-2-0-extend", duration: 12, resolution: "1080p" }))).toBe("seedance-2-0-extend:12s:1080p")
     // A node still naming the retired id is priced as the Seedance 2.5 extend it runs as.
     expect(getModelIdentifier(extend({ provider: "seedance-2-extend", duration: 8 }))).toBe("seedance-2-5-extend:8s:720p")
+  })
+
+  it("prices a Kling 4 extend on its own rows, a resolution it does not render at 720p", () => {
+    const extend = (data: Record<string, unknown>) => makeNode({ type: "extend-video", data: { label: "Extend", ...data } as any })
+    expect(getModelIdentifier(extend({ provider: "kling-4-extend" }))).toBe("kling-4-extend:5s:720p")
+    expect(getModelIdentifier(extend({ provider: "kling-4-extend", duration: 22, resolution: "1080p" }))).toBe("kling-4-extend:22s:1080p")
+    expect(getModelIdentifier(extend({ provider: "kling-4-extend", duration: 22, resolution: "480p" }))).toBe("kling-4-extend:22s:720p")
   })
 
   it("prices an Extend node naming no provider as the VEO extend it runs (EXTEND_VIDEO_DEFAULT_PROVIDER), never the node-type row", () => {

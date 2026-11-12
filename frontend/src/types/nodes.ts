@@ -3090,9 +3090,9 @@ export type ExtendVideoData = PromptAffixFields & {
   seeds?: number                   // VEO only
   quality?: "720p" | "1080p"      // Runway only
   extendMode?: "start" | "end"    // LTX 2.3 Pro only — default "end"
-  duration?: number                // Seconds to add — LTX 1-20; Seedance 2.5 4-30, Seedance 2.0 4-15 (their catalog `durations`)
-  resolution?: "480p" | "720p" | "1080p" // Seedance providers only — default 720p
-  generateAudio?: boolean          // Seedance providers only — default true
+  duration?: number                // Seconds to add — LTX 1-20; Seedance 2.5 4-30, Seedance 2.0 4-15, Kling 4 3-30 (their catalog `durations`)
+  resolution?: "480p" | "720p" | "1080p" // Tail-recipe providers only (Kling 4: 720p / 1080p) — default 720p
+  generateAudio?: boolean          // Seedance providers only — default true (Kling 4's sound is always on)
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

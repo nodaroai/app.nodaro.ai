@@ -3397,7 +3397,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     pricing: [{ identifier: "runway-extend", credits: 320 }],
   },
   // Seedance extends ANY video, one provider per model. Each is priced on its
-  // own rows (`seedanceExtendCreditId`), one per second added and resolution.
+  // own rows (`tailExtendCreditId`), one per second added and resolution.
   // The earlier single id `seedance-2-extend` is retired and runs as Seedance 2.5.
   "seedance-2-5-extend": {
     id: "seedance-2-5-extend",
@@ -3435,6 +3435,29 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedance-2-0-extend:8s:720p", credits: 625, note: "default 8s 720p — see :Ns:res variants for exact" },
       { identifier: "seedance-2-0-extend:8s:480p", credits: 288, note: "8s 480p" },
       { identifier: "seedance-2-0-extend:8s:1080p", credits: 1550, note: "8s 1080p" },
+    ],
+  },
+  // Kling 4 extends ANY video with the same tail recipe, generated on Kling
+  // 4.0 (`kling-4`, reference-to-video): its own entry, so a deployment can
+  // withhold or release it apart from Kling 4.0 generation, and its own rows
+  // (`tailExtendCreditId`), one per second added and resolution. Its sound is
+  // always on (Kling 4.0 has no switch).
+  "kling-4-extend": {
+    id: "kling-4-extend",
+    kind: "video",
+    modes: ["extend"] as const,
+    family: "Kuaishou",
+    maker: "kuaishou",
+    label: "Kling 4 Extend",
+    series: "Kling",
+    description: "Extend ANY video with Kling 4: 3–30s continuation (audio included), stitched into one seamless clip.",
+    useCases: ["extend"],
+    durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 5,
+    resolutions: ["720p", "1080p"],
+    pricing: [
+      { identifier: "kling-4-extend:5s:720p", credits: 425, note: "default 5s 720p — see :Ns:res variants for exact" },
+      { identifier: "kling-4-extend:5s:1080p", credits: 638, note: "5s 1080p" },
     ],
   },
   "veo-1080p": {

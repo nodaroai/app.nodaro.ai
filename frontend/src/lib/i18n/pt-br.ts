@@ -1717,6 +1717,7 @@ export const ptBR: ChromeDict = {
   "vidcfg.extendStart": "Início (acrescentar antes)",
   "vidcfg.resWithCredits": "{res} ({credits} créditos)",
   "vidcfg.descSeedanceExtend": "Estende QUALQUER vídeo conectado: o Seedance 2 gera o que acontece depois (com som) e o resultado é unido em um único clipe contínuo.",
+  "vidcfg.descKlingExtend": "Estende QUALQUER vídeo conectado: o Kling 4 gera o que acontece depois (com som) e o resultado é unido em um único clipe contínuo.",
   "vidcfg.descOtherExtend": "Estende um vídeo do VEO, Runway ou LTX com um novo prompt. Conecte o nó “Imagem para vídeo” ou “Texto para vídeo” anterior que gerou o vídeo a estender.",
   "vidcfg.advancedSettings": "Configurações avançadas",
   "vidcfg.showAdvancedSettings": "Mostrar configurações avançadas",

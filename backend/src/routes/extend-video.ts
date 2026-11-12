@@ -8,11 +8,12 @@
  *   generation's KIE taskId
  * - runway-extend: Runway extend (POST /api/v1/runway/extend) — likewise
  * - ltx-2.3-pro: LTX 2.3 Pro extend, from a video URL
- * - seedance-2-5-extend / seedance-2-0-extend: Seedance 2.5 / Seedance 2.0,
- *   from a video URL — the tail recipe (lib/extend-recipe.ts): the source's
- *   last seconds as the `@video_1` reference, then a stitch. The earlier id
- *   `seedance-2-extend` is retired: the app-wide hook
- *   (middleware/retired-video-provider.ts) runs it as `seedance-2-5-extend`.
+ * - seedance-2-5-extend / seedance-2-0-extend / kling-4-extend: Seedance 2.5 /
+ *   Seedance 2.0 / Kling 4, from a video URL — the tail recipe
+ *   (lib/extend-recipe.ts): the source's last seconds as the `@video_1`
+ *   reference, then a stitch. The earlier id `seedance-2-extend` is retired:
+ *   the app-wide hook (middleware/retired-video-provider.ts) runs it as
+ *   `seedance-2-5-extend`.
  */
 
 import type { FastifyInstance } from "fastify"
@@ -35,12 +36,13 @@ import {
   SEEDANCE_2_5_REF_LIMITS,
   applyVideoNegativePrompt,
   canonicalVideoProvider,
-  isSeedanceExtendProvider,
+  isTailExtendProvider,
 } from "@nodaro/shared/models"
-import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, seedanceExtendCreditId } from "@nodaro/shared/credits"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, tailExtendCreditId } from "@nodaro/shared/credits"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
-import { extendSourceTooShortMessage, isTailRecipeProvider, tailRecipeSeconds, TAIL_RECIPES } from "../lib/extend-recipe.js"
+import { EXTEND_REFERENCE_IMAGE_PROVIDERS, extendSourceTooShortMessage, isTailRecipeProvider, tailRecipeSeconds, TAIL_RECIPES } from "../lib/extend-recipe.js"
 import { EXTEND_DURATION_MAX_SEC, EXTEND_DURATION_SECONDS, describeSeconds } from "../lib/extend-durations.js"
 import { ltxExtendBaseCredits } from "../lib/ltx-extend-credits.js"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
@@ -48,18 +50,15 @@ import { assembleVideoConnectedReferences } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
-/** The providers that take reference images (Seedance's i2v transport has a native `reference_image_urls`). */
-const REFERENCE_IMAGE_PROVIDERS = EXTEND_VIDEO_PROVIDERS.filter(isSeedanceExtendProvider)
-
 // veo-extend and runway-extend continue an upstream generation and need its
-// provider task id; LTX 2.3 Pro and Seedance take a raw videoUrl. Both fields
+// provider task id; LTX 2.3 Pro and the tail-recipe providers take a raw videoUrl. Both fields
 // are optional at the schema level and required per provider by
 // `extendRequestProblem`, so each provider's required input set is enforced
 // precisely.
 export const extendVideoBody = z.object({
   taskId: z.string().min(1).optional(),    // Required for veo-extend / runway-extend (the job output's providerTaskId)
   kieTaskId: z.string().min(1).optional(), // Deprecated alias of taskId, still accepted
-  videoUrl: safeUrlSchema.optional(),       // Required for ltx-2.3-pro and the Seedance providers
+  videoUrl: safeUrlSchema.optional(),       // Required for ltx-2.3-pro and the tail-recipe providers (Seedance, Kling 4)
   prompt: z.string().min(1).max(PROMPT_HARD_CEILING).optional(),    // Required for every provider but LTX
   negativePrompt: z.string().max(PROMPT_HARD_CEILING).optional(), // Always optional — injected into prompt as "Avoid: …" for non-native providers
   userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
@@ -69,10 +68,11 @@ export const extendVideoBody = z.object({
   quality: z.enum(["720p", "1080p"]).optional(), // Runway only
   extendMode: z.enum(["start", "end"]).optional(), // LTX 2.3 Pro only
   // Seconds to add, one of the provider's own (`EXTEND_DURATION_SECONDS`):
-  // Seedance 2.5 4–30, Seedance 2.0 4–15, LTX / VEO / Runway 1–20.
+  // Seedance 2.5 4–30, Seedance 2.0 4–15, Kling 4 3–30, LTX / VEO / Runway 1–20.
   duration: z.number().int().min(1).max(EXTEND_DURATION_MAX_SEC).optional(),
-  resolution: z.enum(["480p", "720p", "1080p"]).optional(), // Seedance only
-  generateAudio: z.boolean().optional(), // Seedance only (default true)
+  // Tail-recipe providers only, one their catalog entry offers (Kling 4: 720p / 1080p).
+  resolution: z.enum(["480p", "720p", "1080p"]).optional(),
+  generateAudio: z.boolean().optional(), // Seedance only (default true); Kling 4's sound is always on
   // Reference images for the extension (Seedance only — the other extend
   // transports have no reference path, and a ref they'd silently drop is
   // refused with a 400 instead). Wire ceiling mirrors generate-video (the
@@ -155,12 +155,13 @@ export function resolveExtendVideoIdentifier(body: Record<string, unknown> | und
   // the guard and the workflow run multiply by the seconds
   // (ltxExtendBaseCredits).
   if (provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
-  // Each Seedance provider on its own rows (per second added × resolution)
-  // — the one builder every surface prices a Seedance extend with.
-  if (isSeedanceExtendProvider(provider)) {
+  // Each tail-recipe provider (Seedance 2.5 / 2.0, Kling 4) on its own rows
+  // (per second added × resolution) — the one builder every surface prices
+  // such an extend with.
+  if (isTailExtendProvider(provider)) {
     const duration = typeof body?.duration === "number" || typeof body?.duration === "string" ? body.duration : undefined
     const resolution = typeof body?.resolution === "string" ? body.resolution : undefined
-    return seedanceExtendCreditId(provider, duration, resolution)
+    return tailExtendCreditId(provider, duration, resolution)
   }
   return provider
 }
@@ -192,15 +193,27 @@ function extendRequestProblem(data: ExtendVideoBody): string | null {
   if (duration !== undefined && !offered.includes(duration)) {
     return `duration must be ${describeSeconds(offered)} for ${provider}`
   }
+  // A tail-recipe provider renders only the resolutions its catalog entry
+  // offers (Kling 4: no 480p). Refused here rather than run, and priced, at
+  // another the caller did not ask for.
+  const resolutions = isTailRecipeProvider(provider) ? MODEL_CATALOG[provider]?.resolutions ?? [] : []
+  if (data.resolution !== undefined && resolutions.length > 0 && !resolutions.includes(data.resolution)) {
+    return `resolution must be ${describeChoices(resolutions)} for ${provider}`
+  }
   // Reference images ride ONLY the Seedance transport (i2v with a native
   // reference_image_urls array). The other extend providers have no reference
   // path at all — refuse instead of silently dropping, so a caller learns at
   // submit time rather than after a billed generation.
   const hasImageRefs = (data.referenceImageUrls?.length ?? 0) > 0 || (data.connectedReferences?.length ?? 0) > 0
-  if (hasImageRefs && !isSeedanceExtendProvider(provider)) {
-    return `referenceImageUrls / connectedReferences are only supported by the Seedance extend providers (${REFERENCE_IMAGE_PROVIDERS.join(", ")})`
+  if (hasImageRefs && !(EXTEND_REFERENCE_IMAGE_PROVIDERS as readonly string[]).includes(provider)) {
+    return `referenceImageUrls / connectedReferences are only supported by the Seedance extend providers (${EXTEND_REFERENCE_IMAGE_PROVIDERS.join(", ")})`
   }
   return null
+}
+
+/** "720p or 1080p", "480p, 720p or 1080p". */
+function describeChoices(choices: readonly string[]): string {
+  return choices.length > 1 ? `${choices.slice(0, -1).join(", ")} or ${choices[choices.length - 1]}` : (choices[0] ?? "")
 }
 
 /**
@@ -223,10 +236,11 @@ export type ExtendSourceCheck = { ok: true } | { ok: false; code: "video_too_sho
 
 /**
  * Whether a tail-recipe provider can continue `videoUrl`. The run sends the
- * last seconds of the source's PICTURE as its `@video_1` reference, and the
- * model refuses a reference shorter than its floor (`minSourceSec`, 1.8 s for
- * Seedance — the floor the worker holds too, a little under the 2 s tail, so
- * a nominal 2 s clip that probes a frame short still runs). A shorter picture
+ * last seconds of the source's PICTURE as its `@video_1` reference (all of a
+ * picture shorter than the tail), and the model refuses a reference shorter
+ * than its floor (`minSourceSec`, the floor the worker holds too: Seedance
+ * 1.8 s, a little under its 2 s tail, so a nominal 2 s clip that probes a
+ * frame short still runs; Kling 4 2 s, under its 3 s tail). A shorter picture
  * is refused here — before anything is reserved — instead of failing in the
  * worker after the reservation. The picture's length is the video stream's
  * own (`videoDurationSeconds`: the sound can run past the last frame), the
@@ -420,8 +434,9 @@ export async function extendVideoRoutes(app: FastifyInstance) {
             // the seedance-correct constraint placement (no native param) —
             // plus the assembled reference directives when refs are present.
             prompt: effectivePrompt,
-            // The seconds the guard priced (the provider's 8 s default when
-            // none was given), in its window: what the worker generates.
+            // The seconds the guard priced (the provider's catalog default
+            // when none was given: 8 s on Seedance, 5 s on Kling 4), in its
+            // window: what the worker generates.
             duration: tailRecipeSeconds(provider, duration),
             resolution: parsed.data.resolution,
             generateAudio: parsed.data.generateAudio,

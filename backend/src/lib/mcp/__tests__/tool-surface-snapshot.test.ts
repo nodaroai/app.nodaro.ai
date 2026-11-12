@@ -1487,6 +1487,14 @@ const GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES = 1_014
 // and without it: extend_video 2_722 → 2_974 B.
 const EXTEND_SEEDANCE_SPLIT_BYTES = 252
 
+// RAISED 2026-11-12 by Kling 4 joining Extend Video, and nothing else: `extend_video` offers
+// `kling-4-extend` beside the Seedance providers, its URL arguments name it, `duration` states its
+// 3–30 s window (default 5), `resolution` names each model's own resolutions, and the sound switch and
+// reference images name the Seedance providers the route takes them on. No tool was added, so the
+// fixture does NOT move. Measured by this suite on the same tree with and without it: extend_video
+// 3_209 → 3_398 B (total 528_925 → 529_114).
+const EXTEND_KLING_4_BYTES = 189
+
 // RAISED 2026-11-11 by image_to_image's `mask_url` naming the models that take a mask
 // (`I2I_MASK_SUPPORT`, now with GPT Image 2.6 Flare's and Sunburst's edits), and that it is
 // refused with a GIF or an SVG, and nothing else. No tool was added, so the fixture does NOT move.
@@ -1780,6 +1788,7 @@ export const TOOL_WIRE_BUDGET = {
     SPEAKER_VIEW_REGION_LIMITS_BYTES +
     GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES +
     EXTEND_SEEDANCE_SPLIT_BYTES +
+    EXTEND_KLING_4_BYTES +
     I2I_MASK_MODELS_BYTES +
     MODIFY_IMAGE_MASK_BYTES +
     SEEDANCE_REFERENCE_TASK_TYPE_ARG_BYTES +

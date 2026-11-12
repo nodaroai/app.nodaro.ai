@@ -49,7 +49,7 @@ import {
   FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS,
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
-  isSeedanceExtendProvider,
+  isTailExtendProvider,
   canonicalVideoProvider,
   pricedOutputDurationSec,
   SEEDANCE_VIDEO_EDIT_SHAPE,
@@ -269,7 +269,8 @@ import {
   clampContentIdeasCount,
   CONTENT_IDEAS_MAX_RECIPE_INPUTS,
   resolveUpscaleFactor,
-  ltxExtendDurationSec
+  ltxExtendDurationSec,
+  tailExtendResolution
 } from "@nodaro/shared/credits";
 import {
   ttsSupportsStitching,
@@ -6836,20 +6837,22 @@ function executeNodeCore(
       );
     }
 
-    // ─── Seedance 2 trim-stitch path ────────────────────────────────────
+    // ─── Tail-recipe trim-stitch path (Seedance 2.5 / 2.0, Kling 4) ─────
     // URL-based like LTX, but the continuation CONTENT is required — the
-    // worker wraps it in the bare temporal template, generates via the
-    // seedance-2 ref-video transport, and trim-stitches source+extension.
-    // Mirrors payload-builder's seedance branch: the provider is sent as the
+    // worker wraps it in the provider's own prompt, generates from the
+    // source's tail, and stitches source+extension.
+    // Mirrors payload-builder's tail branch: the provider is sent as the
     // node names it, so the server runs and prices that model, and the
-    // seconds as that model's estimate prices them — snapped into its window
-    // (a length set on Seedance 2.5, up to 30 s, never reaches 2.0's 4–15 s
-    // as is), its catalog default when none.
-    if (isSeedanceExtendProvider(runsAs)) {
+    // seconds and resolution as that model's estimate prices them — snapped
+    // into its window (a length set on Seedance 2.5, up to 30 s, never reaches
+    // 2.0's 4–15 s as is), its catalog default when none; a resolution it
+    // does not render (480p set on Seedance, then Kling 4 picked on the quick
+    // strip) as the 720p it is priced at, which the route would otherwise refuse.
+    if (isTailExtendProvider(runsAs)) {
       const videoUrl = inputs.videoUrl as string | undefined;
       if (!videoUrl) {
         toast.error(nodeRunError(evData.label, "nodeRun.noUpstreamVideoWireA"));
-        return Promise.reject(new Error("No videoUrl for Seedance extend"));
+        return Promise.reject(new Error("No videoUrl for tail-recipe extend"));
       }
       let seedancePrompt: string | undefined = promptOf("extend-video");
       {
@@ -6864,7 +6867,7 @@ function executeNodeCore(
       }
       if (!seedancePrompt?.trim()) {
         toast.error(nodeRunError(evData.label, "nodeRun.describeWhatHappensNextIn"));
-        return Promise.reject(new Error("No prompt for Seedance extend"));
+        return Promise.reject(new Error("No prompt for tail-recipe extend"));
       }
       setUserPromptTemplate(evData.prompt?.trim() || undefined);
       return runProcessingNode(
@@ -6876,7 +6879,7 @@ function executeNodeCore(
             negativePrompt: inputs.negativePrompt || evData.negativePrompt || undefined,
             provider: runsAs,
             duration: pricedOutputDurationSec(runsAs, evData.duration),
-            resolution: evData.resolution,
+            resolution: tailExtendResolution(runsAs, evData.resolution) as NonNullable<ExtendVideoData["resolution"]>,
             generateAudio: evData.generateAudio,
             userId: ctx.userId,
           }),

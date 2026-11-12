@@ -16,7 +16,7 @@ import {
   buildCreditModelIdentifier,
   buildVideoCreditModelIdentifier,
   seedanceVideoEditCreditId,
-  seedanceExtendCreditId,
+  tailExtendCreditId,
   buildMotionCreditModelIdentifier,
   AI_AVATAR_DURATION_BUCKETS,
   resolveAiAvatarCreditId,
@@ -72,7 +72,7 @@ import {
   dialogueProviderOf,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
   isSeedanceVideoEditProvider,
-  isSeedanceExtendProvider,
+  isTailExtendProvider,
   canonicalVideoProvider,
   sunoSeparateCreditId,
   audioSoundtrackActive,
@@ -1759,6 +1759,66 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "seedance-2-0-extend:13s:1080p": 2325,
   "seedance-2-0-extend:14s:1080p": 2480,
   "seedance-2-0-extend:15s:1080p": 2635,
+  // ── Kling 4 Extend — one row per second added (3–30s) × resolution,
+  //    held to the kling-4 reference-video price the same way (the 3 s tail
+  //    it sends never bills: Kling bills the seconds added plus the longer of
+  //    those and its reference). ──
+  "kling-4-extend:3s:720p": 255,
+  "kling-4-extend:4s:720p": 340,
+  "kling-4-extend:5s:720p": 425,
+  "kling-4-extend:6s:720p": 510,
+  "kling-4-extend:7s:720p": 595,
+  "kling-4-extend:8s:720p": 680,
+  "kling-4-extend:9s:720p": 765,
+  "kling-4-extend:10s:720p": 850,
+  "kling-4-extend:11s:720p": 935,
+  "kling-4-extend:12s:720p": 1020,
+  "kling-4-extend:13s:720p": 1105,
+  "kling-4-extend:14s:720p": 1190,
+  "kling-4-extend:15s:720p": 1275,
+  "kling-4-extend:16s:720p": 1360,
+  "kling-4-extend:17s:720p": 1445,
+  "kling-4-extend:18s:720p": 1530,
+  "kling-4-extend:19s:720p": 1615,
+  "kling-4-extend:20s:720p": 1700,
+  "kling-4-extend:21s:720p": 1785,
+  "kling-4-extend:22s:720p": 1870,
+  "kling-4-extend:23s:720p": 1955,
+  "kling-4-extend:24s:720p": 2040,
+  "kling-4-extend:25s:720p": 2125,
+  "kling-4-extend:26s:720p": 2210,
+  "kling-4-extend:27s:720p": 2295,
+  "kling-4-extend:28s:720p": 2380,
+  "kling-4-extend:29s:720p": 2465,
+  "kling-4-extend:30s:720p": 2550,
+  "kling-4-extend:3s:1080p": 383,
+  "kling-4-extend:4s:1080p": 510,
+  "kling-4-extend:5s:1080p": 638,
+  "kling-4-extend:6s:1080p": 765,
+  "kling-4-extend:7s:1080p": 893,
+  "kling-4-extend:8s:1080p": 1020,
+  "kling-4-extend:9s:1080p": 1148,
+  "kling-4-extend:10s:1080p": 1275,
+  "kling-4-extend:11s:1080p": 1403,
+  "kling-4-extend:12s:1080p": 1530,
+  "kling-4-extend:13s:1080p": 1658,
+  "kling-4-extend:14s:1080p": 1785,
+  "kling-4-extend:15s:1080p": 1913,
+  "kling-4-extend:16s:1080p": 2040,
+  "kling-4-extend:17s:1080p": 2168,
+  "kling-4-extend:18s:1080p": 2295,
+  "kling-4-extend:19s:1080p": 2423,
+  "kling-4-extend:20s:1080p": 2550,
+  "kling-4-extend:21s:1080p": 2678,
+  "kling-4-extend:22s:1080p": 2805,
+  "kling-4-extend:23s:1080p": 2933,
+  "kling-4-extend:24s:1080p": 3060,
+  "kling-4-extend:25s:1080p": 3188,
+  "kling-4-extend:26s:1080p": 3315,
+  "kling-4-extend:27s:1080p": 3443,
+  "kling-4-extend:28s:1080p": 3570,
+  "kling-4-extend:29s:1080p": 3698,
+  "kling-4-extend:30s:1080p": 3825,
   "ltx-2.3-pro-retake:per-second": 40,
   "runway-kie": 30,               // (5s, 720p)
   // ── Video Extend ──
@@ -7469,16 +7529,16 @@ export function getNodeModelIdentifier(
   // which sumWorkflowEstimate multiplies by the seconds (estimatePricingUnits).
   if (nodeType === "extend-video" && provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
 
-  // Extend-video: each Seedance provider (2.5, 2.0) is priced on its own rows
-  // (seconds added × resolution) through the one builder the route and the
-  // workflow run reserve with — the estimate must follow the reservation or
-  // the quote lies. A retired id (`seedance-2-extend`) is quoted as the
-  // provider it runs as.
-  const seedanceExtend = nodeType === "extend-video" ? canonicalVideoProvider(provider) : undefined
-  if (isSeedanceExtendProvider(seedanceExtend)) {
+  // Extend-video: each tail-recipe provider (Seedance 2.5 / 2.0, Kling 4) is
+  // priced on its own rows (seconds added × resolution) through the one
+  // builder the route and the workflow run reserve with — the estimate must
+  // follow the reservation or the quote lies. A retired id
+  // (`seedance-2-extend`) is quoted as the provider it runs as.
+  const tailExtend = nodeType === "extend-video" ? canonicalVideoProvider(provider) : undefined
+  if (isTailExtendProvider(tailExtend)) {
     const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
     const resolution = typeof data.resolution === "string" ? data.resolution : undefined
-    return seedanceExtendCreditId(seedanceExtend, duration, resolution)
+    return tailExtendCreditId(tailExtend, duration, resolution)
   }
 
   // Motion transfer: duration-tiered pricing

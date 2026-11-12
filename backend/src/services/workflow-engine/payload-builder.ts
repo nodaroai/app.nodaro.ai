@@ -124,8 +124,8 @@ import {
   validateCinematicAvatarPayload,
   speedRampCreditId,
   seedanceVideoEditCreditId,
-  seedanceExtendCreditId,
-  seedanceExtendResolution,
+  tailExtendCreditId,
+  tailExtendResolution,
   resolveTopazUpscale,
   resolveUpscaleFactor,
   resolveNormalizedImageGen,
@@ -152,7 +152,7 @@ import {
   isVeoProvider,
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
-  isSeedanceExtendProvider,
+  isTailExtendProvider,
   canonicalVideoProvider,
   SEEDANCE_VIDEO_EDIT_SHAPE,
   SEEDANCE_VIDEO_EDIT_TASK_TYPE,
@@ -5999,10 +5999,10 @@ function buildPayloadOf(
         return pWithNeg
       }
 
-      // ─── Seedance trim-stitch extend (Seedance 2.5, Seedance 2.0) ────────
+      // ─── Tail-recipe trim-stitch extend (Seedance 2.5 / 2.0, Kling 4) ────
       // URL-based like LTX, but the continuation CONTENT is required — the
-      // worker wraps it in the spike-proven bare temporal template and then
-      // trim-stitches source+extension. Each provider is priced on its own
+      // worker wraps it in the provider's own prompt (lib/extend-recipe.ts)
+      // and then stitches source+extension. Each provider is priced on its own
       // rows (seconds added × resolution) through the one builder the HTTP
       // route (`resolveExtendVideoIdentifier`) and the estimate use, so
       // orchestrator and single-node runs reserve identically — commit_credits
@@ -6012,21 +6012,21 @@ function buildPayloadOf(
       // resolution the row is priced at, never the node's raw values: a stored
       // length or resolution the model does not offer (a graph written by MCP,
       // an import, an API save) would otherwise render above what it reserved.
-      const seedanceProvider = canonicalVideoProvider(evProvider)
-      if (isSeedanceExtendProvider(seedanceProvider)) {
+      const tailProvider = canonicalVideoProvider(evProvider)
+      if (isTailExtendProvider(tailProvider)) {
         const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
         const resolution = typeof data.resolution === "string" ? data.resolution : undefined
         return {
           jobName: "extend-video",
           queueName: "video-generation",
-          modelIdentifier: seedanceExtendCreditId(seedanceProvider, duration, resolution),
+          modelIdentifier: tailExtendCreditId(tailProvider, duration, resolution),
           payload: {
             jobId,
-            provider: seedanceProvider,
+            provider: tailProvider,
             video: resolvedInputs.videoUrl || data.videoUrl,
             prompt: buildExtendPrompt(),
-            duration: tailRecipeSeconds(seedanceProvider, duration),
-            resolution: seedanceExtendResolution(seedanceProvider, resolution),
+            duration: tailRecipeSeconds(tailProvider, duration),
+            resolution: tailExtendResolution(tailProvider, resolution),
             generateAudio: data.generateAudio,
             usageLogId,
           },

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // ---------------------------------------------------------------------------
-// The Seedance extend providers: the job's provider id picks the model.
+// The tail-recipe extend providers (Seedance 2.5, Seedance 2.0, Kling 4): the
+// job's provider id picks the model. Kling 4's own case is the last block.
 //
 // The contract this file exists to pin, in order of importance:
 //   1. `seedance-2-0-extend` generates on Seedance 2.0 and `seedance-2-5-extend`
@@ -607,5 +608,101 @@ describe("seedance-2-5-extend — the mov reference chain", () => {
       await expect(run()).rejects.toThrow(/stitch failed/)
       expect(mocks.mockDiscardFailedRunCopies).toHaveBeenCalledWith("job-1", "user-1", [undefined])
     })
+  })
+})
+
+describe("kling-4-extend — the tail recipe on Kling 4", () => {
+  const runKling = (data: Record<string, unknown> = {}) => run({ provider: "kling-4-extend", ...data })
+  const KLING_PROMPT = "Continue @video_1 as one continuous shot, starting exactly where it ends: she opens the door"
+
+  it("a kling-4-extend job generates on kling-4 with a 3 s picture tail and the Kling prompt", async () => {
+    await runKling({ duration: 8 })
+    expect(mocks.mockExtractTailToFile).toHaveBeenCalledWith(`${PREP_DIR}/source.mp4`, 3, { measureFrom: "picture" })
+    const [imageUrl, model, prompt, duration, endFrame, opts, reconcileOpts] = mocks.mockImageToVideo.mock.calls[0]!
+    expect(imageUrl).toBe(LAST_FRAME_URL)
+    expect(model).toBe("kling-4")
+    expect(prompt).toBe(KLING_PROMPT)
+    expect(duration).toBe(8)
+    expect(endFrame).toBeUndefined()
+    // Deep equality: the tail as @video_1, the source's shape (a 16:9 source
+    // snapped to Kling's 16:9), the priced resolution — and no sound switch
+    // (Kling 4.0's sound is always on) and no container lever.
+    expect(opts).toEqual({ resolution: "720p", referenceVideoUrls: [TAIL_URL], aspectRatio: "16:9" })
+    // No KIE task persisted: a reconcile finalize would ship the unstitched extension.
+    expect(reconcileOpts).toBeUndefined()
+  })
+
+  it("renders its 5 s default when no length is set, and the seconds the route queues", async () => {
+    await runKling()
+    expect(mocks.mockImageToVideo.mock.calls[0]![3]).toBe(5)
+    for (const duration of [undefined, 1, 3, 7.6, "12", 30, 45]) {
+      mocks.mockImageToVideo.mockClear()
+      await runKling({ duration })
+      expect(mocks.mockImageToVideo.mock.calls[0]![3], String(duration)).toBe(tailRecipeSeconds("kling-4-extend", duration))
+    }
+  })
+
+  it("renders 720p or 1080p as sent, and anything else at the 720p it is priced at", async () => {
+    for (const [sent, rendered] of [["720p", "720p"], ["1080p", "1080p"], [undefined, "720p"], ["480p", "720p"], ["4k", "720p"]] as const) {
+      mocks.mockImageToVideo.mockClear()
+      await runKling({ resolution: sent })
+      expect(mocks.mockImageToVideo.mock.calls[0]![5], String(sent)).toMatchObject({ resolution: rendered })
+    }
+  })
+
+  it("a sound switch in the job is not sent (Kling 4.0 has none)", async () => {
+    await runKling({ generateAudio: false })
+    expect(mocks.mockImageToVideo.mock.calls[0]![5]).not.toHaveProperty("generateAudio")
+  })
+
+  it("refuses a source with less than 2 s of picture before any provider call", async () => {
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 2.2, videoDurationSeconds: 1.9 })
+    await expect(runKling()).rejects.toThrow(extendSourceTooShortMessage("kling-4-extend", 1.9))
+    expect(mocks.mockImageToVideo).not.toHaveBeenCalled()
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 2, videoDurationSeconds: 2 })
+    await runKling()
+    expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
+  })
+
+  it("a Kling source between 2 and 3 s sends its whole picture as the tail", async () => {
+    // Its sound runs past the last frame: the tail is the picture, ending on that frame.
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 2.6, videoDurationSeconds: 2.5 })
+    await runKling()
+    expect(mocks.mockExtractTailToFile).toHaveBeenCalledWith(`${PREP_DIR}/source.mp4`, 2.5, { measureFrom: "picture" })
+    // The tail is the reference, its last frame the opening frame, as on a longer source.
+    const [imageUrl, model, , , , opts] = mocks.mockImageToVideo.mock.calls[0]!
+    expect(imageUrl).toBe(LAST_FRAME_URL)
+    expect(model).toBe("kling-4")
+    expect(opts).toMatchObject({ referenceVideoUrls: [TAIL_URL] })
+  })
+
+  it("a source of 3 s or more still sends a 3 s tail", async () => {
+    for (const picture of [3, 3.4, 10]) {
+      mocks.mockExtractTailToFile.mockClear()
+      mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: picture, videoDurationSeconds: picture })
+      await runKling()
+      expect(mocks.mockExtractTailToFile, String(picture)).toHaveBeenCalledWith(`${PREP_DIR}/source.mp4`, 3, { measureFrom: "picture" })
+    }
+  })
+
+  it("never looks up a chained mov (that is Seedance 2.5's own chain)", async () => {
+    await runKling()
+    expect(mocks.mockFindChainedMovReference).not.toHaveBeenCalled()
+    expect(mocks.mockCutChainedMovTail).not.toHaveBeenCalled()
+    expect(mocks.mockUploadToR2).not.toHaveBeenCalled()
+  })
+
+  it("delivers the extend stitch of source and extension, as its own provider", async () => {
+    await runKling()
+    expect(mocks.mockCombineVideos).not.toHaveBeenCalled()
+    expect(mocks.mockStitchExtension).toHaveBeenCalledTimes(1)
+    expect(mocks.mockStitchExtension.mock.calls[0]![0]).toMatchObject({
+      sourcePath: `${PREP_DIR}/source.mp4`,
+      extensionPath: `${STITCH_DIR}/extension.mp4`,
+      workDir: STITCH_DIR,
+    })
+    const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
+    expect(finalize.mediaUrl).toBe(STITCHED_R2)
+    expect(finalize.result).toMatchObject({ url: STITCHED_R2, providerUsed: "kling-4-extend" })
   })
 })

@@ -166,14 +166,15 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Runway Extend | Runway | Standard | 352<!-- credits: runway-extend --> | extend | Extend a Runway video by another clip. |
 | Wan 2.7 VideoEdit | Alibaba | Standard | 352<!-- credits: wan-videoedit --> | v2v | Guided video editing with optional reference image, audio control, and prompt expansion. |
 | Wan 3.0 Prime | Alibaba | Standard | 352<!-- credits: wan-3-prime --> | i2v, t2v | Wan 3.0 Prime — Alibaba's high-speed Wan 3.0 tier: same multimodal surface and 2-30s range, faster turnaround at a higher per-second rate. |
-| HappyHorse Edit | HappyHorse | Premium | 385<!-- credits: happyhorse-edit --> | v2v | HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output. |
-| Runway Aleph V2V | Runway | Premium | 385<!-- credits: runway-aleph --> | v2v | Runway Aleph — video-to-video conversion. |
+| HappyHorse Edit | HappyHorse | Standard | 385<!-- credits: happyhorse-edit --> | v2v | HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output. |
+| Runway Aleph V2V | Runway | Standard | 385<!-- credits: runway-aleph --> | v2v | Runway Aleph — video-to-video conversion. |
 | Kling 4.0 | Kuaishou | Premium | 396<!-- credits: kling-4 --> | i2v, t2v | Kling 4.0 — up to 30s with native audio and lip-sync; reference images, videos, characters and voices, or plain text. |
 | Kling 4.0 Keyframes | Kuaishou | Premium | 396<!-- credits: kling-4-keyframes --> | i2v, t2v | Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; up to 30s with native audio. |
 | Seedance 2 | Bytedance | Premium | 418<!-- credits: seedance-2 --> | i2v, t2v | Seedance 2 — premium tier with native audio. Per-second pricing by resolution. |
 | VEO 4K Upscale | Google | Premium | 418<!-- credits: veo-4k --> | video-upscale | Upscale VEO output to 4K. |
 | Kling 2.1 Master | Kuaishou | Premium | 440<!-- credits: kling-master --> | i2v | Master tier I2V — strong cinematic quality. |
 | InfiniTalk | InfiniTalk | Premium | 462<!-- credits: infinitalk --> | lip-sync | Audio-driven talking-head from a still image. 480p / 720p. |
+| Kling 4 Extend | Kuaishou | Premium | 468<!-- credits: kling-4-extend:5s:720p --> | extend | Extend ANY video with Kling 4: 3–30s continuation (audio included), stitched into one seamless clip. |
 | ⭐ Kling 3.0 | Kuaishou | Premium | 550<!-- credits: kling-3.0 --> | i2v, t2v | Premium Kling 3.0 — variable 3-15s duration, native audio, 720P/1080P. |
 | minimax-h3 | MiniMax | Premium | 605<!-- credits: minimax-h3 --> | i2v, t2v | MiniMax H3 — premium multimodal tier: first/last frame + image/video/audio references, native audio, 2K (default) or 768P output, 4-15s per-second pricing. |
 | Kling Avatar Pro | Kuaishou | Premium | 616<!-- credits: kling-avatar-pro --> | lip-sync | Premium lip-sync — better mouth shape and timing. |

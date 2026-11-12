@@ -24,14 +24,23 @@ describe("EXTEND_DURATION_SECONDS", () => {
     expect([...seconds]).toEqual([...new Set(seconds)].sort((a, b) => a - b))
   })
 
+  // Per provider, never the exact list of such models: each new engine that
+  // declares its own lengths joins this check without editing it.
   it("an extend model whose catalog entry declares durations is held to them", () => {
     const declared = Object.values(MODEL_CATALOG as Record<string, ModelCatalogEntry>).filter(
       (e) => e.kind === "video" && e.modes.includes("extend") && (e.durations?.length ?? 0) > 0,
     )
-    expect(declared.map((e) => e.id).sort()).toEqual(["seedance-2-0-extend", "seedance-2-5-extend"])
+    expect(declared.length).toBeGreaterThan(0)
     for (const e of declared) {
+      expect(EXTEND_VIDEO_PROVIDERS as readonly string[], e.id).toContain(e.id)
       expect(EXTEND_DURATION_SECONDS[e.id as keyof typeof EXTEND_DURATION_SECONDS], e.id).toEqual(e.durations)
     }
+  })
+
+  it("Seedance 2.5 adds 4–30 s, Seedance 2.0 4–15 s, Kling 4 3–30 s", () => {
+    expect(EXTEND_DURATION_SECONDS["seedance-2-5-extend"]).toEqual(range(4, 30))
+    expect(EXTEND_DURATION_SECONDS["seedance-2-0-extend"]).toEqual(range(4, 15))
+    expect(EXTEND_DURATION_SECONDS["kling-4-extend"]).toEqual(range(3, 30))
   })
 
   it("LTX 2.3 Pro takes its own 1–20 s, never its generation model's 6/8/10", () => {

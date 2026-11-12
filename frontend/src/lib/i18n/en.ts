@@ -1785,6 +1785,7 @@ export const en = {
   "vidcfg.extendStart": "Start (prepend backwards)",
   "vidcfg.resWithCredits": "{res} ({credits} credits)",
   "vidcfg.descSeedanceExtend": "Extends ANY connected video: Seedance 2 generates what happens next (sound included) and the result is stitched into one seamless clip.",
+  "vidcfg.descKlingExtend": "Extends ANY connected video: Kling 4 generates what happens next (sound included) and the result is stitched into one seamless clip.",
   "vidcfg.descOtherExtend": "Extends a VEO, Runway, or LTX video with a new prompt. Connect the upstream Image to Video or Text to Video node whose video it continues.",
   "vidcfg.advancedSettings": "Advanced Settings",
   "vidcfg.showAdvancedSettings": "Show Advanced Settings",

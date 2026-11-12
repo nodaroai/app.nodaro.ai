@@ -1821,6 +1821,7 @@ export const ja: ChromeDict = {
   "vidcfg.extendStart": "先頭（前に追加する）",
   "vidcfg.resWithCredits": "{res}（{credits} クレジット）",
   "vidcfg.descSeedanceExtend": "接続したどの動画でも延長できます。Seedance 2 が続きを生成し（サウンドを含む）、その結果を 1 本のシームレスなクリップにつなぎ合わせます。",
+  "vidcfg.descKlingExtend": "接続したどの動画でも延長できます。Kling 4 が続きを生成し（サウンドを含む）、その結果を 1 本のシームレスなクリップにつなぎ合わせます。",
   "vidcfg.descOtherExtend": "VEO、Runway、LTX の動画を新しいプロンプトで延長します。延長する動画を生成した上流の「画像から動画」または「テキストから動画」ノードを接続してください。",
   "vidcfg.advancedSettings": "詳細設定",
   "vidcfg.showAdvancedSettings": "詳細設定を表示",

@@ -304,6 +304,19 @@ export const LLM_TEXT_INPUT_MAX = 100_000
  */
 export const LLM_STRUCTURED_SYSTEM_MAX = 200_000
 
+/** Kling 4.0's prompt limit, 8000 chars on both endpoints
+ *  (docs.kie.ai/market/kling/v4-reference-to-video and /v4-keyframe-to-video). */
+const KLING_4_PROMPT_MAX = 8000
+
+/**
+ * The characters a Kling 4 Extend run puts around the user's prompt on its
+ * way to Kling 4.0: the continuation wrapper before it, and the opening-frame
+ * sentence (after a blank line) that the reference endpoint adds for the
+ * source's last frame. Held to the text the run really sends by
+ * `backend/src/lib/__tests__/extend-recipe.test.ts`.
+ */
+const KLING_4_EXTEND_PROMPT_OVERHEAD = 131
+
 /**
  * Per-provider maximum VIDEO prompt length (chars), VERIFIED against each model's
  * official docs.kie.ai schema (2026-06). Absent → {@link VIDEO_PROMPT_MAX} (8000)
@@ -345,8 +358,12 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   "vidu-q4": 20000,
   // Kling 4.0 — 8000 chars on both endpoints
   // (docs.kie.ai/market/kling/v4-reference-to-video and /v4-keyframe-to-video).
-  "kling-4": 8000,
-  "kling-4-keyframes": 8000,
+  "kling-4": KLING_4_PROMPT_MAX,
+  "kling-4-keyframes": KLING_4_PROMPT_MAX,
+  // Kling 4 Extend generates on Kling 4.0's reference endpoint, its user's
+  // prompt wrapped: the room the wrapping takes is left out, so a prompt at
+  // the cap (its "Avoid: …" clause last) reaches Kling 4.0 whole.
+  "kling-4-extend": KLING_4_PROMPT_MAX - KLING_4_EXTEND_PROMPT_OVERHEAD,
   // Kling 4.0 Flash — 8000 chars on both endpoints
   // (docs.kie.ai/market/kling/v4-flash-reference-to-video and /v4-flash-keyframe-to-video).
   "kling-4-flash": 8000,
@@ -1505,10 +1522,13 @@ export const EXTEND_VIDEO_PROVIDERS = [
   "ltx-2.3-pro",
   // Seedance extends ANY video, one provider per model: Seedance 2.5 (4–30 s
   // added) and Seedance 2.0 (4–15 s), each priced on its own rows
-  // (`seedanceExtendCreditId`). The earlier single id `seedance-2-extend` is
+  // (`tailExtendCreditId`). The earlier single id `seedance-2-extend` is
   // retired (RETIRED_VIDEO_PROVIDERS) and runs as Seedance 2.5.
   "seedance-2-5-extend",
   "seedance-2-0-extend",
+  // Kling 4 extends ANY video the same way (3–30 s added, 720p / 1080p, its
+  // sound always on), generated on Kling 4.0 and priced on its own rows.
+  "kling-4-extend",
 ] as const
 export type ExtendVideoProvider = typeof EXTEND_VIDEO_PROVIDERS[number]
 
@@ -1518,10 +1538,31 @@ const SEEDANCE_EXTEND_PROVIDERS: readonly SeedanceExtendProvider[] = ["seedance-
 
 /**
  * Whether a value is one of the Seedance Extend Video providers. A retired id
- * answers false: pass it through {@link canonicalVideoProvider} first.
+ * answers false: pass it through {@link canonicalVideoProvider} first. It
+ * decides the levers only Seedance has (reference images, the sound switch);
+ * the length, the resolution and the price follow {@link isTailExtendProvider}.
  */
 export function isSeedanceExtendProvider(p: unknown): p is SeedanceExtendProvider {
   return typeof p === "string" && (SEEDANCE_EXTEND_PROVIDERS as readonly string[]).includes(p)
+}
+
+/**
+ * The Extend Video providers that continue a video from its tail: the
+ * source's last frame opens the new footage and its last seconds ride as the
+ * `@video_1` reference, then the two are stitched into one clip. Each has its
+ * own catalog entry (its seconds added and resolutions) and price rows, one
+ * per second and resolution (`tailExtendCreditId`).
+ */
+export type TailExtendProvider = SeedanceExtendProvider | Extract<ExtendVideoProvider, "kling-4-extend">
+const TAIL_EXTEND_PROVIDERS: readonly TailExtendProvider[] = [...SEEDANCE_EXTEND_PROVIDERS, "kling-4-extend"]
+
+/**
+ * Whether a value is one of the tail-recipe Extend Video providers
+ * ({@link TailExtendProvider}). A retired id answers false: pass it through
+ * {@link canonicalVideoProvider} first.
+ */
+export function isTailExtendProvider(p: unknown): p is TailExtendProvider {
+  return typeof p === "string" && (TAIL_EXTEND_PROVIDERS as readonly string[]).includes(p)
 }
 
 /** Lip sync providers */
@@ -4328,7 +4369,7 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
   ],
   // The length tiers of the earlier Seedance Extend rows
   // (`seedance-2-extend:<tier>:<res>`). No extend is priced on them any more —
-  // each Seedance extend provider has a row per second (`seedanceExtendCreditId`)
+  // each Seedance extend provider has a row per second (`tailExtendCreditId`)
   // — but the rows stay, and so do their tiers.
   "seedance-2-extend": [
     { maxSeconds: 4, suffix: "4s" },

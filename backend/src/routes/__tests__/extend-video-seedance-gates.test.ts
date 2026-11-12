@@ -197,6 +197,46 @@ describe("POST /v1/extend-video — the free-credit video limits", () => {
   })
 })
 
+describe("POST /v1/extend-video — Kling 4 (kling-4-extend)", () => {
+  const postKling = () =>
+    app.inject({
+      method: "POST",
+      url: "/v1/extend-video",
+      payload: { provider: "kling-4-extend", videoUrl: "https://cdn.example.com/source.mp4", prompt: "she walks out of frame", duration: 5, resolution: "720p" },
+    })
+
+  it("refuses a never-paid account (no extension on free credits)", async () => {
+    profile(false)
+    const res = await postKling()
+    expect(res.statusCode).toBe(402)
+    expect(res.json().error.code).toBe("free_video_limit")
+    expect(res.json().error.message).toMatch(/^Extending video is not available on free credits/)
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("runs for a paying account", async () => {
+    profile(true)
+    const res = await postKling()
+    expect(res.statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenCalledTimes(1)
+  })
+
+  // A new engine ships withheld: a stored override that predates it lists
+  // every model it knew (Kling 4.0 generation among them) but not
+  // kling-4-extend, which is its own catalog model — so it is refused until
+  // an admin ticks it, while Kling 4.0 generation is untouched.
+  it("is refused while a stored availability override does not list it, Kling 4.0 generation or not", async () => {
+    profile(true)
+    withhold("kling-4-extend")
+    expect(GATEABLE_MODEL_IDS.has("kling-4-extend")).toBe(true)
+    const refused = await postKling()
+    expect(refused.statusCode).toBe(403)
+    expect(refused.json().error.code).toBe("model_not_available")
+    expect(refused.json().error.message).toContain("kling-4-extend")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+})
+
 describe("POST /v1/extend-video — availability", () => {
   it("an availability override withholding seedance-2-0-extend refuses it", async () => {
     profile(true)

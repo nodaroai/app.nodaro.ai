@@ -356,6 +356,7 @@ Lives in `packages/shared/src/prompt-wizard-categories.ts`. AI uses these descri
 | `runway-extend` | Extend Runway-generated videos |
 | `seedance-2-5-extend` | Extend ANY video by URL — seamless trim-stitched continuation with audio, 4–30s added (Seedance 2.5) |
 | `seedance-2-0-extend` | Extend ANY video by URL — seamless trim-stitched continuation with audio, 4–15s added (Seedance 2.0) |
+| `kling-4-extend` | Extend ANY video by URL — seamless trim-stitched continuation with audio, 3–30s added (Kling 4) |
 
 ### generate-music
 

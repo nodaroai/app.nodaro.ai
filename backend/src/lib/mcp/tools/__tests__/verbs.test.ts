@@ -25,6 +25,7 @@ import { buildServer, callTool, listTools, executeSession, stubRoute } from "./_
 import { setPluginSupports } from "../../../private-plugins/supports-registry.js"
 import { editPlanModeRefusalMessage } from "../../../private-plugins/edit-plan-mode-gate.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../../../../providers/elevenlabs/neighbour-text.js"
+import { EXTEND_REFERENCE_IMAGE_PROVIDERS } from "../../../extend-recipe.js"
 
 const audio = vi.hoisted(() => ({ measured: vi.fn() }))
 vi.mock("../_audio-length.js", async (importOriginal) => ({
@@ -553,12 +554,12 @@ describe("extend_video verb", () => {
     const schema = tool.inputSchema as { required?: string[]; properties: Record<string, { enum?: unknown[]; minimum?: number; maximum?: number }> }
     const properties = schema.properties
     // Every Extend Video provider but LTX 2.3 Pro, which this tool does not offer; still a required argument.
-    expect(properties.model.enum).toEqual(["veo-extend", "runway-extend", "seedance-2-5-extend", "seedance-2-0-extend"])
+    expect(properties.model.enum).toEqual(["veo-extend", "runway-extend", "seedance-2-5-extend", "seedance-2-0-extend", "kling-4-extend"])
     expect(schema.required).toEqual(expect.arrayContaining(["prompt", "model"]))
     // The retired id is accepted, never offered or named.
     expect(JSON.stringify(tool)).not.toContain("seedance-2-extend")
-    // Seconds to add: the Seedance windows, 4–30 on Seedance 2.5 and 4–15 on Seedance 2.0.
-    expect([properties.duration.minimum, properties.duration.maximum]).toEqual([4, 30])
+    // Seconds to add: the URL models' windows, 4–30 on Seedance 2.5, 4–15 on Seedance 2.0, 3–30 on Kling 4.
+    expect([properties.duration.minimum, properties.duration.maximum]).toEqual([3, 30])
     expect(tool.description).toContain("seedance-2-5-extend")
     expect(tool.description).toContain("seedance-2-0-extend")
     // The resolutions the route takes: no 4k.
@@ -576,6 +577,36 @@ describe("extend_video verb", () => {
       expect(result.isError).toBeUndefined()
       expect(received.body).toMatchObject({ provider, videoUrl: EXTEND_SOURCE, duration: 12, prompt: "the car drives off" })
     }
+  })
+
+  // Each lever names the providers it applies to by the rule the route
+  // enforces: reference images and the sound switch are Seedance's (the route
+  // refuses reference images on any other provider; Kling 4's sound is always
+  // on), the resolutions each model's own.
+  it("extend_video's levers name exactly the providers each applies to", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "extend_video")!
+    const properties = (tool.inputSchema as { properties: Record<string, { description?: string }> }).properties
+    const seedance = EXTEND_REFERENCE_IMAGE_PROVIDERS.join(" / ")
+    expect(seedance).toBe("seedance-2-5-extend / seedance-2-0-extend")
+    expect(properties.reference_image_urls.description).toContain(`(${seedance} only`)
+    expect(properties.reference_image_urls.description).not.toContain("kling-4-extend")
+    expect(properties.generate_audio.description).toContain(`(${seedance} only`)
+    expect(properties.generate_audio.description).not.toContain("kling-4-extend")
+    expect(properties.resolution.description).toContain("seedance-2-5-extend / seedance-2-0-extend: 480p, 720p or 1080p")
+    expect(properties.resolution.description).toContain("kling-4-extend: 720p or 1080p")
+    expect(properties.duration.description).toContain("kling-4-extend 3–30 seconds (default 5)")
+    expect(properties.video_url.description).toContain("kling-4-extend")
+  })
+
+  it("extend_video runs Kling 4 on the video by URL", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/extend-video", { jobId: "j-ex" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "extend_video", { prompt: "the car drives off", model: "kling-4-extend", video_url: EXTEND_SOURCE, duration: 8, resolution: "1080p" })
+    expect(result.isError).toBeUndefined()
+    expect(received.body).toMatchObject({ provider: "kling-4-extend", videoUrl: EXTEND_SOURCE, duration: 8, resolution: "1080p", prompt: "the car drives off" })
   })
 
   it("a Seedance extend with no source names the video it needs, and sends nothing", async () => {

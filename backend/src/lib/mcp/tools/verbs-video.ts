@@ -25,7 +25,7 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { MODEL_CATALOG, modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable, VIDEO_UPSCALE_RESOLUTIONS } from "@nodaro/shared/model-catalog"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, isSeedanceExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
@@ -48,6 +48,7 @@ import { buildEffectiveEdl, validateEffectiveEdl } from "../../apply-edl-plan.js
 import { APPLY_EDL_CLIP_KEY_PATTERN } from "../../apply-edl-output.js"
 import { hasCredits } from "../../config.js"
 import { EXTEND_DURATION_SECONDS, describeSeconds } from "../../extend-durations.js"
+import { EXTEND_REFERENCE_IMAGE_PROVIDERS } from "../../extend-recipe.js"
 import { editPlanModeRefusal, editPlanModeVerdict } from "../../private-plugins/edit-plan-mode-gate.js"
 import { plannableEditPlanModes } from "../../private-plugins/plannable-edit-plan-modes.js"
 import { getUserMcpPreferences } from "../user-preferences.js"
@@ -111,16 +112,38 @@ const EXTEND_SOURCE_INPUT: Readonly<Record<ExtendVideoProvider, "task" | "url" |
   "ltx-2.3-pro": null,
   "seedance-2-5-extend": "url",
   "seedance-2-0-extend": "url",
+  "kling-4-extend": "url",
 }
 
 /** The models `extend_video` offers, in the provider list's order. */
 const EXTEND_MODELS = EXTEND_VIDEO_PROVIDERS.filter((p) => EXTEND_SOURCE_INPUT[p] !== null)
-/** The offered models that continue any video by URL, with their length / resolution / audio / reference levers. */
+/** The offered models that continue any video by URL, with their length and resolution levers. */
 const URL_EXTEND_MODELS = EXTEND_MODELS.filter((p) => EXTEND_SOURCE_INPUT[p] === "url")
 const URL_EXTEND_LABEL = URL_EXTEND_MODELS.join(" / ")
 const URL_EXTEND_SECONDS = URL_EXTEND_MODELS.flatMap((p) => EXTEND_DURATION_SECONDS[p])
 /** The resolutions the URL models render, as their catalog entries declare them. */
 const URL_EXTEND_RESOLUTIONS = [...new Set(URL_EXTEND_MODELS.flatMap((p) => MODEL_CATALOG[p]?.resolutions ?? []))]
+/** "a or b", "a, b or c". */
+const orList = (items: readonly string[]): string =>
+  items.length > 1 ? `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}` : (items[0] ?? "")
+/**
+ * Each URL model's resolutions, models that render the same ones together:
+ * "seedance-2-5-extend / seedance-2-0-extend: 480p, 720p or 1080p; kling-4-extend: 720p or 1080p".
+ * The route refuses a resolution the named model does not render.
+ */
+const URL_EXTEND_RESOLUTIONS_BY_MODEL = [
+  ...URL_EXTEND_MODELS.reduce((groups, p) => {
+    const key = orList(MODEL_CATALOG[p]?.resolutions ?? [])
+    return groups.set(key, [...(groups.get(key) ?? []), p])
+  }, new Map<string, string[]>()),
+].map(([resolutions, models]) => `${models.join(" / ")}: ${resolutions}`).join("; ")
+/**
+ * The offered models that take the user's reference images: the route's own
+ * list (`EXTEND_REFERENCE_IMAGE_PROVIDERS`), which refuses them on any other.
+ */
+const REFERENCE_EXTEND_LABEL = URL_EXTEND_MODELS.filter((p) => (EXTEND_REFERENCE_IMAGE_PROVIDERS as readonly string[]).includes(p)).join(" / ")
+/** The offered models with a sound switch: Seedance's (Kling 4's sound is always on). */
+const SOUND_EXTEND_LABEL = URL_EXTEND_MODELS.filter(isSeedanceExtendProvider).join(" / ")
 /** "seedance-2-5-extend 4–30 seconds (default 8)", one per URL model. */
 const URL_EXTEND_WINDOWS = URL_EXTEND_MODELS.map((p) => {
   const defaultSec = MODEL_CATALOG[p]?.defaultDuration
@@ -806,14 +829,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .max(Math.max(...URL_EXTEND_SECONDS))
           .optional()
           .describe(`Seconds to add: ${URL_EXTEND_WINDOWS}. Any other length is refused.`),
-        resolution: z.enum(URL_EXTEND_RESOLUTIONS).optional().describe(`Extension resolution (${URL_EXTEND_LABEL}, default 720p — match the source for the cleanest seam)`),
-        generate_audio: z.boolean().optional().describe(`Continue the soundtrack into the extension (${URL_EXTEND_LABEL}, default true)`),
+        resolution: z.enum(URL_EXTEND_RESOLUTIONS).optional().describe(`Extension resolution (${URL_EXTEND_RESOLUTIONS_BY_MODEL}; default 720p — match the source for the cleanest seam). Any other is refused.`),
+        generate_audio: z.boolean().optional().describe(`Continue the soundtrack into the extension (${SOUND_EXTEND_LABEL} only, default true)`),
         reference_image_urls: z
           .array(z.string().url())
           .max(SEEDANCE_2_REF_LIMITS.images - 1)
           .optional()
           .describe(
-            `Reference images for the extension (${URL_EXTEND_LABEL} only, up to 8 — one seat is reserved for the continuation anchor). Mention them in the prompt as @image_1…@image_N in list order.`,
+            `Reference images for the extension (${REFERENCE_EXTEND_LABEL} only, up to 8 — one seat is reserved for the continuation anchor). Mention them in the prompt as @image_1…@image_N in list order.`,
           ),
         seed: z.number().int().min(10000).max(99999).optional(),
       },
