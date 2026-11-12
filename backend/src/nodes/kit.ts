@@ -59,6 +59,29 @@ export interface UnitRequiredMedia {
   readonly noun: string
 }
 
+/**
+ * One setting a published app may expose (unit.json `appFields`, tools/units/README.md
+ * "A unit's app fields"): the node-data `field` it writes and every value a run may
+ * set it to — a select's option values, or a whole number from `min` to `max` in
+ * steps of `step`. The app run holds a submitted value to it
+ * (lib/exposed-unit-field-check.ts); `get_app_inputs` types the field by it.
+ */
+export type UnitAppField =
+  | {
+      readonly field: string
+      readonly kind: "select"
+      readonly labelKey: string
+      readonly options: ReadonlyArray<{ readonly value: string; readonly labelKey?: string }>
+    }
+  | {
+      readonly field: string
+      readonly kind: "integer"
+      readonly labelKey: string
+      readonly min: number
+      readonly max: number
+      readonly step: number
+    }
+
 /** backend/src/nodes/<type>/descriptor.generated.ts — the server's projection of unit.json. No price. */
 export interface UnitDescriptor {
   readonly type: string
@@ -87,6 +110,8 @@ export interface UnitDescriptor {
   }
   /** Memberships central seams read (tools/units/capabilities.mjs). */
   readonly capabilities: ReadonlyArray<string>
+  /** The settings a published app may expose (unit.json `appFields`), when declared — lib/exposed-unit-field-check.ts reads them. */
+  readonly appFields?: ReadonlyArray<UnitAppField>
   /** unit.json `mcp`, when declared: the MCP tools whose result widget names this type as its model (lib/mcp/widget-models.ts). */
   readonly mcp?: { readonly widgetModelFor: ReadonlyArray<string> }
   /** Why no rule bounds its video output's length: unit.json's lengthUnknownReason, present exactly with the "length:unknown" capability (UNBOUNDED_LENGTH_REASONS). */

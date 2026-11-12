@@ -410,6 +410,7 @@
         "backend/src/lib/execution-inline-graph.ts",
         "backend/src/lib/exposed-quick-field-check.ts",
         "backend/src/lib/exposed-text-caps.ts",
+        "backend/src/lib/exposed-unit-field-check.ts",
         "backend/src/lib/extend-recipe.ts",
         "backend/src/lib/extract-mcp-client.ts",
         "backend/src/lib/fetch-own-media.ts",

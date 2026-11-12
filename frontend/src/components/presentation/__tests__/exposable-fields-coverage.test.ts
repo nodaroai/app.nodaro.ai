@@ -4,12 +4,13 @@ import { NODE_OPTIONS } from "@/lib/node-options"
 import { NODE_QUICK_CONFIGS, getQuickConfigs } from "@/components/nodes/node-quick-configs"
 import { VIDEO_GEN_MODELS, VIDEO_T2V_MODELS } from "@/components/editor/config-panels/model-options"
 import { isNodeSetting } from "@nodaro/render-rules"
+import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
 import { getExposableFields } from "../exposable-fields"
 
 /**
  * What a published app can expose follows what the node offers, instead of a list someone must remember to
- * extend. A node's app fields are its hand-declared `exposableFields` plus its quick-strip controls
- * (exposable-fields.ts); these guards keep the two sources honest with each other.
+ * extend. A legacy node's app fields are its hand-declared `exposableFields` plus its quick-strip controls; a
+ * node unit's are its manifest's `appFields` (exposable-fields.ts). These guards keep the sources honest.
  */
 
 const controls = Object.entries(NODE_QUICK_CONFIGS())
@@ -44,6 +45,17 @@ describe("every quick-strip control is an app field, or says why not", () => {
   })
 })
 
+describe("every node unit's app field is one of its node's settings", () => {
+  it("each `appFields` entry writes a key the unit's data type declares (types.ts, through gen:skills)", () => {
+    // The same rule as a strip control's: anything else moves nothing the node's run reads, and a published app
+    // does not keep it. Declare the field on the unit's *Data type (then regenerate gen:skills).
+    const undeclared = UNIT_NODE_DEFINITIONS.flatMap((u) =>
+      (u.appFields ?? []).filter((f) => !isNodeSetting(f.field, u.type)).map((f) => `${u.type}.${f.field}`),
+    )
+    expect(undeclared).toEqual([])
+  })
+})
+
 /**
  * Creatable AI nodes that offer an app NOTHING, each with the reason it has no lever a person running the app
  * could meaningfully set. The list only shrinks: an entry that gains a field fails until it is removed here.
@@ -75,7 +87,12 @@ describe("creatable AI nodes offer an app something", () => {
     const bare = aiNodes
       .filter((d) => getExposableFields(d.type).length === 0 && !Object.hasOwn(NO_APP_FIELDS, d.type))
       .map((d) => d.type)
-    expect(bare, "give the node a quick-strip control (NODE_QUICK_CONFIGS) or list it in NO_APP_FIELDS").toEqual([])
+    expect(
+      bare,
+      "a node unit declares the settings an app may expose in its unit.json `appFields` (tools/units/README.md, " +
+        "\"A unit's app fields\"); a legacy node gets a quick-strip control (NODE_QUICK_CONFIGS); or list the node " +
+        "in NO_APP_FIELDS with the reason it has none",
+    ).toEqual([])
   })
 
   it("the list only shrinks: each entry still has no field", () => {

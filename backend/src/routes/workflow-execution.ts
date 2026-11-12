@@ -56,6 +56,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { resolvePrimaryInputField } from "../lib/mcp/extract-app-inputs.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { migrateLegacyNodeType } from "../services/workflow-engine/normalize-node-types.js"
 import { accessAtLeast, canRunWorkflow, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
@@ -875,6 +876,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         error: { code: "locked_field", message: describeLockedOverrides(lockedOverrides) },
       })
     }
+
+    // A node unit's app fields (unit.json appFields) take only the values they declare, on any key this
+    // request sets, exposed or not (lib/exposed-unit-field-check.ts); the orchestrator's merge refuses too.
+    const unitRefusals = findUnitFieldOverrideRefusals((workflow.nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? [], effectiveOverrides)
+    if (unitRefusals.length > 0) return reply.status(400).send({ error: unitFieldOverrideErrorBody(unitRefusals) })
 
     // A lineage's generation is stamped `all` only when it takes on all that
     // was left AND does not stop at a Preview review (decided 2026-10-18): a

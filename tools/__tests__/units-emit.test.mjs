@@ -65,7 +65,8 @@ test("every live seam produces its output; each unit line is tagged // unit:<typ
     assert.match(r.outputs.get("frontend/src/nodes/fixture-echo/definition.generated.ts"), /"priceRows": \{\n {4}"fixture-echo": 3\n {2}\}/)
     assert.match(r.outputs.get("frontend/src/nodes/fixture-case/definition.generated.ts"), /"priceRows": \{\n {4}"use-case-fee:fixture-case": 1\n {2}\}/)
     assert.doesNotMatch(r.outputs.get("backend/src/nodes/fixture-echo/descriptor.generated.ts"), /price|credit/i, "no price in the descriptor")
-    assert.match(r.outputs.get("frontend/src/lib/i18n/he.ts"), /\/\/ gen:units start\n {2}"fixtureEcho\.help": "[^"]+",\n {2}"node\.fixtureEcho": "הד בדיקה",\n {2}\/\/ gen:units end/)
+    // Every key of the unit's strings.json, sorted — its app-field labels (unit.json appFields) among them.
+    assert.match(r.outputs.get("frontend/src/lib/i18n/he.ts"), /\/\/ gen:units start\n {2}"fixtureEcho\.field\.maxLayers": "[^"]+",\n {2}"fixtureEcho\.field\.size": "[^"]+",\n {2}"fixtureEcho\.help": "[^"]+",\n {2}"fixtureEcho\.size\.auto": "[^"]+",\n {2}"node\.fixtureEcho": "הד בדיקה",\n {2}\/\/ gen:units end/)
     assert.match(r.outputs.get("docs/nodes/README.md"), /\| \[Fixture Echo\]\(\.\/utility\/fixture-echo\.md\) \| Echo the input video back unchanged/)
     assert.match(r.outputs.get("packages/shared/src/generated/unit-contracts.ts"), /^ {2}\["fixture-echo", "video"\], \/\/ unit:fixture-echo$/m)
   } finally { rmSync(root, { recursive: true, force: true }) }
@@ -81,6 +82,28 @@ test("a many-wire media input and a JSON input reach both projections as declare
       assert.match(src, /"id": "sources",\n {8}"label": "Sources",\n {8}"accepts": \[\n {10}"video",\n {10}"audio"\n {8}\],\n {8}"many": true\n/, p)
       assert.match(src, /"id": "plan",\n {8}"label": "Plan",\n {8}"accepts": \[\n {10}"look"\n {8}\]\n/, p)
     }
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("appFields reach both projections as declared, and the definitions aggregate holds them to the unit's data type", async () => {
+  const root = tree()
+  try {
+    const r = await run(root)
+    assert.deepEqual(r.errors, [])
+    const declared = JSON.parse(readFileSync(path.join(root, "frontend/src/nodes/fixture-echo/unit.json"), "utf8")).appFields
+    for (const p of ["frontend/src/nodes/fixture-echo/definition.generated.ts", "backend/src/nodes/fixture-echo/descriptor.generated.ts"]) {
+      const src = r.outputs.get(p)
+      // The projection's object literal, read back: its appFields are the manifest's, verbatim.
+      const obj = JSON.parse(src.slice(src.indexOf("= {") + 2, src.lastIndexOf("} as const") + 1))
+      assert.deepEqual(obj.appFields, declared, p)
+    }
+    // fixture-case declares none: no appFields key at all.
+    assert.doesNotMatch(r.outputs.get("frontend/src/nodes/fixture-case/definition.generated.ts"), /appFields/)
+    const defs = r.outputs.get("frontend/src/nodes/_generated/definitions.ts")
+    assert.match(defs, /^import type \{ UnitAppFieldsFit, UnitDefinition \} from "\.\.\/kit"$/m)
+    assert.match(defs, /^export type UnitAppFieldsChecked = \[\n {2}UnitAppFieldsFit<unit_fixture_echo_data, typeof unit_fixture_echo\.appFields>, \/\/ unit:fixture-echo\n\]$/m)
+    // Every other aggregate imports its kit type alone.
+    assert.match(r.outputs.get("frontend/src/nodes/_generated/executors.ts"), /^import type \{ UnitExecutor \} from "\.\.\/exec-kit"$/m)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 

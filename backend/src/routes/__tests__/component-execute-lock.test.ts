@@ -1,3 +1,4 @@
+// @test-watches tools/units/__fixtures__/expected/backend/src/nodes/fixture-echo/** backend/src/nodes/**
 /**
  * `/v1/component/execute` — the override lock (issue #1555).
  *
@@ -61,6 +62,8 @@ vi.mock("@/lib/supabase.js", () => {
       { id: "ugc-1", type: "ugc-creator", data: { source: "sampled", gender: "woman", keepResult: false } },
       { id: "hook-1", type: "webhook-output", data: { url: "https://author.example/hook" } },
       { id: "chat-1", type: "llm-chat", data: { llmModel: "claude-opus-5.5" } },
+      // The fixture unit (its app fields: size, maxLayers), mocked into the units door below.
+      { id: "split", type: "fixture-echo", data: { label: "Layers", size: "1K", maxLayers: 9 } },
     ],
     snapshot_edges: [],
   }
@@ -81,6 +84,15 @@ vi.mock("@/lib/supabase.js", () => {
       }),
     },
   }
+})
+
+// The fixture unit `fixture-echo` (tools/units/__fixtures__) — app fields `size` (auto, 1K, 1.5K, 2K) and
+// `maxLayers` (1–99) — through its golden descriptor, composed into the server's one door to the units.
+vi.mock("@/lib/unit-descriptors.js", async (importOriginal) => {
+  const real = (await importOriginal()) as typeof import("../../lib/unit-descriptors.js")
+  const { descriptor } = await import("../../../../tools/units/__fixtures__/expected/backend/src/nodes/fixture-echo/descriptor.generated.js")
+  const units = [...real.UNIT_NODE_DESCRIPTORS, descriptor as unknown as (typeof real.UNIT_NODE_DESCRIPTORS)[number]]
+  return { ...real, UNIT_NODE_DESCRIPTORS: units, unitDescriptorOf: (t: string | undefined) => units.find((u) => u.type === t) }
 })
 
 import { componentExecuteRoutes } from "../component-execute.js"
@@ -154,6 +166,34 @@ describe("POST /v1/component/execute — the override lock (issue #1555)", () =>
     expect(mockExecuteAppRun).toHaveBeenCalledWith(
       expect.objectContaining({ inputOverrides: { "text-1": { text: "a legitimate input" } } }),
     )
+  })
+})
+
+describe("POST /v1/component/execute — a node unit's app fields take only what they declare", () => {
+  const run = (overrides: Record<string, unknown>) =>
+    app.inject({ method: "POST", url: "/v1/component/execute", payload: { appSlug: "deliver", inputOverrides: { split: overrides } } })
+
+  it("a value outside the declaration is a 400 validation_error with its wording — no wrapper job, no run", async () => {
+    const res = await run({ size: "4K" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({ code: "validation_error", message: "Invalid value for size: 4K. Allowed: auto, 1K, 1.5K, 2K" })
+    expect(mockInsertJob).not.toHaveBeenCalled()
+    expect(mockInsertJobIdempotent).not.toHaveBeenCalled()
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+  })
+
+  it("null is refused: it would clear the field", async () => {
+    const res = await run({ maxLayers: null })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toBe("Invalid value for maxLayers: null. Use a whole number between 1 and 99.")
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+  })
+
+  it("a declared value runs, and reaches the inner run", async () => {
+    const res = await run({ maxLayers: 12 })
+    expect(res.statusCode).toBe(202)
+    await vi.waitFor(() => expect(mockExecuteAppRun).toHaveBeenCalledTimes(1))
+    expect(mockExecuteAppRun).toHaveBeenCalledWith(expect.objectContaining({ inputOverrides: { split: { maxLayers: 12 } } }))
   })
 })
 

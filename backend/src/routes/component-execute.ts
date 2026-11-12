@@ -22,6 +22,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { isBillingContext, shouldRefuseDegradedRunFor, type BillingContext } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
 import { requireScope } from "../lib/scopes.js"
@@ -148,6 +149,10 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         error: { code: "locked_field", message: describeLockedOverrides(lockedOverrides) },
       })
     }
+    // A node unit's app fields (unit.json appFields) take only the values they declare, on any key this
+    // request sets, exposed or not (lib/exposed-unit-field-check.ts); the orchestrator's merge refuses too.
+    const unitRefusals = findUnitFieldOverrideRefusals((appRow.snapshot_nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? [], inputOverrides)
+    if (unitRefusals.length > 0) return reply.status(400).send({ error: unitFieldOverrideErrorBody(unitRefusals) })
 
     // A UGC Creator set to "My photo" that the run gives no photo: publishing stripped the author's
     // own, so the creator would stop the run after the script before it was paid for. Refused before

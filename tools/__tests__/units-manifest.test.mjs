@@ -735,3 +735,116 @@ test("length:unknown: a video unit may hold it alone, and it adds no kept-length
     assert.doesNotMatch(descriptorSource(echo()), /lengthUnknownReason/)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+// ---------------------------------------------------------------------------
+// appFields (tools/units/app-field-rules.mjs): the settings a published app may
+// expose. fixture-echo declares a select (`size`) and an integer (`maxLayers`).
+// ---------------------------------------------------------------------------
+
+const sizeField = (m) => m.appFields.find((f) => f.field === "size")
+const layersField = (m) => m.appFields.find((f) => f.field === "maxLayers")
+
+test("appFields: the fixture's select and integer validate, and reach both projections only when declared", () => {
+  const root = tree()
+  try {
+    assert.deepEqual(problems(root), [])
+    const echo = () => loadUnits(root).find((u) => u.manifest.type === "fixture-echo")
+    assert.match(descriptorSource(echo()), /"appFields": \[\n {4}\{\n {6}"field": "size",\n {6}"kind": "select"/)
+    withManifest(root, (m) => { delete m.appFields })
+    assert.deepEqual(problems(root), [])
+    assert.doesNotMatch(descriptorSource(echo()), /appFields/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("appFields: its shape — a non-empty list of known kinds, each with only its own keys", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.appFields = [] })), /^fixture-echo: appFields must list the settings a published app may expose \(omit it when there are none\)$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.appFields = { size: {} } })), /^fixture-echo: appFields must list/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).kind = "slider" })), /^fixture-echo: appFields\[0\]\.kind: "slider" is not an app-field kind \(select, integer\)$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).min = 1 })), /^fixture-echo: appFields\[0\]\.min: unknown for kind "select" \(field, kind, labelKey, options\)$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { layersField(m).options = [] })), /^fixture-echo: appFields\[1\]\.options: unknown for kind "integer"/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { delete sizeField(m).field })), /^fixture-echo: appFields\[0\]\.field must name the node-data field the setting writes$/)
+})
+
+test("appFields: a field is one of the node's settings, exposed once, starting at its default", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.appFields.push(structuredClone(sizeField(m))) })), /^fixture-echo: appFields\[2\] \("size"\): the field is exposed twice — one app field per setting$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { delete m.defaultData.size })), /^fixture-echo: appFields\[0\] \("size"\): defaultData has no "size" — an app field starts at the node's default$/)
+  // A wire's landing field and a result are not settings.
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).field = "videoUrl"; m.defaultData.videoUrl = "1K" })), /^fixture-echo: appFields\[0\] \("videoUrl"\): "videoUrl" is an input's field — a wire lands there; an app field is a setting$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).field = "generatedVideoUrl"; m.defaultData.generatedVideoUrl = "1K" })), /^fixture-echo: appFields\[0\] \("generatedVideoUrl"\): "generatedVideoUrl" is an output's field — a run writes it; an app field is a setting$/)
+  // Its values are held to types.ts at typecheck, so types.ts must be there.
+  expectProblem(problemsAfter((root) => rmSync(path.join(root, UNIT, "types.ts"))), /^fixture-echo: appFields needs frontend\/src\/nodes\/fixture-echo\/types\.ts: each field's values are held to its data type there/)
+})
+
+test("appFields: every label is a key of the unit's own strings.json (all five dicts)", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).labelKey = "field.size" })), /^fixture-echo: appFields\[0\]\.labelKey: "field\.size" is not a key of the unit's strings\.json keys/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).options[0].labelKey = "fixtureEcho.size.nope" })), /^fixture-echo: appFields\[0\] \("size"\)\.options\[0\]\.labelKey: "fixtureEcho\.size\.nope" is not a key/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { delete layersField(m).labelKey })), /^fixture-echo: appFields\[1\]\.labelKey must be a message key of the unit's strings\.json keys$/)
+  // A key the unit declares in four dicts only is refused by the strings rule itself.
+  expectProblem(problemsAfter((root) => {
+    const file = path.join(root, UNIT, "strings.json")
+    const s = JSON.parse(readFileSync(file, "utf8"))
+    delete s.keys["fixtureEcho.field.size"].ja
+    writeFileSync(file, JSON.stringify(s))
+  }), /^fixture-echo: strings\.json keys\."fixtureEcho\.field\.size" needs a non-empty "ja"$/)
+})
+
+test("appFields: a select lists unique string values, its default among them", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).options = [] })), /^fixture-echo: appFields\[0\] \("size"\)\.options must list the values a run may take/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).options.push({ value: "1K" }) })), /^fixture-echo: appFields\[0\] \("size"\)\.options\[4\]: "1K" is listed twice$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).options[1] = { value: 1 } })), /^fixture-echo: appFields\[0\] \("size"\)\.options\[1\]\.value must be a non-empty string \(a select card writes the option's string\)$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).options[1].label = "One K" })), /^fixture-echo: appFields\[0\] \("size"\)\.options\[1\]\.label: unknown \(value, labelKey\)$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.defaultData.size = "4K" })), /^fixture-echo: appFields\[0\] \("size"\): its default "4K" \(defaultData\) is not one of its options \(auto, 1K, 1\.5K, 2K\)$/)
+})
+
+test("appFields: an integer's bounds are whole numbers, max reachable from min, its default on the grid", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { layersField(m).max = 9.5 })), /^fixture-echo: appFields\[1\] \("maxLayers"\): max must be a whole number$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { layersField(m).step = 0 })), /^fixture-echo: appFields\[1\] \("maxLayers"\)\.step must be at least 1$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { layersField(m).min = 99 })), /^fixture-echo: appFields\[1\] \("maxLayers"\): min 99 must be below max 99$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { layersField(m).step = 5 })), /^fixture-echo: appFields\[1\] \("maxLayers"\): max 99 is not reached from min 1 in steps of 5$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.defaultData.maxLayers = 100 })), /^fixture-echo: appFields\[1\] \("maxLayers"\): its default 100 \(defaultData\) is not a whole number from 1 to 99$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.defaultData.maxLayers = "9" })), /its default "9" \(defaultData\) is not a whole number from 1 to 99$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { Object.assign(layersField(m), { min: 1, max: 97, step: 2 }); m.defaultData.maxLayers = 8 })), /its default 8 \(defaultData\) is not a whole number from 1 to 97 in steps of 2$/)
+})
+
+test("unit.schema.json's appFields kinds are the validator's APP_FIELD_KINDS", () => {
+  const schema = JSON.parse(readFileSync(path.join(here, "../units/unit.schema.json"), "utf8"))
+  assert.deepEqual(schema.properties.appFields.items.properties.kind.enum, vocabulary.APP_FIELD_KINDS)
+  assert.deepEqual(schema.properties.appFields.items.oneOf.map((b) => b.properties.kind.const), vocabulary.APP_FIELD_KINDS)
+})
+
+// appFields beside the other manifest keys: neither rule set refuses the other's valid manifest.
+test("appFields beside list outputs, a JSON pip, an AI category and a provider lane: all valid together", () => {
+  const appFieldsOf = (m) => m.appFields.map((f) => f.field)
+  // The list-output unit (a base image, its layers as a list, their JSON) keeps fixture-echo's app fields.
+  assert.deepEqual(problemsAfter((root) => withManifest(root, (m) => { asListUnit(m); assert.deepEqual(appFieldsOf(m), ["size", "maxLayers"]) })), [])
+  // An AI node listed under a server category, in the provider lane.
+  assert.deepEqual(problemsAfter((root) => withManifest(root, (m) => {
+    asListUnit(m)
+    m.category = "ai"
+    m.registry.category = "ai-image"
+    m.capabilities = ["lane:provider", "provider:kie"]
+  }), { capabilities: CAPABILITIES }), [])
+  // A list output's field is a result, never a setting an app may set.
+  expectProblem(
+    problemsAfter((root) => withManifest(root, (m) => { asListUnit(m); m.appFields[0].field = "generatedLayerUrls"; m.defaultData.generatedLayerUrls = "1K" })),
+    /^fixture-echo: appFields\[0\] \("generatedLayerUrls"\): "generatedLayerUrls" is an output's field — a run writes it; an app field is a setting$/,
+  )
+})
+
+test("appFields: never a field the override merge deletes, the label or the field mappings (read from @nodaro/shared)", async () => {
+  const { reservedAppFieldsFrom, OVERRIDE_FIELD_LISTS_FILE } = await import("../units/app-field-rules.mjs")
+  const reservedAppFields = reservedAppFieldsFrom(readFileSync(path.join(REPO, OVERRIDE_FIELD_LISTS_FILE), "utf8"))
+  for (const name of ["generatedResults", "generatedVideoUrl", "useCaseContinue", "rightsConfirmationId", "label", "fieldMappings"]) {
+    assert.ok(reservedAppFields.has(name), name)
+    const errs = problemsAfter((root) => withManifest(root, (m) => {
+      m.appFields[0].field = name
+      m.appFields[0].options = [{ value: "a" }]
+      m.defaultData[name] = "a"
+    }), { reservedAppFields })
+    expectProblem(errs, new RegExp(`^fixture-echo: appFields\\[0\\] \\("${name}"\\): "${name}" cannot be an app field: `))
+  }
+  // Without the shared source (a fixture-only context), the label and the field mappings are still refused.
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.appFields[0].field = "label"; m.appFields[0].options = [{ value: "Fixture Echo" }] })), /"label" cannot be an app field: the node's label/)
+  // The repo's context reads it.
+  assert.ok(repoContext(REPO).reservedAppFields.has("generatedResults"))
+})

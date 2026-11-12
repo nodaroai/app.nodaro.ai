@@ -1,4 +1,4 @@
-// @test-watches tools/units/** frontend/src/nodes/kit.ts packages/render-rules/src/use-case-*.ts packages/shared/src/json-kinds.ts frontend/src/types/nodes.ts frontend/src/lib/handle-colors.ts frontend/src/lib/node-families.ts frontend/src/lib/canvas-macros.ts frontend/src/lib/*macro*.ts frontend/src/lib/node-options.tsx backend/src/ee/billing/credits.ts packages/shared/src/producer-types.ts packages/shared/src/presentation-utils.ts backend/src/lib/queue.ts backend/src/lib/node-registry.ts backend/src/services/workflow-engine/payload-builder.ts
+// @test-watches tools/units/** frontend/src/nodes/kit.ts backend/src/nodes/kit.ts packages/shared/src/presentation-types.ts packages/render-rules/src/use-case-*.ts packages/shared/src/json-kinds.ts frontend/src/types/nodes.ts frontend/src/lib/handle-colors.ts frontend/src/lib/node-families.ts frontend/src/lib/canvas-macros.ts frontend/src/lib/*macro*.ts frontend/src/lib/node-options.tsx backend/src/ee/billing/credits.ts packages/shared/src/producer-types.ts packages/shared/src/presentation-utils.ts backend/src/lib/queue.ts backend/src/lib/node-registry.ts backend/src/services/workflow-engine/payload-builder.ts
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
@@ -8,7 +8,8 @@ import { HANDLE_COLORS } from "@/lib/handle-colors"
 import { familyIdsFrom, familyTypesFrom, loadUnits, repoContext } from "../../../tools/units/manifest.mjs"
 import { NODE_OPTIONS } from "@/lib/node-options"
 import { isCanvasMacroType } from "@/lib/canvas-macros"
-import { ACCEPTS_KINDS, CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, JSON_PIP_KINDS, LIST_OUTPUT_KINDS, MANY_KINDS, MEDIA_INPUT_KINDS, OUTPUT_TYPES, PICKER_TABS, PRESENTS, PRODUCER_KINDS, QUEUES, REGISTRY_CATEGORIES, SERVER_CATEGORIES, USE_CASE_INPUT_HANDLES } from "../../../tools/units/vocabulary.mjs"
+import { ACCEPTS_KINDS, APP_FIELD_KINDS, CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, JSON_PIP_KINDS, LIST_OUTPUT_KINDS, MANY_KINDS, MEDIA_INPUT_KINDS, OUTPUT_TYPES, PICKER_TABS, PRESENTS, PRODUCER_KINDS, QUEUES, REGISTRY_CATEGORIES, SERVER_CATEGORIES, USE_CASE_INPUT_HANDLES } from "../../../tools/units/vocabulary.mjs"
+import { UNIT_APP_FIELD_CARDS } from "@/components/presentation/exposable-fields"
 import { unitInputAccepts } from "@/lib/ffmpeg-handles"
 import { ACCEPTS_JSON } from "@/lib/data-handles"
 import type { UnitHandleKind } from "@/nodes/kit"
@@ -169,5 +170,16 @@ describe("the validator's vocabularies are the product's", () => {
   it("every queue a unit may name exists", () => {
     expect(QUEUES).toEqual(["video"])
     expect(read("backend/src/lib/queue.ts")).toMatch(/export const videoQueue = new Queue\("video-generation"/)
+  })
+
+  it("app-field kinds = the editor's cards for them = the kinds both kits' UnitAppField carry", () => {
+    expect(Object.keys(UNIT_APP_FIELD_CARDS)).toEqual(APP_FIELD_KINDS)
+    // Each kind renders as a card the app-field system already has (ExposableField["type"]).
+    const cards = unionOf(read("packages/shared/src/presentation-types.ts").replace(/^ {2}readonly type: /m, "export type Card = "), "Card") ?? []
+    for (const card of Object.values(UNIT_APP_FIELD_CARDS)) expect(cards).toContain(card)
+    for (const kit of ["frontend/src/nodes/kit.ts", "backend/src/nodes/kit.ts"]) {
+      const kinds = [...read(kit).matchAll(/^ {6}readonly kind: "([a-z]+)"$/gm)].map((m) => m[1])
+      expect(kinds, kit).toEqual(APP_FIELD_KINDS)
+    }
   })
 })

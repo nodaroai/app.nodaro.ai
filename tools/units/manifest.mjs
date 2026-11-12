@@ -3,7 +3,7 @@
 // and gen:skills (backend/scripts/lib/gen-skills/parse-node-definitions.ts)
 // both read units through it, so they can never disagree about what a unit
 // is. Built-ins only: the tools self-test job runs it without npm install.
-// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json tools/units/reserved-credit-ids.json frontend/src/lib/node-families.ts docs/nodes/README.md frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts packages/render-rules/src/use-case-specs.ts
+// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json tools/units/reserved-credit-ids.json frontend/src/lib/node-families.ts docs/nodes/README.md frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts packages/render-rules/src/use-case-specs.ts packages/shared/src/preview-gate.ts
 //
 // A unit is one node type, named by its type id. Its manifest,
 // frontend/src/nodes/<type>/unit.json, is the source of truth; the backend
@@ -14,12 +14,13 @@ import path from "node:path"
 import { CAPABILITIES } from "./capabilities.mjs"
 import { AGGREGATES, EXECUTION_SEAMS, UNIT_FILES, UNIT_ROOTS, liveSeams } from "./seams.mjs"
 import { jsonOutputProblems } from "./json-output-rules.mjs"
+import { OVERRIDE_FIELD_LISTS_FILE, appFieldProblems, reservedAppFieldsFrom } from "./app-field-rules.mjs"
 import { USE_CASE_SPECS_FILE, duplicateBuilderProblems, useCaseBuildersFrom, useCaseFileProblems, useCaseProblems, useCaseSeamNeeds } from "./use-case-rules.mjs"
 import { ACCEPTS_KINDS, CATEGORIES, CONTRACT_KEYS, DICT_LOCALES, LIST_OUTPUT_KINDS, MANY_KINDS, MEDIA_INPUT_KINDS, REGISTRY_CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, LABEL_LOCALES, NOT_A_UNIT, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES, SERVER_CATEGORIES } from "./vocabulary.mjs"
 
 export const TYPE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const MESSAGE_KEY = /^[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+$/
-const TOP_LEVEL_KEYS = ["$schema", "schemaVersion", "type", "label", "category", "position", "picker", "handles", "defaultData", "execution", "capabilities", "lengthUnknownReason", "registry", "contract", "docs", "mcp"]
+const TOP_LEVEL_KEYS = ["$schema", "schemaVersion", "type", "label", "category", "position", "picker", "handles", "defaultData", "execution", "capabilities", "lengthUnknownReason", "registry", "contract", "docs", "mcp", "appFields"]
 const MEDIA_KINDS = ["audio", "video", "image"]
 // No price, credit id, doctrine or prompt text in a manifest: prices live in
 // backend/src/nodes/<type>/price.ee.ts (Enterprise License), prompt content in
@@ -220,6 +221,8 @@ export function repoContext(root) {
     }),
     optionTypes: optionTypesFrom(text("frontend/src/lib/node-options.tsx")),
     useCaseBuilders: useCaseBuildersFrom(text(USE_CASE_SPECS_FILE)),
+    // The field names an app field may not take (the label, the field mappings, what the override merge deletes).
+    reservedAppFields: reservedAppFieldsFrom(text(OVERRIDE_FIELD_LISTS_FILE)),
     live: liveSeams(),
     capabilities: CAPABILITIES,
     exists: (p) => existsSync(path.join(root, p)),
@@ -578,6 +581,7 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
   checkMcp(m.mcp, errors)
   errors.push(...useCaseProblems(unit, m, ctx))
   errors.push(...jsonOutputProblems(m))
+  errors.push(...appFieldProblems(unit, m, ctx.reservedAppFields))
   const docs = m.docs
   if (!isObject(docs) || (docs.page === undefined) === (docs.awaiting === undefined)) errors.push("docs needs exactly one of page (the docs/nodes/… page) or awaiting (why it has none yet)")
   else if (docs.page !== undefined) {

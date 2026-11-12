@@ -15,7 +15,9 @@ export const definition = {
   ],
   "defaultData": {
     "label": "Fixture Echo",
-    "fieldMappings": {}
+    "fieldMappings": {},
+    "size": "1K",
+    "maxLayers": 9
   },
   "position": {
     "after": "upload-video"
@@ -78,6 +80,36 @@ export const definition = {
   },
   "capabilities": [
     "lane:local"
+  ],
+  "appFields": [
+    {
+      "field": "size",
+      "kind": "select",
+      "labelKey": "fixtureEcho.field.size",
+      "options": [
+        {
+          "value": "auto",
+          "labelKey": "fixtureEcho.size.auto"
+        },
+        {
+          "value": "1K"
+        },
+        {
+          "value": "1.5K"
+        },
+        {
+          "value": "2K"
+        }
+      ]
+    },
+    {
+      "field": "maxLayers",
+      "kind": "integer",
+      "labelKey": "fixtureEcho.field.maxLayers",
+      "min": 1,
+      "max": 99,
+      "step": 1
+    }
   ],
   "producer": "video",
   "docs": {

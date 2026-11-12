@@ -374,6 +374,118 @@
         }
       }
     },
+    "appFields": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The node's settings a published app may let its user set (tools/units/README.md, \"A unit's app fields\"). Each starts at its defaultData value; its labels are keys of the unit's strings.json.",
+      "items": {
+        "type": "object",
+        "required": [
+          "field",
+          "kind",
+          "labelKey"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The node-data field the setting writes (a key of defaultData and of the <Pascal>Data type in types.ts)."
+          },
+          "kind": {
+            "enum": [
+              "select",
+              "integer"
+            ],
+            "description": "select: a fixed list of string values (a select card). integer: a whole number from min to max in steps of step (a slider card)."
+          },
+          "labelKey": {
+            "type": "string",
+            "description": "A key of the unit's strings.json keys: the card's label."
+          },
+          "options": {
+            "type": "array",
+            "minItems": 1,
+            "description": "kind select: every value a run may take, in the order the card lists them.",
+            "items": {
+              "type": "object",
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "labelKey": {
+                  "type": "string",
+                  "description": "A key of the unit's strings.json keys; without one the option shows its value."
+                }
+              }
+            }
+          },
+          "min": {
+            "type": "integer"
+          },
+          "max": {
+            "type": "integer"
+          },
+          "step": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "select"
+              }
+            },
+            "required": [
+              "options"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "min"
+                  ]
+                },
+                {
+                  "required": [
+                    "max"
+                  ]
+                },
+                {
+                  "required": [
+                    "step"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "integer"
+              }
+            },
+            "required": [
+              "min",
+              "max",
+              "step"
+            ],
+            "not": {
+              "required": [
+                "options"
+              ]
+            }
+          }
+        ],
+        "additionalProperties": false
+      }
+    },
     "contract": {
       "type": "object",
       "additionalProperties": false,

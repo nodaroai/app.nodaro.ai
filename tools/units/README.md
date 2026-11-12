@@ -208,6 +208,7 @@ gen:skills could not get past that throw to rewrite the table itself.
 | `capabilities.mjs` | The closed list of manifest `capabilities`, each naming the seams that read it (`seams: [...]`, every one live). |
 | `vocabulary.mjs` | Categories, handle kinds, producer kinds, execution kinds, queues — pinned to the product by `frontend/src/__tests__/units-vocabulary.test.ts`. |
 | `use-case-rules.mjs` | The rules of `execution.kind: "use-case"` (required and refused files, `execution.builder` against `USE_CASE_SPECS`, use-case input ids) and of the contract keys `@nodaro/shared` composes; `manifest.mjs` calls it. |
+| `app-field-rules.mjs` | The rules of `appFields`, the settings a published app may expose ("A unit's app fields"); `manifest.mjs` calls it. |
 | `handle-prune.mjs` | Deletes unit rows from `backend/src/lib/mcp/generated/node-handles.ts` (gen:skills' legacy-only handle table) on every gen:units run. |
 | `templates.mjs` | The emitters and the region splice. |
 | `scaffold.mjs` | `gen:units -- --new`: flags, the in-memory validation, the write, the printed next steps. |
@@ -259,6 +260,7 @@ seams: a capability, an input kind (`ACCEPTS_KINDS`) or a category
 | the editor's credit id of a unit priced by its settings (`UNIT_PRICE_IDS`, each unit's `price-id.ts`) | `frontend/src/lib/unit-price-ids.ts` (`unitCreditIdOf(type, data)`), read by `getModelIdentifier` (`config-panels/helpers.ts`) and `estimateNodeCredits` (`workflow-editor/types.ts`) |
 | a provider-lane worker's provider (its `provider:*` capability) | `backend/src/lib/concurrency-lanes/provider-of.ts`, through `providerOf` (`lib/unit-descriptors.ts`) |
 | a unit's `/v1/nodes` category (`registry.category`, projected as `registryCategory`) | `backend/src/lib/node-registry.ts` (`registryCategoryOf`, `lib/unit-compose.ts`) |
+| a published app's fields (`appFields`: the publish picker, the app cards, every run's check, `get_app_inputs` and the listing's "up to") | the editor's `getExposableFields` (`components/presentation/exposable-fields.ts`, through `unit-definitions.ts`) and the server's `exposed-unit-field-check.ts` (through `unit-descriptors.ts`), read by the override merge `workers/apply-input-overrides.ts`, every route that takes overrides, and `lib/mcp/extract-app-inputs.ts` — "A unit's app fields" |
 
 The pure composition lives in `frontend/src/lib/unit-compose.ts` and
 `backend/src/lib/unit-compose.ts` (an empty unit collection returns the legacy
@@ -443,6 +445,103 @@ composes from that flag, so a reload re-attaches the poll of a long job for
 `single-node-restore-units.test.ts` prove both on the fixture unit, which
 carries a `budget.ts`.
 
+**A unit's app fields.** A published app lets its creator expose some of a
+node's settings to the app's users. A unit declares which, and how each is
+shown, in its manifest — never in the quick-strip registry
+(`NODE_QUICK_CONFIGS`) or a hand-declared `exposableFields`, which are the
+legacy nodes' sources:
+
+```json
+"defaultData": { "label": "…", "size": "1K", "maxLayers": 9 },
+"appFields": [
+  { "field": "size", "kind": "select", "labelKey": "myNode.field.size",
+    "options": [{ "value": "auto", "labelKey": "myNode.size.auto" }, { "value": "1K" }, { "value": "2K" }] },
+  { "field": "maxLayers", "kind": "integer", "labelKey": "myNode.field.maxLayers", "min": 1, "max": 99, "step": 1 }
+]
+```
+
+- `kind` is a card the app-field system already renders (`APP_FIELD_KINDS`):
+  `select`, a fixed list of string values (a select card, which the
+  publisher may restrict), and `integer`, a whole number from `min` to `max`
+  in steps of `step` (a slider card).
+- `labelKey` (and an option's, optional — without one the option shows its
+  value) is a key of the unit's own `strings.json` `keys`, so it is in all
+  five dicts and reads in the interface language.
+- The validator (`app-field-rules.mjs`) holds each field to the node: it is a
+  key of `defaultData` whose value is one of its options (or a whole number in
+  its range, on its step), never an input's `field` or an output's `from`,
+  never a field the run override merge deletes (`RUN_OVERRIDE_CLEARED_FIELDS`
+  and `RUN_ONLY_NODE_FIELDS` of `@nodaro/shared`, read from their source, so a
+  field added to either is refused here with no second list), nor `label` or
+  `fieldMappings`, and exposed once; `types.ts` is required beside it. The
+  definitions aggregate writes one `UnitAppFieldsFit<Data, typeof
+  definition.appFields>` line per unit that declares them: a field must be a
+  key the `<Pascal>Data` type DECLARES (its `[key: string]: unknown` index
+  signature does not count) whose type takes every value it lists, or
+  typecheck fails there. `exposable-fields-coverage.test.ts` holds each field
+  to the node's settings (`isNodeSetting`, from types.ts through gen:skills),
+  as it does a strip control.
+- gen:units projects `appFields` verbatim into the editor definition and the
+  server descriptor (only when declared). The editor's `getExposableFields`
+  returns a unit's app fields and nothing else (a unit has neither legacy
+  source): the node picker lists them, the app runtimes render them through
+  `FieldInputCard`, each starting at its `defaultData` value. On the server,
+  `get_app_inputs` and the SDK's flat inputs type a select by its values and
+  an integer as a number with its range and step (`extract-app-inputs.ts`, so
+  the listing's "up to" prices every option and both ends of a range).
+- **The declaration is a guarantee on every lane.** A run may set a unit's app
+  field only to a value it declares — exposed by the app or not, by any lane,
+  and `null` is refused too (the merge would delete the key, and the unit's
+  `payload.ts` and `creditId(data)` would read no value instead of the
+  default). `lib/exposed-unit-field-check.ts` holds it in two places, as the
+  outbound-node lock is held:
+  - at the ONE merge of a run's overrides into node data,
+    `applyInputOverridesToNodes` (`workers/apply-input-overrides.ts`, called
+    once, by the orchestrator, for every lane's job and every continuation):
+    it throws before touching a node, and the run fails with the message;
+  - up front, a 400 `validation_error` before any row exists, on every route
+    that takes overrides — the app run (`/v1/app/:slug/run`, its flat
+    `inputs` and nested `inputOverrides` alike) and a draft run
+    (`/v1/app/:slug/runs`), a Retry (`app-run-resume.ts`) and a Render final
+    (`app-render-final.ts`) re-applying a stored run's inputs, a share-token
+    run (`/v1/present/:token/run`), a component's run (`/v1/component/execute`),
+    the workflow run API (`workflow-execution.ts`) and an API token run
+    (`api-tokens.ts`). `unit-field-override-lanes.test.ts` holds both: one
+    product caller of the merge, and every route that checks the lock
+    checks app fields too.
+  The wording is a legacy fixed-list strip field's (`Invalid value for
+  maxLayers: 500. Use a whole number between 1 and 99.`), and it applies under
+  a publisher's restriction too. A flat input naming a field the app does not
+  expose is dropped, as on any node. Only a run's override is held: a value
+  the creator SAVED on the node keeps running. The value lands in the node's
+  data like any override, where the unit's `payload.ts` reads it — no seam of
+  its own. A legacy node is never read by any of this: its fields keep their
+  own rules (an unexposed raw override on one still passes unchecked).
+- **Narrowing a declaration is a breaking change.** Removing a select value,
+  or raising `min` / lowering `max` (or changing `step`), makes every run that
+  sets the old value refuse — a published app whose publisher restricted the
+  field to it, a stored run a Retry or a Render final re-applies, an API or
+  MCP caller that sends it — until each is changed. There is no retired-values
+  list (a strip control's `retainedOptions`): widen freely; narrow only with
+  that in mind, and say so in the PR.
+- The three `backend/src/lib/mcp/generated/exposable-*.ts` tables stay
+  legacy-only: they exist because the server cannot read the editor's
+  definitions, and a unit's descriptor is that table for it.
+  `exposable-fields-units.test.tsx` renders both editor-side generators with
+  a unit carrying app fields composed into `NODE_DEFINITIONS`, and holds them
+  to the committed files.
+- Proven on `fixture-echo` (a select `size`, an integer `maxLayers`):
+  `units-manifest.test.mjs` (the validator), `units-app-field-reserved.test.ts`
+  (the reserved names against the runtime lists), `units-emit.test.mjs` (the
+  projections and the aggregate line), `unit-app-fields-fit.test.ts` (the
+  typecheck), `exposable-fields-units.test.tsx` (the editor),
+  `extract-app-inputs-unit-fields.test.ts` (the schema and the check),
+  `apply-input-overrides-unit-fields.test.ts` and
+  `unit-field-override-fails-execution.test.ts` (the merge and the
+  orchestrator), and the route lanes: `app-runner-unit-fields.test.ts`,
+  `presentation-lock.test.ts`, `component-execute-lock.test.ts`,
+  `app-run-resume.test.ts`.
+
 **Ordered registries.** Where a user or an agent sees a registry's order, a
 unit is placed, never appended: NODE_DEFINITIONS after its `position.after`,
 NODE_OPTIONS after its `picker.after` (a unit first in its family —
@@ -562,6 +661,7 @@ which the two engines' parity tests read.)
 | `handles.outputs[].list: true` | the output carries one run's LIST of files (`LIST_OUTPUT_KINDS`: an image, video or audio output) with a `from`, never `runtimeTyped`; a side output of the media take, which is the unit's first output ("A worker unit's media take and its side outputs"). gen:units writes its `UNIT_LIST_PIPS` row (`@nodaro/shared`, a published row: type id and pip ids). |
 | `registry.category` | the `/v1/nodes` category (`SERVER_CATEGORIES`) of a unit whose own category the server does not share; refused when it does. |
 | `picker.alsoOnTabs` | picker tabs (other than its family's own) that also list the node (`TAB_SUPERSET`). |
+| `appFields` | the settings a published app may expose: `{ field, kind: "select", labelKey, options: [{ value, labelKey? }] }` or `{ field, kind: "integer", labelKey, min, max, step }` ("A unit's app fields"). |
 | `contract.jsonPips` | `{ <look output id>: "transcript" \| "edl" \| "other" }`, every `look` output declared (`JSON_OUTPUT_KINDS`). |
 | `contract.nonPromptInputs` | input ids that are never a prompt lane (`NON_PROMPT_TEXT_LANES`). |
 | `contract.reviewHold` | `use-case` only: a review-on run ends at a Preview that holds what follows (`REVIEW_HOLDING_USE_CASE_TYPES`). |

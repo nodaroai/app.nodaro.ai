@@ -102,6 +102,19 @@ export const JSON_PIP_KINDS = ["transcript", "edl", "other"]
 /** How a published app shows a node's result (`contract.presents`): `OutputType` of packages/shared/src/presentation-utils.ts but "data". */
 export const PRESENTS = ["image", "video", "audio", "text"]
 
+/**
+ * The kinds of setting a unit may expose to a published app (`appFields[].kind`,
+ * tools/units/app-field-rules.mjs): each is a card the app-field system
+ * already renders — `select`, a fixed list of string values (a select card),
+ * and `integer`, a whole number with min / max / step (a slider card). The
+ * editor maps each to its card (`UNIT_APP_FIELD_CARDS`,
+ * frontend/src/components/presentation/exposable-fields.ts) and the server
+ * holds a run to each (backend/src/lib/exposed-unit-field-check.ts);
+ * units-vocabulary.test.ts pins this list to both. A new kind comes with its
+ * card, its server check and its MCP shape, in its own PR.
+ */
+export const APP_FIELD_KINDS = ["select", "integer"]
+
 /** BullMQ queues a worker unit may run on (`videoQueue` in backend/src/lib/queue.ts). */
 export const QUEUES = ["video"]
 

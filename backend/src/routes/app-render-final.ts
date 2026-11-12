@@ -61,6 +61,7 @@ import { importViaOf } from "../lib/import-via.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { personalPayer, shouldRefuseDegradedRunFor } from "../lib/billing-context.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { usecaseRenderFinalEditRefusal } from "../lib/use-case/continuation.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
@@ -248,6 +249,10 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
     if (locked.length > 0) {
       return reply.status(400).send({ error: { code: "locked_field", message: describeLockedOverrides(locked) } })
     }
+    // A node unit's app fields (unit.json appFields) take only the values they declare, on any key this
+    // request sets, exposed or not (lib/exposed-unit-field-check.ts); the orchestrator's merge refuses too.
+    const unitRefusals = findUnitFieldOverrideRefusals(nodes, effective)
+    if (unitRefusals.length > 0) return reply.status(400).send({ error: unitFieldOverrideErrorBody(unitRefusals) })
 
     // An edit the use-case final cannot take — a Clip Pack whose stored review
     // keeps no clip (nothing to render), or any edit of a type with no plan (a

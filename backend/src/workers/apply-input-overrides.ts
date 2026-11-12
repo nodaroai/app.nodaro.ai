@@ -17,6 +17,7 @@ import { locationMentionSlug } from "@nodaro/shared/entities"
 import { mergeNodeInputOverrides } from "@nodaro/shared/apps"
 import { RUN_OVERRIDE_CLEARED_FIELDS } from "@nodaro/shared/nodes"
 import { assertNoLockedOverrides, type VideoLinkAdmission } from "../lib/input-override-lock.js"
+import { assertUnitFieldOverrides } from "../lib/exposed-unit-field-check.js"
 import { coerceListItemsOverrideToRows } from "../services/workflow-engine/output-extractor.js"
 import { LOCATION_VARIANT_BUCKETS } from "../services/workflow-engine/payload-builder.js"
 import { dropSavedRunOnlyFields } from "../services/workflow-engine/run-only-fields.js"
@@ -73,6 +74,12 @@ interface OverridableNode {
  *
  * `admitVideoLinks`: which Video URL nodes the run may point at a new link — a
  * published app's exposed ones (the route's own rule); omitted = none.
+ *
+ * Refuses too, before touching any node, an override that sets a node unit's
+ * app field (unit.json `appFields`) to a value its declaration does not take —
+ * `null` included (`lib/exposed-unit-field-check.ts`). Same reason: every lane
+ * and every continuation merges here, exposed field or not. Only unit nodes
+ * that declare app fields are read; a legacy node never is.
  */
 export function applyInputOverridesToNodes(
   nodes: OverridableNode[],
@@ -80,6 +87,7 @@ export function applyInputOverridesToNodes(
   admitVideoLinks?: VideoLinkAdmission,
 ): void {
   if (inputOverrides) assertNoLockedOverrides(nodes, inputOverrides, admitVideoLinks)
+  if (inputOverrides) assertUnitFieldOverrides(nodes, inputOverrides)
   // A continuation of a use-case node's run is ONE run's override, never a
   // saved setting: one saved on the graph (from before it was stripped on
   // save, or written past the save path) is dropped, so only this run's own

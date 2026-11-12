@@ -45,6 +45,7 @@ import { describeLockedOverrides, findLockedOverrides } from "../lib/input-overr
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { importViaOf } from "../lib/import-via.js"
 import { quickFieldRefusal } from "../lib/exposed-quick-field-check.js"
+import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { appReviewerPresent } from "../lib/app-reviewer.js"
 import { appRunViewStates } from "../lib/app-run-states.js"
 import { appRunFinalChain, finalExecutionIdOf, loadAppRunFinals, selectWithFinalExecution, type AppRunFinal } from "../lib/app-run-final-column.js"
@@ -132,7 +133,8 @@ function finalView(final: AppRunFinal | undefined): Record<string, unknown> | nu
 /**
  * Validate the submitted values of the app's exposed fields: a restricted
  * field's value must be one of its `allowedValues` (an unrestricted field derived
- * from a quick-strip control with a fixed list, one of that list's values); a text input's value may
+ * from a quick-strip control with a fixed list, one of that list's values); a
+ * node unit's app field, exposed or not, one its manifest declares; a text input's value may
  * not exceed its `maxLength` (decided 2026-10-06 — the limit caps the price
  * the app is advertised at, so it must hold when the app runs); a picker
  * card's value must be within its allowed list (cardMeta). Returns the
@@ -145,6 +147,11 @@ function validateExposedInputs(
   inputValues: Record<string, Record<string, unknown>> | undefined,
   snapshotNodes: ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }> | null | undefined,
 ): { code: "validation_error" | "input_too_long"; message: string } | null {
+  // A node unit's app fields (unit.json appFields) are held to their declaration on EVERY key the request
+  // sets — exposed by the app or not, null included — before anything else (lib/exposed-unit-field-check.ts;
+  // the orchestrator's merge refuses too). Only unit nodes that declare app fields are read.
+  const unitRefusals = findUnitFieldOverrideRefusals(snapshotNodes, inputValues)
+  if (unitRefusals.length > 0) return unitFieldOverrideErrorBody(unitRefusals)
   const presSettings = (snapshotSettings ?? {} as Record<string, unknown>).presentationSettings as Record<string, unknown> | undefined
   if (!presSettings || !inputValues) return null
   if (presSettings.inputItems) {
