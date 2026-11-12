@@ -69,23 +69,36 @@ describe("llmPriceKey", () => {
   })
 })
 
-// GPT-6.1 Terra's price depends on whether its call sends an effort (the
-// aggregator adds input of its own by it), so its key names the effort the
-// call sends — and every other model's key is exactly what it was.
+// A model whose price depends on the effort a call sends (`effortPriced`)
+// names that effort in its key — no model does today (GPT-6.1 Terra did for
+// part of 2026-11-12), so every key is exactly what it was before the suffix
+// existed. The mechanism is exercised on a stand-in: Terra flagged for the
+// length of one test.
 describe("llmPriceKey: the effort, on a model whose price depends on it (`effortPriced`)", () => {
   /** The key as it was built before effort-priced models existed. */
   const keyBefore = (feature: string, modelId: string, effort?: string, advanced?: boolean) => {
     const e = effort ?? defaultReasoningEffort(llmDefaultsFeature(feature), modelId)
     return llmServesDirect(modelId, e, advanced) ? `${feature}:${modelId}:direct` : `${feature}:${modelId}`
   }
+  /** Run `fn` with `modelId` flagged `effortPriced`, then put the registry back. */
+  const whileEffortPriced = (modelId: string, fn: () => void) => {
+    const model = getLlmModel(modelId) as { effortPriced?: true }
+    const before = model.effortPriced
+    model.effortPriced = true
+    try {
+      fn()
+    } finally {
+      if (before === undefined) delete model.effortPriced
+      else model.effortPriced = before
+    }
+  }
 
-  it("only GPT-6.1 Terra is effort-priced today", () => {
-    expect(LLM_MODELS.filter((m) => m.effortPriced).map((m) => m.id)).toEqual(["gpt-6.1-terra"])
+  it("no model is effort-priced today", () => {
+    expect(LLM_MODELS.filter((m) => m.effortPriced).map((m) => m.id)).toEqual([])
   })
 
-  it("every other model's key is unchanged, at every effort, with Advanced mode on or off", () => {
+  it("every model's key is unchanged, at every effort, with Advanced mode on or off", () => {
     for (const m of LLM_MODELS) {
-      if (m.effortPriced) continue
       for (const feature of ["llm-chat", "ai-writer", "describe-to-picker", "text-to-picker"]) {
         for (const effort of [undefined, ...LLM_REASONING_EFFORTS]) {
           for (const advanced of [false, true]) {
@@ -96,17 +109,30 @@ describe("llmPriceKey: the effort, on a model whose price depends on it (`effort
     }
   })
 
-  it("names the effort a Terra call sends: none at Auto (or `none`, which it does not offer), the level otherwise", () => {
-    expect(llmPriceKey("llm-chat", "gpt-6.1-terra")).toBe("llm-chat:gpt-6.1-terra")
-    expect(llmPriceKey("llm-chat", "gpt-6.1-terra", "none")).toBe("llm-chat:gpt-6.1-terra")
-    expect(llmPriceKey("llm-chat", "gpt-6.1-terra", "high")).toBe("llm-chat:gpt-6.1-terra:effort-high")
-    expect(llmPriceKey("ai-writer", "gpt-6.1-terra", "low")).toBe("ai-writer:gpt-6.1-terra:effort-low")
-    expect(llmPriceKey("ai-writer", "gpt-6.1-terra", "max", true)).toBe("ai-writer:gpt-6.1-terra:effort-max")
+  it("GPT-6.1 Terra's key is the bare key at every effort", () => {
+    for (const effort of [undefined, ...LLM_REASONING_EFFORTS]) {
+      expect(llmPriceKey("llm-chat", "gpt-6.1-terra", effort), String(effort)).toBe("llm-chat:gpt-6.1-terra")
+      expect(llmPriceKey("ai-writer", "gpt-6.1-terra", effort), String(effort)).toBe("ai-writer:gpt-6.1-terra")
+    }
+  })
+
+  it("an effort-priced model's key names the effort its call sends: none at Auto (or a level it does not offer), the level otherwise", () => {
+    whileEffortPriced("gpt-6.1-terra", () => {
+      expect(llmPriceKey("llm-chat", "gpt-6.1-terra")).toBe("llm-chat:gpt-6.1-terra")
+      expect(llmPriceKey("llm-chat", "gpt-6.1-terra", "none")).toBe("llm-chat:gpt-6.1-terra")
+      expect(llmPriceKey("llm-chat", "gpt-6.1-terra", "high")).toBe("llm-chat:gpt-6.1-terra:effort-high")
+      expect(llmPriceKey("ai-writer", "gpt-6.1-terra", "max", true)).toBe("ai-writer:gpt-6.1-terra:effort-max")
+      expect(parseLlmPriceKeyModel("gpt-6.1-terra:effort-high")).toEqual({ modelId: "gpt-6.1-terra", reasoningEffort: "high" })
+      // A level it does not offer, and both suffixes at once, are no key.
+      expect(parseLlmPriceKeyModel("gpt-6.1-terra:effort-none")).toBeNull()
+      expect(parseLlmPriceKeyModel("gpt-6.1-terra:effort-high:direct")).toBeNull()
+      expect(parseLlmPriceKeyModel("gpt-6.1-terra:direct:effort-high")).toBeNull()
+    })
+    expect(getLlmModel("gpt-6.1-terra")?.effortPriced).toBeUndefined()
   })
 
   it("parseLlmPriceKeyModel reads back exactly the keys llmPriceKey builds", () => {
     expect(parseLlmPriceKeyModel("gpt-6.1-terra")).toEqual({ modelId: "gpt-6.1-terra" })
-    expect(parseLlmPriceKeyModel("gpt-6.1-terra:effort-high")).toEqual({ modelId: "gpt-6.1-terra", reasoningEffort: "high" })
     expect(parseLlmPriceKeyModel("claude-opus-5.5:direct")).toEqual({ modelId: "claude-opus-5.5", lane: "direct" })
     for (const m of LLM_MODELS) {
       for (const effort of [undefined, ...LLM_REASONING_EFFORTS]) {
@@ -119,13 +145,10 @@ describe("llmPriceKey: the effort, on a model whose price depends on it (`effort
   })
 
   it("parseLlmPriceKeyModel refuses what no key carries", () => {
-    // An effort on a model whose price does not depend on it.
+    // An effort on a model whose price does not depend on it — Terra's included now.
+    expect(parseLlmPriceKeyModel("gpt-6.1-terra:effort-high")).toBeNull()
     expect(parseLlmPriceKeyModel("gpt-6.1-sol:effort-high")).toBeNull()
     expect(parseLlmPriceKeyModel("claude-opus-5.5:effort-high")).toBeNull()
-    // A level Terra does not offer, and both suffixes at once.
-    expect(parseLlmPriceKeyModel("gpt-6.1-terra:effort-none")).toBeNull()
-    expect(parseLlmPriceKeyModel("gpt-6.1-terra:effort-high:direct")).toBeNull()
-    expect(parseLlmPriceKeyModel("gpt-6.1-terra:direct:effort-high")).toBeNull()
     // Unknown models, borrowed slugs, other suffixes.
     expect(parseLlmPriceKeyModel("no-such-model")).toBeNull()
     expect(parseLlmPriceKeyModel("gpt-6-1-terra")).toBeNull()

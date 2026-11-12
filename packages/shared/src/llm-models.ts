@@ -146,7 +146,9 @@ export interface LlmModelDef {
    * names the effort a call sends ({@link llmPriceKey}: `:effort-<level>`),
    * and every estimate surface quotes that call. The sizes themselves are
    * backend data (`backend/src/lib/pricing/llm-cost.ts`), held to this flag by
-   * a backend test.
+   * a backend test. No model sets it today (GPT-6.1 Terra did for part of
+   * 2026-11-12, until its aggregator's added input stopped depending on the
+   * effort).
    */
   effortPriced?: true
   /**
@@ -902,21 +904,21 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     // backend/src/lib/llm/kie-cost.ts.
     //
     // KIE's endpoint adds its own instructions to every call and counts them as
-    // input, several times more when any effort is sent (`none` included). The
-    // hold and the estimate count them too (backend/src/lib/pricing/llm-cost.ts,
-    // `llmLaneAddedInputTokens`), and its price key names the effort a call
-    // sends (`effortPriced`), so the quote before a run is that call's.
+    // input. The hold and the estimate count them too
+    // (backend/src/lib/pricing/llm-cost.ts, `llmLaneAddedInputTokens`). They
+    // were several times larger with an effort sent on the morning of
+    // 2026-11-12 and the same size either way by that afternoon, so its price
+    // does not depend on the effort: not `effortPriced` (re-measure if KIE's
+    // reported input jumps again).
     kieSlugOrModel: "gpt-6-1-terra",
     vendor: "openai",
     structuredOutputMode: "responses-json-schema",
     supportsImages: true,
     maxOutputTokens: 16384,
     // NO `none` (decided 2026-11-12): KIE answers it, but a `none` sent on the
-    // wire is an effort — it carries the larger added instructions while
-    // reasoning no more than Auto. Clamping maps a `none` request to nothing
-    // sent (Auto).
+    // wire is answered as an effort (it echoed `medium`) while reasoning no
+    // more than Auto. Clamping maps a `none` request to nothing sent (Auto).
     reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
-    effortPriced: true,
     // Same doc as 6.1 Sol: no temperature lever.
     supportsTemperature: false,
     // NO `thinkingDefaultOn`: with no effort sent (and at low / medium / high)

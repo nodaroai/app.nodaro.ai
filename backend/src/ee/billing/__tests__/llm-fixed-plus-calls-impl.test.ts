@@ -102,8 +102,9 @@ describe("settleFixedPlusLlmCalls — what the settle writes on the job", () => 
 
 // The per-item hold is the item's TYPICAL call priced as the planned call
 // runs: its effort and its lane. Scrapes send neither, so their figure is the
-// model's effort-free one; a call whose price depends on its effort (GPT-6.1
-// Terra) is held at that effort.
+// model's effort-free one; a planned call with an effort is held at that
+// effort's price (on GPT-6.1 Terra the same as Auto: its price does not depend
+// on it).
 describe("reserveFixedPlusLlmCalls — the per-item hold follows the planned call", () => {
   const reserveWith = async (modelId: string, plannedRequest: Record<string, unknown>) => {
     reserveCreditsForJob.mockClear()
@@ -120,12 +121,17 @@ describe("reserveFixedPlusLlmCalls — the per-item hold follows the planned cal
     expect(hold?.llmHoldCredits).toBe(held(llmEstimateBaseCredits("meta-ads-analysis", "claude-sonnet-5.5"), "meta-ads-analysis:claude-sonnet-5.5"))
   })
 
-  it("a planned GPT-6.1 Terra call with an effort is held at that effort's price", async () => {
+  it("a planned call's effort reaches the per-item price: a Claude effort is held on its direct lane", async () => {
+    const plain = await reserveWith("claude-sonnet-5.5", {})
+    const high = await reserveWith("claude-sonnet-5.5", { reasoningEffort: "high" })
+    expect(high?.llmHoldCredits).toBe(held(llmEstimateBaseCredits("meta-ads-analysis", "claude-sonnet-5.5", "high"), "meta-ads-analysis:claude-sonnet-5.5"))
+    expect(high!.llmHoldCredits).toBeGreaterThan(plain!.llmHoldCredits)
+  })
+
+  it("a planned GPT-6.1 Terra call is held the same at Auto and with an effort", async () => {
     const auto = await reserveWith("gpt-6.1-terra", {})
     const high = await reserveWith("gpt-6.1-terra", { reasoningEffort: "high" })
-    expect(llmEstimateBaseCredits("meta-ads-analysis", "gpt-6.1-terra", "high")).toBeGreaterThan(llmEstimateBaseCredits("meta-ads-analysis", "gpt-6.1-terra"))
     expect(auto?.llmHoldCredits).toBe(held(llmEstimateBaseCredits("meta-ads-analysis", "gpt-6.1-terra"), "meta-ads-analysis:gpt-6.1-terra"))
-    expect(high?.llmHoldCredits).toBe(held(llmEstimateBaseCredits("meta-ads-analysis", "gpt-6.1-terra", "high"), "meta-ads-analysis:gpt-6.1-terra"))
-    expect(high!.llmHoldCredits).toBeGreaterThan(auto!.llmHoldCredits)
+    expect(high?.llmHoldCredits).toBe(auto?.llmHoldCredits)
   })
 })

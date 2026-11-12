@@ -73,24 +73,18 @@ describe("whole-run estimate with a metered LLM node", () => {
     expect(lines.find((l) => l.nodeId === "img")?.estimate).toBeUndefined()
   })
 
-  // GPT-6.1 Terra's price depends on the effort it sends: its node's key (and
-  // so its badge and the run's line) names that effort; every other model's
-  // key is what it was.
-  it("a GPT-6.1 Terra node's key, badge and line follow its effort", () => {
+  // GPT-6.1 Terra's price does not depend on its effort: its node's key (and
+  // so its badge and the run's line) is the bare key at every effort.
+  it("a GPT-6.1 Terra node's key, badge and line are the same at every effort", () => {
     const terra = (effort?: string) => n("terra", "llm-chat", { llmModel: "gpt-6.1-terra", ...(effort ? { reasoningEffort: effort } : {}) })
-    expect(llmNodePriceIds(terra())?.key).toBe("llm-chat:gpt-6.1-terra")
-    expect(llmNodePriceIds(terra("none"))?.key).toBe("llm-chat:gpt-6.1-terra")
-    expect(llmNodePriceIds(terra("high"))?.key).toBe("llm-chat:gpt-6.1-terra:effort-high")
-    expect(llmPriceIds("ai-writer", "gpt-6.1-terra").key).toBe("ai-writer:gpt-6.1-terra")
-    expect(llmPriceIds("ai-writer", "gpt-6.1-terra", "medium").key).toBe("ai-writer:gpt-6.1-terra:effort-medium")
-    // Another model with an effort keeps its key (only a Claude effort moves its lane, as before).
-    expect(llmNodePriceIds(n("sol", "llm-chat", { llmModel: "gpt-6.1-sol", reasoningEffort: "high" }))?.key).toBe("llm-chat:gpt-6.1-sol")
-    // The run's line reads the effort's figure.
-    cache({ "llm-chat:gpt-6.1-terra": 3, "llm-chat:gpt-6.1-terra:effort-high": 6 })
-    rememberEstimateModels(["llm-chat:gpt-6.1-terra", "llm-chat:gpt-6.1-terra:effort-high"])
-    expect(runModelIds([terra("high")], [terra("high")], [])).toContain("llm-chat:gpt-6.1-terra:effort-high")
+    for (const effort of [undefined, "none", "low", "high", "max"]) {
+      expect(llmNodePriceIds(terra(effort))?.key, String(effort)).toBe("llm-chat:gpt-6.1-terra")
+    }
+    expect(llmPriceIds("ai-writer", "gpt-6.1-terra", "medium").key).toBe("ai-writer:gpt-6.1-terra")
+    cache({ "llm-chat:gpt-6.1-terra": 3 })
+    rememberEstimateModels(["llm-chat:gpt-6.1-terra"])
     expect(estimateWholeRun([terra()], [], getCachedModelCredits)).toMatchObject({ total: 3, estimate: true })
-    expect(estimateWholeRun([terra("high")], [], getCachedModelCredits)).toMatchObject({ total: 6, estimate: true })
+    expect(estimateWholeRun([terra("high")], [], getCachedModelCredits)).toMatchObject({ total: 3, estimate: true })
   })
 
   it("a run set with no UGC part (Run from here, Run up to here, Render final) is `approx` exactly when a metered line is", () => {

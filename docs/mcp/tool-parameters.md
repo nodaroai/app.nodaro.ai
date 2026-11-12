@@ -1955,7 +1955,7 @@ Always visible.
 | `mode` | string |  | Filter to a specific operation (e.g. 't2i' = text-to-image, 'i2v' = image-to-video). One of `t2i`, `i2i`, `edit`, `upscale`, `remove-bg`, `i2v`, `t2v`, `v2v`, `extend`, `motion-transfer`, `lip-sync`, `video-upscale`, `tts`, `music`, `sfx`, `stt`, `voice-design`, `voice-changer`, `voice-changer-pro`, `isolation`, `dubbing`, `forced-alignment`, `video-analysis`, `video-audit`. |
 | `family` | string |  | Filter by vendor / lab name (e.g. 'Google', 'OpenAI', 'Bytedance'). |
 | `featuredOnly` | boolean |  | Return only editor-picked best-in-tier models. |
-| `priceIds` | string[] |  | Quote prices instead of listing: credit ids, or an LLM call's key `<feature>:<model id>` (any model; `:direct` = vendor API; `:effort-<level>` = the effort sent, on gpt-6.1-terra), e.g. `llm-chat:claude-sonnet-5.5`. Answers `{ prices: { <id>: { credits, estimate? } \| { error } } }`; `estimate`: charged actual usage, show `≈N`. From 1 to 50 items. |
+| `priceIds` | string[] |  | Quote prices instead of listing: credit ids, or an LLM call's key `<feature>:<model id>` (any model; `:direct` = vendor API; `:effort-<level>` = the effort sent, where it sets the price), e.g. `llm-chat:claude-sonnet-5.5`. Answers `{ prices: { <id>: { credits, estimate? } \| { error } } }`; `estimate`: charged actual usage, show `≈N`. From 1 to 50 items. |
 
 ## `list_moodboards`
 

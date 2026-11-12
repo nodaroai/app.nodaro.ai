@@ -159,7 +159,7 @@ A run is charged for the tokens it actually used — its prompt (instructions, u
 | Claude Opus 5.5 | ≈6 credits<!-- credits: llm-chat:claude-opus-5.5 --> |
 | Claude Fable 5 | ≈14 credits<!-- credits: llm-chat:claude-fable-5 --> |
 
-`POST /v1/credits/model-costs` answers the same estimate for `llm-chat:<model>` (`llm-chat:<model>:direct` when the call runs on the provider's own API, and `llm-chat:<model>:effort-<level>` on a model whose price depends on the Effort, GPT-6.1 Terra — `llmPriceKey` in `@nodaro/shared/llm-models` builds the key), and lists it under `estimates`.
+`POST /v1/credits/model-costs` answers the same estimate for `llm-chat:<model>` (`llm-chat:<model>:direct` when the call runs on the provider's own API, and `llm-chat:<model>:effort-<level>` on a model whose price depends on the Effort — `llmPriceKey` in `@nodaro/shared/llm-models` builds the key), and lists it under `estimates`.
 
 **The hold.** When the run starts, a hold is reserved: the call's first attempt at the model's output cap (Max Tokens, or the model's floor). A balance below the hold is refused before anything runs (`402`, "Needs up to N credits"). The hold is not the charge: after the call, the run is charged what it used — usually far less, and sometimes more (a retry on the provider's own API, a long answer). Anything above the hold is taken from your balance, and whatever the balance cannot cover is written off, never billed later.
 
@@ -171,7 +171,7 @@ A run is charged for the tokens it actually used — its prompt (instructions, u
 - **Advanced mode** is on (Gemini and Claude models), or
 - you pick any **Effort** on a **Claude** model: Claude's reasoning effort only takes effect on Anthropic's own API, so choosing one sends the call there. Leave Effort on **Auto** to keep a Claude model on the aggregator.
 
-**GPT-6.1 Terra**'s price depends on the **Effort** chosen: a run with any Effort is charged more than one at **Auto**. A typical run is ≈3 credits<!-- credits: llm-chat:gpt-6.1-terra --> at Auto and ≈6 credits<!-- credits: llm-chat:gpt-6.1-terra:effort-high --> with an Effort, and the `≈N` before a run follows the Effort you pick (`POST /v1/credits/model-costs` answers it for `llm-chat:gpt-6.1-terra:effort-<level>`). Leave Effort on **Auto** unless the task needs the reasoning.
+**GPT-6.1 Terra** is priced the same at every **Effort**: a typical run is ≈3 credits<!-- credits: llm-chat:gpt-6.1-terra -->, at Auto or with any Effort.
 
 **Gemini 4 Argon** runs on Google's own API on every call — it has no aggregator route and no fallback — so it is always charged at that lane's rate, at every effort, with or without Advanced mode. On a self-hosted install it needs `GEMINI_API_KEY`; without it the run fails with a *provider unavailable* error rather than going elsewhere.
 
@@ -183,14 +183,13 @@ Reasoning-capable models expose an **Effort** selector (Auto/low/…/max — the
 per model). **Auto** applies the vendor default. Effort has no price of its own: a higher
 effort usually spends more output tokens reasoning, and those tokens are charged at the
 model's rate. On a **Claude** model any effort other than Auto runs the call on Anthropic's
-own API, at that lane's rate, and on **GPT-6.1 Terra** any effort other than Auto raises the
-price of the run (see [Credit pricing](#credit-pricing)).
+own API, at that lane's rate (see [Credit pricing](#credit-pricing)).
 
 - GPT-6.1 Sol has no `none` level (its ladder is low…max): a `none` request runs at the vendor default
 - Kimi K3 exposes `low`/`medium`/`high` only — requests above `high` clamp down to it, and a `none` request runs at `low`
 - Kimi K3.1 Pro exposes `low`/`high`/`max` — a `none` request runs at `low`, `medium` clamps down to `low`, `xhigh` to `high`. At **Auto** it reasons at its provider's default, `max`
 - On both Kimi models a `none` request runs at their lowest level, `low`, rather than at Auto: Auto sends no effort, and the model then reasons at its provider's default
-- GPT-6.1 Terra exposes `low`…`max` with no `none` level: a `none` request runs at Auto. Any level it does expose raises its price (see [Credit pricing](#credit-pricing))
+- GPT-6.1 Terra exposes `low`…`max` with no `none` level: a `none` request runs at Auto
 - Gemini 3.6 Flash and Gemini 3.8 Flash expose `low`/`high` only (requests above `high` clamp down to it)
 - Gemini 4 Argon and Gemini 4 Carbon expose `low`/`medium`/`high` (no `none`: their provider has no minimal level for them, so a `none` request runs at Auto)
 - Grok 4.6 and GPT-6 Astra expose low/medium/high/xhigh

@@ -42,9 +42,10 @@ describe("isMeteredLlmPriceKey", () => {
     expect(isMeteredLlmPriceKey("workflow-copilot:claude-opus-5.5")).toBe(false)
   })
 
-  it("an effort-priced model's key that names its effort is metered; an effort on any other model's is not", () => {
-    expect(isMeteredLlmPriceKey("llm-chat:gpt-6.1-terra:effort-high")).toBe(true)
-    expect(isMeteredLlmPriceKey("ai-writer:gpt-6.1-terra:effort-low")).toBe(true)
+  it("an effort suffix is a metered key only on an effort-priced model — none is today, Terra included", () => {
+    expect(isMeteredLlmPriceKey("llm-chat:gpt-6.1-terra:effort-high")).toBe(false)
+    expect(isMeteredLlmPriceKey("ai-writer:gpt-6.1-terra:effort-low")).toBe(false)
+    expect(isMeteredLlmPriceKey("llm-chat:gpt-6.1-terra")).toBe(true)
     expect(isMeteredLlmPriceKey("llm-chat:gpt-6.1-sol:effort-high")).toBe(false)
     expect(isMeteredLlmPriceKey("llm-chat:gpt-6.1-terra:effort-none")).toBe(false)
     expect(isMeteredLlmPriceKey("llm-chat:gpt-6.1-terra:effort-high:direct")).toBe(false)

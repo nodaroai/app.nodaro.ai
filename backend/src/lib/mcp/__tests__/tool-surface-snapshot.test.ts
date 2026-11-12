@@ -1563,10 +1563,11 @@ const NODARO_IMAGE_UPSCALE_BYTES = 258
 const LLM_REGISTRY_2026_11_IDS_BYTES = 200
 
 // RAISED 2026-11-12 by `list_models`' `priceIds` naming the price key's effort suffix
-// (`:effort-<level>`, the effort a gpt-6.1-terra call sends, whose price depends on it), and
-// nothing else. No tool was added, so the fixture does NOT move. Measured by this suite:
-// 528_285 total − 528_230 = 55 B, all on list_models.
-const LLM_PRICE_KEY_EFFORT_WORDING_BYTES = 55
+// (`:effort-<level>`, the effort a call sends where it sets the price), and nothing else. No
+// tool was added, so the fixture does NOT move. Measured by this suite: 528_285 total −
+// 528_230 = 55 B, all on list_models, when it named gpt-6.1-terra; +7 B the same day when the
+// wording stopped naming a model (528_781 − 528_774).
+const LLM_PRICE_KEY_EFFORT_WORDING_BYTES = 62
 
 // RAISED 2026-11-12 by FLUX Fill Pro's model-catalog entry (a deployment's model allow list can
 // now name it): `flux-fill` joins the catalog-derived model lists of image_to_image and

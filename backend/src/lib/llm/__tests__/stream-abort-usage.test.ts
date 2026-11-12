@@ -190,12 +190,12 @@ describe("a stopped stream throws LlmStreamAbortedError carrying its estimated u
   })
 
   // GPT-6.1 Terra: KIE adds instructions of its own to the call and bills them
-  // (about 4,400 input tokens with no effort sent, about 25,500 with one), so
-  // a stop estimates them on top of the request's size.
+  // (about 4,400 input tokens, with or without an effort), so a stop estimates
+  // them on top of the request's size.
   it.each([
     [undefined, 4_400],
     ["none", 4_400], // not one of its levels: clamps to Auto, nothing sent
-    ["high", 25_500],
+    ["high", 4_400],
   ])("aborted GPT-6.1 Terra stream (effort %s) counts KIE's added input in the estimate", async (reasoningEffort, added) => {
     const delta = (text: string) => `data: ${JSON.stringify({ type: "response.output_text.delta", delta: text })}\n\n`
     fetchMock = kieFetch(Array.from({ length: 4 }, () => delta("y".repeat(100))))

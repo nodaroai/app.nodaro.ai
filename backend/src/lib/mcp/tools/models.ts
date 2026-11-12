@@ -210,7 +210,7 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
           .max(LIST_MODELS_PRICE_IDS_MAX)
           .optional()
           .describe(
-            "Quote prices instead of listing: credit ids, or an LLM call's key `<feature>:<model id>` (any model; `:direct` = vendor API; `:effort-<level>` = the effort sent, on gpt-6.1-terra), e.g. `llm-chat:claude-sonnet-5.5`. " +
+            "Quote prices instead of listing: credit ids, or an LLM call's key `<feature>:<model id>` (any model; `:direct` = vendor API; `:effort-<level>` = the effort sent, where it sets the price), e.g. `llm-chat:claude-sonnet-5.5`. " +
               "Answers `{ prices: { <id>: { credits, estimate? } | { error } } }`; `estimate`: charged actual usage, show `≈N`.",
           ),
       },

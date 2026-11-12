@@ -2,7 +2,7 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, llmPriceKey } from "@nodaro/shared/llm-models"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, getLlmModel, llmPriceKey } from "@nodaro/shared/llm-models"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 import { METERED_LLM_FEATURES } from "../llm-typical-usage.js"
 import { parseMeteredLlmId } from "../metered-llm-id.js"
@@ -43,9 +43,18 @@ describe("parseMeteredLlmId", () => {
   })
 
   it("an effort-priced model's key names its effort; no other model's does, and no key carries both suffixes", () => {
-    expect(parseMeteredLlmId("llm-chat:gpt-6.1-terra:effort-high")).toEqual({ feature: "llm-chat", modelId: "gpt-6.1-terra", reasoningEffort: "high" })
-    expect(parseMeteredLlmId("ai-writer:gpt-6.1-terra:effort-low")).toEqual({ feature: "ai-writer", modelId: "gpt-6.1-terra", reasoningEffort: "low" })
+    // No model is effort-priced today: the suffix is read on a stand-in, Terra flagged for this test.
+    const terra = getLlmModel("gpt-6.1-terra") as { effortPriced?: true }
+    terra.effortPriced = true
+    try {
+      expect(parseMeteredLlmId("llm-chat:gpt-6.1-terra:effort-high")).toEqual({ feature: "llm-chat", modelId: "gpt-6.1-terra", reasoningEffort: "high" })
+      expect(parseMeteredLlmId("ai-writer:gpt-6.1-terra:effort-low")).toEqual({ feature: "ai-writer", modelId: "gpt-6.1-terra", reasoningEffort: "low" })
+    } finally {
+      delete terra.effortPriced
+    }
     for (const id of [
+      // Terra's price does not depend on its effort, so its key never names one.
+      "llm-chat:gpt-6.1-terra:effort-high",
       "llm-chat:gpt-6.1-sol:effort-high",
       "llm-chat:claude-opus-5.5:effort-high",
       "llm-chat:gpt-6.1-terra:effort-none",

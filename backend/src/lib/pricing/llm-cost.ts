@@ -462,15 +462,22 @@ interface LaneAddedInput {
  * a hold or an estimate, which sizes the call from the request alone, adds them
  * through {@link llmLaneAddedInputTokens} so the quote matches the charge.
  *
- * GPT-6.1 Terra (KIE codex/v1/responses), measured 2026-11-12: a 20-token
- * prompt reported 4,400 input tokens with no effort sent and 25,477 with any
- * effort sent, `none` included (decided the same day: the hold and the
- * estimate count about 4,400 and about 25,500). The other GPT-6 models on the
- * same endpoint report `input_tokens: 0` (`kieInputUntrusted`), so nothing is
- * known to add there; GPT-5.6 Terra carries about 5,300 either way, unmodelled.
+ * The other GPT-6 models on the same endpoint report `input_tokens: 0`
+ * (`kieInputUntrusted`), so nothing is known to add there; GPT-5.6 Terra
+ * carries about 5,300 either way, unmodelled.
+ *
+ * A model whose two figures differ is `effortPriced` in the registry (its
+ * price key names the effort), and only such a model — a backend test holds
+ * the two together.
  */
 const KIE_ADDED_INPUT_TOKENS: Readonly<Record<string, LaneAddedInput>> = {
-  "gpt-6.1-terra": { withoutEffort: 4_400, withEffort: 25_500 },
+  // GPT-6.1 Terra (KIE codex/v1/responses), measured 2026-11-12: at 10:45 IST
+  // a 20-token prompt reported 4,400 input tokens with no effort sent and
+  // 25,477 with any effort sent (`none` included); by 16:30 IST KIE had changed
+  // the endpoint, and the same requests with an effort (echoed `high`) reported
+  // 4,400–4,423. So about 4,400 either way, and Terra is no longer
+  // `effortPriced`. Re-measure if its reported input jumps again.
+  "gpt-6.1-terra": { withoutEffort: 4_400, withEffort: 4_400 },
 }
 
 /**
