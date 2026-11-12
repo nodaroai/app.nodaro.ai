@@ -186,7 +186,7 @@ nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--fa
 #   table shows id, kind, family, maker (the company that made the model; "-" for a model offered under the instance's own label), modes, credit tiers, featured ★ and the doctrine ✓ flag
 #   --json for the full sheets, incl. each model's maker { id, name } (absent on an own-label model) and the maker's logoUrl (null when the instance publishes no mark)
 nodaro models cost <id…> [--json]                       # what each identifier is charged (POST /v1/credits/model-costs)
-#   an id is a model id, a credit id, or a metered LLM price key <feature>:<model>[:direct] (llmPriceKey)
+#   an id is a model id, a credit id, or a metered LLM price key <feature>:<model>[:direct | :effort-<level>] (llmPriceKey)
 #   a metered LLM call is charged for the tokens it uses, so its figure is an estimate and prints as ≈N;
 #   every model's per-token rate is in docs/pricing/llm-models.md. An id with no price prints "-" and why
 

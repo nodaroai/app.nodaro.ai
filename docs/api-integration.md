@@ -3849,7 +3849,7 @@ own `text-to-picker` feature: the run is charged for the tokens its batches
 actually used, at the selected model's rate on the lane that served each one
 ([LLM model rates](pricing/llm-models.md)) — the same rule as
 [Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost), on this
-route's own key, `text-to-picker:<model>[:direct]`. A default run reads every
+route's own key, `text-to-picker:<model>[:direct | :effort-<level>]`. A default run reads every
 picker's catalog, several times the text of one image read. Before the run a
 hold is reserved — each batch's first attempt at the model's output cap — and
 a balance below it is refused (`402`, "Needs up to N credits"). What the server

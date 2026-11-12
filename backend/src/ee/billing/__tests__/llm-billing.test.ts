@@ -434,6 +434,22 @@ describe("llmAttemptCostUsd", () => {
     // 10000×0.03e-6 + 1000×0.15e-6 (reported-only: 0.00015)
     expect(llmAttemptCostUsd({ lane: "kie", modelId: "gpt-6-luna", requestChars: 40000, inputTokens: 0, outputTokens: 1000 })).toBeCloseTo(0.00045, 8))
 
+  // GPT-6.1 Terra shares the GPT-6 endpoint and the `gpt-6` prefix, but reports
+  // its REAL input count — the instructions KIE adds included (a 20-token
+  // prompt reported 25,477 with an effort, 2026-11-12). With no stated charge
+  // (a stream) it is costed on those reported tokens, never on the request's
+  // size, which would leave the added tokens out.
+  it("GPT-6.1 Terra's reported KIE input is charged as reported, not from the request size", () => {
+    // 25,477 × 0.30e-6 + 8 × 1.50e-6 = 0.0076431 + 0.000012 = 0.0076551
+    expect(llmAttemptCostUsd({ lane: "kie", modelId: "gpt-6.1-terra", requestChars: 80, inputTokens: 25_477, outputTokens: 8 })).toBeCloseTo(0.0076551, 10)
+    const spend = new LlmSpend()
+    spend.add("gpt-6.1-terra", { modelId: "gpt-6.1-terra", system: "", messages: [{ role: "user", content: "x".repeat(80) }] }, {
+      response: { text: "ok", usage: { inputTokens: 25_477, outputTokens: 8 }, model: "gpt-6.1-terra", lane: "kie" },
+    })
+    expect(spend.record.source).not.toBe("kie-size-estimate")
+    expect(spend.costUsd).toBeCloseTo(0.0076551, 10)
+  })
+
   it("a stated KIE charge wins; providerCost next; the lane rate last", () => {
     expect(llmAttemptCostUsd({ lane: "kie", modelId: "claude-opus-5.5", requestChars: 1, inputTokens: 1, outputTokens: 1, creditsUsd: 0.5 })).toBe(0.5)
     expect(llmAttemptCostUsd({ lane: "kie", modelId: "gemini-3.8-flash", requestChars: 1, inputTokens: 1, outputTokens: 1, providerCost: 0.25 })).toBe(0.25)

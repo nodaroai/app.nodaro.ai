@@ -135,7 +135,7 @@ import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 import { PIPELINE_ACCEPTED_SCRIPT_LLMS } from "@nodaro/shared/pipeline"
 import { captionRoutesToRemotion } from "@nodaro/shared/captions"
-import { getLlmTier, defaultReasoningEffort, llmDefaultsFeature, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, llmPriceKey, motionGraphicsFeature, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, type LlmFeature } from "@nodaro/shared/llm-models"
+import { getLlmModel, getLlmTier, defaultReasoningEffort, llmDefaultsFeature, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, llmPriceKey, motionGraphicsFeature, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, type LlmFeature } from "@nodaro/shared/llm-models"
 import { FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared/model-catalog"
 import { renderVideoCreditId, scene3DRenderTierCredits } from "@nodaro/shared/scene3d"
 import { META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SCRAPE_ANALYSIS_FEATURE, scrapeAnalysisPriceParts, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS } from "@nodaro/shared/social"
@@ -2736,7 +2736,7 @@ export function registerStaticCreditCosts(costs: Record<string, number>): void {
 
 /**
  * The id a metered LLM node is PRICED under for a run estimate (A5/§8.5): the
- * price key `<feature>:<model>[:direct]` (`llmPriceKey`), which the charged
+ * price key `<feature>:<model>[:direct | :effort-<level>]` (`llmPriceKey`), which the charged
  * price table answers with the model's typical-usage estimate — never a tier
  * row. An unset model is the feature's default (`llmDefaultsFeature`). Under
  * the rollback (`!llmMeteredPricing()`) the tier id, exactly as before. The
@@ -3471,14 +3471,26 @@ export function chargedPriceTableFrom(
   }
 }
 
+/**
+ * The effort a parsed metered key's call runs at, as `llmPriceKey` built it:
+ * none on the direct lane (`:direct` is the Advanced pin, priced there); on a
+ * model whose price depends on the effort (`effortPriced`) exactly the one the
+ * key names — its key always says it, so a key with none sends none, and the
+ * feature's default is never applied on top; on every other model the default
+ * effort of the feature it borrows its defaults from (`llmDefaultsFeature`).
+ */
+function meteredKeyEffort(metered: NonNullable<ReturnType<typeof parseMeteredLlmId>>): string | undefined {
+  if (metered.lane === "direct") return undefined
+  if (getLlmModel(metered.modelId)?.effortPriced) return metered.reasoningEffort
+  return defaultReasoningEffort(llmDefaultsFeature(metered.feature), metered.modelId)
+}
+
 /** A metered price key's estimate in base credits: the feature's typical call
- *  on the lane it runs on — `:direct` pinned direct; a bare key at the default
- *  effort of the feature it borrows its defaults from (`llmDefaultsFeature`),
- *  as `llmPriceKey` and the run read it. Throws `LlmUnpricedModelError`. */
+ *  on the lane it runs on — `:direct` pinned direct — at the effort the key
+ *  stands for (`meteredKeyEffort`), as `llmPriceKey` and the run read it.
+ *  Throws `LlmUnpricedModelError`. */
 function meteredLlmEstimateBase(metered: NonNullable<ReturnType<typeof parseMeteredLlmId>>): number {
-  const direct = metered.lane === "direct"
-  const effort = direct ? undefined : defaultReasoningEffort(llmDefaultsFeature(metered.feature), metered.modelId)
-  return llmEstimateBaseCredits(metered.feature, metered.modelId, effort, direct)
+  return llmEstimateBaseCredits(metered.feature, metered.modelId, meteredKeyEffort(metered), metered.lane === "direct")
 }
 
 /** {@link meteredLlmEstimateBase}, or undefined for a model with no price on its lane: a price
@@ -3493,7 +3505,7 @@ function meteredLlmListedBase(metered: NonNullable<ReturnType<typeof parseMetere
 }
 
 /**
- * The metered LLM price key `identifier` names (`<feature>:<model>[:direct]`,
+ * The metered LLM price key `identifier` names (`<feature>:<model>[:direct | :effort-<level>]`,
  * `llmPriceKey` in `@nodaro/shared/llm-models`), or null — for every other id,
  * and for every id under the rollback (`!llmMeteredPricing()`), when metered
  * keys are priced nowhere. The switch is read only for an id that parses.
@@ -5884,9 +5896,7 @@ function meteredUsageCredits(
 ): number | undefined {
   const metered = meteredLlmIdOf(identifier)
   if (!metered) return undefined
-  const direct = metered.lane === "direct"
-  const effort = direct ? undefined : defaultReasoningEffort(llmDefaultsFeature(metered.feature), metered.modelId)
-  return prices.charge(identifier, quoteBaseCredits(llmUsageBaseCredits(usage, metered.modelId, effort, direct), units))
+  return prices.charge(identifier, quoteBaseCredits(llmUsageBaseCredits(usage, metered.modelId, meteredKeyEffort(metered), metered.lane === "direct"), units))
 }
 
 /**

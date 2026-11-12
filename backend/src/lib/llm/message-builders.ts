@@ -4,7 +4,7 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk"
-import type { LlmModelDef, LlmReasoningEffort } from "@nodaro/shared/llm-models"
+import { structuredWireMode, type LlmModelDef, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
 import { KIE_INLINE_DATA_URL_MAX_CHARS } from "../kie-inline-image.js"
 import { extractJsonFromAIResponse } from "../json-utils.js"
 import { anthropicStrictToolSchema } from "../json-schema-strict.js"
@@ -300,11 +300,13 @@ export function buildAnthropicMessages(req: LlmRequest) {
  * still strongly constrains the shape, and `llmCompleteStructured`'s validate +
  * retry is the actual guarantee. Returns undefined for models with no native
  * mode (GPT-via-KIE ignores response_format) so the caller falls back to text.
+ * A model that sends its schema only as a hint (`structuredOutputHint`, read
+ * through `structuredWireMode`: Gemini 4 Carbon) is sent it the same way.
  *
  * The schema goes on the wire through {@link kieWireSchema}.
  */
 export function kieResponseFormat(model: LlmModelDef, req: LlmRequest): KieSchemaFormat | undefined {
-  if (!req.jsonSchema || model.structuredOutputMode !== "kie-response-format") return undefined
+  if (!req.jsonSchema || structuredWireMode(model) !== "kie-response-format") return undefined
   const wire = kieWireSchema(req.jsonSchema, model)
   return {
     body: { type: "json_schema", json_schema: { name: req.jsonSchema.name, strict: false, schema: wire.schema } },
@@ -371,7 +373,7 @@ function restoreAnswerText(text: string, restore: (value: unknown) => unknown): 
  * without the mode. The schema goes on the wire through {@link kieWireSchema}.
  */
 export function kieResponsesTextFormat(model: LlmModelDef, req: LlmRequest): KieSchemaFormat | undefined {
-  if (!req.jsonSchema || model.structuredOutputMode !== "responses-json-schema") return undefined
+  if (!req.jsonSchema || structuredWireMode(model) !== "responses-json-schema") return undefined
   const wire = kieWireSchema(req.jsonSchema, model)
   return {
     body: { format: { type: "json_schema", name: req.jsonSchema.name, strict: false, schema: wire.schema } },

@@ -1556,6 +1556,18 @@ const SPLIT_INTO_LAYERS_TOOL_BYTES = 2_911
 // 523_132 total − 522_874 = 258 B, all on edit_image.
 const NODARO_IMAGE_UPSCALE_BYTES = 258
 
+// RAISED 2026-11-12 by three LLM ids added to the registry (kimi-k3.1-pro, gpt-6.1-terra,
+// gemini-4-carbon): every tool whose `llm_model` argument is `z.enum(LLM_MODEL_IDS)` lists them
+// (50 B per list, four lists), and nothing else moved. No tool was added, so the fixture does NOT
+// move. Measured by this suite: 528_230 total with the ids − 528_030 without them = 200 B.
+const LLM_REGISTRY_2026_11_IDS_BYTES = 200
+
+// RAISED 2026-11-12 by `list_models`' `priceIds` naming the price key's effort suffix
+// (`:effort-<level>`, the effort a gpt-6.1-terra call sends, whose price depends on it), and
+// nothing else. No tool was added, so the fixture does NOT move. Measured by this suite:
+// 528_285 total − 528_230 = 55 B, all on list_models.
+const LLM_PRICE_KEY_EFFORT_WORDING_BYTES = 55
+
 // RAISED 2026-11-12 by FLUX Fill Pro's model-catalog entry (a deployment's model allow list can
 // now name it): `flux-fill` joins the catalog-derived model lists of image_to_image and
 // modify_image ("flux-fill, " in each), and nothing else. No tool was added, so the fixture does
@@ -1758,6 +1770,8 @@ export const TOOL_WIRE_BUDGET = {
     PIXVERSE_V6_MAX_MODELS_BYTES +
     SPLIT_INTO_LAYERS_TOOL_BYTES +
     NODARO_IMAGE_UPSCALE_BYTES +
+    LLM_REGISTRY_2026_11_IDS_BYTES +
+    LLM_PRICE_KEY_EFFORT_WORDING_BYTES +
     FLUX_FILL_CATALOG_ENTRY_BYTES,
 }
 

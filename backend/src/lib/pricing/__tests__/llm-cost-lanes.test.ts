@@ -46,6 +46,13 @@ describe("serving lane selects the rate band", () => {
     expect(calculateLlmCost("gemini-4-argon", { inputTokens: 1000, outputTokens: 500 }, "direct")).toBeCloseTo(0.014, 10)
   })
 
+  it("costs gemini-4-carbon on both lanes: KIE's list price first, Google's STANDARD list price on its fallback", () => {
+    // KIE: 160/800 KIE credits per M @ $0.005 = $0.80/$4.00 → (1000 * 0.80 + 500 * 4.00) / 1e6 = 0.0028.
+    expect(calculateLlmCost("gemini-4-carbon", { inputTokens: 1000, outputTokens: 500 }, "kie")).toBeCloseTo(0.0028, 10)
+    // Direct: Argon's card, pinned to the standard $4/$20 for the same reason → 0.014.
+    expect(calculateLlmCost("gemini-4-carbon", { inputTokens: 1000, outputTokens: 500 }, "direct")).toBeCloseTo(0.014, 10)
+  })
+
   it("never prices the direct lane BELOW the aggregator", () => {
     // A direct row cheaper than its KIE row would mean the two bands got
     // swapped — a vendor's own list price is never the discounted one.

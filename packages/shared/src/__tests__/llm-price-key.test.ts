@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest"
-import { LLM_FEATURE_DEFAULTS, LLM_FEATURE_DEFAULTS_FROM, llmDefaultsFeature, llmPriceKey } from "../entries/llm-models.js"
+import {
+  LLM_FEATURE_DEFAULTS,
+  LLM_FEATURE_DEFAULTS_FROM,
+  LLM_MODELS,
+  LLM_REASONING_EFFORTS,
+  STRUCTURED_VISION_MODELS,
+  defaultReasoningEffort,
+  effectiveReasoningEffort,
+  getLlmModel,
+  llmDefaultsFeature,
+  llmPriceKey,
+  llmSendsSchema,
+  llmServesDirect,
+  parseLlmPriceKeyModel,
+  structuredWireMode,
+} from "../entries/llm-models.js"
 
 // The key a client asks `POST /v1/credits/model-costs` for a metered LLM
 // call's price with: `<feature>:<model>`, plus `:direct` when the call is
@@ -51,5 +66,118 @@ describe("llmPriceKey", () => {
 
   it("refuses an unresolved (empty) model id", () => {
     expect(() => llmPriceKey("llm-chat", "")).toThrow(TypeError)
+  })
+})
+
+// GPT-6.1 Terra's price depends on whether its call sends an effort (the
+// aggregator adds input of its own by it), so its key names the effort the
+// call sends — and every other model's key is exactly what it was.
+describe("llmPriceKey: the effort, on a model whose price depends on it (`effortPriced`)", () => {
+  /** The key as it was built before effort-priced models existed. */
+  const keyBefore = (feature: string, modelId: string, effort?: string, advanced?: boolean) => {
+    const e = effort ?? defaultReasoningEffort(llmDefaultsFeature(feature), modelId)
+    return llmServesDirect(modelId, e, advanced) ? `${feature}:${modelId}:direct` : `${feature}:${modelId}`
+  }
+
+  it("only GPT-6.1 Terra is effort-priced today", () => {
+    expect(LLM_MODELS.filter((m) => m.effortPriced).map((m) => m.id)).toEqual(["gpt-6.1-terra"])
+  })
+
+  it("every other model's key is unchanged, at every effort, with Advanced mode on or off", () => {
+    for (const m of LLM_MODELS) {
+      if (m.effortPriced) continue
+      for (const feature of ["llm-chat", "ai-writer", "describe-to-picker", "text-to-picker"]) {
+        for (const effort of [undefined, ...LLM_REASONING_EFFORTS]) {
+          for (const advanced of [false, true]) {
+            expect(llmPriceKey(feature, m.id, effort, advanced), `${feature} ${m.id} ${effort} ${advanced}`).toBe(keyBefore(feature, m.id, effort, advanced))
+          }
+        }
+      }
+    }
+  })
+
+  it("names the effort a Terra call sends: none at Auto (or `none`, which it does not offer), the level otherwise", () => {
+    expect(llmPriceKey("llm-chat", "gpt-6.1-terra")).toBe("llm-chat:gpt-6.1-terra")
+    expect(llmPriceKey("llm-chat", "gpt-6.1-terra", "none")).toBe("llm-chat:gpt-6.1-terra")
+    expect(llmPriceKey("llm-chat", "gpt-6.1-terra", "high")).toBe("llm-chat:gpt-6.1-terra:effort-high")
+    expect(llmPriceKey("ai-writer", "gpt-6.1-terra", "low")).toBe("ai-writer:gpt-6.1-terra:effort-low")
+    expect(llmPriceKey("ai-writer", "gpt-6.1-terra", "max", true)).toBe("ai-writer:gpt-6.1-terra:effort-max")
+  })
+
+  it("parseLlmPriceKeyModel reads back exactly the keys llmPriceKey builds", () => {
+    expect(parseLlmPriceKeyModel("gpt-6.1-terra")).toEqual({ modelId: "gpt-6.1-terra" })
+    expect(parseLlmPriceKeyModel("gpt-6.1-terra:effort-high")).toEqual({ modelId: "gpt-6.1-terra", reasoningEffort: "high" })
+    expect(parseLlmPriceKeyModel("claude-opus-5.5:direct")).toEqual({ modelId: "claude-opus-5.5", lane: "direct" })
+    for (const m of LLM_MODELS) {
+      for (const effort of [undefined, ...LLM_REASONING_EFFORTS]) {
+        for (const advanced of [false, true]) {
+          const key = llmPriceKey("llm-chat", m.id, effort, advanced)
+          expect(parseLlmPriceKeyModel(key.slice("llm-chat:".length))?.modelId, key).toBe(m.id)
+        }
+      }
+    }
+  })
+
+  it("parseLlmPriceKeyModel refuses what no key carries", () => {
+    // An effort on a model whose price does not depend on it.
+    expect(parseLlmPriceKeyModel("gpt-6.1-sol:effort-high")).toBeNull()
+    expect(parseLlmPriceKeyModel("claude-opus-5.5:effort-high")).toBeNull()
+    // A level Terra does not offer, and both suffixes at once.
+    expect(parseLlmPriceKeyModel("gpt-6.1-terra:effort-none")).toBeNull()
+    expect(parseLlmPriceKeyModel("gpt-6.1-terra:effort-high:direct")).toBeNull()
+    expect(parseLlmPriceKeyModel("gpt-6.1-terra:direct:effort-high")).toBeNull()
+    // Unknown models, borrowed slugs, other suffixes.
+    expect(parseLlmPriceKeyModel("no-such-model")).toBeNull()
+    expect(parseLlmPriceKeyModel("gpt-6-1-terra")).toBeNull()
+    expect(parseLlmPriceKeyModel("gpt-6.1-terra:premium")).toBeNull()
+  })
+})
+
+describe("effortBelowLowestSendsLowest (Kimi K3 and K3.1 Pro)", () => {
+  it("a request below the lowest level sends the lowest level; Auto still sends nothing", () => {
+    for (const id of ["kimi-k3", "kimi-k3.1-pro"]) {
+      expect(getLlmModel(id)?.effortBelowLowestSendsLowest, id).toBe(true)
+      expect(effectiveReasoningEffort(id, "none"), id).toBe("low")
+      expect(effectiveReasoningEffort(id, undefined), id).toBeUndefined()
+      expect(effectiveReasoningEffort(id, "low"), id).toBe("low")
+    }
+    // The clamp above the lowest level is unchanged.
+    expect(effectiveReasoningEffort("kimi-k3.1-pro", "medium")).toBe("low")
+    expect(effectiveReasoningEffort("kimi-k3.1-pro", "xhigh")).toBe("high")
+    expect(effectiveReasoningEffort("kimi-k3", "medium")).toBe("medium")
+    expect(effectiveReasoningEffort("kimi-k3", "max")).toBe("high")
+  })
+
+  it("only the two Kimi models declare it — every other model still drops a request below its lowest level", () => {
+    expect(LLM_MODELS.filter((m) => m.effortBelowLowestSendsLowest).map((m) => m.id).sort()).toEqual(["kimi-k3", "kimi-k3.1-pro"])
+    expect(effectiveReasoningEffort("gpt-6.1-sol", "none")).toBeUndefined()
+    expect(effectiveReasoningEffort("gpt-6.1-terra", "none")).toBeUndefined()
+    expect(effectiveReasoningEffort("gemini-4-carbon", "none")).toBeUndefined()
+  })
+})
+
+describe("structured output: a trusted mode vs a schema hint", () => {
+  it("Gemini 4 Carbon sends its schema as a hint, never as a trusted mode", () => {
+    const carbon = getLlmModel("gemini-4-carbon")!
+    expect(carbon.structuredOutputMode).toBeUndefined()
+    expect(carbon.structuredOutputHint).toBe("kie-response-format")
+    expect(structuredWireMode(carbon)).toBe("kie-response-format")
+    expect(STRUCTURED_VISION_MODELS.map((m) => m.id)).not.toContain("gemini-4-carbon")
+  })
+
+  it("a hint is never set beside a trusted mode; a trusted model's wire mode is its mode", () => {
+    for (const m of LLM_MODELS) {
+      expect(m.structuredOutputMode !== undefined && m.structuredOutputHint !== undefined, m.id).toBe(false)
+      if (m.structuredOutputMode) expect(structuredWireMode(m), m.id).toBe(m.structuredOutputMode)
+    }
+  })
+
+  it("llmSendsSchema: a model that sends its schema (trusted or hinted) counts it; one that sends none does not", () => {
+    expect(llmSendsSchema("gemini-4-carbon")).toBe(true)
+    expect(llmSendsSchema("gpt-6.1-terra")).toBe(true)
+    expect(llmSendsSchema("gpt-5.2")).toBe(false)
+    // Unset model = the feature's default; an unknown model counts it.
+    expect(llmSendsSchema(undefined, "llm-chat")).toBe(llmSendsSchema(LLM_FEATURE_DEFAULTS["llm-chat"]))
+    expect(llmSendsSchema("no-such-model")).toBe(true)
   })
 })

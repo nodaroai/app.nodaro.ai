@@ -17,13 +17,14 @@
  * so a bound here only needs to be sane, not a guarantee.
  */
 import { usdToCredits } from "@nodaro/shared/credits"
-import { getLlmModel, supportsAdvancedMode } from "@nodaro/shared/llm-models"
+import { getLlmModel, llmSendsSchema, supportsAdvancedMode } from "@nodaro/shared/llm-models"
 import { KIE_IMAGE_ESTIMATE_CHARS } from "../../lib/llm/kie-cost.js"
 import type { LlmRequest } from "../../lib/llm/types.js"
 import { llmEffectiveOutputCap } from "../../lib/llm-node-output-cap.js"
 import {
   calculateLlmCost,
   hasLlmRate,
+  llmLaneAddedInputTokens,
   llmPossibleLanes,
   llmPrimaryLane,
   LlmRateMissingError,
@@ -135,14 +136,15 @@ export function llmInputTokenBound(input: { text: string; imageCount: number; me
 
 /**
  * {@link llmInputTokenBound} of a built request: the text is the system prompt,
- * the structured schema (`JSON.stringify(jsonSchema.schema)`) and every text
+ * the structured schema (`JSON.stringify(jsonSchema.schema)`, only when the
+ * model's calls send it: `llmSendsSchema`) and every text
  * message or block; each `image` / `image_base64` block is one image; each
  * `video` / `video_base64` / `audio` block adds `opts.mediaSeconds` (else
  * {@link LLM_UNKNOWN_MEDIA_SECONDS}).
  */
 export function llmRequestInputBound(req: LlmRequest, opts?: { mediaSeconds?: number }): number {
   const perMediaSeconds = opts?.mediaSeconds ?? LLM_UNKNOWN_MEDIA_SECONDS
-  let text = req.system + (req.jsonSchema ? JSON.stringify(req.jsonSchema.schema) : "")
+  let text = req.system + (req.jsonSchema && llmSendsSchema(req.modelId, req.feature) ? JSON.stringify(req.jsonSchema.schema) : "")
   let imageCount = 0
   let mediaSeconds = 0
   for (const message of req.messages) {
@@ -177,11 +179,16 @@ export function llmHoldBaseCredits(modelId: string, shape: LlmHoldShape): number
   }
   const extra = shape.extraTextChars ?? 0
   assertSize("extraTextChars", extra, true)
+  const lane = llmPrimaryLane(model, { ...shape.request, cheapLanesOnly: shape.cheapLanesOnly })
   const usage: LlmCostUsage = {
-    inputTokens: llmRequestInputBound(shape.request, { mediaSeconds: shape.mediaSeconds }) + Math.ceil(extra / LLM_CEILING_CHARS_PER_TOKEN),
+    inputTokens:
+      llmRequestInputBound(shape.request, { mediaSeconds: shape.mediaSeconds }) +
+      Math.ceil(extra / LLM_CEILING_CHARS_PER_TOKEN) +
+      // What the lane adds of its own and bills as input (GPT-6.1 Terra on KIE).
+      llmLaneAddedInputTokens(model, lane, shape.request.reasoningEffort),
     outputTokens: llmEffectiveOutputCap(model, shape.request),
   }
-  return usdToCredits(laneCostUsd(model.id, usage, llmPrimaryLane(model, { ...shape.request, cheapLanesOnly: shape.cheapLanesOnly })))
+  return usdToCredits(laneCostUsd(model.id, usage, lane))
 }
 
 /**
@@ -221,5 +228,8 @@ export function llmUsageBaseCredits(
     reasoningEffort: reasoningEffort as LlmRequest["reasoningEffort"],
     requireLane: advancedMode && supportsAdvancedMode(model.id) ? "direct" : undefined,
   })
-  return Math.max(1, usdToCredits(laneCostUsd(model.id, { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }, primary)))
+  // The usage is the caller's own prompt; what the lane adds of its own and
+  // bills as input (GPT-6.1 Terra on KIE) is counted on top, as the hold does.
+  const inputTokens = usage.inputTokens + llmLaneAddedInputTokens(model, primary, reasoningEffort)
+  return Math.max(1, usdToCredits(laneCostUsd(model.id, { inputTokens, outputTokens: usage.outputTokens }, primary)))
 }

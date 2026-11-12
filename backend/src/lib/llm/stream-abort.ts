@@ -7,7 +7,8 @@
  * stream lane turns such an abort into {@link LlmStreamAbortedError} through
  * {@link asStoppedStream}, so the three lanes cannot price it differently:
  *
- * - input `ceil(requestChars ÷ 4)` and output `ceil(streamedChars ÷ 4)`, or the
+ * - input `ceil(requestChars ÷ 4)` (plus what the lane adds of its own,
+ *   `addedInputTokens`) and output `ceil(streamedChars ÷ 4)`, or the
  *   lane's own reported counts when it reported any before the stop (the direct
  *   Gemini lane reports usage on every chunk);
  * - priced at the SERVING lane's rate with the throwing `calculateLlmCost`, so
@@ -29,6 +30,13 @@ import type { LlmServedLane } from "./types.js"
 export interface StreamAbortContext {
   signal: AbortSignal
   requestChars: number
+  /**
+   * Input tokens the lane adds to the call of its own and bills
+   * (`llmLaneAddedInputTokens`: GPT-6.1 Terra's on KIE), counted on top of the
+   * request's size in the estimate — the provider read them before the stop.
+   * Absent = none.
+   */
+  addedInputTokens?: number
 }
 
 /** The caller stopped the call: its signal fired, and not because a deadline ran out. */
@@ -50,7 +58,11 @@ export function asStoppedStream(
     /** The registry id (never a lane's own vendor id): the rate tables are keyed by it. */
     modelId: string
     lane: LlmServedLane
-    /** Characters of answer that reached the caller before the stop. */
+    /**
+     * Characters the stream delivered before the stop: the answer that reached
+     * the caller, plus any reasoning text a responses stream sent (counted for
+     * the charge, never passed to the caller).
+     */
     streamedChars: number
     /** The lane's own counts, when it reported any before the stop. */
     reported?: { inputTokens: number; outputTokens: number }
@@ -58,7 +70,7 @@ export function asStoppedStream(
 ): unknown {
   if (err instanceof LlmStreamResponseError || !callerStopped(ctx.signal)) return err
   const tokens = ctx.reported ?? {
-    inputTokens: Math.ceil(ctx.requestChars / 4),
+    inputTokens: Math.ceil(ctx.requestChars / 4) + (ctx.addedInputTokens ?? 0),
     outputTokens: Math.ceil(ctx.streamedChars / 4),
   }
   const providerCost = calculateLlmCost(ctx.modelId, tokens, ctx.lane === "kie" ? "kie" : "direct")

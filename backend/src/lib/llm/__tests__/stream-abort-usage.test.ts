@@ -45,6 +45,7 @@ vi.mock("@google/genai", () => ({
 }))
 
 const { llmStream } = await import("../../llm-client.js")
+const { KIMI_STREAM } = await import("../../__tests__/kie-probe-2026-11-12-fixtures.js")
 const { LlmStreamAbortedError, billedProviderCost } = await import("../../llm-errors.js")
 const { laneFallbackAllowed } = await import("../lane-fallback.js")
 
@@ -186,6 +187,67 @@ describe("a stopped stream throws LlmStreamAbortedError carrying its estimated u
 
     expect(err).toMatchObject({ usage: { inputTokens: 1001, outputTokens: 26, estimated: true } })
     expect(billedProviderCost(err)).toBeCloseTo((1001 * 1.6 + 26 * 8) / 1_000_000, 12)
+  })
+
+  // GPT-6.1 Terra: KIE adds instructions of its own to the call and bills them
+  // (about 4,400 input tokens with no effort sent, about 25,500 with one), so
+  // a stop estimates them on top of the request's size.
+  it.each([
+    [undefined, 4_400],
+    ["none", 4_400], // not one of its levels: clamps to Auto, nothing sent
+    ["high", 25_500],
+  ])("aborted GPT-6.1 Terra stream (effort %s) counts KIE's added input in the estimate", async (reasoningEffort, added) => {
+    const delta = (text: string) => `data: ${JSON.stringify({ type: "response.output_text.delta", delta: text })}\n\n`
+    fetchMock = kieFetch(Array.from({ length: 4 }, () => delta("y".repeat(100))))
+    vi.stubGlobal("fetch", fetchMock)
+    const controller = new AbortController()
+
+    const err = await caught(llmStream(requestOf("gpt-6.1-terra", 4000, { reasoningEffort }), abortAfter(controller, 400), controller.signal))
+
+    expect(err).toBeInstanceOf(LlmStreamAbortedError)
+    expect(err).toMatchObject({ lane: "kie", usage: { inputTokens: 1000 + added, outputTokens: 100, estimated: true } })
+    // Terra on KIE: $0.30 / $1.50 per M.
+    expect(billedProviderCost(err)).toBeCloseTo(((1000 + added) * 0.3 + 100 * 1.5) / 1_000_000, 12)
+  })
+
+  // Kimi K3.1 Pro's real stream (the 2026-11-12 probe) sends its reasoning as
+  // `response.reasoning_text.delta` frames before any answer. Stopped then,
+  // the reasoning it streamed is what it wrote: counted toward the output
+  // estimate, never added to the answer (decided 2026-11-12).
+  it("a stop during a responses stream's reasoning counts the reasoning text received", async () => {
+    const frames = KIMI_STREAM.split("\n\n")
+    const firstAnswer = frames.findIndex((f) => f.includes("response.output_text.delta"))
+    const reasoning = frames.slice(0, firstAnswer)
+    const reasoningChars = reasoning
+      .filter((f) => f.includes("response.reasoning_text.delta"))
+      .map((f) => (JSON.parse(f.slice(f.indexOf("data:") + 5)) as { delta: string }).delta.length)
+      .reduce((a, b) => a + b, 0)
+    expect(reasoningChars).toBeGreaterThan(0)
+    const controller = new AbortController()
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init: { signal?: AbortSignal }) => {
+      const signal = init.signal!
+      const body = new ReadableStream<Uint8Array>({
+        start(c) {
+          c.enqueue(new TextEncoder().encode(reasoning.join("\n\n") + "\n\n"))
+          signal.addEventListener("abort", () => c.error(signal.reason), { once: true })
+        },
+        // Asked for more only once the reader has taken the reasoning: the caller stops then.
+        pull() {
+          setTimeout(() => controller.abort(), 0)
+        },
+      })
+      return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } })
+    }))
+    const tokens: string[] = []
+
+    const err = await caught(llmStream(requestOf("kimi-k3.1-pro", 400), (t) => tokens.push(t), controller.signal))
+
+    expect(err).toBeInstanceOf(LlmStreamAbortedError)
+    expect(err).toMatchObject({ lane: "kie", usage: { inputTokens: 100, outputTokens: Math.ceil(reasoningChars / 4), estimated: true } })
+    // Kimi K3.1 Pro on KIE: $0.80 / $4.00 per M.
+    expect(billedProviderCost(err)).toBeCloseTo((100 * 0.8 + Math.ceil(reasoningChars / 4) * 4) / 1_000_000, 12)
+    // Nothing of the reasoning reached the caller as answer text.
+    expect(tokens).toEqual([])
   })
 
   it("aborted Anthropic direct stream estimates at the direct rate", async () => {

@@ -2,7 +2,7 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { LLM_MODEL_IDS } from "@nodaro/shared/llm-models"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, llmPriceKey } from "@nodaro/shared/llm-models"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 import { METERED_LLM_FEATURES } from "../llm-typical-usage.js"
 import { parseMeteredLlmId } from "../metered-llm-id.js"
@@ -38,6 +38,29 @@ describe("parseMeteredLlmId", () => {
       for (const modelId of LLM_MODEL_IDS) {
         expect(parseMeteredLlmId(`${feature}:${modelId}`)).toEqual({ feature, modelId })
         expect(parseMeteredLlmId(`${feature}:${modelId}:direct`)).toEqual({ feature, modelId, lane: "direct" })
+      }
+    }
+  })
+
+  it("an effort-priced model's key names its effort; no other model's does, and no key carries both suffixes", () => {
+    expect(parseMeteredLlmId("llm-chat:gpt-6.1-terra:effort-high")).toEqual({ feature: "llm-chat", modelId: "gpt-6.1-terra", reasoningEffort: "high" })
+    expect(parseMeteredLlmId("ai-writer:gpt-6.1-terra:effort-low")).toEqual({ feature: "ai-writer", modelId: "gpt-6.1-terra", reasoningEffort: "low" })
+    for (const id of [
+      "llm-chat:gpt-6.1-sol:effort-high",
+      "llm-chat:claude-opus-5.5:effort-high",
+      "llm-chat:gpt-6.1-terra:effort-none",
+      "llm-chat:gpt-6.1-terra:effort-high:direct",
+      "llm-chat:gpt-6.1-terra:effort-",
+    ]) {
+      expect(parseMeteredLlmId(id), id).toBeNull()
+    }
+    // Every key llmPriceKey builds parses back to its feature and model.
+    for (const feature of METERED_LLM_FEATURES) {
+      for (const modelId of LLM_MODEL_IDS) {
+        for (const effort of [undefined, ...LLM_REASONING_EFFORTS]) {
+          const key = llmPriceKey(feature, modelId, effort)
+          expect(parseMeteredLlmId(key), key).toMatchObject({ feature, modelId })
+        }
       }
     }
   })

@@ -67,6 +67,19 @@ describe("LlmModelSelect prices", () => {
     expect(screen.getByTestId(`llm-model-price-${GROK}`)).toHaveTextContent("≈2 CR")
   })
 
+  it("a node's effort reaches the GPT-6.1 Terra row's key (its price depends on it); other rows keep theirs", async () => {
+    const terraHigh = "llm-chat:gpt-6.1-terra:effort-high"
+    api.answer = { data: { [terraHigh]: 6 }, missing: [], estimates: [terraHigh] }
+    render(<LlmModelSelect feature="llm-chat" value="gpt-6.1-terra" reasoningEffort="high" onChange={() => {}} />)
+    await waitFor(() => expect(api.calls).toHaveLength(1))
+    expect(api.calls[0]).toContain(terraHigh)
+    expect(api.calls[0]).not.toContain("llm-chat:gpt-6.1-terra")
+    // Every non-Claude row is asked its usual key (a Claude effort moves its lane, as before).
+    expect(api.calls[0]).toContain(llmPriceKey("llm-chat", "gpt-6.1-sol"))
+    expect(api.calls[0]).toContain(llmPriceKey("llm-chat", GROK))
+    await waitFor(() => expect(screen.getByTestId("llm-model-price")).toHaveTextContent("≈6 CR"))
+  })
+
   it("picker hides prices when no estimate comes back", async () => {
     // Rollback: every metered key is `missing`; only the tier ids are priced.
     api.answer = {

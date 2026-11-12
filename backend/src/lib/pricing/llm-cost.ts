@@ -24,7 +24,7 @@
  * [2,3,7,11].
  * ────────────────────────────────────────────────────────────────────────────
  */
-import { getLlmModel, llmServesDirect, type LlmModelDef } from "@nodaro/shared/llm-models"
+import { effectiveReasoningEffort, getLlmModel, llmServesDirect, type LlmModelDef } from "@nodaro/shared/llm-models"
 import { claudeMustServeDirect } from "../llm/claude-direct.js"
 import type { LlmRequest } from "../llm/types.js"
 
@@ -80,6 +80,12 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   // gemini-4-argon has NO row here on purpose: it is `directOnly` (no call
   // reaches KIE — see its registry entry), so it is costed on the direct table
   // below only. A re-enable of its KIE lane adds the row with the re-probe.
+  // KIE list price 160/800 KIE-credits per M ($0.005/credit), read 2026-11-12
+  // (api.kie.ai model-pricing; its product page agrees). No cached-input tier
+  // listed. Its stream's last chunk and the non-stream reply both carry
+  // `credits_consumed`, which matched these rates × the reported counts in the
+  // probe (KIE does not bill the reasoning `total_tokens` adds on top).
+  "gemini-4-carbon":   { inputPricePerM: 0.80,  outputPricePerM: 4.00 },
   // KIE-routed models below are pinned to KIE's published list prices
   // (kie.ai/claude-opus-4-7, kie.ai/gpt-5-4, kie.ai/gpt-5-5, kie.ai/gpt-5-6,
   // kie.ai/claude-sonnet-5, kie.ai/claude-opus-4-8).
@@ -111,6 +117,12 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   "gpt-6-luna":        { inputPricePerM: 0.03,  outputPricePerM: 0.15 },
   "gpt-6-sol":         { inputPricePerM: 0.60,  outputPricePerM: 3.00 },
   "gpt-6.1-sol":       { inputPricePerM: 0.60,  outputPricePerM: 3.00 },
+  // GPT-6.1 Terra — KIE list price 60/300 KIE-credits per M ($0.005/credit),
+  // read 2026-11-12; cached input 3, cache writes 75 credits/M (unmodelled, as
+  // for the rows above). Unlike the three above it reports REAL top-level
+  // `usage.input_tokens`, and those include the instructions KIE adds to every
+  // call (see KIE_ADDED_INPUT_TOKENS below), which KIE bills.
+  "gpt-6.1-terra":     { inputPricePerM: 0.30,  outputPricePerM: 1.50 },
   // KIE list price 160/480 KIE-credits per M ($0.005/credit) — 40% of xAI's
   // official $2/$6 (confirmed 2026-08-18, docs.kie.ai/market/grok/grok-4-6).
   // Cached input reprices to $0.20/M on KIE's side; the table models the flat
@@ -139,6 +151,10 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   // OpenAI-shape lane above; both reported real `usage.input_tokens` and
   // `credits_consumed` in the probe.
   "kimi-k3":           { inputPricePerM: 2.40,  outputPricePerM: 12.00 },
+  // Kimi K3.1 Pro — KIE list price 160/800 KIE-credits per M (cached input 16),
+  // read 2026-11-12. Flat uncached band; real `usage.input_tokens` and
+  // `credits_consumed` in the probe, as K3.
+  "kimi-k3.1-pro":     { inputPricePerM: 0.80,  outputPricePerM: 4.00 },
   "deepseek-v4.1-flash": { inputPricePerM: 0.12, outputPricePerM: 0.475 },
 }
 
@@ -190,6 +206,11 @@ const LLM_DIRECT_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   // from 2026-12-01, while over-reporting during the promo is the safe
   // direction — the `claude-sonnet-5` reasoning above.
   "gemini-4-argon": { inputPricePerM: 4.00, outputPricePerM: 20.00 },
+  // Its FALLBACK lane (KIE is primary). Google's card is Argon's exactly
+  // (verified 2026-11-12): INTRO $2/$10 through 2026-11-30, STANDARD $4/$20
+  // from 2026-12-01, thinking billed as output, no long-context band. Pinned
+  // to the standard rate for Argon's reason above.
+  "gemini-4-carbon": { inputPricePerM: 4.00, outputPricePerM: 20.00 },
   // Anthropic direct-SDK lane.
   "claude-haiku-4.5": { inputPricePerM: 1.00, outputPricePerM: 5.00 },
   // Anthropic list prices, 2026-10-10: two rate cards chosen by prompt length —
@@ -424,4 +445,56 @@ export function llmRateCard(modelId: string, lane: LlmServingLane): LlmRateCardU
 /** Test/introspection hook: model ids carrying a direct-lane rate row. */
 export function directRatedModelIds(): string[] {
   return Object.keys(LLM_DIRECT_RATES_USD_PER_M)
+}
+
+/** Input tokens a lane adds to every call of one model, by whether the call sends a reasoning effort. */
+interface LaneAddedInput {
+  /** No effort on the wire (Auto, or a request that clamps to none). */
+  withoutEffort: number
+  /** Any effort on the wire. */
+  withEffort: number
+}
+
+/**
+ * Input tokens KIE adds to a call on its own side — instructions of its own
+ * placed above the caller's prompt — and bills as input, per model. The call's
+ * reported `usage.input_tokens` (what it is charged on) already includes them;
+ * a hold or an estimate, which sizes the call from the request alone, adds them
+ * through {@link llmLaneAddedInputTokens} so the quote matches the charge.
+ *
+ * GPT-6.1 Terra (KIE codex/v1/responses), measured 2026-11-12: a 20-token
+ * prompt reported 4,400 input tokens with no effort sent and 25,477 with any
+ * effort sent, `none` included (decided the same day: the hold and the
+ * estimate count about 4,400 and about 25,500). The other GPT-6 models on the
+ * same endpoint report `input_tokens: 0` (`kieInputUntrusted`), so nothing is
+ * known to add there; GPT-5.6 Terra carries about 5,300 either way, unmodelled.
+ */
+const KIE_ADDED_INPUT_TOKENS: Readonly<Record<string, LaneAddedInput>> = {
+  "gpt-6.1-terra": { withoutEffort: 4_400, withEffort: 25_500 },
+}
+
+/**
+ * The input tokens `lane` adds to a call on `model` (see
+ * {@link KIE_ADDED_INPUT_TOKENS}): 0 on the direct lanes and for every model
+ * with no entry. Whether an effort is sent is decided exactly as the wire does
+ * (`deriveParams`): the request's effort clamped to the model's ladder on that
+ * lane, so a level the model does not offer (Terra's `none`) counts as no
+ * effort, and nothing is sent.
+ */
+export function llmLaneAddedInputTokens(
+  modelOrId: string | LlmModelDef,
+  lane: LlmServingLane,
+  reasoningEffort?: string,
+): number {
+  if (lane !== "kie") return 0
+  const model = typeof modelOrId === "string" ? getLlmModel(modelOrId) : modelOrId
+  const added = model ? KIE_ADDED_INPUT_TOKENS[model.id] : undefined
+  if (!added) return 0
+  // The KIE lane clamps against the aggregator's ladder (`advanced = false`).
+  return effectiveReasoningEffort(model!.id, reasoningEffort) === undefined ? added.withoutEffort : added.withEffort
+}
+
+/** Test/introspection hook: model ids whose KIE lane adds input of its own. */
+export function laneAddedInputModelIds(): string[] {
+  return Object.keys(KIE_ADDED_INPUT_TOKENS)
 }

@@ -216,6 +216,13 @@ export async function parseSseStream(
   let donePartsText: string | undefined
   /** A `sequence_number` that was not `previous + 1` — a lost or reordered frame. */
   let sequenceAnomaly = false
+  /**
+   * Characters of reasoning text the model streamed (`response.reasoning_text.delta`,
+   * Kimi / DeepSeek on the responses dialect). Never part of the answer; counted only
+   * toward a stopped stream's output estimate, since the provider bills reasoning as
+   * output (decided 2026-11-12).
+   */
+  let reasoningChars = 0
   let lastSequence: number | undefined
 
   try {
@@ -349,6 +356,9 @@ export async function parseSseStream(
               onToken(text)
             }
           }
+          if (eventType === "response.reasoning_text.delta" && typeof parsed.delta === "string") {
+            reasoningChars += parsed.delta.length
+          }
           // The provider restating one finished content part verbatim. Kept as
           // the fallback authority for a stream that is cut after the parts are
           // done but before `response.completed`.
@@ -402,8 +412,9 @@ export async function parseSseStream(
     }
   } catch (err) {
     // A stopped stream is billed what it already spent: the prompt, and every
-    // character of answer that arrived — text and tool JSON alike.
-    if (abort) throw asStoppedStream(err, { ...abort, modelId, lane: "kie", streamedChars: fullText.length + toolJson.length })
+    // character the model wrote that arrived — answer text, tool JSON, and the
+    // reasoning text it streamed (never part of the answer).
+    if (abort) throw asStoppedStream(err, { ...abort, modelId, lane: "kie", streamedChars: fullText.length + toolJson.length + reasoningChars })
     throw err
   } finally {
     reader.cancel().catch(() => {})

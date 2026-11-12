@@ -142,6 +142,30 @@ describe("metered: a workflow estimate prices LLM nodes per model", () => {
     expect(getNodeModelIdentifier({ type: "image-to-text", data: { llmModel: "gpt-5.6-terra", reasoningEffort: "max" } })).toBe(llmPriceKey("image-to-text", "gpt-5.6-terra", "max"))
   })
 
+  // GPT-6.1 Terra's price depends on the effort it sends (the aggregator adds
+  // input of its own by it): its key names that effort, and the estimate, the
+  // badge and the workflow total all quote that call. Typical llm-chat call
+  // (1k / 1k): 2 base at Auto → 3 charged; 5 base with an effort → 6 charged.
+  // ai-writer (2k / 2k): 3 base → 4; 6 base → 7.
+  it("GPT-6.1 Terra: the key, the quote and the workflow estimate follow its effort", async () => {
+    const terra = (data: Record<string, unknown>): EstimateNode => ({ id: "terra", type: "llm-chat", data: { llmModel: "gpt-6.1-terra", ...data } })
+    expect(getNodeModelIdentifier(terra({}))).toBe("llm-chat:gpt-6.1-terra")
+    expect(getNodeModelIdentifier(terra({ reasoningEffort: "none" }))).toBe("llm-chat:gpt-6.1-terra")
+    expect(getNodeModelIdentifier(terra({ reasoningEffort: "high" }))).toBe("llm-chat:gpt-6.1-terra:effort-high")
+    expect(charged("llm-chat:gpt-6.1-terra")).toBe(3)
+    expect(charged("llm-chat:gpt-6.1-terra:effort-high")).toBe(6)
+    expect(charged("ai-writer:gpt-6.1-terra")).toBe(4)
+    expect(charged("ai-writer:gpt-6.1-terra:effort-high")).toBe(7)
+    expect(isMeteredLlmQuoteId("llm-chat:gpt-6.1-terra:effort-high")).toBe(true)
+    const auto = await estimateWorkflowCreditsDetailed([terra({})], [])
+    const high = await estimateWorkflowCreditsDetailed([terra({ reasoningEffort: "high" })], [])
+    expect(auto).toEqual({ credits: 3, estimate: true, perNode: { terra: { credits: 3, estimate: true } } })
+    expect(high).toEqual({ credits: 6, estimate: true, perNode: { terra: { credits: 6, estimate: true } } })
+    // A Terra node with its own expected call size is priced at that size and its effort.
+    const sized = await estimateWorkflowCreditsDetailed([terra({ reasoningEffort: "high", expectedUsage: { inputTokens: 2_000, outputTokens: 2_000 } })], [])
+    expect(sized.credits).toBe(7)
+  })
+
   it("Generate Script prices the model its run resolves (a legacy script provider maps to its model)", () => {
     expect(getNodeModelIdentifier({ type: "generate-script", data: {} })).toBe(llmPriceKey("generate-script", LLM_FEATURE_DEFAULTS["generate-script"]))
     expect(getNodeModelIdentifier({ type: "generate-script", data: { llmModel: "claude-opus-5.5" } })).toBe(llmPriceKey("generate-script", "claude-opus-5.5"))

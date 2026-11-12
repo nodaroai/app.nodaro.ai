@@ -7764,7 +7764,7 @@ the convert is charged the sum, rounded once). `@nodaro/shared` builds it:
 | `data` | `Record<string, number>` | Priced identifier → credit cost. |
 | `missing` | `string[]` | Identifiers with no pricing row (render `'—'`). |
 | `errors` | `string[]` | Identifiers where the lookup itself failed. |
-| `estimates` | `string[]?` | The identifiers in `data` whose figure is an **estimate**, not a fixed price: metered LLM price keys (`<feature>:<model>[:direct]`, built by `llmPriceKey` from `@nodaro/shared/llm-models`), charged for the tokens the call actually uses. Show these as `≈N`. Omitted when there are none. A metered key in `missing` means the server is not pricing LLM calls per model — show no price for it. |
+| `estimates` | `string[]?` | The identifiers in `data` whose figure is an **estimate**, not a fixed price: metered LLM price keys (`<feature>:<model>[:direct \| :effort-<level>]`, built by `llmPriceKey` from `@nodaro/shared/llm-models`), charged for the tokens the call actually uses. Show these as `≈N`. Omitted when there are none. A metered key in `missing` means the server is not pricing LLM calls per model — show no price for it. |
 | `errorCodes` | `Record<string, { code, message }>?` | Why each identifier in `errors` has no price — today `llm_model_unpriced`: a model with no rate on the lane it would be served on (it cannot be run). Omitted when `errors` is empty. |
 | `display` | `ModelCostsDisplay?` | On a deployment that shows its own unit instead of credits: `{ unit, decimals, data }`, where `data` maps the same identifiers to their price in that unit, converted by the server (`null` = unavailable). An identifier in `estimates` is an estimate here too. Absent where no unit is configured. |
 
