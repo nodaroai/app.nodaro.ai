@@ -18,6 +18,7 @@
    "combine-videos": 10,
    "assemble-narrated-video": 10,
    "mask-composite": 10,
+   "video-overlay:video": 10,
    "ltx-2.3-pro-extend:per-second": 40,
    "ltx-2.3-pro-retake:per-second": 40,
    "elevenlabs-v4:per-100-chars": 4,
@@ -674,6 +675,108 @@
     "servedUnit": 12,
     "credits": 690,
     "perUnitQuote": 720
+   }
+  },
+  {
+   "name": "Video Overlay with a video layer: a 60 s video on a layer handle over a 23 s base \u2014 5 units (the base decides)",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "video-overlay",
+     "data": {
+      "layers": [
+       {
+        "start": 0
+       }
+      ]
+     }
+    },
+    {
+     "id": "b",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/b.mp4",
+      "videoDurationSec": 23,
+      "duration": 23
+     }
+    },
+    {
+     "id": "c",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/c.mp4",
+      "duration": 60
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "b-x-video",
+     "source": "b",
+     "target": "x",
+     "targetHandle": "video"
+    },
+    {
+     "id": "c-x-overlay",
+     "source": "c",
+     "target": "x",
+     "targetHandle": "overlay"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "video-overlay:video",
+    "units": 5,
+    "quoteId": "video-overlay:video:5u",
+    "servedUnit": 12,
+    "credits": 58,
+    "perUnitQuote": 60
+   }
+  },
+  {
+   "name": "Video Overlay with a stored video layer: a 60 s base \u2014 12 units, the cap",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "video-overlay",
+     "data": {
+      "layers": [
+       {
+        "videoUrl": "https://m.test/c.mp4",
+        "start": 0,
+        "sound": {
+         "volume": 0.5
+        }
+       }
+      ]
+     }
+    },
+    {
+     "id": "b",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/b.mp4",
+      "videoDurationSec": 60,
+      "duration": 60
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "b-x-video",
+     "source": "b",
+     "target": "x",
+     "targetHandle": "video"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "video-overlay:video",
+    "units": 12,
+    "quoteId": "video-overlay:video:12u",
+    "servedUnit": 12,
+    "credits": 138,
+    "perUnitQuote": 144
    }
   },
   {

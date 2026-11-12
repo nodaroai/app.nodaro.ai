@@ -163,18 +163,22 @@ export function isValidImageOverlayConnection(
 }
 
 // ─── video-overlay ─────────────────────────────────────────────────────
-// Base video on `video`; up to twelve image layers on `overlay`..`overlay12`
-// (the same ids Image Overlay renders). Two rules in one predicate: the base
-// takes a video producer, every layer handle an image producer — each OR'd
-// with the dynamic sources. The `layerPlan` pip takes a list of layers: any
-// JSON producer (or a list) — of the UGC nodes, only UGC Cards, whose layer
-// plan is made for it (ugc-plan-inputs.ts). Output: video.
+// Base video on `video`; up to twelve layers on `overlay`..`overlay12` (the
+// same ids Image Overlay renders), each an image or a video. Two rules in one
+// predicate: the base takes a video producer, every layer handle an image or
+// a video producer — each OR'd with the dynamic sources; an audio-only source
+// reaches neither. What a wired layer draws as is the run's wired-kind rule
+// (`videoOverlayWiredLayerKind`). The `layerPlan` pip takes a list of layers:
+// any JSON producer (or a list) — of the UGC nodes, only UGC Cards, whose
+// layer plan is made for it (ugc-plan-inputs.ts). Output: video.
 export function isValidVideoOverlayConnection(
   targetHandleId: string,
   sourceType: string,
 ): boolean {
   if (targetHandleId === "video") return ACCEPTS_VIDEO_OR_DYN(sourceType)
-  if ((VIDEO_OVERLAY_HANDLE_IDS as readonly string[]).includes(targetHandleId)) return ACCEPTS_IMAGE_OR_DYN(sourceType)
+  if ((VIDEO_OVERLAY_HANDLE_IDS as readonly string[]).includes(targetHandleId)) {
+    return ACCEPTS_IMAGE_OR_DYN(sourceType) || VIDEO_PRODUCER_TYPES.has(sourceType)
+  }
   if (targetHandleId === "layerPlan") return ACCEPTS_JSON(sourceType) && ugcMayFeedPlanInput("video-overlay", "layerPlan", sourceType)
   return false
 }

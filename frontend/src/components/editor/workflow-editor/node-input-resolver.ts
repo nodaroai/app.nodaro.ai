@@ -1,15 +1,16 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { runGraph } from "./run-graph";
-import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions";
-import { composeSet, jsonListItems, unitsWith } from "@/lib/unit-compose";
+import { UNIT_NODE_DEFINITIONS, unitDefinitionOf } from "@/lib/unit-definitions";
+import { composeSet, jsonListItems, unitOutputPip, unitPipIsImage, unitsWith } from "@/lib/unit-compose";
 // @registry-enumerates ENTITY_SUBJECT_TARGET_TYPES carries every node unit with the "input:entity-subject" capability
+// (it also routes a wire by the pip of the one node unit it leaves — unitDefinitionOf(src.type): an image pip as an image, a list pip's Bundle item by item)
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint, PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
 import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
 import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
 import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, ugcClipSavedList } from "@nodaro/shared/ugc"
-import { outputPipSourceType, characterMentionSlug, type EntityKind } from "@nodaro/shared/entities"
+import { outputPipSourceType, wiredCharacterNamesOf, wiredCharacterKey, type EntityKind } from "@nodaro/shared/entities"
 import { bypassTeleports, editPlanProducerKind, splitMediaParts } from "@nodaro/render-rules"
 import {
   DYNAMIC_PRODUCER_TYPES,
@@ -48,7 +49,7 @@ import type { ConnectedReference } from "@nodaro/shared/types"
 import { editPlanTranscriptOrigin } from "@nodaro/shared/edl"
 import { CAMERA_SWITCH_SPEAKER_MAP_HANDLE, cameraSwitchSpeakerMapLanding, isUseCaseNodeType } from "@nodaro/render-rules"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
-import { editPlanOutputOf, unitSourceJsonOf, usecaseJsonOf } from "@/lib/edit-plan-saved-output";
+import { editPlanOutputOf, unitSourceJsonOf, unitSourceListOf, usecaseJsonOf } from "@/lib/edit-plan-saved-output";
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -69,6 +70,7 @@ import { isVisualPickerType } from "@/lib/parameter-picker-types";
 import { appendVideoAsMixTrack } from "./mix-audio-video-track";
 import { routeUseCaseInput, usecaseHandsOnEpisode, usecaseHoldsVideo, type UseCaseResolvedInputs } from "./use-case-io";
 import { routeUnitInput, type UnitResolvedInputs } from "./unit-inputs";
+import { videoOverlayWireKindOf, withVideoOverlayWireKind } from "@/lib/video-overlay-wire-kind";
 export { resolveSourceThroughConnectedList };
 
 /** Empty picker-type set — reused for location/character branches until they
@@ -235,7 +237,8 @@ export function resolveCharacterAssets(
  * appended the fragment to the prompt BODY (the global tail). Routing it through
  * the per-character ref instead lets the shared `buildImagePrompt` /
  * `resolveVideoPromptMentions` weave it INTO that character's identity bullet.
- * Deduped per character node; merges when two nodes share a slug.
+ * Deduped per character node; merges when two nodes share a typed name (the
+ * same character), never two unnamed nodes (each is its own "Character N").
  */
 export function collectCharacterElementInjections(
   consumerNodeId: string,
@@ -245,6 +248,7 @@ export function collectCharacterElementInjections(
   const edges = bypassTeleports(nodes, rawEdges);
   const bySlug = new Map<string, string>();
   const seen = new Set<string>();
+  const names = wiredCharacterNamesOf(consumerNodeId, nodes, edges);
   for (const edge of edges) {
     if (edge.target !== consumerNodeId) continue;
     const srcNode = nodes.find((n) => n.id === edge.source);
@@ -252,10 +256,8 @@ export function collectCharacterElementInjections(
     seen.add(srcNode.id);
     const injected = resolveCharacterAssets({ id: srcNode.id }, edges, nodes).injectedAssets.trim();
     if (!injected) continue;
-    const data = srcNode.data as Record<string, unknown> | undefined;
-    const name = (data?.characterName as string) || (data?.label as string) || "";
-    const slug = characterMentionSlug(name);
-    if (!slug) continue;
+    // Filed under the character's wired slug (the workflow run's rule too).
+    const slug = wiredCharacterKey(names, srcNode.id, srcNode.data);
     const prev = bySlug.get(slug);
     bySlug.set(slug, prev ? `${prev}, ${injected}` : injected);
   }
@@ -710,6 +712,10 @@ export interface FrontendResolvedInputs extends UseCaseResolvedInputs, UnitResol
   overlayQrText?: string;
   /** Video Overlay's JSON layer-plan input — read by the assembly (plan layers first). Mirrors backend ResolvedInputs.layerPlan. */
   layerPlan?: string;
+  /** Video Overlay: the 1-based layer slots whose wired source is a video (the
+   *  assembly's `wiredVideoSlots`), sorted; absent when every wired layer is an
+   *  image. Mirrors backend ResolvedInputs.overlayVideoSlots. */
+  overlayVideoSlots?: number[];
   audioUrl?: string;
   audioUrl2?: string;
   audioUrls?: string[];
@@ -880,12 +886,52 @@ function pickerOwnFields(data: Readonly<Record<string, unknown>>, fields: readon
  * node is no producer of it (`OUTPUT_PIP_EFFECTIVE_TYPES`: UGC Creator's
  * `image`, the UGC text pips) routes as the producer it behaves as — the type
  * the connection validator judged the wire by — so it reaches every input it
- * connects to. Its value was read from the node itself. Every other wire
- * routes as its node. Mirrors the backend input-resolver.
+ * connects to. Its value was read from the node itself. A node unit's image
+ * pip (the pip the wire leaves; an edge naming none reads its first output)
+ * routes as an Upload Image — every image input takes it as it takes one, a
+ * list pip's item included. Every other wire routes as its node. Mirrors the
+ * backend input-resolver.
  */
 function routedAs(node: WorkflowNode, sourceHandle: string | null | undefined): WorkflowNode {
-  const type = outputPipSourceType(node.type, sourceHandle);
+  const unit = unitDefinitionOf(node.type);
+  const type = unit && unitPipIsImage(unit, sourceHandle) ? "upload-image" : outputPipSourceType(node.type, sourceHandle);
   return type === node.type ? node : ({ ...node, type } as WorkflowNode);
+}
+
+/**
+ * A social post set to post a carousel: a Bundle wire into it makes each item a
+ * media item (`mediaItems`), its own Bundle branch. Mirrors the backend
+ * input-resolver's carousel branch.
+ */
+function isCarouselPostTarget(node: WorkflowNode): boolean {
+  return SOCIAL_POST_NODE_TYPES.has(node.type ?? "") && (node.data as Record<string, unknown> | undefined)?.action === "post-carousel";
+}
+
+/**
+ * A Bundle wire from a node unit's list pip hands on EVERY item it selects, each
+ * as its own wire in order (`item:<i>`), so each lands where an image wire into
+ * that input lands — never one joined string. Every other wire, and a list pip
+ * holding nothing, stays as it is. So does a Bundle into a target whose own
+ * Bundle branch the backend input-resolver runs ahead of its per-item one: a
+ * fan-in input folds the whole list, a carousel post makes each item a media
+ * item (isCarouselPostTarget).
+ */
+function expandUnitListBundles(
+  incoming: WorkflowEdge[],
+  nodes: ReadonlyArray<WorkflowNode>,
+  target: WorkflowNode,
+): WorkflowEdge[] {
+  return incoming.flatMap((edge) => {
+    const edgeData = edge.data as Record<string, unknown> | undefined;
+    if (edgeData?.outputMode !== "all" || isFanInEdge(target.type, edge.targetHandle) || isCarouselPostTarget(target)) return [edge];
+    const src = nodes.find((n) => n.id === edge.source);
+    const unit = src ? unitDefinitionOf(src.type) : undefined;
+    if (!src || !unit || unitOutputPip(unit, edge.sourceHandle)?.list !== true) return [edge];
+    const items = unitSourceListOf(src, edge.sourceHandle)?.items ?? [];
+    if (items.length === 0) return [edge];
+    const picked = selectListItems(items.map((_, i) => String(i)), edgeData as SelectorFields | undefined);
+    return picked.map((i) => ({ ...edge, data: { ...edgeData, outputMode: `item:${i}` } }) as WorkflowEdge);
+  });
 }
 
 /** Route audio to suno-mashup's dual-input fields (audioUrl + audioUrl2). */
@@ -972,7 +1018,10 @@ export const ENTITY_SUBJECT_TARGET_TYPES: ReadonlySet<string> = composeSet(
 // resolver and the config panels' "Inherited" hint (#819).
 
 /** Node types whose primary output is an image URL — used to route media into
- *  llm-chat reference arrays. Names must match SceneNodeType in types/nodes.ts. */
+ *  llm-chat reference arrays. Names must match SceneNodeType in types/nodes.ts.
+ *  No node unit is listed: a unit's image pip reaches this routing as an
+ *  "upload-image" (routedAs), while its other pips — a JSON output beside the
+ *  image — keep their own lane rather than land among the reference images. */
 const LLM_REF_IMAGE_NODE_TYPES = new Set<string>([
   "generate-image", "reference-board", "modify-image", "upscale-image", "remove-background",
   "upload-image", "extract-frame", "generate-mask", "paint-mask",
@@ -1026,6 +1075,11 @@ export function extractNodeOutputAsList(
     const items = jsonListItems(unitJson.value);
     return items.length > 0 ? items : undefined;
   }
+  // A node unit whose media take carries side outputs: its list pip lists one
+  // run's items (the active take's), and its media take's pip lists nothing —
+  // never its take history. Mirror of the backend collector.
+  const unitList = unitSourceListOf(node, sourceHandle);
+  if (unitList) return unitList.items.length > 0 ? [...unitList.items] : undefined;
   // A use-case node's `json` pip lists its plan as the person's review leaves
   // it (usecaseJsonOf — a dropped chapter is not listed, a kept one carries its
   // hook): what filter-list and an Each fan-out read alike. Mirror of the
@@ -1400,7 +1454,8 @@ export function resolveNodeInputs(
   // a Receive as the wire leaving the node feeding its Send (@nodaro/render-rules
   // teleport-bypass.ts — the orchestrator applies the same at graph load).
   const edges = bypassTeleports(nodes, rawEdges);
-  const incomingEdges = edges.filter((e) => e.target === node.id);
+  // A Bundle from a node unit's list pip: one wire per item (expandUnitListBundles).
+  const incomingEdges = expandUnitListBundles(edges.filter((e) => e.target === node.id), nodes, node);
   const inputs: FrontendResolvedInputs = {};
 
   // Prompt-handle injection control (generate-image / generate-video): a source
@@ -1480,6 +1535,10 @@ export function resolveNodeInputs(
       : src.type === "group" || src.type === "collect"
       ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
       : src.type === "split-media"
+        ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
+        // A node unit whose media take carries side outputs: its list pip lists
+        // its items, its media take's pip nothing — never the take history.
+        : unitSourceListOf(src, resolvedSourceHandle ?? undefined)
         ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
         // A node unit's look pip lists its own output, never another output's
         // (the backend's unitLookPipJsonFor).
@@ -1627,8 +1686,7 @@ export function resolveNodeInputs(
           }
           continue;
         }
-        const targetAction = (node.data as Record<string, unknown> | undefined)?.action as string | undefined;
-        if (SOCIAL_POST_NODE_TYPES.has(node.type ?? "") && targetAction === "post-carousel") {
+        if (isCarouselPostTarget(node)) {
           for (const item of filteredSrc) {
             if (!item) continue;
             const type = VIDEO_URL_RE.test(item) ? "video" : "photo";
@@ -1815,7 +1873,9 @@ export function resolveNodeInputs(
     }
 
     // Video Overlay routes by HANDLE too: "video" is the base, "overlay".."overlay12"
-    // the layer images (index-aligned with data.layers[]), the JSON id
+    // the layer sources (index-aligned with data.layers[]) — an image, or a
+    // video when the shared wired-kind rule says so (its slot lands in
+    // overlayVideoSlots, the assembly's wiredVideoSlots); the JSON id
     // "layerPlan" is read by the assembly (plan layers first). An edge with no known handle
     // fills the base only while it is empty. Mirrors backend input-resolver.ts.
     if (node.type === "video-overlay") {
@@ -1829,6 +1889,11 @@ export function resolveNodeInputs(
         const next = [...(inputs.overlayImageUrls ?? [])];
         next[slot - 1] = output;
         inputs.overlayImageUrls = next;
+        // The last wire on a slot decides its kind, as it decides its URL —
+        // the routed source and the teleport origin's pip, as the server reads them.
+        const videoSlots = withVideoOverlayWireKind(inputs.overlayVideoSlots, slot, videoOverlayWireKindOf(src, resolvedSourceHandle, output));
+        if (videoSlots) inputs.overlayVideoSlots = videoSlots;
+        else delete inputs.overlayVideoSlots;
       } else if (handle === "video" || !inputs.videoUrl) {
         inputs.videoUrl = output;
       }
@@ -2492,8 +2557,7 @@ export function resolveNodeInputs(
         loopCol = loopCols[0];
       }
       const colType = loopCol?.type ?? "text";
-      const targetAction = (node.data as Record<string, unknown> | undefined)?.action as string | undefined;
-      const isCarouselTarget = SOCIAL_POST_NODE_TYPES.has(node.type ?? "") && targetAction === "post-carousel";
+      const isCarouselTarget = isCarouselPostTarget(node);
       if (colType === "image-url") {
         if (isCarouselTarget) {
           inputs.mediaItems = [...(inputs.mediaItems ?? []), { type: "photo", url: output }];

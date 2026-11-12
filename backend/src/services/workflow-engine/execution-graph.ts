@@ -1,8 +1,11 @@
+// @registry-enumerates IMAGE_SOURCE_TYPES carries every node unit whose contract.producer is "image"
 /**
  * Execution graph utilities — ported from frontend, no React/Zustand dependencies.
  * Pure functions operating on SimpleNode/SimpleEdge arrays.
  */
 
+import { UNIT_NODE_DESCRIPTORS } from "../../lib/unit-descriptors.js"
+import { composeSet, unitProducers } from "../../lib/unit-compose.js"
 import { buildChildrenByParent, buildFeedMaps, type FeedEdge, type FeedNode } from "@nodaro/shared/workflow"
 import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { isSocialSearchPickFrozen } from "@nodaro/shared/social"
@@ -496,7 +499,14 @@ export function triggerRunScope(
 // Media type sets — used for routing inputs
 // ---------------------------------------------------------------------------
 
-export const IMAGE_SOURCE_TYPES = new Set([
+/**
+ * The image sources: the hand-written rows ∪ every node unit whose
+ * `contract.producer` is "image" (UnitDescriptor.producer, through
+ * lib/unit-descriptors.ts) — the way VIDEO_SOURCE_TYPES / AUDIO_SOURCE_TYPES
+ * below compose the units through the shared producer sets — so asset typing
+ * and the readers below type a unit's image as an image with no row naming it.
+ */
+export const IMAGE_SOURCE_TYPES: ReadonlySet<string> = composeSet("IMAGE_SOURCE_TYPES", new Set([
   "generate-image",
   "reference-board",
   "upload-image",
@@ -512,7 +522,7 @@ export const IMAGE_SOURCE_TYPES = new Set([
   "creature",
   "location",
   "scene",
-])
+]), unitProducers(UNIT_NODE_DESCRIPTORS, "image"))
 
 /**
  * Re-exported from `@nodaro/shared` so the frontend handle validator

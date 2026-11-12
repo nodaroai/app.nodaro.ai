@@ -58,6 +58,7 @@ export const descriptor = {
     "input:entity-subject",
     "lane:local"
   ],
+  "producer": "video",
   "mcp": {
     "widgetModelFor": [
       "gif_to_video"

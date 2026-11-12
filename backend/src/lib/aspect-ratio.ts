@@ -67,3 +67,24 @@ export function clampAspectRatioToModel(
   const supported = modelId ? MODEL_CATALOG[modelId]?.aspectRatios : undefined
   return normalizeAspectRatio(ratio, supported, ratio) ?? ratio
 }
+
+/**
+ * The ratio a lane that passes a stored ratio straight on (a Scene, a surround
+ * continuation) sends: exactly as stored, unless the model the request reaches
+ * declares `strictAspectRatios` (its endpoint refuses a ratio it does not list,
+ * read from its schema), and then the nearest ratio it lists
+ * (`clampAspectRatioToModel`). Pass the model the request REACHES —
+ * `kieImageModelSent` when images go with it — since a text-to-image model and
+ * its edit can list different ratios (Seedream 5.5's edit takes "auto").
+ *
+ * Every other model's ratio goes as stored, on purpose: a catalog list is not a
+ * record of what the provider refuses (GPT Image 2 renders 21:9 and 4:5, which
+ * its list omits; see the flag's comment in the catalog).
+ */
+export function aspectRatioForStrictModel(
+  ratio: string | undefined,
+  modelId: string | undefined,
+): string | undefined {
+  if (!modelId || MODEL_CATALOG[modelId]?.strictAspectRatios !== true) return ratio
+  return clampAspectRatioToModel(ratio, modelId)
+}

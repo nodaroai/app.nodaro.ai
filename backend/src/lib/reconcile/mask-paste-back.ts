@@ -53,7 +53,7 @@ export async function recoveredMaskComposite(
     const provider = text(input.provider)
     const sourceUrl = text(input.imageUrl)
     if (!provider || !sourceUrl || KIE_IMAGE_MODELS[provider]?.maskEditRedrawsOutside !== true) return undefined
-    const pasted = await pasteSourceOutsideMask({ sourceUrl, resultUrl, maskUrl, jobId: row.id })
+    const pasted = await pasteSourceOutsideMask({ sourceUrl, resultUrl, maskUrl, jobId: row.id, transparent: text(input.background) === "transparent" })
     return pasted ? { url: pasted, extraOutputData: { maskComposited: true } } : undefined
   }
 

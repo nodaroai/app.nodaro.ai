@@ -1,5 +1,5 @@
 // @registry-enumerates prices the model identifiers it is given (getModelCreditBaseCost, CreditsService) — credit ids, not node types, so not a @registry-lookup
-import { IMAGE_QUALITY_VALUES } from "@nodaro/shared/models"
+import { IMAGE_QUALITY_VALUES, IMAGE_RESOLUTION_VALUES } from "@nodaro/shared/models"
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
@@ -35,7 +35,7 @@ const generateLocationBody = z.object({
   // `resolveEntityImageParams` (the resolver the CHECK and the DEBIT share) and
   // the snapped value is what gets recorded and enqueued, so an unsupported
   // lever no longer rides through to the provider.
-  resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
+  resolution: z.enum(IMAGE_RESOLUTION_VALUES).optional(),
   quality: z.enum(IMAGE_QUALITY_VALUES).optional(),
   userId: z.string().uuid().optional(),
   // Multi-candidate generation. `1` keeps the legacy single-job behavior and

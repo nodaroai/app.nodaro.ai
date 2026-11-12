@@ -40,14 +40,18 @@ import {
 import {
   VIDEO_OVERLAY_CORNERS,
   VIDEO_OVERLAY_FITS,
+  VIDEO_OVERLAY_LAYOUT_IDS,
   VIDEO_OVERLAY_OUTPUT_ASPECTS,
   VIDEO_OVERLAY_PRESET_IDS,
   isVideoOverlayCorner,
+  isVideoOverlayLayoutId,
   isVideoOverlayOutputAspect,
   isVideoOverlayPresetId,
+  type VideoOverlayBaseBoxSpec,
   type VideoOverlayCorner,
   type VideoOverlayFit,
   type VideoOverlayLayerSpec,
+  type VideoOverlayLayoutId,
   type VideoOverlayOutputAspect,
   type VideoOverlayPresetId,
 } from "@nodaro/shared/video"
@@ -135,6 +139,26 @@ function readJsonArrayFile<T>(path: string, flag: string): T[] {
   return parsed as T[]
 }
 
+/**
+ * Parse a flag that takes an inline JSON object (`--base-box`): a friendly
+ * message naming the flag, then exit 1, for anything that is not a JSON object.
+ * Its fields go to the API as given — the route validates them.
+ */
+function parseJsonObjectFlag<T extends object>(raw: string, flag: string): T {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (err) {
+    warn(`${flag} must be a JSON object, e.g. '{"anchor":"bottom","width":100}': ${(err as Error).message}`)
+    process.exit(1)
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    warn(`${flag} must be a JSON object, e.g. '{"anchor":"bottom","width":100}' (got ${raw})`)
+    process.exit(1)
+  }
+  return parsed as T
+}
+
 /** Parse `--safe-area x,y,w,h` (fractions 0..1) into the route's safeArea. */
 function parseSafeArea(raw: string): { x: number; y: number; w: number; h: number } {
   const parts = raw.split(",").map((n) => parseFloat(n.trim()))
@@ -161,7 +185,7 @@ function parseVideoMaskZone(raw: string): { leftPct: number; rightPct: number; t
 
 export function mediaCommand(): Command {
   const cmd = new Command("media").description(
-    "media ingestion + compositing — pull a social video into storage, trim video/audio, burn captions, still-to-video, slideshow, collage images, overlay layers on an image or timed images on a video, save a URL to storage, probe metadata",
+    "media ingestion + compositing — pull a social video into storage, trim video/audio, burn captions, still-to-video, slideshow, collage images, overlay layers on an image or timed images and videos on a video, save a URL to storage, probe metadata",
   )
 
   cmd
@@ -938,14 +962,16 @@ vision model and answers in these same units.`)
 
   cmd
     .command("video-overlay <videoUrl> [layerUrls...]")
-    .description("place timed image layers over a video (local compositor, no AI; the audio is kept) — positional URLs are layers, one --at each")
+    .description("place timed image or video layers over a video (local compositor, no AI) — positional URLs are image layers, one --at each; video layers come from --layers-file")
     .option("--at <start[-end]>", 'a positional layer\'s window in seconds ("3" = from 3 s to the end, "1.2-2.6"); repeat once per layer, in order', collectVariadic)
     .option("--preset <id>", `placement for every positional layer: ${VIDEO_OVERLAY_PRESET_IDS.join(" | ")} (default: a corner badge — bottom-right, or the --corner given)`)
     .option("--corner <corner>", `with --preset corner-badge: ${VIDEO_OVERLAY_CORNERS.join(" | ")} (default bottom-right)`)
-    .option("--layers-file <path>", "JSON file with the full layers array (custom boxes, opacity, animate, zIndex; mutually exclusive with positional layer URLs)")
+    .option("--layers-file <path>", "JSON file with the full layers array — image or video layers, custom boxes, opacity, animate, zIndex, a video layer's sound (mutually exclusive with positional layer URLs)")
     .option("--aspect <ratio>", `render onto a ${VIDEO_OVERLAY_OUTPUT_ASPECTS.join(" | ")} canvas instead of the video's own size`)
     .option("--base-fit <fit>", "with --aspect: how the video fills the canvas, cover (default) or contain")
     .option("--background-color <hex>", "with --aspect: the padding colour under --base-fit contain, #RRGGBB")
+    .option("--layout <id>", `a named layout that places the base, the first video layer or both: ${VIDEO_OVERLAY_LAYOUT_IDS.join(" | ")} (all but pip need --aspect)`)
+    .option("--base-box <json>", 'with --aspect: where the base video sits, as a layer box, e.g. \'{"anchor":"bottom","width":100}\'')
     .option("--watch", "poll until the job completes")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
     .option("--profile <name>")
@@ -955,12 +981,19 @@ Examples:
   $ nodaro media video-overlay https://x/clip.mp4 https://x/shot1.png https://x/shot2.png --at 1.2-2.6 --at 3-4.4 --preset card --watch
   $ nodaro media video-overlay https://x/clip.mp4 https://x/logo.png --at 0 --preset corner-badge --corner top-right --watch
   $ nodaro media video-overlay https://x/clip.mp4 --layers-file layers.json --aspect 9:16 --watch
+  $ nodaro media video-overlay https://x/talk.mp4 https://x/card.png --at 0 --aspect 9:16 --layout video-bottom --watch
+  $ nodaro media video-overlay https://x/main.mp4 --layers-file guest.json --layout pip --watch
 
 A layers file holds the API's layers array, e.g.
   [{"imageUrl":"https://x/logo.png","start":0,"anchor":"top-left","x":4,"y":4,"width":12,"opacity":0.9}]
+A video layer takes "videoUrl" instead of "imageUrl" (at most 2 per run); its
+sound is off unless it sets "sound", e.g. guest.json:
+  [{"videoUrl":"https://x/guest.mp4","start":0,"corner":"top-right","sound":{"volume":0.8}}]
 Placement is in PERCENT of the output frame. An explicit box field overrides a
 preset; a layer with neither is a corner badge (bottom-right, or the corner it
-names).`)
+names). Layouts: video-bottom / video-top put the base video whole against that
+edge; stack-whole / stack-filled put it above the first video layer (whole, or
+each cropped to half the frame); pip puts the first video layer in its corner.`)
     .action(
       async (
         videoUrl: string,
@@ -973,6 +1006,8 @@ names).`)
           aspect?: string
           baseFit?: string
           backgroundColor?: string
+          layout?: string
+          baseBox?: string
         } & WatchOpts,
       ) => {
         try {
@@ -1008,6 +1043,15 @@ names).`)
             warn("--base-fit and --background-color need --aspect")
             process.exit(1)
           }
+          if (opts.layout && !isVideoOverlayLayoutId(opts.layout)) {
+            warn(`--layout must be one of ${VIDEO_OVERLAY_LAYOUT_IDS.join(", ")} (got "${opts.layout}")`)
+            process.exit(1)
+          }
+          const baseBox = opts.baseBox !== undefined ? parseJsonObjectFlag<VideoOverlayBaseBoxSpec>(opts.baseBox, "--base-box") : undefined
+          if (baseBox && !opts.aspect) {
+            warn("--base-box needs --aspect")
+            process.exit(1)
+          }
 
           // Positional URLs pair with their --at windows and share the preset;
           // a layers file carries whatever the route accepts, verbatim.
@@ -1035,6 +1079,9 @@ names).`)
             ...(opts.aspect ? { outputAspect: opts.aspect as VideoOverlayOutputAspect } : {}),
             ...(opts.baseFit ? { baseFit: opts.baseFit as VideoOverlayFit } : {}),
             ...(opts.backgroundColor ? { backgroundColor: opts.backgroundColor } : {}),
+            ...(opts.layout ? { layout: opts.layout as VideoOverlayLayoutId } : {}),
+            // The box's fields go as given; the route fills x, y and fit and refuses a partial or out-of-range box.
+            ...(baseBox ? { baseBox } : {}),
           })
           await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "video overlay" })
         } catch (err) {

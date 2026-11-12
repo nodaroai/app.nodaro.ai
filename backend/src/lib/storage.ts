@@ -858,18 +858,19 @@ export async function getR2ObjectSize(key: string): Promise<number> {
 }
 
 /**
- * HEAD an object for the failed-delete retry (lib/storage-delete-retries.ts)
- * and the maker-mark check (lib/maker-logos.ts): `exists: false` when storage
- * says it is not there (404), else its `LastModified`, `ETag` and stored
- * `Content-Type` (each absent only if storage omits it). Throws on any other
- * error — including an abort through `opts.abortSignal` — so a caller never
- * acts on a guess. This asks the bucket, never the CDN, so it cannot leave a
- * cached 404 at the edge.
+ * HEAD an object for the failed-delete retry (lib/storage-delete-retries.ts),
+ * the maker-mark check (lib/maker-logos.ts) and the stored-input size
+ * (lib/outside-input-copy.ts): `exists: false` when storage says it is not
+ * there (404), else its `LastModified`, `ETag`, stored `Content-Type` and
+ * stored size in bytes (each absent only if storage omits it). Throws on any
+ * other error — including an abort through `opts.abortSignal` — so a caller
+ * never acts on a guess. This asks the bucket, never the CDN, so it cannot
+ * leave a cached 404 at the edge.
  */
 export async function headR2Object(
   key: string,
   opts: { abortSignal?: AbortSignal } = {},
-): Promise<{ exists: boolean; lastModified?: Date; etag?: string; contentType?: string }> {
+): Promise<{ exists: boolean; lastModified?: Date; etag?: string; contentType?: string; sizeBytes?: number }> {
   try {
     const command = new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key })
     const head = await (opts.abortSignal ? s3.send(command, { abortSignal: opts.abortSignal }) : s3.send(command))
@@ -878,6 +879,7 @@ export async function headR2Object(
       lastModified: head.LastModified,
       ...(head.ETag ? { etag: head.ETag } : {}),
       ...(head.ContentType ? { contentType: head.ContentType } : {}),
+      ...(typeof head.ContentLength === "number" ? { sizeBytes: head.ContentLength } : {}),
     }
   } catch (err) {
     const e = err as { name?: string; $metadata?: { httpStatusCode?: number } }

@@ -230,6 +230,10 @@ import {
   referenceSheetCreditId,
   resolveEffectiveSourceType,
   characterMentionSlug,
+  wiredCharacterNamesOf,
+  wiredCharacterKey,
+  aliasRetiredCharacterMentions,
+  entityImageUrl,
   expandExtraRefsToConnectedReferences,
   findImageMentionTokens,
   knownImageSlugsFromRefs,
@@ -279,6 +283,9 @@ import { scene3DReferenceListError } from "../scene3d/index.js"
 import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { viduQ4InputProblem } from "../../lib/vidu-q4-inputs.js"
+import { imagePromptTooShort } from "../../lib/image-prompt-minimum.js"
+import { aspectRatioForStrictModel } from "../../lib/aspect-ratio.js"
+import { kieImageModelSent } from "../../providers/kie/image-edit-sibling.js"
 import { kling4InputProblem } from "../../lib/kling4-inputs.js"
 import {
   judgeResolvedVoices,
@@ -308,6 +315,17 @@ import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNod
 import { OVERLAY_MAX_LAYERS } from "../../providers/image/overlay-contract.js"
 import { dropNullCaptionLevers } from "../../providers/video/caption-segments.js"
 import { editPlanModeRefusal } from "../../lib/private-plugins/edit-plan-mode-gate.js"
+
+/**
+ * Throw when the prompt an entity or Scene job sends is shorter than its model
+ * takes (`imagePromptTooShort`), before any job row or reservation exists: those
+ * lanes send a node's raw description or prompt when it has no name or scene
+ * fields to build one from. A no-op for every model with no minimum.
+ */
+function assertImagePromptLongEnough(provider: string, prompt: string | undefined): void {
+  const tooShort = imagePromptTooShort(provider, prompt)
+  if (tooShort) throw new Error(tooShort.message)
+}
 
 /** Throw the Vidu Q4 input rule's message (a no-op for every other provider). */
 function assertViduQ4Inputs(args: Parameters<typeof viduQ4InputProblem>[0]): void {
@@ -1177,6 +1195,9 @@ function expandWiredCharacterRefs(
   const out: ConnectedReference[] = []
   const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
+  // The ONE naming the editor's Run and panels read too: a node keeps its own
+  // name, and each unnamed node is its own "Character N".
+  const names = wiredCharacterNamesOf(consumerNodeId, buildCtx.nodes, buildCtx.edges)
   for (const e of incoming) {
     const upstream = nodeById.get(e.source)
     // The entity `image` handle is a PLAIN image, not an identity ref
@@ -1184,12 +1205,10 @@ function expandWiredCharacterRefs(
     // routes as a plain reference via resolvedInputs.referenceImageUrls.
     if (!upstream || resolveEffectiveSourceType(upstream.type, e.sourceHandle) !== "character") continue
     const charData = upstream.data
-    const charName =
-      (charData.characterName as string | undefined) ??
-      (charData.label as string | undefined) ??
-      ""
-    const characterSlug = characterMentionSlug(charName)
-    if (!characterSlug) continue // unnamed character — no slug to @-mention or canonical-fold in the core
+    const named = names.get(upstream.id)
+    if (!named?.slug) continue // a typed name with no letter or digit — nothing to @-mention or canonical-fold in the core
+    const charName = named.name
+    const characterSlug = named.slug
 
     const description = charData.description as string | undefined
     const canonicalDescription =
@@ -1216,9 +1235,9 @@ function expandWiredCharacterRefs(
     const loraFields = extractCharacterLoraFields(
       charData as { loraReplicateVersion?: string | null; loraTriggerWord?: string | null; loraTrainingStatus?: string | null },
     )
-    const canonicalUrl =
-      (charData.defaultAssetUrl as string | undefined) ||
-      (charData.sourceImageUrl as string | undefined)
+    // The portrait IS the node's output (`entityImageUrl`, the editor's rule
+    // too): the one image the character sends, never a second beside it.
+    const canonicalUrl = entityImageUrl(charData)
     if (canonicalUrl) {
       out.push({
         id: `char_${upstream.id}`,
@@ -1283,7 +1302,8 @@ function expandWiredCharacterRefs(
  * REPLACES the old flat `collectCinematographyHints` character fold, which
  * appended the fragment to the prompt BODY (the global tail). Routing it through
  * the per-character ref lets the shared builder place it INSIDE the bullet.
- * Deduped per character node; merges when two nodes share a slug.
+ * Deduped per character node; merges when two nodes share a typed name (the
+ * same character), never two unnamed nodes (each is its own "Character N").
  */
 function collectCharacterElementInjections(
   consumerNodeId: string,
@@ -1293,6 +1313,7 @@ function collectCharacterElementInjections(
   const edges = ctx?.edges ?? []
   const bySlug = new Map<string, string>()
   const seen = new Set<string>()
+  const names = wiredCharacterNamesOf(consumerNodeId, nodes, edges)
   for (const edge of edges) {
     if (edge.target !== consumerNodeId) continue
     const charNode = nodes.find((n) => n.id === edge.source)
@@ -1309,10 +1330,9 @@ function collectCharacterElementInjections(
       if (hint && hint.trim()) frags.push(hint.trim())
     }
     if (frags.length === 0) continue
-    const data = charNode.data as Record<string, unknown> | undefined
-    const name = (data?.characterName as string) || (data?.label as string) || ""
-    const slug = characterMentionSlug(name)
-    if (!slug) continue
+    // Filed under the character's wired slug, so it stamps onto that
+    // character's bullet; never merged into another unnamed node's.
+    const slug = wiredCharacterKey(names, charNode.id, charNode.data)
     const joined = frags.join(", ")
     const prev = bySlug.get(slug)
     bySlug.set(slug, prev ? `${prev}, ${joined}` : joined)
@@ -1660,16 +1680,13 @@ function buildExtraRefCharacterContextLookup(
   if (!buildCtx?.nodes || !buildCtx.edges) return () => undefined
   const bySlug = new Map<string, ExtraRefCharacterContext>()
   const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
-  const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
-  for (const e of incoming) {
-    const upstream = nodeById.get(e.source)
-    if (!upstream || resolveEffectiveSourceType(upstream.type, e.sourceHandle) !== "character") continue
+  // The wired characters, named as everywhere else (wiredCharacterNamesOf).
+  for (const [id, named] of wiredCharacterNamesOf(consumerNodeId, buildCtx.nodes, buildCtx.edges)) {
+    const upstream = nodeById.get(id)
+    if (!upstream) continue
     const charData = upstream.data
-    const charName =
-      (charData.characterName as string | undefined) ??
-      (charData.label as string | undefined) ??
-      ""
-    const slug = characterMentionSlug(charName)
+    const charName = named.name
+    const slug = named.slug
     if (!slug) continue
     if (!bySlug.has(slug)) {
       bySlug.set(slug, {
@@ -1711,6 +1728,16 @@ function readStringArray(value: unknown): readonly string[] | undefined {
     if (typeof v === "string" && v.length > 0) out.push(v)
   }
   return out.length > 0 ? out : undefined
+}
+
+/** {@link aliasRetiredCharacterMentions} over the Character nodes wired into `consumerNodeId`. */
+function aliasRetiredMentionsOf<T extends string | undefined>(
+  prompt: T,
+  consumerNodeId: string,
+  buildCtx: PayloadBuildContext | undefined,
+): T {
+  if (!buildCtx?.nodes || !buildCtx.edges) return prompt
+  return aliasRetiredCharacterMentions(prompt, wiredCharacterNamesOf(consumerNodeId, buildCtx.nodes, buildCtx.edges))
 }
 
 /**
@@ -1790,6 +1817,9 @@ function resolveVideoPromptMentions(
     videoCaptions?: readonly string[]
   },
 ): { prompt: string | undefined; additionalUrls: string[] } {
+  // A mention saved before unnamed characters were numbered reads as the one
+  // unnamed character wired here (the editor's rule too).
+  prompt = aliasRetiredMentionsOf(prompt, consumerNodeId, buildCtx)
   // ── BE-only expansion: wire upstream Character nodes → ConnectedReference[].
   // Canonical-suppression filtering lives in the shared core (single source of
   // truth) — pass the raw expansion + the suppressed set straight through. ──
@@ -3098,6 +3128,9 @@ function buildPayloadOf(
         const identityClause = collectIdentityLockClause(node.id, buildCtx)
         if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
       }
+      // A mention saved before unnamed characters were numbered reads as the
+      // one unnamed character wired here (the editor's rule too).
+      rawPrompt = aliasRetiredMentionsOf(rawPrompt, node.id, buildCtx)
 
       // Wired-character @-mention expansion: when an upstream Character node
       // is wired, ALWAYS route through `connectedReferences` so buildImagePrompt's
@@ -3329,6 +3362,9 @@ function buildPayloadOf(
         maskUrl: resolvedInputs.maskUrl || data.maskUrl,
       })
       if (generateMaskConflict) throw new Error(generateMaskConflict)
+      // A prompt shorter than the model takes: refused before any job row, as on the route.
+      const generateTooShort = lora ? null : imagePromptTooShort(imageParams.modelId, result.prompt)
+      if (generateTooShort) throw new Error(generateTooShort.message)
 
       return {
         jobName: "generate-image",
@@ -3593,6 +3629,9 @@ function buildPayloadOf(
         const identityClause = collectIdentityLockClause(node.id, buildCtx)
         if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
       }
+      // A mention saved before unnamed characters were numbered reads as the
+      // one unnamed character wired here (the editor's rule too).
+      rawPrompt = aliasRetiredMentionsOf(rawPrompt, node.id, buildCtx)
 
       // Wired-character @-mention expansion: see generate-image case above.
       // Same uniform-path strategy — always route through `connectedReferences`
@@ -3646,6 +3685,9 @@ function buildPayloadOf(
             suppressedCanonicalLocationIds: i2iSuppressedLoc,
           })
       const i2iResult = withImagePromptPolicy(rawI2iResult)
+      // A prompt shorter than the model takes: refused before any job row, as on the route.
+      const i2iTooShort = imagePromptTooShort(provider, i2iResult.prompt)
+      if (i2iTooShort) throw new Error(i2iTooShort.message)
 
       return {
         jobName: "image-to-image",
@@ -3764,6 +3806,9 @@ function buildPayloadOf(
         const identityClause = collectIdentityLockClause(node.id, buildCtx)
         if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
       }
+      // A mention saved before unnamed characters were numbered reads as the
+      // one unnamed character wired here (the editor's rule too).
+      rawPrompt = aliasRetiredMentionsOf(rawPrompt, node.id, buildCtx)
 
       // Wired-character @-mention expansion: see generate-image case above.
       // Uniform-path: always use `connectedReferences` when any wired
@@ -3839,6 +3884,10 @@ function buildPayloadOf(
           },
         }
       }
+
+      // A prompt shorter than the model takes: refused before any job row, as on the route.
+      const modTooShort = imagePromptTooShort(provider, i2iResult.prompt)
+      if (modTooShort) throw new Error(modTooShort.message)
 
       return {
         jobName: "image-to-image",
@@ -7215,7 +7264,9 @@ function buildPayloadOf(
 
     case "video-overlay": {
       // The ONE node → request assembly both engines run (@nodaro/shared):
-      // per slot the wired handle's image, else the layer's own imageUrl; a
+      // per slot the wired handle's source — a videoUrl on a slot the input
+      // resolver recorded as a video, else an imageUrl — else the layer's own
+      // imageUrl / videoUrl; a
       // wired slot with no settings is the default corner badge (D2 — on this
       // path an untouched slot is undefined, never {}); empty slots dropped;
       // `slot` stamped; presets expanded. Then the shared validator: a throw
@@ -7227,20 +7278,24 @@ function buildPayloadOf(
         videoUrl: resolvedInputs.videoUrl ?? "",
         data: overlayData,
         wiredImageUrls,
+        ...(resolvedInputs.overlayVideoSlots ? { wiredVideoSlots: new Set(resolvedInputs.overlayVideoSlots) } : {}),
         planLayers: resolvedInputs.layerPlan,
       })
       const verdict = validateVideoOverlayRequest(request)
       if (!verdict.ok) throw new Error(`Video Overlay: ${formatVideoOverlayError(verdict)}`)
       // The freshness key the canvas compares against (`resultCompositionKey`):
       // the SAME shared function over the same inputs the canvas uses — the
-      // resolved base, each slot's `wired ?? imageUrl`, the STORED settings
-      // (never the expanded request). The worker echoes it into output_data,
-      // so a backend run of the current settings reads fresh on the node.
+      // resolved base, each slot's `wired ?? imageUrl ?? videoUrl`, the STORED
+      // settings (never the expanded request) and the wired slots that are
+      // videos (only when one is, so an image-only node keeps its key). The
+      // worker echoes it into output_data, so a backend run of the current
+      // settings reads fresh on the node.
       const resultCompositionKey = videoOverlayCompositionKey({
         baseUrl: resolvedInputs.videoUrl,
         sources: videoOverlaySlotSources(overlayData.layers, wiredImageUrls),
         data: overlayData,
         planLayers: resolvedInputs.layerPlan,
+        videoSlots: resolvedInputs.overlayVideoSlots,
       })
       return ffmpegResult("video-overlay", { jobId, ...request, resultCompositionKey, usageLogId })
     }
@@ -7597,6 +7652,7 @@ function buildPayloadOf(
           })
         : resolveRefs(data.description as string | undefined, refMap)
           ?? resolveRefs(data.prompt as string | undefined, refMap)
+      assertImagePromptLongEnough(provider, entityPrompt)
       return {
         jobName: "generate-character",
         queueName: "video-generation",
@@ -7649,6 +7705,7 @@ function buildPayloadOf(
         entityPrompt = resolveRefs(data.description as string | undefined, refMap)
           ?? resolveRefs(data.prompt as string | undefined, refMap)
       }
+      assertImagePromptLongEnough(provider, entityPrompt)
       return {
         jobName: "generate-face",
         queueName: "video-generation",
@@ -7689,6 +7746,7 @@ function buildPayloadOf(
           })
         : resolveRefs(data.description as string | undefined, refMap)
           ?? resolveRefs(data.prompt as string | undefined, refMap)
+      assertImagePromptLongEnough(provider, entityPrompt)
       return {
         jobName: "generate-object",
         queueName: "video-generation",
@@ -7718,6 +7776,7 @@ function buildPayloadOf(
           })
         : resolveRefs(data.description as string | undefined, refMap)
           ?? resolveRefs(data.prompt as string | undefined, refMap)
+      assertImagePromptLongEnough(provider, entityPrompt)
       return {
         jobName: "generate-creature",
         queueName: "video-generation",
@@ -7746,6 +7805,7 @@ function buildPayloadOf(
           })
         : resolveRefs(augmentedDescription, refMap)
           ?? resolveRefs(data.prompt as string | undefined, refMap)
+      assertImagePromptLongEnough(provider, entityPrompt)
       return {
         jobName: "generate-location",
         queueName: "video-generation",
@@ -7810,6 +7870,7 @@ function buildPayloadOf(
         // Malformed scene data — fall back to raw prompt fields
         scenePrompt = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || ""
       }
+      assertImagePromptLongEnough(provider, scenePrompt)
 
       return {
         jobName: "generate-image",
@@ -7820,7 +7881,16 @@ function buildPayloadOf(
           prompt: scenePrompt,
           provider,
           referenceImageUrls: sceneRefUrls.length > 0 ? sceneRefUrls : undefined,
-          aspectRatio: data.aspectRatio,
+          // Sent as stored, except on a model whose endpoint refuses a ratio it
+          // does not list (`strictAspectRatios`, Seedream 5.5 only): there a
+          // stored "auto" or 4:5 goes as the nearest ratio it lists, never
+          // refused by the provider after the reservation. Checked against the
+          // model the request reaches (`kieImageModelSent`): with references,
+          // Seedream 5.5 runs on its edit, which takes "auto".
+          aspectRatio: aspectRatioForStrictModel(
+            data.aspectRatio as string | undefined,
+            kieImageModelSent(provider, sceneRefUrls.length),
+          ),
           usageLogId,
         },
       }

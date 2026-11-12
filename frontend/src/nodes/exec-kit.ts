@@ -37,6 +37,9 @@ export interface UnitExecKit {
   /**
    * Start a server job (`start` calls the unit's api.ts) and poll it into the
    * store key `resultField` (generatedVideoUrl, generatedAudioUrl, …); resolves with the result.
+   * A unit whose media take carries side outputs (a list output, JSON beside
+   * it) also gets them emptied at the start and landed beside the take — on
+   * the node and on the take — as every server-run lane lands them.
    */
   runProcessingNode(start: () => Promise<{ jobId: string }>, resultField: OutputKeySpec, label: string): Promise<string>
   /**

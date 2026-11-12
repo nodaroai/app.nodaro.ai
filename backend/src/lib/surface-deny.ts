@@ -9,6 +9,7 @@ import {
   GATEABLE_MODEL_IDS,
 } from "./availability-override.js"
 import { isModelSwitchedOff, switchedOffModelIds } from "./model-switch.js"
+import { houseModelServed, houseRuleWithholdsAModel, isOwnLabelModel } from "./house-models-served.js"
 
 /**
  * Backend-authoritative node/model availability for a deployment (B1 + B5).
@@ -276,8 +277,21 @@ export function isModelFactoryDenied(id: string): boolean {
   return deny.includes(id)
 }
 
+/**
+ * True when `id` is a house model (a catalog entry marked `ownLabel`) this
+ * install does not serve: no plugin supplies its upstream here (community,
+ * business, a plugin build without it, or before the plugins have loaded).
+ * Part of the code/edition layer: no profile, override or admin switch hands
+ * it back, and it is false for every other model (lib/house-models.ts).
+ */
+export function isHouseModelUnserved(id: string): boolean {
+  return isOwnLabelModel(id) && !houseModelServed(id)
+}
+
 /** True when this deployment does not offer this model id. */
 export function isModelDenied(id: string): boolean {
+  // A house model this install does not serve is no model here at all.
+  if (isHouseModelUnserved(id)) return true
   // Layer 4 first: the admin's switch is not something an override can lift.
   if (isModelSwitchedOff(id)) return true
   const override = availabilityOverride("models")
@@ -287,15 +301,19 @@ export function isModelDenied(id: string): boolean {
 
 /**
  * True when this deployment RESTRICTS models: its profile names `models.allow`
- * or `models.deny`, or an admin's stored models override (Admin → Availability)
+ * or `models.deny`, an admin's stored models override (Admin → Availability)
  * leaves at least one gateable model off — an override that ticks every model
- * withholds nothing. What gates the credit guard's run-model check
+ * withholds nothing — or the catalog has a house model this install does not
+ * serve (`houseRuleWithholdsAModel`, false while the catalog has none): a
+ * route that runs one through `runModel` is refused before its hold, and a
+ * new node does not start on one. What gates the credit guard's run-model check
  * (`CreditGuardOpts.runModel`): a deployment with no restriction never asks
  * which model a request runs on, so nothing it answers changes. The admin's
  * per-row model switch is not a restriction in this sense — a run priced on a
  * switched-off row is refused by the credit check, as it always was.
  */
 export function modelRestrictionConfigured(): boolean {
+  if (houseRuleWithholdsAModel()) return true
   const { allow, deny } = runtimeSurfaceProfile().models
   if (allow.length > 0 || deny.length > 0) return true
   const override = availabilityOverride("models")
@@ -325,6 +343,26 @@ export function deniedModelRejectionMessage(ids: readonly string[]): string {
  *  that throws it (the workflow build's backstops), parallel to the node one. */
 export function modelNotAvailableError(ids: readonly string[]): Error & { code: "model_not_available" } {
   return Object.assign(new Error(deniedModelRejectionMessage(ids)), { code: "model_not_available" as const })
+}
+
+/**
+ * Recommendations ("best for X" picks) as this install can offer them: a house
+ * model it does not serve is left out of each, and a recommendation left with
+ * no model is dropped. Every other recommendation is returned as it came (the
+ * same object), so an install that serves every house model — or a catalog
+ * with none — lists exactly what it always did.
+ */
+export function recommendationsServedHere<T extends { readonly modelIds: readonly string[] }>(recs: readonly T[]): T[] {
+  const out: T[] = []
+  for (const rec of recs) {
+    if (!rec.modelIds.some(isHouseModelUnserved)) {
+      out.push(rec)
+      continue
+    }
+    const modelIds = rec.modelIds.filter((id) => !isHouseModelUnserved(id))
+    if (modelIds.length > 0) out.push({ ...rec, modelIds })
+  }
+  return out
 }
 
 /** Drop models the deployment does not offer (applied at each read/projection site). */

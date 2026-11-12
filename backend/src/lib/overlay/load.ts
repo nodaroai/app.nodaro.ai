@@ -26,6 +26,8 @@
  * it needs an overlay must not boot silently without it.
  */
 
+import { resetOverlayChecksAfterPluginsForTests, setOverlayCheckAfterPlugins } from "./after-plugins.js"
+
 const OVERLAY_PACKAGE_ENV = "NODARO_OVERLAY_PACKAGE"
 
 export const OVERLAY_CONTRACT_VERSION = 1
@@ -65,6 +67,8 @@ export interface LoadOverlayResult {
  * A failed load exits the process, so its result needs no retry path.
  */
 let overlayLoad: Promise<LoadOverlayResult> | undefined
+/** The house-model warnings already logged in this process: each once. */
+const houseModelWarningsLogged = new Set<string>()
 
 export function loadOverlay(opts: LoadOverlayOpts = {}): Promise<LoadOverlayResult> {
   const name = (opts.packageName ?? process.env[OVERLAY_PACKAGE_ENV] ?? "").trim()
@@ -76,12 +80,43 @@ export function loadOverlay(opts: LoadOverlayOpts = {}): Promise<LoadOverlayResu
 /** Test hook: forget the once-per-process load, so a test can load again. */
 export function resetOverlayLoadForTests(): void {
   overlayLoad = undefined
+  houseModelWarningsLogged.clear()
+  resetOverlayChecksAfterPluginsForTests()
+}
+
+/** Logs each house-model warning of the overlay's preset packs, once per process. */
+function logHouseModelWarnings(name: string, warnings: readonly string[]): void {
+  for (const warning of warnings) {
+    if (houseModelWarningsLogged.has(warning)) continue
+    houseModelWarningsLogged.add(warning)
+    console.warn(`[overlay] ${name}: ${warning}`)
+  }
+}
+
+/**
+ * The overlay's preset packs looked at for the house models they name, once
+ * this process has loaded the private plugins (registered when a load starts,
+ * and run by `loadPrivatePlugins` after every load: lib/overlay/after-plugins.ts;
+ * the overlay's own check also looks when the plugins loaded first). A preset
+ * naming a house model this process does not serve is a WARNING, never a boot
+ * refusal: whether a house model is served depends on its upstream key being
+ * present in this process, which differs between services and changes at run
+ * time. The preset is refused when it runs, before any hold. A no-op with no
+ * overlay, or one whose load failed.
+ */
+export async function warnOverlayPresetPacksOnHouseModels(): Promise<void> {
+  if (!overlayLoad) return
+  const { loaded } = await overlayLoad
+  if (!loaded) return
+  const { presetPackHouseModelWarnings } = await import("../presets/preset-pack-check.js")
+  logHouseModelWarnings(loaded, presetPackHouseModelWarnings())
 }
 
 async function loadOverlayOnce(name: string, opts: LoadOverlayOpts): Promise<LoadOverlayResult> {
 
   const importer = opts.importer ?? ((n: string) => import(n))
   const exit = opts.exit ?? process.exit
+  setOverlayCheckAfterPlugins(warnOverlayPresetPacksOnHouseModels)
 
   let raw: unknown
   try {
@@ -113,7 +148,7 @@ async function loadOverlayOnce(name: string, opts: LoadOverlayOpts): Promise<Loa
   // catalogs as the overlay's own catalog packs left them, in whatever order
   // register() made its calls. Every problem in the one message. Imported here,
   // not at the top: with no overlay set, nothing of it is even loaded.
-  const { presetPackProblems } = await import("../presets/preset-pack-check.js")
+  const { presetPackHouseModelWarnings, presetPackProblems } = await import("../presets/preset-pack-check.js")
   const presetProblems = presetPackProblems()
   if (presetProblems.length > 0) {
     return fail(
@@ -121,6 +156,8 @@ async function loadOverlayOnce(name: string, opts: LoadOverlayOpts): Promise<Loa
       exit,
     )
   }
+  // Where the plugins loaded first (the video worker), the house models are looked at now.
+  logHouseModelWarnings(name, presetPackHouseModelWarnings())
 
   console.log(`[overlay] loaded ${name}`)
   return { loaded: name }

@@ -632,6 +632,38 @@ export const IMAGE_TEST_CONFIGS: TestConfig[] = [
     estimatedTimeSec: 60,
     skipByDefault: false,
   },
+  // Seedream 5.5 — `size` again (1K / 1.5K / 2K, KIE default 2K): 3.6 KIE credits
+  // at 1K or 1.5K, 6.3 at 2K, plus 1.44 per input image on an edit.
+  {
+    modelKey: "seedream-5-5",
+    category: "image",
+    kieModel: "seedream/5-5-text-to-image",
+    expectedKieCredits: 3.6,
+    expectedCostUsd: 0.018,
+    configDesc: "Seedream 5.5 T2I (1K)",
+    apiType: "standard",
+    input: { prompt: "a red bicycle", aspect_ratio: "1:1", size: "1K" },
+    requiresImage: false,
+    requiresAudio: false,
+    requiresVideo: false,
+    estimatedTimeSec: 30,
+    skipByDefault: false,
+  },
+  {
+    modelKey: "seedream-5-5-i2i",
+    category: "image",
+    kieModel: "seedream/5-5-image-to-image",
+    expectedKieCredits: 5.04,
+    expectedCostUsd: 0.0252,
+    configDesc: "Seedream 5.5 I2I (1K, 1 input image)",
+    apiType: "standard",
+    input: { prompt: "make it blue", image_urls: ["{{IMAGE}}"], aspect_ratio: "auto", size: "1K" },
+    requiresImage: true,
+    requiresAudio: false,
+    requiresVideo: false,
+    estimatedTimeSec: 30,
+    skipByDefault: false,
+  },
 
   // --- Z-Image ---
   {

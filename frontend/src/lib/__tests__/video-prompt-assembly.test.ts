@@ -99,7 +99,7 @@ describe("stripVideoImageTokens", () => {
 
 describe("expandCharacterNodeIntoRefs", () => {
   it("emits a canonical entry plus one per expression variant", () => {
-    const out = expandCharacterNodeIntoRefs(shiraCharacter())
+    const out = expandCharacterNodeIntoRefs(shiraCharacter(), { name: "shira", slug: "shira" })
     const byId = new Map(out)
     // Canonical keyed by the node id.
     expect(byId.get("char-shira")?.url).toBe("http://shira/portrait.png")
@@ -109,18 +109,17 @@ describe("expandCharacterNodeIntoRefs", () => {
     expect(byId.get("char-shira_expressions_laughing")?.url).toBe("http://shira/laughing.png")
   })
 
-  it("falls back to the 'Character' name slug when neither characterName nor label is set", () => {
-    // The `characterName || label || "Character"` default means there is always
-    // a slug, so the canonical entry is still emitted (faithful to the moved code).
+  it("names every entry as the consuming node calls the character (an unnamed node: Character N)", () => {
     const unnamed = {
       id: "x",
       type: "character",
       position: { x: 0, y: 0 },
       data: { sourceImageUrl: "http://x/p.png" },
     } as unknown as WorkflowNode
-    const out = expandCharacterNodeIntoRefs(unnamed)
+    const out = expandCharacterNodeIntoRefs(unnamed, { name: "Character 2", slug: "character-2" })
     expect(out).toHaveLength(1)
-    expect(out[0][1].characterSlug).toBe("character")
+    expect(out[0][1].characterSlug).toBe("character-2")
+    expect(out[0][1].defaultName).toBe("Character 2")
     expect(out[0][1].url).toBe("http://x/p.png")
   })
 })

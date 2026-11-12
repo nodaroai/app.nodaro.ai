@@ -25,8 +25,8 @@ import { usecaseTakeMedium } from "@/lib/use-case-run-result"
 import { takeKeptTranscript, type ApplyEdlTake } from "@/lib/apply-edl-take-transcript"
 import { isAudioUrl, isImageUrl, isVideoUrl } from "@/lib/media-type"
 import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
-import { composeSet, unitNoMediumResults } from "@/lib/unit-compose"
-// @registry-enumerates NO_MEDIUM_RESULT_TYPES carries every gallery node unit whose outputs carry no medium
+import { composeSet, unitNoMediumResults, unitProducers } from "@/lib/unit-compose"
+// @registry-enumerates NO_MEDIUM_RESULT_TYPES carries every gallery node unit whose outputs carry no medium, IMAGE_RESULT_TYPES every node unit whose contract.producer is "image"
 
 export type ResultsGalleryMediaType = "image" | "video" | "audio"
 
@@ -36,11 +36,12 @@ const USE_CASE_TAKE_JSON_FIELDS = ["generatedJson", "generatedTranscript"] as co
 type NodeData = Readonly<Record<string, unknown>>
 
 /** Gallery node types whose results are images. There is no shared image
- *  producer set; the census keeps this list from contradicting the shared ones. */
-export const IMAGE_RESULT_TYPES: ReadonlySet<string> = new Set([
+ *  producer set; the census keeps this list from contradicting the shared ones.
+ *  The legacy list ∪ every node unit whose `contract.producer` is "image". */
+export const IMAGE_RESULT_TYPES: ReadonlySet<string> = composeSet("IMAGE_RESULT_TYPES", new Set([
   "generate-image", "modify-image", "upscale-image", "remove-background", "generate-mask",
   "reference-sheet", "reference-board", "extract-frame", "image-collage", "image-overlay",
-])
+]), unitProducers(UNIT_NODE_DEFINITIONS, "image"))
 
 /** Gallery node types with no medium of their own: their result is text, JSON
  *  or a plan (a result with no URL shows no gallery), or, for Component,

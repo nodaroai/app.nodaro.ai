@@ -1339,6 +1339,53 @@ describe("createAssetFromJob", () => {
     expect(getR2ObjectSize).not.toHaveBeenCalled()
     vi.mocked(getR2ObjectSize).mockResolvedValue(0)
   })
+
+  // The extra images an image job filed beside its result (job-finalize.ts
+  // extraImageSets with `library`, output_data.libraryImages): the result and
+  // every one of them reach the Library, each extra image under its name.
+  describe("the extra images a job files beside its result (libraryImages)", () => {
+    const JOB = "11111111-1111-4111-8111-111111111111"
+    const output = {
+      imageUrl: `https://r2.example.com/images/${JOB}.png`,
+      libraryImages: [
+        { url: `https://r2.example.com/images/${JOB}-layers-1.png`, name: "Arctic fox" },
+        { url: `https://r2.example.com/images/${JOB}-layers-2.png`, name: "Top/header: \"text\"" },
+        { url: `https://r2.example.com/images/${JOB}-layers-3.png` },
+        // Never filed: a url that is not this job's own file, and an entry with no url.
+        { url: "https://r2.example.com/images/22222222-2222-4222-8222-222222222222.png", name: "Someone else's" },
+        { name: "No file" },
+      ],
+    }
+
+    it("files the result and each of its own extra images, the name as the filename", async () => {
+      mocks.mockSingle.mockResolvedValueOnce({ data: { status: "completed", output_data: output }, error: null })
+      await createAssetFromJob(JOB, "user-1")
+      const rows = mocks.mockInsert.mock.calls.map((c) => c[0] as Record<string, unknown>)
+      expect(rows.map((r) => [r.r2_key, r.filename, r.type, r.mime_type])).toEqual([
+        [`images/${JOB}.png`, `${JOB}.png`, "image", "image/png"],
+        [`images/${JOB}-layers-1.png`, "Arctic fox.png", "image", "image/png"],
+        [`images/${JOB}-layers-2.png`, "Top header text.png", "image", "image/png"],
+        [`images/${JOB}-layers-3.png`, `${JOB}-layers-3.png`, "image", "image/png"],
+      ])
+      expect(rows[1]).toEqual(expect.objectContaining({ user_id: "user-1", job_id: JOB, upload_source: "generated", relay_job_id: null, metadata: { name: "Arctic fox" } }))
+      expect(rows[3]!.metadata).toEqual({})
+    })
+
+    it("finds each row by its url, so a second filing adds nothing", async () => {
+      mocks.mockSingle.mockResolvedValueOnce({ data: { status: "completed", output_data: output }, error: null })
+      mocks.mockMaybeSingle.mockResolvedValue({ data: { id: "existing" }, error: null })
+      await createAssetFromJob(JOB, "user-1")
+      expect(mocks.mockInsert).not.toHaveBeenCalled()
+      mocks.mockMaybeSingle.mockResolvedValue({ data: null, error: null })
+    })
+
+    it("libraryFileStem keeps the words and drops path and control characters", async () => {
+      const { libraryFileStem } = await import("../shared.js")
+      expect(libraryFileStem("  a/b\\c:d*e?f\"g<h>i|j\u0001k  ")).toBe("a b c d e f g h i j k")
+      expect(libraryFileStem("///")).toBe("image")
+      expect(libraryFileStem("x".repeat(150))).toHaveLength(100)
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

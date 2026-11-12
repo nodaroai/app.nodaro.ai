@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest"
 import {
   costTier,
   costTierCuts,
+  modelGuideDescription,
+  OWN_LABEL_AVAILABILITY,
   renderModelTable,
   renderRecommendations,
 } from "../../../scripts/lib/gen-skills/render-model-guide.js"
@@ -195,5 +197,34 @@ describe("renderRecommendations", () => {
     const out = renderRecommendations(RECS, CATALOG)
     expect(out).toContain("VEO 3.1 (Quality)") // resolved
     expect(out).toContain("not-in-catalog") // fallback raw id
+  })
+})
+
+describe("a house model's row says where it is offered, from the catalog alone", () => {
+  // A fixture entry offered under the deployment's own label (`ownLabel`, no maker).
+  const OWN: ModelCatalogEntry = {
+    id: "house-fixture",
+    kind: "image",
+    modes: ["upscale"],
+    family: "House Fixture",
+    ownLabel: true,
+    label: "House Fixture",
+    series: "House Fixture",
+    description: "Makes pictures bigger.",
+    useCases: ["upscale"],
+    pricing: [{ identifier: "house-fixture", credits: 2 }],
+  }
+
+  it("appends the availability sentence to an own-label model, and to no other", () => {
+    expect(modelGuideDescription(OWN)).toBe(`Makes pictures bigger. ${OWN_LABEL_AVAILABILITY}`)
+    expect(modelGuideDescription(CATALOG["z-image"]!)).toBe("Fast, lightweight generation.")
+    const table = renderModelTable({ ...CATALOG, [OWN.id]: OWN }, "image")
+    const ownRow = table.split("\n").find((l) => l.includes("House Fixture"))!
+    expect(ownRow).toContain(OWN_LABEL_AVAILABILITY)
+    expect(table.split("\n").filter((l) => l.includes(OWN_LABEL_AVAILABILITY))).toHaveLength(1)
+  })
+
+  it("never names a maker or reads what an install serves: the sentence is fixed text", () => {
+    expect(OWN_LABEL_AVAILABILITY).not.toMatch(/maker|ids\(\)/i)
   })
 })

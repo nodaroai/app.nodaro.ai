@@ -4,7 +4,7 @@ import { writeFileSync, rmSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { VIDEO_OVERLAY_CORNERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_PRESET_IDS } from "@nodaro/shared/video"
+import { VIDEO_OVERLAY_CORNERS, VIDEO_OVERLAY_LAYOUT_IDS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_PRESET_IDS } from "@nodaro/shared/video"
 import { mediaCommand } from "../media.js"
 import { warn, success, emit } from "../../output.js"
 
@@ -613,6 +613,50 @@ describe("media video-overlay command", () => {
     expect(mocks.videoOverlay).toHaveBeenCalledWith({ videoUrl: "https://x/clip.mp4", layers })
   })
 
+  it("sends video layers from --layers-file with --layout, as the API takes them", async () => {
+    const file = join(tmpdir(), `video-overlay-pip-${Date.now()}.json`)
+    const layers = [{ videoUrl: "https://x/guest.mp4", start: 0, corner: "top-right", sound: { volume: 0.8 } }]
+    writeFileSync(file, JSON.stringify(layers))
+    mocks.videoOverlay.mockResolvedValueOnce({ jobId: "j-vo4" })
+    try {
+      await runCmd("media", "video-overlay", "https://x/main.mp4", "--layers-file", file, "--layout", "pip", "--json")
+    } finally {
+      rmSync(file, { force: true })
+    }
+    expect(mocks.videoOverlay).toHaveBeenCalledWith({ videoUrl: "https://x/main.mp4", layers, layout: "pip" })
+  })
+
+  it("maps --base-box to baseBox, with --aspect", async () => {
+    mocks.videoOverlay.mockResolvedValueOnce({ jobId: "j-vo5" })
+    await runCmd(
+      "media", "video-overlay", "https://x/talk.mp4", "https://x/card.png", "--at", "0", "--preset", "card",
+      "--aspect", "9:16", "--base-box", '{"anchor":"bottom","width":100}', "--json",
+    )
+    expect(mocks.videoOverlay).toHaveBeenCalledWith({
+      videoUrl: "https://x/talk.mp4",
+      layers: [{ imageUrl: "https://x/card.png", start: 0, preset: "card" }],
+      outputAspect: "9:16",
+      baseBox: { anchor: "bottom", width: 100 },
+    })
+  })
+
+  it("refuses an unknown --layout, a --base-box that is not a JSON object, and --base-box without --aspect", async () => {
+    await expect(runCmd("media", "video-overlay", "https://x/clip.mp4", "https://x/a.png", "--at", "0", "--layout", "grid")).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(`--layout must be one of ${VIDEO_OVERLAY_LAYOUT_IDS.join(", ")} (got "grid")`)
+    await expect(
+      runCmd("media", "video-overlay", "https://x/clip.mp4", "https://x/a.png", "--at", "0", "--aspect", "9:16", "--base-box", "{anchor:bottom}"),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--base-box must be a JSON object"))
+    await expect(
+      runCmd("media", "video-overlay", "https://x/clip.mp4", "https://x/a.png", "--at", "0", "--aspect", "9:16", "--base-box", "[1,2]"),
+    ).rejects.toThrow("process.exit(1)")
+    await expect(
+      runCmd("media", "video-overlay", "https://x/clip.mp4", "https://x/a.png", "--at", "0", "--base-box", '{"anchor":"top","width":100}'),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith("--base-box needs --aspect")
+    expect(mocks.videoOverlay).not.toHaveBeenCalled()
+  })
+
   it("refuses a --at count that does not match the layers, and a window that ends before it starts", async () => {
     await expect(runCmd("media", "video-overlay", "https://x/clip.mp4", "https://x/a.png", "https://x/b.png", "--at", "1")).rejects.toThrow("process.exit(1)")
     expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("one --at per layer URL"))
@@ -875,6 +919,7 @@ describe("docs/cli.md covers the media command surface", () => {
     expect(line).toContain(`--preset ${VIDEO_OVERLAY_PRESET_IDS.join("|")}`)
     expect(line).toContain(`--corner ${VIDEO_OVERLAY_CORNERS.join("|")}`)
     expect(line).toContain(`--aspect ${VIDEO_OVERLAY_OUTPUT_ASPECTS.join("|")}`)
+    expect(line).toContain(`--layout ${VIDEO_OVERLAY_LAYOUT_IDS.join("|")}`)
   })
 
   it("lists every video-mask flag in its synopsis", () => {

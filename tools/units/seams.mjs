@@ -28,7 +28,7 @@ export const GENERATED_DIRS = ["frontend/src/nodes/_generated", "backend/src/nod
 // The files a unit folder may hold. Anything else is a validation error, so
 // the layout stays the one every tool (the engine, the guards) assumes.
 export const UNIT_FILES = {
-  frontend: ["unit.json", "strings.json", "definition.generated.ts", "labels.generated.ts", "types.ts", "node.tsx", "config.tsx", "option.tsx", "exec.ts", "api.ts"],
+  frontend: ["unit.json", "strings.json", "definition.generated.ts", "labels.generated.ts", "types.ts", "node.tsx", "config.tsx", "option.tsx", "exec.ts", "api.ts", "price-id.ts"],
   backend: ["descriptor.generated.ts", "route.ts", "route.ee.ts", "payload.ts", "worker.ts", "price.ee.ts", "output.ts", "inputs.ts", "characterize.char.ts", "use-case.ts", "budget.ts"],
 }
 
@@ -58,6 +58,12 @@ export const AGGREGATES = [
   // operation with its own. `.char.ts`, like the harness: excluded from the
   // build (tsconfig.build.json) and from the default test run (decided 2026-10-18).
   { id: "characterizations", kitType: "UnitCharacterization", kitFile: "../providers/video/__characterization__/operation-types.ts", tree: "backend", out: "backend/src/nodes/_generated/characterizations.char.ts", member: "characterize.char.ts", binding: "characterization", exportName: "UNIT_CHARACTERIZATIONS", composer: "backend/src/providers/video/__characterization__/operations.ts", live: true },
+  // The credit id a run of the unit reserves, read by the editor (price-id.ts): a
+  // unit whose price.ee.ts names its id from the node's data (creditId) has the
+  // same rule here, so the Run button, the config panel and the run estimate
+  // quote the row the server reserves. Composed by lib/unit-price-ids.ts, the
+  // editor's one door to it (getModelIdentifier, estimateNodeCredits).
+  { id: "price-ids", kitType: "UnitCreditId", tree: "frontend", out: "frontend/src/nodes/_generated/price-ids.ts", member: "price-id.ts", binding: "creditId", exportName: "UNIT_PRICE_IDS", composer: "frontend/src/lib/unit-price-ids.ts", live: true },
   // Enterprise by location (ee/): core never imports a price or a Cloud-only route.
   { id: "prices", kitType: "UnitPrice", tree: "backend", out: "backend/src/ee/nodes/_generated/prices.ts", member: "price.ee.ts", binding: "price", exportName: "UNIT_PRICES", composer: "backend/src/ee/billing/credits.ts", live: true },
   { id: "routes-ee", kitType: "UnitRoute", tree: "backend", out: "backend/src/ee/nodes/_generated/routes.ts", member: "route.ee.ts", binding: "route", exportName: "UNIT_EE_ROUTES", composer: "backend/src/app.ts", live: true },

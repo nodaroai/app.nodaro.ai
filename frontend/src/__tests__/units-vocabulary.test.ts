@@ -8,7 +8,7 @@ import { HANDLE_COLORS } from "@/lib/handle-colors"
 import { familyIdsFrom, familyTypesFrom, loadUnits, repoContext } from "../../../tools/units/manifest.mjs"
 import { NODE_OPTIONS } from "@/lib/node-options"
 import { isCanvasMacroType } from "@/lib/canvas-macros"
-import { ACCEPTS_KINDS, CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, JSON_PIP_KINDS, MANY_KINDS, MEDIA_INPUT_KINDS, OUTPUT_TYPES, PICKER_TABS, PRESENTS, PRODUCER_KINDS, QUEUES, REGISTRY_CATEGORIES, USE_CASE_INPUT_HANDLES } from "../../../tools/units/vocabulary.mjs"
+import { ACCEPTS_KINDS, CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, JSON_PIP_KINDS, LIST_OUTPUT_KINDS, MANY_KINDS, MEDIA_INPUT_KINDS, OUTPUT_TYPES, PICKER_TABS, PRESENTS, PRODUCER_KINDS, QUEUES, REGISTRY_CATEGORIES, SERVER_CATEGORIES, USE_CASE_INPUT_HANDLES } from "../../../tools/units/vocabulary.mjs"
 import { unitInputAccepts } from "@/lib/ffmpeg-handles"
 import { ACCEPTS_JSON } from "@/lib/data-handles"
 import type { UnitHandleKind } from "@/nodes/kit"
@@ -94,6 +94,8 @@ describe("the validator's vocabularies are the product's", () => {
     const block = read("backend/src/lib/node-registry.ts").match(/export type NodeCategory =([\s\S]*?)\n\n/)?.[1] ?? ""
     const server = [...block.matchAll(/"([^"]+)"/g)].map((x) => x[1])
     expect(REGISTRY_CATEGORIES).toEqual(CATEGORIES.filter((c: string) => server.includes(c)))
+    // registry.category names one of them for a unit whose own category the server lacks (ai → ai-image, …).
+    expect(SERVER_CATEGORIES).toEqual(server)
     expect(read("backend/src/lib/node-registry.ts")).toContain(`const UNIT_REGISTRY_CATEGORIES = [${REGISTRY_CATEGORIES.map((c: string) => JSON.stringify(c)).join(", ")}] as const`)
   })
 
@@ -158,6 +160,10 @@ describe("the validator's vocabularies are the product's", () => {
 
   it("every execution.kind but source is executable — use-case included (the editor runs it through executeUseCase)", () => {
     expect(EXECUTION_KINDS.filter((k: string) => k !== "source")).toContain("use-case")
+  })
+
+  it("a list output carries files: its kinds are the media producer kinds", () => {
+    expect([...LIST_OUTPUT_KINDS].sort()).toEqual(PRODUCER_KINDS.filter((k: string) => k !== "dynamic").sort())
   })
 
   it("every queue a unit may name exists", () => {

@@ -151,6 +151,7 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   "freecut-export": "exporting a cut to an external editor",
   "generate-face": "the Generate Face route",
   heygen: "HeyGen avatars and voices",
+  "house-models": "which house models the deployment serves (internal only: the standalone orchestrator asks its API)",
   "image-collage": "the Image Collage route",
   "image-proxy": "proxying a remote image",
   "image-to-image": "the Image to Image route",

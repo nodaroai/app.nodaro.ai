@@ -5,6 +5,12 @@ export type VariableDisplayMode = "raw" | "annotated" | "resolved"
 
 export interface SourceNodeInfo {
   readonly id: string
+  /**
+   * The node the wire CARRIES (a Teleport Receive's origin), when it differs
+   * from `id` (the node the wire was drawn from). Read through
+   * `sourceOriginId`, which falls back to `id`.
+   */
+  readonly originId?: string
   readonly type: string
   readonly label: string
   readonly value: string

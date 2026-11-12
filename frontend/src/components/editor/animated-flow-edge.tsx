@@ -29,6 +29,11 @@ type AnimatedFlowEdgeData = {
   listExpression?: string   // List-mode expression: comma-separated indices/ranges, e.g. "1,3,5..last-1"
   sourceNodeType?: string   // Source node's type — used to hide modes that don't apply (e.g. Selected for list/loop)
   targetNodeType?: string   // Target node's type — used to hide Each when feeding into list/loop columns
+  /** The wire leaves a pip that carries the list one run made (a node unit's
+   *  list output — `isListOutputHandle` of the pip it carries, stamped by
+   *  `workflow-canvas.tsx`): list-like like a List source, decided by the pip,
+   *  never by the node type alone. */
+  sourceListPip?: boolean
   /** True when the target handle has cap 0 for the consumer's current model
    *  — i.e., the runtime will silently drop this connection. Drives the
    *  dashed/grayed stroke styling. Set by `workflow-canvas.tsx`'s edge
@@ -196,7 +201,8 @@ function AnimatedFlowEdgeComponent({
   // workflow-canvas.tsx already resolves list-like-source edges to "each"
   // before passing edge data in, but we re-derive defaults here so the
   // fallback is explicit and target-aware.
-  const isListLikeSource = LIST_LIKE_SOURCE_TYPES.has(edgeData?.sourceNodeType ?? "")
+  //   - Source is a node unit's list pip (sourceListPip) → "each", like a list source
+  const isListLikeSource = LIST_LIKE_SOURCE_TYPES.has(edgeData?.sourceNodeType ?? "") || edgeData?.sourceListPip === true
   const isListLikeTarget = LIST_LIKE_TARGET_TYPES.has(edgeData?.targetNodeType ?? "")
   const targetAcceptsMulti = MULTI_INPUT_TARGET_TYPES.has(edgeData?.targetNodeType ?? "")
   const defaultMode = isListLikeTarget ? "all" : isListLikeSource ? "each" : "last"

@@ -205,6 +205,7 @@ const SCRATCH_CALL_SITES: Readonly<Record<string, string>> = {
   "workers/handlers/video-mask.ts :: \"mask-src-c0\"": "Video Mask's re-encoded source of a one-request clip (what SAM 3 is sent): `ctx.jobId`",
   "workers/handlers/video-mask.ts :: rleCacheName(value.chunk.index)": "Video Mask's kept chunk segmentation, so a retry after the model answered never pays it again: `jobId` is the handler's `ctx.jobId`",
   "workers/download-audio.ts :: \"cover-src\"": "Suno's re-hosted source audio: `opts.scratchJobId` is the Suno handler's `ctx.jobId` (without one the flat `audios/` key is listed above)",
+  "lib/outside-input-copy.ts :: `outside-input-${randomUUID()}`": "a copy of an input that was not on our storage, made before a model behind the platform sees it (a full random name: copies are served immutable, so two never share a key): `opts.jobId` (a workflow run's orchestrator passes the job's id), else the running job's id inside a video-worker job; a lane with no job yet (a route's guard, before the job row exists) gets the flat key, which only the 7-day age sweep deletes",
 }
 
 /** The scratch writers' callers outside the scratch module, as `<file> :: <file name>`. */

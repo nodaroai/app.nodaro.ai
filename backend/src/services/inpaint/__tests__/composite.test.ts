@@ -159,6 +159,53 @@ describe("compositeMaskedRegion: the source pasted back outside the mask", () =>
     expect((await sharp(out).metadata()).hasAlpha).toBe(false)
   })
 
+  /** Green, its left half (x < 32) fully transparent: a model that left part of the mask unpainted. */
+  async function halfClearGreen() {
+    const raw = Buffer.alloc(N * N * 4)
+    for (let i = 0; i < N * N; i++) {
+      raw[i * 4 + 1] = 255
+      raw[i * 4 + 3] = i % N < 32 ? 0 : 255
+    }
+    return sharp(raw, { raw: { width: N, height: N, channels: 4 } }).png().toBuffer()
+  }
+
+  // GPT Image 2.6 handed back a partly transparent picture inside the mask
+  // (production, 2026-11-11): an opaque photo must never come back see-through.
+  for (const [what, base] of [["an opaque photo", () => noisySource()], ["a photo whose alpha is all 255", () => noisySource(4, 255)]] as const) {
+    it(`${what} stays opaque under a partly transparent result: the photo shows where the result is clear`, async () => {
+      const source = await base()
+      const out = await compositeMaskedRegion({ base: source, result: await halfClearGreen(), mask: await squareMask(), featherSigma: 2, featherInward: true, keepAlpha: true })
+      const got = await pixels(out)
+      const src = await pixels(source)
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        const px = got.at(x, y)
+        if (px.length === 4) expect(px[3]).toBe(255)
+      }
+      expect(got.at(24, 32).slice(0, 3)).toEqual(src.at(24, 32).slice(0, 3)) // inside the mask, where the result is clear: the photo
+      expect(got.at(40, 32).slice(0, 3)).toEqual([0, 255, 0]) // inside, where the result is opaque: the result
+      expect(got.at(2, 2).slice(0, 3)).toEqual(src.at(2, 2).slice(0, 3)) // outside: the photo
+    })
+  }
+
+  it("keeps the result's transparency on an opaque photo when a transparent background was asked for", async () => {
+    const out = await compositeMaskedRegion({ base: await noisySource(), result: await halfClearGreen(), mask: await squareMask(), featherSigma: 2, featherInward: true, keepAlpha: true, transparent: true })
+    const got = await pixels(out)
+    expect(got.info.channels).toBe(4)
+    expect(got.at(24, 32)[3]).toBe(0)
+    expect(got.at(40, 32)[3]).toBe(255)
+    expect(got.at(2, 2)[3]).toBe(255)
+  })
+
+  it("the Generate Image inpaint (no keepAlpha) shows the base where its result is clear, never black", async () => {
+    const base = await noisySource()
+    const out = await compositeMaskedRegion({ base, result: await halfClearGreen(), mask: await squareMask(), featherSigma: 2 })
+    const got = await pixels(out)
+    const src = await pixels(base)
+    expect((await sharp(out).metadata()).hasAlpha).toBe(false)
+    expect(got.at(24, 32)).toEqual(src.at(24, 32))
+    expect(got.at(40, 32)).toEqual([0, 255, 0])
+  })
+
   for (const format of ["png", "jpeg", "webp"] as const) {
     it(`writes a ${format} when asked`, async () => {
       const out = await compositeMaskedRegion({ base: await noisySource(), result: await green(N), mask: await squareMask(), featherSigma: 2, featherInward: true, keepAlpha: true, format })

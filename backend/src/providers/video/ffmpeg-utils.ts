@@ -663,13 +663,15 @@ export function logFfmpegVersion(tag: string): void {
   console.log(`[${tag}] ${describeFfmpegMemoryBudget(ffmpegMemoryBudgetNow())}`)
 }
 
-export function runFfprobe(args: readonly string[]): Promise<string> {
+export function runFfprobe(args: readonly string[], opts?: { timeoutMs?: number }): Promise<string> {
   return new Promise((resolve, reject) => {
     // Watchdog: ffprobe accepts remote http(s) inputs (probeVideoSource) and
     // a stalled edge/socket would otherwise hang the worker indefinitely —
     // there is no BullMQ-side rescue for a live-but-stuck handler. 120s
-    // matches the safeFetch download timeout.
-    execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout: FFPROBE_TIMEOUT_MS }, (error, stdout, stderr) => {
+    // matches the safeFetch download timeout. A caller on a tighter budget
+    // (`opts.timeoutMs`, never above it) has the process killed sooner.
+    const timeout = Math.min(FFPROBE_TIMEOUT_MS, opts?.timeoutMs ?? FFPROBE_TIMEOUT_MS)
+    execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout }, (error, stdout, stderr) => {
       if (error) {
         reject(Object.assign(new Error(`ffprobe failed: ${stderr || error.message}`), execFailureFlags(error)))
       } else {
@@ -911,6 +913,8 @@ export interface VideoOverlayBaseProbe {
   readonly frameCount?: number
   /** codec_name of the FIRST audio stream; null when the base is silent. */
   readonly audioCodec: string | null
+  /** start_time of that first audio stream, when it states one. With `startTimeSec`: the file's picture/sound offset, which a Video Overlay video layer keeps. */
+  readonly audioStartTimeSec?: number
 }
 
 /**
@@ -965,6 +969,8 @@ export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
   const sar = parseSampleAspect(video.sample_aspect_ratio)
   const start = Number(video.start_time)
   const frames = Number(video.nb_frames)
+  // `Number(undefined)` / `Number("N/A")` are NaN: no stated start, no field.
+  const audioStart = audio ? Number(audio.start_time) : Number.NaN
   return {
     width: swap ? storedH : storedW,
     height: swap ? storedW : storedH,
@@ -977,7 +983,29 @@ export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
     startTimeSec: Number.isFinite(start) ? start : 0,
     ...(Number.isInteger(frames) && frames > 0 ? { frameCount: frames } : {}),
     audioCodec: audio && typeof audio.codec_name === "string" ? audio.codec_name : null,
+    ...(Number.isFinite(audioStart) ? { audioStartTimeSec: audioStart } : {}),
   }
+}
+
+/**
+ * The same probe on the base's LINK, before anything is downloaded — what the
+ * route and the workflow run price a run with a video layer by
+ * (lib/video-overlay-length.ts), so they measure the very stream the worker's
+ * {@link probeVideoOverlayBase} will (cover pictures skipped, the video
+ * stream's length). Guarded like `probeVideoSource`: no private address, and
+ * ffprobe confined to file and http(s). Any failure throws; the caller refuses
+ * the run before anything is reserved.
+ */
+export async function probeVideoOverlayBaseSource(srcUrlOrPath: string): Promise<VideoOverlayBaseProbe> {
+  await assertSafeProbeSource(srcUrlOrPath)
+  const out = await runFfprobe([
+    "-v", "error",
+    "-protocol_whitelist", "file,http,https,tcp,tls",
+    "-show_entries", VIDEO_OVERLAY_PROBE_ENTRIES,
+    "-of", "json",
+    srcUrlOrPath,
+  ])
+  return parseVideoOverlayProbe(out)
 }
 
 /**
@@ -1073,7 +1101,7 @@ export async function probeVideoSource(srcUrlOrPath: string): Promise<{
  * Used by the ai-avatar AUDIO-mode reserve preHandler to bucket the credit
  * hold by the ACTUAL clip length instead of a coarse worst-case ceiling.
  */
-export async function probeMediaDuration(srcUrlOrPath: string): Promise<number> {
+export async function probeMediaDuration(srcUrlOrPath: string, opts?: { timeoutMs?: number }): Promise<number> {
   await assertSafeProbeSource(srcUrlOrPath)
   const output = await runFfprobe([
     "-v", "error",
@@ -1081,7 +1109,7 @@ export async function probeMediaDuration(srcUrlOrPath: string): Promise<number> 
     "-show_entries", "format=duration",
     "-of", "csv=p=0",
     srcUrlOrPath,
-  ])
+  ], opts)
   const duration = parseFloat(output.trim())
   if (Number.isNaN(duration) || duration <= 0) {
     throw new Error(`probeMediaDuration failed to parse: "${output.trim()}"`)

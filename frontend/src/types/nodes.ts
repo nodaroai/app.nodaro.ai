@@ -99,8 +99,10 @@ import type {
   VideoAnalysisResult,
   FrameFit,
   FrameDelivery,
+  VideoOverlayBoxInput,
   VideoOverlayFit,
   VideoOverlayLayerInput,
+  VideoOverlayLayoutId,
   VideoOverlayOutputAspect,
   VideoOverlayWarning
 } from "@nodaro/shared/video"
@@ -4251,6 +4253,10 @@ export type VideoOverlayData = {
   baseFit?: VideoOverlayFit
   /** With outputAspect + contain: the padding colour, #RRGGBB (default #000000). */
   backgroundColor?: string
+  /** With outputAspect: where the base sits, in a layer's box vocabulary (overrides baseFit). Stored as written; the validator refuses a partial box. */
+  baseBox?: VideoOverlayBoxInput | null
+  /** A named layout that writes the boxes (`expandVideoOverlayLayout`); absent, null or "" = Custom. */
+  layout?: VideoOverlayLayoutId | "" | null
   probedVideo?: ProbedVideoInfo
   /** The composition the last run's result was rendered from — stamped by the canvas Run and by every backend (DAG) run; the result entry carries the same key ("Result (old)" when it differs). */
   resultCompositionKey?: string
@@ -10372,6 +10378,10 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // Character
   {
     type: "character",
+    // A node still carrying this label is UNNAMED: it must equal
+    // CHARACTER_NODE_DEFAULT_LABEL (@nodaro/shared, wired-character-names.ts),
+    // pinned by character-name-reads.test.ts. A literal, as gen:skills reads
+    // NODE_DEFINITIONS statically.
     label: "Character Asset",
     category: "character",
     inputs: ["assets", "in"],

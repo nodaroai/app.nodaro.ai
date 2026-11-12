@@ -211,6 +211,10 @@
               "runtimeTyped": {
                 "const": true,
                 "description": "The medium is decided at run time (contract.producer \"dynamic\"): the pip gets no HANDLE_OUTPUT_TYPES row. Only on an audio/video/image output."
+              },
+              "list": {
+                "const": true,
+                "description": "The output carries one run's list of files (an image, video or audio output with from): an Each wire runs the next node once per item (the default), a plain wire reads the first item. Its field holds the list; the job writes it under the output's id."
               }
             }
           }
@@ -330,6 +334,24 @@
             "null"
           ],
           "description": "Where the node sits in /v1/nodes (NODE_REGISTRY) when that differs from position.after: right after this type (null = first). The hand-curated registry has its own order, so a migrated node keeps its place there."
+        },
+        "category": {
+          "enum": [
+            "input",
+            "parameter",
+            "ai-image",
+            "ai-video",
+            "ai-audio",
+            "ai-text",
+            "processing",
+            "composition",
+            "trigger",
+            "output",
+            "control",
+            "entity",
+            "utility"
+          ],
+          "description": "The /v1/nodes category (NodeCategory of backend/src/lib/node-registry.ts) of a unit whose own category is not one the server shares (ai: ai-image, ai-video, …). Refused when its category is shared."
         }
       }
     },

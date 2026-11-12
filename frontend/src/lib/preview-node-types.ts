@@ -6,11 +6,15 @@
 // already has results — so the two cannot drift (decided 2026-10-19). It is a
 // leaf the store can import: execution-graph imports the store, so the store
 // cannot import execution-graph back.
-import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions";
-import { composeSet, unitProducers } from "@/lib/unit-compose";
-// @registry-enumerates VIDEO_SOURCE_TYPES_FOR_RENDER carries every node unit whose contract.producer is "video"
+import { UNIT_NODE_DEFINITIONS, unitDefinitionOf } from "@/lib/unit-definitions";
+import { composeSet, unitOutputPip, unitProducers, unitSideOutputs } from "@/lib/unit-compose";
+// @registry-enumerates VIDEO_SOURCE_TYPES_FOR_RENDER and IMAGE_SOURCE_TYPES carry every node unit whose contract.producer is "video" / "image"
+// (previewTypeOfPip asks the one node unit a wire leaves — unitDefinitionOf(nodeType))
 
-export const IMAGE_SOURCE_TYPES = new Set([
+/** The node types whose output a render / composition node collects as an
+ *  image and the preview types as one. Legacy rows ∪ every node unit whose
+ *  `contract.producer` is "image" (unit-definitions.ts). */
+export const IMAGE_SOURCE_TYPES = composeSet("IMAGE_SOURCE_TYPES", new Set<string>([
   "generate-image",
   "reference-board",
   "upload-image",
@@ -28,7 +32,7 @@ export const IMAGE_SOURCE_TYPES = new Set([
   "creature",
   "location",
   "scene",
-]);
+]), unitProducers(UNIT_NODE_DEFINITIONS, "image"));
 /** The node types whose output a render / composition node collects as a
  *  video (collectMediaAssets) and the preview types as one
  *  (detectPreviewItemType). Legacy rows ∪ every node unit whose
@@ -117,6 +121,20 @@ export const AUDIO_SOURCE_TYPES = new Set([
   // this hand list was missing it (decided 2026-10-19).
   "extract-audio",
 ]);
+
+/**
+ * The preview type a wire's PIP decides before its node's type does: a JSON
+ * (look) output beside a node unit's media take (`unitSideOutputs`) is data,
+ * although the unit's type is an image / video / audio source — its value may
+ * name media files and is still JSON. Undefined for every other pip, which the
+ * node type and the value decide as before. Both classifiers ask it first.
+ */
+export function previewTypeOfPip(nodeType: string, sourceHandle: string | null | undefined): "data" | undefined {
+  const unit = unitDefinitionOf(nodeType)
+  if (!unit || !sourceHandle) return undefined
+  const pip = unitOutputPip(unit, sourceHandle)
+  return pip?.kind === "look" && unitSideOutputs(unit).some((h) => h.id === pip.id) ? "data" : undefined
+}
 
 /**
  * The preview type a node's TYPE decides, or undefined when the type does not

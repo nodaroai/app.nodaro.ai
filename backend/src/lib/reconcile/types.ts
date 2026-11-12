@@ -1,3 +1,5 @@
+import { houseModelStaleThresholdMs } from "../house-model-timeouts.js"
+
 /**
  * Provider kinds for reconciliation. Each kind maps 1:1 to one upstream
  * endpoint + one staleness threshold.
@@ -51,6 +53,10 @@ export const PROVIDER_KIND_VALUES = [
   // scrape-run.ts persists the run id here): its handler re-attaches to it on
   // a re-pick; the cron, with no plan to settle with, only sweeps it.
   "apify-run",
+  // A house model's opaque task (lib/house-models.ts): the reference the
+  // deployment's plugin returned from `start`. reconcileHouseModelJob re-polls
+  // it through the same plugin — one idempotent status read, never a re-start.
+  "house-model",
 ] as const
 
 export type ProviderKind = (typeof PROVIDER_KIND_VALUES)[number]
@@ -161,6 +167,10 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
   // (BACKGROUND_SCRAPE_ATTEMPT_MAX_MS in @nodaro/render-rules — pinned in
   // __tests__/types.test.ts); a re-attached attempt restamps the row.
   "apify-run":                30 * MIN,
+  // A house model's task: the longest per-id poll budget plus a margin
+  // (lib/house-model-timeouts.ts), derived so a long model's row can never sit
+  // below it — the cron never races a worker that is still polling.
+  "house-model":              houseModelStaleThresholdMs(),
 }
 
 /** Smallest entry in `STALE_THRESHOLD_MS`. Drives the SQL pre-filter cutoff
@@ -272,6 +282,12 @@ export const NODARO_CLOUD_RECOVER_KINDS: ReadonlySet<string> = new Set([
   "nodaro-cloud",
 ])
 
+/** Kinds recovered via reconcileHouseModelJob (a house model's opaque task —
+ *  one idempotent status read through the deployment's plugin). */
+export const HOUSE_MODEL_RECOVER_KINDS: ReadonlySet<string> = new Set([
+  "house-model",
+])
+
 /** Every kind with an async recover handler — the provider result can be
  *  re-fetched from the persisted provider_task_id and the job completed. */
 export const ASYNC_RECOVERABLE_KINDS: ReadonlySet<string> = new Set([
@@ -280,6 +296,7 @@ export const ASYNC_RECOVERABLE_KINDS: ReadonlySet<string> = new Set([
   ...ELEVENLABS_RECOVER_KINDS,
   ...FAL_RECOVER_KINDS,
   ...NODARO_CLOUD_RECOVER_KINDS,
+  ...HOUSE_MODEL_RECOVER_KINDS,
   // The copilot turn has no upstream task to re-fetch, but it DOES have a
   // recover handler (`ee/copilot/reconcile.ts`): it settles the turn from the
   // spend persisted per iteration, charging what the model really cost

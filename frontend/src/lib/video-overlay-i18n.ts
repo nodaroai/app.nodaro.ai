@@ -1,5 +1,6 @@
 import type { MessageKey, TFunction } from "@/lib/i18n"
 import type { VideoOverlayErrorCode, VideoOverlayIssue, VideoOverlayWarning, VideoOverlayWarningCode } from "@nodaro/shared/video"
+import type { VideoOverlayLengthWarning } from "@/lib/video-overlay-limits"
 
 /**
  * The canvas's words for the shared validator's codes and the worker's warning
@@ -17,6 +18,13 @@ const ERROR_KEYS: { readonly [C in VideoOverlayErrorCode]: MessageKey } = {
   fit_without_aspect: "proccfg.videoOverlay.err.fit_without_aspect",
   field_out_of_bounds: "proccfg.videoOverlay.err.field_out_of_bounds",
   invalid_layer_plan: "proccfg.videoOverlay.err.invalid_layer_plan",
+  layer_two_sources: "proccfg.videoOverlay.err.layer_two_sources",
+  too_many_video_layers: "proccfg.videoOverlay.err.too_many_video_layers",
+  sound_without_video: "proccfg.videoOverlay.err.sound_without_video",
+  base_box_needs_aspect: "proccfg.videoOverlay.err.base_box_needs_aspect",
+  layout_needs_aspect: "proccfg.videoOverlay.err.layout_needs_aspect",
+  layout_needs_video_layer: "proccfg.videoOverlay.err.layout_needs_video_layer",
+  layout_conflicts_base_box: "proccfg.videoOverlay.err.layout_conflicts_base_box",
 }
 
 const WARNING_KEYS: { readonly [C in VideoOverlayWarningCode]: MessageKey } = {
@@ -24,6 +32,7 @@ const WARNING_KEYS: { readonly [C in VideoOverlayWarningCode]: MessageKey } = {
   skipped: "proccfg.videoOverlay.warn.skipped",
   animated_first_frame: "proccfg.videoOverlay.warn.animated_first_frame",
   audio_reencoded: "proccfg.videoOverlay.warn.audio_reencoded",
+  layer_no_audio: "proccfg.videoOverlay.warn.layer_no_audio",
 }
 
 export function videoOverlayErrorKey(code: VideoOverlayErrorCode): MessageKey {
@@ -37,7 +46,7 @@ function layerNumber(ref: { readonly layer?: number; readonly slot?: number }): 
 
 /** The layer-free text of a verdict ("End must be after start"). */
 export function videoOverlayIssueMessage(issue: VideoOverlayIssue, t: TFunction): string {
-  // A plan layer has no handle to connect: its image can only be the plan's own imageUrl.
+  // A plan layer has no handle to connect: its source can only be the plan's own imageUrl or videoUrl.
   if (issue.code === "layer_without_image" && typeof issue.planLayer === "number") return t("proccfg.videoOverlay.err.layer_without_image_plan")
   return t(ERROR_KEYS[issue.code], { ...issue.params })
 }
@@ -55,4 +64,9 @@ export function videoOverlayIssueText(issue: VideoOverlayIssue, t: TFunction): s
 export function videoOverlayWarningText(w: VideoOverlayWarning, t: TFunction): string {
   const n = layerNumber(w)
   return t(WARNING_KEYS[w.code], n === undefined ? {} : { n })
+}
+
+/** The base's length cap as the panel warns of it (show-only — lib/video-overlay-limits). */
+export function videoOverlayLengthWarningText(w: VideoOverlayLengthWarning, t: TFunction): string {
+  return t("proccfg.videoOverlay.baseTooLong", { max: w.max, d: w.d })
 }

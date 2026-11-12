@@ -36,7 +36,7 @@ import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { usecaseFailedRunFields, usecaseRefusedBeforeWorkPatch, usecaseRestoredResults } from "@/lib/use-case-run-result"
 import { carriesRowStamps, runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
-import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
+import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitSideJobFields, unitSideRunFields } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, UGC_NEWER_RUN_WINS_TYPES, UGC_NEWER_TAKE_WINS_TYPE, UGC_PATCH_REPLACES_GENERIC, holdsUgcRunResult, ugcCreatorShowsRun, ugcEndedRunMayLand, ugcFinishEndedRunMayLand, ugcFinishShowsThisOrNewer, ugcRunIsNewer, ugcRunPatch, ugcRunShowsThisOrNewer, ugcStopPatch } from "@/lib/ugc-run-patch"
 import { ugcFinishNodeIds } from "@nodaro/render-rules"
 import { isSeededState } from "@/lib/seeded-node-state"
@@ -312,6 +312,8 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       // that finished while the tab was closed FIRST; once it has a result,
       // reconcile skips the node, so leaving them off here would read "Result (old)".
       const overlayRun = node.type === "video-overlay" ? videoOverlayRunOutputFields(job.output_data) : undefined
+      // A node unit's side outputs (a list, JSON beside the take): on the node and the take (lib/json-run-result.ts).
+      const sideRun = unitSideJobFields(node.type, job.output_data)
 
       // Apply EDL: the take keeps the Transcript its render was cut with.
       const takeTranscript = applyEdlTakeTranscriptField(node.type, job.output_data, outputUrl)
@@ -321,7 +323,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       // Update the result with the URL if it was missing
       const updatedResults = results.map((r, i) => {
         if (i === 0 && r.jobId === job.id && !r.url && outputUrl) {
-          return { ...r, url: outputUrl, ...takeIdentity, ...(overlayRun ?? {}), ...takeTranscript }
+          return { ...r, url: outputUrl, ...takeIdentity, ...(overlayRun ?? {}), ...(sideRun ?? {}), ...takeTranscript }
         }
         return r
       })
@@ -329,7 +331,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       // If the job was tracked by currentJobId but has no result entry, prepend one
       const hasResultForJob = updatedResults.some(r => r.jobId === job.id)
       if (!hasResultForJob && outputUrl) {
-        updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id, ...takeIdentity, ...(overlayRun ?? {}), ...takeTranscript })
+        updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id, ...takeIdentity, ...(overlayRun ?? {}), ...(sideRun ?? {}), ...takeTranscript })
       }
       // A list-result run (Trailer): every delivery, as the live run lands them, in place of the one take.
       const restoredRows = usecaseRestoredResults(node.type, job.output_data, job.id, results, new Date().toISOString())
@@ -343,6 +345,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
         currentJobId: undefined,
         currentJobProgress: undefined,
         ...(overlayRun ?? {}),
+        ...(sideRun ?? {}),
       }
 
       // Set the appropriate URL field based on output type
@@ -590,6 +593,9 @@ export function applyBackendExecutionState(
         // Video Overlay: warnings / canvas / length — the live run's mapping.
         const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(state.output) : undefined
         if (overlayRun) Object.assign(data, overlayRun)
+        // A node unit's side outputs (a list, JSON beside the take): on the node and the take — the live lane's mapping.
+        const sideRun = unitSideRunFields(nodeType, state.output)
+        if (sideRun) Object.assign(data, sideRun)
         // Choose Best (reduce): the winner + the strategy's meta — the live lane's mapping.
         Object.assign(data, reduceRunOutputFields(nodeType, state.output))
         Object.assign(data, splitMediaRunOutputFields(nodeType, state.output))
@@ -639,7 +645,7 @@ export function applyBackendExecutionState(
             data.generatedResults = [
               {
                 url: outputUrl, timestamp: new Date().toISOString(), jobId: state.jobId ?? `exec-${node.id}`,
-                ...runResultIdentity(nodeType, state.output), ...(overlayRun ?? {}),
+                ...runResultIdentity(nodeType, state.output), ...(overlayRun ?? {}), ...(sideRun ?? {}),
                 // Apply EDL: the take keeps the Transcript its render was cut with.
                 ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
               },
@@ -858,6 +864,9 @@ export function applyCompletedExecutionResults(
     // Video Overlay: warnings / canvas / length — the live run's mapping.
     const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(state.output) : undefined
     if (overlayRun) Object.assign(newData, overlayRun)
+    // A node unit's side outputs (a list, JSON beside the take): on the node and the take — the live lane's mapping.
+    const sideRun = unitSideRunFields(nodeType, state.output)
+    if (sideRun) Object.assign(newData, sideRun)
     // Choose Best (reduce): winner + the judge's reasoning — the live lane's mapping.
     Object.assign(newData, reduceRunOutputFields(nodeType, state.output))
     Object.assign(newData, splitMediaRunOutputFields(nodeType, state.output))
@@ -903,7 +912,7 @@ export function applyCompletedExecutionResults(
       newData.generatedResults = [
         {
           url: outputUrl, timestamp: new Date().toISOString(), jobId: state.jobId ?? `exec-${node.id}`,
-                ...runResultIdentity(nodeType, state.output), ...(overlayRun ?? {}),
+                ...runResultIdentity(nodeType, state.output), ...(overlayRun ?? {}), ...(sideRun ?? {}),
           // Apply EDL: the take keeps the Transcript its render was cut with.
           ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
         },

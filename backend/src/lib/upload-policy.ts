@@ -43,7 +43,9 @@ export type UploadLane =
   // Server-side import of a user-supplied media URL (streams backend→R2). Like
   // retained-*, the bytes pass through us — but a multi-GB import streams to
   // disk rather than buffering, so the policy sees metadata (not a full buffer)
-  // until a streaming-policy variant exists.
+  // until a streaming-policy variant exists. Also an input from an outside
+  // link copied to our storage before a model sees it
+  // (lib/outside-input-copy.ts: the whole file up to 25 MiB, else its head).
   | "media-import"
   // Site Capture's screenshots of a web page, stored as the user's assets
   // (lib/site-capture-store.ts) — a capture run's records, or a relayed

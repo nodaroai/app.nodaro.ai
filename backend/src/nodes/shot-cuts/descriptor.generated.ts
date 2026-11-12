@@ -67,6 +67,7 @@ export const descriptor = {
     "finalize:own-writer",
     "lane:local"
   ],
+  "producer": null,
   "mcp": {
     "widgetModelFor": [
       "shot_cuts"

@@ -1,11 +1,15 @@
+// @registry-enumerates HANDLER_PROVIDERS carries every node unit whose worker names its provider (providerOf)
 // backend/src/lib/concurrency-lanes/provider-of.ts — the PRIMARY provider a
 // job or an LLM call counts against, the key of the gate's platform-wide
 // provider ceilings (setProviderCeilings). Unknown → null: never ceilinged.
 //
 // A job:
 //   1. a local-lane job (ffmpeg, sharp, Remotion) → "local";
+//   1b. a job whose payload `provider` is a house model (an own-label catalog
+//      id, lib/house-models.ts) → "house-models", whatever the job;
 //   2. a handler that calls one provider client whatever its payload →
-//      HANDLER_PROVIDERS;
+//      HANDLER_PROVIDERS (the core handlers ∪ the node units whose worker
+//      names its provider, `provider:*`, through unit-descriptors.ts providerOf);
 //   3. a handler whose provider follows from its payload → ROUTED_JOBS, each
 //      entry deciding as its handler decides. A handler that goes through the
 //      provider router counts against the first provider in the capability's
@@ -59,13 +63,16 @@ import {
   OBJECT_MOTION_DEFAULT_PROVIDER, TEXT_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_UPSCALE_DEFAULT_PROVIDER,
   VOICED_VIDEO_DEFAULT_PROVIDER, type GenerateImageModelInput,
 } from "../../workers/handlers/default-models.js"
+import { composeRecord, unitRecord } from "../unit-compose.js"
+import { providerOf, UNIT_NODE_DESCRIPTORS } from "../unit-descriptors.js"
 import { laneClassOf } from "./registry.js"
+import { HOUSE_MODELS_PROVIDER, isOwnLabelModel } from "../house-models-served.js"
 
 /**
- * Handlers that call one provider client whatever the payload (each checked
- * against its handler under workers/handlers/).
+ * Core handlers that call one provider client whatever the payload (each
+ * checked against its handler under workers/handlers/).
  */
-export const HANDLER_PROVIDERS: Readonly<Record<string, string>> = Object.freeze({
+const CORE_HANDLER_PROVIDERS: Readonly<Record<string, string>> = Object.freeze({
   "text-to-speech": "elevenlabs", // directElevenLabsTTS
   "voice-changer": "elevenlabs", // directVoiceChanger / voiceChangerFromUrl
   "voice-design": "elevenlabs", // designVoice
@@ -104,6 +111,16 @@ export const HANDLER_PROVIDERS: Readonly<Record<string, string>> = Object.freeze
   "meta-ads-scrape": "apify",
   "instagram-scrape": "apify",
 })
+
+/**
+ * Handlers that call one provider client whatever the payload: the core ones ∪
+ * every node unit whose worker names its provider (its `provider:*`
+ * capability, read through providerOf — a unit's job name is its type), so no
+ * row here names a unit. Unchanged (the core table itself) with no such unit.
+ */
+export const HANDLER_PROVIDERS: Readonly<Record<string, string>> = Object.freeze(
+  composeRecord("HANDLER_PROVIDERS", CORE_HANDLER_PROVIDERS, unitRecord(UNIT_NODE_DESCRIPTORS, (u) => providerOf(u.type))),
+)
 
 /** Provider-lane jobs that call no AI provider when they start, each with why — never ceilinged. */
 export const UNATTRIBUTED: Readonly<Record<string, string>> = Object.freeze({
@@ -225,10 +242,13 @@ export function primaryProviderOfJob(jobName: string, data: unknown): string | n
     return cls.kind === "leaf" && cls.lane === "local"
   })
   if (isLocal) return "local"
+  const d = data !== null && typeof data === "object" ? (data as Data) : {}
+  // A house model (an own-label catalog id, lib/house-models.ts) runs through
+  // the deployment's own service whatever the job: one neutral name, never an upstream's.
+  if (isOwnLabelModel(d.provider)) return HOUSE_MODELS_PROVIDER
   if (Object.hasOwn(HANDLER_PROVIDERS, jobName)) return HANDLER_PROVIDERS[jobName]!
   const routed = Object.hasOwn(ROUTED_JOBS, jobName) ? ROUTED_JOBS[jobName]! : undefined
   if (!routed) return null
-  const d = data !== null && typeof data === "object" ? (data as Data) : {}
   return routed(d)
 }
 

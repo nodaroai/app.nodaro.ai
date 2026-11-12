@@ -1432,6 +1432,67 @@ describe("resolveNodeInputs — video-overlay", () => {
     expect(inputs.videoUrl).toBe("https://x/base.mp4")
     expect(inputs.overlayImageUrls).toBeUndefined()
   })
+
+  // The twin of the backend's "video layers through the DAG" cases: a layer
+  // wire's kind is the shared rule's, handed what the server hands it.
+  describe("a wired layer's kind (overlayVideoSlots, 1-based)", () => {
+    const CLIP = "https://x/clip"
+    const pip = (source: string, sourceHandle: string | null, target: string, targetHandle: string) => ({
+      id: `${source}:${sourceHandle}->${target}:${targetHandle}`, source, target, sourceHandle, targetHandle,
+    })
+
+    it("a generate-video wired to overlay2 records slot 2; a wired image records none", () => {
+      const target = makeNode("vo", "video-overlay")
+      const gv = makeNode("gv", "generate-video", { generatedVideoUrl: CLIP })
+      const gi = makeNode("gi", "upload-image", { url: "https://x/still" })
+      const inputs = resolveNodeInputs(target, [gv, gi, target], [edge("gv", "overlay2"), edge("gi", "overlay")] as any)
+      expect(inputs.overlayImageUrls).toEqual(["https://x/still", CLIP])
+      expect(inputs.overlayVideoSlots).toEqual([2])
+      const imagesOnly = resolveNodeInputs(target, [gi, target], [edge("gi", "overlay")] as any)
+      expect(imagesOnly).not.toHaveProperty("overlayVideoSlots")
+    })
+
+    it("a List column's type fills the gap for a link with no extension, below a recognisable one", () => {
+      const target = makeNode("vo", "video-overlay")
+      const col = (cell: string) => ({ columns: [{ id: "c", handleId: "c", name: "Clips", type: "video-url" }], rows: [[cell]] })
+      const pngs = makeNode("lp", "list", col("https://x/still.png"))
+      const bare = makeNode("lb", "list", col("https://x/signed/clip?sig=1"))
+      const inputs = resolveNodeInputs(target, [pngs, bare, target], [pip("lp", "c", "vo", "overlay"), pip("lb", "c", "vo", "overlay2")] as any)
+      expect(inputs.overlayImageUrls).toEqual(["https://x/still.png", "https://x/signed/clip?sig=1"])
+      expect(inputs.overlayVideoSlots).toEqual([2])
+    })
+
+    it("through a teleport pair, the real source and its pip decide", () => {
+      const target = makeNode("vo", "video-overlay")
+      const gv = makeNode("gv", "generate-video", { generatedVideoUrl: CLIP })
+      const send = makeNode("ts", "teleport-send")
+      const recv = makeNode("tr", "teleport-receive")
+      const edges = [pip("gv", "video", "ts", "in"), pip("ts", "out", "tr", "in"), pip("tr", "out", "vo", "overlay")]
+      const inputs = resolveNodeInputs(target, [gv, send, recv, target], edges as any)
+      expect(inputs.overlayImageUrls).toEqual([CLIP])
+      expect(inputs.overlayVideoSlots).toEqual([1])
+    })
+
+    it("the last wire on a slot decides its kind, as it decides its URL", () => {
+      const target = makeNode("vo", "video-overlay")
+      const gv = makeNode("gv", "generate-video", { generatedVideoUrl: CLIP })
+      const gi = makeNode("gi", "upload-image", { url: "https://x/still" })
+      const videoThenImage = resolveNodeInputs(target, [gv, gi, target], [edge("gv", "overlay"), edge("gi", "overlay")] as any)
+      expect(videoThenImage.overlayImageUrls).toEqual(["https://x/still"])
+      expect(videoThenImage).not.toHaveProperty("overlayVideoSlots")
+      const imageThenVideo = resolveNodeInputs(target, [gv, gi, target], [edge("gi", "overlay"), edge("gv", "overlay")] as any)
+      expect(imageThenVideo.overlayImageUrls).toEqual([CLIP])
+      expect(imageThenVideo.overlayVideoSlots).toEqual([1])
+    })
+
+    it("a dynamic producer's video pip is a video with an extension-less file", () => {
+      const target = makeNode("vo", "video-overlay")
+      const av = makeNode("av", "adjust-volume", { generatedVideoUrl: CLIP, generatedResults: [{ url: CLIP }] })
+      const inputs = resolveNodeInputs(target, [av, target], [pip("av", "video-out", "vo", "overlay")] as any)
+      expect(inputs.overlayImageUrls?.[0]).toBeTruthy()
+      expect(inputs.overlayVideoSlots).toEqual([1])
+    })
+  })
 })
 
 describe("Tighten Episode's inputs and its episode downstream", () => {

@@ -32,7 +32,7 @@ import {
 import { imageFormatArgs, imageFormatBody } from "./_image-format-args.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodaro/shared/model-catalog"
-import { I2I_MASK_SUPPORT, IMAGE_BACKGROUND_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, requestImageLimit } from "@nodaro/shared/models"
+import { I2I_MASK_SUPPORT, IMAGE_BACKGROUND_VALUES, IMAGE_K_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, requestImageLimit } from "@nodaro/shared/models"
 import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { imageToImageLevers, normalizeImageInput, requestedAspectRatio, savedGenerationModel } from "../normalize.js"
@@ -125,7 +125,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           resolution: z
             .string()
             .optional()
-            .describe("Resolution: 1K / 2K / 4K. Falls back to nearest supported value."),
+            .describe("Resolution: 1K / 1.5K / 2K / 4K. Falls back to nearest supported value."),
           quality: z
             .string()
             .optional()
@@ -133,7 +133,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           background: z
             .enum(IMAGE_BACKGROUND_VALUES)
             .optional()
-            .describe("Models that list it. Transparent renders at 1K."),
+            .describe("Models that list it. Transparent: 1K on GPT Image."),
           ...imageFormatArgs,
           aspect_ratio: z
             .string()
@@ -456,7 +456,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             ),
           resolution: z.string().optional().describe("Resolution: falls back to nearest supported."),
           quality: z.string().optional().describe("Quality by model (list_models). Auto bills real cost, up to Max."),
-          background: z.enum(IMAGE_BACKGROUND_VALUES).optional().describe("Models that list it. Transparent renders at 1K."),
+          background: z.enum(IMAGE_BACKGROUND_VALUES).optional().describe("Models that list it. Transparent: 1K on GPT Image."),
           ...imageFormatArgs,
           aspect_ratio: z.string().optional().describe("Aspect ratio. 'auto' keeps the photo's shape on every model. Variations and unsupported values fall back."),
           negative_prompt: z.string().max(2000).optional(),
@@ -695,11 +695,11 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
-            "Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6 or MiniMax H3) for multi-ref " +
+            "Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6 or MiniMax H3, 9 on Seedream 5.5) for multi-ref " +
             "models — asset ids are resolved server-side. Accepts an array; a lone URL " +
             "or a JSON-stringified array is coerced.",
           ),
-        resolution: z.enum(["1K", "2K", "4K"]).optional(),
+        resolution: z.enum(IMAGE_K_RESOLUTION_VALUES).optional(),
         quality: z.enum(IMAGE_QUALITY_VALUES).optional(),
         strength: z.number().min(0).max(1).optional().describe("How much the prompt overrides the source image (0=subtle, 1=full repaint)."),
         aspect_ratio: z.string().optional(),

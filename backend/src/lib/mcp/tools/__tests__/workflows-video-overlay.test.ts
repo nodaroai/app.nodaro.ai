@@ -5,6 +5,12 @@ import { newSession } from "../../session.js"
 import type { McpSession } from "../../session.js"
 import { buildServer, callTool } from "./_helpers.js"
 
+/** A WIRED slot's stored layer: expanded, but with no fade setting it was not written with — its default follows the wire's kind, read at the run. */
+function wiredLayer(l: Parameters<typeof expandVideoOverlayLayer>[0]) {
+  const { animate: _byWireKind, ...rest } = expandVideoOverlayLayer(l)
+  return rest
+}
+
 /**
  * D10 — the workflow-JSON write boundary. An agent-written Video Overlay node
  * never renders the canvas writer that clears a wired layer's `imageUrl` (D3),
@@ -88,7 +94,7 @@ function writtenLayers(payload: Record<string, unknown>): Array<Record<string, u
 
 function assertD10(layers: Array<Record<string, unknown>>) {
   expect(layers[0]).not.toHaveProperty("imageUrl")
-  expect(layers[0]).toEqual(expandVideoOverlayLayer({ start: 1, end: 3, preset: "card" }))
+  expect(layers[0]).toEqual(wiredLayer({ start: 1, end: 3, preset: "card" }))
   expect(layers[1]).toEqual(expandVideoOverlayLayer({ imageUrl: OWN, start: 2 }))
 }
 

@@ -645,6 +645,8 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Fast, low-cost Seedream edits, up to 10 input images": "高速・低コストの Seedream 編集、入力画像は最大 10 枚",
   "Readable text in the picture, up to 4K, same price at 1K and 2K": "画像内の文字も読みやすく、最大 4K、1K と 2K は同じ価格",
   "Up to 16 reference images in one edit, readable text, up to 4K": "1 回の編集でリファレンス画像を最大 16 枚、読みやすい文字、最大 4K",
+  "Natural light, materials and skin, small text, transparent backgrounds": "自然な光・質感・肌、細かい文字、透明背景",
+  "Edits that keep the rest of the picture, up to 10 input images": "ほかの部分はそのままの編集、入力画像は最大 10 枚",
   "Fast Gemini, agentic-tuned": "高速な Gemini、エージェント向けに調整",
   "Fast Gemini, sharper reasoning": "高速な Gemini、より鋭い推論",
   "Fast Imagen, lower latency": "高速な Imagen、低レイテンシー",
@@ -1082,6 +1084,8 @@ const OPTION_QUALIFIERS_JA: Record<string, string> = {
   "Standard": "標準",
   "Social": "SNS 向け",
   "High": "高画質",
+  // "1.5K (Medium)", Seedream 5.5's middle size.
+  "Medium": "中画質",
   "Ultra": "超高画質",
   "Detailed": "高精細",
   "Default": "デフォルト",

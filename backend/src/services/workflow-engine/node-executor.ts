@@ -121,6 +121,7 @@ import {
 } from "../../lib/seedance-draft-finalize.js"
 import { stampVideoMaskLength, videoMaskReserveId } from "../../lib/video-mask-length.js"
 import { maskCompositeBaseCredits, maskCompositeReserveUnits, stampMaskCompositeLength } from "../../lib/mask-composite-length.js"
+import { stampVideoOverlayLength, videoOverlayBaseCredits, videoOverlayReserveId, videoOverlayReserveUnits } from "../../lib/video-overlay-length.js"
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { stampTopazVideoUpscale, topazVideoStampedBaseCredits } from "../../lib/topaz-video-plan.js"
 import { stampTopazImageSize, topazImageStampedBaseCredits } from "../../lib/topaz-image-size.js"
@@ -1650,6 +1651,24 @@ async function computeMaskCompositeCreditOverride(
 }
 
 /**
+ * Video Overlay with a video layer is priced per started 5 s of its base: the
+ * workflow run reserves what the route's guard charges — the `video-overlay:video`
+ * row times the units `stampVideoOverlayLength` measured, marked up at that row
+ * (the id the reservation is keyed on, `videoOverlayReserveId`). Undefined for
+ * an image-only run (its flat row prices it) and every other job.
+ */
+async function computeVideoOverlayCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+): Promise<number | undefined> {
+  const units = videoOverlayReserveUnits(jobName, payload)
+  const reserveId = videoOverlayReserveId(jobName, payload)
+  if (units === undefined || reserveId === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(await videoOverlayBaseCredits(units), await getAppSettings(), reserveId)
+}
+
+/**
  * LTX 2.3 Pro Extend is priced per second added. The workflow run reserves what
  * the route's guard charges for the same request — the per-second row times
  * the seconds the payload sends (lib/ltx-extend-credits.ts) — instead of the
@@ -2355,7 +2374,14 @@ async function executeWorkerNode(
   // Video Mask: the same — measure the clip by the route's rule and stamp the
   // price row before input_data is written; a clip the route refuses (unreadable,
   // over the cap) leaves no jobs row.
-  const maskRefusal = (await stampVideoMaskLength(jobName, payload)) ?? (await stampMaskCompositeLength(jobName, payload))
+  // Video Overlay with a video layer: the same — measure the base by the route's
+  // rule and stamp the units before input_data is written; a base the route
+  // refuses (unreadable, past 60 s, a length that leaves nothing to draw or to
+  // stack) leaves no jobs row. An image-only run is not measured.
+  const maskRefusal =
+    (await stampVideoMaskLength(jobName, payload)) ??
+    (await stampMaskCompositeLength(jobName, payload)) ??
+    (await stampVideoOverlayLength(jobName, payload))
   if (maskRefusal) {
     await supabase.from("jobs").delete().eq("id", jobId)
     const err = new Error(maskRefusal.message) as Error & { errorCode?: string }
@@ -2578,6 +2604,7 @@ async function executeWorkerNode(
         pitchTempoReserveId(jobName, payload) ??
         seedanceDraftFinalizeReserveId(jobName, payload) ??
         videoMaskReserveId(jobName, payload) ??
+        videoOverlayReserveId(jobName, payload) ??
         modelIdentifier
 
       const creditOverride =
@@ -2593,6 +2620,7 @@ async function executeWorkerNode(
         (await computeSpeechCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeVideoUtilityCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeMaskCompositeCreditOverride(jobName, payload, modelIdentifier)) ??
+        (await computeVideoOverlayCreditOverride(jobName, payload)) ??
         (await computeLtxExtendCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeGenerateVideoProCreditOverride(payload, modelIdentifier))?.override ??

@@ -89,6 +89,12 @@ function starWildcardSearch(rows, q) {
 /** What a keyless community install answers. Each test overrides one slice. */
 function communityShape() {
   return {
+    // GET /v1/models: every model a community install lists names its maker.
+    models: {
+      sections: [{ kind: "image", families: [{ family: "Tongyi", models: [{ id: "z-image", label: "Z-Image", maker: { id: "alibaba", name: "Alibaba" } }] }] }],
+      recommendations: [],
+      totalModels: 1,
+    },
     nodes: [
       { type: "generate-image", label: "Generate Image", category: "media", description: "d", outputType: "image" },
       { type: "generate-3d-scene", label: "Generate 3D Scene", category: "composition", description: "d", outputType: "data" },
@@ -404,6 +410,8 @@ function stubServer(shape) {
         }
         return send(shape.trailer.status, shape.trailer.body)
       }
+
+      if (path === "/v1/models") return send(200, shape.models)
 
       // ── the Scene3D slice ─────────────────────────────────────────────────
       if (path === "/v1/nodes") return send(200, { data: shape.nodes })
@@ -938,4 +946,19 @@ test("an unregistered lanes route fails the concurrency lanes contract", async (
     shape.lanes = { status: 404, body: { error: { code: "not_found", message: "not found" } } }
   })
   assertContract(out, LANES, "FAIL")
+})
+
+const HOUSE_MODELS = "discovery offers no house model without the deployment's service"
+
+test("a community install whose listed models all name their maker passes the house-model contract", async () => {
+  const { out } = await probeWith()
+  assertContract(out, HOUSE_MODELS, "PASS")
+})
+
+test("a listed model with no maker (a house model the install cannot serve) fails the house-model contract", async () => {
+  const { out, code } = await probeWith((shape) => {
+    shape.models.sections[0].families.push({ family: "House", models: [{ id: "house-fixture", label: "House Fixture" }] })
+  })
+  assertContract(out, HOUSE_MODELS, "FAIL")
+  assert.notEqual(code, 0, "the probe must exit non-zero when a contract fails")
 })

@@ -11,10 +11,12 @@ import { describe, it, expect, vi, afterEach } from "vitest"
 import { buildPayload, type PayloadBuildContext } from "../payload-builder.js"
 import type { SimpleNode, ResolvedInputs, NodeExecutionState, SimpleEdge } from "../types.js"
 import { buildCreditModelIdentifier } from "@nodaro/shared/credits"
-import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_GEN_PROVIDERS } from "@nodaro/shared/models"
+import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_GEN_PROVIDERS } from "@nodaro/shared/models"
+import { CHARACTER_ASPECT_OPTIONS } from "@nodaro/shared/entities"
 import { MODEL_CATALOG, autoAspectNeedsSourceImage, normalizeModelInput } from "@nodaro/shared/model-catalog"
 import { SOURCE_IMAGE_NODE_TYPES, PHOTO_AUTO_ASPECT_NODE_TYPES } from "@nodaro/shared/nodes"
 import { autoAspectSourceImageUrl, generateImageMayUsePhotoSize } from "../source-image.js"
+import { kieImageModelSent } from "../../../providers/kie/image-edit-sibling.js"
 
 describe("payload-builder-image-collage.test.ts", () => {
   /**
@@ -776,5 +778,139 @@ describe("MiniMax H3 Image in a workflow run", () => {
     const r = buildPayload(node("character", { name: "n", description: "d", provider: "minimax-h3-image", resolution: "4K" }), "j", {}, "u")
     expect(r.payload.resolution).toBeUndefined()
     expect(r.modelIdentifier).toBe("minimax-h3-image:2K")
+  })
+})
+
+describe("Seedream 5.5 in a workflow run", () => {
+  const SRC = "https://media.nodaro.ai/src.png"
+  const REF = "https://media.nodaro.ai/ref.png"
+  const node = (type: string, data: Record<string, unknown>): SimpleNode => ({ id: "n1", type, data })
+
+  it("Generate Image sends and prices its size; none is the default 2K", () => {
+    const sized = buildPayload(node("generate-image", { prompt: "a red bicycle", provider: "seedream-5-5", resolution: "1.5K", aspectRatio: "16:9" }), "j", {}, "u")
+    expect(sized.payload.resolution).toBe("1.5K")
+    expect(sized.modelIdentifier).toBe("seedream-5-5:1.5K")
+    const unset = buildPayload(node("generate-image", { prompt: "a red bicycle", provider: "seedream-5-5" }), "j", {}, "u")
+    expect(unset.modelIdentifier).toBe("seedream-5-5:2K")
+    // Text to image takes no auto: an unset ratio (Auto on the node) is sent as a real one.
+    expect(unset.payload.aspectRatio).toBe("1:1")
+  })
+
+  it("Generate Image with a base and a reference runs and is priced as an edit of both", () => {
+    const r = buildPayload(node("generate-image", { prompt: "a red bicycle", provider: "seedream-5-5", resolution: "1K", baseImageUrl: SRC, referenceImageUrls: [REF] }), "j", {}, "u")
+    expect(r.payload.model).toBe("seedream-5-5-i2i")
+    expect(r.modelIdentifier).toBe("seedream-5-5-i2i:1K:2ref")
+  })
+
+  it("Image to Image counts its source and moves transparent to auto in JPEG", () => {
+    const r = buildPayload(
+      node("image-to-image", { prompt: "make it night", provider: "seedream-5-5-i2i", resolution: "2K", background: "transparent", outputFormat: "jpeg" }),
+      "j",
+      { imageUrl: SRC },
+      "u",
+    )
+    expect(r.payload.outputFormat).toBe("jpeg")
+    expect(r.payload.background).toBe("auto")
+    expect(r.modelIdentifier).toBe("seedream-5-5-i2i:2K:1ref")
+  })
+
+  it("a face node with a source image is priced as the edit it runs as", () => {
+    const r = buildPayload(node("face", { name: "n", description: "d", provider: "seedream-5-5", sourceImageUrl: SRC }), "j", {}, "u")
+    expect(r.modelIdentifier).toBe("seedream-5-5-i2i:2K:1ref")
+  })
+
+  it("a prompt shorter than the model takes is refused before any job row", () => {
+    expect(() => buildPayload(node("generate-image", { prompt: "cat", provider: "seedream-5-5" }), "j", {}, "u")).toThrow(/at least 5 characters/)
+    expect(() => buildPayload(node("image-to-image", { prompt: "red", provider: "seedream-5-5-i2i" }), "j", { imageUrl: SRC }, "u")).toThrow(/at least 5 characters/)
+    expect(() => buildPayload(node("modify-image", { prompt: "red", provider: "seedream-5-5-i2i" }), "j", { imageUrl: SRC }, "u")).toThrow(/at least 5 characters/)
+    // Another model is not held to it.
+    expect(() => buildPayload(node("generate-image", { prompt: "cat", provider: "seedream-5-flash" }), "j", {}, "u")).not.toThrow()
+    // Blank space is not a description: counted after trimming.
+    expect(() => buildPayload(node("generate-image", { prompt: "    a", provider: "seedream-5-5" }), "j", {}, "u")).toThrow(/at least 5 characters/)
+  })
+
+  it.each(["character", "face", "object", "creature", "location"])(
+    "a %s node with no name sends its description: one under 5 characters is refused before any job row",
+    (type) => {
+      expect(() => buildPayload(node(type, { description: "cat", provider: "seedream-5-5" }), "j", {}, "u")).toThrow(/at least 5 characters/)
+      expect(() => buildPayload(node(type, { description: "  cat  ", provider: "seedream-5-5", sourceImageUrl: SRC }), "j", {}, "u")).toThrow(/at least 5 characters/)
+      expect(() => buildPayload(node(type, { description: "a red bicycle", provider: "seedream-5-5" }), "j", {}, "u")).not.toThrow()
+      // A name builds the prompt from a template, and another model has no minimum.
+      expect(() => buildPayload(node(type, { name: "Bo", description: "cat", provider: "seedream-5-5" }), "j", {}, "u")).not.toThrow()
+      expect(() => buildPayload(node(type, { description: "cat", provider: "seedream-5-flash" }), "j", {}, "u")).not.toThrow()
+    },
+  )
+
+  it("a Scene sends a ratio the model lists, and its prompt is held to the minimum", () => {
+    const scene = (data: Record<string, unknown>) => buildPayload(node("scene", { provider: "seedream-5-5", ...data }), "j", { prompt: "a red bicycle in the rain" }, "u")
+    expect(scene({ aspectRatio: "auto" }).payload.aspectRatio).toBe("1:1")
+    expect(scene({ aspectRatio: "4:5" }).payload.aspectRatio).toBe("3:4")
+    expect(scene({ aspectRatio: "21:9" }).payload.aspectRatio).toBe("21:9")
+    expect(scene({}).payload.aspectRatio).toBeUndefined()
+    expect(() => buildPayload(node("scene", { provider: "seedream-5-5", prompt: "cat" }), "j", {}, "u")).toThrow(/at least 5 characters/)
+  })
+
+  it("a Scene with a reference snaps its ratio against the edit model the run reaches", () => {
+    // With an image, Seedream 5.5 runs on its edit, which takes "auto": it goes as stored.
+    const withRef = buildPayload(
+      node("scene", { provider: "seedream-5-5", aspectRatio: "auto" }),
+      "j",
+      { prompt: "a red bicycle in the rain", referenceImageUrls: ["https://media.nodaro.ai/ref.png"] },
+      "u",
+    )
+    expect(withRef.payload.referenceImageUrls).toEqual(["https://media.nodaro.ai/ref.png"])
+    expect(withRef.payload.aspectRatio).toBe("auto")
+  })
+})
+
+
+describe("Scene: only a strict model's ratio is checked; every other model's goes as stored", () => {
+  // Every ratio the Scene panel offers (scene-config.tsx) and the surround route
+  // takes, plus every ratio the routes know and "auto". GPT Image 2 renders 21:9
+  // and 4:5 although its catalog list omits them, so no list is enough to move a
+  // ratio: only `strictAspectRatios` (read from the provider's schema) is.
+  const SCENE_PANEL_RATIOS = ["16:9", "9:16", "1:1", "4:3", "21:9", "4:5"]
+  const SENDABLE = [...new Set(["auto", ...SCENE_PANEL_RATIOS, ...CHARACTER_ASPECT_OPTIONS, ...IMAGE_ASPECT_RATIO_VALUES])]
+  const REF = "https://media.nodaro.ai/ref.png"
+  const scene = (provider: string, aspectRatio: string, withReference: boolean) =>
+    buildPayload(
+      { id: "s1", type: "scene", data: { provider, aspectRatio } },
+      "j",
+      { prompt: "a quiet harbour at dawn", ...(withReference ? { referenceImageUrls: [REF] } : {}) },
+      "u",
+    ).payload.aspectRatio
+
+  it("covers the catalog", () => {
+    expect(Object.values(MODEL_CATALOG).filter((m) => m.kind === "image" && !m.strictAspectRatios).length).toBeGreaterThan(30)
+  })
+
+  for (const m of Object.values(MODEL_CATALOG)) {
+    if (m.kind !== "image" || m.strictAspectRatios) continue
+    it(`${m.id}: every sendable ratio, with and without a reference`, () => {
+      for (const ratio of SENDABLE) {
+        expect(scene(m.id, ratio, false), `${ratio} without a reference`).toBe(ratio)
+        expect(scene(m.id, ratio, true), `${ratio} with a reference`).toBe(ratio)
+      }
+    })
+  }
+
+  it("GPT Image 2 (the Scene's default) keeps 21:9 and 4:5", () => {
+    for (const withReference of [false, true]) {
+      expect(scene("gpt-image-2", "21:9", withReference)).toBe("21:9")
+      expect(scene("gpt-image-2", "4:5", withReference)).toBe("4:5")
+    }
+  })
+
+  it("a model the catalog does not know keeps what it was given", () => {
+    expect(scene("not-a-model", "4:5", false)).toBe("4:5")
+    expect(scene("not-a-model", "4:5", true)).toBe("4:5")
+  })
+
+  it("Seedream 5.5 keeps every ratio the model it reaches lists, and text to image never gets auto", () => {
+    for (const withReference of [false, true]) {
+      const reached = MODEL_CATALOG[kieImageModelSent("seedream-5-5", withReference ? 1 : 0)]!
+      for (const ratio of reached.aspectRatios!) expect(scene("seedream-5-5", ratio, withReference), ratio).toBe(ratio)
+    }
+    for (const ratio of SENDABLE) expect(scene("seedream-5-5", ratio, false), ratio).not.toBe("auto")
   })
 })

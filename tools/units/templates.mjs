@@ -107,6 +107,8 @@ export function descriptorSource(unit) {
     category: m.category,
     description: m.registry.description,
     outputType: m.registry.outputType,
+    // Its /v1/nodes category when its own category is not one the server shares (registry.category).
+    ...(m.registry.category !== undefined ? { registryCategory: m.registry.category } : {}),
     position: m.position,
     // Its place in /v1/nodes, when the manifest states one apart from position.after.
     ...("after" in m.registry ? { registryPosition: { after: m.registry.after } } : {}),
@@ -115,6 +117,9 @@ export function descriptorSource(unit) {
     handles: m.handles,
     execution: m.execution,
     capabilities: m.capabilities,
+    // What kind of media its output is (contract.producer; null when it outputs
+    // none) — the server's image sets compose it (as the editor's definition does).
+    producer: m.contract?.producer ?? null,
     // The MCP verbs whose widget names this unit (backend/src/lib/mcp/widget-models.ts), only when declared.
     ...(m.mcp ? { mcp: m.mcp } : {}),
     // Why no rule bounds its length (the "length:unknown" capability), when it has one.
@@ -166,6 +171,8 @@ export function inPositionOrder(units, legacyTypes) {
 }
 
 const isUseCase = (u) => u.manifest.execution?.kind === "use-case"
+/** The ids of a unit's list outputs (handles.outputs[].list), in manifest order. */
+const listPips = (u) => (Array.isArray(u.manifest.handles?.outputs) ? u.manifest.handles.outputs.filter((h) => h?.list === true).map((h) => h.id) : [])
 const row = (type, values) => `  [${[JSON.stringify(type), ...values].join(", ")}], ${tag(type)}`
 
 /**
@@ -187,7 +194,7 @@ export function contractsSource(units, legacyTypes = []) {
     "// The unit contract published in @nodaro/shared (decided 2026-10-16, widened 2026-10-18): node type",
     "// ids with closed vocabularies — each unit's producer kind, the use-case types, what each JSON pip",
     "// carries, the input pips that are never a prompt lane, the review holds, how a published app",
-    "// presents the result and which outputs fan out item by item. Never a price, credit id, number,",
+    "// presents the result, which outputs fan out item by item and which carry a list. Never a price, credit id, number,",
     "// prompt or doctrine string. Each block feeds a published table that composes its rows with the",
     "// hand-written ones (unit-contract-compose.ts); every row is an irrevocable Apache grant.",
     "",
@@ -223,6 +230,11 @@ export function contractsSource(units, legacyTypes = []) {
     "// The outputs an \"each\" edge reads item by item when the unit ran once per item, and the pip an edge naming none reads (contract.fanOutEach) — producer-types.ts.",
     "export const UNIT_FAN_OUT_EACH: ReadonlyArray<readonly [type: string, handles: { readonly each: ReadonlyArray<string>; readonly primary: string }]> = [",
     ...ordered.filter((u) => contract(u).fanOutEach).map((u) => row(u.type, [`{ "each": [${contract(u).fanOutEach.each.map((h) => JSON.stringify(h)).join(", ")}], "primary": ${JSON.stringify(contract(u).fanOutEach.primary)} }`])),
+    "]",
+    "",
+    "// The outputs that carry one run's list of files (handles.outputs[].list), whose wires run the next node once per item by default — producer-types.ts.",
+    "export const UNIT_LIST_PIPS: ReadonlyArray<readonly [type: string, pips: ReadonlyArray<string>]> = [",
+    ...ordered.filter((u) => listPips(u).length).map((u) => row(u.type, [`[${listPips(u).map((h) => JSON.stringify(h)).join(", ")}]`])),
     "]",
     "",
   ].join("\n")

@@ -523,12 +523,20 @@ nodaro media generate-mask <imageUrl> <prompt> [--threshold <n>] [--watch] [--po
                                                          # mask image (white = the subject). --threshold 0-1 (default 0.3; lower selects more). The job's
                                                          # output carries maskUrl (the mask) and imageUrl (the source, passed through) — feed both to an
                                                          # inpainting edit. Price: GET /v1/credits/model-cost?model=generate-mask. See docs/nodes/ai-image/generate-mask.md.
-nodaro media video-overlay <videoUrl> [layerUrls...] [--at <start[-end]>...] [--preset card|corner-badge|full-frame] [--corner top-left|top-right|bottom-left|bottom-right] [--layers-file <path>] [--aspect 16:9|9:16|1:1|4:5] [--base-fit cover|contain] [--background-color <hex>] [--watch] [--poll-interval <ms>] [--json]
-                                                         # 1-20 timed image layers over a video in one local FFmpeg render (no AI), 20 credits; the base
-                                                         # audio is kept untouched. One --at per positional layer URL, in order ("3" = from 3 s to the end,
-                                                         # "1.2-2.6"); --preset/--corner apply to every positional layer. --layers-file takes the full API
-                                                         # layers array instead (per-layer boxes, opacity, animate, zIndex). --base-fit and --background-color
-                                                         # need --aspect. See docs/nodes/processing-video/video-overlay.md.
+nodaro media video-overlay <videoUrl> [layerUrls...] [--at <start[-end]>...] [--preset card|corner-badge|full-frame] [--corner top-left|top-right|bottom-left|bottom-right] [--layers-file <path>] [--aspect 16:9|9:16|1:1|4:5] [--base-fit cover|contain] [--background-color <hex>] [--layout video-bottom|video-top|stack-whole|stack-filled|pip] [--base-box <json>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # 1-20 timed image or video layers over a video in one local FFmpeg render (no AI). Positional
+                                                         # URLs are IMAGE layers: one --at per URL, in order ("3" = from 3 s to the end, "1.2-2.6");
+                                                         # --preset/--corner apply to every positional layer. --layers-file takes the full API layers
+                                                         # array instead — per-layer boxes, opacity, animate, zIndex, and VIDEO layers: "videoUrl" in
+                                                         # place of "imageUrl" (at most 2), silent unless they set "sound":{"volume":0-1}, e.g.
+                                                         #   [{"videoUrl":"https://x/guest.mp4","start":0,"corner":"top-right","sound":{"volume":0.8}}]
+                                                         # --layout places the base, the first video layer or both (video-bottom / video-top: the base
+                                                         # whole against that edge; stack-whole / stack-filled: the base above the first video layer; pip:
+                                                         # that layer in its corner); all but pip need --aspect. --base-box '{"anchor":"bottom","width":100}'
+                                                         # places the base yourself. --base-fit, --background-color and --base-box need --aspect.
+                                                         # Image-only runs have one flat price; a run with a video layer (base up to 60 s) is priced per
+                                                         # started 5 s of the base: GET /v1/credits/model-cost?model=video-overlay:video.
+                                                         # See docs/nodes/processing-video/video-overlay.md.
 nodaro media video-mask <videoUrl> <prompt> [--threshold <n>] [--model sam-3.1|sam-3] [--hold-last-mask] [--min-subject-height <pct>] [--max-subject-height <pct>] [--zone <L,R,T,B>] [--per-shot] [--redetect-every <sec>] [--watch] [--poll-interval <ms>] [--json]
                                                          # tracks a subject described in text through a video (SAM 3.1 by default; --model sam-3 costs
                                                          # half) and returns a black-and-white mask video (white = the subject). --threshold 0.05-0.95

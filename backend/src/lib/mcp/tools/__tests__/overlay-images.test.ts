@@ -34,6 +34,7 @@ beforeEach(() => {
 })
 const VIDEO = "https://cdn.example/base.mp4"
 const IMG = "https://cdn.example/card.png"
+const CLIP = "https://cdn.example/clip.mp4"
 
 describe("overlay_images", () => {
   it("maps url / asset_id layers and z_index onto the route body, resolving ids as images", async () => {
@@ -100,14 +101,109 @@ describe("overlay_images", () => {
     expect(received.url).toBeUndefined()
   })
 
-  it("refuses a missing base and a layer with neither url nor asset_id", async () => {
+  it("refuses a missing base and a layer with no source", async () => {
     const { fastify } = stubRoute("POST", "/v1/video-overlay", { jobId: "never" })
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify })
     const noBase = await callTool(server, "overlay_images", { layers: [{ url: IMG, start: 0 }] })
     expect((noBase.content[0] as { text: string }).text).toBe("Provide the base video as video_url or video_asset_id.")
-    const noImage = await callTool(server, "overlay_images", { video_url: VIDEO, layers: [{ start: 0 }] })
-    expect((noImage.content[0] as { text: string }).text).toBe("layers[0]: give the image as url or asset_id")
+    const noSource = await callTool(server, "overlay_images", { video_url: VIDEO, layers: [{ start: 0 }] })
+    expect((noSource.content[0] as { text: string }).text).toBe(
+      "layers[0]: give an image (url or asset_id) or a video (video_url or video_asset_id)",
+    )
+  })
+
+  it("sends a video layer's video_url as videoUrl, with its sound, and the layout and base_box", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-overlay", { jobId: "j-vo-3" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "overlay_images", {
+      video_url: VIDEO,
+      layers: [
+        { video_url: CLIP, start: 0, sound: { volume: 0.8 }, corner: "top-left" },
+        { url: IMG, start: 1, preset: "card" },
+      ],
+      output_aspect: "9:16",
+      layout: "pip",
+      base_box: { anchor: "bottom", width: 100 },
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body).toEqual({
+      videoUrl: VIDEO,
+      layers: [
+        { videoUrl: CLIP, start: 0, sound: { volume: 0.8 }, corner: "top-left" },
+        { imageUrl: IMG, start: 1, preset: "card" },
+      ],
+      outputAspect: "9:16",
+      layout: "pip",
+      baseBox: { anchor: "bottom", width: 100 },
+      mcp_client: "Claude",
+      userId: "u1",
+    })
+    expect(resolver.calls).toEqual([])
+  })
+
+  it("resolves a layer's video_asset_id as a video", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-overlay", { jobId: "j-vo-4" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "overlay_images", { video_url: VIDEO, layout: "stack-whole", output_aspect: "9:16", layers: [{ video_asset_id: "clip-job", start: 0 }] })
+    expect(received.body?.layers).toEqual([{ videoUrl: "https://cdn.example/resolved/clip-job.mp4", start: 0 }])
+    expect(resolver.calls).toEqual([{ assetId: "clip-job", userId: "u1", expectedKind: "video" }])
+  })
+
+  it("a layer video_asset_id that fails to resolve is an error naming its position", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-overlay", { jobId: "never" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "overlay_images", { video_url: VIDEO, layers: [{ url: IMG, start: 0 }, { video_asset_id: "missing", start: 0 }] })
+    expect((result.content[0] as { text: string }).text).toBe("layers[1]: Asset missing not found")
+    expect(received.url).toBeUndefined()
+  })
+
+  it.each([
+    ["url + video_url", { url: IMG, video_url: CLIP }],
+    ["asset_id + video_asset_id", { asset_id: "img-job", video_asset_id: "clip-job" }],
+    ["url + video_asset_id", { url: IMG, video_asset_id: "clip-job" }],
+  ])("refuses a layer with an image AND a video (%s) before resolving anything", async (_name, sources) => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-overlay", { jobId: "never" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "overlay_images", { video_url: VIDEO, layers: [{ url: IMG, start: 0 }, { ...sources, start: 0 }] })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toBe(
+      "layers[1]: a layer is an image (url or asset_id) or a video (video_url or video_asset_id), not both",
+    )
+    expect(resolver.calls).toEqual([])
+    expect(received.url).toBeUndefined()
+  })
+
+  it("leaves the request rules to the route: sound on an image layer reaches it and its refusal comes back", async () => {
+    const fastify = Fastify()
+    let body: Record<string, unknown> | undefined
+    fastify.post("/v1/video-overlay", async (req, reply) => {
+      body = req.body as Record<string, unknown>
+      return reply.status(400).send({ error: { code: "validation_error", message: "layers[0]: sound is only for a video layer — remove it or set videoUrl" } })
+    })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "overlay_images", { video_url: VIDEO, layers: [{ url: IMG, start: 0, sound: { volume: 1 } }] })
+    expect(body?.layers).toEqual([{ imageUrl: IMG, start: 0, sound: { volume: 1 } }])
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toContain("sound is only for a video layer")
+  })
+
+  it("refuses a sound volume outside 0..1 and an unknown layout at the schema", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-overlay", { jobId: "never" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const loud = await callTool(server, "overlay_images", { video_url: VIDEO, layers: [{ video_url: CLIP, start: 0, sound: { volume: 2 } }] })
+    expect(loud.isError).toBe(true)
+    expect((loud.content[0] as { text: string }).text).toContain("volume")
+    const layout = await callTool(server, "overlay_images", { video_url: VIDEO, layout: "grid", layers: [{ video_url: CLIP, start: 0 }] })
+    expect(layout.isError).toBe(true)
+    expect((layout.content[0] as { text: string }).text).toContain("layout")
+    expect(received.url).toBeUndefined()
   })
 
   it("surfaces the route's validation message", async () => {

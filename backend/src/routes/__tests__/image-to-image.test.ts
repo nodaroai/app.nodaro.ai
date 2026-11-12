@@ -371,6 +371,22 @@ describe("POST /v1/image-to-image", () => {
       expect((await postDefault(16)).statusCode).toBe(400)
     })
 
+    it("Seedream 5.5 takes 10: the image and 9 more", async () => {
+      mockJobInsert("job-10")
+      expect((await post("seedream-5-5-i2i", 9)).statusCode).toBe(200)
+      expect((await post("seedream-5-5-i2i", 10)).statusCode).toBe(400)
+    })
+
+    it("Seedream 5.5 refuses a prompt shorter than 5 characters, before any job row", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/image-to-image",
+        payload: { imageUrl: "https://example.com/image.png", prompt: "red", userId: VALID_UUID, provider: "seedream-5-5-i2i" },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.message).toContain("at least 5 characters")
+    })
+
     it("every other model stays at 14", async () => {
       mockJobInsert("job-14")
       expect((await post("gpt-image-2-5-flare-i2i", 13)).statusCode).toBe(200)

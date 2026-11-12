@@ -253,6 +253,12 @@ export interface NodeOutput {
    *  string its pip hands on (`unitPipValue`, lib/unit-compose.ts). The first
    *  one's value also rides `json`, for the readers that read that. */
   unitOutputs?: Readonly<Record<string, string>>
+  /** A node unit's LIST outputs (`handles.outputs[].list`), by output id: the
+   *  files one run made on that pip, in order — never empty (an empty list is
+   *  no value, the key is absent). A plain wire from the pip carries the first
+   *  (`unitPipValue`), an Each wire runs the next node once per item, a Bundle
+   *  hands every item, each as its own file (input-resolver.ts). */
+  unitLists?: Readonly<Record<string, readonly string[]>>
   /** UGC Script: the job's result, as the node's `result` holds it (plan, category, warnings, notes, rounds). */
   ugcResult?: Record<string, unknown>
   /** UGC Creator, a run where a person picks: the options that passed, waiting for the pick. A COMPLETED state
@@ -660,6 +666,10 @@ export interface ResolvedInputs {
    *  handle is unwired; the payload builder skips the holes and aligns
    *  data.layers[i] by index. */
   overlayImageUrls?: (string | undefined)[]
+  /** Video Overlay: the 1-based slots whose wired source is a video
+   *  (`videoOverlayWiredLayerKind`), ascending — the assembly's
+   *  `wiredVideoSlots`. Absent when every wired layer is an image. */
+  overlayVideoSlots?: number[]
   /** Video Overlay's reserved JSON layer-plan input (VIDEO_OVERLAY_LAYER_PLAN_HANDLE).
    *  Read by the assembly (plan layers first). */
   layerPlan?: string

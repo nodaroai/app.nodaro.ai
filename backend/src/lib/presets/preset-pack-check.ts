@@ -1,6 +1,8 @@
 import { getRegisteredPickerCatalogs, type PickerCatalog } from "@nodaro/prompts/picker-catalogs"
 import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
 import { isModelFactoryDenied } from "../surface-deny.js"
+import { houseModelServed, isOwnLabelModel } from "../house-models-served.js"
+import { pluginServicesLoaded } from "../private-plugins/services-registry.js"
 import { getRegisteredPresetPacks, type PackPreset } from "./app-presets.js"
 
 /**
@@ -13,7 +15,14 @@ import { getRegisteredPresetPacks, type PackPreset } from "./app-presets.js"
  *  - MODELS: every id named in a field a run takes its model from must be one
  *    the surface profile offers (`isModelFactoryDenied`). The profile ALONE:
  *    the admin override and the admin's model switch change at run time, so
- *    judging by them would let a click in Admin stop the next restart.
+ *    judging by them would let a click in Admin stop the next restart. A house
+ *    model (an own-label catalog entry) is not judged here: whether it is
+ *    served depends on its upstream key being present in this process, which
+ *    differs between services and changes at run time, so refusing the boot
+ *    could crash-loop a service. A preset naming one this process does not
+ *    serve is a WARNING (`presetPackHouseModelWarnings`, logged by the overlay
+ *    loader once the plugins have loaded), and the preset is refused when it
+ *    runs, before any hold (`isModelDenied`).
  *  - PICKER IDS: every id in a field that holds picker ids must be an option of
  *    the COMPOSED catalog that field reads, base catalogs plus every registered
  *    catalog pack — so a preset cannot bring back an option the deployment's
@@ -129,6 +138,33 @@ function modelProblems(preset: PackPreset): string[] {
     }
   }
   return out
+}
+
+/**
+ * The house models registered presets name that this process does not serve,
+ * one warning line each (the pack, the preset, the field, the model) — never
+ * a boot refusal (see the module doc). Judged only once this process has
+ * loaded the private plugins: before that, no house model reads as served.
+ * Empty before then.
+ */
+export function presetPackHouseModelWarnings(): string[] {
+  if (!pluginServicesLoaded()) return []
+  const warnings: string[] = []
+  for (const pack of getRegisteredPresetPacks()) {
+    for (const preset of pack.presets) {
+      for (const field of MODEL_FIELDS) {
+        for (const id of picks(preset.data[field])) {
+          if (isOwnLabelModel(id) && !houseModelServed(id)) {
+            warnings.push(
+              `preset pack for "${pack.nodeType}": preset "${preset.id}" names house model "${id}" (data.${field}), ` +
+                "which this process does not serve — the preset is refused when it runs",
+            )
+          }
+        }
+      }
+    }
+  }
+  return warnings
 }
 
 function pickerProblems(nodeType: string, preset: PackPreset, catalogs: readonly PickerCatalog[]): string[] {

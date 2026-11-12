@@ -17,7 +17,7 @@ import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, getModelCreditBaseCost } 
 // community/business too, where no ee/ module may be loaded at runtime.
 // ee -> core is the allowed direction; re-exported so existing importers of
 // this module are unaffected.
-import { probeRefVideoDurations } from "../../lib/ref-video-probe.js"
+import { probeRefVideoDurations, refVideoProbeCandidates } from "../../lib/ref-video-probe.js"
 import { geminiOmni12LadderSec, videoRefBilledDurations, type VideoSourceTrim } from "../../lib/gemini-omni-12-source.js"
 import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
 
@@ -391,9 +391,10 @@ export interface Seedance2RefVideoActualSeconds {
  */
 export async function seedance2RefVideoActualSeconds(args: Seedance2RefVideoActualArgs): Promise<Seedance2RefVideoActualSeconds> {
   const { provider, outputUrl, referenceVideoUrls, requestedDuration } = args
+  const reserved = Array.isArray(args.durationsSec) ? args.durationsSec : undefined
   const [measuredOutputSec, durationsSec] = await Promise.all([
     probeMediaDuration(outputUrl),
-    Array.isArray(args.durationsSec) ? args.durationsSec : probeRefVideoDurations({ provider, referenceVideoUrls }),
+    reserved ? remeasureUnreadClips(provider, reserved, referenceVideoUrls) : probeRefVideoDurations({ provider, referenceVideoUrls }),
   ])
   // Kling 4.0 renders whole seconds (a 3s clip measures 3.04s — live
   // 2026-10-23), so the measured length rounds to the second it was billed at.
@@ -401,7 +402,9 @@ export async function seedance2RefVideoActualSeconds(args: Seedance2RefVideoActu
     ? measuredOutputSec
     : Math.max(1, Math.round(measuredOutputSec))
   if (!isUsableDuration(deliveredSec)) throw new Error(`unusable output duration: ${measuredOutputSec}`)
-  const heldSec = autoEditHeldOutputSec(provider, requestedDuration, durationsSec)
+  // The hold is what the RESERVATION held, so it reads the reservation's own
+  // probe — a clip measured only now never re-sizes it.
+  const heldSec = autoEditHeldOutputSec(provider, requestedDuration, reserved ?? durationsSec)
   let chargedOutputSec = deliveredSec
   if (heldSec !== undefined && deliveredSec > heldSec) {
     console.error(
@@ -410,6 +413,62 @@ export async function seedance2RefVideoActualSeconds(args: Seedance2RefVideoActu
     chargedOutputSec = heldSec
   }
   return { deliveredSec, chargedOutputSec, inputSec: billedInputSeconds(provider, durationsSec).totalSec }
+}
+
+/**
+ * How long the settlement's re-measure ({@link remeasureUnreadClips}) may take.
+ * It runs between the provider's delivery and the job's finalize, so it holds
+ * a FINISHED clip back from the user, and it probes only clips that already
+ * failed at the reservation — the likeliest to be slow or unreachable. Without
+ * a budget each probe could wait out ffprobe's 120 s watchdog, four at a time.
+ *
+ *  - Per clip, 5 s: ffprobe reads only a clip's container header, which a
+ *    reachable host serves in a second or two, so 5 s is generous for a host
+ *    that has recovered and short for one that has not. The ffprobe process
+ *    is killed at the budget.
+ *  - In all, 10 s: four clips are probed at a time, so ten clips would take
+ *    three rounds of 5 s; the ceiling allows two — a short wait set against
+ *    a run that took minutes, and far inside any node's timeout.
+ *
+ * A clip not read within the budget keeps the worst case the run reserved, so
+ * the budget can only leave a charge where it was, never raise it.
+ */
+export const SETTLE_REMEASURE_CLIP_TIMEOUT_MS = 5_000
+export const SETTLE_REMEASURE_TOTAL_MS = 10_000
+
+/**
+ * The reservation's probe of the reference clips, with every clip it could not
+ * measure (NaN, ≤0, or the `null` a NaN becomes in JSON) measured again now.
+ * A clip that reads now counts at its length, never above the worst case the
+ * reservation held for it ({@link refVideoWorstCaseSecFor}); one that still
+ * cannot be read stays unusable, so {@link billedInputSeconds} keeps the worst
+ * case. Each clip's figure can only fall, so the settlement can only lower
+ * the charge. The probe is aligned to its clips by
+ * `refVideoProbeCandidates`, the rule that made it; a probe of another length
+ * (a stale job) is kept as it is. The re-measure runs within
+ * {@link SETTLE_REMEASURE_CLIP_TIMEOUT_MS} per clip and
+ * {@link SETTLE_REMEASURE_TOTAL_MS} in all, and never throws.
+ */
+async function remeasureUnreadClips(
+  provider: string,
+  reserved: readonly unknown[],
+  referenceVideoUrls: readonly unknown[],
+): Promise<unknown[]> {
+  const clips = refVideoProbeCandidates(provider, referenceVideoUrls)
+  const unread = reserved.flatMap((d, i) => (typeof d === "number" && isUsableDuration(d) ? [] : [i]))
+  if (unread.length === 0 || clips.length !== reserved.length) return [...reserved]
+  const fresh = await probeRefVideoDurations({
+    provider,
+    referenceVideoUrls: unread.map((i) => clips[i]!),
+    budget: { clipTimeoutMs: SETTLE_REMEASURE_CLIP_TIMEOUT_MS, totalMs: SETTLE_REMEASURE_TOTAL_MS },
+  }).catch(() => [] as number[])
+  const worst = refVideoWorstCaseSecFor(provider)
+  const out = [...reserved]
+  unread.forEach((clip, k) => {
+    const d = fresh[k]
+    if (typeof d === "number" && isUsableDuration(d)) out[clip] = Math.min(d, worst)
+  })
+  return out
 }
 
 /**

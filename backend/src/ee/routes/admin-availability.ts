@@ -6,6 +6,7 @@ import { NODE_REGISTRY } from "../../lib/node-registry.js"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { LLM_MODELS } from "@nodaro/shared/llm-models"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
+import { isHouseModelUnserved } from "../../lib/surface-deny.js"
 import {
   availabilityOverride,
   gateGeneration,
@@ -72,7 +73,8 @@ export async function adminAvailabilityRoutes(app: FastifyInstance) {
       })),
       ...LLM_MODELS.map((m) => ({ id: m.id, label: m.displayName, category: "llm" })),
     ]
-      .filter((m) => GATEABLE_MODEL_IDS.has(m.id))
+      // A house model this install does not serve is no model here: no switch for it.
+      .filter((m) => GATEABLE_MODEL_IDS.has(m.id) && !isHouseModelUnserved(m.id))
       .map((m) => ({
         ...m,
         factoryEnabled: factoryEnabled("models", m.id),

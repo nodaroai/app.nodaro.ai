@@ -1,4 +1,6 @@
 import type { IdentityMeta } from "@nodaro/shared/types"
+import { aliasRetiredCharacterMentions, wiredCharacterNamesOf } from "@nodaro/shared/entities"
+import { bypassTeleports } from "@nodaro/render-rules"
 import type { AssembleImageInput } from "@nodaro/prompts/assembly"
 import { readDirectionFields, readStructuredFields, readSubjectFields } from "@nodaro/prompts/prompt-builder"
 import { collectAncestorRefs } from "@/components/editor/workflow-editor/execution-graph"
@@ -145,7 +147,9 @@ export function buildImageAssembleInput(
   const structured = readStructuredFields(data.structured)
 
   return {
-    userPrompt: composedPrompt,
+    // A mention saved before unnamed characters were numbered reads as the one
+    // unnamed character wired here, exactly as the run reads it.
+    userPrompt: aliasRetiredCharacterMentions(composedPrompt, wiredCharacterNamesOf(node.id, nodes, bypassTeleports(nodes, edges))),
     provider,
     style: styleBypass ? undefined : style,
     negativePrompt: resolvedNegative || undefined,

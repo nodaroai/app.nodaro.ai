@@ -301,3 +301,33 @@ describe("/v1/text-to-video — character voice persona", () => {
     }
   })
 })
+
+describe("POST /v1/text-to-video — a character seated in the reference images counts once (one-budget models)", () => {
+  // The editor's text-to-video Run seats a wired character's portrait in
+  // referenceImageUrls AND sends the character in characterReferences; the
+  // provider runner turns that seat into the subject, so it is ONE material —
+  // the count /v1/generate-video already makes.
+  const portrait = (i: number) => `https://cdn.example/char${i}.png`
+  const subject = (i: number) => char({ name: `C${i}`, imageUrl: portrait(i), extraImageUrls: [`https://cdn.example/char${i}-b.png`] })
+  const shape = (provider: string, plainRefs: number) => ({
+    provider,
+    audioSoundtrack: false,
+    characterReferences: [subject(1), subject(2), subject(3)],
+    referenceImageUrls: [portrait(1), portrait(2), portrait(3), ...Array.from({ length: plainRefs }, (_, i) => `https://cdn.example/ref${i}.png`)],
+    referenceVideoUrls: Array.from({ length: 5 }, (_, i) => `https://cdn.example/v${i}.mp4`),
+  })
+
+  it("6 reference images + 3 characters (their portraits seated too) + 5 videos is 14 materials, not 17", async () => {
+    mockJobInsert({ data: { id: "job-seat-1" }, error: null })
+    for (const provider of ["kling-4", "kling-4-flash"]) {
+      const res = await post(shape(provider, 6))
+      expect(res.statusCode, `${provider}: ${res.body}`).toBe(200)
+    }
+  })
+
+  it("a real 16th material is still refused", async () => {
+    // 3 seated + 8 plain images + 5 videos = 16.
+    const res = await post(shape("kling-4", 8))
+    expect(res.statusCode).toBe(400)
+  })
+})

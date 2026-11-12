@@ -58,7 +58,7 @@ import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-e
 import { usecaseResultIsText } from "@nodaro/render-rules"
 import { usecaseFailedRunFields, usecaseRestoredResults, usecaseTextRunPatch } from "@/lib/use-case-run-result"
 import { carriesRowStamps, runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
-import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
+import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitSideJobFields, unitSideRunFields } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, UGC_PATCH_REPLACES_GENERIC, isUgcFinishNode, ugcCreatorShowsRun, ugcJobMayLand, ugcJobNoOutputMessage, ugcJobResultPatch, ugcRunPatch, ugcStopPatch } from "@/lib/ugc-run-patch"
 import { serverNowIso } from "@/lib/server-clock"
 import { promptUgcCredits, ugcCreditStopOf } from "@/lib/ugc-creator-run"
@@ -1684,12 +1684,15 @@ export function applyRestoredJobCompletion(
   // Video Overlay: the worker's warnings / canvas / length, on the node and the
   // result — the same mapping the live run writes (lib/video-overlay-run-output).
   const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(job.output_data) : undefined;
+  // A node unit's side outputs (a list, JSON beside the take): on the node and the take, as the canvas run lands them.
+  const sideRun = unitSideJobFields(nodeType, job.output_data);
   const newResult: GeneratedResult = {
     url: (outputUrl as string) ?? "",
     timestamp: new Date().toISOString(),
     jobId,
     ...runResultIdentity(nodeType, job.output_data),
     ...(overlayRun ?? {}),
+    ...(sideRun ?? {}),
     // Apply EDL: the take keeps the Transcript its render was cut with.
     ...applyEdlTakeTranscriptField(nodeType, job.output_data, outputUrl),
   };
@@ -1705,6 +1708,7 @@ export function applyRestoredJobCompletion(
     // the terminal write is the only place the hold flag can be cleared.
     jobAwaitingReview: undefined,
     ...(overlayRun ?? {}),
+    ...(sideRun ?? {}),
   };
 
   if (job.output_data?.imageUrl) {
@@ -2220,6 +2224,10 @@ export interface NodeExecutionState {
     clipWarnings?: readonly string[];
     /** UGC Clip fanned out: each clip's warnings and length, row-aligned with listResults. Mirrors backend NodeOutput. */
     listResultMeta?: readonly unknown[];
+    /** A node unit's JSON (look) outputs, by output id — each the JSON string a wire carries. Mirrors backend NodeOutput. */
+    unitOutputs?: Record<string, string>;
+    /** A node unit's list outputs, by output id — the list one run made on that pip. Mirrors backend NodeOutput. */
+    unitLists?: Record<string, string[]>;
   };
   error?: string;
   /** Stable billing-refusal code (backend reserve-errors.ts) — branch on this, never on text. */
@@ -2459,6 +2467,10 @@ function syncNodeStatesToStore(
         // result entry — the same mapping the single-node Run writes.
         const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(state.output) : undefined;
         if (overlayRun) Object.assign(updates, overlayRun);
+        // A node unit's side outputs (a list, JSON beside the take): on the node
+        // and on the take, as the canvas run lands them (lib/json-run-result.ts).
+        const sideRun = unitSideRunFields(nodeType, state.output);
+        if (sideRun) Object.assign(updates, sideRun);
         // Not on a trigger node: its "text" is the incoming message or payload,
         // which stays in the run history (the editor reads a trigger's values
         // from the transient __triggerData, never from a saved result).
@@ -2623,6 +2635,7 @@ function syncNodeStatesToStore(
                   jobId: state.jobId ?? `exec-${node.id}`,
                   ...runResultIdentity(nodeType, state.output),
                   ...(overlayRun ?? {}),
+                  ...(sideRun ?? {}),
                   // Apply EDL: the take keeps the Transcript its render was cut with.
                   ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
                 },

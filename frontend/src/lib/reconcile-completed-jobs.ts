@@ -55,7 +55,7 @@ import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-outp
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { usecaseRestoredResults, usecaseTextRunPatch } from "@/lib/use-case-run-result"
 import { runResultIdentity } from "@/lib/run-result-identity"
-import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
+import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitSideJobFields } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, ugcJobMayLand, ugcJobResultPatch } from "@/lib/ugc-run-patch"
 import { ugcFinishNodeIds, usecaseResultIsText } from "@nodaro/render-rules"
 import { resultsRunMark } from "@/components/editor/workflow-editor/triggered-run-follow"
@@ -445,8 +445,10 @@ export function buildCompletedResultPatch(
   // Video Overlay: the worker's warnings / canvas / length, on the node and the
   // result — the same mapping every other lane writes (lib/video-overlay-run-output).
   const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(output) : undefined
+  // A node unit's side outputs (a list, JSON beside the take): on the node and the take (lib/json-run-result.ts).
+  const sideRun = unitSideJobFields(nodeType, output)
   const result: GeneratedResult = {
-    url, thumbnailUrl, timestamp, jobId, ...runResultIdentity(nodeType, output), ...(overlayRun ?? {}),
+    url, thumbnailUrl, timestamp, jobId, ...runResultIdentity(nodeType, output), ...(overlayRun ?? {}), ...(sideRun ?? {}),
     // Apply EDL: the take keeps the Transcript its render was cut with.
     ...applyEdlTakeTranscriptField(nodeType, output, url),
   }
@@ -457,6 +459,7 @@ export function buildCompletedResultPatch(
     generatedResults: usecaseRestoredResults(nodeType, output, jobId, Array.isArray(nodeData.generatedResults) ? (nodeData.generatedResults as GeneratedResult[]) : [], timestamp) ?? [result],
     activeResultIndex: 0,
     ...(overlayRun ?? {}),
+    ...(sideRun ?? {}),
   }
   if (videoUrl) patch.generatedVideoUrl = videoUrl
   else if (imageUrl) {

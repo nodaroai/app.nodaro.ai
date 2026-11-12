@@ -21,6 +21,7 @@ import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable } from
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem } from "@nodaro/shared/video"
 import { kling4InputProblem } from "../lib/kling4-inputs.js"
+import { videoMaterialCounts } from "../lib/video-material-counts.js"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import { imageRequiredError } from "../lib/video-image-required.js"
 import { composeVideoPromptText, resolveReferenceTokens } from "@nodaro/prompts/assembly"
@@ -442,10 +443,14 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
 
   // Character references — support, budget (assembled image count) and the
   // shared rule, identical to /v1/generate-video. This lane has no start frame.
+  // A character whose portrait the editor also seated in the reference images
+  // counts ONCE on a one-budget model, through the same function
+  // /v1/generate-video reads (lib/video-material-counts.ts).
+  const materialCounts = videoMaterialCounts({ provider, characterReferences: parsed.data.characterReferences, referenceImageUrls })
   const characterProblem = videoCharacterRefProblem({
     provider,
     characterReferences: parsed.data.characterReferences,
-    imageCount: referenceImageUrls?.length ?? 0,
+    imageCount: materialCounts.imageCountForCharacterRule,
     videoCount: referenceVideoUrls?.length ?? 0,
     hasStartFrame: false,
     audioCount: referenceAudioUrls?.length ?? 0,
@@ -463,7 +468,7 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
     referenceImageCount: referenceImageUrls?.length ?? 0,
     referenceVideoCount: referenceVideoUrls?.length ?? 0,
     referenceAudioCount: referenceAudioUrls?.length ?? 0,
-    characterCount: parsed.data.characterReferences?.length ?? 0,
+    characterCount: materialCounts.unseatedCharacters,
   })
   if (kling4Problem) {
     return reply.status(400).send({ error: kling4Problem })

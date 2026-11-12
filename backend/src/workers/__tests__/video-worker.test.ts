@@ -258,6 +258,7 @@ import { KieError } from "../../providers/kie/client.js"
 // Real class (module not mocked) — the worker's self-heal branch discriminates
 // on isPostProcessingError, so tests must throw the genuine type.
 import { PostProcessingError } from "../../lib/post-processing-error.js"
+import { HouseModelRunPendingError } from "../../lib/house-model-failure.js"
 // Real class (module not mocked) — the drain branch discriminates on
 // instanceof DrainAbortError, so tests must throw the genuine type.
 import { DrainAbortError, beginWorkerDrain, _resetWorkerDrainForTests } from "../../lib/worker-drain.js"
@@ -827,6 +828,39 @@ describe("video worker processor", () => {
         expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
       },
     )
+
+    it("final attempt + a house-model run given up for now (reference saved) → row left processing for the reconcile, no failure, no refund", async () => {
+      mocks.mockSingle
+        .mockResolvedValueOnce({ data: mockJobRecord({ provider_task_id: null }), error: null })
+        .mockResolvedValueOnce({
+          data: { provider_kind: "house-model", provider_task_id: "ref-house", status: "processing" },
+          error: null,
+        })
+      mocks.mockHandler.mockRejectedValueOnce(
+        new HouseModelRunPendingError("House Fixture did not finish within 10 minutes; the run will be checked again.", "house-fixture"),
+      )
+
+      const job = makeBullJob("generate-image")
+      await expect(processor(job)).resolves.toBeUndefined()
+
+      expect(mocks.mockUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ status: "failed" }))
+      expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+    })
+
+    it("final attempt + a house-model run whose reference was never saved (marked final) → the fail path, refunded", async () => {
+      mocks.mockSingle.mockResolvedValueOnce({ data: mockJobRecord({ provider_task_id: null }), error: null })
+      const err = Object.assign(
+        new HouseModelRunPendingError("House Fixture did not finish within 10 minutes; the run will be checked again.", "house-fixture"),
+        { deterministic: true as const },
+      )
+      mocks.mockHandler.mockRejectedValueOnce(err)
+
+      const job = makeBullJob("generate-image")
+      await expect(processor(job)).rejects.toThrow()
+
+      expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: "failed" }))
+      expect(mocks.mockRefundJobCredits).toHaveBeenCalled()
+    })
 
     it("final attempt + PostProcessingError + SYNC kind → existing fail path (refund guard decides)", async () => {
       mocks.mockSingle

@@ -28,13 +28,15 @@ import {
   buildMotionCreditModelIdentifier,
   SPEECH_FLOOR_UNITS,
   speechPriceUnits,
-  speechUnitCreditId
+  speechUnitCreditId,
+  VIDEO_OVERLAY_PRICING,
+  videoOverlayVideoUnits,
 } from "@nodaro/shared/credits"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared/nodes"
 import { OVERLAY_PLATFORM_IDS, VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared/media"
 import { EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanRateCreditId, editPlanMinutesBaseCredits } from "@nodaro/shared/edl"
-import { VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared/video"
+import { VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS, VIDEO_OVERLAY_LAYOUT_IDS } from "@nodaro/shared/video"
 import type { OutputType } from "@nodaro/shared/apps"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared/social"
@@ -291,6 +293,20 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "speed-ramp": { ids: familyIds("speed-ramp") },
   // One-unit row = 5 s of the result; a run is 1 unit per started 5 s, up to the 300 s cap (60 units).
   "mask-composite": { ids: familyIds("mask-composite"), span: [1, 60] },
+  // Two shapes `ids × span` cannot state: an image-only run is the flat row,
+  // a run with a video layer is the video row per started 5 s of its base (1
+  // unit, up to the 60 s cap's 12). From the cheaper of the flat row and one
+  // video unit, up to the dearer of the flat row and the cap.
+  "video-overlay": {
+    ids: familyIds("video-overlay"),
+    band: (credits) => {
+      const image = credits(VIDEO_OVERLAY_PRICING.IMAGE_CREDIT_ID)
+      const low = credits(VIDEO_OVERLAY_PRICING.VIDEO_CREDIT_ID, 1)
+      const high = credits(VIDEO_OVERLAY_PRICING.VIDEO_CREDIT_ID, videoOverlayVideoUnits(undefined))
+      return image === undefined || low === undefined || high === undefined ? undefined : [Math.min(image, low), Math.max(image, high)]
+    },
+    note: "An image-only run is the flat `video-overlay` row; a run with a video layer is the `video-overlay:video` row per started 5 s of its base, up to the 60 s cap.",
+  },
   // One-unit row; a run is 3 units + 1 per 6 blocks: 1–60 blocks span 4–13 units.
   "assemble-narrated-video": { ids: familyIds("assemble-narrated-video"), span: [4, 13] },
   "after-effects": { ids: familyIds("after-effects") },
@@ -1832,12 +1848,14 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     { key: "maskMode", type: "select", options: ["none", "layers", "around", "outside"] },
     { key: "maskSpread", type: "number" },
   ] } },
-  { type: "video-overlay", label: "Video Overlay", category: "processing", description: "Place up to 20 timed image layers — logos, product shots, screenshots, cards — over a video in one local FFmpeg pass; the base audio is kept untouched. Each layer has start / end seconds (no end = to the end of the video) and a placement: a preset (card · corner-badge with a corner · full-frame) or a box in PERCENT of the output frame (anchor, x, y, width, optional height, fit contain / cover), plus opacity, animate (0.15 s fade and slight scale) and zIndex. An explicit box field overrides the preset; a layer with neither is a corner badge (bottom-right, or the corner it names). Base video ← the video handle; layer images ← overlay, overlay2 … overlay12 (index-aligned with layers[]; layers 13 and up carry an imageUrl). Optional outputAspect (16:9 / 9:16 / 1:1 / 4:5) with baseFit and backgroundColor; without it the output keeps the video's own size and frame rate. Layers past the end are clipped or skipped and an animated image renders its first frame — both reported in the output's warnings[]. Price: 20 credits per run.", outputType: "video", creditCost: 20, inputSchema: { fields: [
+  { type: "video-overlay", label: "Video Overlay", category: "processing", description: "Place up to 20 timed layers — images (logos, product shots, screenshots, cards) or up to 2 videos — over a video in one local FFmpeg pass. Each layer carries one source, imageUrl or videoUrl, start / end seconds (no end = to the end of the video) and a placement: a preset (card · corner-badge with a corner · full-frame) or a box in PERCENT of the output frame (anchor, x, y, width, optional height, fit contain / cover), plus opacity, animate (0.15 s fade and slight scale; default on for an image, off for a video) and zIndex. An explicit box field overrides the preset; a layer with neither is a corner badge (bottom-right, or the corner it names). A video layer plays from its first frame at its start and holds its last frame until its window ends; it is silent unless it sets sound.volume (0–1), which mixes it with the base's audio — with no sound set, the base audio is kept untouched. Base video ← the video handle; layer images or videos ← overlay, overlay2 … overlay12 (index-aligned with layers[]; layers 13 and up carry an imageUrl or a videoUrl). Optional outputAspect (16:9 / 9:16 / 1:1 / 4:5) with baseFit, backgroundColor and baseBox (where the base sits, in the layer box vocabulary); without it the output keeps the video's own size and frame rate. Optional layout writes the boxes: video-bottom / video-top (the base whole against that edge), stack-whole / stack-filled (the base above the first video layer, whole or cropped to half each), pip (the first video layer in a corner); every layout but pip needs an outputAspect. Layers past the end are clipped or skipped and an animated image renders its first frame — both reported in the output's warnings[]. Priced by what it carries: an image-only run is one `video-overlay` row, whatever its layers or length; a run with a video layer is one `video-overlay:video` row per started 5 s of the output (the base's length), and its base may be up to 60 s — measured before anything is charged, and quoted at 60 s while not known.", outputType: "video", creditCost: creditBandFor("video-overlay"), inputSchema: { fields: [
     { key: "videoUrl", type: "video-url", required: true },
     { key: "layers", type: "json", required: true },
     { key: "outputAspect", type: "select", options: [...VIDEO_OVERLAY_OUTPUT_ASPECTS] },
     { key: "baseFit", type: "select", options: [...VIDEO_OVERLAY_FITS] },
     { key: "backgroundColor", type: "text" },
+    { key: "baseBox", type: "json" },
+    { key: "layout", type: "select", options: [...VIDEO_OVERLAY_LAYOUT_IDS] },
   ] } },
   { type: "merge-video-audio", label: "Merge Video + Audio", category: "processing", description: "Mux a video and an audio track.", outputType: "video" },
   { type: "still-to-video", label: "Still to Video", category: "processing", description: "Turn one still image + one audio track into an MP4 with an optional motion effect (zoom / pan / Ken Burns). Local FFmpeg — no provider, no GPU, zero credits. The output duration is the audio's duration (no duration field).", outputType: "video", creditCost: 0, inputSchema: { fields: [
@@ -2169,9 +2187,18 @@ function withPromptAffixFields(registry: NodeDescriptor[]): NodeDescriptor[] {
 // The /v1/nodes categories a unit's manifest category maps onto (tools/units/vocabulary.mjs REGISTRY_CATEGORIES).
 const UNIT_REGISTRY_CATEGORIES = ["input", "parameter", "processing", "output", "utility"] as const satisfies readonly NodeCategory[]
 
+// Every NodeCategory (tools/units/vocabulary.mjs SERVER_CATEGORIES): what a unit's
+// registry.category may name when its own category is not one the server shares.
+// `satisfies` keeps it inside the union; the Record below makes it every member.
+const NODE_CATEGORY_MEMBERS = {
+  input: true, parameter: true, "ai-image": true, "ai-video": true, "ai-audio": true, "ai-text": true, processing: true,
+  composition: true, trigger: true, output: true, control: true, entity: true, utility: true,
+} as const satisfies Record<NodeCategory, true>
+const NODE_CATEGORIES = Object.keys(NODE_CATEGORY_MEMBERS) as NodeCategory[]
+
 /** A node unit's descriptor as /v1/nodes serves it (its price comes from STATIC_CREDIT_COSTS, as for every node). */
 function unitNodeDescriptor(u: UnitDescriptor): NodeDescriptor {
-  const base = { type: u.type, label: u.label, category: registryCategoryOf(u, UNIT_REGISTRY_CATEGORIES), description: u.description, outputType: u.outputType }
+  const base = { type: u.type, label: u.label, category: registryCategoryOf(u, UNIT_REGISTRY_CATEGORIES, NODE_CATEGORIES), description: u.description, outputType: u.outputType }
   if (u.execution.kind !== "use-case") return base
   // A use-case node: its steps bill per minute at their own rates plus its per-run fee
   // (price.ee.ts) — the band every use-case entry declares; its fields are its body's (use-case.ts).

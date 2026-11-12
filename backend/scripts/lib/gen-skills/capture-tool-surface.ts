@@ -46,6 +46,9 @@ if (edition === "cloud") {
     policy: {} as never,
     collab: {} as never,
     signupGate: {} as never,
+    // House models are listed only at run time (`houseModelServed`); generated
+    // text is written from the catalog and never asks what an install serves.
+    houseModels: {} as never,
   }
   const engines: Required<{ [K in keyof PluginEngines]: never }> = { scene3d: engine, surround: engine, smartCut: engine }
   publishStandInPluginServices(services)

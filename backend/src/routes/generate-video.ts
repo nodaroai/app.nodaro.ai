@@ -19,6 +19,7 @@ import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../lib/r
 import { probeAndCheckRefAudio } from "../lib/ref-audio-probe.js"
 import { viduQ4InputProblem } from "../lib/vidu-q4-inputs.js"
 import { kling4InputProblem } from "../lib/kling4-inputs.js"
+import { videoMaterialCounts } from "../lib/video-material-counts.js"
 import { applyAudioSoundtrack } from "../lib/audio-soundtrack.js"
 import { getModelCreditBaseCost } from "../ee/billing/credits.js"
 import { voicedAddonBaseCredits, voicesTheVoicedVideoSends } from "../lib/voiced-dialogue-lines.js"
@@ -1272,14 +1273,13 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // "not supported" rather than a misleading "imageUrl is required".
     // On a one-budget model (Kling 4.0) a character whose portrait the editor
     // already seated in the reference images is ONE material: the runner turns
-    // that seat into the subject. Count the seat once.
-    const seatedCharacters = refCaps?.materials !== undefined
-      ? (parsed.data.characterReferences ?? []).filter((c) => (referenceImageUrls ?? []).includes(c.imageUrl)).length
-      : 0
+    // that seat into the subject. Count the seat once — the shared rule both
+    // video routes read (lib/video-material-counts.ts).
+    const materialCounts = videoMaterialCounts({ provider, characterReferences: parsed.data.characterReferences, referenceImageUrls })
     const characterProblem = videoCharacterRefProblem({
       provider,
       characterReferences: parsed.data.characterReferences,
-      imageCount: (referenceImageUrls?.length ?? 0) - seatedCharacters,
+      imageCount: materialCounts.imageCountForCharacterRule,
       videoCount: referenceVideoUrls?.length ?? 0,
       hasStartFrame: imageUrl !== undefined,
       hasEndFrame: endFrameUrl !== undefined,
@@ -1361,7 +1361,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       // A character whose portrait already sits in the reference images (the
       // editor seats it there; the runner turns that seat into the subject) is
       // ONE material, not two.
-      characterCount: (characterReferences ?? []).filter((c) => !(referenceImageUrls ?? []).includes(c.imageUrl)).length,
+      characterCount: materialCounts.unseatedCharacters,
     })
     if (kling4Problem) {
       return reply.status(400).send({ error: kling4Problem })

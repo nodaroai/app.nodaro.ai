@@ -1428,6 +1428,13 @@ const GPT_IMAGE_2_6_TOTAL_BYTES = 544
 // Gemini Omni Flash 1.2: its id in the video verbs' provider lists, and its
 // reference caps in the descriptions of `generate_video` / `animate_image`.
 const GEMINI_OMNI_FLASH_1_2_BYTES = 109
+// RAISED by `overlay_images` taking video layers, and nothing else: a layer's `video_url` /
+// `video_asset_id` and `sound: { volume }`, the tool's `layout` and `base_box` (the six box
+// fields), and one sentence of its description in place of the one that said the base audio
+// is always untouched. No tool was added, so the fixture does NOT move. Measured by this suite
+// on the same tree with and without the change: 517_228 total − 516_069 = 1_159 B
+// (overlay_images 3_805 → 4_964 B, under the per-tool budget); the list keeps the headroom it had.
+const VIDEO_OVERLAY_VIDEO_LAYERS_BYTES = 1_159
 // RAISED 2026-11-10 by one NEW tool, `estimate_use_case` (verbs-use-case-estimate.ts: one quote for
 // every offered podcast use-case node, keyed by `node_type`, its `input` the node's run-tool
 // arguments, validated and posted by that verb's own input), and nothing else. Registered beside the
@@ -1489,6 +1496,17 @@ const I2I_MASK_MODELS_BYTES = 126
 // description shared), and nothing else. No tool was added, so the fixture does NOT move. Measured
 // by this suite: 522_874 total − 522_636 = 238 B, all on modify_image.
 const MODIFY_IMAGE_MASK_BYTES = 238
+// RAISED 2026-11-11 by Seedream 5.5 (`seedream-5-5` t2i + `seedream-5-5-i2i`), and nothing else:
+// it widens the model lists generate_image / modify_image / image_to_image already carry, adds
+// `1.5K` (its middle size) to generate_image's resolution note and image_to_image's resolution
+// enum, and the background note says the 1K limit on a transparent background is GPT Image's
+// (Seedream 5.5 renders one at every size), and image_to_image's reference note names its 9
+// (with the source, 10). No tool was added, so the fixture does NOT move.
+// `generate_image` is the one tool past the per-tool budget (9_916 → 9_940 B, after MiniMax H3
+// Image's raise below). Measured by this suite: 523_053 total − 522_964 before = 89 B
+// (generate_image 24, modify_image 21, image_to_image 44).
+const SEEDREAM_5_5_PER_TOOL_BYTES = 24
+const SEEDREAM_5_5_TOTAL_BYTES = 89
 // RAISED 2026-11-11 by Kling 4.0 Flash (`kling-4-flash`) and nothing else: the id joins every
 // catalog-derived model enum and the character-reference provider list, and generate_video's
 // reference-video / reference-audio / extra-image / keep-original-sound descriptions name it (each
@@ -1505,7 +1523,7 @@ const KLING_4_FLASH_MODELS_BYTES = 138
 const MINIMAX_H3_IMAGE_PER_TOOL_BYTES = 32
 
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -1692,6 +1710,8 @@ export const TOOL_WIRE_BUDGET = {
     EXTEND_SEEDANCE_SPLIT_BYTES +
     I2I_MASK_MODELS_BYTES +
     MODIFY_IMAGE_MASK_BYTES +
+    SEEDREAM_5_5_TOTAL_BYTES +
+    VIDEO_OVERLAY_VIDEO_LAYERS_BYTES +
     KLING_4_FLASH_MODELS_BYTES,
 }
 

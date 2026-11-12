@@ -9,6 +9,7 @@ import {
   composeFamilyTypes, composeNodeDefinitions, composeTabSuperset, composeNodeOptions, composeRecord, composeRecordAfter, composeSet, insertAtPositions,
   jsonListItems, toNodeTypeDefinition, unitJobLanding, unitJsonJobLanding, unitJsonProducers, unitJsonRunPatch, unitJsonWorkers, unitNoMediumResults, unitNodeLabels,
   unitOutputTypes, unitOutputValue, unitPipJson, unitPriceRows, unitProducers, unitRecord, unitsWith, unitTabSuperset, unitTextSources,
+  unitListItems, unitPipIsImage, unitPipList, unitSideFields, unitSideJobPatch, unitSideLanding, unitSideOutputs, unitSideRunPatch,
 } from "../unit-compose"
 import { ACCEPTS_AUDIO, ACCEPTS_MEDIA, ACCEPTS_VIDEO, unitInputAccepts } from "../ffmpeg-handles"
 import { createUnitExecKit } from "@/components/editor/workflow-editor/unit-exec-kit"
@@ -281,6 +282,93 @@ describe("a worker unit's JSON (look) outputs", () => {
     expect(landing.land({ json: { a: 1 }, edl: { b: 2 } })).toEqual({ patch: { generatedJson: { a: 1 }, generatedEdl: { b: 2 } }, result: '{"a":1}' })
     expect(landing.land({ edl: { b: 2 } })).toEqual({ patch: { generatedEdl: { b: 2 } }, result: "" })
     expect(landing.land({ videoUrl: "x" })).toBeUndefined()
+  })
+})
+
+// A worker whose image take carries side outputs: a list of images and JSON beside it.
+const LAYERS: UnitDefinition = {
+  ...FIXTURE,
+  type: "fixture-layers",
+  outputs: ["base", "layers", "layerData"],
+  handles: {
+    inputs: [],
+    outputs: [
+      { id: "base", label: "Base", kind: "image", from: "generatedImageUrl" },
+      { id: "layers", label: "Layers", kind: "image", from: "generatedLayerUrls", list: true },
+      { id: "layerData", label: "Layer data", kind: "look", from: "generatedLayerData" },
+    ],
+  },
+  producer: "image",
+}
+
+describe("a media take's side outputs (a list, JSON beside it)", () => {
+  it("unitSideOutputs: the list and look outputs beside a plain media first output — none on a media-only, JSON-only or use-case unit", () => {
+    expect(unitSideOutputs(LAYERS).map((h) => h.id)).toEqual(["layers", "layerData"])
+    expect(unitSideOutputs(FIXTURE)).toEqual([])
+    expect(unitSideOutputs(MAP)).toEqual([])
+    expect(unitSideOutputs({ ...LAYERS, execution: { kind: "use-case" } } as unknown as UnitDefinition)).toEqual([])
+    expect(unitSideFields(LAYERS)).toEqual(["generatedLayerUrls", "generatedLayerData"])
+    expect(unitSideFields(FIXTURE)).toEqual([])
+  })
+  it("unitJsonWorkers: a worker whose JSON stands beside a media take is not a JSON worker", () => {
+    expect(unitJsonWorkers([LAYERS, MAP]).map((u) => u.type)).toEqual(["fixture-map"])
+  })
+  it("unitListItems: an array's non-empty strings, in order; nothing for any other value", () => {
+    expect(unitListItems(["a", "", null, 3, "b"])).toEqual(["a", "b"])
+    expect(unitListItems("a")).toEqual([])
+    expect(unitListItems(undefined)).toEqual([])
+  })
+  it("unitOutputValue: a list pip hands its first item (never the take's url); a side output reads the active take's own field when the take carries it", () => {
+    const one = { generatedImageUrl: "base", generatedLayerUrls: ["l1", "l2"], generatedLayerData: [{ n: 1 }] }
+    expect(unitOutputValue(LAYERS, one, "layers")).toBe("l1")
+    expect(unitOutputValue(LAYERS, one, "layerData")).toBe('[{"n":1}]')
+    expect(unitOutputValue(LAYERS, one)).toBe("base")
+    const takes = { ...one, activeResultIndex: 1, generatedResults: [{ url: "new", generatedLayerUrls: ["n1"] }, { url: "old", generatedLayerUrls: ["o1", "o2"], generatedLayerData: [{ n: 0 }] }] }
+    expect(unitOutputValue(LAYERS, takes)).toBe("old")
+    expect(unitOutputValue(LAYERS, takes, "layers")).toBe("o1")
+    expect(unitOutputValue(LAYERS, takes, "layerData")).toBe('[{"n":0}]')
+    // A take whose run made no side output carries it as null: no value, never the node's.
+    expect(unitOutputValue(LAYERS, { ...one, generatedResults: [{ url: "x", generatedLayerUrls: null }] }, "layers")).toBeUndefined()
+    expect(unitOutputValue(LAYERS, { ...one, generatedResults: [{ url: "x", generatedLayerData: null }] }, "layerData")).toBeUndefined()
+    // A take that carries no side field: the node's.
+    expect(unitOutputValue(LAYERS, { ...one, generatedResults: [{ url: "x" }] }, "layers")).toBe("l1")
+    expect(unitOutputValue(LAYERS, { generatedLayerUrls: [] }, "layers")).toBeUndefined()
+    // A JSON-only worker's look pip never reads a take (no side outputs).
+    expect(unitOutputValue(MAP, { generatedJson: { a: 1 }, generatedResults: [{ generatedJson: { b: 2 } }] }, "json")).toBe('{"a":1}')
+  })
+  it("unitPipJson: a side look pip reads the active take's own field", () => {
+    expect(unitPipJson(LAYERS, { generatedLayerData: [{ n: 1 }], generatedResults: [{ url: "x", generatedLayerData: [{ n: 2 }] }] }, "layerData")).toEqual({ value: [{ n: 2 }] })
+    expect(unitPipJson(LAYERS, { generatedLayerData: [{ n: 1 }] }, "layers")).toBeUndefined()
+  })
+  it("unitPipList: a list pip's items, the media take's pip nothing; undefined off a look pip or a unit without side outputs", () => {
+    expect(unitPipList(LAYERS, { generatedLayerUrls: ["l1", "", "l2"] }, "layers")).toEqual({ items: ["l1", "l2"] })
+    expect(unitPipList(LAYERS, { generatedResults: [{ url: "a" }, { url: "b" }] }, "base")).toEqual({ items: [] })
+    expect(unitPipList(LAYERS, {}, null)).toEqual({ items: [] })
+    expect(unitPipList(LAYERS, { generatedLayerData: [1] }, "layerData")).toBeUndefined()
+    expect(unitPipList(FIXTURE, { generatedResults: [{ url: "a" }] }, "video-out")).toBeUndefined()
+  })
+  it("unitPipIsImage: the pip a wire leaves (none = the first) is an image output", () => {
+    expect(unitPipIsImage(LAYERS, "base")).toBe(true)
+    expect(unitPipIsImage(LAYERS, "layers")).toBe(true)
+    expect(unitPipIsImage(LAYERS, null)).toBe(true)
+    expect(unitPipIsImage(LAYERS, "layerData")).toBe(false)
+    expect(unitPipIsImage(FIXTURE, "video-out")).toBe(false)
+  })
+  it("unitSideLanding: each look output as unitJobLanding lands it, each list output its non-empty strings; no value → null; other keys dropped", () => {
+    const landed = unitSideLanding(LAYERS, { layerData: '[{"n":1}]', base: "x" }, { layers: ["l1", "", "l2"], frames: ["f"] })
+    expect(landed).toEqual({ generatedLayerUrls: ["l1", "l2"], generatedLayerData: [{ n: 1 }] })
+    const empty = unitSideLanding(LAYERS, { layerData: [] }, { layers: [] })
+    expect(empty).toEqual({ generatedLayerData: [], generatedLayerUrls: null })
+    expect(unitSideLanding(FIXTURE, { a: 1 }, {})).toEqual({})
+  })
+  it("unitSideRunPatch / unitSideJobPatch: a node output's carriers and a job row's ids — undefined for a unit without side outputs", () => {
+    expect(unitSideRunPatch(LAYERS, { unitOutputs: { layerData: "[]" }, unitLists: { layers: ["l1"] } })).toEqual({ generatedLayerUrls: ["l1"], generatedLayerData: [] })
+    const none = unitSideRunPatch(LAYERS, {})!
+    expect(Object.keys(none).sort()).toEqual(["generatedLayerData", "generatedLayerUrls"])
+    expect(Object.values(none).every((v) => v === null)).toBe(true)
+    expect(unitSideJobPatch(LAYERS, { imageUrl: "b", layers: ["l1"], layerData: [{ n: 1 }] })).toEqual({ generatedLayerUrls: ["l1"], generatedLayerData: [{ n: 1 }] })
+    expect(unitSideRunPatch(FIXTURE, { unitLists: { x: ["a"] } })).toBeUndefined()
+    expect(unitSideJobPatch(MAP, { json: {} })).toBeUndefined()
   })
 })
 

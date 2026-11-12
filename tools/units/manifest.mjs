@@ -15,7 +15,7 @@ import { CAPABILITIES } from "./capabilities.mjs"
 import { AGGREGATES, EXECUTION_SEAMS, UNIT_FILES, UNIT_ROOTS, liveSeams } from "./seams.mjs"
 import { jsonOutputProblems } from "./json-output-rules.mjs"
 import { USE_CASE_SPECS_FILE, duplicateBuilderProblems, useCaseBuildersFrom, useCaseFileProblems, useCaseProblems, useCaseSeamNeeds } from "./use-case-rules.mjs"
-import { ACCEPTS_KINDS, CATEGORIES, CONTRACT_KEYS, DICT_LOCALES, MANY_KINDS, MEDIA_INPUT_KINDS, REGISTRY_CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, LABEL_LOCALES, NOT_A_UNIT, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES } from "./vocabulary.mjs"
+import { ACCEPTS_KINDS, CATEGORIES, CONTRACT_KEYS, DICT_LOCALES, LIST_OUTPUT_KINDS, MANY_KINDS, MEDIA_INPUT_KINDS, REGISTRY_CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, LABEL_LOCALES, NOT_A_UNIT, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES, SERVER_CATEGORIES } from "./vocabulary.mjs"
 
 export const TYPE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const MESSAGE_KEY = /^[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+$/
@@ -29,6 +29,19 @@ const PROMPT_KEY = /prompt|doctrine|instruction/i
 const LANE_PREFIX = "lane:"
 /** The concurrency-lane capabilities (tools/units/capabilities.mjs): a worker unit carries exactly one. */
 export const LANE_CAPABILITIES = Object.keys(CAPABILITIES).filter((c) => c.startsWith(LANE_PREFIX))
+const PROVIDER_PREFIX = "provider:"
+/** The provider-attribution capabilities: a worker in the provider lane names exactly one (concurrency-lanes/provider-of.ts). */
+export const PROVIDER_CAPABILITIES = Object.keys(CAPABILITIES).filter((c) => c.startsWith(PROVIDER_PREFIX))
+
+/**
+ * Whether a unit's price.ee.ts names the id a run reserves from the node's data
+ * (`creditId`), read as text with its comments removed (a flat-priced unit's
+ * comment says it has none).
+ */
+export function priceNamesCreditId(source) {
+  const code = String(source ?? "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "")
+  return /\bcreditId\b/.test(code)
+}
 
 export const pascalCase = (type) => type.split("-").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join("")
 /** The `<Pascal>Data` interface a unit's types.ts exports — the same name gen:skills looks for. */
@@ -258,6 +271,17 @@ function checkHandles(h, errors) {
       } else {
         if (!HANDLE_KINDS.includes(handle.kind)) errors.push(`${at}.kind: "${handle.kind}" is not a handle kind (${HANDLE_KINDS.join(", ")})`)
         if (handle.from !== undefined && !isNonEmptyString(handle.from)) errors.push(`${at}.from must be a non-empty string`)
+        // A list output: one run's several files on one pip (an Each wire runs the
+        // next node once per item, a plain wire reads the first). Its field holds
+        // the list of URLs; the job writes it under the output's id.
+        if (handle.list !== undefined) {
+          if (handle.list !== true) errors.push(`${at}.list: only true (or absent)`)
+          else {
+            if (!LIST_OUTPUT_KINDS.includes(handle.kind)) errors.push(`${at}.list: only on a ${LIST_OUTPUT_KINDS.join("/")} output — a list pip carries files`)
+            if (handle.from === undefined) errors.push(`${at}.list: a list output names the node-data field its list lands on — add from`)
+            if (handle.runtimeTyped !== undefined) errors.push(`${at}.list: a list output's medium is its kind, never decided at run time — remove runtimeTyped`)
+          }
+        }
       }
     })
     const dup = ids.filter((id, i) => ids.indexOf(id) !== i)
@@ -320,6 +344,16 @@ function checkFiles(unit, m, ctx, errors) {
   if (routes.length > 0 && !has("backend", "price.ee.ts")) errors.push(`a unit with a route needs ${unit.dirs.backend}/price.ee.ts (a zero-cost one too)`)
   // A use-case node's route is the factory's (POST /v1/<type>): its price.ee.ts holds the fee row.
   if (routes.length === 0 && kind !== "use-case" && has("backend", "price.ee.ts")) errors.push("price.ee.ts without a route prices nothing — remove it")
+  // The editor names the id a run reserves with the server's rule (price-id.ts, the
+  // "price-ids" seam): a worker or sync unit whose price.ee.ts names its id from
+  // the node's data has one, and only such a unit (a use-case node's fee is its
+  // own branch, a flat-priced unit reserves its type's row).
+  if (ctx.readText) {
+    const namesId = has("backend", "price.ee.ts") && priceNamesCreditId(ctx.readText(`${unit.dirs.backend}/price.ee.ts`))
+    const priced = (kind === "worker" || kind === "sync") && namesId
+    if (priced && !has("frontend", "price-id.ts")) errors.push(`price.ee.ts names the credit id from the node's data (creditId): the editor needs the same rule — add ${unit.dirs.frontend}/price-id.ts`)
+    if (has("frontend", "price-id.ts") && !priced) errors.push(`price-id.ts is only for a worker or sync unit whose price.ee.ts exports creditId (the id a run reserves, named from the node's data)`)
+  }
   // The characterization harness renders ffmpeg-backed operations through their real provider.
   if (has("backend", "characterize.char.ts") && (kind !== "worker" || !(Array.isArray(m.capabilities) && m.capabilities.includes("ffmpeg-media")))) {
     errors.push(`characterize.char.ts characterizes an ffmpeg worker: it needs execution.kind "worker" and the "ffmpeg-media" capability`)
@@ -362,6 +396,8 @@ function checkSeams(unit, m, ctx, errors) {
   if (Object.keys(unit.strings?.labels ?? {}).length) missing("labels", "strings.json labels")
   if (m.docs?.page) missing("docs-index", "docs.page")
   if (m.contract?.producer) missing("contracts", "contract.producer")
+  // A list output's row (UNIT_LIST_PIPS) is what defaultEdgeOutputMode reads.
+  if (Array.isArray(m.handles?.outputs) && m.handles.outputs.some((h) => h?.list === true)) missing("contracts", "handles.outputs[].list")
   for (const [seam, why] of useCaseSeamNeeds(m)) missing(seam, why)
   for (const c of Array.isArray(m.capabilities) ? m.capabilities : []) {
     const cap = ctx.capabilities[c]
@@ -433,8 +469,14 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
     if (reserved) errors.push(`"${unit.type}" is reserved: ${reserved} — choose another type id`)
   }
   if (!isNonEmptyString(m.label)) errors.push("label must be a non-empty string")
+  // /v1/nodes lists a unit under its own category when the server shares it, else under
+  // the one registry.category names (an "ai" node: "ai-image", "ai-video", …).
+  const registryCategory = isObject(m.registry) ? m.registry.category : undefined
   if (!CATEGORIES.includes(m.category)) errors.push(`category "${m.category}" is not one of ${CATEGORIES.join(", ")}`)
-  else if (!REGISTRY_CATEGORIES.includes(m.category)) errors.push(`category "${m.category}" has no /v1/nodes category yet (${REGISTRY_CATEGORIES.join(", ")}) — a unit in it adds that seam in its own PR`)
+  else if (REGISTRY_CATEGORIES.includes(m.category)) {
+    if (registryCategory !== undefined) errors.push(`registry.category: category "${m.category}" is a /v1/nodes category already — remove registry.category`)
+  } else if (registryCategory === undefined) errors.push(`category "${m.category}" is not a /v1/nodes category (${REGISTRY_CATEGORIES.join(", ")}) — name the one /v1/nodes lists it under in registry.category (${SERVER_CATEGORIES.join(", ")})`)
+  if (registryCategory !== undefined && !SERVER_CATEGORIES.includes(registryCategory)) errors.push(`registry.category: "${registryCategory}" is not a /v1/nodes category (${SERVER_CATEGORIES.join(", ")})`)
   const after = (v, where) => {
     if (v === null) return
     if (typeof v !== "string") return errors.push(`${where} must name a node type or be null (first)`)
@@ -499,6 +541,14 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
     } else if (isObject(ex) && EXECUTION_KINDS.includes(ex.kind)) {
       for (const l of lanes) errors.push(`capability "${l}" is a worker's concurrency lane; execution.kind "${ex.kind}" runs no worker job`)
     }
+    // A provider-lane worker counts against one provider's ceiling (concurrency-lanes/provider-of.ts).
+    const providers = m.capabilities.filter((c) => typeof c === "string" && c.startsWith(PROVIDER_PREFIX))
+    if (lanes.length === 1 && lanes[0] === "lane:provider" && isObject(ex) && ex.kind === "worker") {
+      if (providers.length === 0) errors.push(`a worker in the provider lane names the provider it calls (${PROVIDER_CAPABILITIES.join(", ")}) — its job counts against that provider's ceiling`)
+      else if (providers.length > 1) errors.push(`a worker counts against one provider — ${providers.map((p) => JSON.stringify(p)).join(", ")} name ${providers.length}`)
+    } else {
+      for (const p of providers) errors.push(`capability "${p}" attributes a provider-lane worker's job; this unit has no "lane:provider" worker job`)
+    }
     // The entity lands in imageUrl (both input resolvers), so the node must read it there, on an input that takes images.
     if (m.capabilities.includes("input:entity-subject")) {
       const imageUrlInputs = Array.isArray(m.handles?.inputs) ? m.handles.inputs.filter((h) => isObject(h) && h.field === "imageUrl") : []
@@ -519,7 +569,7 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
     errors.push(`registry needs a description and an outputType (${OUTPUT_TYPES.join(", ")}) — /v1/nodes lists every node`)
   }
   if (isObject(m.registry)) {
-    for (const k of Object.keys(m.registry)) if (!["description", "outputType", "after"].includes(k)) errors.push(`registry.${k}: unknown (description, outputType, after)`)
+    for (const k of Object.keys(m.registry)) if (!["description", "outputType", "after", "category"].includes(k)) errors.push(`registry.${k}: unknown (description, outputType, after, category)`)
     // /v1/nodes keeps its own hand-curated order: a node whose place there
     // differs from position.after states it (a migrated node keeps its place).
     if ("after" in m.registry) after(m.registry.after, "registry.after")

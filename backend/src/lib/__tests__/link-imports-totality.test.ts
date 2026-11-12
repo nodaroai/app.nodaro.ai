@@ -44,8 +44,8 @@ const read = (rel: string): string => withoutComments(readFileSync(join(SRC_DIR,
 
 /** A field that takes a URL, however it is spelled in the schema. */
 const URL_FIELD = /\bsafeUrlSchema\b|z\.string\(\)\.url\(/
-/** Asking the switch: through the import gate, or directly. */
-const ASKS_THE_SWITCH = /\b(?:requireImportAllowed|requireAccountlessImportAllowed|spendImportConfirmation|assertLinkImportAllowed|linkImportRefusal)\s*\(/
+/** Asking the switch: through the import gate, directly, or through the outside-input copy (`lib/outside-input-copy.ts` asks it before any fetch). */
+const ASKS_THE_SWITCH = /\b(?:requireImportAllowed|requireAccountlessImportAllowed|spendImportConfirmation|assertLinkImportAllowed|linkImportRefusal|copyOutsideInput|inspectOutsideInput)\s*\(/
 /** Refusing or never fetching anything but this deployment's own storage. */
 const OWN_MEDIA_ONLY = /\b(?:isOurCdnUrl|isOwnMediaUrl|isOwnStoredFileUrl|r2KeyFromOurUrl)\s*\(/
 /** A direct fetch of a URL in a route (workers fetch job payloads; their routes are counted here). */

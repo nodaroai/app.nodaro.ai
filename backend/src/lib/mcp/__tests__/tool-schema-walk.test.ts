@@ -33,6 +33,7 @@ import { recordingsInputShape } from "../tools/verbs-use-case-recordings.js"
 import { framingSourceInputShape } from "../tools/verbs-use-case-framing.js"
 import { trendRunShape } from "../tools/trends.js"
 import { castSwapRolePreviewArgs } from "../tools/cast-swap.js"
+import { videoOverlayBoxArgs } from "../tools/verbs-video-overlay.js"
 
 const TOOLS_DIR = join(__dirname, "..", "tools")
 const TOOL_FILES = readdirSync(TOOLS_DIR).filter(
@@ -142,6 +143,9 @@ const SCHEMA_FRAGMENTS: Record<string, readonly string[]> = {
   // cast_swap: every role kind's preview-only settings (preview_name, in_preview),
   // read by name where the roles are mapped, so they need no mapper below.
   castSwapRolePreviewArgs: Object.keys(castSwapRolePreviewArgs),
+  // overlay_images: a layer's box (anchor, x, y, width, height, fit), forwarded
+  // with the rest of the layer; `base_box` takes the same fields by name.
+  videoOverlayBoxArgs: Object.keys(videoOverlayBoxArgs),
   // generate_image / modify_image / image_to_image: the output format and a GIF's or an SVG's levers.
   imageFormatArgs: Object.keys(imageFormatArgs),
 }

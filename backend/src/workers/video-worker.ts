@@ -8,6 +8,7 @@ import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellati
 // NOTE: imported from their CORE modules, not re-exported through ./shared.js —
 // the test harness mocks shared.js wholesale and would undefine them.
 import { isPostProcessingError } from "../lib/post-processing-error.js"
+import { isHouseModelRunPending } from "../lib/house-model-failure.js"
 import { isDeterministicJobError } from "../lib/deterministic-job-error.js"
 import { declaredJobBudgetMs } from "../lib/job-budget.js"
 import { providerDetailOf } from "../lib/provider-error-detail.js"
@@ -654,7 +655,11 @@ export function createVideoWorker() {
       // exhaustion, fail+refunds with an anomaly row). Plain Errors (e.g.
       // the inpaint composite, REFUND-CRITICAL in handlers/image-ai.ts)
       // deliberately do NOT qualify — they must keep refunding.
-      if (finalAttempt && isPostProcessingError(err)) {
+      // A house-model run given up for now with its reference saved
+      // (`HouseModelRunPendingError`: past its poll budget, or its status reads
+      // kept failing) is still going upstream: left for the reconcile the same
+      // way, so its "will be checked again" holds on the final attempt too.
+      if (finalAttempt && (isPostProcessingError(err) || isHouseModelRunPending(err))) {
         const { data: row } = await supabase
           .from("jobs")
           .select("provider_kind, provider_task_id, status")

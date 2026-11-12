@@ -2,7 +2,7 @@
 // The unit contract published in @nodaro/shared (decided 2026-10-16, widened 2026-10-18): node type
 // ids with closed vocabularies — each unit's producer kind, the use-case types, what each JSON pip
 // carries, the input pips that are never a prompt lane, the review holds, how a published app
-// presents the result and which outputs fan out item by item. Never a price, credit id, number,
+// presents the result, which outputs fan out item by item and which carry a list. Never a price, credit id, number,
 // prompt or doctrine string. Each block feeds a published table that composes its rows with the
 // hand-written ones (unit-contract-compose.ts); every row is an irrevocable Apache grant.
 
@@ -36,4 +36,8 @@ export const UNIT_PRESENTS: ReadonlyArray<readonly [type: string, presents: "ima
 // The outputs an "each" edge reads item by item when the unit ran once per item, and the pip an edge naming none reads (contract.fanOutEach) — producer-types.ts.
 export const UNIT_FAN_OUT_EACH: ReadonlyArray<readonly [type: string, handles: { readonly each: ReadonlyArray<string>; readonly primary: string }]> = [
   ["fixture-case", { "each": ["text"], "primary": "text" }], // unit:fixture-case
+]
+
+// The outputs that carry one run's list of files (handles.outputs[].list), whose wires run the next node once per item by default — producer-types.ts.
+export const UNIT_LIST_PIPS: ReadonlyArray<readonly [type: string, pips: ReadonlyArray<string>]> = [
 ]

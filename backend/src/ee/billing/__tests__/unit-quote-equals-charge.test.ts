@@ -44,8 +44,9 @@ vi.mock("@/lib/supabase.js", () => ({
   },
 }))
 vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: async () => settings.current }))
-// The run measures a Mask Composite foreground by probing the file: here, the
-// length its upload recorded (the fixture's `duration`), keyed by its url.
+// The run measures a Mask Composite foreground (and a Video Overlay's base) by
+// probing the file: here, the length its upload recorded (the fixture's
+// `duration`), keyed by its url.
 const { probedSec } = vi.hoisted(() => ({ probedSec: new Map<string, number>() }))
 vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/providers/video/ffmpeg-utils.js")>()),
@@ -53,6 +54,11 @@ vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
     const durationSeconds = probedSec.get(url)
     if (durationSeconds === undefined) throw new Error(`no probe for ${url}`)
     return { durationSeconds }
+  },
+  probeVideoOverlayBaseSource: async (url: string) => {
+    const streamDurationSec = probedSec.get(url)
+    if (streamDurationSec === undefined) throw new Error(`no probe for ${url}`)
+    return { streamDurationSec }
   },
 }))
 
@@ -62,6 +68,7 @@ import { applyServiceMarkup } from "../service-margin.js"
 import { ltxExtendBaseCredits } from "../../../lib/ltx-extend-credits.js"
 import { ltxRetakeBaseCredits } from "../../../lib/ltx-retake-credits.js"
 import { maskCompositeBaseCredits, maskCompositeReserveUnits, stampMaskCompositeLength } from "../../../lib/mask-composite-length.js"
+import { stampVideoOverlayLength, videoOverlayBaseCredits, videoOverlayReserveUnits } from "../../../lib/video-overlay-length.js"
 import { unitRateBaseCredits } from "../../../lib/credit-base-cost.js"
 import { VIDEO_UTILITY_JOB_NAMES, videoUtilityChargeBaseCredits } from "../../../lib/video-utility-credits.js"
 import { resolveNodeInputs } from "../../../services/workflow-engine/input-resolver.js"
@@ -113,6 +120,9 @@ async function routeBase(nodeType: string, rateId: string, units: number): Promi
       return SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE[rateId as keyof typeof SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE] * units
     case "mask-composite":
       return maskCompositeBaseCredits(units)
+    case "video-overlay":
+      // routes/video-overlay.ts computeCredits, a run with a video layer: the video row × the base's units.
+      return videoOverlayBaseCredits(units)
     case "extend-video":
       return ltxExtendBaseCredits(units)
     case "video-retake":
@@ -147,7 +157,7 @@ async function runCharge(c: Case, rateId: string): Promise<number | undefined> {
   const target = nodes.find((n) => n.id === c.node)!
   // A run with nothing wired is refused before it reserves (video_required).
   if (c.edges.length === 0) return undefined
-  if (!VIDEO_UTILITY_JOB_NAMES.includes(target.type) && target.type !== "mask-composite") return undefined
+  if (!VIDEO_UTILITY_JOB_NAMES.includes(target.type) && target.type !== "mask-composite" && target.type !== "video-overlay") return undefined
   probedSec.clear()
   for (const n of c.nodes) {
     const d = n.data as { url?: unknown; duration?: unknown }
@@ -159,6 +169,9 @@ async function runCharge(c: Case, rateId: string): Promise<number | undefined> {
   if (target.type === "mask-composite") {
     expect(await stampMaskCompositeLength("mask-composite", payload)).toBeUndefined()
     base = await maskCompositeBaseCredits(maskCompositeReserveUnits("mask-composite", payload)!)
+  } else if (target.type === "video-overlay") {
+    expect(await stampVideoOverlayLength("video-overlay", payload)).toBeUndefined()
+    base = await videoOverlayBaseCredits(videoOverlayReserveUnits("video-overlay", payload)!)
   } else {
     base = await videoUtilityChargeBaseCredits(target.type, payload)
   }

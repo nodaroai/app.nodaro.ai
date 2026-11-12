@@ -55,6 +55,20 @@ describe("free-credit video limits — blocked models", () => {
     expect(freeVideoRefusal(freeVideoRequestOf({ provider: "kling-4-flash", duration: 4, resolution: "720p" })!, ON)).toBeNull()
   })
 
+  it("a length of 0 or below that is not Auto is the model's default, as pricing reads it — refused when the default is over the limit", () => {
+    // Flash renders (and bills) its 5 s default for these; Seedance 2 Fast its 8 s.
+    for (const duration of [0, "0", -2, "-3", -0.5]) {
+      expect(freeVideoRefusal({ provider: "kling-4-flash", duration, resolution: "720p" }, ON), `kling-4-flash ${duration}`).not.toBeNull()
+      expect(freeVideoRefusal({ provider: "seedance-2-fast", duration, resolution: "480p" }, ON), `seedance-2-fast ${duration}`).not.toBeNull()
+    }
+    // The workflow lane: a node payload written with duration 0.
+    expect(freeVideoRefusal(freeVideoRequestOf({ provider: "kling-4-flash", duration: 0, resolution: "720p" })!, ON)).not.toBeNull()
+    // A legitimate short Flash clip is still allowed.
+    for (const duration of [3, 4, "4"]) {
+      expect(freeVideoRefusal({ provider: "kling-4-flash", duration, resolution: "720p" }, ON), `kling-4-flash ${duration}`).toBeNull()
+    }
+  })
+
   it("the trigger case: two 7-second 1080p Kling 3.0 clips", () => {
     expect(freeVideoRefusal({ provider: "kling-3.0", duration: 7, resolution: "1080P" }, ON)?.reason).toBe("free_video")
   })

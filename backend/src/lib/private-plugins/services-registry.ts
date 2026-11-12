@@ -14,6 +14,8 @@ import type { PluginServices } from "./types.js"
  * plugin toolkit — the same split as engine-registry.ts / supports-registry.ts.
  */
 let pluginServices: PluginServices = {}
+/** Whether this process ran `loadPrivatePlugins()` at all (any outcome). */
+let loaded = false
 
 /**
  * The private plugins' service surface, or `{}` when no plugin provided one
@@ -25,7 +27,25 @@ export function getPluginServices(): PluginServices {
   return pluginServices
 }
 
+/**
+ * Whether this process loaded the plugins (whatever the outcome — `{}` on a
+ * community install is a load too). The standalone orchestrator never does:
+ * a seam that runs there asks this container's API instead (the house models,
+ * `lib/house-models-served.ts`), and must not read an empty `{}` here as
+ * "the plugin serves nothing".
+ */
+export function pluginServicesLoaded(): boolean {
+  return loaded
+}
+
 /** Written only by load.ts — every load outcome, and the gen-skills stand-in. */
 export function setPluginServices(services: PluginServices): void {
   pluginServices = services
+  loaded = true
+}
+
+/** Test seam: back to a process that never loaded the plugins (the standalone orchestrator). */
+export function _resetPluginServicesForTests(): void {
+  pluginServices = {}
+  loaded = false
 }

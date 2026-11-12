@@ -12,7 +12,7 @@
  *
  * Derived, never hand-listed per node: every render's rows
  * (`RENDER_NODE_TYPES[*].creditIds`), every video utility the shared estimator
- * prices per unit, Mask Composite, the LTX per-second rows, and the dubbing
+ * prices per unit, Mask Composite, Video Overlay's video row, the LTX per-second rows, and the dubbing
  * per-minute rows (whole started minutes only, at most the longest span a dub
  * may cover — `<row>:2.5u` is not a count a dub is charged at), and Speaker
  * Frames' per-block row (whole started blocks of 1,000 sampled frames). A speech
@@ -28,6 +28,7 @@
 import {
   LTX_EXTEND_PER_SECOND_CREDIT_ID,
   LTX_RETAKE_PER_SECOND_CREDIT_ID,
+  VIDEO_OVERLAY_PRICING,
   isSpeechLengthPriceId,
   parseSpeechQuoteCreditId,
   parseUnitQuoteCreditId,
@@ -62,6 +63,7 @@ export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
     ...Object.values(RENDER_NODE_TYPES).flatMap((d) => d.creditIds),
     ...VIDEO_UTILITY_JOB_NAMES,
     "mask-composite",
+    VIDEO_OVERLAY_PRICING.VIDEO_CREDIT_ID,
     LTX_EXTEND_PER_SECOND_CREDIT_ID,
     LTX_RETAKE_PER_SECOND_CREDIT_ID,
   ].map((id) => [id, ANY_UNITS] as const),

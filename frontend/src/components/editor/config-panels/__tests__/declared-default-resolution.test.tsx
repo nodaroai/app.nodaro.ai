@@ -1,6 +1,6 @@
 /**
- * A model whose unset size is not its first listed one (MiniMax H3 Image renders
- * 2K, its first listed size is 1K) shows and writes that size on every editor
+ * A model whose unset size is not its first listed one (MiniMax H3 Image and
+ * Seedream 5.5 render 2K, their first listed size is 1K) shows and writes that size on every editor
  * surface: the config panel's fail-safe, the run strip and its snap, and a
  * published app's reset. No other image model's shown default moves.
  */
@@ -21,20 +21,22 @@ import { getQuickConfigs, quickConfigSnapPatch, resolveQuickConfigOptions } from
 import { ConfigFieldRenderer } from "@/components/presentation/config-field-renderer"
 
 const MINIMAX = ["minimax-h3-image", "minimax-h3-image-i2i"]
+const SEEDREAM_5_5 = ["seedream-5-5", "seedream-5-5-i2i"]
+const DECLARING = [...MINIMAX, ...SEEDREAM_5_5]
 
 describe("the declared default size", () => {
-  it("is declared by MiniMax H3 Image's two ids and by one video model only", () => {
+  it("is declared by MiniMax H3 Image's and Seedream 5.5's two ids each and by one video model only", () => {
     const declaring = Object.values(MODEL_CATALOG).filter((m) => m.defaultResolution).map((m) => m.id).sort()
-    expect(declaring).toEqual(["gemini-omni-flash-1-2", "minimax-h3-image", "minimax-h3-image-i2i"])
+    expect(declaring).toEqual(["gemini-omni-flash-1-2", "minimax-h3-image", "minimax-h3-image-i2i", "seedream-5-5", "seedream-5-5-i2i"])
     expect(MODEL_CATALOG["gemini-omni-flash-1-2"]!.kind).toBe("video")
   })
 
-  it("is 2K on MiniMax H3 Image and nothing on every other image model with a size menu", () => {
-    for (const id of MINIMAX) {
-      expect(declaredDefaultResolution(id)).toBe("2K")
-      expect(defaultResolutionFor(id)).toBe("2K")
+  it("is 2K on MiniMax H3 Image and Seedream 5.5 and nothing on every other image model with a size menu", () => {
+    for (const id of DECLARING) {
+      expect(declaredDefaultResolution(id), id).toBe("2K")
+      expect(defaultResolutionFor(id), id).toBe("2K")
     }
-    for (const id of Object.keys(IMAGE_RESOLUTION_OPTIONS).filter((id) => !MINIMAX.includes(id))) {
+    for (const id of Object.keys(IMAGE_RESOLUTION_OPTIONS).filter((id) => !DECLARING.includes(id))) {
       expect(declaredDefaultResolution(id), id).toBeUndefined()
     }
   })
@@ -53,6 +55,7 @@ describe("the run strip", () => {
 
   it("shows 2K for an unset size on MiniMax H3 Image, the first listed size elsewhere", () => {
     expect(strip({ provider: "minimax-h3-image" }).currentResolution).toBe("2K")
+    expect(strip({ provider: "seedream-5-5" }).currentResolution).toBe("2K")
     expect(strip({ provider: "seedream-5-flash" }).currentResolution).toBe("1K")
     expect(strip({ provider: "gpt-image-2" }).currentResolution).toBe(IMAGE_RESOLUTION_OPTIONS["gpt-image-2"]![0]!.value)
   })
@@ -64,19 +67,22 @@ describe("the run strip", () => {
       return quickConfigSnapPatch(control, "2 MP", resolveQuickConfigOptions(control, data), data)
     }
     expect(snap("minimax-h3-image")).toEqual({ resolution: "2K" })
+    expect(snap("seedream-5-5")).toEqual({ resolution: "2K" })
     expect(snap("gpt-image-2")).toEqual({ resolution: "1K" })
   })
 })
 
 describe("a published app's size field", () => {
+  // Only Generate Image exposes a size field to a published app (`renderGenerateImage`).
   const renderSize = (provider: string) => {
     const onChange = vi.fn()
     render(<ConfigFieldRenderer nodeType="generate-image" field="resolution" value={undefined} nodeData={{ provider }} onChange={onChange} />)
     return onChange
   }
 
-  it("writes 2K for an unset size on MiniMax H3 Image, the first listed size elsewhere", () => {
+  it("writes 2K for an unset size on MiniMax H3 Image and Seedream 5.5, the first listed size elsewhere", () => {
     expect(renderSize("minimax-h3-image")).toHaveBeenCalledWith("2K")
+    expect(renderSize("seedream-5-5")).toHaveBeenCalledWith("2K")
     expect(renderSize("gpt-image-2")).toHaveBeenCalledWith("1K")
   })
 })

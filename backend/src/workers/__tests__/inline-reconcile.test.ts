@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   reconcileElevenLabsJob: vi.fn().mockResolvedValue(undefined),
   reconcileFalJob: vi.fn().mockResolvedValue(undefined),
   reconcileNodaroCloudJob: vi.fn().mockResolvedValue(undefined),
+  reconcileHouseModelJob: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock("../../lib/reconcile/kie.js", () => ({
@@ -26,6 +27,10 @@ vi.mock("../../lib/reconcile/fal.js", () => ({
 
 vi.mock("../../lib/reconcile/nodaro-cloud.js", () => ({
   reconcileNodaroCloudJob: mocks.reconcileNodaroCloudJob,
+}))
+
+vi.mock("../../lib/reconcile/house-model.js", () => ({
+  reconcileHouseModelJob: mocks.reconcileHouseModelJob,
 }))
 
 import { tryInlineReconcile } from "../inline-reconcile.js"
@@ -139,6 +144,22 @@ describe("tryInlineReconcile", () => {
       { id: "j-sv", provider_task_id: "cloud-sv", reconcile_attempts: 0, job_type: "speaker-view" },
       { claimant: "worker" },
     )
+  })
+
+  it("dispatches house-model to reconcileHouseModelJob as claimant 'worker', reading the saved run to its end — never a re-start", async () => {
+    await tryInlineReconcile({
+      id: "j-house",
+      provider_kind: "house-model",
+      provider_task_id: "ref-house",
+      reconcile_attempts: 1,
+      job_type: "edit-image",
+      input_data: { provider: "some-house-model" },
+    })
+    expect(mocks.reconcileHouseModelJob).toHaveBeenCalledWith(
+      { id: "j-house", provider_task_id: "ref-house", reconcile_attempts: 1, job_type: "edit-image", input_data: { provider: "some-house-model" } },
+      { claimant: "worker", pollToEnd: true },
+    )
+    expect(mocks.reconcileKieJob).not.toHaveBeenCalled()
   })
 
   it("no-op when provider_kind is null (cron handles legacy rows)", async () => {

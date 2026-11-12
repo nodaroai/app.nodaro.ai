@@ -210,6 +210,184 @@ describe("buildPayload — video-overlay stamps the freshness key (resultComposi
   })
 })
 
+describe("video layers through the DAG — a wired video source becomes a video layer", () => {
+  const CLIP = "https://x/clip"
+  const done = (output: NodeExecutionState["output"]): NodeExecutionState => ({ status: "completed", output })
+
+  it("a generate-video wired to overlay2 records slot 2 and gives layers[0] a videoUrl and slot 2 (fade off)", () => {
+    const target = node("vo", "video-overlay", { layers: [] })
+    const base = node("b", "upload-video", { url: BASE })
+    const gv = node("gv", "generate-video")
+    const inputs = resolveNodeInputs(target, [edge("b", "vo", "video"), edge("gv", "vo", "overlay2")], { gv: done({ videoUrl: CLIP }) }, [base, gv, target])
+    expect(inputs.overlayImageUrls).toEqual([undefined, CLIP])
+    expect(inputs.overlayVideoSlots).toEqual([2])
+    const r = buildPayload(target, "job-1", inputs, undefined, ctx(target))
+    expect(r.payload.layers).toEqual([{ ...DEFAULT_VIDEO_OVERLAY_LAYER, animate: false, videoUrl: CLIP, slot: 2 }])
+    expect(r.payload.layers as Array<Record<string, unknown>>).not.toContainEqual(expect.objectContaining({ imageUrl: expect.anything() }))
+  })
+
+  it("a generate-image wired to overlay keeps imageUrl and records no video slot", () => {
+    const target = node("vo", "video-overlay", { layers: [] })
+    const base = node("b", "upload-video", { url: BASE })
+    const gi = node("gi", "generate-image")
+    const inputs = resolveNodeInputs(target, [edge("b", "vo", "video"), edge("gi", "vo", "overlay")], { gi: done({ imageUrl: "https://x/still" }) }, [base, gi, target])
+    expect(inputs.overlayImageUrls).toEqual(["https://x/still"])
+    expect(inputs).not.toHaveProperty("overlayVideoSlots")
+    const r = buildPayload(target, "job-1", inputs, undefined, ctx(target))
+    expect(r.payload.layers).toEqual([{ ...DEFAULT_VIDEO_OVERLAY_LAYER, imageUrl: "https://x/still", slot: 1 }])
+  })
+
+  it("the wire replaces a stored source of the other kind, keeping the layer's own settings (its sound included)", () => {
+    const target = node("vo", "video-overlay", { layers: [null, { imageUrl: "https://x/stale.png", start: 1, sound: { volume: 0.4 } }] })
+    const gv = node("gv", "generate-video")
+    const inputs = resolveNodeInputs(target, [edge("gv", "vo", "overlay2")], { gv: done({ videoUrl: CLIP }) }, [gv, target])
+    const r = buildPayload(target, "job-1", { ...inputs, videoUrl: BASE }, undefined, ctx(target))
+    expect(r.payload.layers).toEqual([{ ...DEFAULT_VIDEO_OVERLAY_LAYER, animate: false, start: 1, videoUrl: CLIP, sound: { volume: 0.4 }, slot: 2 }])
+  })
+
+  // The canvas executor sends the same layer (execute-node-processing.test.ts).
+  it("a wired IMAGE slot with a stored sound runs: the sound is skipped, its fade default follows the image", () => {
+    const target = node("vo", "video-overlay", { layers: [{ start: 1, sound: { volume: 0.5 } }] })
+    const gi = node("gi", "generate-image")
+    const inputs = resolveNodeInputs(target, [edge("gi", "vo", "overlay")], { gi: done({ imageUrl: "https://x/still" }) }, [gi, target])
+    const r = buildPayload(target, "job-1", { ...inputs, videoUrl: BASE }, undefined, ctx(target))
+    expect(r.payload.layers).toEqual([{ ...DEFAULT_VIDEO_OVERLAY_LAYER, imageUrl: "https://x/still", start: 1, slot: 1 }])
+  })
+
+  it("a stored image layer of its own (no wire) with sound is still refused before anything is reserved", () => {
+    const target = node("vo", "video-overlay", { layers: [{ imageUrl: "https://x/own.png", start: 0, sound: { volume: 1 } }] })
+    expect(() => buildPayload(target, "job-1", { videoUrl: BASE }, undefined, ctx(target))).toThrow("Layer 1: sound is only for a video layer")
+  })
+
+  // The canvas run sends the same request (execute-node-processing.test.ts, same fixture).
+  it("a base box the canvas wrote rides in the payload as stored, with the same key as the canvas", () => {
+    const baseBox = { anchor: "center", x: 10, y: -5, width: 60, height: 40, fit: "cover" } as const
+    const data = { layers: [], outputAspect: "9:16", baseBox }
+    const target = node("vo", "video-overlay", data)
+    const r = buildPayload(target, "job-1", { videoUrl: BASE, overlayImageUrls: ["http://a.png"] }, undefined, ctx(target))
+    expect(r.payload).toMatchObject({ videoUrl: BASE, outputAspect: "9:16", baseBox, layers: [{ ...DEFAULT_VIDEO_OVERLAY_LAYER, imageUrl: "http://a.png", slot: 1 }] })
+    expect(r.payload.resultCompositionKey).toBe(videoOverlayCompositionKey({ baseUrl: BASE, sources: videoOverlaySlotSources([], ["http://a.png"]), data }))
+  })
+
+  it("a source of no fixed kind reads by its URL: a sub-workflow's .mp4 is a video, its .png an image", () => {
+    const target = node("vo", "video-overlay", { layers: [] })
+    const clips = node("sv", "sub-workflow")
+    const pics = node("si", "sub-workflow")
+    const states = { sv: done({ videoUrl: "https://x/row.mp4?sig=1" }), si: done({ imageUrl: "https://x/row.png" }) }
+    const inputs = resolveNodeInputs(target, [edge("sv", "vo", "overlay"), edge("si", "vo", "overlay3")], states, [clips, pics, target])
+    expect(inputs.overlayImageUrls).toEqual(["https://x/row.mp4?sig=1", undefined, "https://x/row.png"])
+    expect(inputs.overlayVideoSlots).toEqual([1])
+  })
+
+  it("a List column's type ranks below the file's extension: a .png in a video-url column stays an image; it fills the gap for a link with none", () => {
+    const target = node("vo", "video-overlay", { layers: [] })
+    const videoColumn = { columns: [{ id: "c", handleId: "c", name: "Clips", type: "video-url" }], rows: [] }
+    const pngs = node("lp", "list", videoColumn)
+    const bare = node("lb", "list", videoColumn)
+    const states = { lp: done({ text: "https://x/still.png" }), lb: done({ text: "https://x/signed/clip?sig=1" }) }
+    const inputs = resolveNodeInputs(target, [edge("lp", "vo", "overlay"), edge("lb", "vo", "overlay2")], states, [pngs, bare, target])
+    expect(inputs.overlayImageUrls).toEqual(["https://x/still.png", "https://x/signed/clip?sig=1"])
+    expect(inputs.overlayVideoSlots).toEqual([2])
+  })
+
+  it("the last wire on a slot decides its kind, as it decides its URL", () => {
+    const target = node("vo", "video-overlay", { layers: [] })
+    const gv = node("gv", "generate-video")
+    const gi = node("gi", "generate-image")
+    const states = { gv: done({ videoUrl: CLIP }), gi: done({ imageUrl: "https://x/still" }) }
+    const videoThenImage = resolveNodeInputs(target, [edge("gv", "vo", "overlay"), edge("gi", "vo", "overlay")], states, [gv, gi, target])
+    expect(videoThenImage.overlayImageUrls).toEqual(["https://x/still"])
+    expect(videoThenImage).not.toHaveProperty("overlayVideoSlots")
+    const imageThenVideo = resolveNodeInputs(target, [edge("gi", "vo", "overlay"), edge("gv", "vo", "overlay")], states, [gv, gi, target])
+    expect(imageThenVideo.overlayImageUrls).toEqual([CLIP])
+    expect(imageThenVideo.overlayVideoSlots).toEqual([1])
+  })
+
+  it("a stack layout is satisfied by a wired video, and the freshness key follows the wired video's URL and its kind (image-only keys are unchanged)", () => {
+    const data = { layers: [], outputAspect: "9:16", layout: "stack-whole" }
+    const target = node("vo", "video-overlay", data)
+    const r = buildPayload(target, "job-1", { videoUrl: BASE, overlayImageUrls: [CLIP], overlayVideoSlots: [1] }, undefined, ctx(target))
+    expect(r.payload).toMatchObject({ layout: "stack-whole", outputAspect: "9:16", layers: [{ videoUrl: CLIP, slot: 1 }] })
+    // The canvas key for the same node: the same sources, settings and wired video slots.
+    expect(r.payload.resultCompositionKey).toBe(videoOverlayCompositionKey({ baseUrl: BASE, sources: videoOverlaySlotSources([], [CLIP]), data, videoSlots: [1] }))
+    expect(r.payload.resultCompositionKey).not.toBe(videoOverlayCompositionKey({ baseUrl: BASE, sources: videoOverlaySlotSources([], [CLIP]), data }))
+    // Without the video slot the same wire is an image, and the stack has no video layer to place.
+    expect(() => buildPayload(target, "job-1", { videoUrl: BASE, overlayImageUrls: [CLIP] }, undefined, ctx(target))).toThrow(
+      "Video Overlay: layout stack-whole needs a video layer",
+    )
+  })
+})
+
+describe("video layers through the DAG — the wire's own medium decides (typed pips, declared ports)", () => {
+  const done = (output: NodeExecutionState["output"]): NodeExecutionState => ({ status: "completed", output })
+  const from = (source: string, sourceHandle: string, target: string, targetHandle: string): SimpleEdge => ({
+    id: `${source}:${sourceHandle}->${target}:${targetHandle}`, source, target, sourceHandle, targetHandle,
+  })
+  const SIGNED = "https://x/signed/abc?token=1"
+
+  it("3D Render Pro's stills pip into a layer stays an image layer — the image-only payload this node built before video layers", () => {
+    const target = node("vo", "video-overlay", { layers: [] })
+    const base = node("b", "upload-video", { url: BASE })
+    const pro = node("p3", "pro-3d-render")
+    const still = "https://x/shot-1.png"
+    const states = { p3: done({ videoUrl: "https://x/render.mp4", shotStills: [{ shotIndex: 0, frame: 0, assetId: "a-1", url: still }] }) }
+    const inputs = resolveNodeInputs(target, [edge("b", "vo", "video"), from("p3", "stills", "vo", "overlay")], states, [base, pro, target])
+    expect(inputs.overlayImageUrls).toEqual([still])
+    expect(inputs).not.toHaveProperty("overlayVideoSlots")
+    const r = buildPayload(target, "job-1", inputs, "usage-1", ctx(target))
+    expect(r.payload).toEqual({
+      jobId: "job-1",
+      videoUrl: BASE,
+      layers: [{ ...DEFAULT_VIDEO_OVERLAY_LAYER, imageUrl: still, slot: 1 }],
+      resultCompositionKey: videoOverlayCompositionKey({ baseUrl: BASE, sources: [still], data: { layers: [] } }),
+      usageLogId: "usage-1",
+    })
+  })
+
+  it("3D Render Pro's video pip into a layer is a video layer, whatever its URL", () => {
+    const target = node("vo", "video-overlay", { layers: [] })
+    const pro = node("p3", "pro-3d-render")
+    const inputs = resolveNodeInputs(target, [from("p3", "video", "vo", "overlay")], { p3: done({ videoUrl: SIGNED }) }, [pro, target])
+    expect(inputs.overlayVideoSlots).toEqual([1])
+  })
+
+  it("a Collect node's out-video lane is a video layer, an extension-less URL included", () => {
+    const target = node("vo", "video-overlay", { layers: [] })
+    const agg = node("c", "collect")
+    const inputs = resolveNodeInputs(target, [from("c", "out-video", "vo", "overlay2")], { c: done({ videoUrl: SIGNED }) }, [agg, target])
+    expect(inputs.overlayImageUrls).toEqual([undefined, SIGNED])
+    expect(inputs.overlayVideoSlots).toEqual([2])
+    const r = buildPayload(target, "job-1", { ...inputs, videoUrl: BASE }, undefined, ctx(target))
+    expect(r.payload.layers).toEqual([{ ...DEFAULT_VIDEO_OVERLAY_LAYER, animate: false, videoUrl: SIGNED, slot: 2 }])
+  })
+
+  it("through a teleport, the lane the wire left on the real source still decides", () => {
+    const target = node("vo", "video-overlay", { layers: [] })
+    const agg = node("c", "collect")
+    const send = node("t", "teleport-send")
+    const inputs = resolveNodeInputs(target, [from("c", "out-video", "t", "in"), from("t", "out", "vo", "overlay")], { c: done({ videoUrl: SIGNED }) }, [agg, send, target])
+    expect(inputs.overlayImageUrls).toEqual([SIGNED])
+    expect(inputs.overlayVideoSlots).toEqual([1])
+  })
+
+  it("a component output typed video, with an extension-less URL, is a video layer", () => {
+    const target = node("vo", "video-overlay", { layers: [] })
+    const comp = node("cp", "component", { componentMetadata: { inputs: [], outputs: [{ id: "clip", name: "Clip", type: "video", required: false, fieldKey: "videoUrl" }], exposedSettings: [] } })
+    const inputs = resolveNodeInputs(target, [from("cp", "out_clip", "vo", "overlay")], { cp: done({ _outputResults: { clip: SIGNED } } as NodeExecutionState["output"]) }, [comp, target])
+    expect(inputs.overlayImageUrls).toEqual([SIGNED])
+    expect(inputs.overlayVideoSlots).toEqual([1])
+  })
+
+  it("a sub-workflow's video port is a video layer; its image port an image layer", () => {
+    const target = node("vo", "video-overlay", { layers: [] })
+    const sub = node("sw", "sub-workflow", { routeSnapshot: { outputPorts: [{ id: "cut", mediaType: "video" }, { id: "card", mediaType: "image" }] } })
+    const states = { sw: done({ _outputResults: { cut: SIGNED, card: "https://x/render/card" } } as NodeExecutionState["output"]) }
+    const inputs = resolveNodeInputs(target, [from("sw", "out_cut", "vo", "overlay"), from("sw", "out_card", "vo", "overlay2")], states, [sub, target])
+    expect(inputs.overlayImageUrls).toEqual([SIGNED, "https://x/render/card"])
+    expect(inputs.overlayVideoSlots).toEqual([1])
+  })
+})
+
 describe("output-extractor — video-overlay as a source", () => {
   it("a finished node reads as a video", () => {
     const n = node("vo", "video-overlay", { generatedResults: [{ url: "https://x/out.mp4" }], activeResultIndex: 0 })

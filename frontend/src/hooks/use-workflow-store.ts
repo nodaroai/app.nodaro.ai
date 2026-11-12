@@ -35,8 +35,10 @@ import type { PipelineStatus } from "@nodaro/shared/pipeline"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { NodeDoubleClickAction } from "@/lib/node-double-click-action"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
-import { previewTypeOfNodeType } from "@/lib/preview-node-types"
+import { previewTypeOfNodeType, previewTypeOfPip } from "@/lib/preview-node-types"
 import { videoOverlayConnectPatch } from "@/lib/video-overlay-connect"
+import { videoOverlayEdgeMedium } from "@/lib/video-overlay-wire-kind"
+import { videoOverlaySlotOfHandle } from "@nodaro/shared/video"
 import { initialEdgeData } from "@/lib/initial-edge-data"
 import { ensureNodePositions } from "@/lib/node-position"
 import { usecaseNodeInvariantsGraph } from "@/lib/use-case-cameras-invariant"
@@ -164,6 +166,9 @@ export function classifyPreviewValue(
   value: string,
   sourceHandle?: string | null,
 ): PreviewItem["type"] {
+  // A JSON output beside a node unit's media take is data — before the extension checks (its JSON may name an image).
+  const byPip = previewTypeOfPip(nodeType, sourceHandle)
+  if (byPip) return byPip
   if (nodeType === "voice-design" && sourceHandle === "voiceId") return "text"
   if (nodeType === "forced-alignment") return "data"
   // Must precede the extension checks below — video-analysis (and
@@ -1548,12 +1553,20 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       }
 
       // Video Overlay (D3): a wire into a layer handle CLEARS that layer's own
-      // imageUrl — the wire replaces it, so a stored layer never carries both
-      // and disconnecting later empties the slot instead of resurfacing a
-      // hidden URL. Here, not in the panel: the panel may not be mounted.
+      // imageUrl / videoUrl — the wire replaces it, so a stored layer never
+      // carries both and disconnecting later empties the slot instead of
+      // resurfacing a hidden URL — and, when the wire changes the slot's kind
+      // (image ↔ video), drops the other kind's fade setting and sound. Here,
+      // not in the panel: the panel may not be mounted.
       const videoOverlayTarget = newNodes.find((n) => n.id === connection.target && n.type === "video-overlay")
-      if (videoOverlayTarget) {
-        const patch = videoOverlayConnectPatch(videoOverlayTarget.data as { layers?: unknown }, connection.targetHandle)
+      if (videoOverlayTarget && videoOverlaySlotOfHandle(connection.targetHandle) > 0 && connection.source) {
+        const onHandle = state.edges.filter((e) => e.target === connection.target && e.targetHandle === connection.targetHandle)
+        const last = onHandle[onHandle.length - 1]
+        const wire = { source: connection.source, target: connection.target, sourceHandle: connection.sourceHandle, targetHandle: connection.targetHandle }
+        const patch = videoOverlayConnectPatch(videoOverlayTarget.data as { layers?: unknown }, connection.targetHandle, {
+          ...(last ? { previous: videoOverlayEdgeMedium(state.nodes, state.edges, last) } : {}),
+          next: videoOverlayEdgeMedium(state.nodes, state.edges, wire),
+        })
         if (patch) {
           newNodes = newNodes.map((n) => (n.id === videoOverlayTarget.id ? { ...n, data: mergeNodeData(n.data, patch) } : n))
         }

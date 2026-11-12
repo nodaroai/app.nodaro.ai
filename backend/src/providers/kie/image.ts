@@ -16,11 +16,13 @@ import { KieError, createSanitizedError, runKieTask, type KieResultJson } from "
 import { runFluxKontextTask } from "./kontext-client.js"
 import { KIE_IMAGE_MODELS, kieSeedForWire, type KieModelConfig, KIE_CREDIT_USD, GPT_IMAGE_2_6_SVG_AUTHOR_MODELS } from "./models.js"
 import { expectedKieCreditsFor, kieImageCostUsd, kieTaskCreditsConsumed } from "./image-cost.js"
+import { GPT_IMAGE_T2I_TO_I2I } from "./image-edit-sibling.js"
 import { IMAGE_GIF_FRAME_SIZE, isGptImage26AutoRun } from "@nodaro/shared/model-catalog"
 import { ensureImageForProvider } from "./video.js"
 import { TASK_CHAINED_EDIT_PROVIDERS, getMaxImagePromptChars } from "@nodaro/shared/models"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
+import { hasTransparentPixels } from "../../lib/image-transparency.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
 
 // Models that need output_format forced to "png" (legacy Nano Banana family).
@@ -76,30 +78,10 @@ function withIdeogramEditHint(provider: string, err: unknown): unknown {
   return err
 }
 
-// GPT Image text-to-image endpoints SILENTLY IGNORE a supplied reference image —
-// they generate purely from the prompt, which destroys character/entity identity
-// when an anchor is passed (e.g. Studio asset shots: angles, poses, expressions).
-// Their image-to-image siblings consume the anchor via `input_urls`. When
-// reference image(s) are present, `generateImage` swaps the t2i provider for its
-// i2i sibling below so the anchor is actually honored.
-//
-// TARGETED to GPT Image (and MiniMax H3 Image, whose text-to-image endpoint
-// takes no image at all) — do NOT widen to a blanket "any t2i + refs → i2i"
-// rule: models like nano-banana and seedream t2i legitimately accept reference
-// images via `image_input` as a STYLE reference, and remapping them would change
-// their behavior. Credit reservation already happened at the route; a model
-// priced per input image prices a text-to-image id sent images on its edit id
-// (`buildCreditModelIdentifier`), so the price follows this swap.
-const GPT_IMAGE_T2I_TO_I2I: Record<string, string> = {
-  "gpt-image-2": "gpt-image-2-i2i",
-  "gpt-image-2-5-flare": "gpt-image-2-5-flare-i2i",
-  "gpt-image-2-5-sunburst": "gpt-image-2-5-sunburst-i2i",
-  "gpt-image-2-6-flare": "gpt-image-2-6-flare-i2i",
-  "gpt-image-2-6-sunburst": "gpt-image-2-6-sunburst-i2i",
-  "gpt-image-2-6-economy": "gpt-image-2-6-economy-i2i",
-  "gpt-image": "gpt-image-i2i",
-  "minimax-h3-image": "minimax-h3-image-i2i",
-}
+// GPT_IMAGE_T2I_TO_I2I — the text-to-image ids `generateImage` sends to their
+// edit sibling when images go with the request — lives in `image-edit-sibling.ts`
+// (why it is GPT-Image-targeted is written there), so a lane that picks a lever
+// before the call snaps it against the model this swap reaches.
 
 // Map ratio strings → named image_size values for models that require them
 const RATIO_TO_NAMED_SIZE: Record<string, string> = {
@@ -152,6 +134,15 @@ export async function prepareMask(
   maskUrl: string,
   opts: { form: KieMaskForm },
 ): Promise<string> {
+  return (await fitMaskToSource(imageUrl, maskUrl, opts)).url
+}
+
+/** `prepareMask`, with the source image it downloaded to size the mask. */
+async function fitMaskToSource(
+  imageUrl: string,
+  maskUrl: string,
+  opts: { form: KieMaskForm },
+): Promise<{ url: string; source: Buffer }> {
   const [img, mask] = await Promise.all([
     downloadAndMeasure(imageUrl),
     downloadAndMeasure(maskUrl),
@@ -159,7 +150,7 @@ export async function prepareMask(
 
   const resize = img.width !== mask.width || img.height !== mask.height
   if (!resize && opts.form === "white-edits") {
-    return maskUrl
+    return { url: maskUrl, source: img.buffer }
   }
 
   if (resize) {
@@ -177,7 +168,7 @@ export async function prepareMask(
     : await (opts.form === "black-edits" ? pipeline.removeAlpha().greyscale().negate() : pipeline).png().toBuffer()
 
   // A provider input: the running job's scratch folder, emptied when the job ends.
-  return uploadJobScratchBuffer(prepared, "prepared-mask", "png", "image/png")
+  return { url: await uploadJobScratchBuffer(prepared, "prepared-mask", "png", "image/png"), source: img.buffer }
 }
 
 /**
@@ -314,6 +305,13 @@ function firstInputImage(modelConfig: KieModelConfig, input: Record<string, unkn
  * a mask that would not be sent. Returns that source when the model redraws
  * outside the mask (`maskEditRedrawsOutside`), for the handler to paste back.
  * A model without a `maskFormat` is left as it is.
+ *
+ * A masked edit of an opaque photo asks for an opaque picture
+ * (`background: "opaque"`, on a model whose field list takes `background`),
+ * unless the caller asked for a transparent one: left to `auto`, GPT Image 2.6
+ * can hand back a picture that is partly transparent inside the mask (a live
+ * run, 2026-11-11: alpha down to 37 there; `opaque` returned RGB at 1K, 2K
+ * and 4K). A photo with transparent pixels keeps the caller's choice.
  */
 async function applyMaskFormat(
   modelConfig: KieModelConfig,
@@ -330,7 +328,11 @@ async function applyMaskFormat(
     delete input.mask_url
     return undefined
   }
-  input.mask_url = await prepareMask(source, callerMask, { form: modelConfig.maskFormat })
+  const fitted = await fitMaskToSource(source, callerMask, { form: modelConfig.maskFormat })
+  input.mask_url = fitted.url
+  if (fields?.includes("background") && input.background !== "transparent" && !(await hasTransparentPixels(fitted.source))) {
+    input.background = "opaque"
+  }
   return modelConfig.maskEditRedrawsOutside ? source : undefined
 }
 
@@ -877,6 +879,7 @@ export class KieImageProvider
       provider === "seedream-5-pro-i2i" ||
       provider === "seedream-5-flash-i2i" ||
       provider === "minimax-h3-image-i2i" ||
+      provider === "seedream-5-5-i2i" ||
       provider === "grok-2-edit"
     )) {
       input.prompt = clampPromptForProvider(prompt, provider)

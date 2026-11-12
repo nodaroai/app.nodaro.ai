@@ -67,5 +67,6 @@ export const descriptor = {
   },
   "capabilities": [
     "lane:local"
-  ]
+  ],
+  "producer": "video"
 } as const

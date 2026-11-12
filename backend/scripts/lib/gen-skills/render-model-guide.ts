@@ -55,6 +55,19 @@ export type ChargedCreditsOf = (identifier: string, credits: number) => number
 const asListed: ChargedCreditsOf = (_identifier, credits) => credits
 
 /**
+ * Where a house model (a catalog entry offered under the deployment's own
+ * label, `ownLabel`) is available, said from the catalog alone — this text is
+ * generated without a plugin, so it never reads what an install serves
+ * (docs/design/house-models.md).
+ */
+export const OWN_LABEL_AVAILABILITY = "Offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it."
+
+/** A catalog entry's "best for" cell: its description, and for a house model where it is offered. */
+export function modelGuideDescription(e: Pick<ModelCatalogEntry, "description" | "ownLabel">): string {
+  return e.ownLabel === true ? `${e.description} ${OWN_LABEL_AVAILABILITY}` : e.description
+}
+
+/**
  * One markdown table of every catalog entry of `kind`, excluding `mcpHidden`
  * (superseded) and `docsHidden` (withheld) models. Sorted cheapest-first so the everyday picks read at the
  * top; featured ("best in tier") models are flagged with ⭐.
@@ -87,7 +100,7 @@ export function renderModelTable(
     // The price id rides along invisibly, so docs-charged-prices.test.ts holds the figure to it.
     const price = identifier ? `${credits}<!-- credits: ${identifier} -->` : `${credits}`
     lines.push(
-      `| ${escapeCell(name)} | ${escapeCell(e.family)} | ${costTier(credits, cuts)} | ${price} | ${escapeCell(modes)} | ${escapeCell(e.description)} |`,
+      `| ${escapeCell(name)} | ${escapeCell(e.family)} | ${costTier(credits, cuts)} | ${price} | ${escapeCell(modes)} | ${escapeCell(modelGuideDescription(e))} |`,
     )
   }
   return lines.join("\n")

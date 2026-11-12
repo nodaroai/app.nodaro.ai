@@ -63,5 +63,6 @@ export const descriptor = {
   "capabilities": [
     "panel:generate-button",
     "edition:nodaro-exclusive"
-  ]
+  ],
+  "producer": "video"
 } as const

@@ -52,6 +52,12 @@ export {
 } from "../video-link.js"
 export type { VideoLinkPlatform, VideoLinkNodeFields, VideoLinkInputProblem, VideoLinkNeed, VideoLinkGraphNode, VideoLinkGraphEdge } from "../video-link.js"
 export * from "../video-overlay.js"
+export * from "../video-overlay-geometry.js"
+export * from "../video-overlay-validate.js"
+export { declaredOutputMediaType, listColumnMediaType, videoOverlayHasVideoLayer, videoOverlayWiredLayerKind, videoOverlayWireMediumBeforeRun, withoutImpliedVideoOverlayAnimate } from "../video-overlay-video-layers.js"
+export type { VideoOverlayWiredLayerKind, VideoOverlayWiredSource, VideoOverlayWireBeforeRun, VideoOverlayWireMedium } from "../video-overlay-video-layers.js"
+export * from "../video-overlay-layout-ids.js"
+export * from "../video-overlay-layouts.js"
 // --- Video-analysis node (window/result schemas + slot-token + aspect helpers) ---
 export * from "../video-analysis.js"
 // --- Unified video node UI-default fills (panel snap == strip == DAG payload) ---

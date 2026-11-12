@@ -160,9 +160,12 @@ test("G3: every aggregate declares @registry and @registry-exports; only reviewe
 // type's inputs. declaredJobBudgetMs: its first argument is a job name, and
 // every budgeted job name is its node's type — a unit's budget.ts is keyed by
 // its type, and node-executor-budget-ceilings.test.ts dispatches every legacy
-// name as its node type. laneOf: its argument is a job name, and a unit's
-// worker job is named by its node type — the video queue's BullMQ job name.)
-const LOOKUPS_BY_NODE_TYPE = new Set(["isExecutableNode", "familyLabel", "isLocalizedTableKey", "unitDefinitionOf", "unitDescriptorOf", "unitInputHandleOf", "usecaseInputSchemaOf", "declaredJobBudgetMs", "laneOf"])
+// name as its node type. laneOf and providerOf: their argument is a job name,
+// and a unit's worker job is named by its node type — the video queue's BullMQ
+// job name. unitCreditIdOf: its first argument is the node's type; the second,
+// the node's data, only picks that type's row — it returns a credit id, never a
+// collection.)
+const LOOKUPS_BY_NODE_TYPE = new Set(["isExecutableNode", "familyLabel", "isLocalizedTableKey", "unitDefinitionOf", "unitDescriptorOf", "unitInputHandleOf", "usecaseInputSchemaOf", "declaredJobBudgetMs", "laneOf", "providerOf", "unitCreditIdOf"])
 
 test("G3: composer `lookups` are only one-node-type lookups", () => {
   const bad = Object.entries(composerMap).flatMap(([f, e]) => (e.lookups ?? []).filter((n) => !LOOKUPS_BY_NODE_TYPE.has(n)).map((n) => `${f}: ${n}`))

@@ -1,5 +1,7 @@
+// @registry-lookup getModelIdentifier asks the one node type it prices for its unit price id (unitCreditIdOf(node.type, data))
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
+import { unitCreditIdOf } from "@/lib/unit-price-ids"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, isSeedanceExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
 import { defaultImageModelForNode, imageFormatLeversOf, isPricedPerInputImage, maskedEditResolution, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
@@ -25,6 +27,7 @@ import {
   seedanceExtendCreditId,
   pitchTempoQuoteCreditId,
   videoGenerationCreditId,
+  videoOverlayCreditId,
 } from "@nodaro/shared/credits"
 import {
   buildLlmCreditIdentifier,
@@ -49,7 +52,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { isTopazVideoUpscaleProvider, pitchTempoQuotedSec, videoMaskQuotedSec, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { isTopazVideoUpscaleProvider, pitchTempoQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
@@ -163,6 +166,7 @@ function sourcesEqual(
     const n = next[i]
     if (
       p.id !== n.id ||
+      p.originId !== n.originId ||
       p.type !== n.type ||
       p.label !== n.label ||
       p.value !== n.value ||
@@ -206,6 +210,7 @@ export function getConnectedSources(
     const d = source.data as Record<string, unknown>
     sources.push({
       id: drawnSourceId(edge),
+      ...(source.id !== drawnSourceId(edge) ? { originId: source.id } : {}),
       type: source.type as string,
       label: (d.label as string) ?? source.type ?? source.id,
       value: extractDisplayValue(d, source.type as string),
@@ -385,6 +390,10 @@ export function getModelIdentifier(
   // Priced as it runs: a wired Settings input sets the model and length.
   const node = withWiredSettings(storedNode, nodes, edges)
   const data = node.data as Record<string, unknown>
+  // A node unit priced by its settings (its price-id.ts): the row its run
+  // reserves, named by the same rule as its backend price.ee.ts creditId.
+  const unitCreditId = unitCreditIdOf(node.type, data)
+  if (unitCreditId !== undefined) return unitCreditId
   // Dubbing: its language's per-minute row (Hebrew rides the separately priced
   // project API) — the row the route and the workflow run reserve on, × the
   // started minutes of the span (`getExactPricingUnits`).
@@ -698,6 +707,12 @@ export function getModelIdentifier(
     return videoSfxQuoteCreditId(videoSfxQuotedSec(node, nodes ?? [], edges ?? [], reruns))
   }
 
+  // Video Overlay: the flat image row, or — for a node that can carry a video
+  // layer (the shared rule the server's run estimate reads) — the per-5-second
+  // video row, × the base's units (`getExactPricingUnits`). The route and the
+  // workflow run measure the base and reserve on the same row.
+  if (nodeType === "video-overlay") return videoOverlayCreditId(videoOverlayQuotesVideoOf(node, nodes ?? [], edges ?? []))
+
   // Pitch & Tempo: per started minute of its input (decided 2026-10-12) — the
   // `pitch-tempo:<N>m` id the route and the workflow run reserve from the
   // measured file. Quoted at the length the graph or the upstream node tells;
@@ -825,8 +840,8 @@ export function buildCreditModelIdentifier(
   // ref count from `data.referenceImageUrls` (panel-local mirror of the wired
   // refs) so the displayed credit number matches what the route will charge.
   const refs = data.referenceImageUrls as string[] | undefined
-  // A model priced per input image (GPT Image 2.6, MiniMax H3 Image) counts
-  // every image the run will send.
+  // A model priced per input image (GPT Image 2.6, MiniMax H3 Image, Seedream
+  // 5.5) counts every image the run will send.
   const refCount = isPricedPerInputImage(provider) ? pricedEstimatedImages(provider, data, wiredImageRefs) : (refs?.length ?? 0)
   // Topaz bills on the upscale FACTOR. The legacy `targetResolution` still on
   // stored node data is mapped forward by resolveTopazUpscale — the same

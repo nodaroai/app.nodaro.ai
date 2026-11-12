@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { createClient, StaticTokenAuth } from "../../index.js"
+import type { VideoOverlayRequest } from "@nodaro/shared/video"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -158,6 +159,50 @@ describe("media resource", () => {
     expect(init.method).toBe("POST")
     expect(JSON.parse(init.body)).toEqual(body)
     expect(out.jobId).toBe("j-vo")
+  })
+
+  it("videoOverlay() sends video layers with their sound, a layout and a base box as given", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-vo-video" }))
+    const c = make(fetchMock)
+    // Typed as the public request: a layer carries an image OR a video, a video layer may carry sound.
+    const body: VideoOverlayRequest = {
+      videoUrl: "https://x/base.mp4",
+      layers: [
+        { videoUrl: "https://x/guest.mp4", start: 0, sound: { volume: 0.8 }, corner: "top-left" },
+        { imageUrl: "https://x/logo.png", start: 0, preset: "corner-badge" },
+      ],
+      outputAspect: "9:16",
+      layout: "pip",
+      baseBox: { anchor: "top", width: 100 },
+    }
+    const out = await c.media.videoOverlay(body)
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/video-overlay")
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual(body)
+    expect(out.jobId).toBe("j-vo-video")
+  })
+
+  it("videoOverlay()'s request type takes one source per layer", () => {
+    const both: VideoOverlayRequest = {
+      videoUrl: "https://x/base.mp4",
+      // @ts-expect-error — a layer is an image or a video, never both (the route refuses it: layer_two_sources)
+      layers: [{ imageUrl: "https://x/a.png", videoUrl: "https://x/b.mp4", start: 0 }],
+    }
+    const stacked: VideoOverlayRequest = { videoUrl: "https://x/a.mp4", outputAspect: "9:16", layout: "stack-whole", layers: [{ videoUrl: "https://x/b.mp4", start: 0 }] }
+    expect(both.layers).toHaveLength(1)
+    expect(stacked.layout).toBe("stack-whole")
+  })
+
+  it("videoOverlay()'s request type takes a base box with only anchor and width (the route fills x, y and fit)", () => {
+    const placed: VideoOverlayRequest = { videoUrl: "https://x/a.mp4", outputAspect: "9:16", baseBox: { anchor: "bottom", width: 100 }, layers: [{ imageUrl: "https://x/b.png", start: 0 }] }
+    const noWidth: VideoOverlayRequest = {
+      videoUrl: "https://x/a.mp4",
+      outputAspect: "9:16",
+      // @ts-expect-error — a base box needs its width (the route refuses it: incomplete_box)
+      baseBox: { anchor: "bottom" },
+      layers: [{ imageUrl: "https://x/b.png", start: 0 }],
+    }
+    expect(placed.baseBox).toEqual({ anchor: "bottom", width: 100 })
+    expect(noWidth.baseBox).toEqual({ anchor: "bottom" })
   })
 
   it("suggestOverlayPlacement() POSTs /v1/image-overlay/suggest-placement and returns the placement synchronously", async () => {

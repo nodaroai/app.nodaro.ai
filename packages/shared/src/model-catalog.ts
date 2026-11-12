@@ -32,6 +32,7 @@ import { isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "./seedance-dr
 import { isFlux2Model } from "./flux2-pricing.js"
 import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, MINIMAX_H3_IMAGE_RESOLUTIONS } from "./minimax-h3-image.js"
 import { isAutoVideoDuration } from "./video-duration-auto.js"
+import { SEEDREAM_5_5_DEFAULT_RESOLUTION, SEEDREAM_5_5_RESOLUTIONS } from "./seedream-5-5.js"
 
 export type ModelKind = "image" | "video" | "audio"
 
@@ -329,6 +330,24 @@ export interface ModelCatalogEntryFields {
    * as before. "auto" stays in `aspectRatios`, so every menu still offers it.
    */
   autoAspectFromSourceImage?: true
+  /**
+   * The provider's endpoint refuses an aspect ratio this model does not list.
+   * Set only when that was read from the provider's own schema: a ratio field
+   * marked required, with a closed list (Seedream 5.5: text to image requires
+   * one of its eight ratios and has no "auto"; its edit takes "auto" and the
+   * same eight; docs.kie.ai/market/seedream/5-5-text-to-image.md and
+   * 5-5-image-to-image.md). The lanes that pass a stored ratio straight on (a
+   * Scene, a surround continuation) move a ratio such a model does not list to
+   * the nearest one it does, checked against the model the request reaches
+   * (`aspectRatioForStrictModel` in the backend), and send every other model's
+   * ratio exactly as stored.
+   *
+   * A ratio missing from `aspectRatios` is NOT evidence the provider refuses
+   * it. Measured 2026-11-11: the provider rendered 21:9 (1916×821) and 4:5
+   * (1122×1402) for GPT Image 2, whose list names neither. Do not set this flag
+   * from a catalog list alone, and do not snap those lanes for every model.
+   */
+  strictAspectRatios?: true
   /**
    * The pixel size (width, height) this model renders at each aspect ratio and
    * size, from the provider's own table, for a PNG, JPEG or WebP. Read where a
@@ -633,6 +652,17 @@ const SEEDREAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:
 // a fallback that takes the first ratio never lands on it
 // (docs.kie.ai/market/minimax-h3/text-to-image + image-edit).
 const MINIMAX_H3_IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "5:4", "4:5", "21:9", "auto"] as const
+// Seedream 5.5 (docs.kie.ai/market/seedream/5-5-{text,image}-to-image): the
+// text-to-image endpoint REQUIRES a real ratio, the eight above; the edit
+// endpoint takes the same eight plus `auto`, its own default (listed first, as
+// on the GPT Image edits, so a stale ratio on an edit falls back to keeping the
+// photo's shape rather than to a fixed one).
+const SEEDREAM_5_5_I2I_RATIOS = ["auto", ...SEEDREAM_RATIOS] as const
+// Its sizes (KIE's `size`), the default being 2K (`SEEDREAM_5_5_DEFAULT_RESOLUTION`),
+// a background setting (transparent only with PNG: TRANSPARENT_OUTPUT_FORMATS
+// moves it to auto with JPEG), and PNG (its default) or JPEG.
+const SEEDREAM_5_5_BACKGROUNDS = ["auto", "opaque", "transparent"] as const
+const SEEDREAM_5_5_FORMATS = ["png", "jpeg"] as const
 const Z_IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 
 const VIDEO_RATIOS_HV = ["16:9", "9:16"] as const
@@ -1673,6 +1703,61 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: SEEDREAM_RATIOS,
     resolutions: ["1K", "2K"],
     pricing: [{ identifier: "seedream-5-flash-i2i", credits: 10, note: "1K / 2K flat" }],
+  },
+  // Seedream 5.5 — a different model from Seedream 5 Lite, Pro and Flash, priced
+  // by its size (1K and 1.5K the same, 2K dearer) and, on an edit, by each input
+  // image (the rows are `ee/billing/seedream-5-5-pricing.ts`).
+  // See: docs.kie.ai/market/seedream/5-5-text-to-image.md
+  //      docs.kie.ai/market/seedream/5-5-image-to-image.md
+  "seedream-5-5": {
+    id: "seedream-5-5",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "Bytedance",
+    maker: "bytedance",
+    label: "Seedream 5.5",
+    series: "Seedream",
+    description: "Seedream 5.5 - more natural light, materials and skin, and dense small text that stays readable. A transparent background in one step, PNG or JPEG, at 1K, 1.5K or 2K (the default); 1K and 1.5K cost the same.",
+    useCases: ["realistic", "typography", "product", "transparent"],
+    features: ["reference-image"],
+    aspectRatios: SEEDREAM_RATIOS,
+    strictAspectRatios: true,
+    resolutions: SEEDREAM_5_5_RESOLUTIONS,
+    defaultResolution: SEEDREAM_5_5_DEFAULT_RESOLUTION,
+    backgrounds: SEEDREAM_5_5_BACKGROUNDS,
+    outputFormats: SEEDREAM_5_5_FORMATS,
+    pricing: [
+      { identifier: "seedream-5-5", credits: 16, note: "2K default" },
+      { identifier: "seedream-5-5:1K", credits: 9, note: "1K" },
+      { identifier: "seedream-5-5:1.5K", credits: 9, note: "1.5K, the same as 1K" },
+      { identifier: "seedream-5-5:2K", credits: 16, note: "2K" },
+    ],
+  },
+  "seedream-5-5-i2i": {
+    id: "seedream-5-5-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "Bytedance",
+    maker: "bytedance",
+    label: "Seedream 5.5 (I2I)",
+    series: "Seedream",
+    description: "Seedream 5.5 edits - change what you ask, round after round, and the rest of the picture stays as it was. Up to 10 input images, priced per image; a transparent background, PNG or JPEG, at 1K, 1.5K or 2K (the default).",
+    useCases: ["edit", "iteration", "transparent"],
+    features: ["reference-image"],
+    aspectRatios: SEEDREAM_5_5_I2I_RATIOS,
+    strictAspectRatios: true,
+    resolutions: SEEDREAM_5_5_RESOLUTIONS,
+    defaultResolution: SEEDREAM_5_5_DEFAULT_RESOLUTION,
+    backgrounds: SEEDREAM_5_5_BACKGROUNDS,
+    outputFormats: SEEDREAM_5_5_FORMATS,
+    pricing: [
+      { identifier: "seedream-5-5-i2i", credits: 20, note: "2K, one input image (the default)" },
+      { identifier: "seedream-5-5-i2i:1K:1ref", credits: 13, note: "1K, one input image (the least)" },
+      { identifier: "seedream-5-5-i2i:1.5K:1ref", credits: 13, note: "1.5K, one input image" },
+      { identifier: "seedream-5-5-i2i:2K:1ref", credits: 20, note: "2K, one input image" },
+      { identifier: "seedream-5-5-i2i:1K:10ref", credits: 45, note: "1K, ten input images" },
+      { identifier: "seedream-5-5-i2i:2K:10ref", credits: 52, note: "2K, ten input images (the most)" },
+    ],
   },
 
   // ── MiniMax H3 Image ──
@@ -5152,6 +5237,8 @@ const MODEL_VALUE_LABELS: Record<string, string> = {
   "adaptive": "Adaptive",
   // image resolutions
   "1K": "1K (Standard)",
+  // Only Seedream 5.5 lists it.
+  "1.5K": "1.5K (Medium)",
   "2K": "2K (High)",
   "4K": "4K (Ultra)",
   "4k": "4K",

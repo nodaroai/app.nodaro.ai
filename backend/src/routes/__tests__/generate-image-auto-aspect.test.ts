@@ -278,8 +278,12 @@ describe("no provider receives 'auto' it cannot take (every Generate Image model
 
     it(`${provider}: a photo that cannot be read → today's snapped ratio`, async () => {
       const { queued } = await post({ provider, referenceImageUrls: [MISSING], aspectRatio: "auto" })
-      expect(queued.aspectRatio).not.toBe("auto")
-      expect(queued.aspectRatio).toBe(todays(normalizedImageGenModelId({ provider, refCount: 1, swapToI2i: true })))
+      // The reference moves the run onto the edit model: "auto" is sent only
+      // where that model takes it natively (Seedream 5.5's edit, whose own
+      // default it is), never to a model without it.
+      const sentTo = normalizedImageGenModelId({ provider, refCount: 1, swapToI2i: true })
+      if (!MODEL_CATALOG[sentTo]?.aspectRatios?.includes("auto")) expect(queued.aspectRatio).not.toBe("auto")
+      expect(queued.aspectRatio).toBe(todays(sentTo))
     })
   }
 })

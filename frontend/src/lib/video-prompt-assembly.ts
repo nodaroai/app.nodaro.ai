@@ -16,7 +16,7 @@
  */
 
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ExtraRef } from "@/types/nodes"
-import { characterMentionSlug, characterMentionableAssetArrays, resolveEffectiveSourceType } from "@nodaro/shared/entities"
+import { aliasRetiredCharacterMentions, characterMentionSlug, characterMentionableAssetArrays, characterOwnName, entityImageUrl, resolveEffectiveSourceType, wiredCharacterBySlug, wiredCharacterNamesOf, type WiredCharacterName } from "@nodaro/shared/entities"
 import { isGeminiOmniProvider, isSeedanceVideoEditProvider, extractCharacterLoraFields, resolveVideoProviderForMode } from "@nodaro/shared/models"
 import { hasFeature } from "@nodaro/shared/model-catalog"
 import { countRefModalityEdges, type ReferenceModality } from "@nodaro/shared/workflow"
@@ -84,26 +84,30 @@ export function stripVideoImageTokens(text: string | undefined): string | undefi
  * Returns an empty array when the character has no usable slug — the caller
  * is expected to fall back to a generic `wired-image` entry.
  *
+ * `named` is what the consuming node calls this character — for a wired one,
+ * its entry in `wiredCharacterNamesOf` (the rule the workflow run reads too),
+ * so an unnamed node is "Character N" and two unnamed nodes stay two.
+ *
  * MOVED verbatim from `execute-node.ts` (was the inline `expandCharacterNodeIntoRefs`
  * at ~line 479). Still consumed by `execute-node.ts`'s image branches
  * (`buildConnectedRefsForI2I`) via re-import, AND by `expandWiredCharacterRefsForVideo`
  * below.
  *
  * @param characterNode - The upstream Character node (must have type === "character").
- * @param fallbackUrl - URL to use for the canonical entry when the node has
- *   no `defaultAssetUrl` (typically the upstream-output URL). The backend
- *   doesn't have this fallback (it prefers `defaultAssetUrl || sourceImageUrl`);
- *   the frontend keeps it because `chainRefs[i]` may carry a fresher generated
- *   result than `sourceImageUrl`.
+ * @param named - The character's name and @-mention slug for this consumer.
+ * @param portraitUrl - The canonical image to use instead of the node's own
+ *   (a library character's). By default the portrait is the node's output,
+ *   `entityImageUrl` — the workflow run's rule too — so the character and its
+ *   output are one image.
  */
 export function expandCharacterNodeIntoRefs(
   characterNode: WorkflowNode,
-  fallbackUrl?: string,
+  named: Pick<WiredCharacterName, "name" | "slug">,
+  portraitUrl?: string,
 ): Array<[string, Omit<ConnectedReference, "id">]> {
   const charData = characterNode.data as CharacterNodeData
-  const upstreamData = characterNode.data as Record<string, unknown>
-  const charName = charData.characterName || (upstreamData.label as string) || "Character"
-  const characterSlug = characterMentionSlug(charName)
+  const charName = named.name
+  const characterSlug = named.slug
   if (!characterSlug) return []
 
   const out: Array<[string, Omit<ConnectedReference, "id">]> = []
@@ -119,7 +123,7 @@ export function expandCharacterNodeIntoRefs(
   // LoRA training fields — character-level (same across all variants). Shared
   // helper keeps this in lockstep with backend `expandWiredCharacterRefs`.
   const loraFields = extractCharacterLoraFields(charData)
-  const canonicalUrl = charData.defaultAssetUrl || fallbackUrl || charData.sourceImageUrl
+  const canonicalUrl = portraitUrl ?? entityImageUrl(charData)
   if (canonicalUrl) {
     out.push([
       characterNode.id,
@@ -190,13 +194,17 @@ export function expandWiredCharacterRefsForVideo(
 ): ConnectedReference[] {
   const out: ConnectedReference[] = []
   const incomingEdges = edges.filter((e) => e.target === consumerNodeId)
+  // The ONE naming the workflow run reads too: each unnamed node is its own "Character N".
+  const names = wiredCharacterNamesOf(consumerNodeId, nodes, edges)
   for (const e of incomingEdges) {
     const upstream = nodes.find((n) => n.id === e.source)
     // The entity `image` handle is a PLAIN image, not an identity ref — skip it
     // (resolveEffectiveSourceType maps `image` → "upload-image"). The portrait
     // still rides along as a plain reference via the resolved image inputs.
     if (!upstream || resolveEffectiveSourceType(upstream.type, e.sourceHandle) !== "character") continue
-    const expansion = expandCharacterNodeIntoRefs(upstream)
+    const named = names.get(upstream.id)
+    if (!named) continue
+    const expansion = expandCharacterNodeIntoRefs(upstream, named)
     for (const [id, meta] of expansion) {
       out.push({ id, ...meta })
     }
@@ -315,6 +323,10 @@ export function resolveVideoPromptMentions(
     videoCaptions?: readonly string[]
   },
 ): { prompt: string | undefined; additionalUrls: string[] } {
+  // A mention saved before unnamed characters were numbered reads as the one
+  // unnamed character wired here (the workflow run's rule too).
+  const wiredNames = wiredCharacterNamesOf(consumerNodeId, nodes, edges)
+  prompt = aliasRetiredCharacterMentions(prompt, wiredNames)
   // ── FE-only expansion: wire upstream Character nodes → ConnectedReference[].
   // Canonical-suppression filtering lives in the shared core (single source of
   // truth) — pass the raw expansion + the suppressed set straight through. ──
@@ -325,19 +337,20 @@ export function resolveVideoPromptMentions(
   const wiredEntityExtras = opts?.includeWiredEntities
     ? expandWiredEntityExtrasForVideo(consumerNodeId, nodes, edges)
     : []
-  // FE-only lookup for an extra-ref's character metadata: find the upstream
-  // Character node whose name slugifies to `slug`, then read its usage-mode +
-  // canonical description (the BE supplies the same shape from its build ctx).
+  // FE-only lookup for an extra-ref's character metadata: the wired Character
+  // node with this slug (named as the workflow run names it), else — as
+  // before — any named Character node on the canvas whose name slugifies to
+  // it; then its usage-mode + canonical description (the BE supplies the same
+  // shape from its build ctx).
   const lookupCharacterBySlug = (slug: string): CharacterMeta | undefined => {
-    const upstream = nodes.find((n) => {
-      if (n.type !== "character") return false
-      const cd = n.data as CharacterNodeData
-      return characterMentionSlug(cd.characterName || (cd.label as string) || "") === slug
-    })
-    if (!upstream) return undefined
+    const wired = wiredCharacterBySlug(wiredNames, slug)
+    const upstream = wired
+      ? nodes.find((n) => n.id === wired.key)
+      : nodes.find((n) => n.type === "character" && characterMentionSlug(characterOwnName(n.data)) === slug)
+    if (!upstream || !slug) return undefined
     const cd = upstream.data as CharacterNodeData
     return {
-      characterName: cd.characterName as string | undefined,
+      characterName: wired?.named.name ?? characterOwnName(cd),
       defaultUsageMode: cd.defaultUsageMode,
       canonicalDescription: cd.canonicalDescription as string | undefined,
       defaultRole: cd.defaultRole,

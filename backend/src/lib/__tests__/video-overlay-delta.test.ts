@@ -2,6 +2,12 @@ import { describe, it, expect } from "vitest"
 import { expandVideoOverlayLayer } from "@nodaro/shared/video"
 import { deltaTouchesVideoOverlay, videoOverlayDeltaUpserts } from "../video-overlay-delta.js"
 
+/** A WIRED slot's stored layer: expanded, but with no fade setting it was not written with — its default follows the wire's kind, read at the run. */
+function wiredLayer(l: Parameters<typeof expandVideoOverlayLayer>[0]) {
+  const { animate: _byWireKind, ...rest } = expandVideoOverlayLayer(l)
+  return rest
+}
+
 const OWN = "https://r2.test/own.png"
 const STALE = "https://r2.test/stale.png"
 const vo = (layers: unknown[]) => ({ id: "vo", type: "video-overlay", position: { x: 400, y: 0 }, data: { label: "Video Overlay", layers } })
@@ -32,7 +38,7 @@ describe("videoOverlayDeltaUpserts — D10 on the delta save", () => {
     expect(out[0]!.id).toBe("vo")
     expect(out[0]!.position).toEqual({ x: 400, y: 0 })
     const layers = (out[0]!.data as { layers: unknown[] }).layers
-    expect(layers[0]).toEqual(expandVideoOverlayLayer({ start: 1, preset: "card" }))
+    expect(layers[0]).toEqual(wiredLayer({ start: 1, preset: "card" }))
     expect(layers[1]).toEqual(expandVideoOverlayLayer({ imageUrl: OWN, start: 2 }))
   })
 

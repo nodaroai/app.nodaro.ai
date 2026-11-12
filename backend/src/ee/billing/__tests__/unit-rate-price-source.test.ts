@@ -1,6 +1,6 @@
-// @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,extend-video,video-retake,dubbing}.ts
+// @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,video-overlay,extend-video,video-retake,dubbing}.ts
 // @test-watches backend/src/services/workflow-engine/node-executor.ts
-// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span}.ts backend/src/lib/private-plugins/toolkit.ts
+// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,video-overlay-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span}.ts backend/src/lib/private-plugins/toolkit.ts
 /**
  * A per-unit run is CHARGED from the same price source it is QUOTED from.
  *
@@ -87,6 +87,7 @@ import { quoteBaseCredits } from "../../../lib/credit-base-cost.js"
 import { UNIT_QUOTE_RATE_IDS } from "../../../lib/unit-quote-rates.js"
 import { videoUtilityChargeBaseCredits } from "../../../lib/video-utility-credits.js"
 import { maskCompositeBaseCredits } from "../../../lib/mask-composite-length.js"
+import { videoOverlayBaseCredits } from "../../../lib/video-overlay-length.js"
 import { ltxExtendBaseCredits } from "../../../lib/ltx-extend-credits.js"
 import { ltxRetakeBaseCredits } from "../../../lib/ltx-retake-credits.js"
 import { applyEdlCreditOverride } from "../../../lib/apply-edl-plan.js"
@@ -136,6 +137,8 @@ const CHARGES: Readonly<Record<string, Charge>> = {
   "assemble-narrated-video": videoUtility("assemble-narrated-video", { blocks: Array.from({ length: 24 }, () => ({})) }),
   // routes/mask-composite.ts and the workflow run's computeMaskCompositeCreditOverride.
   "mask-composite": { units: 7, charge: async () => markedUp("mask-composite", await maskCompositeBaseCredits(7)) },
+  // routes/video-overlay.ts (a run with a video layer) and the workflow run's computeVideoOverlayCreditOverride.
+  "video-overlay:video": { units: 7, charge: async () => markedUp("video-overlay:video", await videoOverlayBaseCredits(7)) },
   // routes/extend-video.ts and computeLtxExtendCreditOverride.
   [LTX_EXTEND_PER_SECOND_CREDIT_ID]: { units: 7, charge: async () => markedUp(LTX_EXTEND_PER_SECOND_CREDIT_ID, await ltxExtendBaseCredits(7)) },
   // routes/video-retake.ts and computeLtxRetakeCreditOverride (a window set to the frame).
@@ -296,12 +299,14 @@ describe("each charge site prices through the function this suite drives", () =>
     "routes/assemble-narrated-video.ts": ["unitRateBaseCredits"],
     "routes/apply-edl.ts": ["unitRateBaseCredits"],
     "routes/mask-composite.ts": ["maskCompositeBaseCredits"],
+    "routes/video-overlay.ts": ["videoOverlayBaseCredits"],
     "routes/extend-video.ts": ["ltxExtendBaseCredits"],
     "routes/video-retake.ts": ["ltxRetakeBaseCredits"],
     "routes/dubbing.ts": ["dubbingBaseCredits"],
     "services/workflow-engine/node-executor.ts": [
       "videoUtilityChargeBaseCredits",
       "maskCompositeBaseCredits",
+      "videoOverlayBaseCredits",
       "ltxExtendBaseCredits",
       "ltxRetakeBaseCredits",
       "applyEdlCreditOverride",
@@ -310,6 +315,7 @@ describe("each charge site prices through the function this suite drives", () =>
     // The library functions the sites call: each reads the row through the shared lookup.
     "lib/video-utility-credits.ts": ["unitRateBaseCredits"],
     "lib/mask-composite-length.ts": ["unitRateBaseCredits"],
+    "lib/video-overlay-length.ts": ["unitRateBaseCredits"],
     "lib/ltx-extend-credits.ts": ["unitRateBaseCredits"],
     "lib/ltx-retake-credits.ts": ["unitRateBaseCredits"],
     "lib/apply-edl-plan.ts": ["unitRateBaseCredits"],

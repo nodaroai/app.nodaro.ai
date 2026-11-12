@@ -45,6 +45,12 @@ export interface UnitOutputHandle {
   readonly from?: string
   /** Its medium is decided at run time (contract.producer "dynamic"): the pip gets no HANDLE_OUTPUT_TYPES row. */
   readonly runtimeTyped?: true
+  /**
+   * It carries one run's list of files (an image/video/audio output): the job
+   * writes the list under the output's id, its `from` field holds it, an Each
+   * wire runs the next node once per item and a plain wire reads the first.
+   */
+  readonly list?: true
 }
 
 export interface UnitRequiredMedia {
@@ -61,6 +67,10 @@ export interface UnitDescriptor {
   readonly category: string
   readonly description: string
   readonly outputType: "image" | "video" | "audio" | "text" | "data" | "none"
+  /** Its /v1/nodes category when its own category is not one the server shares (unit.json registry.category). */
+  readonly registryCategory?: string
+  /** The medium of its output, `contract.producer` of unit.json (null: it outputs no media). */
+  readonly producer: "audio" | "video" | "image" | "dynamic" | null
   /** Where the unit sits among the nodes: right after this type (null = first). */
   readonly position: { readonly after: string | null }
   /** Its place in /v1/nodes (NODE_REGISTRY) when unit.json states one apart from position.after (registry.after). */

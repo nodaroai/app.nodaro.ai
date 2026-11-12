@@ -33,6 +33,7 @@ const FIXTURE: UnitDescriptor = {
   execution: { kind: "worker", queue: "video" },
   capabilities: ["length:unknown"],
   lengthUnknownReason: "its length is the fixture's, which only the file says",
+  producer: "video",
 }
 /** A unit with another length capability: it reaches the rules through LENGTH_KEEPING_VIDEO_TYPES, never through this seam. */
 const KEEPER: UnitDescriptor = { ...FIXTURE, type: "fixture-keeper", capabilities: ["length:exact-video"], lengthUnknownReason: undefined }

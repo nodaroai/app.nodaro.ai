@@ -5,7 +5,7 @@ import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { useDismissableLayerSurface } from "@radix-ui/react-dismissable-layer"
 import { isModalDialogOpen, refuseDeleteUnderModal } from "@/lib/modal-open"
 import { buildRangeLabel as buildRangeLabelShared, isCollectInEdge, type SelectorMode } from "@nodaro/shared/workflow"
-import { withWiredSettings } from "@nodaro/shared/nodes"
+import { isListOutputHandle, withWiredSettings } from "@nodaro/shared/nodes"
 import { bypassTeleports } from "@nodaro/render-rules"
 import {
   ReactFlow,
@@ -190,7 +190,10 @@ const DEFAULT_ALL_TARGET_TYPES = new Set(["list"])
 
 /** Resolve the effective output mode, mirroring the dropdown defaults so the
  *  edge label agrees with the radio selection. Target-based "all" wins over
- *  source-based "each" (matches animated-flow-edge). */
+ *  source-based "each" (matches animated-flow-edge). A wire from a pip that
+ *  carries the list one run made (a node unit's list output — isListOutputHandle,
+ *  the rule both engines' defaultEdgeOutputMode reads) is an Each wire too; the
+ *  same node's other pips are not. */
 function resolveEffectiveOutputMode(
   edge: WorkflowEdge,
   sourceNode: { type?: string } | undefined,
@@ -200,6 +203,7 @@ function resolveEffectiveOutputMode(
   if (explicit) return explicit
   if (targetNode?.type && DEFAULT_ALL_TARGET_TYPES.has(targetNode.type)) return "all"
   if (sourceNode?.type && DEFAULT_EACH_SOURCE_TYPES.has(sourceNode.type)) return "each"
+  if (isListOutputHandle(sourceNode?.type, edge.sourceHandle)) return "each"
   return undefined
 }
 
@@ -1251,6 +1255,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const unusedPromptRef = unusedPromptReason !== undefined
 
       const outputMode = resolveEffectiveOutputMode(carried, sourceNode, targetNode)
+      // The wire carries the list one run made (a node unit's list pip): list-like in the mode menu.
+      const sourceListPip = isListOutputHandle(sourceNode?.type, carried.sourceHandle)
 
       // Stable signature of every value that feeds the returned edge's
       // `data`/`style`/`animated`/`type`. Reuse the previously-returned object
@@ -1270,6 +1276,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         outputMode,
         sourceNode?.type,
         targetNode?.type,
+        sourceListPip,
         disabledByProvider,
         unusedPromptReason,
         shouldHighlight,
@@ -1294,7 +1301,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         ...edge,
         type: 'default', // Explicitly set type to use our AnimatedFlowEdge
         animated: hasAnimation, // Only animate for execution, not for dragging
-        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode, sourceNodeType: sourceNode?.type, targetNodeType: targetNode?.type, disabledByProvider, unusedPromptRef, unusedPromptReason },
+        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode, sourceNodeType: sourceNode?.type, targetNodeType: targetNode?.type, ...(sourceListPip ? { sourceListPip } : {}), disabledByProvider, unusedPromptRef, unusedPromptReason },
         style: styleOverride ? { ...edge.style, ...styleOverride } : edge.style,
       }
       nextCache.set(edge.id, { fields, rawEdge: edge, result: computed })

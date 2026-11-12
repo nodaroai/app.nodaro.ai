@@ -88,10 +88,10 @@ export function resolveEntityImageCreditIdentifier(body: unknown, refCountOverri
 /**
  * The credit id of an image route or node priced on the plain model (face,
  * object, creature, their asset routes, surround fill, a Scene). A model priced
- * per input image (GPT Image 2.6 Flare and Sunburst, MiniMax H3 Image) is
- * priced on what such a run sends: no quality or size (the model's default —
- * medium 1K on GPT Image 2.6, 2K on MiniMax H3 Image) and `inputImages`
- * pictures. Every other model keeps its plain id.
+ * per input image (GPT Image 2.6 Flare and Sunburst, MiniMax H3 Image, Seedream
+ * 5.5) is priced on what such a run sends: no quality or size (the model's
+ * default — medium 1K on GPT Image 2.6, 2K on MiniMax H3 Image and Seedream 5.5)
+ * and `inputImages` pictures. Every other model keeps its plain id.
  */
 export function plainEntityCreditIdentifier(provider: string, inputImages: number): string {
   if (!isPricedPerInputImage(provider)) return provider
