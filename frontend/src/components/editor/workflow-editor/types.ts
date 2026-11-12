@@ -984,6 +984,8 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   "loop-video": videoUtilityPricingUnits,
   "combine-videos": videoUtilityPricingUnits,
   "assemble-narrated-video": videoUtilityPricingUnits,
+  // Mask Composite: the started 5 s of its leading video as the graph gives it
+  // (`maskCompositeQuotedSec`) — the cap's 60 while it is not known.
   "mask-composite": maskCompositePricingUnits,
   // Video Overlay: 1 for an image-only node (its flat row); with a video layer,
   // the started 5 s of its base — the cap's 12 while the base is not known.

@@ -41,8 +41,9 @@ function MaskCompositeNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as MaskCompositeData
   // One `mask-composite` row per started 5 s of the result (its leading video's
-  // length: the foreground, or the background with a pixelate / blur fill); an
-  // unknown length shows the range "one unit – the 300 s cap".
+  // length: the foreground, or the background with a pixelate / blur fill, as
+  // the graph gives it — `maskCompositeQuotedSec`); an unknown length shows the
+  // range "one unit – the 300 s cap".
   const unitRow = useModelCredits("mask-composite", NODE_CREDIT_COSTS["mask-composite"])
   const fgSec = useWorkflowStore((s) => maskCompositeQuotedSec({ id, data: nodeData }, s.nodes, s.edges))
   // The whole run's price for its units (an unknown length: the 300 s cap) —

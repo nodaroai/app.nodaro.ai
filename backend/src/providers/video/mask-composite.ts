@@ -16,7 +16,8 @@
  *
  * `buildMaskCompositeArgs` is a PURE function of the probed inputs, so the
  * graph is unit-tested without ffmpeg; `maskComposite` downloads, probes and
- * runs it.
+ * runs it. Between the probe and ffmpeg it checks that the run was charged
+ * for the leading video it downloaded (`maskCompositeRefusalForCharge`).
  */
 
 import { join } from "node:path"
@@ -40,6 +41,7 @@ import { DEFAULT_FFMPEG_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
 import { canvasPeakMemoryMiB } from "./ffmpeg-memory-model.js"
 import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
+import { maskCompositeRefusalForCharge } from "../../lib/mask-composite-refusal.js"
 
 /** What the graph needs to know about the inputs (probed by `maskComposite`). */
 export interface MaskCompositeProbe {
@@ -288,6 +290,13 @@ export interface MaskCompositeParams {
   readonly backgroundUrl: string
   readonly maskUrl: string
   readonly settings: MaskCompositeSettings
+  /**
+   * The units the run was charged for, as the queue payload carries them —
+   * written by the route or the workflow run from its own measurement of the
+   * leading video. The render refuses a lead that has grown past them, and a
+   * run without them (`maskCompositeRefusalForCharge`).
+   */
+  readonly billedUnits?: unknown
 }
 
 export interface MaskCompositeResult {
@@ -328,6 +337,10 @@ export async function maskComposite(params: MaskCompositeParams): Promise<MaskCo
         `The foreground is ${Math.ceil(fg.streamDurationSec)} seconds; Mask Composite takes at most ${MASK_COMPOSITE_BOUNDS.MAX_DURATION_SEC}.`,
       )
     }
+    // The run was charged for this length (the foreground may have changed since
+    // its price was measured): refused before anything is drawn, and refunded.
+    const chargeRefusal = maskCompositeRefusalForCharge("foreground", params.billedUnits, fg.streamDurationSec)
+    if (chargeRefusal) throw new DeterministicJobError(chargeRefusal.message)
     const probe: MaskCompositeProbe = {
       width: fg.width,
       height: fg.height,
@@ -368,6 +381,10 @@ async function maskCompositeFill(params: MaskCompositeParams): Promise<MaskCompo
         `The background is ${Math.ceil(bg.streamDurationSec)} seconds; Mask Composite takes at most ${MASK_COMPOSITE_BOUNDS.MAX_DURATION_SEC}.`,
       )
     }
+    // The run was charged for this length (the background may have changed since
+    // its price was measured): refused before anything is drawn, and refunded.
+    const chargeRefusal = maskCompositeRefusalForCharge("background", params.billedUnits, bg.streamDurationSec)
+    if (chargeRefusal) throw new DeterministicJobError(chargeRefusal.message)
     const probe: MaskCompositeProbe = {
       width: bg.width,
       height: bg.height,

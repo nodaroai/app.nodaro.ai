@@ -56,13 +56,17 @@ describe("video-mask credit id (editor quote)", () => {
     const mc = node("c", "mask-composite")
     expect(getModelIdentifier(mc, [], [mc])).toBe("mask-composite")
     expect(maskCompositePricingUnits(mc, [mc], [])).toBe(60)
-    const up = node("u", "upload-video", { videoUrl: "https://x/v.mp4", duration: 12 })
+    const up = node("u", "upload-video", { url: "https://x/v.mp4", duration: 12 })
     expect(maskCompositePricingUnits(mc, [up, mc], [wire("u", "c", "video")])).toBe(3)
+    // An upload that hands on no file (`url` is what it hands on, never `videoUrl`)
+    // has no length the server reads: the cap, whatever length it stores.
+    const noFile = node("u", "upload-video", { videoUrl: "https://x/v.mp4", duration: 12 })
+    expect(maskCompositePricingUnits(mc, [noFile, mc], [wire("u", "c", "video")])).toBe(60)
   })
 
   it("mask-composite with a pixelate / blur fill prices on the background (its `background-video` wire), never the ignored foreground", () => {
-    const fg = node("f", "upload-video", { videoUrl: "https://x/f.mp4", duration: 12 })
-    const bg = node("b", "upload-video", { videoUrl: "https://x/b.mp4", duration: 41 })
+    const fg = node("f", "upload-video", { url: "https://x/f.mp4", duration: 12 })
+    const bg = node("b", "upload-video", { url: "https://x/b.mp4", duration: 41 })
     const edges = [wire("f", "c", "video"), wire("b", "c", "background-video")]
     expect(maskCompositePricingUnits(node("c", "mask-composite"), [fg, bg], edges)).toBe(3)
     for (const fill of ["pixelate", "blur"]) {

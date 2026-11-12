@@ -1243,13 +1243,19 @@ describe("mask-composite handler", () => {
     expect(mocks.maskComposite).toHaveBeenLastCalledWith(expect.objectContaining({ settings: expect.objectContaining({ opacity: 0.85 }) }))
   })
 
-  it("normalises the settings and finishes through the shared ffmpeg completion", async () => {
-    await videoMaskHandlers["mask-composite"]!(job({ foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", feather: 99, backgroundFit: "contain" }), ctx)
+  it("normalises the settings, hands the render the units the job was charged, and finishes through the shared ffmpeg completion", async () => {
+    await videoMaskHandlers["mask-composite"]!(job({ foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", feather: 99, backgroundFit: "contain", billedUnits: 3 }), ctx)
     expect(mocks.maskComposite).toHaveBeenCalledWith({
       foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4",
       settings: { invertMask: false, feather: 20, grow: 0, opacity: 1, fill: "video", pixelSizePct: 1.25, blurStrengthPct: 2, backgroundFit: "contain", audioSource: "foreground" },
+      billedUnits: 3,
     })
     expect(mocks.completeFfmpegVideoJob).toHaveBeenCalledWith("/tmp/mc/output.mp4", ctx, { width: 640, height: 360, durationSec: 3 })
+  })
+
+  it("a job queued with no units reaches the render without any (which refuses it): never a default", async () => {
+    await videoMaskHandlers["mask-composite"]!(job({ foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4" }), ctx)
+    expect((mocks.maskComposite.mock.lastCall as unknown[] | undefined)?.[0]).toMatchObject({ billedUnits: undefined })
   })
 
   it("refuses a missing input as a deterministic failure", async () => {
@@ -1258,10 +1264,11 @@ describe("mask-composite handler", () => {
   })
 
   it("pixelate / blur run without a foreground, and never pass one on", async () => {
-    await videoMaskHandlers["mask-composite"]!(job({ backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", fill: "pixelate", pixelSizePct: 3 }), ctx)
+    await videoMaskHandlers["mask-composite"]!(job({ backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", fill: "pixelate", pixelSizePct: 3, billedUnits: 9 }), ctx)
     expect(mocks.maskComposite).toHaveBeenLastCalledWith({
       backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4",
       settings: expect.objectContaining({ fill: "pixelate", pixelSizePct: 3 }),
+      billedUnits: 9,
     })
     await videoMaskHandlers["mask-composite"]!(job({ foregroundUrl: "https://x/fg.mp4", backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", fill: "blur" }), ctx)
     expect((mocks.maskComposite.mock.lastCall as unknown[] | undefined)?.[0]).not.toHaveProperty("foregroundUrl")

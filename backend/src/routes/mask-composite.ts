@@ -6,7 +6,9 @@
  * runs keyless in every edition. Priced per started 5 seconds of the result
  * (the leading video's length — the foreground, or the background when `fill`
  * is pixelate / blur — measured by the preHandler with the rule the workflow
- * run shares — lib/mask-composite-length.ts).
+ * run shares — lib/mask-composite-length.ts). The measured units ride the job
+ * row and the queue payload (`billedUnits`); the render re-measures the file it
+ * downloads and refuses one that needs more (lib/mask-composite-refusal.ts).
  *
  * `fill`: `video` (default) needs `foregroundUrl`; `pixelate` / `blur` fill the
  * masked area from the background itself, so `foregroundUrl` is optional and,
@@ -134,7 +136,9 @@ export async function maskCompositeRoutes(app: FastifyInstance) {
     }
     const reservation = await reserveCreditsForJob(req, reply, job.id, "mask-composite")
     if (reply.sent) return
-    await videoQueue.add("mask-composite", { jobId: job.id, ...body, usageLogId: reservation?.usageLogId })
+    // The units it was charged ride the job (after the spread: a client's field never wins;
+    // Zod strips one anyway): the render refuses a foreground / background that needs more.
+    await videoQueue.add("mask-composite", { jobId: job.id, ...body, billedUnits, usageLogId: reservation?.usageLogId })
     return { jobId: job.id }
   })
 }
