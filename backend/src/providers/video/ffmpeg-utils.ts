@@ -31,6 +31,11 @@ import {
   FFPROBE_TIMEOUT_MS,
   downloadBodyDeadlineMs,
 } from "./ffmpeg-timeouts.js"
+import { constantFrameRate, parseFrameRate } from "./frame-rate.js"
+
+// The frame-rate rule lives in a dependency-free leaf (see its header);
+// re-exported so every existing `ffmpeg-utils.js` import keeps working.
+export { constantFrameRate, parseFrameRate }
 
 // The ceilings live in a dependency-free leaf (see its header); re-exported so
 // every existing `ffmpeg-utils.js` import keeps working.
@@ -853,46 +858,6 @@ export async function assertSafeProbeSource(src: string): Promise<void> {
 }
 
 /**
- * ffprobe reports a frame rate as the rational string "num/den" ("30000/1001").
- * A stream with no usable rate reports "0/0" — and a still-image or malformed
- * stream can report anything at all — so every unusable form answers `undefined`
- * rather than a made-up number: the caller decides the fallback.
- */
-export function parseFrameRate(value: unknown): number | undefined {
-  if (typeof value !== "string") return undefined
-  const [num, den] = value.trim().split("/")
-  const n = Number(num)
-  const d = den === undefined ? 1 : Number(den)
-  if (!Number.isFinite(n) || !Number.isFinite(d) || d === 0 || n <= 0) return undefined
-  const fps = n / d
-  return Number.isFinite(fps) && fps > 0 ? fps : undefined
-}
-
-/**
- * How far the clip's AVERAGE rate may sit from its nominal base rate before the
- * source counts as variable-frame-rate, as a fraction of the larger of the two.
- */
-const VFR_RATE_TOLERANCE = 0.1
-
-/**
- * The clip's CONSTANT frame rate, or `undefined` when it has none.
- *
- * `avg_frame_rate` is what the clip actually played at, `r_frame_rate` the
- * container's nominal base rate. When only one parses, that is the best answer
- * available. When both do and they DISAGREE by more than VFR_RATE_TOLERANCE, the
- * source is variable-frame-rate: neither number describes a constant rate (a
- * sparse screen recording reports an average of ~6 against a base of 60), so
- * re-encoding at either one is wrong — a bursty source rendered at its low
- * average decimates the real motion. Report no rate and let the caller fall back.
- */
-export function constantFrameRate(avg: number | undefined, nominal: number | undefined): number | undefined {
-  if (avg === undefined) return nominal
-  if (nominal === undefined) return avg
-  const spread = Math.abs(avg - nominal) / Math.max(avg, nominal)
-  return spread > VFR_RATE_TOLERANCE ? undefined : avg
-}
-
-/**
  * What Video Overlay knows about its base after ONE local ffprobe call
  * (`probeVideoOverlayBase`). `width` / `height` are the DISPLAY size — the
  * stored size with the axes swapped for a 90°/270° rotation tag, which is what
@@ -907,6 +872,8 @@ export interface VideoOverlayBaseProbe {
   /** Display-matrix rotation, degrees normalised to 0..359. */
   readonly rotation: number
   readonly sar: number
+  /** `sar` exactly, as the fraction `num/den` (a `setsar` value), in the same orientation; absent when it is 1. */
+  readonly sarRatio?: string
   readonly rFrameRate?: string
   readonly avgFrameRate?: string
   readonly streamDurationSec: number
@@ -930,10 +897,16 @@ const VIDEO_OVERLAY_PROBE_ENTRIES =
   "stream=index,codec_type,codec_name,width,height,sample_aspect_ratio,r_frame_rate,avg_frame_rate,duration,start_time,nb_frames" +
   ":stream_side_data=rotation:stream_disposition=attached_pic:stream_tags=rotate:format=duration"
 
-function parseSampleAspect(value: unknown): number {
-  if (typeof value !== "string") return 1
+/** ffprobe's `num:den` sample aspect as its two terms; undefined when absent or unusable ("0:1", "N/A"). */
+function sampleAspectTerms(value: unknown): readonly [number, number] | undefined {
+  if (typeof value !== "string") return undefined
   const [num, den] = value.split(":").map(Number)
-  return num !== undefined && den !== undefined && Number.isFinite(num) && Number.isFinite(den) && num > 0 && den > 0 ? num / den : 1
+  return num !== undefined && den !== undefined && Number.isFinite(num) && Number.isFinite(den) && num > 0 && den > 0 ? [num, den] : undefined
+}
+
+function parseSampleAspect(value: unknown): number {
+  const terms = sampleAspectTerms(value)
+  return terms ? terms[0] / terms[1] : 1
 }
 
 function parseRotation(stream: Record<string, unknown>): number {
@@ -969,6 +942,7 @@ export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
   const rotation = parseRotation(video)
   const swap = rotation === 90 || rotation === 270
   const sar = parseSampleAspect(video.sample_aspect_ratio)
+  const terms = sampleAspectTerms(video.sample_aspect_ratio)
   const start = Number(video.start_time)
   const frames = Number(video.nb_frames)
   // `Number(undefined)` / `Number("N/A")` are NaN: no stated start, no field.
@@ -979,6 +953,7 @@ export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
     rotation,
     // The ffmpeg CLI's autorotate transposes the frame AND inverts its SAR.
     sar: swap ? 1 / sar : sar,
+    ...(terms && terms[0] !== terms[1] ? { sarRatio: swap ? `${terms[1]}/${terms[0]}` : `${terms[0]}/${terms[1]}` } : {}),
     ...(typeof video.r_frame_rate === "string" ? { rFrameRate: video.r_frame_rate } : {}),
     ...(typeof video.avg_frame_rate === "string" ? { avgFrameRate: video.avg_frame_rate } : {}),
     streamDurationSec,

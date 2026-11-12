@@ -21,6 +21,8 @@ import { splitMedia } from "../split-media.js"
 import { extractFrame } from "../extract-frame.js"
 import { smartLoopCut } from "../smart-loop-cut.js"
 import { applyEdl } from "../apply-edl.js"
+import { stitchExtension } from "../extend-stitch.js"
+import { createWorkDir } from "../ffmpeg-utils.js"
 import { fixtureUrl, type FixtureSet } from "./fixtures.js"
 import type { CharacterizedOperation, RenderedOutput, OperationResult } from "./operation-types.js"
 import { UNIT_CHARACTERIZATIONS } from "../../../nodes/_generated/characterizations.char.js"
@@ -327,6 +329,49 @@ const tier1: CharacterizedOperation[] = [
         smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
       })
       return single(outputPath, "video")
+    },
+  },
+  // The extend stitch (extend-stitch.ts): an extension joined to its source at
+  // the source's size, frame rate and picture quality (its bitrate, two
+  // passes). It reads local files, so the fixtures go in as paths. No matcher
+  // registers in this repo's own processes (it is the cloud plugin's), so the
+  // fixed trims apply, as they do on every edition without it.
+  {
+    // A time-coded source and a smaller (480×270) time-coded extension, both
+    // with pulsing sound: the per-frame luma pins exactly which frames the end
+    // and start trims drop (by frame index), and the extension is scaled up to
+    // cover 640×360; the envelope pins the equal-power crossfade at the join.
+    name: "extend-stitch-cover-crossfade",
+    tier: 1,
+    run: async (f) => {
+      const workDir = await createWorkDir("characterize-extend-stitch")
+      const { outputPath } = await stitchExtension({
+        sourcePath: f.rampAMp4,
+        extensionPath: f.rampBMp4,
+        workDir,
+        smartCut: { framesFromPrev: 8, framesFromNext: 8 },
+        fallbackTrims: { trimEndFrames: 4, trimStartFrames: 3 },
+        audioFadeSec: 0.15,
+      })
+      return single(outputPath, "video", workDir)
+    },
+  },
+  {
+    // A portrait extension with no sound (320×568) on a landscape source with
+    // sound: covered and centre-cropped to 640×360, and its side of the sound
+    // is silence its picture's exact length.
+    name: "extend-stitch-silent-extension",
+    tier: 1,
+    run: async (f) => {
+      const workDir = await createWorkDir("characterize-extend-stitch")
+      const { outputPath } = await stitchExtension({
+        sourcePath: f.clipMp4,
+        extensionPath: f.clipPortraitMp4,
+        workDir,
+        fallbackTrims: { trimEndFrames: 4, trimStartFrames: 3 },
+        audioFadeSec: 0.15,
+      })
+      return single(outputPath, "video", workDir)
     },
   },
   // apply-edl (the EDL renderer behind the podcast/multicam editing nodes).

@@ -25,8 +25,8 @@ Seedance comes as two choices, one per model: **Seedance 2.5** (`seedance-2-5-ex
 | veo-extend | Model: fast (VEO 3.1 Fast) or quality (VEO 3.1 Quality) |
 | runway-extend | Quality: 720p or 1080p |
 | ltx-2.3-pro | Extend mode: `start` (prepend before clip) or `end` (append after clip, default); duration: 1–20s of new footage to add (default 6) |
-| seedance-2-5-extend | Duration: 4–30s of new footage to add (default 8); Resolution: 480p / 720p / 1080p (default 720p); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
-| seedance-2-0-extend | Duration: 4–15s of new footage to add (default 8); Resolution: 480p / 720p / 1080p (default 720p); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
+| seedance-2-5-extend | Duration: 4–30s of new footage to add (default 8); Resolution: 480p / 720p / 1080p, the resolution the new footage is generated at and priced by (default 720p; the delivered video keeps the source's size); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
+| seedance-2-0-extend | Duration: 4–15s of new footage to add (default 8); Resolution: 480p / 720p / 1080p, the resolution the new footage is generated at and priced by (default 720p; the delivered video keeps the source's size); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
 
 ## Inputs & Outputs
 
@@ -47,6 +47,8 @@ Seedance comes as two choices, one per model: **Seedance 2.5** (`seedance-2-5-ex
 | `seedance-2-0-extend` | Any video URL | append-only | +4–15s of new footage per run (chain to go further) | 480p / 720p / 1080p |
 
 LTX 2.3 Fast does **not** support extend mode — only Pro extends. The `extend_mode` field controls whether the new footage is prepended (`start`) or appended (`end`, default).
+
+For Seedance 2.5 and Seedance 2.0, the resolution is the one the new footage is generated at, and the one the run is priced by. Whichever you pick, the new footage is scaled to the source's frame, up from a lower resolution or down from a higher one. The video you get back keeps the source's size and frame rate, and is encoded once as an H.264 MP4 with AAC sound: an H.264 source at least at its own bitrate, and a source in any other codec, or an H.264 source that reports no bitrate, at a high constant quality. A 10-bit, 4:2:2 or 4:4:4 source comes back as 8-bit 4:2:0, an HDR source in standard dynamic range (SDR), and a full-range source in standard range (a watermarked run is encoded once more; see [How Seedance extend works](#how-seedance-extend-works)).
 
 An extend that names the earlier single Seedance id, `seedance-2-extend` (from before Seedance 2.5 and Seedance 2.0 were separate choices), runs on **Seedance 2.5**. Saved workflows, apps and API or MCP calls on that id keep working, and now run, and are priced, as Seedance 2.5 (a length under 4 seconds, which the earlier id raised to 4, still runs as 4 seconds rather than being refused) — 8 seconds at 720p, for example, is 1045 credits<!-- credits: seedance-2-5-extend:8s:720p --> on Seedance 2.5 and 688 credits<!-- credits: seedance-2-0-extend:8s:720p --> on Seedance 2.0. Choose Seedance 2.0 to keep that model.
 
@@ -78,7 +80,7 @@ That amount is held when the job starts. The final charge follows the processing
 
 ### How Seedance extend works
 
-Seedance 2.5 and Seedance 2.0 generate the continuation natively (the model watches the end of the source clip and produces only what happens next, soundtrack included), then the platform **smart-stitches** source + extension into one seamless clip: it PSNR-matches the source's last 8 frames against the extension's first 8, ends the source **on** the most similar frame and starts the extension **right after** its near-identical twin — the duplicated boundary moment plays exactly once and motion continues through the cut. If no genuine match is found (below the 24dB threshold), the stitch falls back to fixed trims (source's last 4 frames + extension's first 3). The join is a hard cut with a short audio blend; the applied cut is reported in the job's `output_data.smartCuts` (frames dropped each side + match PSNR). The extension automatically matches the source's aspect ratio.
+Seedance 2.5 and Seedance 2.0 generate the continuation natively (the model watches the end of the source clip and produces only what happens next, soundtrack included), then the platform **smart-stitches** source + extension into one seamless clip: it PSNR-matches the source's last 8 frames against the extension's first 8, ends the source **on** the most similar frame and starts the extension **right after** its near-identical twin — the duplicated boundary moment plays exactly once and motion continues through the cut. If no genuine match is found (below the 24dB threshold), the stitch falls back to fixed trims (source's last 4 frames + extension's first 3). The join is a hard cut with a short audio blend; the applied cut is reported in the job's `output_data.smartCuts` (frames dropped each side + match PSNR). The extension automatically matches the source's aspect ratio, and is scaled to cover the source's frame and centre-cropped to it. The video you get back keeps the source's size and frame rate, and is encoded once as an H.264 MP4 with AAC sound: an H.264 source at least at its own bitrate, and a source in any other codec, or an H.264 source that reports no bitrate, at a high constant quality. A 10-bit, 4:2:2 or 4:4:4 source comes back as 8-bit 4:2:0, an HDR source in standard dynamic range (SDR), and a full-range source in standard range. A run that carries the free-tier watermark is encoded once more to add it: its size and frame rate stay the source's, its picture quality does not.
 
 ### Reference images (Seedance only)
 
@@ -108,7 +110,7 @@ returns a 400 (they would otherwise be silently ignored). Reference images add
 
 ### Seedance 2.5 extend credits
 
-Priced by the exact number of seconds added — every whole second from 4 to 30 has its own price — and the resolution. With no duration set the extend adds 8 seconds; with no resolution, it renders 720p. Selected lengths:
+Priced by the exact number of seconds added — every whole second from 4 to 30 has its own price — and the resolution the new footage is generated at (the delivered video keeps the source's size). With no duration set the extend adds 8 seconds; with no resolution, the new footage is generated at 720p. Selected lengths:
 
 | Seconds added | 480p | 720p | 1080p |
 |---|---|---|---|
@@ -125,7 +127,7 @@ The node's Run button, the workflow estimate and `GET /v1/credits/model-cost` (i
 
 ### Seedance 2.0 extend credits
 
-Priced by the exact number of seconds added — every whole second from 4 to 15 has its own price — and the resolution. With no duration set the extend adds 8 seconds; with no resolution, it renders 720p. Selected lengths:
+Priced by the exact number of seconds added — every whole second from 4 to 15 has its own price — and the resolution the new footage is generated at (the delivered video keeps the source's size). With no duration set the extend adds 8 seconds; with no resolution, the new footage is generated at 720p. Selected lengths:
 
 | Seconds added | 480p | 720p | 1080p |
 |---|---|---|---|
@@ -142,7 +144,7 @@ The node's Run button, the workflow estimate and `GET /v1/credits/model-cost` (i
 
 - For VEO / Runway: the source video must come from the matching generation node — this node cannot extend arbitrary uploaded videos for those providers.
 - For LTX 2.3 Pro: any video URL works; use `extend_mode: "start"` to add a lead-in, `extend_mode: "end"` (default) to add a continuation.
-- For Seedance 2.5 and Seedance 2.0: describe only what happens next, in plain action language (e.g. "the ball keeps rolling until it hits a cup") — the platform handles the continuation phrasing. Match the source's resolution for the cleanest seam.
+- For Seedance 2.5 and Seedance 2.0: describe only what happens next, in plain action language (e.g. "the ball keeps rolling until it hits a cup") — the platform handles the continuation phrasing. Pick the source's resolution for the cleanest seam: the new footage is scaled to the source's size, so a lower resolution looks softer after the join, and a higher one is scaled down to the source's size.
 - For Seedance with reference images: mention every reference you attach (`@image_1`, `@image_2`, …) in the continuation prompt — an unmentioned flat reference still rides along, but naming it tells the model what it's for.
 - Write prompts that describe the continuation, not the original content.
 - Use "fast" mode for iteration, "quality" for final output (VEO).
