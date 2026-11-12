@@ -91,6 +91,8 @@ export interface FactoryPresetGroupSummary {
   count: number
   /** The example picture of its first preset that has one, or null. */
   previewUrl: string | null
+  /** Its first example pictures, in catalog order, each once: at most three (empty when none has one). */
+  previewUrls: string[]
 }
 
 /** `POST /v1/node-presets` body. */

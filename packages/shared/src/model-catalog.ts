@@ -395,6 +395,16 @@ export interface ModelCatalogEntryFields {
    * the two cannot drift.
    */
   unlistedResolutionRendersAs?: string
+  /**
+   * The resolutions (catalog spelling) at which this video model takes a start
+   * frame ONLY: no end frame, no loop and no in-between frames beside it. A run
+   * that would send any of them at such a resolution is refused before any
+   * credits are held, with one sentence (`videoStartFrameOnlyProblem`), on the
+   * API routes, the workflow run and the editor's Run; the editor offers the
+   * resolution only while nothing but a start frame is wired. Declared from the
+   * provider's own refusal, never guessed.
+   */
+  startFrameOnlyResolutions?: readonly string[]
   qualities?: readonly string[]
   /**
    * The quality a run renders at when none is named, where that is not the
@@ -2624,6 +2634,10 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     resolutions: ["480p", "720p", "1080p"],
     // normalizeGrokVideo15Resolution sends 480p for anything off the list.
     unlistedResolutionRendersAs: "480p",
+    // KIE refuses 1080p beside anything but a lone start frame ("1080p is only
+    // supported for text-to-video or a single image used as the first frame",
+    // a staging run 2026-11-12): no end frame, loop or in-between frames.
+    startFrameOnlyResolutions: ["1080p"],
     noSeed: true,  // the KIE schema has no `seed` (additionalProperties: false)
     pricing: [
       { identifier: "grok-imagine-video-1.5", credits: 50, note: "default 8s 480p — see :Ns:res variants" },

@@ -2985,7 +2985,14 @@ so a value the model doesn't support is ignored, never a 400:
   alone. `duration` 1–15 (default 8); `resolution` `480p` (default) / `720p` /
   `1080p`, anything else renders and bills 480p; no `seed`; no reference
   videos, audio or characters. Priced per second by resolution; the frames add
-  nothing.
+  nothing. **At `1080p` it takes the `imageUrl` alone:** a run that would also
+  send an `endFrameUrl` (the same URL included, a loop) or in-between frames
+  (`referenceImageUrls` and the images of `connectedReferences`, counted after
+  the D − 1 limit) is a `400` with code `start_frame_only_resolution` before
+  any credits are reserved: "Grok Imagine Video 1.5 takes a start frame only at
+  1080p: no end frame, loop or in-between frames. Choose 720p, or remove the
+  end frame and the in-between frames. Nothing was charged." 480p and 720p take
+  every frame.
 - **`gemini-omni-flash`** takes exactly the same fields as
   `gemini-omni-video` on the same 720p / 1080p / 4K tiers, the same 4 / 6 / 8 /
   10 `duration` menu (an omitted duration renders and bills as 8 s), the same
@@ -6424,7 +6431,7 @@ factory catalog it reads as anyone can.
 |---|---|---|---|
 | `GET` | `/v1/node-presets` | `nodeType` (optional) | Your custom presets (newest first). |
 | `GET` | `/v1/node-presets/factory` | `nodeType` (**required**) | The built-in catalog for a node type. **No auth needed.** |
-| `GET` | `/v1/node-presets/factory/groups` | `nodeType` (**required**) | The built-in catalog's categories, in the order a picker shows them (shelf by shelf; a shelf's named groups in the design's order, the rest in catalog order): `{ data: [{ group, shelf, count, previewUrl }] }`, each group's name, the shelf a picker files it under (`video`, `marketing`, `photos`, `creative`, `life`, `pro`, or `more` for a group no shelf names yet), how many presets it holds and the example picture of its first preset that has one (or `null`). A few KB, for a menu or a shelf that lists the categories without the whole catalog. **No auth needed.** |
+| `GET` | `/v1/node-presets/factory/groups` | `nodeType` (**required**) | The built-in catalog's categories, in the order a picker shows them (shelf by shelf; a shelf's named groups in the design's order, the rest in catalog order): `{ data: [{ group, shelf, count, previewUrl, previewUrls }] }`, each group's name, the shelf a picker files it under (`video`, `marketing`, `photos`, `creative`, `life`, `pro`, or `more` for a group no shelf names yet), how many presets it holds, the example picture of its first preset that has one (or `null`) and its first three example pictures in catalog order (`previewUrls`, each once; empty when none has one). A few KB, for a menu or a shelf that lists the categories without the whole catalog. **No auth needed.** |
 | `GET` | `/v1/node-presets/favorites` | `nodeType` (**required**) | Your favorite preset ids (see [Favorites](#favorites)). |
 | `GET` | `/v1/node-preset-groups` | `nodeType` (optional) | Your preset folders/sections. |
 

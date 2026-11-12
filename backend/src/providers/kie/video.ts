@@ -21,7 +21,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, listedSeedanceTaskType, seedanceTaskTypeFitsMedia, type DeclaredSeedanceTaskType, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isKling4RunnerProvider, isGrokVideo15Provider, isVeoProvider, videoProviderReferenceSyntax, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
+import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, listedSeedanceTaskType, seedanceTaskTypeFitsMedia, type DeclaredSeedanceTaskType, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isKling4RunnerProvider, isGrokVideo15Provider, videoStartFrameOnlyResolution, videoStartFrameOnlyMessage, isVeoProvider, videoProviderReferenceSyntax, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION, isVideoAutoAspectToken, videoAutoAspectRunsAt } from "@nodaro/shared/model-catalog"
 import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
@@ -1998,6 +1998,13 @@ async function runGrokVideo15(
   // reserved (the workflow run moves a lone end frame into the start slot).
   if (typeof input.first_frame_url !== "string" && typeof input.loop_url !== "string") {
     throw createSanitizedError(`${logLabel}: a start frame is required`, "Video generation")
+  }
+  // Backstop for the start-frame-only rule (1080p takes a start frame alone):
+  // every route and the workflow run refuse it before credits are reserved,
+  // judged by `videoStartFrameOnlyProblem` — read here off the body itself.
+  const startFrameOnlyTier = videoStartFrameOnlyResolution(modelKey, input.resolution as string)
+  if (startFrameOnlyTier && (typeof input.last_frame_url === "string" || typeof input.loop_url === "string" || Array.isArray(input.keyframes))) {
+    throw createSanitizedError(`${logLabel}: ${videoStartFrameOnlyMessage(modelKey, startFrameOnlyTier)}`, "Video generation")
   }
 
   // Each distinct image once, under its own name (input-label.ts), with the

@@ -32,7 +32,7 @@ import { judgeVoicesUnderLock } from "../lib/voice-lock.js"
 import { voiceNotAvailableBody } from "../lib/voice-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderTakesLoneEndFrame, videoProviderRefsReplaceStartFrame, videoProviderRefModeFrameSeats, resolveVideoProviderForMode } from "@nodaro/shared/models"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderTakesLoneEndFrame, videoProviderRefsReplaceStartFrame, videoStartFrameOnlyProblem, videoProviderRefModeFrameSeats, resolveVideoProviderForMode } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable, hasFeature } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, FRAME_FITS, FRAME_DELIVERIES } from "@nodaro/shared/video"
@@ -1407,6 +1407,21 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     })
     if (kling4Problem) {
       return reply.status(400).send({ error: kling4Problem })
+    }
+    // A resolution that takes a start frame only (Grok Imagine Video 1.5 at
+    // 1080p): refused here, before the job row and the reservation, rather than
+    // by the provider after it. Judged on what the runner sends — the assembled
+    // reference list (connected references joined), the end frame (a loop
+    // included), the clip's in-between cap — after the start-frame gate above.
+    const startFrameOnly = videoStartFrameOnlyProblem(provider, {
+      resolution: normResolution,
+      durationSec: normDuration,
+      hasEndFrame: endFrameUrl !== undefined,
+      inBetweenFrameCount: referenceImageUrls?.length ?? 0,
+      nothingCharged: true,
+    })
+    if (startFrameOnly) {
+      return reply.status(400).send({ error: { code: startFrameOnly.code, message: startFrameOnly.message } })
     }
 
     // Determine model identifier for credit check (supports variable pricing by duration/audio/resolution/video-ref)

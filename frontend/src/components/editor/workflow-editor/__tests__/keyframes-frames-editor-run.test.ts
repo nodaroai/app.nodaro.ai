@@ -213,3 +213,46 @@ describe("editor Run: a keyframes model gives a wired character no image number"
     expect(String(sent()[PROMPT_ARG])).toMatch(/from @image_3/)
   })
 })
+
+describe("editor Run: Grok Imagine Video 1.5 takes a start frame only at 1080p", () => {
+  const GROK = "grok-imagine-video-1.5"
+  const SENTENCE =
+    "Grok Imagine Video 1.5 takes a start frame only at 1080p: no end frame, loop or in-between frames. " +
+    "Choose 720p, or remove the end frame and the in-between frames. Nothing was charged."
+
+  for (const [what, wiring] of [
+    ["an end frame", { end: true }],
+    ["in-between frames", { refs: 2 }],
+    ["an end frame and in-between frames", { end: true, refs: 2 }],
+  ] as const) {
+    it(`refuses ${what} at 1080p before calling the server, with the server's sentence`, async () => {
+      await expect(executeNode(wire({ provider: GROK, data: { resolution: "1080p", duration: 8 }, start: true, ...wiring }) as any, ctx())).rejects.toThrow(SENTENCE)
+      expect(mockRunVideoGeneration).not.toHaveBeenCalled()
+      expect(mockToastError).toHaveBeenCalledTimes(1)
+      expect(String(mockToastError.mock.calls[0]![0])).toContain(SENTENCE)
+    })
+
+    it(`runs ${what} at 720p`, async () => {
+      await executeNode(wire({ provider: GROK, data: { resolution: "720p", duration: 8 }, start: true, ...wiring }) as any, ctx())
+      expect(mockRunVideoGeneration).toHaveBeenCalledTimes(1)
+    })
+  }
+
+  it("refuses a loop (the start picture as the end frame) at 1080p", async () => {
+    const node = wire({ provider: GROK, data: { resolution: "1080p" }, start: true })
+    // The start frame's own upload node wired into the end frame too: one picture as both.
+    mockEdges = [...mockEdges, { id: "start->v-end", source: "start", target: "v", sourceHandle: null, targetHandle: "endFrame" }]
+    await expect(executeNode(node as any, ctx())).rejects.toThrow(SENTENCE)
+    expect(mockRunVideoGeneration).not.toHaveBeenCalled()
+  })
+
+  it("runs a lone start frame at 1080p", async () => {
+    await executeNode(wire({ provider: GROK, data: { resolution: "1080p" }, start: true }) as any, ctx())
+    expect(mockRunVideoGeneration).toHaveBeenCalledTimes(1)
+  })
+
+  it("runs at 1080p when a 1-second clip leaves every in-between frame out", async () => {
+    await executeNode(wire({ provider: GROK, data: { resolution: "1080p", duration: 1 }, start: true, refs: 2 }) as any, ctx())
+    expect(mockRunVideoGeneration).toHaveBeenCalledTimes(1)
+  })
+})

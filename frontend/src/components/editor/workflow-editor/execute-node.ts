@@ -59,6 +59,7 @@ import {
   resolveVideoModeForInputs,
   videoProviderRefsReplaceStartFrame,
   videoProviderTakesLoneEndFrame,
+  videoStartFrameOnlyProblem,
   selectLoraRoutingForMentions,
   resolveGvpAnchorWire,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
@@ -531,6 +532,7 @@ import {
   runWireDurationReader,
 } from "@/lib/upstream-duration";
 import { editPlanIssueText, nodeRunError, nodeRunText } from "@/components/editor/workflow-editor/node-run-message";
+import { startFrameOnlyText } from "@/lib/video-start-frame-only";
 
 // ---------------------------------------------------------------------------
 // Manual-edit pending promise bridge
@@ -3151,6 +3153,25 @@ function executeNodeCore(
       const debugSources = edges.filter((e) => e.target === node.id).map((e) => `${e.sourceHandle ?? "?"}→${e.targetHandle ?? "?"}`).join(", ")
       toast.error(nodeRunError(i2vData.label, "nodeRun.noStartFrameImageFound", { startFrame: inputs.startFrameUrl ?? "none", imageUrl: inputs.imageUrl ?? "none", edges: debugSources || "none" }));
       return Promise.reject(new Error("No start frame image"));
+    }
+
+    // A resolution that takes a start frame only (Grok Imagine Video 1.5 at
+    // 1080p): refused here, before the server is called, with the sentence the
+    // server and the workflow run use — judged on the frames this Run sends
+    // (the end frame, a loop included, and the in-between frames after the
+    // clip's cap). Checked after the start-frame refusal above.
+    const startFrameOnly = startFrameUrl
+      ? videoStartFrameOnlyProblem(nodeProvider, {
+          resolution: i2vData.resolution,
+          durationSec: i2vData.duration,
+          hasEndFrame: !!endFrameUrl,
+          inBetweenFrameCount: i2vMergedRefs?.length ?? 0,
+          nothingCharged: true,
+        })
+      : undefined;
+    if (startFrameOnly && nodeProvider) {
+      toast.error(nodeRunText(i2vData.label, startFrameOnlyText(nodeProvider, startFrameOnly, "nodeRun.startFrameOnlyResolution")));
+      return Promise.reject(new Error(startFrameOnly.message));
     }
 
     // Read canonical `mode`/`sound` first, fall back to legacy

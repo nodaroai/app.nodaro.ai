@@ -370,6 +370,17 @@ generic frame normalization in `imageToVideo` for the same reason.
   `videoProviderRefsReplaceStartFrame` — the catalog declares `keyframes` but no
   `reference-to-video`); the workflow run moves a lone end frame into the start
   slot. The runner throws as a backstop.
+- **1080p takes a start frame ONLY** (staging, 2026-11-12: KIE fails the task
+  with `[400] 1080p is only supported for text-to-video or a single image used
+  as the first frame` beside an end frame, a loop or `keyframes`; 480p/720p take
+  them all). Declared as the catalog's `startFrameOnlyResolutions: ["1080p"]`
+  and judged by the shared `videoStartFrameOnlyProblem` (in-between frames
+  counted after `videoKeyframesMiddleCap`, a loop as an end frame): the
+  `/v1/generate-video` route and the payload builder refuse before the
+  reservation (`start_frame_only_resolution`), the editor's Run before calling
+  the route, and `runGrokVideo15` throws on the built body as a backstop.
+  `grok-video-15-start-frame-only.test.ts` holds the rule to the builder's
+  bodies. Do not snap 1080p to 720p silently — the decision is to refuse.
 - **Billing:** per second by resolution (KIE 2.4 / 4.5 / 8 cr/s at 480p / 720p /
   1080p, read 2026-11-11), no per-image or per-frame part. Seeded
   `grok-imagine-video-1.5:<N>s:<res>` rows, the bare id = 8 s @480p. The runner

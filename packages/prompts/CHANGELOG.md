@@ -1,5 +1,50 @@
 # @nodaro/prompts
 
+## 1.54.0
+
+### Minor Changes
+
+- b2f971c: Kling 4.0 Flash (`kling-4-flash`): a new `KLING_4_FLASH_DOCTRINE` entry — which endpoint a run takes (a start frame alone is the exact opening frame; anything else is a reference run), how materials are named in the prompt (`@image_1`, `@video_1`, a character's `@Name`, `@first_frame`), that voice clip N becomes the voice of character N when that character has 2–4 images, and is dropped otherwise (never `@audio_N`), and its limits (10 images, 5 videos 2–20 s together, 7 characters, 15 in all; 3–20 s, 720p, no end frame). Prompt-wizard capability lines for both modes.
+- 5895212: `presetShelf(group)`, `presetShelfRank(group)` and `PRESET_SHELF_ORDER`: the shelf a picker files each image-preset group under (`video`, `marketing`, `photos`, `creative`, `life`, `pro`, or `more` for a group no shelf names yet), one mapping for every picker.
+- 2695c5f: Seedream 5.5 joins the catalog: `seedream-5-5` (text to image) and `seedream-5-5-i2i` (image to image, up to 10 input images, run by itself when images are added). Sizes `1K`, `1.5K` and `2K` (`defaultResolution` 2K), a `background` of `auto`, `opaque` or `transparent`, and `png` or `jpeg` (`outputFormats`). It is priced by size and, on an edit, by each input image.
+
+  `1.5K` joins `IMAGE_RESOLUTION_VALUES` (and the new `IMAGE_K_RESOLUTION_VALUES`); on any other model `normalizeModelInput` moves it to a size that model lists. New: `isPricedPerInputImage`, `isPricedPerInputImageEdit`, `pricedSentImages` and `pricedEstimatedImages`, which count the input images of every model priced per input image (GPT Image 2.6 Flare and Sunburst, Seedream 5.5) the same way; the `SEEDREAM_5_5_*` constants; and `MIN_IMAGE_PROMPT_CHARS_BY_PROVIDER` / `getMinImagePromptChars`, the shortest prompt a model takes (5 characters on Seedream 5.5).
+
+  A catalog entry may declare `strictAspectRatios: true`: its provider refuses an aspect ratio the model does not list (read from the provider's schema, not inferred from the list). Only Seedream 5.5's two ids declare it.
+
+- f6016d7: `resolveVideoReferenceCore` takes `assetsTakeNoSeat`, for a video model whose image references are its frames (Grok Imagine Video 1.5, Kling 4.0 Keyframes): no wired character or extra attaches a URL or is numbered as an `@image_N`. A wired character gives its name and description in both reference formats, a mention of it or a `{ref:<id>}` naming it reads as its name, and an extra that is not a character adds nothing. Without the option every output is unchanged.
+
+### Patch Changes
+
+- cfb554e: Extend Video runs Seedance as two providers, one per model: `seedance-2-5-extend` (Seedance 2.5, 4–30 s added) and `seedance-2-0-extend` (Seedance 2.0, 4–15 s added). Both are in `EXTEND_VIDEO_PROVIDERS` and in `MODEL_CATALOG` with their own durations, resolutions and price rows. The earlier single id `seedance-2-extend` is retired (`RETIRED_VIDEO_PROVIDERS`): `canonicalVideoProvider` maps it to `seedance-2-5-extend`, so a saved or sent `seedance-2-extend` keeps working and runs, and is priced, as Seedance 2.5. Code that names the literal `"seedance-2-extend"` as an `ExtendVideoProvider` no longer compiles: pass it through `canonicalVideoProvider` or use `seedance-2-5-extend`.
+
+  New in `@nodaro/shared/models`: `SeedanceExtendProvider` and `isSeedanceExtendProvider`. New in `@nodaro/shared/credits`: `seedanceExtendCreditId(provider, duration?, resolution?)`, the credit identifier a Seedance extend is priced at — one row per second added and resolution for each model (`seedance-2-5-extend:<N>s:<res>`, `seedance-2-0-extend:<N>s:<res>`) — and `seedanceExtendResolution(provider, resolution?)`, the resolution that row is priced at and the run renders at (the requested one when the model offers it, else 720p). `buildVideoCreditModelIdentifier` prices both Seedance extend providers, and the retired id, through it, so it never returns a bare, unpriced extend id. Seedance 2.0 Extend is no longer priced on the `seedance-2-extend:<tier>:<res>` length tiers. `DURATION_PRICED_PROVIDERS` and `RESOLUTION_DURATION_PRICING` no longer list `seedance-2-extend` (no price is read through those keys); `VIDEO_DURATION_TIERS["seedance-2-extend"]` stays, unread, beside the earlier rows it describes.
+
+  `@nodaro/prompts`: the prompt wizard's Extend Video capabilities list both Seedance providers.
+
+- f8d0ecb: Grok Imagine Video 1.5 doctrine: at 1080p the model takes the start frame alone, and a run with an end frame, a loop or in-between frames is refused before any credits are held, so frames run at 720p.
+- f6016d7: Grok Imagine Video 1.5 doctrine and prompt-wizard lines: the start frame is the exact first frame, an end frame the exact last frame, the same image as both a seamless loop, and up to 4 Image References become in-between frames spread evenly over the clip at whole seconds; 1080p alongside 480p and 720p. The earlier "up to 7 input images" line is gone.
+- ca800e2: MiniMax H3 Image joins the catalog as a text-to-image id (`minimax-h3-image`, in `IMAGE_GEN_PROVIDERS`) and an edit id (`minimax-h3-image-i2i`, in `IMAGE_I2I_PROVIDERS`); a text-to-image request with reference images runs on the edit id (`T2I_TO_I2I_VARIANT`). It renders at 1K, 2K (the default) or 4K in ten aspect ratios or `auto`, writes PNG or JPEG, takes a seed, and an edit takes 1 to 16 reference images. It is priced by size, the same at 1K and 2K, and an edit also by each reference image: `minimaxH3ImageCreditId` builds `minimax-h3-image:<size>` and `minimax-h3-image-i2i:<size>:<N>ref`.
+
+  `isPricedPerInputImage`, `pricedSentImages` and `pricedEstimatedImages` count the input images a run sends for every model priced per input image (GPT Image 2.6 Flare and Sunburst, MiniMax H3 Image). `gptImage26SentImages` and `gptImage26EstimatedImages` are deprecated in their favour; their results are unchanged. The prompt wizard describes both new ids.
+
+- Updated dependencies [ef1c692]
+- Updated dependencies [cfb554e]
+- Updated dependencies [f8d0ecb]
+- Updated dependencies [f6016d7]
+- Updated dependencies [b2f971c]
+- Updated dependencies [6a112ad]
+- Updated dependencies [ca800e2]
+- Updated dependencies [f29d508]
+- Updated dependencies [d91ddea]
+- Updated dependencies [ea0018f]
+- Updated dependencies [8ef5c9f]
+- Updated dependencies [2695c5f]
+- Updated dependencies [593e33c]
+- Updated dependencies [6ffb265]
+- Updated dependencies [3fb15c1]
+  - @nodaro/shared@3.62.0
+
 ## 1.53.2
 
 ### Patch Changes

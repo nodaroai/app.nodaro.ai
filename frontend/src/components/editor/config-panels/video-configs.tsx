@@ -58,6 +58,7 @@ import {
 } from "@nodaro/shared/model-catalog"
 import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, type TopazVideoResolution } from "@nodaro/shared/models"
 import { TOPAZ_VIDEO_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
+import { nodeStartFrameOnlyProblem, startFrameOnlyText } from "@/lib/video-start-frame-only"
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec, isSeedanceExtendProvider, pricedOutputDurationSec, snapToNearestDuration, type SeedanceExtendProvider } from "@nodaro/shared/models"
@@ -404,6 +405,27 @@ export function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry
   }))
 }
 
+/**
+ * The note beside a resolution that takes a start frame only (Grok Imagine
+ * Video 1.5 at 1080p) while other frames are wired: the run's refusal, in the
+ * same sentence. The saved value is kept, never snapped to another tier.
+ */
+function StartFrameOnlyResolutionNote({ provider, data, hasEndFrame, inBetweenFrameCount }: {
+  provider: string
+  data: { readonly resolution?: unknown; readonly duration?: unknown }
+  hasEndFrame: boolean
+  inBetweenFrameCount: number
+}) {
+  const t = useT()
+  const problem = nodeStartFrameOnlyProblem(provider, data, { hasEndFrame, inBetweenFrameCount })
+  if (!problem) return null
+  return (
+    <p role="status" className="px-1 text-[11px] leading-snug text-amber-500">
+      {startFrameOnlyText(provider, problem, "vidcfg.startFrameOnlyResolution", t)}
+    </p>
+  )
+}
+
 function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
   // The free-credit video limits: what the server would refuse is shown locked, with why.
   const freeVideoLimits = useFreeVideoLimits()
@@ -576,6 +598,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           primaryLabel={t("vidcfg.startFrame")}
         />
       )}
+      <StartFrameOnlyResolutionNote provider={currentI2VProvider} data={data} hasEndFrame={hasEndFrame} inBetweenFrameCount={connectedRefImages.length} />
 
       <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <ModelSearchSelect
@@ -3256,6 +3279,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             </span>
           )}
           <span className="text-[11px] leading-snug text-muted-foreground">{t("vidcfg.grokVideo15LoopNote")}</span>
+          <StartFrameOnlyResolutionNote provider={currentProvider} data={data} hasEndFrame={hasEndFrame} inBetweenFrameCount={connectedRefImages.length} />
         </div>
       )}
 
