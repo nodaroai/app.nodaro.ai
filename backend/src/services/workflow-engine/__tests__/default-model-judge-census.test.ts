@@ -42,6 +42,8 @@ const JOB_JUDGE_EXEMPT: Readonly<Record<string, string>> = {
   "speech-to-video": OUTSIDE_CATALOG,
   "face-swap": OUTSIDE_CATALOG,
   "generate-mask": OUTSIDE_CATALOG,
+  // KIE's seedream-5-5-layer-decomposition, which has no catalog entry.
+  "split-into-layers": OUTSIDE_CATALOG,
   "ai-avatar": OUTSIDE_CATALOG,
   "cinematic-avatar": OUTSIDE_CATALOG,
   "switchx": OUTSIDE_CATALOG,

@@ -447,3 +447,87 @@ describe("a Split into Chunks wire set to Each", () => {
     expect(getFanOutMultiplier(trim, [s, trim], [e("s", "t", "video")], ids(trim))).toBe(1)
   })
 })
+
+// A node unit's list output (Split into Layers' Layers, `listMax: "maxLayers"`):
+// an Each wire — the pip's default — runs the next node once per layer. Before a
+// first run (or when the split re-runs) that is its Max layers; after one, the
+// layers it holds. Rows from the manifests (UNIT_LIST_OUTPUTS), no type named in
+// the estimate.
+describe("a node unit's list output on an Each wire", () => {
+  const SPLIT = "split-into-layers"
+  const up = n("up", "upscale-image", {})
+  const wire = (sourceHandle: string, outputMode?: string): WorkflowEdge =>
+    ({ id: `s-up-${sourceHandle}`, source: "s", target: "up", sourceHandle, targetHandle: "image", ...(outputMode ? { data: { outputMode } } : {}) }) as WorkflowEdge
+  const split = (data: Record<string, unknown> = {}) => n("s", SPLIT, { maxLayers: 9, size: "1K", ...data })
+
+  it("before a first run: its Max layers (the pip defaults to Each)", () => {
+    const s = split({ maxLayers: 5 })
+    expect(getFanOutMultiplier(up, [s, up], [wire("layers")], ids(s, up))).toBe(5)
+    expect(getFanOutMultiplier(up, [s, up], [wire("layers", "each")], ids(s, up))).toBe(5)
+    // Not re-run but holding no layers yet: still the most a run makes.
+    expect(getFanOutMultiplier(up, [s, up], [wire("layers")], ids(up))).toBe(5)
+  })
+
+  it("a node with no Max layers saved counts the manifest's default", () => {
+    const s = n("s", SPLIT, {})
+    expect(getFanOutMultiplier(up, [s, up], [wire("layers")], ids(s, up))).toBe(9)
+  })
+
+  it("after a run, not re-run: the layers it holds; re-run: its Max layers again", () => {
+    const s = split({ maxLayers: 7, generatedLayerUrls: ["l1", "l2", "l3"] })
+    expect(getFanOutMultiplier(up, [s, up], [wire("layers")], ids(up))).toBe(3)
+    expect(getFanOutMultiplier(up, [s, up], [wire("layers")], ids(s, up))).toBe(7)
+  })
+
+  it("a Bundle or Selected wire runs the next node once; the base pip never fans out", () => {
+    const s = split({ generatedLayerUrls: ["l1", "l2", "l3"] })
+    expect(getFanOutMultiplier(up, [s, up], [wire("layers", "bundle")], ids(up))).toBe(1)
+    expect(getFanOutMultiplier(up, [s, up], [wire("layers", "selected")], ids(up))).toBe(1)
+    expect(getFanOutMultiplier(up, [s, up], [wire("base")], ids(s, up))).toBe(1)
+  })
+
+  it("prices the next node per layer in the run estimate", () => {
+    const s = split({ maxLayers: 4 })
+    const line = estimateRunCreditLines([s, up], [s, up], [wire("layers")], () => 6).find((l) => l.nodeId === "up")!
+    expect(line.quantity.fanOut).toBe(4)
+    expect(line.credits).toBe(24)
+  })
+
+  // The node itself run once per upstream picture (a List of three): its Layers
+  // pip hands on every picture's layers, row by row (decided 2026-11-11).
+  const pictures = n("l", "list", { items: "https://r2/a.png\nhttps://r2/b.png\nhttps://r2/c.png" })
+  const intoSplit = { id: "l-s", source: "l", target: "s", targetHandle: "image" } as WorkflowEdge
+
+  it("a split run once per picture: N × Max layers before a first run, and on a re-run", () => {
+    const s = split({ maxLayers: 4 })
+    expect(getFanOutMultiplier(s, [pictures, s, up], [intoSplit, wire("layers")], ids(pictures, s, up))).toBe(3)
+    expect(getFanOutMultiplier(up, [pictures, s, up], [intoSplit, wire("layers")], ids(pictures, s, up))).toBe(12)
+    expect(getFanOutMultiplier(up, [pictures, s, up], [intoSplit, wire("layers", "each")], ids(pictures, s, up))).toBe(12)
+    // Not re-run but holding no layers yet: still every run's most.
+    expect(getFanOutMultiplier(up, [pictures, s, up], [intoSplit, wire("layers")], ids(up))).toBe(12)
+    // Re-run: every run's most again, whatever it holds.
+    const ran = split({ maxLayers: 4, generatedLayerUrls: ["a1", "a2", "c1", "c2", "c3"], __listResults: ["a", "b", "c"] })
+    expect(getFanOutMultiplier(up, [pictures, ran, up], [intoSplit, wire("layers")], ids(pictures, ran, up))).toBe(12)
+  })
+
+  it("after a run once per picture, not re-run: every picture's layers it holds (2 + 0 + 3), not one picture's", () => {
+    const ran = split({ maxLayers: 4, generatedLayerUrls: ["a1", "a2", "c1", "c2", "c3"], __listResults: ["a", "b", "c"] })
+    expect(getFanOutMultiplier(up, [pictures, ran, up], [intoSplit, wire("layers")], ids(up))).toBe(5)
+    const line = estimateRunCreditLines([up], [pictures, ran, up], [intoSplit, wire("layers")], () => 6).find((l) => l.nodeId === "up")!
+    expect(line.quantity.fanOut).toBe(5)
+    expect(line.credits).toBe(30)
+  })
+
+  it("the wire's selector keeps what it picks of every picture's layers", () => {
+    const s = split({ maxLayers: 4 })
+    const first5 = { ...wire("layers"), data: { selectorMode: "range", rangeFrom: "1", rangeTo: "5" } } as WorkflowEdge
+    expect(getFanOutMultiplier(up, [pictures, s, up], [intoSplit, first5], ids(pictures, s, up))).toBe(5)
+  })
+
+  it("a Bundle or Selected wire still runs the next node once; the base pip keeps its quote", () => {
+    const s = split({ maxLayers: 4 })
+    expect(getFanOutMultiplier(up, [pictures, s, up], [intoSplit, wire("layers", "bundle")], ids(pictures, s, up))).toBe(1)
+    expect(getFanOutMultiplier(up, [pictures, s, up], [intoSplit, wire("layers", "selected")], ids(pictures, s, up))).toBe(1)
+    expect(getFanOutMultiplier(up, [pictures, s, up], [intoSplit, wire("base")], ids(pictures, s, up))).toBe(1)
+  })
+})

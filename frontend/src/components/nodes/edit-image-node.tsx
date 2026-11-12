@@ -18,6 +18,8 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useWiredImageSize } from "@/hooks/use-wired-image-size"
+import { nodaroImageUpscaleCreditId } from "@nodaro/render-rules"
 import { EditableNodeLabel } from "./editable-node-label"
 import { imageNodeSizing } from "./video-node-defaults"
 import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
@@ -44,7 +46,13 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
-  const credits = useModelCredits(nodeData.provider ?? "recraft-upscale", 2)
+  // Nodaro Image Upscale is priced by its output's size: the wired photo's recorded size × the factor.
+  const wiredPhotoSize = useWiredImageSize(id)
+  const provider = nodeData.provider ?? "recraft-upscale"
+  const credits = useModelCredits(
+    provider === "nodaro-image-upscale" ? nodaroImageUpscaleCreditId(wiredPhotoSize, nodeData.upscaleFactor) : provider,
+    2,
+  )
   const useFull = useFullResolution(id)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const { aspectRatio: imgAspectRatio, onLoadDimensions: handleLoadDimensions } =

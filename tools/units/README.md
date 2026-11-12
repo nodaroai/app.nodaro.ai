@@ -7,7 +7,7 @@ central registration files (§5.8 option B, decided 2026-10-16):
 | Tree | Folder | Holds |
 |---|---|---|
 | frontend | `frontend/src/nodes/<type>/` | `unit.json` (**the manifest, source of truth**), `strings.json`, `types.ts`, `node.tsx`, `config.tsx`, `option.tsx`, `exec.ts`, `api.ts`, `price-id.ts` (a unit priced by its settings: the credit id a run reserves), generated `definition.generated.ts` / `labels.generated.ts`, `__tests__/` |
-| backend | `backend/src/nodes/<type>/` | `route.ts` (or `route.ee.ts` when Cloud-only), `payload.ts`, `worker.ts`, `price.ee.ts`, `output.ts` / `inputs.ts`, `characterize.char.ts` (an ffmpeg worker's characterization operation), `use-case.ts` (a use-case node's request body), `budget.ts` (a worker's job budget), generated `descriptor.generated.ts`, `__tests__/` |
+| backend | `backend/src/nodes/<type>/` | `route.ts` (or `route.ee.ts` when Cloud-only), `payload.ts`, `worker.ts`, `price.ee.ts`, `output.ts` / `inputs.ts`, `characterize.char.ts` (an ffmpeg worker's characterization operation), `use-case.ts` (a use-case node's request body), `budget.ts` (a worker's job budget), `recover.ts` (an own-writer worker's recovery from its provider task), generated `descriptor.generated.ts`, `__tests__/` |
 
 The central registries become **generated, checked-in aggregates** built from
 the manifests (`frontend/src/nodes/_generated/`, `backend/src/nodes/_generated/`,
@@ -208,6 +208,7 @@ gen:skills could not get past that throw to rewrite the table itself.
 | `capabilities.mjs` | The closed list of manifest `capabilities`, each naming the seams that read it (`seams: [...]`, every one live). |
 | `vocabulary.mjs` | Categories, handle kinds, producer kinds, execution kinds, queues — pinned to the product by `frontend/src/__tests__/units-vocabulary.test.ts`. |
 | `use-case-rules.mjs` | The rules of `execution.kind: "use-case"` (required and refused files, `execution.builder` against `USE_CASE_SPECS`, use-case input ids) and of the contract keys `@nodaro/shared` composes; `manifest.mjs` calls it. |
+| `app-field-rules.mjs` | The rules of `appFields`, the settings a published app may expose ("A unit's app fields"); `manifest.mjs` calls it. |
 | `handle-prune.mjs` | Deletes unit rows from `backend/src/lib/mcp/generated/node-handles.ts` (gen:skills' legacy-only handle table) on every gen:units run. |
 | `templates.mjs` | The emitters and the region splice. |
 | `scaffold.mjs` | `gen:units -- --new`: flags, the in-memory validation, the write, the printed next steps. |
@@ -252,13 +253,16 @@ seams: a capability, an input kind (`ACCEPTS_KINDS`) or a category
 | `NODARO_EXCLUSIVE_NODE_TYPES` (the `edition:nodaro-exclusive` capability) | `frontend/src/lib/cloud-only-nodes.ts` and `backend/src/lib/cloud-only-nodes.ts` |
 | the ffmpeg characterization operations (`OPERATIONS`; each named by its unit's type — its golden key — and placed after its `after`) | `backend/src/providers/video/__characterization__/operations.ts`. The unit file and its aggregate are `.char.ts`, like the harness: excluded from the build and the default test run |
 | the job budgets (`DECLARED_JOB_BUDGETS`, read through `declaredJobBudgetMs` and `BUDGETED_JOB_NAMES`: the video worker's liveness fallback, the orchestrator's ceilings, the row sweeps) | `backend/src/lib/job-budget.ts`, the legacy rows ∪ the `budgets` aggregate (`UNIT_BUDGETS`, each unit's `budget.ts` under its type) |
+| an own-writer worker's recovery from its provider task (`UNIT_RECOVERS`, each unit's `recover.ts` under its type; read by the KIE reconcile — its cron and the video worker's stall re-pick — before its `NOT_GENERIC_RECOVERABLE` bump) | `backend/src/lib/reconcile/unit-recovery.ts` (`unitRecoverOf(jobType)`, a lookup; no legacy rows) |
 | the long single-node restore horizon (`LONG_RUNNING_NODE_TYPES`: a reload re-attaches a running job's poll for 6 h instead of 30 minutes) | `frontend/src/lib/single-node-restore.ts`, the legacy rows ∪ the units whose definition is `longRunning` (through `unit-definitions.ts`) |
 | the kept-length sets (`LENGTH_KEEPING_VIDEO_TYPES` / `EXACT_LENGTH_VIDEO_TYPES`, the `length:*` capabilities — the run estimates, the run's charge and, through them, the listing's `VIDEO_OUTPUT_LENGTH_RULES`) | `packages/render-rules/src/kept-length.ts` ∪ `unit-kept-lengths.generated.ts` |
 | the image typing sets (the server's `IMAGE_SOURCE_TYPES`; the editor's `IMAGE_SOURCE_TYPES` and `IMAGE_RESULT_TYPES`: every unit whose `contract.producer` is `image`) and the routing of a unit's image pip (as an Upload Image, both engines' `routedAs`) | `workflow-engine/execution-graph.ts` and `input-resolver.ts` (through `unit-descriptors.ts`); `lib/preview-node-types.ts`, `config-panels/results-gallery-media.ts` and `workflow-editor/node-input-resolver.ts` (through `unit-definitions.ts`) |
 | the list pips (`LIST_OUTPUT_HANDLES` / `isListOutputHandle`, read by `defaultEdgeOutputMode`: a wire leaving a list pip runs the next node once per item by default) | `packages/shared/src/producer-types.ts` ∪ `generated/unit-contracts.ts` `UNIT_LIST_PIPS` (each unit's `handles.outputs[].list`) |
+| the run estimate's count of an Each wire from a list pip (`baseFanOut`: the list the source holds when it is not re-run — after a run once per upstream item, every row's; before a first run, or when it re-runs, the most items a run makes — the `defaultData` field named by the output's `listMax`, as saved on the node, else its default — times the runs the source itself makes; with no `listMax`, the list held) | `packages/render-rules/src/node-fan-out.ts` reads the `list-outputs` data file `unit-list-outputs.generated.ts` (`UNIT_LIST_OUTPUTS`: type, pip, `from`, `max`) |
 | the editor's credit id of a unit priced by its settings (`UNIT_PRICE_IDS`, each unit's `price-id.ts`) | `frontend/src/lib/unit-price-ids.ts` (`unitCreditIdOf(type, data)`), read by `getModelIdentifier` (`config-panels/helpers.ts`) and `estimateNodeCredits` (`workflow-editor/types.ts`) |
 | a provider-lane worker's provider (its `provider:*` capability) | `backend/src/lib/concurrency-lanes/provider-of.ts`, through `providerOf` (`lib/unit-descriptors.ts`) |
 | a unit's `/v1/nodes` category (`registry.category`, projected as `registryCategory`) | `backend/src/lib/node-registry.ts` (`registryCategoryOf`, `lib/unit-compose.ts`) |
+| a published app's fields (`appFields`: the publish picker, the app cards, every run's check, `get_app_inputs` and the listing's "up to") | the editor's `getExposableFields` (`components/presentation/exposable-fields.ts`, through `unit-definitions.ts`) and the server's `exposed-unit-field-check.ts` (through `unit-descriptors.ts`), read by the override merge `workers/apply-input-overrides.ts`, every route that takes overrides, and `lib/mcp/extract-app-inputs.ts` — "A unit's app fields" |
 
 The pure composition lives in `frontend/src/lib/unit-compose.ts` and
 `backend/src/lib/unit-compose.ts` (an empty unit collection returns the legacy
@@ -371,7 +375,8 @@ URLs) beside the media keys every media node writes; both engines are held to
   typing sets: the server's `IMAGE_SOURCE_TYPES` (`workflow-engine/execution-graph.ts`),
   the editor's `IMAGE_SOURCE_TYPES` (`lib/preview-node-types.ts`) and
   `IMAGE_RESULT_TYPES` (`config-panels/results-gallery-media.ts`).
-- **A list pip** hands one run's files. The server's node output carries them
+- **A list pip** hands one run's files (after a run once per upstream item,
+  every run's, row by row — below). The server's node output carries them
   on `unitLists` (by output id; non-empty strings only, an empty list is no
   value), the node holds them on the output's `from` field. A plain (Selected)
   wire carries the first item; an Each wire — the default, `LIST_OUTPUT_HANDLES`
@@ -385,7 +390,18 @@ URLs) beside the media keys every media node writes; both engines are held to
   post makes each item a media item, and a UGC node's handle takes each item
   on that handle (the last is its value). The list operators read every item
   (`collectItemsForEdge`); a look pip lists its own JSON entries, never the
-  take batch.
+  take batch. `listMax` (optional, list outputs only) names a
+  `defaultData` field holding the most items one run makes (a whole number,
+  at least 1): the run estimate counts an Each wire from the pip at that
+  before a first run — times the runs the source itself makes, when it runs
+  once per upstream item — and the list held after one (`list-outputs` data
+  file, `UNIT_LIST_OUTPUTS`, read by `node-fan-out.ts`). Without it an unrun
+  list pip quotes one run. A list output may also report how many items its run
+  made but could not store: the job's `output_data["<id>NotSaved"]` (a whole
+  number, 0 when it stored every one) — on the server's node output as
+  `unitListsNotSaved` (by output id), landed on the node and the take as
+  `<id>NotSaved` by every lane (`unitSideJobPatch` / `unitSideRunPatch`,
+  `frontend/src/lib/unit-compose.ts`), cleared at run start.
 - **A JSON output beside the media** lands on `unitOutputs` like a JSON-only
   worker's, but sets no `json` (a JSON consumer wired from the take reads no
   layer data); its JSON readers read its own output only.
@@ -403,15 +419,58 @@ URLs) beside the media keys every media node writes; both engines are held to
   pip lists only the last batch of a run once per upstream item
   (`__listResults` / `listResults`, `unitTakeBatchFor`) — never the take
   history a legacy media node lists.
+- **A run once per upstream item hands on every row's side outputs,
+  row-aligned** (decided 2026-11-11). Each row keeps its own on its take: the
+  server's fan-out output carries them row-aligned with `listResults`
+  (`listResultSideOutputs`, `workers/fan-out-result.ts`), and every editor lane
+  spreads each row's on its take (`unitSideListRowFields`,
+  `lib/json-run-result.ts`), untagged — what one run made. Beside them the
+  node's own side outputs hold the WHOLE batch (`unitBatchSideOutputs`,
+  `@nodaro/render-rules` — the one rule both engines run): each list output's
+  files row by row; a look output that declares `alignedWith: <list output
+  id>` its entries row by row, each carrying the row it came from (`row`,
+  0-based: its take's index in the live `listResults` / the editor's
+  `__listResults`, which keep "" for a row whose run failed — a row that made
+  none adds nothing, so it is a row index, never a position; a node seeded
+  from its saved data lists only the takes that were made, so pair an entry
+  with its take by what the entry names, Split into Layers' `baseUrl`, never
+  by `row`); the not-stored counts summed. A look output with no `alignedWith` holds the
+  first row's (in row order) that made one. The server's fan-out output
+  carries the whole on `unitLists` / `unitOutputs` / `unitListsNotSaved`; the
+  editor's server-run lanes land it on the node like any run's, and its canvas
+  run once per item (`executeNodeForList`) lands the same from the batch's
+  takes (`unitSideBatchFields`). While the node holds a batch
+  (`__listResults`), a wire from a side pip reads the node's fields —
+  whichever take is active, as the take pip lists the batch whichever take is
+  active (`unitSavedOutput`; the editor's `unitOutputField`): an Each wire
+  runs once per item of every row, a Bundle hands them all, a plain wire the
+  first, and item:N addresses the whole list. A single run's side outputs are
+  as they were: no `row`. The node itself shows its active take's own
+  (`read: "take"`), so switching takes shows that row's.
 - **Storing extra images.** A worker stores its list's files through
   `finalizeJobWithMedia`'s `extraImageSets` (`lib/job-finalize.ts`): each set
   is uploaded with the result's own uploader (the job's watermark rule and the
   user's storage) under `<jobId>-<key>-<n>`, a few at a time, inside the
   finalize claim; its stored URLs land on `output_data[<key>]` (never on
   `imageUrls`, which the editor reads as takes); `extraOutputData` may be a
-  function handed those URLs; and a set marked `library` is listed on
+  function handed those URLs and the result's own stored URL (what finalize
+  writes to `output_data.imageUrl` — Split into Layers names it on each
+  layer's data as `baseUrl`, which is how a batch's layer is paired with its
+  base: the take pip lists only the takes that were made, so a failed row
+  shifts every later take's place); and a set marked `library` is listed on
   `output_data.libraryImages`, from which `createAssetFromJob` files each file
-  in the Library under its name.
+  in the Library under its name. `storeAttempts` tries each image (the result
+  and every extra one) that many times — a failed attempt of one image stores
+  and counts nothing, and every attempt writes the same key — and a set marked
+  `dropUnstorable` leaves out an image that still fails (the job completes
+  with the rest; `extraOutputData` and a `meteredBaseCredits` function are
+  handed what was stored and dropped, so the charge counts only what was
+  stored). Without them, finalize is as before: one attempt, and a failed
+  extra image fails the finalize. A finalize that does not complete — a later
+  step throws, or a cancel wins the completion — deletes every object it
+  stored and gives its bytes back, under its claim and before releasing it
+  (`discardUnfinishedStores`, lib/job-finalize-discard.ts); a held result keeps
+  its objects for review.
 
 **A unit priced by its settings.** A worker or sync unit whose reserved
 credit id depends on the node's data names it in `price.ee.ts` (`creditId`)
@@ -442,6 +501,159 @@ composes from that flag, so a reload re-attaches the poll of a long job for
 6 h with no hand list. `job-budget-units.test.ts` and
 `single-node-restore-units.test.ts` prove both on the fixture unit, which
 carries a `budget.ts`.
+
+**A worker unit's recovery.** A worker that writes its own completion
+(`finalize:own-writer`) is in `NOT_GENERIC_RECOVERABLE`: no generic media
+finalize may take its row, so without more a reconcile tick only bumps it, and
+a job whose delivery failed (or whose worker died after the provider finished)
+is failed and refunded about 90 minutes later — with its result still
+downloadable. Such a worker on a provider whose reconcile reads it (today
+`provider:kie`, `RECOVERING_PROVIDERS` in `manifest.mjs`) may declare
+`recover.ts`: `export const recover: UnitRecover = (task) => …`
+(`backend/src/nodes/kit.ts`). The KIE reconcile (`lib/reconcile/kie.ts`) — its
+cron and the video worker's stall re-pick — asks
+`lib/reconcile/unit-recovery.ts` (`unitRecoverOf`) first; for a type that
+answers it polls the saved task (a task that failed upstream still fails and
+refunds at once, a running one is bumped) and hands the recovery the task's
+WHOLE result (`task.result`: a record-info task's parsed `resultJson`), what it
+cost and took, the job's `input_data` and the claimant. The recovery runs the
+SAME delivery its worker runs after the provider call — one exported function,
+called by both with the same inputs (Split into Layers: `deliverLayerSplit`,
+from the parsed result and the run's `maxLayers` / `size` to
+`finalizeJobWithMedia`) — so a recovered job is delivered and charged exactly
+as the worker would have. A recovery that throws (a result it cannot read, a
+base that cannot be stored after its attempts) fails the job and refunds it on
+that tick (`reconcile_last_error` `delivery_failed`), never the 18-tick bump; a
+`{ ok: false }` outcome (a lost claim, a held or blocked result) is not a
+failure. The fal and Replicate reconciles do not read the seam (no own-writer
+unit runs there), so the validator refuses `recover.ts` on any other provider.
+
+**A unit's app fields.** A published app lets its creator expose some of a
+node's settings to the app's users. A unit declares which, and how each is
+shown, in its manifest — never in the quick-strip registry
+(`NODE_QUICK_CONFIGS`) or a hand-declared `exposableFields`, which are the
+legacy nodes' sources:
+
+```json
+"defaultData": { "label": "…", "size": "1K", "maxLayers": 9 },
+"appFields": [
+  { "field": "size", "kind": "select", "labelKey": "myNode.field.size",
+    "options": [{ "value": "auto", "labelKey": "myNode.size.auto" }, { "value": "1K" }, { "value": "2K" }] },
+  { "field": "maxLayers", "kind": "integer", "labelKey": "myNode.field.maxLayers", "min": 1, "max": 99, "step": 1 }
+]
+```
+
+- `kind` is a card the app-field system already renders (`APP_FIELD_KINDS`):
+  `select`, a fixed list of string values (a select card, which the
+  publisher may restrict), and `integer`, a whole number from `min` to `max`
+  in steps of `step` (a slider card).
+- `labelKey` (and an option's, optional — without one the option shows its
+  value) is a key of the unit's own `strings.json` `keys`, so it is in all
+  five dicts and reads in the interface language.
+- The validator (`app-field-rules.mjs`) holds each field to the node: it is a
+  key of `defaultData` whose value is one of its options (or a whole number in
+  its range, on its step), never an input's `field` or an output's `from`,
+  never a field the run override merge deletes (`RUN_OVERRIDE_CLEARED_FIELDS`
+  and `RUN_ONLY_NODE_FIELDS` of `@nodaro/shared`) or one the server writes
+  into a run's overrides itself (`SERVER_RUN_OVERRIDE_FIELDS` of
+  `@nodaro/render-rules`: a render's `quality`, a plan's `editedEdl`, a
+  component's `__injectedPortValues` —
+  `backend/src/lib/__tests__/server-run-override-fields.test.ts` finds every
+  server writer with the TypeScript parser and fails a key not declared
+  there), nor `label` or `fieldMappings`, and exposed once; `types.ts` is
+  required beside it. The lists are read from their source as text, strictly
+  (`readConstList`: either quote; a spread, a reference, a missing list or a
+  missing file throws), so a field added to any is refused here with no second
+  list. The
+  definitions aggregate writes one `UnitAppFieldsFit<Data, typeof
+  definition.appFields>` line per unit that declares them: a field must be a
+  key the `<Pascal>Data` type DECLARES (its `[key: string]: unknown` index
+  signature does not count) whose type takes every value it lists, or
+  typecheck fails there. `exposable-fields-coverage.test.ts` holds each field
+  to the node's settings (`isNodeSetting`, from types.ts through gen:skills),
+  as it does a strip control.
+- gen:units projects `appFields` verbatim into the editor definition and the
+  server descriptor (only when declared). The editor's `getExposableFields`
+  returns a unit's app fields and nothing else (a unit has neither legacy
+  source): the node picker lists them, the app runtimes render them through
+  `FieldInputCard`, each starting at its `defaultData` value. On the server,
+  `get_app_inputs` and the SDK's flat inputs type a select by its values and
+  an integer as a number with its range and step (`extract-app-inputs.ts`, so
+  the listing's "up to" prices every option and both ends of a range).
+- **The declaration is a guarantee on every run lane.** It covers a run's
+  OVERRIDES — what a run request, or a continuation re-applying a stored run,
+  writes over the saved node. A run may set a unit's app field only to a value
+  it declares — exposed by the app or not, by any lane, and `null` is refused
+  too (the merge would delete the key, and the unit's `payload.ts` and
+  `creditId(data)` would read no value instead of the default).
+  `lib/exposed-unit-field-check.ts` holds it in two places, as the
+  outbound-node lock is held:
+  - at the ONE merge of a run's overrides into node data,
+    `applyInputOverridesToNodes` (`workers/apply-input-overrides.ts`, called
+    once, by the orchestrator, for every lane's job and every continuation):
+    it throws before touching a node, and the run fails with the message;
+  - up front, a 400 `validation_error` before any row exists, on every route
+    that takes or re-applies overrides — the app run (`/v1/app/:slug/run`, its
+    flat `inputs` and nested `inputOverrides` alike) and a draft run
+    (`/v1/app/:slug/runs`); the app's Retry (`app-run-resume.ts`) and Render
+    final (`app-render-final.ts`), on the stored run's inputs; a share-token
+    run (`/v1/present/:token/run`); a component's run
+    (`/v1/component/execute`); the workflow run API (`workflow-execution.ts`),
+    which an editor's or an agent's Render final runs through, and its quote
+    (`workflow-render-final.ts`), on the stored pin with the Final over it; a
+    use-case node's continue (`use-case-continue.ts`, from-failed and Render
+    final, on the stored pin with the continuation's own over it); and an
+    API token run (`api-tokens.ts`). A route that re-applies a stored run
+    checks what the run will APPLY (`continuationInputOverrides`), never only
+    what the request sent. `unit-field-override-lanes.test.ts` holds it with
+    the TypeScript parser: one product caller of the merge; every route that
+    names `inputOverrides` or calls `continuationInputOverrides` checks; and
+    each such check reads the applied overrides.
+  The wording is a legacy fixed-list strip field's (`Invalid value for
+  maxLayers: 500. Use a whole number between 1 and 99.`), and it applies under
+  a publisher's restriction too. The refused value is caller-shaped and
+  reaches a run's `error_message` column, so it is escaped (a NUL, a lone
+  surrogate) and cut to 120 code points, at most ten refusals are spelled out,
+  and each is its own sentence. A flat input naming a field the app does not
+  expose is dropped, as on any node. Only a run's override is held: a value
+  the creator SAVED on the node keeps running. The value lands in the node's
+  data like any override, where the unit's `payload.ts` reads it — no seam of
+  its own. A legacy node is never read by any of this: its fields keep their
+  own rules (an unexposed raw override on one still passes unchecked).
+  A direct node run is not an override: `POST /v1/<type>` (the unit's own
+  route, which a canvas Run and an API call use) is held by that route's own
+  Zod body, not by this check. Derive that body's enum and bounds from the
+  same declaration — the unit's own projection, `./descriptor.generated.js`
+  (`descriptor.appFields`), which `route.ts` may import (its own folder, G5) —
+  built inside the route plugin rather than at the top level (G7 allows no
+  computed call there): `z.enum(values as [string, ...string[]])` from a
+  select's options, `z.number().int().min(min).max(max)` (and a step check)
+  from an integer. The route then can never take a value the declaration
+  refuses, or refuse one it takes.
+- **Narrowing a declaration is a breaking change.** Removing a select value,
+  or raising `min` / lowering `max` (or changing `step`), makes every run that
+  sets the old value refuse — a published app whose publisher restricted the
+  field to it, a stored run a Retry or a Render final re-applies, an API or
+  MCP caller that sends it — until each is changed. There is no retired-values
+  list (a strip control's `retainedOptions`): widen freely; narrow only with
+  that in mind, and say so in the PR.
+- The three `backend/src/lib/mcp/generated/exposable-*.ts` tables stay
+  legacy-only: they exist because the server cannot read the editor's
+  definitions, and a unit's descriptor is that table for it.
+  `exposable-fields-units.test.tsx` renders both editor-side generators with
+  a unit carrying app fields composed into `NODE_DEFINITIONS`, and holds them
+  to the committed files.
+- Proven on `fixture-echo` (a select `size`, an integer `maxLayers`):
+  `units-manifest.test.mjs` (the validator), `units-app-field-reserved.test.ts`
+  (the reserved names against the runtime lists), `units-emit.test.mjs` (the
+  projections and the aggregate line), `unit-app-fields-fit.test.ts` (the
+  typecheck), `exposable-fields-units.test.tsx` (the editor),
+  `extract-app-inputs-unit-fields.test.ts` (the schema and the check),
+  `apply-input-overrides-unit-fields.test.ts` and
+  `unit-field-override-fails-execution.test.ts` (the merge and the
+  orchestrator), and the route lanes: `app-runner-unit-fields.test.ts`,
+  `presentation-lock.test.ts`, `component-execute-lock.test.ts`,
+  `app-run-resume.test.ts`.
 
 **Ordered registries.** Where a user or an agent sees a registry's order, a
 unit is placed, never appended: NODE_DEFINITIONS after its `position.after`,
@@ -484,8 +696,10 @@ which the two engines' parity tests read.)
   none; `use-case` → backend `use-case.ts` + `price.ee.ts`, and it refuses
   `exec.ts`, `api.ts`, a route, `payload.ts`, `worker.ts`,
   `characterize.char.ts`, `execution.queue` and `execution.requires`.
-  `budget.ts` is only for `worker` (the video worker's liveness budget). Any
-  route needs `price.ee.ts` (a zero-cost one too). `price.ee.ts`
+  `budget.ts` is only for `worker` (the video worker's liveness budget).
+  `recover.ts` is only for a `worker` with `finalize:own-writer` and a
+  provider whose reconcile reads it (`RECOVERING_PROVIDERS`: `provider:kie`).
+  Any route needs `price.ee.ts` (a zero-cost one too). `price.ee.ts`
   exports `staticCosts`, plus `creditId(data)` only when the id a run reserves
   depends on the node's data (a flat-priced unit reserves the row of its type).
 - `docs.page` exists, or `docs.awaiting` gives the reason. `docs.index:
@@ -559,9 +773,12 @@ which the two engines' parity tests read.)
 | `handles.outputs[].kind: "look"` (not a use case) | a JSON output names its `from` (the field its value lands on), and stands beside other `look` outputs ("A worker unit's JSON outputs") or beside media outputs, the media take first ("A worker unit's media take and its side outputs") — never beside a text or any other output (`json-output-rules.mjs`). |
 | `handles.outputs[].from` (use-case) | absent: the use-case reader (`use-case-io.ts` in the editor, `use-case-output.ts` on the server) reads a use-case node's outputs, never `from`. |
 | `handles.outputs[].runtimeTyped: true` | only on an audio/video/image output with `contract.producer: "dynamic"`: the pip's kind is decided at run time, so it gets no `HANDLE_OUTPUT_TYPES` row. |
-| `handles.outputs[].list: true` | the output carries one run's LIST of files (`LIST_OUTPUT_KINDS`: an image, video or audio output) with a `from`, never `runtimeTyped`; a side output of the media take, which is the unit's first output ("A worker unit's media take and its side outputs"). gen:units writes its `UNIT_LIST_PIPS` row (`@nodaro/shared`, a published row: type id and pip ids). |
+| `handles.outputs[].list: true` | the output carries one run's LIST of files (`LIST_OUTPUT_KINDS`: an image, video or audio output) with a `from`, never `runtimeTyped`; a side output of the media take, which is the unit's first output ("A worker unit's media take and its side outputs"). gen:units writes its `UNIT_LIST_PIPS` row (`@nodaro/shared`, a published row: type id and pip ids) and its `UNIT_LIST_OUTPUTS` row (`@nodaro/render-rules`, private: the run estimate's count). |
+| `handles.outputs[].listMax: "<field>"` | only on a list output: the `defaultData` field (a whole number, at least 1) holding the most items one run makes — what the run estimate counts an Each wire from the pip at before a first run. |
+| `handles.outputs[].alignedWith: "<list output id>"` | only on a `look` output, naming a list output (`list: true`) of the same unit, never on a use-case node: its entries line up with that list's items one for one. After a run once per upstream item both hand on every row's, row by row, and each entry carries its row (`row`) — "A worker unit's media take and its side outputs" (`json-output-rules.mjs`). |
 | `registry.category` | the `/v1/nodes` category (`SERVER_CATEGORIES`) of a unit whose own category the server does not share; refused when it does. |
 | `picker.alsoOnTabs` | picker tabs (other than its family's own) that also list the node (`TAB_SUPERSET`). |
+| `appFields` | the settings a published app may expose: `{ field, kind: "select", labelKey, options: [{ value, labelKey? }] }` or `{ field, kind: "integer", labelKey, min, max, step }` ("A unit's app fields"). |
 | `contract.jsonPips` | `{ <look output id>: "transcript" \| "edl" \| "other" }`, every `look` output declared (`JSON_OUTPUT_KINDS`). |
 | `contract.nonPromptInputs` | input ids that are never a prompt lane (`NON_PROMPT_TEXT_LANES`). |
 | `contract.reviewHold` | `use-case` only: a review-on run ends at a Preview that holds what follows (`REVIEW_HOLDING_USE_CASE_TYPES`). |

@@ -100,7 +100,7 @@ import {
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, type UseCaseViewerFlags } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, nodaroImageUpscaleCreditId, type UseCaseViewerFlags } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -772,6 +772,14 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "topaz-image-upscale": 25,      // (2K default)
   "topaz-image-upscale:4K": 50,
   "topaz-image-upscale:8K": 100,
+  // Nodaro Image Upscale — by the OUTPUT's total pixels (@nodaro/render-rules
+  // nodaro-image-upscale-pricing.ts, written to model_pricing by migration 627).
+  // The bare id is the hold when the image's size cannot be read before the
+  // run (the top tier's price), settled to the delivered output's tier.
+  "nodaro-image-upscale:2K": 4,         // output up to 4,194,304 px (2048²)
+  "nodaro-image-upscale:4K": 10,        // up to 16,777,216 px (4096²)
+  "nodaro-image-upscale:8K": 30,        // up to 67,108,864 px (8192²)
+  "nodaro-image-upscale": 30,           // the hold
   // Grok Imagine 2 task-chained ops (prior grok-2 task_id, not an image URL)
   "grok-2-edit": 10,
   "grok-2-i2i": 10, // segment(free) + edit chain — same provider cost as t2i              // prompt/region edit ($0.02)
@@ -847,42 +855,60 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "grok-i2v:6s": 50,
   "grok-i2v:10s": 80,
   "grok-i2v:15s": 100,
-  // ── Grok Imagine Video 1.5 (KIE) — per-second billing, 480p/720p, image-to-video. ──
-  // KIE 14.5 cr/s @480p, 25 cr/s @720p, +2 cr/image (always 1 image → +2 in every tier).
-  // Nodaro = ceil(KIE_total / 4) — same conversion as Seedance-2. Base = 8s/480p.
-  "grok-imagine-video-1.5": 295,
-  // 480p (KIE 14.5 cr/s + 2)
-  "grok-imagine-video-1.5:1s:480p": 50,
-  "grok-imagine-video-1.5:2s:480p": 80,
-  "grok-imagine-video-1.5:3s:480p": 120,
-  "grok-imagine-video-1.5:4s:480p": 150,
-  "grok-imagine-video-1.5:5s:480p": 190,
-  "grok-imagine-video-1.5:6s:480p": 230,
-  "grok-imagine-video-1.5:7s:480p": 260,
-  "grok-imagine-video-1.5:8s:480p": 300,
-  "grok-imagine-video-1.5:9s:480p": 340,
-  "grok-imagine-video-1.5:10s:480p": 370,
-  "grok-imagine-video-1.5:11s:480p": 410,
-  "grok-imagine-video-1.5:12s:480p": 440,
-  "grok-imagine-video-1.5:13s:480p": 480,
-  "grok-imagine-video-1.5:14s:480p": 520,
-  "grok-imagine-video-1.5:15s:480p": 550,
-  // 720p (KIE 25 cr/s + 2)
-  "grok-imagine-video-1.5:1s:720p": 70,
-  "grok-imagine-video-1.5:2s:720p": 130,
-  "grok-imagine-video-1.5:3s:720p": 200,
-  "grok-imagine-video-1.5:4s:720p": 260,
-  "grok-imagine-video-1.5:5s:720p": 320,
-  "grok-imagine-video-1.5:6s:720p": 380,
-  "grok-imagine-video-1.5:7s:720p": 450,
-  "grok-imagine-video-1.5:8s:720p": 510,
-  "grok-imagine-video-1.5:9s:720p": 570,
-  "grok-imagine-video-1.5:10s:720p": 630,
-  "grok-imagine-video-1.5:11s:720p": 700,
-  "grok-imagine-video-1.5:12s:720p": 760,
-  "grok-imagine-video-1.5:13s:720p": 820,
-  "grok-imagine-video-1.5:14s:720p": 880,
-  "grok-imagine-video-1.5:15s:720p": 950,
+  // ── Grok Imagine Video 1.5 (KIE) — per-second billing at 480p / 720p / 1080p. ──
+  // KIE 2.4 / 4.5 / 8 cr/s, with no per-image or per-frame part (repriced
+  // 2026-11-11 to KIE's current rates; the in-between frames are free).
+  // credits = ceil(KIE_rate × seconds / 4) × 10, one row per second. The bare id
+  // is the 8s @480p row (KIE's default render).
+  "grok-imagine-video-1.5": 50,
+  // 480p (KIE 2.4 cr/s)
+  "grok-imagine-video-1.5:1s:480p": 10,
+  "grok-imagine-video-1.5:2s:480p": 20,
+  "grok-imagine-video-1.5:3s:480p": 20,
+  "grok-imagine-video-1.5:4s:480p": 30,
+  "grok-imagine-video-1.5:5s:480p": 30,
+  "grok-imagine-video-1.5:6s:480p": 40,
+  "grok-imagine-video-1.5:7s:480p": 50,
+  "grok-imagine-video-1.5:8s:480p": 50,
+  "grok-imagine-video-1.5:9s:480p": 60,
+  "grok-imagine-video-1.5:10s:480p": 60,
+  "grok-imagine-video-1.5:11s:480p": 70,
+  "grok-imagine-video-1.5:12s:480p": 80,
+  "grok-imagine-video-1.5:13s:480p": 80,
+  "grok-imagine-video-1.5:14s:480p": 90,
+  "grok-imagine-video-1.5:15s:480p": 90,
+  // 720p (KIE 4.5 cr/s)
+  "grok-imagine-video-1.5:1s:720p": 20,
+  "grok-imagine-video-1.5:2s:720p": 30,
+  "grok-imagine-video-1.5:3s:720p": 40,
+  "grok-imagine-video-1.5:4s:720p": 50,
+  "grok-imagine-video-1.5:5s:720p": 60,
+  "grok-imagine-video-1.5:6s:720p": 70,
+  "grok-imagine-video-1.5:7s:720p": 80,
+  "grok-imagine-video-1.5:8s:720p": 90,
+  "grok-imagine-video-1.5:9s:720p": 110,
+  "grok-imagine-video-1.5:10s:720p": 120,
+  "grok-imagine-video-1.5:11s:720p": 130,
+  "grok-imagine-video-1.5:12s:720p": 140,
+  "grok-imagine-video-1.5:13s:720p": 150,
+  "grok-imagine-video-1.5:14s:720p": 160,
+  "grok-imagine-video-1.5:15s:720p": 170,
+  // 1080p (KIE 8 cr/s)
+  "grok-imagine-video-1.5:1s:1080p": 20,
+  "grok-imagine-video-1.5:2s:1080p": 40,
+  "grok-imagine-video-1.5:3s:1080p": 60,
+  "grok-imagine-video-1.5:4s:1080p": 80,
+  "grok-imagine-video-1.5:5s:1080p": 100,
+  "grok-imagine-video-1.5:6s:1080p": 120,
+  "grok-imagine-video-1.5:7s:1080p": 140,
+  "grok-imagine-video-1.5:8s:1080p": 160,
+  "grok-imagine-video-1.5:9s:1080p": 180,
+  "grok-imagine-video-1.5:10s:1080p": 200,
+  "grok-imagine-video-1.5:11s:1080p": 220,
+  "grok-imagine-video-1.5:12s:1080p": 240,
+  "grok-imagine-video-1.5:13s:1080p": 260,
+  "grok-imagine-video-1.5:14s:1080p": 280,
+  "grok-imagine-video-1.5:15s:1080p": 300,
   // ── Seedance 2.0 — per-second billing, resolution × video-ref dimensions ──
   // Base fallback (8s/480p/no-ref)
   "seedance-2": 380,
@@ -7218,6 +7244,12 @@ export function getNodeModelIdentifier(
     })
     return buildCreditModelIdentifier(provider, undefined, undefined, undefined, creditTier)
   }
+
+  // Nodaro Image Upscale is priced by the OUTPUT's size: the wired photo's recorded
+  // size × the factor, as the run reads it (`nodaroImageUpscaleCreditId`, the one
+  // sizing every lane uses). A photo whose size the graph does not record —
+  // or an output the run will refuse — is quoted at the hold the run reserves.
+  if (provider === "nodaro-image-upscale") return nodaroImageUpscaleCreditId(graph.sourceImage, data.upscaleFactor)
 
   // Image/edit nodes with quality/resolution variable pricing. The input images
   // reach the id for a model priced per image. The size is the one the run

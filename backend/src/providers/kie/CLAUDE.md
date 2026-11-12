@@ -92,6 +92,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `kling-turbo` | `kling/v2-5-turbo-image-to-video-pro` | [kling turbo i2v](https://docs.kie.ai/market/kling/v2-5-turbo-image-to-video-pro.md) |
 | `kling-3.0` | `kling-3.0/video` | [kling 3.0](https://docs.kie.ai/market/kling/kling-3.0.md) |
 | `grok-i2v` | `grok-imagine/image-to-video` | [grok i2v](https://docs.kie.ai/market/grok-imagine/image-to-video.md) |
+| `grok-imagine-video-1.5` | `grok-imagine-video-1-5-preview` (bespoke `runGrokVideo15`, body from `grok-video-15.ts`). Image required: no t2v entry (the t2v route answers "requires an input image"). | [grok imagine video 1.5](https://docs.kie.ai/market/grok-imagine/1-5-preview.md) |
 | `sora2-pro` | `sora-2-pro-image-to-video` | [sora2 pro i2v](https://docs.kie.ai/market/sora2/sora-2-pro-image-to-video.md) |
 | `minimax-h3` | `minimax-h3/image-to-video` (swaps to `minimax-h3/reference-to-video` when refs are wired — see `minimaxH3TaskModel`) | [minimax-h3 i2v](https://docs.kie.ai/market/minimax-h3/image-to-video.md) / [r2v](https://docs.kie.ai/market/minimax-h3/reference-to-video.md) |
 | `wan-3` | `wan/3-0-video` (bespoke `runWan3`) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
@@ -331,6 +332,50 @@ frame table and Kling 4.0's materials rule); it opts in through
   `KLING_4_FLASH_RATE_USD_PER_SEC` as the provider cost (a reference-video run
   at the 2 × output floor, as for Kling 4.0). Not yet probed live.
 
+### Grok Imagine Video 1.5 wire notes (`grok-imagine-video-1.5`, bespoke `runGrokVideo15`)
+
+ONE KIE id, image to video only. The pure `buildGrokVideo15Request`
+(`grok-video-15.ts`) builds the body from the RAW frame URLs; `runGrokVideo15`
+normalizes each distinct image once afterwards (our 2048 px cap), so a loop
+image or a start image riding twice stays one URL. The dispatch sits ABOVE the
+generic frame normalization in `imageToVideo` for the same reason.
+
+- The schema's `input` is `additionalProperties: false`: explicit allow-list —
+  `prompt`, `image_urls`, `aspect_ratio` (catalog ratios + `auto`, anything
+  else → `auto`), `resolution` (`normalizeGrokVideo15Resolution`: lowercase
+  480p / 720p / 1080p, anything else → 480p, billed the same), INTEGER
+  `duration` 1-15 (default 8), `first_frame_url`, `last_frame_url`, `loop_url`,
+  `keyframes`, `nsfw_checker: false`. Never `seed`, `negative_prompt` (a
+  negative is folded into the prompt as "Avoid: …"), `cfg_scale`, a reference
+  list or `enable_audio` (KIE's default, audio on, renders).
+- **Frames (decided 2026-11-11):** the start frame is `first_frame_url` (the
+  exact first frame), the end frame `last_frame_url`; the SAME URL as both is
+  sent as `loop_url` alone (KIE refuses a loop image beside a different first or
+  last frame). The node's Image References are the in-between frames
+  (`keyframes`, max 4) and never `image_urls`: spread evenly at whole seconds,
+  `round(i × D / (k + 1))`, strictly inside the clip; a D-second clip has D − 1
+  slots (`grokVideo15MiddleFrameSlots`), and frames past them are dropped with a
+  server-log note — never refused.
+- **The start frame's transport** is ONE constant,
+  `GROK_VIDEO_15_START_FRAME_TRANSPORT`: `"first-frame-only"` (the default —
+  `first_frame_url`, no `image_urls`) or `"first-frame-and-image-urls"` (the
+  start or loop image also rides `image_urls`, one entry). The schema lists
+  `image_urls` as required yet says the first frame "can be sent on its own";
+  flip the constant if a staging run refuses the first body.
+- **Mentions:** KIE reads `@imageN` as the Nth `image_urls` entry. Every image
+  mention (`@image_N`, `@imageN`, `@image(N)`) loses its `@` except `@image1`
+  under the second transport (the start image).
+- **No start image, no run:** the route and the editor refuse a lone end frame
+  and in-between frames without a start frame (`videoProviderTakesLoneEndFrame`,
+  `videoProviderRefsReplaceStartFrame` — the catalog declares `keyframes` but no
+  `reference-to-video`); the workflow run moves a lone end frame into the start
+  slot. The runner throws as a backstop.
+- **Billing:** per second by resolution (KIE 2.4 / 4.5 / 8 cr/s at 480p / 720p /
+  1080p, read 2026-11-11), no per-image or per-frame part. Seeded
+  `grok-imagine-video-1.5:<N>s:<res>` rows, the bare id = 8 s @480p. The runner
+  reports `GROK_VIDEO_15_RATE_USD_PER_SEC` × seconds as the provider cost and
+  writes a credit-audit row.
+
 ### Gemini Omni Flash 1.2 wire notes (`gemini-omni-flash-1-2`, bespoke `runGeminiOmni12`)
 
 One KIE id, four modes picked by the inputs. It is in `GEMINI_OMNI_PROVIDERS` for
@@ -390,6 +435,41 @@ ONCE with `SEEDANCE_2_EDIT_MODE_PARAMS`. Gated on the provider AND the provider'
 own words; every other model keeps plain `runKieTask` behaviour. The retry
 returns `sentInput` so the credit audit reports the body that actually billed.
 
+**Declared task type (`omni_reference_task_type`, `seedanceTaskTypeForBody`).**
+A request can say what its reference media is for instead of leaving Seedance
+to guess from the prompt: `referenceTaskType` = `reference` | `edit` | `extend`
+(`auto` or absent declares nothing). The routes resolve it before pricing
+(`resolveSeedanceTaskType` through `resolveVideoRequestNorm`: `edit` runs at
+`adaptive` + `-1`, `extend` at `adaptive` + a fixed length) and queue only the
+resolved value; the i2v, t2v and voiced-video handlers pass it on as
+`ProviderOptions.referenceTaskType`. `applySeedance2Params` writes it AFTER
+`resolveSeedance2Inputs`, on the body as it will be sent, only when ALL hold:
+the model's catalog `referenceTaskTypes` lists the value
+(`listedSeedanceTaskType` — `seedance-2-5` today; never a hand-written model
+id), the run is not a draft, the body's `reference_*_urls` are the media the
+type needs (`seedanceTaskTypeFitsMedia`, the resolver's own rule: `edit` and
+`extend` need `reference_video_urls`, since both act on a reference video,
+while `reference` takes any reference media), `first_frame_url` is not on the
+body (a start frame beside reference media rides as a reference image, so that
+run still takes it), and an `edit` or `extend` body is in its shape (`edit`:
+`isSeedance2EditModeInput`, `adaptive` + `-1`; `extend`: `adaptive`). A route
+request always is; one that skipped the routes and is not gets no key and one
+warning. It is NEVER sent on a text-only body or in either frame mode (KIE:
+"only supported in multimodal reference tasks"), on a draft, on an
+`edit`/`extend` without a reference video or out of its shape, or on another
+model; no option means no key, so the body is byte-identical to the
+undeclared one. **An edit-mode re-send drops the declaration:** when the
+provider answers with its edit-mode words it has overridden the declared type,
+so both re-send lanes — the retry above and the reconcile resend
+(`lib/reconcile/seedance-edit-resubmit.ts`) — send
+`seedance2EditModeResendInput(body)` (`seedance-edit-mode.ts`): the original
+without `omni_reference_task_type`, with `SEEDANCE_2_EDIT_MODE_PARAMS` applied,
+exactly the undeclared edit-shape request, and logs one line naming the
+dropped value (the reconcile lane also names the job and the task). A declared
+`edit` is already in edit shape, so neither lane re-sends it. The Nodaro cloud relay
+(`providers/nodaro/video.ts`) forwards the option as the public
+`referenceTaskType` field, and the far end resolves it again.
+
 **Billing:** commit can only refund, so the reservation is the WORST CASE and the
 commit is measured. `seedance2RefVideoBaseCreditsFromDurations` (ee/billing)
 bills the output at the longer of the requested duration and the longest
@@ -408,7 +488,15 @@ basis), clamped at the reservation, no anomaly filed for settling below it, and
 parked in `held_completion_fields` so a review approve replays it
 (`heldCommitArgs` is the one mapping both use). A style run is refunded to its
 requested duration; an edit of a 30s clip from a node set to 12s pays for 30s.
-An unmeasurable delivery commits the reservation.
+An unmeasurable delivery commits the reservation. An Auto (`-1`) run with every
+clip measured is held as an edit (the longest clip + 1 s,
+`seedance2RefVideoHeldOutputSec`) — except a run whose RESOLVED type is
+`reference`: a reference runs at a length the model picks, so it is held at the
+worst case (Auto = the model's longest output) and charged what it delivers,
+capped at that hold. The type is a REQUIRED key on the hold, the reservation
+(`…FromDurations`/`…FromUrls`), the quote and the settlement args, read from
+`req.videoNorm.referenceTaskType` (routes), the stamped payload (executor) and
+the job's `referenceTaskType` (worker lanes, reconcile) — never the raw body.
 
 **Reference videos are re-encoded (`reference-video-reencode.ts`).** Both
 Seedance branches of `KieVideoProvider` (i2v + t2v) swap the prepared body's

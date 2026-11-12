@@ -16,7 +16,7 @@ import { GEN_UNITS_PRUNES, NODE_HANDLES_TABLE, pruneUnitRows } from "../units/ha
 import { ALL_SEAM_IDS, AGGREGATES, DATA_FILES, SPLICES, liveSeams } from "../units/seams.mjs"
 import { LANE_CAPABILITIES, loadUnits } from "../units/manifest.mjs"
 import { CAPABILITIES } from "../units/capabilities.mjs"
-import { aggregateSource, contractsSource, importSpecifier, inPositionOrder, useCaseRowsSource } from "../units/templates.mjs"
+import { aggregateSource, contractsSource, importSpecifier, inPositionOrder, listOutputsSource, useCaseRowsSource } from "../units/templates.mjs"
 import { memberLineTypes } from "../test-select/registry.mjs"
 import { USE_CASE_INPUT_HANDLES } from "../units/vocabulary.mjs"
 
@@ -65,7 +65,8 @@ test("every live seam produces its output; each unit line is tagged // unit:<typ
     assert.match(r.outputs.get("frontend/src/nodes/fixture-echo/definition.generated.ts"), /"priceRows": \{\n {4}"fixture-echo": 3\n {2}\}/)
     assert.match(r.outputs.get("frontend/src/nodes/fixture-case/definition.generated.ts"), /"priceRows": \{\n {4}"use-case-fee:fixture-case": 1\n {2}\}/)
     assert.doesNotMatch(r.outputs.get("backend/src/nodes/fixture-echo/descriptor.generated.ts"), /price|credit/i, "no price in the descriptor")
-    assert.match(r.outputs.get("frontend/src/lib/i18n/he.ts"), /\/\/ gen:units start\n {2}"fixtureEcho\.help": "[^"]+",\n {2}"node\.fixtureEcho": "הד בדיקה",\n {2}\/\/ gen:units end/)
+    // Every key of the unit's strings.json, sorted — its app-field labels (unit.json appFields) among them.
+    assert.match(r.outputs.get("frontend/src/lib/i18n/he.ts"), /\/\/ gen:units start\n {2}"fixtureEcho\.field\.maxLayers": "[^"]+",\n {2}"fixtureEcho\.field\.size": "[^"]+",\n {2}"fixtureEcho\.help": "[^"]+",\n {2}"fixtureEcho\.size\.auto": "[^"]+",\n {2}"node\.fixtureEcho": "הד בדיקה",\n {2}\/\/ gen:units end/)
     assert.match(r.outputs.get("docs/nodes/README.md"), /\| \[Fixture Echo\]\(\.\/utility\/fixture-echo\.md\) \| Echo the input video back unchanged/)
     assert.match(r.outputs.get("packages/shared/src/generated/unit-contracts.ts"), /^ {2}\["fixture-echo", "video"\], \/\/ unit:fixture-echo$/m)
   } finally { rmSync(root, { recursive: true, force: true }) }
@@ -81,6 +82,28 @@ test("a many-wire media input and a JSON input reach both projections as declare
       assert.match(src, /"id": "sources",\n {8}"label": "Sources",\n {8}"accepts": \[\n {10}"video",\n {10}"audio"\n {8}\],\n {8}"many": true\n/, p)
       assert.match(src, /"id": "plan",\n {8}"label": "Plan",\n {8}"accepts": \[\n {10}"look"\n {8}\]\n/, p)
     }
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("appFields reach both projections as declared, and the definitions aggregate holds them to the unit's data type", async () => {
+  const root = tree()
+  try {
+    const r = await run(root)
+    assert.deepEqual(r.errors, [])
+    const declared = JSON.parse(readFileSync(path.join(root, "frontend/src/nodes/fixture-echo/unit.json"), "utf8")).appFields
+    for (const p of ["frontend/src/nodes/fixture-echo/definition.generated.ts", "backend/src/nodes/fixture-echo/descriptor.generated.ts"]) {
+      const src = r.outputs.get(p)
+      // The projection's object literal, read back: its appFields are the manifest's, verbatim.
+      const obj = JSON.parse(src.slice(src.indexOf("= {") + 2, src.lastIndexOf("} as const") + 1))
+      assert.deepEqual(obj.appFields, declared, p)
+    }
+    // fixture-case declares none: no appFields key at all.
+    assert.doesNotMatch(r.outputs.get("frontend/src/nodes/fixture-case/definition.generated.ts"), /appFields/)
+    const defs = r.outputs.get("frontend/src/nodes/_generated/definitions.ts")
+    assert.match(defs, /^import type \{ UnitAppFieldsFit, UnitDefinition \} from "\.\.\/kit"$/m)
+    assert.match(defs, /^export type UnitAppFieldsChecked = \[\n {2}UnitAppFieldsFit<unit_fixture_echo_data, typeof unit_fixture_echo\.appFields>, \/\/ unit:fixture-echo\n\]$/m)
+    // Every other aggregate imports its kit type alone.
+    assert.match(r.outputs.get("frontend/src/nodes/_generated/executors.ts"), /^import type \{ UnitExecutor \} from "\.\.\/exec-kit"$/m)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
@@ -202,6 +225,33 @@ test("a worker's budget.ts: the budgets aggregate binds it, and the editor's def
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
+test("an own-writer worker's recover.ts: the recovers aggregate binds it under its type, typed by the kit", async () => {
+  const root = tree()
+  try {
+    const OUT = "backend/src/nodes/_generated/recovers.ts"
+    // The fixture has none: the aggregate is emitted with no member.
+    const bare = await run(root)
+    assert.deepEqual(bare.errors, [])
+    assert.doesNotMatch(bare.outputs.get(OUT), /unit:fixture-echo/)
+    // An own-writer KIE worker with one.
+    const file = path.join(root, "frontend/src/nodes/fixture-echo/unit.json")
+    const m = JSON.parse(readFileSync(file, "utf8"))
+    m.capabilities = ["lane:provider", "provider:kie", "finalize:own-writer"]
+    writeFileSync(file, JSON.stringify(m))
+    writeFileSync(path.join(root, "backend/src/nodes/fixture-echo/recover.ts"), "export const recover = async () => ({ ok: true })\n")
+    const caps = ["lane:provider", "provider:kie", "finalize:own-writer"]
+    const r = await run(root, { ...ctxFor(root), capabilities: Object.fromEntries(caps.map((c) => [c, CAPABILITIES[c]])) })
+    assert.deepEqual(r.errors, [])
+    const recovers = r.outputs.get(OUT)
+    assert.match(recovers, /^\/\/ @registry backend\/src\/nodes\/\*\/recover\.ts$/m)
+    assert.match(recovers, /^\/\/ @registry-exports recovers: UNIT_RECOVERS$/m)
+    assert.match(recovers, /^import type \{ UnitRecover \} from "\.\.\/kit\.js"$/m)
+    assert.match(recovers, /^import \{ recover as unit_fixture_echo \} from "\.\.\/fixture-echo\/recover\.js" \/\/ unit:fixture-echo$/m)
+    assert.match(recovers, /^export const UNIT_RECOVERS: Readonly<Record<string, UnitRecover>> = Object\.assign\(Object\.create\(null\), \{$/m)
+    assert.match(recovers, /^ {2}"fixture-echo": unit_fixture_echo, \/\/ unit:fixture-echo$/m)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
 test("an unknown argument is a usage error", async () => {
   const err = []
   assert.equal(await main(["--wat"], REPO, { write() {} }, { write: (s) => err.push(s) }), 2)
@@ -283,6 +333,22 @@ test("inPositionOrder: units by position.after over the (alphabetical) legacy li
   assert.deepEqual(inPositionOrder(units, new Set(["legacy-a", "legacy-b"])).map((x) => x.type), ["b-other", "z-tighten", "a-chapters"])
   assert.match(useCaseRowsSource(units, new Set(["legacy-a", "legacy-b"])), /"z-tighten".*\n.*"a-chapters"/)
   assert.match(contractsSource(units, new Set(["legacy-a", "legacy-b"])), /UNIT_USE_CASE_TYPES = \[\n {2}"z-tighten", \/\/ unit:z-tighten\n {2}"a-chapters", \/\/ unit:a-chapters\n\] as const/)
+})
+
+test("listOutputsSource: one row per list output, in position order, with its listMax field and default", () => {
+  const u = (type, after, outputs, defaultData = {}) => ({ type, manifest: { type, label: type, position: { after }, execution: { kind: "worker" }, defaultData, handles: { inputs: [], outputs } } })
+  const units = [
+    u("b-split", "a-plain", [
+      { id: "base", kind: "image", from: "generatedImageUrl" },
+      { id: "layers", kind: "image", from: "generatedLayerUrls", list: true, listMax: "maxLayers" },
+    ], { maxLayers: 9 }),
+    u("a-plain", "legacy-a", [{ id: "out", kind: "image", from: "generatedImageUrl" }]),
+    u("c-frames", "b-split", [{ id: "frames", kind: "image", from: "generatedFrameUrls", list: true }]),
+  ]
+  const src = listOutputsSource(units, new Set(["legacy-a"]))
+  assert.match(src, /UNIT_LIST_OUTPUTS: ReadonlyArray<\{ readonly type: string; readonly pip: string; readonly from: string; readonly max\?: \{ readonly field: string; readonly default: number \} \}> = \[\n/)
+  assert.match(src, /= \[\n {2}\{ type: "b-split", pip: "layers", from: "generatedLayerUrls", max: \{ field: "maxLayers", default: 9 \} \}, \/\/ unit:b-split\n {2}\{ type: "c-frames", pip: "frames", from: "generatedFrameUrls" \}, \/\/ unit:c-frames\n\]\n$/)
+  assert.doesNotMatch(src, /a-plain/)
 })
 
 test("useCaseRowsSource: a row's inputs are typed by the vocabulary's use-case input handles (one list, no second literal)", () => {

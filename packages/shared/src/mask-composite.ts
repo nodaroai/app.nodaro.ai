@@ -68,6 +68,17 @@ export const MASK_COMPOSITE_BOUNDS = {
 export const MASK_COMPOSITE_UNIT_SEC = 5
 
 /**
+ * How much longer, in seconds, the leading video the render downloads may run
+ * than the one measured before the run was charged, before the render refuses
+ * it as changed: a re-measure can read a hair longer (a re-encode, a
+ * container's rounding), and that is not a different file. Applied to the
+ * seconds, never to the units, before the price's own 0.05 s grace
+ * (`pricedClipSeconds`): a run billed for 10 s renders a lead of up to about
+ * 10.55 s. The same slack as Video Overlay's base.
+ */
+export const MASK_COMPOSITE_REMEASURE_SLACK_SEC = 0.5
+
+/**
  * Pricing units for a result `durationSec` long: one per started 5 seconds,
  * at least one, after `pricedClipSeconds` (up to 0.05 s past a whole second is
  * ignored, so a 10.01 s result is 2 units, not 3). An unknown length counts the

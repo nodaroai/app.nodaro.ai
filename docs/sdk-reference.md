@@ -3195,6 +3195,14 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > dropped, as is any clip past the last character. `duration` 3–20 (default 5), 720p only
 > (anything else → 720p), no end frame, no seed, no `audioSoundtrack`. See
 > [Kling 4.0 Flash](nodes/ai-video/generate-video.md#kling-40-flash).
+> **Grok Imagine 1.5** (`grok-imagine-video-1.5`) needs `imageUrl` (the exact
+> first frame); `endFrameUrl` is the exact last frame, the same URL as both
+> makes a seamless loop, and up to 4 in-between frames go in
+> `referenceImageUrls` (in order, spread over the clip at whole seconds; a
+> D-second clip takes at most D − 1, the rest are left out). `duration` 1–15
+> (default 8); `resolution` `480p` / `720p` / `1080p` (anything else → 480p);
+> no seed. See
+> [Grok Imagine 1.5 frames](nodes/ai-video/generate-video.md#grok-imagine-15-frames).
 > **Gemini Omni Flash** (`gemini-omni-flash`) is the cheaper, faster sibling of
 > `gemini-omni-video` on an identical request shape — same 4 / 6 / 8 / 10
 > `duration` menu (8 s when omitted), same 720p / 1080p / 4K tiers, same
@@ -3315,6 +3323,12 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 >   or a `taskId` on another provider, does not compile. The provider defaults
 >   to `recraft-upscale`; `prompt` is required for `nano-banana-edit` and
 >   `grok-2-edit` (a `400` without one); `maskIndexes` is for `grok-2-edit` only.
+>   `upscaleFactor` (`UpscaleFactor`: `"1"`, `"2"`, `"4"`, `"8"`) is 1, 2 or 4 on
+>   `topaz-image-upscale` and 1, 2, 4 or 8 on `nodaro-image-upscale` (a factor the
+>   model does not take is a `400 validation_error`). `nodaro-image-upscale` is
+>   priced by its output's size and refuses an output past 67,108,864 pixels or
+>   16,384 pixels on a side with a `400 image_too_large` before anything is
+>   charged — see [Upscale Image → Nodaro Image Upscale](./nodes/ai-image/upscale-image.md#nodaro-image-upscale).
 > - `split-image` is free and synchronous: it creates no job, so `runAndWait`
 >   does not apply (it would throw — the answer has no `jobId`). `run` answers
 >   `SplitImageResult` — `{ images: { name, url }[] }`, one PNG per tile, in
@@ -3350,6 +3364,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > await client.nodes.runAndWait("generate-image", { prompt: "a blue car", baseImageUrl: imageUrl, maskUrl } satisfies GenerateImageParams)
 > await client.nodes.runAndWait("generate-image", { prompt: "a waving flag", provider: "gpt-image-2-6-flare", outputFormat: "gif", gifFrames: 12 } satisfies GenerateImageParams)
 > const { jobId } = await client.nodes.run("edit-image", { imageUrl, provider: "topaz-image-upscale", upscaleFactor: "4" } satisfies EditImageParams)
+> await client.nodes.runAndWait("edit-image", { imageUrl, provider: "nodaro-image-upscale", upscaleFactor: "8" } satisfies EditImageParams)
 > ```
 
 > **Seedance 2.5 Draft.** `GenerateVideoParams` and `TextToVideoParams` take
@@ -3360,6 +3375,36 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > 1080p, priced from the draft's length. A foreign, unfinished or non-draft
 > source is refused with a 4xx before anything is charged. See
 > [Seedance 2.5 HD (from draft)](./nodes/processing-video/video-upscale.md#seedance-25-hd-from-draft).
+
+> **Seedance 2.5 reference task type.** `GenerateVideoParams` and
+> `TextToVideoParams` take `referenceTaskType?: "auto" | "reference" | "edit" | "extend"`,
+> which tells `seedance-2-5` what the reference media is for instead of leaving
+> it to the prompt; every other model ignores it, and so does a draft
+> (`draft: true`) or a run with no reference media (a start or end frame does
+> not count). `"auto"` (the default) declares nothing. `"reference"` keeps your
+> `aspectRatio` and `duration`; with an Auto `duration` (`-1`) the run is
+> reserved at the longest output the model can make, and charged what it makes.
+> `"edit"` edits the reference video in its own
+> shape and length (`aspectRatio` becomes `"adaptive"`, `duration` Auto) and
+> needs every reference video to be 4–30 s long; otherwise nothing is declared
+> and the run keeps the ratio and length you sent. `"extend"` continues the
+> reference video in its own shape at a set length (Auto or no `duration`
+> becomes the model's default); the platform returns the model's clip as
+> delivered, without joining the source to it, so expect the continuation
+> only (for both as one video, run `extend-video`). `edit` and `extend` need a
+> reference video. What they
+> change comes back in `result.adjustments`, and `nodes.quote` prices the body
+> the same way the run does. See
+> [Seedance 2.5 reference task type](./api-integration.md#seedance-25-reference-task-type).
+>
+> ```ts
+> await client.nodes.run("generate-video", {
+>   provider: "seedance-2-5",
+>   prompt: "remove the sign on the wall",
+>   referenceVideoUrls: [clipUrl],
+>   referenceTaskType: "edit",
+> } satisfies GenerateVideoParams)
+> ```
 
 > **Topaz video upscale.** `VideoUpscaleParams` takes `targetResolution`
 > (`"720p" | "1080p" | "4k"`, the frame's short side, default 1080p) and
@@ -3892,8 +3937,10 @@ string[]` (its default first) and, where it writes them, `gifFrameSize` (512),
 (each absent on every other model, and on an older server).
 
 `ModelSummary` also types `defaultDuration` (the length an unset `duration`
-renders and is charged at) and `autoDuration` (`duration: -1` lets the model
-pick the length).
+renders and is charged at), `autoDuration` (`duration: -1` lets the model
+pick the length) and `referenceTaskTypes` (the values `referenceTaskType`
+takes on that model: `["reference", "edit", "extend"]` on `seedance-2-5`,
+absent elsewhere).
 
 ```ts
 const { sections } = await client.models.list({ kind: "image" })
@@ -5453,8 +5500,10 @@ list(params?: ListAppsParams): Promise<ListAppsResult>
 Cursor-paginated browse of published apps (`GET /v1/apps/browse`). Optional
 `search`, `category`, and `limit` (server caps at 50). On a deployment that does
 not allow public work (`outputs.allowPublic: false`) the marketplace lists
-nothing: `{ data: [], nextCursor: null }`. `get()` and `run()` by slug are
-unchanged there.
+nothing: `{ data: [], nextCursor: null }`, and an app is its creator's alone:
+`get()`, `run()` and `resume()` of someone else's app throw `NotFoundError`, as
+for an app that does not exist (an admin can still `get()` one). Your own past
+runs of it (`listRuns()`, `getRun()`) stay readable.
 
 Each app's `estimatedCredits` is its listed price per run. When its price
 follows the length of the recording the app is given (an Edit Plan pass, the
@@ -6793,6 +6842,75 @@ const { jobId } = await client.media.shotCuts({ videoUrl: "https://example.com/a
 ```
 
 Full reference: [Shot Cuts](./nodes/processing-video/shot-cuts.md).
+
+#### `splitIntoLayers(input)`
+
+```ts
+splitIntoLayers(input: {
+  imageUrl: string
+  maxLayers?: number                       // 1–99, default 9
+  size?: "1K" | "1.5K" | "2K" | "auto"     // default "1K"
+  prompt?: string                          // what to separate, up to 2,000 characters
+}): Promise<{ jobId: string }>
+```
+
+Split one image into a base picture and separate layers
+(`POST /v1/split-into-layers`), each element on its own transparent PNG, with its
+name, description, stacking order and the box it sits in on the base.
+
+- `maxLayers` caps the layers: a picture with more elements than that gets them
+  merged into fewer layers (none is dropped).
+- `size` is each image's pixel budget: `1K` is about one megapixel; `auto` keeps
+  the picture's own size (between 1K and 2K).
+- `prompt` names which elements to split out, and may carry
+  `<bbox>x1 y1 x2 y2</bbox>` marks (0–1000) to point at a region. Left empty,
+  the main elements are found automatically.
+- A malformed body is a `400 validation_error` before any credits are held.
+
+On Nodaro Cloud a run holds the price of the most images it may return
+(`maxLayers` + 1, the base included) at its size, and is charged only for the
+images it really returns: `1K` and `1.5K` are priced alike, as are `2K` and
+`auto`. The default run (9 layers at 1K) holds 104 credits<!-- credits: split-into-layers:1k:10 -->;
+one that returns 3 layers at 1K is charged 44 credits<!-- credits: split-into-layers:1k:4 -->
+(74 credits<!-- credits: split-into-layers:2k:4 --> at 2K or `auto`); `maxLayers: 5`
+at 1K holds 64 credits<!-- credits: split-into-layers:1k:6 -->. A run that finds no
+element completes with the base picture only (`layers` empty) and is charged the
+one-image price.
+
+Poll `jobs.get(jobId)`; the completed job's `output_data` is a
+`SplitIntoLayersOutput`:
+
+```ts
+interface SplitIntoLayersOutput {
+  imageUrl: string        // the base picture: an opaque PNG
+  layers: string[]        // each layer's transparent PNG, bottom to top
+  layerData: Array<{      // one per layer, in the same order
+    name?: string
+    description?: string
+    zIndex: number        // stacking order: 1 sits on the base, higher is drawn above
+    width?: number        // the layer FILE's own pixels, not the base's
+    height?: number
+    box?: { x1: number; y1: number; x2: number; y2: number }           // where it sits on the base, in the base's pixels
+    boxNormalized?: { x1: number; y1: number; x2: number; y2: number } // the same box on a 0–1000 scale of the base
+    url: string
+    baseUrl?: string      // the base picture this layer was cut from: the same as imageUrl
+  }>
+  layerCount: number    // layers saved
+  layersNotSaved?: number // layers returned that could not be saved (0 when all were); the run is charged only for the images saved
+  libraryImages?: Array<{ url: string; name?: string }> // each layer as filed in the Library, under its name
+}
+```
+
+A layer is **not** in the base's pixels: it is cropped to its element, at about
+the size setting's pixel budget and the element's own shape. To put a layer back
+in place, scale it to its `box` (`x1`/`y1` the top-left corner, `x2`/`y2` the
+bottom-right).
+
+```ts
+const { jobId } = await client.media.splitIntoLayers({ imageUrl: "https://example.com/poster.png", maxLayers: 5 })
+```
+
+Full reference: [Split into Layers](./nodes/ai-image/split-into-layers.md).
 
 #### `stillToVideo(input)`
 

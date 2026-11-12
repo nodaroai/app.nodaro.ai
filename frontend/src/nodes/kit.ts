@@ -53,6 +53,13 @@ export interface UnitOutputHandle {
    * default) and a plain wire reads the first.
    */
   readonly list?: true
+  /**
+   * A JSON (look) output only: the list output of this unit whose items its
+   * entries line up with, one for one. After a run once per upstream item both
+   * hand on every row's, each entry with its row (@nodaro/render-rules
+   * unitBatchSideOutputs).
+   */
+  readonly alignedWith?: string
 }
 
 /** `contract.producer` (tools/units/vocabulary.mjs PRODUCER_KINDS). */
@@ -65,6 +72,51 @@ export interface UnitRequiredMedia {
   readonly kind: UnitHandleKind
   readonly noun: string
 }
+
+/**
+ * One setting a published app may expose (unit.json `appFields`, tools/units/README.md
+ * "A unit's app fields"): the node-data `field` it writes, its card (`kind`: a select
+ * of fixed string values, or a whole number from `min` to `max` in steps of `step`),
+ * and its label — a key of the unit's own strings.json, as is a select option's.
+ */
+export type UnitAppField =
+  | {
+      readonly field: string
+      readonly kind: "select"
+      readonly labelKey: string
+      readonly options: ReadonlyArray<{ readonly value: string; readonly labelKey?: string }>
+    }
+  | {
+      readonly field: string
+      readonly kind: "integer"
+      readonly labelKey: string
+      readonly min: number
+      readonly max: number
+      readonly step: number
+    }
+
+/**
+ * The keys a data type DECLARES: its named properties, without an index signature's `string` / `number` /
+ * `symbol`. Every unit's `<Pascal>Data` carries `[key: string]: unknown`, under which `keyof` admits any
+ * name — so a fit judged on `keyof` would pass a field the type never declares.
+ */
+type DeclaredKeys<T> = keyof { [K in keyof T as string extends K ? never : number extends K ? never : symbol extends K ? never : K]: T[K] }
+
+/** `F` when its field is a declared key of `Data` whose type takes its values (a select's every value, an integer field's number), else never. */
+type AppFieldFitting<Data, F> =
+  F extends { readonly field: infer K; readonly kind: "select"; readonly options: ReadonlyArray<{ readonly value: infer V }> }
+    ? K extends DeclaredKeys<Data> ? ([V] extends [NonNullable<Data[K & keyof Data]>] ? F : never) : never
+    : F extends { readonly field: infer K; readonly kind: "integer" }
+      ? K extends DeclaredKeys<Data> ? ([number] extends [NonNullable<Data[K & keyof Data]>] ? F : never) : never
+      : never
+
+/**
+ * A unit's app fields held to its data type (the definitions aggregate writes
+ * one per unit that declares `appFields`): each field a key of `Data` whose type
+ * takes every value the field lists. A field that does not fit fails the
+ * constraint, so typecheck fails at that unit's aggregate line.
+ */
+export type UnitAppFieldsFit<Data, Fields extends { readonly [I in keyof Fields]: AppFieldFitting<Data, Fields[I]> }> = Fields
 
 /** frontend/src/nodes/<type>/definition.generated.ts — the editor's projection of unit.json. */
 export interface UnitDefinition {
@@ -96,6 +148,8 @@ export interface UnitDefinition {
   }
   /** Memberships central seams read (tools/units/capabilities.mjs). */
   readonly capabilities: ReadonlyArray<string>
+  /** The settings a published app may expose (unit.json `appFields`), when declared — presentation/exposable-fields.ts reads them. */
+  readonly appFields?: ReadonlyArray<UnitAppField>
   /** The medium of its output, `contract.producer` of unit.json (null: it outputs no media). Validated against its output handles by gen:units. */
   readonly producer: UnitProducerKind | null
   readonly docs: { readonly page?: string; readonly awaiting?: string; readonly useCase?: string }

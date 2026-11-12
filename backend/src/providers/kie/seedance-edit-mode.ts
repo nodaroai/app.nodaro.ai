@@ -57,6 +57,30 @@ export function providerErrorText(err: unknown): string {
  */
 export const SEEDANCE_2_EDIT_MODE_PARAMS = { aspect_ratio: "adaptive", duration: -1 } as const
 
+/**
+ * The body key a declared Seedance 2.5 reference task type travels in
+ * (`applySeedance2Params` writes it; the edit-mode re-send below drops it).
+ */
+export const SEEDANCE_TASK_TYPE_WIRE_KEY = "omni_reference_task_type"
+
+/**
+ * The body re-sent after the provider answered with its edit-mode words: the
+ * original WITHOUT a declared task type, in the edit shape
+ * ({@link SEEDANCE_2_EDIT_MODE_PARAMS}). The provider has overridden the
+ * declaration, and a declared `reference` or `extend` laid over
+ * `adaptive` / `-1` would contradict itself, so the re-send is exactly the
+ * undeclared edit-shape request. The ONE rule both re-send lanes use — the
+ * worker's retry (`runVideoTaskWithSeedanceEditRetry`) and the recovery lane's
+ * (`resubmitSeedanceEdit`). A new object: the original is never mutated. An
+ * undeclared body gives exactly `{ ...input, ...SEEDANCE_2_EDIT_MODE_PARAMS }`,
+ * key order included. A declared `edit` never gets here: its body is already
+ * in edit shape ({@link isSeedance2EditModeInput}), so neither lane re-sends.
+ */
+export function seedance2EditModeResendInput(input: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const undeclared = Object.fromEntries(Object.entries(input).filter(([key]) => key !== SEEDANCE_TASK_TYPE_WIRE_KEY))
+  return { ...undeclared, ...SEEDANCE_2_EDIT_MODE_PARAMS }
+}
+
 /** Already in edit shape → a retry would re-send a byte-identical body. */
 export function isSeedance2EditModeInput(input: Record<string, unknown>): boolean {
   return (

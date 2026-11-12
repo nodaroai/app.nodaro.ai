@@ -20,7 +20,7 @@ import type {
   ModifyImageProvider,
   TaskChainedEditProvider,
 } from "@nodaro/shared/models"
-import type { TopazUpscaleFactor } from "@nodaro/shared/credits"
+import type { UpscaleFactor } from "@nodaro/shared/credits"
 import type { ImageToImageAttachColumn } from "@nodaro/shared/entities"
 import type { GenerateMaskOutput, GenerateMaskRequest } from "@nodaro/shared/media"
 import type { GenerationSessionParams, NodeJobOutput, RunNodeAdjustment } from "./nodes.js"
@@ -127,9 +127,13 @@ export interface EditImageCommonParams extends GenerationSessionParams {
   prompt?: string
   /** The prompt as your user typed it. Stored on the job; never sent to the model. */
   userPrompt?: string
-  /** `topaz-image-upscale`: the factor. Wins over `targetResolution`. */
-  upscaleFactor?: TopazUpscaleFactor
-  /** The upscalers' output tier. On `topaz-image-upscale` it maps to a factor (2K → 2, 4K and 8K → 4) when `upscaleFactor` is absent. */
+  /**
+   * The upscale factor. `topaz-image-upscale`: 1, 2 or 4, and it wins over
+   * `targetResolution`. `nodaro-image-upscale`: 1, 2, 4 or 8 (default 2; 1 enhances
+   * at the same size) — a factor the model does not take is a `400 validation_error`.
+   */
+  upscaleFactor?: UpscaleFactor
+  /** The upscalers' output tier. On `topaz-image-upscale` it maps to a factor (2K → 2, 4K and 8K → 4) when `upscaleFactor` is absent. `nodaro-image-upscale` ignores it: its price follows the output's size. */
   targetResolution?: ImageEditTargetResolution
   /** Corrected per model; dropped for the models that take none (the upscalers, background removal, the Grok task ops). */
   aspectRatio?: ImageAspectRatio

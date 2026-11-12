@@ -28,9 +28,14 @@ const mocks = vi.hoisted(() => {
   const jobsSelectMock = vi.fn(() => ({ eq: jobsSelectEqMock }))
   // UPDATE path (claim release): .from("jobs").update({ finalize_claimed_at: null })
   //   .eq("id", jobId).eq("finalize_claimed_at", claimTs)
-  const jobsUpdateEq2Mock = vi.fn().mockResolvedValue({ data: [], error: null })
+  // and the discard fence: the same chain, then .in("status", [...]).select("finalize_claimed_at")
+  // (answers no row by default: the fence is not won).
+  const jobsFenceSelectMock = vi.fn().mockResolvedValue({ data: [], error: null })
+  const jobsFenceInMock = vi.fn((_col: string, _statuses: readonly string[]) => ({ select: jobsFenceSelectMock }))
+  const updateReply = () => Object.assign(Promise.resolve({ data: [], error: null }), { in: jobsFenceInMock })
+  const jobsUpdateEq2Mock = vi.fn((_col: string, _val: unknown) => updateReply())
   const jobsUpdateEqMock = vi.fn(() => ({ eq: jobsUpdateEq2Mock }))
-  const jobsUpdateMock = vi.fn(() => ({ eq: jobsUpdateEqMock }))
+  const jobsUpdateMock = vi.fn((_fields: Record<string, unknown>) => ({ eq: jobsUpdateEqMock }))
 
   // -------------------------- rpc dispatcher --------------------------
   // claim_job_finalize returns the fresh claim timestamp when won, null when
@@ -80,6 +85,9 @@ const mocks = vi.hoisted(() => {
     jobsUpdateMock,
     jobsUpdateEqMock,
     jobsUpdateEq2Mock,
+    jobsFenceInMock,
+    jobsFenceSelectMock,
+    updateReply,
     usageLimitMock,
     usageSelectMock,
     wfSingleMock,
@@ -130,9 +138,23 @@ const storageMocks = vi.hoisted(() => ({
       (sourceUrl: string, jobId: string, type: string, userId?: string) => Promise<string>
     >()
     .mockResolvedValue("https://r2.example/audio-j-aud.mp3"),
+  // The delete lane's reads (lib/discard-job-copies.ts): our public URL → key, and a key's size.
+  r2KeyFromOurUrl: (url: string) => (url.startsWith("https://r2.example/") ? url.slice("https://r2.example/".length) : null),
+  getR2ObjectSize: vi.fn<(key: string) => Promise<number>>().mockResolvedValue(0),
 }))
 
 vi.mock("@/lib/storage.js", () => storageMocks)
+
+// The delete lane's two writes: the storage-delete funnel and the storage give-back.
+const deleteLaneMocks = vi.hoisted(() => ({
+  deleteKeysRecordingFailures: vi.fn(async (keys: readonly string[]) => ({ deleted: keys.length, errors: 0, notDeleted: [] as string[], kept: [] as string[], failed: [] as string[] })),
+  updateStorageUsage: vi.fn(async (_userId: string, _bytes: number) => undefined),
+}))
+vi.mock("@/lib/storage-delete.js", () => ({ deleteKeysRecordingFailures: deleteLaneMocks.deleteKeysRecordingFailures }))
+vi.mock("@/utils/file-validation.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/utils/file-validation.js")>()),
+  updateStorageUsage: deleteLaneMocks.updateStorageUsage,
+}))
 
 // Mock lib/character-auto-attach.js: the reference-video auto-attach is
 // best-effort and verified at the finalize boundary — assert it's invoked with
@@ -160,6 +182,7 @@ vi.mock("@/lib/gpt-image-2-6-settle.js", () => ({
 }))
 
 import { finalizeJobWithMedia, runCompletionTail } from "@/lib/job-finalize.js"
+import { DISCARD_AFTER_MISSED_BLOCK, DISCARD_STATUSES } from "@/lib/job-finalize-discard.js"
 
 // ---------------------------------------------------------------------------
 // Default factory — resets every mock back to a successful happy-path state
@@ -181,8 +204,12 @@ function resetMocksToHappyPath() {
   mocks.usageLimitMock.mockResolvedValue({ data: [{ id: "u-log-1" }], error: null })
   mocks.wfSingleMock.mockResolvedValue({ data: null, error: null })
   mocks.wfUpdateEq2Mock.mockResolvedValue({ data: [], error: null })
-  mocks.jobsUpdateEq2Mock.mockResolvedValue({ data: [], error: null })
+  mocks.jobsUpdateEq2Mock.mockImplementation(() => mocks.updateReply())
+  mocks.jobsFenceSelectMock.mockResolvedValue({ data: [], error: null })
   mocks.rpcMock.mockResolvedValue({ data: "2026-06-10T10:00:00+00:00", error: null })
+  storageMocks.getR2ObjectSize.mockResolvedValue(0)
+  deleteLaneMocks.deleteKeysRecordingFailures.mockImplementation(async (keys) => ({ deleted: keys.length, errors: 0, notDeleted: [], kept: [], failed: [] }))
+  deleteLaneMocks.updateStorageUsage.mockResolvedValue(undefined)
 
   sharedMocks.uploadImageVariantsMaybeWatermark.mockResolvedValue([
     "https://r2.example/img-j1.png",
@@ -1522,6 +1549,38 @@ describe("finalizeJobWithMedia — extra image sets", () => {
     expect(out.layerData).toEqual([{ zIndex: 1, url: "https://r2.example/images/j1-layers-1.png" }, { zIndex: 2, url: "https://r2.example/images/j1-layers-2.png" }])
   })
 
+  it("extraOutputData as a function is handed the result's stored URL: exactly what output_data.imageUrl holds", async () => {
+    const seen: unknown[] = []
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "edit-image",
+      result: { url: "https://kie.example/base.png", cost: 0 },
+      extraImageSets: [{ key: "layers", images: layers.slice(0, 1) }],
+      extraOutputData: (stored, _dropped, resultUrl) => {
+        seen.push(resultUrl)
+        return { layerData: stored.layers!.map((url) => ({ url, baseUrl: resultUrl })) }
+      },
+    })
+    const out = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data as Record<string, unknown>
+    expect(seen).toEqual([out.imageUrl])
+    expect(out.imageUrl).toBe("https://r2.example/images/j1.png")
+    expect(out.layerData).toEqual([{ url: "https://r2.example/images/j1-layers-1.png", baseUrl: "https://r2.example/images/j1.png" }])
+  })
+
+  it("a failure is thrown only once every upload of its batch has settled: none is still writing when the finalize gives up", async () => {
+    let settledLate = false
+    sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => {
+      if (key === "j1-layers-1") throw new Error("R2 down")
+      if (key === "j1-layers-3") {
+        await new Promise((r) => setTimeout(r, 5))
+        settledLate = true
+      }
+      return [`https://r2.example/images/${key}.png`]
+    })
+    await expect(finalizeJobWithMedia({ jobId: "j1", jobType: "edit-image", result: { url: "https://kie.example/base.png", cost: 0 }, extraImageSets: [{ key: "layers", images: layers }] })).rejects.toThrow("R2 down")
+    expect(settledLate).toBe(true)
+  })
+
   it("uploads a few at a time, never the whole set at once", async () => {
     let inFlight = 0
     let most = 0
@@ -1577,5 +1636,379 @@ describe("finalizeJobWithMedia — extra image sets", () => {
     expect(sharedMocks.uploadImageVariantsMaybeWatermark).toHaveBeenCalledTimes(1)
     const out = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data as Record<string, unknown>
     expect(out).toEqual({ imageUrl: "https://r2.example/images/j1.png", segments: [] })
+  })
+})
+
+// A layer that cannot be stored must not fail the whole job (decided 2026-11-11):
+// each image is tried `storeAttempts` times; a set marked `dropUnstorable` drops an
+// image that still fails and completes with the rest, reporting it by index; the
+// charge reads what was stored. The result itself has no such escape — its store
+// failing fails the finalize (the caller decides the refund).
+describe("finalizeJobWithMedia — store attempts and unstorable extra images", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetMocksToHappyPath()
+  })
+
+  const layers = [
+    { url: "https://kie.example/l1.png", name: "Fox" },
+    { url: "https://kie.example/l2.png", name: "Title" },
+    { url: "https://kie.example/l3.png", name: "Caption" },
+  ]
+  const callsFor = (key: string) => sharedMocks.uploadImageVariantsMaybeWatermark.mock.calls.filter((c) => c[1] === key).length
+
+  it("an image that fails every attempt is dropped; the rest complete, filed under their own names, and the drop is reported by index", async () => {
+    sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => {
+      if (key === "j1-layers-2") throw new Error("404 from provider")
+      return [`https://r2.example/images/${key}.png`]
+    })
+    const seen: unknown[] = []
+    const result = await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "edit-image",
+      result: { url: "https://kie.example/base.png", cost: 0 },
+      storeAttempts: 3,
+      extraImageSets: [{ key: "layers", images: layers, library: true, dropUnstorable: true }],
+      extraOutputData: (stored, dropped) => { seen.push([stored, dropped]); return { layersNotSaved: dropped.layers!.length } },
+    })
+    expect(result.ok).toBe(true)
+    expect(callsFor("j1-layers-2")).toBe(3)
+    expect(callsFor("j1-layers-1")).toBe(1)
+    expect(seen).toEqual([[{ layers: ["https://r2.example/images/j1-layers-1.png", "https://r2.example/images/j1-layers-3.png"] }, { layers: [1] }]])
+    const out = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data as Record<string, unknown>
+    expect(out.layers).toEqual(["https://r2.example/images/j1-layers-1.png", "https://r2.example/images/j1-layers-3.png"])
+    expect(out.libraryImages).toEqual([
+      { url: "https://r2.example/images/j1-layers-1.png", name: "Fox" },
+      { url: "https://r2.example/images/j1-layers-3.png", name: "Caption" },
+    ])
+    expect(out.layersNotSaved).toBe(1)
+  })
+
+  it("a transient failure is retried and stored once: nothing dropped", async () => {
+    let failed = false
+    sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => {
+      if (key === "j1-layers-3" && !failed) { failed = true; throw new Error("socket hang up") }
+      return [`https://r2.example/images/${key}.png`]
+    })
+    const seen: unknown[] = []
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "edit-image",
+      result: { url: "https://kie.example/base.png", cost: 0 },
+      storeAttempts: 3,
+      extraImageSets: [{ key: "layers", images: layers, dropUnstorable: true }],
+      extraOutputData: (_stored, dropped) => { seen.push(dropped); return {} },
+    })
+    expect(callsFor("j1-layers-3")).toBe(2)
+    expect(seen).toEqual([{ layers: [] }])
+    const out = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data as Record<string, unknown>
+    expect(out.layers).toHaveLength(3)
+  })
+
+  it("the result's store is retried too, and when it fails every attempt the finalize fails, the claim is released and no extra image is stored", async () => {
+    sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => {
+      if (key === "j1") throw new Error("R2 down")
+      return [`https://r2.example/images/${key}.png`]
+    })
+    await expect(finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "edit-image",
+      result: { url: "https://kie.example/base.png", cost: 0 },
+      storeAttempts: 2,
+      extraImageSets: [{ key: "layers", images: layers, dropUnstorable: true }],
+    })).rejects.toThrow("R2 down")
+    expect(callsFor("j1")).toBe(2)
+    expect(callsFor("j1-layers-1")).toBe(0)
+    expect(sharedMocks.markJobCompletedDetailed).not.toHaveBeenCalled()
+    expect(mocks.jobsUpdateMock).toHaveBeenCalledWith({ finalize_claimed_at: null, finalize_claimed_by: null })
+  })
+
+  it("without dropUnstorable an unstorable extra image still fails the finalize, after its attempts", async () => {
+    sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => {
+      if (key === "j1-layers-1") throw new Error("R2 down")
+      return [`https://r2.example/images/${key}.png`]
+    })
+    await expect(finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "edit-image",
+      result: { url: "https://kie.example/base.png", cost: 0 },
+      storeAttempts: 2,
+      extraImageSets: [{ key: "layers", images: layers }],
+    })).rejects.toThrow("R2 down")
+    expect(callsFor("j1-layers-1")).toBe(2)
+    expect(sharedMocks.markJobCompletedDetailed).not.toHaveBeenCalled()
+  })
+
+  it("a metered charge as a function reads what was stored, and settles on it", async () => {
+    sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => {
+      if (key === "j1-layers-1") throw new Error("404")
+      return [`https://r2.example/images/${key}.png`]
+    })
+    const metered = vi.fn(async (stored: Record<string, readonly string[]>) => 10 * ((stored.layers?.length ?? 0) + 1))
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "edit-image",
+      result: { url: "https://kie.example/base.png", cost: 0.1 },
+      extraImageSets: [{ key: "layers", images: layers, dropUnstorable: true }],
+      meteredBaseCredits: metered,
+    })
+    expect(metered).toHaveBeenCalledWith({ layers: ["https://r2.example/images/j1-layers-2.png", "https://r2.example/images/j1-layers-3.png"] }, { layers: [0] })
+    // 2 layers stored + the base = 3 images → 30 base credits, count-based.
+    expect(sharedMocks.commitJobCredits).toHaveBeenCalledWith("u-log-1", "j1", null, 30, true)
+  })
+
+  it("without storeAttempts each store is tried once, exactly as before", async () => {
+    sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => {
+      if (key === "j1-layers-2") throw new Error("R2 down")
+      return [`https://r2.example/images/${key}.png`]
+    })
+    const out = await finalizeJobWithMedia({ jobId: "j1", jobType: "edit-image", result: { url: "https://kie.example/base.png", cost: 0 }, extraImageSets: [{ key: "layers", images: layers, dropUnstorable: true }] })
+    expect(out.ok).toBe(true)
+    expect(callsFor("j1-layers-2")).toBe(1)
+  })
+})
+
+// A finalize that stored some objects and then does NOT complete its job — a
+// later step threw, or a cancel won the completion — deletes exactly what it
+// stored and gives the bytes back, behind a fence on its own claim and before
+// releasing it. A completion, a held result, a row another finalizer took or
+// completed, and a finalize with no claim delete nothing.
+describe("finalizeJobWithMedia — what a finalize that does not complete stored", () => {
+  const CLAIM_TS = "2026-06-10T10:00:00+00:00"
+  const layers = [
+    { url: "https://kie.example/l1.png", name: "Fox" },
+    { url: "https://kie.example/l2.png", name: "Title" },
+    { url: "https://kie.example/l3.png", name: "Caption" },
+  ]
+  /** Each object's stored size: the base 1000 bytes, a layer 100. */
+  const SIZE: Record<string, number> = { "images/j1.png": 1000, "images/j1-layers-1.png": 100, "images/j1-layers-2.png": 100, "images/j1-layers-3.png": 100 }
+  /** The job row as the database holds it: its status and the claim it carries. */
+  let row: { status: string; claimedAt: string }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetMocksToHappyPath()
+    row = { status: "processing", claimedAt: CLAIM_TS }
+    sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => [`https://r2.example/images/${key}.png`])
+    storageMocks.getR2ObjectSize.mockImplementation(async (key) => SIZE[key] ?? 0)
+    // The fence, as the database answers it: the row matches only while it
+    // carries OUR claim and is in one of the statuses the finalize names; the
+    // claim then becomes the discard's, with a fresh timestamp.
+    mocks.jobsFenceSelectMock.mockImplementation(async () => {
+      const fields = mocks.jobsUpdateMock.mock.lastCall![0]
+      const claimedWith = mocks.jobsUpdateEq2Mock.mock.lastCall![1]
+      const statuses = mocks.jobsFenceInMock.mock.lastCall![1]
+      if (claimedWith !== row.claimedAt || !statuses.includes(row.status)) return { data: [], error: null }
+      row.claimedAt = fields.finalize_claimed_at as string
+      return { data: [{ finalize_claimed_at: row.claimedAt }], error: null }
+    })
+  })
+
+  const run = (over: Partial<Parameters<typeof finalizeJobWithMedia>[0]> = {}) =>
+    finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "edit-image",
+      result: { url: "https://kie.example/base.png", cost: 0 },
+      extraImageSets: [{ key: "layers", images: layers }],
+      ...over,
+    })
+  const deletedKeys = () => deleteLaneMocks.deleteKeysRecordingFailures.mock.calls.flatMap((c) => [...c[0]]).sort()
+  const fenceCalls = () => mocks.jobsUpdateMock.mock.calls.filter((c) => c[0].finalize_claimed_by === "discard")
+  const releaseCalls = () => mocks.jobsUpdateMock.mock.calls.flatMap((c, i) => (c[0].finalize_claimed_at === null ? [i] : []))
+  /** The claim timestamp each release was scoped to (the second `.eq` of the release's chain). */
+  const releasedWith = () => releaseCalls().map((i) => mocks.jobsUpdateEq2Mock.mock.calls[i]![1])
+
+  describe.each([
+    ["a later layer's store throws (a set that does not drop an unstorable image)", {
+      upload: (key: string) => key === "j1-layers-2",
+      over: {},
+      stored: ["images/j1-layers-1.png", "images/j1-layers-3.png", "images/j1.png"],
+    }],
+    ["the extraOutputData function throws", {
+      upload: () => false,
+      over: { extraOutputData: () => { throw new Error("R2 down") } },
+      stored: ["images/j1-layers-1.png", "images/j1-layers-2.png", "images/j1-layers-3.png", "images/j1.png"],
+    }],
+    ["the metered-credits function throws", {
+      upload: () => false,
+      over: { meteredBaseCredits: async () => { throw new Error("R2 down") } },
+      stored: ["images/j1-layers-1.png", "images/j1-layers-2.png", "images/j1-layers-3.png", "images/j1.png"],
+    }],
+  ] as const)("a throw after some stores: %s", (_what, c) => {
+    beforeEach(() => {
+      sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => {
+        if (c.upload(key)) throw new Error("R2 down")
+        return [`https://r2.example/images/${key}.png`]
+      })
+    })
+
+    it("on a LIVE row (processing): deletes nothing — a finalizer that took the row over may still complete it naming those keys — releases its own claim and rethrows", async () => {
+      row.status = "processing"
+      await expect(run(c.over as Partial<Parameters<typeof finalizeJobWithMedia>[0]>)).rejects.toThrow("R2 down")
+      expect(deleteLaneMocks.deleteKeysRecordingFailures).not.toHaveBeenCalled()
+      expect(deleteLaneMocks.updateStorageUsage).not.toHaveBeenCalled()
+      expect(fenceCalls()).toHaveLength(1)
+      expect(mocks.jobsFenceInMock).toHaveBeenCalledWith("status", DISCARD_STATUSES)
+      expect(releasedWith()).toEqual([CLAIM_TS])
+      expect(row.claimedAt).toBe(CLAIM_TS)
+    })
+
+    it.each(["cancelled", "failed"])("on a row that went %s while it stored: deletes every object this finalize stored, gives their bytes back once, then releases the claim and rethrows", async (status) => {
+      row.status = status
+      await expect(run(c.over as Partial<Parameters<typeof finalizeJobWithMedia>[0]>)).rejects.toThrow("R2 down")
+
+      expect(deletedKeys()).toEqual(c.stored)
+      expect((deleteLaneMocks.deleteKeysRecordingFailures.mock.calls[0] as unknown[])[1]).toBe("job-output")
+      const bytes = c.stored.reduce((sum, key) => sum + SIZE[key]!, 0)
+      expect(deleteLaneMocks.updateStorageUsage).toHaveBeenCalledTimes(1)
+      expect(deleteLaneMocks.updateStorageUsage).toHaveBeenCalledWith("u1", -bytes)
+      expect(sharedMocks.markJobCompletedDetailed).not.toHaveBeenCalled()
+
+      // Fenced on OUR claim, on a row that went terminal without a completion.
+      expect(fenceCalls()).toHaveLength(1)
+      expect(mocks.jobsUpdateEq2Mock.mock.calls[mocks.jobsUpdateMock.mock.calls.findIndex((x) => x[0].finalize_claimed_by === "discard")]).toEqual(["finalize_claimed_at", CLAIM_TS])
+      expect(mocks.jobsFenceInMock).toHaveBeenCalledWith("status", DISCARD_STATUSES)
+      // Released AFTER the delete, scoped to the fence's claim (no finalizer could take the row in between).
+      expect(releasedWith()).toEqual([row.claimedAt])
+      expect(row.claimedAt).not.toBe(CLAIM_TS)
+      const released = mocks.jobsUpdateMock.mock.invocationCallOrder[releaseCalls()[0]!]!
+      expect(deleteLaneMocks.deleteKeysRecordingFailures.mock.invocationCallOrder[0]!).toBeLessThan(released)
+      expect(deleteLaneMocks.updateStorageUsage.mock.invocationCallOrder[0]!).toBeLessThan(released)
+    })
+  })
+
+  it("a throw on a row another finalizer has taken over (its own claim on it): nothing is deleted, and the release leaves its claim alone", async () => {
+    // Terminal, so only the take-over keeps the delete away.
+    row.status = "cancelled"
+    row.claimedAt = "2026-06-10T10:00:09+00:00"
+    await expect(run({ extraOutputData: () => { throw new Error("bad layer data") } })).rejects.toThrow("bad layer data")
+    expect(deleteLaneMocks.deleteKeysRecordingFailures).not.toHaveBeenCalled()
+    expect(deleteLaneMocks.updateStorageUsage).not.toHaveBeenCalled()
+    // The release is scoped to OUR timestamp, so it clears nothing of theirs.
+    expect(releasedWith()).toEqual([CLAIM_TS])
+  })
+
+  it("a throw with no claim (the claim RPC failed and the finalize ran unclaimed): nothing is deleted", async () => {
+    row.status = "cancelled"
+    mocks.rpcMock.mockResolvedValueOnce({ data: null, error: { message: "db hiccup" } })
+    await expect(run({ extraOutputData: () => { throw new Error("bad layer data") } })).rejects.toThrow("bad layer data")
+    expect(fenceCalls()).toHaveLength(0)
+    expect(deleteLaneMocks.deleteKeysRecordingFailures).not.toHaveBeenCalled()
+  })
+
+  it("the base store itself fails: nothing was stored, so nothing is deleted, and the claim is released for the retry to re-store it", async () => {
+    sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => {
+      if (key === "j1") throw new Error("R2 down")
+      return [`https://r2.example/images/${key}.png`]
+    })
+    await expect(run({ storeAttempts: 2 })).rejects.toThrow("R2 down")
+    expect(fenceCalls()).toHaveLength(0)
+    expect(deleteLaneMocks.deleteKeysRecordingFailures).not.toHaveBeenCalled()
+    expect(releasedWith()).toEqual([CLAIM_TS])
+  })
+
+  it("a cancel during the store (the completion CAS misses on the cancelled row): every stored object is deleted and its bytes given back", async () => {
+    sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => {
+      // The user cancels while the layers are being stored.
+      if (key === "j1-layers-2") row.status = "cancelled"
+      return [`https://r2.example/images/${key}.png`]
+    })
+    // The completion CAS (live statuses only) matches no row: the funnel reports a lost race.
+    sharedMocks.markJobCompletedDetailed.mockImplementationOnce(async () => (row.status === "processing" ? "completed" : "lost_race"))
+
+    const out = await run()
+
+    expect(out).toEqual({ ok: false, reason: "lost_race" })
+    expect(deletedKeys()).toEqual(["images/j1-layers-1.png", "images/j1-layers-2.png", "images/j1-layers-3.png", "images/j1.png"])
+    expect(deleteLaneMocks.updateStorageUsage).toHaveBeenCalledWith("u1", -1300)
+    expect(mocks.jobsFenceInMock).toHaveBeenCalledWith("status", DISCARD_STATUSES)
+    expect(releasedWith()).toEqual([row.claimedAt])
+    expect(sharedMocks.commitJobCredits).not.toHaveBeenCalled()
+    expect(sharedMocks.createAssetFromJob).not.toHaveBeenCalled()
+  })
+
+  it("a delete storage does not confirm gives nothing back for that object (it is recorded for the retry pass)", async () => {
+    row.status = "cancelled"
+    sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("lost_race")
+    deleteLaneMocks.deleteKeysRecordingFailures.mockImplementationOnce(async (keys) => ({ deleted: keys.length - 1, errors: 1, notDeleted: ["images/j1.png"], kept: [], failed: ["images/j1.png"] }))
+    await run()
+    expect(deleteLaneMocks.updateStorageUsage).toHaveBeenCalledWith("u1", -300)
+  })
+
+  it("a lost completion on a row another finalizer COMPLETED: nothing is deleted (its output names the same keys)", async () => {
+    row.status = "completed"
+    sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("lost_race")
+    const out = await run()
+    expect(out).toEqual({ ok: false, reason: "lost_race" })
+    expect(fenceCalls()).toHaveLength(1)
+    expect(deleteLaneMocks.deleteKeysRecordingFailures).not.toHaveBeenCalled()
+    expect(deleteLaneMocks.updateStorageUsage).not.toHaveBeenCalled()
+    expect(releaseCalls()).toHaveLength(0)
+  })
+
+  it("a lost completion whose row is still live (the CAS write errored): nothing is deleted — a retry completes with these objects", async () => {
+    sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("lost_race")
+    await run()
+    expect(deleteLaneMocks.deleteKeysRecordingFailures).not.toHaveBeenCalled()
+    expect(releaseCalls()).toHaveLength(0)
+  })
+
+  it("a normal completion deletes nothing and fences nothing", async () => {
+    const out = await run()
+    expect(out).toEqual({ ok: true })
+    expect(fenceCalls()).toHaveLength(0)
+    expect(deleteLaneMocks.deleteKeysRecordingFailures).not.toHaveBeenCalled()
+    expect(deleteLaneMocks.updateStorageUsage).not.toHaveBeenCalled()
+  })
+
+  it("a HELD result deletes nothing: its objects are what the reviewer looks at (the fence never matches pending_review)", async () => {
+    sharedMocks.markJobCompletedDetailed.mockImplementationOnce(async () => { row.status = "pending_review"; return "held" })
+    const out = await run()
+    expect(out).toEqual({ ok: false, reason: "held" })
+    expect(deleteLaneMocks.deleteKeysRecordingFailures).not.toHaveBeenCalled()
+    expect(deleteLaneMocks.updateStorageUsage).not.toHaveBeenCalled()
+    expect(releasedWith()).toEqual([CLAIM_TS])
+  })
+
+  it("a hold that MISSED its compare-and-set (the row was cancelled first): every stored object is deleted and given back once", async () => {
+    sharedMocks.markJobCompletedDetailed.mockImplementationOnce(async () => { row.status = "cancelled"; return "held" })
+    const out = await run()
+    expect(out).toEqual({ ok: false, reason: "held" })
+    expect(deletedKeys()).toEqual(["images/j1-layers-1.png", "images/j1-layers-2.png", "images/j1-layers-3.png", "images/j1.png"])
+    expect(deleteLaneMocks.updateStorageUsage).toHaveBeenCalledTimes(1)
+    expect(deleteLaneMocks.updateStorageUsage).toHaveBeenCalledWith("u1", -1300)
+    expect(releasedWith()).toEqual([row.claimedAt])
+  })
+
+  it("an APPLIED block (the row is failed): finalize discards nothing — the gate already deleted and gave back", async () => {
+    sharedMocks.markJobCompletedDetailed.mockImplementationOnce(async () => { row.status = "failed"; return "blocked" })
+    const out = await run()
+    expect(out).toEqual({ ok: false, reason: "blocked" })
+    expect(deleteLaneMocks.deleteKeysRecordingFailures).not.toHaveBeenCalled()
+    expect(deleteLaneMocks.updateStorageUsage).not.toHaveBeenCalled()
+  })
+
+  it("a block that MISSED its compare-and-set (the row was cancelled first): every stored object is deleted and given back once", async () => {
+    sharedMocks.markJobCompletedDetailed.mockImplementationOnce(async () => { row.status = "cancelled"; return "blocked" })
+    const out = await run()
+    expect(out).toEqual({ ok: false, reason: "blocked" })
+    expect(deletedKeys()).toEqual(["images/j1-layers-1.png", "images/j1-layers-2.png", "images/j1-layers-3.png", "images/j1.png"])
+    expect(deleteLaneMocks.updateStorageUsage).toHaveBeenCalledTimes(1)
+    expect(deleteLaneMocks.updateStorageUsage).toHaveBeenCalledWith("u1", -1300)
+  })
+
+  it("a caller's pre-uploaded media is never deleted: this finalize did not store it", async () => {
+    row.status = "cancelled"
+    sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("lost_race")
+    await finalizeJobWithMedia({ jobId: "j1", jobType: "image-to-video", result: { url: "https://kie.example/v.mp4", cost: 0 }, mediaUrl: "https://r2.example/videos/j1.mp4" })
+    expect(fenceCalls()).toHaveLength(0)
+    expect(deleteLaneMocks.deleteKeysRecordingFailures).not.toHaveBeenCalled()
+  })
+})
+
+describe("the discard fence's statuses", () => {
+  it("after a throw or a lost completion alike: cancelled or failed only — never live, completed or held", () => {
+    expect([...DISCARD_STATUSES].sort()).toEqual(["cancelled", "failed"])
+    expect(DISCARD_AFTER_MISSED_BLOCK).toEqual(["cancelled"])
   })
 })

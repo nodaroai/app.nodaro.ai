@@ -114,6 +114,8 @@ export {
   resolutionNearestSource,
   maskedEditResolution,
   isAutoAspectToken,
+  isVideoAutoAspectToken,
+  videoAutoAspectRunsAt,
   resolutionsAtAspectRatio,
   resolutionAtAspectRatio,
 } from "../model-catalog.js"

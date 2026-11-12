@@ -377,6 +377,49 @@ describe("generate_video verb", () => {
     expect(received.body?.aspectRatio).toBe("adaptive")
   })
 
+  // reference_task_type is forwarded as the public field; the route resolves it.
+  const SEEDANCE_REF_CALL = {
+    prompt: "make it black and white",
+    model: "seedance-2-5",
+    resolution: "480p",
+    reference_video_urls: ["https://a/v.mp4"],
+  }
+
+  it("dispatches reference_task_type as referenceTaskType", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/text-to-video", { jobId: "j-task" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_video", { ...SEEDANCE_REF_CALL, reference_task_type: "edit" })
+    expect(result.isError).toBeUndefined()
+    expect(received.body).toMatchObject({ provider: "seedance-2-5", referenceTaskType: "edit", referenceVideoUrls: ["https://a/v.mp4"] })
+  })
+
+  it("without reference_task_type the dispatched body is unchanged", async () => {
+    const plain = stubRoute("POST", "/v1/text-to-video", { jobId: "j-plain" })
+    const plainServer = buildServer()
+    registerVerbs({ server: plainServer, session: executeSession(), fastify: plain.fastify })
+    await callTool(plainServer, "generate_video", SEEDANCE_REF_CALL)
+    expect(plain.received.body).not.toHaveProperty("referenceTaskType")
+
+    const auto = stubRoute("POST", "/v1/text-to-video", { jobId: "j-auto" })
+    const autoServer = buildServer()
+    registerVerbs({ server: autoServer, session: executeSession(), fastify: auto.fastify })
+    await callTool(autoServer, "generate_video", { ...SEEDANCE_REF_CALL, reference_task_type: "auto" })
+    // "auto" is forwarded as asked; the route declares nothing for it.
+    const { referenceTaskType, ...autoRest } = auto.received.body as Record<string, unknown>
+    expect(referenceTaskType).toBe("auto")
+    expect(autoRest).toStrictEqual(plain.received.body)
+  })
+
+  it("lists reference_task_type with its four values", async () => {
+    const fastify = Fastify()
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const tool = (await listTools(server)).find((t) => t.name === "generate_video")
+    const prop = (tool?.inputSchema as { properties?: Record<string, { enum?: string[] }> })?.properties?.reference_task_type
+    expect(prop?.enum).toEqual(["auto", "reference", "edit", "extend"])
+  })
+
   it("does NOT register without workflows:execute scope", async () => {
     const fastify = Fastify()
     const server = buildServer()
@@ -1666,8 +1709,19 @@ describe("modify_video verb", () => {
       resolution: "480p",
       referenceVideoUrls: ["https://a/v.mp4"],
       referenceImageUrls: ["https://a/coat.jpg"],
+      // Requested; the route declares it only when the clip is 4–30 s.
+      referenceTaskType: "edit",
     })
     expect(received.body).not.toHaveProperty("videoUrl")
+  })
+
+  it("another model dispatches no task type", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-to-video", { jobId: "j-mv" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "modify_video", { prompt: "make it noir", video_url: "https://a/v.mp4", model: "luma-modify" })
+    expect(received.body?.provider).toBe("luma-modify")
+    expect(received.body).not.toHaveProperty("referenceTaskType")
   })
 
   it("seedance-2-5 sends extra clips after the source and the audio references", async () => {

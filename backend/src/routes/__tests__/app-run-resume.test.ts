@@ -1,3 +1,4 @@
+// @test-watches tools/units/__fixtures__/expected/backend/src/nodes/fixture-echo/** backend/src/nodes/**
 /**
  * POST /v1/app/:slug/runs/:runId/resume — an app run's Retry continues its failed execution
  * (decided 2026-10-18): only what the run did not complete runs, on the version it ran, with the
@@ -47,6 +48,15 @@ vi.mock("@/lib/idempotent-insert.js", () => ({
 vi.mock("@/services/workflow-engine/run-continuation.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/services/workflow-engine/run-continuation.js")>()
   return { ...actual, loadContinuationSource: vi.fn(async (id: string) => mocks.sources.get(id) ?? null) }
+})
+
+// The fixture unit `fixture-echo` (tools/units/__fixtures__) — app fields `size` (auto, 1K, 1.5K, 2K) and
+// `maxLayers` (1–99) — through its golden descriptor, composed into the server's one door to the units.
+vi.mock("@/lib/unit-descriptors.js", async (importOriginal) => {
+  const real = (await importOriginal()) as typeof import("../../lib/unit-descriptors.js")
+  const { descriptor } = await import("../../../../tools/units/__fixtures__/expected/backend/src/nodes/fixture-echo/descriptor.generated.js")
+  const units = [...real.UNIT_NODE_DESCRIPTORS, descriptor as unknown as (typeof real.UNIT_NODE_DESCRIPTORS)[number]]
+  return { ...real, UNIT_NODE_DESCRIPTORS: units, unitDescriptorOf: (t: string | undefined) => units.find((u) => u.type === t) }
 })
 
 import { appRunResumeRoutes } from "../app-run-resume.js"
@@ -338,5 +348,35 @@ describe("POST /v1/app/:slug/runs/:runId/resume", () => {
       expect(res.statusCode).toBe(402)
       nothingWritten()
     })
+  })
+})
+
+describe("POST /v1/app/:slug/runs/:runId/resume — the run's stored inputs on a node unit's app fields", () => {
+  const withUnit = (inputOverrides: Record<string, Record<string, unknown>>) => {
+    const nodes = [...snapshot.snapshot_nodes, { id: "split", type: "fixture-echo", data: { label: "Layers", size: "1K", maxLayers: 9 } }]
+    mocks.versions.set(V1, version(V1, 1, { snapshot_nodes: nodes }))
+    mocks.sources.set(RUN_EXEC, source({ inputOverrides: { prompt: { text: "a cat" }, ...inputOverrides } }))
+  }
+
+  it("a stored value outside the declaration is refused with its wording, nothing written", async () => {
+    withUnit({ split: { maxLayers: 500 } })
+    const res = await post()
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({ code: "validation_error", message: "Invalid value for maxLayers: 500. Use a whole number between 1 and 99." })
+    nothingWritten()
+  })
+
+  it("a stored null is refused: re-applied, it would clear the field", async () => {
+    withUnit({ split: { size: null } })
+    const res = await post()
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toBe("Invalid value for size: null. Allowed: auto, 1K, 1.5K, 2K")
+    nothingWritten()
+  })
+
+  it("stored declared values continue as usual", async () => {
+    withUnit({ split: { size: "2K", maxLayers: 42 } })
+    const res = await post()
+    expect(res.statusCode).toBe(202)
   })
 })

@@ -202,6 +202,21 @@ describe("getPublishedApp", () => {
     const [url] = mock.mock.calls[0]
     expect(url).toBe("/v1/app/my%20app%2Ftest")
   })
+
+  // Where public work is not allowed the page is its creator's alone, so the
+  // creator's token must go along; a visitor with no session sends none.
+  it("sends the signed-in user's token, and none without a session", async () => {
+    const mock = mockFetchJson({ id: "x" })
+    vi.stubGlobal("fetch", mock)
+
+    mockGetSession.mockResolvedValueOnce({ data: { session: { access_token: "creator-token" } } })
+    await getPublishedApp("cool-app")
+    expect(mock.mock.calls[0][1].headers.Authorization).toBe("Bearer creator-token")
+
+    mockGetSession.mockResolvedValueOnce({ data: { session: null } })
+    await getPublishedApp("cool-app")
+    expect(mock.mock.calls[1][1].headers.Authorization).toBeUndefined()
+  })
 })
 
 // ---------------------------------------------------------------------------

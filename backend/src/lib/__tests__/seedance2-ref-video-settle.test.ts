@@ -45,6 +45,7 @@ const args = {
   resolution: "1080p",
   outputUrl: "https://kie.example/out.mp4",
   referenceVideoUrls: ["https://r2.example.com/videos/ref.mp4"],
+  referenceTaskType: undefined,
 }
 const NOT_MEASURED = { baseCredits: undefined, seconds: undefined }
 
@@ -72,6 +73,13 @@ describe("measureSeedance2RefVideoBaseCredits", () => {
     await measureSeedance2RefVideoBaseCredits({ ...args, refVideoDurationsSec: [30, null] })
     expect(settle.refSeconds).toHaveBeenCalledWith({ ...args, durationsSec: [30, null] })
     expect(settle.actual).toHaveBeenCalledWith({ ...args, durationsSec: [30, null] }, REF_SECONDS)
+  })
+
+  it("forwards the job's recorded reference task type: the hold was sized from it", async () => {
+    await measureSeedance2RefVideoBaseCredits({ ...args, duration: -1, referenceTaskType: "reference" })
+    const run = { ...args, requestedDuration: -1, referenceTaskType: "reference" }
+    expect(settle.refSeconds.mock.calls[0]![0]).toStrictEqual({ provider: run.provider, resolution: run.resolution, outputUrl: run.outputUrl, referenceVideoUrls: run.referenceVideoUrls, requestedDuration: -1, referenceTaskType: "reference" })
+    expect(settle.actual).toHaveBeenCalledWith(run, REF_SECONDS)
   })
 
   it("a job that carries no probe (in flight across the deploy) sends none — the helper re-probes", async () => {
@@ -121,7 +129,7 @@ describe("measureSeedance2RefVideoBaseCredits", () => {
   // AUTO duration with nothing wired is the other worst-case reservation (the
   // model's longest clip) — it settles to the tier of the delivered length.
   describe("auto duration, no reference video", () => {
-    const auto = { provider: "seedance-2-5", resolution: "480p", outputUrl: args.outputUrl, referenceVideoUrls: undefined, duration: -1 }
+    const auto = { provider: "seedance-2-5", resolution: "480p", outputUrl: args.outputUrl, referenceVideoUrls: undefined, duration: -1, referenceTaskType: undefined }
 
     it("measures the delivered clip", async () => {
       await expect(measureSeedance2RefVideoBaseCredits(auto)).resolves.toBe(311)
@@ -170,7 +178,7 @@ describe("measureSeedance2RefVideoBaseCredits", () => {
  * without a reference video). The credits are exactly the old function's.
  */
 describe("per-second Gemini Omni", () => {
-  const run = { provider: "gemini-omni-flash-1-2", resolution: "720p", outputUrl: "out", referenceVideoUrls: ["clip"], duration: 8 }
+  const run = { provider: "gemini-omni-flash-1-2", resolution: "720p", outputUrl: "out", referenceVideoUrls: ["clip"], duration: 8, referenceTaskType: undefined }
 
   it("commits the hold when the source clip was measured", async () => {
     expect(await measureSeedance2RefVideoBaseCredits({ ...run, refVideoDurationsSec: [10] })).toBeUndefined()
@@ -208,7 +216,7 @@ describe("measureSeedance2Settle", () => {
   })
 
   it("auto duration with nothing wired: the length chosen is the output, nothing is input", async () => {
-    const auto = { provider: "seedance-2-5", resolution: "480p", outputUrl: args.outputUrl, referenceVideoUrls: undefined, duration: -1 }
+    const auto = { provider: "seedance-2-5", resolution: "480p", outputUrl: args.outputUrl, referenceVideoUrls: undefined, duration: -1, referenceTaskType: undefined }
     await expect(measureSeedance2Settle(auto)).resolves.toEqual({ baseCredits: 311, seconds: { outputSec: 9, inputSec: 0 } })
     expect(settle.autoSeconds).toHaveBeenCalledTimes(1)
     expect(settle.auto).toHaveBeenCalledWith({ provider: "seedance-2-5", resolution: "480p", outputUrl: args.outputUrl }, 9)

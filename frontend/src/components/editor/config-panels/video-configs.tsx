@@ -59,7 +59,7 @@ import {
 import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, type TopazVideoResolution } from "@nodaro/shared/models"
 import { TOPAZ_VIDEO_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
-import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, KLING_4_MAX_MIDDLE_FRAMES, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
+import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec, isSeedanceExtendProvider, pricedOutputDurationSec, snapToNearestDuration, type SeedanceExtendProvider } from "@nodaro/shared/models"
 import { VIDEO_AUDIT_BUCKET_CREDITS, ltxExtendDurationSec, seedanceExtendCreditId } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, entityImageUrl, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
@@ -2982,9 +2982,13 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   // Kling 4.0 Flash shares the Kling 4.0 block below (720p only, no frames
   // past the start, no 1080p) — never a member of the Kling 4.0 family set.
   const isKling4Flash = isKling4FlashProvider(currentProvider)
-  // Kling 4.0 Keyframes: Image References are in-between FRAMES (catalog
-  // feature `keyframes`), capped by the clip's length.
-  const isKeyframesModel = isKling4 && hasFeature(currentProvider, "keyframes")
+  // A keyframes model's Image References are in-between FRAMES (catalog
+  // feature `keyframes`): Kling 4.0 Keyframes (capped with the start/end frames
+  // by the clip's length) and Grok Imagine Video 1.5 (one per whole second
+  // inside the clip, at most 4; the start/end frames ride their own fields).
+  const isKeyframesModel = hasFeature(currentProvider, "keyframes")
+  const isKling4Keyframes = isKling4 && isKeyframesModel
+  const isGrokVideo15 = isGrokVideo15Provider(currentProvider)
   // Kling 4.0 plays its first audio clip as the soundtrack unless turned off
   // (catalog feature `audio-soundtrack`, @nodaro/shared audio-soundtrack.ts).
   const soundtrackModel = hasFeature(currentProvider, "audio-soundtrack")
@@ -3105,7 +3109,18 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   // Kling 4.0 Keyframes: start + in-between + end ≤ the duration's frame cap.
   const keyframeSeconds = typeof data.duration === "number" && data.duration > 0 ? data.duration : 5
   const keyframeCap = kling4KeyframeFrameCap(keyframeSeconds)
-  const keyframeEnds = (connectedImages.some((i) => i.targetHandle === "startFrame") ? 1 : 0) + (hasEndFrame ? 1 : 0)
+  const hasStartFrameWired = connectedImages.some((i) => i.targetHandle === "startFrame")
+  const keyframeEnds = (hasStartFrameWired ? 1 : 0) + (hasEndFrame ? 1 : 0)
+  // A keyframes model: the in-between frames this clip takes — the one rule the
+  // handle cap and the runner read (Kling 4.0 Keyframes shares its cap with the
+  // start/end frames; Grok Imagine Video 1.5 takes one per whole second).
+  const keyframesMiddleCap = isKeyframesModel
+    ? videoKeyframesMiddleCap(currentProvider, data.duration, { hasStartFrame: hasStartFrameWired, hasEndFrame })
+    : undefined
+  // Grok Imagine Video 1.5: the length it renders (its 8s default when unset),
+  // for the in-between frame line; frames past the cap are left out at run time.
+  const grokSeconds = pricedOutputDurationSec(currentProvider, data.duration)
+  const grokSlots = keyframesMiddleCap ?? 0
   const keyframeUsed = keyframeEnds + connectedRefImages.length
   // Kling 4.0 Flash runs a start frame ALONE on its keyframe endpoint (the
   // frame is the exact opening frame and the clip takes its shape); anything
@@ -3119,7 +3134,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     ? Math.max(0, Math.min(refCaps?.images ?? 7, 7 - geminiVideoCount * 2) - (geminiHasStartFrame ? 1 : 0) - (geminiHasEndFrame ? 1 : 0))
     : currentProvider === "grok-i2v" ? 6
     : currentProvider === "kling-3-omni" ? 7
-    : isKeyframesModel ? Math.max(0, Math.min(KLING_4_MAX_MIDDLE_FRAMES, keyframeCap - keyframeEnds))
+    : keyframesMiddleCap !== undefined ? keyframesMiddleCap
     : (refCaps?.images ?? 3)
 
   if (currentProvider === "kling-3.0") {
@@ -3210,7 +3225,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 
       {/* Kling 4.0 Keyframes — frames counted against the clip's length (KIE
           refuses more; the route and the DAG refuse it before any credits). */}
-      {isKeyframesModel && (
+      {isKling4Keyframes && (
         <div className="flex flex-col gap-1 rounded-md border border-border bg-muted/30 p-2">
           <span className="text-[11px] font-medium text-foreground">{t("vidcfg.modeLabel", { label: t("vidcfg.modeKeyframes") })}</span>
           {keyframeUsed > keyframeCap ? (
@@ -3222,6 +3237,25 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               {t("vidcfg.kling4FramesUsed", { seconds: keyframeSeconds, used: keyframeUsed, max: keyframeCap })}
             </span>
           )}
+        </div>
+      )}
+
+      {/* Grok Imagine Video 1.5 — in-between frames spread over the clip at
+          whole seconds; extras are left out (never refused). The same image as
+          start and end frame makes a seamless loop. */}
+      {isGrokVideo15 && (
+        <div className="flex flex-col gap-1 rounded-md border border-border bg-muted/30 p-2">
+          <span className="text-[11px] font-medium text-foreground">{t("vidcfg.modeLabel", { label: t("vidcfg.modeKeyframes") })}</span>
+          {connectedRefImages.length > grokSlots ? (
+            <span className="text-[11px] leading-snug text-amber-500">
+              {t("vidcfg.grokVideo15FramesOverCap", { seconds: grokSeconds, max: grokSlots, extra: connectedRefImages.length - grokSlots })}
+            </span>
+          ) : (
+            <span className="text-[11px] leading-snug text-muted-foreground">
+              {t("vidcfg.grokVideo15FramesUsed", { seconds: grokSeconds, used: connectedRefImages.length, max: grokSlots })}
+            </span>
+          )}
+          <span className="text-[11px] leading-snug text-muted-foreground">{t("vidcfg.grokVideo15LoopNote")}</span>
         </div>
       )}
 
@@ -3940,7 +3974,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           })()}
           {/* Keyframes follows the start frame's shape once any frame is
               attached, so the ratio is offered only for a frameless run. */}
-          {!(isKeyframesModel && keyframeUsed > 0) && !flashStartFrameOnly && (
+          {!(isKling4Keyframes && keyframeUsed > 0) && !flashStartFrameOnly && (
             <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
               <AspectRatioSelector
                 options={getAspectRatiosForVideoModel(currentProvider)}
@@ -3949,7 +3983,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               />
             </MappableField>
           )}
-          {!isKeyframesModel && connectedRefVideos.length > 0 && (
+          {!isKling4Keyframes && connectedRefVideos.length > 0 && (
             <div className="flex items-center gap-2 px-1">
               <input
                 type="checkbox"
@@ -3961,7 +3995,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               <label htmlFor="gv-kling4KeepSound" className="text-xs">{t("vidcfg.keepOriginalSound")}</label>
             </div>
           )}
-          <p className="text-[11px] text-muted-foreground px-1">{t(isKeyframesModel ? "vidcfg.kling4KeyframesNote" : isKling4Flash ? "vidcfg.kling4FlashNote" : "vidcfg.kling4Note")}</p>
+          <p className="text-[11px] text-muted-foreground px-1">{t(isKling4Keyframes ? "vidcfg.kling4KeyframesNote" : isKling4Flash ? "vidcfg.kling4FlashNote" : "vidcfg.kling4Note")}</p>
         </>
       )}
 

@@ -17,6 +17,7 @@ import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { sendCredentialUnbound, unboundCredentialUsesFor } from "../lib/credential-gate.js"
 import { personalPayer, shouldRefuseDegradedRun } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
@@ -330,6 +331,10 @@ export async function presentationRoutes(app: FastifyInstance) {
         error: { code: "locked_field", message: describeLockedOverrides(lockedOverrides) },
       })
     }
+    // A node unit's app fields (unit.json appFields) take only the values they declare, on any key this
+    // request sets, exposed or not (lib/exposed-unit-field-check.ts); the orchestrator's merge refuses too.
+    const unitRefusals = findUnitFieldOverrideRefusals((workflow.nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? [], inputOverrides)
+    if (unitRefusals.length > 0) return reply.status(400).send({ error: unitFieldOverrideErrorBody(unitRefusals) })
 
     // Enforce read-only for non-owners
     const wfSettings = (workflow.settings ?? {}) as Record<string, unknown>

@@ -29,9 +29,10 @@
  *     nothing held, the run can be started again). The next ask is not sooner
  *     than `HOUSE_MODELS_SERVED_FAILURE_TTL_MS`. The
  *     predicate is synchronous, so the workflow engine awaits
- *     `refreshHouseModelsServed()` before every payload build while the
- *     catalog has a house model (`buildPayloadWithSourceSize`). A drain during
- *     the ask rejects the refresh with the drain's own `DrainAbortError`.
+ *     `refreshHouseModelsServed()` before the payload build of a node that
+ *     names a house model (`buildPayloadWithSourceSize`); a node that names
+ *     none never asks. A drain during the ask rejects the refresh with the
+ *     drain's own `DrainAbortError`.
  *   - With no source registered (a process that neither loaded the plugins nor
  *     registered one): "not served".
  *
@@ -222,6 +223,27 @@ export function servedHouseModelIds(): string[] {
 export function houseRuleWithholdsAModel(): boolean {
   for (const id of ownLabelModelIds()) if (houseModelServedState(id) !== "served") return true
   return false
+}
+
+/**
+ * True when this process already KNOWS every house model is served here (or
+ * the catalog has none): the loaded plugin serves each, or — in the
+ * orchestrator — its held answer lists each. Unlike `houseRuleWithholdsAModel`
+ * it never asks and never starts an ask, so a per-request check reads it
+ * first and, on an install that serves every house model, skips everything
+ * else. Never throws.
+ */
+export function servesEveryHouseModel(): boolean {
+  const ids = ownLabelModelIds()
+  if (ids.size === 0) return true
+  if (pluginServicesLoaded()) {
+    for (const id of ids) if (!servedByLoadedPlugin(id)) return false
+    return true
+  }
+  const held = source ? usableAnswer() : null
+  if (!held) return false
+  for (const id of ids) if (!held.ids.has(id)) return false
+  return true
 }
 
 /** The orchestrator's source of the served ids: a function that asks this container's API (`null` clears it). */

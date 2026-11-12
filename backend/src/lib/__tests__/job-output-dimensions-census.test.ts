@@ -72,6 +72,12 @@ const LEDGER: ReadonlyMap<string, Entry> = new Map<string, Entry>([
   ["workers/handlers/heygen-avatar.ts", { notAnOutput: "the avatar photo sent to HeyGen; the job's output is a video" }],
   ["lib/private-plugins/toolkit.ts", { notAnOutput: "the start frame a plugin's video render sends to the provider (frame fit)" }],
   ["routes/image-overlay-placement.ts", { notAnOutput: "the request's image the vision model reads; the job's output is a placement (JSON)" }],
+  // (A split image — its delivery, nodes/split-into-layers/recover.ts — writes
+  // no imageUrl key of its own: the job's base image is published by
+  // finalizeJobWithMedia as edit-image (workers/shared.ts above), so it gets its
+  // size. Its layers, an extra image set on `output_data.layers`, get none: the
+  // stamp reads only imageUrl / imageUrls. Each layer's width / height in
+  // `layerData` is the model's own report, not measured from the stored file.)
 ])
 
 /** Lanes that produce images but get no stamped `width` / `height`, and why. */

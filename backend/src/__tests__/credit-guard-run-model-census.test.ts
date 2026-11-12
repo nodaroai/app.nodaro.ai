@@ -92,6 +92,7 @@ vi.mock("fastify", async (importOriginal) => {
 import { creditGuardModelOf, isCreditGuard, type CreditGuardModel, type CreditGuardOpts } from "../middleware/credit-guard.js"
 import type { PluginCreditGuardOpts } from "../lib/private-plugins/types.js"
 import { GATEABLE_MODEL_IDS } from "../lib/availability-override.js"
+import { ownLabelModelIds } from "../lib/house-models-served.js"
 import { RESOLVED_MODEL_OF_JOB, resolvedModelOfJob } from "../lib/job-resolved-model.js"
 import { llmFeatureDefault } from "../lib/run-model.js"
 import { PLUGIN_CREDIT_GUARDED_ROUTES } from "../lib/route-node-gate.js"
@@ -139,6 +140,8 @@ const RUN_MODEL_EXEMPT: Readonly<Record<string, string>> = {
   "POST /v1/face-swap": OUTSIDE_CATALOG,
   "POST /v1/generate-mask": OUTSIDE_CATALOG,
   "POST /v1/video-mask": OUTSIDE_CATALOG,
+  // KIE's seedream-5-5-layer-decomposition, which has no catalog entry.
+  "POST /v1/split-into-layers": OUTSIDE_CATALOG,
   "POST /v1/audio-separation": OUTSIDE_CATALOG,
   "POST /v1/voice-remix": OUTSIDE_CATALOG,
   "POST /v1/speech-to-video": OUTSIDE_CATALOG,
@@ -401,6 +404,81 @@ describe("every declared run model is total and speaks the deny's vocabulary", (
       }
     }
     expect(outside).toEqual([])
+  })
+})
+
+/**
+ * A house model is reached ONLY by naming it. On an install that does not
+ * serve one, the guard judges nothing but the house model, and asks a route's
+ * `runModel` only when the body names one (`namesHouseModel`,
+ * withheldRunModels) — sound only while no request that names no house model
+ * runs on one. Held here over every guard this boot records: its run model
+ * (`runModel`) and its pricing (`modelResolver`), for bodies that name every
+ * OTHER model in every field a model is named in — so a default, an engine
+ * name's alias (lib/provider-model.ts), an image-to-image swap with
+ * references attached, a fixed run model or a text-length choice that landed
+ * on a house model would trip it.
+ */
+describe("a house model is reached only by naming it", () => {
+  const own = ownLabelModelIds()
+  const REF = "https://cdn.example/ref.png"
+  const others = [...GATEABLE_MODEL_IDS].filter((id) => !own.has(id))
+  const BODIES: ReadonlyArray<Record<string, unknown>> = [
+    ...PROBE_BODIES,
+    { text: "x".repeat(6_000) },
+    { imageUrl: REF, referenceImageUrls: [REF] },
+    ...others.flatMap((id) => [
+      { provider: id },
+      { provider: id, imageUrl: REF, referenceImageUrls: [REF] },
+      { model: id },
+      { models: [id] },
+      { llmModel: id },
+      { analysisModel: id },
+      { engine: id },
+    ]),
+  ]
+  const guards = () => [
+    ...attached().map((g) => ({ name: g.key, url: g.url, model: g.model })),
+    ...inline().map((g) => ({ name: g.site, url: "", model: g.model })),
+  ]
+  const isOwn = (id: unknown) => typeof id === "string" && (own.has(id) || own.has(id.split(":")[0]!))
+
+  it("the catalog has a house model to hold this for", () => {
+    expect(own.size).toBeGreaterThan(0)
+    expect(others.length).toBeGreaterThan(100)
+  })
+
+  it("no run model answers a house model for a body that names none", () => {
+    const reached: string[] = []
+    for (const g of guards()) {
+      if (typeof g.model.runModel !== "function") continue
+      for (const body of BODIES) {
+        let answer: unknown
+        try {
+          answer = g.model.runModel(fakeRequest(g.url, { ...body }))
+        } catch {
+          continue
+        }
+        for (const id of ids(answer)) if (isOwn(id)) reached.push(`${g.name}: ${String(id)} for ${JSON.stringify(body)}`)
+      }
+    }
+    expect(reached).toEqual([])
+  })
+
+  it("no guard prices a house model for a body that names none", () => {
+    const priced: string[] = []
+    for (const g of guards()) {
+      for (const body of BODIES) {
+        let id: unknown
+        try {
+          id = g.model.modelResolver(fakeRequest(g.url, { ...body }))
+        } catch {
+          continue
+        }
+        if (isOwn(id)) priced.push(`${g.name}: ${String(id)} for ${JSON.stringify(body)}`)
+      }
+    }
+    expect(priced).toEqual([])
   })
 })
 

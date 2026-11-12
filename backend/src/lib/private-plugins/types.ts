@@ -44,6 +44,7 @@ import type { PresetSettings } from "@nodaro/shared/organizations"
 import type { SurroundDirection } from "@nodaro/shared/entities"
 import type { PluginScene3DEngine, PluginStageToolkit } from "./scene3d-contract.js"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared/video"
+import type { SeedanceReferenceTaskType } from "@nodaro/shared/models"
 import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared/edl"
 import type { CastSwapSteps, TextStepSetting } from "../cast-swap-steps.js"
 import type {
@@ -2414,20 +2415,25 @@ export interface PluginHttpToolkit {
    * measured — for a clip that only exists after the quote (Cast Swap cuts its
    * clip once it has quoted). `hold` is exactly what the run reserves (the
    * reservation's own rule, `seedance2RefVideoHeldOutputSec`: an Auto run's
-   * output held at the first clip rounded up plus a second);
+   * output held at the longest clip rounded up plus a second);
    * `expected` is what it should settle at once delivered, null when a clip
    * is unmeasurable. `duration` is the requested duration (-1 = Auto);
    * `durationsSec` the measured clip lengths in seconds, in request order
-   * (null or NaN = unmeasurable, priced at the worst case). Rejects for a
+   * (null or NaN = unmeasurable, priced at the worst case). `referenceTaskType`
+   * is the one the run's body will carry (absent = none), resolved as the run
+   * resolves it: a run that declares `"reference"` with an Auto duration is held
+   * at the model's longest output, not at its longest clip. Rejects for a
    * model whose price does not follow its reference clips. Cloud-only.
-   * Present when `tk.capabilities.seedanceRefVideoQuote` is true.
-   * ADDITIVE-OPTIONAL (no contract bump).
+   * Present when `tk.capabilities.seedanceRefVideoQuote` is true;
+   * `referenceTaskType` is read when `tk.capabilities.seedanceReferenceTaskType`
+   * is true too. ADDITIVE-OPTIONAL (no contract bump).
    */
   quoteSeedanceRefVideo?(args: {
     provider: string
     resolution?: string
     duration?: number
     draft?: boolean
+    referenceTaskType?: SeedanceReferenceTaskType
     durationsSec: ReadonlyArray<number | null>
   }): Promise<{ hold: number; expected: number | null }>
   computeSeedanceDraftFinalizePricing?(args: {
@@ -3811,6 +3817,16 @@ export interface PluginCapabilities {
    * shift to -12..12 silently, so a wider shift there needs two calls.
    */
   readonly pitchTempoTwoOctaves?: boolean
+  /**
+   * `/v1/generate-video` takes `referenceTaskType` for Seedance 2.5: a child may
+   * declare `reference`, `edit` or `extend`. The host resolves it before
+   * pricing and drops a declaration the request does not fit (an `edit` needs
+   * every reference video measured at 4 to 30 s). `tk.http.quoteSeedanceRefVideo`
+   * takes the same `referenceTaskType`, so a child's hold quote matches its
+   * run. False (or absent): an older host, whose route drops the field
+   * silently, so the child runs undeclared.
+   */
+  readonly seedanceReferenceTaskType?: boolean
 }
 
 /**

@@ -36,7 +36,7 @@ import {
   type FanOutItemMeta
 } from "@nodaro/shared/nodes"
 import { DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES } from "@nodaro/shared/catalogs"
-import { parseGroupHandle, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName } from "@nodaro/shared/workflow"
+import { parseGroupHandle, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, referenceModalityForHandle } from "@nodaro/shared/workflow"
 import {
   editPlanSourceDurationSec,
   videoLinkPageUrl,
@@ -726,6 +726,11 @@ export interface FrontendResolvedInputs extends UseCaseResolvedInputs, UnitResol
     sourceType?: "audio" | "video";
   }[];
   referenceImageUrls?: string[];
+  /** The part of `referenceImageUrls` that arrived through an Image References
+   *  handle (`imageReferences` / `references`), in edge order — without the
+   *  images a wired asset adds. A `keyframes` model takes exactly these as its
+   *  in-between frames. Mirrors backend ResolvedInputs. */
+  imageReferenceHandleUrls?: string[];
   referenceVideoUrls?: string[];
   referenceAudioUrls?: string[];
   /** Singular reference image, used by image-critic which takes a single
@@ -1472,7 +1477,22 @@ export function resolveNodeInputs(
   // generate-video only — standalone i2v/t2v keep legacy negative handling.
   const isGenImageOrVideo = node.type === "generate-image" || node.type === "generate-video";
 
+  // What each Image References edge added to `referenceImageUrls` — recorded
+  // apart (`imageReferenceHandleUrls`) because a wired asset's images land in
+  // the same list by source type. Flushed at the top of the next edge, so
+  // every `continue` below is covered, and once after the loop. Mirrors the
+  // orchestrator's input-resolver.ts.
+  let imageRefEdgeStart: number | undefined;
+  const flushImageRefEdge = (): void => {
+    if (imageRefEdgeStart === undefined) return;
+    const added = (inputs.referenceImageUrls ?? []).slice(imageRefEdgeStart);
+    if (added.length > 0) inputs.imageReferenceHandleUrls = [...(inputs.imageReferenceHandleUrls ?? []), ...added];
+    imageRefEdgeStart = undefined;
+  };
+
   for (const srcEdge of incomingEdges) {
+    flushImageRefEdge();
+    if (referenceModalityForHandle(srcEdge.targetHandle) === "image") imageRefEdgeStart = inputs.referenceImageUrls?.length ?? 0;
     let src = nodes.find((n) => n.id === srcEdge.source);
     if (!src) continue;
 
@@ -3551,6 +3571,7 @@ export function resolveNodeInputs(
       inputs.prompt = output;
     }
   }
+  flushImageRefEdge();
 
   return inputs;
 }

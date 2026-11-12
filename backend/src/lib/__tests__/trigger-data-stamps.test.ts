@@ -18,25 +18,27 @@ import ts from "typescript"
 import { eachSourceFile, parseText, walk } from "./source-scan.js"
 import { keyWrites } from "./execution-row-ast.js"
 import { RESERVED_TRIGGER_DATA_KEYS, serverStamps, withoutReservedStamps } from "../trigger-data-stamps.js"
-import { SERVER_STAMPED_TRIGGER_TYPES, isServerStartedRun, serverTriggerData } from "../server-started-runs.js"
+import { OUTER_RUN_LINK_TRIGGER_TYPE, SERVER_STAMPED_TRIGGER_TYPES, isServerStartedRun, outerRunTriggerData, serverTriggerData } from "../server-started-runs.js"
 import { appRunResumeStamp, appRunResumedFromOf, appRunStamp, appRunStampOf } from "../app-run-stamp.js"
 import { appRenderFinalStamp, appRenderFinalStampOf } from "../app-run-final-column.js"
 import { continueFromFailedStamp, continueFromFailedStampOf } from "../continue-from-failed-lineage.js"
 import { RUN_ROOT_STAMP_KEY, runRootOf } from "../continuation-run-root.js"
+import { outerRunOf, outerRunStamp } from "../use-case-outer-run.js"
 
 const FORGED = {
   appRun: { appRunId: "run-of-someone" },
   appRenderFinal: { appRunId: "r", appVersionId: "v", continuedFrom: "e" },
   continueFromFailed: { from: "e", root: "root-of-someone", seededFrom: "e", all: true },
   runRoot: { executionId: "root-of-someone" },
+  outerRun: { executionId: "run-of-someone" },
 }
 
 /** What `serverStamps` reads on a row it cannot trust. */
-const NONE = { continueFromFailed: null, appRun: null, appRenderFinal: null, runRoot: null, resumedFrom: null }
+const NONE = { continueFromFailed: null, appRun: null, appRenderFinal: null, runRoot: null, resumedFrom: null, outerRun: null }
 
 describe("caller data never carries a platform stamp", () => {
   it("every stamp is reserved", () => {
-    expect([...RESERVED_TRIGGER_DATA_KEYS].sort()).toEqual(["appRenderFinal", "appRun", "continueFromFailed", "runRoot"])
+    expect([...RESERVED_TRIGGER_DATA_KEYS].sort()).toEqual(["appRenderFinal", "appRun", "continueFromFailed", "outerRun", "runRoot"])
   })
 
   it("a body carrying every stamp lands without them, and every other key as it was", () => {
@@ -47,6 +49,7 @@ describe("caller data never carries a platform stamp", () => {
     expect(appRenderFinalStampOf(stored)).toBeNull()
     expect(continueFromFailedStampOf(stored)).toBeNull()
     expect(runRootOf(stored)).toBeNull()
+    expect(outerRunOf(stored)).toBeNull()
     // The input is left as it was.
     expect(body.runRoot).toEqual(FORGED.runRoot)
   })
@@ -58,7 +61,7 @@ describe("a stamp is read only on a run a stamp-writing lane started", () => {
   })
 
   it("a row of any other lane reads as carrying none, whatever its trigger_data holds", () => {
-    for (const trigger_type of ["webhook", "schedule", "telegram", "telegram_account", "api", "use_case", undefined, null, 7]) {
+    for (const trigger_type of ["webhook", "schedule", "telegram", "telegram_account", "api", undefined, null, 7]) {
       const row = { trigger_type, trigger_data: FORGED }
       expect(isServerStartedRun(row)).toBe(false)
       expect(serverTriggerData(row)).toBeNull()
@@ -84,6 +87,29 @@ describe("a stamp is read only on a run a stamp-writing lane started", () => {
     const retry = serverStamps({ trigger_type: "app_run", trigger_data: appRunResumeStamp("run-1", "exec-failed") })
     expect([retry.appRun, retry.resumedFrom]).toEqual(["run-1", "exec-failed"])
     expect(appRunResumedFromOf(appRunStamp("run-1"))).toBeNull()
+  })
+})
+
+describe("the use-case link is read only on a use-case node's inner run (the narrower rule, decided 2026-11-11)", () => {
+  it("the lane it is trusted on is `use_case` alone, and that lane is no stamp-writing lane", () => {
+    expect(OUTER_RUN_LINK_TRIGGER_TYPE).toBe("use_case")
+    expect(SERVER_STAMPED_TRIGGER_TYPES).not.toContain(OUTER_RUN_LINK_TRIGGER_TYPE)
+  })
+
+  it("on a use_case row the link reads, and every other stamp reads as absent", () => {
+    expect(serverStamps({ trigger_type: "use_case", trigger_data: outerRunStamp("exec-outer") })).toEqual({ ...NONE, outerRun: "exec-outer" })
+    // A use_case row that somehow carried the other stamps trusts none of them.
+    expect(serverStamps({ trigger_type: "use_case", trigger_data: FORGED })).toEqual({ ...NONE, outerRun: "run-of-someone" })
+    expect(outerRunTriggerData({ trigger_type: "use_case", trigger_data: null })).toBeNull()
+  })
+
+  it("on any other lane the link reads as absent: a webhook body, a manual run, an app run", () => {
+    for (const trigger_type of ["webhook", "schedule", "manual", "mcp", "app_run", "api", undefined, null]) {
+      const row = { trigger_type, trigger_data: outerRunStamp("exec-outer") }
+      expect(outerRunTriggerData(row)).toBeNull()
+      expect(serverStamps(row).outerRun).toBeNull()
+    }
+    expect(serverStamps({ trigger_data: outerRunStamp("exec-outer") }).outerRun).toBeNull()
   })
 })
 
@@ -130,6 +156,9 @@ const WRITERS: Record<string, { readonly kind: "stamp" | "fixed" | "caller"; rea
   "routes/workflow-execution.ts": { kind: "stamp", values: ["continueFromFailedStamp(lineageStamp)", "runSelection"] },
   "services/app-execution.ts": { kind: "stamp", values: ["appRunStamp(appRunId)"] },
   "services/app-render-final.ts": { kind: "stamp", values: ["appRenderFinalStamp({ appRunId: params.runId, appVersionI…"] },
+  // A use-case node's inner run: the run it works for, from the internal lane or the run it continues
+  // — the only thing its lane stores (held below), so the link may be trusted on it.
+  "services/use-case-execution.ts": { kind: "stamp", values: ["outerRunStamp(p.outerRunId)"] },
 }
 
 describe("every trigger_data write is a platform stamp, fixed keys, or caller data without stamps", () => {
@@ -171,6 +200,18 @@ describe("every trigger_data write is a platform stamp, fixed keys, or caller da
       .filter(([file]) => found.has(file) && WRITERS[file]?.kind !== "stamp")
       .map(([file]) => file)
     expect(mixed, "a manual/mcp/app_run insert stores only a platform stamp in trigger_data").toEqual([])
+  })
+
+  it("the use-case lane stores only its link: every file inserting it writes trigger_data with outerRunStamp alone", () => {
+    // The narrower rule (lib/server-started-runs.ts) trusts `outerRun` on these rows only while this holds.
+    const useCaseFiles = [...lanes.entries()].filter(([, literals]) => literals.includes(OUTER_RUN_LINK_TRIGGER_TYPE)).map(([file]) => file)
+    expect(useCaseFiles, "the use_case lane has one writer").toEqual(["services/use-case-execution.ts"])
+    for (const file of useCaseFiles) {
+      for (const value of found.get(file) ?? []) expect(value, `${file}: a use_case row stores only outerRunStamp(...) in trigger_data`).toMatch(/^outerRunStamp\(/)
+    }
+    // …and no other lane writes the link.
+    const elsewhere = [...found.entries()].filter(([file, values]) => !useCaseFiles.includes(file) && values.some((v) => /\bouterRunStamp\(/.test(v))).map(([file]) => file)
+    expect(elsewhere).toEqual([])
   })
 
   it("a lane that stores caller or fixed data never inserts as a stamp-writing lane", () => {

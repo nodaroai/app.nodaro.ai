@@ -45,6 +45,7 @@ export {
   type EffectiveEdlOptions,
 } from "./apply-edl"
 export {
+  SERVER_RUN_OVERRIDE_FIELDS,
   renderFinalRunSet,
   renderRunOverrides,
   rendersOfPlan,
@@ -749,6 +750,13 @@ export {
   type UnitInputValue,
   type UnitSourceRow,
 } from "./unit-input-lanes"
+// What a node unit's side outputs hand on after it ran once per upstream item: every row's, row-aligned (both engines).
+export {
+  UNIT_BATCH_ROW_KEY,
+  unitBatchSideOutputs,
+  type UnitBatchSideOutputs,
+  type UnitSideOutputsRow,
+} from "./unit-batch-side-outputs"
 // What one Speaker Map run is sent, and why it is refused (both engines).
 export {
   SPEAKER_MAP_MAX_MARGIN_DB,
@@ -865,6 +873,20 @@ export {
   topazImageSizeUnits,
   type TopazVideoHoldInput,
 } from "./topaz-pricing.js"
+// Nodaro Image Upscale: the output's size, its price tier and the limits a run is refused past.
+export {
+  NODARO_IMAGE_UPSCALE_HOLD_CREDIT_ID,
+  NODARO_IMAGE_UPSCALE_MAX_OUTPUT_PIXELS,
+  NODARO_IMAGE_UPSCALE_MAX_OUTPUT_SIDE,
+  NODARO_IMAGE_UPSCALE_TIERS,
+  NODARO_IMAGE_UPSCALE_CREDIT_IDS,
+  nodaroImageUpscaleTierCreditId,
+  nodaroImageUpscaleSizing,
+  nodaroImageUpscaleCreditId,
+  nodaroImageUpscaleTooLargeMessage,
+  type NodaroImageUpscaleImageSize,
+  type NodaroImageUpscaleSizing,
+} from "./nodaro-image-upscale-pricing.js"
 // Background scrapes on the video worker: the worker's lock geometry, one attempt's bound, and a client's poll budget.
 export {
   VIDEO_WORKER_LOCK_DURATION_MS,
@@ -930,3 +952,22 @@ export {
   type NodeModelLever,
   type NodeModelPlan,
 } from "./node-model-levers"
+// Split into Layers' run rules: sizes, Max layers, the images a run holds and its credit ids (the node, its route, its worker and its price).
+export {
+  LAYER_SPLIT_DEFAULT_SIZE,
+  LAYER_SPLIT_MAX_IMAGES,
+  LAYER_SPLIT_MAX_LAYERS,
+  LAYER_SPLIT_PROMPT_MAX,
+  LAYER_SPLIT_SIZES,
+  LAYER_SPLIT_TIERS,
+  layerSplitCreditId,
+  layerSplitCreditIds,
+  layerSplitHoldCreditId,
+  layerSplitImagesHeld,
+  layerSplitMaxLayers,
+  layerSplitPrompt,
+  layerSplitSize,
+  layerSplitTier,
+  type LayerSplitSize,
+  type LayerSplitTier,
+} from "./layer-split"

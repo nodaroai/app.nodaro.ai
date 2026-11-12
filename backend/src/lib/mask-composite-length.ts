@@ -67,7 +67,8 @@ export async function maskCompositeBaseCredits(units: number): Promise<number> {
 /**
  * The workflow run's twin of the route's preHandler: measures a mask-composite
  * payload's leading video (`maskCompositeLeadOf`) and stamps `billedUnits` (what the reservation charges,
- * see `maskCompositeReserveUnits`). Run BEFORE writing input_data. Returns the
+ * see `maskCompositeReserveUnits`, and what the render checks the file it downloads against,
+ * `maskCompositeRefusalForCharge`). Run BEFORE writing input_data. Returns the
  * route's refusal for a foreground it would refuse; undefined otherwise, and
  * for any job that is not a mask-composite run, whose payload is left untouched.
  */

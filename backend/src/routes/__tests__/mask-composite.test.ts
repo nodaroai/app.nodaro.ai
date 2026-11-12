@@ -87,8 +87,25 @@ describe("POST /v1/mask-composite", () => {
     expect(guardedCredits).toBe(30)
     expect(reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-mc-1", "mask-composite")
     expect(videoQueue.add).toHaveBeenCalledWith("mask-composite", {
-      jobId: "job-mc-1", ...URLS, invertMask: false, feather: 2, grow: 0, opacity: 1, fill: "video", pixelSizePct: 1.25, blurStrengthPct: 2, backgroundFit: "cover", audioSource: "foreground", usageLogId: "u-1",
+      jobId: "job-mc-1", ...URLS, invertMask: false, feather: 2, grow: 0, opacity: 1, fill: "video", pixelSizePct: 1.25, blurStrengthPct: 2, backgroundFit: "cover", audioSource: "foreground", billedUnits: 3, usageLogId: "u-1",
     })
+  })
+
+  it("the units it charged ride the job row AND the queue payload — the render checks the file it downloads against them", async () => {
+    probe.mockResolvedValue({ width: 1280, height: 720, durationSeconds: 23, fps: 30 })
+    expect((await post({ ...URLS, userId: USER })).statusCode).toBe(200)
+    const insert = vi.mocked(supabase.from).mock.results[0]!.value.insert as ReturnType<typeof vi.fn>
+    expect(insert.mock.calls[0]![0].input_data.billedUnits).toBe(5)
+    expect(vi.mocked(videoQueue.add).mock.calls[0]![1]).toMatchObject({ billedUnits: 5 })
+  })
+
+  it("a client's billedUnits or stashed units never reach the job: the measured ones do", async () => {
+    probe.mockResolvedValue({ width: 1280, height: 720, durationSeconds: 23, fps: 30 })
+    expect((await post({ ...URLS, billedUnits: 1, __maskCompositeUnits: 1, userId: USER })).statusCode).toBe(200)
+    expect(guardedCredits).toBe(50)
+    const insert = vi.mocked(supabase.from).mock.results[0]!.value.insert as ReturnType<typeof vi.fn>
+    expect(insert.mock.calls[0]![0].input_data.billedUnits).toBe(5)
+    expect(vi.mocked(videoQueue.add).mock.calls[0]![1]).toMatchObject({ billedUnits: 5 })
   })
 
   it("passes explicit settings through", async () => {
@@ -132,7 +149,7 @@ describe("POST /v1/mask-composite", () => {
       expect(probe).toHaveBeenCalledWith("https://example.com/bg.mp4")
       // 21 s of background → 5 units × the 10-credit row.
       expect(guardedCredits).toBe(50)
-      expect(videoQueue.add).toHaveBeenCalledWith("mask-composite", expect.objectContaining({ fill, backgroundUrl: URLS.backgroundUrl, maskUrl: URLS.maskUrl }))
+      expect(videoQueue.add).toHaveBeenCalledWith("mask-composite", expect.objectContaining({ fill, backgroundUrl: URLS.backgroundUrl, maskUrl: URLS.maskUrl, billedUnits: 5 }))
       expect(vi.mocked(videoQueue.add).mock.calls[0]![1]).not.toHaveProperty("foregroundUrl")
     })
 

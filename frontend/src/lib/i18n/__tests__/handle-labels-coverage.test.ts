@@ -105,3 +105,35 @@ describe("every locale's handle table covers every parameter-picker registry lab
     expect(missing, "picker registry labels with no entry in a locale's handle table").toEqual([])
   })
 })
+
+/**
+ * A node unit's pips are declared in its manifest (handles.inputs/outputs[].label)
+ * — the names every surface that reads the manifest (the add-node popup's pip
+ * list, the MCP handle docs' editor twin) localizes through the same tables.
+ */
+/** Unit pip labels from before this check, still English-only in the four tables. The list only shrinks. */
+const UNIT_PIP_LABELS_NOT_YET_TRANSLATED: ReadonlySet<string> = new Set([
+  "Cameras", "Chapters (JSON)", "Clip set (EDLs)", "Edit (EDL)", "Episode", "First frames",
+  "Last frames", "Master audio", "Recordings", "Shots", "Show notes", "Trailers",
+])
+
+describe("every locale's handle table covers every node unit's pip labels", () => {
+  it("the not-yet list only shrinks: each entry is still a unit pip label missing from some table", async () => {
+    const { UNIT_NODE_DEFINITIONS } = await import("@/lib/unit-definitions")
+    const labels = new Set(UNIT_NODE_DEFINITIONS.flatMap((u) => [...u.handles.inputs, ...u.handles.outputs].map((h) => h.label)))
+    for (const l of UNIT_PIP_LABELS_NOT_YET_TRANSLATED) {
+      expect(labels.has(l) && Object.values(LABEL_TABLES).some((t) => !(l in (t?.handle ?? {}))), `${l}: translated or gone — drop it from the list`).toBe(true)
+    }
+  }, TIMEOUT)
+
+  it("no English-only unit pip label", async () => {
+    const { UNIT_NODE_DEFINITIONS } = await import("@/lib/unit-definitions")
+    const labels = [...new Set(UNIT_NODE_DEFINITIONS.flatMap((u) => [...u.handles.inputs, ...u.handles.outputs].map((h) => h.label)))]
+      .filter((l): l is string => typeof l === "string" && /[A-Za-z]{2,}/.test(l) && !UNIT_PIP_LABELS_NOT_YET_TRANSLATED.has(l))
+    expect(labels).toContain("Layer data")
+    const missing = Object.entries(LABEL_TABLES).flatMap(([locale, tables]) =>
+      labels.filter((l) => !(l in (tables?.handle ?? {}))).map((l) => `${locale}: ${JSON.stringify(l)}`),
+    )
+    expect(missing, "unit pip labels with no entry in a locale's handle table").toEqual([])
+  }, TIMEOUT)
+})

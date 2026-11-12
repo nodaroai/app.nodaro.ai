@@ -246,6 +246,12 @@
       "lookups": [
         "declaredJobBudgetMs"
       ]
+    },
+    "backend/src/lib/reconcile/unit-recovery.ts": {
+      "composes": "unitRecoverOf(jobType) = UNIT_RECOVERS[jobType], each own-writer worker unit's recover.ts under its type (its BullMQ job name, the row's job_type): the KIE reconcile delivers its task's result through it",
+      "lookups": [
+        "unitRecoverOf"
+      ]
     }
   }
 }

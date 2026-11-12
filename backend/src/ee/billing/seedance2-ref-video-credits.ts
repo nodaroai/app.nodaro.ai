@@ -7,6 +7,7 @@ import {
   normalizeKling4Resolution,
   isKling4FlashProvider,
   KLING_4_FLASH_RESOLUTION,
+  listedSeedanceTaskType,
   pricedOutputDurationSec,
   supportsAutoVideoDuration,
 } from "@nodaro/shared/models"
@@ -166,11 +167,14 @@ export const SEEDANCE_AUTO_EDIT_HOLD_MARGIN_SEC = 1
  *
  *  - AUTO duration (the edit shape, `SEEDANCE_VIDEO_EDIT_SHAPE`) with every
  *    reference clip measured, on a model whose output follows its clip
- *    (Seedance): the edit renders its SOURCE clip's length — the first clip,
- *    `@video_1` — so the hold is that clip rounded up to a whole second plus
+ *    (Seedance): the edit renders the length of the clip it edits — usually
+ *    the first, `@video_1`, but the model may edit any of them — so the hold
+ *    is the LONGEST clip rounded up to a whole second plus
  *    {@link SEEDANCE_AUTO_EDIT_HOLD_MARGIN_SEC}, never above the model's
- *    longest clip. Any further clips are references: they count on the input
- *    side only.
+ *    longest clip. Every clip also counts on the input side. With one clip,
+ *    that clip is the longest. NOT for a run that declared `reference`
+ *    ({@link declaresAutoReference}): a reference runs at a length the model
+ *    picks within its range, not a clip's, so it takes the worst case below.
  *  - Otherwise the longer of the priced output (`outputDurationSec`, from
  *    `pricedOutputDurationSec` — Auto = the model's longest clip) and the
  *    longest reference clip: Seedance decides from the prompt whether a run
@@ -188,9 +192,13 @@ export function seedance2RefVideoHeldOutputSec(args: {
   outputDurationSec: number
   /** The request's own duration: Auto (-1) is the edit shape. */
   requestedDuration: unknown
+  /** The run's DECLARED reference task type, as resolved (`resolveSeedanceTaskType`; a job's
+   *  `input_data.referenceTaskType`); `undefined` when none is declared. Required so no path
+   *  that holds, quotes or settles a run can skip it. */
+  referenceTaskType: unknown
   durationsSec: readonly unknown[]
 }): number {
-  const { provider, outputDurationSec, requestedDuration, durationsSec } = args
+  const { provider, outputDurationSec, requestedDuration, referenceTaskType, durationsSec } = args
   // A per-second Gemini Omni edit renders its source clip, rounded up to a whole
   // second so a clip a hair over a rung still holds the rung above it.
   if (isGeminiOmniPerSecondProvider(provider)) {
@@ -198,20 +206,35 @@ export function seedance2RefVideoHeldOutputSec(args: {
     return Math.ceil(clipSec - 0.05)
   }
   if (!outputFollowsReferenceClip(provider)) return outputDurationSec
-  const autoEdit = autoEditHeldOutputSec(provider, requestedDuration, durationsSec)
+  const autoEdit = autoEditHeldOutputSec(provider, requestedDuration, referenceTaskType, durationsSec)
   if (autoEdit !== undefined) return autoEdit
   return Math.max(outputDurationSec, ...billedInputSeconds(provider, durationsSec).perClip)
 }
 
+/**
+ * Whether the run DECLARED `reference` with an automatic length, on a model
+ * that lists that type (`listedSeedanceTaskType`, the one membership test) and
+ * takes an automatic length. Such a run renders a length the model picks
+ * within its range (KIE: -1 follows the input video's length only for an edit),
+ * so it is held at the worst case and charged what it makes, up to that hold.
+ */
+function declaresAutoReference(provider: string, requestedDuration: unknown, referenceTaskType: unknown): boolean {
+  return listedSeedanceTaskType(provider, referenceTaskType) === "reference"
+    && isAutoVideoDuration(requestedDuration) && supportsAutoVideoDuration(provider)
+}
+
 /** The Auto-edit hold of {@link seedance2RefVideoHeldOutputSec}, or undefined when the run is not that shape. */
-function autoEditHeldOutputSec(provider: string, requestedDuration: unknown, durationsSec: readonly unknown[]): number | undefined {
+function autoEditHeldOutputSec(provider: string, requestedDuration: unknown, referenceTaskType: unknown, durationsSec: readonly unknown[]): number | undefined {
   if (!outputFollowsReferenceClip(provider)) return undefined
   if (!isAutoVideoDuration(requestedDuration) || !supportsAutoVideoDuration(provider)) return undefined
+  // A declared reference is no edit: it takes the worst case.
+  if (declaresAutoReference(provider, requestedDuration, referenceTaskType)) return undefined
   if (durationsSec.length === 0 || !durationsSec.every((d) => typeof d === "number" && isUsableDuration(d))) return undefined
-  const sourceSec = durationsSec[0] as number
+  // The longest clip, wherever it is: the model may edit any of them.
+  const longestSec = Math.max(...(durationsSec as readonly number[]))
   // The model's longest clip: what Auto is priced at without a measured clip.
   const cap = pricedOutputDurationSec(provider, VIDEO_DURATION_AUTO)
-  return Math.min(Math.ceil(sourceSec) + SEEDANCE_AUTO_EDIT_HOLD_MARGIN_SEC, cap)
+  return Math.min(Math.ceil(longestSec) + SEEDANCE_AUTO_EDIT_HOLD_MARGIN_SEC, cap)
 }
 
 /**
@@ -234,6 +257,8 @@ export function seedance2RefVideoBaseCreditsFromDurations(args: {
   outputDurationSec: number
   /** The request's own duration (Auto = -1, the edit shape). Required so no reservation path can skip the rule. */
   requestedDuration: unknown
+  /** The run's declared reference task type, resolved (`undefined`: none). Required for the same reason. */
+  referenceTaskType: unknown
   durationsSec: readonly number[]
   /** The node's trim of its source clip (per-second Gemini Omni: it decides what is billed). */
   videoTrim?: VideoSourceTrim
@@ -255,9 +280,10 @@ export function seedance2RefVideoBaseCreditsFromDurations(args: {
  * rule as the reservation ({@link billedInputSeconds}); the output is the
  * length the run will most likely render:
  *  - Auto duration (the edit shape, `SEEDANCE_VIDEO_EDIT_SHAPE`): an edit
- *    renders its SOURCE clip's length — the first clip (`@video_1`); any
- *    extra clips are references, even a longer one (the reservation holds
- *    the same source clip, rounded up, plus a second);
+ *    most likely renders its SOURCE clip's length — the first clip
+ *    (`@video_1`); any extra clips are references, even a longer one (the
+ *    reservation holds the LONGEST clip, rounded up, plus a second, since the
+ *    model may edit another clip);
  *  - a fixed duration: the requested seconds (a style run).
  * The settlement still measures what was delivered, so this is an estimate a
  * client can show, not a price. Undefined when a clip could not be measured:
@@ -296,12 +322,14 @@ export async function seedance2RefVideoBaseCreditsFromUrls(args: {
   outputDurationSec: number
   /** The request's own duration (Auto = -1, the edit shape). */
   requestedDuration: unknown
+  /** The run's declared reference task type, resolved (`undefined`: none). */
+  referenceTaskType: unknown
   referenceVideoUrls: readonly unknown[]
   videoTrim?: VideoSourceTrim
 }): Promise<number> {
-  const { provider, resolution, outputDurationSec, requestedDuration, referenceVideoUrls, videoTrim } = args
+  const { provider, resolution, outputDurationSec, requestedDuration, referenceTaskType, referenceVideoUrls, videoTrim } = args
   const durationsSec = await probeRefVideoDurations({ provider, referenceVideoUrls })
-  return seedance2RefVideoBaseCreditsFromDurations({ provider, resolution, outputDurationSec, requestedDuration, durationsSec, videoTrim })
+  return seedance2RefVideoBaseCreditsFromDurations({ provider, resolution, outputDurationSec, requestedDuration, referenceTaskType, durationsSec, videoTrim })
 }
 
 /**
@@ -323,13 +351,15 @@ export async function seedance2RefVideoBaseCreditsFromUrls(args: {
  * Only a job that carries no probe (in flight across the deploy that added
  * it) re-probes, under the same worst-case rule.
  *
- * An Auto-duration edit is held for its source clip plus a margin
+ * An Auto-duration edit is held for its longest reference clip plus a margin
  * ({@link seedance2RefVideoHeldOutputSec}), not the model's longest clip. A
  * delivered clip longer than that hold is charged at the hold — the most the
  * run reserved, all `commit_credits` could collect anyway — and logs an
  * `[ALERT]` naming the job, the held and the delivered seconds, because it
- * means the hold rule's assumption (an Auto run with a clip renders that
- * clip's length) did not hold.
+ * means the hold rule's assumption (an Auto run renders the length of one of
+ * its clips, whichever it edits) did not hold. A run that declared `reference`
+ * with an automatic length is held at the worst case instead and charged what
+ * it delivered, up to that hold.
  *
  * Throws when the delivered clip cannot be measured — the caller then commits
  * the reservation, which is today's behaviour and never under-bills.
@@ -362,6 +392,9 @@ export interface Seedance2RefVideoActualArgs {
   durationsSec?: readonly unknown[]
   /** The request's own duration (Auto = -1): what the hold was sized from. */
   requestedDuration: unknown
+  /** The run's declared reference task type (a job's `input_data.referenceTaskType`, present only
+   *  when one was declared): what the hold was sized from too. */
+  referenceTaskType: unknown
   /** For the over-run alert only. */
   jobId?: string
 }
@@ -370,7 +403,8 @@ export interface Seedance2RefVideoActualArgs {
 export interface Seedance2RefVideoActualSeconds {
   /** What was rendered: the measured length (Kling 4.0's rounded to the whole second it bills), never capped. */
   deliveredSec: number
-  /** `deliveredSec` capped at an Auto edit's hold — the output seconds the charge bills. */
+  /** `deliveredSec` capped at the hold of an Auto edit or of a declared reference with an automatic
+   *  length — the output seconds the charge bills. */
   chargedOutputSec: number
   /** The reference clips' seconds, as the run bills them ({@link billedInputSeconds}). */
   inputSec: number
@@ -385,12 +419,17 @@ export interface Seedance2RefVideoActualSeconds {
  *
  * A delivered clip longer than an Auto edit's hold is charged at the hold
  * (`chargedOutputSec`) and logs the `[ALERT]` naming the job, the held and the
- * delivered seconds; `deliveredSec` stays what was rendered.
+ * delivered seconds; `deliveredSec` stays what was rendered. A run that
+ * declared `reference` with an automatic length is held at the worst case and
+ * charged what it delivered, never above that hold
+ * ({@link chargedWithinWorstCaseHold}). Any other run delivered past its hold
+ * (a fixed length, a declared `extend`) logs the same kind of `[ALERT]` and is
+ * charged as measured ({@link alertOverrunPastHold}).
  *
  * Throws when the delivered clip cannot be measured.
  */
 export async function seedance2RefVideoActualSeconds(args: Seedance2RefVideoActualArgs): Promise<Seedance2RefVideoActualSeconds> {
-  const { provider, outputUrl, referenceVideoUrls, requestedDuration } = args
+  const { provider, outputUrl, referenceVideoUrls, requestedDuration, referenceTaskType } = args
   const reserved = Array.isArray(args.durationsSec) ? args.durationsSec : undefined
   const [measuredOutputSec, durationsSec] = await Promise.all([
     probeMediaDuration(outputUrl),
@@ -403,16 +442,86 @@ export async function seedance2RefVideoActualSeconds(args: Seedance2RefVideoActu
     : Math.max(1, Math.round(measuredOutputSec))
   if (!isUsableDuration(deliveredSec)) throw new Error(`unusable output duration: ${measuredOutputSec}`)
   // The hold is what the RESERVATION held, so it reads the reservation's own
-  // probe — a clip measured only now never re-sizes it.
-  const heldSec = autoEditHeldOutputSec(provider, requestedDuration, reserved ?? durationsSec)
+  // probe — a clip measured only now never re-sizes it. Every hold below
+  // (the Auto edit's, a declared reference's, the over-run alert's) reads it;
+  // only the input side reads the re-measured clips.
+  const heldClipsSec = reserved ?? durationsSec
+  const heldSec = autoEditHeldOutputSec(provider, requestedDuration, referenceTaskType, heldClipsSec)
   let chargedOutputSec = deliveredSec
   if (heldSec !== undefined && deliveredSec > heldSec) {
     console.error(
       `[ALERT] [billing] Seedance Auto edit delivered more than it held; charging the hold: job=${args.jobId ?? "unknown"} provider=${provider} heldSec=${heldSec} deliveredSec=${deliveredSec}`,
     )
     chargedOutputSec = heldSec
+  } else if (heldSec === undefined && outputFollowsReferenceClip(provider) && declaresAutoReference(provider, requestedDuration, referenceTaskType)) {
+    chargedOutputSec = chargedWithinWorstCaseHold(args, deliveredSec, heldClipsSec)
+  } else if (heldSec === undefined) {
+    alertOverrunPastHold(args, deliveredSec, heldClipsSec)
   }
   return { deliveredSec, chargedOutputSec, inputSec: billedInputSeconds(provider, durationsSec).totalSec }
+}
+
+/**
+ * How far past its nominal length a delivered clip's container may read
+ * without counting as longer (8.04 s for an 8 s clip): a quarter second, the
+ * slop the Auto-duration settlement below rounds by.
+ */
+const CONTAINER_OVERHANG_SEC = 0.25
+
+/**
+ * The output seconds the reservation held for a run that is NOT an Auto edit
+ * ({@link seedance2RefVideoHeldOutputSec}: the longer of the priced output and
+ * the longest clip), recomputed from what the settlement carries.
+ */
+function worstCaseHeldOutputSec(args: Seedance2RefVideoActualArgs, durationsSec: readonly unknown[]): number {
+  const { provider, requestedDuration, referenceTaskType } = args
+  const requested = typeof requestedDuration === "number" || typeof requestedDuration === "string" ? requestedDuration : undefined
+  return seedance2RefVideoHeldOutputSec({
+    provider,
+    outputDurationSec: pricedOutputDurationSec(provider, requested),
+    requestedDuration,
+    referenceTaskType,
+    durationsSec,
+  })
+}
+
+/**
+ * The charged output seconds of a run that declared `reference` with an
+ * automatic length ({@link declaresAutoReference}): what it delivered, never
+ * above the worst-case hold it reserved. A delivery past the hold by more than
+ * a container's overhang also logs an `[ALERT]` naming the job, the held and
+ * the delivered seconds — the hold is already the model's longest output.
+ */
+function chargedWithinWorstCaseHold(args: Seedance2RefVideoActualArgs, deliveredSec: number, durationsSec: readonly unknown[]): number {
+  const heldSec = worstCaseHeldOutputSec(args, durationsSec)
+  if (deliveredSec <= heldSec) return deliveredSec
+  if (deliveredSec > heldSec + CONTAINER_OVERHANG_SEC) {
+    console.error(
+      `[ALERT] [billing] Seedance reference run delivered more than it held; charging the hold: job=${args.jobId ?? "unknown"} provider=${args.provider} heldSec=${heldSec} deliveredSec=${deliveredSec}`,
+    )
+  }
+  return heldSec
+}
+
+/**
+ * The over-run alert for a run that is NOT an Auto edit — a fixed length (a
+ * declared `extend`, a style run) or an Auto run held at the worst case —
+ * on a model whose output follows its reference clip (Seedance). The hold is
+ * the reservation's own ({@link worstCaseHeldOutputSec}), and a delivery past
+ * it by more than a container's overhang costs more than was reserved, a
+ * shortfall `commit_credits` cannot collect. Log only: the charge stays what
+ * was measured, exactly as without the alert. A per-second Gemini Omni edit is
+ * left out (its hold reads the node's trim, which the settlement does not
+ * carry).
+ */
+function alertOverrunPastHold(args: Seedance2RefVideoActualArgs, deliveredSec: number, durationsSec: readonly unknown[]): void {
+  const { provider } = args
+  if (!outputFollowsReferenceClip(provider) || isGeminiOmniPerSecondProvider(provider)) return
+  const heldSec = worstCaseHeldOutputSec(args, durationsSec)
+  if (deliveredSec <= heldSec + CONTAINER_OVERHANG_SEC) return
+  console.error(
+    `[ALERT] [billing] Seedance run delivered more than it held; the shortfall is not collected: job=${args.jobId ?? "unknown"} provider=${provider} heldSec=${heldSec} deliveredSec=${deliveredSec}`,
+  )
 }
 
 /**

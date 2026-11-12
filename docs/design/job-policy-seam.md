@@ -286,6 +286,17 @@ becomes `error_hint.reason`, which the owner sees), and
 are admin-gated and there is no bulk verb: one job per decision, and every
 resolution records who made it.
 
+Each queue card previews a job's first 4 held outputs and offers "+N more"
+to reveal the rest of the held list; the hidden previews load only when
+revealed. Each output previews by its own media kind (an image, a video, an
+audio clip); an output whose kind is "other" or missing is a download link,
+never a player chosen from the job's kind (a node unit's job itself is
+classified by its manifest's producer). The held list is capped at 17
+objects, so a job that made more — a layered image, for one — also states
+how many it holds that are not shown: the queue row carries `outputCount`
+(previewable) and `outputTotal` (every object the job owns, which is what
+approve publishes).
+
 Approve performs its own compare-and-set `pending_review → completed`, replays
 the completion fields the funnel stored at hold time (including the caller's
 metering flag, so a metered provider is charged its actual cost rather than the

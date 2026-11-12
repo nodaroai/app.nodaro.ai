@@ -102,6 +102,8 @@ export function registerNodeQuote(app: FastifyInstance): void {
     // the raw body, exactly as the run route's preHandlers do.
     req.body = params
     req.priceNotes = EMPTY_PRICE_NOTES
+    // A quote stores nothing: a pre-check that copies an input checks it instead.
+    req.quoteOnly = true
     for (const precheck of entry.pricing.prechecks) {
       await precheck(req, reply)
       if (reply.sent) return reply
@@ -111,6 +113,11 @@ export function registerNodeQuote(app: FastifyInstance): void {
     const withheld = withheldRunModels(req, entry.pricing.opts?.runModel, provider)
     if (withheld.length > 0) {
       return reply.status(403).send({ error: { code: "model_not_available", message: deniedModelRejectionMessage(withheld) } })
+    }
+    // The route's own step that prepares what its price reads, where the run's guard runs it.
+    if (entry.pricing.opts?.beforePricing) {
+      await entry.pricing.opts.beforePricing(req, reply)
+      if (reply.sent) return reply
     }
     try {
       const identifier = entry.pricing.modelResolver(req)

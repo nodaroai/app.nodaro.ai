@@ -104,6 +104,7 @@ export const MODIFY_IMAGE_MODELS = [
 export const UPSCALE_IMAGE_MODELS = [
   { value: "recraft-upscale", label: "Recraft Upscale", description: "Fast, high-quality upscaling" },
   { value: "topaz-image-upscale", label: "Topaz Upscale", description: "Premium AI upscaling with a 1x / 2x / 4x factor" },
+  { value: "nodaro-image-upscale", label: "Nodaro Image Upscale", description: "Upscale up to 8x, lettering kept exactly as written" },
 ]
 
 export const VIDEO_I2V_MODELS = [
@@ -141,7 +142,7 @@ export const VIDEO_I2V_MODELS = [
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
   { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
-  { value: "grok-imagine-video-1.5", label: "Grok Imagine 1.5", desc: "xAI Grok, 1–15s, 480p/720p, per-second pricing" },
+  { value: "grok-imagine-video-1.5", label: "Grok Imagine 1.5", desc: "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames, per-second pricing" },
   { value: "wan-3", label: "Wan 3.0", desc: "Alibaba Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs" },
   { value: "wan-3-prime", label: "Wan 3.0 Prime", desc: "High-speed Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs" },
   { value: "vidu-q4", label: "Vidu Q4", desc: "ShengShu Vidu Q4, 3–16s, 540p–4K, native audio, start frame or 15 image + 3 MP3 audio refs" },
@@ -177,7 +178,7 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
   { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
-  { value: "grok-imagine-video-1.5", label: "Grok Imagine 1.5", desc: "xAI Grok, 1–15s, 480p/720p (image required)" },
+  { value: "grok-imagine-video-1.5", label: "Grok Imagine 1.5", desc: "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames (image required)" },
   { value: "wan-3", label: "Wan 3.0", desc: "Alibaba Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs" },
   { value: "wan-3-prime", label: "Wan 3.0 Prime", desc: "High-speed Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs" },
   { value: "vidu-q4", label: "Vidu Q4", desc: "ShengShu Vidu Q4, 3–16s, 540p–4K, native audio (image required)" },

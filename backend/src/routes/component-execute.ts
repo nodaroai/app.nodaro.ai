@@ -22,12 +22,14 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { isBillingContext, shouldRefuseDegradedRunFor, type BillingContext } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
 import { requireScope } from "../lib/scopes.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
+import { componentWithheld } from "../lib/published-app-access.js"
 
 
 const bodySchema = z.object({
@@ -123,7 +125,11 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     const { data: appRows } = await appQuery
     const appRow = appRows?.[0]
     // A blocked author's component answers like a missing one (lib/access-blocks.ts).
-    if (!appRow || (await isUserBlocked((appRow.creator_id as string | null) ?? null))) {
+    // So does someone else's, on a deployment that does not allow public work,
+    // unless a full run of a workflow holding the component node calls it (the
+    // orchestrator's lane: lib/published-app-access.ts) — a component placed in
+    // a workflow keeps running there, and is not reached by its name.
+    if (!appRow || componentWithheld(req, appRow.creator_id) || (await isUserBlocked((appRow.creator_id as string | null) ?? null))) {
       return reply.status(404).send({ error: { code: "not_found", message: "Component not found" } })
     }
 
@@ -148,6 +154,10 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         error: { code: "locked_field", message: describeLockedOverrides(lockedOverrides) },
       })
     }
+    // A node unit's app fields (unit.json appFields) take only the values they declare, on any key this
+    // request sets, exposed or not (lib/exposed-unit-field-check.ts); the orchestrator's merge refuses too.
+    const unitRefusals = findUnitFieldOverrideRefusals((appRow.snapshot_nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? [], inputOverrides)
+    if (unitRefusals.length > 0) return reply.status(400).send({ error: unitFieldOverrideErrorBody(unitRefusals) })
 
     // A UGC Creator set to "My photo" that the run gives no photo: publishing stripped the author's
     // own, so the creator would stop the run after the script before it was paid for. Refused before
@@ -376,7 +386,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("published_apps")
-      .select("snapshot_nodes, snapshot_edges, component_metadata")
+      .select("snapshot_nodes, snapshot_edges, component_metadata, creator_id")
       .eq("slug", appSlug)
       .eq("publish_type", "component")
       .eq("is_active", true)
@@ -389,7 +399,9 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     }
 
     const { data: app } = await query.single()
-    if (!app) {
+    // Someone else's component is not priced by its name on a deployment that
+    // does not allow public work: the same rule as its run (componentWithheld).
+    if (!app || componentWithheld(req, app.creator_id)) {
       return reply.status(404).send({ error: { code: "not_found", message: "Component not found" } })
     }
 

@@ -101,7 +101,7 @@ Generate Video Pro offers every video model that can drive the engine's **keyfra
 | `kling-4` | Kling 4.0 | 3–30s | 720p / 1080p | Keyframes |
 | `kling-4-flash` | Kling 4.0 Flash | 3–20s | 720p | Keyframes |
 
-Kling 4.0 **Keyframes** (`kling-4-keyframes`) is not offered: its Image References are in-between frames, so the identity references each segment carries would land in the clip as frames. Kling 4.0 (`kling-4`) is keyframes-only here — like Wan 3.0, it takes reference videos on Generate Video but the continuation transport is not wired for it. Kling 4.0 Flash (`kling-4-flash`) is keyframes-only for the same reason, at 720p, its only resolution.
+Kling 4.0 **Keyframes** (`kling-4-keyframes`) and Grok Imagine 1.5 (`grok-imagine-video-1.5`) are not offered: their Image References are in-between frames, so the identity references each segment carries would land in the clip as frames. Kling 4.0 (`kling-4`) is keyframes-only here — like Wan 3.0, it takes reference videos on Generate Video but the continuation transport is not wired for it. Kling 4.0 Flash (`kling-4-flash`) is keyframes-only for the same reason, at 720p, its only resolution.
 
 ### Render methods and why the list differs
 
@@ -121,7 +121,7 @@ Two consequences worth knowing on the sparse-length models:
 
 MiniMax H3 shares Seedance 2's multimodal reference surface (the same 9-image / 3-video / 3-audio reference semantics), so the whole continuation transport carries over unchanged. Its per-second price has no with-reference axis; both segment rates derive from the one 8s composite of the selected resolution tier (`minimax-h3:8s` @2K, `minimax-h3:8s:768p` @768P — see [Credit cost](#credit-cost)).
 
-Models that take only a bare start frame with no reference-image forwarding (Wan 2.6 / 2.7, Hailuo 2.3, Bytedance Pro, Grok Imagine 1.5) stay out — the anchor wave's identity references would be silently dropped. Workflows saved with a since-withdrawn provider keep running, and the editor snaps their selection to `seedance-2` the next time the panel is opened.
+Models that take only a bare start frame with no reference-image forwarding (Wan 2.6 / 2.7, Hailuo 2.3, Bytedance Pro) stay out — the anchor wave's identity references would be silently dropped. Workflows saved with a since-withdrawn provider keep running, and the editor snaps their selection to `seedance-2` the next time the panel is opened.
 
 For the full Seedance 2 capability write-up (multimodal image/video/audio references, `{image:N}`-style prompt tokens, unified frames+references wiring) see [Generate Video → Providers](./generate-video.md#providers). Generate Video Pro forwards the full reference surface — `startFrame`, `endFrame`, `imageReferences`, `audioReferences`, `assets` (with `@mention` / `{image:N}` token resolution), and the Extend Source (`videoReferences`) — into generation.
 

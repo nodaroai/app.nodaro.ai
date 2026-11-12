@@ -75,3 +75,24 @@ describe("a node scope is read only from a run a stamp-writing lane started", ()
     }
   })
 })
+
+describe("a use-case inner run's link rides the continuation source, read on a use_case row alone", () => {
+  // routes/use-case-continue.ts gives a continuation started from outside a run this link, so a
+  // continued inner run is judged by the same outer run (lib/use-case-outer-run.ts).
+  it("a use_case row carrying the link gives it", async () => {
+    db.execution = { ...executionRow("use_case", { outerRun: { executionId: "exec-outer" } }), workflow_id: null }
+    expect((await load())!.outerRun).toBe("exec-outer")
+  })
+
+  it("a row of another lane carrying the same key gives none", async () => {
+    for (const lane of ["manual", "mcp", "app_run", "webhook"]) {
+      db.execution = executionRow(lane, { outerRun: { executionId: "exec-outer" } })
+      expect((await load())!.outerRun).toBeNull()
+    }
+  })
+
+  it("a use_case row with no link (a standalone run, or one from before the link) gives none", async () => {
+    db.execution = { ...executionRow("use_case", null), workflow_id: null }
+    expect((await load())!.outerRun).toBeNull()
+  })
+})

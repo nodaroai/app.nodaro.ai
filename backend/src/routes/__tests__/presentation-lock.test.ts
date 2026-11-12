@@ -1,3 +1,4 @@
+// @test-watches tools/units/__fixtures__/expected/backend/src/nodes/fixture-echo/** backend/src/nodes/**
 /**
  * `/v1/present/:token/run` — the override lock (issue #1555).
  *
@@ -51,6 +52,15 @@ vi.mock("@/lib/http-credentials.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/http-credentials.js")>()),
   findUnboundCredentialUses: findUnboundMock,
 }))
+
+// The fixture unit `fixture-echo` (tools/units/__fixtures__) — app fields `size` (auto, 1K, 1.5K, 2K) and
+// `maxLayers` (1–99) — through its golden descriptor, composed into the server's one door to the units.
+vi.mock("@/lib/unit-descriptors.js", async (importOriginal) => {
+  const real = (await importOriginal()) as typeof import("../../lib/unit-descriptors.js")
+  const { descriptor } = await import("../../../../tools/units/__fixtures__/expected/backend/src/nodes/fixture-echo/descriptor.generated.js")
+  const units = [...real.UNIT_NODE_DESCRIPTORS, descriptor as unknown as (typeof real.UNIT_NODE_DESCRIPTORS)[number]]
+  return { ...real, UNIT_NODE_DESCRIPTORS: units, unitDescriptorOf: (t: string | undefined) => units.find((u) => u.type === t) }
+})
 
 import { presentationRoutes } from "../presentation.js"
 import { supabase } from "../../lib/supabase.js"
@@ -170,6 +180,36 @@ describe("POST /v1/present/:token/run — the override lock (issue #1555)", () =
       }),
       expect.objectContaining({ jobId: EXEC_ID }),
     )
+  })
+})
+
+describe("POST /v1/present/:token/run — a node unit's app fields take only what they declare", () => {
+  const unitGraph = () => mockSharedWorkflow([
+    { id: "text-1", type: "text-prompt", data: { text: "hello" } },
+    { id: "split", type: "fixture-echo", data: { label: "Layers", size: "1K", maxLayers: 9 } },
+  ])
+
+  it("a value outside the declaration is a 400 validation_error with the declaration's wording, nothing enqueued", async () => {
+    unitGraph()
+    const res = await viewerRun({ inputOverrides: { split: { maxLayers: 500 } } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({ code: "validation_error", message: "Invalid value for maxLayers: 500. Use a whole number between 1 and 99." })
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it("null is refused too: it would clear the field and the unit would read no value", async () => {
+    unitGraph()
+    const res = await viewerRun({ inputOverrides: { split: { size: null } } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({ code: "validation_error", message: "Invalid value for size: null. Allowed: auto, 1K, 1.5K, 2K" })
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it("a declared value runs, and reaches the orchestrator job", async () => {
+    unitGraph()
+    const res = await viewerRun({ inputOverrides: { split: { size: "2K", maxLayers: 42 } } })
+    expect(res.statusCode).toBe(202)
+    expect(mockOrchestrationQueueAdd).toHaveBeenCalledWith("workflow-execution", expect.objectContaining({ inputOverrides: { split: { size: "2K", maxLayers: 42 } } }), expect.anything())
   })
 })
 

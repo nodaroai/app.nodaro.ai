@@ -34,7 +34,9 @@ export function aggregateSource(agg, members) {
   ]
   const dir = (u) => u.dirs[agg.tree]
   // The unit kit types the collection, so a member that does not fit fails typecheck at its line.
-  lines.push(`import type { ${agg.kitType} } from "${importSpecifier(agg.out, `${agg.tree === "frontend" ? "frontend/src/nodes" : "backend/src/nodes"}/${agg.kitFile ?? "kit.ts"}`)}"`)
+  // The definitions aggregate also holds each unit's app fields to its data type (UnitAppFieldsFit).
+  const kitTypes = agg.id === "definitions" ? `UnitAppFieldsFit, ${agg.kitType}` : agg.kitType
+  lines.push(`import type { ${kitTypes} } from "${importSpecifier(agg.out, `${agg.tree === "frontend" ? "frontend/src/nodes" : "backend/src/nodes"}/${agg.kitFile ?? "kit.ts"}`)}"`)
   for (const u of members) lines.push(`import { ${agg.binding} as ${unitBinding(u.type)} } from "${importSpecifier(agg.out, `${dir(u)}/${agg.member}`)}" ${tag(u.type)}`)
   const typed = agg.id === "definitions" ? members.filter((u) => u.typesSource !== null) : []
   for (const u of typed) {
@@ -49,6 +51,13 @@ export function aggregateSource(agg, members) {
     for (const u of members) lines.push(`  | ${JSON.stringify(u.type)} ${tag(u.type)}`)
     lines.push("", "export type UnitNodeData =", "  | never")
     for (const u of typed) lines.push(`  | ${unitBinding(u.type)}_data ${tag(u.type)}`)
+    // unit.json appFields against types.ts: a value the unit's data type does not take
+    // for that field fails typecheck at the unit's line (the validator requires types.ts).
+    lines.push("", "// Each unit's app fields (unit.json appFields) against its data type (types.ts): a value it does not take fails typecheck at its line.", "export type UnitAppFieldsChecked = [")
+    for (const u of typed.filter((x) => Array.isArray(x.manifest?.appFields))) {
+      lines.push(`  UnitAppFieldsFit<${unitBinding(u.type)}_data, typeof ${unitBinding(u.type)}.appFields>, ${tag(u.type)}`)
+    }
+    lines.push("]")
   } else {
     // Null-prototype: composers look a unit up by any node.type a workflow
     // carries, and on a plain object "constructor" / "toString" / "__proto__"
@@ -77,6 +86,8 @@ export function definitionSource(unit, priceRows) {
     handles: m.handles,
     execution: m.execution,
     capabilities: m.capabilities,
+    // The settings a published app may expose (exposable-fields.ts), only when declared.
+    ...(m.appFields ? { appFields: m.appFields } : {}),
     // What kind of media its output is (contract.producer; null when it outputs
     // none) — the editor's video sets compose it (VIDEO_SOURCE_TYPES_FOR_RENDER).
     producer: m.contract?.producer ?? null,
@@ -117,6 +128,8 @@ export function descriptorSource(unit) {
     handles: m.handles,
     execution: m.execution,
     capabilities: m.capabilities,
+    // The settings a published app may expose: what a run is held to (exposed-unit-field-check.ts), only when declared.
+    ...(m.appFields ? { appFields: m.appFields } : {}),
     // What kind of media its output is (contract.producer; null when it outputs
     // none) — the server's image sets compose it (as the editor's definition does).
     producer: m.contract?.producer ?? null,
@@ -250,6 +263,33 @@ export function useCaseRowsSource(units, legacyTypes = []) {
     "",
     `export const UNIT_USE_CASE_ROWS: ReadonlyArray<{ readonly type: string; readonly builder: string; readonly label: string; readonly inputs: ReadonlyArray<${USE_CASE_INPUT_HANDLES.map((h) => JSON.stringify(h)).join(" | ")}> }> = [`,
     ...rows.map((u) => `  { type: ${JSON.stringify(u.type)}, builder: ${JSON.stringify(u.manifest.execution.builder)}, label: ${JSON.stringify(u.manifest.label)}, inputs: [${u.manifest.handles.inputs.map((h) => JSON.stringify(h.id)).join(", ")}] }, ${tag(u.type)}`),
+    "]",
+    "",
+  ].join("\n")
+}
+
+/**
+ * packages/render-rules/src/unit-list-outputs.generated.ts — each unit's list
+ * outputs (handles.outputs[].list) as the run estimate counts them
+ * (node-fan-out.ts): the field holding the list a run made, and — when
+ * declared (listMax) — the field holding the most items a run makes, with its
+ * default, counted before a first run.
+ */
+export function listOutputsSource(units, legacyTypes = []) {
+  const rows = inPositionOrder(units, legacyTypes).flatMap((u) => (Array.isArray(u.manifest.handles?.outputs) ? u.manifest.handles.outputs : [])
+    .filter((h) => h?.list === true)
+    .map((h) => {
+      const max = typeof h.listMax === "string" ? `, max: { field: ${JSON.stringify(h.listMax)}, default: ${Number(u.manifest.defaultData?.[h.listMax])} }` : ""
+      return `  { type: ${JSON.stringify(u.type)}, pip: ${JSON.stringify(h.id)}, from: ${JSON.stringify(h.from)}${max} }, ${tag(u.type)}`
+    }))
+  return [
+    GENERATED_HEADER,
+    "// The node units' list outputs (handles.outputs[].list), in position order, as the run estimate",
+    "// counts an Each wire from one (node-fan-out.ts): the list a run made (`from`), and the most items",
+    "// a run makes (`max`, listMax), counted before a first run. render-rules is private (never published).",
+    "",
+    "export const UNIT_LIST_OUTPUTS: ReadonlyArray<{ readonly type: string; readonly pip: string; readonly from: string; readonly max?: { readonly field: string; readonly default: number } }> = [",
+    ...rows,
     "]",
     "",
   ].join("\n")

@@ -24,6 +24,7 @@ const mocks = {
   videoOverlay: vi.fn(),
   addCaptions: vi.fn(),
   videoMask: vi.fn(),
+  splitIntoLayers: vi.fn(),
   nodesRun: vi.fn(),
   jobsGet: vi.fn(),
 }
@@ -46,6 +47,7 @@ vi.mock("../../client.js", () => ({
       videoOverlay: mocks.videoOverlay,
       addCaptions: mocks.addCaptions,
       videoMask: mocks.videoMask,
+      splitIntoLayers: mocks.splitIntoLayers,
     },
     nodes: { run: mocks.nodesRun },
     jobs: { get: mocks.jobsGet },
@@ -121,6 +123,46 @@ describe("media generate-mask command", () => {
     })
     await runCmd("media", "generate-mask", "https://x/photo.png", "the person", "--watch", "--poll-interval", "1")
     expect(mocks.jobsGet).toHaveBeenCalledWith("j-mask")
+    expect(vi.mocked(success)).toHaveBeenCalledWith(expect.stringContaining("completed"))
+  })
+})
+
+describe("media split-layers command", () => {
+  it("sends the image and --max-layers, --size and --prompt to client.media.splitIntoLayers", async () => {
+    mocks.splitIntoLayers.mockResolvedValueOnce({ jobId: "j-layers" })
+    await runCmd("media", "split-layers", "https://x/poster.png", "--max-layers", "4", "--size", "2K", "--prompt", "the title, the car", "--json")
+    expect(mocks.splitIntoLayers).toHaveBeenCalledWith({ imageUrl: "https://x/poster.png", maxLayers: 4, size: "2K", prompt: "the title, the car" })
+    expect(vi.mocked(emit)).toHaveBeenCalledWith({ jobId: "j-layers" }, expect.anything())
+  })
+
+  it("sends only the image when no flag is given (the server defaults apply)", async () => {
+    mocks.splitIntoLayers.mockResolvedValueOnce({ jobId: "j-layers" })
+    await runCmd("media", "split-layers", "https://x/poster.png", "--json")
+    expect(mocks.splitIntoLayers).toHaveBeenCalledWith({ imageUrl: "https://x/poster.png" })
+  })
+
+  it.each([["0"], ["100"], ["2.5"], ["abc"]])("refuses --max-layers %s before calling the API", async (v) => {
+    await expect(runCmd("media", "split-layers", "https://x/poster.png", "--max-layers", v)).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--max-layers"))
+    expect(mocks.splitIntoLayers).not.toHaveBeenCalled()
+  })
+
+  it("refuses a --size the API does not take, and a --prompt past 2,000 characters", async () => {
+    await expect(runCmd("media", "split-layers", "https://x/poster.png", "--size", "4K")).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--size"))
+    await expect(runCmd("media", "split-layers", "https://x/poster.png", "--prompt", "x".repeat(2001))).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--prompt"))
+    expect(mocks.splitIntoLayers).not.toHaveBeenCalled()
+  })
+
+  it("--watch polls the job to its end", async () => {
+    mocks.splitIntoLayers.mockResolvedValueOnce({ jobId: "j-layers" })
+    mocks.jobsGet.mockResolvedValueOnce({
+      data: { id: "j-layers", status: "completed", output_data: { imageUrl: "https://x/base.png", layers: ["https://x/l1.png"], layerCount: 1 } },
+    })
+    await runCmd("media", "split-layers", "https://x/poster.png", "--size", "auto", "--watch", "--poll-interval", "1")
+    expect(mocks.splitIntoLayers).toHaveBeenCalledWith({ imageUrl: "https://x/poster.png", size: "auto" })
+    expect(mocks.jobsGet).toHaveBeenCalledWith("j-layers")
     expect(vi.mocked(success)).toHaveBeenCalledWith(expect.stringContaining("completed"))
   })
 })
@@ -928,6 +970,15 @@ describe("docs/cli.md covers the media command surface", () => {
     const flags = (sub?.options ?? []).map((o) => o.long).filter((f): f is string => !!f && f !== "--profile")
     expect(flags).toEqual(expect.arrayContaining(["--per-shot", "--zone", "--redetect-every"]))
     for (const flag of flags) expect(line).toContain(`[${flag}`)
+  })
+
+  it("lists every split-layers flag and size in its synopsis", () => {
+    const line = synopsisOf("split-layers") ?? ""
+    const sub = mediaCommand().commands.find((c) => c.name() === "split-layers")
+    const flags = (sub?.options ?? []).map((o) => o.long).filter((f): f is string => !!f && f !== "--profile")
+    expect(flags).toEqual(expect.arrayContaining(["--max-layers", "--size", "--prompt"]))
+    for (const flag of flags) expect(line).toContain(`[${flag}`)
+    expect(line).toContain("--size 1K|1.5K|2K|auto")
   })
 
   it("names video overlay in the Media section header", () => {

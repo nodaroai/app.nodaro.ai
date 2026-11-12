@@ -55,7 +55,7 @@ import {
   type VideoOverlayOutputAspect,
   type VideoOverlayPresetId,
 } from "@nodaro/shared/video"
-import type { DownloadVideoProgress, CaptionEntry, CaptionSegmentInput } from "@nodaro/sdk/media"
+import type { DownloadVideoProgress, CaptionEntry, CaptionSegmentInput, SplitIntoLayersSize } from "@nodaro/sdk/media"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -65,6 +65,11 @@ interface WatchOpts extends GlobalOpts {
   watch?: boolean
   pollInterval: number
 }
+
+/** `media split-layers`' levers, as POST /v1/split-into-layers takes them (checked here so a bad flag never reaches the API). */
+const SPLIT_LAYERS_SIZES = ["1K", "1.5K", "2K", "auto"] as const satisfies readonly SplitIntoLayersSize[]
+const SPLIT_LAYERS_MAX_LAYERS = { min: 1, max: 99, default: 9 } as const
+const SPLIT_LAYERS_PROMPT_MAX = 2000
 
 /** Parse `--section a-b` (seconds, floats allowed) into a start/end pair. */
 function parseSection(raw: string): { sectionStartSec: number; sectionEndSec: number } {
@@ -1118,6 +1123,54 @@ image, passed through unchanged): \`nodaro jobs get <jobId>\`. Use the mask for 
           ...(opts.threshold !== undefined ? { threshold: opts.threshold } : {}),
         })
         await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "mask" })
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("split-layers <imageUrl>")
+    .description("split one image into a base picture and separate layers — each element on its own transparent PNG, with its name, stacking order and the box it sits in on the base")
+    .option("--max-layers <n>", `the most layers to make, ${SPLIT_LAYERS_MAX_LAYERS.min}–${SPLIT_LAYERS_MAX_LAYERS.max} (default ${SPLIT_LAYERS_MAX_LAYERS.default}); more elements than that merge into fewer layers`, (v) => Number(v))
+    .option("--size <size>", `each image's pixel budget: ${SPLIT_LAYERS_SIZES.join(" | ")} (default 1K; auto keeps the picture's own size, between 1K and 2K)`)
+    .option("--prompt <text>", `what to separate, up to ${SPLIT_LAYERS_PROMPT_MAX.toLocaleString("en-US")} characters (default: the main elements are found automatically)`)
+    .option("--watch", "poll until the job completes")
+    .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText("after", `
+Examples:
+  $ nodaro media split-layers https://x/poster.png --watch
+  $ nodaro media split-layers https://x/poster.png --max-layers 4 --size 2K --prompt "the title, the car, the sky" --watch --json
+
+The finished job's output carries \`imageUrl\` (the base picture), \`layers\` (each
+layer's transparent PNG, bottom to top) and \`layerData\` (per layer: name,
+zIndex, the file's own width/height, \`box\` — where it sits on the base, in
+the base's pixels — and \`baseUrl\`, the base it was cut from). A layer is
+cropped to its element: scale it to its box to put it back in place. A run holds the price of --max-layers + 1 images and is
+charged only for the images it returns.`)
+    .action(async (imageUrl: string, opts: { maxLayers?: number; size?: string; prompt?: string } & WatchOpts) => {
+      try {
+        if (opts.maxLayers !== undefined && !(Number.isInteger(opts.maxLayers) && opts.maxLayers >= SPLIT_LAYERS_MAX_LAYERS.min && opts.maxLayers <= SPLIT_LAYERS_MAX_LAYERS.max)) {
+          warn(`--max-layers must be a whole number from ${SPLIT_LAYERS_MAX_LAYERS.min} to ${SPLIT_LAYERS_MAX_LAYERS.max}`)
+          process.exit(1)
+        }
+        if (opts.size !== undefined && !(SPLIT_LAYERS_SIZES as readonly string[]).includes(opts.size)) {
+          warn(`--size must be one of ${SPLIT_LAYERS_SIZES.join(", ")} (got "${opts.size}")`)
+          process.exit(1)
+        }
+        if (opts.prompt !== undefined && opts.prompt.length > SPLIT_LAYERS_PROMPT_MAX) {
+          warn(`--prompt must be at most ${SPLIT_LAYERS_PROMPT_MAX.toLocaleString("en-US")} characters`)
+          process.exit(1)
+        }
+        const client = buildClient(opts.profile)
+        const result = await client.media.splitIntoLayers({
+          imageUrl,
+          ...(opts.maxLayers !== undefined ? { maxLayers: opts.maxLayers } : {}),
+          ...(opts.size !== undefined ? { size: opts.size as SplitIntoLayersSize } : {}),
+          ...(opts.prompt ? { prompt: opts.prompt } : {}),
+        })
+        await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "split into layers" })
       } catch (err) {
         handleError(err)
       }

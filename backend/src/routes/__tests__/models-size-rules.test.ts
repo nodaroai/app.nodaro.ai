@@ -10,7 +10,9 @@ import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
  * served exactly as the catalog declares it, on the models that declare it,
  * and left out everywhere else, so a client that reads only the SDK knows
  * that GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only, and that
- * GPT Image 2 renders every ratio it offers at every size.
+ * GPT Image 2 renders every ratio it offers at every size. The reference task
+ * types a model takes (`referenceTaskTypes`, Seedance 2.5) follow the same
+ * rule.
  */
 
 // Not about prices or marks: both read the database, which this test has none of.
@@ -26,6 +28,7 @@ const { modelsRoutes } = await import("../models.js")
 
 interface ServedModel {
   id: string
+  referenceTaskTypes?: string[]
   resolutions?: string[]
   resolutionsByAspectRatio?: Record<string, string[]>
   transparentResolution?: string
@@ -109,6 +112,25 @@ describe("GET /v1/models — the transparent background's size", () => {
       else expect(m, m.id).not.toHaveProperty("transparentResolution")
       if (entry?.backgroundOnlyAtTransparentResolution) expect(m.backgroundOnlyAtTransparentResolution, m.id).toBe(true)
       else expect(m, m.id).not.toHaveProperty("backgroundOnlyAtTransparentResolution")
+    }
+  })
+})
+
+describe("GET /v1/models — the reference task types a model takes", () => {
+  it("Seedance 2.5 lists reference, edit and extend", () => {
+    expect(byId("seedance-2-5").referenceTaskTypes).toEqual(["reference", "edit", "extend"])
+  })
+
+  it("is served exactly as the catalog declares it, and left out on every other model", () => {
+    const carrying = served.filter((m) => m.referenceTaskTypes !== undefined).map((m) => m.id)
+    expect(carrying.sort()).toEqual(
+      served.filter((m) => (MODEL_CATALOG[m.id]?.referenceTaskTypes?.length ?? 0) > 0).map((m) => m.id).sort(),
+    )
+    expect(byId("seedance-2")).not.toHaveProperty("referenceTaskTypes")
+    for (const m of served) {
+      const declared = MODEL_CATALOG[m.id]?.referenceTaskTypes
+      if (declared?.length) expect(m.referenceTaskTypes, m.id).toEqual([...declared])
+      else expect(m, m.id).not.toHaveProperty("referenceTaskTypes")
     }
   })
 })

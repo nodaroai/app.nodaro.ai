@@ -392,7 +392,7 @@ describe("/v1/text-to-video Seedance 2 reference-video billing", () => {
       })
       expect(res.statusCode).toBe(200)
       const { seedance2RefVideoChargedQuote } = await import("../../ee/billing/seedance2-ref-video-quote.js")
-      const quote = await seedance2RefVideoChargedQuote({ provider: "seedance-2-5", resolution: "720p", duration: -1, durationsSec: [4.1], unknownClips: 0 })
+      const quote = await seedance2RefVideoChargedQuote({ provider: "seedance-2-5", resolution: "720p", duration: -1, durationsSec: [4.1], unknownClips: 0, referenceTaskType: undefined })
       // 0% markup here: ceil(95 × (4.1 + 6)) = 960 (was ceil(95 × 34.1) = 3240).
       expect(quote.credits).toBe(960)
       expect(reserveSpy).toHaveBeenCalledWith(
@@ -469,5 +469,84 @@ describe("/v1/text-to-video Seedance 2 reference-video billing", () => {
     expect(refCreditsSpy).not.toHaveBeenCalled()
     expect(probeSpy).not.toHaveBeenCalled()
     await app.close()
+  })
+})
+
+// A request that DECLARES `reference` with an automatic length: Seedance runs a
+// reference at a length it picks (4 to 30 s on 2.5), not its clip's, so the run
+// is reserved at the worst case — the model's longest output — rather than the
+// edit hold (the longest clip + 1 s). Every other request reserves as before.
+describe("a declared reference with an automatic length (both video routes)", () => {
+  const CLIP = "https://r2.example.com/ref.mp4"
+  const routes = [
+    { url: "/v1/text-to-video", build: buildTextToVideoApp, queued: "text-to-video" },
+    { url: "/v1/generate-video", build: buildGenerateVideoApp, queued: "image-to-video" },
+  ] as const
+
+  /** What one request reserved (the identifier, the override), recorded and queued. */
+  async function runOnce(route: (typeof routes)[number], payload: Record<string, unknown>) {
+    vi.clearAllMocks()
+    const app = await route.build()
+    const res = await app.inject({ method: "POST", url: route.url, payload })
+    expect(res.statusCode, res.body).toBe(200)
+    const [, , identifier, , , options] = reserveSpy.mock.calls[0] as unknown as [string, string, string, number, number, { creditOverride?: number }]
+    const inputData = (fakeJobInsert.mock.calls[0] as unknown as [{ input_data: Record<string, unknown> }])[0].input_data
+    const { videoQueue } = await import("../../lib/queue.js")
+    const [name, queued] = vi.mocked(videoQueue.add).mock.calls[0] as unknown as [string, Record<string, unknown>]
+    await app.close()
+    return { reserve: { identifier, creditOverride: options?.creditOverride }, inputData, name, queued }
+  }
+
+  const auto = { prompt: "a cat in the style of {video:1}", provider: "seedance-2-5", resolution: "720p", duration: -1, referenceVideoUrls: [CLIP] }
+
+  it.each(routes)("$url: one 5 s clip at 720p reserves the worst case, ceil(95 × (5 + 30)) = 3325 — not the edit's 1045", async (route) => {
+    const { reserve, inputData, name, queued } = await runOnce(route, { ...auto, referenceTaskType: "reference" })
+    const { seedance2RefVideoBaseCreditsFromDurations: reservation } = await vi.importActual<typeof import("../../ee/billing/seedance2-ref-video-credits.js")>("../../ee/billing/seedance2-ref-video-credits.js")
+    const worst = reservation({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: 30, requestedDuration: -1, referenceTaskType: "reference", durationsSec: [5] })
+    expect(worst).toBe(3325)
+    expect(reserve).toStrictEqual({ identifier: "seedance-2-5:30s:720p-ref", creditOverride: worst })
+    expect(refCreditsSpy).toHaveBeenCalledWith(expect.objectContaining({ requestedDuration: -1, referenceTaskType: "reference", durationsSec: [5] }))
+    // The settlement reads the type off the job: recorded and queued.
+    expect(inputData).toMatchObject({ referenceTaskType: "reference", duration: -1, refVideoDurationsSec: [5] })
+    expect(name).toBe(route.queued)
+    expect(queued).toMatchObject({ referenceTaskType: "reference", duration: -1, refVideoDurationsSec: [5] })
+  })
+
+  it.each(routes)("$url: two clips reserve the longest output and both clips as input", async (route) => {
+    probeSpy.mockImplementation(((url: string) => Promise.resolve(url === CLIP ? 5 : 12)) as never)
+    try {
+      const { reserve } = await runOnce(route, { ...auto, referenceVideoUrls: [CLIP, "https://r2.example.com/long.mp4"], referenceTaskType: "reference" })
+      expect(reserve.creditOverride).toBe(Math.ceil((760 / 8) * (5 + 12 + 30)))
+    } finally {
+      probeSpy.mockImplementation(() => Promise.resolve(5))
+    }
+  })
+
+  /** The same body without the field: what it reserved, recorded and queued before this rule. */
+  async function expectUndeclared(route: (typeof routes)[number], body: Record<string, unknown>, referenceTaskType: string) {
+    const declared = await runOnce(route, { ...body, referenceTaskType })
+    const plain = await runOnce(route, body)
+    expect(declared.reserve).toStrictEqual(plain.reserve)
+    return { declared, plain }
+  }
+
+  it.each(routes)("$url: a draft, or a model that does not take the type, reserves exactly as undeclared", async (route) => {
+    await expectUndeclared(route, { ...auto, draft: true }, "reference")
+    await expectUndeclared(route, { ...auto, provider: "seedance-2" }, "reference")
+  })
+
+  it.each(routes)("$url: edit + Auto, extend, a fixed-length reference and auto reserve exactly as undeclared", async (route) => {
+    // edit: the clip is 5 s (inside 4–30), so it is declared and runs at the edit shape — the same hold.
+    const edit = await expectUndeclared(route, { ...auto, aspectRatio: "adaptive" }, "edit")
+    expect(edit.declared.queued).toMatchObject({ referenceTaskType: "edit" })
+    expect(edit.declared.reserve.creditOverride).toBe(Math.ceil((760 / 8) * (5 + 6)))
+    // extend at a set length, and a reference at a set length: the longer of the length and the clip.
+    const extend = await expectUndeclared(route, { ...auto, duration: 8, aspectRatio: "adaptive" }, "extend")
+    expect(extend.declared.queued).toMatchObject({ referenceTaskType: "extend" })
+    const fixed = await expectUndeclared(route, { ...auto, duration: 8 }, "reference")
+    expect(fixed.declared.reserve.creditOverride).toBe(Math.ceil((760 / 8) * (5 + 8)))
+    const none = await expectUndeclared(route, auto, "auto")
+    expect(none.declared.queued).not.toHaveProperty("referenceTaskType")
+    expect(none.declared.reserve.creditOverride).toBe(1045)
   })
 })

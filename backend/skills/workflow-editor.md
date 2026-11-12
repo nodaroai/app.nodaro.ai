@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-11-04T12:55:49.174Z
-generated_from: 2cad74fa7
+generated_at: 2026-11-11T19:47:27.192Z
+generated_from: 223a60d37
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -225,6 +225,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `speaker-view` — Speaker View
 - `speech-to-video` — Speech to Video
 - `speed-ramp` — Adjust Speed
+- `split-into-layers` — Split into Layers
 - `split-media` — Split into Chunks
 - `split-text` — Split Text
 - `sticky-note` — Sticky Note

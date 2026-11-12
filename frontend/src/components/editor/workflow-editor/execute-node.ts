@@ -55,10 +55,10 @@ import {
   isMinimaxH3Provider,
   isVeoProvider,
   isGeminiOmniProvider,
-  isGeminiOmniPerSecondProvider,
   resolveVideoProviderForMode,
   resolveVideoModeForInputs,
-  VIDEO_REF_LIMITS_BY_PROVIDER,
+  videoProviderRefsReplaceStartFrame,
+  videoProviderTakesLoneEndFrame,
   selectLoraRoutingForMentions,
   resolveGvpAnchorWire,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
@@ -233,6 +233,7 @@ import {
   resolveNodeRefs,
   splitGeneratedItems,
   countRefModalityEdges,
+  referenceModalityForHandle,
   type ReferenceModality,
   resolveSeparator,
   evaluateJsonPath,
@@ -261,7 +262,7 @@ import {
 import {
   clampContentIdeasCount,
   CONTENT_IDEAS_MAX_RECIPE_INPUTS,
-  resolveTopazUpscale,
+  resolveUpscaleFactor,
   ltxExtendDurationSec
 } from "@nodaro/shared/credits";
 import {
@@ -2127,10 +2128,9 @@ function executeNodeCore(
     return runEditImage(node.id, imageUrl, ctx, prompt, provider, {
       // Single-node Run must send the SAME factor the badge priced and the
       // route will reserve — forwarding the raw legacy targetResolution here
-      // was a live CHECK != SENT gap. resolveTopazUpscale is the one authority.
-      ...(editData.provider === "topaz-image-upscale"
-        ? { upscaleFactor: resolveTopazUpscale({ upscaleFactor: editData.upscaleFactor, targetResolution: editData.targetResolution }).upscaleFactor }
-        : { upscaleFactor: editData.upscaleFactor }),
+      // was a live CHECK != SENT gap. resolveUpscaleFactor is the one authority
+      // (Topaz through resolveTopazUpscale; Nodaro Image Upscale always sends one).
+      upscaleFactor: resolveUpscaleFactor(editData.provider, editData),
       targetResolution: editData.targetResolution,
       aspectRatio: editData.aspectRatio,
       negativePrompt: editData.negativePrompt,
@@ -2473,9 +2473,7 @@ function executeNodeCore(
       {
         // Same resolver as the badge, the route and the worker — see the edit
         // lane above.
-        ...(upData.provider === "topaz-image-upscale"
-          ? { upscaleFactor: resolveTopazUpscale({ upscaleFactor: upData.upscaleFactor, targetResolution: upData.targetResolution }).upscaleFactor }
-          : { upscaleFactor: upData.upscaleFactor }),
+        upscaleFactor: resolveUpscaleFactor(upData.provider, upData),
         targetResolution: upData.targetResolution,
       },
     );
@@ -2520,7 +2518,10 @@ function executeNodeCore(
     // Shared with the backend orchestrator: a start frame is i2v; refs alone
     // are i2v only for a split-id model whose t2v twin cannot carry them
     // (Grok Imagine 1 — its text endpoint has no image parameter, #861).
-    const hasImageRefs = Boolean((inputs.referenceImageUrls as string[] | undefined)?.length);
+    // A keyframes model counts only what is wired into its Image References (a
+    // wired asset never becomes one of its frames) — mirrors payload-builder.ts.
+    const gvKeyframesModel = !!rawProvider && hasFeature(rawProvider, "keyframes");
+    const hasImageRefs = Boolean(((gvKeyframesModel ? inputs.imageReferenceHandleUrls : inputs.referenceImageUrls) as string[] | undefined)?.length);
     const mode: "image-to-video" | "text-to-video" = hasGeminiVideoRef
       ? "image-to-video"
       : resolveVideoModeForInputs(rawProvider, { hasStartFrame: hasImage, hasImageRefs });
@@ -2930,7 +2931,11 @@ function executeNodeCore(
     // the config panel) before mention-merge so positional Image-N letters
     // in the assembled prompt respect the user's ordering. Mirrors the
     // orchestrator's `applyOrderToReferenceUrls` in `payload-builder.ts`.
-    let referenceImageUrls = inputs.referenceImageUrls as string[] | undefined;
+    // A keyframes model's in-between frames are exactly what is wired into its
+    // Image References, in order (decided 2026-11-11): a wired asset's image
+    // never becomes one. Mirrors payload-builder.ts.
+    const i2vKeyframesModel = !!nodeProvider && hasFeature(nodeProvider, "keyframes");
+    let referenceImageUrls = (i2vKeyframesModel ? inputs.imageReferenceHandleUrls : inputs.referenceImageUrls) as string[] | undefined;
     // A generate-video node re-typed to i2v carries the migrated
     // `referenceImageOrder` (the load migration renames `connectedRefImageOrder`
     // → `referenceImageOrder`), so fall back to it — otherwise single-node Run
@@ -2939,8 +2944,10 @@ function executeNodeCore(
     const i2vRefOrder = i2vData.connectedRefImageOrder
       ?? ((i2vData as Record<string, unknown>).referenceImageOrder as readonly string[] | undefined);
     if (i2vRefOrder?.length) {
+      // On a keyframes model the order covers every Image References handle
+      // (`imageReferences` on Generate Video), as the workflow run's does.
       const refSourceNodes = edges
-        .filter((e) => e.target === node.id && e.targetHandle === "references")
+        .filter((e) => e.target === node.id && (i2vKeyframesModel ? referenceModalityForHandle(e.targetHandle) === "image" : e.targetHandle === "references"))
         .map((e) => nodes.find((n) => n.id === e.source))
         .filter(Boolean) as WorkflowNode[];
       if (refSourceNodes.length > 0) {
@@ -3079,7 +3086,9 @@ function executeNodeCore(
       suppressedCanonicalCharacterIds: i2vData.suppressedCanonicalCharacterIds,
       // D5: assets number AFTER leading image-refs (ordinalOffset = EDGE count) +
       // wired entities attach — mirrors the orchestrator (payload-builder.ts) + preview.
-      ...(i2vProviderSupportsRefs ? { ordinalOffset: countRefModality("image"), includeWiredEntities: true } : {}),
+      // A keyframes model's wired assets add no image (a character keeps its
+      // identity text) — mirrors payload-builder.ts.
+      ...(i2vProviderSupportsRefs ? { ordinalOffset: countRefModality("image"), includeWiredEntities: !i2vKeyframesModel, assetsTakeNoSeat: i2vKeyframesModel } : {}),
       videoRefCount: i2vProviderSupportsRefs ? countRefModality("video") : undefined,
       audioRefCount: i2vProviderSupportsRefs ? countRefModality("audio") : undefined,
     });
@@ -3089,7 +3098,6 @@ function executeNodeCore(
     // asset's image must not join them. A `character-subjects` model (Kling 4.0)
     // has no frame for a character to fill — its image stays a reference seat
     // the provider names. Mirrors payload-builder.ts.
-    const i2vKeyframesModel = !!nodeProvider && hasFeature(nodeProvider, "keyframes");
     if (i2vMention.additionalUrls.length > 0 && !i2vKeyframesModel) {
       let remainingMentionUrls = i2vMention.additionalUrls;
       if (!startFrameUrl && !(nodeProvider && hasFeature(nodeProvider, "character-subjects"))) {
@@ -3128,13 +3136,16 @@ function executeNodeCore(
     // /v1/generate-video route applies (`hasMultimodalRef`): a provider whose
     // cap says it carries image references may run on them alone (grok-i2v
     // via the #861 mode routing; kling-3-omni / happyhorse-ref2v when reached
-    // as i2v). Video/audio-only refs keep the older provider-specific checks.
+    // as i2v) — but a `keyframes` model's in-between frames need the start
+    // frame unless its endpoint runs from them alone (Grok Imagine Video 1.5
+    // does not). Video/audio-only refs keep the older provider-specific checks.
     const i2vRefsCarried =
-      (VIDEO_REF_LIMITS_BY_PROVIDER[nodeProvider ?? ""]?.images ?? 0) > 0 && (i2vMergedRefs?.length ?? 0) > 0
-    // Kling 4.0 Keyframes and Omni Flash 1.2 take an end frame alone, and every
-    // Gemini Omni model runs a source video alone as a video edit.
-    const i2vOmniPerSecond = isGeminiOmniPerSecondProvider(nodeProvider)
-    const i2vLoneEndFrame = (i2vKeyframesModel || i2vOmniPerSecond) && !!endFrameUrl
+      videoProviderRefsReplaceStartFrame(nodeProvider) && (i2vMergedRefs?.length ?? 0) > 0
+    // Kling 4.0 Keyframes and Omni Flash 1.2 take an end frame alone
+    // (videoProviderTakesLoneEndFrame — not Grok Imagine Video 1.5, which needs
+    // its start image), and every Gemini Omni model runs a source video alone
+    // as a video edit.
+    const i2vLoneEndFrame = videoProviderTakesLoneEndFrame(nodeProvider) && !!endFrameUrl
     const i2vSourceVideoAlone = isGeminiOmniProvider(nodeProvider) && Boolean((inputs.referenceVideoUrls as string[] | undefined)?.length)
     if (!startFrameUrl && !isVeoRefMode && !isSeedance2RefOnly && !i2vRefsCarried && !i2vLoneEndFrame && !i2vSourceVideoAlone) {
       const debugSources = edges.filter((e) => e.target === node.id).map((e) => `${e.sourceHandle ?? "?"}→${e.targetHandle ?? "?"}`).join(", ")
@@ -3425,6 +3436,8 @@ function executeNodeCore(
     // `t2vProvider` below is only for endpoint/param routing, not the strip gate.
     const t2vProviderForRefs = t2vData.provider;
     const t2vProviderSupportsRefs = !!t2vProviderForRefs && hasFeature(t2vProviderForRefs, "reference-image");
+    // A keyframes model seats no asset: its references are its frames.
+    const t2vRefsKeyframes = !!t2vProviderForRefs && hasFeature(t2vProviderForRefs, "keyframes");
     let prompt: string | undefined = promptOf("text-to-video", (node.data as Record<string, unknown>).__appendWired === true);
     if (!t2vProviderSupportsRefs) prompt = stripVideoImageTokens(prompt);
     {
@@ -3477,7 +3490,7 @@ function executeNodeCore(
       suppressedCanonicalCharacterIds: t2vData.suppressedCanonicalCharacterIds,
       // D5: assets number AFTER leading image-refs (ordinalOffset = EDGE count) +
       // wired entities attach — mirrors the orchestrator (payload-builder.ts) + preview.
-      ...(t2vProviderSupportsRefs ? { ordinalOffset: countRefModality("image"), includeWiredEntities: true } : {}),
+      ...(t2vProviderSupportsRefs ? { ordinalOffset: countRefModality("image"), includeWiredEntities: !t2vRefsKeyframes, assetsTakeNoSeat: t2vRefsKeyframes } : {}),
       videoRefCount: t2vProviderSupportsRefs ? countRefModality("video") : undefined,
       audioRefCount: t2vProviderSupportsRefs ? countRefModality("audio") : undefined,
     });
@@ -3500,7 +3513,10 @@ function executeNodeCore(
     // orchestrator's t2v branch in `payload-builder.ts`. t2v has no
     // startFrame handle, so the filter accepts any wired image/character/
     // entity upstream (matches `T2V_IMAGE_TYPES` in `video-configs.tsx`).
-    let upstreamRefImages = inputs.referenceImageUrls as string[] | undefined
+    // A keyframes model's in-between frames are exactly what is wired into its
+    // Image References (decided 2026-11-11) — mirrors payload-builder.ts.
+    const t2vKeyframesModel = !!t2vProvider && hasFeature(t2vProvider, "keyframes");
+    let upstreamRefImages = (t2vKeyframesModel ? inputs.imageReferenceHandleUrls : inputs.referenceImageUrls) as string[] | undefined
     // Fall back to the migrated `referenceImageOrder` (see the i2v branch) so a
     // re-typed generate-video node keeps its drag order on single-node Run.
     const t2vRefOrder = t2vData.connectedRefImageOrder
@@ -3511,7 +3527,7 @@ function executeNodeCore(
         "edit-image", "image-to-image", "scene",
       ]);
       const refSourceNodes = edges
-        .filter((e) => e.target === node.id)
+        .filter((e) => e.target === node.id && (!t2vKeyframesModel || referenceModalityForHandle(e.targetHandle) === "image"))
         .map((e) => nodes.find((n) => n.id === e.source))
         .filter((n): n is WorkflowNode => !!n && t2vRefAllowedTypes.has(n.type as string));
       if (refSourceNodes.length > 0) {
@@ -3542,7 +3558,7 @@ function executeNodeCore(
     let t2vRefImages: string[] | undefined = upstreamRefImages?.length ? [...upstreamRefImages] : undefined;
     // A keyframes model's Image References are its in-between FRAMES: a wired
     // asset's image must not join them (mirrors payload-builder.ts).
-    if (t2vMention.additionalUrls.length > 0 && !(t2vProvider && hasFeature(t2vProvider, "keyframes"))) {
+    if (t2vMention.additionalUrls.length > 0 && !t2vKeyframesModel) {
       const existing = t2vRefImages ?? [];
       const merged: string[] = [];
       const seen = new Set<string>();

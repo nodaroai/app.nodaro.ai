@@ -23,6 +23,7 @@ import {
   noteInlineGraphColumnError,
 } from "../lib/execution-inline-graph.js"
 import { updateExecutionWithRetry } from "../lib/execution-writes.js"
+import { outerRunStamp } from "../lib/use-case-outer-run.js"
 import type { WorkflowExecutionJob } from "./workflow-engine/types.js"
 import type { ImportVia } from "../lib/content-rights.js"
 
@@ -55,6 +56,14 @@ export interface ExecuteInlineGraphParams {
    * carried onto the job, where it means "takes no run slot". Absent = top-level.
    */
   readonly parentExecutionId?: string
+  /**
+   * The run this inner run works for (lib/use-case-outer-run.ts), stamped on
+   * its `trigger_data`: the running run whose node started it (the internal
+   * lane's parent, never a caller's), or — a continuation started from
+   * outside a run — the link of the run it continues. Its provider words are
+   * judged by that run's workflow. Absent: a use-case job run on its own.
+   */
+  readonly outerRunId?: string
   /**
    * The run's spend surface and app-run flag, as the route resolved them for
    * its own balance check and fee hold: the steps of the hidden run reserve
@@ -92,6 +101,8 @@ export async function executeInlineGraph(p: ExecuteInlineGraphParams): Promise<E
         user_id: p.userId,
         status: "pending",
         trigger_type: "use_case",
+        // The run it works for, written by the server alone (lib/use-case-outer-run.ts); none on a standalone run.
+        ...(p.outerRunId ? { trigger_data: outerRunStamp(p.outerRunId) } : {}),
         ...inlineExecutionColumns(p.graph, p.wrapperJobId),
         ...(p.mcpClient ? { mcp_client: p.mcpClient } : {}),
         // The carried payer's pair rides the row (personal adds nothing).

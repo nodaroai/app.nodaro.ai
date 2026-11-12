@@ -51,6 +51,18 @@ export {
   type TopazUpscaleAdjustment,
   type TopazUpscaleResolution,
 } from "../topaz-upscale.js"
+export {
+  NODARO_IMAGE_UPSCALE_MODEL_ID,
+  NODARO_IMAGE_UPSCALE_FACTORS,
+  NODARO_IMAGE_UPSCALE_DEFAULT_FACTOR,
+  UPSCALE_FACTORS,
+  resolveNodaroImageUpscaleFactor,
+  resolveUpscaleFactor,
+  snappedUpscaleFactor,
+  upscaleFactorsFor,
+  type NodaroImageUpscaleFactor,
+  type UpscaleFactor,
+} from "../upscale-factors.js"
 export { calculateMonetizationMarkup, calculateMonetizedCost } from "../monetization.js"
 export {
   LIP_SYNC_DURATION_BUCKETS,

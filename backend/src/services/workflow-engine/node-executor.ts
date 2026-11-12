@@ -125,8 +125,13 @@ import { stampVideoOverlayLength, videoOverlayBaseCredits, videoOverlayReserveId
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { stampTopazVideoUpscale, topazVideoStampedBaseCredits } from "../../lib/topaz-video-plan.js"
 import { stampTopazImageSize, topazImageStampedBaseCredits } from "../../lib/topaz-image-size.js"
+import { isNodaroImageUpscaleJob, nodaroImageUpscaleReserveId } from "../../lib/nodaro-image-upscale-size.js"
+import { stampNodaroImageUpscaleInput } from "../../lib/nodaro-image-upscale-lane.js"
+import { runStopSignal } from "./run-stop-signal.js"
+import { discardDeletedJobScratch } from "../../lib/job-scratch.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
+import { stampSeedanceReferenceTaskType } from "../../lib/seedance-task-type-stamp.js"
 import { applyAudioSoundtrack } from "../../lib/audio-soundtrack.js"
 import { probeAndCheckRefAudio } from "../../lib/ref-audio-probe.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
@@ -1851,8 +1856,12 @@ async function computeSeedance2RefVideoCreditOverride(
     // provider's own default, the same source the identifier's tier reads
     // (#1397: a literal 5 under-reserved seedance-2-5's 8s render).
     outputDurationSec: pricedOutputDurationSec(provider as string, payload.duration as number | string | undefined),
-    // Auto (-1) is the edit shape: its hold follows the source clip.
+    // Auto (-1) is the edit shape: its hold follows the longest reference clip.
     requestedDuration: payload.duration,
+    // The RESOLVED declaration: the 2b+ stamp ran before this, so the payload
+    // carries a declared type or no key. A declared `reference` with an
+    // automatic length holds the worst case, not the edit's.
+    referenceTaskType: payload.referenceTaskType,
     // Per-second Gemini Omni: the node's trim decides what is billed.
     videoTrim: { start: payload.videoTrimStart, end: payload.videoTrimEnd },
   }
@@ -2279,7 +2288,8 @@ async function executeWorkerNode(
       : new Error(`Failed to build payload for ${node.type}: ${String(err)}`)
   }
   const { jobName, queueName, modelIdentifier } = buildResult
-  // `let`: the Seedance draft-finalize stamp (2b'++) rebinds it to a merged copy.
+  // `let`: the reference task type stamp (2b+) and the Seedance draft-finalize
+  // stamp (2b'++) rebind it to a copy.
   let { payload } = buildResult
 
   // 2. The restriction gate, FIRST: a file an administrator restricted after
@@ -2358,6 +2368,13 @@ async function executeWorkerNode(
   // privately and the settlement to probe again.
   const refVideoDurationsSec = refVideoCheck.durationsSec ?? (await probeRefVideosForReservation(payload))
 
+  // 2b+. A requested reference task type (the Video to Video node's Seedance
+  // edit requests `edit`), resolved by the routes' own rule now that the clips
+  // are measured — BEFORE input_data, the reservation and the queued payload
+  // below, which all read this `payload`. Undeclared → no key at all. A payload
+  // that requests nothing is the same object (lib/seedance-task-type-stamp.ts).
+  payload = stampSeedanceReferenceTaskType(payload, refVideoDurationsSec)
+
   // 2b'. Video SFX: measure the clip by the route's own rule and stamp the
   // length (what the model scores) and its price row on the payload, BEFORE
   // input_data is written below — the worker reads the row, not the queue
@@ -2430,6 +2447,38 @@ async function executeWorkerNode(
     throw err
   }
   if (Object.keys(topazImageStamp.patch).length > 0) payload = { ...payload, ...topazImageStamp.patch }
+  // Nodaro Image Upscale (a house model): its image goes through the copy helper
+  // into this job's scratch folder and is measured there, by the route's rule;
+  // an output past the limits, or an image the helper refuses, ends the node
+  // before a jobs row is kept. The stored copy (beside the node's own
+  // `imageUrl`, kept as it was), its bytes and the tier its output is charged
+  // are stamped (lib/nodaro-image-upscale-lane.ts). An unreadable size stamps
+  // the hold (settled to what the run delivers). The copy stops when the run is
+  // cancelled or this worker drains (`runStopSignal`), and a stamp that throws
+  // instead of refusing — a stop, the upload policy's own refusal, the served
+  // ids not known yet — leaves no jobs row either, and is rethrown as it is (a
+  // drain or an unknown answer still hands the run back). Either way the copy
+  // already stored for it (an output past the limits is refused after the
+  // copy; a stop can land after the upload) is deleted with the row, and a
+  // cleanup that fails never replaces the error the node ends with.
+  const nodaroImageUpscaleStop = isNodaroImageUpscaleJob(jobName, payload) ? runStopSignal(ctx) : undefined
+  const nodaroImageUpscaleStamp = await stampNodaroImageUpscaleInput(jobName, payload, {
+    userId: ctx.userId,
+    jobId,
+    ...(nodaroImageUpscaleStop ? { signal: nodaroImageUpscaleStop.signal } : {}),
+  })
+    .catch(async (err: unknown) => {
+      await dropRefusedStampedJob(jobId)
+      throw err
+    })
+    .finally(() => nodaroImageUpscaleStop?.dispose())
+  if (!nodaroImageUpscaleStamp.ok) {
+    await dropRefusedStampedJob(jobId)
+    const err = new Error(nodaroImageUpscaleStamp.message) as Error & { errorCode?: string }
+    err.errorCode = nodaroImageUpscaleStamp.code
+    throw err
+  }
+  if (Object.keys(nodaroImageUpscaleStamp.patch).length > 0) payload = { ...payload, ...nodaroImageUpscaleStamp.patch }
 
   const pitchTempoRefusal = await stampPitchTempoDuration(jobName, payload)
   if (pitchTempoRefusal) {
@@ -2600,6 +2649,8 @@ async function executeWorkerNode(
         meteredHold?.chargeId ??
         (await computeEditPlanReserveId(jobName, payload, editPlanPerMinute)) ??
         videoSfxReserveId(jobName, payload) ??
+        // Nodaro Image Upscale: the tier stamped from its output's size, else the hold.
+        nodaroImageUpscaleReserveId(jobName, payload) ??
         videoDepthReserveId(jobName, payload) ??
         pitchTempoReserveId(jobName, payload) ??
         seedanceDraftFinalizeReserveId(jobName, payload) ??
@@ -3568,4 +3619,21 @@ async function speakerViewClipOfRun(node: SimpleNode, resolvedInputs: ResolvedIn
 async function speakerViewTracksOfRun(node: SimpleNode, resolvedInputs: ResolvedInputs, userId: string) {
   const { resolveSpeakerViewTracksOfNode, speakerViewTracksServerDeps } = await import("../../lib/speaker-view-tracks-io.js")
   return resolveSpeakerViewTracksOfNode(node, resolvedInputs, speakerViewTracksServerDeps(userId))
+}
+
+/**
+ * The placeholder row of a node refused at its input stamp, and the copy the
+ * stamp already stored in the job's scratch folder (`discardDeletedJobScratch`):
+ * both go. Never throws — it runs while the node unwinds a refusal or a stop,
+ * and a failed cleanup must not replace that error (a `DrainAbortError` stays
+ * one, so the run is still handed back). A row or a file left behind is the
+ * daily sweep's.
+ */
+async function dropRefusedStampedJob(jobId: string): Promise<void> {
+  try {
+    await supabase.from("jobs").delete().eq("id", jobId)
+  } catch (err) {
+    console.warn(`[orchestrator] Could not delete refused job ${jobId}'s placeholder row: ${err instanceof Error ? err.message : String(err)}`)
+  }
+  await discardDeletedJobScratch(jobId)
 }

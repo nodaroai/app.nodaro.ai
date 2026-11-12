@@ -215,6 +215,14 @@
               "list": {
                 "const": true,
                 "description": "The output carries one run's list of files (an image, video or audio output with from): an Each wire runs the next node once per item (the default), a plain wire reads the first item. Its field holds the list; the job writes it under the output's id."
+              },
+              "listMax": {
+                "type": "string",
+                "description": "Only with list: the node-data field (a whole number in defaultData) holding the most items one run makes on this output — what the run estimate counts before a first run."
+              },
+              "alignedWith": {
+                "type": "string",
+                "description": "Only on a JSON (look) output: the id of a list output of this unit whose items its entries line up with, one for one. After a run once per upstream item both hand on every row's, row by row, and each entry carries its row (`row`, 0-based)."
               }
             }
           }
@@ -372,6 +380,118 @@
           },
           "description": "The MCP tools (snake_case names, e.g. gif_to_video) that dispatch this node's job and whose result widget shows this node's type as its model. Composed by backend/src/lib/mcp/widget-models.ts; a tool is claimed by one node."
         }
+      }
+    },
+    "appFields": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The node's settings a published app may let its user set (tools/units/README.md, \"A unit's app fields\"). Each starts at its defaultData value; its labels are keys of the unit's strings.json.",
+      "items": {
+        "type": "object",
+        "required": [
+          "field",
+          "kind",
+          "labelKey"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The node-data field the setting writes (a key of defaultData and of the <Pascal>Data type in types.ts)."
+          },
+          "kind": {
+            "enum": [
+              "select",
+              "integer"
+            ],
+            "description": "select: a fixed list of string values (a select card). integer: a whole number from min to max in steps of step (a slider card)."
+          },
+          "labelKey": {
+            "type": "string",
+            "description": "A key of the unit's strings.json keys: the card's label."
+          },
+          "options": {
+            "type": "array",
+            "minItems": 1,
+            "description": "kind select: every value a run may take, in the order the card lists them.",
+            "items": {
+              "type": "object",
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "labelKey": {
+                  "type": "string",
+                  "description": "A key of the unit's strings.json keys; without one the option shows its value."
+                }
+              }
+            }
+          },
+          "min": {
+            "type": "integer"
+          },
+          "max": {
+            "type": "integer"
+          },
+          "step": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "select"
+              }
+            },
+            "required": [
+              "options"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "min"
+                  ]
+                },
+                {
+                  "required": [
+                    "max"
+                  ]
+                },
+                {
+                  "required": [
+                    "step"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "integer"
+              }
+            },
+            "required": [
+              "min",
+              "max",
+              "step"
+            ],
+            "not": {
+              "required": [
+                "options"
+              ]
+            }
+          }
+        ],
+        "additionalProperties": false
       }
     },
     "contract": {

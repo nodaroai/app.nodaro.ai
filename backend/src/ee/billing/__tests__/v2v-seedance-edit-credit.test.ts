@@ -7,7 +7,7 @@ import { seedance2RefVideoQuote } from "../seedance2-ref-video-quote.js"
 
 /** The base (unmarked) price of a run whose one reference clip is unknown: its worst case. */
 const worstCase = (provider: string, resolution: string, duration: number) =>
-  seedance2RefVideoQuote({ provider, resolution, duration, durationsSec: [], unknownClips: 1, charge: (_id, base) => base }).credits
+  seedance2RefVideoQuote({ provider, resolution, duration, referenceTaskType: undefined, durationsSec: [], unknownClips: 1, charge: (_id, base) => base }).credits
 
 /**
  * The Video to Video node's Seedance EDIT lane is a text-to-video job in edit

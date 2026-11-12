@@ -16,7 +16,9 @@ export interface VideoToVideoParams extends GenerationSessionParams {
   /** The person's own words, kept for the record when `prompt` was rewritten. */
   userPrompt?: string
   /** Default `"wan"`. `seedance-2-5` edits the whole clip and is priced by the
-   *  clip's length (see `nodes.quote`). */
+   *  clip's length (see `nodes.quote`). The platform tells Seedance the run is
+   *  an edit when every clip (`videoUrl` and `referenceVideoUrls`) is 4–30 s
+   *  long (not on a draft), so this lane takes no `referenceTaskType` of its own. */
   provider?: VideoToVideoNodeProvider
   /** Wan / Wan Flash. A Seedance edit ignores it: the result keeps the source
    *  clip's own length. */

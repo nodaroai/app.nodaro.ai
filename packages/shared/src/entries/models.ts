@@ -82,6 +82,7 @@ export {
   VIDEO_TO_VIDEO_NODE_PROVIDERS,
   DEFAULT_VIDEO_TO_VIDEO_PROVIDER,
   SEEDANCE_VIDEO_EDIT_SHAPE,
+  SEEDANCE_VIDEO_EDIT_TASK_TYPE,
   FACE_SWAP_PROVIDERS,
   VIDEO_UPSCALE_PROVIDERS,
   EXTEND_VIDEO_PROVIDERS,
@@ -149,6 +150,8 @@ export {
   VIDEO_PROVIDERS_REQUIRING_IMAGE,
   videoProviderRequiresImage,
   videoProviderFoldsLoneEndFrame,
+  videoProviderTakesLoneEndFrame,
+  videoProviderRefsReplaceStartFrame,
   VIDEO_MODE_ALIASES,
   RETIRED_VIDEO_PROVIDERS,
   canonicalVideoProvider,
@@ -183,6 +186,13 @@ export {
   isKling4FlashProvider,
   KLING_4_FLASH_RESOLUTION,
   isKling4RunnerProvider,
+  GROK_VIDEO_15_PROVIDER,
+  isGrokVideo15Provider,
+  GROK_VIDEO_15_DEFAULT_RESOLUTION,
+  normalizeGrokVideo15Resolution,
+  GROK_VIDEO_15_MAX_MIDDLE_FRAMES,
+  grokVideo15MiddleFrameSlots,
+  videoKeyframesMiddleCap,
   VIDEO_REF_RATE_PROVIDERS,
   billsReferenceVideoSeconds,
   GEMINI_OMNI_PROVIDERS,
@@ -229,6 +239,10 @@ export {
   snapToNearestDuration,
   videoDefaultDurationSec,
   supportsAutoVideoDuration,
+  supportsReferenceTaskType,
+  listedSeedanceTaskType,
+  seedanceTaskTypeFitsMedia,
+  resolveSeedanceTaskType,
   maxVideoDurationSec,
   PRICING_DEFAULT_RESOLUTION,
 } from "../model-constants.js"
@@ -316,7 +330,13 @@ export type {
   RefAudioProbe,
   RefAudioCheck,
   VideoReferenceSyntax,
+  SeedanceTaskTypeFacts,
+  SeedanceTaskTypeResolution,
+  SeedanceReferenceMediaCount,
 } from "../model-constants.js"
+// Seedance 2.5 reference task type: what a request's reference media is for.
+export { SEEDANCE_REFERENCE_TASK_TYPES, SEEDANCE_EDIT_REF_VIDEO_SEC } from "../seedance-task-type.js"
+export type { SeedanceReferenceTaskType, DeclaredSeedanceTaskType } from "../seedance-task-type.js"
 export { GEMINI_OMNI_VOICE_PRESETS, GEMINI_OMNI_VOICE_PRESET_IDS } from "../gemini-omni-voices.js"
 export type { GeminiOmniVoicePreset, GeminiOmniVoicePresetId } from "../gemini-omni-voices.js"
 export {

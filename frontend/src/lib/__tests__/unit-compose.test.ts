@@ -9,7 +9,7 @@ import {
   composeFamilyTypes, composeNodeDefinitions, composeTabSuperset, composeNodeOptions, composeRecord, composeRecordAfter, composeSet, insertAtPositions,
   jsonListItems, toNodeTypeDefinition, unitJobLanding, unitJsonJobLanding, unitJsonProducers, unitJsonRunPatch, unitJsonWorkers, unitNoMediumResults, unitNodeLabels,
   unitOutputTypes, unitOutputValue, unitPipJson, unitPriceRows, unitProducers, unitRecord, unitsWith, unitTabSuperset, unitTextSources,
-  unitListItems, unitPipIsImage, unitPipList, unitSideFields, unitSideJobPatch, unitSideLanding, unitSideOutputs, unitSideRunPatch,
+  unitListItems, unitListNotSavedField, unitPipIsImage, unitPipList, unitSideBatchPatch, unitSideFields, unitSideJobPatch, unitSideLanding, unitSideOutputs, unitSideRunPatch,
 } from "../unit-compose"
 import { ACCEPTS_AUDIO, ACCEPTS_MEDIA, ACCEPTS_VIDEO, unitInputAccepts } from "../ffmpeg-handles"
 import { createUnitExecKit } from "@/components/editor/workflow-editor/unit-exec-kit"
@@ -295,7 +295,7 @@ const LAYERS: UnitDefinition = {
     outputs: [
       { id: "base", label: "Base", kind: "image", from: "generatedImageUrl" },
       { id: "layers", label: "Layers", kind: "image", from: "generatedLayerUrls", list: true },
-      { id: "layerData", label: "Layer data", kind: "look", from: "generatedLayerData" },
+      { id: "layerData", label: "Layer data", kind: "look", from: "generatedLayerData", alignedWith: "layers" },
     ],
   },
   producer: "image",
@@ -307,7 +307,7 @@ describe("a media take's side outputs (a list, JSON beside it)", () => {
     expect(unitSideOutputs(FIXTURE)).toEqual([])
     expect(unitSideOutputs(MAP)).toEqual([])
     expect(unitSideOutputs({ ...LAYERS, execution: { kind: "use-case" } } as unknown as UnitDefinition)).toEqual([])
-    expect(unitSideFields(LAYERS)).toEqual(["generatedLayerUrls", "generatedLayerData"])
+    expect(unitSideFields(LAYERS)).toEqual(["generatedLayerUrls", "layersNotSaved", "generatedLayerData"])
     expect(unitSideFields(FIXTURE)).toEqual([])
   })
   it("unitJsonWorkers: a worker whose JSON stands beside a media take is not a JSON worker", () => {
@@ -354,21 +354,71 @@ describe("a media take's side outputs (a list, JSON beside it)", () => {
     expect(unitPipIsImage(LAYERS, "layerData")).toBe(false)
     expect(unitPipIsImage(FIXTURE, "video-out")).toBe(false)
   })
-  it("unitSideLanding: each look output as unitJobLanding lands it, each list output its non-empty strings; no value → null; other keys dropped", () => {
-    const landed = unitSideLanding(LAYERS, { layerData: '[{"n":1}]', base: "x" }, { layers: ["l1", "", "l2"], frames: ["f"] })
-    expect(landed).toEqual({ generatedLayerUrls: ["l1", "l2"], generatedLayerData: [{ n: 1 }] })
+  it("unitSideLanding: each look output as unitJobLanding lands it, each list output its non-empty strings and its not-saved count; no value → null; other keys dropped", () => {
+    const landed = unitSideLanding(LAYERS, { layerData: '[{"n":1}]', base: "x" }, { layers: ["l1", "", "l2"], frames: ["f"] }, { layers: 2, frames: 1 })
+    expect(landed).toEqual({ generatedLayerUrls: ["l1", "l2"], layersNotSaved: 2, generatedLayerData: [{ n: 1 }] })
     const empty = unitSideLanding(LAYERS, { layerData: [] }, { layers: [] })
-    expect(empty).toEqual({ generatedLayerData: [], generatedLayerUrls: null })
+    expect(empty).toEqual({ generatedLayerData: [], generatedLayerUrls: null, layersNotSaved: null })
     expect(unitSideLanding(FIXTURE, { a: 1 }, {})).toEqual({})
   })
+  it("unitSideLanding: a not-saved count is a whole number from 0 (0 = every item stored); anything else lands null", () => {
+    const count = (v: unknown) => unitSideLanding(LAYERS, {}, {}, { layers: v }).layersNotSaved
+    expect(count(0)).toBe(0)
+    expect(count(3)).toBe(3)
+    expect(count(2.7)).toBe(2)
+    expect(count(-1)).toBeNull()
+    expect(count("2")).toBeNull()
+    expect(count(Number.NaN)).toBeNull()
+    expect(unitListNotSavedField({ id: "layers" })).toBe("layersNotSaved")
+  })
   it("unitSideRunPatch / unitSideJobPatch: a node output's carriers and a job row's ids — undefined for a unit without side outputs", () => {
-    expect(unitSideRunPatch(LAYERS, { unitOutputs: { layerData: "[]" }, unitLists: { layers: ["l1"] } })).toEqual({ generatedLayerUrls: ["l1"], generatedLayerData: [] })
+    expect(unitSideRunPatch(LAYERS, { unitOutputs: { layerData: "[]" }, unitLists: { layers: ["l1"] }, unitListsNotSaved: { layers: 1 } })).toEqual({ generatedLayerUrls: ["l1"], layersNotSaved: 1, generatedLayerData: [] })
+    expect(unitSideRunPatch(LAYERS, { unitOutputs: { layerData: "[]" }, unitLists: { layers: ["l1"] } })).toEqual({ generatedLayerUrls: ["l1"], layersNotSaved: null, generatedLayerData: [] })
     const none = unitSideRunPatch(LAYERS, {})!
-    expect(Object.keys(none).sort()).toEqual(["generatedLayerData", "generatedLayerUrls"])
+    expect(Object.keys(none).sort()).toEqual(["generatedLayerData", "generatedLayerUrls", "layersNotSaved"])
     expect(Object.values(none).every((v) => v === null)).toBe(true)
-    expect(unitSideJobPatch(LAYERS, { imageUrl: "b", layers: ["l1"], layerData: [{ n: 1 }] })).toEqual({ generatedLayerUrls: ["l1"], generatedLayerData: [{ n: 1 }] })
+    expect(unitSideJobPatch(LAYERS, { imageUrl: "b", layers: ["l1"], layerData: [{ n: 1 }], layersNotSaved: 0 })).toEqual({ generatedLayerUrls: ["l1"], layersNotSaved: 0, generatedLayerData: [{ n: 1 }] })
+    // A job row from before the count: no value, never an earlier run's.
+    expect(unitSideJobPatch(LAYERS, { imageUrl: "b", layers: ["l1"], layerData: [{ n: 1 }] })).toEqual({ generatedLayerUrls: ["l1"], layersNotSaved: null, generatedLayerData: [{ n: 1 }] })
     expect(unitSideRunPatch(FIXTURE, { unitLists: { x: ["a"] } })).toBeUndefined()
     expect(unitSideJobPatch(MAP, { json: {} })).toBeUndefined()
+  })
+
+  // A run once per upstream item (decided 2026-11-11, row-aligned): the node's
+  // fields hold every row's; each take keeps its own.
+  const takeA = { url: "a", generatedLayerUrls: ["a1", "a2"], generatedLayerData: [{ n: "a1" }, { n: "a2" }], layersNotSaved: 1 }
+  const takeB = { url: "b", generatedLayerUrls: null, generatedLayerData: [], layersNotSaved: 0 }
+  const takeC = { url: "c", generatedLayerUrls: ["c1"], generatedLayerData: [{ n: "c1" }], layersNotSaved: 2 }
+  it("unitSideBatchPatch: every row's take, row by row — the layers, their data each with its row, the counts summed; a row with none adds nothing", () => {
+    expect(unitSideBatchPatch(LAYERS, [takeA, takeB, takeC])).toEqual({
+      generatedLayerUrls: ["a1", "a2", "c1"],
+      layersNotSaved: 3,
+      generatedLayerData: [{ n: "a1", row: 0 }, { n: "a2", row: 0 }, { n: "c1", row: 2 }],
+    })
+    // A failed row (no take) keeps its place: the next row is still row 2.
+    expect(unitSideBatchPatch(LAYERS, [takeA, undefined, takeC])?.generatedLayerData).toEqual([{ n: "a1", row: 0 }, { n: "a2", row: 0 }, { n: "c1", row: 2 }])
+    // No row made any: every side field null.
+    expect(unitSideBatchPatch(LAYERS, [undefined, { url: "x" }])).toEqual({ generatedLayerUrls: null, layersNotSaved: null, generatedLayerData: null })
+    expect(unitSideBatchPatch(FIXTURE, [takeA])).toBeUndefined()
+  })
+  it("after a run once per upstream item a wire reads the node's fields (every row's) whichever take is active; the node shows the active take's own (read: take)", () => {
+    const batch = {
+      generatedLayerUrls: ["a1", "a2", "c1"],
+      generatedLayerData: [{ n: "a1", row: 0 }, { n: "a2", row: 0 }, { n: "c1", row: 2 }],
+      __listResults: ["a", "b", "c"],
+      activeResultIndex: 2,
+      generatedResults: [takeA, takeB, takeC],
+    }
+    expect(unitPipList(LAYERS, batch, "layers")).toEqual({ items: ["a1", "a2", "c1"] })
+    expect(unitOutputValue(LAYERS, batch, "layers")).toBe("a1")
+    expect(unitPipJson(LAYERS, batch, "layerData")?.value).toEqual(batch.generatedLayerData)
+    expect(unitOutputValue(LAYERS, batch)).toBe("c")
+    expect(unitPipList(LAYERS, batch, "base")).toEqual({ items: ["a", "b", "c"] })
+    expect(unitPipList(LAYERS, batch, "layers", "take")).toEqual({ items: ["c1"] })
+    expect(unitPipJson(LAYERS, batch, "layerData", "take")?.value).toEqual([{ n: "c1" }])
+    // No batch held: the active take's own, as before.
+    const { __listResults: _batch, ...single } = batch
+    expect(unitPipList(LAYERS, single, "layers")).toEqual({ items: ["c1"] })
   })
 })
 

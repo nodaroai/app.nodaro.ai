@@ -44,6 +44,7 @@ const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
   "speaker-map": "new node (podcast primitive); the in-repo page is docs/nodes/processing-audio/speaker-map.md and the docs-site page follows its release",
   "speaker-layout": "new node (podcast use-case); the in-repo page is docs/nodes/processing-video/speaker-layout.md and the docs-site page follows its release",
   "shot-cuts": "new node; the in-repo page is docs/nodes/processing-video/shot-cuts.md and the docs-site page follows its release",
+  "split-into-layers": "new node; the in-repo page is docs/nodes/ai-image/split-into-layers.md and the docs-site page follows its release",
 }
 
 const hasPage = (type: string) => type in NODE_DOCS_SECTIONS || type in NODE_DOCS_ALIASES

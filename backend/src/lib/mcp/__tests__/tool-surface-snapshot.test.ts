@@ -1496,6 +1496,12 @@ const I2I_MASK_MODELS_BYTES = 126
 // description shared), and nothing else. No tool was added, so the fixture does NOT move. Measured
 // by this suite: 522_874 total − 522_636 = 238 B, all on modify_image.
 const MODIFY_IMAGE_MASK_BYTES = 238
+// RAISED 2026-11-11 by `reference_task_type` on generate_video (what a Seedance 2.5 run's
+// references are for: auto, reference, edit or extend, and that edit takes the reference video's
+// own ratio and length while extend runs adaptive at a set length), and nothing else. No tool was
+// added, so the fixture does NOT move. Measured by this suite: 523_128 total − 522_874 = 254 B, all
+// on generate_video (9_470 → 9_724 B, under the per-tool budget).
+const SEEDANCE_REFERENCE_TASK_TYPE_ARG_BYTES = 254
 // RAISED 2026-11-11 by Seedream 5.5 (`seedream-5-5` t2i + `seedream-5-5-i2i`), and nothing else:
 // it widens the model lists generate_image / modify_image / image_to_image already carry, adds
 // `1.5K` (its middle size) to generate_image's resolution note and image_to_image's resolution
@@ -1521,6 +1527,24 @@ const KLING_4_FLASH_MODELS_BYTES = 138
 // GPT Image 2.6 (16 images). `generate_image` is the one tool past the per-tool budget
 // (9_884 → 9_916 B). No tool was added, so the fixture does NOT move.
 const MINIMAX_H3_IMAGE_PER_TOOL_BYTES = 32
+
+// RAISED 2026-11-11 by one NEW tool, `split_into_layers` (verbs-split-into-layers.ts: the Split into
+// Layers node's verb — one image split into a base picture and separate layers, with the output's
+// shape, the layer-pixel caveat and the default run's charged price in its description), and nothing
+// else. Registered beside `generate_mask` and gated like it (no credits gate: the route is core), so
+// BOTH the cloud/all AND the community/all fixtures move by exactly that name. Measured from the
+// tool's own definition as tools/list serves it (cloud, all scopes): 2_864 B with `layersNotSaved` in
+// its output shape, far under the per-tool budget; +47 B (2026-11-12) for `baseUrl` in each layer's
+// data (", baseUrl" in the shape and "(`baseUrl`: the base it was cut from)"), 2_911 B. The price
+// figure is the bare row's charged credits, so a reprice that changes its digit count moves this by
+// that many bytes.
+const SPLIT_INTO_LAYERS_TOOL_BYTES = 2_911
+
+// RAISED 2026-11-11 by Nodaro Image Upscale on edit_image (the model in its `model` enum and its
+// one line in the description, and `upscale_factor`'s 8 with which model takes which factors),
+// and nothing else. No tool was added, so the fixture does NOT move. Measured by this suite:
+// 523_132 total − 522_874 = 258 B, all on edit_image.
+const NODARO_IMAGE_UPSCALE_BYTES = 258
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES,
@@ -1710,9 +1734,12 @@ export const TOOL_WIRE_BUDGET = {
     EXTEND_SEEDANCE_SPLIT_BYTES +
     I2I_MASK_MODELS_BYTES +
     MODIFY_IMAGE_MASK_BYTES +
+    SEEDANCE_REFERENCE_TASK_TYPE_ARG_BYTES +
     SEEDREAM_5_5_TOTAL_BYTES +
     VIDEO_OVERLAY_VIDEO_LAYERS_BYTES +
-    KLING_4_FLASH_MODELS_BYTES,
+    KLING_4_FLASH_MODELS_BYTES +
+    SPLIT_INTO_LAYERS_TOOL_BYTES +
+    NODARO_IMAGE_UPSCALE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -17,15 +17,17 @@
  * No photo, or a size that cannot be read: one build, without a size, and
  * "auto" snaps exactly as it always has.
  *
- * It also makes the served house models current before the build (the
- * orchestrator's answer comes from its API, lib/house-models-served.ts).
+ * For a node that names a house model it also makes the served house models
+ * current before the build (the orchestrator's answer comes from its API,
+ * lib/house-models-served.ts); every other node never asks.
  */
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared/models"
 import { buildPayload, type PayloadBuildContext } from "./payload-builder.js"
 import { autoAspectSourceImageUrl, generateImageAutoNeedsPhotoSize, generateImageMayUsePhotoSize } from "./source-image.js"
 import { probeImageDisplaySize } from "../../lib/image-source-size.js"
 import { imageJobPhotoUrl } from "../../lib/image-auto-aspect.js"
-import { ownLabelModelIds, refreshHouseModelsServed } from "../../lib/house-models-served.js"
+import { refreshHouseModelsServed } from "../../lib/house-models-served.js"
+import { namesHouseModel } from "../../lib/surface-deny.js"
 import type { ResolvedInputs, SimpleNode } from "./types.js"
 
 export type BuiltPayload = ReturnType<typeof buildPayload>
@@ -37,14 +39,17 @@ export async function buildPayloadWithSourceSize(
   usageLogId: string | undefined,
   ctx: PayloadBuildContext,
 ): Promise<BuiltPayload> {
-  // While the catalog has a house model, any node may run on one: its model can
-  // arrive through a FieldMapping, an app input or a retired model's remap, not
-  // only its own data. The build's availability rule asks `houseModelServed`
-  // synchronously, and in the standalone orchestrator (no plugin loaded) that
-  // answer comes from the API — make it current first (cached; a no-op where
-  // the plugins are loaded). With no house model in the catalog nothing waits.
+  // A node that names a house model — in its data, or in the provider it was
+  // handed (a FieldMapping, an app input) — is judged by `houseModelServed`,
+  // which in the standalone orchestrator (no plugin loaded) answers from the
+  // API: make that answer current first (cached; a no-op where the plugins are
+  // loaded). The same `namesHouseModel` check as the build's narrow judge, so
+  // a node that names none — every other model — never asks or waits, exactly
+  // as on an install with no house model. A house model reached any other way
+  // is asked about when the build judges it (`houseModelServedState` starts the
+  // ask itself), and at worst the run is handed back once, with nothing held.
   // A drain during the ask rejects with its DrainAbortError: the run is handed back.
-  if (ownLabelModelIds().size > 0) await refreshHouseModelsServed()
+  if (namesHouseModel([node.data, resolvedInputs.provider])) await refreshHouseModelsServed()
   let photoUrl = autoAspectSourceImageUrl(node, resolvedInputs, ctx)
   let firstPass: BuiltPayload | undefined
   if (!photoUrl && generateImageMayUsePhotoSize(node)) {

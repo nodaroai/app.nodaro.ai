@@ -50,6 +50,8 @@ import {
 } from "../../lib/availability-override.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 import { __resetModelSwitchForTests } from "../../lib/model-switch.js"
+import { ownLabelModelIds } from "../../lib/house-models-served.js"
+import { serveEveryHouseModel, serveNoHouseModel } from "../../test/house-models.js"
 
 const USER = "user-1"
 const ADMIN = "admin-1"
@@ -88,19 +90,32 @@ const SCRAPERS = ["instagram-scrape", "meta-ads-scrape"]
 const hideScrapers = () => __resetAvailabilityOverridesForTests({ nodes: new Set(ALL_NODES.filter((t) => !SCRAPERS.includes(t))) })
 
 describe("GET /v1/surface/availability", () => {
-  it("stock deployment: nothing denied, nothing hidden, for anyone", async () => {
+  // A stock install serves no house model: the catalog's one is hidden, and is
+  // no restriction — it withholds only itself.
+  it("stock deployment: nothing denied but the unserved house model, nothing hidden, no restriction, for anyone", async () => {
     for (const who of [USER, ADMIN]) {
       const body = (await get(who)).json()
       expect(body.nodes).toEqual({ denied: [], hiddenFromUsers: [] })
-      expect(body.models).toEqual({ denied: [], restricted: false })
+      expect(body.models).toEqual({ denied: [...ownLabelModelIds()], restricted: false })
     }
+    expect([...ownLabelModelIds()]).toContain("nodaro-image-upscale")
   })
 
   it("a model the admin switched off on its pricing row is denied for everyone — admins too", async () => {
     __resetModelSwitchForTests(["flux-flex"])
     for (const who of [USER, ADMIN]) {
       const body = (await get(who)).json()
-      expect(body.models.denied).toEqual(["flux-flex"])
+      expect([...body.models.denied].sort()).toEqual(["flux-flex", ...ownLabelModelIds()].sort())
+      expect(body.models.restricted).toBe(false)
+    }
+  })
+
+  it("a deployment that serves its house models lists none of them as denied", async () => {
+    serveEveryHouseModel()
+    try {
+      expect((await get(USER)).json().models).toEqual({ denied: [], restricted: false })
+    } finally {
+      serveNoHouseModel()
     }
   })
 

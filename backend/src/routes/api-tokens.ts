@@ -42,6 +42,7 @@ import { getInputNodes, getOutputNodes, getOutputType, getNodeLabel, getInputFie
 import type { PresentationItem, GenericNode, GenericEdge } from "@nodaro/shared/types"
 import { formatZodError } from "../lib/zod-error.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { refuseLimitedKey } from "../middleware/token-workflow-scope.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { readWithLaneStamp } from "../lib/concurrency-lanes/columns.js"
@@ -799,6 +800,10 @@ export async function apiTokenRoutes(app: FastifyInstance) {
           error: { code: "locked_field", message: describeLockedOverrides(lockedOverrides) },
         })
       }
+      // A node unit's app fields (unit.json appFields) take only the values they declare, on any key this
+      // request sets (lib/exposed-unit-field-check.ts); the orchestrator's merge refuses too.
+      const unitRefusals = findUnitFieldOverrideRefusals(nodes, inputOverrides)
+      if (unitRefusals.length > 0) return reply.status(400).send({ error: unitFieldOverrideErrorBody(unitRefusals) })
 
       // A token caller cannot review a Preview render: refused before any row
       // exists unless its inputs set every such render to Final

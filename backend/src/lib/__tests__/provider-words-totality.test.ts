@@ -578,6 +578,19 @@ describe("the run rule's lookups, and the webhook body", () => {
     expect(bodyOf(readers, "runsWordsReadable")).toMatch(/workflowsReaderCanOpen\(readerId,/)
   })
 
+  it("a use-case inner run is judged by the run it links (decided 2026-11-11): followed within the one rule, bounded, and read as the platform's own", () => {
+    const readers = codeOf("lib/provider-words-readers.ts")
+    // The one rule both the run reads and the job reads ask follows the links itself.
+    expect(bodyOf(readers, "runsWordsReadable")).toMatch(/await runVerdicts\(readerId, runs\)/)
+    // The link is read only through the narrower trust rule (a use_case row alone).
+    expect(readers).toMatch(/const link = outerRunOf\(outerRunTriggerData\(run\)\)/)
+    // Level by level, one read per level, never past the use-case nesting limit; an unreadable link withholds.
+    expect(readers).toMatch(/const linked = level < USE_CASE_MAX_DEPTH \? await linkedRuns\(readerId, new Set\(following\.values\(\)\)\) : null/)
+    expect(readers).toMatch(/const own = row \? ownVerdict\(row\) : \(\{ kind: "unresolved" \} as const\)/)
+    // The linked runs are the reader's own: an inner run and the run it works for are one person's.
+    expect(readers).toMatch(/\.from\("workflow_executions"\)\s*\.select\(RUN_RELATION_COLUMNS\)\s*\.in\("id", \[\.\.\.ids\]\)\s*\.eq\("user_id", readerId\)/)
+  })
+
   it("a job.failed webhook body is judged by its job's run: fresh, on a retry and in the delivery log", () => {
     const event = codeOf("lib/webhooks/event.ts")
     expect(event).toMatch(/\.select\(`\$\{jobEventColumns\(\)\}, workflow_execution_id`\)/)

@@ -205,6 +205,142 @@ describe("Admin review — the held media preview", () => {
   })
 })
 
+describe("Admin review — a job with several outputs", () => {
+  /** Seventeen held files (the held list's cap), every one of them held. */
+  const SEVENTEEN_JOB = {
+    ...HELD_JOB,
+    jobType: "split-into-layers",
+    mediaKind: "image" as const,
+    outputCount: 17,
+    outputTotal: 17,
+    outputKinds: Array(17).fill("image"),
+  }
+  /** A base picture and 30 layers: the server previews the first 17 (its held
+   *  list's cap) and counts all 31. */
+  const LAYERED_JOB = { ...SEVENTEEN_JOB, outputTotal: 31 }
+
+  const fetchedIndices = () => h.fetchHeldOutputBlob.mock.calls.map(([, index]) => index as number)
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i)
+
+  it("previews the first 4 files and offers the other 13 behind a control, fetching only the 4", async () => {
+    h.listHeldJobs.mockResolvedValue({ data: [SEVENTEEN_JOB], total: 1, page: 0, pageSize: 25 })
+    renderPage()
+    await waitFor(() => expect(screen.getAllByTestId("review-media")).toHaveLength(4))
+    for (const media of screen.getAllByTestId("review-media")) expect(media.tagName).toBe("IMG")
+    expect(screen.getByRole("button", { name: "+13 more" })).toBeInTheDocument()
+    // The hidden files are not mounted, so none of their bytes come down.
+    expect(fetchedIndices()).toEqual(range(4))
+    // Every file is held, so there is nothing past the held list to note.
+    expect(screen.queryByTestId("review-outputs-not-shown")).not.toBeInTheDocument()
+  })
+
+  it("reveals the rest on click, fetching each of them once and the first 4 not again", async () => {
+    const user = userEvent.setup()
+    h.listHeldJobs.mockResolvedValue({ data: [SEVENTEEN_JOB], total: 1, page: 0, pageSize: 25 })
+    renderPage()
+    await waitFor(() => expect(screen.getAllByTestId("review-media")).toHaveLength(4))
+    expect(fetchedIndices()).toEqual(range(4))
+    await user.click(screen.getByRole("button", { name: "+13 more" }))
+    await waitFor(() => expect(screen.getAllByTestId("review-media")).toHaveLength(17))
+    for (const media of screen.getAllByTestId("review-media")) expect(media.tagName).toBe("IMG")
+    expect([...fetchedIndices()].sort((a, b) => a - b)).toEqual(range(17))
+    expect(screen.queryByTestId("review-outputs-reveal")).not.toBeInTheDocument()
+  })
+
+  it("keeps the not-shown note true before and after the reveal", async () => {
+    const user = userEvent.setup()
+    h.listHeldJobs.mockResolvedValue({ data: [LAYERED_JOB], total: 1, page: 0, pageSize: 25 })
+    renderPage()
+    expect(
+      await screen.findByText("Not shown: 27 more of this job's 31 outputs (showing the first 4)."),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByTestId("review-media")).toHaveLength(4))
+    // The control offers only what a click can bring up: the held files.
+    await user.click(screen.getByRole("button", { name: "+13 more" }))
+    expect(
+      await screen.findByText("Not shown: 14 more of this job's 31 outputs (showing the first 17)."),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByTestId("review-media")).toHaveLength(17))
+    expect([...fetchedIndices()].sort((a, b) => a - b)).toEqual(range(17))
+  })
+
+  it("shows no control for a job of exactly 4 files", async () => {
+    h.listHeldJobs.mockResolvedValue({
+      data: [{ ...SEVENTEEN_JOB, outputCount: 4, outputTotal: 4, outputKinds: Array(4).fill("image") }],
+      total: 1,
+      page: 0,
+      pageSize: 25,
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getAllByTestId("review-media")).toHaveLength(4))
+    expect(fetchedIndices()).toEqual(range(4))
+    expect(screen.queryByTestId("review-outputs-reveal")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /more/ })).not.toBeInTheDocument()
+  })
+
+  it("previews a video object as a video, by the object's own kind", async () => {
+    // The JOB says image; the object says video. The object wins.
+    h.listHeldJobs.mockResolvedValue({
+      data: [{ ...HELD_JOB, mediaKind: "image" as const, outputCount: 1, outputTotal: 1, outputKinds: ["video"] }],
+      total: 1,
+      page: 0,
+      pageSize: 25,
+    })
+    renderPage()
+    const media = await screen.findByTestId("review-media")
+    expect(media.tagName).toBe("VIDEO")
+    expect(media).toHaveAttribute("src", "blob:held-preview")
+  })
+
+  it("offers an other object as a download, never as the job's player", async () => {
+    // A VIDEO job whose file the gate could not place: no <video> guessed from the job.
+    h.listHeldJobs.mockResolvedValue({
+      data: [{ ...HELD_JOB, mediaKind: "video" as const, outputCount: 1, outputTotal: 1, outputKinds: ["other"] }],
+      total: 1,
+      page: 0,
+      pageSize: 25,
+    })
+    renderPage()
+    const media = await screen.findByTestId("review-media")
+    expect(media.tagName).toBe("A")
+    expect(media).toHaveAttribute("download")
+    expect(media).toHaveAttribute("href", "blob:held-preview")
+    expect(document.querySelector("video")).toBeNull()
+    expect(document.querySelector("img")).toBeNull()
+  })
+
+  it("shows no note when every output is previewed", async () => {
+    h.listHeldJobs.mockResolvedValue({
+      data: [{ ...LAYERED_JOB, outputCount: 3, outputTotal: 3, outputKinds: ["image", "image", "image"] }],
+      total: 1,
+      page: 0,
+      pageSize: 25,
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getAllByTestId("review-media")).toHaveLength(3))
+    expect(screen.queryByTestId("review-outputs-not-shown")).not.toBeInTheDocument()
+  })
+
+  it("shows no note for a job from a server that sends no total (read as the previewable count)", async () => {
+    renderPage()
+    expect(await screen.findByTestId("review-media")).toBeInTheDocument()
+    expect(screen.getAllByTestId("review-media")).toHaveLength(1)
+    expect(screen.queryByTestId("review-outputs-not-shown")).not.toBeInTheDocument()
+  })
+
+  it("renders each output by its own kind", async () => {
+    h.listHeldJobs.mockResolvedValue({
+      data: [{ ...HELD_JOB, outputCount: 2, outputTotal: 2, outputKinds: ["video", "image"] }],
+      total: 1,
+      page: 0,
+      pageSize: 25,
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getAllByTestId("review-media")).toHaveLength(2))
+    expect(screen.getAllByTestId("review-media").map((m) => m.tagName)).toEqual(["VIDEO", "IMG"])
+  })
+})
+
 describe("Admin review — decisions log", () => {
   it("renders the log with the resolver and the human-readable verdict", async () => {
     const user = userEvent.setup()

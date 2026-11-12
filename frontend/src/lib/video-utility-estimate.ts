@@ -19,7 +19,7 @@ import {
   type LoopVideoEstimatorInput,
   type TrimVideoEstimatorInput,
 } from "@nodaro/shared/credits"
-import { maskCompositeLeadHandle, maskCompositeUnits } from "@nodaro/shared/media"
+import { maskCompositeUnits } from "@nodaro/shared/media"
 import { fanInClipCount, forwardedVideoLengthSec, maskCompositeLeadSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo } from "@nodaro/render-rules"
 import { clampTopazVideoFps, isTopazVideoResolution, resolveTopazVideoTarget, type TopazVideoResolution, type TopazVideoSource } from "@nodaro/shared/models"
 import { withWiredSettings } from "@nodaro/shared/nodes"
@@ -213,10 +213,20 @@ export function videoUtilityPricingUnits(
 /**
  * The length, in seconds, a Mask Composite is QUOTED at, or `null` when it is
  * not known (the 300 s cap): its leading video's — the foreground on its
- * `video` wire (the reading Video SFX and Video Mask quote with), or, with a
- * pixelate / blur fill, the background on its `background-video` wire — as
- * the graph gives it, else as the upstream node itself reports it. The server's
- * run estimate reads the same wire (`maskCompositeLeadSec`).
+ * `video` wire, or, with a pixelate / blur fill, the background on its
+ * `background-video` wire — as the graph gives it (`maskCompositeLeadSec`,
+ * the rule the server's run estimate prices it by). For an upload, a clip
+ * added from the Library, a Video link, and Trim / Loop / Combine Videos or
+ * length-keeping steps built only on those, the reading is the server's. Any
+ * other node's output (a generation, an Extend Video, or a step that recorded
+ * a length of its own) is read at the length its node records or is set to
+ * (`forwardedVideoLengthSec`), which the server's estimate does not read, and
+ * which can differ from what the run produces (an Extend Video adds seconds; a
+ * re-run can come out longer; a step's recorded take can be stale). The run is
+ * always charged the length it measures. No fallback
+ * to a length the upstream node merely stores (metadata with no result row for
+ * its file, an earlier file's length, a Video link's whole length): the server
+ * does not read one either.
  */
 export function maskCompositeQuotedSec(
   node: Pick<WorkflowNode, "id" | "data">,
@@ -227,16 +237,13 @@ export function maskCompositeQuotedSec(
   const data = (node.data ?? {}) as Record<string, unknown>
   const inputs = edges.filter((e) => e.target === node.id)
   const lengthOf = wireDurationReader(nodes, edges, rerunIds)
-  return (
-    maskCompositeLeadSec(data, inputs, inputs.map((e) => lengthOf(e.source))) ??
-    upstreamVideoDurationSec(node.id, maskCompositeLeadHandle(data), nodes, edges)
-  )
+  return maskCompositeLeadSec(data, inputs, inputs.map((e) => lengthOf(e.source))) ?? null
 }
 
 /**
  * Mask Composite's pricing units: one per started 5 s of its result
- * ({@link maskCompositeQuotedSec}), or the 300 s cap when that length is not
- * known yet (an upper bound, as the server's run estimate quotes it).
+ * ({@link maskCompositeQuotedSec}), or the 300 s cap's 60 when that length is
+ * not known yet — an upper bound, as the server's run estimate quotes it.
  */
 export function maskCompositePricingUnits(
   node: WorkflowNode,

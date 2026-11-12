@@ -68,6 +68,15 @@ vi.mock("@/services/workflow-engine/run-continuation.js", async (importOriginal)
   return { ...actual, loadContinuationSource: mocks.loadSource }
 })
 
+// The fixture unit `fixture-echo` (tools/units/__fixtures__) — app fields `size` (auto, 1K, 1.5K, 2K) and
+// `maxLayers` (1–99) — through its golden descriptor, composed into the server's one door to the units.
+vi.mock("@/lib/unit-descriptors.js", async (importOriginal) => {
+  const real = (await importOriginal()) as typeof import("../../lib/unit-descriptors.js")
+  const { descriptor } = await import("../../../../tools/units/__fixtures__/expected/backend/src/nodes/fixture-echo/descriptor.generated.js")
+  const units = [...real.UNIT_NODE_DESCRIPTORS, descriptor as unknown as (typeof real.UNIT_NODE_DESCRIPTORS)[number]]
+  return { ...real, UNIT_NODE_DESCRIPTORS: units, unitDescriptorOf: (t: string | undefined) => units.find((u) => u.type === t) }
+})
+
 import { workflowExecutionRoutes } from "../workflow-execution.js"
 import { workflowRenderFinalRoutes } from "../workflow-render-final.js"
 import { supabase } from "../../lib/supabase.js"
@@ -415,6 +424,37 @@ describe("POST /v1/workflows/:id/render-final/estimate", () => {
     const res = await quote({ renderNodeId: "render" })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
+  })
+})
+
+describe("Render final re-applies the earlier run's overrides: a node unit's app fields are held to their declaration", () => {
+  // The fixture graph with a node unit beside it; the earlier run set its app field outside the declaration.
+  const withUnit = (pinned: Record<string, unknown>) => {
+    const tighten = FIXTURE.cases["tighten"]!
+    useGraph({ nodes: [...tighten.nodes, { id: "split", type: "fixture-echo", data: { label: "Layers", size: "1K", maxLayers: 9 } }], edges: tighten.edges })
+    mocks.loadSource.mockResolvedValue(source({ inputOverrides: { split: pinned } }))
+  }
+
+  it("the quote refuses a pinned value outside the declaration with the declaration's 400", async () => {
+    withUnit({ maxLayers: 500 })
+    const res = await quote({ renderNodeId: "render", continueFromExecutionId: PRIOR })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({ code: "validation_error", message: "Invalid value for maxLayers: 500. Use a whole number between 1 and 99." })
+  })
+
+  it("so does the run, before any row exists", async () => {
+    withUnit({ size: null })
+    const res = await run(renderFinal)
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({ code: "validation_error", message: "Invalid value for size: null. Allowed: auto, 1K, 1.5K, 2K" })
+    expect(mocks.inserts).toHaveLength(0)
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("a pinned declared value is quoted as usual", async () => {
+    withUnit({ maxLayers: 12 })
+    const res = await quote({ renderNodeId: "render", continueFromExecutionId: PRIOR })
+    expect(res.statusCode).toBe(200)
   })
 })
 

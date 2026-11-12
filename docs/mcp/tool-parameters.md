@@ -763,8 +763,8 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `image_url` | string (URL) |  | Source image URL (all providers except the task-chained grok ops). |
 | `image_asset_id` | string |  | Nodaro image job id. |
-| `model` | string |  | Edit operation. Default recraft-upscale. One of `recraft-upscale`, `topaz-image-upscale`, `recraft-remove-bg`, `nano-banana-edit`, `grok-2-edit`, `grok-2-segment`. |
-| `upscale_factor` | string |  | Upscale factor (for topaz-image-upscale). Default 2. One of `1`, `2`, `4`. |
+| `model` | string |  | Edit operation. Default recraft-upscale. One of `recraft-upscale`, `topaz-image-upscale`, `nodaro-image-upscale`, `recraft-remove-bg`, `nano-banana-edit`, `grok-2-edit`, `grok-2-segment`. |
+| `upscale_factor` | string |  | Upscale factor: 1, 2 or 4 for topaz-image-upscale; 1, 2, 4 or 8 for nodaro-image-upscale. Default 2. One of `1`, `2`, `4`, `8`. |
 | `target_resolution` | string |  | Deprecated for topaz-image-upscale — maps to an upscale factor (2K→2, 4K→4, 8K→4). Prefer upscale_factor. One of `2K`, `4K`, `8K`. |
 | `prompt` | string |  | Edit prompt (required for nano-banana-edit and grok-2-edit). At most 2000 characters. |
 | `task_id` | string |  | Task id of a prior grok-2 generation, its output providerTaskId (grok-2-edit / grok-2-segment). |
@@ -1374,6 +1374,7 @@ Needs `workflows:execute`.
 | `negative_prompt` | string |  | At most 8000 characters. |
 | `seed` | integer |  | From 0 to 2147483647. |
 | `draft` | boolean |  | seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd. |
+| `reference_task_type` | string |  | seedance-2-5: what the references are for (auto: model guesses). edit: the reference video's own ratio+length (each 4-30s); extend: adaptive, set length. One of `auto`, `reference`, `edit`, `extend`. |
 | `structured` | object |  |  |
 | `structured.person` | object |  |  |
 | `structured.person.age` | integer |  | From 0 to 120. |
@@ -3003,6 +3004,18 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | Motion/scene description to guide the animation. From 1 to 2500 characters. |
 | `resolution` | string |  | Output resolution. Default 480p. One of `480p`, `580p`, `720p`. |
 | `negative_prompt` | string |  | At most 2500 characters. |
+
+## `split_into_layers`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `image_url` | string (URL) |  | Image to split. |
+| `image_asset_id` | string |  | Image to split, as a Nodaro image job id or an uploaded image's id. |
+| `max_layers` | integer |  | The most layers to make. Default 9. From 1 to 99. |
+| `size` | string |  | Each image's pixel budget. Default 1K. One of `1K`, `1.5K`, `2K`, `auto`. |
+| `prompt` | string |  | What to separate. At most 2000 characters. |
 
 ## `split_media`
 

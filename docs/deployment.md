@@ -1036,18 +1036,36 @@ optional; each array empty = "keep the default"):
   - **Another person's job by its id** reads as not found: the MCP `get_asset`
     and `display_asset` tools, the items `list_favorites` returns, and adding a
     favorite (`POST /v1/gallery/favorite`, MCP `favorite_asset`).
+  - **A published app or component is its creator's alone.** Its page
+    (`GET /v1/app/:slug`; an admin keeps a preview), its link card
+    (`/og/app/:slug`) and its embed (`/v1/embed/:slug`) answer everyone else as
+    for an app that does not exist, and so does a run of it started by anyone
+    else: `POST /v1/app/:slug/run` and `/runs`, Restore, Retry
+    (`/runs/:runId/resume`) and Render final, the MCP `get_app_inputs`,
+    `run_app` and `retry_app_run` tools. A person's own past runs of someone
+    else's app stay readable (`GET /v1/app/:slug/runs`, `…/runs/:runId`, MCP
+    `get_app_run`). A component runs (`POST /v1/component/execute`) and is
+    priced (`POST /v1/component/estimate-credits`) for its creator, and as
+    part of a full run of a workflow that holds the component node, whoever
+    owns the component. Anyone else reaching it by its name gets
+    `Component not found`: MCP `run_component` and `get_component_inputs`, a
+    direct call, and the editor's "Run this node" on someone else's component
+    (also on a sub-workflow node that holds one, or a list driving one), so in
+    the editor another person's component runs as part of a full run, not on
+    its own. Its settings panel keeps the inputs and settings saved on the node
+    and stops refreshing them from the published component.
 
   Work marked public before the switch was set, or carried over in a copied
   database, is therefore not served either. A person's own gallery, jobs, apps,
-  templates, shots and shared workflows are unchanged for them.
+  components, templates, shots and shared workflows are unchanged for them.
 
   What the switch does **not** close: the presentation share links
-  (`/v1/present/:token`, a separate feature), a published app's own page and
-  runs (`GET /v1/app/:slug`, its link card and embed, MCP `get_app_inputs` /
-  `run_app` / `get_component_inputs` / `run_component`), and the catalogs an
-  administrator curates (tutorials, the Keepers shelf, trends, the shared
-  library). A file's address
-  in your storage stays readable by whoever holds it.
+  (`/v1/present/:token`, a separate feature) and the catalogs an administrator
+  curates (tutorials, the Keepers shelf, trends, the shared library). A
+  component placed in a workflow runs in that workflow's full runs, so someone
+  who already knows a component's name can still run it by placing it in a
+  workflow of their own; with every listing closed, nobody can find a new one.
+  A file's address in your storage stays readable by whoever holds it.
 - `voice.allowedGenders`: `["male"]` / `["female"]` / `["neutral"]` (any subset) —
   restrict voice pickers, policy-owned default voices, and TTS / speech requests to
   these voice genders. Empty (`[]`) = all genders, and nothing below is looked up.
@@ -1143,9 +1161,11 @@ optional; each array empty = "keep the default"):
   node states, and the jobs that belong to it — to a reader who can open the
   workflow the run executed (never to a published app's runner or a person
   running someone else's share link, nor on a share page to anyone but its
-  creator). A job that is not linked to the workflow run that started it (a few
-  node types; a use-case node's hidden run, states and jobs alike; and a run
-  whose workflow was deleted) is its owner's, like a job that belongs to no run.
+  creator). A use-case node's hidden run, states and jobs alike, is judged by
+  the workflow run whose node started it, which it is linked to. A job that is
+  not linked to the workflow run that started it (a few node types; a hidden run
+  made before these links were recorded; and a run whose workflow was deleted)
+  is its owner's, like a job that belongs to no run.
   Backend-only: stripped from `/config.js`. The key governs what the server
   serves from a job and from a run. Words an editor has already saved onto a
   workflow's nodes, before the key was set or on an administrator's own

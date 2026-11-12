@@ -46,7 +46,7 @@ The Run button on the node displays the live credit estimate. When the upstream 
 
 **The upstream length a run is charged by** (in the editor, in a workflow run, and in a published app) is the length of the video the wire hands on:
 
-- an uploaded clip: the length measured when it was uploaded, as long as that upload is still the node's file. A link pasted into Upload Video later is charged at the fallback below, never at an earlier upload's length;
+- an uploaded clip, or one added from your own uploads in the Library: the length measured when it was uploaded, as long as that file is still the node's file. These are charged at the fallback below, never at an earlier upload's length: a Library video whose length was not measured at upload (a generated one, for example), a video from the shared library, a Library clip added before its length was recorded this way (add it again from your uploads to record it), and a link pasted into Upload Video later;
 - the output of a Trim, Loop or Combine Videos: the length that step passes on (a Trim's window, a Loop's copies or target, a Combine's clips added up), the same length the estimate before the run uses;
 - a render's output (Apply EDL): the length of the cut it rendered. The estimate before the run prices it at the render's length rounded up to whole minutes, so the run never costs more than its estimate;
 - a [Tighten Episode](./tighten-episode.md#steps-after-the-node)'s episode: the length of the cut it rendered, captioned or with its music bed;

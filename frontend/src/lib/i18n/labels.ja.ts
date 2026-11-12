@@ -386,6 +386,8 @@ const HANDLE_LABELS_JA: Record<string, string> = {
   "Instructions": "指示",
   "Instrumental": "インストゥルメンタル",
   "Isolated": "単体",
+  "Layer data": "レイヤーデータ",
+  "Layers": "レイヤー",
   "Without": "除外後",
   "JSON": "JSON",
   "Location": "ロケーション",
@@ -609,6 +611,7 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Greater musical expression with more natural vocals and richer details.": "より自然なボーカルと豊かなディテールで、音楽表現がさらに向上。",
   "Lightweight and fast, balancing quality and speed for effortless creation.": "軽量かつ高速。品質と速度を両立し、手軽に制作。",
   "Premium AI upscaling with a 1x / 2x / 4x factor": "1x / 2x / 4x 倍率のプレミアム AI アップスケール",
+  "Upscale up to 8x, lettering kept exactly as written": "最大 8x のアップスケール。文字は書かれたとおりに保持",
   "Alibaba Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs": "Alibaba Wan 3.0、2〜30 秒、480p/720p/1080p、ネイティブオーディオ、画像／動画／オーディオのリファレンス",
   "Avatar-inference dubbing on a video. Dynamic duration, premium.": "アバター推論による動画の吹き替え。長さは可変、プレミアム。",
   "BFL FLUX Fill Pro via Replicate — dedicated masked inpainting (white = edit area)": "BFL FLUX Fill Pro（Replicate 経由）：マスク専用のインペインティング（白が編集領域）",
@@ -790,8 +793,8 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Wan 2.7 T2V, 2–15s, 720p/1080p": "Wan 2.7 T2V、2〜15 秒、720p/1080p",
   "Wan I2V, 5-15s, resolution options": "Wan I2V、5〜15 秒、解像度を選択可能",
   "fal.ai sync.so v3 dubbing. Video input, billed per second.": "fal.ai sync.so v3 による吹き替え。動画入力、秒単位の課金。",
-  "xAI Grok, 1–15s, 480p/720p (image required)": "xAI Grok、1〜15 秒、480p/720p（画像が必要）",
-  "xAI Grok, 1–15s, 480p/720p, per-second pricing": "xAI Grok、1〜15 秒、480p/720p、秒単位の課金",
+  "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames (image required)": "xAI Grok、1〜15 秒、480p〜1080p、開始フレーム + 中間フレーム最大 4 枚 + 終了フレーム（画像が必要）",
+  "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames, per-second pricing": "xAI Grok、1〜15 秒、480p〜1080p、開始フレーム + 中間フレーム最大 4 枚 + 終了フレーム、秒単位の課金",
   "xAI flagship, strong reasoning": "xAI のフラッグシップ、強力な推論",
 }
 

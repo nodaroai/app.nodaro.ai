@@ -7,6 +7,8 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { getStaticPublicAppUrl } from "../lib/allowed-origins.js"
+import { publishedAppSlugWithheld } from "../lib/published-app-access.js"
+import { surfaceAllowsPublicOutputs } from "../lib/surface-profile.js"
 
 const slugParams = z.object({ slug: z.string().min(1) })
 
@@ -26,6 +28,17 @@ export async function ogTagsRoutes(app: FastifyInstance) {
     }
 
     const { slug } = parsed.data
+
+    // A deployment that does not allow public work (`outputs.allowPublic:
+    // false`) shows an app's card to its signed-in creator alone; anyone else
+    // (a link preview sends no sign-in) gets the card of an app that does not
+    // exist (lib/published-app-access.ts).
+    const withheld = await publishedAppSlugWithheld(slug, req.userId)
+    if (withheld) {
+      return reply
+        .header("Content-Type", "text/html; charset=utf-8")
+        .send(buildHtml({ slug, title: "Nodaro App", description: "AI-powered app on Nodaro.ai" }))
+    }
 
     // Fetch app metadata (latest version)
     const { data: appRow } = await supabase
@@ -78,7 +91,8 @@ export async function ogTagsRoutes(app: FastifyInstance) {
 
     return reply
       .header("Content-Type", "text/html; charset=utf-8")
-      .header("Cache-Control", "public, max-age=3600, s-maxage=3600")
+      // The creator's own card, where public work is not allowed, is never stored by a shared cache.
+      .header("Cache-Control", surfaceAllowsPublicOutputs() ? "public, max-age=3600, s-maxage=3600" : "private, no-store")
       .send(buildHtml({ slug, title, description, imageUrl }))
   })
 }

@@ -224,6 +224,8 @@ export interface UnitJsonOutput {
   readonly unitOutputs?: Readonly<Record<string, string>>
   /** By list output id: the files one run made on that pip, in order (never empty). */
   readonly unitLists?: Readonly<Record<string, readonly string[]>>
+  /** By list output id: how many items the run made on that pip but could not store (the job's `<id>NotSaved`, a whole number; 0 when it stored every one). */
+  readonly unitListsNotSaved?: Readonly<Record<string, number>>
   /** The first output's JSON value when the first output is a look output (a JSON-only worker), for the readers that read `output.json`. */
   readonly json?: unknown
 }
@@ -274,7 +276,31 @@ function sideOutputValues(u: UnitDescriptor, read: (h: UnitOutputHandle) => unkn
  * every media node's is, these beside it.
  */
 export function unitJobOutput(u: UnitDescriptor, outputData: Readonly<Record<string, unknown>>): UnitJsonOutput {
-  return sideOutputValues(u, (h) => (Object.hasOwn(outputData, h.id) ? outputData[h.id] : undefined))
+  const values = sideOutputValues(u, (h) => (Object.hasOwn(outputData, h.id) ? outputData[h.id] : undefined))
+  const notSaved = unitListsNotSavedOf(u, outputData)
+  return notSaved ? { ...values, unitListsNotSaved: notSaved } : values
+}
+
+/** The output_data key a list output reports its unstored items on: `<id>NotSaved`. */
+export function unitListNotSavedKey(listId: string): string {
+  return `${listId}NotSaved`
+}
+
+/**
+ * How many items each list output's run made but could not store — the job's
+ * `output_data["<id>NotSaved"]` when it is a whole number (0 included: a run
+ * that stored every item says so); undefined when no list output reports one.
+ */
+export function unitListsNotSavedOf(u: UnitDescriptor, outputData: Readonly<Record<string, unknown>>): Readonly<Record<string, number>> | undefined {
+  if (u.execution.kind === "use-case") return undefined
+  const out: Record<string, number> = {}
+  for (const h of u.handles.outputs) {
+    if (h.list !== true) continue
+    const key = unitListNotSavedKey(h.id)
+    const v = Object.hasOwn(outputData, key) ? outputData[key] : undefined
+    if (typeof v === "number" && Number.isInteger(v) && v >= 0) out[h.id] = v
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 /**
@@ -385,8 +411,13 @@ export interface UnitSavedOutput extends UnitJsonOutput {
  * output's field on `unitOutputs` (and, for a JSON-only worker, the first
  * one's value on `json`), a list output's on `unitLists`. A media unit's side
  * output reads the ACTIVE take's own field when that take carries it (a take
- * holds the side fields it was made with), else the node's field. Undefined
- * when nothing is saved yet.
+ * holds the side fields it was made with), else the node's field — except
+ * after a run once per upstream item (the node holds a batch on
+ * `__listResults`): then the node's field, which holds every row's,
+ * row-aligned (unitBatchSideOutputs, decided 2026-11-11), whichever take is
+ * active — as its take pip lists the batch whichever take is active. The
+ * editor's twin is frontend/src/lib/unit-compose.ts `unitOutputField`.
+ * Undefined when nothing is saved yet.
  */
 export function unitSavedOutput(u: UnitDescriptor, data: Readonly<Record<string, unknown>>): UnitSavedOutput | undefined {
   const out: Record<string, string> = {}
@@ -405,15 +436,16 @@ export function unitSavedOutput(u: UnitDescriptor, data: Readonly<Record<string,
       if (url && out[`${h.kind}Url`] === undefined) out[`${h.kind}Url`] = url
     } else if (h.kind === "text" && typeof value === "string" && value && out.text === undefined) out.text = value
   }
-  // A media unit's take carries its side fields; a JSON-only worker reads its node's fields as it always has.
-  const take = unitHasSideOutputs(u) && typeof activeTake === "object" && activeTake !== null ? (activeTake as Readonly<Record<string, unknown>>) : undefined
+  // Its take pip lists the last batch of a run once per upstream item (as a
+  // per-item node's each pip does, savedListFor) — never its take history.
+  const batch = unitHasSideOutputs(u) ? unitListItems(data.__listResults) : undefined
+  // A media unit's take carries its side fields; a JSON-only worker reads its
+  // node's fields as it always has, and so does a batch (its node's fields hold every row's).
+  const take = unitHasSideOutputs(u) && !batch && typeof activeTake === "object" && activeTake !== null ? (activeTake as Readonly<Record<string, unknown>>) : undefined
   const side = sideOutputValues(u, (h) => {
     if (!h.from) return undefined
     return take && Object.hasOwn(take, h.from) ? take[h.from] : data[h.from]
   })
-  // Its take pip lists the last batch of a run once per upstream item (as a
-  // per-item node's each pip does, savedListFor) — never its take history.
-  const batch = unitHasSideOutputs(u) ? unitListItems(data.__listResults) : undefined
   const saved: UnitSavedOutput = { ...out, ...side, ...(batch ? { listResults: batch } : {}) }
   return Object.keys(saved).length ? saved : undefined
 }

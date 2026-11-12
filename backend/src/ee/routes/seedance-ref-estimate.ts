@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { audioSoundtrackClipSec, billsReferenceVideoSeconds, pricedOutputDurationSec, SEEDANCE_2_5_REF_LIMITS } from "@nodaro/shared/models"
+import { audioSoundtrackClipSec, billsReferenceVideoSeconds, pricedOutputDurationSec, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES } from "@nodaro/shared/models"
 import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
 import { openApiRegistry } from "../../lib/openapi-registry.js"
 import { formatZodError } from "../../lib/zod-error.js"
@@ -17,10 +17,16 @@ const estimateBody = z.object({
   provider: z.string().min(1).max(64),
   /** The run's resolution; omitted = the model's default, as the run sends it. */
   resolution: z.string().min(1).max(16).optional(),
-  /** Output seconds; -1 = Auto (held for the first clip rounded up plus a second, or the model's longest clip while a clip is unmeasured). Omitted = the model's default. */
+  /** Output seconds; -1 = Auto (held for the longest clip rounded up plus a second, or the model's longest clip while a clip is unmeasured). Omitted = the model's default. */
   duration: z.union([z.number(), z.string().max(8)]).optional(),
   /** Seedance 2.5 Draft: priced at 480p. */
   draft: z.boolean().optional(),
+  /**
+   * Seedance 2.5: the `referenceTaskType` the run will send, resolved as the run
+   * resolves it. A declared `reference` with an automatic length is priced at
+   * the model's longest output; `edit` and `extend` at the length they run at.
+   */
+  referenceTaskType: z.enum(SEEDANCE_REFERENCE_TASK_TYPES).optional(),
   /** The reference clips the run will send, in order. */
   referenceVideoUrls: z.array(z.string().url().max(2048)).max(MAX_CLIPS),
   /** Wired reference clips whose URL is not known yet (their upstream has not produced them). */
@@ -80,7 +86,7 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }
-    const { provider, resolution, duration, draft, referenceVideoUrls } = parsed.data
+    const { provider, resolution, duration, draft, referenceTaskType, referenceVideoUrls } = parsed.data
     const unknownClips = parsed.data.unknownReferenceVideos ?? 0
     if (!billsReferenceVideoSeconds(provider)) {
       return reply.status(400).send({ error: { code: "validation_error", message: `"${provider}" is not a model whose price follows its reference clips (Seedance 2, Kling 4.0, Kling 4.0 Flash, Gemini Omni Flash 1.2).` } })
@@ -106,7 +112,7 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
         : parsed.data.unknownSoundtrack === true ? outputSec : undefined
       const durationsSec = soundtrackSec === undefined ? probed : [...probed, soundtrackSec]
       const videoTrim = { start: parsed.data.videoTrimStart, end: parsed.data.videoTrimEnd }
-      return { data: await seedance2RefVideoChargedQuote({ provider, resolution, duration, draft, durationsSec, unknownClips, videoTrim }) }
+      return { data: await seedance2RefVideoChargedQuote({ provider, resolution, duration, draft, referenceTaskType, durationsSec, unknownClips, videoTrim }) }
     } catch (err) {
       if (handlePriceNotConfigured(err, reply, ROUTE)) return reply
       return sendInternalError(reply, req, err, "Failed to estimate the reference-video credits")

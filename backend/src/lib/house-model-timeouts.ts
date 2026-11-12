@@ -5,7 +5,7 @@
  * threshold from it, so the reconcile cron can never take a job over while its
  * worker is still polling (the double-finalize of 2026-06-10).
  *
- * EMPTY until a house model ships. A new house model adds ONE row to each map,
+ * One row per house model. A new house model adds ONE row to each map,
  * keyed by its catalog id and sized to its longest legitimate run, beside its
  * row in `house-model-lanes.ts` (docs/design/house-models.md). A served model
  * with no row runs on the defaults.
@@ -20,10 +20,15 @@ export const DEFAULT_HOUSE_MODEL_TIMEOUT_MS = 10 * MIN
 export const DEFAULT_HOUSE_MODEL_POLL_INTERVAL_MS = 5_000
 
 /** Per-id poll budget, in ms: the longest a run may poll before the worker gives it up. */
-export const HOUSE_MODEL_TIMEOUT_MS: Readonly<Record<string, number>> = Object.freeze({})
+export const HOUSE_MODEL_TIMEOUT_MS: Readonly<Record<string, number>> = Object.freeze({
+  // Nodaro Image Upscale: an 8x of a large image is the longest run.
+  "nodaro-image-upscale": 12 * MIN,
+})
 
 /** Per-id pause between two status reads, in ms. */
-export const HOUSE_MODEL_POLL_INTERVAL_MS: Readonly<Record<string, number>> = Object.freeze({})
+export const HOUSE_MODEL_POLL_INTERVAL_MS: Readonly<Record<string, number>> = Object.freeze({
+  "nodaro-image-upscale": 5_000,
+})
 
 /** The poll budget and cadence a run of `id` uses. */
 export function houseModelTiming(id: string): { timeoutMs: number; pollIntervalMs: number } {

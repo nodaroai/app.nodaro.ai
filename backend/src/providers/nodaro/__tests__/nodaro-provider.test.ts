@@ -329,6 +329,34 @@ describe("NodaroCloudVideoProvider", () => {
     expect((JSON.parse(String(i2vCall[1]?.body)) as Record<string, unknown>).characterReferences).toEqual(characterReferences)
   })
 
+  it("forwards a declared referenceTaskType on both video routes, and the body is unchanged without one", async () => {
+    const referenceVideoUrls = ["https://r2.example/source.mp4"]
+    const options = { aspectRatio: "adaptive", resolution: "720p", referenceVideoUrls }
+    const bodies: Record<string, unknown>[] = []
+    for (const withType of [false, true]) {
+      queueResponses(
+        jsonResponse(200, { jobId: "cloud-vid-tt1" }),
+        completedJob({ videoUrl: "https://r2.example/tt1.mp4" }),
+        jsonResponse(200, { jobId: "cloud-vid-tt2" }),
+        completedJob({ videoUrl: "https://r2.example/tt2.mp4" }),
+      )
+      const opts = withType ? { ...options, referenceTaskType: "edit" as const } : options
+      await new NodaroCloudVideoProvider().imageToVideo(undefined as unknown as string, "make it night", "seedance-2-5", -1, undefined, opts)
+      await new NodaroCloudVideoProvider().textToVideo("make it night", "seedance-2-5", -1, "adaptive", opts)
+      const created = mockFetch.mock.calls.filter((c) => c[0] === "/v1/generate-video" || c[0] === "/v1/text-to-video")
+      bodies.push(...created.slice(-2).map((c) => JSON.parse(String(c[1]?.body)) as Record<string, unknown>))
+    }
+    const [i2vPlain, t2vPlain, i2vDeclared, t2vDeclared] = bodies as [Record<string, unknown>, Record<string, unknown>, Record<string, unknown>, Record<string, unknown>]
+    // Without the option: no key, and the reference media is relayed as before.
+    for (const plain of [i2vPlain, t2vPlain]) {
+      expect(plain).not.toHaveProperty("referenceTaskType")
+      expect(plain.referenceVideoUrls).toEqual(referenceVideoUrls)
+    }
+    // With it: the same body plus the public field.
+    expect(i2vDeclared).toEqual({ ...i2vPlain, referenceTaskType: "edit" })
+    expect(t2vDeclared).toEqual({ ...t2vPlain, referenceTaskType: "edit" })
+  })
+
   it("throws when a completed video job carries no videoUrl", async () => {
     queueResponses(
       jsonResponse(200, { jobId: "cloud-vid-3" }),

@@ -4,6 +4,10 @@ import { supabase } from "../supabase.js"
 import { markJobFailed } from "../job-failure.js"
 import { uploadToR2 } from "../storage.js"
 import { providerDetailOf, logProviderFailure } from "../provider-error-detail.js"
+import { userFacingMessage } from "../user-facing-error.js"
+import { isDrainAbortError } from "../worker-drain.js"
+import type { UnitRecover } from "../../nodes/kit.js"
+import { unitRecoverOf } from "./unit-recovery.js"
 import {
   safetyBlockOf,
   inputVideoRefusedOf,
@@ -21,6 +25,7 @@ import {
   pollVeoTask,
   runVeo1080pTask,
   isUpstreamKieFailure,
+  type KieResultJson,
 } from "../../providers/kie/client.js"
 import { pollKling3Task } from "../../providers/kie/kling3-client.js"
 import { pollKontextTask } from "../../providers/kie/kontext-client.js"
@@ -132,6 +137,27 @@ function autoQualityCreditsOf(row: KieJobRow, kieCredits: number | undefined): n
   return kieCredits
 }
 
+/** The kinds polled on KIE's standard `/jobs/recordInfo` endpoint, whose finished task carries a whole `resultJson`. */
+const RECORD_INFO_KINDS: ReadonlySet<string> = new Set(["kie-standard", "kie-seedance-draft", "kie-lip-sync"])
+
+/**
+ * One read of a record-info task (Kling avatar / InfiniTalk use it too): its
+ * whole parsed `resultJson`, and what it took and cost. Throws, as the poll
+ * does, while the task is still running or when it failed upstream. The job's
+ * own settings name the ratio the person chose, for the sentence if the model
+ * refused it.
+ */
+async function readRecordInfoTask(row: KieJobRow, pollAttempts: number): Promise<{
+  result: KieResultJson
+  providerMs?: number
+  kieCredits?: number
+}> {
+  if (!row.provider_task_id) throw new Error("no provider_task_id")
+  if (!RECORD_INFO_KINDS.has(row.provider_kind ?? "")) throw new Error(`not a record-info task: ${row.provider_kind}`)
+  const r = await pollKieTask(row.provider_task_id, pollAttempts, undefined, { requestedAspectRatio: requestedAspectRatioOf(row.input_data) })
+  return { result: r.resultJson, providerMs: r.providerMs, kieCredits: kieTaskCreditsConsumed(r.rawRecordInfo) }
+}
+
 /** Single-attempt poll dispatcher. Returns the recovered URL(s) on success;
  *  throws when the upstream task is still running OR has terminally failed.
  *  Caller distinguishes terminal failure via `isUpstreamKieFailure(err)` (the
@@ -150,16 +176,14 @@ async function singlePoll(row: KieJobRow, pollAttempts = 1): Promise<{
     case "kie-standard":
     case "kie-seedance-draft":
     case "kie-lip-sync": {
-      // Kling avatar / InfiniTalk use the standard /jobs/recordInfo endpoint.
-      // The job's own settings name the ratio the person chose, for the sentence if the model refused it.
-      const r = await pollKieTask(id, pollAttempts, undefined, { requestedAspectRatio: requestedAspectRatioOf(row.input_data) })
-      const urls = r.resultJson.resultUrls ?? (
-        r.resultJson.videoUrl ? [r.resultJson.videoUrl]
-        : r.resultJson.audioUrl ? [r.resultJson.audioUrl]
+      const r = await readRecordInfoTask(row, pollAttempts)
+      const urls = r.result.resultUrls ?? (
+        r.result.videoUrl ? [r.result.videoUrl]
+        : r.result.audioUrl ? [r.result.audioUrl]
         : []
       )
       if (!urls[0]) throw new Error("KIE success but no result URL")
-      return { url: urls[0]!, extraUrls: urls.slice(1), providerMs: r.providerMs, kieCredits: kieTaskCreditsConsumed(r.rawRecordInfo) }
+      return { url: urls[0]!, extraUrls: urls.slice(1), providerMs: r.providerMs, kieCredits: r.kieCredits }
     }
     case "kie-veo": {
       const r = await pollVeoTask(id, "VEO")
@@ -332,12 +356,15 @@ function refusalHintOf(err: unknown, row: KieJobRow): ErrorHint | null {
   )
 }
 
+/** True when THIS write flipped the row failed (`markJobFailed`'s answer). */
 async function markFailed(
   jobId: string,
   reason: string,
   detail: string | null = null,
   hint: ErrorHint | null = null,
-): Promise<void> {
+  /** What `reconcile_last_error` records: the upstream task failed, or (a unit's recovery) its result could not be delivered. */
+  lastError: "upstream_failed" | "delivery_failed" = "upstream_failed",
+): Promise<boolean> {
   // Log BEFORE the write: this module had no per-job output at all, so a
   // cron-failed job was invisible in Railway (spec §11.3).
   logProviderFailure("reconcile/kie", jobId, reason, detail)
@@ -345,12 +372,86 @@ async function markFailed(
   // a concurrent writer flipped to completed/cancelled, and never take a
   // `pending_review` row — a held job is out of every reconcile sweep's reach
   // by construction (spec D11).
-  await markJobFailed(jobId, {
+  return markJobFailed(jobId, {
     error_message: reason,
     error_detail: detail,
-    reconcile_last_error: "upstream_failed",
+    reconcile_last_error: lastError,
     ...(hint ? { error_hint: hint } : {}),
   })
+}
+
+/**
+ * A poll that threw. A task that failed upstream (`isUpstreamKieFailure`, the
+ * structured flag — never the message text: KieError.message is sanitized, so
+ * a string match silently missed every terminal failure and bumped it toward
+ * the 18-attempt / 90-min exhaustion) fails fast + refunds; ALL KIE poll
+ * clients set the flag (createUpstreamFailureError), so every provider fails
+ * fast here. A task still running, a transient read failure or an unsupported
+ * kind bumps, and the next tick looks again.
+ */
+async function failOrBumpPolled(row: KieJobRow, err: unknown, opts?: ReconcileOpts): Promise<void> {
+  if (isUpstreamKieFailure(err)) {
+    const msg = err instanceof Error ? err.message : String(err)
+    // The worker's one retry on this rejection died with the worker: it is done here instead.
+    const resubmit = await resubmitSeedanceEdit(row, err)
+    if (resubmit.outcome === "taken") return
+    if (resubmit.outcome === "resent") {
+      return reconcileKieJob({ ...row, provider_task_id: resubmit.taskId, reconcile_attempts: 0 }, opts)
+    }
+    await markFailed(row.id, msg, providerDetailOf(err), refusalHintOf(err, row))
+    await refundReservedCreditsForJob(row.id)
+  } else {
+    // still pending / transient / unsupported kind — try again next tick
+    await bumpAttemptsOrExhaust(row.id, err)
+  }
+}
+
+/**
+ * Recover an own-writer node unit's job (its `recover.ts`, through
+ * unit-recovery.ts): read its record-info task's WHOLE result — the unit's own
+ * parser decides what it holds, so no URL is required of it here — and hand it
+ * to the unit's recovery, the same delivery its worker runs after the provider
+ * call (finalize included: claim, store, commit on what was stored).
+ *
+ *   - the poll threw: the shared failure path (`failOrBumpPolled`) — a task
+ *     that failed upstream fails fast + refunds on this tick, a running one
+ *     bumps; a unit row on a kind that is not record-info bumps toward the
+ *     exhaustion (refund) like any unrecoverable row;
+ *   - the delivery threw (its result unreadable, no base, a base that could not
+ *     be stored after its attempts): the task is done and its result will not
+ *     change, so the job fails and is REFUNDED now — the same funnel as an
+ *     upstream failure, never the 18-tick bump. Refunded only when THIS write
+ *     flipped the row: a delivery that completed the job before it threw keeps
+ *     its charge. A drain (the worker's re-pick during a deploy) is rethrown:
+ *     the replacement process re-picks the job;
+ *   - the delivery's `{ ok: false }` (another finalizer won, or a held or
+ *     blocked result) is not a failure.
+ */
+async function reconcileKieUnitJob(row: KieJobRow, recover: UnitRecover, opts?: ReconcileOpts): Promise<void> {
+  let task: Awaited<ReturnType<typeof readRecordInfoTask>>
+  try {
+    task = await readRecordInfoTask(row, opts?.pollAttempts ?? 1)
+  } catch (err) {
+    return failOrBumpPolled(row, err, opts)
+  }
+  try {
+    await recover({
+      jobId: row.id,
+      input: row.input_data ?? {},
+      taskId: row.provider_task_id!,
+      providerKind: row.provider_kind!,
+      result: task.result,
+      ...(task.kieCredits !== undefined ? { providerCredits: task.kieCredits } : {}),
+      ...(task.providerMs !== undefined ? { providerMs: task.providerMs } : {}),
+      claimant: opts?.claimant ?? "cron",
+    })
+  } catch (err) {
+    if (isDrainAbortError(err)) throw err
+    // The words the worker's own failure path writes for the same error (video-worker.ts).
+    const message = userFacingMessage(err, "The result could not be delivered.")
+    const flipped = await markFailed(row.id, message, providerDetailOf(err), null, "delivery_failed")
+    if (flipped) await refundReservedCreditsForJob(row.id)
+  }
 }
 
 /**
@@ -363,6 +464,8 @@ async function markFailed(
  *     failed + refunds reserved credits.
  *   - on transient (still running, network blip): bumps `reconcile_attempts`
  *     and leaves the row in place for the next cron tick.
+ * An own-writer node unit with a recovery delivers through its own delivery
+ * instead (`reconcileKieUnitJob`).
  */
 export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Promise<void> {
   if (!row.provider_task_id) return
@@ -372,31 +475,18 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     return reconcileKieSunoJob(row, opts)
   }
 
+  // An own-writer node unit with a recovery (its recover.ts) is finished from
+  // its task's whole result through its OWN delivery — still after a poll, so a
+  // genuinely failed task fails fast + refunds here too (M-4a below) — and so
+  // never reaches the NOT_GENERIC_RECOVERABLE bump it is listed in.
+  const unitRecover = unitRecoverOf(row.job_type)
+  if (unitRecover) return reconcileKieUnitJob(row, unitRecover, opts)
+
   let result: Awaited<ReturnType<typeof singlePoll>>
   try {
     result = await singlePoll(row, opts?.pollAttempts ?? 1)
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    // Classify off the STRUCTURED flag via the shared isUpstreamKieFailure helper,
-    // never the message text: KieError.message is sanitized (e.g. the generic
-    // "Generation failed…"), so a string match silently missed every terminal
-    // failure and bumped it toward the 18-attempt / 90-min exhaustion. ALL KIE
-    // poll clients now set the flag (createUpstreamFailureError), so every
-    // provider fails fast here — not just kie-standard.
-    if (isUpstreamKieFailure(err)) {
-      // The worker's one retry on this rejection died with the worker: it is done here instead.
-      const resubmit = await resubmitSeedanceEdit(row, err)
-      if (resubmit.outcome === "taken") return
-      if (resubmit.outcome === "resent") {
-        return reconcileKieJob({ ...row, provider_task_id: resubmit.taskId, reconcile_attempts: 0 }, opts)
-      }
-      await markFailed(row.id, msg, providerDetailOf(err), refusalHintOf(err, row))
-      await refundReservedCreditsForJob(row.id)
-    } else {
-      // still pending / transient / unsupported kind — try again next tick
-      await bumpAttemptsOrExhaust(row.id, err)
-    }
-    return
+    return failOrBumpPolled(row, err, opts)
   }
 
   // Entity studios (Character / Face / Object / Creature / Location — images,
@@ -421,8 +511,9 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
   }
 
   // Types with their own completion writer, and unknown/NULL types, must not
-  // reach finalize. DELIBERATELY AFTER the poll (M-4a): the catch above
-  // fails-fast + refunds a genuinely-failed task on tick 1, and skipping the
+  // reach finalize (an own-writer unit WITH a recovery was routed to its own
+  // delivery above). DELIBERATELY AFTER the poll (M-4a): the catch above
+  // (`failOrBumpPolled`) fails-fast + refunds a genuinely-failed task on tick 1, and skipping the
   // poll to "save a provider call" would instead ride all 18 reconcile ticks
   // (~90 min of a stuck `processing` row) because the bump reason below
   // matches no DETERMINISTIC_RECONCILE_ERRORS pattern. Same bump-with-reason
@@ -466,6 +557,8 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
       referenceVideoUrls: input.referenceVideoUrls,
       refVideoDurationsSec: input.refVideoDurationsSec,
       duration: input.duration,
+      // Recorded only when a type was declared: the hold the reservation sized.
+      referenceTaskType: input.referenceTaskType,
       jobId: row.id,
     })
     // A recovered clip is the RAW take, so a Seedance draft records its length

@@ -49,6 +49,7 @@ vi.mock("../workflow-editor/use-edge-insert-animation", () => ({
 }))
 
 import { AnimatedFlowEdge } from "../animated-flow-edge"
+import { edgeModeMenu } from "../edge-mode-menu"
 
 type EdgeData = Record<string, unknown>
 
@@ -151,5 +152,56 @@ describe("AnimatedFlowEdge — the mode menu of a wire from a list pip", () => {
   it("the same node's other pips are not list-like: Selected stays, Bundle only into a node that takes several", () => {
     expect(openMenu({ sourceNodeType: "fixture-layers", targetNodeType: "upscale-image", edgeModeLabel: "selected" }).options).toEqual(["Selected", "Item", "Each"])
     expect(openMenu({ sourceNodeType: "fixture-layers", sourceListPip: true, targetNodeType: "upscale-image", edgeModeLabel: "each" }).options).toEqual(["Item", "Each"])
+  })
+
+  it("a node unit's list pip into Image Collage: Each the default, Bundle offered", () => {
+    expect(openMenu({ sourceNodeType: "fixture-layers", sourceListPip: true, targetNodeType: "image-collage", edgeModeLabel: "each" }).options).toEqual(["Item", "Each", "Bundle"])
+  })
+
+  it("every other source into Image Collage keeps its menu: no Bundle", () => {
+    expect(openMenu({ sourceNodeType: "list", targetNodeType: "image-collage", edgeModeLabel: "each" }).options).toEqual(["Item", "Each"])
+    expect(openMenu({ sourceNodeType: "generate-image", targetNodeType: "image-collage", edgeModeLabel: "selected" }).options).toEqual(["Selected", "Item", "Each"])
+    // The unit's other pips (its take, its JSON) are not list pips.
+    expect(openMenu({ sourceNodeType: "fixture-layers", targetNodeType: "image-collage", edgeModeLabel: "selected" }).options).toEqual(["Selected", "Item", "Each"])
+  })
+})
+
+describe("edgeModeMenu — Bundle into Image Collage is a unit list pip's alone", () => {
+  // The targets that take several items in one run (the menu's MULTI_INPUT_TARGET_TYPES), Image
+  // Collage, and a spread of single-input targets — every one checked from each source below.
+  const MULTI = [
+    "generate-image", "edit-image", "image-to-image", "modify-image", "mix-audio", "combine-audio", "suno-mashup",
+    "combine-videos", "slideshow", "manual-edit", "composite", "combine-text", "list",
+    "instagram-post", "tiktok-post", "facebook-post", "x-post", "linkedin-post",
+  ]
+  const SINGLE = ["upscale-image", "remove-background", "image-overlay", "generate-video", "image-to-video", "llm-chat", "extract-field", "filter-list"]
+  const TARGETS = [...MULTI, "image-collage", ...SINGLE]
+  // Sources that are not a unit list pip: list-like by type, list operators, a time splitter, a search, plain media.
+  const OTHER_SOURCES = ["list", "split-text", "split-media", "filter-list", "sort-list", "social-search", "generate-image", "upload-image", "fixture-layers"]
+  const pip = (target: string) => edgeModeMenu({ sourceNodeType: "fixture-layers", sourceListPip: true, targetNodeType: target })
+
+  it("a unit list pip is offered Bundle into exactly the several-item targets and Image Collage", () => {
+    expect(TARGETS.filter((target) => pip(target).modes.includes("all"))).toEqual([...MULTI, "image-collage"])
+  })
+
+  it("into Image Collage: a unit list pip gains Bundle; no other source does", () => {
+    expect(pip("image-collage")).toEqual({ modes: ["item", "each", "all"], defaultMode: "each" })
+    for (const source of OTHER_SOURCES) {
+      expect(edgeModeMenu({ sourceNodeType: source, targetNodeType: "image-collage" }).modes, source).not.toContain("all")
+    }
+    expect(edgeModeMenu({ sourceNodeType: "list", targetNodeType: "image-collage" })).toEqual({ modes: ["item", "each"], defaultMode: "each" })
+    expect(edgeModeMenu({ sourceNodeType: "generate-image", targetNodeType: "image-collage" })).toEqual({ modes: ["last", "item", "each"], defaultMode: "last" })
+  })
+
+  it("everywhere but Image Collage, a unit list pip's menu is a List source's (the rule it had before)", () => {
+    for (const target of TARGETS.filter((t) => t !== "image-collage")) {
+      expect(pip(target), target).toEqual(edgeModeMenu({ sourceNodeType: "list", targetNodeType: target }))
+    }
+  })
+
+  it("a unit list pip into a several-item target keeps Bundle; into a list column, Bundle is the default", () => {
+    expect(pip("generate-image")).toEqual({ modes: ["item", "each", "all"], defaultMode: "each" })
+    expect(pip("slideshow").modes).toContain("all")
+    expect(pip("list")).toEqual({ modes: ["item", "all"], defaultMode: "all" })
   })
 })

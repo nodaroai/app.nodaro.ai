@@ -10,6 +10,7 @@ import { REPEAT_PLACEHOLDER, decodeProviderItem, settledWithLimit, fanOutTextFee
 import { FAN_OUT_ALL_OR_NOTHING_TYPES, isRenderNodeType, type FanOutItemMeta } from "@nodaro/shared/nodes"
 import { setSuppressToasts, RUN_START_RESET } from "./poll-job";
 import { UGC_NEWER_TAKE_WINS_TYPE, ugcCanvasRunMark } from "@/lib/ugc-run-patch";
+import { unitSideBatchFields } from "@/lib/json-run-result";
 import { caughtErrorWords } from "@/lib/failed-job-error";
 import { browserRenderRowSentStamps } from "./apply-edl-stamps";
 import { fanOutRowStamps } from "./fan-out-row-stamps";
@@ -231,6 +232,11 @@ export async function executeNodeForList(
       __listInputs: [...items],
       generatedResults: [...batchResults, ...preBatchHistory],
       activeResultIndex: 0,
+      // A node unit's side outputs (a split image's layers and their data): each
+      // take keeps its own row's, as its poll landed it; the node's fields hold
+      // every row's, row-aligned with __listResults — what a wire from a side
+      // pip reads after the batch, as on the server (unitSideBatchFields).
+      ...unitSideBatchFields(node.type, results.map((url) => (url ? landed.get(url) : undefined))),
       // Fan-out window closes atomically with the terminal status write, so the
       // abandon-guard resumes normal single-job matching the moment the batch
       // settles. (The finally below is a defensive backstop for the throw path.)

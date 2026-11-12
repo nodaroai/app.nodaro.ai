@@ -38,7 +38,7 @@ const DURATIONS = Array.from({ length: 13 }, (_, i) => i + 3)
 const ladder = (kiePerSec: number, sec: number) => Math.ceil((kiePerSec * sec * 2.5) / 10) * 10
 
 const edit = (resolution: string, durationsSec: number[], videoTrim?: { start?: number; end?: number }) =>
-  seedance2RefVideoBaseCreditsFromDurations({ provider: ID, resolution, outputDurationSec: 8, requestedDuration: 8, durationsSec, videoTrim })
+  seedance2RefVideoBaseCreditsFromDurations({ provider: ID, resolution, outputDurationSec: 8, requestedDuration: 8, referenceTaskType: undefined, durationsSec, videoTrim })
 
 describe("gemini-omni-flash-1-2 static credits", () => {
   it("prices every (duration, resolution) row by the ladder rule", () => {
@@ -133,7 +133,7 @@ describe("gemini-omni-flash-1-2 video edit", () => {
 
   it("settles on the delivered clip", async () => {
     probe.durations.set("out", 8.04)
-    const run = { provider: ID, resolution: "720p", outputUrl: "out", referenceVideoUrls: ["clip"], durationsSec: [8], requestedDuration: 5 }
+    const run = { provider: ID, resolution: "720p", outputUrl: "out", referenceVideoUrls: ["clip"], durationsSec: [8], requestedDuration: 5, referenceTaskType: undefined }
     const seconds = await seedance2RefVideoActualSeconds(run)
     expect(seconds.chargedOutputSec).toBeCloseTo(8.04)
     expect(await seedance2RefVideoActualBaseCredits(run, seconds)).toBe(STATIC_CREDIT_COSTS[`${ID}:8s:720p`])

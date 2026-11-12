@@ -18,7 +18,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render } from "@testing-library/react"
-import { GenerateImageConfig, ModifyImageConfig } from "../image-configs"
+import { GenerateImageConfig, ModifyImageConfig, UpscaleImageConfig } from "../image-configs"
 import { ImageToVideoConfig, TextToVideoConfig, GenerateVideoConfig, VideoDepthConfig, VideoToVideoConfig } from "../video-configs"
 import { LipSyncConfig } from "../audio-configs"
 import { getAspectRatiosForVideoModel, getVideoResolutionOptions } from "../model-options"
@@ -514,6 +514,44 @@ describe("GenerateImageConfig — provider-snap useEffect", () => {
     render(<GenerateImageConfig {...commonProps(onUpdate, data)} />)
     for (const [u] of onUpdate.mock.calls) {
       expect("resolution" in u).toBe(false)
+    }
+  })
+})
+
+// =============================================================================
+// UpscaleImageConfig
+// =============================================================================
+
+describe("UpscaleImageConfig — upscale factor snap useEffect", () => {
+  const upscaleData = (overrides: Record<string, unknown>) => ({ label: "Upscale Image", provider: "recraft-upscale", fieldMappings: {}, ...overrides })
+  const mergedUpdates = (onUpdate: ReturnType<typeof vi.fn>): Record<string, unknown> =>
+    onUpdate.mock.calls.reduce((acc: Record<string, unknown>, [u]: any) => ({ ...acc, ...u }), {})
+
+  it("clears a Nodaro Image Upscale 8x left on Recraft, which takes no factor", () => {
+    const onUpdate = vi.fn()
+    render(<UpscaleImageConfig {...commonProps(onUpdate, upscaleData({ provider: "recraft-upscale", upscaleFactor: "8" }))} />)
+    const merged = mergedUpdates(onUpdate)
+    expect("upscaleFactor" in merged).toBe(true)
+    expect(merged.upscaleFactor).toBeUndefined()
+  })
+
+  it("snaps a Nodaro Image Upscale 8x left on Topaz to 2, the factor its run renders", () => {
+    const onUpdate = vi.fn()
+    render(<UpscaleImageConfig {...commonProps(onUpdate, upscaleData({ provider: "topaz-image-upscale", upscaleFactor: "8" }))} />)
+    expect(mergedUpdates(onUpdate).upscaleFactor).toBe("2")
+  })
+
+  it("keeps a factor the model takes, and writes nothing on a model with no factor stored", () => {
+    for (const data of [
+      upscaleData({ provider: "nodaro-image-upscale", upscaleFactor: "8" }),
+      upscaleData({ provider: "topaz-image-upscale", upscaleFactor: "4" }),
+      upscaleData({ provider: "recraft-upscale" }),
+      // A saved Recraft node's own 4 is not rewritten when its panel is viewed.
+      upscaleData({ provider: "recraft-upscale", upscaleFactor: "4" }),
+    ]) {
+      const onUpdate = vi.fn()
+      render(<UpscaleImageConfig {...commonProps(onUpdate, data)} />)
+      expect("upscaleFactor" in mergedUpdates(onUpdate), String(data.provider)).toBe(false)
     }
   })
 })

@@ -46,6 +46,7 @@ import { bypassTeleports } from "./teleport-bypass"
 import { editPlanClipFanOut, heldBatchFanOut, inheritedClipFanOut, selectedFanOutCount, type FanOutGraphEdge } from "./clip-fan-out"
 import { SPLIT_MEDIA_ASSUMED_SOURCE_SEC, SPLIT_SHOTS_ASSUMED_SHOT_SEC, splitMediaPartCount, splitMediaParts } from "./split-media-parts"
 import { runWireLengthSec } from "./utility-wire-length"
+import { UNIT_LIST_OUTPUTS } from "./unit-list-outputs.generated"
 
 /** Downstream runs one run of a producer makes the node after it run. */
 export type ProducerFanOut = (
@@ -203,6 +204,36 @@ function listFanOut(data: Record<string, unknown>, selector: SelectorFields | un
   return 0
 }
 
+/**
+ * The runs an Each wire from a node unit's LIST output makes (a list one run
+ * produced on that pip — each layer of a split image): before a first run, or
+ * when the source re-runs, the most items a run makes (its `listMax` field,
+ * else the field's default) times the runs the source itself makes
+ * (`sourceRuns`: a source run once per upstream item hands on every run's
+ * list, row by row — unit-batch-side-outputs.ts); after one, the list it holds
+ * (after a run once per item, that whole list). 0 when it fans nothing out.
+ * Rows from the manifests (unit-list-outputs.generated.ts), so no unit is
+ * named here.
+ */
+function unitListFanOut(
+  source: EstimateGraphNode,
+  sourceHandle: string | null | undefined,
+  rerun: boolean,
+  selector: SelectorFields | undefined,
+  sourceRuns: () => number,
+): number | undefined {
+  const row = UNIT_LIST_OUTPUTS.find((r) => r.type === source.type && r.pip === sourceHandle)
+  if (!row) return undefined
+  const data = dataOf(source)
+  const held = Array.isArray(data[row.from]) ? (data[row.from] as unknown[]).filter((v): v is string => typeof v === "string" && v !== "") : []
+  if (!rerun && held.length > 0) return fanOutCount(held, selector)
+  if (!row.max) return fanOutCount(held, selector)
+  const set = Number(data[row.max.field])
+  const most = Number.isFinite(set) && set >= 1 ? Math.floor(set) : row.max.default
+  const runs = Math.max(1, sourceRuns())
+  return fanOutCount(Array.from({ length: most * runs }, (_, i) => String(i + 1)), selector)
+}
+
 /** An Each wire whose producer emits nothing on it: 0 runs. */
 function eachWireCarriesNothing(
   edge: FanOutGraphEdge,
@@ -262,6 +293,11 @@ export function baseFanOut(
       if (n > 1) return n
     }
 
+    // A node unit's list output (a split image's layers): its most items before a first run — every
+    // run's, when the source itself runs once per upstream item — and its list after.
+    const unitList = unitListFanOut(source, edge.sourceHandle, rerunIds.has(source.id), selector, () => runsOf(source, nodes, edges, rerunIds, planOutputOf))
+    if (unitList !== undefined && unitList > 1) return unitList
+
     // Transitive: a Text node fed by a List on an Each wire.
     if (source.type === "text-prompt") {
       for (const upEdge of edges) {
@@ -305,7 +341,17 @@ export function nodeFanOut(
 ): number {
   // A Teleport pair passes on exactly what entered it — counted as the run
   // fans out through it (both engines read the bypassed graph).
-  const carried = bypassTeleports(nodes, edges)
+  return runsOf(node, nodes, bypassTeleports(nodes, edges), rerunIds, planOutputOf)
+}
+
+/** {@link nodeFanOut} over edges whose Teleport pairs are already bypassed. */
+function runsOf(
+  node: EstimateGraphNode,
+  nodes: readonly EstimateGraphNode[],
+  carried: readonly FanOutGraphEdge[],
+  rerunIds: ReadonlySet<string>,
+  planOutputOf: EditPlanOutputReader,
+): number {
   const repeat = REPEATABLE_NODE_TYPES.has(node.type ?? "") ? getEffectiveRepeatCount(dataOf(node)) : 1
   return baseFanOut(node, nodes, carried, rerunIds, planOutputOf) * repeat
 }

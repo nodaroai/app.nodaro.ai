@@ -10,6 +10,7 @@ import { NodeComponent as unit_remove_audio } from "../remove-audio/node" // uni
 import { NodeComponent as unit_shot_cuts } from "../shot-cuts/node" // unit:shot-cuts
 import { NodeComponent as unit_speaker_layout } from "../speaker-layout/node" // unit:speaker-layout
 import { NodeComponent as unit_speaker_map } from "../speaker-map/node" // unit:speaker-map
+import { NodeComponent as unit_split_into_layers } from "../split-into-layers/node" // unit:split-into-layers
 import { NodeComponent as unit_tighten_episode } from "../tighten-episode/node" // unit:tighten-episode
 
 export const UNIT_COMPONENTS: Readonly<Record<string, UnitNodeComponent>> = Object.assign(Object.create(null), {
@@ -21,5 +22,6 @@ export const UNIT_COMPONENTS: Readonly<Record<string, UnitNodeComponent>> = Obje
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "speaker-map": unit_speaker_map, // unit:speaker-map
+  "split-into-layers": unit_split_into_layers, // unit:split-into-layers
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

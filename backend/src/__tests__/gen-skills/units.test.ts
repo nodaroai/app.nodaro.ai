@@ -38,7 +38,7 @@ describe("gen:skills sees node units", () => {
     // fixture-case (the use-case fixture) follows fixture-echo: a unit may follow a unit.
     expect(defs.map((d) => d.type)).toEqual(["text-prompt", "upload-video", "fixture-echo", "fixture-case", "list"])
     const echo = defs.find((d) => d.type === "fixture-echo")!
-    expect(echo).toMatchObject({ label: "Fixture Echo", category: "utility", inputs: ["in", "sources", "plan"], outputs: ["video-out"], defaultDataKeys: ["label", "fieldMappings"] })
+    expect(echo).toMatchObject({ label: "Fixture Echo", category: "utility", inputs: ["in", "sources", "plan"], outputs: ["video-out"], defaultDataKeys: ["label", "fieldMappings", "size", "maxLayers"] })
     expect(echo.unit?.typesFile).toBe(join(tree, "frontend/src/nodes/fixture-echo/types.ts"))
     expect(defs.find((d) => d.type === "list")!.unit).toBeUndefined()
   })
@@ -47,9 +47,13 @@ describe("gen:skills sees node units", () => {
     const echo = defs.find((d) => d.type === "fixture-echo")!
     expect(renderWorkflowEditorCatalog(defs)).toContain("fixture-echo")
     const shape = parseDataInterface(echo.unit!.typesFile!, "FixtureEchoData")
-    expect(shape?.fields.map((f) => f.name)).toEqual(["label", "videoUrl", "generatedVideoUrl"])
+    // Its app fields (unit.json appFields: size, maxLayers) are declared settings like any other, so a published
+    // app keeps them and isNodeSetting answers for them (node-data-fields).
+    expect(shape?.fields.map((f) => f.name)).toEqual(["label", "videoUrl", "generatedVideoUrl", "size", "maxLayers"])
     expect(renderNodeDataShapeBlock(echo, shape)).toContain("videoUrl")
-    expect(renderNodeDataFieldsModule(defs, new Map([["fixture-echo", shape]]))).toContain("\"fixture-echo\"")
+    const fields = renderNodeDataFieldsModule(defs, new Map([["fixture-echo", shape]]))
+    expect(fields).toContain("\"fixture-echo\"")
+    expect(fields).toMatch(/"fixture-echo": \{ declared: true, fields: \[[^\]]*"maxLayers"[^\]]*"size"/)
   })
 
   it("node-handles.ts stays legacy-only: the renderer gen-skills.ts calls drops units itself", () => {

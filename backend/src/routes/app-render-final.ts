@@ -61,6 +61,7 @@ import { importViaOf } from "../lib/import-via.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { personalPayer, shouldRefuseDegradedRunFor } from "../lib/billing-context.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { usecaseRenderFinalEditRefusal } from "../lib/use-case/continuation.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
@@ -86,6 +87,7 @@ import {
 import { executeAppRenderFinal } from "../services/app-render-final.js"
 import { RENDER_FINAL_ALREADY_RUNNING, RENDER_FINAL_NOT_PREVIEW } from "../lib/render-final-codes.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
+import { APP_NOT_FOUND, publishedAppWithheld } from "../lib/published-app-access.js"
 
 /** Stable refusal codes of this route (clients branch on the code). */
 export const APP_RENDER_FINAL_NOT_A_RENDER = "not_a_render"
@@ -157,6 +159,12 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
     }
     if (await isUserBlocked(appRow.creator_id ?? null)) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
+    }
+    // A run of someone else's app is not re-rendered on a deployment that does
+    // not allow public work: the app answers as one that does not exist
+    // (lib/published-app-access.ts). The runner's own past run stays readable.
+    if (publishedAppWithheld(userId, appRow.creator_id)) {
+      return reply.status(404).send(APP_NOT_FOUND)
     }
     // A component never stops for a review (permanent): it runs inside its caller's run.
     if (appRow.publish_type === "component") {
@@ -248,6 +256,10 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
     if (locked.length > 0) {
       return reply.status(400).send({ error: { code: "locked_field", message: describeLockedOverrides(locked) } })
     }
+    // A node unit's app fields (unit.json appFields) take only the values they declare, on any key this
+    // request sets, exposed or not (lib/exposed-unit-field-check.ts); the orchestrator's merge refuses too.
+    const unitRefusals = findUnitFieldOverrideRefusals(nodes, effective)
+    if (unitRefusals.length > 0) return reply.status(400).send({ error: unitFieldOverrideErrorBody(unitRefusals) })
 
     // An edit the use-case final cannot take — a Clip Pack whose stored review
     // keeps no clip (nothing to render), or any edit of a type with no plan (a

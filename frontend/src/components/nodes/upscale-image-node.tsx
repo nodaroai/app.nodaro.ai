@@ -20,6 +20,7 @@ import { imageNodeSizing } from "./video-node-defaults"
 import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
+import { useWiredImageSize } from "@/hooks/use-wired-image-size"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { UpscaleImageData } from "@/types/nodes"
 
@@ -41,9 +42,13 @@ function UpscaleImageNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
+  // A model priced by its photo's size (Nodaro Image Upscale) reads the wired photo's recorded size.
+  const wiredPhotoSize = useWiredImageSize(id)
   const creditModelId = buildCreditModelIdentifier(
     nodeData.provider ?? "recraft-upscale",
     nodeData as unknown as Record<string, unknown>,
+    0,
+    { sourceImage: wiredPhotoSize },
   )
   const credits = useModelCredits(creditModelId, 2)
   const useFull = useFullResolution(id)

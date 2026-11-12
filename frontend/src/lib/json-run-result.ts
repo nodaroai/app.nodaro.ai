@@ -1,9 +1,9 @@
 // @registry-enumerates JSON_RUN_RESULT_TYPES carries every worker node unit whose outputs are JSON (look)
-// (unitSideRunFields / unitSideJobFields land the side outputs of the one node unit a lane writes — unitDefinitionOf(nodeType))
+// (unitSideRunFields / unitSideJobFields / unitSideBatchFields land the side outputs of the one node unit a lane writes — unitDefinitionOf(nodeType))
 import { editPlanResultPatch, unwrapEditPlanOutput } from "@nodaro/shared/edl"
 import { telegramPostsFrom } from "@nodaro/shared/social"
 import { UNIT_NODE_DEFINITIONS, unitDefinitionOf } from "./unit-definitions"
-import { composeSet, unitJsonRunPatch, unitJsonWorkers, unitSideJobPatch, unitSideRunPatch } from "./unit-compose"
+import { composeSet, unitJsonRunPatch, unitJsonWorkers, unitSideBatchPatch, unitSideJobPatch, unitSideRunPatch } from "./unit-compose"
 
 /**
  * A finished node's JSON result, under the fields its card and its output
@@ -346,17 +346,63 @@ export function jsonRunResultPatch(
  */
 export function unitSideRunFields(
   nodeType: string | null | undefined,
-  // Any lane's node output: its side outputs ride on `unitOutputs` / `unitLists` when it carries them.
+  // Any lane's node output: its side outputs ride on `unitOutputs` / `unitLists` / `unitListsNotSaved` when it carries them.
   output: object | null | undefined,
 ): Record<string, unknown> | undefined {
   const unit = typeof nodeType === "string" ? unitDefinitionOf(nodeType) : undefined
-  return unit ? unitSideRunPatch(unit, output as { readonly unitOutputs?: unknown; readonly unitLists?: unknown } | null | undefined) : undefined
+  return unit ? unitSideRunPatch(unit, output as { readonly unitOutputs?: unknown; readonly unitLists?: unknown; readonly unitListsNotSaved?: unknown } | null | undefined) : undefined
 }
 
 /** `unitSideRunFields` from a job row's `output_data` (each side output's value under its id): a restored poll, a reconciled job. */
 export function unitSideJobFields(nodeType: string | null | undefined, outputData: unknown): Record<string, unknown> | undefined {
   const unit = typeof nodeType === "string" ? unitDefinitionOf(nodeType) : undefined
   return unit ? unitSideJobPatch(unit, outputData) : undefined
+}
+
+/**
+ * A node unit with side outputs that a canvas run ran once per upstream item
+ * (list-execution.ts): the node's side fields after the batch — every row's,
+ * row-aligned (`unitSideBatchPatch`: the rule the server's fan-out output
+ * applies, so a wire reads the same whole on both engines). `takes[i]` is row
+ * i's take as its poll landed it (its own side fields), undefined for a row
+ * that made none. Undefined for every other node type.
+ */
+export function unitSideBatchFields(
+  nodeType: string | null | undefined,
+  takes: ReadonlyArray<object | null | undefined>,
+): Record<string, unknown> | undefined {
+  const unit = typeof nodeType === "string" ? unitDefinitionOf(nodeType) : undefined
+  return unit ? unitSideBatchPatch(unit, takes) : undefined
+}
+
+/**
+ * A node unit with side outputs that a server run ran once per upstream item:
+ * each row's take carries THAT row's side outputs. The server writes them as
+ * `listResultSideOutputs`, row-aligned with `listResults` (each
+ * `{ unitLists?, unitOutputs?, unitListsNotSaved? }`, null where the row carries none —
+ * backend fan-out-result.ts); this looks a row up by its URL (the first row with
+ * it wins, as `videoOverlayListRowFields` does) and maps it as
+ * `unitSideRunFields` maps a node output. A row with none, or a URL no row
+ * names, gets the all-null patch — never no keys, which a take reader would
+ * fill from the node's fields (the batch's whole). The three lanes that build
+ * fan-out rows (the live sync and both load-time lanes) spread `rowFields(url)`
+ * onto each row; the node's own fields take the output's (every row's,
+ * row-aligned — `unitSideRunFields`). `{}` for every other node type.
+ */
+export function unitSideListRowFields(
+  nodeType: string | null | undefined,
+  output: { readonly listResults?: unknown; readonly listResultSideOutputs?: unknown } | null | undefined,
+): (url: string) => Record<string, unknown> {
+  if (unitSideRunFields(nodeType, null) === undefined) return () => ({})
+  const urls = Array.isArray(output?.listResults) ? output.listResults : []
+  const rows = Array.isArray(output?.listResultSideOutputs) ? output.listResultSideOutputs : []
+  const byUrl = new Map<string, object | null>()
+  urls.forEach((url, row) => {
+    if (typeof url !== "string" || !url || byUrl.has(url)) return
+    const side: unknown = rows[row]
+    byUrl.set(url, typeof side === "object" && side !== null ? side : null)
+  })
+  return (url) => unitSideRunFields(nodeType, byUrl.get(url) ?? null) ?? {}
 }
 
 /**

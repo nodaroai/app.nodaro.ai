@@ -398,6 +398,8 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "Instructions": "הוראות",
   "Instrumental": "כלי",
   "Isolated": "מבודד",
+  "Layer data": "נתוני שכבות",
+  "Layers": "שכבות",
   "Without": "בלעדיו",
   "JSON": "JSON",
   "Location": "מיקום",
@@ -625,6 +627,7 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "Greater musical expression with more natural vocals and richer details.": "הבעה מוזיקלית עשירה יותר, עם שירה טבעית יותר ופרטים עשירים יותר.",
   "Lightweight and fast, balancing quality and speed for effortless creation.": "קליל ומהיר, מאזן בין איכות למהירות ליצירה ללא מאמץ.",
   "Premium AI upscaling with a 1x / 2x / 4x factor": "הגדלת AI פרימיום בפקטור 1x / 2x / 4x",
+  "Upscale up to 8x, lettering kept exactly as written": "הגדלה עד פי 8, והכיתוב נשמר בדיוק כפי שנכתב",
   "Alibaba Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs": "Alibaba Wan 3.0, 2–30 שניות, 480p/720p/1080p, אודיו מובנה, ייחוסי תמונה/וידאו/אודיו",
   "Avatar-inference dubbing on a video. Dynamic duration, premium.": "דיבוב מבוסס אווטאר על סרטון. משך דינמי, פרימיום.",
   "BFL FLUX Fill Pro via Replicate — dedicated masked inpainting (white = edit area)": "BFL FLUX Fill Pro דרך Replicate — מילוי אזורים ייעודי לפי מסכה (לבן = אזור העריכה)",
@@ -806,8 +809,8 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "Wan 2.7 T2V, 2–15s, 720p/1080p": "Wan 2.7 T2V, 2–15 שניות, 720p/1080p",
   "Wan I2V, 5-15s, resolution options": "Wan I2V, 5–15 שניות, אפשרויות רזולוציה",
   "fal.ai sync.so v3 dubbing. Video input, billed per second.": "דיבוב fal.ai sync.so v3. קלט וידאו, חיוב לפי שנייה.",
-  "xAI Grok, 1–15s, 480p/720p (image required)": "xAI Grok, 1–15 שניות, 480p/720p (נדרשת תמונה)",
-  "xAI Grok, 1–15s, 480p/720p, per-second pricing": "xAI Grok, 1–15 שניות, 480p/720p, תמחור לפי שנייה",
+  "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames (image required)": "xAI Grok, 1–15 שניות, 480p–1080p, פריים פתיחה + עד 4 פריימים באמצע + פריים סיום (נדרשת תמונה)",
+  "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames, per-second pricing": "xAI Grok, 1–15 שניות, 480p–1080p, פריים פתיחה + עד 4 פריימים באמצע + פריים סיום, תמחור לפי שנייה",
   "xAI flagship, strong reasoning": "הדגל של xAI, חשיבה חזקה",
 }
 

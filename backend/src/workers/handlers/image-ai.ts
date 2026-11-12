@@ -10,10 +10,11 @@ import { safeFetch } from "../../lib/safe-fetch.js"
 import { locateGrokSegments } from "../../lib/grok-segment-placement.js"
 import { providerKindForImageModel } from "../../lib/reconcile/provider-kind.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
+import { runNodaroImageUpscaleJob } from "../../lib/nodaro-image-upscale-lane.js"
 import { supabase } from "../../lib/supabase.js"
 import { IMAGE_MASK_MODE, T2I_TO_I2I_VARIANT, TASK_CHAINED_EDIT_PROVIDERS, type ImageGenProvider } from "@nodaro/shared/models"
 import { describeMaskRegion } from "@nodaro/shared/media"
-import { resolveTopazUpscale } from "@nodaro/shared/credits"
+import { NODARO_IMAGE_UPSCALE_MODEL_ID, resolveTopazUpscale } from "@nodaro/shared/credits"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
 import { EDIT_IMAGE_DEFAULT_PROVIDER, generateImageModelOf } from "./default-models.js"
 import { compositeInpaint, maskBoundingBoxFromUrl, imageDimensions, pasteSourceOutsideMask } from "../../services/inpaint/composite.js"
@@ -208,6 +209,14 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
     maskIndexes?: number[]
   }
   const resolvedProvider = provider ?? EDIT_IMAGE_DEFAULT_PROVIDER
+  // Nodaro Image Upscale is a house model: run through the seam's runner and
+  // delivered through its one delivery (lib/nodaro-image-upscale-lane.ts) —
+  // never a provider client of this worker's own.
+  if (resolvedProvider === NODARO_IMAGE_UPSCALE_MODEL_ID) {
+    await setJobProgress(job, ctx.jobId, 10)
+    await runNodaroImageUpscaleJob(job.data as Record<string, unknown>, { jobId: ctx.jobId })
+    return
+  }
   // The task-chained Grok providers (grok-2-edit / grok-2-segment) take a
   // prior Grok task_id instead of an image URL; the
   // KIE provider's editImage uses `imageParam` to route the input value to

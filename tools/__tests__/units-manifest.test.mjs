@@ -4,7 +4,7 @@
 // @test-watches tools/units/** packages/render-rules/src/use-case-*.ts frontend/src/lib/node-families.ts frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -610,6 +610,34 @@ test("a list output: only true, only on an image/video/audio output, with from, 
   expectProblem(listAt((o) => { o[1].runtimeTyped = true }), /^fixture-echo: handles\.outputs\[1\]\.list: a list output's medium is its kind, never decided at run time — remove runtimeTyped$/)
 })
 
+test("listMax: only on a list output, naming a defaultData whole number of at least 1", () => {
+  const maxAt = (edit) => problemsAfter((root) => withManifest(root, (m) => { asListUnit(m); m.defaultData.maxLayers = 9; edit(m) }))
+  assert.deepEqual(maxAt((m) => { m.handles.outputs[1].listMax = "maxLayers" }), [])
+  expectProblem(maxAt((m) => { m.handles.outputs[0].listMax = "maxLayers" }), /^fixture-echo: handles\.outputs\[0\]\.listMax: only on a list output \(list: true\)$/)
+  expectProblem(maxAt((m) => { m.handles.outputs[1].listMax = "" }), /^fixture-echo: handles\.outputs\[1\]\.listMax must name a node-data field$/)
+  expectProblem(maxAt((m) => { m.handles.outputs[1].listMax = "nope" }), /^fixture-echo: handles\.outputs\[1\]\.listMax: defaultData\.nope must be a whole number of items, at least 1/)
+  expectProblem(maxAt((m) => { m.handles.outputs[1].listMax = "maxLayers"; m.defaultData.maxLayers = 0 }), /defaultData\.maxLayers must be a whole number of items, at least 1/)
+  expectProblem(maxAt((m) => { m.handles.outputs[1].listMax = "maxLayers"; m.defaultData.maxLayers = 2.5 }), /defaultData\.maxLayers must be a whole number of items, at least 1/)
+})
+
+test("alignedWith: only on a JSON (look) output, naming a list output of the same unit", () => {
+  const alignAt = (edit) => problemsAfter((root) => withManifest(root, (m) => { asListUnit(m); edit(m.handles.outputs) }))
+  // The fixture's Layer data lines up with its Layers.
+  assert.equal(LIST_UNIT.outputs[2].alignedWith, "layers")
+  assert.deepEqual(alignAt(() => {}), [])
+  // Optional: a JSON output beside the media need not line up with a list.
+  assert.deepEqual(alignAt((o) => { delete o[2].alignedWith }), [])
+  expectProblem(alignAt((o) => { o[1].alignedWith = "layers" }), /^fixture-echo: handles\.outputs\[1\]\.alignedWith: only on a JSON \(look\) output$/)
+  expectProblem(alignAt((o) => { o[2].alignedWith = "" }), /^fixture-echo: handles\.outputs\[2\]\.alignedWith must name a list output$/)
+  expectProblem(alignAt((o) => { o[2].alignedWith = "base" }), /^fixture-echo: handles\.outputs\[2\]\.alignedWith: "base" is not a list output \(list: true\) of this unit/)
+  expectProblem(alignAt((o) => { o[2].alignedWith = "nope" }), /^fixture-echo: handles\.outputs\[2\]\.alignedWith: "nope" is not a list output \(list: true\) of this unit/)
+  // A use-case node's outputs are read by the use-case reader, never row by row.
+  expectProblem(
+    problemsAfter((root) => withManifest(root, (m) => { m.handles.outputs.find((o) => o.kind === "look").alignedWith = "json" }, CASE)),
+    /^fixture-case: handles\.outputs\[\d+\]\.alignedWith: a use-case node's outputs are read by the use-case reader, never row by row — remove alignedWith$/,
+  )
+})
+
 test("side outputs ride on the media take: the first output is a plain media output", () => {
   const order = (edit) => problemsAfter((root) => withManifest(root, (m) => { asListUnit(m); edit(m.handles.outputs) }))
   const FIRST = /^fixture-echo: handles\.outputs\[0\]: a unit with list or JSON outputs beside its media puts the media take first/
@@ -641,6 +669,24 @@ test("provider:* — a worker in the provider lane names the one provider it cal
   expectProblem(caps(["lane:local", "provider:kie"]), /^fixture-echo: capability "provider:kie" attributes a provider-lane worker's job; this unit has no "lane:provider" worker job$/)
   expectProblem(caps(["provider:kie"], CASE), /^fixture-case: capability "provider:kie" attributes a provider-lane worker's job/)
   assert.deepEqual(CAPABILITIES["provider:kie"].seams, ["registry"])
+})
+
+test("recover.ts: only an own-writer worker on a provider whose reconcile reads it (RECOVERING_PROVIDERS) has one", () => {
+  const capabilities = CAPABILITIES
+  const withRecover = (list, dir = UNIT, backend = BACKEND) => problemsAfter((root) => {
+    if (list) withManifest(root, (m) => { m.capabilities = list }, dir)
+    writeFileSync(path.join(root, backend, "recover.ts"), "export const recover = async () => ({ ok: true })\n")
+  }, { capabilities })
+  const NOT_OWN_WRITER = /recover\.ts finishes an own-writer worker's job from its provider task: it needs execution\.kind "worker" and the "finalize:own-writer" capability$/
+  // An own-writer KIE worker: valid.
+  assert.ok(!withRecover(["lane:provider", "provider:kie", "finalize:own-writer"]).some((e) => /recover\.ts/.test(e)))
+  // The fixture worker as it is (lane:local, no own-writer), or a provider worker that finalizes generically.
+  expectProblem(withRecover(null), new RegExp(`^fixture-echo: ${NOT_OWN_WRITER.source}`))
+  expectProblem(withRecover(["lane:provider", "provider:kie"]), new RegExp(`^fixture-echo: ${NOT_OWN_WRITER.source}`))
+  // An own-writer worker on no provider a reconcile reads it for (a local one).
+  expectProblem(withRecover(["lane:local", "finalize:own-writer"]), /^fixture-echo: recover\.ts is read only by the reconcile of provider:kie \(backend\/src\/lib\/reconcile\/kie\.ts\)/)
+  // A use-case node runs no worker.
+  expectProblem(withRecover(null, CASE, CASE_BACKEND), new RegExp(`^fixture-case: ${NOT_OWN_WRITER.source}`))
 })
 
 test("price-id.ts: a worker whose price.ee.ts names its id from the node's data has the editor's twin, and only such a unit", () => {
@@ -734,4 +780,143 @@ test("length:unknown: a video unit may hold it alone, and it adds no kept-length
     assert.match(keptLengthsSource(loadUnits(root)), /\["fixture-echo", "bound"\]/)
     assert.doesNotMatch(descriptorSource(echo()), /lengthUnknownReason/)
   } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+// ---------------------------------------------------------------------------
+// appFields (tools/units/app-field-rules.mjs): the settings a published app may
+// expose. fixture-echo declares a select (`size`) and an integer (`maxLayers`).
+// ---------------------------------------------------------------------------
+
+const sizeField = (m) => m.appFields.find((f) => f.field === "size")
+const layersField = (m) => m.appFields.find((f) => f.field === "maxLayers")
+
+test("appFields: the fixture's select and integer validate, and reach both projections only when declared", () => {
+  const root = tree()
+  try {
+    assert.deepEqual(problems(root), [])
+    const echo = () => loadUnits(root).find((u) => u.manifest.type === "fixture-echo")
+    assert.match(descriptorSource(echo()), /"appFields": \[\n {4}\{\n {6}"field": "size",\n {6}"kind": "select"/)
+    withManifest(root, (m) => { delete m.appFields })
+    assert.deepEqual(problems(root), [])
+    assert.doesNotMatch(descriptorSource(echo()), /appFields/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("appFields: its shape — a non-empty list of known kinds, each with only its own keys", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.appFields = [] })), /^fixture-echo: appFields must list the settings a published app may expose \(omit it when there are none\)$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.appFields = { size: {} } })), /^fixture-echo: appFields must list/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).kind = "slider" })), /^fixture-echo: appFields\[0\]\.kind: "slider" is not an app-field kind \(select, integer\)$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).min = 1 })), /^fixture-echo: appFields\[0\]\.min: unknown for kind "select" \(field, kind, labelKey, options\)$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { layersField(m).options = [] })), /^fixture-echo: appFields\[1\]\.options: unknown for kind "integer"/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { delete sizeField(m).field })), /^fixture-echo: appFields\[0\]\.field must name the node-data field the setting writes$/)
+})
+
+test("appFields: a field is one of the node's settings, exposed once, starting at its default", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.appFields.push(structuredClone(sizeField(m))) })), /^fixture-echo: appFields\[2\] \("size"\): the field is exposed twice — one app field per setting$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { delete m.defaultData.size })), /^fixture-echo: appFields\[0\] \("size"\): defaultData has no "size" — an app field starts at the node's default$/)
+  // A wire's landing field and a result are not settings.
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).field = "videoUrl"; m.defaultData.videoUrl = "1K" })), /^fixture-echo: appFields\[0\] \("videoUrl"\): "videoUrl" is an input's field — a wire lands there; an app field is a setting$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).field = "generatedVideoUrl"; m.defaultData.generatedVideoUrl = "1K" })), /^fixture-echo: appFields\[0\] \("generatedVideoUrl"\): "generatedVideoUrl" is an output's field — a run writes it; an app field is a setting$/)
+  // Its values are held to types.ts at typecheck, so types.ts must be there.
+  expectProblem(problemsAfter((root) => rmSync(path.join(root, UNIT, "types.ts"))), /^fixture-echo: appFields needs frontend\/src\/nodes\/fixture-echo\/types\.ts: each field's values are held to its data type there/)
+})
+
+test("appFields: every label is a key of the unit's own strings.json (all five dicts)", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).labelKey = "field.size" })), /^fixture-echo: appFields\[0\]\.labelKey: "field\.size" is not a key of the unit's strings\.json keys/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).options[0].labelKey = "fixtureEcho.size.nope" })), /^fixture-echo: appFields\[0\] \("size"\)\.options\[0\]\.labelKey: "fixtureEcho\.size\.nope" is not a key/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { delete layersField(m).labelKey })), /^fixture-echo: appFields\[1\]\.labelKey must be a message key of the unit's strings\.json keys$/)
+  // A key the unit declares in four dicts only is refused by the strings rule itself.
+  expectProblem(problemsAfter((root) => {
+    const file = path.join(root, UNIT, "strings.json")
+    const s = JSON.parse(readFileSync(file, "utf8"))
+    delete s.keys["fixtureEcho.field.size"].ja
+    writeFileSync(file, JSON.stringify(s))
+  }), /^fixture-echo: strings\.json keys\."fixtureEcho\.field\.size" needs a non-empty "ja"$/)
+})
+
+test("appFields: a select lists unique string values, its default among them", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).options = [] })), /^fixture-echo: appFields\[0\] \("size"\)\.options must list the values a run may take/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).options.push({ value: "1K" }) })), /^fixture-echo: appFields\[0\] \("size"\)\.options\[4\]: "1K" is listed twice$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).options[1] = { value: 1 } })), /^fixture-echo: appFields\[0\] \("size"\)\.options\[1\]\.value must be a non-empty string \(a select card writes the option's string\)$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).options[1].label = "One K" })), /^fixture-echo: appFields\[0\] \("size"\)\.options\[1\]\.label: unknown \(value, labelKey\)$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.defaultData.size = "4K" })), /^fixture-echo: appFields\[0\] \("size"\): its default "4K" \(defaultData\) is not one of its options \(auto, 1K, 1\.5K, 2K\)$/)
+})
+
+test("appFields: an integer's bounds are whole numbers, max reachable from min, its default on the grid", () => {
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { layersField(m).max = 9.5 })), /^fixture-echo: appFields\[1\] \("maxLayers"\): max must be a whole number$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { layersField(m).step = 0 })), /^fixture-echo: appFields\[1\] \("maxLayers"\)\.step must be at least 1$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { layersField(m).min = 99 })), /^fixture-echo: appFields\[1\] \("maxLayers"\): min 99 must be below max 99$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { layersField(m).step = 5 })), /^fixture-echo: appFields\[1\] \("maxLayers"\): max 99 is not reached from min 1 in steps of 5$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.defaultData.maxLayers = 100 })), /^fixture-echo: appFields\[1\] \("maxLayers"\): its default 100 \(defaultData\) is not a whole number from 1 to 99$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.defaultData.maxLayers = "9" })), /its default "9" \(defaultData\) is not a whole number from 1 to 99$/)
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { Object.assign(layersField(m), { min: 1, max: 97, step: 2 }); m.defaultData.maxLayers = 8 })), /its default 8 \(defaultData\) is not a whole number from 1 to 97 in steps of 2$/)
+})
+
+test("unit.schema.json's appFields kinds are the validator's APP_FIELD_KINDS", () => {
+  const schema = JSON.parse(readFileSync(path.join(here, "../units/unit.schema.json"), "utf8"))
+  assert.deepEqual(schema.properties.appFields.items.properties.kind.enum, vocabulary.APP_FIELD_KINDS)
+  assert.deepEqual(schema.properties.appFields.items.oneOf.map((b) => b.properties.kind.const), vocabulary.APP_FIELD_KINDS)
+})
+
+// appFields beside the other manifest keys: neither rule set refuses the other's valid manifest.
+test("appFields beside list outputs, a JSON pip, an AI category and a provider lane: all valid together", () => {
+  const appFieldsOf = (m) => m.appFields.map((f) => f.field)
+  // The list-output unit (a base image, its layers as a list, their JSON) keeps fixture-echo's app fields.
+  assert.deepEqual(problemsAfter((root) => withManifest(root, (m) => { asListUnit(m); assert.deepEqual(appFieldsOf(m), ["size", "maxLayers"]) })), [])
+  // An AI node listed under a server category, in the provider lane.
+  assert.deepEqual(problemsAfter((root) => withManifest(root, (m) => {
+    asListUnit(m)
+    m.category = "ai"
+    m.registry.category = "ai-image"
+    m.capabilities = ["lane:provider", "provider:kie"]
+  }), { capabilities: CAPABILITIES }), [])
+  // A list output's field is a result, never a setting an app may set.
+  expectProblem(
+    problemsAfter((root) => withManifest(root, (m) => { asListUnit(m); m.appFields[0].field = "generatedLayerUrls"; m.defaultData.generatedLayerUrls = "1K" })),
+    /^fixture-echo: appFields\[0\] \("generatedLayerUrls"\): "generatedLayerUrls" is an output's field — a run writes it; an app field is a setting$/,
+  )
+})
+
+test("appFields: never a field the override merge deletes, the label or the field mappings (read from @nodaro/shared)", async () => {
+  const { reservedAppFieldsFrom } = await import("../units/app-field-rules.mjs")
+  const reservedAppFields = reservedAppFieldsFrom((p) => readFileSync(path.join(REPO, p), "utf8"))
+  for (const name of ["generatedResults", "generatedVideoUrl", "useCaseContinue", "rightsConfirmationId", "quality", "editedEdl", "__injectedPortValues", "label", "fieldMappings"]) {
+    assert.ok(reservedAppFields.has(name), name)
+    const errs = problemsAfter((root) => withManifest(root, (m) => {
+      m.appFields[0].field = name
+      m.appFields[0].options = [{ value: "a" }]
+      m.defaultData[name] = "a"
+    }), { reservedAppFields })
+    expectProblem(errs, new RegExp(`^fixture-echo: appFields\\[0\\] \\("${name}"\\): "${name}" cannot be an app field: `))
+  }
+  // Without the shared source (a fixture-only context), the label and the field mappings are still refused.
+  expectProblem(problemsAfter((root) => withManifest(root, (m) => { m.appFields[0].field = "label"; m.appFields[0].options = [{ value: "Fixture Echo" }] })), /"label" cannot be an app field: the node's label/)
+  // The repo's context reads it.
+  assert.ok(repoContext(REPO).reservedAppFields.has("generatedResults"))
+})
+
+test("the reserved-name lists are read strictly: either quote; a spread, a reference or a missing list or file throws", async () => {
+  const { readConstList, reservedAppFieldsFrom, RESERVED_FIELD_LISTS } = await import("../units/app-field-rules.mjs")
+  assert.deepEqual(readConstList('export const L = ["a", \'b\'] as const\n', "L", "f.ts"), ["a", "b"])
+  // Typed, multi-line, with comments and a trailing comma.
+  assert.deepEqual(readConstList('export const L: readonly string[] = [\n  "a", // one\n  /* two */ "b",\n]\n', "L", "f.ts"), ["a", "b"])
+  assert.deepEqual(readConstList("export const L = [] as const\n", "L", "f.ts"), [])
+  assert.throws(() => readConstList('export const L = [...OTHER, "a"] as const\n', "L", "f.ts"), /cannot read "\.\.\.OTHER" in L \(f\.ts\)/)
+  assert.throws(() => readConstList('export const L = [A_FIELD] as const\n', "L", "f.ts"), /cannot read "A_FIELD" in L/)
+  assert.throws(() => readConstList("export const L = [`a`] as const\n", "L", "f.ts"), /cannot read "`a`" in L/)
+  assert.throws(() => readConstList('export const L = ["a,b"] as const\n', "L", "f.ts"), /cannot read/)
+  assert.throws(() => readConstList('export const M = ["a"] as const\n', "L", "f.ts"), /f\.ts declares no "export const L = \[\.\.\.\]"/)
+  // A list file that is absent throws: a validator that read nothing would let a reserved name through.
+  assert.throws(() => reservedAppFieldsFrom(() => null), /packages\/shared\/src\/preview-gate\.ts is missing/)
+  // A repo without the list's source: the repo context refuses it rather than read no reserved name.
+  const bare = mkdtempSync(path.join(tmpdir(), "units-bare-repo-"))
+  try {
+    mkdirSync(path.join(bare, "tools/units"), { recursive: true })
+    writeFileSync(path.join(bare, "tools/units/legacy-nodes.json"), '{"types":[]}')
+    assert.throws(() => repoContext(bare), /packages\/shared\/src\/preview-gate\.ts is missing — it holds/)
+  } finally { rmSync(bare, { recursive: true, force: true }) }
+  // Every list the validator reads is read from the repo.
+  const reserved = reservedAppFieldsFrom((p) => readFileSync(path.join(REPO, p), "utf8"))
+  assert.ok(RESERVED_FIELD_LISTS.length >= 3)
+  for (const name of ["quality", "editedEdl", "__injectedPortValues", "useCaseContinue", "generatedResults"]) assert.ok(reserved.has(name), name)
 })

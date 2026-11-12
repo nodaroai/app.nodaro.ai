@@ -1,4 +1,5 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect, expectTypeOf, vi } from "vitest"
+import type { DeclaredSeedanceTaskType } from "@nodaro/shared/models"
 import { createClient, StaticTokenAuth } from "../../index.js"
 import type { ModelMaker, ModelsListResult, ModelSummary } from "../../index.js"
 
@@ -128,5 +129,19 @@ describe("models resource", () => {
     expect(m.transparentResolution).toBe("1K")
     expect(m.backgroundOnlyAtTransparentResolution).toBe(true)
     expect([seedance.defaultDuration, seedance.autoDuration, notAList, severalSizes]).toHaveLength(4)
+  })
+
+  it("types the reference task types a model takes as the values the platform declares", async () => {
+    const seedance25: ModelSummary = { ...VEO, id: "seedance-2-5", autoDuration: true, defaultDuration: 8, referenceTaskTypes: ["reference", "edit", "extend"] }
+    // @ts-expect-error — "auto" is the default, never a listed value
+    const withAuto: ModelSummary = { ...seedance25, referenceTaskTypes: ["auto"] }
+    expectTypeOf<NonNullable<ModelSummary["referenceTaskTypes"]>[number]>().toEqualTypeOf<DeclaredSeedanceTaskType>()
+    const fetchMock = vi.fn<typeof fetch>().mockReturnValueOnce(
+      mockOk({ ...CATALOG, sections: [{ kind: "video", families: [{ family: "Bytedance", models: [seedance25, KLING] }] }] }),
+    )
+    const [m, other] = (await client(fetchMock).models.list({ kind: "video" })).sections[0]!.families[0]!.models
+    expect(m!.referenceTaskTypes).toEqual(["reference", "edit", "extend"])
+    expect(other!.referenceTaskTypes).toBeUndefined()
+    expect(withAuto).toBeDefined()
   })
 })

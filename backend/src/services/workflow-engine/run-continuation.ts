@@ -158,6 +158,8 @@ export interface ContinuationSource {
   readonly runRoot?: string | null
   /** An app run's Retry: the execution it continued (lib/app-run-stamp.ts); null for any other. Absent on a literal. */
   readonly resumedFrom?: string | null
+  /** A use-case node's inner run: the run it works for (lib/use-case-outer-run.ts); null for any other. Absent on a literal. */
+  readonly outerRun?: string | null
 }
 
 /** What the run asks to continue with. */
@@ -297,6 +299,7 @@ export async function loadContinuationSource(
     nodeSelection: nodeSelectionOf(serverTriggerData(execution)),
     runRoot: ranAppVersion ? stamps.runRoot : null,
     resumedFrom: stamps.resumedFrom,
+    outerRun: stamps.outerRun,
     ...(opts.withStates
       ? { nodeStates: await resolveRunStateStamps(execution.node_states ?? {}, opts.isRenderNode, execution.user_id) }
       : {}),

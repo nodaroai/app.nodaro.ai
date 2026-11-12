@@ -29,6 +29,7 @@ Don't know where to start? Find your goal here, then jump to the model in the ta
 | highest fidelity image | GPT Image 2, GPT Image 2.6 Sunburst, Imagen 4 Ultra | GPT Image 2 for characters and identity; GPT Image 2.6 Sunburst for wide or in-between ratios GPT Image 2 can't draw. |
 | image edit / restyle | GPT Image 2.6 Flare (I2I), GPT Image 2 (I2I), Seedream 5 Pro (I2I) | GPT Image 2.6 Flare changes what you ask and keeps the rest; GPT Image 2 i2i for identity-critical edits; Seedream 5 Pro for instruction-based edits. |
 | highest-resolution image | Topaz Image Upscale, GPT Image 2, GPT Image 2.6 Sunburst | Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor). |
+| upscale an image with text, labels or logos | Nodaro Image Upscale | Keeps lettering exactly as written. 1x enhances at the same size; up to 8x. Priced by the output's size, so a small picture costs little. |
 | background removal / cutout | Recraft Remove BG | Cheap, no prompt needed. |
 | best cinematic video | VEO 3.1 Quality, Kling 3.0, Seedance 2 | VEO 3.1 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency. |
 | cheap batch video clips | VEO 3.1 Fast, Wan 2.2 Turbo, Bytedance Lite I2V | VEO 3.1 Fast is the best price/quality balance with native audio. |
@@ -52,6 +53,7 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | ⭐ Z-Image | Tongyi-MAI | Everyday | 3<!-- credits: z-image --> | t2i | Cheapest model in catalog. Fast, stylized output. Limited aspect ratios. |
 | Flux 2 Klein (Open) | Black Forest Labs | Everyday | 4<!-- credits: flux-2-klein --> | t2i | Open Flux 2 9B from BFL — fast. Runs direct on Replicate. |
 | Recraft Remove BG | Recraft | Everyday | 4<!-- credits: recraft-remove-bg --> | remove-bg | Remove image background. Cheap utility. |
+| Nodaro Image Upscale | Nodaro Upscale | Everyday | 5<!-- credits: nodaro-image-upscale:2K --> | upscale | Image upscale at 1x (enhance only), 2x, 4x or 8x. Restores detail and keeps lettering exactly as written; the output is the input times the factor, nothing cropped. Priced by the output's size. Offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it. |
 | MiniMax H3 Image | MiniMax | Everyday | 6<!-- credits: minimax-h3-image --> | t2i | MiniMax H3 Image: detailed pictures up to about 16 MP at 4K, with readable text inside the picture. Ten shapes plus auto, the same price at 1K and 2K (2K by default), PNG or JPEG. |
 | MiniMax H3 Image (I2I) | MiniMax | Everyday | 7<!-- credits: minimax-h3-image-i2i --> | i2i | MiniMax H3 Image edits: change or combine up to 16 reference images in one edit, with readable text, up to about 16 MP at 4K. Priced by size and by reference image; auto keeps the first image's shape. |
 | Grok Imagine | xAI | Everyday | 11<!-- credits: grok --> | t2i, t2v | Expressive, high-contrast output. Supports both image and video. |
@@ -115,6 +117,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | VEO 1080p Upscale | Google | Everyday | 22<!-- credits: veo-1080p --> | video-upscale | Upscale VEO output to 1080p. |
 | Runway (via KIE) | Runway | Everyday | 33<!-- credits: runway-kie --> | i2v, t2v | Runway Gen-3 routed through KIE. 5/10s at 720p/1080p. |
 | Topaz Video Upscale | Topaz | Everyday | 44<!-- credits: topaz-video:per-unit --> | video-upscale | High-quality video upscale and enhancement to 720p, 1080p or 4K at 15–60 fps (frames are interpolated). Metered: the price is per Topaz unit, and a run uses a few units per output gigapixel. |
+| Grok Imagine Video 1.5 | xAI | Everyday | 55<!-- credits: grok-imagine-video-1.5 --> | i2v | Grok Imagine Video 1.5 — 1–15s at 480p, 720p or 1080p, per-second pricing. An exact first and last frame (the same image as both makes a seamless loop) and up to 4 in-between frames. Requires an input image. |
 | Bytedance Lite I2V | Bytedance | Everyday | 63<!-- credits: bytedance-lite --> | i2v, t2v | Cheapest Bytedance video tier with end-frame support. |
 | Hailuo 02 Standard | MiniMax | Everyday | 83<!-- credits: hailuo-standard --> | i2v, t2v | Hailuo 02 Standard — economical option with end-frame support. |
 | Hailuo 2.3 Standard | MiniMax | Everyday | 83<!-- credits: hailuo-2.3 --> | i2v | Cheaper Hailuo 2.3 tier — good baseline quality. |
@@ -135,9 +138,9 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | LTX 2.3 Fast | Lightricks | Everyday | 198<!-- credits: ltx-2.3-fast --> | i2v, t2v | Lightricks LTX 2.3 Fast — text/image→video up to 20s at 1080p (6/8/10s at 2K and 4K). No audio input, no extend. |
 | Wan 2.7 I2V | Alibaba | Everyday | 207<!-- credits: wan-2.7-i2v --> | i2v | Wan 2.7 image-to-video — 2–15s at 720p/1080p, supports start+end frame. |
 | Wan 2.7 T2V | Alibaba | Everyday | 207<!-- credits: wan-2.7-t2v --> | t2v | Wan 2.7 text-to-video — 2–15s at 720p/1080p. |
-| Seedance 2 Mini | Bytedance | Everyday | 209<!-- credits: seedance-2-mini --> | i2v, t2v | Budget Seedance 2 tier — 480p/720p only, per-second pricing by resolution. |
-| VEO Extend | Google | Everyday | 209<!-- credits: veo-extend --> | extend | Extend an existing VEO 3.1 clip by another segment. |
-| Vidu Q4 | Vidu | Everyday | 209<!-- credits: vidu-q4 --> | i2v | Vidu Q4 — start-frame or reference-driven video (up to 15 reference images + 3 MP3 voice/sound clips), native audio, 3-16s at 540p to 4K. |
+| Seedance 2 Mini | Bytedance | Standard | 209<!-- credits: seedance-2-mini --> | i2v, t2v | Budget Seedance 2 tier — 480p/720p only, per-second pricing by resolution. |
+| VEO Extend | Google | Standard | 209<!-- credits: veo-extend --> | extend | Extend an existing VEO 3.1 clip by another segment. |
+| Vidu Q4 | Vidu | Standard | 209<!-- credits: vidu-q4 --> | i2v | Vidu Q4 — start-frame or reference-driven video (up to 15 reference images + 3 MP3 voice/sound clips), native audio, 3-16s at 540p to 4K. |
 | Hailuo 2.3 Pro | MiniMax | Standard | 220<!-- credits: hailuo-2.3-pro --> | i2v | Hailuo 2.3 Pro — newer Hailuo with 768P / 1080P resolutions. |
 | Wan 3.0 | Alibaba | Standard | 220<!-- credits: wan-3 --> | i2v, t2v | Wan 3.0 — multimodal: first/last frame or image/video/audio references, native audio, 2-30s at 480p/720p/1080p. |
 | Kling 4.0 Flash | Kuaishou | Standard | 242<!-- credits: kling-4-flash --> | i2v, t2v | Kling 4.0 Flash — the faster, lower-cost Kling 4.0 at 720p, up to 20s with native audio; a start frame, reference images, videos and characters (each can carry a voice clip), or plain text. |
@@ -149,7 +152,6 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | HappyHorse 1.1 | HappyHorse | Standard | 311<!-- credits: happyhorse --> | t2v | HappyHorse 1.1 text-to-video — 3–15s at 720p/1080p, 9 aspect ratios incl. 21:9/9:21, per-second pricing. |
 | HappyHorse 1.1 I2V | HappyHorse | Standard | 311<!-- credits: happyhorse-i2v --> | i2v | HappyHorse 1.1 image-to-video — 3–15s at 720p/1080p, aspect ratio inferred from input image, per-second pricing. |
 | HappyHorse 1.1 Ref2V | HappyHorse | Standard | 311<!-- credits: happyhorse-ref2v --> | i2v | HappyHorse 1.1 reference-to-video — 1–9 reference images, 3–15s at 720p/1080p, per-second pricing. |
-| Grok Imagine Video 1.5 | xAI | Standard | 325<!-- credits: grok-imagine-video-1.5 --> | i2v | Grok Imagine 1.5 image-to-video — 1–15s, 480p/720p, per-second pricing. Requires an input image. |
 | Kling 3.0 Motion Transfer | Kuaishou | Standard | 330<!-- credits: kling-3.0-motion --> | motion-transfer | Premium motion transfer via Kling 3.0. |
 | Seedance 2 Fast | Bytedance | Standard | 341<!-- credits: seedance-2-fast --> | i2v, t2v | Cheaper / quicker Seedance 2 tier. |
 | Gemini Omni | Google | Standard | 347<!-- credits: gemini-omni-video --> | i2v, t2v | Google multimodal video with native audio; text/image-to-video + video-edit. |

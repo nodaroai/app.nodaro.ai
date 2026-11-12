@@ -1,6 +1,7 @@
 import { describe, it, expect, expectTypeOf, vi } from "vitest"
+import type { SeedanceReferenceTaskType } from "@nodaro/shared/models"
 import { createClient, StaticTokenAuth } from "../../index.js"
-import type { NodeQuote, RunNodeResult, VideoToVideoParams } from "../../index.js"
+import type { GenerateVideoParams, NodeQuote, RunNodeResult, TextToVideoParams, VideoToVideoParams } from "../../index.js"
 
 type FetchMock = ReturnType<typeof vi.fn> & typeof fetch
 
@@ -58,6 +59,27 @@ describe("nodes.run — the typed video lanes take an Idempotency-Key", () => {
     expectTypeOf<VideoToVideoParams["referenceImageUrls"]>().toEqualTypeOf<string[] | undefined>()
     expectTypeOf<VideoToVideoParams["referenceVideoUrls"]>().toEqualTypeOf<string[] | undefined>()
     expectTypeOf<VideoToVideoParams["referenceAudioUrls"]>().toEqualTypeOf<string[] | undefined>()
+  })
+})
+
+describe("nodes.run — Seedance 2.5 referenceTaskType", () => {
+  const REFS = { provider: "seedance-2-5", referenceVideoUrls: ["https://cdn.example.com/a.mp4"] }
+
+  it.each([
+    ["generate-video", "/v1/generate-video", { prompt: "remove the sign", ...REFS, referenceTaskType: "edit" }],
+    ["text-to-video", "/v1/text-to-video", { prompt: "keep going", ...REFS, referenceTaskType: "extend" }],
+  ] as const)("%s sends it in the body on POST %s", async (type, path, params) => {
+    const fetchMock = fetchAnswering({ jobId: "job-1" })
+    await client(fetchMock).nodes.run(type as "text-to-video", params)
+    const sent = call(fetchMock, 0)
+    expect(sent.url).toBe(`https://api.example.com${path}`)
+    expect(sent.body).toEqual(params)
+    expect(sent.body.referenceTaskType).toBe(params.referenceTaskType)
+  })
+
+  it("types the same four values the platform takes", () => {
+    expectTypeOf<NonNullable<GenerateVideoParams["referenceTaskType"]>>().toEqualTypeOf<SeedanceReferenceTaskType>()
+    expectTypeOf<NonNullable<TextToVideoParams["referenceTaskType"]>>().toEqualTypeOf<SeedanceReferenceTaskType>()
   })
 })
 

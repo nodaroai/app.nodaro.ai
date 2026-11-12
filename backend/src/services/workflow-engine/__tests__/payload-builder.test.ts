@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest"
 import { buildPayload, buildNodeRefMap, expandWiredLocationRefs, expandWiredObjectCreatureRefs } from "../payload-builder.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "../types.js"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared/models"
 import { setLlmMeteredSchemaReadyForTesting } from "../../../lib/llm-metered-schema-gate.js"
 import sunoSeparateSourceCases from "../../../../../packages/render-rules/fixtures/suno-separate-source.cases.json"
 
@@ -482,6 +482,40 @@ describe("buildPayload", () => {
       const n = node("n1", "video-to-video", { provider: "seedance-2-5" })
       const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4", prompt: "edit {video:1} as follows:\nmake it black and white" })
       expect(result.payload.prompt).toBe("edit @video_1 as follows:\nmake it black and white")
+    })
+
+    // The edit lane REQUESTS the edit task type; the executor resolves it once
+    // the clip is measured (lib/seedance-task-type-stamp.ts). The edit shape is
+    // already adaptive / Auto, so the request moves no ratio, length or price.
+    it("seedance-2-5: the edit job requests the edit task type, and nothing else moves", () => {
+      const n = node("n1", "video-to-video", { provider: "seedance-2-5", v2vResolution: "480p" })
+      const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4", prompt: "make it black and white" })
+      expect(result.payload.referenceTaskType).toBe("edit")
+      expect(result.payload).toMatchObject({ aspectRatio: "adaptive", duration: -1, resolution: "480p" })
+      expect(result.modelIdentifier).toBe("seedance-2-5:30s:480p-ref")
+    })
+
+    it("a model of the route's own requests no task type", () => {
+      for (const provider of VIDEO_TO_VIDEO_PROVIDERS) {
+        const result = buildPayload(node("n1", "video-to-video", { provider }), jobId, { videoUrl: "https://v.mp4", prompt: "make it noir" })
+        expect(result.jobName, provider).toBe("video-to-video")
+        expect(result.payload, provider).not.toHaveProperty("referenceTaskType")
+      }
+    })
+  })
+
+  // The Generate Video lanes do not read the field from node data yet: a node
+  // that carries it builds exactly the payload it builds without it.
+  describe("generate-video ignores a referenceTaskType in node data", () => {
+    it.each<[string, ResolvedInputs]>([
+      ["text-to-video, with a reference video", { referenceVideoUrls: ["https://ref.mp4"] }],
+      ["image-to-video, with a start frame", { startFrameUrl: "https://cdn/f.png" }],
+    ])("%s", (_name, inputs) => {
+      const data = { provider: "seedance-2-5", prompt: "she turns to camera", resolution: "480p", duration: 5 }
+      const plain = buildPayload(node("n1", "generate-video", data), jobId, { ...inputs })
+      const asked = buildPayload(node("n1", "generate-video", { ...data, referenceTaskType: "edit" }), jobId, { ...inputs })
+      expect(asked).toStrictEqual(plain)
+      expect(asked.payload).not.toHaveProperty("referenceTaskType")
     })
   })
 

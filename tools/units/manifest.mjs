@@ -3,7 +3,7 @@
 // and gen:skills (backend/scripts/lib/gen-skills/parse-node-definitions.ts)
 // both read units through it, so they can never disagree about what a unit
 // is. Built-ins only: the tools self-test job runs it without npm install.
-// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json tools/units/reserved-credit-ids.json frontend/src/lib/node-families.ts docs/nodes/README.md frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts packages/render-rules/src/use-case-specs.ts
+// @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json tools/units/reserved-credit-ids.json frontend/src/lib/node-families.ts docs/nodes/README.md frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts packages/render-rules/src/use-case-specs.ts packages/shared/src/preview-gate.ts packages/render-rules/src/render-final-set.ts
 //
 // A unit is one node type, named by its type id. Its manifest,
 // frontend/src/nodes/<type>/unit.json, is the source of truth; the backend
@@ -14,12 +14,13 @@ import path from "node:path"
 import { CAPABILITIES } from "./capabilities.mjs"
 import { AGGREGATES, EXECUTION_SEAMS, UNIT_FILES, UNIT_ROOTS, liveSeams } from "./seams.mjs"
 import { jsonOutputProblems } from "./json-output-rules.mjs"
+import { appFieldProblems, reservedAppFieldsFrom } from "./app-field-rules.mjs"
 import { USE_CASE_SPECS_FILE, duplicateBuilderProblems, useCaseBuildersFrom, useCaseFileProblems, useCaseProblems, useCaseSeamNeeds } from "./use-case-rules.mjs"
 import { ACCEPTS_KINDS, CATEGORIES, CONTRACT_KEYS, DICT_LOCALES, LIST_OUTPUT_KINDS, MANY_KINDS, MEDIA_INPUT_KINDS, REGISTRY_CATEGORIES, EXECUTION_KINDS, HANDLE_KINDS, LABEL_LOCALES, NOT_A_UNIT, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES, SERVER_CATEGORIES } from "./vocabulary.mjs"
 
 export const TYPE_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const MESSAGE_KEY = /^[a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+$/
-const TOP_LEVEL_KEYS = ["$schema", "schemaVersion", "type", "label", "category", "position", "picker", "handles", "defaultData", "execution", "capabilities", "lengthUnknownReason", "registry", "contract", "docs", "mcp"]
+const TOP_LEVEL_KEYS = ["$schema", "schemaVersion", "type", "label", "category", "position", "picker", "handles", "defaultData", "execution", "capabilities", "lengthUnknownReason", "registry", "contract", "docs", "mcp", "appFields"]
 const MEDIA_KINDS = ["audio", "video", "image"]
 // No price, credit id, doctrine or prompt text in a manifest: prices live in
 // backend/src/nodes/<type>/price.ee.ts (Enterprise License), prompt content in
@@ -32,6 +33,13 @@ export const LANE_CAPABILITIES = Object.keys(CAPABILITIES).filter((c) => c.start
 const PROVIDER_PREFIX = "provider:"
 /** The provider-attribution capabilities: a worker in the provider lane names exactly one (concurrency-lanes/provider-of.ts). */
 export const PROVIDER_CAPABILITIES = Object.keys(CAPABILITIES).filter((c) => c.startsWith(PROVIDER_PREFIX))
+/**
+ * The providers whose reconcile reads a unit's recover.ts (the "recovers" seam):
+ * backend/src/lib/reconcile/kie.ts asks lib/reconcile/unit-recovery.ts before
+ * its NOT_GENERIC_RECOVERABLE bump. The fal and Replicate reconciles do not, so
+ * a recover.ts on a unit of theirs would never run — refused until theirs do.
+ */
+export const RECOVERING_PROVIDERS = ["provider:kie"]
 
 /**
  * Whether a unit's price.ee.ts names the id a run reserves from the node's data
@@ -220,6 +228,9 @@ export function repoContext(root) {
     }),
     optionTypes: optionTypesFrom(text("frontend/src/lib/node-options.tsx")),
     useCaseBuilders: useCaseBuildersFrom(text(USE_CASE_SPECS_FILE)),
+    // The field names an app field may not take (the label, the field mappings, what the override merge deletes).
+    // Throws when a list file is absent: a real repo always has them.
+    reservedAppFields: reservedAppFieldsFrom((p) => (existsSync(path.join(root, p)) ? readFileSync(path.join(root, p), "utf8") : null)),
     live: liveSeams(),
     capabilities: CAPABILITIES,
     exists: (p) => existsSync(path.join(root, p)),
@@ -282,6 +293,18 @@ function checkHandles(h, errors) {
             if (handle.runtimeTyped !== undefined) errors.push(`${at}.list: a list output's medium is its kind, never decided at run time — remove runtimeTyped`)
           }
         }
+        // The most items one run makes on a list output: a defaultData number the run estimate counts before a first run.
+        if (handle.listMax !== undefined) {
+          if (handle.list !== true) errors.push(`${at}.listMax: only on a list output (list: true)`)
+          if (!isNonEmptyString(handle.listMax)) errors.push(`${at}.listMax must name a node-data field`)
+        }
+        // A JSON output whose entries line up one for one with a list output's
+        // items: after a run once per upstream item both hand on every row's,
+        // each entry with its row (json-output-rules.mjs checks what it names).
+        if (handle.alignedWith !== undefined) {
+          if (handle.kind !== "look") errors.push(`${at}.alignedWith: only on a JSON (look) output`)
+          if (!isNonEmptyString(handle.alignedWith)) errors.push(`${at}.alignedWith must name a list output`)
+        }
       }
     })
     const dup = ids.filter((id, i) => ids.indexOf(id) !== i)
@@ -336,6 +359,17 @@ function checkFiles(unit, m, ctx, errors) {
   for (const f of ["payload.ts", "worker.ts"]) if (kind !== "worker" && kind !== "use-case" && has("backend", f)) errors.push(`${f} is only for execution.kind "worker"`)
   // The video worker sizes a job's liveness from it (declaredJobBudgetMs), so only a worker's job has one.
   if (kind !== "worker" && has("backend", "budget.ts")) errors.push(`budget.ts is only for execution.kind "worker" (the video worker's liveness budget)`)
+  // The reconcile finishes an own-writer worker's job from its saved provider
+  // task through recover.ts (the "recovers" seam): only such a worker has one,
+  // and only on a provider whose reconcile reads it.
+  if (has("backend", "recover.ts")) {
+    const caps = Array.isArray(m.capabilities) ? m.capabilities : []
+    if (kind !== "worker" || !caps.includes("finalize:own-writer")) {
+      errors.push(`recover.ts finishes an own-writer worker's job from its provider task: it needs execution.kind "worker" and the "finalize:own-writer" capability`)
+    } else if (!caps.some((c) => RECOVERING_PROVIDERS.includes(c))) {
+      errors.push(`recover.ts is read only by the reconcile of ${RECOVERING_PROVIDERS.join(", ")} (backend/src/lib/reconcile/kie.ts): a worker with one names that provider — another provider's reconcile must read the "recovers" seam first`)
+    }
+  }
   errors.push(...useCaseFileProblems(unit, kind, has, ctx))
   if (kind === "source" && has("frontend", "exec.ts")) errors.push("execution.kind \"source\" runs nothing — remove exec.ts or change the kind")
   // The add-node picker renders the icon of option.tsx (node-options.tsx composes it).
@@ -513,6 +547,12 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
   checkHandles(m.handles, errors)
   if (!isObject(m.defaultData)) errors.push("defaultData must be an object")
   else {
+    // A list output's listMax names a defaultData field holding a whole number of items, at least 1.
+    for (const [i, h] of (Array.isArray(m.handles?.outputs) ? m.handles.outputs : []).entries()) {
+      if (!isObject(h) || h.list !== true || typeof h.listMax !== "string" || !h.listMax) continue
+      const v = m.defaultData[h.listMax]
+      if (!Number.isInteger(v) || v < 1) errors.push(`handles.outputs[${i}].listMax: defaultData.${h.listMax} must be a whole number of items, at least 1 (the most a run makes, counted before a first run)`)
+    }
     for (const [k, v] of Object.entries(m.defaultData)) {
       if (PROMPT_KEY.test(k) && typeof v === "string" && v !== "") errors.push(`defaultData.${k}: no prompt text in a manifest — prompt content belongs in @nodaro/prompts`)
     }
@@ -578,6 +618,7 @@ export function validateUnit(unit, ctx, knownTypes, unitFamilies = new Map()) {
   checkMcp(m.mcp, errors)
   errors.push(...useCaseProblems(unit, m, ctx))
   errors.push(...jsonOutputProblems(m))
+  errors.push(...appFieldProblems(unit, m, ctx.reservedAppFields))
   const docs = m.docs
   if (!isObject(docs) || (docs.page === undefined) === (docs.awaiting === undefined)) errors.push("docs needs exactly one of page (the docs/nodes/… page) or awaiting (why it has none yet)")
   else if (docs.page !== undefined) {

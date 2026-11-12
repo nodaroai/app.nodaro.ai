@@ -493,6 +493,33 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
    *  { provider: "seedance-2-5-hd", sourceJobId })`: the same take, frame for
    *  frame, at 1080p. Drafts are kept about 7 days. */
   draft?: boolean
+  /**
+   * Seedance 2.5 (`seedance-2-5` only; every other model ignores it): what the
+   * reference media (`referenceImageUrls` / `referenceVideoUrls` /
+   * `referenceAudioUrls`) is for, so the model does not have to guess it from
+   * the prompt.
+   *
+   * - `"auto"` (or absent): nothing is declared; the model decides from the prompt.
+   * - `"reference"`: the media only guides a new clip; your `aspectRatio` and
+   *   `duration` are kept.
+   * - `"edit"`: an edit of the reference video. The run takes the video's own
+   *   shape and length (`aspectRatio` becomes `"adaptive"`, `duration` Auto).
+   *   Needs a reference video, and every reference video 4–30 s long as the
+   *   platform measures it; otherwise nothing is declared and the run goes out
+   *   with the ratio and length you sent.
+   * - `"extend"`: continues the reference video, in its own shape
+   *   (`"adaptive"`), at a set length (Auto or no `duration` becomes the
+   *   model's default). The platform returns the model's clip as delivered,
+   *   without joining the source to it, so expect the continuation only; for
+   *   both as one video, run `extend-video`. Needs a reference video.
+   *
+   * Ignored on a draft and on a run with no reference media (a start or end
+   * frame is not reference media). Every ratio or length it changes is
+   * reported in the response's `adjustments`, and the run is priced, reserved
+   * and sent at the ratio and length it runs at. A dropped declaration is not
+   * reported.
+   */
+  referenceTaskType?: "auto" | "reference" | "edit" | "extend"
   [k: string]: unknown
 }
 
@@ -537,6 +564,12 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
    *  { provider: "seedance-2-5-hd", sourceJobId })`: the same take, frame for
    *  frame, at 1080p. Drafts are kept about 7 days. */
   draft?: boolean
+  /** Seedance 2.5 (`seedance-2-5` only; ignored elsewhere): what the reference
+   *  media is for — `"auto"` (default: the model decides from the prompt),
+   *  `"reference"`, `"edit"` (takes the reference video's own shape and
+   *  length; every reference video 4–30 s) or `"extend"` (continues it; the
+   *  source is not joined to the result). See {@link GenerateVideoParams.referenceTaskType}. */
+  referenceTaskType?: "auto" | "reference" | "edit" | "extend"
   /** Absent / `true`: a copyright refusal is retried once with a reworded
    *  prompt. `false` = a copyright refusal fails the job instead of retrying
    *  once with a reworded prompt. */

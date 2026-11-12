@@ -386,6 +386,8 @@ const HANDLE_LABELS_PT_BR: Record<string, string> = {
   "Instructions": "Instruções",
   "Instrumental": "Instrumental",
   "Isolated": "Isolado",
+  "Layer data": "Dados das camadas",
+  "Layers": "Camadas",
   "Without": "Sem ele",
   "JSON": "JSON",
   "Location": "Local",
@@ -609,6 +611,7 @@ const MODEL_DESCRIPTIONS_PT_BR: Record<string, string> = {
   "Greater musical expression with more natural vocals and richer details.": "Maior expressividade musical, com vocais mais naturais e detalhes mais ricos.",
   "Lightweight and fast, balancing quality and speed for effortless creation.": "Leve e rápido, equilibra qualidade e velocidade para criar sem esforço.",
   "Premium AI upscaling with a 1x / 2x / 4x factor": "Aumento de resolução premium com IA, fator 1x / 2x / 4x",
+  "Upscale up to 8x, lettering kept exactly as written": "Aumento de resolução de até 8x, com o texto mantido exatamente como está",
   "Alibaba Wan 3.0, 2–30s, 480p/720p/1080p, native audio, image/video/audio refs": "Alibaba Wan 3.0, 2–30 s, 480p/720p/1080p, áudio nativo, refs. de imagem/vídeo/áudio",
   "Avatar-inference dubbing on a video. Dynamic duration, premium.": "Dublagem por inferência de avatar em um vídeo. Duração dinâmica, premium.",
   "BFL FLUX Fill Pro via Replicate — dedicated masked inpainting (white = edit area)": "BFL FLUX Fill Pro via Replicate — inpainting dedicado com máscara (branco = área de edição)",
@@ -790,8 +793,8 @@ const MODEL_DESCRIPTIONS_PT_BR: Record<string, string> = {
   "Wan 2.7 T2V, 2–15s, 720p/1080p": "Wan 2.7 T2V, 2–15 s, 720p/1080p",
   "Wan I2V, 5-15s, resolution options": "Wan I2V, 5-15 s, opções de resolução",
   "fal.ai sync.so v3 dubbing. Video input, billed per second.": "Dublagem fal.ai sync.so v3. Entrada de vídeo, cobrada por segundo.",
-  "xAI Grok, 1–15s, 480p/720p (image required)": "xAI Grok, 1–15 s, 480p/720p (imagem obrigatória)",
-  "xAI Grok, 1–15s, 480p/720p, per-second pricing": "xAI Grok, 1–15 s, 480p/720p, preço por segundo",
+  "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames (image required)": "xAI Grok, 1–15 s, 480p–1080p, quadro inicial + até 4 quadros intermediários + quadro final (imagem obrigatória)",
+  "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames, per-second pricing": "xAI Grok, 1–15 s, 480p–1080p, quadro inicial + até 4 quadros intermediários + quadro final, preço por segundo",
   "xAI flagship, strong reasoning": "Topo de linha da xAI, raciocínio sólido",
 }
 

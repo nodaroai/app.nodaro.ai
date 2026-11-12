@@ -1,0 +1,118 @@
+{
+  "$comment": "Mask Composite's quote before a run, read by BOTH estimates over the same graphs: the editor's (frontend maskCompositePricingUnits — the node's pill, its Run button, the confirm and the workflow badge) and the server's run estimate (CreditsService.estimateWorkflowBaseCredits). Each case wires its sources into the composite `c`; `expectedUnits` is the 5-second units both quote (60 = the 300 s cap). The sources are uploads, Library clips and Video links, which the two read the same way (as they do Trim / Loop / Combine Videos or length-keeping steps built only on those). Any other node's output (a generation, an Extend Video, or a step that recorded a length of its own, and a chain built on one) is not a case: the editor reads the length that node records or is set to, which the server's run estimate does not read. `fallbackDecidedBefore` marks a shape the editor used to price from a length the upstream node merely stores (an upload's metadata, a Video link's whole length) — the server never read it, so the editor now quotes the cap there too. `libraryAsset` is the Library asset a case's upload node was added from: the editor half builds that node through `assetToUploadNode` and holds it to `nodes[0].data` (all but the row's `jobId` and `timestamp`, which no reader reads), so the server half reads exactly what a Library add writes.",
+  "cases": [
+    {
+      "name": "an uploaded clip: the result row the upload recorded for its current file",
+      "composite": {},
+      "nodes": [
+        { "id": "u", "type": "upload-video", "data": { "url": "https://cdn.example/clip.mp4", "metadata": { "durationSeconds": 23 }, "generatedResults": [{ "url": "https://cdn.example/clip.mp4", "duration": 23 }], "activeResultIndex": 0 } }
+      ],
+      "edges": [{ "source": "u", "targetHandle": "video" }],
+      "expectedUnits": 5
+    },
+    {
+      "name": "an upload that declares its length with the node (an API-written workflow)",
+      "composite": {},
+      "nodes": [
+        { "id": "u", "type": "upload-video", "data": { "url": "https://cdn.example/clip.mp4", "duration": 12 } }
+      ],
+      "edges": [{ "source": "u", "targetHandle": "video" }],
+      "expectedUnits": 3
+    },
+    {
+      "name": "pixelate: the background's recorded length, never the foreground's",
+      "composite": { "fill": "pixelate" },
+      "nodes": [
+        { "id": "f", "type": "upload-video", "data": { "url": "https://cdn.example/f.mp4", "duration": 12 } },
+        { "id": "b", "type": "upload-video", "data": { "url": "https://cdn.example/b.mp4", "duration": 41 } }
+      ],
+      "edges": [{ "source": "f", "targetHandle": "video" }, { "source": "b", "targetHandle": "background-video" }],
+      "expectedUnits": 9
+    },
+    {
+      "name": "nothing wired: the cap",
+      "composite": {},
+      "nodes": [],
+      "edges": [],
+      "expectedUnits": 60
+    },
+    {
+      "name": "an upload with no length at all: the cap",
+      "composite": {},
+      "nodes": [
+        { "id": "u", "type": "upload-video", "data": { "url": "https://cdn.example/clip.mp4" } }
+      ],
+      "edges": [{ "source": "u", "targetHandle": "video" }],
+      "expectedUnits": 60
+    },
+    {
+      "name": "blur with only a foreground of known length: the cap (the background is the lead)",
+      "composite": { "fill": "blur" },
+      "nodes": [
+        { "id": "f", "type": "upload-video", "data": { "url": "https://cdn.example/f.mp4", "duration": 12 } }
+      ],
+      "edges": [{ "source": "f", "targetHandle": "video" }],
+      "expectedUnits": 60
+    },
+    {
+      "name": "a video added from the Library: the row the add records for its file — its length",
+      "libraryAsset": { "id": "asset-1", "type": "video", "filename": "clip.mp4", "mimeType": "video/mp4", "sizeBytes": 1234, "url": "https://cdn.example/asset.mp4", "thumbnailUrl": "https://cdn.example/asset.jpg", "metadata": { "width": 1280, "height": 720, "durationSeconds": 23 }, "isLibraryItem": true, "uploadSource": "manual_upload", "createdAt": "2026-11-01T00:00:00.000Z" },
+      "composite": {},
+      "nodes": [
+        { "id": "u", "type": "upload-video", "data": { "r2Url": "https://cdn.example/asset.mp4", "url": "https://cdn.example/asset.mp4", "thumbnailUrl": "https://cdn.example/asset.jpg", "filename": "clip.mp4", "fileSize": 1234, "mimeType": "video/mp4", "metadata": { "width": 1280, "height": 720, "durationSeconds": 23 }, "assetId": "asset-1", "generatedResults": [{ "url": "https://cdn.example/asset.mp4", "thumbnailUrl": "https://cdn.example/asset.jpg", "jobId": "upload-1794441600000", "timestamp": "2026-11-12T00:00:00.000Z", "width": 1280, "height": 720, "duration": 23 }], "activeResultIndex": 0 } }
+      ],
+      "edges": [{ "source": "u", "targetHandle": "video" }],
+      "expectedUnits": 5
+    },
+    {
+      "name": "a video added from the Library whose length was never measured (a generated video's asset): the cap",
+      "libraryAsset": { "id": "asset-2", "type": "video", "filename": "gen.mp4", "mimeType": "video/mp4", "sizeBytes": 999, "url": "https://cdn.example/gen.mp4", "thumbnailUrl": null, "metadata": { "thumbnail_url": "https://cdn.example/gen.jpg" }, "isLibraryItem": true, "uploadSource": "generated", "jobId": "job-9", "createdAt": "2026-11-01T00:00:00.000Z" },
+      "composite": {},
+      "nodes": [
+        { "id": "u", "type": "upload-video", "data": { "r2Url": "https://cdn.example/gen.mp4", "url": "https://cdn.example/gen.mp4", "filename": "gen.mp4", "fileSize": 999, "mimeType": "video/mp4", "metadata": { "thumbnail_url": "https://cdn.example/gen.jpg" }, "assetId": "asset-2", "generatedResults": [{ "url": "https://cdn.example/gen.mp4", "jobId": "upload-1794441600000", "timestamp": "2026-11-12T00:00:00.000Z" }], "activeResultIndex": 0 } }
+      ],
+      "edges": [{ "source": "u", "targetHandle": "video" }],
+      "expectedUnits": 60
+    },
+    {
+      "name": "a video saved to the Library with its caller's metadata (POST /v1/library/save-generated): no length recorded — the cap",
+      "libraryAsset": { "id": "asset-3", "type": "video", "filename": "saved.mp4", "mimeType": "video/mp4", "sizeBytes": 0, "url": "https://cdn.example/saved.mp4", "thumbnailUrl": null, "metadata": { "durationSeconds": 1 }, "isLibraryItem": true, "uploadSource": "generated", "createdAt": "2026-11-01T00:00:00.000Z" },
+      "composite": {},
+      "nodes": [
+        { "id": "u", "type": "upload-video", "data": { "r2Url": "https://cdn.example/saved.mp4", "url": "https://cdn.example/saved.mp4", "filename": "saved.mp4", "fileSize": 0, "mimeType": "video/mp4", "metadata": { "durationSeconds": 1 }, "assetId": "asset-3", "generatedResults": [{ "url": "https://cdn.example/saved.mp4", "jobId": "upload-1794441600000", "timestamp": "2026-11-12T00:00:00.000Z" }], "activeResultIndex": 0 } }
+      ],
+      "edges": [{ "source": "u", "targetHandle": "video" }],
+      "expectedUnits": 60
+    },
+    {
+      "name": "a video added from the Library before adds recorded its length (the asset's metadata only, no result row): the cap",
+      "fallbackDecidedBefore": 2,
+      "composite": {},
+      "nodes": [
+        { "id": "u", "type": "upload-video", "data": { "url": "https://cdn.example/asset.mp4", "r2Url": "https://cdn.example/asset.mp4", "assetId": "asset-1", "metadata": { "durationSeconds": 10 } } }
+      ],
+      "edges": [{ "source": "u", "targetHandle": "video" }],
+      "expectedUnits": 60
+    },
+    {
+      "name": "an upload whose link was replaced: the earlier file's length is not this file's — the cap",
+      "fallbackDecidedBefore": 2,
+      "composite": {},
+      "nodes": [
+        { "id": "u", "type": "upload-video", "data": { "url": "https://cdn.example/new.mp4", "metadata": { "durationSeconds": 10 }, "generatedResults": [{ "url": "https://cdn.example/old.mp4", "duration": 10 }], "activeResultIndex": 0 } }
+      ],
+      "edges": [{ "source": "u", "targetHandle": "video" }],
+      "expectedUnits": 60
+    },
+    {
+      "name": "a Video link: the linked video's whole length is not the file the run downloads — the cap",
+      "fallbackDecidedBefore": 8,
+      "composite": {},
+      "nodes": [
+        { "id": "y", "type": "youtube-video", "data": { "url": "https://www.youtube.com/watch?v=abc", "videoDurationSec": 40 } }
+      ],
+      "edges": [{ "source": "y", "targetHandle": "video" }],
+      "expectedUnits": 60
+    }
+  ]
+}

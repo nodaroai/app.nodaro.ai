@@ -155,8 +155,25 @@ clone (`POST /v1/templates/:slug/clone`): `404 not_found`. Its creator reads
 and clones it as before, an admin still previews its page, and a template in
 the tutorial channel (`GET /v1/tutorials`, which an administrator curates) is
 read and cloned by anyone as before. Your own apps and templates stay listed by
-`GET /v1/apps/mine` and `GET /v1/templates/mine`. A published app's own page
-(`GET /v1/app/:slug`) and its runs are unchanged.
+`GET /v1/apps/mine` and `GET /v1/templates/mine`.
+
+There, a published app is also its creator's alone:
+
+- `GET /v1/app/:slug` answers everyone but the app's signed-in creator (and an
+  admin's preview) with the `404 not_found` "App not found" of an app that does
+  not exist. The creator's answer is sent `Cache-Control: private, no-store` with
+  `Vary: Authorization`; with public work allowed the headers are unchanged.
+- `GET /og/app/:slug` gives everyone but the signed-in creator the card of an app
+  that does not exist, and `GET /v1/embed/:slug` the missing app's `404`.
+- `POST /v1/app/:slug/run`, `POST /v1/app/:slug/runs`, and `/restore`, `/resume`
+  (the Retry and its quote) and `/render-final` on a run answer someone else's
+  app with the same `404 not_found`. Your own past runs of it stay readable
+  (`GET /v1/app/:slug/runs`, `GET /v1/app/:slug/runs/:runId`).
+- `POST /v1/component/execute` and `POST /v1/component/estimate-credits` run and
+  price a component for its creator, and inside a full run of a workflow that
+  holds the component node, whoever owns the component. Any other call (by its
+  name, the editor's "Run this node" included) gets `404 not_found`
+  "Component not found".
 
 ### HTTP credentials (Webhook Output)
 
@@ -1099,7 +1116,7 @@ Three video-specific rules:
 
 A few models **ignore** an unsupported resolution and render a fixed default
 instead of the nearest band — `minimax-h3` renders 2K for anything that is not
-`768P`, and the `wan-3` family, `vidu-q4` and `kling-4` / `kling-4-keyframes` / `kling-4-flash` render 720p (all described under
+`768P`, the `wan-3` family, `vidu-q4` and `kling-4` / `kling-4-keyframes` / `kling-4-flash` render 720p, and `grok-imagine-video-1.5` renders 480p (all described under
 [Seedance 2 video capabilities](#seedance-2-video-capabilities)).
 For those the correction targets the band the provider will actually produce, so
 the price still matches the render. Each such model declares this in the catalog
@@ -1119,9 +1136,13 @@ request on an LTX 2.3 model renders and bills 6 s.
 family — `autoDuration: true` in `GET /v1/models`): the model picks the clip
 length, which is the source clip's length when it edits a reference video. An
 Auto run reserves credits for the model's longest clip — or, with measured
-reference videos, for the first clip's length rounded up to a whole second plus
-one second (never above the longest clip) — and is refunded down to the length
-actually delivered. On any other model `-1` is ignored and the model
+reference videos, for the longest reference video's length rounded up to a whole
+second plus one second (never above the model's longest clip; the model may edit
+any of the reference videos) — and is refunded down to the length actually
+delivered. A request that declares `referenceTaskType: "reference"` (see
+[Seedance 2.5 reference task type](#seedance-25-reference-task-type)) with an
+Auto length is reserved at the longest output the model can make, and charged
+what it makes. On any other model `-1` is ignored and the model
 renders its default duration.
 
 ## 4e. Generation sessions
@@ -1843,14 +1864,17 @@ belongs to a workflow run carries its words, on every job payload above and in
 the `job.failed` webhook event, only when its owner can open the run's
 workflow — so running someone else's share link gives you its jobs with
 `error_detail: null`. A job that belongs to no run (one node run on its own)
-carries its words to its owner, as before, and so does a run that executes no
-saved workflow — the hidden run a use-case node such as Tighten Episode starts —
-on its node states and on its jobs alike. Some jobs are their owner's even when
-a workflow run started them: those of a few node types, which are not linked to
-that run; a use-case node's hidden run and its jobs, which are not linked to the
-run whose node started them; and the jobs of a run whose workflow has since been
-deleted (the run is deleted with it). Their words go to their owner, as a job
-that belongs to no run does. The share
+carries its words to its owner, as before. The hidden run a use-case node such
+as Tighten Episode starts executes no saved workflow: when a node of a workflow
+run started it, it is linked to that run and judged by its workflow, on its node
+states and on its jobs alike (a hidden run inside another follows the links to
+the nearest run of a workflow); one run on its own is its owner's. Some jobs
+are their owner's even when a workflow run started them: those of a few node
+types, which are not linked to that run; a use-case node's hidden run made
+before these links were recorded, and its jobs; and the jobs of a run whose
+workflow has since been deleted (the run is deleted with it). Their words go to
+their owner, as a job that belongs to no run does — except a linked hidden run
+whose run is gone, which keeps its words from everyone but administrators. The share
 page (`GET /v1/present/:token`) leaves the words its creator's editor saved out
 of every node it shows anyone but the creator. A deployment can also keep these
 words for its administrators (`jobs.errorDetail` in its surface profile, see
@@ -2526,6 +2550,9 @@ per-variant credit `pricing` — the credits a run is charged, the price
 `promptTips`, and the
 `doctrineCovered` truth flag (`true` only when a sourced per-family prompt
 doctrine exists — gate "vendor doctrine" badges on it; never overclaim).
+A video model that takes a [reference task type](#seedance-25-reference-task-type)
+lists the values it takes in `referenceTaskTypes` (`["reference", "edit", "extend"]`
+on `seedance-2-5`; absent on every other model).
 
 Every model also names its **maker** and carries the maker's mark, except a
 model offered under the instance's own label, which names no maker (`maker` is
@@ -2838,7 +2865,9 @@ so a value the model doesn't support is ignored, never a 400:
   other Seedance 2 SKU stops at 15s — and raises the reference caps to
   **30 images / 10 videos / 10 audio** (audio ≤ 30s per clip). With a start
   frame it always renders at that frame's aspect ratio; an explicit
-  `aspectRatio` is coerced to `adaptive` rather than sent.
+  `aspectRatio` is coerced to `adaptive` rather than sent. `referenceTaskType`
+  says what its reference media is for (see
+  [Seedance 2.5 reference task type](#seedance-25-reference-task-type)).
 - **`minimax-h3`** (MiniMax H3) takes the same reference fields with the
   same 9 / 3 / 3 caps and renders at `resolution: "2K"` (default) or `"768P"`
   (the cheaper per-second rate) — any other resolution value renders and bills
@@ -2945,6 +2974,18 @@ so a value the model doesn't support is ignored, never a 400:
   **output + max(output, total reference-video seconds)** at its `-ref` rate.
   Unlike the other Kling models it runs on free credits, as a 3 or 4 second
   clip.
+- **`grok-imagine-video-1.5`** (Grok Imagine 1.5) needs an `imageUrl`: it is
+  the exact first frame. An `endFrameUrl` is the exact last frame, and the
+  **same URL as both** makes a seamless loop. Up to **4** in-between frames go
+  in `referenceImageUrls`, in order; they are spread evenly over the clip at
+  whole seconds inside it (two frames on an 8 s clip land at 3 s and 5 s), so a
+  D-second clip takes at most D − 1 of them — frames past that are left out,
+  never refused. They are frames only, never loose references, and a run with
+  them but no `imageUrl` is a `400` (`image_required`), as is an `endFrameUrl`
+  alone. `duration` 1–15 (default 8); `resolution` `480p` (default) / `720p` /
+  `1080p`, anything else renders and bills 480p; no `seed`; no reference
+  videos, audio or characters. Priced per second by resolution; the frames add
+  nothing.
 - **`gemini-omni-flash`** takes exactly the same fields as
   `gemini-omni-video` on the same 720p / 1080p / 4K tiers, the same 4 / 6 / 8 /
   10 `duration` menu (an omitted duration renders and bills as 8 s), the same
@@ -2974,6 +3015,48 @@ so a value the model doesn't support is ignored, never a 400:
   `kling-4` and `kling-4-flash` count the input differently: they bill output +
   max(output, total reference-video seconds), so a clip shorter than the output
   counts as the output's length.
+
+#### Seedance 2.5 reference task type
+
+`POST /v1/generate-video` and `POST /v1/text-to-video` take an optional
+`referenceTaskType` that tells `seedance-2-5` what the request's reference
+media (`referenceImageUrls`, `referenceVideoUrls`, `referenceAudioUrls`) is
+for, instead of leaving the model to guess it from the prompt:
+
+| Value | What it does |
+|---|---|
+| `auto` (the default, also when absent) | Nothing is declared; the model decides from the prompt. |
+| `reference` | The media only guides a new clip. Nothing else changes: the request keeps the aspect ratio and length it was sent with. |
+| `edit` | The clip is an edit of the reference video, in the video's own shape and length: `aspectRatio` becomes `adaptive` and `duration` becomes Auto (`-1`). Needs at least one reference video, and **every** reference video 4–30 s long as the platform measures it (a clip whose length cannot be read does not qualify). Otherwise nothing is declared and the request goes out with the ratio and length it was sent with. |
+| `extend` | The clip continues the reference video, in the video's own shape (`aspectRatio` becomes `adaptive`), at a set length: an Auto or missing `duration` becomes the model's default length (`defaultDuration` in `GET /v1/models`, 8 s on Seedance 2.5). The platform returns the model's clip as delivered and does not join the source clip to it, so expect the continuation only; for the source and the continuation as one video, use [Extend Video](nodes/ai-video/extend-video.md). Needs at least one reference video; otherwise nothing is declared. |
+
+- **Ignored, never an error,** on any other model (the models that take it
+  list the values they take in `referenceTaskTypes` in
+  [`GET /v1/models`](#model-catalog)), on a draft (`draft: true`)
+  and on a request with no reference media. A start or end frame (`imageUrl`,
+  `endFrameUrl`) is not reference media, so a first-frame or
+  first-and-last-frame request without references declares nothing. A value
+  other than the four above is a `400 validation_error`.
+- **What it changes is reported.** A ratio or length that `edit` or `extend`
+  replaces comes back in `adjustments` (on `/v1/generate-video` also in
+  `warnings`), like any other [correction](#on-the-video-routes). An `Auto`
+  ratio is not replaced: with a reference video it already runs at `adaptive`. The run is
+  priced, reserved and sent at the values it runs at, and `POST /v1/quote`
+  with the same body as its `params` prices it the same way. An Auto length is reserved and
+  settled as described for `duration: -1` under
+  [On the video routes](#on-the-video-routes).
+- **A dropped declaration is not reported.** A request that asked for a type
+  and did not get it (a draft, missing reference media, a clip outside 4–30 s
+  for `edit`) answers like any other, so a response with no adjustment does
+  not mean the type was declared. The job's `input_data.referenceTaskType` is
+  set only when one was.
+- **`POST /v1/video-to-video`** with `provider: "seedance-2-5"` asks for `edit`
+  itself, whatever `referenceTaskType` the body carries. The edit is declared
+  when every clip, the source `videoUrl` and any `referenceVideoUrls`, is
+  4–30 s long (not on a draft); otherwise it goes out undeclared and the model
+  reads the prompt.
+
+MCP: `reference_task_type` on `generate_video`.
 
 ### `{image:N}` tokens on the image routes
 
@@ -4564,7 +4647,9 @@ The same fields are on every job read above, on `GET /v1/jobs/:id` and
 ### How long a component run may take
 
 `POST /v1/component/execute` answers `202 { jobId }` and runs the component in the
-background; poll that wrapper job like any other. With an OAuth app token it needs
+background; poll that wrapper job like any other. On a deployment that does not
+allow public work it runs only your own components, or a component inside a full
+run of a workflow that holds it (see the marketplace note above). With an OAuth app token it needs
 `workflows:execute` (and the wait-limit read below, `jobs:read`). The server gives the run 90 minutes,
 plus the time budget of any long render inside it (today: an Apply EDL final render,
 whose budget is sized from its edit), plus any time the run spends waiting for a free slot. A client that polls with its own time limit can ask
@@ -4616,8 +4701,9 @@ Send `{}` (no draft) for the lowest price any draft can finalize for, returned w
 |---|---|---|
 | `provider` | string | A Seedance 2 model, `kling-4` or `kling-4-flash`. Any other model is a `400 validation_error` whose message names the models that qualify (Seedance 2, Kling 4.0, Kling 4.0 Flash). |
 | `resolution` | string? | As the run sends it; omitted = the model's default. |
-| `duration` | number? | Output seconds; `-1` = Auto, priced as the run reserves it: the first clip's length rounded up to a whole second plus one second (never above the model's longest clip), or the model's longest clip while a clip is unmeasured or unknown. Omitted = the model's default. |
+| `duration` | number? | Output seconds; `-1` = Auto, priced as the run reserves it: the longest clip's length rounded up to a whole second plus one second (never above the model's longest clip), or the model's longest clip while a clip is unmeasured or unknown, or when `referenceTaskType` is `reference`. Omitted = the model's default. |
 | `draft` | boolean? | Seedance 2.5 Draft: priced at 480p. |
+| `referenceTaskType` | string? | Seedance 2.5: the [reference task type](#seedance-25-reference-task-type) the run will send (`auto`, `reference`, `edit`, `extend`), decided as the run decides it. `reference` with an Auto `duration` is priced at the model's longest output; `edit` and `extend` at the length they run at. Any other value is a `400 validation_error`. |
 | `referenceVideoUrls` | string[] | The reference clips the run will send, in order. |
 | `unknownReferenceVideos` | number? | Wired clips whose file does not exist yet (their upstream node has not produced them). |
 
@@ -4640,7 +4726,7 @@ The response is `{ "data": { identifier, reserve, expected?, adjustments, warnin
 |---|---|
 | `identifier` | The credit id the run is charged under. |
 | `reserve` | Credits the run holds when it starts. |
-| `expected` | Credits the run should actually cost, when that can be worked out from the measured inputs. A Seedance reference-video run is reserved at its worst case (input seconds plus the longer of the requested length and the longest clip, since Seedance can treat the run as an edit; for an Auto-duration run with every clip measured, input seconds plus the first clip's length rounded up to a whole second plus one second); `expected` is input plus the length it will most likely render — the source clip's length (`{video:1}`, the first clip) for an Auto-duration run, the requested seconds otherwise. Never above `reserve`. |
+| `expected` | Credits the run should actually cost, when that can be worked out from the measured inputs. A Seedance reference-video run is reserved at its worst case (input seconds plus the longer of the requested length and the longest clip, since Seedance can treat the run as an edit; for an Auto-duration run with every clip measured, input seconds plus the longest clip's length rounded up to a whole second plus one second, unless it declares `referenceTaskType: "reference"`, which is reserved at the model's longest output); `expected` is input plus the length it will most likely render — the source clip's length (`{video:1}`, the first clip) for an Auto-duration run, the requested seconds otherwise. Never above `reserve`. |
 | `adjustments` | `{ code, message, credits? }` — why the price is what it is: `ref_video_length` (priced by the clips' lengths), `extra_reference_images` (MiniMax Hailuo 3 images past the first 5), `auto_duration`, `loop_trim_addon` / `voiced_audio_addon` (with their credits), `params_adjusted` (a resolution or ratio snapped to one the model offers). |
 | `warnings` | `{ code, message }` — `settles_to_actual` (the run is charged for what was generated and the rest of `reserve` is refunded), `ref_video_unmeasured` (a clip could not be measured and is priced as the longest the model accepts). |
 
@@ -7084,6 +7170,7 @@ for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/video-overlay` | 1–20 timed image or video layers over a video, local FFmpeg (`{ videoUrl, layers[]: { imageUrl \| videoUrl (exactly one), sound?: { volume: 0–1 } (a video layer only), start, end?, preset?: card\|corner-badge\|full-frame, corner?, anchor?, x?, y?, width?, height?, fit?: contain\|cover, opacity?, animate?, zIndex? }, outputAspect?: 16:9\|9:16\|1:1\|4:5, baseFit?: cover\|contain, backgroundColor?, baseBox?: { anchor, width, x?, y?, height?, fit? }, layout?: video-bottom\|video-top\|stack-whole\|stack-filled\|pip }`; an explicit box field overrides the preset, neither = a corner badge (bottom-right, or the `corner` it names); `end` omitted = to the end of the video; `animate` defaults on for an image, off for a video). At most 2 video layers; a video layer plays from its first frame at `start` and holds its last frame until its window ends, and is silent unless it has `sound` (mixed with the base's audio under a limiter, as AAC) — with no sound on, the base audio is untouched. `baseBox` places the base (needs `outputAspect`; the uncovered canvas shows `backgroundColor`); `layout` places the base, the first video layer or both — every layout but `pip` needs `outputAspect`, the stacks and `pip` need a video layer, and a stack takes no `baseBox` (400 `validation_error` otherwise). Price: an image-only run is **22 credits**<!-- credits: video-overlay -->; a run with a video layer is **11 credits**<!-- credits-rate: video-overlay:video --> **per started 5 s of the base**, whose length is measured first — over 60 s → 400 `video_overlay_too_long`, unreadable → 400 `invalid_media_duration`, every layer (or a stack's first video layer) starting after its end → 400 `video_overlay_starts_after_end`, before any charge; an image-only run whose layers all start after the end fails at the render and is refunded. 30 requests / minute per user → job; output `{ videoUrl, thumbnailUrl, width, height, durationSec, warnings[] }`. Full reference: [Video Overlay](./nodes/processing-video/video-overlay.md). |
 | `POST` | `/v1/video-depth` | Turn a video into a depth video — near is bright, far is dark (`{ videoUrl, provider?: video-depth-anything\|depth-anything-frames, modelSize?: small\|base\|large, colormap?: grayscale\|turbo\|inferno\|magma\|viridis, resolution?: auto\|360p\|480p\|720p\|1080p, sideBySide? }`; `provider` defaults to `video-depth-anything` and `modelSize` to `large`). `video-depth-anything` honours every lever; `depth-anything-frames` (per frame, may flicker) honours `modelSize` and `colormap` `grayscale` or `inferno` only. A lever the provider does not take is ignored and a colormap it cannot render becomes `grayscale`, so switching providers never fails a request — but every value sent must still be valid (an unknown provider, model size, colormap or resolution is a `400 validation_error`). The clip is measured before anything is created and priced per whole second of its length: `400 video_too_long` over the provider's limit (2,400 frames and at most 300 s for `video-depth-anything`, a clip with no frame rate counted at 30 fps; 80 s for `depth-anything-frames`), `400 video_unreadable` when the clip cannot be read, `400 validation_error` on a malformed body, `403 model_not_available` when this deployment has turned the provider off (an omitted `provider` is checked as the default) — nothing is reserved on any of them. → `{ jobId }`; output `{ videoUrl, thumbnailUrl }`. Full reference: [Video Depth](./nodes/processing-video/video-depth.md). |
 | `POST` | `/v1/generate-mask` | Text-prompted image segmentation (Grounded SAM) → a black-and-white mask image, white = the subject (`{ imageUrl, prompt (1–500 chars, e.g. "the person"), threshold?: 0–1 (default 0.3; lower selects more) }`; a malformed body is a `400 validation_error`). → `{ jobId }`; output `{ maskUrl, imageUrl }` — `maskUrl` is the mask PNG, `imageUrl` the source image passed through unchanged. Price: `GET /v1/credits/model-cost?model=generate-mask`. Full reference: [Generate Mask](./nodes/ai-image/generate-mask.md). |
+| `POST` | `/v1/split-into-layers` | One image → a base picture and separate layers, each element on its own transparent PNG (`{ imageUrl, maxLayers?, size?, prompt? }`: `imageUrl` an http(s) URL; `maxLayers` 1–99, default 9 — more elements than that merge into fewer layers, none is dropped; `size` `"1K"\|"1.5K"\|"2K"\|"auto"`, default `"1K"` — each image's pixel budget, about one megapixel at 1K, while `"auto"` keeps the picture's own size, between 1K and 2K; `prompt` up to 2,000 characters — what to separate, optionally with `<bbox>x1 y1 x2 y2</bbox>` marks (0–1000); left empty, the main elements are found automatically. A malformed body is a `400 validation_error` before any credits are held). → `{ jobId }`; output `{ imageUrl, layers, layerData, layerCount, layersNotSaved, libraryImages }`: `imageUrl` is the base picture (an opaque PNG), `layers` each layer's file, bottom to top, and `layerData` one `{ name?, description?, zIndex, width?, height?, box?, boxNormalized?, url, baseUrl }` per layer in the same order, `baseUrl` naming the base picture the layer was cut from (the job's own `imageUrl`). `zIndex` is the stacking order (1 sits on the base, higher is drawn above); `box` (`{ x1, y1, x2, y2 }`, top-left and bottom-right) is where the layer sits on the base, in the BASE's pixels, and `boxNormalized` the same box on a 0–1000 scale of the base's width and height; `width` / `height` are the layer FILE's own pixels — a layer is cropped to its element at about the size's pixel budget, so scale it to its `box` to put it back in place. A run holds the price of the most images it may return (`maxLayers` + 1, the base included) at its size and is charged only for the images it returns (1K and 1.5K are priced alike, 2K and auto alike): the default run holds **104 credits**<!-- credits: split-into-layers:1k:10 -->, 3 layers returned at 1K are **44 credits**<!-- credits: split-into-layers:1k:4 --> (**74 credits**<!-- credits: split-into-layers:2k:4 --> at 2K or auto), and `maxLayers: 5` at 1K holds **64 credits**<!-- credits: split-into-layers:1k:6 -->. A run that finds no element completes with the base only (`layers` empty) at the one-image price. A layer that cannot be saved after a few tries is left out and counted in `layersNotSaved`, and the run is charged only for the images saved; a run whose base picture cannot be saved fails and is refunded. Full reference: [Split into Layers](./nodes/ai-image/split-into-layers.md). |
 | `POST` | `/v1/video-mask` | Text-prompted video segmentation (SAM 3.1 / SAM 3) → a black-and-white mask video, white = the subject (`{ videoUrl, prompt (≤500 chars; commas track several subjects), threshold?: 0.05–0.95 (default 0.5), provider?: "sam-3.1" (default) \| "sam-3" (about half the price), holdLastMask?: boolean (default false — frames where the subject is lost, under 0.002 % of the picture, repeat the most recent non-empty mask; frames before the first detection stay empty; the output then carries `heldFrames`), minSubjectHeightPct?: 0–100 (default 0 = off — drops every connected region shorter than that % of the frame height, before holdLastMask; the output then carries `droppedRegions`), maxSubjectHeightPct?: 0–100 (default 0 = off — the mirror: drops regions taller than that %; with both set a region is kept when min ≤ height ≤ max, and min > max is a 400 `validation_error`), zone?: { leftPct?, rightPct?, topPct?, bottomPct? } \| null (each 0–49 % of the frame cut off that side, a side left out is 0; default null = off — keeps only the regions whose bounding-box centre is inside the rectangle left, after the size cuts and before holdLastMask), perShot?: boolean (default false — the clip's scene cuts are found first and each shot is segmented on its own: the subject is detected again after every cut, holdLastMask never crosses a cut, each shot's mask is fitted to that shot's exact frame count; on a clip with no cut it is one shot: the same mask, fitted to the clip's exact frame count), redetectEverySec?: 0 \| 1–10 (default 0 = off — the subject is also detected again every that many seconds: the clip, or each shot with perShot, is sent to the model in pieces of at most that length, a last piece under 8 frames joining the one before; holdLastMask holds across these boundaries; slower — one more request per piece — at the same price; a value between 0 and 1 or above 10 is a 400) }`). Clips up to 5 minutes at 30 fps (a faster clip counts proportionally longer; over 60 s is segmented in chunks); a clip that can't be read or is over the limit is refused with 400 `invalid_video_duration` / `video_duration_exceeds_limit` before anything is charged. Priced by length: `sam-3.1-video:<n>s` / `sam-3-video:<n>s` for n = 5, 10, 15, 30, 60, 90, 120, 180, 240, 300 (SAM 3.1: 55<!-- credits: sam-3.1-video:5s --> … 3108 credits<!-- credits: sam-3.1-video:300s -->; SAM 3: 28<!-- credits: sam-3-video:5s --> … 1555<!-- credits: sam-3-video:300s -->) → job; output `{ videoUrl, thumbnailUrl, width, height, frames, chunks, shots, coverage, kept, recipe }` (`shots` is 1 unless perShot found cuts; `recipe` is the version of the masking algorithm that made it (`VIDEO_MASK_RECIPE` in `@nodaro/shared/media`), which changes whenever the same clip and settings would give a different mask; `kept` is false only when the size / zone filters left nothing on any frame — read it rather than `coverage`, which is rounded to 4 decimals). Full reference: [Video Mask](./nodes/ai-video/video-mask.md). |
 | `POST` | `/v1/mask-composite` | A foreground video over a background video through a mask video (white = foreground), local FFmpeg, keyless, **11 credits**<!-- credits-rate: mask-composite --> **per started 5 s of the result** (the video it follows measured first; over 300 s → 400 `video_duration_exceeds_limit`) (`{ foregroundUrl?, backgroundUrl, maskUrl, invertMask?, feather?: 0–20, grow?: -10–10, opacity?: 0–1 (default 1; inside the mask, opacity × fill + (1 − opacity) × background), fill?: video\|pixelate\|blur (default video), pixelSizePct?: 0.2–10 (default 1.25; block = max(2, round(width × pct ÷ 100)) px), blurStrengthPct?: 0.1–5 (default 2; gaussian sigma = width × pct ÷ 100 px), backgroundFit?: cover\|contain\|stretch, audioSource?: foreground\|background\|mix\|none }`; the result follows the foreground's size, rate and length — the background loops, the mask holds its last frame. `foregroundUrl` is required for `fill: "video"` (400 `validation_error` without it); `pixelate` / `blur` fill the mask with the background itself, take no foreground (one sent is ignored), follow and are priced on the background, and the result always carries the background's sound (`audioSource` is ignored)) → job; output `{ videoUrl, thumbnailUrl, width, height, durationSec }`. Full reference: [Mask Composite](./nodes/processing-video/mask-composite.md). |
 | `POST` | `/v1/site-capture` | A web page captured at phone width: full page + up to 8 section stills and a section map, **11 credits**<!-- credits: site-capture --> (`{ url, maxStills?: 3–8 }`). Always answers `{ jobId, status: "pending" }` at once; poll `GET /v1/jobs/:id`. Blocked, empty, unreachable or failed captures are refunded; a site that answers 403 or 429, or shows only a bot challenge, counts as blocked. Each still is shot with its section scrolled into view, so sections that appear as you scroll are captured too. A still that renders as one flat colour, or as mostly one empty band, is shot once more and then skipped: the next section takes its place (`still_blank_skipped:<section order>` in `warnings`). A section whose heading still does not show once it is on screen (a carousel slide that is not showing, for one) is skipped (`still_hidden_skipped:<section order>`), and the stills stop after about 45 s with what they have (`stills_time_budget`). `facts[]` are whole figures on one line (a price with its period, a count with its noun, a percentage, a date). A robots.txt disallow, an unreadable robots.txt, an address that does not resolve, or missing media storage is a 422 before any charge. Output `{ pageUrl, finalUrl, title, lang, dir, fullPage, stills[], sections[], facts[], usableStills, warnings[] }`; a failed job carries `error.code`. Served only where capture is enabled on the install (`SITE_CAPTURE_ENABLED`, on by default); elsewhere the route answers 404. |

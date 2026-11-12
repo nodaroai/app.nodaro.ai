@@ -21,8 +21,8 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isKling4RunnerProvider, isVeoProvider, videoProviderReferenceSyntax, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
-import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "@nodaro/shared/model-catalog"
+import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, listedSeedanceTaskType, seedanceTaskTypeFitsMedia, type DeclaredSeedanceTaskType, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isKling4RunnerProvider, isGrokVideo15Provider, isVeoProvider, videoProviderReferenceSyntax, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
+import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION, isVideoAutoAspectToken, videoAutoAspectRunsAt } from "@nodaro/shared/model-catalog"
 import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs, placeFramesAfterReferences } from "@nodaro/prompts/assembly"
@@ -41,6 +41,7 @@ import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { resolveOmniCharacterIds, forgetOmniCharacters, isInvalidOmniCharacterError, isInvalidOmniAudioError } from "./omni-character.js"
 import { kling3Generate } from "./kling3-client.js"
 import { buildKling4Request } from "./kling4.js"
+import { buildGrokVideo15Request } from "./grok-video-15.js"
 import { kling4CostUsd } from "./kling4-cost.js"
 import { runRunwayTask, runAlephTask } from "./runway-client.js"
 import { runLumaModifyTask } from "./luma-client.js"
@@ -74,7 +75,9 @@ import {
   isSeedance2EditModeInput,
   isSeedance2EditModeRejection,
   providerErrorText,
+  seedance2EditModeResendInput,
   SEEDANCE_2_EDIT_MODE_PARAMS,
+  SEEDANCE_TASK_TYPE_WIRE_KEY,
 } from "./seedance-edit-mode.js"
 
 function mapAspectRatio(_provider: string, aspectRatio: string): string {
@@ -82,22 +85,10 @@ function mapAspectRatio(_provider: string, aspectRatio: string): string {
 }
 
 /**
- * Aspect ratios we forward to KIE for grok-imagine-video-1.5 — derived from the
- * model catalog (the single source for the picker) plus the "auto" default, so
- * the runtime allowlist can't drift from what the UI offers. An aspect_ratio is
- * forwarded only when it's in this set; anything else (e.g. 21:9 from the shared
- * Zod enum) falls back to the extraParams "auto" default instead of erroring at
- * KIE. "Auto"/"adaptive" normalize to "auto".
- */
-const GROK_VIDEO_15_ASPECT_RATIOS = new Set<string>([
-  ...(getModel("grok-imagine-video-1.5")?.aspectRatios ?? []),
-  "auto",
-])
-
-/**
- * Aspect ratios we forward to KIE for happyhorse-ref2v — same catalog-derived
- * pattern as grok above. Ref2V is the only HappyHorse mode on the i2v path with
- * a native aspect_ratio param (i2v proper infers AR from the input image, so it
+ * Aspect ratios we forward to KIE for happyhorse-ref2v — catalog-derived (the
+ * picker's single source), so the runtime allowlist cannot drift from the UI.
+ * Ref2V is the only HappyHorse mode on the i2v path with a native aspect_ratio
+ * param (i2v proper infers AR from the input image, so it
  * must NOT be sent one — the 1.1 schema rejects unknown params). Off-set values
  * (stale "adaptive"/"Auto" from an SDK caller) are dropped so KIE falls back to
  * its 16:9 default instead of 422ing.
@@ -139,8 +130,10 @@ export function seedance25OutputFormat(): "mp4" | "mov" {
  * NB: generate_audio is set by applyVideoAudioToggle (the shared neutral-intent
  * dispatcher) at the call sites, BEFORE this runs — so the Studio `sound`
  * toggle reaches Seedance 2 too, not just the legacy `generateAudio` key.
- * Reference audio deliberately coexists with a first frame (audio-driven
- * lip-sync); the resolver keeps both in that case.
+ * Reference audio beside a first frame (audio-driven lip-sync) is reference
+ * media like any other: the resolver moves the frame into
+ * `reference_image_urls`, after the user's own images, and the run goes out in
+ * reference mode beside the audio.
  */
 export function applySeedance2Params(
   input: Record<string, unknown>,
@@ -252,6 +245,11 @@ export function applySeedance2Params(
     input.output_format = "mov"
   }
 
+  // The declared reference task type: decided AFTER the resolver, because only
+  // it knows whether the body became a multimodal reference task.
+  const referenceTaskType = seedanceTaskTypeForBody(input, options, provider)
+  if (referenceTaskType !== undefined) input[SEEDANCE_TASK_TYPE_WIRE_KEY] = referenceTaskType
+
   if (resolved.promptSuffix) {
     const base = typeof input.prompt === "string" ? input.prompt : ""
     input.prompt = base ? `${base}\n\n${resolved.promptSuffix}` : resolved.promptSuffix
@@ -262,6 +260,60 @@ export function applySeedance2Params(
  *  (docs.kie.ai/market/bytedance/seedance-2) — also the value a pure-t2v
  *  "Auto" resolves to, since `adaptive` means "match the input" and t2v has none. */
 const SEEDANCE_2_DEFAULT_ASPECT = "16:9"
+
+/**
+ * The `omni_reference_task_type` a prepared Seedance body carries, or
+ * `undefined` for none — the last line of defence behind the routes, which
+ * already resolved the declaration before pricing (`resolveSeedanceTaskType`).
+ * Read off the body as it will be sent, after `resolveSeedance2Inputs` chose
+ * its mode and the aspect ratio was snapped, and only when every condition
+ * holds:
+ *   - the model's catalog `referenceTaskTypes` lists the value
+ *     (`listedSeedanceTaskType`: an unknown model, `auto` and junk are none);
+ *   - the run is not a draft (the platform's rule: a draft never declares);
+ *   - no `first_frame_url` — KIE refuses the field on a text-only body and in
+ *     both frame modes ("only supported in multimodal reference tasks");
+ *   - the body's `reference_*_urls` are the media the type needs
+ *     (`seedanceTaskTypeFitsMedia`, the resolver's own rule): `edit` and
+ *     `extend` need `reference_video_urls`, `reference` any reference media;
+ *   - the body is in the type's shape: `edit` in the edit shape (`adaptive`
+ *     and -1, {@link isSeedance2EditModeInput}), `extend` at `adaptive`. A
+ *     request through the routes always is (the resolver forced it); a caller
+ *     that skipped them (a plugin queueing free-form job data) may not be, and
+ *     the provider refuses such a body, so the field is left off and one
+ *     warning is logged.
+ * No option → no field, so the body stays byte-identical to today's.
+ */
+function seedanceTaskTypeForBody(
+  input: Record<string, unknown>,
+  options: ProviderOptions | undefined,
+  provider: string | undefined,
+): DeclaredSeedanceTaskType | undefined {
+  const taskType = listedSeedanceTaskType(provider, options?.referenceTaskType)
+  if (taskType === undefined || options?.draft === true) return undefined
+  if (input.first_frame_url !== undefined) return undefined
+  const count = (key: string): number => {
+    const urls = input[key]
+    return Array.isArray(urls) ? urls.length : 0
+  }
+  const media = {
+    imageCount: count("reference_image_urls"),
+    videoCount: count("reference_video_urls"),
+    audioCount: count("reference_audio_urls"),
+  }
+  if (!seedanceTaskTypeFitsMedia(taskType, media)) return undefined
+  const inShape =
+    taskType === "edit" ? isSeedance2EditModeInput(input)
+    : taskType === "extend" ? input.aspect_ratio === "adaptive"
+    : true
+  if (!inShape) {
+    console.warn(
+      `[KIE.ai] ${provider}: not declaring reference task type "${taskType}": the body is not in its shape (aspect_ratio=${String(input.aspect_ratio)}, duration=${String(input.duration)}; ${taskType === "edit" ? "edit needs adaptive and -1" : "extend needs adaptive"}). Sending it undeclared.`,
+    )
+    return undefined
+  }
+  return taskType
+}
 
 export { isSeedance2EditModeRejection, SEEDANCE_2_EDIT_MODE_PARAMS }
 
@@ -302,11 +354,21 @@ async function runVideoTaskWithSeedanceEditRetry(
     ) {
       throw err
     }
-    // Never mutate the caller's payload — the retry is a new body.
-    const editInput = { ...input, ...SEEDANCE_2_EDIT_MODE_PARAMS }
+    // Never mutate the caller's payload — the retry is a new body, the
+    // undeclared edit shape (a declared task type is dropped: the provider
+    // overrode it).
+    const editInput = seedance2EditModeResendInput(input)
     console.warn(
       `[KIE.ai] ${provider} rejected this run as a video EDIT — ratio and duration must follow the source clip. Resubmitting once with ${JSON.stringify(SEEDANCE_2_EDIT_MODE_PARAMS)}. Provider said: ${message}`,
     )
+    // No job or task id is in scope here: the client's "Task … FAILED" line
+    // above names the task when the rejection came from a poll.
+    const declared = input[SEEDANCE_TASK_TYPE_WIRE_KEY]
+    if (declared !== undefined) {
+      console.warn(
+        `[KIE.ai] ${provider}: dropped the declared reference task type "${String(declared)}" from the resubmit — the provider ran the request as an edit`,
+      )
+    }
     const retried = await runKieTask(taskModel, editInput, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress, meta(editInput))
     return { ...retried, sentInput: editInput }
   }
@@ -323,7 +385,9 @@ async function runVideoTaskWithSeedanceEditRetry(
  * `"adaptive"` is a real provider enum member for the seedance family and is
  * returned untouched. `"Auto"` is the unified node's provider-agnostic token
  * with no provider meaning: it becomes `"adaptive"` when the model offers it
- * AND there is something to match, and the model's fixed default otherwise.
+ * AND there is something to match, and the model's fixed default otherwise —
+ * `videoAutoAspectRunsAt`, the shared rule the reference task type resolver
+ * reads too.
  */
 function resolveCatalogAspect(
   modelId: string | undefined,
@@ -336,8 +400,8 @@ function resolveCatalogAspect(
   if (allowed.length === 0) return raw
   const fixed = allowed.filter((a) => a !== "adaptive")
 
-  if (raw === "Auto" || raw === "auto") {
-    return opts.hasVisualInput && allowed.includes("adaptive") ? "adaptive" : opts.fallback
+  if (isVideoAutoAspectToken(raw)) {
+    return videoAutoAspectRunsAt(modelId, opts.hasVisualInput) ?? opts.fallback
   }
   if (allowed.includes(raw)) return raw
   return snapAspectRatioToken(raw, fixed) ?? opts.fallback
@@ -1877,6 +1941,124 @@ async function runKling4(
   return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
 }
 
+/**
+ * Grok Imagine Video 1.5's provider rate (USD/s) by WIRE resolution: 2.4 / 4.5 /
+ * 8 KIE cr/s at 480p / 720p / 1080p, no per-image part (KIE's price list, read
+ * 2026-11-11; $0.005 per KIE credit). Audit / provider_cost only — the USER
+ * charge is the seeded per-second composite.
+ */
+const GROK_VIDEO_15_RATE_USD_PER_SEC: Record<"480p" | "720p" | "1080p", number> = {
+  "480p": 0.012,
+  "720p": 0.0225,
+  "1080p": 0.04,
+}
+
+/**
+ * Grok Imagine Video 1.5 (`grok-imagine-video-1.5`). The body is built by the
+ * pure `buildGrokVideo15Request` (grok-video-15.ts) from the RAW frame URLs, so
+ * one picture wired as the start and end frame is recognised as a loop before
+ * normalization could turn it into two different uploads. Every image the body
+ * carries is normalized AFTER the build, each distinct URL once (a loop image,
+ * or a start image that also rides `image_urls`, stays one URL).
+ */
+async function runGrokVideo15(
+  modelConfig: KieModelConfig,
+  /** OUR Nodaro key (NOT modelConfig.model, the KIE id) for the egress seam. */
+  modelKey: "grok-imagine-video-1.5",
+  prompt: string,
+  duration: number | undefined,
+  startFrameUrl: string | undefined,
+  endFrameUrl: string | undefined,
+  options: ProviderOptions | undefined,
+  reconcileOpts: ReconcileOpts | undefined,
+  logLabel: string,
+): Promise<ProviderResult> {
+  const requested = duration !== undefined && duration > 0 ? duration : 8
+  const snapped = snapToAllowedDuration(requested, modelConfig.allowedDurations ?? [])
+  if (duration !== undefined && duration > 0 && snapped !== duration) {
+    console.log(`[KIE.ai] ${logLabel}: duration ${duration}s not allowed, snapped to ${snapped}s`)
+  }
+  const { input, notes } = buildGrokVideo15Request({
+    prompt,
+    durationSec: snapped,
+    resolution: options?.resolution,
+    aspectRatio: options?.aspectRatio,
+    startFrameUrl,
+    endFrameUrl,
+    inBetweenFrameUrls: options?.referenceImageUrls,
+  })
+  for (const note of notes) console.log(`[KIE.ai] ${logLabel}: ${note}`)
+  const ignored = [
+    (options?.referenceVideoUrls?.length ?? 0) > 0 ? "reference videos" : undefined,
+    (options?.referenceAudioUrls?.length ?? 0) > 0 ? "reference audio" : undefined,
+    (options?.characterReferences?.length ?? 0) > 0 ? "character references" : undefined,
+  ].filter(Boolean)
+  if (ignored.length > 0) console.log(`[KIE.ai] ${logLabel}: ignored ${ignored.join(", ")} — this model takes none`)
+  // Backstop: every route refuses a run with no start image before credits are
+  // reserved (the workflow run moves a lone end frame into the start slot).
+  if (typeof input.first_frame_url !== "string" && typeof input.loop_url !== "string") {
+    throw createSanitizedError(`${logLabel}: a start frame is required`, "Video generation")
+  }
+
+  // Each distinct image once, under its own name (input-label.ts), with the
+  // i2v constraints every KIE frame gets (our 2048 px cap).
+  const constraints: ImageConstraints = { context: "Video generation", maxDimension: 2048 }
+  const normalized = new Map<string, Promise<string>>()
+  const norm = (u: string, inputLabel: string): Promise<string> => {
+    let p = normalized.get(u)
+    if (!p) {
+      p = ensureImageForProvider(u, modelKey, { ...constraints, inputLabel: `${logLabel} ${inputLabel}` })
+      normalized.set(u, p)
+    }
+    return p
+  }
+  const one = async (key: string, inputLabel: string): Promise<void> => {
+    const v = input[key]
+    if (typeof v === "string") input[key] = await norm(v, inputLabel)
+  }
+  const imageUrls = Array.isArray(input.image_urls) ? (input.image_urls as string[]) : undefined
+  const keyframes = Array.isArray(input.keyframes) ? (input.keyframes as Array<{ url: string; timestamp_s: number }>) : undefined
+  await Promise.all([
+    one("first_frame_url", "first frame"),
+    one("loop_url", "loop frame"),
+    one("last_frame_url", "last frame"),
+    imageUrls
+      ? Promise.all(imageUrls.map((u) => norm(u, "first frame"))).then((urls) => { input.image_urls = urls })
+      : undefined,
+    keyframes
+      ? Promise.all(keyframes.map(async (k, i) => ({
+          url: await norm(k.url, `in-between frame #${i + 1}`),
+          timestamp_s: k.timestamp_s,
+        }))).then((frames) => { input.keyframes = frames })
+      : undefined,
+  ])
+
+  const resolution = input.resolution as "480p" | "720p" | "1080p"
+  const tierCostUsd = GROK_VIDEO_15_RATE_USD_PER_SEC[resolution] * snapped
+
+  console.log(`[KIE.ai] ${logLabel} (${modelConfig.model}) input:`, JSON.stringify(input, null, 2))
+  const { resultJson, taskId, providerMs, rawRecordInfo } = await runKieTask(
+    modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
+    { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
+  )
+  const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!videoUrl) {
+    throw createSanitizedError(`${logLabel} task succeeded but no URL found`, "Video generation")
+  }
+  console.log(`[KIE.ai] ${logLabel} completed: ${videoUrl} (tier cost: $${tierCostUsd.toFixed(4)})`)
+  // What KIE should bill (the tier cost in KIE credits) beside what it reports,
+  // so a staging run measures the rate this model is priced from.
+  logCreditAudit({
+    modelKey,
+    expectedKieCredits: Math.round((tierCostUsd / 0.005) * 10) / 10,
+    modelConfig: { duration: snapped, resolution, provider: modelKey, keyframes: keyframes?.length ?? 0 },
+    rawResponseSample: rawRecordInfo,
+    actualKieCredits: extractCreditFields(rawRecordInfo)?.credits as number | undefined,
+    notes: `i2v grok-imagine-video-1.5 ${resolution}`,
+  })
+  return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
+}
+
 export class KieVideoProvider
   implements
     ImageToVideoProvider,
@@ -1957,6 +2139,25 @@ export class KieVideoProvider
       throw createSanitizedError(
         `Gemini Omni (${provider}): character references cannot be combined with a start or end frame`,
         "Video generation",
+      )
+    }
+
+    // Grok Imagine Video 1.5 — bespoke builder (grok-video-15.ts): explicit
+    // allow-list body, integer duration, frames on their own fields. Placed
+    // BEFORE the frame normalization below and handed the RAW frames: the
+    // builder recognises one picture wired as both ends (a loop) by its URL,
+    // and the runner normalizes each distinct image once after the build.
+    if (isGrokVideo15Provider(provider)) {
+      return runGrokVideo15(
+        modelConfig,
+        provider,
+        effectivePrompt ?? "smooth cinematic motion",
+        duration,
+        imageUrl,
+        endFrameUrl,
+        options,
+        reconcileOpts,
+        `Grok Imagine Video 1.5 (${provider})`,
       )
     }
 
@@ -2416,17 +2617,6 @@ export class KieVideoProvider
     if (options?.cameraFixed !== undefined) {
       if (provider === "bytedance-lite" || provider === "bytedance-pro") {
         input.camera_fixed = options.cameraFixed
-      }
-    }
-
-    // Grok Imagine Video 1.5 — forward aspect_ratio when KIE accepts the value
-    // (Auto/adaptive → "auto"). resolution + duration + image_urls are already
-    // applied by the generic path above; image_urls is required by this model.
-    if (provider === "grok-imagine-video-1.5") {
-      const arRaw = options?.aspectRatio
-      const ar = arRaw === "Auto" || arRaw === "adaptive" ? "auto" : arRaw
-      if (ar && GROK_VIDEO_15_ASPECT_RATIOS.has(ar)) {
-        input.aspect_ratio = ar
       }
     }
 

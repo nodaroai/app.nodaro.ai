@@ -41,7 +41,8 @@ import { viewerForUser } from "../lib/availability-viewer.js"
  * (`modelRestrictionConfigured`: a profile `models.allow` / `models.deny`, or a
  * models override that leaves a model off). `models.denied` alone cannot say
  * it: it also carries the rows an admin switched off, which a deployment with
- * no restriction has too. The editor starts a new node on an offered model only
+ * no restriction has too, and a house model the install does not serve, which
+ * withholds only itself. The editor starts a new node on an offered model only
  * where this is true, so a deployment that restricts nothing keeps every
  * node's default exactly as it is.
  */

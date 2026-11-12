@@ -459,7 +459,7 @@ nodaro voice dub --audio <url> --target-language <code> [--source-language <code
 nodaro voice clones list [--json]                        # clones made before cloning was retired
 nodaro voice clones delete <id> [--json]
 
-# Media — ingestion + compositing: social-video import, trim, split into parts, caption burn-in, still-to-video, slideshow, image collage, image overlay, image mask, video overlay, save-to-storage, metadata probe
+# Media — ingestion + compositing: social-video import, trim, split into parts, caption burn-in, still-to-video, slideshow, image collage, image overlay, image mask, split into layers, video overlay, save-to-storage, metadata probe
 nodaro media download <url> [--max-height <px>] [--section <a-b>] [--watch] [--json]
                                                          # the video behind a link → your storage. --section fetches only
                                                          # that time range (seconds). --watch streams live progress (no job to poll later).
@@ -523,6 +523,18 @@ nodaro media generate-mask <imageUrl> <prompt> [--threshold <n>] [--watch] [--po
                                                          # mask image (white = the subject). --threshold 0-1 (default 0.3; lower selects more). The job's
                                                          # output carries maskUrl (the mask) and imageUrl (the source, passed through) — feed both to an
                                                          # inpainting edit. Price: GET /v1/credits/model-cost?model=generate-mask. See docs/nodes/ai-image/generate-mask.md.
+nodaro media split-layers <imageUrl> [--max-layers <1-99>] [--size 1K|1.5K|2K|auto] [--prompt <text>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # splits one image into a base picture and separate layers, each element on its own
+                                                         # transparent PNG. --max-layers (default 9) caps the layers: more elements merge into fewer
+                                                         # layers, none is dropped. --size is each image's pixel budget (1K, the default, is about one
+                                                         # megapixel; auto keeps the picture's own size, between 1K and 2K). --prompt (up to 2,000
+                                                         # characters) names what to separate; <bbox>x1 y1 x2 y2</bbox> marks (0-1000) may be typed in it.
+                                                         # The job's output carries imageUrl (the base picture), layers (bottom to top) and layerData
+                                                         # (per layer: name, zIndex, the file's own width/height, box: where it sits on the base, in
+                                                         # the base's pixels, and baseUrl: the base it was cut from). A layer is cropped to its element:
+                                                         # scale it to its box to put it back.
+                                                         # A run holds the price of --max-layers + 1 images (the base included) and is charged only
+                                                         # for the images it returns. Prices: docs/nodes/ai-image/split-into-layers.md.
 nodaro media video-overlay <videoUrl> [layerUrls...] [--at <start[-end]>...] [--preset card|corner-badge|full-frame] [--corner top-left|top-right|bottom-left|bottom-right] [--layers-file <path>] [--aspect 16:9|9:16|1:1|4:5] [--base-fit cover|contain] [--background-color <hex>] [--layout video-bottom|video-top|stack-whole|stack-filled|pip] [--base-box <json>] [--watch] [--poll-interval <ms>] [--json]
                                                          # 1-20 timed image or video layers over a video in one local FFmpeg render (no AI). Positional
                                                          # URLs are IMAGE layers: one --at per URL, in order ("3" = from 3 s to the end, "1.2-2.6");

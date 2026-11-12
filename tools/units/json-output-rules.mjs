@@ -7,11 +7,29 @@
 /** The output kinds a media take carries: a JSON output may stand beside them. */
 const MEDIA_KINDS = ["image", "video", "audio"]
 
-/** Problems with the JSON (look) outputs of a unit whose execution.kind is not "use-case". */
+/**
+ * Problems with the JSON (look) outputs of a unit whose execution.kind is not
+ * "use-case" — and, on any unit, with what an `alignedWith` names.
+ */
 export function jsonOutputProblems(m) {
-  if (m.execution?.kind === "use-case") return []
   const outputs = Array.isArray(m.handles?.outputs) ? m.handles.outputs : []
   const out = []
+  // A JSON output aligned with a list output (`alignedWith`): after a run once
+  // per upstream item, its entries are handed on row by row beside that list's
+  // items, each with its row (@nodaro/render-rules unit-batch-side-outputs.ts).
+  // It names a list output of the same unit; its own shape (a look output, a
+  // non-empty id) is checked in manifest.mjs.
+  for (const [i, h] of outputs.entries()) {
+    if (typeof h?.alignedWith !== "string" || h.alignedWith === "") continue
+    if (m.execution?.kind === "use-case") {
+      out.push(`handles.outputs[${i}].alignedWith: a use-case node's outputs are read by the use-case reader, never row by row — remove alignedWith`)
+      continue
+    }
+    if (outputs.find((o) => o?.id === h.alignedWith)?.list !== true) {
+      out.push(`handles.outputs[${i}].alignedWith: "${h.alignedWith}" is not a list output (list: true) of this unit — a JSON output lines up with one of its own list outputs`)
+    }
+  }
+  if (m.execution?.kind === "use-case") return out
   // The job's value under the output's id lands on this field (unitJobLanding),
   // and the saved output is read back from it (unitSavedOutput / unitOutputValue).
   for (const [i, h] of outputs.entries()) {

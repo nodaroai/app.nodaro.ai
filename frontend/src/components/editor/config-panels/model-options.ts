@@ -115,6 +115,8 @@ export const IMAGE_EDIT_MODELS = [
   { value: "recraft-remove-bg", label: "Recraft Remove BG", desc: "Remove background, transparent PNG output" },
   { value: "recraft-upscale", label: "Recraft Upscale", desc: "AI-powered upscaling and enhancement" },
   { value: "topaz-image-upscale", label: "Topaz Upscale", desc: "Advanced upscaling with configurable factor" },
+  // An own-label model: its name is the catalog's (`getModel(...).label`), the one every surface shows.
+  { value: "nodaro-image-upscale", label: getModel("nodaro-image-upscale")?.label ?? "nodaro-image-upscale", desc: "Upscale up to 8x, lettering kept exactly as written" },
 ] as const
 
 export const V2V_DURATION_OPTIONS = [

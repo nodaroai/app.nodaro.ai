@@ -1,11 +1,14 @@
+// @registry-enumerates the review's media-kind sets carry every node unit whose contract.producer is image, video or audio
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { streamR2Object } from "../../lib/storage.js"
 import { resolveHeldJob } from "../../lib/job-policy-review.js"
-import { isOwnedOrRelayedObjectKey } from "../../lib/job-policy-outputs.js"
+import { MAX_HELD_OBJECTS, extractJobOutputs, isOwnedOrRelayedObjectKey } from "../../lib/job-policy-outputs.js"
 import { IMAGE_JOB_TYPES, VIDEO_JOB_TYPES, AUDIO_JOB_TYPES } from "../../lib/job-finalize.js"
+import { UNIT_NODE_DESCRIPTORS } from "../../lib/unit-descriptors.js"
+import { composeSet, unitProducers } from "../../lib/unit-compose.js"
 
 /**
  * The review surface — six routes under `/v1/admin/review` (spec §8).
@@ -58,14 +61,21 @@ import { IMAGE_JOB_TYPES, VIDEO_JOB_TYPES, AUDIO_JOB_TYPES } from "../../lib/job
 
 type MediaKind = "image" | "video" | "audio" | "other"
 
-const IMAGE = new Set<string>(IMAGE_JOB_TYPES)
-const VIDEO = new Set<string>(VIDEO_JOB_TYPES)
-const AUDIO = new Set<string>(AUDIO_JOB_TYPES)
+// Legacy job types ∪ every node unit whose `contract.producer` is that medium
+// (lib/unit-compose.ts unitProducers). A unit's job runs under its OWN type —
+// the video worker stamps `job_type` with it at pickup — and that type is in
+// none of the finalize arrays, so without the units an image unit's held output
+// previewed as a download link. A "dynamic" producer decides its medium at run
+// time and stays "other" here; each held object still carries its own kind.
+const IMAGE = composeSet("admin-review IMAGE", new Set<string>(IMAGE_JOB_TYPES), unitProducers(UNIT_NODE_DESCRIPTORS, "image"))
+const VIDEO = composeSet("admin-review VIDEO", new Set<string>(VIDEO_JOB_TYPES), unitProducers(UNIT_NODE_DESCRIPTORS, "video"))
+const AUDIO = composeSet("admin-review AUDIO", new Set<string>(AUDIO_JOB_TYPES), unitProducers(UNIT_NODE_DESCRIPTORS, "audio"))
 
 /** Derived, never stored: `lib/job-finalize.ts` already owns this
  *  classification and `job-finalize-types.test.ts` asserts the three arrays are
  *  pairwise disjoint, so a new generation type classifies the day it is added
- *  there. `"other"` renders as a download-only row, not a broken `<video>`. */
+ *  there; a node unit classifies by its manifest's producer the day it lands.
+ *  `"other"` renders as a download-only row, not a broken `<video>`. */
 function mediaKindFor(jobType: string | null): MediaKind {
   if (!jobType) return "other"
   if (IMAGE.has(jobType)) return "image"
@@ -82,6 +92,21 @@ interface HeldObjectRow {
   sizeBytes?: number
 }
 
+/** One held object's kind: its own, as the result gate recorded it from the
+ *  file's name, and nothing else. NEVER the job's kind: a file the gate could
+ *  not place (`"other"`) is exactly the one a job-level guess gets wrong — a
+ *  `.json` beside a video job's `.mp4` is not a video — and the page renders
+ *  `"other"` as a download link, which is honest about any file.
+ *
+ *  A MISSING kind is `"other"` too. The gate has stamped `kind` on every entry
+ *  since the column existed (the writer and migration 377 landed together), so
+ *  a kind-less entry was not written by the gate — the planted-array case the
+ *  preview route's ownership re-check exists for — and nothing about it
+ *  supports a guess. */
+function objectKindFor(o: HeldObjectRow): MediaKind {
+  return o.kind === "image" || o.kind === "video" || o.kind === "audio" ? o.kind : "other"
+}
+
 interface HeldJobRow {
   id: string
   user_id: string | null
@@ -94,6 +119,39 @@ interface HeldJobRow {
   held_at: string | null
   held_objects: HeldObjectRow[] | null
   input_data: Record<string, unknown> | null
+  // REVIEW_COUNT_COLUMNS — read to count, never sent.
+  held_output_data?: Record<string, unknown> | null
+  relay_job_id?: string | null
+  held_completion_fields?: Record<string, unknown> | null
+}
+
+/**
+ * How many objects this held job owns IN ALL — what approve publishes and
+ * reject deletes. `held_objects` (the previewable list, `outputCount`) stops at
+ * MAX_HELD_OBJECTS, so a job that made more files than that showed the reviewer
+ * the first ones and said nothing of the rest: approve would publish files
+ * nobody looked at, and the page let it look like a full review.
+ *
+ * Counted over the withheld payload with the fence that wrote `held_objects`
+ * (the job's own key family, widened by the row's relay stem), uncapped, and
+ * unioned with `held_objects` so it never reads below `outputCount`. Not
+ * `ownedHeldObjects` — it logs a warning per foreign URL (an echoed input) and
+ * this runs on every queue read — and not `allOwnedObjects`, which drops the
+ * relay stem and would count a relayed job's outputs as zero.
+ *
+ * A COUNT, and nothing more: the keys never leave this function, and the
+ * preview still reads its key out of `held_objects` by index (promise 2).
+ */
+function heldObjectTotal(job: HeldJobRow, held: readonly HeldObjectRow[]): number {
+  const keys = new Set(held.map((o) => o.key).filter((k): k is string => typeof k === "string" && k !== ""))
+  const relayStem = relayStemOf({
+    relay_job_id: job.relay_job_id ?? null,
+    held_completion_fields: job.held_completion_fields ?? null,
+  })
+  for (const o of extractJobOutputs(job.held_output_data)) {
+    if (o.key && isOwnedOrRelayedObjectKey(job.id, relayStem, o.key)) keys.add(o.key)
+  }
+  return Math.max(keys.size, held.length)
 }
 
 interface DecisionRow {
@@ -107,19 +165,30 @@ interface DecisionRow {
   created_at: string
 }
 
-/** Exactly the columns the queue renders. `output_data`, `held_output_data`
- *  and `error_hint` are deliberately absent: the held payload is the thing
- *  being kept out of circulation, and `held_objects` is selected only to count
- *  and to index into — it never reaches the wire. */
+/** Exactly the columns the queue renders. `output_data` and `error_hint` are
+ *  deliberately absent: the held payload is the thing being kept out of
+ *  circulation, and `held_objects` is selected only to count and to index
+ *  into — it never reaches the wire. */
 const REVIEW_JOB_COLUMNS =
   "id, user_id, job_type, status, credits, source, source_detail, created_at, held_at, held_objects"
+
+/** Read for ONE number, `outputTotal` (heldObjectTotal), and never sent: the
+ *  withheld payload to count the files in, and the two places the row's relay
+ *  stem lives (relayStemOf). The queue's leak test baits the payload and the
+ *  parked completion fields. */
+const REVIEW_COUNT_COLUMNS = "held_output_data, relay_job_id, held_completion_fields"
 
 interface QueueRow {
   jobId: string
   userId: string | null
   jobType: string | null
   mediaKind: MediaKind
+  /** How many held objects can be previewed — `/output/:index` answers 0..outputCount-1. */
   outputCount: number
+  /** How many objects the job owns in all (≥ outputCount): the ones past outputCount are not previewable, and the page says so. */
+  outputTotal: number
+  /** Each previewable object's kind, by index (the detail route's `outputs[].mediaKind`). */
+  outputKinds: MediaKind[]
   credits: number
   createdAt: string
   heldAt: string | null
@@ -132,12 +201,16 @@ interface QueueRow {
 
 function toQueueRow(job: HeldJobRow, decision: DecisionRow | undefined, now: number): QueueRow {
   const heldAt = job.held_at ?? decision?.created_at ?? null
+  const mediaKind = mediaKindFor(job.job_type)
+  const objects = Array.isArray(job.held_objects) ? job.held_objects : []
   return {
     jobId: job.id,
     userId: job.user_id,
     jobType: job.job_type,
-    mediaKind: mediaKindFor(job.job_type),
-    outputCount: Array.isArray(job.held_objects) ? job.held_objects.length : 0,
+    mediaKind,
+    outputCount: objects.length,
+    outputTotal: heldObjectTotal(job, objects),
+    outputKinds: objects.map((o) => objectKindFor(o)),
     credits: Number(job.credits ?? 0),
     createdAt: job.created_at,
     heldAt,
@@ -178,8 +251,8 @@ const jobParams = z.object({ jobId: z.string().uuid() })
 const outputParams = z.object({
   jobId: z.string().uuid(),
   // A held job has one output, occasionally a handful of image variants.
-  // Bounded (MAX_HELD_OBJECTS - 1) so a scan of :index is a scan of nothing.
-  index: z.coerce.number().int().min(0).max(16),
+  // Bounded by the held list's own cap so a scan of :index is a scan of nothing.
+  index: z.coerce.number().int().min(0).max(MAX_HELD_OBJECTS - 1),
 })
 
 const approveBody = z.object({ note: z.string().max(500).optional() })
@@ -342,7 +415,7 @@ export async function adminReviewRoutes(app: FastifyInstance): Promise<void> {
 
     let query = supabase
       .from("jobs")
-      .select(REVIEW_JOB_COLUMNS, { count: "exact" })
+      .select(`${REVIEW_JOB_COLUMNS}, ${REVIEW_COUNT_COLUMNS}`, { count: "exact" })
       // A review queue is a FIFO; oldest first, like `admin-stuck-pipelines`.
       .eq("status", "pending_review")
       .order("held_at", { ascending: true })
@@ -373,7 +446,7 @@ export async function adminReviewRoutes(app: FastifyInstance): Promise<void> {
     }
     const { data } = await supabase
       .from("jobs")
-      .select(`${REVIEW_JOB_COLUMNS}, input_data`)
+      .select(`${REVIEW_JOB_COLUMNS}, ${REVIEW_COUNT_COLUMNS}, input_data`)
       .eq("id", parsed.data.jobId)
       .single()
     const job = (data ?? null) as unknown as HeldJobRow | null
@@ -395,7 +468,7 @@ export async function adminReviewRoutes(app: FastifyInstance): Promise<void> {
         // key on the way back.
         outputs: objects.map((o, i) => ({
           index: i,
-          mediaKind: o.kind ?? mediaKindFor(job.job_type),
+          mediaKind: objectKindFor(o),
           filename: o.key.split("/").pop() ?? "",
           sizeBytes: o.sizeBytes ?? null,
         })),

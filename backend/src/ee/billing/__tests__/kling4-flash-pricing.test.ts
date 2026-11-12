@@ -142,13 +142,13 @@ describe("kling-4-flash reference-video billing (output + max(output, input))", 
 
   it("the reservation bills the REQUESTED output, an unprobed clip at the 20s cap and the input at the 20s total", () => {
     // 10s out, clips 8 + 6 = 14s → 10 + 14 = 24s.
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: ID, resolution: "720p", outputDurationSec: 10, requestedDuration: 10, durationsSec: [8, 6] })).toBe(Math.ceil(28.75 * 24))
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: ID, resolution: "720p", outputDurationSec: 10, requestedDuration: 10, referenceTaskType: undefined, durationsSec: [8, 6] })).toBe(Math.ceil(28.75 * 24))
     // An unreadable clip counts as 20s: 10 + 20 = 30s.
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: ID, resolution: "720p", outputDurationSec: 10, requestedDuration: 10, durationsSec: [Number.NaN] })).toBe(863)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: ID, resolution: "720p", outputDurationSec: 10, requestedDuration: 10, referenceTaskType: undefined, durationsSec: [Number.NaN] })).toBe(863)
     // Inputs past 20s together are capped there (KIE fails such a run; the routes refuse it first).
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: ID, resolution: "720p", outputDurationSec: 10, requestedDuration: 10, durationsSec: [15, 6] })).toBe(863)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: ID, resolution: "720p", outputDurationSec: 10, requestedDuration: 10, referenceTaskType: undefined, durationsSec: [15, 6] })).toBe(863)
     // A short clip still bills 2 × output.
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: ID, resolution: "720p", outputDurationSec: 10, requestedDuration: 10, durationsSec: [3] })).toBe(575)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: ID, resolution: "720p", outputDurationSec: 10, requestedDuration: 10, referenceTaskType: undefined, durationsSec: [3] })).toBe(575)
   })
 
   it("the quote's expected cost is the requested output even with an auto-duration flag", () => {
@@ -177,7 +177,7 @@ describe("kling-4-flash reference-video billing (output + max(output, input))", 
     it("rounds the delivered clip to its whole second and prices the stored probe", async () => {
       probe.durations.set(OUT, 5.04)
       await expect(
-        seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [4.04] }),
+        seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: undefined, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [4.04] }),
       ).resolves.toBe(288)
       expect(probe.probeMediaDuration).toHaveBeenCalledTimes(1)
     })
@@ -188,7 +188,7 @@ describe("kling-4-flash reference-video billing (output + max(output, input))", 
       // The reservation's probe failed (NaN, stored on the job as null).
       for (const stored of [[Number.NaN], [null]]) {
         await expect(
-          seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: 5, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: stored }),
+          seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: 5, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: stored }),
         ).resolves.toBe(288)
       }
     })
@@ -197,7 +197,7 @@ describe("kling-4-flash reference-video billing (output + max(output, input))", 
       probe.durations.set(OUT, 5.04)
       probe.durations.set(REF, new Error("probe failed"))
       await expect(
-        seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: 5, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [Number.NaN] }),
+        seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: 5, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [Number.NaN] }),
       ).resolves.toBe(Math.ceil(28.75 * 25))
     })
 
@@ -207,7 +207,7 @@ describe("kling-4-flash reference-video billing (output + max(output, input))", 
         probe.durations.set(OUT, 5.04)
         probe.durations.set(REF, "hang")
         let done = false
-        const settled = seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: 5, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [Number.NaN] })
+        const settled = seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: 5, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [Number.NaN] })
           .finally(() => { done = true })
         await vi.advanceTimersByTimeAsync(SETTLE_REMEASURE_CLIP_TIMEOUT_MS - 1)
         expect(done).toBe(false)
@@ -224,7 +224,7 @@ describe("kling-4-flash reference-video billing (output + max(output, input))", 
       probe.durations.set(OUT, 5.04)
       probe.durations.set(REF, 45)
       await expect(
-        seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: 5, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [Number.NaN] }),
+        seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: 5, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [Number.NaN] }),
       ).resolves.toBe(Math.ceil(28.75 * 25))
     })
 
@@ -232,7 +232,7 @@ describe("kling-4-flash reference-video billing (output + max(output, input))", 
       probe.durations.set(OUT, 8.02)
       probe.durations.set(REF, 12)
       await expect(
-        seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "1080p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
+        seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "1080p", requestedDuration: undefined, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
       ).resolves.toBe(Math.ceil(28.75 * 20))
     })
   })

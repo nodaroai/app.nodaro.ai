@@ -31,6 +31,7 @@ const FILES_NAMING_A_SAFETY_PARAM: ReadonlySet<string> = new Set([
   "kie/models.ts", // declarations and today's `nsfw_checker: false`
   "kie/video.ts", // Seedance's node option, H3 and Wan never send it
   "kie/seedance-draft.ts", // the finalize carries the draft's own choice
+  "kie/grok-video-15.ts", // Grok Imagine Video 1.5's allow-listed body sends today's `nsfw_checker: false` (declared on its config)
   "replicate/image.ts", // Flux's pinned tolerance and its levers
   "fal/lip-sync.ts", // the lever
 ])

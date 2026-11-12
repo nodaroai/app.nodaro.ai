@@ -26,6 +26,8 @@ export interface ValidationContext {
   optionTypes?: Set<string>
   /** The builder keys of USE_CASE_SPECS (packages/render-rules/src/use-case-specs.ts); a use-case unit's execution.builder must be one. */
   useCaseBuilders?: Set<string>
+  /** The field names an app field (unit.json appFields) may not take, with why (app-field-rules.mjs reservedAppFieldsFrom); without it, label and fieldMappings. */
+  reservedAppFields?: Map<string, string>
   live: Set<string>
   /** Each capability with every seam that reads it (tools/units/capabilities.mjs). */
   capabilities: Record<string, { seams: string[]; why?: string }>

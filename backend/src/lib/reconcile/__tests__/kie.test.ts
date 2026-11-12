@@ -198,6 +198,18 @@ vi.mock("../entity-recovery.js", async (importOriginal) => {
   return { ...actual, recoverEntityJob: mocks.recoverEntityMock }
 })
 
+// The node units' recoveries (unit-recovery.ts), answered for a stand-in type
+// id: the door's real lookup and a real unit's recovery are proven in that
+// unit's own tests (backend/src/nodes/<type>/__tests__/).
+const OWN_WRITER = "fixture-own-writer"
+const unitRecovery = vi.hoisted(() => ({
+  recover: vi.fn(async (_task: Record<string, unknown>): Promise<{ ok: boolean }> => ({ ok: true })),
+}))
+vi.mock("../unit-recovery.js", () => ({
+  unitRecoverOf: (jobType: string | null | undefined) => (jobType === "fixture-own-writer" ? unitRecovery.recover : undefined),
+}))
+
+import { DrainAbortError } from "../../worker-drain.js"
 import { reconcileKieJob, type KieJobRow } from "../kie.js"
 
 describe("reconcileKieJob", () => {
@@ -268,6 +280,37 @@ describe("reconcileKieJob", () => {
       jobId: "j-seedance",
     })
     expect(mocks.finalizeMock).toHaveBeenCalledWith(expect.objectContaining({ jobId: "j-seedance", meteredBaseCredits: 7193 }))
+  })
+
+  it("a recovered run hands the settlement the reference task type its job recorded (the hold it sized)", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example/out.mp4"] },
+      providerMs: 40000,
+      taskId: "t-ref",
+    })
+    settle.measure.mockResolvedValueOnce(3325)
+    await reconcileKieJob({
+      id: "j-ref",
+      provider_kind: "kie-standard",
+      provider_task_id: "t-ref",
+      reconcile_attempts: 0,
+      job_type: "text-to-video",
+      input_data: {
+        provider: "seedance-2-5", resolution: "720p", duration: -1, referenceTaskType: "reference",
+        referenceVideoUrls: ["https://r2.example.com/videos/ref.mp4"], refVideoDurationsSec: [5],
+      },
+    })
+    expect(settle.measure.mock.calls.at(-1)![0]).toStrictEqual({
+      provider: "seedance-2-5",
+      resolution: "720p",
+      outputUrl: "https://kie.example/out.mp4",
+      referenceVideoUrls: ["https://r2.example.com/videos/ref.mp4"],
+      refVideoDurationsSec: [5],
+      duration: -1,
+      referenceTaskType: "reference",
+      jobId: "j-ref",
+    })
+    expect(mocks.finalizeMock).toHaveBeenCalledWith(expect.objectContaining({ jobId: "j-ref", meteredBaseCredits: 3325 }))
   })
 
   it("a recovered GPT Image 2.6 Auto run settles on what KIE billed, as the worker would have", async () => {
@@ -1184,5 +1227,129 @@ describe("reconcileKieJob: a recovered mask job is pasted back before it is fina
     expect(pasteBack.pasteSourceOutsideMask).not.toHaveBeenCalled()
     expect(pasteBack.compositeInpaint).not.toHaveBeenCalled()
     for (const [input] of mocks.finalizeMock.mock.calls) expect(input.result.url).toBe("https://kie.example/out.png")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// An own-writer node unit with a recovery (its recover.ts, through
+// unit-recovery.ts): still in NOT_GENERIC_RECOVERABLE, so no generic finalize
+// takes its row — but a finished task is delivered through the unit's own
+// delivery instead of riding the 18-tick bump, and a delivery that cannot
+// succeed fails + refunds on the same tick.
+// ---------------------------------------------------------------------------
+describe("an own-writer unit with a recovery", () => {
+  const row = (over: Partial<KieJobRow> = {}): KieJobRow => ({
+    id: "j-unit",
+    provider_kind: "kie-standard",
+    provider_task_id: "t-unit",
+    reconcile_attempts: 0,
+    job_type: OWN_WRITER,
+    input_data: { imageUrl: "https://r2/in.png", maxLayers: 3, size: "2K", type: OWN_WRITER },
+    ...over,
+  })
+  const RESULT = { resultObject: { layers_data: [{ z_index: 0, url: "https://kie/base.png" }] }, resultUrls: ["https://kie/base.png", "https://kie/l1.png"] }
+  const failedUpdate = (): Record<string, unknown> | undefined =>
+    mocks.jobsUpdateMock.mock.calls.map((c) => c[0] as Record<string, unknown>).find((u) => u.status === "failed")
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    unitRecovery.recover.mockResolvedValue({ ok: true })
+    mocks.refundMock.mockResolvedValue(undefined)
+    mocks.jobsSingleMock.mockResolvedValue({ data: { reconcile_attempts: 0 }, error: null })
+    mocks.pollKieTaskMock.mockResolvedValue({ resultJson: RESULT, providerMs: 25000, rawRecordInfo: { code: 200, data: { creditsConsumed: 15.84 } }, taskId: "t-unit" })
+  })
+
+  it("hands the finished task's WHOLE result, its cost, the job's input_data and the claimant to the unit's recovery — no generic finalize, no bump", async () => {
+    await reconcileKieJob(row())
+    expect(unitRecovery.recover).toHaveBeenCalledTimes(1)
+    expect(unitRecovery.recover).toHaveBeenCalledWith({
+      jobId: "j-unit",
+      input: { imageUrl: "https://r2/in.png", maxLayers: 3, size: "2K", type: OWN_WRITER },
+      taskId: "t-unit",
+      providerKind: "kie-standard",
+      result: RESULT,
+      providerCredits: 15.84,
+      providerMs: 25000,
+      claimant: "cron",
+    })
+    expect(mocks.finalizeMock).not.toHaveBeenCalled()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+    expect(mocks.jobsUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("the worker's stall re-pick (inline reconcile) threads its claimant and full poll budget", async () => {
+    await reconcileKieJob(row(), { claimant: "worker", pollAttempts: 120 })
+    expect(mocks.pollKieTaskMock).toHaveBeenCalledWith("t-unit", 120, undefined, expect.anything())
+    expect(unitRecovery.recover.mock.calls[0]![0]).toMatchObject({ claimant: "worker" })
+  })
+
+  it("a task with no result URL still reaches the unit's parser (never the generic 'no result URL' bump)", async () => {
+    const empty = { resultObject: { layers_data: [] } }
+    mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: empty, providerMs: 1, rawRecordInfo: { code: 200, data: {} }, taskId: "t-unit" })
+    await reconcileKieJob(row())
+    expect(unitRecovery.recover.mock.calls[0]![0]).toMatchObject({ result: empty })
+    expect(unitRecovery.recover.mock.calls[0]![0]).not.toHaveProperty("providerCredits")
+    expect(mocks.jobsUpdateMock).not.toHaveBeenCalledWith(expect.objectContaining({ reconcile_attempts: 1 }))
+  })
+
+  it("a delivery that cannot succeed (an unreadable result, a base that cannot be stored) fails the job and refunds it on THIS tick — never the bump", async () => {
+    unitRecovery.recover.mockRejectedValueOnce(new Error("Split the result: the base picture could not be saved (R2 down)"))
+    await reconcileKieJob(row())
+    const failed = failedUpdate()
+    expect(failed).toMatchObject({ status: "failed", error_message: "Split the result: the base picture could not be saved (R2 down)", reconcile_last_error: "delivery_failed" })
+    expect(mocks.jobsUpdateInMock).toHaveBeenCalledWith("status", ["pending", "queued", "processing"])
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-unit")
+    expect(mocks.jobsUpdateMock).not.toHaveBeenCalledWith(expect.objectContaining({ reconcile_attempts: 1 }))
+  })
+
+  it("a delivery that completed the job before it threw keeps its charge: no refund when the failure write did not flip the row", async () => {
+    unitRecovery.recover.mockRejectedValueOnce(new Error("asset write failed"))
+    mocks.jobsUpdateInMock.mockReturnValueOnce({ select: vi.fn().mockResolvedValue({ data: [], error: null }) } as never)
+    await reconcileKieJob(row())
+    expect(failedUpdate()).toBeDefined()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+  })
+
+  it("a worker drain during the re-pick is rethrown, the row left as it is", async () => {
+    unitRecovery.recover.mockRejectedValueOnce(new DrainAbortError())
+    await expect(reconcileKieJob(row(), { claimant: "worker" })).rejects.toBeInstanceOf(DrainAbortError)
+    expect(failedUpdate()).toBeUndefined()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+  })
+
+  it("a finalize that was not ok (another finalizer won, a held result) is no failure", async () => {
+    unitRecovery.recover.mockResolvedValueOnce({ ok: false })
+    await reconcileKieJob(row())
+    expect(failedUpdate()).toBeUndefined()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+  })
+
+  it("a task that failed upstream still fails fast + refunds, without the recovery", async () => {
+    mocks.pollKieTaskMock.mockRejectedValueOnce(new mocks.FakeKieError("Generation failed. Please try again.", true))
+    await reconcileKieJob(row())
+    expect(unitRecovery.recover).not.toHaveBeenCalled()
+    expect(failedUpdate()).toMatchObject({ status: "failed", reconcile_last_error: "upstream_failed" })
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-unit")
+  })
+
+  it("a task still running is bumped for the next tick, without the recovery", async () => {
+    mocks.pollKieTaskMock.mockRejectedValueOnce(new Error("task timed out after 1 poll attempts"))
+    await reconcileKieJob(row())
+    expect(unitRecovery.recover).not.toHaveBeenCalled()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+    expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ reconcile_attempts: 1 }))
+  })
+
+  it("a unit row on a kind that is not a record-info task is bumped, never misread", async () => {
+    await reconcileKieJob(row({ provider_kind: "kie-veo" }))
+    expect(unitRecovery.recover).not.toHaveBeenCalled()
+    expect(mocks.pollVeoTaskMock).not.toHaveBeenCalled()
+    expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ reconcile_attempts: 1 }))
+  })
+
+  it("a type with no recovery is untouched by it: a DAG character row still bumps with its named reason", async () => {
+    await reconcileKieJob(row({ job_type: "character", input_data: null }))
+    expect(unitRecovery.recover).not.toHaveBeenCalled()
+    expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ reconcile_last_error: expect.stringMatching(/not generically recoverable: character/) }))
   })
 })

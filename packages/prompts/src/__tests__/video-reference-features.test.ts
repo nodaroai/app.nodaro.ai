@@ -9,11 +9,13 @@ import { modelsWithFeature } from "@nodaro/shared/model-catalog"
 describe("video reference-image capability (catalog)", () => {
   const refModels = modelsWithFeature("reference-image")
 
-  // grok-imagine-video-1.5 takes a single image_url (the i2v start frame) at
-  // KIE — there is no reference transport (no `maxRefImages`, no special path),
-  // so it must NOT advertise the feature.
-  it("excludes grok-imagine-video-1.5 (no reference transport)", () => {
-    expect(refModels).not.toContain("grok-imagine-video-1.5")
+  // grok-imagine-video-1.5 advertised the feature with no transport behind it
+  // (the 2026-06-28 audit). It carries its Image References now, as in-between
+  // FRAMES (KIE `keyframes`, backend kie/grok-video-15.ts), so it declares
+  // `reference-image` together with `keyframes` — and never as loose references.
+  it("grok-imagine-video-1.5 advertises its Image References as in-between frames", () => {
+    expect(refModels).toContain("grok-imagine-video-1.5")
+    expect(modelsWithFeature("keyframes")).toContain("grok-imagine-video-1.5")
   })
 
   // The video models that genuinely forward references — verified against the

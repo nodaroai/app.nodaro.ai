@@ -41,6 +41,8 @@ import { appInputDescription } from "./app-input-descriptions.js"
 import { exposedQuickFieldSpec } from "../exposed-quick-field-check.js"
 import type { ExposableQuickFieldSpec } from "./generated/exposable-quick-fields.js"
 import { EXPOSABLE_DECLARED_FIELDS, type ExposableDeclaredFieldSpec } from "./generated/exposable-declared-fields.js"
+import { exposedUnitFieldSpec, unitSelectValues } from "../exposed-unit-field-check.js"
+import type { UnitAppField } from "../../nodes/kit.js"
 
 /** Public schema entry surfaced to the LLM. No node-id leak. */
 export interface NormalizedInputField {
@@ -491,8 +493,13 @@ export function extractAppInputSchema({
       const quick = lottieSlot ? undefined : exposedQuickFieldSpec(node?.type, item.field)
       // A hand-declared field with a known set of values (the editor's NODE_DEFINITIONS exposableFields).
       const declared = lottieSlot || slider || quick ? undefined : exposedDeclaredFieldSpec(node?.type, item.field)
+      // A node unit's app field (its unit.json appFields, through the unit's descriptor). A unit has none of
+      // the legacy tables' rows above, nor a legacy node an app field.
+      const unitField = lottieSlot ? undefined : exposedUnitFieldSpec(node?.type, item.field)
       let field: NormalizedInputField
-      if (lottieSlot) {
+      if (unitField && !item.allowedValues) {
+        field = unitInputField(key, `${nodeLabel}: ${item.field}`, unitField)
+      } else if (lottieSlot) {
         field = {
           key,
           label: `${nodeLabel}: ${lottieSlot.label}`,
@@ -575,6 +582,24 @@ function quickInputField(key: string, label: string, spec: ExposableQuickFieldSp
     ...(spec.fixed
       ? {}
       : { description: "Which of these a run accepts depends on the node's model: this lists every model's values, so pick one the node's model takes." }),
+  }
+}
+
+/**
+ * The schema entry of a node unit's app field: a select of every value its manifest lists, or a whole number
+ * with its range and step. Each is held to exactly that at run time (exposed-unit-field-check.ts).
+ */
+function unitInputField(key: string, label: string, f: UnitAppField): NormalizedInputField {
+  if (f.kind === "select") return { key, label, type: "select", required: false, options: unitSelectValues(f) }
+  return {
+    key,
+    label,
+    type: "number",
+    required: false,
+    min: f.min,
+    max: f.max,
+    step: f.step,
+    description: `A whole number from ${f.min} to ${f.max}${f.step > 1 ? ` in steps of ${f.step}` : ""}.`,
   }
 }
 

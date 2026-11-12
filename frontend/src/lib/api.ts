@@ -9970,6 +9970,13 @@ export async function getAppFavorites(): Promise<string[]> {
 }
 
 /** Load a published app by slug (public). Optionally load a specific version. */
+/**
+ * The route is public, but on a deployment that does not allow public work it
+ * serves an app's page to its creator alone (an admin keeps a preview), so the
+ * token goes along when there is one — as `getTemplateBySlug` does. Anonymous
+ * callers still work: `getAuthHeaders()` returns `{}` with no session, and an
+ * embed's frame has none.
+ */
 export async function getPublishedApp(slug: string, version?: number): Promise<PublishedApp> {
   const params = new URLSearchParams()
   if (version) params.set("version", String(version))
@@ -9977,7 +9984,6 @@ export async function getPublishedApp(slug: string, version?: number): Promise<P
   return apiRequest<PublishedApp>(
     `/v1/app/${encodeURIComponent(slug)}${qs ? `?${qs}` : ""}`,
     "apiErr.loadApp",
-    { skipAuth: true },
   )
 }
 

@@ -4,6 +4,7 @@ import {
   normalizeMinimaxH3Resolution,
   normalizeWan3Resolution,
   normalizeViduQ4Resolution,
+  normalizeGrokVideo15Resolution,
   KLING_4_FLASH_RESOLUTION,
   VIDEO_GEN_PROVIDERS,
 } from "../model-constants.js"
@@ -57,6 +58,15 @@ describe("unlistedResolutionRendersAs matches the provider's own collapse rule",
     for (const off of ["480p", "8k", "nonsense"]) {
       expect(normalizeViduQ4Resolution(off), `vidu-q4 renders ${off} as`).toBe(declared)
       expect(normalizeVideoRequestParams("vidu-q4", { resolution: off }).resolution).toBe(declared)
+    }
+  })
+
+  it("grok-imagine-video-1.5 declares what normalizeGrokVideo15Resolution collapses to", () => {
+    const declared = MODEL_CATALOG["grok-imagine-video-1.5"]!.unlistedResolutionRendersAs
+    expect(declared).toBe("480p")
+    for (const off of ["360p", "2k", "4k", "nonsense"]) {
+      expect(normalizeGrokVideo15Resolution(off), `grok renders ${off} as`).toBe(declared)
+      expect(normalizeVideoRequestParams("grok-imagine-video-1.5", { resolution: off }).resolution).toBe(declared)
     }
   })
 

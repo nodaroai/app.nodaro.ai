@@ -50,7 +50,7 @@ const INTERNAL: ReadonlyArray<readonly [RegExp, string]> = [
   [/^lib\/app-report-sweep\.ts$/, "the sweep classifies failed jobs for admins"],
   [/^lib\/(asset-delete|media-delete|key-ownership|kie-task-ownership)\.ts$/, "who owns stored bytes or a provider task: a deleted job still owns its media until the purge"],
   [/^lib\/(cancel-job|job-cancellation)\.ts$/, "cancelling stops work: a deleted job still running can be stopped"],
-  [/^lib\/(discard-job-copies|job-finalize|job-policy-gate|job-policy-review|job-scratch|execution-budget)\.ts$/, "a job's own lifecycle: it finishes whether or not it was deleted"],
+  [/^lib\/(discard-job-copies|job-finalize|job-policy-gate|job-policy-outputs|job-policy-review|job-scratch|execution-budget)\.ts$/, "a job's own lifecycle: it finishes whether or not it was deleted (job-policy-outputs: a blocked job's owner, whose storage its deleted output gives back)"],
   [/^lib\/seedance-[a-z-]+\.ts$/, "a Seedance job's own lifecycle"],
   [/^lib\/(llm-[a-z-]+|meter-sync-llm)\.ts$/, "metered LLM billing counts spending, deleted or not"],
   [/^lib\/use-case\/(continue-claim|execution-wrappers|finalize-wrapper)\.ts$/, "a use-case run's own internals"],

@@ -3,8 +3,9 @@
  * Single source of truth for model capability sets and variable pricing rules.
  */
 import { z } from "zod"
-import { MODEL_CATALOG } from "./model-catalog.js"
+import { MODEL_CATALOG, isVideoAutoAspectToken, videoAutoAspectRunsAt, type ModelInputAdjustment } from "./model-catalog.js"
 import { isAutoVideoDuration, VIDEO_DURATION_AUTO } from "./video-duration-auto.js"
+import { SEEDANCE_EDIT_REF_VIDEO_SEC, type DeclaredSeedanceTaskType } from "./seedance-task-type.js"
 
 /** Base USD value of 1 Nodaro credit. Used for cost→credit conversion. */
 export const CREDIT_BASE_USD = 0.002
@@ -668,6 +669,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "recraft-remove-bg",
   "recraft-upscale",
   "topaz-image-upscale",
+  "nodaro-image-upscale",
   // Wan 2.7 — accepts up to 9 optional ref images via input_urls (pure T2I when omitted)
   "wan-2.7",
   // Replicate "Open" (uncensored) image models
@@ -762,6 +764,7 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "recraft-remove-bg": 1,
   "recraft-upscale": 1,
   "topaz-image-upscale": 1,
+  "nodaro-image-upscale": 1,
   // Replicate Open models — Klein takes an optional single ref; Kontext Multi
   // (multi-image-kontext-pro) is a two-image combiner (input_image_1/2 only);
   // Flux 2 Pro up to 4; Max up to 8.
@@ -1004,6 +1007,8 @@ export const IMAGE_EDIT_PROVIDERS = [
   "recraft-remove-bg",
   "nano-banana-edit",
   "topaz-image-upscale",
+  // Nodaro Image Upscale: 1x to 8x, priced by the output's size.
+  "nodaro-image-upscale",
   // Grok Imagine 2 task-chained ops — a prior grok-2 generation's task_id (NOT
   // an image URL); see the edit-image route for the taskId-vs-imageUrl
   // branching. grok-2-edit: prompt edit of a prior grok-2 generation,
@@ -1043,6 +1048,7 @@ export type ModifyImageProvider = typeof MODIFY_IMAGE_PROVIDERS[number]
 export const UPSCALE_IMAGE_PROVIDERS = [
   "recraft-upscale",
   "topaz-image-upscale",
+  "nodaro-image-upscale",
 ] as const
 export type UpscaleImageProvider = typeof UPSCALE_IMAGE_PROVIDERS[number]
 
@@ -1101,7 +1107,7 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "kling-4-flash",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
-  // xAI Grok Imagine Video 1.5 — KIE i2v (image_urls required). Also listed in
+  // xAI Grok Imagine Video 1.5 — KIE i2v (a start image required). Also listed in
   // TEXT_TO_VIDEO_PROVIDERS so it's offered everywhere in the unified node; the
   // t2v route guards no-image runs via VIDEO_PROVIDERS_REQUIRING_IMAGE.
   "grok-imagine-video-1.5",
@@ -1327,12 +1333,15 @@ export function videoProviderReferenceSyntax(provider: string | undefined): Vide
  * Reference-capable video models whose start/end frames ride a channel of
  * their OWN (separate frame parameters next to the reference list), so a frame
  * never occupies a reference seat: `kling-3-omni` (Replicate `start_image` /
- * `end_image`, no dispatch path today) and Kling 4.0 Keyframes (KIE
- * `first_frame_url` / `last_frame_url` beside its in-between `keyframe_urls`).
+ * `end_image`, no dispatch path today), Kling 4.0 Keyframes (KIE
+ * `first_frame_url` / `last_frame_url` beside its in-between `keyframe_urls`)
+ * and Grok Imagine Video 1.5 (KIE `first_frame_url` / `last_frame_url` /
+ * `loop_url` beside its in-between `keyframes`).
  */
 export const VIDEO_PROVIDERS_WITH_SEPARATE_FRAME_CHANNEL: ReadonlySet<string> = new Set([
   "kling-3-omni",
   "kling-4-keyframes",
+  "grok-imagine-video-1.5",
 ])
 
 /**
@@ -1444,6 +1453,17 @@ export const DEFAULT_VIDEO_TO_VIDEO_PROVIDER: VideoToVideoNodeProvider = "wan"
  * ordinary run as an edit.
  */
 export const SEEDANCE_VIDEO_EDIT_SHAPE = { aspectRatio: "adaptive", duration: VIDEO_DURATION_AUTO } as const
+
+/**
+ * The reference task type a purpose-built Seedance video edit requests (the
+ * Video to Video route and node, MCP `modify_video`): the reference video is
+ * the clip to edit, said outright instead of left to the prompt. A request, not
+ * a promise: `resolveSeedanceTaskType` declares it only when the edit's
+ * reference videos qualify, and otherwise the edit goes out undeclared, as
+ * before. Kept apart from `SEEDANCE_VIDEO_EDIT_SHAPE`, whose exact value other
+ * callers spread and pin.
+ */
+export const SEEDANCE_VIDEO_EDIT_TASK_TYPE = "edit" as const satisfies DeclaredSeedanceTaskType
 
 /** Face swap providers */
 export const FACE_SWAP_PROVIDERS = [
@@ -2266,6 +2286,79 @@ export function isKling4RunnerProvider(provider: string | undefined): provider i
 }
 
 /**
+ * Grok Imagine Video 1.5 — KIE `grok-imagine-video-1-5-preview`
+ * (docs.kie.ai/market/grok-imagine/1-5-preview), built by the backend's bespoke
+ * runner (`kie/grok-video-15.ts`). Image to video: the start frame is the exact
+ * first frame, an end frame the exact last frame (one picture wired as both is
+ * a seamless loop), and the Image References are up to
+ * {@link GROK_VIDEO_15_MAX_MIDDLE_FRAMES} in-between frames, each placed at a
+ * whole second inside the clip.
+ */
+export const GROK_VIDEO_15_PROVIDER = "grok-imagine-video-1.5"
+
+export function isGrokVideo15Provider(provider: string | undefined): provider is "grok-imagine-video-1.5" {
+  return provider === GROK_VIDEO_15_PROVIDER
+}
+
+/** Grok Imagine Video 1.5 resolution rendered when the param is omitted or
+ *  unknown — KIE's own default and the tier the bare credit identifier prices. */
+export const GROK_VIDEO_15_DEFAULT_RESOLUTION = "480p"
+
+/**
+ * SINGLE normalization for the Grok Imagine Video 1.5 resolution lever. The KIE
+ * wire enum is lowercase (`480p` | `720p` | `1080p`), the same spelling as the
+ * catalog and the credit identifiers; this folds case and collapses anything
+ * else to {@link GROK_VIDEO_15_DEFAULT_RESOLUTION}. The runner sends what this
+ * returns and the credit identifier bills what this returns.
+ */
+export function normalizeGrokVideo15Resolution(resolution: string | undefined): "480p" | "720p" | "1080p" {
+  const r = resolution?.trim().toLowerCase()
+  return r === "720p" || r === "1080p" ? r : GROK_VIDEO_15_DEFAULT_RESOLUTION
+}
+
+/** Most in-between frames Grok Imagine Video 1.5 takes (KIE `keyframes`). */
+export const GROK_VIDEO_15_MAX_MIDDLE_FRAMES = 4
+
+/**
+ * How many in-between frames a Grok Imagine Video 1.5 clip of `durationSec`
+ * seconds carries. The node has no per-frame time, so the frames sit at whole
+ * seconds strictly inside the clip, no two on the same second (decided
+ * 2026-11-11): a D-second clip has D − 1 such seconds, and KIE takes at most
+ * {@link GROK_VIDEO_15_MAX_MIDDLE_FRAMES}. Frames past this count are left out
+ * (the runner logs it), never refused.
+ */
+export function grokVideo15MiddleFrameSlots(durationSec: number | string | undefined): number {
+  // The length the run renders: the catalog's default when unset, else the
+  // nearest legal second — the same funnel the price reads.
+  const d = pricedOutputDurationSec(GROK_VIDEO_15_PROVIDER, Number.isFinite(Number(durationSec)) ? durationSec : undefined)
+  return Math.max(0, Math.min(GROK_VIDEO_15_MAX_MIDDLE_FRAMES, d - 1))
+}
+
+/**
+ * How many in-between frames (the Image References of a catalog `keyframes`
+ * model) a run takes, given its length and which end frames are wired —
+ * undefined for a model whose references are not frames. The editor's handle
+ * cap and panel count read this, so the two cannot disagree.
+ *
+ *   - Kling 4.0 Keyframes: the start and end frames share the clip's frame cap
+ *     ({@link kling4KeyframeFrameCap}), at most {@link KLING_4_MAX_MIDDLE_FRAMES}.
+ *   - Grok Imagine Video 1.5: {@link grokVideo15MiddleFrameSlots}; the start and
+ *     end frames ride their own fields and take no slot.
+ */
+export function videoKeyframesMiddleCap(
+  provider: string | undefined,
+  durationSec: number | string | undefined,
+  frames: { readonly hasStartFrame: boolean; readonly hasEndFrame: boolean },
+): number | undefined {
+  if (isGrokVideo15Provider(provider)) return grokVideo15MiddleFrameSlots(durationSec)
+  if (provider === "kling-4-keyframes") {
+    const ends = (frames.hasStartFrame ? 1 : 0) + (frames.hasEndFrame ? 1 : 0)
+    return Math.max(0, Math.min(KLING_4_MAX_MIDDLE_FRAMES, kling4KeyframeFrameCap(durationSec) - ends))
+  }
+  return undefined
+}
+
+/**
  * Google Gemini Omni family — the KIE "gemini-omni-video" market model and its
  * faster/cheaper "google/gemini-omni-flash-1-1" sibling. Both take the SAME
  * request shape (prompt + image_urls references, video-edit through the i2v
@@ -2875,12 +2968,18 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // flips a Quality call to REFERENCE_2_VIDEO.
   "veo3.1": { images: 3 },
   "veo3_lite": { images: 3 },
-  // NOTE: wan-i2v / hailuo-2.3[-pro] / bytedance-pro[-fast] / grok-imagine-video-1.5
-  // are deliberately ABSENT. The 2026-06-28 audit (video-reference-features.test.ts)
-  // verified backend reference-forwarding paths and these i2v models have none —
-  // a single image_url start frame only. Advertising a ref cap would silently drop
-  // the user's references (the grok-imagine-video-1.5 bug). Add only with a
-  // verified provider path + the catalog `reference-image` feature.
+  // Grok Imagine Video 1.5 — the Image References are its in-between frames
+  // (KIE `keyframes`, max 4; the clip's length lowers the count, see
+  // grokVideo15MiddleFrameSlots). They are frames only, never `image_urls`
+  // references, and need the start frame. No reference videos or audio.
+  "grok-imagine-video-1.5": { images: GROK_VIDEO_15_MAX_MIDDLE_FRAMES },
+  // NOTE: wan-i2v / hailuo-2.3[-pro] / bytedance-pro[-fast] are deliberately
+  // ABSENT. The 2026-06-28 audit (video-reference-features.test.ts) verified
+  // backend reference-forwarding paths and these i2v models have none — a
+  // single image_url start frame only. Advertising a ref cap would silently
+  // drop the user's references (grok-imagine-video-1.5 had that bug before its
+  // in-between frames were wired). Add only with a verified provider path + the
+  // catalog `reference-image` feature.
 }
 
 /** Per-reference-video duration bounds, in seconds. */
@@ -3002,8 +3101,9 @@ export const RESOLUTION_VIDEO_REF_PRICING = SEEDANCE_2_PROVIDERS
  * RESOLUTION_VIDEO_REF_PRICING (Seedance gen), which also adds `-ref` variants.
  */
 export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
-  // KIE supports only 480p/720p here; 480p is the default.
-  "grok-imagine-video-1.5": ["480p", "720p"],
+  // 480p is KIE's default and the bare id's tier; the runner and the credit
+  // identifier both read normalizeGrokVideo15Resolution.
+  "grok-imagine-video-1.5": ["480p", "720p", "1080p"],
   // HappyHorse 1.1 — per-second billing at two published resolution rates
   // (kie.ai/happyhorse-1-1: 22.5 cr/s @720p, 29 cr/s @1080p, uniform across
   // t2v/i2v/ref2v). 720p first = billing default; the KIE-side default is
@@ -3165,6 +3265,43 @@ export function videoProviderRequiresImage(provider: string | undefined): boolea
  */
 export function videoProviderFoldsLoneEndFrame(provider: string): boolean {
   return isSeedance2Provider(provider) || isMinimaxH3Provider(provider) || isWan3Provider(provider) || isGeminiOmniPerSecondProvider(provider)
+}
+
+/**
+ * True when the provider takes an end frame ALONE, with no start frame, as the
+ * clip's closing frame: Kling 4.0 Keyframes (KIE `last_frame_url` without
+ * `first_frame_url`) and Gemini Omni Flash 1.2. Every other model meets the
+ * platform's general rule for a lone end frame: the workflow run moves it into
+ * the start slot, while the editor's Run and the image-to-video route refuse
+ * the run for having no start frame.
+ *
+ * Read by the three places that apply that rule (the route's image gate, the
+ * workflow payload builder's swap, the editor's start-frame guard) so they
+ * cannot disagree. A `keyframes` model qualifies only when its endpoint runs
+ * with no start frame at all (it has a text-to-video mode): Grok Imagine Video
+ * 1.5 declares `keyframes` but needs its start image, so a lone end frame
+ * keeps the general rule there.
+ */
+export function videoProviderTakesLoneEndFrame(provider: string | undefined): boolean {
+  if (!provider) return false
+  if (isGeminiOmniPerSecondProvider(provider)) return true
+  return MODEL_CATALOG[provider]?.features?.includes("keyframes") === true && !videoProviderRequiresImage(provider)
+}
+
+/**
+ * True when wired reference images can stand in for a missing start frame on
+ * the image-to-video lane: the provider carries image references
+ * ({@link VIDEO_REF_LIMITS_BY_PROVIDER}), unless they are a `keyframes`
+ * model's in-between FRAMES and its endpoint cannot run from them alone (no
+ * `reference-to-video`, {@link videoProviderRunsFromReferences}) — Grok Imagine
+ * Video 1.5's in-between frames need its start frame. Read by the
+ * image-to-video route's gate and the editor's start-frame guard; the workflow
+ * run reaches the same answer through {@link resolveVideoModeForInputs}.
+ */
+export function videoProviderRefsReplaceStartFrame(provider: string | undefined): boolean {
+  if (!provider || (VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 0) <= 0) return false
+  const keyframes = MODEL_CATALOG[provider]?.features?.includes("keyframes") === true
+  return !keyframes || videoProviderRunsFromReferences(provider)
 }
 
 /**
@@ -3456,7 +3593,8 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   // appended for the cheaper tier); ref-video input seconds + extra input
   // images are billed via the dedicated compute hook, not the identifier.
   "minimax-h3": "duration+resolution",
-  // Grok Imagine Video 1.5 — per-second billing split 480p/720p (no video-ref dimension).
+  // Grok Imagine Video 1.5 — per-second billing at 480p / 720p / 1080p (no
+  // video-ref dimension, no per-image or per-frame part).
   "grok-imagine-video-1.5": "duration+resolution",
   // Wan 3.0 family — per-second billing at three resolution rates (no video-ref
   // dimension: reference runs bill output seconds only). No gemini-omni-flash
@@ -3554,6 +3692,156 @@ export function supportsAutoVideoDuration(provider: string | undefined): boolean
   return !!provider && MODEL_CATALOG[provider]?.autoDuration === true
 }
 
+/** Models that accept a reference task type declaration — a catalog capability
+ *  (`MODEL_CATALOG[id].referenceTaskTypes`, see `SEEDANCE_REFERENCE_TASK_TYPES`). */
+export function supportsReferenceTaskType(provider: string | undefined): boolean {
+  return !!provider && (MODEL_CATALOG[provider]?.referenceTaskTypes?.length ?? 0) > 0
+}
+
+/** What a request knows that decides its reference task type. */
+export interface SeedanceTaskTypeFacts {
+  provider: string | undefined
+  /** The value the request carries, unvalidated: anything but a declared value is Auto. */
+  requested: unknown
+  draft: boolean
+  /** Reference images only: a start or end frame is not counted. */
+  referenceImageCount: number
+  referenceAudioCount: number
+  /** One entry per reference video; `undefined` = its length could not be measured. */
+  referenceVideoSec: ReadonlyArray<number | undefined>
+  aspectRatio: string | undefined
+  duration: number | undefined
+}
+
+/** The declaration a request sends (if any), and the ratio and length it runs at. */
+export interface SeedanceTaskTypeResolution {
+  /** `undefined`: nothing is declared and the provider guesses from the prompt. */
+  taskType: DeclaredSeedanceTaskType | undefined
+  aspectRatio: string | undefined
+  duration: number | undefined
+  /** Each change made to the ratio or length, for disclosure. Empty when nothing changed. */
+  adjustments: ModelInputAdjustment[]
+}
+
+/** The aspect ratio an `extend` runs at: the reference video's own (an `edit`
+ *  takes its whole shape from `SEEDANCE_VIDEO_EDIT_SHAPE`). */
+const SEEDANCE_EXTEND_ASPECT = "adaptive"
+
+/**
+ * `requested` when the model's catalog `referenceTaskTypes` lists it (strict
+ * match), else `undefined`. The one membership test: the resolver below and the
+ * provider adapter that writes the value both ask it.
+ */
+export function listedSeedanceTaskType(provider: string | undefined, requested: unknown): DeclaredSeedanceTaskType | undefined {
+  return provider ? MODEL_CATALOG[provider]?.referenceTaskTypes?.find((t) => t === requested) : undefined
+}
+
+/** How many of each kind of reference media a request carries. A start or end frame is not reference media. */
+export interface SeedanceReferenceMediaCount {
+  imageCount: number
+  videoCount: number
+  audioCount: number
+}
+
+/**
+ * Whether a request's reference media is what the declared type needs:
+ * `reference` takes any reference media; `edit` and `extend` need a reference
+ * video, since both act on one. The one media rule: the resolver below asks it
+ * of the request, and the provider adapter of the body as it will be sent.
+ */
+export function seedanceTaskTypeFitsMedia(type: DeclaredSeedanceTaskType, media: SeedanceReferenceMediaCount): boolean {
+  return type === "reference" ? media.imageCount + media.videoCount + media.audioCount > 0 : media.videoCount > 0
+}
+
+function editReferenceVideosFit(referenceVideoSec: ReadonlyArray<number | undefined>): boolean {
+  const { min, max } = SEEDANCE_EDIT_REF_VIDEO_SEC
+  return referenceVideoSec.every((sec) => typeof sec === "number" && sec >= min && sec <= max)
+}
+
+/**
+ * The ONE place that decides whether a request declares a reference task type,
+ * and the aspect ratio and length that declaration forces.
+ *
+ * Declared only when every condition holds; otherwise the result is the input
+ * unchanged (no declaration, ratio and length as given, nothing reported):
+ *   - the request asks for a value the model's catalog `referenceTaskTypes`
+ *     LISTS, matched exactly. The list is what is honoured: a model that lists
+ *     nothing, a value it does not list (`auto`, a wrong case, a number) and a
+ *     model that lists only some values are all Auto;
+ *   - the run is not a draft;
+ *   - it has the reference media the type needs
+ *     ({@link seedanceTaskTypeFitsMedia}): `edit` and `extend` need a
+ *     reference video;
+ *   - for `edit`, every reference video is measured and between
+ *     `SEEDANCE_EDIT_REF_VIDEO_SEC.min` and `.max` seconds inclusive.
+ *
+ * What a declaration forces:
+ *   - `reference` — nothing;
+ *   - `edit`      — the edit shape, `SEEDANCE_VIDEO_EDIT_SHAPE` (`"adaptive"`
+ *                   and Auto length): the output takes the video's own shape
+ *                   and length;
+ *   - `extend`    — `"adaptive"`; a fixed length is kept, and Auto or no length
+ *                   becomes the model's catalog `defaultDuration`.
+ *
+ * Each value it changes is reported as one adjustment; a value it fills where
+ * the request had none is not a correction and reports nothing, and neither is
+ * a ratio that already runs at the forced one (`"Auto"` with a reference video
+ * runs at `"adaptive"`). Pure.
+ */
+export function resolveSeedanceTaskType(facts: SeedanceTaskTypeFacts): SeedanceTaskTypeResolution {
+  const { provider, aspectRatio, duration, referenceVideoSec } = facts
+  const unchanged: SeedanceTaskTypeResolution = { taskType: undefined, aspectRatio, duration, adjustments: [] }
+  const taskType = listedSeedanceTaskType(provider, facts.requested)
+  if (!taskType || !provider || facts.draft) return unchanged
+  const media = {
+    imageCount: facts.referenceImageCount,
+    videoCount: referenceVideoSec.length,
+    audioCount: facts.referenceAudioCount,
+  }
+  if (!seedanceTaskTypeFitsMedia(taskType, media)) return unchanged
+  if (taskType === "edit" && !editReferenceVideosFit(referenceVideoSec)) return unchanged
+  if (taskType === "reference") return { ...unchanged, taskType }
+
+  const verb = taskType === "edit" ? "Edit" : "Extend"
+  const nextAspect = taskType === "edit" ? SEEDANCE_VIDEO_EDIT_SHAPE.aspectRatio : SEEDANCE_EXTEND_ASPECT
+  const adjustments: ModelInputAdjustment[] = []
+  const askedAspect = typeof aspectRatio === "string" ? aspectRatio.trim() : ""
+  // A ratio that already runs at the forced one is not replaced: the forced
+  // value itself, or the "Auto" token, which a request with a reference video
+  // runs at "adaptive" (`videoAutoAspectRunsAt`, the adapter's own rule).
+  const runsAtForced = askedAspect.toLowerCase() === nextAspect
+    || (isVideoAutoAspectToken(askedAspect) && videoAutoAspectRunsAt(provider, media.videoCount > 0) === nextAspect)
+  if (askedAspect !== "" && !runsAtForced) {
+    adjustments.push({
+      field: "aspectRatio", from: askedAspect, to: nextAspect,
+      reason: `${verb} keeps the video's own shape — using "${nextAspect}" instead of "${askedAspect}".`,
+    })
+  }
+
+  let nextDuration: number
+  if (taskType === "edit") {
+    nextDuration = SEEDANCE_VIDEO_EDIT_SHAPE.duration
+    if (duration !== undefined && !isAutoVideoDuration(duration)) {
+      adjustments.push({
+        field: "duration", from: duration, to: nextDuration,
+        reason: `Edit keeps the video's own length — using Auto instead of ${duration}s.`,
+      })
+    }
+  } else if (duration === undefined || isAutoVideoDuration(duration)) {
+    nextDuration = videoDefaultDurationSec(provider)
+    if (duration !== undefined) {
+      adjustments.push({
+        field: "duration", from: duration, to: nextDuration,
+        reason: `Extend needs a set length — using ${nextDuration}s, the model's default, instead of Auto.`,
+      })
+    }
+  } else {
+    nextDuration = duration
+  }
+
+  return { taskType, aspectRatio: nextAspect, duration: nextDuration, adjustments }
+}
+
 /** The longest clip a duration-tiered provider can render (its top priced tier). */
 export function maxVideoDurationSec(provider: string): number | undefined {
   const tiers = VIDEO_DURATION_TIERS[provider]
@@ -3599,6 +3887,12 @@ export const PRICING_DEFAULT_RESOLUTION: Record<string, string> = {
   // Gemini Omni Flash 1.2 — KIE renders 720p when `resolution` is omitted, and
   // the runner sends 720p for anything off its list.
   "gemini-omni-flash-1-2": "720p",
+  // Grok Imagine Video 1.5 — KIE renders 480p when `resolution` is omitted, and
+  // normalizeGrokVideo15Resolution pins the same tier for anything unknown. It
+  // is also the cheapest tier, so the bill does not move; declared so a run
+  // that names no resolution is judged at 480p by the free-tier check (decided
+  // 2026-11-11) and is sent 480p by pricedVideoSelection.
+  "grok-imagine-video-1.5": "480p",
 }
 
 /** Gemini Omni Flash 1.2 per-second tiers — one per allowed duration (3–15s). */
@@ -3770,9 +4064,10 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
     { maxSeconds: 14, suffix: "14s" },
     { maxSeconds: 15, suffix: "15s" },
   ],
-  // Grok Imagine Video 1.5 — true per-second billing (KIE 14.5 cr/s @480p, 25 cr/s
-  // @720p, +2 cr/image). One tier per allowed second (1–15s) so the composite
-  // identifier maps 1:1 to the seeded price — no rounding/overcharge for any on-menu value.
+  // Grok Imagine Video 1.5 — true per-second billing by resolution, with no
+  // per-image or per-frame part. One tier per allowed second (1–15s) so the
+  // composite identifier maps 1:1 to the seeded price — no rounding/overcharge
+  // for any on-menu value.
   "grok-imagine-video-1.5": [
     { maxSeconds: 1, suffix: "1s" },
     { maxSeconds: 2, suffix: "2s" },

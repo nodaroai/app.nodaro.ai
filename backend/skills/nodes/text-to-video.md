@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-11-11T18:06:58.218Z
-generated_from: 98d2c4dc4
+generated_at: 2026-11-11T19:25:18.595Z
+generated_from: 2f1f8c4f2
 ---
 
 # Text to Video
@@ -82,6 +82,7 @@ generated_from: 98d2c4dc4
 - `negative_prompt`
 - `seed`
 - `draft`
+- `reference_task_type`
 - `structured`
 - `connected_references`
 - `described_references`
@@ -334,18 +335,18 @@ descriptions of static/unchanged parts — spend the words on what MOVES.
 
 **Image-to-video (the primary mode)**
 - The input image is the FIRST FRAME, not a loose reference: composition, subject identity, and visual style carry over. Describe motion and camera only ("she turns toward the window as the camera slowly pushes in"); re-describing the still wastes adherence.
-- grok-imagine-video-1.5 accepts up to 7 images (identity/scene references beyond the first frame); at 1080p only ONE image is allowed.
+- grok-imagine-video-1.5 takes frames, not loose references: the start frame is the exact FIRST frame, an end frame the exact LAST frame, and the same image wired as both makes a seamless loop. Its Image References are up to 4 IN-BETWEEN frames, in order, placed evenly over the clip at whole seconds (one per second inside it — a 3s clip takes 2); extra frames are left out. Describe the motion that carries the shot from one frame to the next; the frames cannot be named in the prompt, so refer to them in words ("by the midpoint she has reached the door").
 - grok-i2v with reference images: images are addressed `@image(n)` in array order. Your references come first (`@image(1)` is your first reference); a wired start frame is appended after them and the platform names it as the opening frame.
 
 **Audio (video-1.5)**
-- Native audio generates with the clip — background music, SFX, and lip-synced dialogue. Quote the spoken line; describe the music/SFX plainly. There is no audio toggle on the KIE contract — cue (or exclude) sound in the prompt text.
+- Native audio generates with the clip — background music, SFX, and lip-synced dialogue. Quote the spoken line; describe the music/SFX plainly. The platform offers no audio toggle for it — cue (or exclude) sound in the prompt text.
 
 **Durations / tiers**
 - grok-i2v: 6 or 10 seconds. grok-imagine-video-1.5: 1-15 seconds in 1s steps (default 8), 480p (default) / 720p / 1080p. Prompt cap 4096 chars — but shorter is better here.
 
 Sources: KIE Grok Imagine contracts (docs.kie.ai/market/grok-imagine/image-to-video,
 docs.kie.ai/market/grok-imagine/1-5-preview), xAI Grok Imagine 1.5 release notes
-(x.ai/news/grok-imagine-1-5). Captured 2026-08-09.
+(x.ai/news/grok-imagine-1-5). Captured 2026-08-09; frames and in-between frames 2026-11-11.
 
 ### Wan 2.x (wan, wan-i2v, wan-turbo, wan-2.7 family)
 

@@ -63,7 +63,8 @@ import { characterContextLookup, sourceCharacterNames, sourceOriginId } from "./
 import { DEFAULT_LABEL_BY_SOURCE, type ConnectedReference, type ReferenceSource } from "@nodaro/shared/types"
 import { characterMentionSlug, entityImageUrl, locationMentionSlug, expandExtraRefsToConnectedReferences, resolveEffectiveSourceType, sourceRefKey } from "@nodaro/shared/entities"
 import { getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared/models"
-import { resolveTopazUpscale } from "@nodaro/shared/credits"
+import { NODARO_IMAGE_UPSCALE_MODEL_ID, resolveTopazUpscale, upscaleFactorsFor } from "@nodaro/shared/credits"
+import { upscaleFactorSnapPatch } from "@/lib/upscale-factor-snap"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import { buildImageConnectedReferences } from "./connected-references"
@@ -1930,14 +1931,27 @@ export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onM
     if (!data.targetResolution) return
     onUpdate({ upscaleFactor: resolveTopazUpscale({ targetResolution: data.targetResolution }).upscaleFactor })
   }, [data.provider, data.upscaleFactor, data.targetResolution, onUpdate])
+  // Fail-safe (Provider Enum Sync 12b): a stored factor the model does not take
+  // (8 from Nodaro Image Upscale, on Topaz) snaps to the one the run would render
+  // there — the same resolver the route, the workflow run and the worker use —
+  // and an 8 (only the house model takes it) on a model with no factor list
+  // (Recraft) is cleared; any other factor there stands, as it always did. The
+  // dropdown below writes the same patch with the model, so the switch is one step.
+  useEffect(() => {
+    const patch = upscaleFactorSnapPatch(data.provider, data)
+    if (patch) onUpdate(patch)
+  }, [data.provider, data.upscaleFactor, data.targetResolution, onUpdate])
   const isTopaz = data.provider === "topaz-image-upscale"
+  const isNodaroImageUpscale = data.provider === NODARO_IMAGE_UPSCALE_MODEL_ID
+  // The factors the chosen model takes (none for Recraft).
+  const factors = upscaleFactorsFor(data.provider)
 
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <Select
           value={data.provider || "recraft-upscale"}
-          onValueChange={(v) => onUpdate({ provider: v as UpscaleImageData["provider"] })}
+          onValueChange={(v) => onUpdate({ provider: v as UpscaleImageData["provider"], ...upscaleFactorSnapPatch(v, data) })}
         >
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -1948,7 +1962,7 @@ export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onM
         </Select>
       </MappableField>
 
-      {isTopaz && (
+      {factors && (
         <>
           <MappableField field="upscaleFactor" label={t("field.upscaleFactor")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
@@ -1957,16 +1971,16 @@ export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onM
             >
               <SelectTrigger aria-label={t("field.upscaleFactor")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">{t("imgcfg.upscaleEnhanceOnly")}</SelectItem>
-                <SelectItem value="2">2x</SelectItem>
-                <SelectItem value="4">4x</SelectItem>
+                {factors.map((f) => (
+                  <SelectItem key={f} value={f}>{f === "1" ? t("imgcfg.upscaleEnhanceOnly") : `${f}x`}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </MappableField>
         </>
       )}
 
-      {!isTopaz && (
+      {!isTopaz && !isNodaroImageUpscale && (
         <p className="text-xs text-muted-foreground px-1">
           {t("imgcfg.upscaleDesc")}
         </p>
@@ -1974,6 +1988,11 @@ export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onM
       {isTopaz && (
         <p className="text-xs text-muted-foreground px-1">
           {t("imgcfg.topazUpscaleDesc")}
+        </p>
+      )}
+      {isNodaroImageUpscale && (
+        <p className="text-xs text-muted-foreground px-1">
+          {t("imgcfg.nodaroImageUpscaleDesc")}
         </p>
       )}
     </div>

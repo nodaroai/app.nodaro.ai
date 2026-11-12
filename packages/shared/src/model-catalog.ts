@@ -32,6 +32,7 @@ import { isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "./seedance-dr
 import { isFlux2Model } from "./flux2-pricing.js"
 import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, MINIMAX_H3_IMAGE_RESOLUTIONS } from "./minimax-h3-image.js"
 import { isAutoVideoDuration } from "./video-duration-auto.js"
+import type { DeclaredSeedanceTaskType } from "./seedance-task-type.js"
 import { SEEDREAM_5_5_DEFAULT_RESOLUTION, SEEDREAM_5_5_RESOLUTIONS } from "./seedream-5-5.js"
 
 export type ModelKind = "image" | "video" | "audio"
@@ -452,6 +453,16 @@ export interface ModelCatalogEntryFields {
    */
   autoDuration?: boolean
   /**
+   * The reference task types this model accepts as a declaration (see
+   * `SEEDANCE_REFERENCE_TASK_TYPES`): what the request's reference media is for
+   * — a `reference`, an `edit` of the reference video, or an `extend` of it.
+   * The list is what is honoured: `resolveSeedanceTaskType` declares only a
+   * value listed here, and anything else runs as Auto. Absent or empty: the
+   * model takes no such declaration and the provider guesses from the prompt.
+   * `supportsReferenceTaskType` says whether the list is non-empty.
+   */
+  referenceTaskTypes?: readonly DeclaredSeedanceTaskType[]
+  /**
    * The model takes NO seed: its provider schema has none, so a seed the
    * request carries is dropped before the provider call and repeat runs vary.
    * Absent means a seed is forwarded as usual. Read through
@@ -538,6 +549,7 @@ export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
   { intent: "highest fidelity image", modelIds: ["gpt-image-2", "gpt-image-2-6-sunburst", "imagen4-ultra"], note: "GPT Image 2 for characters and identity; GPT Image 2.6 Sunburst for wide or in-between ratios GPT Image 2 can't draw." },
   { intent: "image edit / restyle", modelIds: ["gpt-image-2-6-flare-i2i", "gpt-image-2-i2i", "seedream-5-pro-i2i"], note: "GPT Image 2.6 Flare changes what you ask and keeps the rest; GPT Image 2 i2i for identity-critical edits; Seedream 5 Pro for instruction-based edits." },
   { intent: "highest-resolution image", modelIds: ["topaz-image-upscale", "gpt-image-2", "gpt-image-2-6-sunburst"], note: "Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor)." },
+  { intent: "upscale an image with text, labels or logos", modelIds: ["nodaro-image-upscale"], note: "Keeps lettering exactly as written. 1x enhances at the same size; up to 8x. Priced by the output's size, so a small picture costs little." },
   { intent: "background removal / cutout", modelIds: ["recraft-remove-bg"], note: "Cheap, no prompt needed." },
   // video
   { intent: "best cinematic video", modelIds: ["veo3", "kling-3.0", "seedance-2"], note: "VEO 3.1 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency." },
@@ -2027,6 +2039,28 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "topaz-image-upscale:4K", credits: 50, note: "4x (legacy identifier)" },
     ],
   },
+  "nodaro-image-upscale": {
+    id: "nodaro-image-upscale",
+    kind: "image",
+    modes: ["upscale"] as const,
+    family: "Nodaro Upscale",
+    ownLabel: true,
+    label: "Nodaro Image Upscale",
+    series: "Nodaro Upscale",
+    description: "Image upscale at 1x (enhance only), 2x, 4x or 8x. Restores detail and keeps lettering exactly as written; the output is the input times the factor, nothing cropped. Priced by the output's size.",
+    useCases: ["upscale", "high-res", "typography", "utility"],
+    features: ["reference-image"],
+    // No `resolutions`: the one lever is the upscale factor (`NODARO_IMAGE_UPSCALE_FACTORS`).
+    // The price follows the OUTPUT's total pixels (`@nodaro/render-rules`
+    // nodaro-image-upscale-pricing.ts); the bare id is the hold when the image's size
+    // cannot be read before the run, settled to the delivered output's tier.
+    pricing: [
+      { identifier: "nodaro-image-upscale:2K", credits: 4, note: "output up to 4,194,304 pixels (2048 × 2048)" },
+      { identifier: "nodaro-image-upscale:4K", credits: 10, note: "output up to 16,777,216 pixels (4096 × 4096)" },
+      { identifier: "nodaro-image-upscale:8K", credits: 30, note: "output up to 67,108,864 pixels (8192 × 8192)" },
+      { identifier: "nodaro-image-upscale", credits: 30, note: "held when the image's size cannot be read before the run; the output's tier is charged" },
+    ],
+  },
 }
 
 // =============================================================================
@@ -2560,35 +2594,45 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "grok-i2v:15s", credits: 100 },
     ],
   },
-  // xAI Grok Imagine Video 1.5 — KIE image-to-video (image required). True
-  // per-second billing split 480p/720p. modes:["i2v"] is the honest capability;
-  // it's also surfaced in the text-to-video dropdown for the unified node, where
-  // the t2v route returns a clean "requires an input image" 400.
+  // xAI Grok Imagine Video 1.5 — KIE image-to-video
+  // (docs.kie.ai/market/grok-imagine/1-5-preview), built by the backend's
+  // bespoke runner (kie/grok-video-15.ts). The start frame is the exact first
+  // frame and an end frame the exact last frame; one picture wired as both is a
+  // seamless loop (KIE `loop_url`). The Image References are up to 4
+  // in-between frames (KIE `keyframes`), spread evenly over the clip at whole
+  // seconds — frames only, never loose references, so `keyframes` is declared
+  // (it also keeps the model out of generate-video-pro, whose segments would
+  // send cast references as frames). modes:["i2v"] and no `reference-to-video`:
+  // every run needs its start image, in-between frames included. It is also
+  // surfaced in the text-to-video dropdown for the unified node, where the t2v
+  // route returns a clean "requires an input image" 400. Per-second billing by
+  // resolution, with no per-image part.
   "grok-imagine-video-1.5": {
     id: "grok-imagine-video-1.5",
     kind: "video",
     modes: ["i2v"] as const,
-    // No `reference-image` (locked by video-reference-features.test.ts, 2026-06-28
-    // audit): KIE's grok-imagine endpoint accepts a single image_url (the i2v
-    // start frame) only — there is no reference transport, so advertising the
-    // feature let the editor attach refs that were silently dropped at the
-    // provider. Also kept OUT of VIDEO_REF_LIMITS_BY_PROVIDER for the same reason.
+    features: ["end-frame", "reference-image", "keyframes"],
     family: "xAI",
     maker: "xai",
     label: "Grok Imagine Video 1.5",
     series: "Grok",
-    description: "Grok Imagine 1.5 image-to-video — 1–15s, 480p/720p, per-second pricing. Requires an input image.",
+    description: "Grok Imagine Video 1.5 — 1–15s at 480p, 720p or 1080p, per-second pricing. An exact first and last frame (the same image as both makes a seamless loop) and up to 4 in-between frames. Requires an input image.",
     useCases: ["stylized", "motion"],
     aspectRatios: ["16:9", "9:16", "1:1", "4:3", "3:4"],
     durations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     defaultDuration: 8,
-    resolutions: ["480p", "720p"],
+    resolutions: ["480p", "720p", "1080p"],
+    // normalizeGrokVideo15Resolution sends 480p for anything off the list.
+    unlistedResolutionRendersAs: "480p",
+    noSeed: true,  // the KIE schema has no `seed` (additionalProperties: false)
     pricing: [
-      { identifier: "grok-imagine-video-1.5", credits: 295, note: "default 8s 480p — see :Ns:res variants" },
-      { identifier: "grok-imagine-video-1.5:8s:480p", credits: 300, note: "8s 480p" },
-      { identifier: "grok-imagine-video-1.5:8s:720p", credits: 510, note: "8s 720p" },
-      { identifier: "grok-imagine-video-1.5:15s:480p", credits: 550, note: "15s 480p (max)" },
-      { identifier: "grok-imagine-video-1.5:15s:720p", credits: 950, note: "15s 720p (max)" },
+      { identifier: "grok-imagine-video-1.5", credits: 50, note: "default 8s 480p — see :Ns:res variants" },
+      { identifier: "grok-imagine-video-1.5:8s:480p", credits: 50, note: "8s 480p" },
+      { identifier: "grok-imagine-video-1.5:8s:720p", credits: 90, note: "8s 720p" },
+      { identifier: "grok-imagine-video-1.5:8s:1080p", credits: 160, note: "8s 1080p" },
+      { identifier: "grok-imagine-video-1.5:15s:480p", credits: 90, note: "15s 480p (max)" },
+      { identifier: "grok-imagine-video-1.5:15s:720p", credits: 170, note: "15s 720p (max)" },
+      { identifier: "grok-imagine-video-1.5:15s:1080p", credits: 300, note: "15s 1080p (max)" },
     ],
   },
 
@@ -2696,6 +2740,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
     defaultDuration: 8,
     autoDuration: true,
+    referenceTaskTypes: ["reference", "edit", "extend"],
     resolutions: ["480p", "720p", "1080p"],
     // KIE refuses a seed on Seedance 2.5 (422) — the provider config omits it.
     noSeed: true,
@@ -4533,6 +4578,31 @@ export function resolutionNearestSource(
 /** True for the "auto" aspect token in any case or padding. */
 export function isAutoAspectToken(value: unknown): boolean {
   return typeof value === "string" && value.trim().toLowerCase() === "auto"
+}
+
+/**
+ * True for the video request's "Auto" ratio — the unified node's
+ * provider-agnostic token — in exactly the spellings a video provider adapter
+ * receives it as (`"Auto"`, `"auto"`). Narrower than {@link isAutoAspectToken}
+ * on purpose: it is the wire rule's own match, so a reader of it agrees with
+ * what is sent.
+ */
+export function isVideoAutoAspectToken(value: string | undefined): boolean {
+  return value === "Auto" || value === "auto"
+}
+
+/**
+ * The ratio a video model runs the "Auto" token ({@link isVideoAutoAspectToken})
+ * at: `"adaptive"` (match the input) when the request has a visual input to
+ * match — a frame, a reference image or a reference video — and the model's
+ * catalog lists `"adaptive"`; otherwise `undefined`, and the provider adapter
+ * sends its own fixed default. The ONE mapping: the KIE adapter sends what it
+ * says, and the Seedance reference task type resolver reads it to tell a ratio
+ * it would replace from one that already runs at the ratio it forces.
+ */
+export function videoAutoAspectRunsAt(modelId: string | undefined, hasVisualInput: boolean): "adaptive" | undefined {
+  if (!hasVisualInput || !modelId) return undefined
+  return MODEL_CATALOG[modelId]?.aspectRatios?.includes("adaptive") ? "adaptive" : undefined
 }
 
 function usableSize(size: SourceImageSize | undefined): size is SourceImageSize {

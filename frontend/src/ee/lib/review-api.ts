@@ -37,7 +37,13 @@ export interface HeldJobSummary {
   userId: string | null
   jobType: string | null
   mediaKind: ReviewMediaKind
+  /** How many held objects can be previewed: `fetchHeldOutputBlob` answers indices 0..outputCount-1. */
   outputCount: number
+  /** How many objects the job owns in all — what approve publishes (≥ outputCount; the server's held list
+   *  is capped, a job can make more). Absent from an older server: read it as `outputCount`. */
+  outputTotal?: number
+  /** Each previewable object's kind, by index. Absent from an older server: every one is `mediaKind`. */
+  outputKinds?: ReviewMediaKind[]
   credits: number
   createdAt: string
   heldAt: string | null

@@ -25,7 +25,9 @@
  * watermarked (a watermark would corrupt the mask).
  *
  * mask-composite: local ffmpeg (providers/video/mask-composite.ts), finished
- * through the shared ffmpeg completion like every other processing node.
+ * through the shared ffmpeg completion like every other processing node. The
+ * render refuses a leading video longer than the units the job was charged
+ * (`billedUnits` on the queue payload) before ffmpeg runs.
  *
  * mask-erase: local ffmpeg (providers/video/mask-erase.ts) — an internal
  * child step (routes/mask-erase.ts): a mask with the regions centred in its
@@ -521,6 +523,9 @@ const handleMaskComposite: HandlerFn = async function handleMaskComposite(job, c
     backgroundUrl: data.backgroundUrl,
     maskUrl: data.maskUrl,
     settings,
+    // The units the route or the workflow run charged: the render refuses (and
+    // refunds) a leading video that needs more, and a job that carries none.
+    billedUnits: data.billedUnits,
   })
   try {
     await setJobProgress(job, ctx.jobId, 80)

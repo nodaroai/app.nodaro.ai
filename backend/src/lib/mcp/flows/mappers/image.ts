@@ -1,4 +1,5 @@
 import { resolveMaskCompositeSettings } from "@nodaro/shared/media"
+import { UPSCALE_IMAGE_PROVIDERS } from "@nodaro/shared/models"
 import { OVERLAY_HANDLE_IDS } from "../../../../providers/image/overlay-contract.js"
 import { defined, inputsOf, num, str, urls, type Body, type FlowNodeSpec, type RouteMappers } from "./kit.js"
 
@@ -6,7 +7,7 @@ import { defined, inputsOf, num, str, urls, type Body, type FlowNodeSpec, type R
 const anySet = (body: Body, keys: readonly string[]) => keys.some((k) => body[k] !== undefined && body[k] !== null)
 
 /** The edit-image providers a node re-runs; the task-chained grok ops take a task id no node holds. */
-const UPSCALE_PROVIDERS: ReadonlySet<string> = new Set(["recraft-upscale", "topaz-image-upscale"])
+const UPSCALE_PROVIDERS: ReadonlySet<string> = new Set(UPSCALE_IMAGE_PROVIDERS)
 const REMOVE_BG_PROVIDER = "recraft-remove-bg"
 const PROMPT_EDIT_PROVIDER = "nano-banana-edit"
 

@@ -30,6 +30,8 @@ import {
   normalizeKling4Resolution,
   isKling4FlashProvider,
   KLING_4_FLASH_RESOLUTION,
+  isGrokVideo15Provider,
+  normalizeGrokVideo15Resolution,
   VIDEO_REF_RATE_PROVIDERS,
   normalizeMinimaxH3Resolution,
   normalizeWan3Resolution,
@@ -506,6 +508,7 @@ function wireNormalizedResolution(provider: string, resolution: string | undefin
   if (isKling4Provider(provider)) return normalizeKling4Resolution(resolution)
   // Kling 4.0 Flash renders 720p whatever it is asked (its runner sends 720p).
   if (isKling4FlashProvider(provider)) return KLING_4_FLASH_RESOLUTION
+  if (isGrokVideo15Provider(provider)) return normalizeGrokVideo15Resolution(resolution)
   return resolution
 }
 
@@ -657,7 +660,7 @@ export function buildVideoCreditModelIdentifier(
     // Collapsing through the SAME normalizer the runner uses makes render == billed
     // by construction for every spelling, including garbage (→ the declared 720p).
     // Scoped to the families whose runner normalizes on purpose (Wan 3.0, Vidu
-    // Q4): the other RESOLUTION_DURATION_PRICING members pass `resolution` to
+    // Q4, Kling 4.0, Grok Imagine Video 1.5): the other RESOLUTION_DURATION_PRICING members pass `resolution` to
     // their wire verbatim, so case-folding their billing without probing their
     // wire would reprice live models.
     const requested = wireNormalizedResolution(effectiveProvider, resolution)

@@ -45,6 +45,7 @@ import { describeLockedOverrides, findLockedOverrides } from "../lib/input-overr
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { importViaOf } from "../lib/import-via.js"
 import { quickFieldRefusal } from "../lib/exposed-quick-field-check.js"
+import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { appReviewerPresent } from "../lib/app-reviewer.js"
 import { appRunViewStates } from "../lib/app-run-states.js"
 import { appRunFinalChain, finalExecutionIdOf, loadAppRunFinals, selectWithFinalExecution, type AppRunFinal } from "../lib/app-run-final-column.js"
@@ -52,6 +53,8 @@ import { PREVIEW_RENDER_NESTED } from "@nodaro/shared/nodes"
 import { clientRunUpdates, executionBelongsToRun } from "../lib/app-run-ownership.js"
 import { requireAnyAppScope, requireAppScope } from "../lib/scope-prehandler.js"
 import { APP_RUN_READ_SCOPES } from "../lib/app-run-scopes.js"
+import { APP_NOT_FOUND, publishedAppRunWithheld, publishedAppSlugWithheld } from "../lib/published-app-access.js"
+import { surfaceAllowsPublicOutputs } from "../lib/surface-profile.js"
 
 // In-memory cache for published app data (30min TTL — explicit invalidation on publish)
 const APP_CACHE_TTL_MS = 30 * 60_000
@@ -132,7 +135,8 @@ function finalView(final: AppRunFinal | undefined): Record<string, unknown> | nu
 /**
  * Validate the submitted values of the app's exposed fields: a restricted
  * field's value must be one of its `allowedValues` (an unrestricted field derived
- * from a quick-strip control with a fixed list, one of that list's values); a text input's value may
+ * from a quick-strip control with a fixed list, one of that list's values); a
+ * node unit's app field, exposed or not, one its manifest declares; a text input's value may
  * not exceed its `maxLength` (decided 2026-10-06 — the limit caps the price
  * the app is advertised at, so it must hold when the app runs); a picker
  * card's value must be within its allowed list (cardMeta). Returns the
@@ -145,6 +149,11 @@ function validateExposedInputs(
   inputValues: Record<string, Record<string, unknown>> | undefined,
   snapshotNodes: ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }> | null | undefined,
 ): { code: "validation_error" | "input_too_long"; message: string } | null {
+  // A node unit's app fields (unit.json appFields) are held to their declaration on EVERY key the request
+  // sets — exposed by the app or not, null included — before anything else (lib/exposed-unit-field-check.ts;
+  // the orchestrator's merge refuses too). Only unit nodes that declare app fields are read.
+  const unitRefusals = findUnitFieldOverrideRefusals(snapshotNodes, inputValues)
+  if (unitRefusals.length > 0) return unitFieldOverrideErrorBody(unitRefusals)
   const presSettings = (snapshotSettings ?? {} as Record<string, unknown>).presentationSettings as Record<string, unknown> | undefined
   if (!presSettings || !inputValues) return null
   if (presSettings.inputItems) {
@@ -265,10 +274,24 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const { slug } = parsed.data
     const cacheKey = requestedVersion ? `${slug}:v${requestedVersion}` : slug
 
+    // A deployment that does not allow public work (`outputs.allowPublic:
+    // false`) serves an app's page to its creator alone (an admin keeps a
+    // preview, as on a template's page): anyone else gets the answer of an app
+    // that does not exist. Asked before the in-memory cache, which holds one
+    // answer for every caller; and the creator's answer is never stored by a
+    // shared cache. With public work allowed, nothing here changes.
+    if (await publishedAppSlugWithheld(slug, req.userId, { adminPreview: true })) {
+      return reply.status(404).send(APP_NOT_FOUND)
+    }
+    const setPageCacheHeaders = () =>
+      surfaceAllowsPublicOutputs()
+        ? reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=86400")
+        : reply.header("Cache-Control", "private, no-store").header("Vary", "Authorization")
+
     // Check in-memory cache
     const cached = appCache.get(cacheKey)
     if (cached && Date.now() < cached.expiry) {
-      reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=86400")
+      setPageCacheHeaders()
       return reply.send(await withEditPlanPerMinute(cached.data))
     }
 
@@ -372,7 +395,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       }
     }
 
-    reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=86400")
+    setPageCacheHeaders()
     return reply.send(await withEditPlanPerMinute(responseData))
   })
 
@@ -401,6 +424,12 @@ export async function appRunnerRoutes(app: FastifyInstance) {
 
     const { slug } = paramsParsed.data
     const { inputOverrides: nestedOverrides, inputs: flatInputs, runId, version, headless, reviewer } = bodyParsed.data
+
+    // Someone else's app is not run on a deployment that does not allow public
+    // work: it answers as an app that does not exist (lib/published-app-access.ts).
+    if (await publishedAppSlugWithheld(slug, req.userId)) {
+      return reply.status(404).send(APP_NOT_FOUND)
+    }
 
     const workflowId = await resolveSlug(slug)
     if (!workflowId) {
@@ -826,6 +855,12 @@ export async function appRunnerRoutes(app: FastifyInstance) {
 
     const { slug } = paramsParsed.data
     const { inputValues, version } = bodyParsed.data
+
+    // A run of someone else's app is not started on a deployment that does not
+    // allow public work (lib/published-app-access.ts).
+    if (await publishedAppSlugWithheld(slug, req.userId)) {
+      return reply.status(404).send(APP_NOT_FOUND)
+    }
 
     const workflowId = await resolveSlug(slug)
     if (!workflowId) {
@@ -1369,6 +1404,12 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const { runId } = parsed.data
+
+    // A run of someone else's app is not restored on a deployment that does
+    // not allow public work: the app answers as one that does not exist.
+    if (await publishedAppRunWithheld(runId, req.userId)) {
+      return reply.status(404).send(APP_NOT_FOUND)
+    }
 
     const { data: updated, error: updateError } = await supabase
       .from("app_runs")

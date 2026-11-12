@@ -97,6 +97,39 @@ describe("resubmitSeedanceEdit", () => {
     })
   })
 
+  it("a declared task type the provider overrode as an edit is not sent again: the resend is the undeclared edit shape", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    mocks.state.job.input_data = { provider: "seedance-2-5", prompt: "Redraw it", referenceTaskType: "reference" }
+    mocks.readKieTaskRequest.mockResolvedValue({
+      model: "bytedance/seedance-2-5",
+      input: { ...SENT, omni_reference_task_type: "reference" },
+    })
+    await expect(resubmitSeedanceEdit(snapshot, REJECTED)).resolves.toEqual({ outcome: "resent", taskId: "task-2" })
+
+    const [, input] = mocks.createKieTask.mock.calls[0]! as [string, Record<string, unknown>]
+    expect(input.aspect_ratio).toBe("adaptive")
+    expect(input.duration).toBe(-1)
+    expect("omni_reference_task_type" in input).toBe(false)
+    expect(input).toEqual({ ...SENT, aspect_ratio: "adaptive", duration: -1 })
+    // One log line names the job, the task, the declared value and why it was dropped.
+    const dropped = warn.mock.calls.map((c) => String(c[0])).filter((l) => l.includes("dropped the declared reference task type"))
+    expect(dropped).toHaveLength(1)
+    expect(dropped[0]).toContain("job j-1")
+    expect(dropped[0]).toContain("task-1")
+    expect(dropped[0]).toContain('"reference"')
+    expect(dropped[0]).toContain("ran the request as an edit")
+    // The job's recorded input is left as it was.
+    expect((job().input_data as Record<string, unknown>).referenceTaskType).toBe("reference")
+    warn.mockRestore()
+  })
+
+  it("an undeclared resend logs no dropped declaration", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    await expect(resubmitSeedanceEdit(snapshot, REJECTED)).resolves.toEqual({ outcome: "resent", taskId: "task-2" })
+    expect(warn.mock.calls.some((c) => String(c[0]).includes("dropped the declared reference task type"))).toBe(false)
+    warn.mockRestore()
+  })
+
   it("two reconcilers at once: only one sends, and the other leaves the job alone", async () => {
     let second: unknown
     mocks.createKieTask.mockImplementationOnce(async () => {

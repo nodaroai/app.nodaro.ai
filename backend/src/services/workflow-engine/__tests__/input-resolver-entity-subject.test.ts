@@ -19,12 +19,13 @@ import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
  * server's legacy list lacked it, the editor's had it, and its payload never
  * read a reference). Since its migration it declares "input:entity-subject" —
  * the server follows the editor (decision 2 of the gif-to-video migration,
- * decided 2026-10-18) — so it takes the entity as its subject.
+ * decided 2026-10-18) — so it takes the entity as its subject. split-into-layers,
+ * a new unit declaring it, splits the wired entity's image (subject).
  */
 type Outcome = "subject" | "reference" | "none"
 const LEGACY_ENTITY_SUBJECT_TARGETS = ["ai-avatar", "lip-sync", "motion-transfer", "speech-to-video", "still-to-video"]
 /** Units declaring "input:entity-subject" (gif-to-video was "reference" before decision 2, decided 2026-10-18). */
-const UNIT_ENTITY_SUBJECT_TARGETS = ["gif-to-video"]
+const UNIT_ENTITY_SUBJECT_TARGETS = ["gif-to-video", "split-into-layers"]
 /** Takes an entity as its image in its own branch, before the entity branch reads the set. */
 const ROUTED_BEFORE_THE_ENTITY_BRANCH = ["image-overlay"]
 /** Targets the entity's image never reaches. */

@@ -92,8 +92,11 @@ const storage = vi.hoisted(() => ({
     url.startsWith("https://cdn.example.com/") ? url.slice("https://cdn.example.com/".length) : null,
   batchDeleteFromR2: vi.fn(async (keys: string[]) => ({ deleted: keys.length, errors: 0 })),
   deleteFromR2: vi.fn(async () => undefined),
+  getR2ObjectSize: vi.fn(async () => 2048),
 }))
 vi.mock("../storage.js", () => storage)
+const fileValidation = vi.hoisted(() => ({ updateStorageUsage: vi.fn(async () => {}) }))
+vi.mock("../../utils/file-validation.js", () => fileValidation)
 
 const failure = vi.hoisted(() => ({
   markJobFailed: vi.fn(async (_jobId: string, _input: Record<string, unknown>) => true),
@@ -262,6 +265,9 @@ describe("verdict → action", () => {
     expect(arg.extra).toHaveProperty("output_data", null)
     expect(credits.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
     expect(storage.batchDeleteFromR2).toHaveBeenCalledWith(["images/job-1.png"])
+    // The deleted object's bytes go back to the owner's storage, once.
+    expect(fileValidation.updateStorageUsage).toHaveBeenCalledTimes(1)
+    expect(fileValidation.updateStorageUsage).toHaveBeenCalledWith("u1", -2048)
   })
 
   it("R61: a registered policy's block of a METERED job also reverses its settled charge (after the reservation refund, behind the CAS)", async () => {

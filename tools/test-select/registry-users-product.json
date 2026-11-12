@@ -167,7 +167,6 @@
  "frontend/src/components/nodes/voice-delivery-node.tsx",
  "frontend/src/components/picker-ui-locale-bridge.tsx",
  "frontend/src/components/presentation/exposable-declared-field-spec.ts",
- "frontend/src/components/presentation/exposable-fields.ts",
  "frontend/src/components/presentation/exposable-quick-field-spec.ts",
  "frontend/src/components/presentation/field-badge.tsx",
  "frontend/src/components/presentation/helpers.ts",

@@ -13,6 +13,7 @@ export const UNIT_CONTRACTS: ReadonlyArray<readonly [type: string, producer: "au
   ["speaker-layout", "video"], // unit:speaker-layout
   ["remove-audio", "video"], // unit:remove-audio
   ["gif-to-video", "video"], // unit:gif-to-video
+  ["split-into-layers", "image"], // unit:split-into-layers
 ]
 
 // The use-case node units (execution.kind "use-case"), in position order — each a route POST /v1/<type> (+ /estimate, /continue).
@@ -32,6 +33,7 @@ export const UNIT_JSON_PIPS: ReadonlyArray<readonly [type: string, pips: Readonl
   ["clip-pack", { "json": "edl" }], // unit:clip-pack
   ["speaker-layout", { "json": "edl" }], // unit:speaker-layout
   ["speaker-map", { "edl": "edl", "json": "other" }], // unit:speaker-map
+  ["split-into-layers", { "layerData": "other" }], // unit:split-into-layers
   ["shot-cuts", { "firstFrames": "other", "json": "other", "lastFrames": "other" }], // unit:shot-cuts
 ]
 
@@ -66,4 +68,5 @@ export const UNIT_FAN_OUT_EACH: ReadonlyArray<readonly [type: string, handles: {
 
 // The outputs that carry one run's list of files (handles.outputs[].list), whose wires run the next node once per item by default — producer-types.ts.
 export const UNIT_LIST_PIPS: ReadonlyArray<readonly [type: string, pips: ReadonlyArray<string>]> = [
+  ["split-into-layers", ["layers"]], // unit:split-into-layers
 ]

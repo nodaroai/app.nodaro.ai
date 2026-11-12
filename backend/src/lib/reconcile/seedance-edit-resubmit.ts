@@ -7,7 +7,8 @@ import {
   isSeedance2EditModeInput,
   isSeedance2EditModeRejection,
   providerErrorText,
-  SEEDANCE_2_EDIT_MODE_PARAMS,
+  seedance2EditModeResendInput,
+  SEEDANCE_TASK_TYPE_WIRE_KEY,
 } from "../../providers/kie/seedance-edit-mode.js"
 import type { KieJobRow } from "./kie.js"
 
@@ -95,7 +96,15 @@ export async function resubmitSeedanceEdit(row: KieJobRow, err: unknown): Promis
   if (claimError) console.warn(`[reconcile/kie] job ${row.id}: claiming the edit resend failed:`, claimError.message)
   if (!claimed?.length) return TAKEN
 
-  const input = { ...request.input, ...SEEDANCE_2_EDIT_MODE_PARAMS }
+  // The undeclared edit shape: a declared task type is dropped, since the
+  // provider overrode it (the worker's retry sends the same body).
+  const input = seedance2EditModeResendInput(request.input)
+  const declared = request.input[SEEDANCE_TASK_TYPE_WIRE_KEY]
+  if (declared !== undefined) {
+    console.warn(
+      `[reconcile/kie] job ${row.id}: task ${taskId}: dropped the declared reference task type "${String(declared)}" from the resend — the provider ran the request as an edit`,
+    )
+  }
   let newTaskId: string
   try {
     newTaskId = (await createKieTask(request.model, input, {

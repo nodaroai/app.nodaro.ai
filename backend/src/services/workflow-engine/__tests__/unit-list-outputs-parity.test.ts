@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it, vi } from "vitest"
 import type { NodeExecutionState, NodeOutput, ResolvedInputs, SimpleEdge, SimpleNode } from "../types.js"
+import type { ExecuteNodeResult } from "../node-executor.js"
+import type { FanOutIterationValue } from "../../../workers/fan-out-result.js"
 
 /**
  * A worker unit whose media take carries SIDE outputs (decided 2026-11-11) on
@@ -13,7 +15,9 @@ import type { NodeExecutionState, NodeOutput, ResolvedInputs, SimpleEdge, Simple
  * fixture-echo's expected descriptor (its type, label, outputType, outputs and
  * producer replaced), added through the server's one door to the unit
  * descriptors; fixture-echo itself is added too — its JSON input `plan` is the
- * consumer a look pip's value is read off.
+ * consumer a look pip's value is read off. `batches`: a run once per upstream
+ * item, through the real fan-out assembly (workers/fan-out-result.ts) and the
+ * node it leaves.
  */
 vi.mock("../../../lib/unit-descriptors.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../../lib/unit-descriptors.js")>()
@@ -67,21 +71,39 @@ vi.mock("@nodaro/shared/nodes", async (importOriginal) => {
   }
 })
 
-const { buildNodeOutputFromJobData, extractSavedNodeOutput, getPrimaryOutput, structuredJsonOf } = await import("../output-extractor.js")
+const { buildNodeOutputFromJobData, extractSavedNodeOutput, fanOutIterationValue, getPrimaryOutput, structuredJsonOf } = await import("../output-extractor.js")
 const { getListFanOutForNode, resolveNodeInputs } = await import("../input-resolver.js")
 const { executeFilterList } = await import("../inline-executor.js")
 const { seededFromSavedData } = await import("../saved-data.js")
+const { assembleFanOutResult } = await import("../../../workers/fan-out-result.js")
 const { defaultEdgeOutputMode } = await import("@nodaro/shared/nodes")
 
 type Pips = Record<string, string | null>
+type Lists = Record<string, readonly string[] | null>
+type Collected = Record<string, readonly string[]>
+interface RouteCase { readonly name: string; readonly pip: string | null; readonly mode?: string; readonly iteration?: number; readonly target: string; readonly targetHandle: string; readonly asUploads: readonly string[] }
+/** A run once per upstream item (`batches`): its rows' jobs (or a row's failure), the server's fan-out output, and the node it leaves. */
+interface BatchCase {
+  readonly name: string
+  readonly rows: ReadonlyArray<{ readonly outputData: Record<string, unknown> } | { readonly failed: string }>
+  readonly nodeOutput: Record<string, unknown>
+  readonly data: Record<string, unknown>
+  readonly savedOutput: NodeOutput
+  readonly pips: Pips
+  readonly lists: Lists
+  readonly collected: Collected
+  readonly routes: ReadonlyArray<RouteCase>
+  readonly selected: { readonly name: string; readonly activeResultIndex: number; readonly savedOutput: NodeOutput; readonly pips: Pips; readonly lists: Lists; readonly collected: Collected }
+}
 interface Fixture {
   readonly unit: { readonly type: string; readonly outputs: ReadonlyArray<{ readonly id: string; readonly kind: string; readonly list?: true }> }
   readonly jobs: ReadonlyArray<{ readonly name: string; readonly outputData: Record<string, unknown>; readonly nodeOutput: NodeOutput; readonly pips: Pips }>
-  readonly saved: ReadonlyArray<{ readonly name: string; readonly data: Record<string, unknown>; readonly nodeOutput: NodeOutput; readonly pips: Pips; readonly lists: Record<string, readonly string[] | null>; readonly collected?: Record<string, readonly string[]> }>
+  readonly saved: ReadonlyArray<{ readonly name: string; readonly data: Record<string, unknown>; readonly nodeOutput: NodeOutput; readonly pips: Pips; readonly lists: Lists; readonly collected?: Collected }>
+  readonly batches: ReadonlyArray<BatchCase>
   readonly defaults: Record<string, "each" | "last">
   readonly routes: {
     readonly data: Record<string, unknown>
-    readonly cases: ReadonlyArray<{ readonly name: string; readonly pip: string | null; readonly mode?: string; readonly iteration?: number; readonly target: string; readonly targetHandle: string; readonly asUploads: readonly string[] }>
+    readonly cases: ReadonlyArray<RouteCase>
     readonly bundleBranches: ReadonlyArray<{ readonly name: string; readonly pip: string; readonly mode: string; readonly target: string; readonly targetData?: Record<string, unknown>; readonly targetHandle: string; readonly inputs: ResolvedInputs }>
   }
 }
@@ -121,6 +143,40 @@ describe("a unit's side outputs — jobs (buildNodeOutputFromJobData), the serve
   }
 })
 
+/** What an Each wire from each pip fans out over, and what each of its rows reads, on one lane of `src`. */
+function expectLists(src: SimpleNode, states: Record<string, NodeExecutionState>, lists: Lists, pips: Pips, lane: string): void {
+  for (const [pip, list] of Object.entries(lists)) {
+    const { node, handle, read } = consumerOf(pip)
+    const edges: SimpleEdge[] = [{ id: "e", source: "src", target: "c", sourceHandle: pip, targetHandle: handle, data: { outputMode: "each" } } as SimpleEdge]
+    const fanOut = getListFanOutForNode(node, edges, states, [src, node])
+    // Both engines fan a node out over a list holding MORE than one value;
+    // a list of one runs it once, on that item (each row read below).
+    expect(fanOut?.items ?? null, `pip "${pip}" fan-out`).toEqual(list && list.length > 1 ? list : null)
+    for (const [i, item] of (list ?? []).entries()) {
+      // Each iteration reads the ROW its item came from (`rowIndices`, as the
+      // orchestrator's plan does): a batch's failed row is a gap the list skips.
+      const row = fanOut?.rowIndices[i] ?? i
+      expect(read(resolveNodeInputs(node, edges, states, [src, node], undefined, row)), `pip "${pip}" row ${row}`).toBe(item)
+    }
+    // A media pip that lists nothing reads its one value on any row (a node
+    // with a state; with none at all a plain read finds no value on any
+    // node). A JSON input wired to an empty look pip holds "" by its own
+    // lane rule (unit-inputs.ts), so look pips are left out here.
+    if (list === null && lane !== "saved" && kindOf(pip) !== "look") {
+      expect(read(resolveNodeInputs(node, edges, states, [src, node], undefined, 1)), `pip "${pip}" row 1`).toBe(pips[pip] ?? undefined)
+    }
+  }
+}
+
+/** What a list operator (filter-list) wired from each pip collects, on one lane of `src`. */
+function expectCollected(src: SimpleNode, states: Record<string, NodeExecutionState>, collected: Collected): void {
+  const node: SimpleNode = { id: "c", type: "filter-list", data: { label: "Filter", conditions: [] } }
+  for (const [key, items] of Object.entries(collected)) {
+    const edges: SimpleEdge[] = [{ id: "e", source: "src", target: "c", sourceHandle: handleOf(key), targetHandle: "in" }]
+    expect(executeFilterList(node, edges, [src, node], states).listResults ?? [], `pip "${key}"`).toEqual(items)
+  }
+}
+
 describe("a unit's side outputs — saved data (extractSavedNodeOutput), the server's engine", () => {
   for (const c of FIXTURE.saved) {
     const src = sourceOf(c.data)
@@ -134,40 +190,76 @@ describe("a unit's side outputs — saved data (extractSavedNodeOutput), the ser
     // The take pip (`base`) lists only this run's takes: a node with several
     // saved takes (the second case) does not fan out over them on any lane.
     for (const [lane, states] of lanesOf(src)) {
-      it(`${c.name}: what an Each wire from each pip fans out over (${lane})`, () => {
-        for (const [pip, list] of Object.entries(c.lists)) {
-          const { node, handle, read } = consumerOf(pip)
-          const edges: SimpleEdge[] = [{ id: "e", source: "src", target: "c", sourceHandle: pip, targetHandle: handle, data: { outputMode: "each" } } as SimpleEdge]
-          const fanOut = getListFanOutForNode(node, edges, states, [src, node])
-          // Both engines fan a node out over a list holding MORE than one value;
-          // a list of one runs it once, on that item (each row read below).
-          expect(fanOut?.items ?? null, `pip "${pip}" fan-out`).toEqual(list && list.length > 1 ? list : null)
-          for (const [row, item] of (list ?? []).entries()) {
-            expect(read(resolveNodeInputs(node, edges, states, [src, node], undefined, row)), `pip "${pip}" row ${row}`).toBe(item)
-          }
-          // A media pip that lists nothing reads its one value on any row (a node
-          // with a state; with none at all a plain read finds no value on any
-          // node). A JSON input wired to an empty look pip holds "" by its own
-          // lane rule (unit-inputs.ts), so look pips are left out here.
-          if (list === null && lane !== "saved" && kindOf(pip) !== "look") {
-            expect(read(resolveNodeInputs(node, edges, states, [src, node], undefined, 1)), `pip "${pip}" row 1`).toBe(c.pips[pip] ?? undefined)
-          }
-        }
-      })
+      it(`${c.name}: what an Each wire from each pip fans out over (${lane})`, () => expectLists(src, states, c.lists, c.pips, lane))
     }
     // A list operator reads its source's state: the source ran this run, or the
     // orchestrator seeded it from its saved data (it seeds every node it does not run).
     const collected = c.collected
     if (collected) {
       for (const [lane, states] of lanesOf(src).filter(([l]) => l !== "saved")) {
-        it(`${c.name}: what a list operator (filter-list) collects from each pip (${lane})`, () => {
-          const node: SimpleNode = { id: "c", type: "filter-list", data: { label: "Filter", conditions: [] } }
-          for (const [key, items] of Object.entries(collected)) {
-            const edges: SimpleEdge[] = [{ id: "e", source: "src", target: "c", sourceHandle: handleOf(key), targetHandle: "in" }]
-            expect(executeFilterList(node, edges, [src, node], states).listResults ?? [], `pip "${key}"`).toEqual(items)
-          }
-        })
+        it(`${c.name}: what a list operator (filter-list) collects from each pip (${lane})`, () => expectCollected(src, states, collected))
       }
+    }
+  }
+})
+
+/**
+ * The server's live batch: each row's job read as its node output, assembled
+ * as the orchestrator assembles a run once per upstream item (fan-out-result.ts).
+ * A failed row is its iteration's rejection (a partial batch completes).
+ */
+function liveBatchOf(c: BatchCase): NodeOutput {
+  const settled = c.rows.map((r, index): PromiseSettledResult<FanOutIterationValue> => {
+    if ("failed" in r) return { status: "rejected", reason: new Error(r.failed) }
+    const output = buildNodeOutputFromJobData(r.outputData, TYPE)
+    return { status: "fulfilled", value: { index, resultValue: fanOutIterationValue(output, TYPE), result: { output, jobId: `job-${index}`, creditsUsed: 0 } as ExecuteNodeResult } }
+  })
+  return assembleFanOutResult(settled, c.rows.length, TYPE).output
+}
+
+describe("a unit's side outputs — a run once per upstream item (batches), the server's engine", () => {
+  for (const c of FIXTURE.batches) {
+    const live = liveBatchOf(c)
+    const liveLane: [string, Record<string, NodeExecutionState>] = ["live", { src: { status: "completed", output: live } as NodeExecutionState }]
+    const src = sourceOf(c.data)
+    it(`${c.name}: the fan-out output — the take batch, every row's side outputs row-aligned, each row's own`, () => {
+      expect(Object.fromEntries(Object.keys(c.nodeOutput).map((k) => [k, (live as unknown as Record<string, unknown>)[k]]))).toEqual(c.nodeOutput)
+    })
+    it(`${c.name}: each layer-data entry's row is the picture it came from, and its baseUrl that picture's own base`, () => {
+      const entries = JSON.parse(String(live.unitOutputs?.layerData ?? "[]")) as Array<{ row: number; baseUrl?: string }>
+      expect(entries.length).toBeGreaterThan(0)
+      for (const e of entries) {
+        const r = c.rows[e.row]!
+        expect("outputData" in r, `row ${e.row} made a take`).toBe(true)
+        expect(e.baseUrl, `row ${e.row}`).toBe((r as { outputData: Record<string, unknown> }).outputData.imageUrl)
+      }
+    })
+    it(`${c.name}: the node it leaves, seeded for a later run that does not re-run it`, () => {
+      expect(extractSavedNodeOutput(src)).toEqual(c.savedOutput)
+    })
+    it(`${c.name}: what a plain wire from each pip carries (live, and saved)`, () => {
+      for (const output of [live, extractSavedNodeOutput(src)!]) {
+        for (const [key, value] of Object.entries(c.pips)) expect(getPrimaryOutput(output, TYPE, handleOf(key)), `pip "${key}"`).toBe(value ?? undefined)
+      }
+    })
+    for (const [lane, states] of [liveLane, ...lanesOf(src)]) {
+      it(`${c.name}: what an Each wire from each pip fans out over (${lane})`, () => expectLists(src, states, c.lists, c.pips, lane))
+    }
+    for (const [lane, states] of [liveLane, ...lanesOf(src).filter(([l]) => l !== "saved")]) {
+      it(`${c.name}: what a list operator (filter-list) collects from each pip (${lane})`, () => expectCollected(src, states, c.collected))
+      for (const r of c.routes) it(`${c.name}: ${r.name} (${lane})`, () => expectRoute(src, states, r))
+    }
+    // Another take made active: Base reads it; the side pips still hand on every row's.
+    const sel = c.selected
+    const picked = sourceOf({ ...c.data, activeResultIndex: sel.activeResultIndex })
+    it(`${c.name}, ${sel.name}: the seeded output and each plain wire`, () => {
+      const output = extractSavedNodeOutput(picked)!
+      expect(output).toEqual(sel.savedOutput)
+      for (const [key, value] of Object.entries(sel.pips)) expect(getPrimaryOutput(output, TYPE, handleOf(key)), `pip "${key}"`).toBe(value ?? undefined)
+    })
+    for (const [lane, states] of lanesOf(picked)) {
+      it(`${c.name}, ${sel.name}: Each wires (${lane})`, () => expectLists(picked, states, sel.lists, sel.pips, lane))
+      if (lane !== "saved") it(`${c.name}, ${sel.name}: a list operator (${lane})`, () => expectCollected(picked, states, sel.collected))
     }
   }
 })
@@ -206,22 +298,25 @@ function routeLanesOf(src: SimpleNode): Array<[string, Record<string, NodeExecut
   ]
 }
 
+/** A wire from `src` into a legacy target lands exactly what wires from Upload Image nodes holding `asUploads` land there, in order. */
+function expectRoute(src: SimpleNode, states: Record<string, NodeExecutionState>, c: RouteCase): void {
+  const target: SimpleNode = { id: "t", type: c.target, data: { label: "Target" } }
+  const edge = { id: "e", source: "src", target: "t", sourceHandle: c.pip, targetHandle: c.targetHandle, ...(c.mode ? { data: { outputMode: c.mode } } : {}) } as SimpleEdge
+  const actual = resolveNodeInputs(target, [edge], states, [src, target], undefined, c.iteration)
+  // The same target, wired from Upload Image nodes holding those files, in order.
+  const uploads: SimpleNode[] = c.asUploads.map((url, i) => ({ id: `u${i}`, type: "upload-image", data: { label: `Upload ${i}`, url } }))
+  const uploadEdges: SimpleEdge[] = uploads.map((u, i) => ({ id: `ue${i}`, source: u.id, target: "t", sourceHandle: null, targetHandle: c.targetHandle }))
+  const expected = resolveNodeInputs(target, uploadEdges, {}, [...uploads, target])
+  // Every file lands somewhere (never two empty input sets compared).
+  expect(JSON.stringify(expected)).toContain(c.asUploads.at(-1)!)
+  expect(withoutSourceIds(actual)).toEqual(withoutSourceIds(expected))
+}
+
 describe("a unit's side outputs — what a wire lands in a legacy target, the server's engine", () => {
   const src = sourceOf(FIXTURE.routes.data)
   for (const c of FIXTURE.routes.cases) {
     for (const [lane, states] of routeLanesOf(src)) {
-      it(`${c.name} (${lane})`, () => {
-        const target: SimpleNode = { id: "t", type: c.target, data: { label: "Target" } }
-        const edge = { id: "e", source: "src", target: "t", sourceHandle: c.pip, targetHandle: c.targetHandle, ...(c.mode ? { data: { outputMode: c.mode } } : {}) } as SimpleEdge
-        const actual = resolveNodeInputs(target, [edge], states, [src, target], undefined, c.iteration)
-        // The same target, wired from Upload Image nodes holding those files, in order.
-        const uploads: SimpleNode[] = c.asUploads.map((url, i) => ({ id: `u${i}`, type: "upload-image", data: { label: `Upload ${i}`, url } }))
-        const uploadEdges: SimpleEdge[] = uploads.map((u, i) => ({ id: `ue${i}`, source: u.id, target: "t", sourceHandle: null, targetHandle: c.targetHandle }))
-        const expected = resolveNodeInputs(target, uploadEdges, {}, [...uploads, target])
-        // Every file lands somewhere (never two empty input sets compared).
-        expect(JSON.stringify(expected)).toContain(c.asUploads.at(-1)!)
-        expect(withoutSourceIds(actual)).toEqual(withoutSourceIds(expected))
-      })
+      it(`${c.name} (${lane})`, () => expectRoute(src, states, c))
     }
   }
 })

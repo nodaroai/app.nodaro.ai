@@ -10,6 +10,7 @@ import { option as unit_remove_audio } from "../remove-audio/option" // unit:rem
 import { option as unit_shot_cuts } from "../shot-cuts/option" // unit:shot-cuts
 import { option as unit_speaker_layout } from "../speaker-layout/option" // unit:speaker-layout
 import { option as unit_speaker_map } from "../speaker-map/option" // unit:speaker-map
+import { option as unit_split_into_layers } from "../split-into-layers/option" // unit:split-into-layers
 import { option as unit_tighten_episode } from "../tighten-episode/option" // unit:tighten-episode
 
 export const UNIT_OPTIONS: Readonly<Record<string, UnitOption>> = Object.assign(Object.create(null), {
@@ -21,5 +22,6 @@ export const UNIT_OPTIONS: Readonly<Record<string, UnitOption>> = Object.assign(
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "speaker-map": unit_speaker_map, // unit:speaker-map
+  "split-into-layers": unit_split_into_layers, // unit:split-into-layers
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

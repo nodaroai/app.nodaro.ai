@@ -39,9 +39,14 @@ export interface Seedance2SettleArgs {
   refVideoDurationsSec?: unknown
   /** The REQUESTED duration. Only Auto (-1) matters here: with no reference
    *  video wired it is the one other run reserved at a worst case; with one,
-   *  the hold was sized from the source clip, and a delivered clip past it is
+   *  the hold was sized from the longest clip, and a delivered clip past it is
    *  charged at the hold and alerted. */
   duration?: unknown
+  /** The run's DECLARED reference task type — the job's `input_data.referenceTaskType` (or its
+   *  queued payload's), present only when one was declared. A declared `reference` with an
+   *  Auto duration was held at the worst case, so it is charged what it delivered up to that
+   *  hold, not capped at the edit's. Required so no lane can skip it. */
+  referenceTaskType: unknown
   /** The job being settled — named by the over-the-hold alert. */
   jobId?: string
 }
@@ -127,6 +132,7 @@ export async function measureSeedance2Settle(args: Seedance2SettleArgs): Promise
       referenceVideoUrls,
       ...(Array.isArray(args.refVideoDurationsSec) ? { durationsSec: args.refVideoDurationsSec } : {}),
       requestedDuration: args.duration,
+      referenceTaskType: args.referenceTaskType,
       ...(args.jobId ? { jobId: args.jobId } : {}),
     }
     const measured = await seedance2RefVideoActualSeconds(run)

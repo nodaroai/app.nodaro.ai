@@ -53,6 +53,7 @@ import { billingPairColumns } from "../lib/insert-job.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
@@ -77,6 +78,7 @@ import { usecaseViewerEstimateFor } from "../lib/use-case/inner-availability.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
+import { APP_NOT_FOUND, publishedAppWithheld } from "../lib/published-app-access.js"
 
 /** The app version the run ran is gone: it cannot be continued; starting over runs the current one. */
 export const APP_RUN_VERSION_UNAVAILABLE = "app_run_version_unavailable"
@@ -171,6 +173,12 @@ export async function appRunResumeRoutes(app: FastifyInstance) {
       if (version.workflow_id !== (slugRow as { workflow_id: string }).workflow_id || (await isUserBlocked(version.creator_id ?? null))) {
         return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
       }
+      // A run of someone else's app is not continued on a deployment that does
+      // not allow public work: the app answers as one that does not exist
+      // (lib/published-app-access.ts). The runner's own past run stays readable.
+      if (publishedAppWithheld(userId, version.creator_id)) {
+        return reply.status(404).send(APP_NOT_FOUND)
+      }
       // The version a Retry continues is the run's own, and only while it is the one the runner is on:
       // a newer version since (or the runner's pick of another) is a version change, refused — starting
       // over runs that one. Continuing on the old snapshot is asked for by naming its version.
@@ -242,6 +250,10 @@ export async function appRunResumeRoutes(app: FastifyInstance) {
       if (locked.length > 0) {
         return reply.status(400).send({ error: { code: "locked_field", message: describeLockedOverrides(locked) } })
       }
+      // A node unit's app fields (unit.json appFields) take only the values they declare, on any key this
+      // request sets, exposed or not (lib/exposed-unit-field-check.ts); the orchestrator's merge refuses too.
+      const unitRefusals = findUnitFieldOverrideRefusals(nodes, effective)
+      if (unitRefusals.length > 0) return reply.status(400).send({ error: unitFieldOverrideErrorBody(unitRefusals) })
       const reviewerPresent = appReviewerPresent(req, { mark: reviewer })
       if (!reviewerPresent) {
         const runIds = new Set(runSet)

@@ -55,10 +55,15 @@ model availability follows from that one rule:
   crash-loop a whole service. The check runs once the private plugins have
   loaded, since before that no house model reads as served. A preset naming
   a model the profile withholds still refuses the boot.
-- While the catalog has a house model this install does not serve, the
-  deployment counts as restricting models (`modelRestrictionConfigured`). A
-  route that names the model it runs only through `runModel` is then judged
-  on it before the hold, and a new node does not start on it.
+- An unserved house model withholds only itself. It is no model restriction
+  (`modelRestrictionConfigured` stays false, and so does `models.restricted`),
+  so every other model behaves exactly as on an install with no house model:
+  an admin's switch-off, the run-model check and the new-node default moves
+  are unchanged. Where a request names a house model outside the `provider`
+  the deny judges first, the credit guard asks the route's `runModel` and
+  refuses that house model alone (`withheldRunModels`), and the workflow build
+  does the same for a node. No default model is a house model (a guard test
+  holds every default), so a request or a node runs one only by naming it.
 
 Generated documentation (the model guide, the node skills) never reads what an
 install serves. It is written from the catalog alone, so a house model's row
@@ -81,11 +86,14 @@ standalone orchestrator, which builds and reserves workflow runs, does not:
 
 So a workflow lane never calls `plan`: it checks what its own core rules can
 before the hold, and the worker plans before it starts (null there fails and
-refunds the job). While the catalog has a house model, the engine makes the
-orchestrator's answer current before it builds every node's payload, where the
-availability rule is applied. It does so whether or not the node names a house
-model, since its model can arrive through a FieldMapping, an app input or a
-retired model's remap.
+refunds the job). Before it builds the payload of a node that names a house
+model, in its data or in the provider it was handed (a FieldMapping, an app
+input), the engine makes the orchestrator's answer current, where the
+availability rule is applied. A node that names none never asks or waits, so
+a run of every other model is exactly as on an install with no house model;
+nothing is asked at boot either. A house model reached any other way is asked
+about when the build judges it, and at worst the run is handed back once, with
+nothing held.
 
 ## A run
 
@@ -233,8 +241,15 @@ plugin handler's error already carries: `deterministic`, `requestRefused`
 
 The platform builds a fresh error from them. It carries a fixed sentence for
 the person, a neutral operator detail, and the flags as own properties.
-`contentPolicy` becomes a safety block. The worker and the recovery map that
-error to the job's `error_message` and `error_hint` the same way. No own-label
+`contentPolicy` becomes a safety block. The sentence is the lane's own for the
+failure's class when its row gives one (`failureSentences`: `contentPolicy`,
+and `inputRefused` for a refused input image or video), else the seam's fixed
+sentence. A lane can therefore say what a run with no prompt should do
+instead, such as which other model to try. The worker and the recovery map that
+error to the job's `error_message` and `error_hint` the same way, and both keep
+its sentence as `error_message`, a safety block included: the generic safety
+sentence, which advises changing the prompt, is never written for a house
+model. The hint is still the safety block's. No own-label
 catalog entry may declare a stochastic safety filter, so a house model never
 takes the worker's inline safety retry; a guard test holds this.
 

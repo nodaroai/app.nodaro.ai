@@ -8,7 +8,7 @@ import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { effectiveVideoPromptCeiling } from "../lib/video-prompt-ceiling.js"
 import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middleware/credit-guard.js"
 import { noteAutoDurationSettles, noteExtraReferenceImages, noteRefVideoPricing } from "../lib/video-price-notes.js"
-import { resolveVideoRequestNorm } from "../lib/video-request-norm.js"
+import { resolveVideoRequestNorm, videoRequestAsRun, videoRequestReferenceMedia } from "../lib/video-request-norm.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -16,7 +16,7 @@ import { probeRefVideoDurations } from "../lib/ref-video-probe.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, applyDefaultVideoSelection } from "@nodaro/shared/models"
+import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, applyDefaultVideoSelection } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem } from "@nodaro/shared/video"
@@ -44,9 +44,9 @@ export const textToVideoBody = z.object({
   provider: z.enum(TEXT_TO_VIDEO_PROVIDERS).optional(),
   // Seconds, or VIDEO_DURATION_AUTO (-1): the model picks the length. Only the
   // providers that accept it send it on (`supportsAutoVideoDuration`); pricing
-  // reserves the model's longest clip (with a measured reference clip: that
-  // clip rounded up plus a second, `seedance2RefVideoHeldOutputSec`) and
-  // settles on the delivered one.
+  // reserves the model's longest clip (with measured reference clips: the
+  // longest of them rounded up plus a second, `seedance2RefVideoHeldOutputSec`,
+  // unless the request declares `reference`) and settles on the delivered one.
   duration: z.union([z.literal(VIDEO_DURATION_AUTO), z.number().int().min(1).max(60)]).optional(),
   mode: z.enum(["pro", "std", "4K"]).optional(),
   sound: z.boolean().optional(),
@@ -62,6 +62,11 @@ export const textToVideoBody = z.object({
   // 480p draft whose same take a `seedance-2-5-hd` Video Upscale finalizes at
   // 1080p. Forces 480p before pricing; any other model ignores it.
   draft: z.boolean().optional(),
+  // Seedance 2.5: what the reference media is for — a reference, an edit of the
+  // reference video, or its extension. `auto` (or absent) declares nothing.
+  // Resolved before pricing (`resolveVideoRequestNorm`); one that does not fit
+  // the request is dropped, and any other model ignores it.
+  referenceTaskType: z.enum(SEEDANCE_REFERENCE_TASK_TYPES).optional(),
   generateAudio: z.boolean().optional(),
   // Wire ceiling = the widest provider's caps (Seedance 2.5: 30/10/10);
   // per-provider enforcement lives in the input resolvers.
@@ -136,12 +141,16 @@ export const textToVideoPricing: RoutePricing = {
     // Placement rule: the CHECK identifier, `computeCredits` and the
     // reservation must all be computed from the SAME normalized values.
     // Stash them so the two later sites cannot re-derive them differently.
+    // The reference clips' lengths are the pre-check's measurement, taken
+    // before this resolver runs; the handler reads the same one.
     const norm = resolveVideoRequestNorm({
       provider: sel.provider,
       aspectRatio: body?.aspectRatio as string | undefined,
       resolution: body?.resolution as string | undefined,
       duration: sel.duration,
       draft: body?.draft === true,
+      referenceTaskType: body?.referenceTaskType,
+      referenceMedia: videoRequestReferenceMedia(body ?? {}, req.refVideoDurationsSec),
     })
     req.videoNorm = norm
     req.freeVideoRequest = { provider: sel.provider, duration: norm.duration ?? sel.duration, resolution: norm.resolution ?? null, videoSize: (body?.videoSize as string | undefined) ?? null }
@@ -157,8 +166,11 @@ export const textToVideoPricing: RoutePricing = {
   },
   opts: {
     runModel: videoRunModel,
-    computeCredits: async (body, req) => {
-      const b = body as Record<string, unknown>
+    computeCredits: async (rawBody, req) => {
+      // The body as the run sends it: a declared reference task type's ratio
+      // and length replace the requested ones (the same object otherwise), so
+      // every read below prices the run that is sent.
+      const b = videoRequestAsRun(rawBody as Record<string, unknown>, req.videoNorm)
       const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0
       // R14: read the resolution the CHECK identifier was built from, never
       // the raw body — normalizing in the preHandler but not here would make
@@ -195,7 +207,14 @@ export const textToVideoPricing: RoutePricing = {
           (await probeRefVideoDurations({ provider: priceArgs.provider, referenceVideoUrls: b.referenceVideoUrls as unknown[] }))
         req.refVideoDurationsSec = durationsSec
         await noteRefVideoPricing(req, { ...priceArgs, rawDuration: b.duration, durationsSec, settlesToActual: true })
-        return seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, requestedDuration: b.duration, durationsSec })
+        return seedance2RefVideoBaseCreditsFromDurations({
+          ...priceArgs,
+          requestedDuration: b.duration,
+          // The RESOLVED declaration (the body's own field is only a request):
+          // a declared `reference` with an automatic length holds the worst case.
+          referenceTaskType: req.videoNorm?.referenceTaskType,
+          durationsSec,
+        })
       }
       // MiniMax Hailuo 3: unit×(input+output) for ref-video runs + a
       // surcharge for input images beyond the first 5. Predict the
@@ -317,10 +336,21 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
   // below by name (absent on the mp4 path, which stays byte-identical).
   const outputFormat = seedance25OutputFormatFor(req, provider, parsed.data.outputFormat)
   delete parsed.data.outputFormat
+  // The requested reference task type leaves `parsed.data` too: the job records
+  // and queues the RESOLVED one by name below, and nothing when none is declared.
+  const requestedTaskType = parsed.data.referenceTaskType
+  delete parsed.data.referenceTaskType
   // Recomputed rather than read off `req` so the handler is correct even when
   // credits are disabled (community edition never runs the guard). Pure, so it
-  // agrees with the preHandler by construction.
-  const normalized = resolveVideoRequestNorm({ provider, aspectRatio, resolution, duration, draft: rawDraft })
+  // agrees with the preHandler by construction: the same reference media, read
+  // from the reference arrays as sent (before the assembly below) and the
+  // pre-check's measurement.
+  const normalized = resolveVideoRequestNorm({
+    provider, aspectRatio, resolution, duration, draft: rawDraft,
+    referenceTaskType: requestedTaskType,
+    referenceMedia: videoRequestReferenceMedia(parsed.data, req.refVideoDurationsSec),
+  })
+  const referenceTaskType = normalized.referenceTaskType
   // Recorded only where it means something: the finalize gate reads
   // `input_data.draft === true` off this job.
   const draft = rawDraft === true && isSeedanceDraftCapable(provider) ? true : undefined
@@ -348,7 +378,9 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
   // reach the provider. The creditGuard preHandler only checks balance — no
   // reservation happens until reserveCreditsForJob below, so returning here is clean.
   if (videoProviderRequiresImage(provider)) {
-    return reply.status(400).send(imageRequiredError(provider, "text-to-video"))
+    return reply.status(400).send(imageRequiredError(provider, "text-to-video", {
+      referenceImages: (parsed.data.referenceImageUrls?.length ?? 0) > 0 || (parsed.data.connectedReferences?.length ?? 0) > 0,
+    }))
   }
 
   // Subject + cinematic direction fold — catalog IDS → prompt text,
@@ -542,6 +574,8 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
             resolution: normResolution,
             duration: normDuration,
             draft,
+            // Only when declared, so `auto` records exactly what no field does.
+            ...(referenceTaskType ? { referenceTaskType } : {}),
             // The pre-check's ffprobe of the reference clips — the
             // settlement prices from the same numbers the reservation did.
             ...(req.refVideoDurationsSec ? { refVideoDurationsSec: req.refVideoDurationsSec } : {}),
@@ -585,6 +619,7 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
     seed,
     resolution: normResolution,
     draft,
+    ...(referenceTaskType ? { referenceTaskType } : {}),
     generateAudio,
     referenceImageUrls,
     referenceVideoUrls,

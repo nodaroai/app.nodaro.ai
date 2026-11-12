@@ -40,9 +40,16 @@ export interface HeldObject {
   readonly sizeBytes?: number
 }
 
-/** The most outputs we will ever WITHHOLD for one job — 16 variants is already
- *  double anything the platform produces, and the review route indexes into
+/** The most outputs we will ever WITHHOLD for one job — 16 variants is double
+ *  any variant count the platform produces, and the review route indexes into
  *  this array from client input (its `:index` bound is this number minus one).
+ *  A layered image job makes more (a base and up to 99 layers): the review
+ *  queue lists only these and counts the rest from `held_output_data`
+ *  (`outputTotal`, ee/routes/admin-review.ts), so the page says how many it
+ *  does not show. A queue card previews the first 4 of these
+ *  (`FIRST_PREVIEWS`, held-job-card.tsx) and fetches the rest only when the
+ *  reviewer opens its "+N more" control, so raising this cap adds to what a
+ *  reveal fetches, never to what a card fetches when the queue opens.
  *
  *  It bounds `jobs.held_objects`, which is a review-UI list, and NOTHING ELSE.
  *  Deletion is deliberately not capped by it: a plugin checkpoint can hold far
@@ -286,23 +293,63 @@ export function allOwnedObjects(
  * and where objects are public by their own ACL they are made private instead
  * (lib/withheld-objects-private.ts). That changes no verdict either.
  */
-export async function deleteOwnedObjects(jobId: string, objects: readonly HeldObject[]): Promise<number> {
+export async function deleteOwnedObjects(
+  jobId: string,
+  objects: readonly HeldObject[],
+  /** `refundOwner`: give the bytes storage confirms deleted back to the job's
+   *  owner (they were counted against their storage when the job stored them).
+   *  Nothing is given back where deletes are skipped: the files stay. */
+  opts: { readonly refundOwner?: boolean } = {},
+): Promise<number> {
   // Deduped: callers legitimately union two sources (the withheld list and the
   // row's residue), and the same key must not be sent twice.
   const keys = [...new Set(objects.map((o) => o.key).filter((k) => isOwnedObjectKey(jobId, k)))]
   if (keys.length === 0) return 0
   try {
+    const refund = opts.refundOwner === true && !storageDeletesSkipped()
+    // Sized BEFORE the delete: a deleted object has no size to read.
+    const sizes = refund ? await ownedObjectSizes(keys) : undefined
     // A key storage fails to delete is recorded for the retry pass.
     const { deleteKeysRecordingFailures } = await import("./storage-delete.js")
-    const { deleted } = await deleteKeysRecordingFailures(keys, "job-policy", { jobIdOf: () => jobId })
+    const { deleted, notDeleted } = await deleteKeysRecordingFailures(keys, "job-policy", { jobIdOf: () => jobId })
     if (storageDeletesSkipped()) {
       const { keepWithheldObjectsPrivate } = await import("./withheld-objects-private.js")
       await keepWithheldObjectsPrivate(jobId, keys)
+    }
+    if (sizes) {
+      const kept = new Set(notDeleted ?? [])
+      const freed = keys.filter((k) => !kept.has(k)).reduce((sum, k) => sum + (sizes.get(k) ?? 0), 0)
+      if (freed > 0) await refundOwnerStorage(jobId, freed)
     }
     return deleted
   } catch (err) {
     console.warn(`[job-policy] object cleanup failed for job ${jobId}: ${(err as Error).message}`)
     return 0
+  }
+}
+
+/** Each key's stored size (0 when storage cannot say), or undefined when sizing fails: then nothing is given back, and the delete still runs. */
+async function ownedObjectSizes(keys: readonly string[]): Promise<Map<string, number> | undefined> {
+  try {
+    const { getR2ObjectSize } = await import("./storage.js")
+    return new Map(await Promise.all(keys.map(async (k) => [k, (await getR2ObjectSize(k)) ?? 0] as const)))
+  } catch (err) {
+    console.warn(`[job-policy] sizing owned objects failed — their storage is not given back: ${(err as Error).message}`)
+    return undefined
+  }
+}
+
+/** Give `bytes` back to the job owner's storage. Logs, never throws. */
+async function refundOwnerStorage(jobId: string, bytes: number): Promise<void> {
+  try {
+    const { supabase } = await import("./supabase.js")
+    const { data } = await supabase.from("jobs").select("user_id").eq("id", jobId).single()
+    const userId = (data as { user_id?: string | null } | null)?.user_id
+    if (!userId) return
+    const { updateStorageUsage } = await import("../utils/file-validation.js")
+    await updateStorageUsage(userId, -bytes)
+  } catch (err) {
+    console.warn(`[job-policy] giving back job ${jobId}'s storage failed: ${(err as Error).message}`)
   }
 }
 

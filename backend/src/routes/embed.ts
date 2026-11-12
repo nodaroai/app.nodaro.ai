@@ -7,6 +7,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { getStaticPublicAppUrl } from "../lib/allowed-origins.js"
+import { publishedAppSlugWithheld } from "../lib/published-app-access.js"
 
 const slugParams = z.object({
   slug: z.string().min(1),
@@ -20,6 +21,14 @@ export async function embedRoutes(app: FastifyInstance) {
     }
 
     const { slug } = parsed.data
+
+    // A deployment that does not allow public work (`outputs.allowPublic:
+    // false`) embeds an app for its signed-in creator alone; anyone else (an
+    // embedding frame sends no sign-in) gets the answer of an app that does not
+    // exist (lib/published-app-access.ts).
+    if (await publishedAppSlugWithheld(slug, req.userId)) {
+      return reply.status(404).send("App not found")
+    }
 
     // Look up app to get allowed_origins for CSP
     const { data: appRow, error } = await supabase

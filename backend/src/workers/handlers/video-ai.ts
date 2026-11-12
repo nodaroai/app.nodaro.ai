@@ -74,7 +74,7 @@ import {
 } from "../../providers/video/ffmpeg-utils.js"
 import { unitRateBaseCredits } from "../../lib/credit-base-cost.js"
 import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
-import type { TopazVideoResolution } from "@nodaro/shared/models"
+import type { DeclaredSeedanceTaskType, TopazVideoResolution } from "@nodaro/shared/models"
 import { isKling4RunnerProvider } from "@nodaro/shared/models"
 import { applySmartLoopCutToR2Url } from "../../providers/video/apply-smart-loop-cut.js"
 import { join } from "node:path"
@@ -346,13 +346,17 @@ async function chainVeoBaseTo4k(
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
   // A retired model in a queued job (any producer: a pipeline shot, an older
   // job) runs as the model it became — the one its credit id was priced on.
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft, outputFormat } = withRunningVideoProvider({ data: job.data }).data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft, outputFormat, referenceTaskType } = withRunningVideoProvider({ data: job.data }).data as {
     jobId: string
     /** Seedance 2.5 container, set by the route only for a child job
      *  (`seedance25OutputFormatFor`); absent = mp4. */
     outputFormat?: "mov"
     /** Seedance Draft: render a 480p draft the 1080p finalize can re-render. */
     draft?: boolean
+    /** Seedance 2.5: the reference task type the route resolved before pricing
+     *  (`resolveVideoRequestNorm`); absent = none declared. Passed to the
+     *  provider as given — the KIE adapter decides whether the body takes it. */
+    referenceTaskType?: DeclaredSeedanceTaskType
     imageUrl?: string
     endFrameUrl?: string
     audioUrl?: string
@@ -449,7 +453,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   const wantsMov = outputFormat === "mov" && resolvedI2vProvider === "seedance-2-5"
   let result
   try {
-    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }, { onTaskCreated })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft, ...(referenceTaskType ? { referenceTaskType } : {}), ...(wantsMov ? { outputFormat: "mov" as const } : {}) }, { onTaskCreated })
   } finally {
     ramp.stop()
   }
@@ -474,6 +478,8 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     referenceVideoUrls,
     refVideoDurationsSec,
     duration,
+    // The type the route declared (the hold it sized): absent = none.
+    referenceTaskType,
     jobId: ctx.jobId,
   })
   const meteredBaseCredits = settle.baseCredits
@@ -673,13 +679,15 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
   // A retired model in a queued job runs as the model it became.
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft, outputFormat } = withRunningVideoProvider({ data: job.data }).data as {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft, outputFormat, referenceTaskType } = withRunningVideoProvider({ data: job.data }).data as {
     jobId: string
     /** Seedance 2.5 container, set by the route only for a child job
      *  (`seedance25OutputFormatFor`); absent = mp4. */
     outputFormat?: "mov"
     /** Seedance Draft — see the image-to-video payload above. */
     draft?: boolean
+    /** See the image-to-video payload above. */
+    referenceTaskType?: DeclaredSeedanceTaskType
     prompt: string
     provider?: string
     duration?: number
@@ -748,7 +756,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // `outputFormat` only when the route honoured mov (Seedance 2.5, a child
   // job): the mp4 options stay key-for-key what they were.
   const wantsMov = outputFormat === "mov" && resolvedT2vProvider === "seedance-2-5"
-  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, draft, contentPolicyRewrite: allowContentPolicyRewrite, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }
+  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, draft, ...(referenceTaskType ? { referenceTaskType } : {}), contentPolicyRewrite: allowContentPolicyRewrite, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }
   let result
   // Content-policy rewrite-once (Task A2, 2026-08-03): a `contentPolicy`-
   // classified KieError (see classifyContentPolicy in providers/kie/client.ts)
@@ -801,6 +809,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     referenceVideoUrls,
     refVideoDurationsSec,
     duration,
+    referenceTaskType,
     jobId: ctx.jobId,
   })
   const meteredBaseCredits = settle.baseCredits
@@ -1972,6 +1981,9 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     refVideoDurationsSec?: Array<number | null>
     /** Seedance Draft — see the image-to-video payload above. */
     draft?: boolean
+    /** See the image-to-video payload above: Seedance 2.5 is audio_driven, so
+     *  a voiced run can carry reference videos and a declared task type. */
+    referenceTaskType?: DeclaredSeedanceTaskType
     languageCode?: string
     characterVoices?: CharacterVoiceSpec[]
     dialogue?: DialogueLine[]
@@ -1981,6 +1993,8 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
   }
   const provider = d.provider ?? VOICED_VIDEO_DEFAULT_PROVIDER
   const audioAddon = d.voicedAudioAddon ?? 0
+  // Every provider call below carries it, like `draft`; absent = no key.
+  const taskTypeOption = d.referenceTaskType ? { referenceTaskType: d.referenceTaskType } : {}
   const mode = getVideoAudioCapability(provider).mode
 
   const dialogueModel = dialogueProviderOf(d.dialogueProvider)
@@ -2019,7 +2033,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
         () => synthesizeDialogueTrack(ctx, resolved, voices, d.languageCode, d.dialogueProvider))
       result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 85 },
         () => imageToVideo(d.imageUrl, provider, d.prompt, d.duration, undefined,
-          { referenceAudioUrls: [trackUrl], generateAudio: false, draft: d.draft, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls }))
+          { referenceAudioUrls: [trackUrl], generateAudio: false, draft: d.draft, ...taskTypeOption, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls }))
       // Seedance 2 ran with generate_audio:false → the clip is SILENT; the
       // reference audio only drove lip motion. Mux the SAME synthesised track in
       // so the delivered video actually carries the voice (a bare upload of
@@ -2044,7 +2058,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     const veoPrompt = spoken ? `${(d.prompt ?? "").trim()}\n\nSpoken dialogue: "${spoken}"`.trim() : (d.prompt ?? "")
     result = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 55 },
       () => imageToVideo(d.imageUrl, provider, veoPrompt, d.duration, undefined,
-        { generateAudio: true, draft: d.draft, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls }))
+        { generateAudio: true, draft: d.draft, ...taskTypeOption, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls }))
     try {
       finalUrl = await revoiceClipToR2(job, ctx, result.url, primaryVoiceId)
       voiceApplied = true
@@ -2064,7 +2078,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     }
     result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 90 },
       () => imageToVideo(d.imageUrl, provider, d.prompt, d.duration, undefined,
-        { generateAudio: d.generateAudio, sound: d.sound, draft: d.draft, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls }))
+        { generateAudio: d.generateAudio, sound: d.sound, draft: d.draft, ...taskTypeOption, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls }))
     finalUrl = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
     voiceApplied = false
   }
@@ -2081,6 +2095,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     referenceVideoUrls: d.referenceVideoUrls,
     refVideoDurationsSec: d.refVideoDurationsSec,
     duration: d.duration,
+    referenceTaskType: d.referenceTaskType,
     jobId: ctx.jobId,
   })
   // Seedance DRAFT: the raw take length (before the voice mux) the finalize bills.

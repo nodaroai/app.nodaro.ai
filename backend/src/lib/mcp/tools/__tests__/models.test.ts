@@ -187,6 +187,23 @@ describe("list_models tool (always available)", () => {
     expect(models.find((m) => m.id === "nano-banana-2")).not.toHaveProperty("transparentResolution")
   })
 
+  it("lists the reference task types a model takes, only on the models that take one", async () => {
+    const server = buildServer()
+    registerModels({
+      server,
+      session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }),
+      fastify: Fastify(),
+    })
+    const result = await callTool(server, "list_models", { kind: "video" })
+    const body = JSON.parse(result.content[0]?.text ?? "") as {
+      sections: Array<{ families: Array<{ models: Array<Record<string, unknown> & { id: string }> }> }>
+    }
+    const models = body.sections.flatMap((s) => s.families.flatMap((f) => f.models))
+    expect(models.find((m) => m.id === "seedance-2-5")?.referenceTaskTypes).toEqual(["reference", "edit", "extend"])
+    expect(models.find((m) => m.id === "seedance-2")).toBeDefined()
+    expect(models.find((m) => m.id === "seedance-2")).not.toHaveProperty("referenceTaskTypes")
+  })
+
   it("lists the files a model writes, with a GIF's and an SVG's options, only where it writes them", async () => {
     const server = buildServer()
     registerModels({

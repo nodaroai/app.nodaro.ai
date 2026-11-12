@@ -21,6 +21,7 @@ const mockBuildAutoComposition = vi.fn()
 const mockCollectAncestorRefs = vi.fn()
 const mockRunImageGeneration = vi.fn()
 const mockRunEditImage = vi.fn()
+const mockRunUpscaleImage = vi.fn()
 const mockRunImageToImage = vi.fn()
 const mockRunModifyImage = vi.fn()
 const mockRunVideoGeneration = vi.fn()
@@ -236,6 +237,7 @@ vi.mock("../node-executors", () => ({
   runImageGeneration: (...args: unknown[]) =>
     mockRunImageGeneration(...args),
   runEditImage: (...args: unknown[]) => mockRunEditImage(...args),
+  runUpscaleImage: (...args: unknown[]) => mockRunUpscaleImage(...args),
   runImageToImage: (...args: unknown[]) => mockRunImageToImage(...args),
   runModifyImage: (...args: unknown[]) => mockRunModifyImage(...args),
   runVideoGeneration: (...args: unknown[]) =>
@@ -1009,6 +1011,51 @@ describe("edit-image", () => {
       "recraft-upscale",
       expect.anything(),
     )
+  })
+
+  it("never sends an 8 (only the house model takes it) to another model; a model's own 1/2/4 goes as it always did", async () => {
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://img.png" })
+    mockRunEditImage.mockResolvedValue(undefined)
+    await executeNode(makeNode("edit-image", { provider: "recraft-upscale", upscaleFactor: "8" }), makeCtx())
+    expect((mockRunEditImage.mock.calls.at(-1)![5] as Record<string, unknown>).upscaleFactor).toBeUndefined()
+    await executeNode(makeNode("edit-image", { provider: "nano-banana-edit", prompt: "x", upscaleFactor: "2" }), makeCtx())
+    expect((mockRunEditImage.mock.calls.at(-1)![5] as Record<string, unknown>).upscaleFactor).toBe("2")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// upscale-image
+// ---------------------------------------------------------------------------
+
+describe("upscale-image", () => {
+  beforeEach(() => {
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://img.png" })
+    mockRunUpscaleImage.mockResolvedValue(undefined)
+  })
+
+  const sentFactor = (): unknown => (mockRunUpscaleImage.mock.calls.at(-1)![4] as Record<string, unknown>).upscaleFactor
+
+  it("a Recraft node's own 4 is sent as it always was", async () => {
+    await executeNode(makeNode("upscale-image", { provider: "recraft-upscale", upscaleFactor: "4" }), makeCtx())
+    expect(sentFactor()).toBe("4")
+  })
+
+  it("a Nodaro Image Upscale 8x left on Recraft (the dropdown hidden) sends no factor", async () => {
+    await executeNode(makeNode("upscale-image", { provider: "recraft-upscale", upscaleFactor: "8" }), makeCtx())
+    expect(mockRunUpscaleImage.mock.calls.at(-1)![3]).toBe("recraft-upscale")
+    expect(sentFactor()).toBeUndefined()
+  })
+
+  it("a node with no model runs as Recraft and sends no 8 either", async () => {
+    await executeNode(makeNode("upscale-image", { upscaleFactor: "8" }), makeCtx())
+    expect(sentFactor()).toBeUndefined()
+  })
+
+  it("a factor the model takes is sent; a stale one on Topaz is sent as the 2 its run renders", async () => {
+    await executeNode(makeNode("upscale-image", { provider: "nodaro-image-upscale", upscaleFactor: "8" }), makeCtx())
+    expect(sentFactor()).toBe("8")
+    await executeNode(makeNode("upscale-image", { provider: "topaz-image-upscale", upscaleFactor: "8" }), makeCtx())
+    expect(sentFactor()).toBe("2")
   })
 })
 
