@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   getHandleConnectionLimit,
   seedance2ImagePoolSlotsConsumed,
+  wiredEndFrames,
 } from "../handle-limits"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { VIDEO_REF_LIMITS_BY_PROVIDER, VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared/models"
@@ -393,5 +394,35 @@ describe("getHandleConnectionLimit (video-to-video)", () => {
   it("leaves the node's other handles uncapped", () => {
     expect(getHandleConnectionLimit(v2v("seedance-2-5"), "video")).toBeNull()
     expect(getHandleConnectionLimit(v2v("seedance-2-5"), "prompt")).toBeNull()
+  })
+})
+
+describe("getHandleConnectionLimit — keyframes models' in-between frames", () => {
+  const gv = (provider: string, duration?: number) =>
+    ({ id: "n", type: "generate-video", data: { provider, ...(duration !== undefined ? { duration } : {}) } }) as unknown as WorkflowNode
+
+  it("Grok Imagine Video 1.5 takes an end frame, and one in-between frame per whole second inside the clip, at most 4", () => {
+    expect(getHandleConnectionLimit(gv("grok-imagine-video-1.5"), "endFrame")?.limit).toBe(1)
+    expect(getHandleConnectionLimit(gv("grok-imagine-video-1.5"), "imageReferences")?.limit).toBe(4) // the 8s default
+    expect(getHandleConnectionLimit(gv("grok-imagine-video-1.5", 3), "imageReferences")?.limit).toBe(2)
+    expect(getHandleConnectionLimit(gv("grok-imagine-video-1.5", 1), "imageReferences")?.limit).toBe(0)
+    // Its start and end frames ride their own fields: they take no slot.
+    expect(getHandleConnectionLimit(gv("grok-imagine-video-1.5", 15), "imageReferences", { seedance2ImagePoolConsumed: 2, wiredEndFrames: { hasStartFrame: true, hasEndFrame: true } })?.limit).toBe(4)
+  })
+
+  it("Kling 4.0 Keyframes still shares its frame cap with the start/end frames", () => {
+    const both = { hasStartFrame: true, hasEndFrame: true }
+    expect(getHandleConnectionLimit(gv("kling-4-keyframes", 3), "imageReferences", { seedance2ImagePoolConsumed: 2, wiredEndFrames: both })?.limit).toBe(2)
+    expect(getHandleConnectionLimit(gv("kling-4-keyframes"), "imageReferences")?.limit).toBe(6)
+    expect(getHandleConnectionLimit(gv("kling-4-keyframes", 9), "imageReferences", { wiredEndFrames: { hasStartFrame: true, hasEndFrame: false } })?.limit).toBe(8)
+    // A wired asset never becomes a frame on a keyframes model, so it takes no slot.
+    expect(getHandleConnectionLimit(gv("kling-4-keyframes", 3), "imageReferences", { seedance2ImagePoolConsumed: 3, wiredEndFrames: both })?.limit).toBe(2)
+  })
+
+  it("wiredEndFrames reads the start / end frame handles only", () => {
+    const e = (targetHandle: string) => ({ id: targetHandle, source: "s", target: "n", targetHandle }) as unknown as WorkflowEdge
+    expect(wiredEndFrames([e("startFrame"), e("assets"), e("imageReferences")], "n")).toEqual({ hasStartFrame: true, hasEndFrame: false })
+    expect(wiredEndFrames([e("endFrame")], "n")).toEqual({ hasStartFrame: false, hasEndFrame: true })
+    expect(wiredEndFrames([e("startFrame")], "other")).toEqual({ hasStartFrame: false, hasEndFrame: false })
   })
 })

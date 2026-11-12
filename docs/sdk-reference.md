@@ -3195,6 +3195,14 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > dropped, as is any clip past the last character. `duration` 3–20 (default 5), 720p only
 > (anything else → 720p), no end frame, no seed, no `audioSoundtrack`. See
 > [Kling 4.0 Flash](nodes/ai-video/generate-video.md#kling-40-flash).
+> **Grok Imagine 1.5** (`grok-imagine-video-1.5`) needs `imageUrl` (the exact
+> first frame); `endFrameUrl` is the exact last frame, the same URL as both
+> makes a seamless loop, and up to 4 in-between frames go in
+> `referenceImageUrls` (in order, spread over the clip at whole seconds; a
+> D-second clip takes at most D − 1, the rest are left out). `duration` 1–15
+> (default 8); `resolution` `480p` / `720p` / `1080p` (anything else → 480p);
+> no seed. See
+> [Grok Imagine 1.5 frames](nodes/ai-video/generate-video.md#grok-imagine-15-frames).
 > **Gemini Omni Flash** (`gemini-omni-flash`) is the cheaper, faster sibling of
 > `gemini-omni-video` on an identical request shape — same 4 / 6 / 8 / 10
 > `duration` menu (8 s when omitted), same 720p / 1080p / 4K tiers, same

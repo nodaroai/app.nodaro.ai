@@ -1,4 +1,4 @@
-import { imageReferenceLimit, VIDEO_REF_LIMITS_BY_PROVIDER, isSeedanceVideoEditProvider, videoProviderAppendsFrames, kling4KeyframeFrameCap } from "@nodaro/shared/models"
+import { imageReferenceLimit, VIDEO_REF_LIMITS_BY_PROVIDER, isSeedanceVideoEditProvider, videoProviderAppendsFrames, videoKeyframesMiddleCap } from "@nodaro/shared/models"
 import { getModel, hasFeature, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { isAnalyzablePicker } from "@nodaro/prompts/picker-catalogs"
 import {
@@ -26,6 +26,24 @@ export interface HandleConnectionCounts {
    *  inputs OTHER than the handle being measured — start/end frame + wired
    *  identity assets. Subtracted from the image-pool budget. */
   readonly seedance2ImagePoolConsumed?: number
+  /** Which end frames are wired: a keyframes model's in-between cap depends on
+   *  them (`videoKeyframesMiddleCap`). Absent = neither. */
+  readonly wiredEndFrames?: { readonly hasStartFrame: boolean; readonly hasEndFrame: boolean }
+}
+
+/** Which of the node's start / end frame handles are wired. */
+export function wiredEndFrames(
+  edges: readonly WorkflowEdge[],
+  nodeId: string,
+): { hasStartFrame: boolean; hasEndFrame: boolean } {
+  let hasStartFrame = false
+  let hasEndFrame = false
+  for (const e of edges) {
+    if (e.target !== nodeId) continue
+    if (e.targetHandle === "startFrame") hasStartFrame = true
+    else if (e.targetHandle === "endFrame") hasEndFrame = true
+  }
+  return { hasStartFrame, hasEndFrame }
 }
 
 /**
@@ -191,17 +209,22 @@ export function getHandleConnectionLimit(
         // user-ref cap reflects the budget the runtime resolver will actually
         // honor — wiring more than this many user refs would push the overflow
         // off the tail (where the frames live), corrupting `Image N`. Other ref
-        // providers (the Gemini Omni family=7, grok-imagine-video-1.5=1,
-        // wan-i2v, …) don't merge frames/assets into one shared pool, so they
-        // keep their flat capability cap straight off
+        // providers (the Gemini Omni family=7, wan-i2v, …) don't merge
+        // frames/assets into one shared pool, so they keep their flat
+        // capability cap straight off
         // VIDEO_REF_LIMITS_BY_PROVIDER. Floor at 0 so the popover shows
         // "N of 0 max" (handle full) rather than a negative max.
-        // Kling 4.0 Keyframes: the in-between frames share the clip's frame
-        // cap with the start/end frames (3s → 4 … 9s or longer → 10).
+        // A keyframes model: the in-between frames a clip of this length takes
+        // (videoKeyframesMiddleCap — the rule the panel and the runner read).
+        // Kling 4.0 Keyframes shares its frame cap with the start/end frames
+        // (3s → 4 … 9s or longer → 10); Grok Imagine Video 1.5's start and end
+        // frames ride their own fields, and it takes one in-between frame per
+        // whole second inside the clip, at most 4. Wired assets never become
+        // frames on either, so they take no slot.
         if (hasFeature(provider, "keyframes")) {
-          const seconds = Number((node.data as { duration?: unknown } | undefined)?.duration) || 5
-          const ends = counts?.seedance2ImagePoolConsumed ?? 0
-          return { limit: Math.max(0, Math.min(poolMax, kling4KeyframeFrameCap(seconds) - ends)), providerLabel, isMultiProviderMin: false }
+          const duration = (node.data as { duration?: number | string } | undefined)?.duration
+          const middle = videoKeyframesMiddleCap(provider, duration, counts?.wiredEndFrames ?? { hasStartFrame: false, hasEndFrame: false })
+          return { limit: Math.max(0, Math.min(poolMax, middle ?? poolMax)), providerLabel, isMultiProviderMin: false }
         }
         const limit = videoProviderAppendsFrames(provider)
           ? Math.max(0, poolMax - (counts?.seedance2ImagePoolConsumed ?? 0))

@@ -825,6 +825,7 @@
         "backend/src/providers/kie/client.ts",
         "backend/src/providers/kie/egress-dimensions.ts",
         "backend/src/providers/kie/gemini-omni-12.ts",
+        "backend/src/providers/kie/grok-video-15.ts",
         "backend/src/providers/kie/input-label.ts",
         "backend/src/providers/kie/kling3-client.ts",
         "backend/src/providers/kie/kling4-cost.ts",

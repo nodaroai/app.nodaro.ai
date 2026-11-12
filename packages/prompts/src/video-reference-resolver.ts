@@ -50,6 +50,7 @@ import { REF_BINDING } from "./ref-binding.js"
 import { resolveRefIdTokens } from "./ref-id-tokens.js"
 import { insertBeforeStyleSection } from "./prompt-style-section.js"
 import { tidyReferenceTokenGaps, unboundReferenceTokenText } from "./unbound-reference-tokens.js"
+import { resolveSeatlessAssets } from "./seatless-assets.js"
 
 // The binding surface string and the id-addressed token resolver live in their
 // own modules (see them for the contracts); re-exported here so every existing
@@ -268,6 +269,15 @@ export interface ResolveVideoReferenceCoreArgs {
    */
   videoCaptions?: readonly string[]
   audioCaptions?: readonly string[]
+  /**
+   * No asset takes an image seat: set for a model whose image references are
+   * its FRAMES (the `keyframes` feature), where only what is wired into Image
+   * References is sent. Wired characters and extras attach no URL and are
+   * numbered nowhere; a character gives its name and description in both
+   * formats, and its mentions and `{ref:<id>}` read as its name. See
+   * `seatless-assets.ts`.
+   */
+  assetsTakeNoSeat?: boolean
 }
 
 /** Result of the HYBRID mention pass — inline role phrases + surfaced opt-in
@@ -477,8 +487,21 @@ export function resolveVideoReferenceCore(
   // below and the main assembly have to carry them. They attach no URL and claim
   // no `@image_N` seat, so they take no part in the numbering walk. Empty for
   // every caller that sends neither → every existing output is untouched.
+  // On a frames model (`assetsTakeNoSeat`) the wired characters join them as
+  // identity lines: no asset is seated, so the whole walk below is skipped.
+  const seatless = args.assetsTakeNoSeat === true
+    ? resolveSeatlessAssets({
+      prompt: args.prompt,
+      wiredCharRefs: args.wiredCharRefs,
+      suppressedCanonicalSlugs: new Set(args.suppressedCanonicalCharacterIds ?? []),
+      extraRefs: args.extraRefs,
+      lookupCharacterBySlug: args.lookupCharacterBySlug,
+    })
+    : undefined
   const describedAndCaptionLines = [
-    ...renderDescribedReferenceLines(args.describedReferences),
+    ...renderDescribedReferenceLines(
+      seatless ? [...seatless.identities, ...(args.describedReferences ?? [])] : args.describedReferences,
+    ),
     ...renderReferenceCaptionLines(args.videoCaptions, args.audioCaptions, {
       video: args.videoRefCount ?? 0,
       audio: args.audioRefCount ?? 0,
@@ -510,6 +533,8 @@ export function resolveVideoReferenceCore(
   for (const ex of args.extraRefs ?? []) {
     if (ex.id && !nameByRefId.has(ex.id)) nameByRefId.set(ex.id, "")
   }
+  // Seated nowhere, a character extra's `{ref:<id>}` reads as its character.
+  for (const [id, name] of seatless?.extraNamesById ?? []) nameByRefId.set(id, name)
   for (const [id, name] of args.refNamesById ?? []) {
     if (id) nameByRefId.set(id, name)
   }
@@ -517,8 +542,10 @@ export function resolveVideoReferenceCore(
   // recovered from URLs afterwards (the walk counts a duplicate-URL extra that
   // `merged` dedups, so URL → index is ambiguous; id → position is not).
   const slotByRefId = new Map<string, number>()
-  if (wiredCharRefs.length === 0 && !hasExtras) {
-    // No wired chars / extras, but the node can still carry plain base reference
+  if (seatless || (wiredCharRefs.length === 0 && !hasExtras)) {
+    // No wired chars / extras — or none that may take a seat (`seatless`, whose
+    // characters already ride `describedAndCaptionLines` and whose mentions are
+    // already names) — but the node can still carry plain base reference
     // images (leadingRefUrls), so `{image:N}` body tokens MUST still resolve. The
     // count is the leading-ref count (or the legacy `imageRefCount` when no
     // leading refs were passed); the leading URLs are returned for the payload.
@@ -528,7 +555,7 @@ export function resolveVideoReferenceCore(
     // leadingRefUrls mode counts the leading refs; ordinalOffset mode counts the
     // caller-owned leading refs the offset stands in for.
     const resolved = resolveReferenceTokens(
-      resolveRefIdTokens(args.prompt, { slotById: slotByRefId, nameById: nameByRefId, imageCount: counts.image }),
+      resolveRefIdTokens(seatless ? seatless.prompt : args.prompt, { slotById: slotByRefId, nameById: nameByRefId, imageCount: counts.image }),
       counts,
     )
     return {

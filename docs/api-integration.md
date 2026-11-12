@@ -1099,7 +1099,7 @@ Three video-specific rules:
 
 A few models **ignore** an unsupported resolution and render a fixed default
 instead of the nearest band — `minimax-h3` renders 2K for anything that is not
-`768P`, and the `wan-3` family, `vidu-q4` and `kling-4` / `kling-4-keyframes` / `kling-4-flash` render 720p (all described under
+`768P`, the `wan-3` family, `vidu-q4` and `kling-4` / `kling-4-keyframes` / `kling-4-flash` render 720p, and `grok-imagine-video-1.5` renders 480p (all described under
 [Seedance 2 video capabilities](#seedance-2-video-capabilities)).
 For those the correction targets the band the provider will actually produce, so
 the price still matches the render. Each such model declares this in the catalog
@@ -2954,6 +2954,18 @@ so a value the model doesn't support is ignored, never a 400:
   **output + max(output, total reference-video seconds)** at its `-ref` rate.
   Unlike the other Kling models it runs on free credits, as a 3 or 4 second
   clip.
+- **`grok-imagine-video-1.5`** (Grok Imagine 1.5) needs an `imageUrl`: it is
+  the exact first frame. An `endFrameUrl` is the exact last frame, and the
+  **same URL as both** makes a seamless loop. Up to **4** in-between frames go
+  in `referenceImageUrls`, in order; they are spread evenly over the clip at
+  whole seconds inside it (two frames on an 8 s clip land at 3 s and 5 s), so a
+  D-second clip takes at most D − 1 of them — frames past that are left out,
+  never refused. They are frames only, never loose references, and a run with
+  them but no `imageUrl` is a `400` (`image_required`), as is an `endFrameUrl`
+  alone. `duration` 1–15 (default 8); `resolution` `480p` (default) / `720p` /
+  `1080p`, anything else renders and bills 480p; no `seed`; no reference
+  videos, audio or characters. Priced per second by resolution; the frames add
+  nothing.
 - **`gemini-omni-flash`** takes exactly the same fields as
   `gemini-omni-video` on the same 720p / 1080p / 4K tiers, the same 4 / 6 / 8 /
   10 `duration` menu (an omitted duration renders and bills as 8 s), the same

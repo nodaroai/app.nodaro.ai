@@ -321,6 +321,12 @@ export function resolveVideoPromptMentions(
      * Mirrors the orchestrator's own option of the same name.
      */
     videoCaptions?: readonly string[]
+    /**
+     * No asset takes an image seat — a model whose image references are its
+     * frames (`keyframes`): characters give their name and description, never
+     * an `@image_N`. Pure pass-through to the shared core.
+     */
+    assetsTakeNoSeat?: boolean
   },
 ): { prompt: string | undefined; additionalUrls: string[] } {
   // A mention saved before unnamed characters were numbered reads as the one
@@ -398,6 +404,7 @@ export function resolveVideoPromptMentions(
     videoRefCount: opts?.videoRefCount,
     audioRefCount: opts?.audioRefCount,
     videoCaptions: opts?.videoCaptions,
+    assetsTakeNoSeat: opts?.assetsTakeNoSeat,
     // FE gate: same module-level `IMAGE_REFERENCE_FORMAT` constant the image side
     // uses (test→legacy, dev→hybrid, prod→VITE_IMAGE_REFERENCE_FORMAT). This is
     // the FE's single `resolveVideoReferenceCore` call site, so both the run
@@ -547,6 +554,8 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
       ? resolveVideoProviderForMode(rawProvider, effectiveType as "image-to-video" | "text-to-video")
       : rawProvider
   const providerSupportsRefs = !!provider && hasFeature(provider, "reference-image")
+  // A keyframes model seats no asset: its references are its frames.
+  const keyframesModel = !!provider && hasFeature(provider, "keyframes")
   if (
     effectiveType === "image-to-video" ||
     effectiveType === "text-to-video" ||
@@ -656,7 +665,9 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
         // (payload-builder.ts). Non-ref providers keep tokens stripped (handled
         // above) and attach no entities.
         ...(providerSupportsRefs
-          ? { ordinalOffset: countRefModality("image"), includeWiredEntities: true }
+          // A keyframes model's wired assets add no image (a character keeps
+          // its identity text) — the run's rule (payload-builder.ts).
+          ? { ordinalOffset: countRefModality("image"), includeWiredEntities: !keyframesModel, assetsTakeNoSeat: keyframesModel }
           : {}),
         videoRefCount: providerSupportsRefs ? countRefModality("video") : undefined,
         audioRefCount: providerSupportsRefs ? countRefModality("audio") : undefined,

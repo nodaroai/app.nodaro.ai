@@ -790,8 +790,8 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Wan 2.7 T2V, 2–15s, 720p/1080p": "Wan 2.7 T2V、2〜15 秒、720p/1080p",
   "Wan I2V, 5-15s, resolution options": "Wan I2V、5〜15 秒、解像度を選択可能",
   "fal.ai sync.so v3 dubbing. Video input, billed per second.": "fal.ai sync.so v3 による吹き替え。動画入力、秒単位の課金。",
-  "xAI Grok, 1–15s, 480p/720p (image required)": "xAI Grok、1〜15 秒、480p/720p（画像が必要）",
-  "xAI Grok, 1–15s, 480p/720p, per-second pricing": "xAI Grok、1〜15 秒、480p/720p、秒単位の課金",
+  "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames (image required)": "xAI Grok、1〜15 秒、480p〜1080p、開始フレーム + 中間フレーム最大 4 枚 + 終了フレーム（画像が必要）",
+  "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames, per-second pricing": "xAI Grok、1〜15 秒、480p〜1080p、開始フレーム + 中間フレーム最大 4 枚 + 終了フレーム、秒単位の課金",
   "xAI flagship, strong reasoning": "xAI のフラッグシップ、強力な推論",
 }
 

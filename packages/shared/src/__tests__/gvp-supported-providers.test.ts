@@ -92,8 +92,8 @@ describe("GVP_SUPPORTED_PROVIDERS", () => {
    * The cross-check that makes the catalog flag trustworthy.
    * VIDEO_REF_LIMITS_BY_PROVIDER was built by the 2026-06-28 audit of actual
    * backend reference-FORWARDING paths (it deliberately omits wan-i2v /
-   * hailuo-2.3[-pro] / bytedance-pro[-fast] / grok-imagine-video-1.5, which
-   * take a single image_url start frame and drop refs on the floor). If the
+   * hailuo-2.3[-pro] / bytedance-pro[-fast], which take a single image_url
+   * start frame and drop refs on the floor). If the
    * two signals ever disagree, one of them is lying about what the backend
    * does — fail the build rather than advertise a dropped capability.
    */
@@ -138,6 +138,8 @@ describe("GVP_SUPPORTED_PROVIDERS", () => {
     expect(isGvpSupportedProvider("wan-i2v")).toBe(false)
     expect(isGvpSupportedProvider("hailuo-2.3-pro")).toBe(false)
     expect(isGvpSupportedProvider("bytedance-pro")).toBe(false)
+    // Its Image References are in-between FRAMES (`keyframes`), like Kling 4.0
+    // Keyframes: a pro segment's cast references would land as frames.
     expect(isGvpSupportedProvider("grok-imagine-video-1.5")).toBe(false)
     // VEO 3.1 Quality joins them: i2v and segmentable, but no reference
     // transport at KIE (Fast/Lite only), so the anchor wave has nowhere to

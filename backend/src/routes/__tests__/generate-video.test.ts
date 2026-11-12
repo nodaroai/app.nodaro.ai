@@ -87,8 +87,7 @@ vi.mock("@/lib/video-schemas.js", async () => {
 // ---------------------------------------------------------------------------
 
 import { generateVideoRoutes, assembleVideoConnectedReferences } from "../generate-video.js"
-import { VIDEO_GEN_PROVIDERS, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame } from "@nodaro/shared/models"
-import { hasFeature } from "@nodaro/shared/model-catalog"
+import { VIDEO_GEN_PROVIDERS, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderTakesLoneEndFrame, videoProviderRefsReplaceStartFrame } from "@nodaro/shared/models"
 import type { ConnectedReference } from "@nodaro/shared/types"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
@@ -1267,10 +1266,15 @@ describe("POST /v1/generate-video — references-only (catalog-driven imageUrl e
     // The References UI offers refs to every provider advertising a cap in
     // VIDEO_REF_LIMITS_BY_PROVIDER — a provider added there without this route
     // accepting its ref-only runs is the exact regression that 400'd
-    // kling-3-omni / grok-i2v / happyhorse-ref2v.
-    const imageRefProviders = Object.entries(VIDEO_REF_LIMITS_BY_PROVIDER)
+    // kling-3-omni / grok-i2v / happyhorse-ref2v. The one exception is a
+    // keyframes model whose endpoint cannot run from its in-between frames
+    // alone (videoProviderRefsReplaceStartFrame) — Grok Imagine Video 1.5,
+    // refused in the Grok frames suite below.
+    const capped = Object.entries(VIDEO_REF_LIMITS_BY_PROVIDER)
       .filter(([, caps]) => (caps?.images ?? 0) > 0)
       .map(([provider]) => provider)
+    const imageRefProviders = capped.filter((provider) => videoProviderRefsReplaceStartFrame(provider))
+    expect(capped.filter((provider) => !imageRefProviders.includes(provider))).toEqual(["grok-imagine-video-1.5"])
     expect(imageRefProviders.length).toBeGreaterThan(0)
     mockJobInsert({ data: { id: "job-any" }, error: null })
     for (const provider of imageRefProviders) {
@@ -1439,11 +1443,17 @@ describe("POST /v1/generate-video — end-frame-only (folded into the provider's
   // loop goes red. (The refusal CODE differs by lane, as it always has: an
   // i2v-only model has nowhere else to go and gets `image_required`; a model
   // with a text-to-video mode is simply on the wrong endpoint.)
-  // A keyframes model (Kling 4.0 Keyframes) takes a lone end frame as its
-  // LAST frame on its own channel — it is not a non-folder to refuse.
+  // Kling 4.0 Keyframes takes a lone end frame as its LAST frame on its own
+  // channel — it is not a non-folder to refuse. Grok Imagine Video 1.5 is a
+  // keyframes model too, but it needs its start image, so it IS refused.
   const refCapableNonFolders = VIDEO_GEN_PROVIDERS.filter(
-    (p) => !videoProviderFoldsLoneEndFrame(p) && !hasFeature(p, "keyframes") && (VIDEO_REF_LIMITS_BY_PROVIDER[p]?.images ?? 0) > 0,
+    (p) => !videoProviderFoldsLoneEndFrame(p) && !videoProviderTakesLoneEndFrame(p) && (VIDEO_REF_LIMITS_BY_PROVIDER[p]?.images ?? 0) > 0,
   )
+
+  it("Grok Imagine Video 1.5 is among them: a keyframes model that needs its start image", () => {
+    expect(refCapableNonFolders).toContain("grok-imagine-video-1.5")
+    expect(refCapableNonFolders).not.toContain("kling-4-keyframes")
+  })
 
   it("there is at least one ref-capable non-folder to refuse (an empty set would guard nothing)", () => {
     expect(refCapableNonFolders.length).toBeGreaterThan(0)
@@ -1472,6 +1482,65 @@ describe("POST /v1/generate-video — end-frame-only (folded into the provider's
       }
     })
   }
+})
+
+describe("POST /v1/generate-video — Grok Imagine Video 1.5 frames", () => {
+  const USER = "00000000-0000-4000-8000-000000000001"
+  const START = "https://cdn.example/start.png"
+  const END = "https://cdn.example/end.png"
+  const MIDS = ["https://cdn.example/m1.png", "https://cdn.example/m2.png"]
+
+  it("refuses in-between frames without a start frame, saying they need one", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: { userId: USER, provider: "grok-imagine-video-1.5", prompt: "a walk", referenceImageUrls: MIDS },
+    })
+    expect(res.statusCode).toBe(400)
+    const body = res.json() as { error: { code: string; message: string } }
+    expect(body.error.code).toBe("image_required")
+    expect(body.error.message).toContain("in-between frames, which need a start frame")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("refuses a lone end frame, naming the end frame rather than image references", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: { userId: USER, provider: "grok-imagine-video-1.5", prompt: "a walk", endFrameUrl: END },
+    })
+    expect(res.statusCode).toBe(400)
+    const body = res.json() as { error: { code: string; message: string } }
+    expect(body.error.code).toBe("image_required")
+    expect(body.error.message).toContain("an end frame alone is not enough")
+    expect(body.error.message).not.toContain("image references")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("passes a start frame, an end frame and in-between frames through to the worker, billed per second", async () => {
+    mockJobInsert({ data: { id: "job-grok-frames" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        userId: USER,
+        provider: "grok-imagine-video-1.5",
+        prompt: "a walk",
+        imageUrl: START,
+        endFrameUrl: END,
+        referenceImageUrls: MIDS,
+        duration: 8,
+        resolution: "1080p",
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const [jobName, payload] = vi.mocked(videoQueue.add).mock.calls[0] as [string, Record<string, unknown>]
+    expect(jobName).toBe("image-to-video")
+    expect(payload.imageUrl).toBe(START)
+    expect(payload.endFrameUrl).toBe(END)
+    expect(payload.referenceImageUrls).toEqual(MIDS)
+    expect(payload.resolution).toBe("1080p")
+  })
 })
 
 // ---------------------------------------------------------------------------

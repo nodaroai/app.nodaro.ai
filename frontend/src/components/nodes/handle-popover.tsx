@@ -27,7 +27,7 @@ import { focusNodeInViewport } from "@/lib/focus-node-in-viewport"
 import { collectTargetCandidates, isValidWorkflowConnection, resolveEffectiveSourceType } from "@/lib/connection-validation"
 import { resolveTeleportOrigin } from "@nodaro/render-rules"
 import { optimizedImageUrl } from "@/lib/image"
-import { getHandleConnectionLimit, seedance2ImagePoolSlotsConsumed } from "@/lib/handle-limits"
+import { getHandleConnectionLimit, seedance2ImagePoolSlotsConsumed, wiredEndFrames } from "@/lib/handle-limits"
 import { withWiredSettings } from "@nodaro/shared/nodes"
 import { TARGET_HANDLE_ACCEPTS, getTargetHandlesAccepting } from "@/lib/target-handle-registry"
 import { useSurfaceAvailability } from "@/lib/surface-availability"
@@ -503,6 +503,7 @@ export function HandlePopover({
           handleId === "imageReferences"
             ? seedance2ImagePoolSlotsConsumed(edges, nodeId)
             : 0,
+        ...(handleId === "imageReferences" ? { wiredEndFrames: wiredEndFrames(edges, nodeId) } : {}),
       })
     : null
   const overflowFrom = handleLimit && enriched.length > handleLimit.limit ? handleLimit.limit : null

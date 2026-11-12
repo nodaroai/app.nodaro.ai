@@ -378,7 +378,9 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
   // reach the provider. The creditGuard preHandler only checks balance — no
   // reservation happens until reserveCreditsForJob below, so returning here is clean.
   if (videoProviderRequiresImage(provider)) {
-    return reply.status(400).send(imageRequiredError(provider, "text-to-video"))
+    return reply.status(400).send(imageRequiredError(provider, "text-to-video", {
+      referenceImages: (parsed.data.referenceImageUrls?.length ?? 0) > 0 || (parsed.data.connectedReferences?.length ?? 0) > 0,
+    }))
   }
 
   // Subject + cinematic direction fold — catalog IDS → prompt text,

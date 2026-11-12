@@ -2571,35 +2571,45 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "grok-i2v:15s", credits: 100 },
     ],
   },
-  // xAI Grok Imagine Video 1.5 — KIE image-to-video (image required). True
-  // per-second billing split 480p/720p. modes:["i2v"] is the honest capability;
-  // it's also surfaced in the text-to-video dropdown for the unified node, where
-  // the t2v route returns a clean "requires an input image" 400.
+  // xAI Grok Imagine Video 1.5 — KIE image-to-video
+  // (docs.kie.ai/market/grok-imagine/1-5-preview), built by the backend's
+  // bespoke runner (kie/grok-video-15.ts). The start frame is the exact first
+  // frame and an end frame the exact last frame; one picture wired as both is a
+  // seamless loop (KIE `loop_url`). The Image References are up to 4
+  // in-between frames (KIE `keyframes`), spread evenly over the clip at whole
+  // seconds — frames only, never loose references, so `keyframes` is declared
+  // (it also keeps the model out of generate-video-pro, whose segments would
+  // send cast references as frames). modes:["i2v"] and no `reference-to-video`:
+  // every run needs its start image, in-between frames included. It is also
+  // surfaced in the text-to-video dropdown for the unified node, where the t2v
+  // route returns a clean "requires an input image" 400. Per-second billing by
+  // resolution, with no per-image part.
   "grok-imagine-video-1.5": {
     id: "grok-imagine-video-1.5",
     kind: "video",
     modes: ["i2v"] as const,
-    // No `reference-image` (locked by video-reference-features.test.ts, 2026-06-28
-    // audit): KIE's grok-imagine endpoint accepts a single image_url (the i2v
-    // start frame) only — there is no reference transport, so advertising the
-    // feature let the editor attach refs that were silently dropped at the
-    // provider. Also kept OUT of VIDEO_REF_LIMITS_BY_PROVIDER for the same reason.
+    features: ["end-frame", "reference-image", "keyframes"],
     family: "xAI",
     maker: "xai",
     label: "Grok Imagine Video 1.5",
     series: "Grok",
-    description: "Grok Imagine 1.5 image-to-video — 1–15s, 480p/720p, per-second pricing. Requires an input image.",
+    description: "Grok Imagine Video 1.5 — 1–15s at 480p, 720p or 1080p, per-second pricing. An exact first and last frame (the same image as both makes a seamless loop) and up to 4 in-between frames. Requires an input image.",
     useCases: ["stylized", "motion"],
     aspectRatios: ["16:9", "9:16", "1:1", "4:3", "3:4"],
     durations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     defaultDuration: 8,
-    resolutions: ["480p", "720p"],
+    resolutions: ["480p", "720p", "1080p"],
+    // normalizeGrokVideo15Resolution sends 480p for anything off the list.
+    unlistedResolutionRendersAs: "480p",
+    noSeed: true,  // the KIE schema has no `seed` (additionalProperties: false)
     pricing: [
-      { identifier: "grok-imagine-video-1.5", credits: 295, note: "default 8s 480p — see :Ns:res variants" },
-      { identifier: "grok-imagine-video-1.5:8s:480p", credits: 300, note: "8s 480p" },
-      { identifier: "grok-imagine-video-1.5:8s:720p", credits: 510, note: "8s 720p" },
-      { identifier: "grok-imagine-video-1.5:15s:480p", credits: 550, note: "15s 480p (max)" },
-      { identifier: "grok-imagine-video-1.5:15s:720p", credits: 950, note: "15s 720p (max)" },
+      { identifier: "grok-imagine-video-1.5", credits: 50, note: "default 8s 480p — see :Ns:res variants" },
+      { identifier: "grok-imagine-video-1.5:8s:480p", credits: 50, note: "8s 480p" },
+      { identifier: "grok-imagine-video-1.5:8s:720p", credits: 90, note: "8s 720p" },
+      { identifier: "grok-imagine-video-1.5:8s:1080p", credits: 160, note: "8s 1080p" },
+      { identifier: "grok-imagine-video-1.5:15s:480p", credits: 90, note: "15s 480p (max)" },
+      { identifier: "grok-imagine-video-1.5:15s:720p", credits: 170, note: "15s 720p (max)" },
+      { identifier: "grok-imagine-video-1.5:15s:1080p", credits: 300, note: "15s 1080p (max)" },
     ],
   },
 

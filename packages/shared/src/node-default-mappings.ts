@@ -234,8 +234,8 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   "gemini-omni-video":   { field: "resolution", values: { low: "720p", mid: "1080p", high: "4k" } },
   "gemini-omni-flash":   { field: "resolution", values: { low: "720p", mid: "1080p", high: "4k" } },
   "gemini-omni-flash-1-2": { field: "resolution", values: { low: "720p", mid: "1080p", high: "4k" } },
-  // Grok Imagine Video 1.5 — only 480p/720p (no 1080p tier); high clamps to 720p.
-  "grok-imagine-video-1.5": { field: "resolution", values: { low: "480p", mid: "720p", high: "720p" } },
+  // Grok Imagine Video 1.5 — 480p / 720p / 1080p, each quality rung its own tier.
+  "grok-imagine-video-1.5": { field: "resolution", values: { low: "480p", mid: "720p", high: "1080p" } },
   // Replicate Flux 2 family — MP-based resolution (matching IMAGE_RESOLUTION_OPTIONS["flux-2-*"]).
   // `field: "resolution"` is mandatory — see Provider Enum Sync pitfall 4.
   // mid = provider default: 1 MP for Klein, 2 MP for Pro/Max.

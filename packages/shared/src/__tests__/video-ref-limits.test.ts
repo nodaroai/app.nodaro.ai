@@ -23,7 +23,8 @@ describe("VIDEO_REF_LIMITS_BY_PROVIDER", () => {
     expect(VIDEO_REF_LIMITS_BY_PROVIDER["kling-turbo"]).toBeUndefined()
     // Not verified reference-forwarders (2026-06-28 audit) → deliberately absent.
     expect(VIDEO_REF_LIMITS_BY_PROVIDER["wan-i2v"]).toBeUndefined()
-    expect(VIDEO_REF_LIMITS_BY_PROVIDER["grok-imagine-video-1.5"]).toBeUndefined()
+    // Its Image References are in-between frames (KIE `keyframes`, max 4).
+    expect(VIDEO_REF_LIMITS_BY_PROVIDER["grok-imagine-video-1.5"]).toEqual({ images: 4 })
   })
 })
 

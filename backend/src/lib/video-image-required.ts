@@ -1,4 +1,4 @@
-import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRefsReplaceStartFrame } from "@nodaro/shared/models"
 
 /**
  * Which endpoint is answering. The two lanes accept DIFFERENT things, so the
@@ -18,14 +18,27 @@ import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
 export type ImageRequiredLane = "text-to-video" | "image-to-video"
 
 /**
+ * What the refused request carried in place of a start frame, so the message
+ * names what was actually sent rather than what the model could take.
+ */
+export interface ImageRequiredSent {
+  /** Reference images were sent. */
+  readonly referenceImages?: boolean
+  /** An end frame was sent (with no start frame). */
+  readonly endFrame?: boolean
+}
+
+/**
  * The single "this model has no text-to-video mode" message.
  *
  * Three sites need it: the t2v route's fast-fail, the i2v route's conditional
  * branch, and the orchestrator's pre-reservation throw. BOTH facts it states
  * are catalog-derived and neither may become a hand-maintained provider list:
  *   - "requires an input image"  <- videoProviderRequiresImage (MODEL_CATALOG `modes`)
- *   - the reference clause       <- VIDEO_REF_LIMITS_BY_PROVIDER[provider].images
- *     (the same source /v1/generate-video's own `hasMultimodalRef` reads)
+ *   - the reference clause       <- videoProviderRefsReplaceStartFrame(provider)
+ *     (the same rule /v1/generate-video's own `hasMultimodalRef` reads); a
+ *     model whose image references are in-between frames that need the start
+ *     frame (Grok Imagine Video 1.5) says so instead
  *
  * Every variant keeps the prefix `<provider> requires an input image` — the
  * orchestrator's test matches on exactly that (`payload-builder-image-required
@@ -39,16 +52,24 @@ export type ImageRequiredLane = "text-to-video" | "image-to-video"
 export function imageRequiredMessage(
   provider: string,
   lane: ImageRequiredLane = "text-to-video",
+  sent: ImageRequiredSent = {},
 ): string {
-  const carriesImageRefs = (VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 0) > 0
+  const refsReplaceStart = videoProviderRefsReplaceStartFrame(provider)
   const base = `${provider} requires an input image — connect an image to the node's image input`
-  if (lane === "image-to-video" && carriesImageRefs) {
+  if (lane === "image-to-video" && refsReplaceStart) {
     return `${base}, or wire image references (this model accepts either on this endpoint).`
   }
-  if (carriesImageRefs) {
+  if (refsReplaceStart) {
     // True on the t2v lane even for a ref-capable model: this endpoint rejects
     // before references are considered.
     return `${base}. Reference images alone reach this model only on the image-to-video endpoint (POST /v1/generate-video).`
+  }
+  // A model whose image references are in-between frames that need the start
+  // frame (Grok Imagine Video 1.5): say what the request sent instead of one.
+  if ((VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 0) > 0) {
+    if (sent.referenceImages) return `${base} (its image references are in-between frames, which need a start frame).`
+    if (sent.endFrame) return `${base} (an end frame alone is not enough — it needs a start frame).`
+    return `${base} (it needs a start frame).`
   }
   return `${base} (this model cannot use reference images — it needs a start frame).`
 }
@@ -56,6 +77,7 @@ export function imageRequiredMessage(
 export function imageRequiredError(
   provider: string,
   lane: ImageRequiredLane = "text-to-video",
+  sent: ImageRequiredSent = {},
 ): { error: { code: "image_required"; message: string } } {
-  return { error: { code: "image_required", message: imageRequiredMessage(provider, lane) } }
+  return { error: { code: "image_required", message: imageRequiredMessage(provider, lane, sent) } }
 }

@@ -32,7 +32,7 @@ import { judgeVoicesUnderLock } from "../lib/voice-lock.js"
 import { voiceNotAvailableBody } from "../lib/voice-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderRefModeFrameSeats, resolveVideoProviderForMode } from "@nodaro/shared/models"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderTakesLoneEndFrame, videoProviderRefsReplaceStartFrame, videoProviderRefModeFrameSeats, resolveVideoProviderForMode } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable, hasFeature } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, FRAME_FITS, FRAME_DELIVERIES } from "@nodaro/shared/video"
@@ -1327,10 +1327,15 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // payload and the recorded input_data carry the policed text.
     const characterReferences = applyPromptPoliciesToCharacterReferences(parsed.data.characterReferences)
     if (characterReferences) parsed.data.characterReferences = characterReferences
-    // Kling 4.0 Keyframes takes an end frame alone as its last frame.
-    const foldsLoneEndFrame = endFrameUrl !== undefined && (videoProviderFoldsLoneEndFrame(provider) || hasFeature(provider, "keyframes"))
+    // Kling 4.0 Keyframes (and Omni Flash 1.2) take an end frame alone as the
+    // last frame; Grok Imagine Video 1.5 needs its start image, so a lone end
+    // frame stays a missing start frame there (videoProviderTakesLoneEndFrame).
+    const foldsLoneEndFrame = endFrameUrl !== undefined && (videoProviderFoldsLoneEndFrame(provider) || videoProviderTakesLoneEndFrame(provider))
+    // In-between frames (a `keyframes` model's references) stand in for the
+    // start frame only where the endpoint runs from them alone.
+    const refsReplaceStartFrame = (referenceImageUrls?.length ?? 0) > 0 && videoProviderRefsReplaceStartFrame(provider)
     const hasMultimodalRef =
-      ((refCaps?.images ?? 0) > 0 && ((referenceImageUrls?.length ?? 0) > 0 || foldsLoneEndFrame)) ||
+      ((refCaps?.images ?? 0) > 0 && (refsReplaceStartFrame || foldsLoneEndFrame)) ||
       ((refCaps?.videos ?? 0) > 0 && (referenceVideoUrls?.length ?? 0) > 0) ||
       ((refCaps?.audio ?? 0) > 0 && (referenceAudioUrls?.length ?? 0) > 0) ||
       // Validated above: reaching here with characters means the provider takes them.
@@ -1359,7 +1364,10 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       // imageRequiredMessage that references ARE an alternative here for a
       // ref-capable model (we only reach this line with hasMultimodalRef false).
       if (videoProviderRequiresImage(provider)) {
-        return reply.status(400).send(imageRequiredError(provider, "image-to-video"))
+        return reply.status(400).send(imageRequiredError(provider, "image-to-video", {
+          referenceImages: (referenceImageUrls?.length ?? 0) > 0,
+          endFrame: endFrameUrl !== undefined,
+        }))
       }
       return reply.status(400).send({
         error: {

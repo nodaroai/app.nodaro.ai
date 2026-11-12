@@ -92,6 +92,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `kling-turbo` | `kling/v2-5-turbo-image-to-video-pro` | [kling turbo i2v](https://docs.kie.ai/market/kling/v2-5-turbo-image-to-video-pro.md) |
 | `kling-3.0` | `kling-3.0/video` | [kling 3.0](https://docs.kie.ai/market/kling/kling-3.0.md) |
 | `grok-i2v` | `grok-imagine/image-to-video` | [grok i2v](https://docs.kie.ai/market/grok-imagine/image-to-video.md) |
+| `grok-imagine-video-1.5` | `grok-imagine-video-1-5-preview` (bespoke `runGrokVideo15`, body from `grok-video-15.ts`). Image required: no t2v entry (the t2v route answers "requires an input image"). | [grok imagine video 1.5](https://docs.kie.ai/market/grok-imagine/1-5-preview.md) |
 | `sora2-pro` | `sora-2-pro-image-to-video` | [sora2 pro i2v](https://docs.kie.ai/market/sora2/sora-2-pro-image-to-video.md) |
 | `minimax-h3` | `minimax-h3/image-to-video` (swaps to `minimax-h3/reference-to-video` when refs are wired — see `minimaxH3TaskModel`) | [minimax-h3 i2v](https://docs.kie.ai/market/minimax-h3/image-to-video.md) / [r2v](https://docs.kie.ai/market/minimax-h3/reference-to-video.md) |
 | `wan-3` | `wan/3-0-video` (bespoke `runWan3`) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
@@ -330,6 +331,50 @@ frame table and Kling 4.0's materials rule); it opts in through
   little above the bare rate — deliberate. `runKling4` reports
   `KLING_4_FLASH_RATE_USD_PER_SEC` as the provider cost (a reference-video run
   at the 2 × output floor, as for Kling 4.0). Not yet probed live.
+
+### Grok Imagine Video 1.5 wire notes (`grok-imagine-video-1.5`, bespoke `runGrokVideo15`)
+
+ONE KIE id, image to video only. The pure `buildGrokVideo15Request`
+(`grok-video-15.ts`) builds the body from the RAW frame URLs; `runGrokVideo15`
+normalizes each distinct image once afterwards (our 2048 px cap), so a loop
+image or a start image riding twice stays one URL. The dispatch sits ABOVE the
+generic frame normalization in `imageToVideo` for the same reason.
+
+- The schema's `input` is `additionalProperties: false`: explicit allow-list —
+  `prompt`, `image_urls`, `aspect_ratio` (catalog ratios + `auto`, anything
+  else → `auto`), `resolution` (`normalizeGrokVideo15Resolution`: lowercase
+  480p / 720p / 1080p, anything else → 480p, billed the same), INTEGER
+  `duration` 1-15 (default 8), `first_frame_url`, `last_frame_url`, `loop_url`,
+  `keyframes`, `nsfw_checker: false`. Never `seed`, `negative_prompt` (a
+  negative is folded into the prompt as "Avoid: …"), `cfg_scale`, a reference
+  list or `enable_audio` (KIE's default, audio on, renders).
+- **Frames (decided 2026-11-11):** the start frame is `first_frame_url` (the
+  exact first frame), the end frame `last_frame_url`; the SAME URL as both is
+  sent as `loop_url` alone (KIE refuses a loop image beside a different first or
+  last frame). The node's Image References are the in-between frames
+  (`keyframes`, max 4) and never `image_urls`: spread evenly at whole seconds,
+  `round(i × D / (k + 1))`, strictly inside the clip; a D-second clip has D − 1
+  slots (`grokVideo15MiddleFrameSlots`), and frames past them are dropped with a
+  server-log note — never refused.
+- **The start frame's transport** is ONE constant,
+  `GROK_VIDEO_15_START_FRAME_TRANSPORT`: `"first-frame-only"` (the default —
+  `first_frame_url`, no `image_urls`) or `"first-frame-and-image-urls"` (the
+  start or loop image also rides `image_urls`, one entry). The schema lists
+  `image_urls` as required yet says the first frame "can be sent on its own";
+  flip the constant if a staging run refuses the first body.
+- **Mentions:** KIE reads `@imageN` as the Nth `image_urls` entry. Every image
+  mention (`@image_N`, `@imageN`, `@image(N)`) loses its `@` except `@image1`
+  under the second transport (the start image).
+- **No start image, no run:** the route and the editor refuse a lone end frame
+  and in-between frames without a start frame (`videoProviderTakesLoneEndFrame`,
+  `videoProviderRefsReplaceStartFrame` — the catalog declares `keyframes` but no
+  `reference-to-video`); the workflow run moves a lone end frame into the start
+  slot. The runner throws as a backstop.
+- **Billing:** per second by resolution (KIE 2.4 / 4.5 / 8 cr/s at 480p / 720p /
+  1080p, read 2026-11-11), no per-image or per-frame part. Seeded
+  `grok-imagine-video-1.5:<N>s:<res>` rows, the bare id = 8 s @480p. The runner
+  reports `GROK_VIDEO_15_RATE_USD_PER_SEC` × seconds as the provider cost and
+  writes a credit-audit row.
 
 ### Gemini Omni Flash 1.2 wire notes (`gemini-omni-flash-1-2`, bespoke `runGeminiOmni12`)
 

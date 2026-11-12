@@ -96,6 +96,19 @@ describe("free-credit video limits — length and resolution", () => {
     expect(freeVideoRefusal({ provider: "wan-3", duration: 4, resolution: "480p" }, ON)).toBeNull()
   })
 
+  it("Grok Imagine Video 1.5: an unset resolution is its declared 480p and runs; 720p and 1080p stay locked", () => {
+    const provider = "grok-imagine-video-1.5"
+    expect(freeVideoRefusal({ provider, duration: 4 }, ON)).toBeNull()
+    expect(freeVideoRefusal({ provider, duration: 4, resolution: "480p" }, ON)).toBeNull()
+    for (const resolution of ["720p", "1080p"]) {
+      expect(freeVideoRefusal({ provider, duration: 4, resolution }, ON), resolution).not.toBeNull()
+    }
+    // A paid account is not judged, whatever it asks.
+    for (const resolution of [undefined, "480p", "720p", "1080p"]) {
+      expect(freeVideoRefusal({ provider, duration: 15, resolution }, { enabled: false, maxSeconds: 4 }), String(resolution)).toBeNull()
+    }
+  })
+
   it("a model whose shortest clip is over the limit is not available at all", () => {
     expect(freeVideoRefusal({ provider: "minimax", duration: 5 }, ON)).not.toBeNull()
     expect(freeVideoRefusal({ provider: "hailuo-2.3", duration: 6, resolution: "768P" }, ON)).not.toBeNull()

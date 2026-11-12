@@ -790,8 +790,8 @@ const MODEL_DESCRIPTIONS_PT_BR: Record<string, string> = {
   "Wan 2.7 T2V, 2–15s, 720p/1080p": "Wan 2.7 T2V, 2–15 s, 720p/1080p",
   "Wan I2V, 5-15s, resolution options": "Wan I2V, 5-15 s, opções de resolução",
   "fal.ai sync.so v3 dubbing. Video input, billed per second.": "Dublagem fal.ai sync.so v3. Entrada de vídeo, cobrada por segundo.",
-  "xAI Grok, 1–15s, 480p/720p (image required)": "xAI Grok, 1–15 s, 480p/720p (imagem obrigatória)",
-  "xAI Grok, 1–15s, 480p/720p, per-second pricing": "xAI Grok, 1–15 s, 480p/720p, preço por segundo",
+  "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames (image required)": "xAI Grok, 1–15 s, 480p–1080p, quadro inicial + até 4 quadros intermediários + quadro final (imagem obrigatória)",
+  "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames, per-second pricing": "xAI Grok, 1–15 s, 480p–1080p, quadro inicial + até 4 quadros intermediários + quadro final, preço por segundo",
   "xAI flagship, strong reasoning": "Topo de linha da xAI, raciocínio sólido",
 }
 

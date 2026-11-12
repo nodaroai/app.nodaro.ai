@@ -10,6 +10,7 @@ import {
   resolveVideoProviderForMode,
   videoProviderRequiresImage,
   videoProviderRunsFromReferences,
+  videoProviderRefsReplaceStartFrame,
 } from "../model-constants.js"
 
 /**
@@ -34,6 +35,9 @@ const BLOCKED_WITHOUT_A_FRAME: Readonly<Record<string, string>> = {
   // No working dispatch at all (VIDEO_PROVIDERS_WITHOUT_DISPATCH): every run
   // fails at the router, so advertising a references-only run would be a lie.
   "kling-3-omni": "no dispatch path",
+  // Its Image References are in-between FRAMES (KIE `keyframes`) that need the
+  // start frame: the endpoint takes no run without one (decided 2026-11-11).
+  "grok-imagine-video-1.5": "in-between frames need the start frame",
 }
 
 const T2V = "text-to-video" as const
@@ -64,9 +68,9 @@ describe("reference-to-video capability (catalog)", () => {
     }
   })
 
-  it("the blocked list is exactly the undispatchable ref-capable models", () => {
+  it("the blocked list is exactly the undispatchable ref-capable models and those whose references cannot replace the start frame", () => {
     expect(Object.keys(BLOCKED_WITHOUT_A_FRAME).sort()).toEqual(
-      refCapable.filter((p) => VIDEO_PROVIDERS_WITHOUT_DISPATCH.has(p)).sort(),
+      refCapable.filter((p) => VIDEO_PROVIDERS_WITHOUT_DISPATCH.has(p) || !videoProviderRefsReplaceStartFrame(p)).sort(),
     )
   })
 })

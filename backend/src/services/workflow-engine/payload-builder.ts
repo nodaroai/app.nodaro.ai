@@ -156,7 +156,7 @@ import {
   isMinimaxH3Provider,
   isWan3Provider,
   isGeminiOmniProvider,
-  isGeminiOmniPerSecondProvider,
+  videoProviderTakesLoneEndFrame,
   PRICING_DEFAULT_RESOLUTION,
   supportsExtendRender,
   COMPOSER_PLAN_MAP,
@@ -1816,6 +1816,12 @@ function resolveVideoPromptMentions(
      * clay render (`scene3DLayoutVideoCaptions`); pure pass-through otherwise.
      */
     videoCaptions?: readonly string[]
+    /**
+     * No asset takes an image seat — a model whose image references are its
+     * frames (`keyframes`): characters give their name and description, never
+     * an `@image_N`. Pure pass-through to the shared core.
+     */
+    assetsTakeNoSeat?: boolean
   },
 ): { prompt: string | undefined; additionalUrls: string[] } {
   // A mention saved before unnamed characters were numbered reads as the one
@@ -1897,6 +1903,7 @@ function resolveVideoPromptMentions(
     videoRefCount: opts?.videoRefCount,
     audioRefCount: opts?.audioRefCount,
     videoCaptions: opts?.videoCaptions,
+    assetsTakeNoSeat: opts?.assetsTakeNoSeat,
     // BE gate: same env determination as the image side (see reference-format.ts).
     // default false = legacy block (dark in prod); flips in lockstep with image.
     hybridRoles: backendHybridRoles(),
@@ -4023,7 +4030,10 @@ function buildPayloadOf(
         buildCtx,
         (e) => referenceModalityForHandle(e.targetHandle) === "image",
       )
-      const i2vBaseRefs = i2vOrderedRefs ?? resolvedInputs.referenceImageUrls
+      // A keyframes model's in-between frames are exactly what is wired into its
+      // Image References (decided 2026-11-11): a wired asset adds no image.
+      const i2vKeyframesModel = !!provider && hasFeature(provider, "keyframes")
+      const i2vBaseRefs = i2vOrderedRefs ?? (i2vKeyframesModel ? resolvedInputs.imageReferenceHandleUrls : resolvedInputs.referenceImageUrls)
       // Scene3D layout references (a clay render on a reference rail): a scoping
       // caption per clip seat, a scoping line per still seat, and the rule-2
       // figure warning — see scene3d-reference-scoping.ts.
@@ -4036,7 +4046,7 @@ function buildPayloadOf(
         // EDGE count, for FE↔BE parity) + entities attach. Non-ref: legacy
         // (imageRefCount 0 → tokens bare-label).
         ...(i2vSupportsRefs
-          ? { ordinalOffset: countRefModalityEdges(node.id, "image", buildCtx), includeWiredEntities: true }
+          ? { ordinalOffset: countRefModalityEdges(node.id, "image", buildCtx), includeWiredEntities: !i2vKeyframesModel, assetsTakeNoSeat: i2vKeyframesModel }
           : { imageRefCount: 0 }),
         videoRefCount: i2vSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
         audioRefCount: i2vSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
@@ -4044,7 +4054,11 @@ function buildPayloadOf(
       i2vPrompt = appendScene3DStillScopingLines(i2vMention.prompt, i2vScene3D)
       let i2vImageUrl = i2vBaseImage
       let i2vReferenceImageUrls = i2vBaseRefs
-      if (i2vMention.additionalUrls.length > 0) {
+      // A keyframes model's Image References are its in-between FRAMES (Kling
+      // 4.0 Keyframes, Grok Imagine Video 1.5): a mentioned or wired asset's
+      // image must not join them, nor fill the start frame — the same guard
+      // as the generate-video case below and the editor's run (execute-node.ts).
+      if (i2vMention.additionalUrls.length > 0 && !i2vKeyframesModel) {
         let remainingMentionUrls = i2vMention.additionalUrls
         // Seedance 2 frame-numbering guard (shared helper — see
         // keepSeedance2MentionsAsRefs). Keep a @-mention front-of-list as a plain
@@ -4190,17 +4204,23 @@ function buildPayloadOf(
       let t2vPrompt = composeVideoPrompt({ rawPrompt: t2vRawPrompt, motionHint: ownMotionHint("text-to-video", data), nodeId: node.id, buildCtx, ...readNodeDirectionLevers(data) })
       // `{image:N}` token resolution — see i2v note. Same gate + edge counts.
       const t2vSupportsRefs = !!provider && hasFeature(provider, "reference-image")
+      // A keyframes model's in-between frames are exactly what is wired into its
+      // Image References (decided 2026-11-11): a wired asset adds no image.
+      const t2vKeyframesModel = !!provider && hasFeature(provider, "keyframes")
       // Plain image-refs LEAD the unified @image_N numbering (D5) — computed BEFORE
       // the resolver so they can be passed in as `leadingRefUrls`. t2v has no
       // startFrame handle, so the reorder filter accepts any wired image/character/
-      // entity upstream (matches the `connectedRefImages` filter in TextToVideoConfig).
+      // entity upstream (matches the `connectedRefImages` filter in TextToVideoConfig)
+      // — on a keyframes model only the Image References edges.
       const t2vOrderedRefs = applyOrderToReferenceUrls(
         node.id,
         data.connectedRefImageOrder as string[] | undefined,
         buildCtx,
-        (_e, src) => VIDEO_REF_IMAGE_SOURCE_TYPES.has(src.type),
+        t2vKeyframesModel
+          ? (e) => referenceModalityForHandle(e.targetHandle) === "image"
+          : (_e, src) => VIDEO_REF_IMAGE_SOURCE_TYPES.has(src.type),
       )
-      const t2vLeadingRefs = t2vOrderedRefs ?? resolvedInputs.referenceImageUrls
+      const t2vLeadingRefs = t2vOrderedRefs ?? (t2vKeyframesModel ? resolvedInputs.imageReferenceHandleUrls : resolvedInputs.referenceImageUrls)
       // Scene3D layout references — see the i2v case.
       const t2vScene3D = collectScene3DLayoutReferences(node, resolvedInputs, buildCtx, t2vLeadingRefs)
       const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx, readExtraRefs(data), {
@@ -4212,7 +4232,7 @@ function buildPayloadOf(
         // URL layer) + entities attach (D5). The caller owns the URL merge below.
         // Non-ref: legacy (imageRefCount 0 → tokens drop, no entities).
         ...(t2vSupportsRefs
-          ? { ordinalOffset: countRefModalityEdges(node.id, "image", buildCtx), includeWiredEntities: true }
+          ? { ordinalOffset: countRefModalityEdges(node.id, "image", buildCtx), includeWiredEntities: !t2vKeyframesModel, assetsTakeNoSeat: t2vKeyframesModel }
           : { imageRefCount: 0 }),
         videoRefCount: t2vSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
         audioRefCount: t2vSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
@@ -4220,7 +4240,7 @@ function buildPayloadOf(
       t2vPrompt = appendScene3DStillScopingLines(t2vMention.prompt, t2vScene3D)
       // image-refs-first (D5): leading plain refs, then the asset URLs (deduped).
       let t2vReferenceImageUrls = t2vLeadingRefs
-      if (t2vMention.additionalUrls.length > 0) {
+      if (t2vMention.additionalUrls.length > 0 && !t2vKeyframesModel) {
         const merged: string[] = []
         const seen = new Set<string>()
         for (const u of [...(t2vLeadingRefs ?? []), ...t2vMention.additionalUrls]) {
@@ -4419,17 +4439,22 @@ function buildPayloadOf(
       // endFrame as the start so providers (veo3, minimax, kling-turbo, etc.)
       // get at least one image in their primary slot. We then clear
       // endFrameUrl to avoid the worker repeating the same image twice.
-      // A keyframes model (Kling 4.0 Keyframes) takes an end frame alone, so
-      // its end frame stays the END.
-      const keyframesModel = hasFeature(provider, "keyframes")
-      // Omni Flash 1.2 takes it alone too, as the closing frame.
-      const keepsLoneEndFrame = keyframesModel || isGeminiOmniPerSecondProvider(provider)
+      // Kling 4.0 Keyframes and Omni Flash 1.2 take an end frame alone, so
+      // their end frame stays the END (videoProviderTakesLoneEndFrame). Grok
+      // Imagine Video 1.5 needs its start image: its lone end frame moves to
+      // the start like every other model's.
+      const keepsLoneEndFrame = videoProviderTakesLoneEndFrame(provider)
       const startFrameUrl = resolvedInputs.startFrameUrl ?? resolvedInputs.imageUrl ?? (keepsLoneEndFrame ? undefined : resolvedInputs.endFrameUrl)
       const endFrameUrl = (resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || keepsLoneEndFrame)
         ? resolvedInputs.endFrameUrl
         : undefined
       const hasStart = !!startFrameUrl
-      const hasImageRef = (resolvedInputs.referenceImageUrls?.length ?? 0) > 0
+      // A keyframes model's in-between frames are exactly what is wired into
+      // its Image References, in order (decided 2026-11-11): a wired asset's
+      // image never becomes one, so it does not count as an image reference.
+      const keyframesModel = hasFeature(provider, "keyframes")
+      const wiredImageRefs = keyframesModel ? resolvedInputs.imageReferenceHandleUrls : resolvedInputs.referenceImageUrls
+      const hasImageRef = (wiredImageRefs?.length ?? 0) > 0
       const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
 
       // Mode dispatch — decides BOTH jobName and credit identifier so the
@@ -4461,7 +4486,7 @@ function buildPayloadOf(
       // /v1/text-to-video route returns, BEFORE a job row is created and
       // credits are reserved, instead of a provider-lookup error mid-run.
       if (effectiveMode === "text-to-video" && videoProviderRequiresImage(resolvedProvider)) {
-        throw new Error(imageRequiredMessage(resolvedProvider))
+        throw new Error(imageRequiredMessage(resolvedProvider, "text-to-video", { referenceImages: hasImageRef }))
       }
 
       // Prompt composition (typed-primary, via the shared helper): list-override
@@ -4495,7 +4520,7 @@ function buildPayloadOf(
         buildCtx,
         (e) => e.targetHandle === "imageReferences" || e.targetHandle === "references" || e.targetHandle === "reference-images",
       )
-      let referenceImageUrls = orderedRefs ?? resolvedInputs.referenceImageUrls
+      let referenceImageUrls = orderedRefs ?? wiredImageRefs
       let imageUrl = startFrameUrl
       // Scene3D layout references — see the i2v case. The leading image list
       // is the one `@image_N` numbers from, so a still seat indexes into it.
@@ -4510,10 +4535,11 @@ function buildPayloadOf(
           videoCaptions: scene3DLayoutVideoCaptions(gvScene3D, composedPrompt),
           suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
           // Ref-capable: assets number AFTER the leading image-refs (ordinalOffset =
-          // EDGE count, for FE↔BE parity) + entities attach. Non-ref: legacy
-          // (imageRefCount 0 → tokens bare-label).
+          // EDGE count, for FE↔BE parity) + entities attach — except on a
+          // keyframes model, whose wired assets add no image (a character keeps
+          // its identity text). Non-ref: legacy (imageRefCount 0 → tokens bare-label).
           ...(gvSupportsRefs
-            ? { ordinalOffset: countRefModalityEdges(node.id, "image", buildCtx), includeWiredEntities: true }
+            ? { ordinalOffset: countRefModalityEdges(node.id, "image", buildCtx), includeWiredEntities: !keyframesModel, assetsTakeNoSeat: keyframesModel }
             : { imageRefCount: 0 }),
           videoRefCount: gvSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
           audioRefCount: gvSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,

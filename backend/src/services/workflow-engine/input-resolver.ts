@@ -36,6 +36,7 @@ import {
   extractReferencedLabels,
   canonicalVarName,
   REFERENCE_HANDLE_MAP,
+  referenceModalityForHandle,
   parseGroupHandle
 } from "@nodaro/shared/workflow"
 import {
@@ -232,7 +233,21 @@ export function resolveNodeInputs(
   // only — standalone i2v/t2v keep legacy negative handling.
   const isGenImageOrVideo = targetNode.type === "generate-image" || targetNode.type === "generate-video"
 
+  // What each Image References edge added to `referenceImageUrls` — recorded
+  // apart (`imageReferenceHandleUrls`) because a wired asset's images land in
+  // the same list by source type. Flushed at the top of the next edge, so
+  // every `continue` below is covered, and once after the loop.
+  let imageRefEdgeStart: number | undefined
+  const flushImageRefEdge = (): void => {
+    if (imageRefEdgeStart === undefined) return
+    const added = (inputs.referenceImageUrls ?? []).slice(imageRefEdgeStart)
+    if (added.length > 0) inputs.imageReferenceHandleUrls = [...(inputs.imageReferenceHandleUrls ?? []), ...added]
+    imageRefEdgeStart = undefined
+  }
+
   for (const edge of incomingEdges) {
+    flushImageRefEdge()
+    if (referenceModalityForHandle(edge.targetHandle) === "image") imageRefEdgeStart = inputs.referenceImageUrls?.length ?? 0
     let sourceNode = nodeById.get(edge.source)
     if (!sourceNode) continue
 
@@ -675,6 +690,7 @@ export function resolveNodeInputs(
     // node type — the source as the producer its pip behaves as (routedAs).
     routeOutput(inputs, routedAs(sourceNode, effectiveSourceHandle), targetNode, output, edge, edges, allNodes, nodeStates, effectiveSourceHandle)
   }
+  flushImageRefEdge()
 
   // --- Post-processing: selectedNodeId fallbacks (matches frontend) ---
   // The frontend supports dropdown-selected node IDs as a fallback for finding

@@ -699,7 +699,7 @@ describe("payload-builder.kling-4.test.ts", () => {
   })
 
   it("Keyframes with in-between frames and an end frame (no start) keeps both", () => {
-    const r = build(n("kling-4-keyframes"), { endFrameUrl: END, referenceImageUrls: [MID(1), MID(2)] })
+    const r = build(n("kling-4-keyframes"), { endFrameUrl: END, referenceImageUrls: [MID(1), MID(2)], imageReferenceHandleUrls: [MID(1), MID(2)] })
     expect(r.jobName).toBe("image-to-video")
     expect(r.payload.endFrameUrl).toBe(END)
     expect(r.payload.referenceImageUrls).toEqual([MID(1), MID(2)])
@@ -707,7 +707,7 @@ describe("payload-builder.kling-4.test.ts", () => {
 
   it("Keyframes over its frame cap is refused before any job exists", () => {
     expect(() =>
-      build(n("kling-4-keyframes", { duration: 3 }), { startFrameUrl: MID(0), endFrameUrl: END, referenceImageUrls: [MID(1), MID(2), MID(3)] }),
+      build(n("kling-4-keyframes", { duration: 3 }), { startFrameUrl: MID(0), endFrameUrl: END, referenceImageUrls: [MID(1), MID(2), MID(3)], imageReferenceHandleUrls: [MID(1), MID(2), MID(3)] }),
     ).toThrow(/at most 4 frames in all/)
   })
 
@@ -819,6 +819,112 @@ describe("payload-builder.kling-4.test.ts", () => {
     expect(r.payload.imageUrl).toBe(END)
     expect(r.payload.endFrameUrl).toBeUndefined()
   })
+})
+
+describe("payload-builder.grok-video-15.test.ts", () => {
+  /**
+   * Hand-built inputs here carry the in-between frames twice, as the input
+   * resolver does when they are wired into Image References:
+   * `referenceImageUrls` and `imageReferenceHandleUrls` (the part of it a
+   * keyframes model takes; keyframes-frames-resolved.test.ts runs the real
+   * resolver).
+   *
+   * Grok Imagine Video 1.5 in the DAG payload builder: the start, end and
+   * in-between frames reach the worker as the editor sends them; a lone end
+   * frame becomes the start frame (the platform's rule for a model that needs
+   * its start image), and in-between frames alone are refused before any job.
+   */
+  const JOB_ID = "job-grok15-1"
+  const START = "https://cdn.example/start.png"
+  const END = "https://cdn.example/end.png"
+  const MID = (i: number) => `https://cdn.example/mid${i}.png`
+
+  function n(data: Record<string, unknown> = {}): SimpleNode {
+    return { id: "g15-1", type: "generate-video", data: { provider: "grok-imagine-video-1.5", prompt: "she walks out", ...data } }
+  }
+  function build(node: SimpleNode, inputs: ResolvedInputs = {}) {
+    return buildPayload(node, JOB_ID, inputs, undefined, { nodes: [node], edges: [], nodeStates: {} })
+  }
+
+  it("start + end + in-between frames run image-to-video, at the 8s / 480p defaults", () => {
+    const r = build(n(), { startFrameUrl: START, endFrameUrl: END, referenceImageUrls: [MID(1), MID(2)], imageReferenceHandleUrls: [MID(1), MID(2)] })
+    expect(r.jobName).toBe("image-to-video")
+    expect(r.payload.imageUrl).toBe(START)
+    expect(r.payload.endFrameUrl).toBe(END)
+    expect(r.payload.referenceImageUrls).toEqual([MID(1), MID(2)])
+    expect(r.modelIdentifier).toBe("grok-imagine-video-1.5:8s:480p")
+  })
+
+  it("more in-between frames than the clip takes are left to the runner to trim, never refused", () => {
+    const r = build(n({ duration: 3 }), { startFrameUrl: START, referenceImageUrls: [MID(1), MID(2), MID(3), MID(4)], imageReferenceHandleUrls: [MID(1), MID(2), MID(3), MID(4)] })
+    expect(r.payload.referenceImageUrls).toHaveLength(4)
+    expect(r.modelIdentifier).toBe("grok-imagine-video-1.5:3s:480p")
+  })
+
+  it("a lone end frame becomes the start frame, as on every model that needs its start image", () => {
+    const r = build(n(), { endFrameUrl: END })
+    expect(r.jobName).toBe("image-to-video")
+    expect(r.payload.imageUrl).toBe(END)
+    expect(r.payload.endFrameUrl).toBeUndefined()
+  })
+
+  it("in-between frames alone are refused before any job exists", () => {
+    expect(() => build(n(), { referenceImageUrls: [MID(1)], imageReferenceHandleUrls: [MID(1)] })).toThrow(/grok-imagine-video-1\.5 requires an input image/)
+  })
+
+  it("1080p bills its own row", () => {
+    expect(build(n({ resolution: "1080p", duration: 15 }), { startFrameUrl: START }).modelIdentifier).toBe("grok-imagine-video-1.5:15s:1080p")
+  })
+
+  it("a node with no resolution set is sent and billed 480p, the tier it renders", () => {
+    const r = build(n({ duration: 4 }), { startFrameUrl: START })
+    expect(r.payload.resolution).toBe("480p")
+    expect(r.modelIdentifier).toBe("grok-imagine-video-1.5:4s:480p")
+  })
+})
+
+describe("payload-builder: a legacy Image to Video node keeps wired assets out of a keyframes model's frames", () => {
+  /**
+   * The legacy `image-to-video` case merges mentioned and wired-entity images
+   * into the reference list. On a keyframes model (Kling 4.0 Keyframes, Grok
+   * Imagine Video 1.5) that list is the in-between FRAMES, so a wired Location's
+   * picture must not join it — nor fill the start frame — exactly as on the
+   * generate-video case and the editor's run (execute-node.ts).
+   */
+  const START = "https://cdn.example/start.png"
+  const MID = "https://cdn.example/mid.png"
+  const LOCATION_IMAGE = "https://cdn.example/old-library.png"
+  const location: SimpleNode = {
+    id: "loc-1",
+    type: "location",
+    data: { label: "Old Library", locationName: "Old Library", sourceImageUrl: LOCATION_IMAGE, canonicalDescription: "A dim Victorian library" },
+  }
+  function build(provider: string, inputs: ResolvedInputs) {
+    const node: SimpleNode = { id: "i2v-1", type: "image-to-video", data: { provider, prompt: "she walks to the window" } }
+    return buildPayload(node, "job-legacy-1", inputs, undefined, {
+      nodes: [node, location],
+      edges: [{ id: "loc-1->i2v-1", source: "loc-1", target: "i2v-1", sourceHandle: "locationRef", targetHandle: "assets" }],
+      nodeStates: {},
+    })
+  }
+  const carries = (r: ReturnType<typeof build>, url: string) =>
+    r.payload.imageUrl === url || ((r.payload.referenceImageUrls as string[] | undefined) ?? []).includes(url)
+
+  it("a reference-image model still takes the wired Location's picture (the guard is keyframes-only)", () => {
+    expect(carries(build("grok-i2v", { startFrameUrl: START }), LOCATION_IMAGE)).toBe(true)
+  })
+
+  for (const provider of ["grok-imagine-video-1.5", "kling-4-keyframes"]) {
+    it(`${provider}: the wired Location's picture becomes neither an in-between frame nor the start frame`, () => {
+      const r = build(provider, { startFrameUrl: START, referenceImageUrls: [MID], imageReferenceHandleUrls: [MID] })
+      expect(r.payload.imageUrl).toBe(START)
+      expect(r.payload.referenceImageUrls).toEqual([MID])
+      expect(carries(r, LOCATION_IMAGE)).toBe(false)
+      const noStart = build(provider, { referenceImageUrls: [MID], imageReferenceHandleUrls: [MID] })
+      expect(noStart.payload.imageUrl).toBeUndefined()
+      expect(carries(noStart, LOCATION_IMAGE)).toBe(false)
+    })
+  }
 })
 
 describe("payload-builder: a wired Style node's wording follows the consumer's surface", () => {

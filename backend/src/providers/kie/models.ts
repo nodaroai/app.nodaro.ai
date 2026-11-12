@@ -1124,19 +1124,25 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   },
 
   // Grok Imagine Video 1.5 — VERIFIED: docs.kie.ai/market/grok-imagine/1-5-preview
-  // Image-to-video only (image_urls required, max 1, ≤20MB). True per-second
-  // billing: KIE 14.5 cr/s @480p, 25 cr/s @720p, +2 cr/image. The Nodaro charge is
-  // seeded per (duration × resolution) in STATIC_CREDIT_COSTS + model_pricing;
-  // `credits`/`cost` below are the KIE-side default tier (8s @480p) for audit logging.
+  // (schema read 2026-11-11). Image to video with an exact first frame, an
+  // optional last frame (or one picture as both: `loop_url`) and up to 4
+  // in-between frames (`keyframes`). Bespoke runner (`runGrokVideo15`, body from
+  // grok-video-15.ts): the input is `additionalProperties: false`, so nothing
+  // here is spread onto the wire. True per-second billing by resolution, with
+  // no per-image part. The Nodaro charge is seeded per (duration × resolution)
+  // in STATIC_CREDIT_COSTS + model_pricing; `credits`/`cost` below are the
+  // KIE-side default tier (8s @480p) for audit logging, and the runner reports
+  // each tier's cost.
   "grok-imagine-video-1.5": {
     model: "grok-imagine-video-1-5-preview",
     safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
-    credits: 118,           // KIE: 14.5×8 + 2 (8s @480p default tier)
-    cost: 0.59,
-    imageParam: "image_urls",   // array format, single image (max 1)
-    extraParams: { resolution: "480p", duration: 8, aspect_ratio: "auto", nsfw_checker: false },
+    credits: 19.2,          // KIE: 2.4 cr/s × 8 (8s @480p default tier)
+    cost: 0.096,
+    omitSeed: true,           // no `seed` in the schema
+    acceptsResolution: true,  // `resolution` 480p | 720p | 1080p
     allowedDurations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    supportsEndFrame: false,
+    supportsEndFrame: true,
+    endFrameParam: "last_frame_url",
   },
 
   // `seedance` (Seedance 1.5 Pro, `bytedance/seedance-1.5-pro`) was retired

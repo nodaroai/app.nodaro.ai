@@ -790,8 +790,8 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "Wan 2.7 T2V, 2–15s, 720p/1080p": "Wan 2.7 T2V, 2–15초, 720p/1080p",
   "Wan I2V, 5-15s, resolution options": "Wan I2V, 5-15초, 해상도 선택 가능",
   "fal.ai sync.so v3 dubbing. Video input, billed per second.": "fal.ai sync.so v3 더빙. 동영상 입력, 초 단위 과금.",
-  "xAI Grok, 1–15s, 480p/720p (image required)": "xAI Grok, 1–15초, 480p/720p(이미지 필수)",
-  "xAI Grok, 1–15s, 480p/720p, per-second pricing": "xAI Grok, 1–15초, 480p/720p, 초 단위 과금",
+  "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames (image required)": "xAI Grok, 1–15초, 480p–1080p, 시작 프레임 + 중간 프레임 최대 4장 + 끝 프레임(이미지 필수)",
+  "xAI Grok, 1–15s, 480p–1080p, start + up to 4 in-between + end frames, per-second pricing": "xAI Grok, 1–15초, 480p–1080p, 시작 프레임 + 중간 프레임 최대 4장 + 끝 프레임, 초 단위 과금",
   "xAI flagship, strong reasoning": "xAI 플래그십, 강력한 추론",
 }
 

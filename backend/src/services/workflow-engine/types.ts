@@ -698,6 +698,13 @@ export interface ResolvedInputs {
     sourceType?: "audio" | "video"
   }>
   referenceImageUrls?: string[]
+  /**
+   * The part of `referenceImageUrls` that arrived through an Image References
+   * handle (`imageReferences` / `references`), in edge order — without the
+   * images a wired asset (character, location, object, …) adds. A `keyframes`
+   * model takes exactly these as its in-between frames (decided 2026-11-11).
+   */
+  imageReferenceHandleUrls?: string[]
   /** Singular reference image for nodes that take exactly one (image-critic).
    *  Distinct from referenceImageUrls (array) — wired by the "reference"
    *  target handle in input-resolver. */
