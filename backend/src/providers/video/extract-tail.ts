@@ -38,8 +38,9 @@ export function extractTailArgs(inputPath: string, start: number, seconds: numbe
  * files only) ends the tail on the last frame.
  *
  * `pictureFilter` runs the picture through a filter on its way (the extend's
- * SDR conversion of an HDR source, `extendTailPicture`); `launch` is the
- * launch's memory prediction, for a cut that needs more than the default.
+ * conversion of an HDR source to SDR, or of a full-range one to limited
+ * range, `extendTailPicture`); `launch` is the launch's memory prediction,
+ * for a cut that needs more than the default.
  * Without them the tail is cut exactly as it always was.
  */
 export async function extractTailToFile(

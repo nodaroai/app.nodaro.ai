@@ -17,9 +17,10 @@ import { tmpdir } from "node:os"
 import { randomUUID } from "node:crypto"
 import { runFfmpeg, runFfprobe } from "../ffmpeg-utils.js"
 import { extractTailArgs, extractTailToFile } from "../extract-tail.js"
-import { sdrPictureFilter } from "../extend-stitch-args.js"
+import { deliveredPictureFilter } from "../extend-stitch-args.js"
+import { extendTailPicture } from "../extend-stitch.js"
 import { probeMatched, type MatchedProbe } from "../matched-encode.js"
-import { hdrTags, writeTaggedClip } from "./colour-tagged-clip.js"
+import { colourTagArgs, hdrTags, writeTaggedClip } from "./colour-tagged-clip.js"
 
 function isFfmpegAvailable(): boolean {
   try {
@@ -67,7 +68,7 @@ describe("extractTailArgs", () => {
     ["HLG", "arib-std-b67"],
     ["PQ", "smpte2084"],
   ])("puts an %s source's picture through the stitch's SDR conversion, nothing else changed", (_label, transfer) => {
-    const filter = sdrPictureFilter(hdrProbe(transfer))!
+    const filter = deliveredPictureFilter(hdrProbe(transfer))!
     expect(filter).toBe(
       `setparams=color_primaries=bt2020:color_trc=${transfer}:colorspace=bt2020nc:range=tv,` +
         "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0," +
@@ -76,9 +77,18 @@ describe("extractTailArgs", () => {
     expect(extractTailArgs("/w/source.mp4", 3, 2, "/w/source.mp4.tail.mp4", filter)).toEqual([...PLAIN.slice(0, 6), "-vf", filter, ...PLAIN.slice(6)])
   })
 
-  it("has no picture filter for an SDR or untagged source", () => {
-    for (const source of [{}, { colorTransfer: "bt709" }, { colorPrimaries: "bt2020", colorTransfer: "bt2020-10" }, { colorTransfer: "unknown" }]) {
-      expect(sdrPictureFilter(source)).toBeUndefined()
+  it("has no picture filter for a limited-range SDR or untagged source", () => {
+    for (const source of [{}, { colorTransfer: "bt709" }, { colorRange: "tv" }, { colorPrimaries: "bt2020", colorTransfer: "bt2020-10" }, { colorTransfer: "unknown" }]) {
+      expect(deliveredPictureFilter(source)).toBeUndefined()
+    }
+  })
+
+  // A full-range SDR source's tail goes through the stitch's conversion to limited range.
+  it("puts a full-range SDR source's picture through the stitch's conversion to limited range, nothing else changed", () => {
+    for (const source of [{ pixFmt: "yuvj420p" }, { colorRange: "pc" }, { pixFmt: "yuvj420p", colorTransfer: "bt709", colorRange: "pc" }]) {
+      const filter = deliveredPictureFilter(source)!
+      expect(filter).toBe("setparams=range=pc,scale=out_range=tv,format=yuv420p")
+      expect(extractTailArgs("/w/source.mp4", 3, 2, "/w/source.mp4.tail.mp4", filter)).toEqual([...PLAIN.slice(0, 6), "-vf", filter, ...PLAIN.slice(6)])
     }
   })
 })
@@ -154,7 +164,7 @@ describe.skipIf(!ffmpegAvailable)("extractTailToFile (real ffmpeg)", () => {
     expect(await probeMatched(src)).toMatchObject({
       videoCodec: "h264", pixFmt: "yuv420p", colorPrimaries: "bt2020", colorTransfer: transfer, colorSpace: "bt2020nc", colorRange: "tv",
     })
-    expect(sdrPictureFilter(await probeMatched(src))).toBeDefined()
+    expect(deliveredPictureFilter(await probeMatched(src))).toBeDefined()
   }, 60_000)
 
   it("runs the picture through `pictureFilter` when given, the sound as before", async () => {
@@ -184,7 +194,7 @@ describe.skipIf(!ffmpegAvailable)("extractTailToFile (real ffmpeg)", () => {
     await writeTaggedClip(src, hdrTags(transfer), { size: "640x360", seconds: 3 })
     const source = await probeMatched(src)
     expect(source.colorTransfer).toBe(transfer)
-    const out = await extractTailToFile(src, 1, { measureFrom: "picture", pictureFilter: sdrPictureFilter(source) })
+    const out = await extractTailToFile(src, 1, { measureFrom: "picture", pictureFilter: deliveredPictureFilter(source) })
     const streams = (JSON.parse(await runFfprobe([
       "-v", "error", "-count_frames",
       "-show_entries", "stream=codec_type,codec_name,pix_fmt,color_primaries,color_transfer,color_space,color_range,nb_read_frames",
@@ -202,6 +212,44 @@ describe.skipIf(!ffmpegAvailable)("extractTailToFile (real ffmpeg)", () => {
       expect(y).toBeGreaterThan(30)
       expect(y).toBeLessThan(230)
     }
+  }, 60_000)
+
+  // The extend's tail of a full-range SDR source (yuvj420p / pc, as some phones and screen recorders
+  // make): limited range like the stitched result, so the model is given the picture the result
+  // shows. A flat white panel (a moving one beside it gives the clip a real bitrate): full range's
+  // 255 lands on limited range's white, about 235.
+  it("cuts a full-range source's tail limited range: yuv420p tagged tv, white at limited-range white", async () => {
+    const src = join(dir, `${randomUUID()}.mp4`)
+    const tagging = colourTagArgs({ primaries: "bt709", transfer: "bt709", matrix: "bt709", range: "pc" })
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "color=c=white:s=160x90:r=24:d=3[w];testsrc2=s=160x90:r=24:d=3[t];[w][t]hstack=inputs=2",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3:sample_rate=48000",
+      // The tags go on after the conversion to full range (`setparams` labels, it does not convert).
+      "-vf", `format=yuvj420p,${tagging.filter}`,
+      "-c:v", "libx264", "-pix_fmt", "yuvj420p", "-b:v", "300k", ...tagging.encoder,
+      "-c:a", "aac", "-shortest",
+      src,
+    ])
+    /** The white panel's mean luma inside its edges, over every frame (a mean: encode noise moves a single pixel). */
+    const whiteOf = async (file: string): Promise<number> => {
+      const out = await runFfmpeg(["-v", "error", "-i", file, "-vf", "crop=120:70:20:10,signalstats,metadata=print:file=-", "-f", "null", "-"])
+      const yavg = [...out.matchAll(/lavfi\.signalstats\.YAVG=([\d.]+)/g)].map((m) => Number(m[1]))
+      expect(yavg.length).toBeGreaterThan(0)
+      return yavg.reduce((a, b) => a + b, 0) / yavg.length
+    }
+    const colourOf = async (file: string) => (JSON.parse(await runFfprobe([
+      "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=pix_fmt,color_range", "-of", "json", file,
+    ])) as { streams: Array<{ pix_fmt: string; color_range?: string }> }).streams[0]!
+    // The fixture really is full range: tagged so, its white at 255.
+    expect((await colourOf(src)).color_range).toBe("pc")
+    expect(await whiteOf(src)).toBeGreaterThanOrEqual(250)
+
+    const out = await extractTailToFile(src, 1, { measureFrom: "picture", ...extendTailPicture(await probeMatched(src)) })
+    expect(await colourOf(out)).toEqual({ pix_fmt: "yuv420p", color_range: "tv" })
+    const white = await whiteOf(out)
+    expect(white).toBeGreaterThanOrEqual(230)
+    expect(white).toBeLessThanOrEqual(240)
   }, 60_000)
 
   it("measureFrom picture: the tail ends on the last frame when the sound runs past it", async () => {
