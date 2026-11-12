@@ -46,6 +46,8 @@ For example, a 5-second 720p clip upscaled to 1080p at 30 fps holds 176 credits<
 
 **The price you see before you run** is the hold, marked as an estimate (≈). The editor reads the clip's length from the node wired into it when it knows it (an upload, a generation's duration), and otherwise prices a 10-second clip; it assumes a 16:9 frame and, with "Same as source", 30 fps. The run itself measures the real clip, so the amount held can differ from the estimate.
 
+**Clips from a link.** Topaz measures a clip from a link to another site before it holds anything, and hands that link to the model. A deployment that has turned off links to other sites refuses such a clip first, before anything is read or held, with its standard message (`403 link_imports_disabled`; upload the file instead). This applies on every edition, and to a workflow run as well: there the node fails with that code. A clip already stored on Nodaro is not affected.
+
 ### Nodaro Video Upscale
 
 Provider id `nodaro-video-upscale`. Upscales any clip of up to **60 seconds** and **50 MB** into a **1080p**, **2K** or **4K** frame:

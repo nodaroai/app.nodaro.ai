@@ -155,7 +155,9 @@ const isTopazBody = (body: unknown): boolean => {
  * (every edition — the legacy factor and "same as source" need the clip's size
  * and rate), so the guard holds the plan's units and the worker renders the
  * target that was priced. An unreadable source is a 400 before anything is
- * reserved. Inert for every other provider.
+ * reserved. A link to outside content is first held to the deployment's
+ * link-import switch, in every edition: where link imports are off it is
+ * refused (403, nothing read, created or held). Inert for every other provider.
  */
 async function topazPlanPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   if (!isTopazBody(req.body)) return
@@ -163,6 +165,10 @@ async function topazPlanPreHandler(req: FastifyRequest, reply: FastifyReply): Pr
   const videoUrl = typeof body.videoUrl === "string" ? body.videoUrl : undefined
   // No URL (or one Zod will refuse) → the handler answers the validation error.
   if (!videoUrl || !safeUrlSchema.safeParse(videoUrl).success) return
+  // Measuring the clip reads the link, and the run hands it to the model:
+  // the deployment's switch is asked first.
+  const linkRefused = linkImportRefusal(videoUrl)
+  if (linkRefused) return reply.status(403).send({ error: linkRefused })
   try {
     req.topazVideoUpscale = await planTopazVideoUpscale(videoUrl, body)
   } catch (err) {
