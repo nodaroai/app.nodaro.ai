@@ -5,10 +5,12 @@
  */
 import { describe, expect, it, vi, beforeEach } from "vitest"
 
-const avail = vi.hoisted(() => ({ loaded: true, unavailable: [] as string[] }))
+const avail = vi.hoisted(() => ({ loaded: true, failed: false, unavailable: [] as string[] }))
 vi.mock("@/lib/surface-availability", async (orig) => ({
   ...(await orig<typeof import("@/lib/surface-availability")>()),
   surfaceAvailabilityLoaded: () => avail.loaded,
+  surfaceAvailabilityFailed: () => avail.failed,
+  // The answer once it is in; before it (awaited, or after a failed read) the static profile's deny list.
   isNodeUnavailable: (type: string) => avail.unavailable.includes(type),
 }))
 
@@ -18,6 +20,7 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 beforeEach(() => {
   avail.loaded = true
+  avail.failed = false
   avail.unavailable = []
 })
 
@@ -42,6 +45,18 @@ describe("usecaseMulticamViewer: the three states the editor shows (decided 2026
     expect(usecaseMulticamViewer()).toBe("offered")
     avail.unavailable = ["speaker-map"]
     expect(usecaseMulticamViewer()).toBe("withheld")
+  })
+
+  it("a read that failed: withheld, as the run then is, whatever the static profile says (never loading for the session)", () => {
+    avail.loaded = false
+    avail.failed = true
+    // The profile does not deny Speaker Map, but it cannot say the admin switch does not: still withheld.
+    expect(usecaseMulticamViewer()).toBe("withheld")
+    expect(usecaseMulticamOffered()).toBe(false)
+    // The profile denies it.
+    avail.unavailable = ["speaker-map"]
+    expect(usecaseMulticamViewer()).toBe("withheld")
+    expect(usecaseMulticamOffered()).toBe(false)
   })
 })
 
