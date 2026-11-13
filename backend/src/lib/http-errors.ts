@@ -308,6 +308,12 @@ export function sendInternalError(
   req: FastifyRequest,
   err: unknown,
   clientMessage = GENERIC_INTERNAL_MESSAGE,
+  /**
+   * Safe, caller-built fields added to the 500's `error` object beside
+   * `code` and `message` (the job ids a batch did start, say). Never derived
+   * from `err`; used only on the 500 itself, not on a refusal answered above.
+   */
+  details?: Readonly<Record<string, unknown>>,
 ): FastifyReply {
   // A plugin route that catches a toolkit refusal (a job-policy block, a
   // session or origin the request may not use, a voice the lock refuses) and
@@ -367,7 +373,7 @@ export function sendInternalError(
   reportServerError(req, errorMessageOf(err) ?? clientMessage, "route-catch", err, clientMessage)
   sanitizedReplies.add(reply)
   return reply.status(500).send({
-    error: { code: "internal_error", message: clientMessage },
+    error: { ...details, code: "internal_error", message: clientMessage },
   })
 }
 

@@ -19,10 +19,18 @@
  * render at Final and every node after it, the set the editor, the API and the
  * app runner run).
  *
- * The one-node podcast templates (Tighten Episode, Clip Pack, Trailer) are
- * listed the same way: each node is set to review first, its preview part the
- * node's first run (fee included), its final part the node's Render final. Its
- * review is the node's own setting, so the sync never flips it.
+ * The one-node podcast templates (Tighten Episode, Clip Pack, Trailer,
+ * Multicam Cut) are listed the same way: each node is set to review first, its
+ * preview part the node's first run (fee included), its final part the node's
+ * Render final. Its review is the node's own setting, so the sync never flips
+ * it.
+ *
+ * Every figure is the run of a viewer from whom Speaker Map is withheld (no
+ * `multicam`; the editor's half loads no availability, so it prices that
+ * viewer too): the one-node Multicam Cut reads its first recording only. Its
+ * figures for a viewer who may use Speaker Map (every user now, the run its
+ * stored card lists: `TEMPLATE_CARD_VIEWER`) are pinned in a describe of
+ * their own.
  *
  * All of that holds with the preview stop rule (PREVIEW_STOP_RULE_ENABLED)
  * off, which this file sets rather than reading the environment. With it on, a
@@ -87,10 +95,12 @@ const fixture = JSON.parse(readFileSync(join(here, "fixtures", "run-estimate-par
  *  rule's sync never changes. */
 const ONE_NODE_TYPES: Record<string, string> = {
   "podcast-clip-pack-one-node": "clip-pack",
+  "podcast-multicam-cut-one-node": "tighten-episode",
   "podcast-tighten-episode-one-node": "tighten-episode",
   "podcast-trailer-formats-one-node": "episode-trailer",
 }
 const ONE_NODE = "podcast-tighten-episode-one-node"
+const MULTICAM_ONE_NODE = "podcast-multicam-cut-one-node"
 const ONE_NODES = Object.keys(ONE_NODE_TYPES)
 const PODCAST = ["podcast-clip-pack", "podcast-multicam-cut", "podcast-tighten-episode", "podcast-trailer-formats", "podcast-vertical-speaker-clip", ...ONE_NODES].sort()
 /** The templates the sync writes at Final where the preview stop rule is off. */
@@ -286,7 +296,6 @@ describe("a step priced by the length it is given, on a render's output", () => 
   const linear: Array<[string, Graph]> = [
     ["a Combine Videos of a trailer render and a second recording", chain("trailer", [{ id: "intro", type: "upload-video", data: {} }, combine("c")], [wire("render", "c"), wire("intro", "c")])],
     ["a Combine Videos of a tighten render (per minute of the episode) and a second recording", chain("tighten", [{ id: "intro", type: "upload-video", data: {} }, combine("c")], [wire("render", "c"), wire("intro", "c")])],
-    ["a Trim of a tighten render", chain("tighten", [trim("t")], [wire("render", "t")])],
     ["a Loop of a trailer render", chain("trailer", [loop("l")], [wire("render", "l")])],
   ]
   it.each(linear)("%s: the run estimate is the listing at the cap", (_name, { nodes, edges }) => {
@@ -294,10 +303,12 @@ describe("a step priced by the length it is given, on a render's output", () => 
   })
 
   // A chain, or a step whose price is not linear in its input (Trim to the
-  // first N seconds, Loop by duration): the listing is the steepest rise per
-  // minute, so at the cap it is never below the run estimate, and above it by
-  // no more than that rounding up or that steepness.
+  // first N seconds, Loop by duration, a Trim with no end: its one-unit floor
+  // on an empty clip less the frame grace): the listing is the steepest rise
+  // per minute, so at the cap it is never below the run estimate, and above it
+  // by no more than that rounding up or that steepness.
   const chained: Array<[string, Graph]> = [
+    ["a Trim with no end of a tighten render", chain("tighten", [trim("t")], [wire("render", "t")])],
     ["a Loop in repeat mode, then a Combine, on a tighten render", chain("tighten", [loop("l", { repeatCount: 3 }), combine("c")], [wire("render", "l"), wire("l", "c")])],
     ["a Trim to the first 20 seconds, then a Combine, on a tighten render", chain("tighten", [trim("t", { trimMode: "keep-first-seconds", keepFirstSeconds: 20 }), combine("c")], [wire("render", "t"), wire("t", "c")])],
   ]
@@ -456,5 +467,59 @@ describe("the one-node podcast templates", () => {
     expect(fixture.templates["podcast-trailer-formats-one-node"]).toBe(
       fixture.templateRunsWithStopRule["podcast-trailer-formats"]! + fixture.prices["use-case-fee:episode-trailer"]!,
     )
+  })
+
+  // For a viewer from whom Speaker Map is withheld the node reads Camera 1
+  // only, as before multicam: the graph with Camera 2, the wide camera and the master
+  // unwired. Its first run is the one-node Tighten Episode's; its Render final
+  // is that one's without the captions (none in a multicam cut).
+  it("Multicam Cut, Speaker Map withheld: Camera 1 alone, the one-node Tighten Episode's first run", () => {
+    const { nodes, edges } = templates.get(MULTICAM_ONE_NODE)!
+    const cameraOneOnly = edges.filter((e) => e.source === "multicam-cam-a")
+    expect(cameraOneOnly.map((e) => e.targetHandle)).toEqual(["media"])
+    expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges)).toBe(CreditsService.estimateWorkflowBaseCredits(nodes, cameraOneOnly))
+    expect(listingPartsAtCap({ nodes, edges })).toEqual(listingPartsAtCap({ nodes, edges: cameraOneOnly }))
+    expect(fixture.templates[MULTICAM_ONE_NODE]).toBe(fixture.templates[ONE_NODE])
+  })
+})
+
+describe("the one-node Multicam Cut for a user who may use Speaker Map (the run its card lists)", () => {
+  // A listing is a general user's run (decided 2026-10-20): Speaker Map is
+  // available to users (`usecaseMulticamForEveryone`, `TEMPLATE_CARD_VIEWER`),
+  // so the node lists on its three cameras and its Master audio. It builds the hand-built Multicam
+  // Cut's chain plus Silence Detect (Tighten's plan reads the silences) and
+  // Speaker Map (who is on which camera; the hand-built Camera Switch keeps
+  // its default map): its first run is the hand-built run up to its Preview,
+  // those two steps and the fee. Its Render final is the hand-built one:
+  // Camera Switch again on the reviewed cut, then the render at Final.
+  const MULTICAM = { multicam: true } as const
+  const graph = () => templates.get(MULTICAM_ONE_NODE)!
+
+  it("the hand-built template's run + Silence Detect + Speaker Map + the fee; the same Render final", () => {
+    const { nodes, edges } = graph()
+    const l = CreditsService.estimateWorkflowBaseListing(nodes, edges, "template", MULTICAM)
+    const firstRun = fixture.templateRunsWithStopRule["podcast-multicam-cut"]! + STATIC_CREDIT_COSTS["silence-detect"]! + STATIC_CREDIT_COSTS["speaker-map"]! + STATIC_CREDIT_COSTS["use-case-fee:tighten-episode"]!
+    expect({ preview: l.preview + 180 * l.previewPerMinute, final: l.final + 180 * l.finalPerMinute }).toEqual({
+      preview: firstRun,
+      final: fixture.templateFinals["podcast-multicam-cut"],
+    })
+    expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges, MULTICAM), "run estimate").toBe(firstRun)
+    const tighten = nodes.find((n) => n.type === "tighten-episode")!
+    const overridden = nodes.map((n) => (n.id === tighten.id ? { ...n, data: { ...n.data, useCaseContinue: { mode: "render-final", jobId: "job-1" } } } : n))
+    expect(CreditsService.estimateWorkflowBaseCredits(overridden, edges, { ...MULTICAM, runNodeIds: new Set([tighten.id]) }), "Render final run estimate").toBe(fixture.templateFinals["podcast-multicam-cut"])
+  })
+
+  // Both answers at the price-table rows. The card stored is the multicam
+  // listing charged (template-listing-prices.test.ts pins the card in each
+  // answer), so it is never below that listing.
+  it("lists 102 + 15 a minute at the rows (992 first run, 1810 Render final at the cap); withheld, 42 + 15 a minute (942 and 1800)", () => {
+    const { nodes, edges } = graph()
+    const rows = (viewer?: typeof MULTICAM) => {
+      const l = CreditsService.estimateWorkflowBaseListing(nodes, edges, "template", viewer)
+      return { fixed: l.preview + l.final, perMinute: l.previewPerMinute + l.finalPerMinute, atCap: { preview: l.preview + 180 * l.previewPerMinute, final: l.final + 180 * l.finalPerMinute } }
+    }
+    expect(rows(MULTICAM)).toEqual({ fixed: 102, perMinute: 15, atCap: { preview: 992, final: 1810 } })
+    expect(rows()).toEqual({ fixed: 42, perMinute: 15, atCap: { preview: 942, final: 1800 } })
+    expect(cardAtCap(docs.get(MULTICAM_ONE_NODE)!), "the card stored, never below the multicam listing").toBeGreaterThanOrEqual(992 + 1810)
   })
 })

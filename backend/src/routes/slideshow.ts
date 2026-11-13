@@ -17,6 +17,7 @@ import {
   STILL_FITS,
 } from "../providers/video/still-segment.js"
 import { SLIDESHOW_MOTIONS } from "../providers/video/slideshow-timing.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 // Enums come from the shared segment builder / timing planner — validation
 // cannot drift from what the worker renders. The audio is OPTIONAL: wired,
@@ -105,12 +106,13 @@ export async function slideshowRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("slideshow", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("slideshow", {
       jobId: job.id,
       ...restData,
       transition: resolveSlideshowTransition(restData.transition),
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

@@ -144,6 +144,22 @@ describe("pricing each item", () => {
     h.markup = 50
     expect((await quote([item("combine_videos", { transition: "cut" })], [], 2)).lines[0]!.credits).toBe(60)
   })
+  it("the join prices each clip at the seconds its item carries (`clipSeconds`, on the envelope): 12 s clips, 5 units", async () => {
+    // 12 s planned + 0.1 s made-clip slack, less the 0.1 s grace: 12 s a clip, 24 s → 5 units.
+    expect(await pricingFor("combine_videos", { transition: "cut" }, { clipCount: 2, clipSeconds: [12, 12] })).toEqual({ id: "combine-videos", base: 50 })
+    const join = { ...item("combine_videos", { transition: "cut" }, "Join"), clipSeconds: [12, 12] }
+    expect((await quote([join], [], 2)).lines[0]!.credits).toBe(50)
+  })
+  it("a join item with no seconds, or a missing or invalid entry, prices that clip at the 8 s stand-in", async () => {
+    expect(await pricingFor("combine_videos", { transition: "cut" }, { clipCount: 2 })).toEqual({ id: "combine-videos", base: 40 })
+    // 12 s + the 8 s stand-in = 20 s → 4 units, for an invalid entry and for a list one short.
+    for (const clipSeconds of [[12, "8"], [12, -3], [12, Number.NaN], [12]]) {
+      expect(await pricingFor("combine_videos", { transition: "cut" }, { clipCount: 2, clipSeconds })).toEqual({ id: "combine-videos", base: 40 })
+    }
+    // A list that is not a list is no list: the item is still priced, every clip at the stand-in.
+    const notAList = { ...item("combine_videos", { transition: "cut" }, "Join"), clipSeconds: "12,12" }
+    expect((await quote([notAList], [], 2)).lines[0]!.credits).toBe(40)
+  })
   it("the charge-time price carries the configured markup", async () => {
     h.markup = 10
     expect((await quote([item("extract_frame", { mode: "timestamp", time_seconds: 4 })])).lines[0]!.credits).toBe(11)

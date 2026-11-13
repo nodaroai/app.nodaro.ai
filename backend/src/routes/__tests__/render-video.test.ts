@@ -20,8 +20,9 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
-vi.mock("@/lib/job-failure.js", () => ({ markJobFailed: vi.fn().mockResolvedValue(true) }))
-vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: vi.fn().mockResolvedValue(1) }))
+vi.mock("@/lib/job-failure.js", () => ({ markJobFailedDetailed: vi.fn().mockResolvedValue("flipped") }))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn().mockResolvedValue(true) }))
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundJobHoldsConfirmed: vi.fn().mockResolvedValue(true) }))
 
 vi.mock("@/lib/queue.js", () => ({
   videoQueue: {
@@ -103,8 +104,8 @@ vi.mock("@/workers/scene3d-render-assets.js", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { markJobFailed } from "../../lib/job-failure.js"
-import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
+import { markJobFailedDetailed } from "../../lib/job-failure.js"
+import { refundJobHoldsConfirmed } from "../../lib/credits-job-lifecycle.js"
 import { renderVideoRoutes } from "../render-video.js"
 import { supabase } from "../../lib/supabase.js"
 import { renderQueue } from "../../lib/render-queue.js"
@@ -489,12 +490,14 @@ describe("POST /v1/render-video/plan", () => {
   it("fails and refunds a reserved plan job when enqueueing fails", async () => {
     mockJobInsert("job-queue-failure")
     vi.mocked(validatePlanByType).mockImplementation(((_type: string, plan: unknown) => plan) as never)
-    vi.mocked(renderQueue.add).mockRejectedValueOnce(new Error("Redis unavailable"))
+    vi.mocked(renderQueue.add).mockRejectedValueOnce(new Error("Connection is closed."))
     const res = await app.inject({ method: "POST", url: "/v1/render-video/plan",
       payload: { planType: "3d-scene", plan: validScene3DPlan(), userId: TEST_USER_ID } })
     expect(res.statusCode).toBe(500)
-    expect(markJobFailed).toHaveBeenCalledWith("job-queue-failure", { error_message: "Failed to enqueue video render" })
-    expect(refundReservedCreditsForJob).toHaveBeenCalledWith("job-queue-failure")
+    expect(res.json().error.code).toBe("internal_error")
+    // The shared rule (lib/enqueue-route-job.ts): failed from pending, its key released, refunded confirmed.
+    expect(markJobFailedDetailed).toHaveBeenCalledWith("job-queue-failure", expect.objectContaining({ from: ["pending"], extra: { idempotency_key: null } }))
+    expect(refundJobHoldsConfirmed).toHaveBeenCalledWith("job-queue-failure")
   })
 
   it.each(["/v1/render-video/plan", "/v1/render-video"])("authorizes a retained v2 scene before queuing through %s", async (url) => {

@@ -77,6 +77,9 @@ import { handOffConcurrencySlot } from "../../lib/concurrency-lanes/handoff.js"
 // (backend/src/nodes/<type>/worker.ts), keyed by its node type.
 // @registry-enumerates ffmpegHandlers carries every video-queue node unit's worker
 import { UNIT_WORKERS } from "../../nodes/_generated/workers.js"
+import { videoUtilityChargeCheck } from "../../lib/video-utility-charge-check.js"
+import { videoUtilityClipReading } from "../../lib/video-utility-credits.js"
+import { probeClipLengthSec } from "../../lib/video-utility-probe.js"
 import { unitDescriptorOf } from "../../lib/unit-descriptors.js"
 import { composeRecord } from "../../lib/unit-compose.js"
 
@@ -119,9 +122,12 @@ const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, c
     edgeFades?: { in?: number; out?: number }
   }
   console.log(`[worker] combine-videos ${ctx.jobId}: ${videoUrls.length} videos, transition=${transition}, audio=${audioMode ?? "crossfade"}, curve=${audioCrossfadeCurve ?? "linear"}, audioXfade=${audioCrossfadeDuration ?? "(=transition)"}, trimStart=${trimStartFrames ?? 0}, trimEnd=${trimEndFrames ?? 0}`)
+  // Priced by the clips' measured lengths: a job with no priced units is refused
+  // now, clips longer than their price after the download (both refunded).
+  const chargeCheck = videoUtilityChargeCheck("combine-videos", job.data as Record<string, unknown>)
 
   const { outputPath, smartCuts } = await combineVideos({
-    videoUrls, transition, transitionDuration,
+    videoUrls, chargeCheck, transition, transitionDuration,
     audioMode: audioMode ?? "crossfade", audioCrossfadeCurve, audioCrossfadeDuration,
     trimStartFrames: trimStartFrames ?? 0, trimEndFrames: trimEndFrames ?? 0,
     smartCut: smartCutEnabled
@@ -345,6 +351,9 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
     smartLoopCutLookback?: number
     losslessKeyframe?: boolean
   }
+  // Priced by the video's measured length: a job with no priced units is refused
+  // now, a video longer than its price after the download (both refunded).
+  const chargeCheck = videoUtilityChargeCheck("trim-video", job.data as Record<string, unknown>)
 
   // Smart loop cut: empirically pick the trailing frame closest to frame 0
   // and trim there. Bypasses the time/frame trim entirely.
@@ -354,8 +363,10 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
       videoUrl,
       lookbackFrames: smartLoopCutLookback,
       outputSilent: outputSilentVideo,
+      chargeCheck,
     })
     await setJobProgress(job, ctx.jobId, 80)
+    const durationSec = await trimOutputLengthSec(slc.videoPath)
     const r2Url = await uploadFileToR2(slc.videoPath, ctx.jobId, "video", ctx.jobUserId)
     await cleanupWorkDir(dirname(slc.videoPath))
     const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -365,6 +376,7 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
       output_data: {
         videoUrl: r2Url,
         thumbnailUrl: thumbUrl,
+        ...(durationSec !== undefined ? { durationSec } : {}),
         smartLoopCut: {
           chosenFrameIndex: slc.chosenFrameIndex,
           psnr: slc.psnr,
@@ -382,6 +394,7 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
   console.log(`[worker] trim-video ${ctx.jobId}${outputSilentVideo ? " (silent)" : ""}`)
   const result = await trimVideo({
     videoUrl,
+    chargeCheck,
     startTime: startTime ?? 0,
     endTime,
     outputSilentVideo,
@@ -394,17 +407,41 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
     losslessKeyframe,
   })
   await setJobProgress(job, ctx.jobId, 80)
+  const durationSec = await trimOutputLengthSec(result.videoPath)
   const r2Url = await uploadFileToR2(result.videoPath, ctx.jobId, "video", ctx.jobUserId)
   await cleanupWorkDir(dirname(result.videoPath))
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...(durationSec !== undefined ? { durationSec } : {}) },
   })
   if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+/** How long reading the length of the file a Trim made may take (a local file: its header, else a short scan). */
+const TRIM_OUTPUT_PROBE_TIMEOUT_MS = 30_000
+
+/**
+ * The real length of the video a Trim made, by the reading a Trim or a Loop
+ * measures a clip with (its container's, `videoUtilityClipReading`), recorded
+ * on the job's output as `durationSec` — the path a generated video's real
+ * length takes to the step after it (`runForwardedVideoLengthSec`) and onto
+ * its result row. A keyframe-snapped cut can run past its window, so the step
+ * after it is handed what was made, not the window. A file that cannot be read
+ * records nothing: the step after it is handed the length the Trim's settings
+ * pass on, as before.
+ */
+async function trimOutputLengthSec(path: string): Promise<number | undefined> {
+  try {
+    const sec = await probeClipLengthSec(path, { reading: videoUtilityClipReading("trim-video"), timeoutMs: TRIM_OUTPUT_PROBE_TIMEOUT_MS, packetTimeoutMs: TRIM_OUTPUT_PROBE_TIMEOUT_MS })
+    return Number.isFinite(sec) && sec > 0 ? sec : undefined
+  } catch (err) {
+    console.warn(`[trimVideo] could not read the length of the cut it made (${err instanceof Error ? err.message : String(err)}): none recorded`)
+    return undefined
+  }
 }
 
 const handleExtractFrame: HandlerFn = async function handleExtractFrame(job, ctx) {
@@ -464,8 +501,12 @@ const handleLoopVideo: HandlerFn = async function handleLoopVideo(job, ctx) {
     smartLoopCutLookback?: number
   }
   console.log(`[worker] loop-video ${ctx.jobId}${smartLoopCutBeforeRepeat ? " [smart-cut-pre]" : ""}`)
+  // Priced by the video's measured length: a job with no priced units is refused
+  // now, a video longer than its price after the download (both refunded).
+  const chargeCheck = videoUtilityChargeCheck("loop-video", job.data as Record<string, unknown>)
   const result = await loopVideo({
     videoUrl,
+    chargeCheck,
     mode,
     repeatCount,
     targetDuration,

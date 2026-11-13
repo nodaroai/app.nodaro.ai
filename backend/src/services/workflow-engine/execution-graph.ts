@@ -11,6 +11,7 @@ import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared/nodes
 import { isSocialSearchPickFrozen } from "@nodaro/shared/social"
 import { ugcAwaitsPick } from "@nodaro/shared/ugc"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { ENGINE_SKIPPED_NODE_TYPES } from "@nodaro/render-rules"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "./types.js"
 import { speakerViewSourceOrderingEdges } from "./speaker-view-source-graph.js"
 
@@ -343,29 +344,8 @@ export function isSourceNode(nodeType: string): boolean {
 export const runsInALevel = (nodeType: string): boolean =>
   !isSourceNode(nodeType) && !isSkipNode(nodeType) && !PARAMETER_NODE_TYPES.has(nodeType)
 
-/** Node types that should be skipped during backend execution */
-// Group and Collect: non-executable aggregators resolved at field-resolution time.
-// The orchestrator skips them entirely; downstream extractor cases
-// (output-extractor.ts) materialize their structured-list output from upstream
-// member nodes (Group via parentId membership, Collect via order[] array).
-const SKIP_NODE_TYPES = new Set([
-  "manual-edit",
-  "sub-workflow-output",
-  "group",
-  "collect",
-  // Visual / config-only nodes that are NOT executable, NOT parameter pickers,
-  // and produce no DAG output. Without an explicit classification they fall
-  // through the orchestrator's executable filter → buildPayload throws
-  // "Unknown node type" → the ENTIRE workflow fails on any full server-side run
-  // (webhook / schedule / MCP / published-app) or the default Run button. The
-  // frontend masks this because it gates on EXECUTABLE_TYPES. The platform's
-  // own film template ships a sticky-note (lib/film-template.ts), so film
-  // workflows hit this. Guarded by node-registry-sync.test.ts (full nodeTypes
-  // map, not just NODE_REGISTRY).
-  "sticky-note", // free-form canvas annotation
-  "provider", // emits a provider value consumed at field-mapping time, not via DAG execution
-  "rss-feed", // legacy/commented-out source; no executable handler — skip rather than crash
-])
+/** Node types that should be skipped during backend execution: `@nodaro/render-rules`' one set (the run estimates' measured walk reads it too). */
+const SKIP_NODE_TYPES = ENGINE_SKIPPED_NODE_TYPES
 
 export function isSkipNode(nodeType: string): boolean {
   return SKIP_NODE_TYPES.has(nodeType)

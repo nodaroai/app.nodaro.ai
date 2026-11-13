@@ -32,6 +32,7 @@ import {
 import { buildObjectMotionPrompt } from "@nodaro/prompts/doctrine"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 /**
  * Body schema for `POST /v1/generate-creature-motion`.
  *
@@ -241,7 +242,7 @@ export async function generateCreatureMotionRoutes(app: FastifyInstance) {
       //    name `"generate-creature-motion"` matches the Phase C2 entityHandlers
       //    key the creature worker registered.
       // ───────────────────────────────────────────────────────────────────
-      await videoQueue.add("generate-creature-motion", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-creature-motion", {
         jobId: job.id,
         prompt,
         sourceImageUrl: parsed.data.sourceImageUrl,
@@ -252,7 +253,8 @@ export async function generateCreatureMotionRoutes(app: FastifyInstance) {
         usageLogId,
         attachToCreatureId: parsed.data.attachToCreatureId,
         attachName: parsed.data.attachName,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     },

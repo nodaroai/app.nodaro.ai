@@ -25,6 +25,7 @@ import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { measureVideoMaskLength } from "../lib/video-mask-length.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const zoneMargin = z.number().min(VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN).max(VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX).optional().default(0)
 
@@ -131,11 +132,12 @@ export async function videoMaskRoutes(app: FastifyInstance) {
     const reservation = await reserveCreditsForJob(req, reply, job.id, bucketKey)
     if (reply.sent) return
 
-    await videoQueue.add("video-mask", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("video-mask", {
       jobId: job.id,
       ...parsed.data,
       usageLogId: reservation?.usageLogId,
-    })
+    }))
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

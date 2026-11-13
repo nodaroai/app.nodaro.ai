@@ -56,6 +56,16 @@ vi.mock("../../lib/queue.js", () => ({
   videoQueue: { add: vi.fn(() => Promise.resolve({ id: "queue-1" })) },
 }))
 
+// The route measures the video before the guard prices it: 5 s here.
+const probeSpy = vi.fn(async (_url: string) => ({ width: 640, height: 360, durationSeconds: 5 }))
+vi.mock("../../providers/video/ffmpeg-utils.js", () => ({ probeVideoSource: probeSpy, assertSafeProbeSource: async () => undefined }))
+
+// The one clip reading both sides measure by (lib/video-utility-probe.ts), driven by the probe above.
+vi.mock("../../lib/video-utility-probe.js", () => ({
+  probeClipLengthSec: async (src: string) => (await probeSpy(src)).durationSeconds,
+  ClipUnreadableError: class ClipUnreadableError extends Error {},
+}))
+
 vi.mock("../../lib/url-validator.js", async () => {
   const { z } = await import("zod")
   return { safeUrlSchema: z.string().url() }
@@ -97,7 +107,7 @@ describe("/v1/loop-video pricing", () => {
     await app.close()
   })
 
-  it("uses upstreamDuration in repeat mode for accurate cost", async () => {
+  it("prices repeat mode by the video's measured length, never a length the request sends", async () => {
     const app = await buildApp()
     const res = await app.inject({
       method: "POST",
@@ -106,9 +116,10 @@ describe("/v1/loop-video pricing", () => {
         videoUrl: "https://example.com/v.mp4",
         mode: "repeat",
         repeatCount: 4,
-        upstreamDuration: 5, // 4×5 = 20s → 4 units = 40 credits
+        upstreamDuration: 1, // ignored: 4 × the measured 5 s = 20 s → 4 units = 40 credits
       },
     })
+    expect(probeSpy).toHaveBeenCalledWith("https://example.com/v.mp4")
     expect(res.statusCode).toBe(200)
     expect(reserveSpy).toHaveBeenCalledWith(
       "u-1", "job-1", "loop-video", 0, 0,

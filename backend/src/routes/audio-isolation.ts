@@ -12,6 +12,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { fixedRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const audioIsolationBody = z.object({
   audioUrl: safeUrlSchema,
@@ -58,11 +59,12 @@ export async function audioIsolationRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("audio-isolation", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("audio-isolation", {
       jobId: job.id,
       audioUrl,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

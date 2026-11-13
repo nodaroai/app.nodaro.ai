@@ -57,7 +57,8 @@ export function wordsFromTranscript(json: unknown): TimedWord[] {
   if (!parsed.success) return []
   return parsed.data.words
     .map((w) => ({ text: w.text.trim(), start: w.startMs / 1000, end: w.endMs / 1000 }))
-    .filter((w) => w.text.length > 0 && Number.isFinite(w.start) && w.end > w.start)
+    // A word can be timed with no length ("I" said fast); it is still a word to caption.
+    .filter((w) => w.text.length > 0 && Number.isFinite(w.start) && Number.isFinite(w.end) && w.end >= w.start)
     .sort((a, b) => a.start - b.start)
 }
 
@@ -192,7 +193,7 @@ export function captionCues(words: readonly TimedWord[], opts: CaptionOptions = 
 // planner cannot answer: the model reads the request first.
 const INTENT_PATTERNS: Record<EditStep, RegExp> = {
   // `\b` knows only ASCII letters, so a word with accents is bounded by lookarounds instead.
-  fillers: /filler|\bums?\b|\buhs?\b|stutter|hesitat|מילות מילוי|אממ|גמגו|היסוס|フィラー|えーと|言い淀|필러|군말|더듬|vícios? de linguagem|muletas?|(?<!\p{L})hã(?!\p{L})/iu,
+  fillers: /filler|\bums?\b|\buhs?\b|stutter|hesitat|מילות ה?מילוי|אממ|גמגו|היסוס|フィラー|えーと|言い淀|필러|군말|더듬|vícios? de linguagem|muletas?|(?<!\p{L})hã(?!\p{L})/iu,
   pauses: /pause|silen|dead air|\bgaps?\b|tighten|שתיק|הפסק|רווח|שקט|מתים|間を|無音|沈黙|詰め|침묵|공백|쉼|pausa|silênc|silenc|respiro/iu,
   captions: /caption|subtit|text on screen|כתובי|תמליל על|字幕|テロップ|자막|legend/iu,
   music: /music|\bsong\b|soundtrack|\bbeat\b|\bbgm\b|מוזיק|שיר|מנגינ|פסקול|音楽|ＢＧＭ|음악|배경음|브금|música|trilha/iu,
@@ -202,7 +203,7 @@ const INTENT_PATTERNS: Record<EditStep, RegExp> = {
 export function planFromRequest(request: string): EditPlan {
   const steps = EDIT_STEPS.filter((step) => INTENT_PATTERNS[step].test(request))
   if (steps.length === 0) {
-    return { steps: ["pauses", "captions", "music"], musicStyle: DEFAULT_MUSIC_STYLE, reply: null, understood: false }
+    return { steps: ["fillers", "pauses", "captions", "music"], musicStyle: DEFAULT_MUSIC_STYLE, reply: null, understood: false }
   }
   return { steps, musicStyle: steps.includes("music") ? DEFAULT_MUSIC_STYLE : null, reply: null, understood: true }
 }

@@ -152,7 +152,7 @@ describe("NODE_REGISTRY entries are classified", () => {
   • Executable (frontend Run button + backend buildPayload switch case): add to EXECUTABLE_TYPES in frontend/src/components/editor/workflow-editor/types.ts AND a case in backend/src/services/workflow-engine/payload-builder.ts
   • Parameter (orchestrator reads prompt hint from node.data, no execution): add to PARAMETER_NODE_TYPES in packages/shared/src/parameter-node-value.ts AND a case in getParameterValue + getParameterPromptHint
   • Source (orchestrator reads raw output from node.data, no execution): add to SOURCE_NODE_TYPES in backend/src/services/workflow-engine/execution-graph.ts
-  • Skip (orchestrator intentionally skips): add to SKIP_NODE_TYPES in same file
+  • Skip (orchestrator intentionally skips): add to ENGINE_SKIPPED_NODE_TYPES in packages/render-rules/src/engine-skipped-types.ts (execution-graph.ts reads it)
 `,
       ).toBeGreaterThan(0)
     },
@@ -218,7 +218,7 @@ describe("every renderable node type is classified", () => {
   • Executable: add to EXECUTABLE_TYPES (frontend types.ts) + a buildPayload case
   • Parameter: add to PARAMETER_NODE_TYPES + getParameterValue/getParameterPromptHint
   • Source (output read from node.data): add to SOURCE_NODE_TYPES in execution-graph.ts
-  • Skip (visual / non-executable, e.g. sticky-note, provider): add to SKIP_NODE_TYPES in execution-graph.ts
+  • Skip (visual / non-executable, e.g. sticky-note, provider): add to ENGINE_SKIPPED_NODE_TYPES (packages/render-rules/src/engine-skipped-types.ts, read by execution-graph.ts)
   • Legacy alias: ensure normalize-node-types.ts migrates it to a classified type before execution`,
       ).toBeGreaterThan(0)
     },

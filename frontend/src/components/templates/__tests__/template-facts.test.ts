@@ -49,7 +49,7 @@ describe("modelChipLabels", () => {
   })
 
   it("keeps a parenthetical that tells models apart", () => {
-    expect(modelChipLabels(["gemini-3-flash-video-analysis"])).toEqual(["Video Analysis (Fast)"])
+    expect(modelChipLabels(["gemini-3.8-flash-video-analysis"])).toEqual(["Video Analysis (Fast)"])
   })
 })
 

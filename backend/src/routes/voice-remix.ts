@@ -12,6 +12,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { isNodeDeniedForUser } from "../lib/availability-viewer.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const voiceRemixBody = z.object({
   text: z.string().min(1).max(5000),
@@ -74,12 +75,13 @@ export async function voiceRemixRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("voice-remix", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("voice-remix", {
       jobId: job.id,
       text,
       voiceDescription: finalVoiceDescription,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

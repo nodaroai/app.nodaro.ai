@@ -23,7 +23,7 @@ import { insertAppReport, type AppReportInput } from "../lib/app-reports.js"
 import { commitReservedCreditsForJob, commitReservedCreditsForJobAtPrice, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 // From their own modules, not the client facade a route test replaces.
-import { LLM_STRUCTURED_DEFAULT_ATTEMPTS, StructuredLlmError } from "../lib/llm/structured.js"
+import { LLM_STRUCTURED_DEFAULT_ATTEMPTS, LLM_STRUCTURED_DIRECT_BACKUP_ASKS, StructuredLlmError } from "../lib/llm/structured.js"
 import { LLM_MAX_LANES_PER_CALL } from "../lib/llm/router.js"
 import { billedContentRefusal, billedProviderCost, describeErrorChain, LlmAdvancedModeUnavailableError, LlmLaneError, LlmPlatformExhaustedError, LlmStreamResponseError } from "../lib/llm-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
@@ -481,7 +481,7 @@ export class PickerFallbackFailedError extends Error {
  * The longest one describe-to-picker request may hold its job row — under
  * the reconciliation sweep's `anthropic-sync` threshold (40 min), which
  * force-fails and refunds a row past it. A Claude run at its slowest effort
- * already spends most of it: (attempts × lanes + the direct-tool backup) ×
+ * already spends most of it: (attempts × lanes + the direct-lane backup) ×
  * 285 s ≈ 33 min, before Gemini starts.
  */
 export const DESCRIBE_TO_PICKER_MAX_RUNTIME_MS = 38 * 60_000
@@ -494,12 +494,13 @@ const FALLBACK_LANE_TIMEOUT_MIN_MS = 10_000
 /**
  * The Gemini fallback's per-lane timeout: the client default, or less when the
  * Claude run used enough of {@link DESCRIBE_TO_PICKER_MAX_RUNTIME_MS} that
- * every attempt on both lanes would not fit in what is left. A Claude failure
- * that came back at once (a drained account) leaves the full default.
- * Exported for unit testing.
+ * every attempt on both lanes, and the direct-lane backup Gemini 3.8 Flash may
+ * take when its KIE answers never validate, would not fit in what is left. A
+ * Claude failure that came back at once (a drained account) leaves the full
+ * default. Exported for unit testing.
  */
 export function fallbackLaneTimeoutMs(elapsedMs: number): number {
-  const lanes = LLM_STRUCTURED_DEFAULT_ATTEMPTS * LLM_MAX_LANES_PER_CALL
+  const lanes = LLM_STRUCTURED_DEFAULT_ATTEMPTS * LLM_MAX_LANES_PER_CALL + LLM_STRUCTURED_DIRECT_BACKUP_ASKS
   const share = Math.floor((DESCRIBE_TO_PICKER_MAX_RUNTIME_MS - elapsedMs) / lanes)
   return Math.max(FALLBACK_LANE_TIMEOUT_MIN_MS, Math.min(FALLBACK_LANE_TIMEOUT_MAX_MS, share))
 }

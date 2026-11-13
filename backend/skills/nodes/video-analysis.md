@@ -1,7 +1,7 @@
 ---
 node_type: video-analysis
-generated_at: 2026-10-14T00:02:33.686Z
-generated_from: b83a9467d
+generated_at: 2026-11-13T09:58:02.667Z
+generated_from: b46bdac042
 ---
 
 # Video Analysis
@@ -9,7 +9,7 @@ generated_from: b83a9467d
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `video-analysis`
 **Category:** processing
-**Credit cost:** `200-2284` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `200-2307` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `video`
 **Outputs (source handles):** `json`, `text`
 

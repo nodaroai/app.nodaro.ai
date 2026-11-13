@@ -19,8 +19,12 @@ interface AuditModel {
   providerCostInCredits: number
   diff: number | null
   diffPercent: number | null
-  status: "OK" | "UNDERPRICED" | "OVERPRICED" | "UNMAPPED"
+  /** CHECK_TIERS: a key priced only through composite rows, each billed amount
+   *  covered by some row but not known to be charged at one (never OK). */
+  status: "OK" | "UNDERPRICED" | "OVERPRICED" | "UNMAPPED" | "CHECK_TIERS"
   variable: boolean
+  /** Per billed amount: the cheapest of the key's rows that covers it. */
+  tierBreakdown?: { kieCost: number; tasks: number; required: number; bestTier: number; covered: boolean }[]
 }
 
 // ---------- Actual mode types ----------
@@ -119,6 +123,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof
   UNDERCHARGED: { label: "Undercharged", color: "bg-red-500/10 text-red-400 border-red-500/20", icon: TrendingDown },
   OVERCHARGED: { label: "Overcharged", color: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20", icon: TrendingUp },
   UNMATCHED: { label: "Unmatched", color: "bg-orange-500/10 text-orange-400 border-orange-500/20", icon: AlertTriangle },
+  CHECK_TIERS: { label: "Check tiers", color: "bg-blue-500/10 text-blue-400 border-blue-500/20", icon: HelpCircle },
   OK: { label: "OK", color: "bg-green-500/10 text-green-400 border-green-500/20", icon: CheckCircle },
   UNMAPPED: { label: "Unmapped", color: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20", icon: HelpCircle },
 }
@@ -479,7 +484,7 @@ function TheoreticalTable({ models }: { models: AuditModel[] }) {
                 {m.providerCostInCredits}
               </td>
               <td className="p-3 text-right tabular-nums font-medium">
-                {m.ourCredits ?? "—"}
+                {m.ourCredits ?? <CoveringTiers breakdown={m.tierBreakdown} />}
               </td>
               <td className={`p-3 text-right tabular-nums font-medium ${
                 m.status === "UNDERPRICED" ? "text-red-400" :
@@ -505,6 +510,23 @@ function TheoreticalTable({ models }: { models: AuditModel[] }) {
         )}
       </tbody>
     </table>
+  )
+}
+
+/**
+ * A key with no price of its own (priced only through composite rows): the
+ * cheapest row that covers each billed amount — one figure, or the range of
+ * them — and "—" when there is none.
+ */
+function CoveringTiers({ breakdown }: { breakdown: AuditModel["tierBreakdown"] }) {
+  const tiers = (breakdown ?? []).filter(t => t.covered).map(t => t.bestTier)
+  if (tiers.length === 0) return <>—</>
+  const low = Math.min(...tiers)
+  const high = Math.max(...tiers)
+  return (
+    <span className="text-muted-foreground" title="The cheapest row that covers each billed amount; which row each task was charged at is not known here">
+      {low === high ? low : `${low}–${high}`}
+    </span>
   )
 }
 

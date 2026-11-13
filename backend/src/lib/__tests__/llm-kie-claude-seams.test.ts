@@ -19,6 +19,7 @@ vi.mock("../anthropic-image.js", async (importOriginal) => ({
 
 import { callKie } from "../llm/kie-lane.js"
 import { buildMessagesBody } from "../llm/message-builders.js"
+import { kiePromptJsonSystem } from "../llm/structured-schema.js"
 import { KIE_IMAGE_ESTIMATE_CHARS, kieCostUsd, kieCreditsUsdOf, kieFailureCostUsd, kieInputTokens, requestChars } from "../llm/kie-cost.js"
 import { LlmContentRefusalError, LlmOutputTruncatedError } from "../llm-errors.js"
 import { inlineImagesForClaudeKie } from "../llm/claude-kie-images.js"
@@ -190,14 +191,19 @@ describe("kieCostUsd", () => {
 })
 
 describe("requestChars", () => {
-  it("counts the system prompt, the schema, text, and a fixed size per image", () => {
+  // A structured Claude call's KIE prompt is the caller's system prompt, the
+  // one-object rule and the schema (kieClaudePromptJson): all of it is counted.
+  it("counts the system prompt as sent (the rule and the schema included), text, and a fixed size per image", () => {
     const schema = { type: "object", properties: { a: { type: "string" } } }
     const chars = requestChars(req({
       system: "abcd",
       jsonSchema: { name: "emit", schema },
       messages: [{ role: "user", content: [{ type: "text", text: "12345678" }, { type: "image", url: "https://r2.example/a.png" }] }],
     }))
-    expect(chars).toBe(4 + JSON.stringify(schema).length + 8 + KIE_IMAGE_ESTIMATE_CHARS)
+    const sent = kiePromptJsonSystem("abcd", { name: "emit", schema })
+    expect(sent).toContain(JSON.stringify(schema))
+    expect(chars).toBe(sent.length + 8 + KIE_IMAGE_ESTIMATE_CHARS)
+    expect(chars).toBeGreaterThan(4 + JSON.stringify(schema).length + 8 + KIE_IMAGE_ESTIMATE_CHARS)
   })
 })
 

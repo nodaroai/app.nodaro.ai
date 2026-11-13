@@ -27,6 +27,7 @@ import { withdrawFromLane } from "../lib/concurrency-lanes/withdraw.js"
 import { isWaitingRow, queueField, queueInfoFor, waitingRowsOf } from "../lib/concurrency-lanes/queue-info.js"
 import { readWithLaneStamp } from "../lib/concurrency-lanes/columns.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { enqueueExecution } from "../lib/enqueue-execution.js"
 import { refuseIfConsentPending } from "../lib/consent-gate.js"
 import { createSSEStream } from "../lib/sse.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
@@ -1168,9 +1169,13 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       ...(fromFailedStamp && namedNodeIds.length > 0 ? { namedNodeIds } : {}),
     }
 
-    await orchestrationQueue.add("workflow-execution", jobData, {
-      jobId: execution.id,
-    })
+    // A queue that refuses the run fails it from `pending` with its
+    // Idempotency-Key released, and answers 500 (lib/enqueue-execution.ts).
+    // Nothing is held before this point: each node reserves when it runs.
+    await enqueueExecution(req, reply, execution.id, () =>
+      orchestrationQueue.add("workflow-execution", jobData, { jobId: execution.id }),
+    )
+    if (reply.sent) return
 
     return reply.status(202).send({
       executionId: execution.id,

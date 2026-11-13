@@ -52,6 +52,7 @@ import { generateVideoChildFields, seedance25OutputFormatFor } from "../lib/seed
 import { CONTENT_RESTRICTED_MESSAGE, restrictedInputKey } from "../lib/content-restriction-gate.js"
 import { jobBlockedBody } from "../lib/job-policy.js"
 import { videoRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 // Character-voice orchestration (voiced-video). All optional + additive: absent
 // => today's behaviour. A "voiced" request ALSO requires a dialogue-capable
@@ -1545,7 +1546,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       ? await voicedAudioAddonAmount(provider, parsed.data as Record<string, unknown>)
       : 0
 
-    await videoQueue.add(isVoiced ? "voiced-video" : "image-to-video", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add(isVoiced ? "voiced-video" : "image-to-video", {
       jobId: job.id,
       imageUrl,
       endFrameUrl,
@@ -1591,7 +1592,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       // so the worker never re-derives what it was billed for.
       ...(isVoiced ? { characterVoices, dialogue, voicedAudioAddon, dialogueProvider: voicedDialogueProvider(characterVoices) } : {}),
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     // R27: BOTH exits disclose a snap. `warnings` keeps this route's existing
     // human-readable vocabulary; `adjustments` carries the SAME corrections in

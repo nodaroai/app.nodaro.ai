@@ -49,7 +49,13 @@ The input is measured before anything is charged, on a single-node run and in a 
 
 - An input **longer than 30 minutes** is refused before any charge (`media_duration_exceeds_limit`).
 - An input whose length **cannot be read** (an unreachable link, a corrupted or unsupported file) is refused before any charge (`invalid_media_duration`). There is no fallback length.
-- Before a run, the editor, the server's run estimate (MCP, the SDK, published apps) and the Render final balance check quote the input's started minutes when its length is known: an uploaded file's recorded length, a rendered or trimmed video's length (also through a step that keeps it, such as a [Tighten Episode](../processing-video/tighten-episode.md#steps-after-the-node)'s music mix), or the length the upstream node reports. When the length is not known yet, they quote the 30-minute price (660 credits<!-- credits: pitch-tempo:30m -->), which is the most a run can be charged. The run then reserves and charges the measured length, which is never more.
+- Before a run, the editor, the server's run estimate (MCP, the SDK, published apps) and the Render final balance check quote the input's started minutes when its length is known:
+  - an uploaded file's recorded length (an audio upload's too), or a file added from your own uploads in the Library;
+  - a rendered or trimmed video's length (also through a step that keeps it, such as a [Tighten Episode](../processing-video/tighten-episode.md#steps-after-the-node)'s music mix);
+  - a video another node makes in this run at the length that node will produce at its settings (a generation at the length its model renders, an Extend Video at its source plus the seconds it adds), plus about a tenth of a second for each clip made on the way — the run measures the whole file and counts any started minute, so a Generate Video Pro clip of 60 s (stitched to 61 s) is quoted at 2 minutes, 44 credits<!-- credits: pitch-tempo:2m -->;
+  - a node that does not run in this run (Pitch & Tempo run on its own, or a frozen node): the length recorded with the result it hands on. A video generation (Generate Video, Image to Video, Text to Video, Video to Video) whose result recorded no length — a fixed-length run records none — made that result at its settings, so it is read at the length they make, its Duration, as a clip the node makes in this run is read.
+
+  A length the upstream node only stores (an earlier result of a node that runs again) is never read. When the length is not known yet — a voice or a song another node makes in this run, a VEO or Runway extension, a video link — they quote the 30-minute price (660 credits<!-- credits: pitch-tempo:30m -->), which is the most a run can be charged. The run then reserves and charges the measured length.
 
 ## API
 

@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { duckSchema } from "../lib/mix-audio-duck.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const mixAudioBody = z
   .object({
@@ -79,7 +80,8 @@ export async function mixAudioRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("mix-audio", { jobId: job.id, ...restData, usageLogId })
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("mix-audio", { jobId: job.id, ...restData, usageLogId }))
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

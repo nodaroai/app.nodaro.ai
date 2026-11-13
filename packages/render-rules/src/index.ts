@@ -268,11 +268,14 @@ export {
   forwardedVideoLengthSec,
   knownLength,
   LENGTH_PRICED_UTILITY_TYPES,
+  LOSSLESS_TRIM_OVERSHOOT_SEC,
+  loopVideoRunFields,
   maskCompositeLeadSec,
   runForwardedVideoLengthSec,
   runWireFps,
   runWireLengthSec,
   utilityOutputLength,
+  videoDepthClipSec,
   videoMaskClipSec,
   videoSfxClipSec,
   type InputLength,
@@ -280,11 +283,15 @@ export {
   type RunWireLengthOptions,
   type WireLength,
 } from "./utility-wire-length"
-export { LENGTH_RECORDING_VIDEO_NODE_TYPES, lengthFollowingBoundSec, withoutRecordedVideoLength, type VideoRunRequest } from "./length-following-video"
+export { LENGTH_RECORDING_VIDEO_NODE_TYPES, lengthFollowingBoundSec, RECORDED_OUTPUT_LENGTH_NODE_TYPES, withoutRecordedVideoLength, type VideoRunRequest } from "./length-following-video"
 export { seedanceTaskTypeAsRun, wiredReferenceVideoSec, type SeedanceTaskTypeAsRun } from "./seedance-task-type-as-run"
-export { generationSourceEstimateSec, LEGACY_VIDEO_NODE_DEFAULT_PROVIDER } from "./generation-source-length"
 export { seedanceFinalizeDraftQuote, type SeedanceFinalizeDraftOptions, type SeedanceFinalizeDraftQuote } from "./seedance-draft-finalize-estimate"
 export { videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo } from "./video-overlay-pricing"
+export { AUTO_EDIT_MARGIN_SEC, CONFIGURED_DURATION_VIDEO_TYPES, GENERATE_VIDEO_PRO_DEFAULT_DURATION_SEC, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, LEGACY_VIDEO_NODE_DEFAULT_PROVIDER, TAIL_RECIPE_WINDOWS, generatedVideoRenderedSec, generateVideoProClampedSec, generateVideoProLengthSec, isTailRecipeProvider, longestModelClipSec, referenceClipOutputSec, referenceClipWorstCaseSec, pixverseExtendSeconds, tailRecipeSeconds, videoProviderRenderedSec, type GeneratedVideoLengthOptions } from "./generated-video-length"
+export { CLIP_REMAKING_KEPT_LENGTH_TYPES, DYNAMIC_VIDEO_OUTPUT_TYPES, PASS_THROUGH_VIDEO_TYPES, SLIDESHOW_MAX_IMAGES, VIDEO_LENGTH_RULES, VIDEO_LENGTH_UNBOUNDED_REASONS, knownOutputLength, longestCatalogVideoSec, motionTransferCeilingSec, seedanceEditChargedLength, usecaseLength, wireKindOf, type OutputLengthContext, type OutputLengthNode, type OutputLengthRule, type OutputWireInput, type OutputWireKind, type OutputWireLength } from "./video-output-length"
+export { ENGINE_SKIPPED_NODE_TYPES } from "./engine-skipped-types"
+export { GRACED_VIDEO_UTILITY_TYPES, trimVideoBranches, trimVideoCutsFixedWindow, trimVideoRunFields, videoUtilityPricedClipSec, videoUtilityUnitsOf, type TrimVideoBranch } from "./video-utility-units"
+export { GENERATED_VOICE_NODE_TYPES, LENGTH_DECIDING_MAPPABLE_FIELDS, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, RECORDING_SOURCE_TYPES, mappedLengthFields, recordedTakeSec, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PRICE_GRACE_SEC, measuredWireLengthSec, plannedVideoLengthSec, recordingLengthSec, type MeasuredInputStepType, type MeasuredWireLengthOptions } from "./measured-wire-length"
 export {
   UGC_CREATOR_NO_IMAGE_MESSAGE,
   UGC_SPEND_REFUSAL_CODES,

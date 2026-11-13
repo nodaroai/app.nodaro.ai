@@ -188,6 +188,26 @@ describe("Gemini 4 Carbon's schema hint on the direct lane", () => {
   })
 })
 
+// Gemini 3.8 Flash sends its schema in the prompt on the KIE lane only
+// (`kieSchemaInPrompt`, llm-client-kie-schema-in-prompt.test.ts). Google's own
+// lane keeps the enforced schema and the caller's system prompt as it is.
+describe("Gemini 3.8 Flash on the direct lane keeps its enforced schema", () => {
+  it("sends responseJsonSchema and the caller's system instruction, with no schema in it", async () => {
+    const { llmCompleteStructured } = await import("../../llm-client.js")
+    generateContent.mockResolvedValue({ text: JSON.stringify({ mood: "happy" }), usageMetadata: { promptTokenCount: 40, candidatesTokenCount: 5 } })
+
+    await llmCompleteStructured({
+      modelId: "gemini-3.8-flash", system: "be terse", requireLane: "direct",
+      messages: [{ role: "user", content: "How does a sunny morning feel?" }],
+    }, z.object({ mood: z.enum(["happy", "sad"]) }).strict())
+
+    const sent = generateContent.mock.calls[0]![0] as { config: { systemInstruction?: string; responseMimeType?: string; responseJsonSchema?: unknown } }
+    expect(sent.config.responseMimeType).toBe("application/json")
+    expect(JSON.stringify(sent.config.responseJsonSchema)).toContain('"enum":["happy","sad"]')
+    expect(sent.config.systemInstruction).toBe("be terse")
+  })
+})
+
 describe("the enum-value budget", () => {
   const enumOf = (n: number, prefix = "v") => ({ type: "string", enum: Array.from({ length: n }, (_, i) => `${prefix}${i}`) })
 

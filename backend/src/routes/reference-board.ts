@@ -14,6 +14,7 @@ import { boardQuality, boardResolution } from "../lib/entity-credit-identifier.j
 import { REFERENCE_BOARD_PROVIDERS, buildBoardPrompt } from "@nodaro/shared/entities"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
 import { formatZodError } from "../lib/zod-error.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const referenceBoardBody = z.object({
   provider: z.enum(REFERENCE_BOARD_PROVIDERS),
@@ -125,7 +126,7 @@ export async function referenceBoardRoutes(app: FastifyInstance): Promise<void> 
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("reference-board", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("reference-board", {
       jobId: job.id,
       prompt,
       referenceImageUrls: body.referenceImageUrls,
@@ -136,7 +137,8 @@ export async function referenceBoardRoutes(app: FastifyInstance): Promise<void> 
       negativePrompt: body.negativePrompt,
       seed: body.seed,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return reply.send({ jobId: job.id })
   })

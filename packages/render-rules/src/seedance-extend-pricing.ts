@@ -37,7 +37,7 @@ import {
 } from "@nodaro/shared/credits"
 import { resolveGraphOrigin, type EstimateGraphEdge, type EstimateGraphNode } from "./apply-edl-estimate"
 import { forwardedVideoLengthSec } from "./utility-wire-length"
-import { activeResult } from "./generation-source-length"
+import { activeTake } from "./measured-wire-length"
 import { LENGTH_RECORDING_VIDEO_NODE_TYPES } from "./length-following-video"
 
 // The provider, the window, the rate rows and each resolution's row are the
@@ -101,7 +101,7 @@ export function extendSourceEstimateSec(
     const type = origin.type ?? ""
     if (RECORDING_VIDEO_SOURCE_TYPES.has(type)) return knownSec(forwardedVideoLengthSec(origin))
     if (LENGTH_RECORDING_VIDEO_NODE_TYPES.has(type) && !rerunIds.has(origin.id)) {
-      return knownSec(activeResult(origin.data as Record<string, unknown> | undefined)?.duration as number | undefined)
+      return knownSec(activeTake(origin.data, { anyUrl: true })?.duration as number | undefined)
     }
     return undefined
   })

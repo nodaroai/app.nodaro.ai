@@ -25,6 +25,7 @@ import { providerRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { isFilledText, llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
 import { ASSET_DESCRIPTION_MODEL } from "../lib/asset-description-prompt.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const assetTypeEnum = z.enum(["angles", "materials", "variations", "custom"])
 
@@ -265,7 +266,7 @@ export async function generateObjectAssetRoutes(app: FastifyInstance) {
       explicit: parsed.data.aspectRatio,
     })
 
-    await videoQueue.add("generate-object-asset", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-object-asset", {
       jobId: job.id,
       prompt,
       sourceImageUrl: resolvedSourceImageUrl,
@@ -279,7 +280,8 @@ export async function generateObjectAssetRoutes(app: FastifyInstance) {
       attachName: parsed.data.attachName,
       description: parsed.data.description,
       seedPromptHint: parsed.data.seedPromptHint,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

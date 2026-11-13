@@ -163,8 +163,10 @@ describe("bare video-analysis node-type credit id", () => {
     // plugin's token pin 8_203 -> 8_482, 356 wrote 2071: Stage 1.3 grew
     // that prompt again, moving the pin 8_482 -> 8_706, and 357 wrote 2076:
     // the transition vocabulary v2 doctrine (twelve named values; absent =
-    // nothing asserted) grew it once more, moving the pin 8_706 -> 9_082.
-    expect(ceiling).toBe(2076)
+    // nothing asserted) grew it once more, moving the pin 8_706 -> 9_082, and
+    // the fast-tier move to gemini-3.8-flash (2026-11-13) wrote 2097: smart's
+    // donor rolls roll the fast model too.
+    expect(ceiling).toBe(2097)
   })
 
   it("the bare id still bounds the default tier at the ceiling bucket", () => {

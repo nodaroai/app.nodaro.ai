@@ -23,6 +23,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 export const generateMaskBody = z.object({
   imageUrl: safeUrlSchema,
@@ -75,13 +76,14 @@ export async function generateMaskRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("generate-mask", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-mask", {
       jobId: job.id,
       imageUrl,
       prompt,
       threshold,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

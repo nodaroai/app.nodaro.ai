@@ -14,6 +14,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
 import { resolveCollageGeometry, toCssColor } from "../providers/image/collage.js"
 import { normalizeCollageLabels } from "../providers/image/collage-badges.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 export const imageCollageBody = z.object({
   imageUrls: z
@@ -258,7 +259,7 @@ export async function imageCollageRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("image-collage", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("image-collage", {
         jobId: job.id,
         imageUrls,
         imageSizes,
@@ -275,7 +276,8 @@ export async function imageCollageRoutes(app: FastifyInstance) {
         attachName,
         attachBoardType,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     },

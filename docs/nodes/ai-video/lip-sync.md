@@ -169,7 +169,13 @@ Kling AI Avatar and OmniHuman 1.5 bill per-second. Credit reservation buckets to
 | 5 min | 300 s | 11,550<!-- credits: omnihuman-2-0:per-second@300 --> |
 | over 5 min | — | refused, nothing charged |
 
-Before the audio's length is known, the node's credit chip shows the 15-second price marked `≈`; it updates once the audio is wired. An app or a component lists a run whose audio length it cannot know at the 5-minute price, the most a run can hold.
+**The price before a run** (the node's chip, its Run button, the workflow's estimate in the editor and on the server, an app's listed price) reads the wired audio's length as the steps that measure their input read it:
+- an uploaded audio: the length recorded for it;
+- a node that does not run in this run: the length recorded with the result it hands on;
+- audio a node makes in this run at a length known before the run: that length plus a tenth of a second, since a made file runs a few hundredths past its planned length and the audio is rounded up. A 5-second clip's sound is quoted as 6 seconds, as a file a few hundredths over 5 seconds is billed; a Voice Changer, Voice Changer Pro, Dubbing or Adjust Volume of an 8-second recording is quoted as 9 seconds.
+- a voice that is made again in this run (Text to Speech, Text to Dialogue): the length of the take it holds now. That is a minimum, not the price: the new voice can be longer, and the run is charged the audio it measures. An app's listed price reads the voice by its script instead, when it can read the script.
+
+With no audio wired, the length the node measured of its own audio at its last run is shown. Before the audio's length is known (a voice with no take yet, a file whose length was not recorded), the node's credit chip shows the 15-second price marked `≈`, while the workflow's credit check before a run and an app's listing hold the 5-minute price, the most a run can hold.
 
 HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 also bill per second of output, bucketed to the same 15s / 30s / 1min / 2min / 5min tiers:
 

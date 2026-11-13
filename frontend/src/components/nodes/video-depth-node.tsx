@@ -14,13 +14,13 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
-import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
 import { useUpstreamVideoProbe } from "@/hooks/use-upstream-video-probe"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { resolveVideoDepthProvider, videoDepthCreditId } from "@nodaro/shared/media"
+import { videoDepthQuotedSec } from "@/lib/video-utility-estimate"
 import type { VideoDepthData } from "@/types/nodes"
 
 const ACCEPTS_VIDEO = (t: string) => isValidVideoDepthConnection("video", t)
@@ -42,13 +42,17 @@ function VideoDepthNodeComponent({ id, data, selected }: NodeProps) {
     useResultAspectRatio(id, results, activeIndex)
   const [previewOpen, setPreviewOpen] = useState(false)
   const provider = resolveVideoDepthProvider(nodeData.provider)
-  // The producer's own length field, else the clip's metadata (cached on the
-  // node, read by the run estimate too) — so the quote is the clip's own row.
-  // Unknown (nothing wired, still reading, unreadable): the provider's highest
-  // reachable row, the most a run can be charged — as the run estimate quotes.
-  const upstreamSec = useUpstreamVideoDuration(id, "video")
-  const probedSec = useUpstreamVideoProbe(id, "video", nodeData.probedVideo, updateNodeData)
-  const creditId = videoDepthCreditId(provider, upstreamSec ?? probedSec)
+  // The length every quote of this node reads (`videoDepthQuotedSec`: the
+  // measured walk the server's estimate shares; an upload whose file records no
+  // length at the read of that file cached on the node — the probe below keeps
+  // it). Unknown (nothing wired, still reading, unreadable): the provider's
+  // highest reachable row, the most a run can be charged — as the run estimate quotes.
+  useUpstreamVideoProbe(id, "video", nodeData.probedVideo, updateNodeData)
+  const clipSec = useWorkflowStore((s) => {
+    const self = s.nodes.find((n) => n.id === id)
+    return self ? videoDepthQuotedSec(self, s.nodes, s.edges) : null
+  })
+  const creditId = videoDepthCreditId(provider, clipSec)
   const credits = useModelCredits(creditId, 300)
 
   const hasResult = status !== "running" && !!activeUrl

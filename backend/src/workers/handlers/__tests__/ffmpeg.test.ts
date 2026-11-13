@@ -58,6 +58,8 @@ const mocks = vi.hoisted(() => {
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
   const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
+  // The length of the file a Trim made (none read by default: the job records none).
+  const mockProbeClipLengthSec = vi.fn().mockRejectedValue(new Error("not read in this test"))
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
   const mockCompleteFfmpegVideoJob = vi.fn().mockResolvedValue(undefined)
   const mockCompleteFfmpegAudioJob = vi.fn().mockResolvedValue(undefined)
@@ -101,6 +103,7 @@ const mocks = vi.hoisted(() => {
     mockCommitJobCredits,
     mockShouldSaveJobResult,
     mockMarkJobCompleted,
+    mockProbeClipLengthSec,
     mockGenerateAndUploadThumbnail,
     mockCompleteFfmpegVideoJob,
     mockCompleteFfmpegAudioJob,
@@ -117,6 +120,10 @@ vi.mock("node:fs", () => ({
 
 vi.mock("@/lib/supabase.js", () => ({
   supabase: { from: mocks.mockFrom },
+}))
+
+vi.mock("@/lib/video-utility-probe.js", () => ({
+  probeClipLengthSec: mocks.mockProbeClipLengthSec,
 }))
 
 vi.mock("@/lib/storage.js", () => ({
@@ -249,6 +256,7 @@ import { applyEdlRenderBudgetMs } from "@/providers/video/apply-edl.js"
 import { BUDGETED_JOB_NAMES, declaredJobBudgetMs } from "@/lib/job-budget.js"
 import { unitDescriptorOf } from "@/lib/unit-descriptors.js"
 import { audioSyncRenderBudgetMs } from "@/providers/audio/audio-sync-budget.js"
+import { isDeterministicJobError } from "@/lib/deterministic-job-error.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1093,7 +1101,7 @@ describe("combine-videos handler", () => {
   const handler = ffmpegHandlers["combine-videos"]
 
   it("happy path: combines, uploads, cleans up with fs.rm, saves to DB", async () => {
-    const job = makeJob("combine-videos", {
+    const job = makeJob("combine-videos", { billedUnits: 9,
       videoUrls: ["https://a.mp4", "https://b.mp4"],
       transition: "fade",
       transitionDuration: 1,
@@ -1102,6 +1110,8 @@ describe("combine-videos handler", () => {
 
     expect(mocks.mockCombineVideos).toHaveBeenCalledWith({
       videoUrls: ["https://a.mp4", "https://b.mp4"],
+      // The render's charge check, run on the clips once downloaded.
+      chargeCheck: expect.any(Function),
       transition: "fade",
       transitionDuration: 1,
       audioMode: "crossfade",
@@ -1117,7 +1127,7 @@ describe("combine-videos handler", () => {
   })
 
   it("defaults audioMode to 'crossfade' when not specified", async () => {
-    const job = makeJob("combine-videos", {
+    const job = makeJob("combine-videos", { billedUnits: 9,
       videoUrls: ["https://a.mp4"],
       transition: "cut",
       transitionDuration: 0,
@@ -1130,7 +1140,7 @@ describe("combine-videos handler", () => {
   })
 
   it("uses provided audioMode", async () => {
-    const job = makeJob("combine-videos", {
+    const job = makeJob("combine-videos", { billedUnits: 9,
       videoUrls: ["https://a.mp4"],
       transition: "cut",
       transitionDuration: 0,
@@ -1143,9 +1153,19 @@ describe("combine-videos handler", () => {
     )
   })
 
+  it("a job that carries no priced units is refused before anything is downloaded", async () => {
+    const job = makeJob("combine-videos", { videoUrls: ["https://a.mp4", "https://b.mp4"], transition: "cut", transitionDuration: 0 })
+    delete (job.data as Record<string, unknown>).billedUnits
+    const refused = handler(job as never, makeCtx())
+    await expect(refused).rejects.toThrow("This run was not priced for its clips — run it again")
+    // Deterministic: the job is failed and its reservation refunded on this attempt, never retried.
+    await expect(refused.catch((err: unknown) => isDeterministicJobError(err))).resolves.toBe(true)
+    expect(mocks.mockCombineVideos).not.toHaveBeenCalled()
+  })
+
   it("returns early when cancelled", async () => {
     mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
-    const job = makeJob("combine-videos", {
+    const job = makeJob("combine-videos", { billedUnits: 9,
       videoUrls: ["https://a.mp4"],
       transition: "cut",
       transitionDuration: 0,
@@ -1249,13 +1269,33 @@ describe("trim-audio handler", () => {
 describe("trim-video handler", () => {
   const handler = ffmpegHandlers["trim-video"]
 
+  it("records the real length of the file it cut (a lossless cut can run past its window), read before the file is cleaned up", async () => {
+    mocks.mockTrimVideo.mockResolvedValueOnce({ videoPath: "/tmp/trim-work/output.mp4" })
+    mocks.mockProbeClipLengthSec.mockResolvedValueOnce(8.083)
+    const job = makeJob("trim-video", { billedUnits: 9, videoUrl: "https://vid.mp4", startTime: 3, endTime: 8, losslessKeyframe: true })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockProbeClipLengthSec).toHaveBeenCalledWith("/tmp/trim-work/output.mp4", expect.objectContaining({ reading: "container" }))
+    expect(mocks.mockProbeClipLengthSec.mock.invocationCallOrder[0]).toBeLessThan(mocks.mockCleanupWorkDir.mock.invocationCallOrder[0]!)
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", { output_data: expect.objectContaining({ durationSec: 8.083 }) })
+  })
+
+  it("records the length of a smart loop cut too, and none when its file cannot be read", async () => {
+    mocks.mockSmartLoopCut.mockResolvedValueOnce({ videoPath: "/tmp/slc-work/output.mp4", chosenFrameIndex: 1, psnr: 30, sourceFrameCount: 48, fps: 24 })
+    mocks.mockProbeClipLengthSec.mockResolvedValueOnce(1.958)
+    await handler(makeJob("trim-video", { billedUnits: 9, videoUrl: "https://vid.mp4", smartLoopCut: true }) as never, makeCtx())
+    expect(mocks.mockMarkJobCompleted.mock.calls.at(-1)![1].output_data).toMatchObject({ durationSec: 1.958 })
+    mocks.mockTrimVideo.mockResolvedValueOnce({ videoPath: "/tmp/trim-work/output.mp4" })
+    await handler(makeJob("trim-video", { billedUnits: 9, videoUrl: "https://vid.mp4", startTime: 3, endTime: 8 }) as never, makeCtx())
+    expect(mocks.mockMarkJobCompleted.mock.calls.at(-1)![1].output_data).not.toHaveProperty("durationSec")
+  })
+
   it("trims video, uploads, generates thumbnail, saves to DB", async () => {
     mocks.mockTrimVideo.mockResolvedValueOnce({ videoPath: "/tmp/trim-work/output.mp4" })
-    const job = makeJob("trim-video", { videoUrl: "https://vid.mp4", startTime: 5, endTime: 15 })
+    const job = makeJob("trim-video", { billedUnits: 9, videoUrl: "https://vid.mp4", startTime: 5, endTime: 15 })
     const ctx = makeCtx()
     await handler(job as never, ctx)
 
-    expect(mocks.mockTrimVideo).toHaveBeenCalledWith({ videoUrl: "https://vid.mp4", startTime: 5, endTime: 15, outputSilentVideo: undefined })
+    expect(mocks.mockTrimVideo).toHaveBeenCalledWith({ videoUrl: "https://vid.mp4", chargeCheck: expect.any(Function), startTime: 5, endTime: 15, outputSilentVideo: undefined })
     expect(mocks.mockUploadFileToR2).toHaveBeenCalledWith("/tmp/trim-work/output.mp4", "job-1", "video", "user-1")
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
@@ -1264,11 +1304,11 @@ describe("trim-video handler", () => {
   it("forwards outputSilentVideo=true to the provider (single-output, no sidecar upload)", async () => {
     mocks.mockUploadFileToR2.mockResolvedValueOnce("https://r2.example.com/video.mp4")
 
-    const job = makeJob("trim-video", { videoUrl: "https://vid.mp4", startTime: 5, endTime: 15, outputSilentVideo: true })
+    const job = makeJob("trim-video", { billedUnits: 9, videoUrl: "https://vid.mp4", startTime: 5, endTime: 15, outputSilentVideo: true })
     await handler(job as never, makeCtx())
 
     expect(mocks.mockTrimVideo).toHaveBeenCalledWith({
-      videoUrl: "https://vid.mp4", startTime: 5, endTime: 15, outputSilentVideo: true,
+      videoUrl: "https://vid.mp4", chargeCheck: expect.any(Function), startTime: 5, endTime: 15, outputSilentVideo: true,
     })
     expect(mocks.mockUploadFileToR2).toHaveBeenCalledTimes(1)
     expect(mocks.mockUploadFileToR2).toHaveBeenCalledWith("/tmp/trim-work/output.mp4", "job-1", "video", "user-1")
@@ -1287,7 +1327,7 @@ describe("trim-video handler", () => {
     })
     mocks.mockUploadFileToR2.mockResolvedValueOnce("https://r2.example.com/video.mp4")
 
-    const job = makeJob("trim-video", {
+    const job = makeJob("trim-video", { billedUnits: 9,
       videoUrl: "https://vid.mp4",
       smartLoopCut: true,
       smartLoopCutLookback: 32,
@@ -1299,7 +1339,18 @@ describe("trim-video handler", () => {
       videoUrl: "https://vid.mp4",
       lookbackFrames: 32,
       outputSilent: true,
+      chargeCheck: expect.any(Function),
     })
+  })
+
+  it("a job that carries no priced units is refused before anything is downloaded (deterministic: failed and refunded)", async () => {
+    const job = makeJob("trim-video", { videoUrl: "https://vid.mp4", startTime: 5, endTime: 15 })
+    delete (job.data as Record<string, unknown>).billedUnits
+    const refused = handler(job as never, makeCtx())
+    await expect(refused).rejects.toThrow("This run was not priced for its video — run it again")
+    // Deterministic: the job is failed and its reservation refunded on this attempt, never retried.
+    await expect(refused.catch((err: unknown) => isDeterministicJobError(err))).resolves.toBe(true)
+    expect(mocks.mockTrimVideo).not.toHaveBeenCalled()
   })
 })
 
@@ -1328,12 +1379,13 @@ describe("loop-video handler", () => {
   const handler = ffmpegHandlers["loop-video"]
 
   it("delegates to loopVideo then completeFfmpegVideoJob", async () => {
-    const job = makeJob("loop-video", { videoUrl: "https://vid.mp4", mode: "repeat", repeatCount: 3 })
+    const job = makeJob("loop-video", { billedUnits: 9, videoUrl: "https://vid.mp4", mode: "repeat", repeatCount: 3 })
     const ctx = makeCtx()
     await handler(job as never, ctx)
 
     expect(mocks.mockLoopVideo).toHaveBeenCalledWith({
       videoUrl: "https://vid.mp4",
+      chargeCheck: expect.any(Function),
       mode: "repeat",
       repeatCount: 3,
       targetDuration: undefined,
@@ -1341,6 +1393,16 @@ describe("loop-video handler", () => {
       smartLoopCutLookback: undefined,
     })
     expect(mocks.mockCompleteFfmpegVideoJob).toHaveBeenCalledWith("/tmp/loop-work/output.mp4", ctx, undefined)
+  })
+
+  it("a job that carries no priced units is refused before anything is downloaded", async () => {
+    const job = makeJob("loop-video", { videoUrl: "https://vid.mp4", mode: "repeat", repeatCount: 3 })
+    delete (job.data as Record<string, unknown>).billedUnits
+    const refused = handler(job as never, makeCtx())
+    await expect(refused).rejects.toThrow("This run was not priced for its video — run it again")
+    // Deterministic: the job is failed and its reservation refunded on this attempt, never retried.
+    await expect(refused.catch((err: unknown) => isDeterministicJobError(err))).resolves.toBe(true)
+    expect(mocks.mockLoopVideo).not.toHaveBeenCalled()
   })
 })
 
@@ -1638,7 +1700,7 @@ describe("combine-videos handler — transitions[] + edgeFades", () => {
   const handler = ffmpegHandlers["combine-videos"]
 
   it("forwards transitions[] and edgeFades to combineVideos verbatim", async () => {
-    const job = makeJob("combine-videos", {
+    const job = makeJob("combine-videos", { billedUnits: 9,
       videoUrls: ["https://a.mp4", "https://b.mp4", "https://c.mp4"],
       transition: "cut",
       transitionDuration: 0,
@@ -1656,7 +1718,7 @@ describe("combine-videos handler — transitions[] + edgeFades", () => {
   })
 
   it("omits both when the job carries neither (byte-identical to today)", async () => {
-    const job = makeJob("combine-videos", {
+    const job = makeJob("combine-videos", { billedUnits: 9,
       videoUrls: ["https://a.mp4", "https://b.mp4"],
       transition: "fade",
       transitionDuration: 1,

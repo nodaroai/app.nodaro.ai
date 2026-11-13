@@ -98,11 +98,15 @@ const seconds = (ms: number) => `${Math.round(ms / 1000)} s`
  * flat 120 s delivered still arrives. The body is fetched uncompressed and a
  * compressed one is refused — the rate counts decoded bytes, so gzip would let
  * a drip-feed pass it at ~1000:1.
+ *
+ * On the DEFAULT path a caller on a tighter budget passes `timeoutMs` (never
+ * above `DOWNLOAD_TIMEOUT_MS`) and a caller whose client may go away a
+ * `signal`; neither changes a caller that passes neither.
  */
 export async function downloadFile(
   url: string,
   dest: string,
-  opts: { maxBytes?: number; limits?: DownloadLimits } = {},
+  opts: { maxBytes?: number; limits?: DownloadLimits; timeoutMs?: number; signal?: AbortSignal } = {},
 ): Promise<void> {
   // safeFetch: callers include media-process which streams user-supplied
   // sourceUrl into ffmpeg. Without DNS-aware SSRF protection, a hostname
@@ -110,8 +114,15 @@ export async function downloadFile(
   // result uploaded to R2 (read-oracle). See backend/src/lib/safe-fetch.ts.
   const limits = opts.limits
   if (!limits) {
-    const response = await safeFetch(url, { timeoutMs: DOWNLOAD_TIMEOUT_MS })
-    await saveResponse(url, dest, response, opts.maxBytes, {})
+    const startedAt = Date.now()
+    const timeoutMs = Math.min(DOWNLOAD_TIMEOUT_MS, opts.timeoutMs ?? DOWNLOAD_TIMEOUT_MS)
+    const response = await safeFetch(url, { timeoutMs, ...(opts.signal ? { signal: opts.signal } : {}) })
+    // A caller on a budget hands it to the 404 fallback too (what is left of it, its signal, its cap);
+    // every other caller's fallback runs as before.
+    const bounded = opts.timeoutMs !== undefined || opts.signal !== undefined
+    await saveResponse(url, dest, response, opts.maxBytes, bounded
+      ? { fallbackBounds: () => ({ timeoutMs: timeoutMs - (Date.now() - startedAt), ...(opts.signal ? { signal: opts.signal } : {}), ...(opts.maxBytes !== undefined ? { maxBytes: opts.maxBytes } : {}) }) }
+      : {})
     return
   }
 
@@ -182,7 +193,12 @@ async function saveResponse(
   dest: string,
   response: Response,
   maxBytes: number | undefined,
-  hooks: { readonly onFallback?: () => void; readonly onBody?: () => (bytes: number) => void },
+  hooks: {
+    readonly onFallback?: () => void
+    readonly onBody?: () => (bytes: number) => void
+    /** The bound the 404 fallback runs under, for a caller on a budget (read when the fallback starts). */
+    readonly fallbackBounds?: () => { timeoutMs?: number; signal?: AbortSignal; maxBytes?: number }
+  },
 ): Promise<void> {
   if (!response.ok) {
     // Never leave a failed response streaming: a 4xx/5xx whose body keeps
@@ -201,7 +217,11 @@ async function saveResponse(
       const key = r2KeyFromOurUrl(url)
       if (key) {
         hooks.onFallback?.()
-        await downloadR2ObjectToFile(key, dest)
+        const bounds = hooks.fallbackBounds?.()
+        if (bounds?.timeoutMs !== undefined && bounds.timeoutMs <= 0) {
+          throw Object.assign(new Error(`Download timeout: no time left for the storage fallback: ${url}`), { name: "TimeoutError" })
+        }
+        await (bounds ? downloadR2ObjectToFile(key, dest, bounds) : downloadR2ObjectToFile(key, dest))
         return
       }
     }
@@ -679,7 +699,7 @@ export function runFfprobe(args: readonly string[], opts: { readonly timeoutMs?:
     // matches the safeFetch download timeout. A caller on a tighter budget
     // (`opts.timeoutMs`, never above it) has the process killed sooner, and
     // `signal` kills it at once (a caller whose time is up, e.g. the
-    // outside-input copy's check).
+    // outside-input copy's check, or a request whose client went away).
     const timeout = Math.min(FFPROBE_TIMEOUT_MS, opts.timeoutMs ?? FFPROBE_TIMEOUT_MS)
     execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout, ...(opts.signal ? { signal: opts.signal } : {}) }, (error, stdout, stderr) => {
       if (error) {
@@ -842,39 +862,60 @@ export async function assertSafeProbeSource(src: string): Promise<void> {
   // string and parses it itself: a link the two would read differently (a
   // backslash, a control character) is refused before either reads it.
   if (hasUrlParserHazard(src)) {
-    throw new Error("probeVideoSource: blocked — a link two URL parsers read differently")
+    throw new ProbeSourceBlockedError("link", "probeVideoSource: blocked — a link two URL parsers read differently")
   }
   let parsed: URL
   try {
     parsed = new URL(src)
   } catch {
-    throw new Error(`probeVideoSource: blocked — invalid URL "${src}"`)
+    throw new ProbeSourceBlockedError("link", `probeVideoSource: blocked — invalid URL "${src}"`)
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error(`probeVideoSource: blocked non-http(s) protocol ${parsed.protocol}`)
+    throw new ProbeSourceBlockedError("link", `probeVideoSource: blocked non-http(s) protocol ${parsed.protocol}`)
   }
   const host = parsed.hostname.replace(/^\[|\]$/g, "")
   if (isIP(host)) {
     if (isPrivateOrReservedIP(host)) {
-      throw new Error(`probeVideoSource: blocked private/reserved IP ${host}`)
+      throw new ProbeSourceBlockedError("address", `probeVideoSource: blocked private/reserved IP ${host}`)
     }
     return
   }
   let addrs: Array<{ address: string }>
   try {
     addrs = await dnsLookup(host, { all: true })
-  } catch {
-    throw new Error(`probeVideoSource: blocked — DNS resolution failed for ${host}`)
+  } catch (err) {
+    // A host that does not exist is for good; any other failure (a timeout, a resolver that failed) may pass.
+    const code = (err as { code?: unknown } | null)?.code
+    throw new ProbeSourceBlockedError(code === "ENOTFOUND" || code === "ENODATA" ? "host" : "dns", `probeVideoSource: blocked — DNS resolution failed for ${host}`)
   }
   if (addrs.length === 0) {
-    throw new Error(`probeVideoSource: blocked — no DNS resolution for ${host}`)
+    throw new ProbeSourceBlockedError("host", `probeVideoSource: blocked — no DNS resolution for ${host}`)
   }
   for (const a of addrs) {
     if (isPrivateOrReservedIP(a.address)) {
-      throw new Error(
+      throw new ProbeSourceBlockedError(
+        "address",
         `probeVideoSource: blocked — ${host} resolves to private/reserved IP ${a.address}`,
       )
     }
+  }
+}
+
+/**
+ * Why `assertSafeProbeSource` refused a link: `address` — it is, or its host
+ * resolves to, a private or reserved address; `host` — its host does not
+ * exist (no such domain, or an answer with no address); `dns` — its host
+ * could not be resolved for another reason (a timeout, a failing resolver:
+ * possibly for a moment, so a caller may treat it as retryable); `link` — not
+ * an http(s) link both URL parsers read alike. The message and the error's
+ * name are the ones the guard has always thrown, so a caller that reads only
+ * those sees no difference.
+ */
+export type ProbeSourceBlockReason = "address" | "host" | "dns" | "link"
+
+export class ProbeSourceBlockedError extends Error {
+  constructor(readonly reason: ProbeSourceBlockReason, message: string) {
+    super(message)
   }
 }
 
@@ -1379,25 +1420,57 @@ export function parsePacketLine(line: string): { pts?: number; dts?: number; dur
   }
 }
 
+/** How a packet scan reads its source. Every field is optional; without them a
+ *  scan reads a LOCAL file under `DEFAULT_FFMPEG_TIMEOUT_MS` (probeStreamEnds). */
+export interface PacketScanOptions {
+  /** ffprobe's `-protocol_whitelist` for a guarded http(s) source (the caller
+   *  checked the link with `assertSafeProbeSource` first, as for a header
+   *  probe): the protocols the scan may open, never a pivot to another one. */
+  readonly protocolWhitelist?: string
+  /** Kill the scan after this long (default `DEFAULT_FFMPEG_TIMEOUT_MS`); its
+   *  rejection then carries `timedOut: true` (retryable). */
+  readonly timeoutMs?: number
+  /** Kill the scan when this aborts (a request whose client went away); its
+   *  rejection then carries `aborted: true`. */
+  readonly signal?: AbortSignal
+}
+
 /** Stream one track's packet list through ffprobe; keep the max PTS end and,
  *  for a stream with no pts at all, the max DTS end, and whether its DTS ever
  *  JUMPS — back, or forward past `DTS_JUMP_THRESHOLD_SEC` (`dtsSteps`, read by
- *  `dtsContinuity`). Discarded packets never count. */
-function scanPacketEnds(filePath: string, streamIndex: number): Promise<{ maxPtsEnd?: number; maxDtsEnd?: number; dtsSteps: "monotonic" | "discontinuous" | "none" }> {
+ *  `dtsContinuity`). Discarded packets never count. The lines are streamed, so
+ *  a scan has no size limit but its time (`opts`). */
+export function scanPacketEnds(
+  filePath: string,
+  streamIndex: number,
+  opts: PacketScanOptions = {},
+): Promise<{ maxPtsEnd?: number; maxDtsEnd?: number; dtsSteps: "monotonic" | "discontinuous" | "none" }> {
   return new Promise((resolve, reject) => {
+    if (opts.signal?.aborted) {
+      reject(Object.assign(new Error(`probeStreamEnds: aborted before the scan of stream ${streamIndex}`), { aborted: true }))
+      return
+    }
     const proc = spawn("ffprobe", [
       "-v", "error",
+      ...(opts.protocolWhitelist !== undefined ? ["-protocol_whitelist", opts.protocolWhitelist] : []),
       "-select_streams", String(streamIndex),
       "-show_entries", "packet=pts_time,dts_time,duration_time,flags",
       "-of", "csv=p=0",
       filePath,
     ], { stdio: ["ignore", "pipe", "pipe"] })
 
+    const limitMs = opts.timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS
     let timedOut = false
+    let aborted = false
     const watchdog = setTimeout(() => {
       timedOut = true
       proc.kill("SIGKILL")
-    }, DEFAULT_FFMPEG_TIMEOUT_MS)
+    }, limitMs)
+    const onAbort = () => {
+      aborted = true
+      proc.kill("SIGKILL")
+    }
+    opts.signal?.addEventListener("abort", onAbort, { once: true })
 
     let maxPtsEnd: number | undefined
     let maxDtsEnd: number | undefined
@@ -1428,12 +1501,15 @@ function scanPacketEnds(filePath: string, streamIndex: number): Promise<{ maxPts
     })
     proc.on("error", (err) => {
       clearTimeout(watchdog)
+      opts.signal?.removeEventListener("abort", onAbort)
       reject(new Error(`ffprobe failed to spawn: ${err.message}`))
     })
     proc.on("close", (code) => {
       clearTimeout(watchdog)
+      opts.signal?.removeEventListener("abort", onAbort)
       if (lineBuf) take(lineBuf)
-      if (timedOut) reject(new Error(`probeStreamEnds: ffprobe timed out after ${DEFAULT_FFMPEG_TIMEOUT_MS}ms on stream ${streamIndex}`))
+      if (aborted) reject(Object.assign(new Error(`probeStreamEnds: ffprobe aborted on stream ${streamIndex}`), { aborted: true }))
+      else if (timedOut) reject(Object.assign(new Error(`probeStreamEnds: ffprobe timed out after ${limitMs}ms on stream ${streamIndex}`), { timedOut: true }))
       else if (code !== 0) reject(new Error(`probeStreamEnds: ffprobe exit ${code} on stream ${streamIndex}: ${stderrTail.trim() || "no output"}`))
       else resolve({
         ...(maxPtsEnd !== undefined ? { maxPtsEnd } : {}),

@@ -14,6 +14,7 @@
  * until it ends (the orchestrator settles them: `settleAppRunFinalEdits`).
  */
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { settleUnqueuedRun } from "../lib/enqueue-execution.js"
 import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { payloadBillingContext, type BillingContext } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
@@ -97,7 +98,14 @@ export async function executeAppRenderFinal(params: ExecuteAppRenderFinalParams)
     // runner can press Render final on a Preview further on.
     reviewerPresent: params.reviewerPresent,
   }
-  await orchestrationQueue.add("workflow-execution", jobData, { jobId: execution.id })
+  try {
+    await orchestrationQueue.add("workflow-execution", jobData, { jobId: execution.id })
+  } catch (err) {
+    // Never left `pending` with nothing queued, holding its Idempotency-Key:
+    // failed from `pending` with its key released (a run that moved on is
+    // running). The caller answers the error.
+    if ((await settleUnqueuedRun(execution.id, params.userId)) !== "moved-on") throw err
+  }
 
   return { executionId: execution.id, linked, deduped: false }
 }

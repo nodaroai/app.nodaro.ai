@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   jobDelete: vi.fn(),
   refundReservedCreditsForJob: vi.fn(),
   cancelOwnedJob: vi.fn(),
+  markJobFailedDetailed: vi.fn(),
+  refundJobHoldsConfirmed: vi.fn(),
   creditIds: [] as string[],
 }))
 
@@ -47,7 +49,12 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   },
   reserveCreditsForJob: mocks.reserveCreditsForJob,
 }))
-vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: mocks.refundReservedCreditsForJob }))
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({
+  refundReservedCreditsForJob: mocks.refundReservedCreditsForJob,
+  refundJobHoldsConfirmed: mocks.refundJobHoldsConfirmed,
+}))
+vi.mock("@/lib/job-failure.js", () => ({ markJobFailedDetailed: mocks.markJobFailedDetailed }))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn().mockResolvedValue(true) }))
 vi.mock("@/lib/cancel-job.js", () => ({ cancelOwnedJob: mocks.cancelOwnedJob }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: mocks.queueAdd }, tryRemoveFromQueue: vi.fn(), redis: {} }))
 vi.mock("@/lib/supabase.js", () => {
@@ -125,6 +132,8 @@ beforeEach(async () => {
   mocks.queueAdd.mockResolvedValue({ id: "bull-1" })
   mocks.refundReservedCreditsForJob.mockResolvedValue(1)
   mocks.cancelOwnedJob.mockResolvedValue({ kind: "cancelled", analysisJobId: null })
+  mocks.markJobFailedDetailed.mockResolvedValue("flipped")
+  mocks.refundJobHoldsConfirmed.mockResolvedValue(true)
   analysisAnswer = { status: 200, body: { jobId: "analysis-1" } }
   analysisSeen = null
 
@@ -457,26 +466,32 @@ describe("POST /v1/3d-scene/generate", () => {
     expect(analysisSeen?.body).toMatchObject({ forcePrivate: true })
   })
 
-  it("refunds, deletes and cancels the child when the ENQUEUE is rejected", async () => {
-    // Nothing else would ever settle this row: no BullMQ entry exists, so no
-    // worker fails it and no refund runs, and the reconcile sweep does not
-    // cover a job that never reached a provider.
-    mocks.queueAdd.mockRejectedValueOnce(new Error("redis is down"))
+  it("fails the parent (never deletes it), refunds it and cancels the child when the QUEUE refuses it", async () => {
+    // The person sees a failed run with its refund, never a vanished one; the
+    // full matrix (moved on, the edit lanes, an unknown outcome) is in
+    // 3d-scene-queue-refusal.test.ts.
+    mocks.queueAdd.mockRejectedValueOnce(new Error("OOM command not allowed when used memory > 'maxmemory'."))
     const res = await generate({ references: [{ id: "r1", url: VIDEO, kind: "video", role: "motion" }] })
     expect(res.statusCode).toBe(500)
-    expect(mocks.cancelOwnedJob).toHaveBeenCalledWith("analysis-1", USER_ID)
-    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
-    expect(mocks.jobDelete).toHaveBeenCalled()
+    expect(res.json().error.code).toBe("internal_error")
+    expect(mocks.markJobFailedDetailed).toHaveBeenCalledWith("job-1", expect.objectContaining({ from: ["pending"] }))
+    expect(mocks.refundJobHoldsConfirmed).toHaveBeenCalledWith("job-1")
+    expect(mocks.jobDelete).not.toHaveBeenCalled()
+    expect(mocks.refundReservedCreditsForJob).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(mocks.cancelOwnedJob).toHaveBeenCalledWith("analysis-1", USER_ID))
   })
 
-  it("refunds and deletes when STAMPING the child throws", async () => {
+  it("fails (never deletes) and refunds when STAMPING the child throws, cancelling the child", async () => {
     mocks.jobUpdate.mockImplementationOnce(() => {
       throw new Error("supabase unreachable")
     })
     const res = await generate({ references: [{ id: "r1", url: VIDEO, kind: "video", role: "motion" }] })
     expect(res.statusCode).toBe(500)
-    expect(mocks.cancelOwnedJob).toHaveBeenCalledWith("analysis-1", USER_ID)
-    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    // The shared fail rule (lib/enqueue-route-job.ts): failed from pending, key released, refund confirmed.
+    expect(mocks.markJobFailedDetailed).toHaveBeenCalledWith("job-1", expect.objectContaining({ from: ["pending"], extra: { idempotency_key: null } }))
+    expect(mocks.refundJobHoldsConfirmed).toHaveBeenCalledWith("job-1")
+    expect(mocks.jobDelete).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(mocks.cancelOwnedJob).toHaveBeenCalledWith("analysis-1", USER_ID))
     expect(mocks.queueAdd).not.toHaveBeenCalled()
   })
 

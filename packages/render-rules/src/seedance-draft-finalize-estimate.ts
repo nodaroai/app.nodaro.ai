@@ -41,7 +41,8 @@ import {
 import { withWiredSettings } from "@nodaro/shared/nodes"
 import { referenceModalityForHandle } from "@nodaro/shared/workflow"
 import { resolveGraphOrigin, type EstimateGraphEdge, type EstimateGraphNode } from "./apply-edl-estimate"
-import { activeResult, LEGACY_VIDEO_NODE_DEFAULT_PROVIDER } from "./generation-source-length"
+import { LEGACY_VIDEO_NODE_DEFAULT_PROVIDER } from "./generated-video-length"
+import { activeTake } from "./measured-wire-length"
 import { nodeProviders } from "./node-fan-out"
 import { seedanceTaskTypeAsRun } from "./seedance-task-type-as-run"
 import { bypassTeleports } from "./teleport-bypass"
@@ -156,7 +157,7 @@ export function seedanceFinalizeDraftQuote(
     const taskId = options.stateTaskIdOf?.(origin.id) ?? str(stored.kieTaskId)
     if (taskId) return { kind: "existing", taskId }
     // A result with no task to name: the run is refused, so it is priced as before.
-    if (activeResult(stored) !== undefined) return undefined
+    if (activeTake(stored, { anyUrl: true }) !== undefined) return undefined
   }
   const data = (withWiredSettings({ id: origin.id, type, data: stored }, nodes, edges).data ?? {}) as Record<string, unknown>
   const provider = draftProviderOf(type, data)

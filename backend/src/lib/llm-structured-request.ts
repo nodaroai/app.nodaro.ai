@@ -79,8 +79,9 @@ export const STRUCTURED_LLM_MAX_RETRIES = 3
  *  - `LLM_MAX_LANES_PER_CALL` lanes per attempt — `llmComplete` falls back from
  *    the primary lane to one alternate, and each lane reads `timeoutMs` again.
  *  - `STRUCTURED_LLM_TIMEOUT_MS`, this route's per-lane budget.
- * Plus `LLM_STRUCTURED_DIRECT_BACKUP_ASKS` single-lane asks: a Claude call
- * whose KIE prompt-JSON answers never validated asks the direct tool once more.
+ * Plus `LLM_STRUCTURED_DIRECT_BACKUP_ASKS` single-lane asks: a call whose KIE
+ * prompt-JSON answers never validated (a Claude model, or a `kieSchemaInPrompt`
+ * Gemini one) asks its direct lane once more.
  *
  * It is a BUDGET, not a measurement: a real draft answers in under a minute
  * (the studio Director's 20-scene plan measured ~50 s). But a call that spends

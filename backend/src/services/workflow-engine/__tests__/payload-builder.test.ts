@@ -704,6 +704,20 @@ describe("buildPayload", () => {
       expect(result.payload.endTime).toBe(10)
     })
 
+    it("trim-video: an end of 0 (the node's default) is a time cut to the clip's end, as the editor's run sends it", () => {
+      const result = buildPayload(node("n1", "trim-video", { startTime: 2, endTime: 0 }), jobId, { videoUrl: "https://v.mp4" })
+      expect(result.payload.startTime).toBe(2)
+      expect(result.payload.endTime).toBeUndefined()
+      expect(result.payload.smartLoopCut).toBe(false)
+    })
+
+    it("trim-video: only the fields of the node's mode reach the worker", () => {
+      const data = { trimMode: "keep-last-seconds", keepLastSeconds: 4, keepFirstSeconds: 9, trimStartFrames: 12, startTime: 3, endTime: 8 }
+      const result = buildPayload(node("n1", "trim-video", data), jobId, { videoUrl: "https://v.mp4" })
+      expect(result.payload).toEqual(expect.objectContaining({ trimMode: "keep-last-seconds", keepLastSeconds: 4, startTime: 0 }))
+      for (const field of ["keepFirstSeconds", "trimStartFrames", "endTime", "smartLoopCutLookback"]) expect(result.payload[field]).toBeUndefined()
+    })
+
     it("resize-video", () => {
       const n = node("n1", "resize-video", { targetAspect: "9:16" })
       const inputs: ResolvedInputs = { videoUrl: "https://v.mp4" }

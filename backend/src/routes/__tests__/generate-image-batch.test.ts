@@ -27,12 +27,21 @@ const h = vi.hoisted(() => ({
   inserted: [] as Array<{ row: Record<string, unknown>; key: string | null | undefined }>,
   refunded: [] as string[],
   deleted: [] as string[][],
+  /** Failure writes of a refused bulk add, and what each job's write answers (default "flipped"). */
+  fails: [] as string[],
+  failOutcomes: new Map<string, "flipped" | "missed" | "error">(),
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
   supabase: {
     from: vi.fn(() => ({
-      delete: () => ({ in: (_c: string, ids: string[]) => { h.deleted.push(ids); return { eq: () => Promise.resolve({ error: null }) } } }),
+      delete: () => ({
+        in: (_c: string, ids: string[]) => {
+          h.deleted.push(ids)
+          const chain = { eq: () => chain, then: (resolve: (v: { error: null }) => void) => resolve({ error: null }) }
+          return chain
+        },
+      }),
     })),
     auth: { getUser: vi.fn() },
   },
@@ -56,6 +65,13 @@ vi.mock("@/lib/credits-job-lifecycle.js", () => ({
   jobCreditHolds: vi.fn(async (ids: readonly string[]) => new Map([...h.holds].filter(([id]) => ids.includes(id)).map(([id, log]) => [id, [{ id: log, credits: 60 }]]))),
   refundUsageLogConfirmed: vi.fn(async () => true),
 }))
+vi.mock("@/lib/job-failure.js", () => ({
+  markJobFailedDetailed: vi.fn(async (jobId: string) => {
+    h.fails.push(jobId)
+    return h.failOutcomes.get(jobId) ?? "flipped"
+  }),
+}))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn(async () => true) }))
 vi.mock("@/lib/job-batch-claim.js", () => ({
   batchClaimKey: (userId: string, key: string) => `claim:${userId}:${key}`,
   claimBatch: vi.fn(async () => ({ renew: async () => true, release: async () => {} })),
@@ -113,6 +129,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 
 import { generateImageRoutes, resolveImageBatchCreditIdentifiers, resolveImageCreditIdentifier } from "../generate-image.js"
 import { videoQueue } from "../../lib/queue.js"
+import { UNQUEUED_BATCH_CLIENT_MESSAGE } from "../../lib/enqueue-route-job.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { presetCatalog } from "../../lib/presets/app-presets.js"
 import { buildGenerateImagePresetBody } from "../../lib/presets/apply-image-preset.js"
@@ -132,6 +149,8 @@ beforeEach(async () => {
   h.inserted.length = 0
   h.refunded.length = 0
   h.deleted.length = 0
+  h.fails.length = 0
+  h.failOutcomes.clear()
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     const body = req.body as Record<string, unknown> | undefined
@@ -386,12 +405,25 @@ describe("credits — all or nothing", () => {
     expect(videoQueue.addBulk).not.toHaveBeenCalled()
   })
 
-  it("a queue failure refunds and removes the whole batch and answers 500", async () => {
+  it("a queue failure fails, refunds and removes the whole batch and answers 500", async () => {
     vi.mocked(videoQueue.addBulk).mockRejectedValueOnce(new Error("redis down"))
     const res = await post({ prompt: "a red car", provider: "gpt-image-2", count: 2 }, KEY)
     expect(res.statusCode).toBe(500)
+    expect(res.json().error).toEqual({ code: "internal_error", message: "Failed to create image generation jobs" })
+    expect(h.fails).toEqual(["job-1", "job-2"])
     expect(h.refunded).toEqual(["job-1", "job-2"])
     expect(h.deleted).toEqual([["job-1", "job-2"]])
+  })
+
+  it("a refused bulk add that was delivered after all: the image a worker took keeps running and is named in startedJobIds", async () => {
+    vi.mocked(videoQueue.addBulk).mockRejectedValueOnce(new Error("Connection is closed."))
+    h.failOutcomes.set("job-1", "missed")
+    const res = await post({ prompt: "a red car", provider: "gpt-image-2", count: 2 }, KEY)
+    expect(res.statusCode).toBe(500)
+    // The same words every batch route answers a partial start with.
+    expect(res.json().error).toEqual({ code: "internal_error", message: UNQUEUED_BATCH_CLIENT_MESSAGE, startedJobIds: ["job-1"] })
+    expect(h.refunded).toEqual(["job-2"])
+    expect(h.deleted).toEqual([["job-2"]])
   })
 })
 

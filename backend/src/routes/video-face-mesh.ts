@@ -39,6 +39,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { createsChildJob } from "../lib/job-submission-context.js"
 import { measureVideoFaceMeshLength } from "../lib/video-face-mesh-length.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const L = VIDEO_FACE_MESH_LIMITS
 const facePct = z.number().min(L.FACE_HEIGHT_PCT_MIN).max(L.FACE_HEIGHT_PCT_MAX).optional().default(0)
@@ -146,7 +147,8 @@ export async function videoFaceMeshRoutes(app: FastifyInstance) {
     if (error || !job) return sendInternalError(reply, req, error, "Failed to create job")
     const reservation = await reserveCreditsForJob(req, reply, job.id, stash.creditId)
     if (reply.sent) return
-    await videoQueue.add("video-face-mesh", { jobId: job.id, ...body, usageLogId: reservation?.usageLogId })
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("video-face-mesh", { jobId: job.id, ...body, usageLogId: reservation?.usageLogId }))
+    if (reply.sent) return
     return reply.status(202).send({ jobId: job.id })
   })
 }

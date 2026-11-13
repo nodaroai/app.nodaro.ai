@@ -949,7 +949,7 @@ The values below are the credits a run is charged:
 
 | Tier | ≤60s | ≤180s | ≤360s | ≤600s |
 |------|------|-------|-------|-------|
-| `smart` (highest accuracy) | 455<!-- credits: video-analysis:smart:60s --> | 554<!-- credits: video-analysis:smart:180s --> | 1394<!-- credits: video-analysis:smart:360s --> | 2284<!-- credits: video-analysis:smart:600s --> |
+| `smart` (highest accuracy) | 458<!-- credits: video-analysis:smart:60s --> | 559<!-- credits: video-analysis:smart:180s --> | 1408<!-- credits: video-analysis:smart:360s --> | 2307<!-- credits: video-analysis:smart:600s --> |
 
 The live tool description carries these same numbers — it prices each bucket's
 credit id at server start. `list_models` and `GET /v1/credits/model-cost` give
@@ -979,7 +979,7 @@ video's probed duration. The values below are the credits a run is charged:
 | Family | ≤60s | ≤180s | ≤360s | ≤600s |
 |--------|------|-------|-------|-------|
 | `video-audit` (analysis wired) | 237<!-- credits: video-audit:60s --> | 319<!-- credits: video-audit:180s --> | 730<!-- credits: video-audit:360s --> | 1181<!-- credits: video-audit:600s --> |
-| `video-audit:auto` (no analysis — auto-runs one first) | 436<!-- credits: video-audit:auto:60s --> | 523<!-- credits: video-audit:auto:180s --> | 1296<!-- credits: video-audit:auto:360s --> | 2114<!-- credits: video-audit:auto:600s --> |
+| `video-audit:auto` (no analysis — auto-runs one first) | 442<!-- credits: video-audit:auto:60s --> | 532<!-- credits: video-audit:auto:180s --> | 1317<!-- credits: video-audit:auto:360s --> | 2149<!-- credits: video-audit:auto:600s --> |
 
 The live tool description carries these same numbers — it prices each bucket's
 credit id at server start. `list_models` and `GET /v1/credits/model-cost` give

@@ -35,6 +35,7 @@ import { buildMotionCreditModelIdentifier, motionTransferResolution } from "@nod
 import { formatZodError } from "../lib/zod-error.js"
 import { jobRunModel } from "../lib/run-model.js"
 import { withAdjustments } from "../lib/image-gen-normalize.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 export const motionTransferBody = z.object({
   imageUrl: safeUrlSchema,
@@ -111,7 +112,7 @@ export async function motionTransferRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("motion-transfer", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("motion-transfer", {
       jobId: job.id,
       imageUrl,
       videoUrl,
@@ -123,7 +124,8 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       backgroundSource,
       videoDuration,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return withAdjustments({ jobId: job.id }, sized.adjustments)
   })

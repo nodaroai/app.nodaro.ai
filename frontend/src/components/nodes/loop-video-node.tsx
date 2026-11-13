@@ -20,6 +20,7 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { LoopVideoData } from "@/types/nodes"
+import { loopVideoRepeatCount } from "@/lib/loop-video-count"
 
 function LoopVideoNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
@@ -55,7 +56,7 @@ function LoopVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   const modeLabel = nodeData.mode === "duration"
     ? `${nodeData.targetDuration ?? 10}s`
-    : `${nodeData.repeatCount ?? 2}x`
+    : `${loopVideoRepeatCount(nodeData)}x`
 
   const hasResult = status !== "running" && !!activeUrl && !videoError
   const canBrowseAlternates = !!activeUrl && results.length > 1
@@ -141,7 +142,7 @@ function LoopVideoNodeComponent({ id, data, selected }: NodeProps) {
           {status !== "running" && !activeUrl && status !== "failed" && (
             <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground"><Repeat className="w-5 h-5" /></div>
           )}
-          <p className="text-muted-foreground">{nodeData.mode === "duration" ? t("node.loopToSeconds", { n: nodeData.targetDuration ?? 10 }) : t("node.repeatTimes", { n: nodeData.repeatCount ?? 2 })}</p>
+          <p className="text-muted-foreground">{nodeData.mode === "duration" ? t("node.loopToSeconds", { n: nodeData.targetDuration ?? 10 }) : t("node.repeatTimes", { n: loopVideoRepeatCount(nodeData) })}</p>
         </div>
       )}
     </BaseNode>

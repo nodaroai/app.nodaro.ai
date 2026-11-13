@@ -241,14 +241,14 @@ export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CRE
   // estimateNodeCredits below + the node's live useModelCredits estimate).
   // Kept equal to VIDEO_ANALYSIS_BUCKET_CREDITS' table-wide ceiling
   // (smart:600s) so this rare-path fallback never under-quotes; re-sync by
-  // hand whenever that table reprices (last: 2026-08-03, task A3).
-  "video-analysis": 2076,
+  // hand whenever that table reprices (last: 2026-11-13, the fast-tier move).
+  "video-analysis": 2097,
   // Like video-analysis above, the real per-run cost is bucketed — here by
   // FAMILY × duration (see estimateNodeCredits + the node's live badge). This
   // key is the bare `video-audit` model id, so it carries that id's catalog
   // price: the re-audit family's 600s ceiling (credit-estimate-tables.test.ts
   // pins the two together). It is NOT the table-wide max — the auto family is
-  // a SEPARATE catalog id (`video-audit:auto`, 1921) — so treat this purely as
+  // a SEPARATE catalog id (`video-audit:auto`, 1953) — so treat this purely as
   // a last-resort floor: every real quoting path (node badge, canvas total,
   // run-confirm, precheck) resolves a bucketed composite first.
   "video-audit": 1073,
@@ -1005,12 +1005,13 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   "text-to-speech": speechPricingUnits,
   "text-to-dialogue": speechPricingUnits,
   // Dubbing: the started minutes of its span (the window, else the source's
-  // length the graph gives), at most 30 — one minute when it is not known.
+  // length the measured walk gives), at most 30 — one minute when it is not
+  // known (a minimum: the run measures the source).
   "dubbing": (node, allNodes, edges, rerunIds) => dubbingQuotedMinutesOf(withWiredSettings(node, allNodes, edges), allNodes, edges, rerunIds),
   // Video Upscale on Topaz: the Topaz units its target renders at the length
-  // its video wire gives (else 10 s), a 16:9 frame — the server's estimate
-  // reads the same rule (`topazVideoEstimateUnits`). The run measures the real
-  // clip, holds that, and is charged the units Topaz reports. Other providers: 1.
+  // the measured walk gives its video wire (else 10 s, a minimum), a 16:9
+  // frame — the server's estimate reads the same rule (`topazVideoEstimateUnits`). The run measures the
+  // real clip, holds that, and is charged the units Topaz reports. Other providers: 1.
   "video-upscale": videoUpscalePricingUnits,
   // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): the
   // billed seconds of the audio the graph or the node's last run gives, else

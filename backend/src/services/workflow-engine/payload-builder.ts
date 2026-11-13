@@ -64,7 +64,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, type UpstreamTaskGraph } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -7522,31 +7522,21 @@ function buildPayloadOf(
     }
 
     case "trim-video": {
-      const trimMode = (data.trimMode as string | undefined) ?? "time"
+      // The fields of the node's mode only (`trimVideoRunFields`, the ones a
+      // quote of the node prices): the worker reads every field it is sent,
+      // so dropping the seconds and keep fields passed the video through
+      // UNTRIMMED in those modes, and a time cut's end of 0 (the node's
+      // default) is left out — it runs to the clip's end, as the editor's run
+      // sends it, where an end of 0 rendered an empty video.
+      const runFields = trimVideoRunFields(data)
       return ffmpegResult("trim-video", {
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        startTime: trimMode === "time" ? data.startTime : 0,
-        endTime: trimMode === "time" ? data.endTime : undefined,
+        ...runFields,
         // outputSilentVideo: when true, the main trimmed clip is encoded
         // with `-an` (no audio).
         outputSilentVideo: data.outputSilentVideo,
-        // Frame-based trim — worker probes source fps and converts.
-        trimStartFrames: trimMode === "frames" ? data.trimStartFrames : undefined,
-        trimEndFrames: trimMode === "frames" ? data.trimEndFrames : undefined,
-        // Seconds + keep-first/keep-last modes — the worker reads these fields;
-        // dropping them passed the video through UNTRIMMED in those modes.
-        trimStartSeconds: trimMode === "seconds" ? data.trimStartSeconds : undefined,
-        trimEndSeconds: trimMode === "seconds" ? data.trimEndSeconds : undefined,
-        keepFirstSeconds: trimMode === "keep-first-seconds" ? data.keepFirstSeconds : undefined,
-        keepLastSeconds: trimMode === "keep-last-seconds" ? data.keepLastSeconds : undefined,
-        // Smart loop cut — worker picks the trailing frame closest to frame 0.
-        smartLoopCut: trimMode === "smart-loop-cut",
-        smartLoopCutLookback: trimMode === "smart-loop-cut" ? data.smartLoopCutLookback : undefined,
-        losslessKeyframe: trimMode !== "smart-loop-cut" && data.losslessKeyframe === true ? true : undefined,
-        // Pass through trimMode + upstream duration for accurate credit estimation
-        // (frame and smart-loop-cut modes need source length to derive output duration).
-        trimMode,
+        losslessKeyframe: runFields.trimMode !== "smart-loop-cut" && data.losslessKeyframe === true ? true : undefined,
         upstreamDuration: resolvedInputs.videoDuration,
         usageLogId,
       })
@@ -7619,11 +7609,8 @@ function buildPayloadOf(
       return ffmpegResult("loop-video", {
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        mode: data.mode ?? "repeat",
-        repeatCount: data.repeatCount ?? data.loops,
-        targetDuration: data.targetDuration,
-        smartLoopCutBeforeRepeat: data.smartLoopCutBeforeRepeat,
-        smartLoopCutLookback: data.smartLoopCutLookback,
+        // The one reading of the Loop's settings (its older `loops` count included) every quote prices.
+        ...loopVideoRunFields(data),
         // Pass through upstream duration for accurate credit estimation
         // (repeat mode multiplies upstream duration by repeatCount to derive cost).
         upstreamDuration: resolvedInputs.videoDuration,

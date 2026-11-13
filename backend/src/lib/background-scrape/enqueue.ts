@@ -11,9 +11,7 @@
  */
 import type { FastifyReply, FastifyRequest } from "fastify"
 import { videoQueue } from "../queue.js"
-import { markJobFailed } from "../job-failure.js"
-import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
-import { sendInternalError } from "../http-errors.js"
+import { enqueueRouteJob } from "../enqueue-route-job.js"
 import type { BackgroundScrapeJobBase } from "./common.js"
 
 import type { BackgroundScrapeJobType } from "./job-types.js"
@@ -24,21 +22,12 @@ export async function enqueueBackgroundScrape(
   jobType: BackgroundScrapeJobType,
   data: BackgroundScrapeJobBase & Record<string, unknown>,
 ): Promise<void> {
-  try {
-    // The BullMQ id is the row's id: a scrape waiting for capacity can then be
-    // found on the queue by its row (the never-started sweep spares it).
-    await videoQueue.add(jobType, data, { jobId: data.jobId })
-  } catch (err) {
-    // Nothing will run the job: fail it and give the reservation back (no
-    // provider or analysis call has run, so a full refund is right).
-    try {
-      const flipped = await markJobFailed(data.jobId, { error_message: "Could not start the job", extra: { output_data: { error: "Could not start the job" } } })
-      if (flipped && data.usageLogId) await refundReservedCreditsForJob(data.jobId)
-    } catch (failErr) {
-      req.log.error({ err: failErr, jobId: data.jobId }, `[${jobType}] failed to mark an unqueued job failed / refund`)
-    }
-    sendInternalError(reply, req, err, "Failed to start the job")
-    return
-  }
+  // The BullMQ id is the row's id: a scrape waiting for capacity can then be
+  // found on the queue by its row (the never-started sweep spares it). A
+  // queue that refuses the job fails it from `pending` with its key released
+  // and refunds it, confirmed (no provider or analysis call has run, so a
+  // full refund is right) — lib/enqueue-route-job.ts.
+  await enqueueRouteJob(req, reply, data.jobId, () => videoQueue.add(jobType, data, { jobId: data.jobId }))
+  if (reply.sent) return
   reply.send({ jobId: data.jobId, status: "pending" })
 }

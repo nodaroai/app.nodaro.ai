@@ -14,6 +14,7 @@ import {
   getLlmTier,
   getLlmModalityCaps,
   VIDEO_ANALYSIS_LLM_MODELS,
+  VIDEO_ANALYSIS_TIERS,
   buildLlmCreditIdentifier,
   resolveLlmCreditId,
   motionGraphicsFeature,
@@ -1008,15 +1009,12 @@ describe("gemini-3.8-flash exposure", () => {
     expect(getLlmModel("gemini-3-8-flash-openai")?.id).toBe("gemini-3.8-flash")
   })
 
-  it("stays OUT of video-analysis — image-only modality caps by decision, not omission", () => {
-    // Google's own 3.8 lane understands video (agentic video via the
-    // Interactions API), so full caps here would auto-enroll it in
-    // VIDEO_ANALYSIS_LLM_MODELS and force a VA tier + pricing decision that is
-    // deliberately deferred until the 3.8-vs-3.7 analysis A/B concludes.
-    // If this goes red, someone flipped the caps — only valid TOGETHER with
-    // that VA-side decision.
-    expect(getLlmModalityCaps("gemini-3.8-flash")).toEqual({ image: true, video: false, audio: false })
-    expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gemini-3.8-flash")
+  it("backs the video-analysis fast tier — full video + audio caps (decided 2026-11-13)", () => {
+    // Full caps are what enrol it in VIDEO_ANALYSIS_LLM_MODELS; the fast tier
+    // moved here when KIE dropped gemini-3-flash's channel.
+    expect(getLlmModalityCaps("gemini-3.8-flash")).toEqual({ image: true, video: true, audio: true })
+    expect(VIDEO_ANALYSIS_LLM_MODELS).toContain("gemini-3.8-flash")
+    expect(VIDEO_ANALYSIS_TIERS.fast).toBe("gemini-3.8-flash")
   })
 })
 

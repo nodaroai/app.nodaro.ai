@@ -5,13 +5,31 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
-const { mockCanRun, mockRecordRefusal, mockResolve, mockQueueAdd, execInserts, workflowHome } = vi.hoisted(() => ({
+const TRIGGER_1 = {
+  triggerId: "trig-1",
+  userId: "owner-1",
+  workflowId: "wf-1",
+  connectionId: "conn-1",
+  nodeId: "tg-node-1",
+  chatIdFilter: undefined,
+  messageTypeFilters: undefined,
+}
+
+const { mockCanRun, mockRecordRefusal, mockResolve, mockQueueAdd, mockFailWaiting, failAttempts, execInserts, execReadBack, workflowHome, botTriggers } = vi.hoisted(() => ({
   mockCanRun: vi.fn(),
   mockRecordRefusal: vi.fn(async () => undefined),
   mockResolve: vi.fn(async (input: { userId: string }) => ({ payer: "user" as const, userId: input.userId })),
-  mockQueueAdd: vi.fn(async () => ({})),
+  mockQueueAdd: vi.fn(async (..._a: unknown[]) => ({})),
+  /** A run the queue refuses is failed through its own failure write (lib/enqueue-execution.ts). */
+  mockFailWaiting: vi.fn(async (..._a: unknown[]) => true),
+  /** How many writes that failure write took: a false after more than one is read back (lib/enqueue-execution.ts). */
+  failAttempts: { value: 1 },
   execInserts: [] as Array<Record<string, unknown>>,
+  /** What the read-back of a run answers when its failure write answered false (lib/enqueue-execution.ts). */
+  execReadBack: { value: { data: null, error: null } as { data: unknown; error: unknown } },
   workflowHome: { value: null as string | null },
+  /** Every trigger listening on the bot; null: the one trigger below. */
+  botTriggers: { value: null as Array<Record<string, unknown>> | null },
 }))
 
 vi.mock("@/lib/workflow-access.js", () => ({ canRunWorkflow: mockCanRun }))
@@ -26,21 +44,19 @@ vi.mock("@/lib/billing-context.js", async (importOriginal) => {
 vi.mock("@/lib/orchestration-queue.js", () => ({
   orchestrationQueue: { add: mockQueueAdd },
 }))
+vi.mock("@/lib/concurrency-lanes/run-failure.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/concurrency-lanes/run-failure.js")>()),
+  failWaitingExecution: mockFailWaiting,
+  // The form the refused-run settle calls (lib/enqueue-execution.ts): mockFailWaiting's answer after
+  // failAttempts.value writes. A false after one write is believed without a read-back.
+  failWaitingExecutionDetailed: async (...a: unknown[]) => ({ failed: await mockFailWaiting(...a), attempts: failAttempts.value }),
+}))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn(async () => true) }))
 vi.mock("@/lib/telegram-router.js", () => ({
   // The secret belongs to the URL; the triggers are every listener on that bot.
   getRouteForToken: () => ({
     secretToken: "shh",
-    triggers: [
-      {
-        triggerId: "trig-1",
-        userId: "owner-1",
-        workflowId: "wf-1",
-        connectionId: "conn-1",
-        nodeId: "tg-node-1",
-        chatIdFilter: undefined,
-        messageTypeFilters: undefined,
-      },
-    ],
+    triggers: botTriggers.value ?? [TRIGGER_1],
   }),
   downloadTelegramFile: vi.fn(),
 }))
@@ -80,13 +96,20 @@ vi.mock("@/lib/supabase.js", () => {
           }
         }
         if (table === "workflow_executions") {
+          // The read-back of a run by id: `.select(…).eq("id", …).maybeSingle()`.
+          const read: Record<string, unknown> = {}
+          read.select = vi.fn().mockReturnValue(read)
+          read.eq = vi.fn().mockReturnValue(read)
+          read.maybeSingle = vi.fn().mockImplementation(async () => execReadBack.value)
           return {
-            ...chain,
+            ...read,
             insert: vi.fn().mockImplementation((row: Record<string, unknown>) => {
               execInserts.push(row)
+              // exec-1, exec-2, …: one execution per trigger the message fires.
+              const id = `exec-${execInserts.length}`
               return {
                 select: vi.fn().mockReturnValue({
-                  single: vi.fn().mockResolvedValue({ data: { id: "exec-1" }, error: null }),
+                  single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
                 }),
               }
             }),
@@ -100,12 +123,16 @@ vi.mock("@/lib/supabase.js", () => {
 
 import { telegramWebhookRoutes } from "../telegram-webhook.js"
 import { supabase } from "@/lib/supabase.js"
+import { UNQUEUED_EXECUTION_CLIENT_MESSAGE, UNQUEUED_EXECUTION_MESSAGE } from "@/lib/enqueue-execution.js"
 
 let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
   execInserts.length = 0
+  execReadBack.value = { data: null, error: null }
+  failAttempts.value = 1
+  botTriggers.value = null
   app = Fastify()
   app.addHook("onRequest", async (req) => {
     ;(req as unknown as { userId?: string }).userId = req.headers["x-user-id"] as string | undefined
@@ -177,6 +204,114 @@ describe("telegram fire gate (P14/W6)", () => {
     const res = await fire()
     expect(res.statusCode).toBe(200)
     expect(execInserts).toHaveLength(1)
+  })
+})
+
+// A queue that refuses a trigger's run (lib/enqueue-execution.ts): the run is
+// failed from `pending` at once with its key released, and the bot's other
+// triggers still fire. An error answer makes Telegram deliver the message
+// again, which fires every trigger again, so it is given only when no run of
+// the message started and every refused run is failed (those runs carry no
+// key: the redelivery fires them again cleanly). Otherwise Telegram gets ok.
+describe("telegram fire: a queue that refuses a trigger's run", () => {
+  it("the run is failed, the next trigger still fires, and Telegram gets its ok", async () => {
+    mockCanRun.mockResolvedValue(true)
+    workflowHome.value = null
+    botTriggers.value = [TRIGGER_1, { ...TRIGGER_1, triggerId: "trig-2", workflowId: "wf-2", nodeId: "tg-node-2" }]
+    mockQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    const res = await fire()
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ ok: true })
+    expect(execInserts).toHaveLength(2)
+    expect(mockFailWaiting).toHaveBeenCalledTimes(1)
+    expect(mockFailWaiting).toHaveBeenCalledWith("exec-1", UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null })
+    // The second trigger's run was queued as usual.
+    expect(mockQueueAdd).toHaveBeenCalledTimes(2)
+    expect(mockQueueAdd).toHaveBeenLastCalledWith(
+      "workflow-execution",
+      expect.objectContaining({ executionId: "exec-2", workflowId: "wf-2", triggerNodeId: "tg-node-2" }),
+      { jobId: "exec-2" },
+    )
+  })
+
+  it("a failure write that cannot land still answers Telegram ok (the never-started sweep fails the run)", async () => {
+    mockCanRun.mockResolvedValue(true)
+    workflowHome.value = null
+    mockQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    mockFailWaiting.mockRejectedValueOnce(new Error("could not write the execution"))
+    const res = await fire()
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ ok: true })
+  })
+
+  it("the only run refused and failed: nothing started, so Telegram gets an error and delivers the message again", async () => {
+    mockCanRun.mockResolvedValue(true)
+    workflowHome.value = null
+    mockQueueAdd.mockRejectedValueOnce(new Error("OOM command not allowed when used memory > 'maxmemory'."))
+    const res = await fire()
+    expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({ error: { code: "internal_error", message: UNQUEUED_EXECUTION_CLIENT_MESSAGE } })
+    expect(res.body).not.toContain("maxmemory")
+    expect(mockFailWaiting).toHaveBeenCalledWith("exec-1", UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null })
+  })
+
+  it("every trigger's run refused and failed: an error too", async () => {
+    mockCanRun.mockResolvedValue(true)
+    workflowHome.value = null
+    botTriggers.value = [TRIGGER_1, { ...TRIGGER_1, triggerId: "trig-2", workflowId: "wf-2", nodeId: "tg-node-2" }]
+    mockQueueAdd.mockRejectedValueOnce(new Error("Connection is closed.")).mockRejectedValueOnce(new Error("Connection is closed."))
+    const res = await fire()
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    expect(mockFailWaiting).toHaveBeenCalledTimes(2)
+    expect(mockFailWaiting).toHaveBeenCalledWith("exec-1", UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null })
+    expect(mockFailWaiting).toHaveBeenCalledWith("exec-2", UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null })
+  })
+
+  it("one trigger skipped by its gate and the other's run refused and failed: still an error (the gate's refusal is recorded once)", async () => {
+    workflowHome.value = null
+    botTriggers.value = [TRIGGER_1, { ...TRIGGER_1, triggerId: "trig-2", workflowId: "wf-2", nodeId: "tg-node-2" }]
+    mockCanRun.mockImplementation(async (_userId: string, workflowId: string) => workflowId === "wf-2")
+    mockQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    const res = await fire()
+    expect(res.statusCode).toBe(500)
+    expect(mockRecordRefusal).toHaveBeenCalledTimes(1)
+    expect(execInserts).toHaveLength(1)
+  })
+
+  it("a refused run that moved on (a worker claimed it) started: Telegram gets its ok", async () => {
+    mockCanRun.mockResolvedValue(true)
+    workflowHome.value = null
+    mockQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    mockFailWaiting.mockResolvedValueOnce(false)
+    failAttempts.value = 2
+    execReadBack.value = { data: { status: "running", error_message: null }, error: null }
+    const res = await fire()
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ ok: true })
+  })
+
+  it("a refused run whose failure the read-back cannot confirm (unsettled) keeps the ok", async () => {
+    mockCanRun.mockResolvedValue(true)
+    workflowHome.value = null
+    mockQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    mockFailWaiting.mockResolvedValueOnce(false)
+    failAttempts.value = 2
+    execReadBack.value = { data: null, error: { message: "could not read" } }
+    const res = await fire()
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ ok: true })
+  })
+
+  it("a refused run whose lost-answer write the read-back finds failed counts as failed: an error", async () => {
+    mockCanRun.mockResolvedValue(true)
+    workflowHome.value = null
+    mockQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    mockFailWaiting.mockResolvedValueOnce(false)
+    failAttempts.value = 2
+    execReadBack.value = { data: { status: "failed", error_message: UNQUEUED_EXECUTION_MESSAGE }, error: null }
+    const res = await fire()
+    expect(res.statusCode).toBe(500)
   })
 })
 

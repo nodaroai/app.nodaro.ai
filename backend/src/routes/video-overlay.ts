@@ -45,6 +45,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { measureVideoOverlayBase, videoOverlayBaseCredits } from "../lib/video-overlay-length.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const B = VIDEO_OVERLAY_BOUNDS
 const seconds = z.number().finite().min(0).max(VIDEO_OVERLAY_MAX_TIME_SEC)
@@ -244,7 +245,8 @@ export async function videoOverlayRoutes(app: FastifyInstance) {
 
       // A run with a video layer carries the units it was charged for (the server's own measurement, never a
       // body field — the schema strips those): the worker refuses a base that has grown past them since.
-      await videoQueue.add("video-overlay", { jobId: job.id, ...restData, ...(billedUnits === undefined ? {} : { billedUnits }), usageLogId })
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("video-overlay", { jobId: job.id, ...restData, ...(billedUnits === undefined ? {} : { billedUnits }), usageLogId }))
+      if (reply.sent) return
       return { jobId: job.id }
     },
   )

@@ -3,7 +3,7 @@ import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { UGC_ESTIMATE_PARTS, type UgcEstimatePart, type UgcQuoteLineKey } from "@nodaro/render-rules"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { getPluginServices } from "../../lib/private-plugins/services-registry.js"
-import { videoUtilityChargeBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
+import { plannedMadeClipSec, videoUtilityChargeBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
 import type { PluginUgcEstimate, PluginUgcEstimateInput } from "../../lib/private-plugins/types.js"
 import type { LlmRequest } from "../../lib/llm/types.js"
 import { llmHoldForCalls } from "../billing/llm-hold-for-calls.js"
@@ -238,12 +238,15 @@ export const UGC_JOIN_NODE = {
  * `computeVideoUtilityCreditOverride`: `videoUtilityChargeBaseCredits` over the request, marked up under
  * `combine-videos`), over the request the join node sends (`videoUtilityEstimateBody`: its settings
  * with the run's defaults). The clips reach the join as one list over a Bundle edge, and a run hands
- * it each finished clip at its own real length (`runForwardedVideoLengthSec`, decided 2026-10-13), so
- * the quote prices each clip at its ticket's length: the most a finished clip runs — the finish cuts
- * a clip to its speech and pads, a passed-through clip is its ticket's render.
+ * it each finished clip, and the join is charged the length it measures of each, so the quote reads
+ * the rule every Combine Videos quote reads: each clip at its planned length — its ticket's, the most a
+ * finished clip runs (the finish cuts a clip to its speech and pads, a passed-through clip is its
+ * ticket's render) — plus the slack for a clip made in the run, then the frame grace inside the shared units
+ * rule (`plannedMadeClipSec`, the one helper the MCP planner's join quote prices each clip by too).
  */
 async function joinCredits(ticketSecs: readonly number[]): Promise<number> {
-  const body = { ...videoUtilityEstimateBody(UGC_JOIN_NODE)!, videoUrls: ticketSecs.map(() => ""), upstreamDurations: [...ticketSecs] }
+  const planned = ticketSecs.map(plannedMadeClipSec)
+  const body = { ...videoUtilityEstimateBody(UGC_JOIN_NODE)!, videoUrls: ticketSecs.map(() => ""), upstreamDurations: planned }
   const base = await videoUtilityChargeBaseCredits(UGC_JOIN_NODE.type, body)
   if (base === undefined) throw new Error("combine-videos has no computed price")
   return applyServiceMarkup(base, await getAppSettings(), UGC_JOIN_NODE.type)

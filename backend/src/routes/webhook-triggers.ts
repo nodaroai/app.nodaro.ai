@@ -25,6 +25,7 @@ import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { enqueueExecution } from "../lib/enqueue-execution.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
@@ -390,9 +391,15 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       reviewerPresent: false,
     }
 
-    await orchestrationQueue.add("workflow-execution", jobData, {
-      jobId: execution.id,
-    })
+    // A queue that refuses the run fails it from `pending` with its
+    // idempotency key released, and answers 500 — the answer this route
+    // already gives when its execution row cannot be written, so a caller
+    // that retries on a server error fires again (lib/enqueue-execution.ts).
+    // Nothing is held before this point.
+    await enqueueExecution(req, reply, execution.id, () =>
+      orchestrationQueue.add("workflow-execution", jobData, { jobId: execution.id }),
+    )
+    if (reply.sent) return
 
     return reply.status(202).send({
       executionId: execution.id,

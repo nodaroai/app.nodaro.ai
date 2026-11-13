@@ -6,10 +6,13 @@
  *     per-minute part, including when it is wired to Transcribe or Edit Plan.
  *  2. A generated voice (Text to Speech, Text to Dialogue) is listed at the
  *     length its script text is expected to take, at most 300 seconds, not at
- *     the Lip Sync provider's own audio cap.
+ *     the Lip Sync provider's own audio cap. Combine Videos reads it through the
+ *     measured walk it is quoted by, which adds its slack to the clip the Lip
+ *     Sync makes.
  */
 import { describe, it, expect } from "vitest"
 import { estimateScriptDurationSec } from "@nodaro/shared/credits"
+import { VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC } from "@nodaro/render-rules"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 import { videoUtilityUnits } from "../../../lib/video-utility-credits.js"
 
@@ -27,6 +30,12 @@ type E = { source: string; target: string; sourceHandle?: string | null; targetH
 const combine: N = { id: "op", type: "combine-videos", data: { trimStartFrames: 0, trimEndFrames: 0 } }
 const combineCharge = (durations: Array<number | undefined>) =>
   staticUtilityBase("combine-videos", { transition: "cut", transitionDuration: 0.5, trimStartFrames: 0, trimEndFrames: 0, videoUrls: durations.map(() => ""), upstreamDurations: durations })!
+/**
+ * Combine Videos is charged the length it measures, so a clip a node makes in
+ * the run (a Lip Sync, a generation) is listed with the slack the measured walk
+ * adds to each clip made (`VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC`).
+ */
+const clipCharge = (sec: number) => combineCharge([sec + VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC])
 const MINUTES = [1, 7, 45, 180]
 
 const yt: N = { id: "yt", type: "youtube-video", data: { youtubeUrl: "https://www.youtube.com/watch?v=abc", videoId: "abc", duration: 95 } }
@@ -151,33 +160,33 @@ describe("a generated voice is listed at its script's expected length", () => {
     const script = "x".repeat(240)
     const d = voiceTo(speech(script))
     expect(d.perMinute).toBe(0)
-    expect(d.fixed).toBe(combineCharge([estimateScriptDurationSec(script)]))
-    expect(d.fixed).toBeLessThan(combineCharge([300]))
+    expect(d.fixed).toBe(clipCharge(estimateScriptDurationSec(script)))
+    expect(d.fixed).toBeLessThan(clipCharge(300))
   })
 
   it("a script that runs past 300 seconds lists at 300", () => {
     const d = voiceTo(speech("x".repeat(9000)))
-    expect(d.fixed).toBe(combineCharge([GENERATED_VOICE_MAX_SEC]))
+    expect(d.fixed).toBe(clipCharge(GENERATED_VOICE_MAX_SEC))
   })
 
   it("a slower voice runs longer: the listing follows the node's speed", () => {
     const script = "x".repeat(1200)
     const d = voiceTo(speech(script, { speed: 0.7 }))
-    expect(d.fixed).toBe(combineCharge([estimateScriptDurationSec(script, 0.7)]))
+    expect(d.fixed).toBe(clipCharge(estimateScriptDurationSec(script, 0.7)))
     expect(d.fixed).toBeGreaterThan(voiceTo(speech(script)).fixed)
   })
 
   it("a speed mapped to a wire is listed at the slowest the voice speaks", () => {
     const script = "x".repeat(1200)
     const d = voiceTo(speech(script, { fieldMappings: { speed: { source: "n" } } }))
-    expect(d.fixed).toBe(combineCharge([estimateScriptDurationSec(script, SLOWEST_VOICE_SPEED)]))
+    expect(d.fixed).toBe(clipCharge(estimateScriptDurationSec(script, SLOWEST_VOICE_SPEED)))
   })
 
   it("a Chinese script is listed at the slow-script rate, not the Latin one", () => {
     const script = "你".repeat(600)
     const d = voiceTo(speech(script, { speed: 0.7 }))
     const seconds = Math.ceil(600 / SLOW_SCRIPT_CHARS_PER_SEC / 0.7)
-    expect(d.fixed).toBe(combineCharge([seconds]))
+    expect(d.fixed).toBe(clipCharge(seconds))
     expect(seconds).toBeGreaterThanOrEqual(150)
   })
 
@@ -190,7 +199,7 @@ describe("a generated voice is listed at its script's expected length", () => {
     const voice: N = { id: "voice", type: "text-to-dialogue", data: { dialogue: lines } }
     const d = voiceTo(voice)
     expect(d.perMinute).toBe(0)
-    expect(d.fixed).toBe(combineCharge([estimateScriptDurationSec("z".repeat(240))]))
+    expect(d.fixed).toBe(clipCharge(estimateScriptDurationSec("z".repeat(240))))
   })
 
   it("a script fed by a Text node with a literal text is read through the wire", () => {
@@ -198,14 +207,14 @@ describe("a generated voice is listed at its script's expected length", () => {
     const voice: N = { id: "voice", type: "text-to-speech", data: { textSource: "connected", provider: "elevenlabs-turbo" } }
     const text: N = { id: "txt", type: "text-prompt", data: { text: script } }
     const d = voiceTo(voice, [text], [{ source: "txt", target: "voice", targetHandle: "prompt" }])
-    expect(d.fixed).toBe(combineCharge([estimateScriptDurationSec(script)]))
+    expect(d.fixed).toBe(clipCharge(estimateScriptDurationSec(script)))
   })
 
   it("an exposed text input with a character limit: the longest script the limit admits", () => {
     const voice: N = { id: "voice", type: "text-to-speech", data: { textSource: "connected", provider: "elevenlabs-turbo" } }
     const text: N = { id: "txt", type: "text-prompt", data: { text: "placeholder" } }
     const d = voiceTo(voice, [text], [{ source: "txt", target: "voice", targetHandle: "prompt" }], { "txt:text": 600 })
-    expect(d.fixed).toBe(combineCharge([estimateScriptDurationSec("x".repeat(600))]))
+    expect(d.fixed).toBe(clipCharge(estimateScriptDurationSec("x".repeat(600))))
   })
 
   describe("a script an LLM node writes (decided 2026-10-07): at most maxTokens x 8 characters, read at the same speaking rate", () => {
@@ -217,26 +226,26 @@ describe("a generated voice is listed at its script's expected length", () => {
     const seconds = (chars: number, speed = 1) => estimateScriptDurationSec("x".repeat(chars), speed)
 
     it("Prompt (llm-chat) with maxTokens 200: 1600 characters, not the provider's cap", () => {
-      expect(listed(voice(), llm({ maxTokens: 200 }))).toBe(combineCharge([seconds(1600)]))
+      expect(listed(voice(), llm({ maxTokens: 200 }))).toBe(clipCharge(seconds(1600)))
       expect(seconds(1600)).toBe(134)
     })
 
     it("follows the voice's speed, and a speed mapped to a wire is the slowest the voice speaks", () => {
-      expect(listed(voice({ speed: 1.12 }), llm({ maxTokens: 200 }))).toBe(combineCharge([seconds(1600, 1.12)]))
-      expect(listed(voice({ fieldMappings: { speed: { source: "n" } } }), llm({ maxTokens: 200 }))).toBe(combineCharge([seconds(1600, SLOWEST_VOICE_SPEED)]))
+      expect(listed(voice({ speed: 1.12 }), llm({ maxTokens: 200 }))).toBe(clipCharge(seconds(1600, 1.12)))
+      expect(listed(voice({ fieldMappings: { speed: { source: "n" } } }), llm({ maxTokens: 200 }))).toBe(clipCharge(seconds(1600, SLOWEST_VOICE_SPEED)))
     })
 
     it("an unset maxTokens is the node's default, which is past 300 seconds: it lists at 300", () => {
-      expect(listed(voice(), llm({}))).toBe(combineCharge([GENERATED_VOICE_MAX_SEC]))
-      expect(listed(voice(), llm({}, "ai-writer"))).toBe(combineCharge([GENERATED_VOICE_MAX_SEC]))
+      expect(listed(voice(), llm({}))).toBe(clipCharge(GENERATED_VOICE_MAX_SEC))
+      expect(listed(voice(), llm({}, "ai-writer"))).toBe(clipCharge(GENERATED_VOICE_MAX_SEC))
     })
 
     it("a large maxTokens lists at the 300-second cap", () => {
-      expect(listed(voice(), llm({ maxTokens: 16384 }))).toBe(combineCharge([GENERATED_VOICE_MAX_SEC]))
+      expect(listed(voice(), llm({ maxTokens: 16384 }))).toBe(clipCharge(GENERATED_VOICE_MAX_SEC))
     })
 
     it("AI Writer reads its own maxTokens", () => {
-      expect(listed(voice(), llm({ maxTokens: 100 }, "ai-writer"))).toBe(combineCharge([seconds(800)]))
+      expect(listed(voice(), llm({ maxTokens: 100 }, "ai-writer"))).toBe(clipCharge(seconds(800)))
     })
 
     it("the voice's pre and post text is part of what it reads", () => {
@@ -246,32 +255,32 @@ describe("a generated voice is listed at its script's expected length", () => {
 
     it("a node that falls back to its own text when the LLM is blank is never listed below that text", () => {
       const own = "x".repeat(3000)
-      expect(listed(voice({ directText: own }), llm({ maxTokens: 100 }))).toBe(combineCharge([seconds(3000)]))
+      expect(listed(voice({ directText: own }), llm({ maxTokens: 100 }))).toBe(clipCharge(seconds(3000)))
     })
 
     it("a maxTokens mapped to a wire is not bounded: the 300-second stand-in as before", () => {
-      expect(listed(voice(), llm({ maxTokens: 200, fieldMappings: { maxTokens: { source: "n" } } }))).toBe(combineCharge([300]))
+      expect(listed(voice(), llm({ maxTokens: 200, fieldMappings: { maxTokens: { source: "n" } } }))).toBe(clipCharge(300))
     })
 
     it("a maxTokens an app exposes is read at the largest value the app user can pick", () => {
-      expect(listed(voice(), llm({ maxTokens: 200 }), { "llm:maxTokens": 16384 })).toBe(combineCharge([GENERATED_VOICE_MAX_SEC]))
-      expect(listed(voice(), llm({ maxTokens: 200 }), { "llm:maxTokens": 256 })).toBe(combineCharge([seconds(2048)]))
+      expect(listed(voice(), llm({ maxTokens: 200 }), { "llm:maxTokens": 16384 })).toBe(clipCharge(GENERATED_VOICE_MAX_SEC))
+      expect(listed(voice(), llm({ maxTokens: 200 }), { "llm:maxTokens": 256 })).toBe(clipCharge(seconds(2048)))
     })
 
     it("a node with no model of its own runs the feature's default, which reasons by default: its 8192-token floor is no bound", () => {
       const bare = (data: Record<string, unknown>): N => ({ id: "llm", type: "llm-chat", data })
-      expect(listed(voice(), bare({ maxTokens: 200 }))).toBe(combineCharge([GENERATED_VOICE_MAX_SEC]))
+      expect(listed(voice(), bare({ maxTokens: 200 }))).toBe(clipCharge(GENERATED_VOICE_MAX_SEC))
     })
 
     it("a model that shares its output budget with thinking is read at the floor the request layer raises it to", () => {
       // Opus 5 reasons by default: a 200-token cap is raised to the model's floor, so the cap is no bound.
-      expect(listed(voice(), llm({ maxTokens: 200, llmModel: "claude-opus-5" }))).toBe(combineCharge([GENERATED_VOICE_MAX_SEC]))
-      expect(listed(voice(), llm({ maxTokens: 200, llmModel: "claude-sonnet-4.6", reasoningEffort: "max" }))).toBe(combineCharge([GENERATED_VOICE_MAX_SEC]))
+      expect(listed(voice(), llm({ maxTokens: 200, llmModel: "claude-opus-5" }))).toBe(clipCharge(GENERATED_VOICE_MAX_SEC))
+      expect(listed(voice(), llm({ maxTokens: 200, llmModel: "claude-sonnet-4.6", reasoningEffort: "max" }))).toBe(clipCharge(GENERATED_VOICE_MAX_SEC))
     })
 
     it("a voice fed by two wires, or by any other node, is not bounded", () => {
       const other: N = { id: "other", type: "image-to-text", data: { maxTokens: 200 } }
-      expect(voiceTo(voice(), [other], [{ source: "other", target: "voice", targetHandle: "prompt" }]).fixed).toBe(combineCharge([300]))
+      expect(voiceTo(voice(), [other], [{ source: "other", target: "voice", targetHandle: "prompt" }]).fixed).toBe(clipCharge(300))
     })
 
     it("the voice's own price is the same as before: the bound is a length, not a script count", () => {
@@ -291,7 +300,7 @@ describe("a generated voice is listed at its script's expected length", () => {
     ]
     const withOp = listingOf([...nodes, combine], [...edges, { source: "merge", target: "op", targetHandle: "in" }], [])
     const without = listingOf(nodes, edges, [])
-    expect(withOp.preview - without.preview).toBe(combineCharge([15]))
+    expect(withOp.preview - without.preview).toBe(clipCharge(15))
   })
 })
 
@@ -313,5 +322,32 @@ describe("generatedVoiceLength", () => {
 
   it("is bounded by a count under the cap, even when it is a limit rather than the text", () => {
     expect(generatedVoiceLength({ chars: 600, exact: false, cap: 40000 })).toEqual({ fixedSec: 50, perEpisodeSec: 0 })
+  })
+})
+
+describe("a Lip Sync priced by its audio's seconds lists a generated voice at its script's length", () => {
+  // OmniHuman 2.0 is charged the seconds of the audio it measures, at least 4: its listed price reads the voice
+  // by its script, as Pitch & Tempo and Dubbing do — never at the model's 300 s maximum when the script is known.
+  const listedLipSync = (voice: N) => {
+    const nodes: N[] = [voice, { id: "step", type: "lip-sync", data: { provider: "omnihuman-2-0" } }]
+    const edges: E[] = [{ source: "voice", target: "step", targetHandle: "audio" }]
+    const withStep = listingOf(nodes, edges, [])
+    const without = listingOf([voice], [], [])
+    return { fixed: withStep.preview - without.preview, perMinute: withStep.previewPerMinute - without.previewPerMinute }
+  }
+  const perSecond = STATIC_CREDIT_COSTS["omnihuman-2-0:per-second"]!
+
+  it("Text to Speech with a literal script: the seconds that script takes, billed as the run bills them", () => {
+    const script = "x".repeat(240)
+    const listed = listedLipSync({ id: "voice", type: "text-to-speech", data: { textSource: "direct", directText: script, provider: "elevenlabs-turbo" } })
+    const seconds = Math.max(4, Math.ceil(estimateScriptDurationSec(script)))
+    expect(listed.perMinute).toBe(0)
+    expect(listed.fixed).toBe(Math.ceil(perSecond * seconds))
+    expect(listed.fixed).toBeLessThan(Math.ceil(perSecond * 300))
+  })
+
+  it("a voice whose script the listing cannot read: the model's 300 s maximum", () => {
+    const listed = listedLipSync({ id: "voice", type: "text-to-speech", data: { textSource: "connected", provider: "elevenlabs-turbo" } })
+    expect(listed.fixed).toBe(Math.ceil(perSecond * 300))
   })
 })

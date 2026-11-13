@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
+import { getAppSettings } from "../../../lib/app-settings.js"
+import { applyServiceMarkup } from "../../billing/service-margin.js"
+import { measureVideoUtilityCharge, videoUtilityMeasuredBaseCredits } from "../../../lib/video-utility-length.js"
 
 export interface PipelineCombineVideosArgs {
   supabase: SupabaseClient
@@ -18,14 +21,6 @@ export interface PipelineCombineVideosArgs {
   audioMode?: "keep" | "crossfade" | "remove"
   trimStartFrames?: number
   trimEndFrames?: number
-  // TODO: duration-aware credit reservation. `runPipelineWorkerJob`
-  // reserves a fixed cost from the model identifier — the per-clip
-  // duration list is never read by the credit path. Wiring this end-to-end
-  // requires extending `runPipelineWorkerJob` with a `creditOverride`
-  // callback (or routing combine-videos through a custom reservation that
-  // sums the per-clip durations). Separate PR. The previous
-  // `upstreamDurations` field was dead code — it was forwarded into
-  // `inputData` but never reached `CreditsService.reserveCredits`.
 }
 
 export interface PipelineCombineVideosResult {
@@ -45,7 +40,11 @@ export interface PipelineCombineVideosResult {
  *      pipeline MP4.
  *
  * Pattern matches pipelineGenerateImage. The "combine-videos" model
- * identifier is fixed (no provider variant).
+ * identifier is fixed (no provider variant). Priced as every Combine Videos
+ * run is: each clip measured before anything is reserved, the node's own unit
+ * formula at those lengths, each unit at the combine-videos row
+ * (lib/video-utility-length.ts); the units and lengths ride the job, and the
+ * render refuses clips longer than they were priced at.
  */
 export async function pipelineCombineVideos(
   args: PipelineCombineVideosArgs,
@@ -66,6 +65,11 @@ export async function pipelineCombineVideos(
   if (videoUrls.length < 2) {
     throw new Error("pipelineCombineVideos requires at least 2 video URLs")
   }
+  const priced = { videoUrls, transition, transitionDuration, trimStartFrames, trimEndFrames }
+  const measured = await measureVideoUtilityCharge("combine-videos", priced)
+  if (!measured.ok) throw new Error(`combine-videos: ${measured.message}`)
+  const charged = { upstreamDurations: [...measured.secs], billedUnits: measured.units }
+  const creditOverride = applyServiceMarkup(await videoUtilityMeasuredBaseCredits("combine-videos", measured.units), await getAppSettings(), "combine-videos")
 
   return runPipelineWorkerJob({
     supabase,
@@ -79,6 +83,7 @@ export async function pipelineCombineVideos(
       audioMode,
       trimStartFrames,
       trimEndFrames,
+      ...charged,
       type: "combine-videos",
     },
     queueName: "videoQueue",
@@ -91,9 +96,11 @@ export async function pipelineCombineVideos(
       audioMode,
       trimStartFrames,
       trimEndFrames,
+      ...charged,
       usageLogId,
     }),
     modelIdentifier: "combine-videos",
+    creditOverride,
     assetType: "video",
     pickOutputUrl: (output) =>
       (output.videoUrl as string | undefined) ?? (output.url as string | undefined),

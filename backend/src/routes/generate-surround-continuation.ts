@@ -18,6 +18,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { providerRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 /**
  * S8 (2026-07): surround-continuation was ungated at birth (Community and
@@ -188,7 +189,7 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("generate-surround-continuation", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-surround-continuation", {
         jobId: job.id,
         prompt,
         referenceImageUrl,
@@ -203,7 +204,8 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
         attachToLocationId,
         attachToColumn,
         attachName,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     },

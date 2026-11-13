@@ -71,6 +71,18 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
+// What a job the queue refused goes through (lib/enqueue-route-job.ts): the
+// failure write, the confirmed refund, and the app report when either cannot
+// be confirmed. Only the partial-batch case reaches them.
+const unqueued = vi.hoisted(() => ({
+  markJobFailedDetailed: vi.fn(async (_jobId: string, _input: unknown) => "flipped"),
+  refundJobHoldsConfirmed: vi.fn(async (_jobId: string) => true),
+  insertAppReport: vi.fn(async (_input: unknown) => true),
+}))
+vi.mock("@/lib/job-failure.js", () => ({ markJobFailedDetailed: unqueued.markJobFailedDetailed }))
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundJobHoldsConfirmed: unqueued.refundJobHoldsConfirmed }))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: unqueued.insertAppReport }))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -79,6 +91,7 @@ import { generateObjectRoutes } from "../generate-object.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { UNQUEUED_BATCH_CLIENT_MESSAGE } from "../../lib/enqueue-route-job.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -227,6 +240,29 @@ describe("POST /v1/generate-object — multi-candidate + auto-attach (Phase C2a)
     expect(body.jobId).toBeUndefined()
     expect(jobInsert).toHaveBeenCalledTimes(2)
     expect(videoQueue.add).toHaveBeenCalledTimes(2)
+  })
+
+  it("a queue that refuses the 2nd of 3 candidates: the 1st keeps running, the 2nd and 3rd are failed and refunded, 500 names the 1st", async () => {
+    setupSupabaseMock()
+    vi.mocked(videoQueue.add)
+      .mockResolvedValueOnce({ id: "queue-job-1" } as never)
+      .mockRejectedValueOnce(new Error("OOM command not allowed when used memory > 'maxmemory'."))
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-object",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Ornate Goblet", count: 3 },
+    })
+
+    expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({
+      error: { code: "internal_error", message: UNQUEUED_BATCH_CLIENT_MESSAGE, startedJobIds: ["job-1"] },
+    })
+    // job-3 is never handed to the queue once job-2 is refused.
+    expect(vi.mocked(videoQueue.add).mock.calls.map((c) => (c[1] as { jobId: string }).jobId)).toEqual(["job-1", "job-2"])
+    expect(unqueued.markJobFailedDetailed.mock.calls.map((c) => c[0])).toEqual(["job-2", "job-3"])
+    expect(unqueued.refundJobHoldsConfirmed.mock.calls.map((c) => c[0])).toEqual(["job-2", "job-3"])
   })
 
   it("returns 400 for count above the max (11)", async () => {

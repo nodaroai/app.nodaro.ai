@@ -37,6 +37,18 @@ vi.mock("@/lib/orchestration-queue.js", () => ({
   orchestrationQueue: { add: mockOrchestrationQueueAdd },
 }))
 
+// The run's own failure write (lib/concurrency-lanes/run-failure.ts), reached only when the queue
+// refuses a run (lib/enqueue-execution.ts). Default: it flipped the run from `pending`.
+const mockFailWaiting = vi.hoisted(() => vi.fn(async (..._a: unknown[]) => true))
+vi.mock("@/lib/concurrency-lanes/run-failure.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/concurrency-lanes/run-failure.js")>()),
+  failWaitingExecution: mockFailWaiting,
+  // The form the refused-run settle calls (lib/enqueue-execution.ts): mockFailWaiting's answer after
+  // one write, so a false is believed without a read-back.
+  failWaitingExecutionDetailed: async (...a: unknown[]) => ({ failed: await mockFailWaiting(...a), attempts: 1 }),
+}))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn(async () => true) }))
+
 // The run pre-check (R51; the estimator is unit-tested in workflow-estimate-metered.test.ts):
 // a node naming "unpriced-model" is the call a run would be refused at.
 vi.mock("@/ee/billing/credits.js", () => ({
@@ -64,6 +76,7 @@ vi.mock("@/lib/unit-descriptors.js", async (importOriginal) => {
 
 import { presentationRoutes } from "../presentation.js"
 import { supabase } from "../../lib/supabase.js"
+import { UNQUEUED_EXECUTION_CLIENT_MESSAGE, UNQUEUED_EXECUTION_MESSAGE } from "../../lib/enqueue-execution.js"
 
 const VIEWER_ID = "00000000-0000-4000-8000-000000000002"
 const OWNER_ID = "00000000-0000-4000-8000-000000000001"
@@ -180,6 +193,29 @@ describe("POST /v1/present/:token/run — the override lock (issue #1555)", () =
       }),
       expect.objectContaining({ jobId: EXEC_ID }),
     )
+  })
+})
+
+// A queue that refuses the viewer's run (lib/enqueue-execution.ts): failed from
+// `pending` at once, so the viewer is not left on a run that never starts and
+// a run of theirs no longer reads as already running.
+describe("POST /v1/present/:token/run — a queue that refuses the run", () => {
+  it("the execution is failed from pending and the viewer is answered 500", async () => {
+    mockSharedWorkflow([{ id: "text-1", type: "text-prompt", data: { text: "hello" } }])
+    mockOrchestrationQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    const res = await viewerRun({})
+    expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({ error: { code: "internal_error", message: UNQUEUED_EXECUTION_CLIENT_MESSAGE } })
+    expect(mockFailWaiting).toHaveBeenCalledWith(EXEC_ID, UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null })
+  })
+
+  it("a run that moved on meanwhile is answered as started", async () => {
+    mockSharedWorkflow([{ id: "text-1", type: "text-prompt", data: { text: "hello" } }])
+    mockOrchestrationQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    mockFailWaiting.mockResolvedValueOnce(false)
+    const res = await viewerRun({})
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toEqual({ executionId: EXEC_ID, status: "pending" })
   })
 })
 

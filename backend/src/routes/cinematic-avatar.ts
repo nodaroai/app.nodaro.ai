@@ -11,6 +11,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { resolveCinematicCreditId, CINEMATIC_PROMPT_MAX } from "@nodaro/shared/credits"
 import { sendInternalError } from "../lib/http-errors.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 // HeyGen combined reference caps (see create-video.md): at most 3 videos and 9
 // images across avatar looks + references. Avatar looks are image looks, so
@@ -125,7 +126,7 @@ export async function cinematicAvatarRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("cinematic-avatar", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("cinematic-avatar", {
         jobId: job.id,
         prompt: finalPrompt,
         avatarLooks,
@@ -136,7 +137,8 @@ export async function cinematicAvatarRoutes(app: FastifyInstance) {
         enhancePrompt,
         references,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     },

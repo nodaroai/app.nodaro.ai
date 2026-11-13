@@ -24,7 +24,7 @@ import {
   socialPostsDigest,
   isSocialPostReaderNodeType
 } from "@nodaro/shared/social"
-import { drawnSourceId, isUseCaseNodeType, LENGTH_RECORDING_VIDEO_NODE_TYPES, splitMediaParts, usecaseResultIsText } from "@nodaro/render-rules"
+import { drawnSourceId, isUseCaseNodeType, RECORDED_OUTPUT_LENGTH_NODE_TYPES, splitMediaParts, usecaseResultIsText } from "@nodaro/render-rules"
 /**
  * Extract output from completed node execution or source node data.
  * Backend equivalent of frontend extractNodeOutput().
@@ -2349,8 +2349,9 @@ export function buildNodeOutputFromJobData(
   // (`runForwardedVideoLengthSec`). A job from before it was recorded has none.
   // A video generation node's job records the same key when its run followed
   // its own length (an automatic length, a Seedance Edit / Extend): the length
-  // its video really is (finalize, lib/generated-video-recorded-length.ts).
-  if ((isRenderNodeType(nodeType) || LENGTH_RECORDING_VIDEO_NODE_TYPES.has(nodeType)) && typeof outputData.durationSec === "number") output.durationSec = outputData.durationSec
+  // its video really is (finalize, lib/generated-video-recorded-length.ts); and
+  // a Trim's, the length of the file it cut (workers/handlers/ffmpeg.ts).
+  if ((isRenderNodeType(nodeType) || RECORDED_OUTPUT_LENGTH_NODE_TYPES.has(nodeType)) && typeof outputData.durationSec === "number") output.durationSec = outputData.durationSec
   // …and its remapped transcript, when it comes out on its own pip (Speaker
   // View's `transcript`, decided 2026-10-08). A job from an older plugin
   // carries none: the pip then hands nothing.

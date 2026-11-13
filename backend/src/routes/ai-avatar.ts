@@ -11,6 +11,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { resolveAiAvatarCreditId } from "@nodaro/shared/credits"
 import { sendInternalError } from "../lib/http-errors.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const ttsEngineSchema = z
   .discriminatedUnion("engine_type", [
@@ -240,7 +241,7 @@ export async function aiAvatarRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("ai-avatar", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("ai-avatar", {
         jobId: job.id,
         avatarSource,
         engine,
@@ -266,7 +267,8 @@ export async function aiAvatarRoutes(app: FastifyInstance) {
         motionPrompt,
         expressiveness,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     },

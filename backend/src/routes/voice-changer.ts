@@ -13,6 +13,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { judgeVoice, voiceNotAvailableBody } from "../lib/voice-gender.js"
 import { fixedRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 /** The catalog model every run of this route runs — and the credit id it bills under. */
 const VOICE_CHANGER_MODEL_ID = "elevenlabs-voice-changer"
@@ -93,7 +94,7 @@ export async function voiceChangerRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("voice-changer", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("voice-changer", {
       jobId: job.id,
       audioUrl,
       videoUrl,
@@ -106,7 +107,8 @@ export async function voiceChangerRoutes(app: FastifyInstance) {
       useSpeakerBoost,
       seed,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

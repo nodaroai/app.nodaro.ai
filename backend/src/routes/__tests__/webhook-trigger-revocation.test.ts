@@ -37,6 +37,18 @@ vi.mock("@/lib/orchestration-queue.js", () => ({
   orchestrationQueue: { add: vi.fn().mockResolvedValue({ id: "orch-1" }) },
 }))
 
+// The run's own failure write (lib/concurrency-lanes/run-failure.ts), reached only when the queue
+// refuses a run (lib/enqueue-execution.ts). Default: it flipped the run from `pending`.
+const mockFailWaiting = vi.hoisted(() => vi.fn(async (..._a: unknown[]) => true))
+vi.mock("@/lib/concurrency-lanes/run-failure.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/concurrency-lanes/run-failure.js")>()),
+  failWaitingExecution: mockFailWaiting,
+  // The form the refused-run settle calls (lib/enqueue-execution.ts): mockFailWaiting's answer after
+  // one write, so a false is believed without a read-back.
+  failWaitingExecutionDetailed: async (...a: unknown[]) => ({ failed: await mockFailWaiting(...a), attempts: 1 }),
+}))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn(async () => true) }))
+
 const mockResolveBillingContext = vi.hoisted(() =>
   vi.fn(async (input: { userId: string }) => ({ payer: "user" as const, userId: input.userId })),
 )
@@ -55,6 +67,7 @@ import { webhookTriggerRoutes } from "../webhook-triggers.js"
 import { supabase } from "../../lib/supabase.js"
 import { getPluginServices } from "../../lib/private-plugins/load.js"
 import { orchestrationQueue } from "../../lib/orchestration-queue.js"
+import { UNQUEUED_EXECUTION_CLIENT_MESSAGE, UNQUEUED_EXECUTION_MESSAGE } from "../../lib/enqueue-execution.js"
 
 const OWNER = "00000000-0000-4000-8000-0000000000ff"
 const WF = "00000000-0000-4000-8000-000000000020"
@@ -115,6 +128,8 @@ function fireTables() {
               limit: vi.fn().mockResolvedValue({ data: [], error: null }),
             }),
           }),
+          // The run twin's read-back of a run it may have failed (lib/enqueue-execution.ts): still running.
+          maybeSingle: vi.fn().mockResolvedValue({ data: { status: "running", error_message: null }, error: null }),
         }),
       }),
       insert: execInsert,
@@ -217,6 +232,32 @@ describe("POST /v1/webhooks/:token — a trigger must not outlive its access", (
     })
     const enqueued = vi.mocked(orchestrationQueue.add).mock.calls[0]?.[1] as { billingContext?: unknown }
     expect(enqueued.billingContext).toEqual({ payer: "user", userId: TRIGGER_ROW.user_id })
+  })
+})
+
+// A queue that refuses the fire's run (lib/enqueue-execution.ts): the run is
+// failed from `pending` at once with its idempotency key released, and the
+// caller gets the 500 this route gives when its execution row cannot be
+// written, so a caller that retries on a server error fires again.
+describe("POST /v1/webhooks/:token — a queue that refuses the run", () => {
+  it("the execution is failed from pending with its key released, answered 500", async () => {
+    plugin(true)
+    fireTables()
+    vi.mocked(orchestrationQueue.add).mockRejectedValueOnce(new Error("Connection is closed."))
+    const res = await app.inject({ method: "POST", url: `/v1/webhooks/${TOKEN}`, payload: {} })
+    expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({ error: { code: "internal_error", message: UNQUEUED_EXECUTION_CLIENT_MESSAGE } })
+    expect(mockFailWaiting).toHaveBeenCalledWith("exec-1", UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null })
+  })
+
+  it("a run that moved on meanwhile is answered as started", async () => {
+    plugin(true)
+    fireTables()
+    vi.mocked(orchestrationQueue.add).mockRejectedValueOnce(new Error("Connection is closed."))
+    mockFailWaiting.mockResolvedValueOnce(false)
+    const res = await app.inject({ method: "POST", url: `/v1/webhooks/${TOKEN}`, payload: {} })
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toEqual({ executionId: "exec-1", status: "pending" })
   })
 })
 

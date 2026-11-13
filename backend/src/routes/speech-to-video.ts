@@ -12,6 +12,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const speechToVideoBody = z.object({
   imageUrl: safeUrlSchema,
@@ -95,12 +96,13 @@ export async function speechToVideoRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("speech-to-video", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("speech-to-video", {
       jobId: job.id,
       imageUrl, audioUrl, prompt: finalPrompt, resolution,
       negativePrompt: finalNegativePrompt, seed, numFrames, fps, inferenceSteps, guidanceScale, shift,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

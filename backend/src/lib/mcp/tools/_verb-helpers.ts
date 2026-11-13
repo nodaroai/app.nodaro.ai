@@ -193,6 +193,15 @@ export function errorResult(statusCode: number, body: string) {
 /** A machine code as an older route writes it bare: lower snake_case, never a reason phrase. */
 const BARE_ERROR_CODE = /^[a-z][a-z0-9_]*$/
 
+/**
+ * Our own retryable 503 codes whose message is written by us and carries no
+ * internal detail (Trim, Loop and Combine Videos measuring a clip before the
+ * charge): the agent gets the message itself — "run it again" — instead of
+ * "this model is not available", which would send it to another model or make
+ * it give up on a call that only needs repeating.
+ */
+const FORWARDED_503_CODES: ReadonlySet<string> = new Set(["probe_timeout", "source_unreachable"])
+
 function formatRouteError(statusCode: number, body: string): string {
   let code: string | undefined
   let message: string | undefined
@@ -225,6 +234,7 @@ function formatRouteError(statusCode: number, body: string): string {
     const detail = message ?? "invalid request"
     return `Nodaro rejected the request (${statusCode}${code ? ` ${code}` : ""}): ${detail}`
   }
+  if (statusCode === 503 && code !== undefined && FORWARDED_503_CODES.has(code) && message) return `Nodaro: ${message} [${code}]`
   if (statusCode === 503) return `Nodaro: this model is not available right now.${code ? ` [${code}]` : ""}`
   return `Nodaro had a server error (${statusCode}) — usually transient, please try again.${code ? ` [${code}]` : ""}`
 }

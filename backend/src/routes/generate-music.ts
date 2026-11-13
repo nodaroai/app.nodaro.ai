@@ -12,6 +12,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { MUSIC_CREDIT_ID, MUSIC_PROVIDERS } from "@nodaro/shared/models"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 /**
  * What MiniMax Music refuses to run without.
@@ -93,7 +94,7 @@ export async function generateMusicRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("generate-music", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-music", {
       jobId: job.id,
       prompt: enrichedPrompt,
       provider,
@@ -102,7 +103,8 @@ export async function generateMusicRoutes(app: FastifyInstance) {
       referenceAudioUrl,
       modelVersion,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

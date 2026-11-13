@@ -13,6 +13,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { probeVideoFrames, exactFrameCount } from "../lib/ffprobe-frames.js"
 import { resolveSwitchXCreditId } from "@nodaro/shared/credits"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 /**
  * Beeble SwitchX hard input limits. The provider rejects sources beyond these,
@@ -198,7 +199,7 @@ export async function switchXRoutes(app: FastifyInstance): Promise<void> {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("switchx", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("switchx", {
         jobId: job.id,
         videoUrl,
         referenceImageUrl,
@@ -212,7 +213,8 @@ export async function switchXRoutes(app: FastifyInstance): Promise<void> {
         // cap — the worker trims it to this many frames before submitting.
         trimSourceToFrames: (req.body as Record<string, unknown>).__trimSourceToFrames as number | undefined,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     },

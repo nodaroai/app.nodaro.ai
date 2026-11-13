@@ -175,14 +175,17 @@ describe("every credit-guarded route runs a node the availability funnel knows",
   })
 
   it("a route file that creates more guards than it attaches is pinned — so an inline guard is a decision made here", () => {
-    const attached = new Set(guarded().map((r) => `${r.method} ${normalizePath(r.url)}`))
+    // Counted per guard, not per route: a route may attach two (Trim, Loop and
+    // Combine Videos check the balance at their one-unit floor, measure their
+    // clips, then check the measured price), and both are attached.
+    const attached = new Map(guarded().map((r) => [`${r.method} ${normalizePath(r.url)}`, r.creditGuards] as const))
     const found: string[] = []
     for (const file of allRouteFiles(REPO_ROOT)) {
       // Comments name `creditGuard(` too; only code installs one.
       const code = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1")
       const installs = code.split("creditGuard(").length - 1
       if (installs === 0) continue
-      const attachedHere = extractRouteRegistrations(code).filter((r) => attached.has(`${r.method} ${r.path}`)).length
+      const attachedHere = extractRouteRegistrations(code).reduce((n, r) => n + (attached.get(`${r.method} ${r.path}`) ?? 0), 0)
       if (installs > attachedHere) found.push(file.slice(REPO_ROOT.length + 1).split("\\").join("/"))
     }
     expect(found.sort()).toEqual(INLINE_GUARD_FILES)

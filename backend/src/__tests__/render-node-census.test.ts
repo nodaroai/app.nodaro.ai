@@ -77,7 +77,7 @@ const ALLOWLIST: readonly Entry[] = [
   ["backend/src/providers/video/edl-timeline.ts", `export const APPLY_EDL_LABEL = "apply-edl"`, "the timeline's default label: Apply EDL's work dir, log and checkpoint prefix"],
   ["backend/src/routes/apply-edl.ts", `force_private: extractForcePrivate(req.body) || isPreviewRender("apply-edl"`, "the node's own route"],
   ["backend/src/routes/apply-edl.ts", `"apply-edl"`, "the node's own route (credit guard job)"],
-  ["backend/src/routes/apply-edl.ts", `await videoQueue.add("apply-edl"`, "the node's own route (queue job)"],
+  ["backend/src/routes/apply-edl.ts", `await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("apply-edl"`, "the node's own route (queue job)"],
   ["backend/src/services/workflow-engine/input-resolver.ts", `if (targetType === "apply-edl"`, "input-handle mapping"],
   ["backend/src/services/workflow-engine/payload-builder.ts", `case "apply-edl"`, "the node's payload case"],
   ["backend/src/services/workflow-engine/payload-builder.ts", `"apply-edl"`, "the node's payload case (job name)"],

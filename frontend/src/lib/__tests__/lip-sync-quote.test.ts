@@ -1,8 +1,9 @@
 /**
  * A Lip Sync on OmniHuman 2.0 is quoted as the WHOLE run its audio is charged
  * (decided 2026-11-11): its per-second row × the billed seconds — the audio's
- * length rounded up, at least 4 — from the length the graph gives, else what
- * the node measured at its last run, else 15 s shown as an estimate. Every
+ * length rounded up, at least 4 — from the length the graph gives (a wired
+ * audio as the measured walk reads it), else, with no audio wired, what the
+ * node measured at its last run, else 15 s shown as an estimate. Every
  * other lip-sync model keeps its own row (1 unit). The shared fixture
  * (tools/fixtures/unit-quote-cases.json) holds the quote to the route's charge.
  */
@@ -43,6 +44,13 @@ describe("the seconds a Lip Sync is quoted at", () => {
   it("the length the node measured at its last run, when the graph does not tell", () => {
     const x = node("x", "lip-sync", { provider: "omnihuman-2-0", audioDurationSec: 59.2 })
     expect(lipSyncPricingUnits(x, [x], [])).toBe(60)
+  })
+
+  it("a wired audio of unknown length never falls back to the last run's length: 15 s, an estimate", () => {
+    const x = node("x", "lip-sync", { provider: "omnihuman-2-0", audioDurationSec: 59.2 })
+    const noLength = node("a", "upload-audio", { url: "https://m.test/nolen.mp3" })
+    expect(lipSyncPricingUnits(x, [x, noLength], [audioWire("a")])).toBe(15)
+    expect(lipSyncQuoteIsEstimate(x, [x, noLength], [audioWire("a")])).toBe(true)
   })
 
   it("no length known yet: 15 s, an estimate (its line is shown ≈)", () => {

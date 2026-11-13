@@ -126,6 +126,9 @@ class JobFailed extends Error {
   }
 }
 
+/** A word as the feed names it: "um" for the transcript's "um,". */
+const bareWord = (text: string) => text.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "") || text
+
 /** The provider's words a failed step carries, for the panel to show under its sentence. */
 const wordsOf = (error: unknown): string | undefined =>
   error instanceof JobFailed && error.errorDetail ? error.errorDetail : undefined
@@ -234,6 +237,30 @@ const fileNameOfUrl = (url: string) => {
   } catch {
     return ""
   }
+}
+
+const AUDIO_TYPES: Readonly<Record<string, string>> = {
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  ogg: "audio/ogg",
+  opus: "audio/ogg",
+  flac: "audio/flac",
+  webm: "audio/webm",
+}
+
+/**
+ * The name and type the music is imported under, as its bytes are: from the
+ * file's address (Suno tracks arrive as WAV), else from the response's type.
+ */
+export function musicFileOf(url: string, contentType: string | null): { readonly name: string; readonly type: string } {
+  const ext = /\.([a-z0-9]{2,5})$/i.exec(fileNameOfUrl(url))?.[1]?.toLowerCase()
+  if (ext && AUDIO_TYPES[ext]) return { name: `ai-music.${ext}`, type: AUDIO_TYPES[ext] }
+  const type = contentType?.split(";")[0]?.trim().toLowerCase() ?? ""
+  if (/^audio\/(x-)?wave?$/.test(type)) return { name: "ai-music.wav", type: "audio/wav" }
+  const known = Object.entries(AUDIO_TYPES).find(([, t]) => t === type)
+  return known ? { name: `ai-music.${known[0]}`, type: known[1] } : { name: "ai-music.mp3", type: "audio/mpeg" }
 }
 
 interface MediaView {
@@ -394,7 +421,8 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
         const from = timelineFrameOf(stage.timeline, stage.mediaId, firstRange.start)
         const to = timelineFrameOf(stage.timeline, stage.mediaId, Math.max(firstRange.start, firstRange.end - 0.01))
         if (at) {
-          cursor("cutter", { frame: at.frame, trackId: at.trackId })
+          // The cursor stands where the cut starts, beside the playhead, which the editor keeps in view.
+          cursor("cutter", { frame: (from ?? at).frame, trackId: at.trackId })
           link.playback("seek", Math.max(0, (from ?? at).frame - 2))
           show(from && to ? [{ id: "cut", color: AGENT_COLORS.cutter, trackId: at.trackId, from: from.frame, to: Math.max(from.frame + 1, to.frame) }] : [])
           await beat(520)
@@ -406,7 +434,7 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
             const removed = fillerIn(r)
             summary.fillersCut += removed.length
             if (removed.length === 0 || r.end - r.start - removed.reduce((n, f) => n + f.end - f.start, 0) > 0.3) summary.pausesCut += 1
-            if (removed.length > 0) feed("cutter", "freecutAi.cutFiller", { word: removed.map((f) => f.word).join(" ") })
+            if (removed.length > 0) feed("cutter", "freecutAi.cutFiller", { word: removed.map((f) => bareWord(f.word)).join(" ") })
             else feed("cutter", "freecutAi.cutPause", { seconds: secondsText(r.end - r.start) })
           }
         } else {
@@ -473,7 +501,8 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
         const buffer = await response.arrayBuffer()
         checkStop(signal)
         const ref = `ai-music-${Date.now().toString(36)}`
-        link.importFile(ref, "ai-music.mp3", "audio/mpeg", buffer)
+        const file = musicFileOf(url, response.headers.get("content-type"))
+        link.importFile(ref, file.name, file.type, buffer)
         const placed = await apply(
           stepLabels.music,
           [{ op: "placeAudio", ref, from: 0, durationInFrames: stage.timeline.durationInFrames, volumeDb: -16, fadeOutSeconds: 1.5, newTrack: true }],

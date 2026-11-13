@@ -70,12 +70,17 @@ function knownSec(durationSec: number | null | undefined): number | undefined {
 }
 
 /**
- * Is the clip the graph gives past the longest clip a run takes
+ * Is the clip the graph KNOWS past the longest clip a run takes
  * ({@link NODARO_VIDEO_UPSCALE_MAX_SEC})? Such a run is refused before
  * anything is held, so no estimate prices it (decided 2026-11-12): the
  * server's run estimate leaves it out, the editor's Run confirm says the node
- * is not priced, and the node's pill shows no figure. A length the graph does
- * not know is never refused here — the run measures the clip.
+ * is not priced, and the node's pill shows no figure. Pass only a length the
+ * graph knows (an upload, a measured Library clip, a take's recorded length:
+ * the measured walk's `knownOnly` reading). A planned length is an upper bound
+ * (a slack per clip made, Combine Videos' trims not taken off), never proof a
+ * run is refused: it is quoted at the cap instead
+ * ({@link nodaroVideoUpscaleEstimateUnits}). A length the graph does not know
+ * is never refused here — the run measures the clip.
  */
 export function nodaroVideoUpscaleRefusesLength(durationSec: number | null | undefined): boolean {
   const sec = knownSec(durationSec)
@@ -84,14 +89,17 @@ export function nodaroVideoUpscaleRefusesLength(durationSec: number | null | und
 
 /**
  * The units an ESTIMATE quotes before the clip is measured (the editor's
- * badge, the server's run estimate): the length the graph gives (else
- * {@link NODARO_VIDEO_UPSCALE_ESTIMATE_FALLBACK_SEC}), billed as a run bills it.
- * Undefined for a length a run refuses ({@link nodaroVideoUpscaleRefusesLength}):
- * no estimate prices that run. The run itself measures the real clip.
+ * badge, the server's run estimate): the length the graph gives — the measured
+ * walk's, planned lengths included — (else
+ * {@link NODARO_VIDEO_UPSCALE_ESTIMATE_FALLBACK_SEC}), at most the longest clip
+ * a run takes, billed as a run bills it. A planned length past that limit is
+ * quoted at it: the run then bills at most that, or refuses the clip and
+ * charges nothing. A KNOWN length past the limit is no run at all; the callers
+ * leave it out first ({@link nodaroVideoUpscaleRefusesLength}).
  */
-export function nodaroVideoUpscaleEstimateUnits(durationSec: number | null | undefined): number | undefined {
-  if (nodaroVideoUpscaleRefusesLength(durationSec)) return undefined
-  return nodaroVideoUpscaleUnits(nodaroVideoUpscaleBilledSec(knownSec(durationSec) ?? NODARO_VIDEO_UPSCALE_ESTIMATE_FALLBACK_SEC))
+export function nodaroVideoUpscaleEstimateUnits(durationSec: number | null | undefined): number {
+  const sec = knownSec(durationSec) ?? NODARO_VIDEO_UPSCALE_ESTIMATE_FALLBACK_SEC
+  return nodaroVideoUpscaleUnits(nodaroVideoUpscaleBilledSec(Math.min(sec, NODARO_VIDEO_UPSCALE_MAX_SEC)))
 }
 
 /**

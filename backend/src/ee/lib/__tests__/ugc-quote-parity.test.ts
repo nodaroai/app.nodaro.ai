@@ -35,12 +35,30 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard:
     (resolve: (req: unknown) => string, opts?: { computeCredits?: (body: unknown, req: unknown) => number | Promise<number> }) =>
     async (req: { body: unknown }, reply: { status(code: number): { send(body: unknown): unknown } }) => {
+      // Trim, Loop and Combine Videos check the balance at their one-unit floor,
+      // then measure their clips, then price the measured units: the price is
+      // the guard after the measure, so the floor check lets the request on.
+      const { MEASURED_VIDEO_UTILITY_JOBS } = await import("@/lib/video-utility-credits.js")
+      const { stashedVideoUtilityLength } = await import("@/lib/video-utility-length.js")
+      if (MEASURED_VIDEO_UTILITY_JOBS.has(resolve(req)) && stashedVideoUtilityLength(req.body) === undefined) return
       guard.id = resolve(req)
       guard.base = opts?.computeCredits ? await opts.computeCredits(req.body, req) : undefined
       return reply.status(299).send({ recorded: true })
     },
   reserveCreditsForJob: vi.fn(),
 }))
+// Combine Videos measures each clip before its guard prices it. The UGC quote
+// prices clips that do not exist yet at the estimators' 8-second stand-in — a
+// minimum, since the run is charged what it measures — so the clips here
+// measure exactly that: the two sides must still run one formula.
+vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/providers/video/ffmpeg-utils.js")>()),
+  probeVideoSource: vi.fn(async () => ({ width: 1080, height: 1920, durationSeconds: 8 })),
+  // The example links are public: the probe's link guard never asks DNS here.
+  assertSafeProbeSource: vi.fn(async () => undefined),
+}))
+const clipLength = vi.hoisted(() => ({ sec: 8 }))
+vi.mock("@/lib/video-utility-probe.js", () => ({ probeClipLengthSec: vi.fn(async () => clipLength.sec), ClipUnreadableError: class ClipUnreadableError extends Error {} }))
 vi.mock("@/lib/queue.js", () => ({
   videoQueue: { add: vi.fn() },
   redis: { incr: vi.fn().mockResolvedValue(1), expire: vi.fn(), ttl: vi.fn().mockResolvedValue(60) },
@@ -177,6 +195,7 @@ beforeEach(() => {
   captured = {}
   guard.id = undefined
   guard.base = undefined
+  clipLength.sec = 8
 })
 
 describe("the UGC quote reserves what each route reserves", () => {
@@ -187,7 +206,10 @@ describe("the UGC quote reserves what each route reserves", () => {
     expect(result.isError, JSON.stringify(result.content)).toBeUndefined()
     expect(captured.url).toBe(URLS[c.tool])
 
-    const res = await routes.inject({ method: "POST", url: URLS[c.tool]!, payload: captured.body })
+    // The test session's user id ("u1") is not a uuid: a route that parses its
+    // body before its price (Combine Videos measures only a body that parses)
+    // is sent a real one.
+    const res = await routes.inject({ method: "POST", url: URLS[c.tool]!, payload: { ...(captured.body as object), userId: "00000000-0000-4000-8000-000000000001" } })
     expect(res.statusCode, res.body).toBe(299)
 
     const quoted = await pricingFor(c.tool, c.quoted, { clipCount: c.clipCount ?? 1 })
@@ -197,6 +219,38 @@ describe("the UGC quote reserves what each route reserves", () => {
     // while the quote reads the row must compute exactly that row's base.
     if (quoted?.base !== undefined) expect(guard.base).toBe(quoted.base)
     else if (guard.base !== undefined) expect(guard.base).toBe(STATIC_CREDIT_COSTS[quoted!.id])
+  })
+})
+
+// The join of finished clips longer than the 8 s stand-in: the route measures each one, and the planner's
+// quote reads each clip's seconds from the join item's envelope (`clipSeconds`). With them it is never below
+// the measured charge; without them it stays at the stand-in (the plugin's per-clip seconds are what close it).
+describe("the UGC join, on clips longer than the stand-in", () => {
+  const join = { transition: "cut", audio_mode: "keep", smart_cut: false }
+  async function routeBaseFor(clipCount: number): Promise<number> {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: verbsFastify })
+    const result = await callTool(server, "combine_videos", { ...join, videos: Array.from({ length: clipCount }, () => ({ url: VIDEO })) })
+    expect(result.isError, JSON.stringify(result.content)).toBeUndefined()
+    const res = await routes.inject({ method: "POST", url: "/v1/combine-videos", payload: { ...(captured.body as object), userId: "00000000-0000-4000-8000-000000000001" } })
+    expect(res.statusCode, res.body).toBe(299)
+    return guard.base as number
+  }
+
+  it("12 s clips with their seconds on the join item: the quote is at least the measured charge", async () => {
+    clipLength.sec = 12
+    const charged = await routeBaseFor(2)
+    expect(charged).toBe(5 * STATIC_CREDIT_COSTS["combine-videos"]!)
+    const quoted = await pricingFor("combine_videos", join, { clipCount: 2, clipSeconds: [12, 12] })
+    expect(quoted?.base).toBeGreaterThanOrEqual(charged)
+  })
+
+  it("12 s clips with no seconds on the item: the quote stays at the 8 s stand-in a clip (below the charge until the plugin sends them)", async () => {
+    clipLength.sec = 12
+    const charged = await routeBaseFor(2)
+    const quoted = await pricingFor("combine_videos", join, { clipCount: 2 })
+    expect(quoted?.base).toBe(4 * STATIC_CREDIT_COSTS["combine-videos"]!)
+    expect(quoted!.base!).toBeLessThan(charged)
   })
 })
 

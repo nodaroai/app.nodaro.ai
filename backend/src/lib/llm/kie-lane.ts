@@ -14,11 +14,10 @@ import {
   buildChatCompletionsMessages,
   buildMessagesBody,
   buildResponsesInput,
-  kieClaudePromptJson,
-  kiePromptJsonText,
   kieResponseFormat,
   kieResponsesTextFormat,
 } from "./message-builders.js"
+import { kieChatPromptJsonFormat, kieClaudePromptJson, kiePromptJsonFloorRequest, kiePromptJsonText } from "./structured-schema.js"
 import { assertKieEnvelope, assertMediaIngested, buildResponse, extractActualUsd } from "./response.js"
 import { requestChars } from "./kie-cost.js"
 import { llmLaneAddedInputTokens } from "../pricing/llm-cost.js"
@@ -189,9 +188,12 @@ async function fetchKieStream(
 async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/${model.kieSlugOrModel}/v1/chat/completions`
   const { eff, temperature, topP, maxTokens } = deriveParams(model, req)
+  // A `kieSchemaInPrompt` model's structured call: the schema in the system
+  // prompt, in its wire form, and no response_format (kieChatPromptJsonFormat).
+  const promptJson = kieChatPromptJsonFormat(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
-    messages: buildChatCompletionsMessages(req),
+    messages: buildChatCompletionsMessages(promptJson ? { ...req, system: promptJson.system } : req),
     max_tokens: maxTokens,
     ...(temperature !== undefined ? { temperature } : {}),
     ...(topP !== undefined ? { top_p: topP } : {}),
@@ -220,12 +222,15 @@ async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Prom
 
   return buildResponse(
     model,
-    responseFormat ? responseFormat.restoreText(text) : text,
+    // A prompt-JSON answer is the text with any fence or surrounding prose
+    // removed, under the caller's names — as a response_format answer is.
+    (responseFormat ?? promptJson)?.restoreText(text) ?? text,
     { stopReason: choices?.[0]?.finish_reason, cap: maxTokens },
     usage,
     extractActualUsd(data),
     "kie",
-    req,
+    // The media floor counts the schema text the prompt now carries.
+    promptJson ? kiePromptJsonFloorRequest(req, promptJson.system) : req,
   )
 }
 
@@ -242,9 +247,10 @@ async function streamKieChatCompletions(
 ): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/${model.kieSlugOrModel}/v1/chat/completions`
   const { eff, temperature, topP, maxTokens } = deriveParams(model, req)
+  const promptJson = kieChatPromptJsonFormat(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
-    messages: buildChatCompletionsMessages(req),
+    messages: buildChatCompletionsMessages(promptJson ? { ...req, system: promptJson.system } : req),
     max_tokens: maxTokens,
     ...(temperature !== undefined ? { temperature } : {}),
     ...(topP !== undefined ? { top_p: topP } : {}),
@@ -267,7 +273,8 @@ async function streamKieChatCompletions(
   }
 
   const streamed = await parseSseStream(response, model.id, onToken, "chat-completions", maxTokens, undefined, false, abort, requestChars(req))
-  return responseFormat ? { ...streamed, text: responseFormat.restoreText(streamed.text) } : streamed
+  const format = responseFormat ?? promptJson
+  return format ? { ...streamed, text: format.restoreText(streamed.text) } : streamed
 }
 
 // -- Messages format (Claude models) --

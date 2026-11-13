@@ -70,6 +70,7 @@ import {
   VIDEO_DEPTH_LIMITS,
 } from "@nodaro/shared/media"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { pricedAsId } from "../../lib/retired-price-id.js"
 import { withWiredSettings, renderNodeOf, isRenderNodeType, withRunOverrides, transcribeNodeReturnsWords } from "@nodaro/shared/nodes"
 import {
   MUSIC_CREDIT_ID,
@@ -113,10 +114,11 @@ import {
   type WireInput,
   type WireLength,
 } from "../../lib/video-output-length.js"
+import { generateVideoProCapSec as generateVideoProCapSecOfEnv } from "../../lib/generate-video-pro-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, type UseCaseViewerFlags, generationSourceEstimateSec, type EstimateGraphNode, LENGTH_RECORDING_VIDEO_NODE_TYPES, extendSourceEstimateSec, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -165,12 +167,12 @@ import { flux3KleinStaticCosts } from "./flux-3-klein-pricing.js"
 import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
-import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
+import { MEASURED_VIDEO_UTILITY_JOBS, videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
 import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
 import { refVideoClipSources, seedanceDraftFinalizeEstimateCredits, seedanceFinalizeDraftQuoteOf, seedanceRefVideoEstimateCredits } from "./seedance-ref-video-estimate.js"
 import { uploadClipSec, withUploadClipLengths } from "./upload-clip-lengths.js"
-import { listingCeiling, listingFieldDomains } from "./listing-range.js"
+import { listingCeiling, listingFieldDomains, listingOpenValueNodeIds } from "./listing-range.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { quoteBaseCredits } from "../../lib/credit-base-cost.js"
 import { UNIT_QUOTE_MAX_UNITS } from "../../lib/unit-quote-rates.js"
@@ -282,7 +284,7 @@ const VIDEO_ANALYSIS_STATIC: Record<string, number> = {}
 // Model-backed tiers plus the two engine-plan SENTINELS that own credit rows
 // (`mixed` and `smart`). `mixed-fast` is absent because it shares `mixed`'s credit
 // family, so its colon ids are never built.
-for (const model of ["gemini-3-flash", "gemini-3.6-flash", "gemini-3.1-pro", "mixed", "smart"]) {
+for (const model of ["gemini-3.8-flash", "gemini-3-flash", "gemini-3.6-flash", "gemini-3.1-pro", "mixed", "smart"]) {
   // Bare per-model id (`video-analysis:<model>`) = the unknown-duration ceiling
   // (600s). buildVideoAnalysisCreditId NEVER produces this id — it always appends
   // a `:<bucket>s` suffix; the bare id exists in STATIC only because MODEL_CATALOG
@@ -3360,6 +3362,10 @@ export function invalidateModelPricingCache(): void {
  * entries like `seedance-2:8s:1080p-ref`).
  */
 export async function getModelCreditBaseCost(modelIdentifier: string): Promise<ModelPricing> {
+  // A retired video model's id is priced as the id of the model it runs as.
+  const pricedAs = pricedAsId(modelIdentifier)
+  if (pricedAs !== modelIdentifier) return getModelCreditBaseCost(pricedAs)
+
   // A metered LLM id (A1) has NO price of its own — its hold is the
   // reservation's override and its usage the charge — so every price lookup
   // FAILS CLOSED on it: a caller that would read a price here (a settle at a
@@ -3487,7 +3493,9 @@ async function readPricingRow(modelIdentifier: string): Promise<ModelPricing> {
  * `cost_markup_percent` otherwise — see ee/billing/service-margin.ts.
  * Both DB values and STATIC_CREDIT_COSTS represent base costs at 0% markup.
  */
-export async function getModelCreditCostFromDB(modelIdentifier: string): Promise<ModelPricing> {
+export async function getModelCreditCostFromDB(identifier: string): Promise<ModelPricing> {
+  // Priced, and marked up, as the id it runs as (a retired video model's).
+  const modelIdentifier = pricedAsId(identifier)
   const base = await getModelCreditBaseCost(modelIdentifier)
   // Apply markup from admin settings (cached 60s separately)
   const settings = await getAppSettings()
@@ -3627,7 +3635,10 @@ export function chargedPriceTableFrom(
     editPlanPerMinute,
     // A speech `:per-100-chars` row is served only while length pricing is on
     // (lib/speech-credits.ts): its absence is how a client learns the flag.
-    base: (identifier) => {
+    // A retired video model's id is priced, and marked up, as the id it runs
+    // as (`pricedAsId`), as the single lookup prices it.
+    base: (asked) => {
+      const identifier = pricedAsId(asked)
       // A metered LLM id is the feature's typical call on the model's primary
       // lane (`:direct` = Advanced mode) — an estimate, never a row. A model
       // with no price there is simply not listed.
@@ -3642,7 +3653,8 @@ export function chargedPriceTableFrom(
     },
     // A speech length price is marked up at its model, as its reservation is;
     // a metered LLM id at its charge id (`:direct` is the same charge).
-    charge: (identifier, baseCredits) => {
+    charge: (asked, baseCredits) => {
+      const identifier = pricedAsId(asked)
       const metered = meteredLlmCallsOf(identifier)?.metered
       const key = metered ? llmChargeId(metered.feature, metered.modelId) : priceMarginKey(identifier)
       return applyServiceMarkup(baseCredits, settings, key)
@@ -5364,8 +5376,9 @@ export class CreditsService {
     onNode?: ListingTally,
   ): AppListingEstimate {
     const graph = asSavedGraph(nodes)
-    const split = listingEstimate(graph, edges ?? [], prices, publishType, undefined, options?.speechTextCaps, options?.replaceableMediaNodeIds, options?.exposedListNodeIds, undefined, undefined, onNode)
-    return listingHoldsMeteredEstimate(graph, edges, undefined, undefined) ? { ...split, estimate: true } : split
+    const flags = usecaseExpandFlags(options)
+    const split = listingEstimate(graph, edges ?? [], prices, publishType, undefined, options?.speechTextCaps, options?.replaceableMediaNodeIds, listingOpenValues(options, graph), options?.exposedListNodeIds, flags, undefined, onNode)
+    return listingHoldsMeteredEstimate(graph, edges, flags, undefined) ? { ...split, estimate: true } : split
   }
 
   /**
@@ -5388,11 +5401,37 @@ export class CreditsService {
 /** A listing's tally: one priced node's fixed and per-minute credits, in the part they are summed into. */
 export type ListingTally = (nodeId: string, part: "preview" | "final", fixed: number, perMinute: number) => void
 
+/**
+ * The nodes whose value a listing's app user types with no domain the range
+ * can enumerate (decided 2026-11-12): the caller's set, else the app's exposed
+ * free-text and unbounded-number inputs (`listingOpenValueNodeIds`, from its
+ * settings) and every exposed text input (`speechTextCaps`' nodes, the ones a
+ * caller without the settings still has). A length a mapping from one of them
+ * decides is listed as open, as a replaced recording is listed with no length.
+ */
+function listingOpenValues(
+  options: { readonly openValueNodeIds?: ReadonlySet<string>; readonly speechTextCaps?: ExposedTextCaps; readonly snapshotSettings?: Record<string, unknown> | null } | undefined,
+  nodes: ReadonlyArray<EstimateNode>,
+): ReadonlySet<string> {
+  if (options?.openValueNodeIds) return options.openValueNodeIds
+  const typed = Object.keys(options?.speechTextCaps ?? {}).map((key) => key.slice(0, key.lastIndexOf(":")))
+  return new Set([...listingOpenValueNodeIds(options?.snapshotSettings, nodes), ...typed])
+}
+
 /** What a listing priced without the database is given (`estimateWorkflowListingAt`). */
 type BaseListingOptions = {
   readonly replaceableMediaNodeIds?: ReadonlySet<string>
+  /** The nodes whose value the app's user types with no enumerable domain; absent: read off `speechTextCaps` (`listingOpenValues`). */
+  readonly openValueNodeIds?: ReadonlySet<string>
   readonly exposedListNodeIds?: ReadonlySet<string>
   readonly speechTextCaps?: ExposedTextCaps
+  /** A general user may use Speaker Map (`ListingEstimateOptions.multicam`):
+   *  a use-case node lists on every recording it reads and its Master audio.
+   *  Absent: its first recording only. */
+  readonly multicam?: boolean
+  /** A general user's Speaker Frames answer (`ListingEstimateOptions.framesWithheld`):
+   *  an `auto` framing source lists as the even split. Absent: following faces. */
+  readonly framesWithheld?: boolean
 }
 
 /**
@@ -5773,15 +5812,13 @@ function sumEstimatedNodes(
 ): number {
   const gateNodes = listingGateNodes(nodes)
   const gateEdges = listingGateEdges(edges ?? [])
-  const unitsOf = (n: EstimateNode) => graphPricingUnits(n, nodes, edges, rerunIds)
-  const wireSec = runWireLengthOf(nodes, edges, rerunIds)
-  const utilityWireSec = runUtilityWireLengthOf(nodes, edges, rerunIds)
-  const wireFps = runWireFpsOf(nodes, edges)
+  const wires = runWireReadersOf(nodes, edges, rerunIds)
+  const unitsOf = (n: EstimateNode) => graphPricingUnits(n, nodes, edges, rerunIds, wires.measuredSec)
   return nodes.reduce((sum, node) => {
     if (!include(node)) return sum
     const runs = nodeFanOut({ id: node.id ?? "", type: node.type, data: node.data }, gateNodes, gateEdges, rerunIds)
     if (runs === 0) return sum
-    const credits = runs * oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds, wireFps, utilityWireSec)
+    const credits = runs * oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wires, rerunIds)
     // Its line is an estimate when the node is priced at a metered call — as
     // it runs: a wired Settings input may set the model, never the type — or
     // is a Component whose published price holds one (`componentHoldsMeteredEstimate`).
@@ -5814,16 +5851,13 @@ function oneRunCredits(
   prices: ChargedPriceTable,
   speechTextCaps: ExposedTextCaps | undefined,
   unitsOf: (node: EstimateNode, priced: EstimateNode) => number,
-  wireSec: WireSecOf,
+  /** How a run estimate reads the video on a wire (`runWireReadersOf`). */
+  wires: RunWireReaders,
   /** The nodes the priced run executes: a render's price tier reads its graph through them. */
   rerunIds: ReadonlySet<string>,
-  /** The frame rate of the video on a wire (`runWireFpsOf`): Video Mask is priced by it. */
-  wireFps: WireFpsOf,
-  /** The length on a wire for a step charged by it (`runUtilityWireLengthOf`): Trim, Loop, Combine Videos. */
-  utilityWireSec: WireSecOf,
 ): number {
   const variants = nodeProviders(node.type, node.data)?.map((provider) => ({ ...node, data: { ...(node.data ?? {}), provider } })) ?? [node]
-  return variants.reduce((t, v) => t + estimateNodeCredits(v, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds, wireFps, utilityWireSec), 0)
+  return variants.reduce((t, v) => t + estimateNodeCredits(v, nodes, edges, prices, speechTextCaps, unitsOf, wires, rerunIds), 0)
 }
 
 /** The length, in seconds, of the video on a wire when a run is estimated; undefined when not known. */
@@ -5831,6 +5865,75 @@ type WireSecOf = (sourceId: string | undefined) => number | undefined
 
 /** The frame rate of the video on a wire when a run is estimated; undefined when not known (the 30 fps basis). */
 type WireFpsOf = (sourceId: string | undefined) => number | undefined
+
+/**
+ * The length, in seconds, of the video on a wire into a step whose run
+ * measures it (Mask Composite, Video Overlay), with that step's slack on each
+ * clip a node makes in the run; undefined when not known (the step's cap).
+ */
+type MeasuredWireSecOf = (
+  sourceId: string | undefined,
+  plannedClipSlackSec: number,
+  /** What one step's reading adds (Lip Sync: a re-run voice at its earlier take, a minimum). */
+  extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum">,
+) => number | undefined
+
+/** How a run estimate reads the video on a wire: its length, its measured length, the length the graph knows, and its frame rate. */
+interface RunWireReaders {
+  readonly sec: WireSecOf
+  readonly measuredSec: MeasuredWireSecOf
+  /** Only a length the graph knows (a recording, a take's record): the measured walk's `knownOnly` reading. */
+  readonly knownSec: WireSecOf
+  readonly fps: WireFpsOf
+}
+
+/** The three wire readings of a run estimate, over one graph and one run set. */
+function runWireReadersOf(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  rerunIds: ReadonlySet<string>,
+  /** A listing's app inputs typed with no enumerable domain (`listingOpenValues`); a run estimate has none. */
+  openSourceIds?: ReadonlySet<string>,
+): RunWireReaders {
+  return { sec: runWireLengthOf(nodes, edges, rerunIds), measuredSec: measuredWireLengthOf(nodes, edges, rerunIds, openSourceIds), knownSec: knownWireLengthOf(nodes, edges, rerunIds, openSourceIds), fps: runWireFpsOf(nodes, edges) }
+}
+
+/**
+ * A run estimate's read of the video a MEASURING step is given
+ * (`measuredWireLengthSec`, shared with the editor's quote): a render at its
+ * estimated length, a recording at the length its run forwards, a node outside
+ * the run at the take it hands on, and a node the run executes at the length
+ * it will produce at its settings (a generation at its model's rendered
+ * length, an Extend Video at its source plus what it adds, every other
+ * producer by its length rule), plus the step's slack once on each clip a
+ * node makes on the way. Frozen nodes never count as running. Unknown is `undefined`:
+ * the step's cap. The deployment's Generate Video Pro cap is its env's.
+ */
+function measuredWireLengthOf(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  rerunIds: ReadonlySet<string>,
+  openSourceIds?: ReadonlySet<string>,
+): MeasuredWireSecOf {
+  if (!edges) return () => undefined
+  const gateNodes = listingGateNodes(nodes)
+  const gateEdges = listingGateEdges(edges)
+  const generateVideoProCapSec = generateVideoProCapSecOfEnv()
+  return (sourceId, plannedClipSlackSec, extra) => measuredWireLengthSec(sourceId, gateNodes, gateEdges, rerunIds, { generateVideoProCapSec, plannedClipSlackSec, openSourceIds, ...extra })
+}
+
+/** The length the graph KNOWS a wire's clip is (a recording, a take's record), over the same graph as {@link measuredWireLengthOf}; nothing planned. */
+function knownWireLengthOf(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  rerunIds: ReadonlySet<string>,
+  openSourceIds?: ReadonlySet<string>,
+): WireSecOf {
+  if (!edges) return () => undefined
+  const gateNodes = listingGateNodes(nodes)
+  const gateEdges = listingGateEdges(edges)
+  return (sourceId) => measuredWireLengthSec(sourceId, gateNodes, gateEdges, rerunIds, { openSourceIds, knownOnly: true })
+}
 
 /**
  * A run estimate's read of a wire's frame rate (`runWireFps`, shared with the
@@ -5859,12 +5962,11 @@ function runWireFpsOf(nodes: ReadonlyArray<EstimateNode>, edges: ReadonlyArray<E
  * estimate prices an uploaded clip at its real length, not the fallback. Any
  * other source (a generation) is not read here. An audio recording is read
  * at the length its upload recorded (`recordingLengthSec`). Unknown is
- * `undefined`, and each step stands at its own fallback: Trim / Loop / Combine
- * Videos at the estimators' 8 seconds (what the run itself charges them on
- * such a wire, not an upper bound); Mask Composite at its 300-second cap,
- * Video Mask / Video Depth / Video SFX at their highest row and Pitch & Tempo
- * at its 30-minute id — upper bounds on what their runs measure (decided
- * 2026-10-13 for Video SFX and Pitch & Tempo).
+ * `undefined`, and each step stands at its own fallback. Every step whose run
+ * measures its input reads the measured walk instead (`measuredWireLengthOf`):
+ * Mask Composite, Video Overlay, Trim / Loop / Combine Videos, Video SFX,
+ * Video Mask, Video Depth, Pitch & Tempo, Dubbing and Topaz Video Upscale;
+ * Video Face Mesh and Assemble Narrated Video still read this one.
  */
 function runWireLengthOf(
   nodes: ReadonlyArray<EstimateNode>,
@@ -5880,35 +5982,6 @@ function runWireLengthOf(
 /** A run estimate's own read of a source that is neither a render nor a length-priced step: a recording's length, else none. */
 const recordedSourceSec = (origin: { type?: string | null; data?: unknown }): number | undefined =>
   RECORDING_SOURCE_TYPES.has(origin.type ?? "") ? recordingLengthSec(origin) : undefined
-
-/**
- * {@link runWireLengthOf} for the steps CHARGED by the length they are handed
- * (Trim, Loop, Combine Videos), which also read a generated video: by the
- * shared rule (`generationSourceEstimateSec`, the editor's estimate reads it
- * too), a generation that runs in the estimated run and follows its own length
- * (an automatic length, a Seedance Edit / Extend) at the most it can make — the
- * length it records is capped at that, so the quote is never below the charge
- * — and one that does not run at the length its result recorded. Any other
- * generation at the length the run hands on from it, its stored Duration
- * (`forwardedVideoLengthSec`, decided 2026-11-11: before, the estimators'
- * fallback, below the charge of a longer video), as the editor reads it; every
- * other source as {@link runWireLengthOf} reads it. Steps that measure the clip
- * they are given (Video SFX, Video Mask, …) keep {@link runWireLengthOf}: a
- * recorded length is capped, and can sit under the file they measure.
- */
-function runUtilityWireLengthOf(
-  nodes: ReadonlyArray<EstimateNode>,
-  edges: ReadonlyArray<EstimateEdge> | undefined,
-  rerunIds: ReadonlySet<string>,
-): WireSecOf {
-  if (!edges) return () => undefined
-  const gateNodes = listingGateNodes(nodes)
-  const gateEdges = listingGateEdges(edges)
-  const today = (origin: EstimateGraphNode) =>
-    LENGTH_RECORDING_VIDEO_NODE_TYPES.has(origin.type ?? "") ? forwardedVideoLengthSec(origin) : recordedSourceSec(origin)
-  const otherSec = (origin: EstimateGraphNode) => generationSourceEstimateSec(origin, gateNodes, gateEdges, rerunIds, today)
-  return (sourceId) => runWireLengthSec(sourceId, gateNodes, gateEdges, rerunIds, { otherSec })
-}
 
 /**
  * A video-utility estimate body with the length of each wire that feeds it,
@@ -5950,25 +6023,29 @@ function estimateNodeCredits(
   prices: ChargedPriceTable,
   speechTextCaps: ExposedTextCaps | undefined,
   unitsOf: (node: EstimateNode, priced: EstimateNode) => number,
-  wireSec: WireSecOf,
+  wires: RunWireReaders,
   rerunIds: ReadonlySet<string>,
-  wireFps: WireFpsOf,
-  /** The length on a wire for a step charged by it (Trim, Loop, Combine Videos): a generated video read by the shared rule. */
-  utilityWireSec: WireSecOf,
 ): number {
+  const { sec: wireSec, fps: wireFps } = wires
+  // The steps whose run measures its input before it reserves (Video SFX, Video
+  // Mask, Video Depth, Pitch & Tempo, Dubbing, Topaz): each wire through the
+  // measured walk the editor's quote reads, with that step's slack.
+  const measuredFor = (type: MeasuredInputStepType): WireSecOf => (sourceId) => wires.measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC[type])
   // A parameter node (Provider, Duration, a picker) is read, never run: no
   // job, no charge. A Provider's data names a model ("veo3"), which the
   // lookups below would otherwise price as a run of that model. The editor's
   // estimate already counts executable nodes only.
   if (PARAMETER_NODE_TYPES.has(node.type)) return 0
-  // Nodaro Video Upscale on a clip the graph knows is past its 60-second limit:
-  // the run is refused before anything is held (`video_too_long`), so no
-  // estimate prices it (decided 2026-11-12) — it adds nothing here, as the
-  // editor leaves it out of its totals and its pill shows no figure
-  // (`nodaroVideoUpscaleRefusesLength`, the one rule all three read).
+  // Nodaro Video Upscale on a clip the graph KNOWS is past its 60-second
+  // limit (an upload, a measured Library clip, a take's record): the run is
+  // refused before anything is held (`video_too_long`), so no estimate prices
+  // it (decided 2026-11-12) — it adds nothing here, as the editor leaves it out
+  // of its totals and its pill shows no figure (`nodaroVideoUpscaleRefusesLength`,
+  // the one rule all three read). A PLANNED length past it is quoted at the
+  // limit by the units below: an upper bound is no proof of a refusal.
   if (node.type === "video-upscale") {
     const runs = withWiredSettings(node, nodes, edges)
-    if (isNodaroVideoUpscaleNode(runs) && nodaroVideoUpscaleRefusesLength(videoUpscaleWireSec(node, edges, wireSec))) return 0
+    if (isNodaroVideoUpscaleNode(runs) && nodaroVideoUpscaleRefusesLength(videoUpscaleWireSec(node, edges, wires.knownSec))) return 0
   }
   // Image Overlay is base + 2 per extra platform render — the shared formula,
   // marked up once as a whole, the way its route's creditGuard reserves it.
@@ -5977,33 +6054,33 @@ function estimateNodeCredits(
   }
   // Mask Composite: its one-unit row × one unit per started 5 s of the result
   // (its leading video's length — the foreground's `video` wire, or the
-  // `background-video` wire with a pixelate / blur fill — when a run estimate
-  // knows it, else the 300-second cap: an upper bound on what the run measures).
-  // Marked up once as a whole, the way the route's creditGuard and the
-  // workflow run reserve it (`unitRateBaseCredits`).
+  // `background-video` wire with a pixelate / blur fill — as the measured walk
+  // reads it, the editor's own reading; else the 300-second cap: an upper bound
+  // on what the run measures). Marked up once as a whole, the way the route's
+  // creditGuard and the workflow run reserve it (`unitRateBaseCredits`).
   if (node.type === "mask-composite") {
-    const credits = chargedCredits(prices, "mask-composite", maskCompositeUnits(maskCompositeLeadSecOf(node, edges, wireSec)))
+    const credits = chargedCredits(prices, "mask-composite", maskCompositeUnits(maskCompositeLeadSecOf(node, edges, wires.measuredSec)))
     if (credits !== undefined) return credits
   }
   // Video Overlay that can carry a video layer (`videoOverlayQuotesVideo`, the
   // rule the editor quotes by): the `video-overlay:video` row × one unit per
-  // started 5 s of its base (its `video` wire's length when a run estimate knows
-  // it, else the 60 s cap — the run measures the base before it reserves).
-  // Marked up once as a whole, the way the route's creditGuard and the workflow
-  // run reserve it. An image-only node falls through to its flat row.
+  // started 5 s of its base (its `video` wire's length as the measured walk
+  // reads it, else the 60 s cap — the run measures the base before it
+  // reserves). Marked up once as a whole, the way the route's creditGuard and
+  // the workflow run reserve it. An image-only node falls through to its flat row.
   if (node.type === "video-overlay") {
-    const credits = videoOverlayVideoCredits(node, nodes, edges, prices, wireSec)
+    const credits = videoOverlayVideoCredits(node, nodes, edges, prices, wires.measuredSec)
     if (credits !== undefined) return credits
   }
   // Dubbing: its language's per-minute row × the started minutes of the span
-  // (the window, else the source's length where a run estimate knows it),
+  // (the window, else the source's length as the measured walk reads it),
   // marked up once as a whole — what the dubbing route and the workflow run
   // reserve. A span the graph does not tell quotes one minute: the run
   // measures the source before it reserves.
   if (node.type === "dubbing") {
     const priced = withWiredSettings(node, nodes, edges)
     const data = priced.data ?? {}
-    const credits = chargedCredits(prices, dubbingModelIdentifier(data.targetLanguage), dubbingQuotedMinutes(data, dubbingSourceSecOf(priced, nodes, edges, wireSec)))
+    const credits = chargedCredits(prices, dubbingModelIdentifier(data.targetLanguage), dubbingQuotedMinutes(data, dubbingSourceSecOf(priced, edges, measuredFor("dubbing"))))
     if (credits !== undefined) return credits
   }
   // Trim / Loop / Combine / Assemble Narrated Video are priced per unit of
@@ -6015,11 +6092,14 @@ function estimateNodeCredits(
   const clipWires = fanInClipWires(node, nodes, edges, rerunIds)
   const utilityBody = videoUtilityEstimateBody(node, clipWires)
   if (utilityBody) {
-    // A wire whose length a run estimate knows (an upload, a render's output,
-    // a chain of these steps, a generated video by the shared rule — the most
-    // a length-following run can make) is priced at it; the rest at the
-    // estimators' fallback, as the run itself charges them.
-    const secs = clipWires.map((e) => utilityWireSec(e.source))
+    // Trim, Loop and Combine Videos are charged the length their run measures
+    // (lib/video-utility-length.ts), so each clip is read by the measured walk
+    // the editor's quote reads (`measuredWireLengthSec`: a clip a node makes
+    // in the run at its planned length plus the slack, a node outside the run
+    // at its take, an upload at its measured length). A clip nothing can size
+    // stands at the estimators' 8-second fallback, a minimum.
+    const secs = clipWires.map((e) =>
+      MEASURED_VIDEO_UTILITY_JOBS.has(node.type) ? wires.measuredSec(e.source, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC) : wireSec(e.source))
     const body = secs.some((sec) => sec !== undefined) ? withUpstreamLengths(node.type, utilityBody, secs) : utilityBody
     const units = videoUtilityUnits(node.type, body)
     const credits = units === undefined ? undefined : chargedCredits(prices, node.type, units)
@@ -6060,14 +6140,18 @@ function estimateNodeCredits(
     timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
     audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
     editPlan: node.type === "edit-plan" ? { sourceSec: editPlanSourceSecOf(node, nodes, edges), perMinute: prices.editPlanPerMinute === true } : undefined,
-    videoSfxSec: node.type === "video-sfx" ? videoSfxClipSecOf(node, edges, wireSec) : undefined,
-    videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, nodes, edges, wireSec, prices) : undefined,
-    pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, wireSec) : undefined,
+    videoSfxSec: node.type === "video-sfx" ? videoSfxClipSecOf(node, edges, measuredFor("video-sfx")) : undefined,
+    videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, nodes, edges, measuredFor("video-depth"), prices) : undefined,
+    pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, measuredFor("pitch-tempo")) : undefined,
+    // Transcribe on Nemotron 3.5: its audio wire as a run estimate reads it (not the measured walk: it was not moved onto it).
     transcribeSec: node.type === "transcribe" ? transcribeInputSecOf(node, edges, wireSec) : undefined,
+    // Add Captions on Nemotron 3.5 Transcribe: its video wire as a run estimate reads it, as Transcribe's
+    // input is read (not the measured walk: neither was moved onto it).
     addCaptionsVideoSec: node.type === "add-captions" ? addCaptionsVideoSecOf(node, edges, wireSec) : undefined,
     addCaptionsSourceWired: node.type === "add-captions" ? addCaptionsSourceKnownWired(node, nodes, edges) : undefined,
-    videoMaskSec: node.type === "video-mask" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
-    // Video Face Mesh (the Cast Swap engine's quote graph): its `video` wire, priced as Video Mask's (the 30 fps basis).
+    videoMaskSec: node.type === "video-mask" ? videoMaskClipSecOf(node, edges, measuredFor("video-mask"), wireFps) : undefined,
+    // Video Face Mesh (the Cast Swap engine's quote graph): its `video` wire as a run estimate reads it (not the
+    // measured walk: it is not one of the steps moved onto it), priced as Video Mask's (the 30 fps basis).
     videoFaceMeshSec: node.type === "video-face-mesh" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
     videoRefWired: videoRefWired(node, edges),
     imageRefsWired: edges && node.id ? countImageInputEdges(edges, node.id) : undefined,
@@ -6141,11 +6225,13 @@ function meteredChargedOrThrow(prices: ChargedPriceTable, identifier: string, un
 }
 
 /**
- * The input length a Pitch & Tempo is priced at when a run is estimated: its
- * media wire's length where a run estimate knows it (a render's output, a
- * chain of length-priced steps), at most the 30 minutes a run accepts.
- * Undefined when unknown: the 30-minute id stands in (`pitchTempoQuoteCreditId`)
- * — a run measures the real file before it reserves, so no run is charged more.
+ * The input length a Pitch & Tempo is priced at when a run is estimated: the
+ * first wire whose length the measured walk knows (`wireSec`, the editor's
+ * reading: an upload's, a render's output, a node outside the run at its take,
+ * a node that runs at the length it will produce plus the container slack), at
+ * most the 30 minutes a run accepts. Undefined when unknown: the 30-minute id
+ * stands in (`pitchTempoQuoteCreditId`) — a run measures the real file before
+ * it reserves, so no run is charged more.
  */
 function pitchTempoInputSecOf(
   node: EstimateNode,
@@ -6224,14 +6310,15 @@ function addCaptionsSourceKnownWired(
 
 /**
  * The source length a Dubbing is priced at when a run is estimated: its
- * source wire's length where a run estimate knows it (`video` wins over
- * `audio`, as the node dubs; a `sourceUrl` replaces both and is measured by the
- * run), else the length the source node records — an audio upload's included
- * (`mediaLengthSecOf`), as the editor reads it. Undefined when unknown.
+ * source wire's length as the measured walk reads it (`wireSec`, the editor's
+ * reading — `video` wins over `audio`, as the node dubs; a `sourceUrl`
+ * replaces both and is measured by the run): an upload's, an audio upload's
+ * recorded length, a node outside the run at its take, a node that runs at the
+ * length it will produce plus the container slack — never a length a node
+ * that runs merely stores. Undefined when unknown.
  */
 function dubbingSourceSecOf(
   node: EstimateNode,
-  nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
   wireSec: WireSecOf,
 ): number | undefined {
@@ -6239,8 +6326,7 @@ function dubbingSourceSecOf(
   const inputs = edges.filter((e) => e.target === node.id)
   const handle = dubbingSourceHandle(node.data ?? {}, inputs.map((e) => e.targetHandle))
   const wire = handle === undefined ? undefined : inputs.find((e) => e.targetHandle === handle)
-  if (wire === undefined) return undefined
-  return wireSec(wire.source) ?? mediaLengthSecOf(nodes.find((n) => n.id === wire.source)?.data)
+  return wire === undefined ? undefined : wireSec(wire.source)
 }
 
 /**
@@ -6254,54 +6340,56 @@ function videoOverlayVideoCredits(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
   prices: ChargedPriceTable,
-  wireSec: WireSecOf,
+  measuredSec: MeasuredWireSecOf,
 ): number | undefined {
   const self = { id: node.id ?? "", type: node.type, data: node.data }
   if (!videoOverlayQuotesVideo(self, listingGateNodes(nodes), listingGateEdges(edges ?? []))) return undefined
   const inputs = node.id === undefined ? [] : (edges ?? []).filter((e) => e.target === node.id)
-  const units = videoOverlayVideoUnits(videoOverlayBaseSec(inputs, inputs.map((e) => wireSec(e.source))))
+  const units = videoOverlayVideoUnits(videoOverlayBaseSec(inputs, inputs.map((e) => measuredSec(e.source, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC))))
   return chargedCredits(prices, VIDEO_OVERLAY_PRICING.VIDEO_CREDIT_ID, units)
 }
 
 /**
- * The length of the audio a Lip Sync is driven by when a run is estimated: its
- * `audio` wire's length where a run estimate knows it, else the length the
- * audio's source node records (an audio upload's included, `mediaLengthSecOf`).
+ * The length of the audio a Lip Sync priced by its audio's seconds is driven
+ * by when a run is estimated: its `audio` wire as the measured walk reads it
+ * (`wireSec`, the editor's reading) — an upload at its recorded length, a node
+ * outside the run at its take, a node that runs at the length it will produce
+ * plus the container slack. The run measures the real audio before it holds.
  * Undefined when unknown.
  */
 function lipSyncAudioWireSecOf(
   node: EstimateNode,
-  nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
   wireSec: WireSecOf,
 ): number | undefined {
   if (node.id === undefined || !edges) return undefined
   const wire = edges.find((e) => e.target === node.id && e.targetHandle === "audio")
-  if (wire === undefined) return undefined
-  return wireSec(wire.source ?? "") ?? mediaLengthSecOf(nodes.find((n) => n.id === wire.source)?.data)
+  return wire === undefined ? undefined : wireSec(wire.source ?? "")
 }
 
 /**
  * The length a Mask Composite is priced at when a run is estimated: its
- * leading video's wire (`maskCompositeLeadSec`, @nodaro/render-rules).
+ * leading video's wire (`maskCompositeLeadSec`, @nodaro/render-rules), read by
+ * the measured walk with Mask Composite's slack on each clip a node makes.
  */
 function maskCompositeLeadSecOf(
   node: EstimateNode,
   edges: ReadonlyArray<EstimateEdge> | undefined,
-  wireSec: WireSecOf,
+  measuredSec: MeasuredWireSecOf,
 ): number | undefined {
   if (node.id === undefined || !edges) return undefined
   const inputs = edges.filter((e) => e.target === node.id)
-  return maskCompositeLeadSec(node.data, inputs, inputs.map((e) => wireSec(e.source)))
+  return maskCompositeLeadSec(node.data, inputs, inputs.map((e) => measuredSec(e.source, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC)))
 }
 
 /**
  * The clip length a Video SFX is priced at when a run is estimated: its
- * `video` wire's length where a run estimate knows it (a render's output, a
- * chain of Trim / Loop / Combine Videos / Video SFX), at most the 300 seconds
- * a run accepts, as the listing prices it (`videoSfxClipSec`, decided
- * 2026-10-07). Undefined when no wire's length is known: the 300-second row
- * stands in (`videoSfxQuoteCreditId`), the most a run can be charged.
+ * `video` wire's length as the measured walk reads it (`wireSec`, the editor's
+ * reading: a render's output, a recording, a node outside the run at its take,
+ * a node that runs at the length it will produce plus the container slack), at
+ * most the 300 seconds a run accepts (`videoSfxClipSec`). Undefined when no
+ * wire's length is known: the 300-second row stands in
+ * (`videoSfxQuoteCreditId`), the most a run can be charged.
  */
 function videoSfxClipSecOf(
   node: EstimateNode,
@@ -6315,10 +6403,12 @@ function videoSfxClipSecOf(
 
 /**
  * The PRICED length a Video Mask is quoted at when a run is estimated: the
- * clip Video SFX reads ({@link videoSfxClipSecOf}), at the 30 fps basis when
- * its wire carries a frame rate (`videoMaskClipSec` — `videoMaskBilledSeconds`,
- * the rule a run is charged by), so a faster clip is quoted the row its run
- * is charged. Undefined when no length is known: the longest row.
+ * clip its `video` wire brings (`wireSec`: the measured walk for Video Mask,
+ * the editor's reading; a run estimate's wire reading for Video Face Mesh), at
+ * the 30 fps basis when its wire carries a frame rate (`videoMaskClipSec` —
+ * `videoMaskBilledSeconds`, the rule a run is charged by), so a faster clip is
+ * quoted the row its run is charged. Undefined when no length is known: the
+ * longest row.
  */
 function videoMaskClipSecOf(
   node: EstimateNode,
@@ -6333,14 +6423,14 @@ function videoMaskClipSecOf(
 
 /**
  * The clip length a Video Depth is priced at when a run is estimated: its
- * `video` wire's length where a run estimate knows it (a render's output, a
- * chain of Trim / Loop / Combine Videos / Video SFX), else the first wire with
- * a known length — Video SFX's reading, without its 300-second clamp
- * (`videoDepthCreditId` already prices anything past the provider's limit at
- * its highest reachable row). With no such length, an uploaded source clip is
- * priced at its probed length (`withUploadClipLengths`), as the run's
- * reservation measures it. Undefined when neither is known: that row stands
- * in, the most a run can be charged.
+ * `video` wire's length as the measured walk reads it (`wireSec`, the editor's
+ * reading: a render's output, a recording, a node outside the run at its take,
+ * a node that runs at the length it will produce plus the container slack),
+ * else the first wire with a known length (`videoDepthClipSec`). With no such
+ * length, an uploaded source clip is priced at its probed length
+ * (`withUploadClipLengths`), as the run's reservation measures it. Undefined
+ * when neither is known: the provider's highest reachable row stands in, the
+ * most a run can be charged.
  */
 function videoDepthClipSecOf(
   node: EstimateNode,
@@ -6351,10 +6441,7 @@ function videoDepthClipSecOf(
 ): number | undefined {
   if (node.id === undefined || !edges) return undefined
   const inputs = edges.filter((e) => e.target === node.id)
-  const secs = inputs.map((e) => wireSec(e.source))
-  const videoWire = inputs.findIndex((e) => e.targetHandle === "video")
-  const known = videoWire >= 0 ? secs[videoWire] : secs.find((sec) => sec !== undefined)
-  return known ?? uploadClipSec(prices, videoDepthSource(node, nodes, edges))
+  return videoDepthClipSec(inputs, inputs.map((e) => wireSec(e.source))) ?? uploadClipSec(prices, videoDepthSource(node, nodes, edges))
 }
 
 /**
@@ -6447,26 +6534,13 @@ function editPlanListingParts(prices: ChargedPriceTable, mode: string, tier: str
 // `@nodaro/render-rules`, where the run estimates read them; the registry reads
 // the same rule.
 
-/** The recording node types a listing reads a length from: the uploads an app exposes and the Video URL (YouTube or any link) node, which the user replaces the same way (decided 2026-10-07). */
-const RECORDING_SOURCE_TYPES: ReadonlySet<string> = new Set(["upload-video", "upload-audio", "reference-audio", "youtube-video"])
-
-/** The audio recordings, which record their length only on `metadata.durationSeconds` (never on a result). */
-const AUDIO_RECORDING_TYPES: ReadonlySet<string> = new Set(["upload-audio", "reference-audio"])
-
-/**
- * A recording's length as a run estimate reads it: the length a run forwards
- * from it (`forwardedVideoLengthSec` — an upload's result, only while it is
- * the node's file), and for an audio recording the length its upload or
- * extraction recorded (`mediaLengthSecOf`: `metadata.durationSeconds`, trusted
- * only while stamped to the node's current media), as the editor reads it.
- * Pitch & Tempo on an uploaded audio is then quoted at its own minutes, not at
- * the unknown-length bound.
- */
-function recordingLengthSec(origin: { type?: string | null; data?: unknown }): number | undefined {
-  const forwarded = forwardedVideoLengthSec(origin)
-  if (forwarded !== undefined || !AUDIO_RECORDING_TYPES.has(origin.type ?? "")) return forwarded
-  return mediaLengthSecOf(origin.data as Record<string, unknown> | undefined)
-}
+// The recording node types a listing reads a length from — the uploads an app
+// exposes and the Video URL (YouTube or any link) node, which the user replaces
+// the same way (decided 2026-10-07) — and how a run estimate reads one
+// (`RECORDING_SOURCE_TYPES`, `recordingLengthSec`) are `@nodaro/render-rules`':
+// the measured walk the editor shares reads a recording the same way. Pitch &
+// Tempo on an uploaded audio is then quoted at its own minutes, not at the
+// unknown-length bound.
 
 /**
  * The replaced recordings that ARE the episode the per-minute figure counts:
@@ -6561,13 +6635,7 @@ function wireInputLength(
     return known === undefined ? (origin.type === "youtube-video" ? "unknown" : undefined) : { fixedSec: known, perEpisodeSec: 0 }
   }
   // A generated voice: the length its script takes, when the listing can read the script.
-  if (SPEECH_NODE_TYPES.has(origin.type ?? "")) {
-    const ctx = upstreamSpeechText(origin, nodes, edges, speechTextCaps ?? {})
-    const script = speechEstimateChars(origin.type as string, origin.data ?? {}, ctx)
-    // A script an LLM node writes at run time: at most what that node can write (decided 2026-10-07).
-    const llmChars = script.exact ? undefined : llmScriptChars(origin.type as string, origin.data ?? {}, ctx)
-    return generatedVoiceLength({ ...script, ...(llmChars !== undefined ? { chars: llmChars, bounded: true } : {}), ...speechScriptTraits(origin.type as string, origin.data ?? {}, ctx) })
-  }
+  if (SPEECH_NODE_TYPES.has(origin.type ?? "")) return listedVoiceLength(origin, nodes, edges, speechTextCaps)
   if (seen.has(origin.id)) return undefined
   const walked = new Set(seen).add(origin.id)
   const inputs: WireInput[] = gateEdges
@@ -6590,6 +6658,71 @@ function wireInputLength(
 }
 
 /**
+ * How long a generated voice (Text to Speech, Text to Dialogue) is listed at:
+ * the seconds its script takes to read, when the listing can read the script
+ * (`generatedVoiceLength`), else no bound. The listing's own knowledge: a run
+ * estimate reads such a voice as unknown.
+ */
+function listedVoiceLength(
+  origin: EstimateNode & { readonly id: string },
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge>,
+  speechTextCaps: ExposedTextCaps | undefined,
+): WireLength {
+  const ctx = upstreamSpeechText(origin, nodes, edges, speechTextCaps ?? {})
+  const script = speechEstimateChars(origin.type as string, origin.data ?? {}, ctx)
+  // A script an LLM node writes at run time: at most what that node can write (decided 2026-10-07).
+  const llmChars = script.exact ? undefined : llmScriptChars(origin.type as string, origin.data ?? {}, ctx)
+  return generatedVoiceLength({ ...script, ...(llmChars !== undefined ? { chars: llmChars, bounded: true } : {}), ...speechScriptTraits(origin.type as string, origin.data ?? {}, ctx) })
+}
+
+/**
+ * The listing's read of the clips a step charged the length its run measures
+ * is given (Trim, Loop, Combine Videos, Video SFX, Pitch & Tempo, Dubbing — the
+ * listed steps with parts of their own): the measured walk the run estimate
+ * and the editor's quote share (`measuredWireLengthSec`, with the step's slack
+ * on each clip a node makes — {@link listingMeasuredSlackOf} —, a length an
+ * app user types with no bound read as open), over the graph the listing's
+ * length rules read (a replaced recording's sample removed), knowing what only
+ * the listing knows: a generated voice at the length its script takes
+ * (`listedVoiceLength`).
+ */
+function listingUtilityWireSecOf(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge>,
+  rerunIds: ReadonlySet<string>,
+  openSourceIds: ReadonlySet<string> | undefined,
+  speechTextCaps: ExposedTextCaps | undefined,
+): MeasuredWireSecOf {
+  const gateNodes = listingGateNodes(nodes)
+  const gateEdges = listingGateEdges(edges)
+  const generateVideoProCapSec = generateVideoProCapSecOfEnv()
+  const knownLengthSec = (origin: { id: string; type?: string | null; data?: unknown }): number | undefined =>
+    SPEECH_NODE_TYPES.has(origin.type ?? "")
+      ? knownLength(listedVoiceLength({ id: origin.id, type: origin.type ?? "", data: origin.data as Record<string, unknown> | undefined }, nodes, edges, speechTextCaps))?.fixedSec
+      : undefined
+  return (sourceId, plannedClipSlackSec, extra) =>
+    measuredWireLengthSec(sourceId, gateNodes, gateEdges, rerunIds, {
+      generateVideoProCapSec,
+      plannedClipSlackSec,
+      openSourceIds,
+      knownLengthSec,
+      ...extra,
+    })
+}
+
+/**
+ * The slack a listed step whose run measures its clips reads them with
+ * (`VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC` for Trim, Loop and Combine Videos;
+ * `MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC` for Video SFX, Pitch & Tempo and
+ * Dubbing), or undefined for a step the listing reads by its own rule.
+ */
+function listingMeasuredSlackOf(type: string): number | undefined {
+  if (MEASURED_VIDEO_UTILITY_JOBS.has(type)) return VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC
+  return Object.hasOwn(MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type) ? MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC[type as MeasuredInputStepType] : undefined
+}
+
+/**
  * A length-priced utility's listed parts (decided 2026-10-07), from the same
  * estimator its run is charged with, evaluated at the length each input wire
  * has (`wireInputLength`; a wire the listing knows no length for at the
@@ -6600,6 +6733,13 @@ function wireInputLength(
  * run refuses a clip over 5 minutes, so it is listed at its 300-second row,
  * fixed (decided 2026-10-07). `undefined` when no input's length is known to
  * the listing: the caller prices the node as a run estimate does.
+ *
+ * Trim, Loop, Combine Videos, Video SFX and Pitch & Tempo are charged the
+ * length their run measures, so a wire whose length does not follow the
+ * episode is listed at the measured walk's length (`measuredSec`,
+ * `listingUtilityWireSecOf`, with the step's slack: the reading the run
+ * estimate and the editor's quote share, plus what only the listing knows); a
+ * wire the walk cannot size keeps the listing's own reading.
  */
 function utilityListingParts(
   node: EstimateNode,
@@ -6609,13 +6749,23 @@ function utilityListingParts(
   replacedMediaIds: ReadonlySet<string>,
   rerunIds: ReadonlySet<string>,
   speechTextCaps: ExposedTextCaps | undefined,
+  /** The listing's measured walk (`listingUtilityWireSecOf`): the steps a run charges the length it measures read their clips through it. */
+  measuredSec?: MeasuredWireSecOf,
 ): ListingParts | undefined {
   // One entry per clip that reaches it (a Bundle from a fanned-out source counts each clip), as the run estimate reads it.
   const incoming = fanInClipWires(node, nodes, edges, rerunIds)
   const episodeIds = episodeRecordingIds(nodes, edges, replacedMediaIds)
-  // A video-utility job (Trim, Loop, Combine Videos) is charged by the length it is handed; Video SFX and Pitch & Tempo measure theirs.
+  const slack = listingMeasuredSlackOf(node.type)
+  // A video-utility job (Trim, Loop, Combine Videos): where the measured walk cannot size a clip, the listing's
+  // own reading takes a Video to Video Seedance edit at the most it can make (`chargedVideoOutputLength`).
   const chargedByLength = videoUtilityEstimateBody(node, incoming) !== undefined
-  const wires = incoming.map((e) => wireInputLength(e.source, nodes, edges, replacedMediaIds, episodeIds, rerunIds, speechTextCaps, chargedByLength))
+  const wires = incoming.map((e): WireLength => {
+    const listed = wireInputLength(e.source, nodes, edges, replacedMediaIds, episodeIds, rerunIds, speechTextCaps, chargedByLength)
+    // A length that follows the episode is listed per minute of it, as before.
+    if (!measuredSec || slack === undefined || (knownLength(listed)?.perEpisodeSec ?? 0) > 0) return listed
+    const sec = measuredSec(e.source, slack)
+    return sec !== undefined ? { fixedSec: sec, perEpisodeSec: 0 } : listed
+  })
   const videoWire = incoming.findIndex((e) => e.targetHandle === "video")
   const videoSfxWire = videoWire >= 0 ? wires[videoWire] : wires.find((l) => l !== undefined)
   // Video SFX refuses a clip over 300 s, so on a recording the user replaces —
@@ -6631,6 +6781,8 @@ function utilityListingParts(
   const videoSfxLength = knownLength(videoSfxWire)
   const secAt = (l: InputLength | undefined, minutes: number) => (l ? l.fixedSec + l.perEpisodeSec * minutes : undefined)
   // The base price of a run when the episode is `minutes` long, and the id it is charged at.
+  // Whether some length follows the episode: then the listing is per minute of it.
+  const perEpisode = lengths.some((l) => (l?.perEpisodeSec ?? 0) > 0)
   const priceAt = (minutes: number): { id: string; base: number } | undefined => {
     if (node.type === "pitch-tempo") {
       // Per started minute of its one media input, at most the 30 minutes a
@@ -6650,14 +6802,18 @@ function utilityListingParts(
     }
     const body = videoUtilityEstimateBody(node, incoming)
     if (!body) return undefined
+    // A Trim's fixed window on a length that follows the episode (a recording the user replaces) is listed at
+    // its window whatever the recording (`trimVideoCutsFixedWindow`): cut at a shorter recording its price stops
+    // rising, which the steepest rise per minute would over-state. On a fixed length (a generation, a sample
+    // upload) the window is cut at that length, as the estimate, the pill and the charge cut it.
+    const secs = node.type === "trim-video" && perEpisode && trimVideoCutsFixedWindow(body) ? [] : lengths.map((l) => secAt(l, minutes))
     // Each unit at the node's own row, the price its run reserves (`unitRateBaseCredits`).
-    const units = videoUtilityUnits(node.type, withUpstreamLengths(node.type, body, lengths.map((l) => secAt(l, minutes))))
+    const units = videoUtilityUnits(node.type, withUpstreamLengths(node.type, body, secs))
     const unit = prices.base(node.type)
     return units === undefined || unit === undefined ? undefined : { id: node.type, base: quoteBaseCredits(unit, units) }
   }
   const zero = priceAt(0)
   if (!zero) return undefined
-  const perEpisode = lengths.some((l) => (l?.perEpisodeSec ?? 0) > 0)
   if (!perEpisode) return { fixed: prices.charge(zero.id, zero.base), perMinute: 0 }
   let rate = 0
   let chargeId = zero.id
@@ -6679,7 +6835,9 @@ function utilityListingParts(
  */
 /**
  * A Dubbing's listed parts, from the length its source wire has to the listing
- * (`wireInputLength`): a recording the user cannot replace at its own length;
+ * (`wireInputLength`; a length that does not follow the episode read by the
+ * measured walk the run estimate and the editor's quote share, `measuredSec`,
+ * when it can size it): a recording the user cannot replace at its own length;
  * the episode recording per minute of the episode (the steepest rise over
  * 1..180 minutes of its started-minute price, so the listing at any length is
  * never below the charge, the 30-minute cap included); any other recording the
@@ -6696,13 +6854,18 @@ function dubbingListingParts(
   replacedMediaIds: ReadonlySet<string>,
   rerunIds: ReadonlySet<string>,
   speechTextCaps: ExposedTextCaps | undefined,
+  /** The listing's measured walk (`listingUtilityWireSecOf`). */
+  measuredSec?: MeasuredWireSecOf,
 ): ListingParts | undefined {
   const data = withWiredSettings(node, nodes, edges).data ?? {}
   const inputs = edges.filter((e) => e.target === node.id)
   const handle = dubbingSourceHandle(data, inputs.map((e) => e.targetHandle))
   const wire = handle === undefined ? undefined : inputs.find((e) => e.targetHandle === handle)
   if (!wire) return undefined
-  const length = wireInputLength(wire.source, nodes, edges, replacedMediaIds, episodeRecordingIds(nodes, edges, replacedMediaIds), rerunIds, speechTextCaps)
+  const listed = wireInputLength(wire.source, nodes, edges, replacedMediaIds, episodeRecordingIds(nodes, edges, replacedMediaIds), rerunIds, speechTextCaps)
+  // A length that follows the episode is listed per minute of it; any other the measured walk sizes is read by it.
+  const walked = measuredSec && (knownLength(listed)?.perEpisodeSec ?? 0) === 0 ? measuredSec(wire.source, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC.dubbing) : undefined
+  const length: WireLength = walked !== undefined ? { fixedSec: walked, perEpisodeSec: 0 } : listed
   if (length === undefined) return undefined
   const rate = dubbingModelIdentifier(data.targetLanguage)
   const at = (sec: number) => chargedCredits(prices, rate, dubbingQuotedMinutes(data, sec))
@@ -6730,11 +6893,13 @@ function lengthDependentParts(
   rerunIds: ReadonlySet<string>,
   replacedMediaIds: ReadonlySet<string> = new Set(),
   speechTextCaps?: ExposedTextCaps,
+  /** The listing's measured walk, for the steps that read it (Trim, Loop, Combine Videos, Video SFX, Pitch & Tempo, Dubbing). */
+  measuredSec?: MeasuredWireSecOf,
 ): ListingParts | undefined {
   if (!node.id) return undefined
   const self = { id: node.id, type: node.type, data: node.data }
-  if (LENGTH_PRICED_UTILITY_TYPES.has(node.type)) return utilityListingParts(node, nodes, edges, prices, replacedMediaIds, rerunIds, speechTextCaps)
-  if (node.type === "dubbing") return dubbingListingParts(node, nodes, edges, prices, replacedMediaIds, rerunIds, speechTextCaps)
+  if (LENGTH_PRICED_UTILITY_TYPES.has(node.type)) return utilityListingParts(node, nodes, edges, prices, replacedMediaIds, rerunIds, speechTextCaps, measuredSec)
+  if (node.type === "dubbing") return dubbingListingParts(node, nodes, edges, prices, replacedMediaIds, rerunIds, speechTextCaps, measuredSec)
   if (isRenderNodeType(node.type)) {
     const length = resolveApplyEdlEstimateLength(self, listingGateNodes(nodes), listingGateEdges(edges), rerunIds)
     if (length.perEpisodeMinute === 0) return undefined
@@ -6780,6 +6945,8 @@ function sumListingParts(
   speechTextCaps: ExposedTextCaps | undefined,
   /** Sources whose recording the app user or the cloner replaces: priced with no length. */
   replacedMediaIds: ReadonlySet<string>,
+  /** Nodes whose value the app user types with no enumerable domain: a length mapped from one is open. */
+  openValueNodeIds: ReadonlySet<string> | undefined,
   /** Told each priced node's parts (times the runs it makes), when a caller asks. */
   onNode?: (nodeId: string, fixed: number, perMinute: number) => void,
 ): ListingParts {
@@ -6788,18 +6955,18 @@ function sumListingParts(
   // The graph the length rules read: a replaced source's sample length removed
   // (`withoutMediaLength`), so a render or plan that follows it lists per minute.
   const lengthNodes = nodes.map((n) => (n.id && replacedMediaIds.has(n.id) ? { ...n, data: withoutMediaLength(n.data) } : n))
-  const wireSec = runWireLengthOf(lengthNodes, edges, rerunIds)
-  const utilityWireSec = runUtilityWireLengthOf(lengthNodes, edges, rerunIds)
-  const wireFps = runWireFpsOf(lengthNodes, edges)
+  const wires = runWireReadersOf(lengthNodes, edges, rerunIds, openValueNodeIds)
+  const utilityWireSec = listingUtilityWireSecOf(lengthNodes, edges, rerunIds, openValueNodeIds, speechTextCaps)
   return nodes.reduce<ListingParts>((sum, node, i) => {
     if (!include(node)) return sum
     const runs = nodeFanOut({ id: node.id ?? "", type: node.type, data: node.data }, gateNodes, gateEdges, rerunIds)
     if (runs === 0) return sum
-    const unitsOf = (n: EstimateNode) => graphPricingUnits(n, lengthNodes, edges, rerunIds)
+    // The listing's own measured walk (a generated voice by its script, as Pitch & Tempo and Dubbing read it).
+    const unitsOf = (n: EstimateNode) => graphPricingUnits(n, lengthNodes, edges, rerunIds, utilityWireSec)
     // Several providers on one node: each runs, at its own price (the run's
     // expansion), as the run estimate and the editor's estimate sum them.
-    const parts = lengthDependentParts(lengthNodes[i]!, lengthNodes, edges, prices, rerunIds, replacedMediaIds, speechTextCaps) ?? {
-      fixed: oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds, wireFps, utilityWireSec),
+    const parts = lengthDependentParts(lengthNodes[i]!, lengthNodes, edges, prices, rerunIds, replacedMediaIds, speechTextCaps, utilityWireSec) ?? {
+      fixed: oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wires, rerunIds),
       perMinute: 0,
     }
     onNode?.(node.id ?? node.type, parts.fixed * runs, parts.perMinute * runs)
@@ -6834,6 +7001,8 @@ export function graphPricingUnits(
   /** Undefined when the caller sent no wiring: unknown, so never the one-minute floor. */
   edges: ReadonlyArray<EstimateEdge> | undefined,
   rerunIds: ReadonlySet<string>,
+  /** The measured walk a Topaz upscale's video is read by (the caller's, with an app listing's open inputs); else one over this graph and run set. */
+  measuredSec: MeasuredWireSecOf = measuredWireLengthOf(nodes, edges, rerunIds),
 ): number {
   // Speaker Frames: the blocks of the edit wired in when it is known now; a
   // length not known before the run, 180 min on each camera the run will
@@ -6849,32 +7018,40 @@ export function graphPricingUnits(
     return speakerFramesEstimateBlocks(self, listingGateNodes(nodes), listingGateEdges(edges), rerunIds)
   }
   // Topaz video upscale: the units its hold reads — its target at the length
-  // its video wire gives (else the estimate's fallback length), a 16:9 frame.
-  // The run measures the real clip before it reserves (lib/topaz-video-plan.ts).
+  // its video wire gives as the measured walk reads it (the editor's reading:
+  // a node that runs at the length it will produce plus one frame of slack,
+  // the hold counting the video stream's frames), else the estimate's fallback
+  // length, a 16:9 frame. The run measures the real clip before it reserves
+  // (lib/topaz-video-plan.ts).
   if (node.type === "video-upscale" && isTopazVideoUpscaleNode(node)) {
     const wired = withWiredSettings(node, nodes, edges ?? [])
-    const lengthOf = runWireLengthOf(nodes, edges, rerunIds)
+    const slack = MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["video-upscale"]
     const sec = edges && node.id
-      ? edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source ?? "")).find((v) => v !== undefined)
+      ? edges.filter((e) => e.target === node.id).map((e) => measuredSec(e.source, slack)).find((v) => v !== undefined)
       : undefined
     return topazVideoEstimateUnits(topazVideoEstimateTarget(wired.data ?? {}, sec))
   }
   // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): the
-  // billed seconds of the audio its wire gives — the length a run estimate
-  // follows, else what the audio's source node records — or, not known, the
-  // model's maximum: an estimate never quotes below what the run may hold.
+  // billed seconds of its `audio` wire as the measured walk reads it (0.1 s
+  // slack on audio made in the run; a voice made again in the run at the take
+  // it holds, a minimum; in a listing, a voice by its script) — or, not known,
+  // the model's maximum: an estimate never quotes below what the run may hold.
   // The run measures the real audio before it reserves (lib/lip-sync-inputs.ts).
   if (node.type === "lip-sync") {
     const rate = lipSyncAudioRateOf(withWiredSettings(node, nodes, edges ?? []).data?.provider)
-    if (rate) return lipSyncEstimateSeconds(rate, lipSyncAudioWireSecOf(node, nodes, edges, runWireLengthOf(nodes, edges, rerunIds)))
+    if (rate) return lipSyncEstimateSeconds(rate, lipSyncAudioWireSecOf(node, edges, (sourceId) => measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"], { voiceTakeAsMinimum: true })))
   }
   // Nodaro Video Upscale: its tier's four-second row × the billed seconds ÷ 4,
-  // at the length its video wire gives (else the estimate's 10 s), billed as a
-  // run bills it (`nodaroVideoUpscaleEstimateUnits`). The run measures the clip.
-  // A clip the graph knows is past the limit has no units: `estimateNodeCredits`
-  // leaves that run out before it asks for them (the 0 is never priced).
+  // at the length its video wire gives as the measured walk reads it, with
+  // Topaz's one frame of slack on a clip a node makes (the run bills the clip
+  // it measures, rounded up to a whole second), else the estimate's 10 s — a
+  // minimum, as Topaz's; at most the 60-second limit, the most a run bills;
+  // billed as a run bills it (`nodaroVideoUpscaleEstimateUnits`). A clip the
+  // graph knows is past the limit is left out by `estimateNodeCredits` before
+  // it asks for units.
   if (node.type === "video-upscale" && isNodaroVideoUpscaleNode(node)) {
-    return nodaroVideoUpscaleEstimateUnits(videoUpscaleWireSec(node, edges, runWireLengthOf(nodes, edges, rerunIds))) ?? 0
+    const slack = MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["video-upscale"]
+    return nodaroVideoUpscaleEstimateUnits(videoUpscaleWireSec(node, edges, (sourceId) => measuredSec(sourceId, slack)))
   }
   // Extend Video on Seedance 2.5: (seconds sent + seconds added) ÷ 2 of its
   // two-second row — the source's last 10 s at the length the graph knows it
@@ -7033,6 +7210,8 @@ function listingEstimate(
   /** An app's or component's exposed media inputs (`exposedMediaNodeIds`). A
    *  template, and a call without them, replaces every upload node: never under-quote. */
   replaceableMediaNodeIds?: ReadonlySet<string>,
+  /** The nodes whose value the app's user types with no enumerable domain (`listingOpenValues`): a length mapped from one is open. */
+  openValueNodeIds?: ReadonlySet<string>,
   /** An app's or component's List inputs its user fills (`exposedListNodeIds`). */
   exposedListNodeIds?: ReadonlySet<string>,
   /** A general user's answers (`usecaseViewerForEveryone`): Speaker Map, Speaker Frames. */
@@ -7054,9 +7233,9 @@ function listingEstimate(
   const uc = expandUseCaseNodes(nodes, edges, usecaseExpandFlags(viewer))
   if (uc.expanded) {
     // The tally hears the run's preview part and the whole chain's final part, as they are summed.
-    const run = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds, undefined, ugcPerItem, onNode && ((id, part, fixed, perMinute) => part === "preview" && onNode(id, part, fixed, perMinute)))
+    const run = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, openValueNodeIds, exposedListNodeIds, undefined, ugcPerItem, onNode && ((id, part, fixed, perMinute) => part === "preview" && onNode(id, part, fixed, perMinute)))
     const whole = expandUseCaseNodes(nodes, edges, { chain: "whole", ...usecaseExpandFlags(viewer) })
-    const finals = listingEstimate(whole.nodes, whole.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds, undefined, undefined, onNode && ((id, part, fixed, perMinute) => part === "final" && onNode(id, part, fixed, perMinute)))
+    const finals = listingEstimate(whole.nodes, whole.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, openValueNodeIds, exposedListNodeIds, undefined, undefined, onNode && ((id, part, fixed, perMinute) => part === "final" && onNode(id, part, fixed, perMinute)))
     // Each fee counts once per run its node makes (a List's items, Each wires, repeats).
     const reruns = new Set(nodes.flatMap((n) => (n.id && !isFrozenNode(n) ? [n.id] : [])))
     const fees = (graph: ReadonlyArray<EstimateNode>) => usecaseFeesTotal(uc.fees, (id) => usecaseFeeCredits(prices, id), graph, edges, reruns)
@@ -7071,7 +7250,7 @@ function listingEstimate(
     let previewPerItem = refusedLists.size > 0 ? 0 : (run.previewPerItem ?? 0)
     const finalPerItem =
       refusedLists.size > 0
-        ? listingEstimate(whole.nodes, whole.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, listedLists).finalPerItem
+        ? listingEstimate(whole.nodes, whole.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, openValueNodeIds, listedLists).finalPerItem
         : finals.finalPerItem
     if (publishType !== "template" && listedLists?.size) {
       for (const listId of listedLists) {
@@ -7079,7 +7258,7 @@ function listingEstimate(
         if (!list || list.type !== "list") continue
         const saved = Math.max(1, listItemCount(list.data))
         const withItems = (count: number) => nodes.map((n) => (n.id === listId ? { ...n, data: withListItemCount(n.data, count) } : n))
-        const steps = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, new Set([listId]), undefined, ugcPerItem).previewPerItem ?? 0
+        const steps = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, openValueNodeIds, new Set([listId]), undefined, ugcPerItem).previewPerItem ?? 0
         previewPerItem = Math.max(previewPerItem, steps + fees(withItems(saved + 1)) - fees(withItems(saved)))
       }
     }
@@ -7093,7 +7272,7 @@ function listingEstimate(
       ...(finalPerItem ? { finalPerItem } : {}),
     }
   }
-  const parts = listingParts(nodes, edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, onNode)
+  const parts = listingParts(nodes, edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, openValueNodeIds, onNode)
   if (publishType === "template" || !exposedListNodeIds?.size) return parts
   // A List the app's user fills (decided 2026-10-07): the saved items are in
   // the parts above; each further item is priced as the difference one more
@@ -7106,8 +7285,8 @@ function listingEstimate(
     if (!list || list.type !== "list") continue
     const saved = Math.max(1, listItemCount(list.data))
     const withItems = (count: number) => nodes.map((n) => (n.id === listId ? { ...n, data: withListItemCount(n.data, count) } : n))
-    const one = listingParts(withItems(saved), edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds)
-    const two = listingParts(withItems(saved + 1), edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds)
+    const one = listingParts(withItems(saved), edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, openValueNodeIds)
+    const two = listingParts(withItems(saved + 1), edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, openValueNodeIds)
     const ceiling = (fixed: number, perMinute: number) => fixed + perMinute * EDIT_PLAN_MAX_MINUTES
     // The UGC part is the app run's (the preview part): what one more item adds to it.
     const ugcStep = ugcPerItem?.get(listId) ?? 0
@@ -7168,6 +7347,8 @@ function listingParts(
   skip?: (node: EstimateNode) => boolean,
   speechTextCaps?: ExposedTextCaps,
   replaceableMediaNodeIds?: ReadonlySet<string>,
+  /** The nodes whose value the app's user types with no enumerable domain: a length mapped from one is open. */
+  openValueNodeIds?: ReadonlySet<string>,
   onNode?: ListingTally,
 ): AppListingEstimate {
   // The recordings an app user or a template's cloner replaces with their own
@@ -7183,7 +7364,7 @@ function listingParts(
   // The preview part is the whole graph at its saved settings — never only
   // the run up to each Preview: a flag-off app run executes all of it, with
   // the fee (see AppListingEstimate). Revisit when production turns the flag on.
-  const preview = sumListingParts(nodes, edges, prices, (n) => !skip?.(n), reruns, speechTextCaps, replaced, onNode && ((id, fixed, perMinute) => onNode(id, "preview", fixed, perMinute)))
+  const preview = sumListingParts(nodes, edges, prices, (n) => !skip?.(n), reruns, speechTextCaps, replaced, openValueNodeIds, onNode && ((id, fixed, perMinute) => onNode(id, "preview", fixed, perMinute)))
   // A component runs inside its caller's run and never stops at a Preview.
   if (publishType === "component") return { preview: preview.fixed, final: 0, previewPerMinute: preview.perMinute, finalPerMinute: 0 }
   const gateNodes = listingGateNodes(nodes)
@@ -7194,7 +7375,7 @@ function listingParts(
   for (const renderId of previewStopsForListing(gateNodes, gateEdges).previewRenderIds) {
     const runSet = renderFinalRunSet(renderId, gateNodes, gateEdges)
     const atFinal = nodes.map((n) => (n.id === renderId ? { ...n, data: { ...(n.data ?? {}), quality: "final" } } : n))
-    const parts = sumListingParts(atFinal, edges, prices, (n) => !!n.id && runSet.has(n.id) && !frozen(n) && !skip?.(n), reruns, speechTextCaps, replaced, onNode && ((id, fixed, perMinute) => onNode(id, "final", fixed, perMinute)))
+    const parts = sumListingParts(atFinal, edges, prices, (n) => !!n.id && runSet.has(n.id) && !frozen(n) && !skip?.(n), reruns, speechTextCaps, replaced, openValueNodeIds, onNode && ((id, fixed, perMinute) => onNode(id, "final", fixed, perMinute)))
     final = { fixed: final.fixed + parts.fixed, perMinute: final.perMinute + parts.perMinute }
   }
   return { preview: preview.fixed, final: final.fixed, previewPerMinute: preview.perMinute, finalPerMinute: final.perMinute }
@@ -8037,6 +8218,11 @@ export type ListingEstimateOptions = {
      *  a recording the app user replaces is priced with no length. A template
      *  replaces every upload node, whatever is passed. */
     readonly replaceableMediaNodeIds?: ReadonlySet<string>
+    /** The nodes whose value the app's user types with no enumerable domain —
+     *  free text, an unbounded number (`listingOpenValueNodeIds`): a length a
+     *  mapping from one decides is open. Absent: read off `snapshotSettings`
+     *  and `speechTextCaps` (`listingOpenValues`). */
+    readonly openValueNodeIds?: ReadonlySet<string>
     /** An app's or component's List inputs (`exposedListNodeIds`): priced per
      *  further item beyond the saved count. Ignored for a template. */
     readonly exposedListNodeIds?: ReadonlySet<string>
@@ -8064,7 +8250,8 @@ export type ListingEstimateOptions = {
 async function listingPricer(
   nodes: ReadonlyArray<EstimateNode>,
   rawEdges: ReadonlyArray<EstimateEdge> | undefined,
-  options: ListingEstimateOptions,
+  /** With the published snapshot's settings when the caller has them: its free-text inputs are open values (`listingOpenValues`). */
+  options: ListingEstimateOptions & { readonly snapshotSettings?: Record<string, unknown> | null },
 ): Promise<{
   readonly saved: (graph: ReadonlyArray<EstimateNode>) => AppListingEstimate
   readonly choice: (graph: ReadonlyArray<EstimateNode>) => Promise<AppListingEstimate>
@@ -8079,6 +8266,8 @@ async function listingPricer(
     : options.replaceableMediaNodeIds
   const prices = hasCredits() ? await withUploadClipLengths(await getChargedPriceTable(), lengthPricedUploads(nodes, edges), replaced) : STATIC_BASE_PRICES
   const memo: UgcAnswerMemo = new Map()
+  // The app inputs its user types with no enumerable domain: a length mapped from one is open.
+  const openValues = listingOpenValues(options, nodes)
   // The UGC part of a graph, priced through its seam, in the preview part (it is the app run's), and
   // for each List the app's user fills, what one further item adds to it (a UGC node it fans out
   // runs once more), for that List's per-item figure, as a run with more items charges it.
@@ -8110,7 +8299,7 @@ async function listingPricer(
     return { ugc, perItem }
   }
   const priceWith = (graph: ReadonlyArray<EstimateNode>, { ugc, perItem }: Awaited<ReturnType<typeof ugcOfGraph>>): AppListingEstimate => {
-    const split = listingEstimate(graph, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, options.exposedListNodeIds, usecaseExpandFlags(options), perItem)
+    const split = listingEstimate(graph, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, openValues, options.exposedListNodeIds, usecaseExpandFlags(options), perItem)
     const estimate = listingHoldsMeteredEstimate(graph, edges, usecaseExpandFlags(options), ugc ?? undefined)
     return { ...split, preview: split.preview + (ugc?.credits ?? 0), ...(estimate ? { estimate: true as const } : {}) }
   }

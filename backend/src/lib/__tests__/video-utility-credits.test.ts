@@ -51,6 +51,17 @@ describe("the workflow run counts the units the single-node route charges", () =
     expect(workflow).toBe(route)
   })
 
+  it("Trim Video with no end (the node's default end of 0): from its start to the clip's end on both", () => {
+    // A 12 s clip from 2 s: 12 − 0.1 − 2 = 9.9 s → 2 units.
+    const route = trimVideoUnits({ startTime: 2, upstreamDuration: 12 })
+    const workflow = videoUtilityUnits(
+      "trim-video",
+      { ...workflowPayload("trim-video", { startTime: 2, endTime: 0 }, { videoUrl: clip("v") }), upstreamDuration: 12 },
+    )
+    expect(route).toBe(2)
+    expect(workflow).toBe(route)
+  })
+
   it("Loop Video: three repeats of a 10 s clip is 6 units, 60 credits", () => {
     const route = loopVideoUnits({ mode: "repeat", repeatCount: 3, upstreamDuration: 10 })
     const workflow = videoUtilityUnits(
@@ -122,5 +133,16 @@ describe("the server's workflow estimate", () => {
     const assemble = videoUtilityEstimateBody({ id: "a", type: "assemble-narrated-video", data: {} }, edges)
     expect(videoUtilityUnits("assemble-narrated-video", assemble!)).toBe(4)
     expect(videoUtilityEstimateBody({ id: "g", type: "generate-image", data: {} }, edges)).toBeUndefined()
+  })
+
+  it("prices a Trim over the fields its run sends: the node's mode only, an end of 0 open", () => {
+    const trim = (data: Record<string, unknown>) => videoUtilityUnits("trim-video", { ...videoUtilityEstimateBody({ id: "t", type: "trim-video", data })!, upstreamDuration: 30 })
+    // The default node (end 0): 30 − 0.1 s → 6 units, not the one-unit floor of an empty window.
+    expect(trim({ startTime: 0, endTime: 0 })).toBe(6)
+    expect(trim({ startTime: 0, endTime: 12 })).toBe(3)
+    // Keep the last 4 s with a stale frames setting from an earlier mode: the run sends only the keep field.
+    expect(trim({ trimMode: "keep-last-seconds", keepLastSeconds: 4, trimEndFrames: 24 })).toBe(1)
+    // Smart loop cut: the run sends the flag the node's mode names.
+    expect(trim({ trimMode: "smart-loop-cut" })).toBe(6 + 1)
   })
 })

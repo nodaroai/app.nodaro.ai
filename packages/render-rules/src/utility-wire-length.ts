@@ -30,6 +30,7 @@ import {
   type EstimateGraphNode,
 } from "./apply-edl-estimate"
 import { keptLengthWire } from "./kept-length"
+import { RECORDED_OUTPUT_LENGTH_NODE_TYPES } from "./length-following-video"
 
 /** The steps charged by the length of the media they are given. */
 export const LENGTH_PRICED_UTILITY_TYPES: ReadonlySet<string> = new Set(["trim-video", "loop-video", "combine-videos", "video-sfx", "pitch-tempo"])
@@ -57,12 +58,113 @@ export const knownLength = (l: WireLength): InputLength | undefined => (typeof l
 const LOOP_DEFAULT_TARGET_SEC = 10
 
 /**
+ * The fields a Loop run sends its worker, from the node's settings: its mode
+ * (default `repeat`), its copy count — `repeatCount`, else the older `loops` a
+ * graph may still carry — its target length and its smart loop cut levers.
+ * What every run of the node sends (the workflow run's payload, the editor's
+ * Run) and what every quote of it prices (the server's estimate, the editor's
+ * pill, the length it passes on): the one reading of `loops`.
+ */
+export function loopVideoRunFields(data: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  return {
+    mode: data.mode ?? "repeat",
+    repeatCount: data.repeatCount ?? data.loops,
+    targetDuration: data.targetDuration,
+    smartLoopCutBeforeRepeat: data.smartLoopCutBeforeRepeat,
+    smartLoopCutLookback: data.smartLoopCutLookback,
+  }
+}
+
+/**
+ * How far past the end of its cut a Trim with "Lossless (snap to keyframe)"
+ * on can run. Its stream copy (`-ss <snapped start> -t <end − snapped>`, the
+ * provider's `trimVideo`) ends on whole frames and runs two frames past
+ * `-t`, plus the end's rounding up to a frame boundary — measured on H.264/AAC
+ * clips with the production-pinned ffmpeg 8.1.2 and with 9.0.2, alike:
+ * 0.067–0.083 s at 30 fps, 0.083–0.092 s at 24 fps, 0.20–0.25 s at 10 fps and
+ * 0.40–0.55 s at 5 fps. 0.6 s holds down to about 5 frames a second; a
+ * sparser clip (a slideshow, a sparse screen recording) can run a little
+ * further (1.0 s at 2 fps).
+ */
+export const LOSSLESS_TRIM_OVERSHOOT_SEC = 0.6
+
+/**
+ * The length a Trim with "Lossless (snap to keyframe)" on passes on, at most:
+ * its run moves the start back to the keyframe at or before it — so the file
+ * can begin seconds before the window — and copies to the end of its cut,
+ * running up to {@link LOSSLESS_TRIM_OVERSHOOT_SEC} past it. So never more
+ * than the cut's end plus that, and never more than its input:
+ * - a time cut with an end, or the first N seconds: that end plus the
+ *   overshoot, at most a known input — known whether or not the input is;
+ * - seconds mode: a known input less the seconds it trims off the end, plus
+ *   the overshoot, at most the input;
+ * - the last N seconds: its input's length; on an input of unknown length, N
+ *   — a minimum (the snap to an earlier keyframe can only add), never below
+ *   what the same cut reads with Lossless off;
+ * - a cut that runs to the clip's end (a time cut with no end), or one whose
+ *   tail is in frames (its rate is not known here): its input's length —
+ *   unknown when the input is.
+ */
+function losslessTrimLength(mode: unknown, data: Readonly<Record<string, unknown>>, input: WireLength): WireLength {
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined)
+  const known = knownLength(input)
+  const fixedKnown = known && known.perEpisodeSec === 0 ? known.fixedSec : undefined
+  const fixed = (sec: number): InputLength => ({ fixedSec: Math.max(0, sec), perEpisodeSec: 0 })
+  const cutEnd = mode === "time" ? num(data.endTime) : mode === "keep-first-seconds" ? num(data.keepFirstSeconds) : undefined
+  if (cutEnd !== undefined && cutEnd > 0) {
+    const bound = cutEnd + LOSSLESS_TRIM_OVERSHOOT_SEC
+    return fixed(fixedKnown === undefined ? bound : Math.min(fixedKnown, bound))
+  }
+  if (mode === "seconds" && fixedKnown !== undefined) {
+    const tail = Math.max(0, num(data.trimEndSeconds) ?? 0)
+    return fixed(Math.min(fixedKnown, Math.max(0, fixedKnown - tail) + LOSSLESS_TRIM_OVERSHOOT_SEC))
+  }
+  if (mode === "keep-last-seconds" && known === undefined) {
+    const keep = num(data.keepLastSeconds)
+    if (keep !== undefined && keep > 0) return fixed(keep)
+  }
+  return input
+}
+
+/**
+ * The real length a length-priced step's run recorded for the video it made
+ * (`RECORDED_OUTPUT_LENGTH_NODE_TYPES`: Trim Video measures the file it cut),
+ * when it has one: this run's (`fresh`), for the video `url` when one is
+ * named; else the length recorded with the saved result that IS that video
+ * (`url`, else this run's video, else the take the node hands on). Never
+ * another file's: a video none of the saved results describe has none.
+ * `undefined` for a step that records none (Loop, Combine Videos, …) and for a
+ * take from before the step recorded it.
+ */
+function recordedOutputLengthSec(
+  origin: EstimateGraphNode,
+  url: string | undefined,
+  fresh: RunOutputLengths | undefined,
+): number | undefined {
+  if (!RECORDED_OUTPUT_LENGTH_NODE_TYPES.has(origin.type ?? "")) return undefined
+  const wanted = url?.trim() || undefined
+  const freshSec = positiveSec(fresh?.durationSec)
+  if (freshSec !== undefined && (wanted === undefined || fresh?.videoUrl?.trim() === wanted)) return freshSec
+  const data = origin.data as Record<string, unknown> | undefined
+  const video = wanted ?? (fresh?.videoUrl?.trim() || undefined)
+  if (video !== undefined) return recordedLengthOfUrl(data, video)
+  if (fresh !== undefined) return undefined
+  const rows = Array.isArray(data?.generatedResults) ? (data.generatedResults as Array<{ url?: unknown; duration?: unknown } | null>) : []
+  const row = rows[typeof data?.activeResultIndex === "number" ? data.activeResultIndex : 0]
+  return typeof row?.url === "string" && row.url.trim() !== "" ? positiveSec(row.duration) : undefined
+}
+
+/**
  * The length a Trim, Loop, Combine Videos or Video SFX passes on, from its
  * input wires' lengths (review round, decided 2026-10-07). Never shorter than
  * a run's output, so a step after it is never listed below its charge:
- * - Trim: a fixed window (`time` with an end, keep the first or last N
- *   seconds) is the window; any other mode is its input's length (a cut only
- *   shortens it).
+ * - Trim: a fixed window (`time` with an end after 0, keep the first or last
+ *   N seconds) is the window; any other mode is its input's length (a cut only
+ *   shortens it) — a time cut whose end is 0 runs to the clip's end, as its
+ *   run sends it (`trimVideoRunFields`). With "Lossless (snap to keyframe)"
+ *   on (any mode but the smart loop cut, which never snaps), at most the end
+ *   of its cut plus {@link LOSSLESS_TRIM_OVERSHOOT_SEC}, never past its input
+ *   ({@link losslessTrimLength}). The Trim's own price is still its window.
  * - Loop: duration mode is its target; repeat mode its input's length times
  *   its copy count (the run's default, 2).
  * - Combine Videos: the sum of its inputs, a wire with no known length at the
@@ -85,15 +187,18 @@ export function utilityOutputLength(
   switch (node.type) {
     case "trim-video": {
       const mode = data.trimMode ?? "time"
+      // A keyframe-snapped cut is not its window (see above).
+      if (data.losslessKeyframe === true && mode !== "smart-loop-cut") return losslessTrimLength(mode, data, input)
       const end = num(data.endTime)
-      if (mode === "time" && end !== undefined) return fixed(end - (num(data.startTime) ?? 0))
+      if (mode === "time" && end !== undefined && end > 0) return fixed(end - (num(data.startTime) ?? 0))
       const keep = num(mode === "keep-first-seconds" ? data.keepFirstSeconds : mode === "keep-last-seconds" ? data.keepLastSeconds : undefined)
       if (keep !== undefined) return fixed(known && known.perEpisodeSec === 0 ? Math.min(known.fixedSec, keep) : keep)
       return input
     }
     case "loop-video": {
-      if (data.mode === "duration") return fixed(num(data.targetDuration) ?? LOOP_DEFAULT_TARGET_SEC)
-      const copies = Math.max(1, num(data.repeatCount ?? data.loops) ?? 2)
+      const run = loopVideoRunFields(data)
+      if (run.mode === "duration") return fixed(num(run.targetDuration) ?? LOOP_DEFAULT_TARGET_SEC)
+      const copies = Math.max(1, num(run.repeatCount) ?? 2)
       return known ? { fixedSec: known.fixedSec * copies, perEpisodeSec: known.perEpisodeSec * copies } : input
     }
     case "combine-videos": {
@@ -144,7 +249,23 @@ export function videoSfxClipSec(
   return sec === undefined ? undefined : Math.min(sec, VIDEO_SFX_PRICING.MAX_DURATION_SEC)
 }
 
-/** The wire whose clip a Video SFX / Video Mask is priced by: the `video` wire, else the first with a known length (-1: none). */
+/**
+ * The clip length, in seconds, a RUN estimate prices a Video Depth at, from
+ * the lengths of the wires into it (`secs`, in the order of `inputs`): the
+ * `video` wire's, else the first wire with a known length — the wire
+ * {@link videoSfxClipSec} reads, without its 300-second clamp (a Video Depth
+ * row past its provider's limit is that provider's highest reachable row).
+ * `undefined` when no length is known: the highest row.
+ */
+export function videoDepthClipSec(
+  inputs: ReadonlyArray<{ targetHandle?: string | null }>,
+  secs: ReadonlyArray<number | undefined>,
+): number | undefined {
+  const i = clipWireIndex(inputs, secs)
+  return i < 0 ? undefined : secs[i]
+}
+
+/** The wire whose clip a Video SFX / Video Mask / Video Depth is priced by: the `video` wire, else the first with a known length (-1: none). */
 function clipWireIndex(inputs: ReadonlyArray<{ targetHandle?: string | null }>, secs: ReadonlyArray<number | undefined>): number {
   const videoWire = inputs.findIndex((e) => e.targetHandle === "video")
   return videoWire >= 0 ? videoWire : secs.findIndex((s) => s !== undefined)
@@ -221,12 +342,12 @@ function recordedLengthOfUrl(data: Record<string, unknown> | undefined, url: str
  * was uploaded — and only while that upload is still the file the node hands
  * on: a link pasted over it later reads as unknown (or the `duration` declared
  * on the node), never the earlier file's length (decided 2026-10-13). The run forwards exactly this as the step's
- * upstream length (backend `input-resolver.ts` → `upstreamDuration`), and
- * Trim, Loop and Combine Videos are charged by it, so the run estimates (the
- * editor's and the server's) read a wire through this one function and quote
- * an uploaded clip at the length its run is charged at. `undefined` when the
- * node records no length: the estimators' fallback length stands in, as it
- * does in the run.
+ * upstream length (backend `input-resolver.ts` → `upstreamDuration`), and the
+ * run estimates (the editor's and the server's) read a wire through this one
+ * function. An upload's length is the server's measurement of the file, the
+ * reading Trim, Loop and Combine Videos now measure before they reserve.
+ * `undefined` when the node records no length: the estimators' fallback length
+ * stands in.
  */
 export function forwardedVideoLengthSec(origin: { readonly type?: string | null; readonly data?: unknown }): number | undefined {
   const data = origin.data as Record<string, unknown> | undefined
@@ -343,9 +464,13 @@ function bundleRows(
 }
 
 /**
- * The length, in seconds, a workflow RUN hands a length-priced step for the
- * video `url` on a wire from `sourceId` — the length the step is charged at,
- * and the one place both engines read it (decided 2026-10-13):
+ * The length, in seconds, a workflow RUN forwards to the step after a source
+ * for the video `url` on a wire from `sourceId` — the one place both engines
+ * read it (decided 2026-10-13). Trim, Loop and Combine Videos are no longer
+ * CHARGED by it: their runs measure each clip before they reserve, and the
+ * measurement replaces this length on the job (backend
+ * lib/video-utility-length.ts); steps that read an upstream length as a hint
+ * (Video Analysis, Video Audit) still read it:
  *
  * - The output of a Trim, Loop, Combine Videos, Video SFX or Pitch & Tempo:
  *   the length that step passes on ({@link utilityOutputLength}) from what
@@ -384,6 +509,9 @@ export function runForwardedVideoLengthSec(
   )
   if (!origin) return undefined
   if (LENGTH_PRICED_UTILITY_TYPES.has(origin.type ?? "")) {
+    // The real length the step's run recorded for the file it made (Trim): that, before the length its settings pass on.
+    const recorded = recordedOutputLengthSec(origin, url, freshOutputOf?.(origin.id))
+    if (recorded !== undefined) return recorded
     if (seen.has(origin.id)) return undefined
     const walked = new Set(seen).add(origin.id)
     // One entry per CLIP that reached the step: a Bundle wire hands it every
@@ -477,6 +605,11 @@ export function runWireLengthSec(
     return renderLengthSec(resolveApplyEdlEstimateLength(origin, nodes, edges, rerunIds, options.planOutputOf))
   }
   if (LENGTH_PRICED_UTILITY_TYPES.has(origin.type ?? "")) {
+    // A step that does not run again hands on its take: the real length its run recorded for it (Trim), when it did.
+    if (!rerunIds.has(origin.id)) {
+      const recorded = recordedOutputLengthSec(origin, undefined, undefined)
+      if (recorded !== undefined) return recorded
+    }
     if (seen.has(origin.id)) return undefined
     const walked = new Set(seen).add(origin.id)
     const inputs = edges.filter((e) => e.target === origin.id)

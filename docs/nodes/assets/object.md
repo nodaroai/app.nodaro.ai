@@ -66,3 +66,4 @@ In two more cases the picker helps you avoid clutter:
 - Custom variations can be generated with a free-text prompt beyond the standard angle/material/variation categories.
 - The `objectRef` output allows downstream nodes to reference this object consistently.
 - Each asset category generates individual cropped images that can be accessed separately.
+- Over the API, if a main-image run's candidates cannot all be queued to start, `POST /v1/generate-object` answers `500 internal_error` with `error.startedJobIds` naming the candidates that did start (follow those; the list is empty when none did); the others are failed and their credits refunded.

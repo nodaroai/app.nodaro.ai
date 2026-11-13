@@ -25,13 +25,45 @@ import { warnLaneRateLimited } from "./hold.js"
  * when this call failed it. Throws when the failure write fails after its
  * retries (the row stays waiting; the next sweep tries again).
  */
-export async function failWaitingExecution(executionId: string, errorMessage: string): Promise<boolean> {
+export async function failWaitingExecution(
+  executionId: string,
+  errorMessage: string,
+  /** More columns for the same write (a route that could not queue the run releases its `idempotency_key`). */
+  extra: Readonly<Record<string, unknown>> = {},
+): Promise<boolean> {
+  return (await failWaitingExecutionDetailed(executionId, errorMessage, extra)).failed
+}
+
+/** What {@link failWaitingExecutionDetailed} answers. */
+export interface WaitingExecutionFailure {
+  /** True when this call failed the run. */
+  readonly failed: boolean
+  /**
+   * How many times the failure write was sent. More than one means an earlier
+   * write errored, and an errored write may have landed with only its answer
+   * lost: a `failed: false` after it does not prove the run moved on. After a
+   * single write, `failed: false` does: nothing of this call's landed.
+   */
+  readonly attempts: number
+}
+
+/**
+ * {@link failWaitingExecution}, also answering how many times its write was
+ * sent, for a caller that must tell a run that moved on from a write of its
+ * own that landed with its answer lost (lib/enqueue-execution.ts). Throws as
+ * `failWaitingExecution` does.
+ */
+export async function failWaitingExecutionDetailed(
+  executionId: string,
+  errorMessage: string,
+  extra: Readonly<Record<string, unknown>> = {},
+): Promise<WaitingExecutionFailure> {
   const result = await updateExecutionWithRetry(
     executionId,
-    { status: "failed", error_message: errorMessage, completed_at: new Date().toISOString() },
+    { ...extra, status: "failed", error_message: errorMessage, completed_at: new Date().toISOString() },
     { fromStatuses: ["pending"] },
   )
-  if (!result.ok) return false
+  if (!result.ok) return { failed: false, attempts: result.attempts }
   try {
     executionEvents.emit(executionId, { type: "execution:failed", executionId, nodeStates: {}, errorMessage })
   } catch {
@@ -45,7 +77,7 @@ export async function failWaitingExecution(executionId: string, errorMessage: st
     // The use-case wrapper sweep catches a wrapper left open.
     warnLaneRateLimited(`could not settle the use-case wrapper of execution ${executionId}`, err)
   }
-  return true
+  return { failed: true, attempts: result.attempts }
 }
 
 /**

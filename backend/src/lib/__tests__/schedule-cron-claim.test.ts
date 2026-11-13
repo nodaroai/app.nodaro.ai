@@ -29,7 +29,18 @@ const { db, mockQueueAdd } = vi.hoisted(() => ({
   mockQueueAdd: vi.fn(async () => ({})),
 }))
 
-const settle = vi.hoisted(() => ({ failWaitingExecution: vi.fn(async (_id: string, _message: string) => true) }))
+const settle = vi.hoisted(() => {
+  const failWaitingExecution = vi.fn(async (_id: string, _message: string, _extra?: Readonly<Record<string, unknown>>) => true)
+  return {
+    failWaitingExecution,
+    // The form a refused run's settle calls (lib/enqueue-execution.ts `failUnqueuedRun`):
+    // one write, so a false is believed without a read-back.
+    failWaitingExecutionDetailed: async (id: string, message: string, extra?: Readonly<Record<string, unknown>>) => ({
+      failed: await failWaitingExecution(id, message, extra),
+      attempts: 1,
+    }),
+  }
+})
 vi.mock("@/lib/concurrency-lanes/run-failure.js", () => settle)
 
 vi.mock("@/lib/workflow-access.js", () => ({ canRunWorkflow: vi.fn(async () => true) }))
@@ -287,7 +298,8 @@ describe("checkScheduledTriggers — a tick fires only after it claims the tick"
     // never left `pending`, which every later fire would read as "already running".
     expect(db.insertAttempts).toHaveLength(1)
     expect(settle.failWaitingExecution).toHaveBeenCalledTimes(1)
-    expect(settle.failWaitingExecution).toHaveBeenCalledWith("exec-1", expect.stringContaining("could not be queued"))
+    // The schedule's run keeps its key (the row holds the fire's claim): no extra columns.
+    expect(settle.failWaitingExecution).toHaveBeenCalledWith("exec-1", expect.stringContaining("could not be queued"), {})
     // Released, the claim would only collide with that key on the next due tick.
     expect(db.trigger?.last_triggered_at).toBe(NOW.toISOString())
     // A run that never ran is not counted against maxExecutions.

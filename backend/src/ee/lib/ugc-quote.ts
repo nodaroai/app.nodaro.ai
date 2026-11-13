@@ -25,7 +25,7 @@ import type { BillingContext } from "../../lib/billing-context.js"
 import { llmMeteredPricing, speechLengthPricingEnabled } from "../../lib/config.js"
 import { speechBaseCredits } from "../../lib/speech-credits.js"
 import { unitRateBaseCredits } from "../../lib/credit-base-cost.js"
-import { combineVideosUnits } from "../../lib/video-utility-credits.js"
+import { combineVideosUnits, plannedMadeClipSec } from "../../lib/video-utility-credits.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import { normalizeVideoInput } from "../../lib/mcp/normalize.js"
 import { sideHoldChargesFor, withSideCharge } from "../../lib/job-step-charge.js"
@@ -84,6 +84,14 @@ export interface UgcQuoteItem {
   readonly tool: string
   readonly args: Readonly<Record<string, unknown>>
   readonly count: number
+  /**
+   * The join's own (`combine_videos`): each clip's planned seconds, in clip
+   * order, on the item's envelope beside `tool` and `args` — never inside
+   * `args`, which go to the MCP verb as they are. Optional: a missing list (or
+   * one that is not a list), or a missing or invalid entry, prices that clip at
+   * the 8-second stand-in.
+   */
+  readonly clipSeconds?: unknown
 }
 export interface UgcQuoteLine {
   readonly label: string
@@ -174,6 +182,8 @@ export interface UgcPricing {
 export interface QuoteContext {
   /** How many clips the join combines. */
   readonly clipCount: number
+  /** The item's own `clipSeconds` (the join's), carried from its envelope by `priceItem`. */
+  readonly clipSeconds?: readonly unknown[]
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
@@ -238,14 +248,18 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
     const mapped = ugcCallToRouteBody({ tool: "image_to_image", args, imageArg: "image_url" }, { image: "https://price.invalid/x.png" })
     return mapped && "body" in mapped ? { id: resolveImageToImageCreditIdentifier({ body: mapped.body } as FastifyRequest) } : null
   },
-  // combine_videos → POST /v1/combine-videos: a COMPUTED base (the verb sends no upstream durations) —
-  // the route's own unit count, each unit at the combine-videos row (`unitRateBaseCredits`), as it reserves.
+  // combine_videos → POST /v1/combine-videos: a COMPUTED base — the route's own unit count, each unit at the
+  // combine-videos row (`unitRateBaseCredits`), as it reserves. The route measures each clip before it prices;
+  // a clip that does not exist yet is quoted at its planned seconds when the join item carries them
+  // (`clipSeconds`), through the one helper the canvas's join quote uses (`plannedMadeClipSec`: the seconds
+  // plus the made-clip slack, less the grace in the units rule), else at the estimators' 8-second stand-in.
   combine_videos: async (args, ctx) => {
     if (ctx.clipCount < 2) return null
     const units = combineVideosUnits({
       transition: str(args.transition),
       transitionDuration: num(args.transition_duration),
       videoUrls: Array.from({ length: ctx.clipCount }, () => ""),
+      upstreamDurations: Array.from({ length: ctx.clipCount }, (_, i) => plannedMadeClipSec(ctx.clipSeconds?.[i])),
     })
     return { id: "combine-videos", base: await unitRateBaseCredits("combine-videos", units) }
   },
@@ -361,6 +375,8 @@ const quoteItemSchema = z.object({
   tool: z.string(),
   args: z.record(z.string(), z.unknown()).optional().default({}),
   count: z.number().int().min(1),
+  // Read where it is priced: a list that is not one, or an invalid entry, is the stand-in, never a refused quote.
+  clipSeconds: z.unknown().optional(),
 })
 
 /** A builder item checked at run time: a malformed one is a quote error (with its label when it has one), never a crash. */
@@ -379,7 +395,7 @@ async function priceItem(
   llmAt: "estimate" | "tier",
 ): Promise<UgcQuoteLine> {
   const item = parseItem(raw)
-  const quoted = await pricingFor(item.tool, item.args, ctx)
+  const quoted = await pricingFor(item.tool, item.args, Array.isArray(item.clipSeconds) ? { ...ctx, clipSeconds: item.clipSeconds } : ctx)
   if (!quoted) throw new UgcQuoteError(item.label)
   // At its tier row: the guard's id, priced as before metered pricing.
   const pricing: UgcPricing = llmAt === "tier" && quoted.meteredKey !== undefined ? { id: quoted.id } : quoted

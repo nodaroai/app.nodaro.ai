@@ -1,0 +1,2343 @@
+{
+  "$comment": "Trim Video, Loop Video and Combine Videos are charged by the measured length of each clip they are given (their run probes every input before it reserves). Their quote before a run reads the one measured walk Mask Composite and Video Overlay read (measuredWireLengthSec, @nodaro/render-rules), with VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC (0.1 s) on each clip a node makes in the run, and every clip less VIDEO_UTILITY_PRICE_GRACE_SEC (0.1 s) before the node's formula (videoUtilityUnitsOf — the rule the charge counts by, so a frame past a 5-second mark is free on both): a generation at the length its model renders for its settings (Auto at its longest, a mapped length as the run resolves it), an Extend Video at its source plus what it adds, a node outside the run (or frozen) at the take it hands on, an upload or a Library clip at its measured length, and a clip nothing can size at the estimators' 8-second fallback (a minimum: the run is charged the length it measures). Each case names its step `t`; `whole` is a whole run (the editor's whole-run set, the server's estimate with no run set), `alone` is the step's own Run and its pill (the server's run of `t` alone), `partial` a run of exactly `runSet`. Units are the step's pricing units (each one unit of its own row). Held by frontend/src/lib/__tests__/video-utility-quote-parity.test.ts and backend/src/ee/billing/__tests__/video-utility-quote-parity.test.ts. The step settings: Trim keeps the whole clip (seconds mode, 0 + 0), Loop repeats twice, Combine joins by cuts with its default 1 + 2 frame trims. A case's `stepData` replaces its step's settings; a Trim is priced over the fields its run sends (trimVideoRunFields: its mode's own, an end of 0 left open, so the cut runs to the clip's end).",
+  "steps": {
+    "trim": {
+      "type": "trim-video",
+      "data": {
+        "trimMode": "seconds",
+        "trimStartSeconds": 0,
+        "trimEndSeconds": 0
+      }
+    },
+    "loop": {
+      "type": "loop-video",
+      "data": {
+        "mode": "repeat",
+        "repeatCount": 2
+      }
+    },
+    "combine": {
+      "type": "combine-videos",
+      "data": {
+        "transition": "cut",
+        "transitionDuration": 0.5,
+        "trimStartFrames": 1,
+        "trimEndFrames": 2
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "1. Trim — a 5 s generation (kling-4): 5.1 s planned, less the 0.1 s grace: 5 s",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 1,
+        "alone": 1
+      }
+    },
+    {
+      "name": "1b. Loop ×2 — a 5 s generation: 10.2 s",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "1c. Combine — two 5 s generations: 5.1 + 5.1 s, less 3 frames each",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        },
+        {
+          "id": "h",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "h",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "2. Trim — a 15 s generation (the old 8-second under-quote): 15.1 s",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "2b. Loop ×2 — a 15 s generation: 30.2 s",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 6,
+        "alone": 6
+      }
+    },
+    {
+      "name": "2c. Combine — two 15 s generations",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15
+          }
+        },
+        {
+          "id": "h",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "h",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 6,
+        "alone": 6
+      }
+    },
+    {
+      "name": "3. Trim — Seedance 2.5 on Auto: its longest clip, 30.1 s",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": -1
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 6,
+        "alone": 6
+      }
+    },
+    {
+      "name": "3b. Loop ×2 — Seedance 2.5 on Auto: 60.2 s",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": -1
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 12,
+        "alone": 12
+      }
+    },
+    {
+      "name": "3c. Combine — two Seedance 2.5 Auto clips",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": -1
+          }
+        },
+        {
+          "id": "h",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": -1
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "h",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 12,
+        "alone": 12
+      }
+    },
+    {
+      "name": "4. Trim — an Extend Video (Seedance 2.5, +5 s) of a 10 s upload: 15.1 s",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ]
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "seedance-2-5-extend",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "4b. Loop ×2 — the same extension: 30.2 s",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ]
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "seedance-2-5-extend",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 6,
+        "alone": 6
+      }
+    },
+    {
+      "name": "4c. Combine — the extension and the 10 s upload it extends: 15.1 + 10 s, less 3 frames each",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ]
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "seedance-2-5-extend",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 5,
+        "alone": 5
+      }
+    },
+    {
+      "name": "5. Trim — a Duration node of 15 s wired into a generation stored at 5 s: 15.1 s",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "d",
+          "type": "duration",
+          "data": {
+            "seconds": 15
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "d",
+          "target": "g",
+          "targetHandle": "field-duration"
+        },
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "5b. Loop ×2 — the same mapped 15 s: 30.2 s",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "d",
+          "type": "duration",
+          "data": {
+            "seconds": 15
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "d",
+          "target": "g",
+          "targetHandle": "field-duration"
+        },
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 6,
+        "alone": 6
+      }
+    },
+    {
+      "name": "6. Trim — a generation whose duration an LLM Chat's answer sets: kling-4's longest clip, 30.1 s",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "l",
+          "type": "llm-chat",
+          "data": {}
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5,
+            "fieldMappings": {
+              "duration": {
+                "sourceNodeId": "l"
+              }
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 6,
+        "alone": 6
+      }
+    },
+    {
+      "name": "6b. Loop ×2 — the same open duration: 60.2 s",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "l",
+          "type": "llm-chat",
+          "data": {}
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5,
+            "fieldMappings": {
+              "duration": {
+                "sourceNodeId": "l"
+              }
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 12,
+        "alone": 12
+      }
+    },
+    {
+      "name": "7. Trim — Seedance 2 Fast set to 30 s renders its longest, 15 s: 15.1 s (never the setting)",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-fast",
+            "duration": 30
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "7b. Loop ×2 — Kling Image to Video set to 7 s renders the 5 s it offers: 10.2 s",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "image-to-video",
+          "data": {
+            "provider": "kling",
+            "duration": 7
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "8. Trim — a 10 s upload: its measured length, no slack",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "8b. Loop ×2 — a 10 s upload: 20 s",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "8c. Combine — two 10 s uploads: 19.75 s",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/a.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/a.mp4",
+                "duration": 10
+              }
+            ]
+          }
+        },
+        {
+          "id": "v",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/b.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/b.mp4",
+                "duration": 10
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "v",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "9. Loop ×2 — a 12 s Library clip whose length was measured at upload: 24 s",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/lib.mp4",
+            "assetId": "asset-1",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/lib.mp4",
+                "duration": 12
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 5,
+        "alone": 5
+      }
+    },
+    {
+      "name": "10. Trim — a Library clip with no recorded length (a generated asset): unknown, the 8-second minimum",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/libg.mp4",
+            "assetId": "asset-2",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/libg.mp4"
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "10b. Loop ×2 — the same unknown clip: 16 s",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/libg.mp4",
+            "assetId": "asset-2",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/libg.mp4"
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "10c. Combine — a 10 s upload and a VEO extension (a length the catalog does not declare): 10 + 8 s",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ]
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "veo-extend",
+            "duration": 7
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "x",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "11. Trim — a FROZEN generation (take 5.042 s, now set to 10 s): it never runs, so its take",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "skipped": true,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4",
+                "duration": 5.042
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 1,
+        "alone": 1
+      }
+    },
+    {
+      "name": "11b. Loop ×2 — the same frozen take: 10.084 s",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "skipped": true,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4",
+                "duration": 5.042
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "12. Loop ×2 — a generation with a 5.042 s take, now set to 10 s: a whole run re-runs it (20.2 s); alone it hands on its take (10.084 s)",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4",
+                "duration": 5.042
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 2
+      },
+      "partial": {
+        "runSet": [
+          "g",
+          "t"
+        ],
+        "expectedUnits": 4
+      }
+    },
+    {
+      "name": "12b. Combine — the same generation and a 10 s upload: a run that leaves the generation out reads its take",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4",
+                "duration": 5.042
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 3
+      },
+      "partial": {
+        "runSet": [
+          "u",
+          "t"
+        ],
+        "expectedUnits": 3
+      }
+    },
+    {
+      "name": "13. Loop ×2 after a Trim of a 5 s generation (a chain): 5.1 s passed on, 10.2 s",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        },
+        {
+          "id": "r",
+          "type": "trim-video",
+          "data": {
+            "trimMode": "seconds",
+            "trimStartSeconds": 0,
+            "trimEndSeconds": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "r",
+          "targetHandle": "in"
+        },
+        {
+          "source": "r",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "13b. Loop ×2 after a Trim of a generation with a 5.042 s take, now 10 s: the Trim runs on the take when only it and the Loop run",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4",
+                "duration": 5.042
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "r",
+          "type": "trim-video",
+          "data": {
+            "trimMode": "seconds",
+            "trimStartSeconds": 0,
+            "trimEndSeconds": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "r",
+          "targetHandle": "in"
+        },
+        {
+          "source": "r",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 2
+      },
+      "partial": {
+        "runSet": [
+          "r",
+          "t"
+        ],
+        "expectedUnits": 2
+      }
+    },
+    {
+      "name": "14. Trim to a fixed window (0–4 s) of a 15 s generation: its window, whatever the clip",
+      "step": "trim",
+      "stepData": {
+        "trimMode": "time",
+        "startTime": 0,
+        "endTime": 4
+      },
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 1,
+        "alone": 1
+      }
+    },
+    {
+      "name": "15. Trim — a clean 10 s generation: 10.1 s planned, less the grace: 10 s, 2 units (a frame past the mark is free)",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "15b. Loop ×2 — a clean 10 s generation: 20 s, 4 units",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "15c. Loop ×3 — a clean 10 s generation: the grace before the copies, 30 s, 6 units",
+      "step": "loop",
+      "stepData": {
+        "mode": "repeat",
+        "repeatCount": 3
+      },
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 6,
+        "alone": 6
+      }
+    },
+    {
+      "name": "16. Trim — an upload measured at 10.1 s: at the edge of the grace, 2 units",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10.1
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "16b. Trim — an upload measured at 10.11 s: past the grace, 3 units",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10.11
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "17. Trim with the node's own defaults (time, 0 to an end of 0): no end, so from 0 to the clip's end — a 10 s upload, 9.9 s, 2 units",
+      "step": "trim",
+      "stepData": {
+        "trimMode": "time",
+        "startTime": 0,
+        "endTime": 0
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "17b. Trim from 3 s with no end, of a 15 s generation: 15.1 s planned, less the grace, less 3 s: 12 s, 3 units",
+      "step": "trim",
+      "stepData": {
+        "trimMode": "time",
+        "startTime": 3,
+        "endTime": 0
+      },
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "17c. Trim in seconds mode (0 + 0) with a keep-first setting left from an earlier mode: the run sends the seconds fields only — a 15 s generation, 15 s, 3 units",
+      "step": "trim",
+      "stepData": {
+        "trimMode": "seconds",
+        "trimStartSeconds": 0,
+        "trimEndSeconds": 0,
+        "keepFirstSeconds": 3
+      },
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "17d. Trim by smart loop cut, of a clean 10 s generation: 10 s, 2 units, and 1 for the 16 frames searched",
+      "step": "trim",
+      "stepData": {
+        "trimMode": "smart-loop-cut"
+      },
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "18. Combine — a Duration node of 15 s wired into a generation stored at 5 s, and a 5 s generation: 15.1 + 5.1 s, less the grace and 3 frames each: 19.75 s",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "d",
+          "type": "duration",
+          "data": {
+            "seconds": 15
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        },
+        {
+          "id": "h",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "d",
+          "target": "g",
+          "targetHandle": "field-duration"
+        },
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "h",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "18b. Combine — a generation whose duration an LLM Chat's answer sets (kling-4's longest clip, 30.1 s) and a 5 s generation: 34.75 s",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "l",
+          "type": "llm-chat",
+          "data": {}
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5,
+            "fieldMappings": {
+              "duration": {
+                "sourceNodeId": "l"
+              }
+            }
+          }
+        },
+        {
+          "id": "h",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "h",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 7,
+        "alone": 7
+      }
+    },
+    {
+      "name": "18c. Combine — Seedance 2 Fast set to 30 s (renders its longest, 15 s) and a 5 s generation: 15.1 + 5.1 s, never the setting: 19.75 s",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-fast",
+            "duration": 30
+          }
+        },
+        {
+          "id": "h",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "h",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "18d. Combine — a 12 s Library clip whose length was measured at upload, and a 10 s upload: 11.9 + 9.9 s, less 3 frames each: 21.55 s",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/lib.mp4",
+            "assetId": "asset-1",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/lib.mp4",
+                "duration": 12
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "v",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "v",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 5,
+        "alone": 5
+      }
+    },
+    {
+      "name": "18e. Combine — a FROZEN generation (take 5.042 s, now set to 10 s) and a 10 s upload: it never runs, so its take: 14.59 s",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "skipped": true,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4",
+                "duration": 5.042
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "v",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "v",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "19. Trim — a 12 s Library clip whose length was measured at upload: 11.9 s, 3 units",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/lib.mp4",
+            "assetId": "asset-1",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/lib.mp4",
+                "duration": 12
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "19b. Trim — a generation with a 5.042 s take, now set to 10 s: alone it is outside the run and hands on its take (1 unit); a run that re-runs it reads its 10 s (2 units)",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4",
+                "duration": 5.042
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 1
+      },
+      "partial": {
+        "runSet": [
+          "g",
+          "t"
+        ],
+        "expectedUnits": 2
+      }
+    },
+    {
+      "name": "20. Trim to 0–60 s of a 15 s generation: the window ends at the clip (15.1 s planned, less the grace: 15 s), 3 units",
+      "step": "trim",
+      "stepData": {
+        "trimMode": "time",
+        "startTime": 0,
+        "endTime": 60
+      },
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "20b. Trim from 20 to 30 s of a 15 s generation: it starts past the clip, the one-unit minimum",
+      "step": "trim",
+      "stepData": {
+        "trimMode": "time",
+        "startTime": 20,
+        "endTime": 30
+      },
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 1,
+        "alone": 1
+      }
+    },
+    {
+      "name": "20c. Trim to 0–60 s of a Library clip with no recorded length: never cut at the 8-second stand-in, the window: 60 s, 12 units",
+      "step": "trim",
+      "stepData": {
+        "trimMode": "time",
+        "startTime": 0,
+        "endTime": 60
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/libg.mp4",
+            "assetId": "asset-2",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/libg.mp4"
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 12,
+        "alone": 12
+      }
+    },
+    {
+      "name": "21. Trim — a generation set to 15 s holding a take with no recorded length (a fixed-length run records none, so the take was made at its settings): alone it hands on that take, 15 s plus the slack; a whole run re-runs it, the same",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4"
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "21b. Loop ×2 — the same take: 30.2 s",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4"
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 6,
+        "alone": 6
+      }
+    },
+    {
+      "name": "21c. Combine — the same take and a 10 s upload",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4"
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "videos"
+        },
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "videos"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 5,
+        "alone": 5
+      }
+    },
+    {
+      "name": "22. Trim — Seedance 2.5 on Auto with a 5 s reference clip and no task type: the model may take it as a reference, so its longest clip, 30 s",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u5.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u5.mp4",
+                "duration": 5
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": -1
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "g",
+          "targetHandle": "videoReferences"
+        },
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 6,
+        "alone": 6
+      }
+    },
+    {
+      "name": "22b. Trim — the same run declaring The video to edit: the clip rounded up plus a second, 6 s",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u5.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u5.mp4",
+                "duration": 5
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": -1,
+            "referenceTaskType": "edit"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "g",
+          "targetHandle": "videoReferences"
+        },
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "23. Loop ×4 after a LOSSLESS Trim of 3–8 s of a 10 s upload: a keyframe-snapped cut can start before its window and run a few frames past its end (a stream copy of 3–8 s with keyframes at 0 and 10 s measures 8.083 s), so the Trim passes on its end plus the copy's overshoot, 8.6 s, at most its input: 4 × 8.5 s, 7 units",
+      "step": "loop",
+      "stepData": {
+        "mode": "repeat",
+        "repeatCount": 4
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "r",
+          "type": "trim-video",
+          "data": {
+            "trimMode": "time",
+            "startTime": 3,
+            "endTime": 8,
+            "losslessKeyframe": true
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "r",
+          "targetHandle": "in"
+        },
+        {
+          "source": "r",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 7,
+        "alone": 7
+      }
+    },
+    {
+      "name": "23b. The same Trim re-encoded (Lossless off): its window, 5 s; Loop ×4 is 20 s, 4 units",
+      "step": "loop",
+      "stepData": {
+        "mode": "repeat",
+        "repeatCount": 4
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "r",
+          "type": "trim-video",
+          "data": {
+            "trimMode": "time",
+            "startTime": 3,
+            "endTime": 8
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "r",
+          "targetHandle": "in"
+        },
+        {
+          "source": "r",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "24. Loop with the older `loops: 5` and no `repeatCount` (an older or API-written graph), on a 10 s upload: every run reads 5 copies, so 50 s, 10 units",
+      "step": "loop",
+      "stepData": {
+        "mode": "repeat",
+        "loops": 5
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up10.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up10.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 10,
+        "alone": 10
+      }
+    },
+    {
+      "name": "25. Loop ×2 after a LOSSLESS Trim of 0–60 s of an upload whose length is not known: never the 8-second stand-in, the end of the cut plus the copy's overshoot, 60.6 s",
+      "step": "loop",
+      "stepData": {
+        "mode": "repeat",
+        "repeatCount": 2
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/nolen.mp4"
+          }
+        },
+        {
+          "id": "r",
+          "type": "trim-video",
+          "data": {
+            "trimMode": "time",
+            "startTime": 0,
+            "endTime": 60,
+            "losslessKeyframe": true
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "r",
+          "targetHandle": "in"
+        },
+        {
+          "source": "r",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 25,
+        "alone": 25
+      }
+    },
+    {
+      "name": "25b. Loop ×2 after a LOSSLESS Trim keeping the first 7 s of a 20 s upload: 7.6 s",
+      "step": "loop",
+      "stepData": {
+        "mode": "repeat",
+        "repeatCount": 2
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up20.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up20.mp4",
+                "duration": 20
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "r",
+          "type": "trim-video",
+          "data": {
+            "trimMode": "keep-first-seconds",
+            "keepFirstSeconds": 7,
+            "losslessKeyframe": true
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "r",
+          "targetHandle": "in"
+        },
+        {
+          "source": "r",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "25c. Loop ×2 after a LOSSLESS Trim of 0–30 s of a 600 s upload: the end of the cut, 30.6 s, never the 600 s input",
+      "step": "loop",
+      "stepData": {
+        "mode": "repeat",
+        "repeatCount": 2
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up600.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up600.mp4",
+                "duration": 600
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "r",
+          "type": "trim-video",
+          "data": {
+            "trimMode": "time",
+            "startTime": 0,
+            "endTime": 30,
+            "losslessKeyframe": true
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "r",
+          "targetHandle": "in"
+        },
+        {
+          "source": "r",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 13,
+        "alone": 13
+      }
+    },
+    {
+      "name": "26. Loop ×2 after a LOSSLESS Trim keeping the last 30 s of an upload whose length is not known: 30 s, a minimum (the snap to an earlier keyframe can only add), as with Lossless off: 12 units",
+      "step": "loop",
+      "stepData": {
+        "mode": "repeat",
+        "repeatCount": 2
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/nolen.mp4"
+          }
+        },
+        {
+          "id": "r",
+          "type": "trim-video",
+          "data": {
+            "trimMode": "keep-last-seconds",
+            "keepLastSeconds": 30,
+            "losslessKeyframe": true
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "r",
+          "targetHandle": "in"
+        },
+        {
+          "source": "r",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 12,
+        "alone": 12
+      }
+    }
+  ]
+}

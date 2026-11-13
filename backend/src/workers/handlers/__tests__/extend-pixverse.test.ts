@@ -37,7 +37,15 @@ const mocks = vi.hoisted(() => ({
   mockProbeMatchedOrThrow: vi.fn(),
   mockRunVeoExtendTask: vi.fn(),
   mockRunRunwayExtendTask: vi.fn(),
+  mockCreditIdBaseCredits: vi.fn(),
 }))
+
+/** Base credits of the rows a settle may read (any figures: the worker passes on what the price table answers). */
+const ROW_BASE: Record<string, number> = {
+  "pixverse-v6-extend:5s:540p": 70,
+  "pixverse-v6-extend:5s:540p:audio": 90,
+  "pixverse-v6-extend:7s:1080p": 260,
+}
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/lib/storage.js", () => ({
@@ -118,6 +126,8 @@ vi.mock("../../shared.js", async (importOriginal) => {
 })
 vi.mock("../../../lib/job-finalize.js", () => ({ finalizeJobWithMedia: mocks.mockFinalizeJobWithMedia }))
 vi.mock("@/lib/discard-job-copies.js", () => ({ discardFailedRunCopies: vi.fn().mockResolvedValue(undefined) }))
+// A row's base credits, from the price table (`creditIdBaseCredits`).
+vi.mock("@/lib/credit-id-base.js", () => ({ creditIdBaseCredits: mocks.mockCreditIdBaseCredits }))
 
 import { videoAIHandlers } from "../video-ai.js"
 import { extensionTooShortMessage } from "../../../lib/extend-recipe.js"
@@ -139,6 +149,13 @@ const BOUNDARY = { matched: false, psnrDb: null, trimEndFrames: 0, trimStartFram
 let sourceProbe: MatchedProbe
 /** PixVerse's whole clip: the source re-rendered, then the new seconds. */
 let pixverseProbe: MatchedProbe
+/** The new part cut from it: what the run delivers (with PixVerse's sound, when it kept some). */
+let newPartProbe: MatchedProbe
+/** A cut new part with no sound. */
+const SILENT_NEW_PART: MatchedProbe = { width: 1280, height: 720, videoCodec: "h264", durationSec: 5.19, videoDurationSec: 5.19 }
+/** Each probe reads the file it is given: the source's local copy, PixVerse's clip, or the cut new part. */
+const probeOf = async (path: string): Promise<MatchedProbe> =>
+  path === PIXVERSE_PATH ? pixverseProbe : path === NEW_PART_PATH ? newPartProbe : sourceProbe
 
 function makeJob(data: Record<string, unknown> = {}) {
   return {
@@ -180,11 +197,11 @@ beforeEach(() => {
   mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue(STITCHED_R2)
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/images/thumb.png")
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
+  mocks.mockCreditIdBaseCredits.mockImplementation(async (id: string) => ROW_BASE[id])
   sourceProbe = { width: 854, height: 480, videoCodec: "h264", audioCodec: "aac", durationSec: 8.1, videoDurationSec: 8.06 }
   // 8.06 s of source, re-rendered, then 5.19 s of new footage.
   pixverseWith(13.25)
-  // Each probe reads the file it is given: the source's local copy, or PixVerse's clip.
-  const probeOf = async (path: string) => (path === PIXVERSE_PATH ? pixverseProbe : sourceProbe)
+  newPartProbe = { ...SILENT_NEW_PART, audioCodec: "pcm_s24le" }
   mocks.mockProbeMatched.mockImplementation(probeOf)
   mocks.mockProbeMatchedOrThrow.mockImplementation(probeOf)
 })
@@ -389,6 +406,99 @@ describe("pixverse-v6-extend — the deliverable", () => {
     expect(isDeterministicJobError(failure)).toBe(false)
     expect((failure as Error).message).not.toBe("Extend: the source video has no picture to extend")
     expect(mocks.mockRunPixverseExtend).not.toHaveBeenCalled()
+  })
+})
+
+// What the run is charged. It reserved its row (`pixverseExtendCreditId`): the
+// sound row while the sound is on. A run whose sound was on but whose new part
+// — the cut it delivers, read by a probe that throws when it fails — has no
+// sound delivers silent new seconds, so it settles at the silent row of its
+// seconds and quality (`meteredBaseCredits`, base credits, marked up at commit
+// like every measured settle; `commit_credits` refunds the rest of the hold).
+// Every other run commits the row it reserved.
+describe("pixverse-v6-extend — what the run is charged", () => {
+  const settledBase = () => mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].meteredBaseCredits
+  /** PixVerse's clip with no sound, and so a new part cut from it with none. */
+  const soundless = (probe: MatchedProbe): void => {
+    pixverseProbe = probe
+    newPartProbe = SILENT_NEW_PART
+  }
+
+  it("sound on and PixVerse returns sound: commits the sound row it reserved", async () => {
+    await run({ generateAudio: true })
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledTimes(1)
+    expect(settledBase()).toBeUndefined()
+    expect(mocks.mockCreditIdBaseCredits).not.toHaveBeenCalled()
+    // Decided on the new part the run delivers, read by the probe that throws when it fails.
+    expect(mocks.mockProbeMatchedOrThrow).toHaveBeenCalledWith(NEW_PART_PATH)
+  })
+
+  it("sound on but PixVerse returns no sound: settles at the silent row of its seconds and quality", async () => {
+    soundless({ width: 1280, height: 720, videoCodec: "h264", durationSec: 13.25, videoDurationSec: 13.25 })
+    await run({ duration: 5, resolution: "540p", generateAudio: true })
+    expect(mocks.mockCreditIdBaseCredits).toHaveBeenCalledWith("pixverse-v6-extend:5s:540p")
+    expect(settledBase()).toBe(ROW_BASE["pixverse-v6-extend:5s:540p"])
+    // Below the sound row it reserved: the difference is refunded at commit.
+    expect(settledBase()).toBeLessThan(ROW_BASE["pixverse-v6-extend:5s:540p:audio"]!)
+    // The deliverable is as before: the new seconds cut as asked, the stitch padding them with silence.
+    expect(mocks.mockCutNativeExtension).toHaveBeenCalledWith(PIXVERSE_PATH, 8.06, STITCH_DIR, { sound: true })
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].mediaUrl).toBe(STITCHED_R2)
+  })
+
+  it("reads the silent row at the seconds and quality the run was priced at", async () => {
+    soundless({ width: 1920, height: 1080, videoCodec: "h264", durationSec: 15.06, videoDurationSec: 15.06 })
+    await run({ duration: 7, resolution: "1080p", generateAudio: undefined })
+    expect(mocks.mockCreditIdBaseCredits).toHaveBeenCalledWith("pixverse-v6-extend:7s:1080p")
+    expect(settledBase()).toBe(ROW_BASE["pixverse-v6-extend:7s:1080p"])
+  })
+
+  it("sound off: commits the silent row it reserved, whatever PixVerse returned", async () => {
+    for (const audioCodec of ["aac", undefined]) {
+      vi.clearAllMocks()
+      mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
+      pixverseProbe = { width: 1280, height: 720, videoCodec: "h264", ...(audioCodec ? { audioCodec } : {}), durationSec: 13.25, videoDurationSec: 13.25 }
+      newPartProbe = SILENT_NEW_PART
+      await run({ generateAudio: false })
+      expect(settledBase(), String(audioCodec)).toBeUndefined()
+      expect(mocks.mockCreditIdBaseCredits).not.toHaveBeenCalled()
+      // Nothing to decide: the cut is silent by construction, and is not probed for it.
+      expect(mocks.mockProbeMatchedOrThrow).not.toHaveBeenCalledWith(NEW_PART_PATH)
+    }
+  })
+
+  it("a silent row that cannot be priced commits the hold as made, never failing a delivered run", async () => {
+    soundless({ width: 1280, height: 720, videoCodec: "h264", durationSec: 13.25, videoDurationSec: 13.25 })
+    mocks.mockCreditIdBaseCredits.mockResolvedValue(undefined)
+    await run({ generateAudio: true })
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledTimes(1)
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]).not.toHaveProperty("meteredBaseCredits")
+  })
+
+  // `probeMatched` never throws: a probe of PixVerse's clip that fails reads nothing — no
+  // sound — while the cut keeps the sound the clip has. What the run delivers decides.
+  it("a probe of PixVerse's clip that reads nothing never settles a run whose new part has sound at the silent row", async () => {
+    mocks.mockProbeMatched.mockImplementation(async (path: string) => (path === PIXVERSE_PATH ? {} : probeOf(path)))
+    await run({ generateAudio: true })
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledTimes(1)
+    expect(settledBase()).toBeUndefined()
+    expect(mocks.mockCreditIdBaseCredits).not.toHaveBeenCalled()
+  })
+
+  // Whether the new part has sound is what the run is charged by, so a probe of it that
+  // FAILS (timed out, could not read the file) says nothing: a plain error, retried like any
+  // transient failure — never a settle at the silent row, never the run delivered.
+  it("a probe of the new part that fails is a plain, retryable error: nothing delivered or settled", async () => {
+    mocks.mockProbeMatchedOrThrow.mockImplementation(async (path: string) => {
+      if (path === NEW_PART_PATH) throw Object.assign(new Error("ffprobe failed: killed"), { killed: true, timedOut: true })
+      return probeOf(path)
+    })
+    const failure = await failureOf({ generateAudio: true })
+    expect(failure).toBeInstanceOf(Error)
+    expect(isDeterministicJobError(failure)).toBe(false)
+    expect(mocks.mockStitchExtension).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+    expect(mocks.mockCreditIdBaseCredits).not.toHaveBeenCalled()
+    expect(mocks.mockCleanupWorkDir.mock.calls.map((c) => c[0])).toContain(STITCH_DIR)
   })
 })
 

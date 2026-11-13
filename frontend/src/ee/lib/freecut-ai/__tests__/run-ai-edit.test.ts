@@ -54,7 +54,7 @@ vi.mock("@/lib/api", () => ({
 
 import { cancelJob, sunoGenerateApi, transcribeApi } from "@/lib/api"
 import type { EditorLink, OpsResult, PresenceCursor } from "../editor-link"
-import { RunFailed, RunStopped, openedVideoMedia, runAiEdit, undoAiEdit, type RunEvent } from "../run-ai-edit"
+import { RunFailed, RunStopped, musicFileOf, openedVideoMedia, runAiEdit, undoAiEdit, type RunEvent } from "../run-ai-edit"
 import { readTimelineView } from "../edit-plan"
 
 const VIDEO_URL = "https://cdn.example.com/uploads/take.mp4"
@@ -176,6 +176,21 @@ describe("runAiEdit", () => {
     expect(link.applied.filter((a) => a.ops[0]!.op === "addTranscriptCaptions").length).toBeLessThanOrEqual(10)
   })
 
+  it("names a removed filler word without the transcript's punctuation", async () => {
+    api.plannerText = '{"steps":["fillers"],"musicStyle":null,"reply":"Taking out the um."}'
+    api.words = [
+      { text: "Then,", startMs: 1000, endMs: 1300 },
+      { text: " um,", startMs: 1500, endMs: 1650 },
+      { text: " on", startMs: 1800, endMs: 1900 },
+    ]
+    const events: RunEvent[] = []
+
+    const summary = await run(fakeLink(), events)
+
+    expect(summary.fillersCut).toBe(1)
+    expect(events).toContainEqual(expect.objectContaining({ type: "feed", key: "freecutAi.cutFiller", vars: { word: "um" } }))
+  })
+
   it("finishes the rest of the edit when the music cannot be made", async () => {
     api.musicFails = true
     const events: RunEvent[] = []
@@ -233,6 +248,19 @@ describe("runAiEdit", () => {
 
   it("refuses an editor with no video on it", async () => {
     await expect(run(fakeLink({ fps: 30, durationInFrames: 0, items: [], media: [] }))).rejects.toBeInstanceOf(RunFailed)
+  })
+})
+
+describe("musicFileOf", () => {
+  it("names the music as its bytes are: a Suno track is a WAV", () => {
+    expect(musicFileOf("https://cdn.nodaro.ai/audios/8caa956f.wav", "audio/wav")).toEqual({ name: "ai-music.wav", type: "audio/wav" })
+    expect(musicFileOf("https://cdn.example.com/track.mp3", null)).toEqual({ name: "ai-music.mp3", type: "audio/mpeg" })
+  })
+
+  it("falls back to the response's type when the address has no extension", () => {
+    expect(musicFileOf("https://cdn.example.com/track", "audio/x-wav")).toEqual({ name: "ai-music.wav", type: "audio/wav" })
+    expect(musicFileOf("https://cdn.example.com/track", "audio/flac; charset=binary")).toEqual({ name: "ai-music.flac", type: "audio/flac" })
+    expect(musicFileOf("https://cdn.example.com/track", null)).toEqual({ name: "ai-music.mp3", type: "audio/mpeg" })
   })
 })
 

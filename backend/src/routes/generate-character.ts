@@ -6,6 +6,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
+import { enqueueRouteJobs } from "../lib/enqueue-route-job.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
 import { resolveEntityImageCreditIdentifier, resolveEntityImageParams } from "../lib/entity-credit-identifier.js"
@@ -515,29 +516,39 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       }
 
       // ──────────────────────────────────────────────────────────────────────
-      // Phase 2B: All reservations succeeded — enqueue every job.
+      // Phase 2B: All reservations succeeded — enqueue every job, in order.
+      // When the queue refuses one, it and the jobs after it are failed and
+      // refunded, the ones already queued keep running, and the request is
+      // answered 500 with `error.startedJobIds` (enqueueRouteJobs).
       // ──────────────────────────────────────────────────────────────────────
-      for (const r of reservations) {
-        await videoQueue.add("generate-character", {
+      await enqueueRouteJobs(
+        req,
+        reply,
+        reservations.map((r) => ({
           jobId: r.jobId,
-          prompt: promptText,
-          sourceImageUrl: data.sourceImageUrl,
-          provider: data.provider,
-          attachToCharacterId: data.attachToCharacterId,
-          skipPortraitAttach: data.skipPortraitAttach,
-          attachPortrait: data.attachPortrait,
-          aspectRatio,
-          resolution: data.resolution,
-          quality: data.quality,
-          // W1-a: arms the minor-age-floor policy at the entity image
-          // chokepoint. The legacy (userPrompt/description) prompt path is
-          // NOT scaffolded here, so for those requests the worker floor is
-          // the only cover — which is exactly why this rides every job, not
-          // just the scaffolded ones.
-          subjectMinor,
-          usageLogId: r.usageLogId,
-        })
-      }
+          enqueue: () =>
+            videoQueue.add("generate-character", {
+              jobId: r.jobId,
+              prompt: promptText,
+              sourceImageUrl: data.sourceImageUrl,
+              provider: data.provider,
+              attachToCharacterId: data.attachToCharacterId,
+              skipPortraitAttach: data.skipPortraitAttach,
+              attachPortrait: data.attachPortrait,
+              aspectRatio,
+              resolution: data.resolution,
+              quality: data.quality,
+              // W1-a: arms the minor-age-floor policy at the entity image
+              // chokepoint. The legacy (userPrompt/description) prompt path is
+              // NOT scaffolded here, so for those requests the worker floor is
+              // the only cover — which is exactly why this rides every job, not
+              // just the scaffolded ones.
+              subjectMinor,
+              usageLogId: r.usageLogId,
+            }),
+        })),
+      )
+      if (reply.sent) return
 
       return { jobId: insertedJobIds[0], jobIds: insertedJobIds }
     },

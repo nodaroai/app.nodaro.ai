@@ -26,6 +26,12 @@
  * to Preview at Final. The last describe opens that graph in the editor: its
  * run estimate quotes the listing stored with it, the server's half pins both.
  *
+ * Every figure is a viewer's from whom Speaker Map is withheld (this file
+ * loads no availability, so `usecaseMulticamOffered` is false): the one-node
+ * Multicam Cut is priced on its first recording only, as the server's half
+ * prices that viewer. Its stored card is for a user who may use Speaker Map
+ * (every user now); the server's half pins that run on its own.
+ *
  * The editor is priced from the fixture's price table alone (the backend half
  * pins that table to the server's base prices), so the totals can only agree
  * when both sides read the same credit ids, the same minutes, the same runs

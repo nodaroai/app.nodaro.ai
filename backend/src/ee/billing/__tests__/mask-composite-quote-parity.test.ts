@@ -6,11 +6,10 @@
  * leading video's length as the graph gives it, and the 300 s cap when the
  * graph gives none — never a length the upstream node merely stores. A
  * Library case's node is exactly what the editor's Library add writes (the
- * editor half builds it and holds it to the fixture). Not covered: any other
- * node's output (a generation, an Extend Video, or a step that recorded a
- * length of its own, and a chain built on one), which this estimate does not
- * read and the editor reads at the length that node records or is set to. The
- * editor half is
+ * editor half builds it and holds it to the fixture). A video another node
+ * makes (a generation, an Extend Video, a step that re-runs, and a chain built
+ * on one) is held to the same parity, for Mask Composite and Video Overlay
+ * both, by planned-length-quote-parity.test.ts. The editor half is
  * frontend/src/lib/__tests__/mask-composite-quote-parity.test.ts, over the
  * same fixture.
  */

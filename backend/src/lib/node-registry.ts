@@ -833,7 +833,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     category: "processing",
     // outputType: data — emits the scene-segmented analysis JSON via the `json` handle.
     // Duration-bucketed pricing: <model>:60s → <model>:600s (181cr small clip on the legacy
-    // fast tier → 2076cr @10min smart — the range below is the table's min..max);
+    // fast tier → 2097cr @10min smart — the range below is the table's min..max);
     // unknown duration reserves the 600s ceiling. See @nodaro/shared video-analysis-pricing.ts.
     description: "Scene-segmented analysis of a video: prompt-ready visuals, camera language, mode-tagged audio, castable entity slots.",
     outputType: "data",

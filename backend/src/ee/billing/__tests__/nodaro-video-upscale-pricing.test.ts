@@ -68,10 +68,12 @@ describe("Nodaro Video Upscale pricing", () => {
     expect(nodaroVideoUpscaleEstimateUnits(8.2)).toBe(2.25)
   })
 
-  it("a known length past 60 s has no units (the run refuses it, so no estimate prices it); 60 s itself and an unknown length do", () => {
+  it("a known length past 60 s is refused (the callers leave it out, so no estimate prices it); a planned one is quoted at the 60 s a run bills at most; 60 s itself and an unknown length are priced", () => {
     expect(nodaroVideoUpscaleRefusesLength(75)).toBe(true)
     expect(nodaroVideoUpscaleRefusesLength(60.02)).toBe(true)
-    expect(nodaroVideoUpscaleEstimateUnits(75)).toBeUndefined()
+    // The units read any length, planned ones included, at most the limit: the run bills at most that, or refuses and charges nothing.
+    expect(nodaroVideoUpscaleEstimateUnits(75)).toBe(15)
+    expect(nodaroVideoUpscaleEstimateUnits(60.17)).toBe(15)
     expect(nodaroVideoUpscaleRefusesLength(60)).toBe(false)
     expect(nodaroVideoUpscaleEstimateUnits(60)).toBe(15)
     for (const unknown of [undefined, null, 0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {

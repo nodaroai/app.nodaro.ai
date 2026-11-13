@@ -629,3 +629,13 @@ describe("the editor's request for a draft with a reference video: the route quo
     }
   })
 })
+
+describe("a draft node that does not run again and holds a result row with an empty url and no task", () => {
+  it("leaves the finalize priced as before (no draft to name), as the estimate read such a row; with no row at all, the run makes the draft", () => {
+    const edges = [{ source: "draft", target: "hd", sourceHandle: "video", targetHandle: "video" }]
+    const emptyRow = { id: "draft", type: "generate-video", data: { ...GV, generatedResults: [{ url: "" }], activeResultIndex: 0 } }
+    expect(seedanceFinalizeDraftQuote(FINALIZE, [emptyRow, FINALIZE], edges, new Set(["hd"]))).toBeUndefined()
+    const noRow = { id: "draft", type: "generate-video", data: { ...GV } }
+    expect(seedanceFinalizeDraftQuote(FINALIZE, [noRow, FINALIZE], edges, new Set(["hd"]))?.kind).toBe("planned")
+  })
+})

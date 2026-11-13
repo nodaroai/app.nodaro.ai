@@ -39,6 +39,7 @@ import { addCaptionsTranscribesOnNemotron, measureAddCaptionsNemotronHold, type 
 import { rawBodyRecord, textField } from "../lib/run-model.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 /** Parse a stringified Transcript before normalization so this ingress behaves
  *  identically to the DAG payload-builder (which parses the stringified json
@@ -366,7 +367,8 @@ export async function addCaptionsRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("add-captions", { jobId: job.id, ...restData, ...measured, usageLogId })
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("add-captions", { jobId: job.id, ...restData, ...measured, usageLogId }))
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

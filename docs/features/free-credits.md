@@ -22,9 +22,13 @@ anything, contact support from the same account and we will look into it.
 ## What the grant covers
 
 The grant is the free tier's spending balance: it works with every model the
-free tier can run, outputs are watermarked until the first purchase, and there
-is no daily cap. Details of what each tier includes are on the
-[pricing page](https://app.nodaro.ai/pricing).
+free tier can run, and there is no daily cap. Image and video outputs are
+watermarked while the account is on the free tier, with no subscription and
+no credits bought. A subscription lifts the watermark while it lasts, and
+buying a credit pack lifts it for good on runs made through the API, SDK, CLI
+and MCP (see [pay-as-you-go accounts](../api-integration.md#8b-pay-as-you-go-accounts)),
+unless the credits bought are all refunded. Details of what each tier
+includes are on the [pricing page](https://app.nodaro.ai/pricing).
 
 ## Video on free credits
 

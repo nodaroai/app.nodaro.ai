@@ -1,7 +1,8 @@
 // @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,video-overlay,extend-video,video-retake,dubbing,lip-sync}.ts
 // @test-watches backend/src/services/workflow-engine/node-executor.ts
 // @test-watches backend/src/workers/handlers/video-ai.ts
-// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,video-overlay-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span,lip-sync-inputs,nodaro-video-upscale-plan,seedance-extend-credits}.ts backend/src/lib/private-plugins/toolkit.ts
+// @test-watches backend/src/lib/{video-utility-credits,video-utility-length,mask-composite-length,video-overlay-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span,lip-sync-inputs,nodaro-video-upscale-plan,seedance-extend-credits}.ts backend/src/lib/private-plugins/toolkit.ts
+// @test-watches backend/src/ee/pipelines/services/pipeline-combine-videos.ts
 /**
  * A per-unit run is CHARGED from the same price source it is QUOTED from.
  *
@@ -89,6 +90,7 @@ import { applyServiceMarkup } from "../service-margin.js"
 import { quoteBaseCredits } from "../../../lib/credit-base-cost.js"
 import { UNIT_QUOTE_RATE_IDS } from "../../../lib/unit-quote-rates.js"
 import { videoUtilityChargeBaseCredits } from "../../../lib/video-utility-credits.js"
+import { videoUtilityMeasuredBaseCredits } from "../../../lib/video-utility-length.js"
 import { maskCompositeBaseCredits } from "../../../lib/mask-composite-length.js"
 import { videoOverlayBaseCredits } from "../../../lib/video-overlay-length.js"
 import { ltxExtendBaseCredits } from "../../../lib/ltx-extend-credits.js"
@@ -129,16 +131,24 @@ const videoUtility = (job: string, body: Record<string, unknown>): Charge => ({
   charge: async () => markedUp(job, (await videoUtilityChargeBaseCredits(job, body))!),
 })
 
+/** Seven units of a video utility priced by its measured clips: what its routes, its workflow run and a pipeline's combine step reserve. */
+const measuredVideoUtility = (job: string): Charge => ({
+  units: 7,
+  charge: async () => markedUp(job, await videoUtilityMeasuredBaseCredits(job, 7)),
+})
+
 /**
  * What each lane in this repo reserves for a run of a per-unit rate, MARKED UP:
  * the function the route's guard and the workflow run's override call. Keyed by
  * rate, and required for every rate a quote may name.
  */
 const CHARGES: Readonly<Record<string, Charge>> = {
-  // routes/{trim,loop,combine,assemble-narrated}-video.ts and the workflow run's computeVideoUtilityCreditOverride.
-  "trim-video": videoUtility("trim-video", { trimMode: "time", startTime: 0, endTime: 35 }),
-  "loop-video": videoUtility("loop-video", { mode: "duration", targetDuration: 35 }),
-  "combine-videos": videoUtility("combine-videos", { transition: "cut", trimStartFrames: 0, trimEndFrames: 0, videoUrls: ["", ""], upstreamDurations: [15, 20] }),
+  // routes/{trim,loop,combine}-video.ts, the workflow run's computeVideoUtilityCreditOverride and a
+  // pipeline's combine step: the units measured from the clips (lib/video-utility-length.ts).
+  "trim-video": measuredVideoUtility("trim-video"),
+  "loop-video": measuredVideoUtility("loop-video"),
+  "combine-videos": measuredVideoUtility("combine-videos"),
+  // routes/assemble-narrated-video.ts and the workflow run's computeVideoUtilityCreditOverride.
   "assemble-narrated-video": videoUtility("assemble-narrated-video", { blocks: Array.from({ length: 24 }, () => ({})) }),
   // routes/mask-composite.ts and the workflow run's computeMaskCompositeCreditOverride.
   "mask-composite": { units: 7, charge: async () => markedUp("mask-composite", await maskCompositeBaseCredits(7)) },
@@ -321,9 +331,10 @@ function identifiersIn(rel: string, names: ReadonlySet<string>): string[] {
 describe("each charge site prices through the function this suite drives", () => {
   // Site → the functions it must call to charge (each one held above).
   const SITES: Readonly<Record<string, readonly string[]>> = {
-    "routes/trim-video.ts": ["unitRateBaseCredits"],
-    "routes/loop-video.ts": ["unitRateBaseCredits"],
-    "routes/combine-videos.ts": ["unitRateBaseCredits"],
+    "routes/trim-video.ts": ["videoUtilityMeasuredBaseCredits"],
+    "routes/loop-video.ts": ["videoUtilityMeasuredBaseCredits"],
+    "routes/combine-videos.ts": ["videoUtilityMeasuredBaseCredits"],
+    "ee/pipelines/services/pipeline-combine-videos.ts": ["videoUtilityMeasuredBaseCredits"],
     "routes/assemble-narrated-video.ts": ["unitRateBaseCredits"],
     "routes/apply-edl.ts": ["unitRateBaseCredits"],
     "routes/mask-composite.ts": ["maskCompositeBaseCredits"],
@@ -334,6 +345,7 @@ describe("each charge site prices through the function this suite drives", () =>
     "routes/lip-sync.ts": ["lipSyncRateBaseCredits"],
     "services/workflow-engine/node-executor.ts": [
       "videoUtilityChargeBaseCredits",
+      "videoUtilityMeasuredBaseCredits",
       "maskCompositeBaseCredits",
       "videoOverlayBaseCredits",
       "ltxExtendBaseCredits",
@@ -346,6 +358,7 @@ describe("each charge site prices through the function this suite drives", () =>
     "workers/handlers/video-ai.ts": ["seedanceExtendBaseCredits"],
     // The library functions the sites call: each reads the row through the shared lookup.
     "lib/video-utility-credits.ts": ["unitRateBaseCredits"],
+    "lib/video-utility-length.ts": ["unitRateBaseCredits"],
     "lib/mask-composite-length.ts": ["unitRateBaseCredits"],
     "lib/video-overlay-length.ts": ["unitRateBaseCredits"],
     "lib/ltx-extend-credits.ts": ["unitRateBaseCredits"],

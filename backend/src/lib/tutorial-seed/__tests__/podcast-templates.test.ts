@@ -20,7 +20,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { TEMPLATE_CATEGORIES } from "@nodaro/shared/apps"
 import { isKineticCaptionStyle } from "@nodaro/shared/captions"
-import { videoFedSpeakerViews } from "@nodaro/render-rules"
+import { orderUseCaseMedia, videoFedSpeakerViews } from "@nodaro/render-rules"
 import { ALL_NODE_HANDLES } from "../../node-handles.js"
 import type { TutorialTemplateDoc } from "../types.js"
 
@@ -30,12 +30,13 @@ const TEMPLATES_DIR = join(HERE, "..", "templates")
 /** The hand-built chains, each with one Apply EDL. */
 const MULTI_NODE_SLUGS = ["podcast-tighten-episode", "podcast-clip-pack", "podcast-multicam-cut", "podcast-trailer-formats"] as const
 /** The one-node twins: the same use case as one use-case node set to review first. */
-const ONE_NODE_SLUGS = ["podcast-tighten-episode-one-node", "podcast-clip-pack-one-node", "podcast-trailer-formats-one-node"] as const
+const ONE_NODE_SLUGS = ["podcast-tighten-episode-one-node", "podcast-clip-pack-one-node", "podcast-trailer-formats-one-node", "podcast-multicam-cut-one-node"] as const
 /** Each twin's use-case node type. */
 const ONE_NODE_TYPE: Record<(typeof ONE_NODE_SLUGS)[number], string> = {
   "podcast-tighten-episode-one-node": "tighten-episode",
   "podcast-clip-pack-one-node": "clip-pack",
   "podcast-trailer-formats-one-node": "episode-trailer",
+  "podcast-multicam-cut-one-node": "tighten-episode",
 }
 /** The hand-built chains that render through Speaker View instead of Apply EDL. */
 const SPEAKER_VIEW_SLUGS = ["podcast-vertical-speaker-clip"] as const
@@ -623,6 +624,83 @@ describe("podcast editing templates — structural validity", () => {
       expect(notes.some((text) => /Review before render/.test(text) && /Render final/.test(text)), "a note names the review setting").toBe(true)
       expect(notes.some((text) => /Intro card input/.test(text)), "a note says to connect an intro card").toBe(true)
       expect(notes.some((text) => /node by node/.test(text)), "a note points at the step-by-step template").toBe(true)
+      expect(t.withoutPreviewStopRule).toBeUndefined()
+    })
+
+    it("lists the node types and providers it actually uses", async () => {
+      const t = await loadTemplate(SLUG)
+      const nodes = t.nodes as Node[]
+      expect([...(t.nodeTypesUsed ?? [])].sort()).toEqual([...new Set(nodes.map((n) => n.type))].sort())
+      expect(t.providersUsed ?? []).toEqual([])
+    })
+  })
+
+  describe("Multicam Cut in One Node", () => {
+    const SLUG = "podcast-multicam-cut-one-node"
+    const CAMERAS = ["Camera 1", "Camera 2", "Wide Camera"]
+
+    it("is one Tighten Episode node set to review first, fed three cameras on Recordings and the master on Master audio", async () => {
+      const t = await loadTemplate(SLUG)
+      const nodes = (t.nodes as Node[]).filter((n) => n.type !== "sticky-note")
+      expect(nodes.map((n) => n.type).sort()).toEqual(["tighten-episode", "upload-audio", "upload-video", "upload-video", "upload-video"])
+      const master = nodes.find((n) => n.type === "upload-audio")!
+      const cameras = CAMERAS.map((label) => nodes.find((n) => n.type === "upload-video" && n.data?.label === label)!)
+      const tighten = nodes.find((n) => n.type === "tighten-episode")!
+      expect(master.data).toEqual({ label: "Master Audio", assetId: "", url: "" })
+      for (const [i, cam] of cameras.entries()) expect(cam?.data, CAMERAS[i]).toEqual({ label: CAMERAS[i], assetId: "", url: "" })
+      // The node's settings, written out: set to review first as its
+      // hand-built twin is, with captions off (the hand-built cut adds none),
+      // no framing; the recordings in camera order, the third the wide camera.
+      expect(tighten.data).toEqual({
+        label: "Tighten Episode",
+        output: "video",
+        captions: false,
+        captionStyle: "word-highlight",
+        reviewBeforeRender: true,
+        planTier: "standard",
+        instructions: "",
+        mediaOrder: cameras.map((c) => c.id),
+        cameras: { wide: 3 },
+        fieldMappings: {},
+        executionStatus: "idle",
+      })
+      // Each camera into `media`, the master into `masterAudio`; nothing into `music`.
+      expect((t.edges as Edge[]).map((e) => [e.source, e.sourceHandle, e.target, e.targetHandle])).toEqual([
+        ...cameras.map((c) => [c.id, "video", tighten.id, "media"]),
+        [master.id, "audio", tighten.id, "masterAudio"],
+      ])
+    })
+
+    // `mediaOrder` names template node ids. An import that gives the nodes new
+    // ids leaves it naming nothing, and the order falls back to wire order
+    // (`orderUseCaseMedia`): the wires are in camera order too, so the twin
+    // runs and prices its cameras in the same order either way.
+    it("wires the cameras in mediaOrder's order, so a copy whose node ids changed keeps the camera order", async () => {
+      const t = await loadTemplate(SLUG)
+      const tighten = (t.nodes as Node[]).find((n) => n.type === "tighten-episode")!
+      const order = (tighten.data as { mediaOrder: string[] }).mediaOrder
+      const wires = (t.edges as Edge[]).filter((e) => e.target === tighten.id && e.targetHandle === "media").map((e) => ({ nodeId: e.source }))
+      expect(wires.map((w) => w.nodeId)).toEqual(order)
+      expect(orderUseCaseMedia(wires, undefined)).toEqual(orderUseCaseMedia(wires, order))
+      // Re-ided: mediaOrder names no wired node, so wire order decides.
+      const reIded = wires.map((w) => ({ nodeId: `copy-${w.nodeId}` }))
+      expect(orderUseCaseMedia(reIded, order).map((w) => w.nodeId)).toEqual(order.map((id) => `copy-${id}`))
+      // The wide camera is the third recording in that order.
+      const wide = (t.nodes as Node[]).find((n) => n.id === order[(tighten.data as { cameras: { wide: number } }).cameras.wide - 1])
+      expect(wide?.data?.label).toBe("Wide Camera")
+    })
+
+    it("explains the recordings, Master audio, the wide camera and the automatic speaker map", async () => {
+      const t = await loadTemplate(SLUG)
+      const notes = (t.nodes as Node[]).filter((n) => n.type === "sticky-note").map((n) => String((n.data as { text?: unknown }).text ?? ""))
+      expect(notes.some((text) => /Review before render/.test(text) && /Render final/.test(text)), "a note names the review setting").toBe(true)
+      expect(notes.some((text) => /Recordings/.test(text)), "a note names the Recordings input").toBe(true)
+      expect(notes.some((text) => /Master audio/.test(text)), "a note names the Master audio input").toBe(true)
+      expect(notes.some((text) => /Wide camera/i.test(text)), "a note explains the wide camera").toBe(true)
+      expect(notes.some((text) => /Speaker 1 is the first voice heard/.test(text)), "a note says who Speaker 1 is").toBe(true)
+      expect(notes.some((text) => /no clear camera/.test(text)), "a note says the map reports a speaker with no clear camera").toBe(true)
+      expect(notes.some((text) => /node by node/.test(text)), "a note points at the step-by-step template").toBe(true)
+      // The node's review is its own setting: no rule-off listing.
       expect(t.withoutPreviewStopRule).toBeUndefined()
     })
 

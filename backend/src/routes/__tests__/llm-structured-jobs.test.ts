@@ -4,7 +4,10 @@
  * (proxying install, bad body, no key, unknown model); the parent row and its
  * reservation; for a movie run, the analysis child created THROUGH the
  * analysis route with the caller's auth forwarded, its refusal propagated
- * verbatim and the parent undone; the enqueue payload the worker reads.
+ * verbatim and the parent undone; the enqueue payload the worker reads; and a
+ * queue that refuses the draft — or a read or stamp of its analysis that
+ * throws on the way to the queue — which fails and refunds it (never deletes
+ * it) and cancels an analysis child the run started.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -19,6 +22,10 @@ const mocks = vi.hoisted(() => ({
   jobDelete: vi.fn(),
   /** The caller's own analysis child, as `readOwnAnalysisChild` reads it. */
   jobRead: vi.fn(),
+  markJobFailedDetailed: vi.fn(),
+  refundJobHoldsConfirmed: vi.fn(),
+  insertAppReport: vi.fn(),
+  cancelOwnedJob: vi.fn(),
 }))
 
 vi.mock("@/lib/config.js", () => ({
@@ -35,7 +42,13 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard: () => async () => {},
   reserveCreditsForJob: mocks.reserveCreditsForJob,
 }))
-vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: mocks.refundReservedCreditsForJob }))
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({
+  refundReservedCreditsForJob: mocks.refundReservedCreditsForJob,
+  refundJobHoldsConfirmed: mocks.refundJobHoldsConfirmed,
+}))
+vi.mock("@/lib/job-failure.js", () => ({ markJobFailedDetailed: mocks.markJobFailedDetailed }))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: mocks.insertAppReport }))
+vi.mock("@/lib/cancel-job.js", () => ({ cancelOwnedJob: mocks.cancelOwnedJob }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: mocks.queueAdd }, tryRemoveFromQueue: vi.fn(), redis: {} }))
 vi.mock("@/lib/supabase.js", () => {
   // update({...}).eq("id").eq("user_id") and delete().eq("id").eq("user_id")
@@ -83,6 +96,10 @@ beforeEach(async () => {
   analysisAnswer = { status: 200, body: { jobId: "child-1" } }
   analysisSeen = null
   mocks.jobRead.mockReturnValue(null)
+  mocks.markJobFailedDetailed.mockResolvedValue("flipped")
+  mocks.refundJobHoldsConfirmed.mockResolvedValue(true)
+  mocks.insertAppReport.mockResolvedValue(true)
+  mocks.cancelOwnedJob.mockResolvedValue({ kind: "cancelled", analysisJobId: null })
 
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
@@ -249,6 +266,133 @@ describe("a movie run", () => {
     expect(res.json().error.code).toBe("analysis_unavailable")
     expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("parent-1")
     expect(mocks.jobDelete).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("a queue that refuses the draft (lib/enqueue-route-job.ts)", () => {
+  const REFUSED = () => new Error("OOM command not allowed when used memory > 'maxmemory'.")
+  const ANALYSIS_ID = "00000000-0000-4000-8000-00000000a002"
+  /** Let the handler finish what it does after the 500 went out, before asserting it did NOT do something. */
+  const settle = () => new Promise((resolve) => setImmediate(resolve))
+
+  /** Failed through the shared rule — from `pending` only, its key released, refunded confirmed — and never deleted. */
+  function expectFailedNotDeleted(): void {
+    expect(mocks.markJobFailedDetailed).toHaveBeenCalledWith("parent-1", expect.objectContaining({ from: ["pending"], extra: { idempotency_key: null } }))
+    expect(mocks.refundJobHoldsConfirmed).toHaveBeenCalledWith("parent-1")
+    expect(mocks.jobDelete).not.toHaveBeenCalled()
+    expect(mocks.refundReservedCreditsForJob).not.toHaveBeenCalled()
+  }
+
+  it("a story run: failed and refunded, answered 500 internal_error, its queue options kept", async () => {
+    mocks.queueAdd.mockRejectedValueOnce(REFUSED())
+    const res = await post(VALID)
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    expectFailedNotDeleted()
+    expect(mocks.queueAdd.mock.calls[0][2]).toEqual({ attempts: 1, removeOnFail: { count: 200 } })
+    await settle()
+    expect(mocks.cancelOwnedJob).not.toHaveBeenCalled()
+  })
+
+  it("a movie run: failed and refunded, then the analysis child it started is cancelled (nobody will draft from it)", async () => {
+    mocks.queueAdd.mockRejectedValueOnce(REFUSED())
+    const res = await post({ ...VALID, videoUrl: VIDEO })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    expectFailedNotDeleted()
+    await vi.waitFor(() => expect(mocks.cancelOwnedJob).toHaveBeenCalledWith("child-1", USER_ID))
+    expect(mocks.markJobFailedDetailed.mock.invocationCallOrder[0]!).toBeLessThan(mocks.cancelOwnedJob.mock.invocationCallOrder[0]!)
+  })
+
+  it("a run drafting from a reused analysis: failed and refunded, and the caller's finished analysis is never touched", async () => {
+    mocks.jobRead.mockReturnValue({
+      id: ANALYSIS_ID,
+      job_type: "video-analysis",
+      status: "completed",
+      output_data: {
+        json: {
+          meta: { durationSec: 12, width: 1920, height: 1080, aspectRatio: "16:9", title: "Clip" },
+          slots: [],
+          scenes: [{ startSec: 0, endSec: 4, label: "Hook", shotType: "Medium Close-Up", camera: "push-in", visual: "waves", audio: [], sceneNumber: 1, visualResolved: "waves", slotRefs: [] }],
+          warnings: [],
+        },
+      },
+      credits: 60,
+    })
+    mocks.queueAdd.mockRejectedValueOnce(REFUSED())
+    const res = await post({ ...VALID, analysisJobId: ANALYSIS_ID })
+    expect(res.statusCode).toBe(500)
+    expectFailedNotDeleted()
+    await settle()
+    expect(mocks.cancelOwnedJob).not.toHaveBeenCalled()
+  })
+
+  it("a draft that moved on (a worker claimed it) is answered as started: not refunded, not deleted, its analysis left to run", async () => {
+    mocks.queueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    mocks.markJobFailedDetailed.mockResolvedValue("missed")
+    const res = await post({ ...VALID, videoUrl: VIDEO })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ jobId: "parent-1" })
+    expect(mocks.refundJobHoldsConfirmed).not.toHaveBeenCalled()
+    expect(mocks.jobDelete).not.toHaveBeenCalled()
+    expect(mocks.cancelOwnedJob).not.toHaveBeenCalled()
+  })
+
+  it("a movie run whose child's price cannot be read: failed and refunded like a refusal, never queued, its child cancelled", async () => {
+    mocks.jobRead.mockImplementation(() => { throw new Error("connection reset reading the analysis job") })
+    const res = await post({ ...VALID, videoUrl: VIDEO })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    expectFailedNotDeleted()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(mocks.cancelOwnedJob).toHaveBeenCalledWith("child-1", USER_ID))
+    expect(mocks.cancelOwnedJob).toHaveBeenCalledTimes(1)
+    expect(mocks.markJobFailedDetailed.mock.invocationCallOrder[0]!).toBeLessThan(mocks.cancelOwnedJob.mock.invocationCallOrder[0]!)
+  })
+
+  it("a movie run whose stamp throws: failed and refunded, never queued, its child cancelled", async () => {
+    mocks.jobRead.mockReturnValue({ id: "child-1", job_type: "video-analysis", status: "pending", output_data: null, credits: 60 })
+    mocks.jobUpdate.mockImplementationOnce(() => { throw new Error("fetch failed") })
+    const res = await post({ ...VALID, videoUrl: VIDEO })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    expectFailedNotDeleted()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(mocks.cancelOwnedJob).toHaveBeenCalledWith("child-1", USER_ID))
+  })
+
+  it("a run from a reused analysis whose stamp throws: failed and refunded, never queued, the caller's analysis never touched", async () => {
+    mocks.jobRead.mockReturnValue({
+      id: ANALYSIS_ID,
+      job_type: "video-analysis",
+      status: "completed",
+      output_data: {
+        json: {
+          meta: { durationSec: 12, width: 1920, height: 1080, aspectRatio: "16:9", title: "Clip" },
+          slots: [],
+          scenes: [{ startSec: 0, endSec: 4, label: "Hook", shotType: "Medium Close-Up", camera: "push-in", visual: "waves", audio: [], sceneNumber: 1, visualResolved: "waves", slotRefs: [] }],
+          warnings: [],
+        },
+      },
+      credits: 60,
+    })
+    mocks.jobUpdate.mockImplementationOnce(() => { throw new Error("fetch failed") })
+    const res = await post({ ...VALID, analysisJobId: ANALYSIS_ID })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    expectFailedNotDeleted()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+    await settle()
+    expect(mocks.cancelOwnedJob).not.toHaveBeenCalled()
+  })
+
+  it("a queued movie run is unchanged: nothing failed, refunded or cancelled", async () => {
+    const res = await post({ ...VALID, videoUrl: VIDEO })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ jobId: "parent-1" })
+    expect(mocks.markJobFailedDetailed).not.toHaveBeenCalled()
+    expect(mocks.refundJobHoldsConfirmed).not.toHaveBeenCalled()
+    expect(mocks.cancelOwnedJob).not.toHaveBeenCalled()
   })
 })
 

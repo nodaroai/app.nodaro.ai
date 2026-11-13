@@ -1,16 +1,16 @@
 /**
  * Per-wire message/body builders shared by the KIE and direct-Anthropic lanes,
- * and the KIE structured-output (JSON-schema) request fields.
+ * and the KIE structured-output (JSON-schema) request fields. The schema's wire
+ * form and the prompt-JSON system prompt live in ./structured-schema.ts, which
+ * billing reads without loading the lanes.
  */
 
 import type Anthropic from "@anthropic-ai/sdk"
 import { structuredWireMode, type LlmModelDef, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
 import { KIE_INLINE_DATA_URL_MAX_CHARS } from "../kie-inline-image.js"
-import { extractJsonFromAIResponse } from "../json-utils.js"
 import { anthropicStrictToolSchema } from "../json-schema-strict.js"
-import { aliasKeywordPropertyNames } from "../json-schema-property-alias.js"
-import { toGeminiResponseSchema } from "../gemini/response-schema.js"
 import { deriveParams } from "./params.js"
+import { kieChatPromptJson, kieClaudePromptJson, kiePromptJsonSystem, kieWireSchema } from "./structured-schema.js"
 import type { LlmContentBlock, LlmRequest } from "./types.js"
 
 // ---------------------------------------------------------------------------
@@ -148,45 +148,6 @@ export function buildMessagesBody(model: LlmModelDef, req: LlmRequest): Record<s
 }
 
 /**
- * Is this a structured Claude call — which KIE's messages lane serves as
- * PROMPT-JSON (the schema in the system prompt, no `tools`), never as a tool?
- *
- * Probed 2026-10-16 against KIE's /claude/v1/messages, which documents only
- * model, messages, tools, thinkingFlag, stream and max_tokens:
- * - image + ANY tool: in KIE's documented shape (no system, no tool_choice) a
- *   503 every time; with system + tool_choice a 200 whose model never saw the
- *   image ("I don't see a photo") — production describe-to-picker job
- *   1572a638 completed with `{}` that way, and was billed;
- * - text-only + tool, in the shape `anthropicStructuredTool` sends (system +
- *   tool_choice): Opus 5.5 503s in every variant, Haiku 4.5 and Sonnet 4.6
- *   answer a 200 carrying an in-band "Server exception" — so text-only
- *   structured calls take the same route;
- * - no tools, schema in `system`: clean JSON in ~5 s, text-only and with an
- *   image (URL or base64) read correctly, with or without thinkingFlag.
- * The answer is plain text; the structured loop's parse (fences stripped),
- * Zod validation and correction retry are what make it an answer. The direct
- * lane keeps its tool (`anthropicStructuredTool`).
- */
-export function kieClaudePromptJson(model: LlmModelDef, req: LlmRequest): boolean {
-  return req.jsonSchema !== undefined && model.structuredOutputMode === "anthropic-tool"
-}
-
-/** The system prompt of a {@link kieClaudePromptJson} call: the caller's, then the one-object rule and the schema. */
-export function kiePromptJsonSystem(system: string, jsonSchema: NonNullable<LlmRequest["jsonSchema"]>): string {
-  return [
-    system,
-    `Reply with ONLY one JSON object — the \`${jsonSchema.name}\` result — that matches this JSON Schema exactly. ` +
-      "No prose before or after it, and no markdown code fences.",
-    JSON.stringify(jsonSchema.schema),
-  ].filter(Boolean).join("\n\n")
-}
-
-/** A prompt-JSON answer's JSON, with a ```json fence or surrounding prose removed (the model sometimes adds one). */
-export function kiePromptJsonText(text: string): string {
-  return extractJsonFromAIResponse(text)
-}
-
-/**
  * The tool fields of an `anthropic-tool` structured call on the direct SDK —
  * the one-shot call and the stream, so they can never ask differently. KIE's
  * messages proxy is never sent a tool ({@link kieClaudePromptJson}).
@@ -301,12 +262,14 @@ export function buildAnthropicMessages(req: LlmRequest) {
  * retry is the actual guarantee. Returns undefined for models with no native
  * mode (GPT-via-KIE ignores response_format) so the caller falls back to text.
  * A model that sends its schema only as a hint (`structuredOutputHint`, read
- * through `structuredWireMode`: Gemini 4 Carbon) is sent it the same way.
+ * through `structuredWireMode`: Gemini 4 Carbon) is sent it the same way. A
+ * `kieSchemaInPrompt` model is sent none: its schema rides the system prompt,
+ * in the same wire form (`kieChatPromptJsonFormat`, ./structured-schema.ts).
  *
- * The schema goes on the wire through {@link kieWireSchema}.
+ * The schema goes on the wire through `kieWireSchema` (./structured-schema.ts).
  */
 export function kieResponseFormat(model: LlmModelDef, req: LlmRequest): KieSchemaFormat | undefined {
-  if (!req.jsonSchema || structuredWireMode(model) !== "kie-response-format") return undefined
+  if (!req.jsonSchema || structuredWireMode(model) !== "kie-response-format" || kieChatPromptJson(model, req)) return undefined
   const wire = kieWireSchema(req.jsonSchema, model)
   return {
     body: { type: "json_schema", json_schema: { name: req.jsonSchema.name, strict: false, schema: wire.schema } },
@@ -321,48 +284,6 @@ interface KieSchemaFormat {
 }
 
 /**
- * The caller's schema as KIE is sent it, on both of its JSON-schema lanes.
- *
- * KIE's chat-completions validator reads a property NAMED like a keyword
- * (`type`) as that keyword and refuses the request
- * (`json-schema-property-alias.ts`), so such a property is sent under a wire
- * name, and `restoreText` puts the caller's name back on the answer before
- * anything reads it. The responses lane gets the same wire form: the rename is
- * invisible to the caller either way, so no lane is left to fail on a validator
- * we have not seen yet. A schema with no such name is sent as it is. The
- * request is never changed: a fallback lane reads the caller's schema from the
- * same `req`.
- */
-function kieWireSchema(jsonSchema: NonNullable<LlmRequest["jsonSchema"]>, model: LlmModelDef): {
-  schema: Record<string, unknown>
-  restoreText: (text: string) => string
-} {
-  const wire = aliasKeywordPropertyNames(jsonSchema.schema)
-  // KIE forwards a Google model's schema to Google's own decoder, which
-  // refuses an array cap and a schema with too many enum ids exactly as it
-  // does on the direct lane (`gemini/response-schema.ts`) — the proxy adds no
-  // tolerance. The same wire form keeps the two lanes from failing apart;
-  // the rewrite never touches property names, so the alias restore still holds.
-  const schema = model.vendor === "google" ? (toGeminiResponseSchema(wire.schema) as Record<string, unknown>) : wire.schema
-  return {
-    schema,
-    restoreText: wire.aliases.size === 0 ? (text) => text : (text) => restoreAnswerText(text, wire.restore),
-  }
-}
-
-/** An answer's text under the caller's names. Text that is not JSON is returned
- *  as the model wrote it, for the caller's own parse to judge. */
-function restoreAnswerText(text: string, restore: (value: unknown) => unknown): string {
-  let answer: unknown
-  try {
-    answer = JSON.parse(extractJsonFromAIResponse(text))
-  } catch {
-    return text
-  }
-  return JSON.stringify(restore(answer))
-}
-
-/**
  * KIE responses-API `text` param for models that natively enforce a JSON
  * schema on the {family}/v1/responses endpoints (gpt-5.4/5.5 + the GPT-5.6
  * family — live-verified 2026-07-14; grok-4.6 — live-verified 2026-08-18;
@@ -370,7 +291,7 @@ function restoreAnswerText(text: string, restore: (value: unknown) => unknown): 
  * echoed back and output arrives schema-shaped). Same `strict: false`
  * rationale as {@link kieResponseFormat}; `llmCompleteStructured`'s
  * validate+retry remains the actual guarantee. Returns undefined for models
- * without the mode. The schema goes on the wire through {@link kieWireSchema}.
+ * without the mode. The schema goes on the wire through `kieWireSchema`.
  */
 export function kieResponsesTextFormat(model: LlmModelDef, req: LlmRequest): KieSchemaFormat | undefined {
   if (!req.jsonSchema || structuredWireMode(model) !== "responses-json-schema") return undefined

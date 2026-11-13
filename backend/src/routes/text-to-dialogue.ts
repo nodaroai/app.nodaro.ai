@@ -12,6 +12,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { judgeVoices, voiceNotAvailableBody } from "../lib/voice-gender.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 // Probed hard limit (2026-08-30): an 11th unique voice → 400 max_voices_exceeded.
 const MAX_UNIQUE_DIALOGUE_VOICES = 10
@@ -129,7 +130,7 @@ export async function textToDialogueRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("text-to-dialogue", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("text-to-dialogue", {
       jobId: job.id,
       provider,
       dialogue,
@@ -139,7 +140,8 @@ export async function textToDialogueRoutes(app: FastifyInstance) {
       seed,
       applyTextNormalization,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

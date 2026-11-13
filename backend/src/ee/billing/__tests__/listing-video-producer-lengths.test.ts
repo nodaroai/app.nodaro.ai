@@ -5,7 +5,10 @@
  * video whose length is not known before the run. These guards run the real
  * listing over a chain `recording -> producer -> step`, against the charge of
  * the same step at the length the producer delivers (`videoUtilityUnits` × the row,
- * the Video SFX row), at `STATIC_CREDIT_COSTS`' base prices.
+ * the Video SFX row), at `STATIC_CREDIT_COSTS`' base prices. Combine Videos is
+ * charged the length its run measures, so a clip a step makes in the run (a
+ * Lip Sync, an avatar, a generation) is listed with the slack the measured walk
+ * adds to each clip made (`VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC`).
  */
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
@@ -29,6 +32,7 @@ import {
   motionTransferCeilingSec,
 } from "../../../lib/video-output-length.js"
 import { generateVideoProLengthSec } from "../../../lib/generate-video-pro-length.js"
+import { VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC as SLACK, generatedVideoRenderedSec } from "@nodaro/render-rules"
 
 type N = { id: string; type: string; data?: Record<string, unknown> }
 type E = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }
@@ -139,12 +143,12 @@ describe("steps with a length of their own", () => {
       [],
     )
     expect(d.perMinute).toBe(0)
-    expect(d.fixed).toBe(combineCharge([getLipSyncMaxAudioSeconds("kling-avatar")]))
+    expect(d.fixed).toBe(combineCharge([getLipSyncMaxAudioSeconds("kling-avatar") + SLACK]))
   })
 
   it("Cinematic Avatar on auto duration: its 15-second ceiling", () => {
     const step: N = { id: "step", type: "cinematic-avatar", data: { autoDuration: true } }
-    expect(stepDelta([step], [], combine, "step", []).fixed).toBe(combineCharge([15]))
+    expect(stepDelta([step], [], combine, "step", []).fixed).toBe(combineCharge([15 + SLACK]))
   })
 
   it("Lip Sync on a generated audio: the provider's own cap, fixed", () => {
@@ -152,7 +156,7 @@ describe("steps with a length of their own", () => {
     const step: N = { id: "step", type: "lip-sync", data: { provider: "kling-avatar" } }
     const d = stepDelta([tts, step], [{ source: "voice", target: "step", targetHandle: "audio" }], combine, "step", [])
     expect(d.perMinute).toBe(0)
-    expect(d.fixed).toBe(combineCharge([getLipSyncMaxAudioSeconds("kling-avatar")]))
+    expect(d.fixed).toBe(combineCharge([getLipSyncMaxAudioSeconds("kling-avatar") + SLACK]))
   })
 
   it("Lip Sync on the episode's audio: at the cap (the run trims to it), fixed", () => {
@@ -160,26 +164,26 @@ describe("steps with a length of their own", () => {
     const step: N = { id: "step", type: "lip-sync", data: { provider: "kling-avatar" } }
     const d = stepDelta([audio, step], [{ source: "rec", target: "step", targetHandle: "audio" }], combine, "step")
     expect(d.perMinute).toBe(0)
-    expect(d.fixed).toBe(combineCharge([300]))
+    expect(d.fixed).toBe(combineCharge([300 + SLACK]))
   })
 
   it("AI Avatar on an audio: the audio, at most 600 seconds", () => {
     const audio: N = { id: "rec", type: "upload-audio", data: {} }
     const step: N = { id: "step", type: "ai-avatar", data: { speechMode: "audio" } }
     const d = stepDelta([audio, step], [{ source: "rec", target: "step", targetHandle: "audio" }], combine, "step")
-    expect(d.fixed).toBe(combineCharge([AI_AVATAR_MAX_AUDIO_SEC]))
+    expect(d.fixed).toBe(combineCharge([AI_AVATAR_MAX_AUDIO_SEC + SLACK]))
   })
 
   it("Motion Transfer: the driving video, at most the longest tier priced", () => {
     const d = chain({ id: "step", type: "motion-transfer", data: {} }, [recTo("video")], combine)
     expect(d.perMinute).toBe(0)
-    expect(d.fixed).toBe(combineCharge([motionTransferCeilingSec()]))
+    expect(d.fixed).toBe(combineCharge([motionTransferCeilingSec() + SLACK]))
   })
 
   it("UGC Clip: one clip, at most the longest clip any catalog video model declares, fixed", () => {
     const d = chain({ id: "step", type: "ugc-clip", data: {} }, [], combine)
     expect(d.perMinute).toBe(0)
-    expect(d.fixed).toBe(combineCharge([longestCatalogVideoSec()]))
+    expect(d.fixed).toBe(combineCharge([longestCatalogVideoSec() + SLACK]))
   })
 
   it("Merge Video Audio keeps the video's length when its audio is a recording", () => {
@@ -293,7 +297,11 @@ describe("every video producer with a rule lists a step after it", () => {
     const wires: E[] = [{ source: "rec", target: "step", targetHandle: firstInput(type) }]
     const d = stepDelta([rec, step], wires, combine, "step")
     expect(Number.isFinite(d.fixed), type).toBe(true)
-    for (const m of [1, 60]) expect(d.at(m), `${type} @ ${m} min`).toBeGreaterThanOrEqual(combineCharge([VIDEO_UTIL_PRICING.FALLBACK_DURATION_SECONDS]))
+    // A generation is listed at the clip its run renders and the step measures (Generate Video's default model renders
+    // 4 s); every other producer at no less than the 8-second stand-in.
+    const floor = generatedVideoRenderedSec(step, { runDefaultDuration: true })
+    const atLeast = floor === undefined ? combineCharge([VIDEO_UTIL_PRICING.FALLBACK_DURATION_SECONDS]) : combineCharge([floor + SLACK])
+    for (const m of [1, 60]) expect(d.at(m), `${type} @ ${m} min`).toBeGreaterThanOrEqual(atLeast)
   })
 })
 

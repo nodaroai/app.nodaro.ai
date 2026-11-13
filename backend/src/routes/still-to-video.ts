@@ -16,6 +16,7 @@ import {
   STILL_FPS_OPTIONS,
   STILL_FITS,
 } from "../providers/video/still-segment.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 // Enums come from the still-segment builder — the route's validation cannot
 // drift from what the worker can actually render. No duration field by
@@ -76,7 +77,8 @@ export async function stillToVideoRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("still-to-video", { jobId: job.id, ...restData, usageLogId })
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("still-to-video", { jobId: job.id, ...restData, usageLogId }))
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

@@ -17,8 +17,9 @@
  * so a bound here only needs to be sane, not a guarantee.
  */
 import { usdToCredits } from "@nodaro/shared/credits"
-import { getLlmModel, llmSendsSchema, supportsAdvancedMode } from "@nodaro/shared/llm-models"
+import { getLlmModel, supportsAdvancedMode } from "@nodaro/shared/llm-models"
 import { KIE_IMAGE_ESTIMATE_CHARS } from "../../lib/llm/kie-cost.js"
+import { sentSchemaText } from "../../lib/llm/structured-schema.js"
 import type { LlmRequest } from "../../lib/llm/types.js"
 import { llmEffectiveOutputCap } from "../../lib/llm-node-output-cap.js"
 import {
@@ -136,15 +137,15 @@ export function llmInputTokenBound(input: { text: string; imageCount: number; me
 
 /**
  * {@link llmInputTokenBound} of a built request: the text is the system prompt,
- * the structured schema (`JSON.stringify(jsonSchema.schema)`, only when the
- * model's calls send it: `llmSendsSchema`) and every text
- * message or block; each `image` / `image_base64` block is one image; each
+ * the structured schema as it is sent (`sentSchemaText`: only when the model's
+ * calls send it; a prompt-JSON call's one-object rule and the schema's wire
+ * form) and every text message or block; each `image` / `image_base64` block is one image; each
  * `video` / `video_base64` / `audio` block adds `opts.mediaSeconds` (else
  * {@link LLM_UNKNOWN_MEDIA_SECONDS}).
  */
 export function llmRequestInputBound(req: LlmRequest, opts?: { mediaSeconds?: number }): number {
   const perMediaSeconds = opts?.mediaSeconds ?? LLM_UNKNOWN_MEDIA_SECONDS
-  let text = req.system + (req.jsonSchema && llmSendsSchema(req.modelId, req.feature) ? JSON.stringify(req.jsonSchema.schema) : "")
+  let text = req.system + sentSchemaText(req)
   let imageCount = 0
   let mediaSeconds = 0
   for (const message of req.messages) {

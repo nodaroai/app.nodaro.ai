@@ -36,6 +36,7 @@ import {
   speechUnitCreditId,
 } from "@nodaro/shared/credits"
 import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
+import { GENERATED_VOICE_NODE_TYPES } from "@nodaro/render-rules"
 import { getAppSettings } from "./app-settings.js"
 import { speechLengthPricingEnabled } from "./config.js"
 import { resolveOmittedTtsProvider } from "./omitted-tts-provider.js"
@@ -43,7 +44,8 @@ import { LLM_MAX_TOKENS_LIMIT, LLM_TEXT_NODE_TYPES, llmNodeOutputTokenCap } from
 import { SLOWEST_VOICE_SPEED, slowScriptChars } from "./video-output-length.js"
 import { billableDialogueChars, billableSpeechChars, dialogueBaseCredits, speechBaseCredits, speechRunsAs } from "./speech-credits.js"
 
-export const SPEECH_NODE_TYPES: ReadonlySet<string> = new Set(["text-to-speech", "text-to-dialogue"])
+/** The generated voices (Text to Speech, Text to Dialogue): the one set the measured walk reads too. */
+export const SPEECH_NODE_TYPES: ReadonlySet<string> = GENERATED_VOICE_NODE_TYPES
 /** A `{Label}` reference — resolved at run time, so its length is unknown now (the add-captions precedent). */
 const REFERENCE = /\{[^{}]+\}/
 const NO_REFS: ReadonlyMap<string, string> = new Map()

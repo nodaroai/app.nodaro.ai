@@ -57,8 +57,11 @@
  *     `failed` with its key cleared and its hold still `reserved`, which no
  *     sweep reads — the report is the only way an operator hears of it.
  *
- * `src/lib/__tests__/unit-route-enqueue-guard.test.ts` holds every node unit's
- * route to `enqueueUnitJob`.
+ * `enqueueRouteJobs` does the same for a batch route's jobs (the ones already
+ * queued keep running; the 500 names them), and `enqueueUnitJob` for a node
+ * unit's job on its own queue. `lib/enqueue-execution.ts` is the twin for a
+ * workflow run. `src/lib/__tests__/route-enqueue-guard.test.ts` holds every
+ * route (`routes/`, `ee/routes/`, the node units') to these helpers.
  */
 import type { FastifyReply, FastifyRequest } from "fastify"
 import { videoQueue } from "./queue.js"
@@ -154,6 +157,24 @@ async function refundUnqueuedJob(req: FastifyRequest, jobId: string): Promise<vo
 }
 
 /**
+ * Settle a job the queue refused: fail it from `pending` (its key released),
+ * refund it confirmed when this call flipped it, report it when the outcome
+ * stays unknown. Answers the failure's outcome: "missed" means the job moved
+ * on (it is running, or its owner cancelled it). Never throws.
+ */
+async function settleUnqueuedJob(req: FastifyRequest, jobId: string): Promise<JobFailureOutcome> {
+  let outcome: JobFailureOutcome = "error"
+  try {
+    outcome = await failUnqueuedJob(jobId)
+    if (outcome === "flipped") await refundUnqueuedJob(req, jobId)
+    else if (outcome === "error") await reportUnconfirmedFailure(req, jobId)
+  } catch (failErr) {
+    req.log.error({ err: failErr, jobId }, "could not fail or refund a job the queue refused")
+  }
+  return outcome
+}
+
+/**
  * Run `enqueue` for the job `jobId` the route inserted and reserved. On
  * success it sends nothing: the route answers as it always did. When the
  * queue refuses the job it fails it, refunds it and sends the 500, so the
@@ -170,19 +191,66 @@ export async function enqueueRouteJob(
     await enqueue()
     return
   } catch (err) {
-    let outcome: JobFailureOutcome = "error"
-    try {
-      outcome = await failUnqueuedJob(jobId)
-      if (outcome === "flipped") await refundUnqueuedJob(req, jobId)
-      else if (outcome === "error") await reportUnconfirmedFailure(req, jobId)
-    } catch (failErr) {
-      req.log.error({ err: failErr, jobId }, "could not fail or refund a job the queue refused")
-    }
-    if (outcome === "missed") {
+    if ((await settleUnqueuedJob(req, jobId)) === "missed") {
       req.log.warn({ err, jobId }, "the queue refused a job that has since moved on — answered as started")
       return
     }
     sendInternalError(reply, req, err, UNQUEUED_JOB_CLIENT_MESSAGE)
+  }
+}
+
+/** What a batch route's 500 says when some of its jobs did start (`error.startedJobIds` lists them). */
+export const UNQUEUED_BATCH_CLIENT_MESSAGE =
+  "Some of the jobs could not be started. The jobs in startedJobIds are running; please try the rest again."
+
+/** One job of a batch route: the row it inserted and reserved, and how to queue it. */
+export interface RouteJobEnqueue {
+  readonly jobId: string
+  readonly enqueue: () => Promise<unknown>
+}
+
+/**
+ * Queue a batch route's jobs in order (its variants, versions or segments).
+ * When the queue refuses one, that job and every job after it — none of them
+ * queued — are settled like {@link enqueueRouteJob}'s (failed from `pending`,
+ * key released, refund confirmed); the jobs already queued keep running. The
+ * request is then answered `500 internal_error` with `error.startedJobIds`:
+ * the jobs that are running (the refused one too, when it moved on), so a
+ * client can follow them and run the rest again. When nothing ends up failed
+ * (the refused job had moved on and was the last), nothing is sent and the
+ * route answers as it always did. The route's next statement is
+ * `if (reply.sent) return`. Never throws.
+ */
+export async function enqueueRouteJobs(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  jobs: ReadonlyArray<RouteJobEnqueue>,
+): Promise<void> {
+  const started: string[] = []
+  for (let i = 0; i < jobs.length; i++) {
+    const job = jobs[i]!
+    try {
+      await job.enqueue()
+      started.push(job.jobId)
+      continue
+    } catch (err) {
+      const failed: string[] = []
+      if ((await settleUnqueuedJob(req, job.jobId)) === "missed") started.push(job.jobId)
+      else failed.push(job.jobId)
+      // The jobs after it were never handed to the queue: a "missed" one was
+      // cancelled meanwhile, not started.
+      for (const rest of jobs.slice(i + 1)) {
+        await settleUnqueuedJob(req, rest.jobId)
+        failed.push(rest.jobId)
+      }
+      if (failed.length === 0) {
+        req.log.warn({ err, jobId: job.jobId }, "the queue refused the last job of a batch that has since moved on — answered as started")
+        return
+      }
+      req.log.error({ startedJobIds: started, failedJobIds: failed }, "the queue refused part of a batch: the rest is failed and refunded")
+      sendInternalError(reply, req, err, started.length > 0 ? UNQUEUED_BATCH_CLIENT_MESSAGE : UNQUEUED_JOB_CLIENT_MESSAGE, { startedJobIds: started })
+      return
+    }
   }
 }
 

@@ -193,6 +193,20 @@ function extendPeakMemoryMiB(canvas: PictureShape, decoded: readonly PictureShap
   })
 }
 
+/** The picture the default launch estimate (`defaultLaunchPeakMiB`) is the base of: 1080p. */
+const DEFAULT_ESTIMATE_PICTURE: PictureShape = { width: 1920, height: 1080 }
+
+/**
+ * What re-encoding one picture of `size` holds beyond the same launch on a
+ * 1080p picture, the one the default launch estimate is the base of: the
+ * stitch's size → memory model (`extendPeakMemoryMiB`) at the two sizes, 0 at
+ * or below 1080p's megapixels.
+ */
+function pictureAboveDefaultMiB(size: PictureShape): number {
+  const reencode = (picture: PictureShape): number => extendPeakMemoryMiB(picture, [picture], false)
+  return Math.max(0, reencode(size) - reencode(DEFAULT_ESTIMATE_PICTURE))
+}
+
 /**
  * How the extend's tail (its `@video_1` reference, and the last frame taken
  * from it) is cut from `source` (`extractTailToFile`'s options). An HDR, a
@@ -200,18 +214,26 @@ function extendPeakMemoryMiB(canvas: PictureShape, decoded: readonly PictureShap
  * conversion (`deliveredPictureFilter`: rounded down to even, to SDR, to
  * limited range), so the model continues the very picture the result shows,
  * the boundary match compares like with like, and an odd-size picture can be
- * encoded at all (H.264 4:2:0 needs even sides). An HDR source's cut is
- * admitted at what a tail cut reserves (the default launch,
- * `defaultLaunchPeakMiB`) plus the tone-map's buffers at the source's stored
- * size (4K when it reports none); any other one's at the default. Any other
- * source: nothing, the tail cut exactly as it always was.
+ * encoded at all (H.264 4:2:0 needs even sides). Any other source's picture is
+ * cut as it always was.
+ *
+ * Every cut decodes and re-encodes the source's picture, so it is admitted at
+ * what a tail cut reserves (the default launch, `defaultLaunchPeakMiB`, a
+ * 1080p estimate) plus what a picture of the source's stored size holds beyond
+ * 1080p (`pictureAboveDefaultMiB`; 4K when it reports no size), plus the
+ * tone-map's buffers at that size for an HDR source. A cut that adds nothing
+ * to the default (an SDR source at or below 1080p) names no launch: admitted
+ * at the default, exactly as before.
  */
 export function extendTailPicture(source: MatchedProbe): { pictureFilter?: string; launch?: { peakMemoryMiB: number } } {
   const pictureFilter = deliveredPictureFilter(source)
-  if (!pictureFilter) return {}
-  if (!isHdr(source)) return { pictureFilter }
   const size: PictureShape = source.width && source.height ? { width: source.width, height: source.height } : { ...UHD_CANVAS }
-  return { pictureFilter, launch: { peakMemoryMiB: defaultLaunchPeakMiB() + Math.ceil(toneMapPeakMemoryMiB(size)) } }
+  const toneMap = pictureFilter !== undefined && isHdr(source)
+  const aboveDefaultMiB = pictureAboveDefaultMiB(size) + (toneMap ? Math.ceil(toneMapPeakMemoryMiB(size)) : 0)
+  return {
+    ...(pictureFilter ? { pictureFilter } : {}),
+    ...(aboveDefaultMiB > 0 ? { launch: { peakMemoryMiB: defaultLaunchPeakMiB() + aboveDefaultMiB } } : {}),
+  }
 }
 
 /** How far `probe`'s sound starts after its picture, in seconds (negative: before it); 0 when either start is unread. */

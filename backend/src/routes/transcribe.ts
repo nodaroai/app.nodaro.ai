@@ -25,6 +25,7 @@ import { measureNemotronTranscribeInput } from "../lib/nemotron-transcribe-input
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 // The providers this route ACCEPTS that can also honour word timestamps —
 // derived from the capability table, intersected with the route's own enum so
@@ -248,7 +249,7 @@ export async function transcribeRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("transcribe", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("transcribe", {
       jobId: job.id,
       audioUrl,
       provider,
@@ -263,7 +264,8 @@ export async function transcribeRoutes(app: FastifyInstance) {
       // (and the connected app), for the worker's gate (`importRightsOf`).
       ...(confirmationId ? { confirmationId } : {}),
       ...importJobFields(req),
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

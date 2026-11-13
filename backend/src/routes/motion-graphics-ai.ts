@@ -4,6 +4,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { insertJob, insertSyncJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
@@ -187,7 +188,8 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
           usageLogId = reservation?.usageLogId
         }
 
-        await videoQueue.add("motion-graphics-lottie", { ...lottiePayload, usageLogId })
+        await enqueueRouteJob(req, reply, lottieJob.id, () => videoQueue.add("motion-graphics-lottie", { ...lottiePayload, usageLogId }))
+        if (reply.sent) return
 
         return { jobId: lottieJob.id }
       }

@@ -105,14 +105,15 @@ describe("withFallback lane logging", () => {
     }
   })
 
+  // On 3.6 Flash: 3.8 (and 3.7) send no response_format on KIE (`kieSchemaInPrompt`).
   it("the direct lane is asked with the caller's own schema, not the KIE wire form", async () => {
     const { llmComplete } = await import("../llm-client.js")
-    geminiMock.callGeminiDirect.mockResolvedValue({ text: '{"type":"wide"}', usage: { inputTokens: 1, outputTokens: 1 }, model: "gemini-3.8-flash" })
+    geminiMock.callGeminiDirect.mockResolvedValue({ text: '{"type":"wide"}', usage: { inputTokens: 1, outputTokens: 1 }, model: "gemini-3.6-flash" })
     fetchMock.mockRejectedValue(new Error("socket hang up"))
     const schema = { type: "object", properties: { type: { type: "string" } } }
 
     const res = await llmComplete({
-      modelId: "gemini-3.8-flash",
+      modelId: "gemini-3.6-flash",
       system: "",
       messages: [{ role: "user", content: "hi" }],
       jsonSchema: { name: "shot", schema },
@@ -124,6 +125,29 @@ describe("withFallback lane logging", () => {
     const directReq = geminiMock.callGeminiDirect.mock.calls[0]![1] as { jsonSchema: { schema: unknown } }
     expect(directReq.jsonSchema.schema).toEqual({ type: "object", properties: { type: { type: "string" } } })
     expect(schema).toEqual({ type: "object", properties: { type: { type: "string" } } })
+  })
+
+  it("gemini-3.8-flash: KIE gets the schema's wire form in its system prompt and no response_format; its direct fallback the caller's schema and system", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    geminiMock.callGeminiDirect.mockResolvedValue({ text: '{"type":"wide"}', usage: { inputTokens: 1, outputTokens: 1 }, model: "gemini-3.8-flash" })
+    fetchMock.mockRejectedValue(new Error("socket hang up"))
+    const schema = { type: "object", properties: { type: { type: "string" } } }
+
+    const res = await llmComplete({
+      modelId: "gemini-3.8-flash",
+      system: "be terse",
+      messages: [{ role: "user", content: "hi" }],
+      jsonSchema: { name: "shot", schema },
+    })
+
+    expect(res.text).toBe('{"type":"wide"}')
+    const kieBody = JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)
+    expect(kieBody).not.toHaveProperty("response_format")
+    // `type` is a keyword to KIE's validator, so the property goes as `type_`.
+    expect(kieBody.messages[0].content).toContain('{"type":"object","properties":{"type_":{"type":"string"}}}')
+    const directReq = geminiMock.callGeminiDirect.mock.calls[0]![1] as { system: string; jsonSchema: { schema: unknown } }
+    expect(directReq.system).toBe("be terse")
+    expect(directReq.jsonSchema.schema).toEqual(schema)
   })
 
   it("no warn when the primary lane succeeds", async () => {

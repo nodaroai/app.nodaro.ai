@@ -4,6 +4,8 @@ import { supabase } from "../lib/supabase.js"
 import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { decryptToken } from "../services/social/encryption.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { tryEnqueueExecution, UNQUEUED_EXECUTION_CLIENT_MESSAGE, type UnqueuedExecutionOutcome } from "../lib/enqueue-execution.js"
+import { sendInternalError } from "../lib/http-errors.js"
 import { uploadBufferToR2 } from "../lib/storage.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { resolveBillingContext, shouldRefuseDegradedRunFor } from "../lib/billing-context.js"
@@ -99,6 +101,13 @@ export async function telegramWebhookRoutes(app: FastifyInstance) {
       if (downloads[1]) videoUrl = await uploadBufferToR2(downloads[1], `${keyPrefix}-video.mp4`, "video/mp4")
       if (downloads[2]) audioUrl = await uploadBufferToR2(downloads[2], `${keyPrefix}-audio.ogg`, "audio/ogg")
     }
+
+    // What this message's runs came to, for the answer below: how many
+    // started (queued, or refused but moved on), and what became of each one
+    // the queue refused.
+    let startedRuns = 0
+    const refusedOutcomes: UnqueuedExecutionOutcome[] = []
+    let lastRefusal: unknown = null
 
     for (const trigger of triggers) {
       if (trigger.chatIdFilter && chatId !== trigger.chatIdFilter && `@${chatId}` !== trigger.chatIdFilter) {
@@ -204,10 +213,34 @@ export async function telegramWebhookRoutes(app: FastifyInstance) {
           // A bot conversation cannot review a Preview render.
           reviewerPresent: false,
         }
-        await orchestrationQueue.add("workflow-execution", jobData, {
+        // A queue that refuses the run: it is failed from `pending` at once
+        // (lib/enqueue-execution.ts; nothing is held before this point), and
+        // the bot's other triggers still fire. The answer to Telegram is
+        // decided below, from every run this message fired.
+        const refused = await tryEnqueueExecution(req, execution.id, () => orchestrationQueue.add("workflow-execution", jobData, {
           jobId: execution.id,
-        })
+        }))
+        if (refused) {
+          const fields = { err: refused.err, triggerId: trigger.triggerId, executionId: execution.id, outcome: refused.outcome }
+          if (refused.outcome === "moved-on") req.log.warn(fields, "the queue refused a Telegram trigger's run that has since moved on")
+          else req.log.error(fields, "the queue refused a Telegram trigger's run")
+          refusedOutcomes.push(refused.outcome)
+          lastRefusal = refused.err
+          if (refused.outcome === "moved-on") startedRuns++
+        } else {
+          startedRuns++
+        }
       }
+    }
+
+    // An error answer makes Telegram deliver the message again, and that
+    // fires every trigger again. So it is given only when no run of this
+    // message started and every run the queue refused is failed: those runs
+    // carry no key, so the redelivery fires them again cleanly and starts
+    // nothing twice. A run that started, or one whose failure is not
+    // confirmed (it may still be pending, and may yet run), keeps the ok.
+    if (startedRuns === 0 && refusedOutcomes.length > 0 && refusedOutcomes.every((outcome) => outcome === "failed")) {
+      return sendInternalError(reply, req, lastRefusal, UNQUEUED_EXECUTION_CLIENT_MESSAGE)
     }
 
     return { ok: true }

@@ -14,6 +14,7 @@ import { textToAudioCreditId } from "@nodaro/shared/credits"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const textToAudioBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -81,7 +82,7 @@ export async function textToAudioRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("text-to-audio", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("text-to-audio", {
       jobId: job.id,
       prompt: finalPrompt,
       provider: modelIdentifier,
@@ -89,7 +90,8 @@ export async function textToAudioRoutes(app: FastifyInstance) {
       loop,
       promptInfluence,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

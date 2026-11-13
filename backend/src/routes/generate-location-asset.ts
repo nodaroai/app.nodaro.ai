@@ -17,6 +17,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { providerRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 // Single source of truth for the asset-type and attach-column enums lives in
 // `@nodaro/shared/entity-prompts` — reused by the MCP `generate_location` verb
@@ -325,7 +326,7 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("generate-location-asset", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-location-asset", {
       jobId: job.id,
       prompt,
       sourceImageUrl: resolvedSourceImageUrl,
@@ -339,7 +340,8 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
       attachToLocationId,
       attachToColumn,
       attachName,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

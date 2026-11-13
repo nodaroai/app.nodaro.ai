@@ -1,8 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertJob } from "../lib/insert-job.js"
-import { markJobFailed } from "../lib/job-failure.js"
-import { refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { z } from "zod"
 import { renderVideoCreditId } from "@nodaro/shared/scene3d"
 import { safeUrlSchema } from "../lib/url-validator.js"
@@ -149,6 +147,7 @@ const renderSceneGraphBody = z.object({
 import { PLAN_TYPES, validatePlanByType } from "../lib/plan-schemas.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const renderPlanBody = z.object({
   planType: z.enum(PLAN_TYPES),
@@ -206,7 +205,7 @@ export async function renderVideoRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await renderQueue.add("render-video", {
+    await enqueueRouteJob(req, reply, job.id, () => renderQueue.add("render-video", {
       jobId: job.id,
       template: body.template,
       fps: body.fps,
@@ -222,7 +221,8 @@ export async function renderVideoRoutes(app: FastifyInstance) {
       backgroundColor: body.backgroundColor,
       kenBurnsEnabled: body.kenBurnsEnabled,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })
@@ -265,11 +265,12 @@ export async function renderVideoRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await renderQueue.add("render-video", {
+    await enqueueRouteJob(req, reply, job.id, () => renderQueue.add("render-video", {
       jobId: job.id,
       sceneGraph,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })
@@ -339,21 +340,15 @@ export async function renderVideoRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    try {
-      await renderQueue.add("render-video", {
-        jobId: job.id,
-        planType,
-        plan,
-        usageLogId,
-        // A coordinator's child (the video director's render job) goes ahead in its lane; nothing else changes.
-        ...laneParentPayload(req),
-      })
-    } catch (error) {
-      if (await markJobFailed(job.id, { error_message: "Failed to enqueue video render" })) {
-        await refundReservedCreditsForJob(job.id)
-      }
-      return sendInternalError(reply, req, error, "Failed to enqueue video render")
-    }
+    await enqueueRouteJob(req, reply, job.id, () => renderQueue.add("render-video", {
+      jobId: job.id,
+      planType,
+      plan,
+      usageLogId,
+      // A coordinator's child (the video director's render job) goes ahead in its lane; nothing else changes.
+      ...laneParentPayload(req),
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   }

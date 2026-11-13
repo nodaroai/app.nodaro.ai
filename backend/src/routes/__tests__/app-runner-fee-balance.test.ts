@@ -47,10 +47,31 @@ vi.mock("@/services/app-execution.js", async (importOriginal) => {
   return { ...orig, executeAppRun: (p: unknown) => mockExecuteAppRun(p) }
 })
 
+// A run the queue refuses (lib/enqueue-execution.ts): its execution's failure write, the hold
+// release the twin's job sibling would make, and the report of a write that cannot land.
+const refusal = vi.hoisted(() => ({
+  failWaiting: vi.fn(async (..._a: unknown[]) => true),
+  refundJobHolds: vi.fn(async (..._a: unknown[]) => true),
+  appReport: vi.fn(async (_r: unknown) => true),
+}))
+vi.mock("@/lib/concurrency-lanes/run-failure.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/concurrency-lanes/run-failure.js")>()),
+  failWaitingExecution: refusal.failWaiting,
+  // The form the refused-run settle calls (lib/enqueue-execution.ts): refusal.failWaiting's answer after
+  // one write, so a false is believed without a read-back.
+  failWaitingExecutionDetailed: async (...a: unknown[]) => ({ failed: await refusal.failWaiting(...a), attempts: 1 }),
+}))
+vi.mock("@/lib/credits-job-lifecycle.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/credits-job-lifecycle.js")>()),
+  refundJobHoldsConfirmed: refusal.refundJobHolds,
+}))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: refusal.appReport }))
+
 import { appRunnerRoutes, invalidateAppCache } from "../app-runner.js"
 import { supabase } from "../../lib/supabase.js"
 import { orchestrationQueue } from "../../lib/orchestration-queue.js"
 import { CreditsService } from "../../ee/billing/credits.js"
+import { UNQUEUED_EXECUTION_CLIENT_MESSAGE, UNQUEUED_EXECUTION_MESSAGE } from "../../lib/enqueue-execution.js"
 
 const RUNNER = "00000000-0000-4000-8000-000000000001"
 const CREATOR = "00000000-0000-4000-8000-000000000002"
@@ -294,5 +315,46 @@ describe("a workspace-paid run of an app with the creator's fee", () => {
     expect(res.statusCode).toBe(202)
     expect(tables).not.toContain("organization_approved_apps")
     expect(afford.fn).not.toHaveBeenCalled()
+  })
+})
+
+describe("a monetized app's run the queue refuses", () => {
+  // The creator's fee is a balance check before the run and is settled after
+  // it (the orchestrator's monetization step), so a run the queue refuses has
+  // held nothing: its execution is failed, and no credit is reserved, taken
+  // or released.
+  it("the draft-run path: the execution is failed from pending, answered 500, and no fee is held or released", async () => {
+    const { tables } = setupApp(APP_ROW)
+    const refundCredits = vi.spyOn(CreditsService, "refundCredits")
+    const reserveCredits = vi.spyOn(CreditsService, "reserveCredits")
+    vi.mocked(orchestrationQueue.add).mockRejectedValueOnce(new Error("Connection is closed."))
+    try {
+      const res = await run(RUNNER, { runId: RUN_ID })
+      expect(res.statusCode).toBe(500)
+      expect(res.json()).toEqual({ error: { code: "internal_error", message: UNQUEUED_EXECUTION_CLIENT_MESSAGE } })
+      // The fee was checked against the balance before anything was written…
+      expect(covers).toHaveBeenCalledWith(RUNNER, 1050, undefined, expect.any(Boolean))
+      // …the execution is failed, its key released…
+      expect(refusal.failWaiting).toHaveBeenCalledWith(EXECUTION_ID, UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null })
+      // …and nothing was held, so nothing is released.
+      expect(reserveCredits).not.toHaveBeenCalled()
+      expect(refundCredits).not.toHaveBeenCalled()
+      expect(refusal.refundJobHolds).not.toHaveBeenCalled()
+      expect(tables).not.toContain("usage_logs")
+      expect(tables).not.toContain("credit_transactions")
+    } finally {
+      refundCredits.mockRestore()
+      reserveCredits.mockRestore()
+    }
+  })
+
+  it("a run that moved on meanwhile is answered as started, the fee left to be settled after it", async () => {
+    setupApp(APP_ROW)
+    vi.mocked(orchestrationQueue.add).mockRejectedValueOnce(new Error("Connection is closed."))
+    refusal.failWaiting.mockResolvedValueOnce(false)
+    const res = await run(RUNNER, { runId: RUN_ID })
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toMatchObject({ executionId: EXECUTION_ID, status: "pending" })
+    expect(refusal.refundJobHolds).not.toHaveBeenCalled()
   })
 })

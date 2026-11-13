@@ -90,6 +90,9 @@ describe("POST /v1/video-sfx", () => {
   let guardCredits: number | undefined
   let refundCalls: string[] = []
   let jobDeleteIds: string[][] = []
+  // A job the queue refused (lib/enqueue-route-job.ts): the jobs failed, and the jobs refunded confirmed.
+  let unqueuedFailed: string[] = []
+  let unqueuedRefunded: string[] = []
 
   // Override knobs reset per test
   let reserveBehavior: ((jobId: string, callIndex: number) => Promise<{ usageLogId: string } | undefined> | { usageLogId: string } | undefined) | null = null
@@ -102,6 +105,8 @@ describe("POST /v1/video-sfx", () => {
     guardCredits = undefined
     refundCalls = []
     jobDeleteIds = []
+    unqueuedFailed = []
+    unqueuedRefunded = []
     reserveBehavior = null
 
     app = Fastify()
@@ -220,6 +225,23 @@ describe("POST /v1/video-sfx", () => {
       },
     }))
 
+    // What a job the queue refused goes through (lib/enqueue-route-job.ts):
+    // the failure write, the confirmed refund, and the app report when either
+    // cannot be confirmed. Only the partial-batch case reaches them.
+    vi.doMock("../../lib/job-failure.js", () => ({
+      markJobFailedDetailed: vi.fn(async (jobId: string) => {
+        unqueuedFailed.push(jobId)
+        return "flipped"
+      }),
+    }))
+    vi.doMock("../../lib/credits-job-lifecycle.js", () => ({
+      refundJobHoldsConfirmed: vi.fn(async (jobId: string) => {
+        unqueuedRefunded.push(jobId)
+        return true
+      }),
+    }))
+    vi.doMock("../../lib/app-reports.js", () => ({ insertAppReport: vi.fn(async () => true) }))
+
     const { default: videoSfxRoutes } = await import("../video-sfx.js")
     await app.register(videoSfxRoutes)
   })
@@ -234,6 +256,9 @@ describe("POST /v1/video-sfx", () => {
     vi.doUnmock("../../lib/app-settings.js")
     vi.doUnmock("../../lib/credit-base-cost.js")
     vi.doUnmock("../../ee/services/credits.js")
+    vi.doUnmock("../../lib/job-failure.js")
+    vi.doUnmock("../../lib/credits-job-lifecycle.js")
+    vi.doUnmock("../../lib/app-reports.js")
   })
 
   it("inserts 1 job for default versions and returns { jobId }", async () => {
@@ -380,5 +405,30 @@ describe("POST /v1/video-sfx", () => {
     // The route additionally deletes the un-reserved orphan (job-3) via supabase.in().
     // Verify the .in() delete call: only job-3 should be in it.
     expect(jobDeleteIds).toEqual([["job-3"]])
+  })
+
+  it("a queue that refuses the 2nd of 3 versions: the 1st keeps running, the 2nd and 3rd are failed and refunded, 500 names the 1st", async () => {
+    const { videoQueue } = await import("../../lib/queue.js")
+    const { UNQUEUED_BATCH_CLIENT_MESSAGE } = await import("../../lib/enqueue-route-job.js")
+    vi.mocked(videoQueue.add)
+      .mockResolvedValueOnce({ id: "queued-job-id" } as never)
+      .mockRejectedValueOnce(new Error("OOM command not allowed when used memory > 'maxmemory'."))
+
+    const res = await app.inject({
+      method: "POST", url: "/v1/video-sfx",
+      payload: { videoUrl: "https://example.com/v.mp4", versions: 3 },
+    })
+
+    expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({
+      error: { code: "internal_error", message: UNQUEUED_BATCH_CLIENT_MESSAGE, startedJobIds: ["job-1"] },
+    })
+    // job-3 is never handed to the queue once job-2 is refused.
+    expect(vi.mocked(videoQueue.add).mock.calls.map((c: any) => c[1].jobId)).toEqual(["job-1", "job-2"])
+    expect(unqueuedFailed).toEqual(["job-2", "job-3"])
+    expect(unqueuedRefunded).toEqual(["job-2", "job-3"])
+    // Nothing goes through the reservation rollback: the failed jobs are refunded by the helper.
+    expect(refundCalls).toEqual([])
+    expect(jobDeleteIds).toEqual([])
   })
 })

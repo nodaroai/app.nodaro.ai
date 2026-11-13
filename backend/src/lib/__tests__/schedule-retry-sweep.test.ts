@@ -26,7 +26,18 @@ const { db, mockQueueAdd } = vi.hoisted(() => ({
   mockQueueAdd: vi.fn(async () => ({})),
 }))
 
-const settle = vi.hoisted(() => ({ failWaitingExecution: vi.fn(async (_id: string, _message: string) => true) }))
+const settle = vi.hoisted(() => {
+  const failWaitingExecution = vi.fn(async (_id: string, _message: string, _extra?: Readonly<Record<string, unknown>>) => true)
+  return {
+    failWaitingExecution,
+    // The form a refused run's settle calls (lib/enqueue-execution.ts `failUnqueuedRun`):
+    // one write, so a false is believed without a read-back.
+    failWaitingExecutionDetailed: async (id: string, message: string, extra?: Readonly<Record<string, unknown>>) => ({
+      failed: await failWaitingExecution(id, message, extra),
+      attempts: 1,
+    }),
+  }
+})
 vi.mock("@/lib/concurrency-lanes/run-failure.js", () => settle)
 
 vi.mock("@/lib/workflow-access.js", () => ({ canRunWorkflow: vi.fn(async () => true) }))
@@ -287,7 +298,8 @@ describe("sweepScheduleRetries — a due failure is run again, the way the cron 
     await sweep()
 
     expect(db.insertAttempts).toHaveLength(1)
-    expect(settle.failWaitingExecution).toHaveBeenCalledWith("exec-new-1", expect.stringContaining("could not be queued"))
+    // The schedule's run keeps its key (the row holds the fire's claim): no extra columns.
+    expect(settle.failWaitingExecution).toHaveBeenCalledWith("exec-new-1", expect.stringContaining("could not be queued"), {})
     expect(db.triggers[0]!.last_triggered_at).toBe(NOW.toISOString())
   })
 

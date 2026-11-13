@@ -238,11 +238,10 @@ describe("the fixture's charge — every case, at its non-zero margins", () => {
 })
 
 describe("which wires the server's run estimate reads a length off", () => {
-  // Uploaded clips: RECORDINGS (an upload, a Video URL) at their recorded length. A generation
-  // is read by the shared rule (`generationSourceEstimateSec`, decided 2026-11-11): one that does
-  // not run at the length its result recorded (the run hands the step exactly that), one that
-  // runs and follows its own length at the most it can make, any other at its stored Duration
-  // (the length the run hands on; before, the estimators' fallback).
+  // Trim, Loop and Combine Videos are charged the length their run measures, so the estimate
+  // reads a wire by the measured walk the editor's quote reads: a recording at its recorded
+  // length, a node outside the run at the take it hands on, a node the run executes at the
+  // length it will render (video-utility-quote-parity.json holds the rest).
   const trim = { id: "x", type: "trim-video", data: { trimMode: "keep-first-seconds", keepFirstSeconds: 23 } }
   const edges = [{ id: "v-x", source: "v", target: "x", targetHandle: "in" }]
 
@@ -251,14 +250,16 @@ describe("which wires the server's run estimate reads a length off", () => {
     expect(await CreditsService.estimateWorkflowCredits([trim, upload], edges, { runNodeIds: new Set(["x"]) })).toBe(applyServiceMarkup(50, settings.current as never, "trim-video"))
   })
 
-  it("a generation that does not run: the length its result recorded (40 s → keep 23 s → 5 units)", async () => {
+  it("a generation outside the run: the take it hands on (40 s → keep 23 s → 5 units)", async () => {
     const generated = { id: "v", type: "generate-video", data: { duration: 40, generatedResults: [{ url: "https://m.test/g.mp4", duration: 40 }] } }
     expect(await CreditsService.estimateWorkflowCredits([trim, generated], edges, { runNodeIds: new Set(["x"]) })).toBe(applyServiceMarkup(50, settings.current as never, "trim-video"))
   })
 
-  it("a fixed-length generation that runs: its stored 40 s (keep 23 s → 5 units), never its last take's 12 s", async () => {
-    const generated = { id: "v", type: "generate-video", data: { duration: 40, generatedResults: [{ url: "https://m.test/g.mp4", duration: 12 }] } }
-    expect(await CreditsService.estimateWorkflowCredits([trim, generated], edges, { runNodeIds: new Set(["v", "x"]) })).toBe(applyServiceMarkup(50, settings.current as never, "trim-video"))
+  it("the same generation re-run: the clip its model renders, never its old take (Seedance 2 Fast's longest, 15 s → 3 units with the frame grace)", async () => {
+    const generated = { id: "v", type: "generate-video", data: { duration: 40, generatedResults: [{ url: "https://m.test/g.mp4", duration: 40 }] } }
+    expect(await CreditsService.estimateWorkflowCredits([trim, generated], edges, { runNodeIds: new Set(["x", "v"]) }).then(async (all) =>
+      all - (await CreditsService.estimateWorkflowCredits([generated], [], { runNodeIds: new Set(["v"]) })),
+    )).toBe(applyServiceMarkup(30, settings.current as never, "trim-video"))
   })
 })
 

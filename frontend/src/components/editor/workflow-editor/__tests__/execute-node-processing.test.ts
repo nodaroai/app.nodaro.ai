@@ -873,6 +873,8 @@ describe("trim-video", () => {
       "Trim Video",
       expect.anything(),
       expect.any(Function),
+      undefined,
+      { resultFields: expect.any(Function) },
     )
     const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
     await apiCallFn()
@@ -920,6 +922,39 @@ describe("trim-video", () => {
         upstreamDuration: undefined,
       },
     )
+  })
+
+  // The editor's Run sends the fields of the node's mode only (`trimVideoRunFields`), as the workflow run
+  // does and the pill prices: a time setting left from another mode never reaches the worker.
+  async function trimRunArgs(data: Record<string, unknown>): Promise<unknown[]> {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    mockTrimVideoApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("trim-video", data), makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    return mockTrimVideoApi.mock.calls[0] as unknown[]
+  }
+
+  it("keep-first with its seconds left empty and a stale time end: no stale end is sent", async () => {
+    const [, startTime, endTime, , , extras] = await trimRunArgs({ trimMode: "keep-first-seconds", startTime: 0, endTime: 60 })
+    expect(startTime).toBe(0)
+    expect(endTime).toBeUndefined()
+    expect(extras).toEqual(expect.objectContaining({ trimMode: "keep-first-seconds", keepFirstSeconds: undefined, smartLoopCut: false }))
+  })
+
+  it("seconds mode with a stale start and end: only its seconds fields, no end time", async () => {
+    const [, startTime, endTime, , , extras] = await trimRunArgs({ trimMode: "seconds", trimStartSeconds: 2, startTime: 5, endTime: 60 })
+    expect(startTime).toBe(0)
+    expect(endTime).toBeUndefined()
+    expect(extras).toEqual(expect.objectContaining({ trimMode: "seconds", trimStartSeconds: 2 }))
+  })
+
+  it("an end of 0 (the node's default) is no end; lossless and silent still go through", async () => {
+    const [, startTime, endTime, , silent, extras] = await trimRunArgs({ startTime: 3, endTime: 0, losslessKeyframe: true, outputSilentVideo: true })
+    expect(startTime).toBe(3)
+    expect(endTime).toBeUndefined()
+    expect(silent).toBe(true)
+    expect(extras).toEqual(expect.objectContaining({ trimMode: "time", losslessKeyframe: true }))
   })
 })
 

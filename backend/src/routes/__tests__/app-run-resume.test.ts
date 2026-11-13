@@ -23,7 +23,18 @@ const mocks = vi.hoisted(() => ({
   eligibility: vi.fn(),
   price: vi.fn(),
   checkRunSet: vi.fn(),
+  /** The Retry's failure write when the queue refuses it (lib/enqueue-execution.ts): true, it flipped the run. */
+  failWaiting: vi.fn(async (..._a: unknown[]) => true),
 }))
+
+vi.mock("@/lib/concurrency-lanes/run-failure.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/concurrency-lanes/run-failure.js")>()),
+  failWaitingExecution: mocks.failWaiting,
+  // The form the refused-run settle calls (lib/enqueue-execution.ts): mocks.failWaiting's answer after
+  // one write, so a false is believed without a read-back.
+  failWaitingExecutionDetailed: async (...a: unknown[]) => ({ failed: await mocks.failWaiting(...a), attempts: 1 }),
+}))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn(async () => true) }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/lib/config.js", async (importOriginal) => ({
@@ -65,6 +76,7 @@ vi.mock("@/lib/unit-descriptors.js", async (importOriginal) => {
 
 import { appRunResumeRoutes } from "../app-run-resume.js"
 import { supabase } from "../../lib/supabase.js"
+import { UNQUEUED_EXECUTION_CLIENT_MESSAGE, UNQUEUED_EXECUTION_MESSAGE } from "../../lib/enqueue-execution.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const OTHER = "00000000-0000-4000-8000-000000000002"
@@ -298,6 +310,26 @@ describe("POST /v1/app/:slug/runs/:runId/resume", () => {
     expect(mocks.queueAdd.mock.calls[0]![1]).toMatchObject({ continueFromExecutionId: EARLIER_EXEC, nodeIds: ["vid", "join"] })
     // Keyed by what the run points at now, so it is not the refused Retry's key.
     expect(mocks.inserts[0]!.key).toBe(`app-run-resume:${RUN_EXEC}`)
+  })
+
+  it("a queue that refuses the Retry: its execution is failed from pending with its key released, answered 500", async () => {
+    mocks.queueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    const res = await post()
+    expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({ error: { code: "internal_error", message: UNQUEUED_EXECUTION_CLIENT_MESSAGE } })
+    // Failed from `pending`, so the next press is a new Retry, not this one again.
+    expect(mocks.failWaiting).toHaveBeenCalledWith(RETRY_EXEC, UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null })
+    // The run points at it: a Retry refused before it started, which the next Retry steps over
+    // ("a Retry refused before it started holds nothing" above).
+    expect(mocks.runUpdates).toEqual([expect.objectContaining({ row: { execution_id: RETRY_EXEC, status: "running" } })])
+  })
+
+  it("a queue that refuses a Retry that has since moved on: answered as started", async () => {
+    mocks.queueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    mocks.failWaiting.mockResolvedValueOnce(false)
+    const res = await post()
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toMatchObject({ executionId: RETRY_EXEC, runId: RUN, nodeIds: ["vid", "join"] })
   })
 
   it("nothing left to run: 409, nothing created", async () => {

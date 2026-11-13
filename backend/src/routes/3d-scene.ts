@@ -67,14 +67,14 @@ import {
 import {
   WORKSPACE_HEADER_LOWER,
 } from "@nodaro/shared/organizations"
-import { cancelOwnedJob } from "../lib/cancel-job.js"
 import { shouldProxyLlmToCloud } from "../lib/cloud-llm-proxy.js"
 import { config } from "../lib/config.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 import { IMPORT_VIA_HEADER } from "../lib/import-via.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertJob } from "../lib/insert-job.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { discardUnstartedJob, stampAnalysisChild } from "../lib/llm-structured-job-row.js"
+import { cancelUnusedAnalysisChild, discardUnstartedJob, stampAnalysisChild } from "../lib/llm-structured-job-row.js"
 import { videoQueue } from "../lib/queue.js"
 import { llmPrecheckBaseCredits, reserveLlmCall } from "../lib/llm-billing.js"
 import { scene3DEditHoldRequest, scene3DGenerateHoldRequest } from "../services/scene3d/scene3d-authoring.js"
@@ -320,18 +320,23 @@ async function createAnalysisChild(
 }
 
 /**
- * Undo a parent that never started.
+ * Undo a parent that was never queued.
  *
- * Everything after `insertJob` + `reserveCreditsForJob` — creating the child,
- * stamping it on the row, the enqueue itself — can throw, and a throw there
- * used to leave a `pending` row holding a `reserved` credit hold that nothing
- * would ever settle: no BullMQ entry existed, so no worker would fail it and
- * no refund would run. The reconcile sweep does not cover a job that never
- * reached a provider. So every post-reservation failure funnels here, and it
- * goes through the established lifecycle helpers: `cancelOwnedJob` for the
- * analysis child (which refunds ITS hold and flips it to cancelled, the same
- * thing a user cancel does) and `discardUnstartedJob` for the parent (refund,
- * then delete, so a run that never started never shows in a run list).
+ * Between `insertJob` + `reserveCreditsForJob` and the enqueue, the analysis
+ * route can refuse the child, and creating the child or stamping it on the
+ * row can throw. A throw there used to leave a `pending` row holding a
+ * `reserved` credit hold that nothing would ever settle: no BullMQ entry
+ * existed, so no worker would fail it and no refund would run. So every such
+ * failure funnels here, through the established lifecycle helpers:
+ * `cancelUnusedAnalysisChild` for the analysis child (`cancelOwnedJob`, which
+ * refunds ITS hold and flips it to cancelled, the same thing a user cancel
+ * does) and `discardUnstartedJob` for the parent (refund, then delete, so a
+ * run refused before it was queued never shows in a run list).
+ *
+ * A queue that refuses the parent is NOT undone here: the parent is failed
+ * and refunded through `enqueueRouteJob` (lib/enqueue-route-job.ts), so the
+ * run shows as failed rather than vanishing, and its child is cancelled after
+ * it (see the handlers).
  *
  * Best-effort by construction: the caller is already answering an error, and
  * a failure to clean up must not replace it with a different one.
@@ -342,11 +347,7 @@ async function undoUnstartedParent(
   userId: string,
   analysisJobId?: string,
 ): Promise<void> {
-  if (analysisJobId) {
-    await cancelOwnedJob(analysisJobId, userId).catch((err: unknown) => {
-      req.log.error({ err, analysisJobId }, "[3d-scene] could not cancel the analysis child of an unstarted job")
-    })
-  }
+  await cancelUnusedAnalysisChild(req, analysisJobId, userId)
   await discardUnstartedJob(jobId, userId).catch((err: unknown) => {
     req.log.error({ err, jobId }, "[3d-scene] could not discard an unstarted job")
   })
@@ -474,8 +475,8 @@ export async function scene3DRoutes(app: FastifyInstance) {
           ))
       if (reply.sent) return
 
-      // From here on the parent holds reserved credits, so EVERY failure has
-      // to be undone explicitly — see `undoUnstartedParent`.
+      // From here on the parent holds reserved credits. A failure before it is
+      // queued is undone explicitly — see `undoUnstartedParent`.
       let analysisJobId: string | undefined
       try {
         if (videos.length === 1) {
@@ -485,29 +486,38 @@ export async function scene3DRoutes(app: FastifyInstance) {
             return reply.status(child.status).send(child.body)
           }
           analysisJobId = child.jobId
-          await stampAnalysisChild(job.id, userId, inputData, { analysisJobId })
         }
-
-        const payload: Scene3DJobPayload = {
-          kind: "generate",
-          jobId: job.id,
-          usageLogId: reservation?.usageLogId,
-          prompt: parsed.data.prompt,
-          llmModel: model.id,
-          reasoningEffort: parsed.data.reasoningEffort,
-          references,
-          revisionId: newScene3DRevisionId(),
-          ...frame,
-          ...(analysisJobId ? { analysisJobId, analyzedReferenceId: videos[0].id } : {}),
-        }
-        await videoQueue.add(SCENE3D_GENERATE_JOB_TYPE, payload as unknown as Record<string, unknown>, {
-          attempts: 1,
-          removeOnFail: { count: 200 },
-        })
       } catch (err) {
         await undoUnstartedParent(req, job.id, userId, analysisJobId)
         return sendInternalError(reply, req, err, "Failed to start 3D scene authoring")
       }
+
+      const payload: Scene3DJobPayload = {
+        kind: "generate",
+        jobId: job.id,
+        usageLogId: reservation?.usageLogId,
+        prompt: parsed.data.prompt,
+        llmModel: model.id,
+        reasoningEffort: parsed.data.reasoningEffort,
+        references,
+        revisionId: newScene3DRevisionId(),
+        ...frame,
+        ...(analysisJobId ? { analysisJobId, analyzedReferenceId: videos[0].id } : {}),
+      }
+      // The child's stamp runs inside the queue step: a throw there, like a
+      // queue that refuses the job, fails it and refunds it and answers the
+      // 500 (lib/enqueue-route-job.ts) — never a parent that vanishes. The
+      // analysis child started for it then has nobody to wait for it, so it is
+      // cancelled. A job that moved on is answered as started, its child left
+      // to run.
+      await enqueueRouteJob(req, reply, job.id, async () => {
+        if (analysisJobId) await stampAnalysisChild(job.id, userId, inputData, { analysisJobId })
+        return videoQueue.add(SCENE3D_GENERATE_JOB_TYPE, payload as unknown as Record<string, unknown>, {
+          attempts: 1,
+          removeOnFail: { count: 200 },
+        })
+      })
+      if (reply.sent) return cancelUnusedAnalysisChild(req, analysisJobId, userId)
       return { jobId: job.id }
   }
 
@@ -711,33 +721,38 @@ export async function scene3DRoutes(app: FastifyInstance) {
             return reply.status(child.status).send(child.body)
           }
           analysisJobId = child.jobId
-          await stampAnalysisChild(job.id, userId, inputData, { analysisJobId })
         }
-
-        const payload: Scene3DJobPayload = {
-          kind: "edit",
-          replaceReferences: parsed.data.replaceReferences,
-          jobId: job.id,
-          usageLogId: reservation?.usageLogId,
-          plan,
-          expectedRevisionId: parsed.data.expectedRevisionId,
-          revisionId,
-          lockedObjectIds,
-          selectedObjectIds,
-          references,
-          ...(operations ? { operations } : { instruction: parsed.data.prompt! }),
-          ...(model.ok ? { llmModel: model.id } : {}),
-          reasoningEffort: parsed.data.reasoningEffort,
-          ...(analysisJobId ? { analysisJobId, analyzedReferenceId: videos[0].id } : {}),
-        }
-        await videoQueue.add(SCENE3D_EDIT_JOB_TYPE, payload as unknown as Record<string, unknown>, {
-          attempts: 1,
-          removeOnFail: { count: 200 },
-        })
       } catch (err) {
         await undoUnstartedParent(req, job.id, userId, analysisJobId)
         return sendInternalError(reply, req, err, "Failed to start the 3D scene edit")
       }
+
+      const payload: Scene3DJobPayload = {
+        kind: "edit",
+        replaceReferences: parsed.data.replaceReferences,
+        jobId: job.id,
+        usageLogId: reservation?.usageLogId,
+        plan,
+        expectedRevisionId: parsed.data.expectedRevisionId,
+        revisionId,
+        lockedObjectIds,
+        selectedObjectIds,
+        references,
+        ...(operations ? { operations } : { instruction: parsed.data.prompt! }),
+        ...(model.ok ? { llmModel: model.id } : {}),
+        reasoningEffort: parsed.data.reasoningEffort,
+        ...(analysisJobId ? { analysisJobId, analyzedReferenceId: videos[0].id } : {}),
+      }
+      // The stamp, then the queue: a throw from either fails the job, refunds
+      // it and cancels its analysis child — as on generate.
+      await enqueueRouteJob(req, reply, job.id, async () => {
+        if (analysisJobId) await stampAnalysisChild(job.id, userId, inputData, { analysisJobId })
+        return videoQueue.add(SCENE3D_EDIT_JOB_TYPE, payload as unknown as Record<string, unknown>, {
+          attempts: 1,
+          removeOnFail: { count: 200 },
+        })
+      })
+      if (reply.sent) return cancelUnusedAnalysisChild(req, analysisJobId, userId)
       return { jobId: job.id }
   }
   app.post("/v1/3d-scene/edit", editOptions, editHandler)

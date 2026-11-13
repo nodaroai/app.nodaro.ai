@@ -71,6 +71,7 @@ import {
   seedanceDraftFinalizeBaseCredits,
   seedanceDraftFinalizeBilledSec,
 } from "../lib/seedance-draft-finalize.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const isNodaroVideoUpscaleBody = (body: unknown): boolean =>
   (body as { provider?: unknown } | undefined)?.provider === NODARO_VIDEO_UPSCALE_PROVIDER
@@ -446,18 +447,19 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
     if (nodaro) {
       // The clip, the tier and the measured seconds the hold was priced on —
       // the worker runs exactly these.
-      await videoQueue.add("video-upscale", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("video-upscale", {
         jobId: job.id,
         provider,
         targetResolution: nodaro.tier,
         // The stored clip's URL (the plan's), the same the job's request records.
         ...nodaroVideoUpscalePlanFields(nodaro),
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
       return { jobId: job.id }
     }
 
-    await videoQueue.add("video-upscale", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("video-upscale", {
       jobId: job.id,
       videoUrl,
       upscaleFactor,
@@ -472,7 +474,8 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
       ...(draft?.audioMux ? { draftAudioMux: draft.audioMux } : {}),
       ...(draft?.draftVideoUrl ? { draftVideoUrl: draft.draftVideoUrl } : {}),
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

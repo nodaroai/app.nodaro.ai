@@ -17,6 +17,7 @@ import { handleTextToVideoRequest, textToVideoBody, textToVideoPricing } from ".
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const SEEDANCE_EDIT_ONLY_LISTS = ["referenceImageUrls", "referenceVideoUrls", "referenceAudioUrls"] as const
 
@@ -205,7 +206,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("video-to-video", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("video-to-video", {
       jobId: job.id,
       videoUrl,
       prompt: finalPrompt,
@@ -222,7 +223,8 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       audioSetting,
       promptExtend,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

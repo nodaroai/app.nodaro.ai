@@ -10,6 +10,7 @@ import { insertJob } from "../lib/insert-job.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { videoQueue } from "../lib/queue.js"
+import { enqueueRouteJobs } from "../lib/enqueue-route-job.js"
 import { supabase } from "../lib/supabase.js"
 import { hasCredits } from "../lib/config.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -280,34 +281,47 @@ export default async function videoSfxRoutes(app: FastifyInstance): Promise<void
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    // Phase 2B: All reservations succeeded — enqueue every job.
+    // Phase 2B: All reservations succeeded — enqueue every job, in order.
     //
     // Worker reads canonical fields (videoUrl, prompt, etc.) from the
     // jobs row's input_data (single source of truth), but we still pass
     // them in the BullMQ payload for parity with the rest of the worker
     // pipeline and to avoid a second DB read on hot path.
+    //
+    // When the queue refuses one version, it and the versions after it are
+    // failed and refunded, the ones already queued keep running, and the
+    // request is answered 500 with `error.startedJobIds` (enqueueRouteJobs).
     // ──────────────────────────────────────────────────────────────────────
-    for (const r of reservations) {
-      const entry = inserted.find((e) => e.jobId === r.jobId)
-      if (!entry) continue  // unreachable; satisfies TS
-      const { inputData } = entry
-      await videoQueue.add("video-sfx", {
-        jobId: r.jobId,
-        userId,
-        model: "replicate-mmaudio",
-        videoUrl: inputData.videoUrl,
-        prompt: inputData.prompt,
-        negativePrompt: inputData.negativePrompt,
-        cfgStrength: inputData.cfgStrength,
-        numSteps: inputData.numSteps,
-        seed: inputData.seed,
-        duration_seconds: inputData.duration_seconds,
-        bucketKey: inputData.bucketKey,
-        iterationIndex: inputData.iterationIndex,
-        iterationTotal: inputData.iterationTotal,
-        usageLogId: r.usageLogId,
-      })
-    }
+    await enqueueRouteJobs(
+      req,
+      reply,
+      reservations.flatMap((r) => {
+        const entry = inserted.find((e) => e.jobId === r.jobId)
+        if (!entry) return []  // unreachable; satisfies TS
+        const { inputData } = entry
+        return [{
+          jobId: r.jobId,
+          enqueue: () =>
+            videoQueue.add("video-sfx", {
+              jobId: r.jobId,
+              userId,
+              model: "replicate-mmaudio",
+              videoUrl: inputData.videoUrl,
+              prompt: inputData.prompt,
+              negativePrompt: inputData.negativePrompt,
+              cfgStrength: inputData.cfgStrength,
+              numSteps: inputData.numSteps,
+              seed: inputData.seed,
+              duration_seconds: inputData.duration_seconds,
+              bucketKey: inputData.bucketKey,
+              iterationIndex: inputData.iterationIndex,
+              iterationTotal: inputData.iterationTotal,
+              usageLogId: r.usageLogId,
+            }),
+        }]
+      }),
+    )
+    if (reply.sent) return
 
     // Backward-compat response shape: versions=1 returns the legacy
     // `{ jobId }`, versions>1 returns `{ jobIds }`. Matches

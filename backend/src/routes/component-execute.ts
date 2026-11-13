@@ -6,7 +6,9 @@ import { isUserBlocked } from "../lib/access-blocks.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { insertJob, insertJobIdempotent } from "../lib/insert-job.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
-import { executeAppRun } from "../services/app-execution.js"
+import { executeAppRun, type ExecuteAppRunResult } from "../services/app-execution.js"
+import { UnqueuedRunError } from "../lib/enqueue-execution.js"
+import { markJobFailedDetailed } from "../lib/job-failure.js"
 import { parentExecutionIdOf } from "../lib/concurrency-lanes/parent-execution.js"
 import { importViaOf } from "../lib/import-via.js"
 import type { ComponentMetadata } from "@nodaro/shared/apps"
@@ -55,11 +57,33 @@ const bodySchema = z.object({
   billingContext: z.unknown().optional(),
 })
 
+/**
+ * What a component's wrapper job says (`jobs.error_message`) when its inner run
+ * could not be started: created or queued. Fixed text — the cause is logged.
+ */
+export const COMPONENT_RUN_NOT_STARTED_MESSAGE = "The component's run could not be started. Run it again."
+
 async function updateWrapperJob(jobId: string, fields: Record<string, unknown>) {
   // The wrapper settles here, never in a worker, so it carries the completion
   // bookkeeping itself (progress 100 on success; completed_at either way).
   const stamp = fields.status === "completed" ? completedJobColumns() : { completed_at: new Date().toISOString() }
   await supabase.from("jobs").update({ ...fields, ...stamp }).eq("id", jobId)
+}
+
+/**
+ * Fail a wrapper whose inner run could not be started: the fixed message and
+ * `extra` in one write (lib/job-failure.ts), from `processing` (the status the
+ * route inserts it in) only, so a wrapper its owner cancelled meanwhile keeps
+ * its cancel. Never throws: a write that fails leaves the wrapper to the
+ * stuck-wrapper sweep.
+ */
+async function failUnstartedWrapper(jobId: string, extra: Record<string, unknown>, req: FastifyRequest): Promise<void> {
+  try {
+    const outcome = await markJobFailedDetailed(jobId, { error_message: COMPONENT_RUN_NOT_STARTED_MESSAGE, from: ["processing"], extra })
+    if (outcome === "error") req.log.error({ jobId }, "could not fail a component wrapper whose inner run did not start")
+  } catch (err) {
+    req.log.error({ err, jobId }, "could not fail a component wrapper whose inner run did not start")
+  }
 }
 
 export async function componentExecuteRoutes(app: FastifyInstance) {
@@ -256,8 +280,9 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     // Runs the full published workflow (same as app runner) — no node subset
     // filtering so the execution is identical to Present mode.
     setImmediate(async () => {
+      let result: ExecuteAppRunResult
       try {
-        const result = await executeAppRun({
+        result = await executeAppRun({
           appVersionId: appRow.id,
           workflowId: appRow.workflow_id as string,
           userId: req.userId!,
@@ -275,7 +300,35 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
           ...(forwardedPreviewStopRule !== undefined ? { previewStopRule: forwardedPreviewStopRule } : {}),
           ...(forwardedCheapLanesOnly ? { cheapLanesOnly: true } : {}),
         })
+      } catch (err) {
+        // The inner run could not be created or queued. The wrapper is failed
+        // with a fixed message (the cause stays in the log, never in the job),
+        // from `processing` only, so a wrapper its owner cancelled meanwhile
+        // keeps its cancel. Whether its Idempotency-Key goes with it depends
+        // on whether anything may be running:
+        //   - nothing was queued (a row could not be created), or the queue
+        //     refused the run and executeAppRun failed it from `pending`
+        //     ("failed"): nothing runs, so the key is released in the same
+        //     write and a retry with the same key starts a new run;
+        //   - the queue refused the run and its state is unknown
+        //     ("unsettled"): it may be waiting or running. The key stays, so
+        //     a same-key retry never starts a second run beside it, and the
+        //     inner run is stamped on the wrapper as a started one is.
+        req.log.error({ err, jobId: wrapperJob.id }, "a component's inner run could not be started")
+        await failUnstartedWrapper(
+          wrapperJob.id,
+          err instanceof UnqueuedRunError && err.outcome === "unsettled"
+            ? { input_data: { ...wrapperInput, _executionId: err.executionId } }
+            : { idempotency_key: null },
+          req,
+        )
+        return
+      }
 
+      // From here on the inner run exists and may be running: a failure below
+      // keeps the wrapper's key, so a same-key retry never starts a second run
+      // beside it.
+      try {
         // Stamp the nested execution id on the wrapper IMMEDIATELY (it was
         // otherwise only written on terminal completion below). If this server
         // process dies mid-poll, the wrapper is left "processing" forever — the

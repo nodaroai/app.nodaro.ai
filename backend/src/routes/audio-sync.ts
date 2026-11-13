@@ -11,6 +11,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { audioSyncCreditId } from "../lib/audio-sync-credit-id.js"
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES } from "../providers/audio/audio-sync-budget.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 // Keyless, ffmpeg + in-process correlation: measures how far apart the clocks
 // of 2–6 recordings of one conversation are, against `reference` (default: the
@@ -108,7 +109,8 @@ export async function audioSyncRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("audio-sync", { jobId: job.id, ...restData, usageLogId })
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("audio-sync", { jobId: job.id, ...restData, usageLogId }))
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }
