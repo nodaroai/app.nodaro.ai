@@ -174,6 +174,7 @@ export const MODEL_MAKERS = {
   bytedance: { name: "ByteDance" },
   elevenlabs: { name: "ElevenLabs" },
   google: { name: "Google" },
+  heygen: { name: "HeyGen" },
   ideogram: { name: "Ideogram" },
   kuaishou: { name: "Kuaishou" },
   lightricks: { name: "Lightricks" },
@@ -3867,6 +3868,61 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "volcengine-lipsync:300s", credits: 6000, note: "5-min ceiling" },
     ],
   },
+  // LatentSync, HeyGen Lipsync Precision and Lipsync 2 Pro run on Replicate
+  // (providers/replicate/lip-sync.ts). Listed so a deployment's model
+  // restriction can name them (decided 2026-11-12); what they are sent and
+  // charged did not change. They take no size: the result keeps the size of the
+  // video they are given.
+  "latentsync": {
+    id: "latentsync",
+    kind: "video",
+    modes: ["lip-sync"] as const,
+    family: "LatentSync",
+    maker: "bytedance",
+    label: "LatentSync",
+    series: "LatentSync",
+    description: "Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input.",
+    useCases: ["lip-sync", "dubbing", "video-to-video"],
+    pricing: [{ identifier: "latentsync", credits: 7 }],
+  },
+  "heygen-lipsync-precision": {
+    id: "heygen-lipsync-precision",
+    kind: "video",
+    modes: ["lip-sync"] as const,
+    family: "HeyGen",
+    maker: "heygen",
+    label: "HeyGen Lipsync Precision",
+    series: "HeyGen",
+    description: "Dub existing footage with precise lip sync to a new audio track. Video input, billed per second.",
+    useCases: ["lip-sync", "dubbing", "video-to-video"],
+    pricing: [
+      { identifier: "heygen-lipsync-precision", credits: 10010, note: "5-min ceiling (no duration given)" },
+      { identifier: "heygen-lipsync-precision:15s", credits: 510 },
+      { identifier: "heygen-lipsync-precision:30s", credits: 1010 },
+      { identifier: "heygen-lipsync-precision:60s", credits: 2010 },
+      { identifier: "heygen-lipsync-precision:120s", credits: 4010 },
+      { identifier: "heygen-lipsync-precision:300s", credits: 10010, note: "5-min ceiling" },
+    ],
+  },
+  "lipsync-2-pro": {
+    id: "lipsync-2-pro",
+    kind: "video",
+    modes: ["lip-sync"] as const,
+    family: "Sync",
+    maker: "sync-labs",
+    label: "Lipsync 2 Pro",
+    series: "Sync",
+    description: "Studio-grade lip sync on existing footage, re-synced to a new audio track. Video input, billed per second.",
+    useCases: ["lip-sync", "dubbing", "video-to-video", "premium"],
+    pricing: [
+      { identifier: "lipsync-2-pro", credits: 12490, note: "5-min ceiling (no duration given)" },
+      { identifier: "lipsync-2-pro:15s", credits: 630 },
+      { identifier: "lipsync-2-pro:30s", credits: 1250 },
+      { identifier: "lipsync-2-pro:60s", credits: 2500 },
+      { identifier: "lipsync-2-pro:120s", credits: 5000 },
+      { identifier: "lipsync-2-pro:300s", credits: 12490, note: "5-min ceiling" },
+    ],
+  },
   // ── Video Depth ── (video-depth node; priced by the input clip's length via
   // videoDepthCreditId in video-depth.ts — `<provider>:<n>s`, one row per whole
   // second of the clip (`pricedClipSeconds`), representative rows below: `:1s` …
@@ -4483,6 +4539,48 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Suno v4 music generation — full songs with vocals, multiple genres.",
     useCases: ["music", "song", "vocals"],
     pricing: [{ identifier: "suno", credits: 30, note: "per generation" }],
+  },
+  // Suno v4.5, v4.5 All and v4.5+ (decided 2026-11-12): listed so a
+  // deployment's model restriction can name them, each with a price row of its
+  // own (SUNO_VERSION_CREDIT_KEYS) at the price those runs were charged before.
+  "suno-v4_5": {
+    id: "suno-v4_5",
+    kind: "audio",
+    modes: ["music"] as const,
+    family: "Suno",
+    maker: "suno",
+    label: "Suno v4.5",
+    series: "Suno",
+    dataValue: "V4_5",
+    description: "Suno v4.5 — improved quality and coherence over v4.",
+    useCases: ["music", "song", "vocals"],
+    pricing: [{ identifier: "suno-v4_5", credits: 30, note: "per generation" }],
+  },
+  "suno-v4_5all": {
+    id: "suno-v4_5all",
+    kind: "audio",
+    modes: ["music"] as const,
+    family: "Suno",
+    maker: "suno",
+    label: "Suno v4.5 All",
+    series: "Suno",
+    dataValue: "V4_5ALL",
+    description: "Suno v4.5 All — full instrument and vocal generation.",
+    useCases: ["music", "song", "vocals"],
+    pricing: [{ identifier: "suno-v4_5all", credits: 30, note: "per generation" }],
+  },
+  "suno-v4_5plus": {
+    id: "suno-v4_5plus",
+    kind: "audio",
+    modes: ["music"] as const,
+    family: "Suno",
+    maker: "suno",
+    label: "Suno v4.5 Plus",
+    series: "Suno",
+    dataValue: "V4_5PLUS",
+    description: "Suno v4.5 Plus — richer production than v4.5.",
+    useCases: ["music", "song", "vocals"],
+    pricing: [{ identifier: "suno-v4_5plus", credits: 30, note: "per generation" }],
   },
   "suno-v5": {
     id: "suno-v5",

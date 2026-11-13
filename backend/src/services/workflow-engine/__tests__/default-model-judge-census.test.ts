@@ -220,19 +220,11 @@ describe("every dispatchable node type that names no model resolves a default a 
  */
 const PROBE = "zz-not-a-model"
 
-const LIP_SYNC_AWAITING = "LatentSync, Wav2Lip, VideoReTalking, SadTalker, HeyGen Lipsync Precision and Lipsync 2 Pro run beside its catalog models and have no catalog entry. An entry needs each one's maker: two are not makers in MODEL_MAKERS yet, and Wav2Lip is a research release. Awaiting that decision (2026-11-12)"
-const SUNO_AWAITING = "Suno V4_5PLUS, V4_5ALL and V4_5 run beside the catalog's Suno versions and have no catalog entry; each is charged under its operation's row (`sunoCreditType`), so an entry needs a price row of its own, or one it is not charged under. Awaiting that decision (2026-11-12)"
+const LIP_SYNC_AWAITING = "Wav2Lip, VideoReTalking and SadTalker run beside its catalog models and have no catalog entry. They are being retired from Lip Sync (decided 2026-11-12), which removes them from the node"
 
 /** Node types that run catalog models AND accept options with no catalog entry, each with what deciding it needs. Only shrinks. */
 const MIXED_AWAITING_DECISION: Readonly<Record<string, string>> = {
   "lip-sync": LIP_SYNC_AWAITING,
-  "suno-generate": SUNO_AWAITING,
-  "suno-cover": SUNO_AWAITING,
-  "suno-extend": SUNO_AWAITING,
-  "suno-mashup": SUNO_AWAITING,
-  "suno-upload-extend": SUNO_AWAITING,
-  "suno-add-instrumental": SUNO_AWAITING,
-  "suno-add-vocals": SUNO_AWAITING,
 }
 
 interface NodeOptionCensus {
@@ -303,7 +295,16 @@ describe("every option a workflow node accepts runs a model a restriction can na
     // Wan Animate on Motion Transfer, beside the Kling motion models (decided 2026-11-12).
     expect([...byType("motion-transfer")!.gateable]).toEqual(expect.arrayContaining(["wan-animate-move", "wan-animate-replace", "motion-transfer", "kling-3.0-motion"]))
     expect(byType("motion-transfer")!.outside.size).toBe(0)
-    expect([...byType("lip-sync")!.outside.keys()]).toContain("provider=latentsync")
+    // LatentSync, HeyGen Lipsync Precision and Lipsync 2 Pro on Lip Sync (decided 2026-11-12).
+    const lipSync = byType("lip-sync")!
+    expect([...lipSync.gateable]).toEqual(expect.arrayContaining(["latentsync", "heygen-lipsync-precision", "lipsync-2-pro", "kling-avatar"]))
+    // A mixed node is visible to it: the Lip Sync options being retired.
+    expect([...lipSync.outside.keys()].sort()).toEqual(["provider=sadtalker", "provider=video-retalking", "provider=wav2lip"])
+    // Suno V4_5PLUS, V4_5ALL and V4_5 on every Suno node that runs a version (decided 2026-11-12).
+    for (const type of ["suno-generate", "suno-cover", "suno-extend", "suno-mashup", "suno-upload-extend", "suno-add-instrumental", "suno-add-vocals"]) {
+      expect([...byType(type)!.gateable], type).toEqual(expect.arrayContaining(["suno-v4_5plus", "suno-v6"]))
+      expect(byType(type)!.outside.size, type).toBe(0)
+    }
   })
 
   it("a model field the built job runs verbatim has its accepted values declared", () => {

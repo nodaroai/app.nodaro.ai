@@ -1114,8 +1114,8 @@ export function speakerViewCreditId(quality: unknown, tier?: unknown): SpeakerVi
  * satisfies the B3 egress invariant.
  *
  * The version → key map is {@link SUNO_VERSION_CREDIT_KEYS}; a version with no
- * entry (V4 / V4_5 / V4_5ALL / V4_5PLUS) falls back to the operation key, and a
- * non-version-priced operation is returned unchanged.
+ * entry (V4) falls back to the operation key, and a non-version-priced
+ * operation is returned unchanged.
  */
 export function sunoCreditType(model: string | undefined, operation: string): string {
   if (!(SUNO_VERSION_PRICED_OPERATIONS as readonly string[]).includes(operation)) {
@@ -1138,4 +1138,9 @@ export const SUNO_VERSION_CREDIT_KEYS: Readonly<Record<string, string>> = {
   V6_MINI: "suno-v6_mini",
   V5_5: "suno-v5_5",
   V5: "suno-v5",
+  // Their own rows since 2026-11-12, at the price their runs were charged
+  // under the operation's row before.
+  V4_5PLUS: "suno-v4_5plus",
+  V4_5ALL: "suno-v4_5all",
+  V4_5: "suno-v4_5",
 }

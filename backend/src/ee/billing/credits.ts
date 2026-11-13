@@ -2083,6 +2083,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // Replicate disabled
   // "tangoflux": 4, // Replicate SFX, estimated
   "suno": 30,                     // (V4) — base
+  "suno-v4_5": 30,                // (V4.5) — own row since 2026-11-12, the price its runs had under the operation's row
+  "suno-v4_5all": 30,             // (V4.5 All) — same
+  "suno-v4_5plus": 30,            // (V4.5+) — same
   "suno-v5": 30,                  // (V5)
   "suno-v5_5": 30,                // (V5.5)
   "suno-v6": 30,                  // (V6 — the default; 12 KIE credits, same as every prior version)

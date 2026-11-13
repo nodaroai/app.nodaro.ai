@@ -110,7 +110,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "Generate a music track from a text prompt. Returns a job_id.\n\n" +
         "**Picking a model**: Default `suno-v6` (flagship: richer detail, natural vocals). " +
         "`suno-v6_wild` is bolder and less predictable; `suno-v6_mini` is faster. " +
-        "`suno-v5_5` / `suno-v5` / `suno` are earlier generations. `minimax` follows a reference track. " +
+        "`suno-v5_5` / `suno-v5` / `suno-v4_5plus` / `suno-v4_5all` / `suno-v4_5` / `suno` are earlier generations. `minimax` follows a reference track. " +
         "For instrumental tracks set `instrumental: true`; for songs with vocals " +
         "provide `lyrics`.\n\n" +
         "**Presets/templates**: call list_node_presets { nodeType: \"generate-music\" } " +
@@ -147,7 +147,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             `Music model. Default ${DEFAULT_SUNO_CATALOG_ID}; suno-v6_wild bolder, suno-v6_mini faster; ` +
-            "suno-v5_5 (also as suno-v5-5) / suno-v5 / suno earlier; minimax needs a reference_audio_url.",
+            "suno-v5_5 (also as suno-v5-5) / suno-v5 / suno-v4_5plus / suno-v4_5all / suno-v4_5 / suno earlier; minimax needs a reference_audio_url.",
           ),
         duration: z.number().min(1).max(30).optional(),
         instrumental: z.boolean().optional(),

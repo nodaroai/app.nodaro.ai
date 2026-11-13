@@ -118,6 +118,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 <!-- AUTO-GEN:START model-table-video -->
 | Model | Family | Tier | Credits | Modes | Best for |
 | --- | --- | --- | --- | --- | --- |
+| LatentSync | LatentSync | Everyday | 8<!-- credits: latentsync --> | lip-sync | Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input. |
 | Nodaro Video Upscale | Nodaro Upscale | — | 17<!-- credits: nodaro-video-upscale:1080p:per-4s --> | video-upscale | Upscale any clip of up to 60 seconds and 50 MB into a 1080p, 2K or 4K frame. It keeps the clip's shape (nothing is cropped), frame rate, length and sound. Priced per second of the clip; the listed price is four seconds at 1080p. Offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it. |
 | VEO 1080p Upscale | Google | Everyday | 22<!-- credits: veo-1080p --> | video-upscale | Upscale VEO output to 1080p. |
 | Runway (via KIE) | Runway | Everyday | 33<!-- credits: runway-kie --> | i2v, t2v | Runway Gen-3 routed through KIE. 5/10s at 720p/1080p. |
@@ -195,6 +196,8 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | OmniHuman 1.5 | Bytedance | Premium | 4455<!-- credits: omnihuman-1-5 --> | lip-sync | Premium prompt-directed talking avatar from a still image + audio. 720p / 1080p, up to 60s. People, pets, anime. |
 | Video Depth Anything | Depth Anything | Premium | 6600<!-- credits: video-depth-anything --> | video-depth | Temporally consistent depth video from any clip. Grayscale or colormapped, up to 2,400 frames or 300 seconds. |
 | Volcengine Lip Sync | Volcengine | Premium | 6600<!-- credits: volcengine-lipsync --> | lip-sync | Video-to-video AI dubbing — re-syncs lips to a new vocal track. Multi-speaker (scene detection + speaker ID) in basic mode. Video input, billed per second. |
+| HeyGen Lipsync Precision | HeyGen | Premium | 11011<!-- credits: heygen-lipsync-precision --> | lip-sync | Dub existing footage with precise lip sync to a new audio track. Video input, billed per second. |
+| Lipsync 2 Pro | Sync | Premium | 13739<!-- credits: lipsync-2-pro --> | lip-sync | Studio-grade lip sync on existing footage, re-synced to a new audio track. Video input, billed per second. |
 | Sync Lipsync v3 | Sync | Premium | 22000<!-- credits: sync-lipsync-v3 --> | lip-sync | Dub existing footage — re-syncs lips to a new audio track. Video input, billed per second. |
 <!-- AUTO-GEN:END model-table-video -->
 
@@ -217,6 +220,9 @@ Text-to-speech, voice design/changing, dubbing, sound effects, transcription, an
 | ElevenLabs v3 | ElevenLabs | Everyday | 33<!-- credits: elevenlabs-v3 --> | tts | Expressive ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API. |
 | ⭐ ElevenLabs v4 | ElevenLabs | Everyday | 33<!-- credits: elevenlabs-v4 --> | tts | Newest ElevenLabs TTS — [audio tags], stability and similarity control, up to 10,000 characters per request. Direct API. |
 | Suno v4 | Suno | Everyday | 33<!-- credits: suno --> | music | Suno v4 music generation — full songs with vocals, multiple genres. |
+| Suno v4.5 | Suno | Everyday | 33<!-- credits: suno-v4_5 --> | music | Suno v4.5 — improved quality and coherence over v4. |
+| Suno v4.5 All | Suno | Everyday | 33<!-- credits: suno-v4_5all --> | music | Suno v4.5 All — full instrument and vocal generation. |
+| Suno v4.5 Plus | Suno | Everyday | 33<!-- credits: suno-v4_5plus --> | music | Suno v4.5 Plus — richer production than v4.5. |
 | Suno v5 | Suno | Everyday | 33<!-- credits: suno-v5 --> | music | Suno v5 — better vocal quality than v4, more genres. Same price. |
 | Suno v5.5 | Suno | Everyday | 33<!-- credits: suno-v5_5 --> | music | Suno v5.5 — improved audio quality and expressiveness over v5. |
 | ⭐ Suno V6 | Suno | Everyday | 33<!-- credits: suno-v6 --> | music | Suno V6 — greater musical expression with more natural vocals and richer details. The flagship and the default. |

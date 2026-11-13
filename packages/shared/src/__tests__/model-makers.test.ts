@@ -93,6 +93,9 @@ describe("model makers", () => {
     expect(MODEL_CATALOG["depth-anything-frames"]!.maker).toBe("bytedance")
     expect(MODEL_CATALOG["volcengine-lipsync"]!.maker).toBe("bytedance") // Volcano Engine
     expect(MODEL_CATALOG["infinitalk"]!.maker).toBe("meituan") // MeiGen-AI
+    expect(MODEL_CATALOG["latentsync"]!.maker).toBe("bytedance") // ByteDance's research release
+    expect(MODEL_CATALOG["lipsync-2-pro"]!.maker).toBe("sync-labs") // sync.so
+    expect(MODEL_CATALOG["heygen-lipsync-precision"]!.maker).toBe("heygen")
   })
 
   it("modelMakerOf serves the maker's id and the company's name", () => {

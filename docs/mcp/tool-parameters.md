@@ -1214,7 +1214,7 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `prompt` | string |  | From 1 to 2000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your prompt. From 1 to 200 characters. |
-| `model` | string |  | Music model. Default suno-v6; suno-v6_wild bolder, suno-v6_mini faster; suno-v5_5 (also as suno-v5-5) / suno-v5 / suno earlier; minimax needs a reference_audio_url. One of `suno`, `suno-v5`, `suno-v5_5`, `suno-v6`, `suno-v6_wild`, `suno-v6_mini`, `suno-v5-5`, `minimax`. |
+| `model` | string |  | Music model. Default suno-v6; suno-v6_wild bolder, suno-v6_mini faster; suno-v5_5 (also as suno-v5-5) / suno-v5 / suno-v4_5plus / suno-v4_5all / suno-v4_5 / suno earlier; minimax needs a reference_audio_url. One of `suno`, `suno-v4_5`, `suno-v4_5all`, `suno-v4_5plus`, `suno-v5`, `suno-v5_5`, `suno-v6`, `suno-v6_wild`, `suno-v6_mini`, `suno-v5-5`, `minimax`. |
 | `duration` | number |  | From 1 to 30. |
 | `instrumental` | boolean |  |  |
 | `lyrics` | string |  | The exact words to sing, with [Intro]/[Verse]/[Chorus] structure tags on their own lines. Supplying them switches Suno to custom mode, where they are sung as written (and `duration` starts working); without them the model invents its own words from the prompt. At most 2000 characters. |

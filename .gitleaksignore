@@ -73,6 +73,18 @@ ffd6dc89479c59b6ab90ec2eadb945a14d34f2a6:frontend/src/ee/app/billing-admin/__tes
 # key, so no later commit or squash repeats the match.
 4a2f6ee907114f6111a81a92a07cae1263429eaf:backend/src/middleware/__tests__/credit-guard-before-pricing.test.ts:generic-api-key:79
 
+# backend/src/__tests__/fixtures/suno-requests.ts: a recorded test fixture's credit-id field (its
+# name spelled model-k-e-y, its value a public price-row id such as Suno V6 Wild's) read as a
+# credential by generic-api-key.
+# It is no secret. This pins the PR-branch commit that introduced it; the fixture now names the
+# field `egressId`, so no later commit or squash repeats the match.
+d9d5b81de9a8adac5d2f6e17267cb5b8e1d1fc08:backend/src/__tests__/fixtures/suno-requests.ts:generic-api-key:128
+d9d5b81de9a8adac5d2f6e17267cb5b8e1d1fc08:backend/src/__tests__/fixtures/suno-requests.ts:generic-api-key:537
+d9d5b81de9a8adac5d2f6e17267cb5b8e1d1fc08:backend/src/__tests__/fixtures/suno-requests.ts:generic-api-key:967
+d9d5b81de9a8adac5d2f6e17267cb5b8e1d1fc08:backend/src/__tests__/fixtures/suno-requests.ts:generic-api-key:2819
+d9d5b81de9a8adac5d2f6e17267cb5b8e1d1fc08:backend/src/__tests__/fixtures/suno-requests.ts:generic-api-key:3053
+d9d5b81de9a8adac5d2f6e17267cb5b8e1d1fc08:backend/src/__tests__/fixtures/suno-requests.ts:generic-api-key:3301
+
 # Nemotron 3.5 Transcribe (PR #3078): `modelKey: "<the engine id>"` — our public model id
 # beside the word "modelKey" — read as a credential by generic-api-key. It is no secret. These
 # pin the PR-branch commits that introduced it; the lines now name the shared constant

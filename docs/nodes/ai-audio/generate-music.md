@@ -29,7 +29,7 @@ The Generate Music node produces original music with MiniMax, steered by a **ref
 |----------|-------|-------|
 | `minimax` | MiniMax Music | The only provider for this node |
 
-> **Note:** Suno models (`suno-v6` / `suno-v6_wild` / `suno-v6_mini` / `suno-v5_5` / `suno-v5` / `suno`) are **not** available through this node. They run through the dedicated **Suno Create Music** node (and related Suno-specific nodes) which use a separate client path. See [Suno Create Music](../suno-music/suno-generate.md) for Suno-based music generation.
+> **Note:** Suno models (`suno-v6` / `suno-v6_wild` / `suno-v6_mini` / `suno-v5_5` / `suno-v5` / `suno-v4_5plus` / `suno-v4_5all` / `suno-v4_5` / `suno`) are **not** available through this node. They run through the dedicated **Suno Create Music** node (and related Suno-specific nodes) which use a separate client path. See [Suno Create Music](../suno-music/suno-generate.md) for Suno-based music generation.
 
 ## Inputs & Outputs
 

@@ -649,17 +649,9 @@ function optionCensusOf(name: string, url: string, site: string, model: CreditGu
  * with what deciding it needs. Only shrinks: an entry here is a model a
  * deployment's allow list cannot withhold on a route it cannot withhold either.
  */
-const LIP_SYNC_AWAITING = "LatentSync, Wav2Lip, VideoReTalking, SadTalker, HeyGen Lipsync Precision and Lipsync 2 Pro run beside its catalog models and have no catalog entry. An entry needs each one's maker: two are not makers in MODEL_MAKERS yet, and Wav2Lip is a research release. Awaiting that decision (2026-11-12)"
-const SUNO_AWAITING = "Suno V4_5PLUS, V4_5ALL and V4_5 run beside the catalog's Suno versions and have no catalog entry; each is charged under its operation's row (`sunoCreditType`), so an entry needs a price row of its own, or one it is not charged under. Awaiting that decision (2026-11-12)"
+const LIP_SYNC_AWAITING = "Wav2Lip, VideoReTalking and SadTalker run beside its catalog models and have no catalog entry. They are being retired from Lip Sync (decided 2026-11-12), which removes them from the route"
 const MIXED_AWAITING_DECISION: Readonly<Record<string, string>> = {
   "POST /v1/lip-sync": LIP_SYNC_AWAITING,
-  "POST /v1/suno/generate": SUNO_AWAITING,
-  "POST /v1/suno/cover": SUNO_AWAITING,
-  "POST /v1/suno/extend": SUNO_AWAITING,
-  "POST /v1/suno/mashup": SUNO_AWAITING,
-  "POST /v1/suno/upload-extend": SUNO_AWAITING,
-  "POST /v1/suno/add-instrumental": SUNO_AWAITING,
-  "POST /v1/suno/add-vocals": SUNO_AWAITING,
 }
 
 /**
@@ -725,8 +717,22 @@ describe("every option a credit-guarded route accepts runs a model a restriction
     const image = byName("POST /v1/generate-image")!
     expect([...image.gateable]).toContain("flux-lora-character")
     expect(image.outside.size).toBe(0)
-    // A mixed route is visible to it.
-    expect([...byName("POST /v1/lip-sync")!.outside.keys()]).toContain("latentsync")
+    // LatentSync, HeyGen Lipsync Precision and Lipsync 2 Pro on /v1/lip-sync (decided 2026-11-12).
+    const lipSync = byName("POST /v1/lip-sync")!
+    expect([...lipSync.gateable]).toEqual(expect.arrayContaining(["latentsync", "heygen-lipsync-precision", "lipsync-2-pro", "kling-avatar"]))
+    // A mixed route is visible to it: the Lip Sync options being retired.
+    expect([...lipSync.outside.keys()].sort()).toEqual(["sadtalker", "video-retalking", "wav2lip"])
+    // Suno V4_5PLUS, V4_5ALL and V4_5 on every Suno route that runs a version (decided 2026-11-12).
+    for (const op of ["generate", "cover", "extend", "mashup", "upload-extend"]) {
+      const suno = byName(`POST /v1/suno/${op}`)!
+      expect([...suno.gateable], op).toEqual(expect.arrayContaining(["suno-v4_5plus", "suno-v4_5all", "suno-v4_5", "suno-v6", "suno"]))
+      expect(suno.outside.size, op).toBe(0)
+    }
+    for (const op of ["add-instrumental", "add-vocals"]) {
+      const suno = byName(`POST /v1/suno/${op}`)!
+      expect([...suno.gateable], op).toEqual(expect.arrayContaining(["suno-v4_5plus", "suno-v6"]))
+      expect(suno.outside.size, op).toBe(0)
+    }
   })
 
   it("no route runs both a catalog model and one no restriction can name, unless it awaits a decision listed above", () => {

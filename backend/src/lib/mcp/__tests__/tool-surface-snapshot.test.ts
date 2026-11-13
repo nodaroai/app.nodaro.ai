@@ -1611,6 +1611,14 @@ const FLUX_3_KLEIN_TOTAL_BYTES = 66
 // (before FLUX Fill's entry): 529_585 total − 528_463 = 1_122 B, all on transcribe (1_851 → 2_973 B).
 const NEMOTRON_TRANSCRIBE_BYTES = 1_122
 
+// RAISED 2026-11-12 by the Suno v4.5 Plus, v4.5 All and v4.5 model-catalog entries (a deployment's
+// model allow list can now name them): their ids join generate_music's catalog-derived `model`
+// enum (43 B) and the two hand-written model lists in its description (92 B), and nothing else.
+// The Lip Sync entries move no tool (lip_sync's list is the route's own). No tool was added, so
+// the fixture does NOT move. Measured by this suite: 528_916 total − 528_781 = 135 B, all on
+// generate_music.
+const SUNO_V4_5_CATALOG_ENTRIES_BYTES = 135
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES,
   totalBytes:
@@ -1813,7 +1821,8 @@ export const TOOL_WIRE_BUDGET = {
     LLM_PRICE_KEY_EFFORT_WORDING_BYTES +
     FLUX_FILL_CATALOG_ENTRY_BYTES +
     FLUX_3_KLEIN_TOTAL_BYTES +
-    NEMOTRON_TRANSCRIBE_BYTES,
+    NEMOTRON_TRANSCRIBE_BYTES +
+    SUNO_V4_5_CATALOG_ENTRIES_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }
