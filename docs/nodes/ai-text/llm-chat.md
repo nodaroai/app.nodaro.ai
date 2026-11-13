@@ -32,6 +32,7 @@ When the prompt (or a template) produces a single block with no `===NEXT===` mar
 | Max Tokens | `number` | `8192` | Maximum output length in tokens. A model's reasoning counts toward it, so the cap has a floor: at `xhigh`/`max` effort — and at **every** effort, including `Auto`, for the models that reason by default — it is raised to 32768 (Claude Haiku 5.5, Claude Opus 5, Claude Sonnet 5.5, Claude Opus 5.5, Claude Fable 5, Grok 4.6 and 4.7, the GPT-6 family except GPT-6.1 Terra, Kimi K3 and K3.1 Pro, DeepSeek V4.1 Flash, Gemini 4 Argon and Gemini 4 Carbon), 16384 (Gemini 3.8 Flash, Gemini 3.1 Pro) or 8192 (Gemini 3 Flash, Gemini 3.6 Flash). If the model still reaches the cap before it finishes, the run **fails** with a *cut off* error and is charged for the text the model wrote before it was cut off (the provider billed it) — a partial answer is never saved or passed to the next node. DeepSeek V4.1 Flash does not accept an output cap at all, so Max Tokens does not limit its answer |
 | # of runs | `number` | `1` | How many generations to produce per Run click (1–4 in the node's quick toolbar). Each run is charged separately — the Run button shows the multiplied estimate |
 | Effort | `string` | `Auto` | Reasoning effort for models that support it — hidden entirely for models with no reasoning levels. See [Reasoning effort](#reasoning-effort) |
+| Files (PDF) | `string[]` | — | `referenceFileUrls`: up to 5 PDF documents (100 pages in all) the model reads with the prompt — upload one in the **References** section or paste a public link. Shown only for a model that reads files (today **GPT-6.1 Terra**). See [Files (PDF)](#files-pdf) |
 | Advanced mode | `boolean` | `false` | Gemini and Claude models. Runs the model on the provider's own API so **Temperature**, **Max Tokens** (above the model's reasoning floor — see Max Tokens) and the full reasoning-depth range actually apply — those controls appear once it is on. The call is charged at that lane's per-token rate (see [Credit pricing](#credit-pricing)); the node's cost badge updates immediately. Disabled with an inline reason on other models |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the **User Input** (never the Instructions / system prompt) at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
@@ -108,6 +109,17 @@ Drag the **magnifier handle** at the bottom-left corner to zoom the node up to 2
 
 - **Image reference** — supported by every model. Useful for "describe this image", "write a caption", or generating prompts from a connected image.
 - **Video / audio reference** — supported **only by the video-capable Gemini models** (Gemini 3 Flash, Gemini 3.6 Flash, Gemini 3.8 Flash, or Gemini 3.1 Pro — Gemini 4 Argon and Gemini 4 Carbon are image-only for now). If a video or audio reference is connected, select one of those models or the reference is ignored.
+- **Files (PDF)** — read only by a model that reads files: today **GPT-6.1 Terra**. See below.
+
+### Files (PDF)
+
+On **GPT-6.1 Terra** the node can send documents with the prompt — "summarise this report", "extract the totals from these invoices". In the **References** section, **Upload PDF** stores the file in your uploads, or **+ Add a link** takes a public `https` link to a PDF.
+
+- **PDF only**, up to **5 files**, up to **6 MB** and **100 pages in all** for one run. Text, Word and other document types are not read.
+- Every file is downloaded and its pages counted by a PDF reader when the run starts, before any credits are held. When many documents are being read at once, the run may answer `503` ("try again in a moment"), also before anything is held. A file that cannot be downloaded, is not a PDF, is past a limit, or whose pages cannot be read (an encrypted or damaged PDF) fails the run with a `400` naming the file, and nothing is charged. So does any file sent to a model that does not read files.
+- Switching the node to a model that does not read files removes its files. A node that still carries files on such a model (written in workflow JSON, for example) fails with a `400` saying the model does not read files; its files are never silently left out.
+- **Pricing.** Files add to the price by their pages. A document is read as input: the run is charged its tokens at the model's input rate, like the rest of the prompt. The node's price badge does **not** include files — it shows a typical run without them. Before the run, the hold sets aside room for each page at up to 2,000 input tokens, plus 1,000 per file: for a 10-page PDF on GPT-6.1 Terra that is about 5 credits<!-- credits-llm-rate: gpt-6.1-terra:kie@21000/0 --> more held. The charge is what the model reports it read, usually far less, and the rest of the hold is released. When the model reports reading less than the files hold, each page is charged as at least 600 input tokens, plus 100 per file.
+- Over the API: `referenceFileUrls` on `POST /v1/llm-chat/generate` and `/v1/llm-chat/generate-stream` (`LlmChatParams` in the SDK).
 
 ## Presets
 
@@ -171,7 +183,7 @@ A run is charged for the tokens it actually used — its prompt (instructions, u
 - **Advanced mode** is on (Gemini and Claude models), or
 - you pick any **Effort** on a **Claude** model: Claude's reasoning effort only takes effect on Anthropic's own API, so choosing one sends the call there. Leave Effort on **Auto** to keep a Claude model on the aggregator.
 
-**GPT-6.1 Terra** is priced the same at every **Effort**: a typical run is ≈3 credits<!-- credits: llm-chat:gpt-6.1-terra -->, at Auto or with any Effort.
+**GPT-6.1 Terra** is priced the same at every **Effort**: a typical run is ≈6 credits<!-- credits: llm-chat:gpt-6.1-terra -->, at Auto or with any Effort.
 
 **Gemini 4 Argon** runs on Google's own API on every call — it has no aggregator route and no fallback — so it is always charged at that lane's rate, at every effort, with or without Advanced mode. On a self-hosted install it needs `GEMINI_API_KEY`; without it the run fails with a *provider unavailable* error rather than going elsewhere.
 

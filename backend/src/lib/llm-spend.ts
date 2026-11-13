@@ -9,7 +9,7 @@
 import { getLlmModel } from "@nodaro/shared/llm-models"
 import { CREDIT_BASE_USD } from "@nodaro/shared/models"
 import { LlmStreamAbortedError, LlmStreamResponseError } from "./llm-errors.js"
-import { kieCostUsd, kieInputUntrusted, requestChars } from "./llm/kie-cost.js"
+import { kieCostUsd, kieInputUntrusted, documentInputFloorTokens, requestChars } from "./llm/kie-cost.js"
 import { calculateLlmCost, llmPrimaryLane } from "./pricing/llm-cost.js"
 import { directLaneVendor } from "./llm/direct-vendor.js"
 import type { StructuredLlmOutput } from "./llm/structured.js"
@@ -24,10 +24,14 @@ export interface LlmBillingRecord {
    * this order: `floor` (it computed below `CREDIT_BASE_USD`, so the floor was
    * charged), `abort-estimate` (a stopped stream's estimate),
    * `kie-size-estimate` (a KIE Claude / GPT-6 call costed from its request
-   * size), `provider-usage` (the adapter's cost or the lane rate × reported
-   * tokens), `kie-stated` (KIE's own stated charge for every attempt).
+   * size), `document-floor` (a call that sent documents and reported less
+   * input than they hold, its input charged at their measured size —
+   * `documentInputFloorTokens`; under `floor` when even that cost is below
+   * `CREDIT_BASE_USD`), `provider-usage` (the adapter's cost or the lane rate
+   * × reported tokens), `kie-stated` (KIE's own stated charge for every
+   * attempt).
    */
-  source: "kie-stated" | "kie-size-estimate" | "provider-usage" | "abort-estimate" | "floor"
+  source: "kie-stated" | "kie-size-estimate" | "document-floor" | "provider-usage" | "abort-estimate" | "floor"
   /** Attempts billed (each structured re-ask, fallback and repair counts). */
   calls: number
   /** The lane of each attempt, in order. */
@@ -40,7 +44,19 @@ function attemptSource(a: LlmAttemptSpend): AttemptSource {
   if (a.estimated) return "abort-estimate"
   if (a.creditsUsd !== undefined) return "kie-stated"
   if (a.lane === "kie" && kieInputUntrusted(a.modelId)) return "kie-size-estimate"
+  if (documentFloorApplies(a)) return "document-floor"
   return "provider-usage"
+}
+
+/**
+ * Whether an attempt's input is charged at its documents' floor (rule 3 of
+ * {@link llmAttemptCostUsd}): it sent documents, its reply stated no charge,
+ * its reported input is below the floor, and its usage is not a stopped
+ * stream's estimate. Such an attempt is recorded as `document-floor`.
+ */
+function documentFloorApplies(a: LlmAttemptSpend): a is LlmAttemptSpend & { fileInputFloor: number } {
+  return a.creditsUsd === undefined && !a.estimated && a.fileInputFloor !== undefined && a.inputTokens < a.fileInputFloor &&
+    !(a.lane === "kie" && kieInputUntrusted(a.modelId))
 }
 
 /**
@@ -51,10 +67,14 @@ function attemptSource(a: LlmAttemptSpend): AttemptSource {
  *     never GPT-6.1 Terra, whose count is real): the size estimate — the request's
  *     characters ÷ 4 in, the reported output tokens out — at the KIE rate
  *     (`kieCostUsd`);
- *  3. the adapter's `providerCost` — unless it is 0 beside real tokens (the
+ *  3. for a request that sent documents whose reported input is below their
+ *     measured size (`fileInputFloor`, `documentInputFloorTokens`; never a
+ *     stopped stream's estimate): the lane's rate × that floor in, the
+ *     reported output out;
+ *  4. the adapter's `providerCost` — unless it is 0 beside real tokens (the
  *     rate-table fallback that found no rate, `llmCostOrZero`), which is
- *     recomputed by rule 4;
- *  4. the lane's rate × the reported tokens (`calculateLlmCost`).
+ *     recomputed by rule 5;
+ *  5. the lane's rate × the reported tokens (`calculateLlmCost`).
  * Each rate-based rule throws `LlmRateMissingError` on a missing rate; none
  * ever returns 0 for want of one.
  */
@@ -62,6 +82,12 @@ export function llmAttemptCostUsd(a: LlmAttemptSpend): number {
   if (a.creditsUsd !== undefined) return a.creditsUsd
   if (a.lane === "kie" && kieInputUntrusted(a.modelId)) {
     return kieCostUsd(a.modelId, { promptChars: a.requestChars, answerChars: a.outputTokens * 4 })
+  }
+  // A call that sent documents and reported less input than they hold (a
+  // stream's reply with no stated charge; a document call has reported 0):
+  // its input is charged at its documents' measured size plus its text.
+  if (documentFloorApplies(a)) {
+    return calculateLlmCost(a.modelId, { inputTokens: a.fileInputFloor, outputTokens: a.outputTokens }, a.lane === "kie" ? "kie" : "direct")
   }
   // A 0 cost beside real tokens is a rate-table figure that found no rate
   // (`llmCostOrZero`), never a free call: recompute it, which throws when the
@@ -104,11 +130,12 @@ function servedLaneOf(value: unknown, what: string): LlmServedLane {
  */
 function checkedAttempt(a: {
   lane: unknown; modelId: unknown; requestChars: unknown; inputTokens: unknown; outputTokens: unknown
-  providerCost?: unknown; creditsUsd?: unknown; estimated?: unknown
+  providerCost?: unknown; creditsUsd?: unknown; estimated?: unknown; fileInputFloor?: unknown
 }): LlmAttemptSpend {
   if (typeof a.modelId !== "string" || a.modelId === "") throw new TypeError("LlmSpend.add: modelId must be a model id")
   const providerCost = optionalCount(a.providerCost, "providerCost")
   const creditsUsd = optionalCount(a.creditsUsd, "creditsUsd")
+  const fileInputFloor = optionalCount(a.fileInputFloor, "fileInputFloor")
   return {
     lane: servedLaneOf(a.lane, "lane"),
     modelId: a.modelId,
@@ -118,7 +145,14 @@ function checkedAttempt(a: {
     ...(providerCost !== undefined ? { providerCost } : {}),
     ...(creditsUsd !== undefined ? { creditsUsd } : {}),
     ...(a.estimated === true ? { estimated: true as const } : {}),
+    ...(fileInputFloor ? { fileInputFloor } : {}),
   }
+}
+
+/** The documents' input floor of `request`, as an attempt carries it (absent for a call with none). */
+function fileFloorOf(request: LlmRequest): { fileInputFloor?: number } {
+  const floor = documentInputFloorTokens(request)
+  return floor > 0 ? { fileInputFloor: floor } : {}
 }
 
 function billed(u: { inputTokens: number; outputTokens: number; providerCost?: number; creditsUsd?: number }): boolean {
@@ -176,6 +210,7 @@ export class LlmSpend {
         outputTokens: r.usage?.outputTokens ?? 0,
         providerCost: r.providerCost,
         creditsUsd: r.creditsUsd,
+        ...fileFloorOf(request),
       }))
       return
     }
@@ -218,6 +253,7 @@ export class LlmSpend {
             providerCost: u.providerCost,
             creditsUsd: u.creditsUsd,
             estimated: cur instanceof LlmStreamAbortedError ? true : undefined,
+            ...fileFloorOf(request),
           }))
         }
         return
@@ -263,7 +299,7 @@ export class LlmSpend {
 
   get record(): LlmBillingRecord {
     const costUsd = this.costUsd
-    const order: readonly LlmBillingRecord["source"][] = ["abort-estimate", "kie-size-estimate", "provider-usage", "kie-stated"]
+    const order: readonly LlmBillingRecord["source"][] = ["abort-estimate", "kie-size-estimate", "document-floor", "provider-usage", "kie-stated"]
     const seen = new Set(this.#attempts.map(attemptSource))
     const source: LlmBillingRecord["source"] = costUsd < CREDIT_BASE_USD
       ? "floor"

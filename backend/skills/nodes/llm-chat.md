@@ -1,7 +1,7 @@
 ---
 node_type: llm-chat
-generated_at: 2026-10-20T21:12:35.117Z
-generated_from: 9ae3392be
+generated_at: 2026-11-13T15:03:27.382Z
+generated_from: dbc1e0419f
 ---
 
 # LLM Chat
@@ -41,6 +41,7 @@ generated_from: 9ae3392be
 - `referenceImageUrls?: readonly string[]`
 - `referenceVideoUrls?: readonly string[]`
 - `referenceAudioUrls?: readonly string[]`
+- `referenceFileUrls?: readonly string[]`
 
 **Default data:**
 ```json

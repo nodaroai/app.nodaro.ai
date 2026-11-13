@@ -312,6 +312,13 @@ describe("credit audit — LLM mode (per feature and model, cost vs charge)", ()
     expect(byKey.get("llm-chat:claude-fable-5")!.estimatedShare).toBe(0.5)
   })
 
+  it("a document call charged at its documents' floor counts as estimated", async () => {
+    meteredJob({ action: "llm-chat:gpt-6.1-terra", costUsd: 0.02, charged: 12, source: "document-floor" })
+    meteredJob({ action: "llm-chat:gpt-6.1-terra", costUsd: 0.02, charged: 12, source: "provider-usage" })
+    const { byKey } = await rows()
+    expect(byKey.get("llm-chat:gpt-6.1-terra")!.estimatedShare).toBe(0.5)
+  })
+
   it("a workspace overrun absorbed as org_usage_variance is a shortfall, not a charge", async () => {
     // commit_credits writes credits_charged = the full actual (917) on a workspace row,
     // but the budget only took 468: the 449 rest is an org_usage_variance line.

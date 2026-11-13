@@ -1,5 +1,5 @@
 import { LLM_ROUTE_REQUEST_TIMEOUT_MS, extendSocketTimeout } from "../lib/llm-route-timeout.js"
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply } from "fastify"
 import { maybeProxyLlmRouteToCloud, maybeProxyLlmStreamToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
@@ -10,7 +10,7 @@ import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { createSSEStream, type SSEController } from "../lib/sse.js"
-import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { acquireLiveLane, laneGuard, sendLaneAnswer } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 import { acquireStreamLane, restampProviderCallStart, type StreamLaneRefusal } from "../lib/concurrency-lanes/live-routes.js"
 import { primaryProviderOfLlm } from "../lib/concurrency-lanes/provider-of.js"
@@ -18,7 +18,9 @@ import { llmComplete, llmStream } from "../lib/llm-client.js"
 import type { LlmContentBlock, LlmRequest, LlmResponse } from "../lib/llm-client.js"
 import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult, stampSyncLlmCallStart } from "../lib/llm-billing.js"
 import { abortOnClientDisconnect, addCallToSpend, billedEvidence, meteredFailureMessage, meteredTextPrecheck, recordMeteredJobOutput } from "../lib/metered-text-route.js"
-import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, getLlmModalityCaps } from "@nodaro/shared/llm-models"
+import { LLM_FILE_MODELS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, LLM_REFERENCE_FILES_MAX, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, getLlmModalityCaps, llmAcceptsFiles } from "@nodaro/shared/llm-models"
+import { LlmFileError, prepareLlmFiles, type LlmFileBlock } from "../lib/llm-files.js"
+import { CLIENT_CLOSED, clientGoneSignal } from "../lib/client-gone.js"
 import { LLM_TEXT_INPUT_MAX } from "@nodaro/shared/models"
 import { advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
 import { LLM_CHEAP_LANES_SHAPE, cheapLanesParam } from "../lib/llm-cheap-lanes.js"
@@ -49,6 +51,10 @@ const llmChatBody = z.object({
   referenceImageUrls: z.array(z.string().url()).max(5).optional(),
   referenceVideoUrls: z.array(z.string().url()).max(3).optional(),
   referenceAudioUrls: z.array(z.string().url()).max(3).optional(),
+  // Documents (PDF), read by a model whose caps say `file` (GPT-6.1 Terra).
+  // Each is fetched, checked and its pages counted before anything is held
+  // (`prepareLlmFiles`).
+  referenceFileUrls: z.array(z.string().url()).max(LLM_REFERENCE_FILES_MAX).optional(),
   temperature: z.number().min(0).max(2).default(0.7),
   // 32768 matches LLM_ADVANCED_SHAPE and the Advanced-mode input's ceiling.
   // At 16384 a value the panel accepts hard-400s every later run of that node.
@@ -62,11 +68,12 @@ const llmChatBody = z.object({
 
 function buildUserContent(
   userInput: string,
-  refs: { images?: string[]; videos?: string[]; audios?: string[] },
+  refs: { images?: string[]; videos?: string[]; audios?: string[]; files?: LlmFileBlock[] },
 ): string | LlmContentBlock[] {
-  const hasMedia = ((refs.images?.length ?? 0) + (refs.videos?.length ?? 0) + (refs.audios?.length ?? 0)) > 0
+  const hasMedia = ((refs.images?.length ?? 0) + (refs.videos?.length ?? 0) + (refs.audios?.length ?? 0) + (refs.files?.length ?? 0)) > 0
   if (!hasMedia) return userInput
   const blocks: LlmContentBlock[] = []
+  for (const file of refs.files ?? []) blocks.push(file)
   for (const url of refs.images ?? []) blocks.push({ type: "image", url })
   for (const url of refs.videos ?? []) blocks.push({ type: "video", url })
   for (const url of refs.audios ?? []) blocks.push({ type: "audio", url })
@@ -75,12 +82,41 @@ function buildUserContent(
 }
 
 /**
+ * The call's documents, read before anything is held, or the answer that
+ * refuses them: `400` naming the file (`LlmFileError`), `503` when every PDF
+ * reader is busy, `499` when the client went away mid-read (`signal`: its
+ * fetches and page counts stop). None asked for: none fetched.
+ */
+async function filesOrRefusal(
+  urls: string[] | undefined,
+  signal: AbortSignal,
+  owner: string,
+): Promise<{ files: LlmFileBlock[] } | { status: number; error: { code: string; message: string } }> {
+  if (!urls?.length) return { files: [] }
+  try {
+    return { files: await prepareLlmFiles(urls, { signal, owner }) }
+  } catch (err) {
+    if (signal.aborted) return { status: 499, error: { ...CLIENT_CLOSED } }
+    if (err instanceof LlmFileError) {
+      return { status: err.code === "file_reader_busy" ? 503 : 400, error: { code: err.code, message: err.message } }
+    }
+    throw err
+  }
+}
+
+/** Sends a refusal from {@link filesOrRefusal}; a busy reader says when to try again. */
+function sendFilesRefusal(reply: FastifyReply, refusal: { status: number; error: { code: string; message: string } }) {
+  if (refusal.status === 503) reply.header("Retry-After", "5")
+  return reply.status(refusal.status).send({ error: refusal.error })
+}
+
+/**
  * Return null if refs are valid for the model, or an error payload when the
  * caller passed video/audio refs to a model that doesn't support them.
  */
 function checkModalityOrError(
   llmModel: string,
-  refs: { videos?: string[]; audios?: string[] },
+  refs: { videos?: string[]; audios?: string[]; files?: string[] },
 ): { code: string; message: string } | null {
   const caps = getLlmModalityCaps(llmModel)
   if (refs.videos?.length && !caps.video) {
@@ -88,6 +124,10 @@ function checkModalityOrError(
   }
   if (refs.audios?.length && !caps.audio) {
     return { code: "modality_not_supported", message: `Model ${llmModel} does not support audio references. Switch to a Gemini model.` }
+  }
+  if (refs.files?.length && !llmAcceptsFiles(llmModel)) {
+    const readers = LLM_FILE_MODELS.map((m) => m.displayName).join(" or ")
+    return { code: "modality_not_supported", message: `Model ${llmModel} does not read files. Switch to ${readers}.` }
   }
   return null
 }
@@ -208,7 +248,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         })
       }
 
-      const { systemPrompt, userInput, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, temperature, maxTokens } = parsed.data
+      const { systemPrompt, userInput, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, referenceFileUrls, temperature, maxTokens } = parsed.data
       const userId = req.userId
 
       if (!userId) {
@@ -227,7 +267,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       }
 
       const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["llm-chat"]
-      const modalityError = checkModalityOrError(llmModel, { videos: referenceVideoUrls, audios: referenceAudioUrls })
+      const modalityError = checkModalityOrError(llmModel, { videos: referenceVideoUrls, audios: referenceAudioUrls, files: referenceFileUrls })
       if (modalityError) {
         return reply.status(400).send({ error: modalityError })
       }
@@ -235,15 +275,19 @@ export async function llmChatRoutes(app: FastifyInstance) {
       if (advancedError) return reply.status(400).send({ error: advancedError })
       // No job row here, so the insert funnel's gate never sees the request:
       // a restricted file (migration 581) is not sent to the model either.
-      if (await restrictedInputKey({ referenceImageUrls, referenceVideoUrls, referenceAudioUrls }, { userId })) {
+      if (await restrictedInputKey({ referenceImageUrls, referenceVideoUrls, referenceAudioUrls, referenceFileUrls }, { userId })) {
         return reply.status(422).send(jobBlockedBody({ userMessage: CONTENT_RESTRICTED_MESSAGE }))
       }
+      // Documents are read here, before any job row or hold: the hold is sized
+      // by their pages, and a file that cannot be read is a 400, not a charge.
+      const prepared = await filesOrRefusal(referenceFileUrls, clientGoneSignal(reply), userId)
+      if ("error" in prepared) return sendFilesRefusal(reply, prepared)
       const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
       // Built once: the metered hold is sized from the very request the lane is sent.
       const request: LlmRequest = {
         modelId: llmModel,
         system: systemPrompt,
-        messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls }) }],
+        messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls, files: prepared.files }) }],
         ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
         ...cheapLanesParam(parsed.data),
         reasoningEffort: parsed.data.reasoningEffort,
@@ -409,7 +453,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         })
       }
 
-      const { systemPrompt, userInput, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, temperature, maxTokens } = parsed.data
+      const { systemPrompt, userInput, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, referenceFileUrls, temperature, maxTokens } = parsed.data
       const userId = req.userId
 
       if (!userId) {
@@ -428,7 +472,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       }
 
       const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["llm-chat"]
-      const modalityError = checkModalityOrError(llmModel, { videos: referenceVideoUrls, audios: referenceAudioUrls })
+      const modalityError = checkModalityOrError(llmModel, { videos: referenceVideoUrls, audios: referenceAudioUrls, files: referenceFileUrls })
       if (modalityError) {
         return reply.status(400).send({ error: modalityError })
       }
@@ -436,15 +480,31 @@ export async function llmChatRoutes(app: FastifyInstance) {
       if (advancedError) return reply.status(400).send({ error: advancedError })
       // No job row here, so the insert funnel's gate never sees the request:
       // a restricted file (migration 581) is not sent to the model either.
-      if (await restrictedInputKey({ referenceImageUrls, referenceVideoUrls, referenceAudioUrls }, { userId })) {
+      if (await restrictedInputKey({ referenceImageUrls, referenceVideoUrls, referenceAudioUrls, referenceFileUrls }, { userId })) {
         return reply.status(422).send(jobBlockedBody({ userMessage: CONTENT_RESTRICTED_MESSAGE }))
       }
+      // Documents are read here, before any job row or hold: the hold is sized
+      // by their pages, and a file that cannot be read is a 400, not a charge.
+      // The user's llm slot first, as the synchronous route takes it before
+      // its handler: one user's calls never queue more document reads than
+      // their slots allow. The stream's own take below then holds it.
+      if (referenceFileUrls?.length) {
+        const laneProvider = primaryProviderOfLlm({ modelId: llmModel, system: "", messages: [], ...resolveLlmParams(parsed.data, { maxTokens, temperature }), ...cheapLanesParam(parsed.data), reasoningEffort: parsed.data.reasoningEffort })
+        try {
+          await acquireLiveLane(req, { lane: "llm", provider: laneProvider, onWaiting: () => {} })
+        } catch (err) {
+          if (sendLaneAnswer(reply, err)) return reply
+          throw err
+        }
+      }
+      const prepared = await filesOrRefusal(referenceFileUrls, clientGoneSignal(reply), userId)
+      if ("error" in prepared) return sendFilesRefusal(reply, prepared)
       const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
       // Built once: the metered hold is sized from the very request the lane is sent.
       const request: LlmRequest = {
         modelId: llmModel,
         system: systemPrompt,
-        messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls }) }],
+        messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls, files: prepared.files }) }],
         ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
         ...cheapLanesParam(parsed.data),
         reasoningEffort: parsed.data.reasoningEffort,

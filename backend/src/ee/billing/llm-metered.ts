@@ -46,6 +46,17 @@ export const LLM_MEDIA_TOKENS_PER_SECOND = 300
 /** Seconds a media block of unknown length is held for. Under D1 any overrun is collected at settle. */
 export const LLM_UNKNOWN_MEDIA_SECONDS = 60
 
+/**
+ * Input tokens one page of a document (`file_base64`) is held for: a ceiling,
+ * so the hold is not below the charge. Measured 2026-11-13 on GPT-6.1 Terra: a
+ * dense 3-page text PDF added about 1,500 input tokens (about 500 a page);
+ * a page's picture may also be read, so the hold allows four times that.
+ */
+export const LLM_FILE_PAGE_TOKENS = 2_000
+
+/** Input tokens each document is held for on top of its pages (its name and framing). */
+export const LLM_FILE_TOKENS = 1_000
+
 /** The credit identifier a metered LLM call is charged (and marked up) under: `<feature>:<modelId>`. */
 export function llmChargeId(feature: MeteredLlmFeature, modelId: string): string {
   return `${feature}:${modelId}`
@@ -114,13 +125,19 @@ function assertSize(name: string, value: number, integer: boolean): void {
  * An input-token bound from a request's parts: ASCII text at
  * {@link LLM_CEILING_CHARS_PER_TOKEN} characters per token (rounded up), every
  * other UTF-16 code unit at one token (Hebrew, Japanese and Korean run near 1:1),
- * {@link LLM_IMAGE_TOKENS} per image and {@link LLM_MEDIA_TOKENS_PER_SECOND} per
- * second of video/audio (rounded up). `text` is text only — images and media
- * are counted through their own fields, never also as characters.
+ * {@link LLM_IMAGE_TOKENS} per image, {@link LLM_MEDIA_TOKENS_PER_SECOND} per
+ * second of video/audio (rounded up), and for documents
+ * {@link LLM_FILE_PAGE_TOKENS} per page plus {@link LLM_FILE_TOKENS} per file.
+ * `text` is text only — images, media and documents are counted through their
+ * own fields, never also as characters.
  */
-export function llmInputTokenBound(input: { text: string; imageCount: number; mediaSeconds: number }): number {
+export function llmInputTokenBound(input: { text: string; imageCount: number; mediaSeconds: number; fileCount?: number; filePages?: number }): number {
   assertSize("imageCount", input.imageCount, true)
   assertSize("mediaSeconds", input.mediaSeconds, false)
+  const fileCount = input.fileCount ?? 0
+  const filePages = input.filePages ?? 0
+  assertSize("fileCount", fileCount, true)
+  assertSize("filePages", filePages, true)
   let ascii = 0
   let nonAscii = 0
   for (let i = 0; i < input.text.length; i++) {
@@ -131,7 +148,9 @@ export function llmInputTokenBound(input: { text: string; imageCount: number; me
     Math.ceil(ascii / LLM_CEILING_CHARS_PER_TOKEN) +
     nonAscii +
     input.imageCount * LLM_IMAGE_TOKENS +
-    Math.ceil(input.mediaSeconds * LLM_MEDIA_TOKENS_PER_SECOND)
+    Math.ceil(input.mediaSeconds * LLM_MEDIA_TOKENS_PER_SECOND) +
+    fileCount * LLM_FILE_TOKENS +
+    filePages * LLM_FILE_PAGE_TOKENS
   )
 }
 
@@ -141,13 +160,17 @@ export function llmInputTokenBound(input: { text: string; imageCount: number; me
  * calls send it; a prompt-JSON call's one-object rule and the schema's wire
  * form) and every text message or block; each `image` / `image_base64` block is one image; each
  * `video` / `video_base64` / `audio` block adds `opts.mediaSeconds` (else
- * {@link LLM_UNKNOWN_MEDIA_SECONDS}).
+ * {@link LLM_UNKNOWN_MEDIA_SECONDS}); each `file_base64` block is one document
+ * of its hold's page count (`holdPages`, never below its `pages`: a crafted
+ * file is never under-held; the settle releases the rest).
  */
 export function llmRequestInputBound(req: LlmRequest, opts?: { mediaSeconds?: number }): number {
   const perMediaSeconds = opts?.mediaSeconds ?? LLM_UNKNOWN_MEDIA_SECONDS
   let text = req.system + sentSchemaText(req)
   let imageCount = 0
   let mediaSeconds = 0
+  let fileCount = 0
+  let filePages = 0
   for (const message of req.messages) {
     if (typeof message.content === "string") {
       text += message.content
@@ -156,10 +179,13 @@ export function llmRequestInputBound(req: LlmRequest, opts?: { mediaSeconds?: nu
     for (const block of message.content) {
       if (block.type === "text") text += block.text
       else if (block.type === "image" || block.type === "image_base64") imageCount++
-      else mediaSeconds += perMediaSeconds
+      else if (block.type === "file_base64") {
+        fileCount++
+        filePages += Math.max(block.pages, block.holdPages ?? 0)
+      } else mediaSeconds += perMediaSeconds
     }
   }
-  return llmInputTokenBound({ text, imageCount, mediaSeconds })
+  return llmInputTokenBound({ text, imageCount, mediaSeconds, fileCount, filePages })
 }
 
 /**

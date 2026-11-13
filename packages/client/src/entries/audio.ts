@@ -7,4 +7,4 @@
  */
 export { AudioResource } from "../resources/audio.js"
 
-export type { TranscribeWord, TranscribeJobOutput, TranscribeProvider } from "../resources/audio.js"
+export type { TranscribeWord, TranscribeJobOutput, TranscribeProvider, TranscribeTargetLanguage } from "../resources/audio.js"

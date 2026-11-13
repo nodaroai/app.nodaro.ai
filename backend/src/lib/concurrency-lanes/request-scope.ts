@@ -214,7 +214,7 @@ function laneAnswer(err: unknown): { status: number; code: string; message: stri
 }
 
 /** Answer a wait that ended without a slot; false when `err` is not one, or the response has already started. */
-function sendLaneAnswer(reply: FastifyReply, err: unknown): boolean {
+export function sendLaneAnswer(reply: FastifyReply, err: unknown): boolean {
   const answer = laneAnswer(err)
   if (!answer || reply.sent || reply.raw.headersSent) return false
   if (answer.retryAfter) reply.header("Retry-After", String(RETRY_AFTER_S))

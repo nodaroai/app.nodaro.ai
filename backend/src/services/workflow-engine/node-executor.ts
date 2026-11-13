@@ -1123,6 +1123,12 @@ export function buildSyncHttpBody(
         referenceImageUrls: resolvedInputs.referenceImageUrls,
         referenceVideoUrls: resolvedInputs.referenceVideoUrls,
         referenceAudioUrls: resolvedInputs.referenceAudioUrls,
+        // Documents are the node's own links (no node outputs one); the route
+        // reads, checks and counts them before it holds anything. Always sent,
+        // as the editor's Run does: on a model that reads none the route
+        // refuses them (`modality_not_supported`) rather than the node
+        // answering about a document it never saw (decided 2026-11-13).
+        ...(Array.isArray(data.referenceFileUrls) && data.referenceFileUrls.length ? { referenceFileUrls: data.referenceFileUrls } : {}),
         ...llmNodeParams(data),
         temperature: data.temperature ?? 0.7,
         maxTokens: data.maxTokens ?? LLM_NODE_MAX_TOKENS_DEFAULTS["llm-chat"],

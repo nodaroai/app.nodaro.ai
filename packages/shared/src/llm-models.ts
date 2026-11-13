@@ -167,8 +167,8 @@ export interface LlmModelDef {
    * and every estimate surface quotes that call. The sizes themselves are
    * backend data (`backend/src/lib/pricing/llm-cost.ts`), held to this flag by
    * a backend test. No model sets it today (GPT-6.1 Terra did for part of
-   * 2026-11-12, until its aggregator's added input stopped depending on the
-   * effort).
+   * 2026-11-12; since 2026-11-13 its added input is counted at the ceiling it
+   * has been seen at, the same with or without an effort).
    */
   effortPriced?: true
   /**
@@ -939,11 +939,11 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     //
     // KIE's endpoint adds its own instructions to every call and counts them as
     // input. The hold and the estimate count them too
-    // (backend/src/lib/pricing/llm-cost.ts, `llmLaneAddedInputTokens`). They
-    // were several times larger with an effort sent on the morning of
-    // 2026-11-12 and the same size either way by that afternoon, so its price
-    // does not depend on the effort: not `effortPriced` (re-measure if KIE's
-    // reported input jumps again).
+    // (backend/src/lib/pricing/llm-cost.ts, `llmLaneAddedInputTokens`). Their
+    // size has moved (about 4,400 and about 25,500 tokens on the same request,
+    // 2026-11-12/13), so both count the ceiling, with or without an effort
+    // (decided 2026-11-13): its price does not depend on the effort, so not
+    // `effortPriced`. The charge follows what KIE states or reports.
     kieSlugOrModel: "gpt-6-1-terra",
     vendor: "openai",
     structuredOutputMode: "responses-json-schema",
@@ -1566,8 +1566,13 @@ export function defaultReasoningEffort(feature: string, modelId?: string): LlmRe
  * no video). Gemini 2/3 family supports image + video + audio natively.
  * GPT-5.x via KIE chat-completions / responses supports image only — audio
  * input requires a separate audio-capable model we don't route to today.
+ *
+ * `file` (decided 2026-11-13): the model reads documents (PDF) sent with the
+ * call. Declared on the one model that does — GPT-6.1 Terra — and never
+ * derived for any other: absent means no. Read it through
+ * {@link llmAcceptsFiles}.
  */
-export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean; audio: boolean }> = {
+export const LLM_MODALITY_CAPS: Record<string, LlmModalityCaps> = {
   // Keeps full caps after KIE dropped its channel (2026-11-13): it stays a
   // VIDEO_ANALYSIS_LLM_MODELS member as the legacy `fast` backing (below), so a
   // stored raw `llmModel: "gemini-3-flash"` still resolves and prices under its
@@ -1616,8 +1621,9 @@ export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean;
   "gpt-6-luna":        { image: true,  video: false, audio: false },
   "gpt-6-sol":         { image: true,  video: false, audio: false },
   "gpt-6.1-sol":       { image: true,  video: false, audio: false },
-  // KIE's doc also takes files (PDFs, documents); that input is not wired here.
-  "gpt-6.1-terra":     { image: true,  video: false, audio: false },
+  // Reads PDFs (`file`, probed 2026-11-13: KIE took a PDF inline and by link,
+  // and refused a text file and a Word file — so PDF only).
+  "gpt-6.1-terra":     { image: true,  video: false, audio: false, file: true },
   "grok-4.6":          { image: true,  video: false, audio: false },
   "grok-4.7":          { image: true,  video: false, audio: false },
   "claude-sonnet-5":   { image: true,  video: false, audio: false },
@@ -1633,10 +1639,48 @@ export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean;
 }
 
 /** Capability lookup with safe default — unknown models get image-only. */
-export function getLlmModalityCaps(modelId: string | undefined): { image: boolean; video: boolean; audio: boolean } {
+export function getLlmModalityCaps(modelId: string | undefined): LlmModalityCaps {
   if (!modelId) return { image: true, video: false, audio: false }
   return LLM_MODALITY_CAPS[modelId] ?? { image: true, video: false, audio: false }
 }
+
+/** What a model reads besides text (see {@link LLM_MODALITY_CAPS}). */
+export interface LlmModalityCaps {
+  image: boolean
+  video: boolean
+  audio: boolean
+  /** Documents (PDF). Set only where it is true. */
+  file?: true
+}
+
+/** Does `modelId` read documents sent with the call (`file` in its modality caps)? An unknown model does not. */
+export function llmAcceptsFiles(modelId: string | undefined): boolean {
+  return Boolean(modelId && LLM_MODALITY_CAPS[modelId]?.file)
+}
+
+/** The models that read documents, in registry order — what a refusal names. */
+export const LLM_FILE_MODELS: readonly LlmModelDef[] = LLM_MODELS.filter((m) => llmAcceptsFiles(m.id))
+
+/** The most documents one LLM call takes (`referenceFileUrls`). */
+export const LLM_REFERENCE_FILES_MAX = 5
+
+/**
+ * The most bytes the documents of one LLM call may total: 6 MiB. They are sent
+ * inline with the call, which carries about ten million characters in all,
+ * and base64 makes 6 MiB about 8.4 million of them (the rest is the call's
+ * images').
+ */
+export const LLM_REFERENCE_FILES_MAX_TOTAL_BYTES = 6 * 1024 * 1024
+
+/**
+ * The most pages the documents of one LLM call may have IN ALL (decided
+ * 2026-11-13: 100 for the whole call, not per file, until a probe shows the
+ * aggregator reads more in one call).
+ */
+export const LLM_REFERENCE_FILES_MAX_PAGES = 100
+
+/** The document types an LLM call takes: PDF only (the aggregator refused text and Word files, 2026-11-13). */
+export const LLM_REFERENCE_FILE_MIME_TYPES: readonly string[] = ["application/pdf"]
 
 /**
  * Dash-form aliases resolve to their canonical dot-form ids. Several wire

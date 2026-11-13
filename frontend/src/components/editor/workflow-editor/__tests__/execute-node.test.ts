@@ -4838,6 +4838,20 @@ describe("llm-chat", () => {
     expect(mockLlmChatStream).toHaveBeenCalled()
   })
 
+  // Documents (decided 2026-11-13): the node's own links, always sent — on a
+  // model that reads none the route refuses them, never a silent drop.
+  it("sends the node's document links on any model", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockLlmChatStream.mockResolvedValue({ jobId: "j1", generatedText: "ok" })
+    const links = ["https://media.example/a.pdf"]
+    await executeNode(makeNode("llm-chat", { userInput: "summarise", llmModel: "gpt-6.1-terra", referenceFileUrls: links }), makeCtx())
+    expect(mockLlmChatStream.mock.calls.at(-1)![0]).toMatchObject({ referenceFileUrls: links })
+    await executeNode(makeNode("llm-chat", { userInput: "summarise", llmModel: "gemini-3.6-flash", referenceFileUrls: links }), makeCtx())
+    expect(mockLlmChatStream.mock.calls.at(-1)![0]).toMatchObject({ referenceFileUrls: links })
+    await executeNode(makeNode("llm-chat", { userInput: "summarise" }), makeCtx())
+    expect(mockLlmChatStream.mock.calls.at(-1)![0]).not.toHaveProperty("referenceFileUrls")
+  })
+
   it("rejects (no llmChatStream) when template.requiresImageRef and no image source connected", async () => {
     mockGetGenerateTextTemplate.mockReturnValue({
       id: "photo-shoot",

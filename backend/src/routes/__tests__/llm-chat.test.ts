@@ -67,6 +67,41 @@ vi.mock("../../lib/reconcile/persistence.js", () => ({
   markProviderCallStart: vi.fn(async () => undefined),
 }))
 
+// The stream route takes the user's llm slot before it reads documents; the
+// take is recorded here (the lanes have their own suites).
+const lanes = vi.hoisted(() => ({ order: [] as string[], refuse: null as null | Error }))
+vi.mock("../../lib/concurrency-lanes/request-scope.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/concurrency-lanes/request-scope.js")>()
+  return {
+    ...actual,
+    acquireLiveLane: vi.fn(async () => {
+      lanes.order.push("lane")
+      if (lanes.refuse) throw lanes.refuse
+      return { release: async () => undefined }
+    }),
+  }
+})
+
+// Documents are read by `prepareLlmFiles` (its own suite: llm-files.test.ts);
+// here it answers from a table, or refuses as it would.
+const files = vi.hoisted(() => ({ prepared: [] as string[][], refuse: null as null | { code: string; message: string } }))
+vi.mock("../../lib/llm-files.js", () => {
+  class LlmFileError extends Error {
+    constructor(readonly code: string, message: string) {
+      super(message)
+    }
+  }
+  return {
+    LlmFileError,
+    prepareLlmFiles: vi.fn(async (urls: string[]) => {
+      lanes.order.push("files")
+      files.prepared.push(urls)
+      if (files.refuse) throw new LlmFileError(files.refuse.code, files.refuse.message)
+      return urls.map((url, i) => ({ type: "file_base64", mediaType: "application/pdf", data: "JVBERi0=", filename: `f${i}.pdf`, pages: 3 }))
+    }),
+  }
+})
+
 async function buildApp() {
   const app = Fastify()
   // Stub raw.setTimeout / once on inject's fake req+reply BEFORE preHandler runs.
@@ -234,6 +269,104 @@ describe("POST /v1/llm-chat/generate — capability filter", () => {
     expect(res.statusCode).toBe(200)
     expect(markProviderCallStart).toHaveBeenCalledTimes(1)
     expect(markProviderCallStart).toHaveBeenCalledWith("job-1", "anthropic-sync")
+  })
+})
+
+// Documents (decided 2026-11-13): read only by a model whose caps say `file`
+// (GPT-6.1 Terra), each read and checked before any job row or hold.
+describe("POST /v1/llm-chat/generate — documents (referenceFileUrls)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    jobInserts.length = 0
+    files.prepared.length = 0
+    files.refuse = null
+  })
+  const payload = (llmModel: string, referenceFileUrls: string[]) => ({ systemPrompt: "", userInput: "summarise", llmModel, referenceFileUrls })
+
+  it("sends GPT-6.1 Terra its documents as inline file blocks before the prompt", async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload("gpt-6.1-terra", ["https://media.example/a.pdf", "https://media.example/b.pdf"]) })
+    expect(res.statusCode).toBe(200)
+    expect(files.prepared).toEqual([["https://media.example/a.pdf", "https://media.example/b.pdf"]])
+    // The client's disconnect stops the reads (fetches and page counts).
+    const { prepareLlmFiles } = await import("../../lib/llm-files.js")
+    // …and the user's one turn of document reads here.
+    expect(vi.mocked(prepareLlmFiles).mock.calls[0]![1]).toEqual({ signal: expect.any(AbortSignal), owner: "u1" })
+    const content = vi.mocked(llmComplete).mock.calls[0]![0].messages[0]!.content as Array<{ type: string; pages?: number }>
+    expect(content.map((b) => b.type)).toEqual(["file_base64", "file_base64", "text"])
+    expect(content[0]!.pages).toBe(3)
+    // The row records the links as given.
+    expect((jobInserts[0] as { input_data: Record<string, unknown> }).input_data.referenceFileUrls).toEqual(["https://media.example/a.pdf", "https://media.example/b.pdf"])
+  })
+
+  it.each(["claude-sonnet-5.5", "gemini-3.6-flash", "gpt-6.1-sol"])("refuses files on %s with 400 modality_not_supported — nothing fetched, no job, nothing held", async (llmModel) => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload(llmModel, ["https://media.example/a.pdf"]) })
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).error).toMatchObject({ code: "modality_not_supported", message: expect.stringContaining("GPT-6.1 Terra") })
+    expect(files.prepared).toEqual([])
+    expect(jobInserts).toEqual([])
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("answers a file the reader refuses with its 400 — no job, nothing held, no call", async () => {
+    files.refuse = { code: "file_type_not_supported", message: "The file at https://media.example/a.txt is not a PDF. Only PDF files can be read." }
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload("gpt-6.1-terra", ["https://media.example/a.txt"]) })
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).error.code).toBe("file_type_not_supported")
+    expect(jobInserts).toEqual([])
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+    expect(llmComplete).not.toHaveBeenCalled()
+  })
+
+  it("answers 503 with Retry-After when every PDF reader is busy — nothing held", async () => {
+    files.refuse = { code: "file_reader_busy", message: "We're reading a lot of documents right now. Try again in a moment." }
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload("gpt-6.1-terra", ["https://media.example/a.pdf"]) })
+    expect(res.statusCode).toBe(503)
+    expect(res.headers["retry-after"]).toBe("5")
+    expect(JSON.parse(res.body).error.code).toBe("file_reader_busy")
+    expect(jobInserts).toEqual([])
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("the stream route takes the user's llm slot before it reads documents, and a busy slot reads none", async () => {
+    lanes.order.length = 0
+    lanes.refuse = null
+    const app = await buildApp()
+    await app.inject({ method: "POST", url: "/v1/llm-chat/generate-stream", payload: payload("gpt-6.1-terra", ["https://media.example/a.pdf"]) })
+    expect(lanes.order.slice(0, 2)).toEqual(["lane", "files"])
+    lanes.order.length = 0
+    files.prepared.length = 0
+    jobInserts.length = 0
+    const { LaneBusyError } = await import("../../lib/concurrency-lanes/errors.js")
+    lanes.refuse = new LaneBusyError()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate-stream", payload: payload("gpt-6.1-terra", ["https://media.example/a.pdf"]) })
+    lanes.refuse = null
+    expect(res.statusCode).toBe(503)
+    expect(JSON.parse(res.body).error.code).toBe("lane_busy")
+    expect(files.prepared).toEqual([])
+    expect(jobInserts).toEqual([])
+  })
+
+  it("refuses more than 5 files at validation", async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload("gpt-6.1-terra", Array.from({ length: 6 }, (_, i) => `https://media.example/${i}.pdf`)) })
+    expect(res.statusCode).toBe(400)
+    expect(files.prepared).toEqual([])
+  })
+
+  it("the stream route reads and refuses files the same way", async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate-stream", payload: payload("claude-sonnet-5.5", ["https://media.example/a.pdf"]) })
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).error.code).toBe("modality_not_supported")
+    files.refuse = { code: "file_unreadable", message: "We couldn't read the pages of the PDF." }
+    const refused = await app.inject({ method: "POST", url: "/v1/llm-chat/generate-stream", payload: payload("gpt-6.1-terra", ["https://media.example/a.pdf"]) })
+    expect(refused.statusCode).toBe(400)
+    expect(JSON.parse(refused.body).error.code).toBe("file_unreadable")
+    expect(jobInserts).toEqual([])
   })
 })
 

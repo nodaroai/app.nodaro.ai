@@ -32,7 +32,7 @@ export { LLM_BILLING_LEDGER_COLUMN }
  */
 export interface LlmBillingLedger {
   costUsd: number | null
-  source: "kie-stated" | "kie-size-estimate" | "provider-usage" | "abort-estimate" | "floor" | "uncomputable"
+  source: "kie-stated" | "kie-size-estimate" | "document-floor" | "provider-usage" | "abort-estimate" | "floor" | "uncomputable"
   /** Attempts billed. `> 0` is what marks the job billed (`llmBillingLedgerBilled`). */
   calls: number
   lanes: LlmServedLane[]

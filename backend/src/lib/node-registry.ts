@@ -1424,7 +1424,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "llm-chat",
     label: "Generate Text - Any LLM",
     category: "ai-text",
-    description: "LLM text generation from a prompt (+ optional image/video/audio refs). Stream-capable. Two outputs: full text and a fan-out item list split on ===NEXT===.",
+    description: "LLM text generation from a prompt (+ optional image/video/audio refs, and PDF documents on a model that reads files: referenceFileUrls). Stream-capable. Two outputs: full text and a fan-out item list split on ===NEXT===.",
     outputType: "text",
     creditCost: creditBandFor("llm-chat"),
   },

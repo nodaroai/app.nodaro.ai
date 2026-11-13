@@ -40,6 +40,11 @@ const ALLOWED_MIME_TYPES: Record<string, ReadonlyArray<string>> = {
   data: [
     "application/json",
   ],
+  // Documents an LLM reads (decided 2026-11-13: PDF only — the aggregator
+  // refused text and Word files). Stored as an asset of type `document`.
+  document: [
+    "application/pdf",
+  ],
 }
 
 const ALL_ALLOWED_TYPES = new Set(
@@ -54,6 +59,7 @@ const SIZE_LIMITS: Record<string, number> = {
   image: 25 * 1024 * 1024,   // 25 MB
   video: 500 * 1024 * 1024,  // 500 MB
   audio: 50 * 1024 * 1024,   // 50 MB
+  document: 25 * 1024 * 1024, // 25 MB (one LLM call reads up to 6 MB of documents: lib/llm-files.ts)
 }
 
 const DEFAULT_SIZE_LIMIT = 50 * 1024 * 1024 // 50 MB fallback
@@ -62,7 +68,7 @@ const DEFAULT_SIZE_LIMIT = 50 * 1024 * 1024 // 50 MB fallback
 // Types
 // ============================================================
 
-export type FileCategory = "image" | "video" | "audio" | "data"
+export type FileCategory = "image" | "video" | "audio" | "data" | "document"
 
 export interface ValidationResult {
   readonly valid: boolean
@@ -145,6 +151,8 @@ const MIME_ALIASES: Readonly<Record<string, string>> = {
   "image/heif-sequence": "image/heif",
   // data
   "text/json": "application/json",
+  // document
+  "application/x-pdf": "application/pdf",
 }
 
 /** Declared types that carry no information — the filename decides instead. */
@@ -179,6 +187,7 @@ const EXTENSION_MIME: Readonly<Record<string, string>> = {
   weba: "audio/webm",
   flac: "audio/flac",
   json: "application/json",
+  pdf: "application/pdf",
 }
 
 /** Canonical accepted type for `filename`'s extension, or null. */
@@ -217,6 +226,7 @@ const CATEGORY_LABELS: Readonly<Record<FileCategory, string>> = {
   video: "videos",
   audio: "audio",
   data: "data",
+  document: "documents",
 }
 
 /**
@@ -274,6 +284,7 @@ export function getExtensionFromMime(mimeType: string): string {
     "audio/flac": "flac",
     "audio/x-flac": "flac",
     "application/json": "json",
+    "application/pdf": "pdf",
   }
   return map[mimeType] ?? "bin"
 }

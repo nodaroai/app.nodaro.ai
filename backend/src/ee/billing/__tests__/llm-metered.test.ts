@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { LLM_FEATURE_DEFAULTS, LLM_MODELS, getLlmModel, type LlmModelDef, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
-import { laneAddedInputModelIds, llmLaneAddedInputTokens, llmPossibleLanes, llmPrimaryLane } from "../../../lib/pricing/llm-cost.js"
+import { laneAddedInputModelIds, llmLaneAddedInputTokens, llmLaneStopEstimateAddedInputTokens, llmPossibleLanes, llmPrimaryLane } from "../../../lib/pricing/llm-cost.js"
 import { claudeMustServeDirect } from "../../../lib/llm/router.js"
 import type { LlmContentBlock, LlmRequest } from "../../../lib/llm/types.js"
 import { kieChatPromptJsonFormat, kiePromptJsonSystem } from "../../../lib/llm/structured-schema.js"
@@ -260,27 +260,31 @@ describe("llmEstimateBaseCredits", () => {
 })
 
 // GPT-6.1 Terra: KIE adds instructions of its own to every call and bills them
-// as input — about 4,400 tokens, with or without an effort (re-measured
-// 2026-11-12 in the afternoon; that morning an effort carried about 25,500).
-// The charge follows the reported usage, which includes them; the estimate and
-// the hold count them too, so the quote matches.
+// as input. Their size has moved (about 4,400, about 25,500, and 0 reported on
+// the same request, 2026-11-12/13), so the estimate and the hold count the
+// ceiling, 25,500, with or without an effort (decided 2026-11-13): never below
+// the charge, which follows what KIE states or reports.
 describe("GPT-6.1 Terra: the input KIE adds is in the estimate and the hold", () => {
   const TERRA = "gpt-6.1-terra"
   /** Base credits of `inputTokens` / `outputTokens` at Terra's KIE rate ($0.30 / $1.50 per M), as usdToCredits rounds. */
   const base = (inputTokens: number, outputTokens: number) => Math.ceil(Math.round(((inputTokens * 0.3 + outputTokens * 1.5) / 1e6 / 0.002) * 1000) / 1000)
 
   it("pins the added tokens per case, on the KIE lane only, and nowhere else", () => {
-    expect(llmLaneAddedInputTokens(TERRA, "kie")).toBe(4_400)
-    expect(llmLaneAddedInputTokens(TERRA, "kie", "high")).toBe(4_400)
-    expect(llmLaneAddedInputTokens(TERRA, "kie", "low")).toBe(4_400)
+    expect(llmLaneAddedInputTokens(TERRA, "kie")).toBe(25_500)
+    expect(llmLaneAddedInputTokens(TERRA, "kie", "high")).toBe(25_500)
+    expect(llmLaneAddedInputTokens(TERRA, "kie", "low")).toBe(25_500)
     // `none` is not one of its levels: clamped to no effort, nothing sent.
-    expect(llmLaneAddedInputTokens(TERRA, "kie", "none")).toBe(4_400)
+    expect(llmLaneAddedInputTokens(TERRA, "kie", "none")).toBe(25_500)
     expect(llmLaneAddedInputTokens(TERRA, "direct", "high")).toBe(0)
     expect(laneAddedInputModelIds()).toEqual([TERRA])
+    // A stopped stream's estimate is the charge: the most frequent reading, never the ceiling.
+    for (const effort of [undefined, "none", "low", "high", "max"]) expect(llmLaneStopEstimateAddedInputTokens(TERRA, "kie", effort), String(effort)).toBe(4_400)
+    expect(llmLaneStopEstimateAddedInputTokens(TERRA, "direct")).toBe(0)
     for (const m of LLM_MODELS) {
       if (m.id === TERRA) continue
       expect(llmLaneAddedInputTokens(m.id, "kie"), m.id).toBe(0)
       expect(llmLaneAddedInputTokens(m.id, "kie", "high"), m.id).toBe(0)
+      expect(llmLaneStopEstimateAddedInputTokens(m.id, "kie", "high"), m.id).toBe(0)
     }
   })
 
@@ -291,15 +295,15 @@ describe("GPT-6.1 Terra: the input KIE adds is in the estimate and the hold", ()
     }
   })
 
-  it("estimate: about 4,400 counted at every effort (llm-chat's typical 1k / 1k)", () => {
+  it("estimate: the 25,500 ceiling counted at every effort (llm-chat's typical 1k / 1k)", () => {
     const auto = llmEstimateBaseCredits("llm-chat", TERRA)
-    expect(auto).toBe(base(1_000 + 4_400, 1_000)) // 2
-    expect(auto).toBe(2)
+    expect(auto).toBe(base(1_000 + 25_500, 1_000)) // 5
+    expect(auto).toBe(5)
     for (const effort of ["none", "low", "medium", "high", "xhigh", "max"] as const) expect(llmEstimateBaseCredits("llm-chat", TERRA, effort), effort).toBe(auto)
   })
 
   it("estimate: a 2k / 2k call (ai-writer's typical size), the same at every effort", () => {
-    expect(llmEstimateBaseCredits("ai-writer", TERRA)).toBe(base(2_000 + 4_400, 2_000)) // 3
+    expect(llmEstimateBaseCredits("ai-writer", TERRA)).toBe(base(2_000 + 25_500, 2_000)) // 6
     expect(llmEstimateBaseCredits("ai-writer", TERRA, "medium")).toBe(llmEstimateBaseCredits("ai-writer", TERRA))
   })
 
@@ -308,12 +312,12 @@ describe("GPT-6.1 Terra: the input KIE adds is in the estimate and the hold", ()
     const auto = llmHoldBaseCredits(TERRA, { request: req({ modelId: TERRA, chars: 300, maxTokens: 1_000 }) })
     const none = llmHoldBaseCredits(TERRA, { request: req({ modelId: TERRA, chars: 300, maxTokens: 1_000, reasoningEffort: "none" }) })
     const high = llmHoldBaseCredits(TERRA, { request: req({ modelId: TERRA, chars: 300, maxTokens: 1_000, reasoningEffort: "high" }) })
-    expect(auto).toBe(base(100 + 4_400, 1_000))
+    expect(auto).toBe(base(100 + 25_500, 1_000))
     expect(none).toBe(auto)
-    expect(high).toBe(base(100 + 4_400, 1_000))
+    expect(high).toBe(base(100 + 25_500, 1_000))
     // xhigh / max floor the cap to 32,768.
     const max = llmHoldBaseCredits(TERRA, { request: req({ modelId: TERRA, chars: 300, maxTokens: 1_000, reasoningEffort: "max" }) })
-    expect(max).toBe(base(100 + 4_400, 32_768))
+    expect(max).toBe(base(100 + 25_500, 32_768))
   })
 
   it("leaves its siblings exactly as they were", () => {

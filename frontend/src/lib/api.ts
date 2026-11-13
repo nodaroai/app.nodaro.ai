@@ -4788,7 +4788,7 @@ export interface UploadResult {
   readonly url: string
   readonly thumbnailUrl: string | null
   readonly assetId: string | null
-  readonly category: "image" | "video" | "audio"
+  readonly category: "image" | "video" | "audio" | "data" | "document"
   readonly filename: string
   readonly mimeType: string
   readonly sizeBytes: number
@@ -7362,6 +7362,8 @@ export async function llmChatStream(params: {
   referenceImageUrls?: string[]
   referenceVideoUrls?: string[]
   referenceAudioUrls?: string[]
+  /** Document links (PDF) — read only by a model whose caps say `file`. */
+  referenceFileUrls?: readonly string[]
   temperature: number
   maxTokens: number
   userId: string

@@ -6030,6 +6030,8 @@ export type LLMChatData = PromptAffixFields & {
   referenceVideoUrls?: readonly string[]
   /** Audio reference URLs. Only used when llmModel supports audio (Gemini family). */
   referenceAudioUrls?: readonly string[]
+  /** Document links (PDF, up to 5). Only used when llmModel reads files (`llmAcceptsFiles`: GPT-6.1 Terra). */
+  referenceFileUrls?: readonly string[]
 }
 
 // --- Web Scrape Node Data ---

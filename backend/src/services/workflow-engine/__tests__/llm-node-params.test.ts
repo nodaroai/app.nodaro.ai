@@ -77,3 +77,22 @@ describe("every LLM node forwards advancedMode in an orchestrated run", () => {
     expect(body.advancedMode).toBeUndefined()
   })
 })
+
+// Documents (decided 2026-11-13) are the node's own links: no node outputs one,
+// so an orchestrated run forwards `data.referenceFileUrls` as the editor's Run
+// does, and the route reads, checks and holds them.
+describe("Generate Text forwards its document links in an orchestrated run", () => {
+  it("sends referenceFileUrls when the node has some, and nothing when it has none", () => {
+    const links = ["https://media.example/a.pdf", "https://media.example/b.pdf"]
+    expect(bodyFor("llm-chat", { llmModel: "gpt-6.1-terra", userInput: "summarise", referenceFileUrls: links }).referenceFileUrls).toEqual(links)
+    expect(Object.hasOwn(bodyFor("llm-chat", { llmModel: "gpt-6.1-terra", userInput: "hi" }), "referenceFileUrls")).toBe(false)
+    expect(Object.hasOwn(bodyFor("llm-chat", { llmModel: "gpt-6.1-terra", userInput: "hi", referenceFileUrls: [] }), "referenceFileUrls")).toBe(false)
+  })
+
+  it("sends them on a model that reads no files too: the route refuses them, never a silent drop", () => {
+    const links = ["https://media.example/a.pdf"]
+    expect(bodyFor("llm-chat", { llmModel: "gemini-3.6-flash", userInput: "hi", referenceFileUrls: links }).referenceFileUrls).toEqual(links)
+    // No model named (a JSON-authored node): the feature's default, which reads none today — the route says so.
+    expect(bodyFor("llm-chat", { userInput: "hi", referenceFileUrls: links }).referenceFileUrls).toEqual(links)
+  })
+})

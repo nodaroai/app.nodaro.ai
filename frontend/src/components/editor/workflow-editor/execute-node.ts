@@ -5836,6 +5836,9 @@ function executeNodeCore(
       referenceImageUrls: inputs.referenceImageUrls,
       referenceVideoUrls: inputs.referenceVideoUrls,
       referenceAudioUrls: inputs.referenceAudioUrls,
+      // Documents are the node's own links: no node outputs one. Always sent:
+      // on a model that reads none the route refuses them, never a silent drop.
+      ...(chatData.referenceFileUrls?.length ? { referenceFileUrls: chatData.referenceFileUrls } : {}),
       temperature: chatData.temperature ?? 0.7,
       maxTokens: chatData.maxTokens ?? 2048,
       llmModel: chatData.llmModel,

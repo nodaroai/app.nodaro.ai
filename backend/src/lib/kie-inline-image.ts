@@ -303,8 +303,11 @@ export interface KieInlineOptions {
  * `image` URL downloaded (or decoded, for a `data:` URL) and inlined, each
  * `image_base64` read from its bytes and fitted, every one within its
  * allowance — the per-image cap, or an even share of the request budget when
- * that is smaller. Text, video and audio blocks pass through untouched; a
- * request with no image comes back as the same object.
+ * that is smaller. Text, video, audio and document blocks pass through
+ * untouched; a request with no image comes back as the same object. A
+ * document (`file_base64`) is already inline and cannot be shrunk, so its
+ * characters come off the budget first (`lib/llm-files.ts` caps documents to
+ * leave the images room).
  *
  * Throws a KIE `LlmLaneError` carrying a sentence the person can read when an
  * image cannot be downloaded or decoded, or cannot fit its allowance even at
@@ -313,15 +316,17 @@ export interface KieInlineOptions {
  */
 export async function inlineImagesForKie(req: LlmRequest, opts: KieInlineOptions = {}): Promise<LlmRequest> {
   const slots: Array<{ message: number; index: number; block: ImageBlock | ImageBase64Block }> = []
+  let documentChars = 0
   req.messages.forEach((m, message) => {
     if (typeof m.content === "string") return
     m.content.forEach((block, index) => {
       if (block.type === "image" || block.type === "image_base64") slots.push({ message, index, block })
+      else if (block.type === "file_base64") documentChars += block.data.length
     })
   })
   if (slots.length === 0) return req
 
-  const budget = opts.budgetChars ?? KIE_INLINE_REQUEST_BUDGET_CHARS
+  const budget = Math.max(0, (opts.budgetChars ?? KIE_INLINE_REQUEST_BUDGET_CHARS) - documentChars)
   const allowance = Math.min(KIE_INLINE_DATA_URL_MAX_CHARS, Math.floor(budget / slots.length))
   const inlined = await mapWithConcurrency(slots, KIE_INLINE_CONCURRENCY, (slot) => inlineOnce(slot.block, allowance, opts.signal), opts.signal)
 

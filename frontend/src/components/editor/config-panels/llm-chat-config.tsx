@@ -27,7 +27,8 @@ import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-fina
 import { useFinalPromptSegments } from "./use-final-prompt-segments"
 import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import type { ConfigProps } from "./types"
-import { getLlmModalityCaps, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
+import { getLlmModalityCaps, LLM_FEATURE_DEFAULTS, llmAcceptsFiles } from "@nodaro/shared/llm-models"
+import { LlmFileRefs } from "./llm-file-refs"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import { useAuth } from "@/hooks/use-auth"
@@ -101,11 +102,14 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
 
   const currentModel = data.llmModel ?? LLM_FEATURE_DEFAULTS["llm-chat"]
   const caps = getLlmModalityCaps(currentModel)
+  const readsFiles = llmAcceptsFiles(currentModel)
 
   useEffect(() => {
     const updates: Partial<LLMChatData> = {}
     if (!caps.video && data.referenceVideoUrls?.length) updates.referenceVideoUrls = undefined
     if (!caps.audio && data.referenceAudioUrls?.length) updates.referenceAudioUrls = undefined
+    // A model that reads no documents: the node's files go (the route would refuse them).
+    if (!readsFiles && data.referenceFileUrls?.length) updates.referenceFileUrls = undefined
     if (Object.keys(updates).length) onUpdate(updates)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.llmModel])
@@ -494,6 +498,12 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
                 max={3}
                 onAdd={(url) => onUpdate({ referenceAudioUrls: [...(data.referenceAudioUrls ?? []), url] })}
                 onRemove={(idx) => onUpdate({ referenceAudioUrls: (data.referenceAudioUrls ?? []).filter((_, i) => i !== idx) })}
+              />
+            )}
+            {readsFiles && (
+              <LlmFileRefs
+                urls={data.referenceFileUrls ?? []}
+                onChange={(urls) => onUpdate({ referenceFileUrls: urls })}
               />
             )}
             {!caps.video && !caps.audio && (
