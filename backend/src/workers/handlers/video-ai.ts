@@ -50,7 +50,7 @@ import {
   getVideoAudioCapability,
   type VideoUpscaleProvider
 } from "@nodaro/shared/models"
-import { grokExtendSeconds, ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendQuality, tailExtendResolution } from "@nodaro/shared/credits"
+import { grokExtendSeconds, ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendCreditId, pixverseExtendQuality, tailExtendResolution } from "@nodaro/shared/credits"
 import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
 import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
@@ -74,6 +74,7 @@ import {
   TAIL_RECIPES,
 } from "../../lib/extend-recipe.js"
 import { seedanceExtendBaseCredits, seedanceExtendHeldSourceSec } from "../../lib/seedance-extend-credits.js"
+import { creditIdBaseCredits } from "../../lib/credit-id-base.js"
 import { pixverseExtendSeconds } from "../../lib/extend-native.js"
 import { cutChainedMovTail, findChainedMovReference, isMovUrl } from "../../lib/seedance-extend-mov-chain.js"
 import { rawExtensionObjectId, silentVideoKey } from "../../lib/job-output-keys.js"
@@ -1597,12 +1598,14 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // The seconds of the source cut and sent: the recipe's tail, or all of a
       // shorter picture (a Seedance 2.5 run is charged for them, settled below).
       const sentSec = tailCutSec(provider, pictureSec)
-      // An HDR or full-range source's tail, and so the last frame taken from
-      // it below, goes through the stitch's own conversion
+      // An HDR, full-range or odd-size source's tail, and so the last frame
+      // taken from it below, goes through the stitch's own conversion
       // (`extendTailPicture`): the result shows the source in SDR, limited
-      // range, so the model continues that picture and the seam matches. Any
-      // other source's tail is cut as it always was, and so is a chained MOV
-      // reference (Seedance's own SDR clip).
+      // range, at even sides, so the model continues that picture and the seam
+      // matches; any other source's picture is cut as it always was, and so is
+      // a chained MOV reference (Seedance's own SDR clip). The cut is admitted
+      // at the memory a picture of the source's size needs (above 1080p, more
+      // than the default; 4K when its size is not read).
       const tailPicture = extendTailPicture(await probeMatched(srcLocal))
       const tailPath = await extractTailToFile(srcLocal, sentSec, { measureFrom: "picture", ...tailPicture })
       // Generation inputs only, never the deliverable: the tail, the frame and
@@ -1891,6 +1894,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       const stitchDir = await createWorkDir("extend-stitch")
       let stitchedR2Url: string
       let stitchBoundary: ExtendStitchResult["boundary"]
+      // Whether the new part the run delivers has sound (its cut's probe below).
+      let newPartHasSound = false
       try {
         const pixversePath = join(stitchDir, "pixverse.mp4")
         await downloadFile(gen.url, pixversePath)
@@ -1920,6 +1925,13 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         // With the sound off the cut keeps no sound, whatever PixVerse returned,
         // and the stitch pads the new seconds with silence.
         const newPartPath = await cutNativeExtension(pixversePath, cutStartSec, stitchDir, { sound })
+        // Whether that new part has sound is what a sound-on run is charged by
+        // (settled below), so it is read on the cut itself, by a probe that
+        // throws when it fails: a probe that could not read the cut says
+        // nothing about its sound, so it is a plain error, retried like any
+        // transient failure, never a settle at the silent row. A sound-off cut
+        // is silent by construction and is not probed.
+        if (sound) newPartHasSound = Boolean((await probeMatchedOrThrow(newPartPath)).audioCodec)
         // The stitch keeps the source's size (rounded down to even), frame
         // rate and picture quality, and covers and crops the new part to the
         // source's frame. The join is matched as the other extends' are (8 × 8,
@@ -1945,9 +1957,22 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       await setJobProgress(job, ctx.jobId, 100)
 
       const stitchedThumbUrl = await generateAndUploadThumbnail(stitchedR2Url, ctx.jobId, ctx.jobUserId)
+      // Charged for the sound it delivers: a run whose sound was on (held at
+      // the sound row) but whose new part has none delivers silent new
+      // seconds, so it settles at the silent row of its seconds and quality;
+      // the rest of the hold is refunded at commit. Every other run commits
+      // the row it reserved. A silent row that cannot be priced here commits
+      // the hold as made, rather than failing a delivered run.
+      const silentBaseCredits = sound && !newPartHasSound
+        ? await creditIdBaseCredits(pixverseExtendCreditId(extSeconds, quality, false))
+        : undefined
+      if (silentBaseCredits !== undefined) {
+        console.log(`[worker] extend-video ${ctx.jobId}: sound on but PixVerse returned none, settling at the silent row`)
+      }
       const { ok: pixverseOk } = await finalizeJobWithMedia({
         jobId: ctx.jobId,
         jobType: "extend-video",
+        ...(silentBaseCredits !== undefined ? { meteredBaseCredits: silentBaseCredits } : {}),
         result: { url: stitchedR2Url, cost: null, providerUsed: provider },
         mediaUrl: stitchedR2Url,
         extraOutputData: {

@@ -22,6 +22,7 @@
  * - No match → the global `cost_markup_percent` applies unchanged.
  */
 import type { AppSettings } from "../../lib/app-settings.js"
+import { pricedAsId } from "../../lib/retired-price-id.js"
 
 /** Settings slice this module needs; `service_margin_percent` tolerated absent
  *  (older cached shapes, partial test doubles) and treated as empty. */
@@ -35,15 +36,19 @@ export function serviceMarginPrefixMatches(identifier: string, prefix: string): 
 
 /**
  * The markup percent to apply for `modelIdentifier`: its longest-prefix
- * service margin when one is configured, else the global markup.
+ * service margin when one is configured, else the global markup. A retired
+ * video model's id is marked up as the id it runs as (`pricedAsId`), here,
+ * where every markup is decided: a quote, a route's reservation (at the
+ * request's raw id) and the settle (at the usage log's raw action) then agree.
  */
 export function effectiveMarkupPercent(
   settings: MarginSettings,
   modelIdentifier: string,
 ): number {
+  const identifier = pricedAsId(modelIdentifier)
   let matched: { prefix: string; percent: number } | null = null
   for (const [prefix, percent] of Object.entries(settings.service_margin_percent ?? {})) {
-    if (!serviceMarginPrefixMatches(modelIdentifier, prefix)) continue
+    if (!serviceMarginPrefixMatches(identifier, prefix)) continue
     if (!matched || prefix.length > matched.prefix.length) matched = { prefix, percent }
   }
   return matched ? matched.percent : settings.cost_markup_percent

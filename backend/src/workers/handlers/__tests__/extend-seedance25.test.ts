@@ -161,6 +161,7 @@ vi.mock("@/lib/discard-job-copies.js", () => ({ discardFailedRunCopies: mocks.mo
 import { videoAIHandlers } from "../video-ai.js"
 import { TAIL_RECIPES, extendSourceTooShortMessage, extensionTooShortMessage, tailRecipeSeconds } from "../../../lib/extend-recipe.js"
 import { extendTailPicture } from "@/providers/video/extend-stitch.js"
+import { defaultLaunchPeakMiB } from "@/providers/video/ffmpeg-admission-instance.js"
 import type { MatchedProbe } from "@/providers/video/matched-encode.js"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 
@@ -771,13 +772,28 @@ describe("seedance extend — an HDR source's generation inputs", () => {
     expect(generation().options).toMatchObject({ referenceVideoUrls: [CHAIN_CUT_URL] })
   })
 
-  it("cuts an SDR or untagged source's tail exactly as before", async () => {
-    for (const probe of [{}, { width: 1920, height: 1080, videoCodec: "h264", colorPrimaries: "bt709", colorTransfer: "bt709", colorSpace: "bt709" }]) {
+  it("cuts an SDR or untagged source's tail at or below 1080p exactly as before", async () => {
+    for (const probe of [{ width: 1920, height: 1080 }, { width: 1920, height: 1080, videoCodec: "h264", colorPrimaries: "bt709", colorTransfer: "bt709", colorSpace: "bt709" }]) {
       mocks.mockExtractTailToFile.mockClear()
       sourceProbe = probe
       await run()
       // The default 6 s source: Seedance 2.5 cuts all of it (`tailCutSec`).
       expect(mocks.mockExtractTailToFile.mock.calls).toEqual([["/tmp/test-workdir/source.mp4", 6, { measureFrom: "picture" }]])
+    }
+  })
+
+  // The tail cut re-encodes the source's picture: a 4K one (or one whose size is not read) is
+  // admitted at a 4K estimate, above the default, with no filter of its own.
+  it("admits a 4K SDR source's tail cut, or one whose size is not read, at its size's estimate", async () => {
+    for (const probe of [{ width: 3840, height: 2160, videoCodec: "h264", colorPrimaries: "bt709", colorTransfer: "bt709", colorSpace: "bt709" }, {}]) {
+      mocks.mockExtractTailToFile.mockClear()
+      sourceProbe = probe
+      await run()
+      const [path, cut, opts] = mocks.mockExtractTailToFile.mock.calls[0]!
+      expect([path, cut]).toEqual(["/tmp/test-workdir/source.mp4", 6])
+      expect(opts).toEqual({ measureFrom: "picture", ...extendTailPicture(probe) })
+      expect(opts.pictureFilter).toBeUndefined()
+      expect(opts.launch.peakMemoryMiB).toBeGreaterThan(defaultLaunchPeakMiB())
     }
   })
 })

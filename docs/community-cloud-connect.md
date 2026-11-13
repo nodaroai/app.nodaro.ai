@@ -16,9 +16,10 @@ locally; the Nodaro connection adds:
 - **One-click start.** Connecting signs you into (or creates) a Nodaro
   Cloud account. New accounts receive the standard one-time 1,500-credit<!-- credits: n/a -->
   signup grant on first sign-in (see [Free credits](features/free-credits.md)
-  for when activation asks for a payment method). Free-account outputs are
-  watermarked; the first credit purchase lifts the watermark and unlocks
-  every model. Connected-instance usage has **no daily spending cap**.
+  for when activation asks for a payment method). Free-account image and
+  video outputs are watermarked; buying credits lifts the watermark (for good,
+  unless they are all refunded) and unlocks every model, and a subscription
+  lifts it while it lasts. Connected-instance usage has **no daily spending cap**.
 - **Standard models without wrangling keys** — image and video generation,
   speech and the LLM lanes route through your Nodaro balance.
 - **Nodaro-exclusive capabilities** — the [Nodaro-exclusive
@@ -183,8 +184,9 @@ Analysis's probe.
 - **Billing** happens on the connected nodaro.ai account. On the OAuth
   lane, per-instance monthly caps from Connected Instances apply. On the
   personal API-key lane the account is used as itself: free-tier accounts
-  keep their standard limits and watermark until a first purchase, and
-  there is no per-instance cap.
+  keep their standard limits and watermark (see
+  [Free credits](features/free-credits.md) for what lifts each), and there
+  is no per-instance cap.
 - The Story → Video generative pipeline remains Cloud-only (it is an
   interactive engine, not a relayable node).
 

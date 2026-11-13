@@ -86,7 +86,10 @@ export function usageByBaseModelKey(
 interface ModelMapping {
   ourKey: string
   kieCredits: number      // raw KIE credits from our config
-  ourCredits: number      // what we charge users (from STATIC_CREDIT_COSTS)
+  /** What we charge users: the key's bare row (STATIC_CREDIT_COSTS), or null
+   *  when it has none — a key priced only through its composite rows
+   *  (`<key>:<length>:<resolution>`…), or priced nowhere. */
+  ourCredits: number | null
   category: string
 }
 
@@ -127,7 +130,7 @@ export function buildModelMap(): Map<string, ModelMapping[]> {
       existing.push({
         ourKey: key,
         kieCredits: config.credits,
-        ourCredits: STATIC_CREDIT_COSTS[key] ?? 0,
+        ourCredits: STATIC_CREDIT_COSTS[key] ?? null,
         category,
       })
       map.set(config.model, existing)
@@ -169,7 +172,7 @@ export function buildModelMap(): Map<string, ModelMapping[]> {
     existing.push({
       ourKey: targetKey,
       kieCredits: STATIC_CREDIT_COSTS[targetKey] ? STATIC_CREDIT_COSTS[targetKey] * KIE_CREDITS_PER_NODARO : 0,
-      ourCredits: STATIC_CREDIT_COSTS[targetKey] ?? 0,
+      ourCredits: STATIC_CREDIT_COSTS[targetKey] ?? null,
       category,
     })
     map.set(alias, existing)
@@ -703,16 +706,27 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
 
       const isVariable = stats.minCredits !== stats.maxCredits
       const hasTiers = allTiers.length > 1
+      // A key with no bare row is priced only through its composite rows (per
+      // length, per resolution…): there is no single price to compare a cost
+      // with, and the provider's records do not say which row each task was
+      // charged at. Each billed amount is compared with the rows that cover
+      // it: one no row covers is UNDERPRICED (every charge of the key is
+      // below it); otherwise the key is CHECK_TIERS, never OK — a task
+      // charged at a cheaper row than the one that covers it would be
+      // under-priced, and nothing here can tell. The breakdown names the
+      // cheapest covering row of each amount.
+      const compositeOnly = mapping.ourCredits === null && allTiers.length > 0
 
-      // For variable models with tiers: validate EACH observed cost level
-      // against our actual tier pricing, not the meaningless average.
+      // For variable models with tiers, and keys priced only through composite
+      // rows: validate EACH observed cost level against our actual tier
+      // pricing, not the meaningless average.
       // For fixed-cost or single-tier models: compare normally.
       let status = "OK"
-      let diff: number
+      let diff: number | null
       let diffPercent: number | null
       let tierBreakdown: { kieCost: number; tasks: number; required: number; bestTier: number; covered: boolean }[] | undefined
 
-      if (isVariable && hasTiers) {
+      if ((isVariable && hasTiers) || compositeOnly) {
         // Per-cost-level validation
         tierBreakdown = []
         let worstDiff = 0
@@ -731,9 +745,14 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
         diff = allCovered ? 0 : worstDiff
         diffPercent = null
         if (!allCovered) status = "UNDERPRICED"
+        else if (compositeOnly) {
+          // Covered by some row, not known to be charged at one: no diff to show.
+          status = "CHECK_TIERS"
+          diff = null
+        }
       } else {
-        // Fixed-cost model: compare directly
-        diff = round2(mapping.ourCredits - expectedCredits)
+        // Fixed-cost model: compare directly (a key priced nowhere at 0)
+        diff = round2((mapping.ourCredits ?? 0) - expectedCredits)
         diffPercent = expectedCredits > 0
           ? round2((diff / expectedCredits) * 100)
           : null

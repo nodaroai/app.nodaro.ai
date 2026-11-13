@@ -70,6 +70,7 @@ import {
   VIDEO_DEPTH_LIMITS,
 } from "@nodaro/shared/media"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { pricedAsId } from "../../lib/retired-price-id.js"
 import { withWiredSettings, renderNodeOf, isRenderNodeType, withRunOverrides, transcribeNodeReturnsWords } from "@nodaro/shared/nodes"
 import {
   MUSIC_CREDIT_ID,
@@ -3361,6 +3362,10 @@ export function invalidateModelPricingCache(): void {
  * entries like `seedance-2:8s:1080p-ref`).
  */
 export async function getModelCreditBaseCost(modelIdentifier: string): Promise<ModelPricing> {
+  // A retired video model's id is priced as the id of the model it runs as.
+  const pricedAs = pricedAsId(modelIdentifier)
+  if (pricedAs !== modelIdentifier) return getModelCreditBaseCost(pricedAs)
+
   // A metered LLM id (A1) has NO price of its own — its hold is the
   // reservation's override and its usage the charge — so every price lookup
   // FAILS CLOSED on it: a caller that would read a price here (a settle at a
@@ -3488,7 +3493,9 @@ async function readPricingRow(modelIdentifier: string): Promise<ModelPricing> {
  * `cost_markup_percent` otherwise — see ee/billing/service-margin.ts.
  * Both DB values and STATIC_CREDIT_COSTS represent base costs at 0% markup.
  */
-export async function getModelCreditCostFromDB(modelIdentifier: string): Promise<ModelPricing> {
+export async function getModelCreditCostFromDB(identifier: string): Promise<ModelPricing> {
+  // Priced, and marked up, as the id it runs as (a retired video model's).
+  const modelIdentifier = pricedAsId(identifier)
   const base = await getModelCreditBaseCost(modelIdentifier)
   // Apply markup from admin settings (cached 60s separately)
   const settings = await getAppSettings()
@@ -3628,7 +3635,10 @@ export function chargedPriceTableFrom(
     editPlanPerMinute,
     // A speech `:per-100-chars` row is served only while length pricing is on
     // (lib/speech-credits.ts): its absence is how a client learns the flag.
-    base: (identifier) => {
+    // A retired video model's id is priced, and marked up, as the id it runs
+    // as (`pricedAsId`), as the single lookup prices it.
+    base: (asked) => {
+      const identifier = pricedAsId(asked)
       // A metered LLM id is the feature's typical call on the model's primary
       // lane (`:direct` = Advanced mode) — an estimate, never a row. A model
       // with no price there is simply not listed.
@@ -3643,7 +3653,8 @@ export function chargedPriceTableFrom(
     },
     // A speech length price is marked up at its model, as its reservation is;
     // a metered LLM id at its charge id (`:direct` is the same charge).
-    charge: (identifier, baseCredits) => {
+    charge: (asked, baseCredits) => {
+      const identifier = pricedAsId(asked)
       const metered = meteredLlmCallsOf(identifier)?.metered
       const key = metered ? llmChargeId(metered.feature, metered.modelId) : priceMarginKey(identifier)
       return applyServiceMarkup(baseCredits, settings, key)

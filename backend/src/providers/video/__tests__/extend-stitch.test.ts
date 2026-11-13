@@ -37,6 +37,7 @@ import { matchedPictureArgs, parseMatchedProbe, type MatchedProbe } from "../mat
 import type { VideoOverlayBaseProbe } from "../ffmpeg-utils.js"
 import type { SmartCutBoundary } from "../smart-cut.js"
 import { defaultLaunchPeakMiB } from "../ffmpeg-admission-instance.js"
+import { ffmpegEffectiveThreads } from "../ffmpeg-threads.js"
 
 /** An 854×480 @ 24 H.264 MP4 source with AAC sound, 3 s (72 frames). */
 const SOURCE: MatchedProbe = {
@@ -1024,19 +1025,24 @@ describe("extendTailPicture", () => {
   it.each([
     ["HLG", "arib-std-b67"],
     ["PQ", "smpte2084"],
-  ])("cuts an %s source's tail through the stitch's own SDR conversion, admitted at the default plus the tone-map's buffers", (_label, transfer) => {
+  ])("cuts an %s source's tail through the stitch's own SDR conversion, admitted at its size's estimate plus the tone-map's buffers", (_label, transfer) => {
     const source = { ...HLG_SOURCE, ...uhd, colorTransfer: transfer }
     const tail = extendTailPicture(source)
     expect(tail.pictureFilter).toBe(toSdr(`color_primaries=bt2020:color_trc=${transfer}:colorspace=bt2020nc:range=tv`))
     // Exactly the picture the stitch delivers the source as.
     expect(chainsOf(extendStitchArgs({ ...BASE, source }))["[sv]"]!.endsWith(`,${tail.pictureFilter}[sv]`)).toBe(true)
-    // What a tail cut reserves today (the default launch), plus the tone-map's buffers: about 597 MiB at 4K.
-    expect(tail.launch!.peakMemoryMiB - defaultLaunchPeakMiB()).toBe(Math.ceil(8.2944 * 72))
+    // What an SDR tail of its size reserves (4K's, `admits a 4K SDR source's tail cut`), plus the
+    // tone-map's buffers: about 597 MiB at 4K.
+    expect(tail.launch!.peakMemoryMiB - extendTailPicture({ ...SOURCE, ...uhd }).launch!.peakMemoryMiB).toBe(Math.ceil(8.2944 * 72))
+    // At 1080p, as before: the default launch plus the tone-map's buffers at 1080p.
+    expect(extendTailPicture({ ...source, width: 1920, height: 1080 }).launch!.peakMemoryMiB - defaultLaunchPeakMiB()).toBe(Math.ceil(2.0736 * 72))
   })
 
   // A full-range SDR source's tail goes through the stitch's own conversion to limited range,
-  // so the model is given the picture the result shows. No tone-map: no estimate of its own.
-  it("cuts a full-range SDR source's tail to limited range, the stitch's own conversion, at the default launch", () => {
+  // so the model is given the picture the result shows. No tone-map: its size's estimate alone (the
+  // default at or below 1080p).
+  it("cuts a full-range SDR source's tail to limited range, the stitch's own conversion, at its size's estimate", () => {
+    const uhdLaunch = extendTailPicture({ ...SOURCE, ...uhd }).launch
     for (const source of [
       { ...SOURCE, pixFmt: "yuvj420p", colorRange: "pc" },
       { ...SOURCE, pixFmt: "yuvj420p" },
@@ -1044,14 +1050,14 @@ describe("extendTailPicture", () => {
       { ...SOURCE, ...uhd, pixFmt: "yuvj420p", colorPrimaries: "bt709", colorTransfer: "bt709", colorSpace: "bt709", colorRange: "pc" },
     ]) {
       const tail = extendTailPicture(source)
-      expect(tail).toEqual({ pictureFilter: TO_LIMITED })
+      expect(tail).toEqual(source.width === uhd.width ? { pictureFilter: TO_LIMITED, launch: uhdLaunch } : { pictureFilter: TO_LIMITED })
       // Exactly the picture the stitch delivers the source as.
       expect(chainsOf(extendStitchArgs({ ...BASE, source }))["[sv]"]!.endsWith(`,${tail.pictureFilter}[sv]`)).toBe(true)
     }
     // An HDR source read as full range is tone-mapped as before, its range in the tone-map's tags.
     const hdr = extendTailPicture({ ...HLG_SOURCE, ...uhd, pixFmt: "yuvj420p", colorRange: "pc" })
     expect(hdr.pictureFilter).toBe(toSdr("color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=pc"))
-    expect(hdr.launch!.peakMemoryMiB - defaultLaunchPeakMiB()).toBe(Math.ceil(8.2944 * 72))
+    expect(hdr.launch!.peakMemoryMiB - uhdLaunch!.peakMemoryMiB).toBe(Math.ceil(8.2944 * 72))
   })
 
   // The tail is the picture the stitch delivers: an odd-size source's is rounded down to even the
@@ -1068,10 +1074,38 @@ describe("extendTailPicture", () => {
     expect(hdr.launch!.peakMemoryMiB).toBeGreaterThan(defaultLaunchPeakMiB())
   })
 
+  // The tail cut decodes and re-encodes the source's picture, so its launch is sized by that picture:
+  // the default launch (a 1080p estimate) plus what the stitch's size → memory model says a picture
+  // of the source's size holds beyond 1080p. A 4K tail then asks for what the measured 4K launches
+  // peak at (1,223 + 91.7·T + 72.6·N MiB, one segment here; the per-thread 91.7 = 4K's 8.2944 MP ×
+  // (8.15 encode + 2.9 decode / filter) when the counts differ), not the 1080p default.
+  it("admits a 4K SDR source's tail cut at a 4K estimate, above the 1080p default", () => {
+    const tail = extendTailPicture({ ...SOURCE, ...uhd })
+    expect(tail.pictureFilter).toBeUndefined()
+    expect(tail.launch!.peakMemoryMiB).toBeGreaterThan(defaultLaunchPeakMiB())
+    const { encode, decode, filter } = ffmpegEffectiveThreads()
+    const measured4k = 1223 + 8.2944 * (8.15 * encode + 2.9 * Math.max(decode, filter)) + 72.6
+    expect(Math.abs(tail.launch!.peakMemoryMiB - measured4k)).toBeLessThan(10)
+    // Sized by the picture, whichever way it stands.
+    expect(extendTailPicture({ ...SOURCE, width: 2160, height: 3840 })).toEqual(tail)
+  })
+
+  it("leaves a 1080p or smaller source's tail cut at the default launch", () => {
+    for (const size of [{ width: 1920, height: 1080 }, { width: 1080, height: 1920 }, { width: 1280, height: 720 }, { width: 854, height: 480 }]) {
+      expect(extendTailPicture({ ...SOURCE, ...size }), `${size.width}x${size.height}`).toEqual({})
+    }
+  })
+
+  // As the HDR cut and the memory model's cameras: a size not read is taken as 4K, never under-reserved.
+  it("admits a source whose size is not read as a 4K one", () => {
+    const unread = extendTailPicture({})
+    expect(unread.launch!.peakMemoryMiB).toBeGreaterThan(defaultLaunchPeakMiB())
+    expect(unread).toEqual({ launch: extendTailPicture({ ...SOURCE, ...uhd }).launch })
+  })
+
   it("leaves a limited-range SDR or untagged source's tail as it always was: no filter, no estimate of its own", () => {
     for (const source of [
       SOURCE,
-      {},
       { ...SOURCE, colorPrimaries: "bt709", colorTransfer: "bt709", colorSpace: "bt709", colorRange: "tv" },
       { ...SOURCE, colorPrimaries: "bt2020", colorTransfer: "bt2020-10", colorSpace: "bt2020nc" },
       { ...SOURCE, colorTransfer: "unknown" },
