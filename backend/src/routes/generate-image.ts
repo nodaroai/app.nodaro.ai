@@ -11,6 +11,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { withAdjustments } from "../lib/image-gen-normalize.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { imagePromptTooShort } from "../lib/image-prompt-minimum.js"
+import { imageInputLimitProblem } from "../lib/image-input-limit.js"
 import { runJobBatch, type PlannedBatchJob } from "../lib/job-batch.js"
 import {
   batchSeed,
@@ -28,7 +29,7 @@ import { userDirectionOf, userDirectionPreHandler } from "../lib/user-direction.
 import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { FLUX_LORA_CHARACTER_MODEL_ID, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
-import { defaultImageModel, MODEL_INPUT_ADJUSTMENT_FIELDS } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, MODEL_INPUT_ADJUSTMENT_FIELDS, pricedSentImages } from "@nodaro/shared/model-catalog"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { generateImageBody, generateImageRequest, type GenerateImageData } from "./generate-image-body.js"
@@ -341,6 +342,16 @@ export async function generateImageRoutes(app: FastifyInstance) {
     for (const plan of plans) {
       const tooShort = imagePromptTooShort(plan.queueData.provider as string | undefined, plan.queueData.prompt as string | undefined)
       if (tooShort) return reply.status(400).send({ error: tooShort })
+      // More images than FLUX 3 Klein takes, counted as the job sends them: the
+      // ASSEMBLED references (structured `connectedReferences` included, which
+      // the body schema cannot count) and a base image. Refused here, before any
+      // job row or reservation, never left out by the provider.
+      const sentRefs = Array.isArray(plan.queueData.referenceImageUrls) ? (plan.queueData.referenceImageUrls as string[]) : []
+      const tooMany = imageInputLimitProblem(
+        plan.queueData.provider as string | undefined,
+        pricedSentImages(plan.queueData.provider as string | undefined, sentRefs, plan.queueData.baseImageUrl),
+      )
+      if (tooMany) return reply.status(400).send({ error: tooMany })
     }
 
     const mcpClient = extractMcpClient(req.body)

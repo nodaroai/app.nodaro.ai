@@ -11,9 +11,10 @@ import {
 
 const LISTED = [...UNSET_RATIO_IS_AUTO_EDIT_MODELS]
 
-describe("imageToImageAspectRatio — no ratio on a GPT Image 2, 2.5 or 2.6, a MiniMax H3 Image or a Seedream 5.5 edit is 'auto'", () => {
-  it("lists exactly the GPT Image 2, 2.5 and 2.6 edit models, MiniMax H3 Image's edit and Seedream 5.5's", () => {
+describe("imageToImageAspectRatio — no ratio on a GPT Image 2, 2.5 or 2.6, a MiniMax H3 Image, a Seedream 5.5 or a FLUX 3 Klein edit is 'auto'", () => {
+  it("lists exactly the GPT Image 2, 2.5 and 2.6 edit models, MiniMax H3 Image's edit, Seedream 5.5's and FLUX 3 Klein's", () => {
     expect(LISTED.sort()).toEqual([
+      "flux-3-klein-i2i",
       "gpt-image-2-5-flare-i2i",
       "gpt-image-2-5-sunburst-i2i",
       "gpt-image-2-6-economy-i2i",

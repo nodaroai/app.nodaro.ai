@@ -86,9 +86,9 @@ describe("aspectRatioForStrictModel", () => {
   const SCENE_PANEL_RATIOS = ["16:9", "9:16", "1:1", "4:3", "21:9", "4:5"]
   const SENDABLE = [...new Set(["auto", ...SCENE_PANEL_RATIOS, ...CHARACTER_ASPECT_OPTIONS, ...IMAGE_ASPECT_RATIO_VALUES])]
 
-  it("is declared by Seedream 5.5's two ids and no other model", () => {
+  it("is declared by Seedream 5.5's and FLUX 3 Klein's two ids each and no other model", () => {
     const strict = Object.values(MODEL_CATALOG).filter((m) => m.strictAspectRatios).map((m) => m.id).sort()
-    expect(strict).toEqual(["seedream-5-5", "seedream-5-5-i2i"])
+    expect(strict).toEqual(["flux-3-klein", "flux-3-klein-i2i", "seedream-5-5", "seedream-5-5-i2i"])
   })
 
   it("sends every ratio as stored on every model without the flag", () => {
@@ -114,5 +114,19 @@ describe("aspectRatioForStrictModel", () => {
     }
     // Text to image never gets "auto", whatever is stored.
     for (const ratio of SENDABLE) expect(aspectRatioForStrictModel(ratio, "seedream-5-5")).not.toBe("auto")
+  })
+
+  it("moves a ratio FLUX 3 Klein does not list to the nearest it does, on the model the request reaches", () => {
+    // Text to image takes no "auto"; the edit does. 9:21 is on both lists.
+    expect(aspectRatioForStrictModel("auto", "flux-3-klein")).toBe("1:1")
+    expect(aspectRatioForStrictModel("auto", "flux-3-klein-i2i")).toBe("auto")
+    expect(aspectRatioForStrictModel("4:5", "flux-3-klein")).toBe("3:4")
+    expect(aspectRatioForStrictModel("4:5", "flux-3-klein-i2i")).toBe("3:4")
+    expect(aspectRatioForStrictModel("9:21", "flux-3-klein")).toBe("9:21")
+    for (const id of ["flux-3-klein", "flux-3-klein-i2i"]) {
+      for (const ratio of MODEL_CATALOG[id]!.aspectRatios!) expect(aspectRatioForStrictModel(ratio, id), `${id} ${ratio}`).toBe(ratio)
+      // Whatever is stored, the request gets a ratio its endpoint lists.
+      for (const ratio of SENDABLE) expect(MODEL_CATALOG[id]!.aspectRatios, `${id} ${ratio}`).toContain(aspectRatioForStrictModel(ratio, id))
+    }
   })
 })

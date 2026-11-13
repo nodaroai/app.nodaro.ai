@@ -54,7 +54,7 @@ export interface ImageToImageParams extends GenerationSessionParams {
   userPrompt?: string
   /** Omitted: the platform's default edit model for the requested `aspectRatio`. */
   provider?: ModifyImageProvider
-  /** Extra reference images, up to 13 (15 on GPT Image 2.6, 9 on Seedream 5.5). On models priced per reference, `imageUrl` counts as one. */
+  /** Extra reference images, up to 13 (15 on GPT Image 2.6, 9 on Seedream 5.5 or FLUX 3 Klein). On models priced per reference, `imageUrl` counts as one. */
   referenceImageUrls?: string[]
   resolution?: ImageResolution
   quality?: ImageQuality

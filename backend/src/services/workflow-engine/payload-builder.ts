@@ -298,6 +298,7 @@ import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { viduQ4InputProblem } from "../../lib/vidu-q4-inputs.js"
 import { imagePromptTooShort } from "../../lib/image-prompt-minimum.js"
+import { baseImageReservedSeats, imageInputLimitProblem } from "../../lib/image-input-limit.js"
 import { aspectRatioForStrictModel } from "../../lib/aspect-ratio.js"
 import { kieImageModelSent } from "../../providers/kie/image-edit-sibling.js"
 import { kling4InputProblem } from "../../lib/kling4-inputs.js"
@@ -3365,8 +3366,15 @@ function buildPayloadOf(
       // their clauses fold in their direction rows, the moodboard's images
       // fill only the reference seats the node's own references leave free.
       const generateUserDirection = buildCtx?.userDirection
+      // A base image FLUX 3 Klein counts against its limit takes a seat the
+      // moodboard would otherwise fill (`baseImageReservedSeats`, as on the route).
+      const generateReservedSeats = baseImageReservedSeats(effectiveProvider, resolvedInputs.baseImageUrl || data.baseImageUrl)
       const userDirectionLevers = generateUserDirection
-        ? { directionRefs: generateUserDirection.refs, styleReferences: generateUserDirection.styleReferences }
+        ? {
+            directionRefs: generateUserDirection.refs,
+            styleReferences: generateUserDirection.styleReferences,
+            ...(generateReservedSeats > 0 ? { reservedImageSeats: generateReservedSeats } : {}),
+          }
         : {}
       // Shared node-input assembly (WI-1a) — single source of truth with the
       // frontend execute-node + Studio. `rawPrompt` is already graph-composed
@@ -3452,6 +3460,13 @@ function buildPayloadOf(
       // sends, `imageJobPhotoUrl`, read by `buildPayloadWithSourceSize`) resolves
       // "auto" on a model without a native auto, as the route does; with no
       // photo, "auto" snaps exactly as it always has.
+      // Every image this job sends: its references and, on a model whose price
+      // reads them, a base image too (`pricedSentImages`, the route's count).
+      const generateSentImages = pricedSentImages(
+        provider,
+        result.referenceImageUrls ?? [],
+        resolvedInputs.baseImageUrl || data.baseImageUrl,
+      )
       const imageParams = resolveNormalizedImageGen({
         provider,
         // Unset = Auto, as the dropdown shows it (`nodeAspectRatio`).
@@ -3462,12 +3477,8 @@ function buildPayloadOf(
         background: data.background,
         // The file written, and a GIF's or an SVG's own levers (a GIF and an SVG price differently).
         ...imageFormatInputOf(data),
-        // On a model priced per input image the base of an edit is one more image sent.
-        refCount: pricedSentImages(
-          provider,
-          result.referenceImageUrls ?? [],
-          resolvedInputs.baseImageUrl || data.baseImageUrl,
-        ),
+        // On a model whose price reads the images the base of an edit is one more image sent.
+        refCount: generateSentImages,
         swapToI2i: !lora,
         sourceImage: buildCtx?.sourceImage,
       })
@@ -3487,6 +3498,9 @@ function buildPayloadOf(
       // A prompt shorter than the model takes: refused before any job row, as on the route.
       const generateTooShort = lora ? null : imagePromptTooShort(imageParams.modelId, result.prompt)
       if (generateTooShort) throw new Error(generateTooShort.message)
+      // More images than FLUX 3 Klein takes: refused before any job row, as on the route.
+      const generateTooMany = lora ? null : imageInputLimitProblem(provider, generateSentImages)
+      if (generateTooMany) throw new Error(generateTooMany.message)
 
       return {
         jobName: "generate-image",
@@ -3816,6 +3830,9 @@ function buildPayloadOf(
       // A prompt shorter than the model takes: refused before any job row, as on the route.
       const i2iTooShort = imagePromptTooShort(provider, i2iResult.prompt)
       if (i2iTooShort) throw new Error(i2iTooShort.message)
+      // The source and its references past what FLUX 3 Klein takes: refused, as on the route.
+      const i2iTooMany = imageInputLimitProblem(provider, 1 + (i2iResult.referenceImageUrls?.length ?? 0))
+      if (i2iTooMany) throw new Error(i2iTooMany.message)
 
       return {
         jobName: "image-to-image",
@@ -4016,6 +4033,9 @@ function buildPayloadOf(
       // A prompt shorter than the model takes: refused before any job row, as on the route.
       const modTooShort = imagePromptTooShort(provider, i2iResult.prompt)
       if (modTooShort) throw new Error(modTooShort.message)
+      // The source and its references past what FLUX 3 Klein takes: refused, as on the route.
+      const modTooMany = imageInputLimitProblem(provider, 1 + (i2iResult.referenceImageUrls?.length ?? 0))
+      if (modTooMany) throw new Error(modTooMany.message)
 
       return {
         jobName: "image-to-image",
@@ -8126,6 +8146,10 @@ function buildPayloadOf(
         scenePrompt = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || ""
       }
       assertImagePromptLongEnough(provider, scenePrompt)
+      // More references than FLUX 3 Klein takes (its wired ones and its assets'):
+      // refused before any job row, never left out by the provider.
+      const sceneTooMany = imageInputLimitProblem(provider, sceneRefUrls.length)
+      if (sceneTooMany) throw new Error(sceneTooMany.message)
 
       return {
         jobName: "generate-image",
@@ -8137,7 +8161,7 @@ function buildPayloadOf(
           provider,
           referenceImageUrls: sceneRefUrls.length > 0 ? sceneRefUrls : undefined,
           // Sent as stored, except on a model whose endpoint refuses a ratio it
-          // does not list (`strictAspectRatios`, Seedream 5.5 only): there a
+          // does not list (`strictAspectRatios`, Seedream 5.5 and FLUX 3 Klein): there a
           // stored "auto" or 4:5 goes as the nearest ratio it lists, never
           // refused by the provider after the reservation. Checked against the
           // model the request reaches (`kieImageModelSent`): with references,

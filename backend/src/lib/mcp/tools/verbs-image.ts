@@ -150,10 +150,9 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .union([z.array(z.string()), z.string()])
             .optional()
             .describe(
-              "Reference images (URLs or Nodaro asset ids, up to 14; 16 on GPT Image 2.6 or MiniMax H3) for identity / " +
-              "style / composition guidance — use whenever the output must match a " +
-              "given person, character, or product. Accepts an array; a lone URL or " +
-              "a JSON-stringified array is tolerated and coerced.",
+              "Reference images (URLs or Nodaro asset ids; up to 14, 16 on GPT Image 2.6 or MiniMax H3, 10 on Seedream 5.5 or FLUX 3 Klein " +
+              "with base_image_url) for identity / style / composition — use when the output must match a " +
+              "person, character or product. An array; a lone URL or JSON array is coerced.",
             ),
           base_image_url: z.string().url().optional().describe("Image to edit; the masked region is regenerated and composited back over it. Enables inpaint."),
           mask_url: z.string().url().optional().describe("Inpainting mask image URL (white=edit, black=keep). Requires base_image_url."),
@@ -697,7 +696,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
-            "Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6 or MiniMax H3, 9 on Seedream 5.5) for multi-ref " +
+            "Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6 or MiniMax H3, 9 on Seedream 5.5 or FLUX 3 Klein) for multi-ref " +
             "models — asset ids are resolved server-side. Accepts an array; a lone URL " +
             "or a JSON-stringified array is coerced.",
           ),

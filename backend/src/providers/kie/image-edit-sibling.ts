@@ -5,8 +5,8 @@
 // reference image(s) are present, `generateImage` (`image.ts`) swaps the t2i
 // provider for its i2i sibling below so the anchor is actually honored.
 //
-// TARGETED to GPT Image (and MiniMax H3 Image and Seedream 5.5, whose
-// text-to-image endpoints take no image at all) — do NOT widen to a blanket
+// TARGETED to GPT Image (and MiniMax H3 Image, Seedream 5.5 and FLUX 3 Klein,
+// whose text-to-image endpoints take no image at all) — do NOT widen to a blanket
 // "any t2i + refs → i2i" rule: models like nano-banana and the earlier seedream
 // t2i legitimately accept reference images via `image_input` as a STYLE
 // reference, and remapping them would change their behavior. Credit reservation
@@ -27,6 +27,7 @@ export const GPT_IMAGE_T2I_TO_I2I: Readonly<Record<string, string>> = {
   "gpt-image": "gpt-image-i2i",
   "minimax-h3-image": "minimax-h3-image-i2i",
   "seedream-5-5": "seedream-5-5-i2i",
+  "flux-3-klein": "flux-3-klein-i2i",
 }
 
 /**

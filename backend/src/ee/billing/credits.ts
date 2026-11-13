@@ -112,6 +112,7 @@ import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unp
 import { EXTEND_VIDEO_DEFAULT_PROVIDER, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, type UseCaseViewerFlags, generationSourceEstimateSec, type EstimateGraphNode, LENGTH_RECORDING_VIDEO_NODE_TYPES } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
+import { plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
 import { refuseBlockedReservation } from "../../lib/access-blocks.js"
 import type { FreeGrantState } from "./signup-grant.js"
@@ -153,7 +154,8 @@ import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { gptImage26StaticCosts } from "./gpt-image-2-6-pricing.js"
 import { minimaxH3ImageStaticCosts } from "./minimax-h3-image-pricing.js"
 import { seedream55StaticCosts } from "./seedream-5-5-pricing.js"
-import { defaultImageModelForNode, imageFormatLeversOf, isPricedPerInputImage, maskedEditResolution, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { flux3KleinStaticCosts } from "./flux-3-klein-pricing.js"
+import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
@@ -734,6 +736,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "z-image": 2,
   "flux-kontext": 13,
   "flux-kontext-max": 25,
+  // FLUX 3 Klein: per size alone, the same on both ids (flux-3-klein-pricing.ts).
+  ...flux3KleinStaticCosts(),
   // ── Replicate "Open" (uncensored) — run direct via Replicate, not KIE ──
   // Base rows (representative default-resolution 0-ref) — for admin display and
   // single-node runs where no :MP:ref composite is available yet.
@@ -7520,6 +7524,18 @@ export function getNodeModelIdentifier(
     ?? (nodeDefault && isPricedPerInputImage(nodeDefault) ? nodeDefault : undefined)
   if (!provider) return nodeType
 
+  // An entity node on FLUX 3 Klein: the job carries no size and only its own
+  // source image, so it is quoted on the id the run reserves (the payload
+  // builder's own: 1K, the edit id with a source), never on a stored size it
+  // does not send. Every other model keeps the generic quote below, which may
+  // quote above the run, never below it.
+  if (typeof data.provider === "string" && isFlux3Klein(provider)) {
+    if (nodeType === "character" || nodeType === "location") return workflowEntityCreditIdentifier(data)
+    if (nodeType === "face" || nodeType === "object" || nodeType === "creature") {
+      return plainEntityCreditIdentifier(provider, typeof data.sourceImageUrl === "string" && data.sourceImageUrl.length > 0 ? 1 : 0)
+    }
+  }
+
   // Extend-video: VEO quality costs more than fast
   if (nodeType === "extend-video" && provider === "veo-extend" && data.model === "quality") {
     return "veo-extend:quality"
@@ -7641,7 +7657,7 @@ export function getNodeModelIdentifier(
     followedSize ?? (typeof data.resolution === "string" ? resolutionAtAspectRatio(provider, data.aspectRatio, data.resolution) : undefined),
     data.renderingSpeed as string | undefined,
     data.targetResolution as string | undefined,
-    isPricedPerInputImage(provider) ? pricedEstimatedImages(provider, data, graph.imageRefsWired ?? 0) : undefined,
+    priceReadsInputImages(provider) ? pricedEstimatedImages(provider, data, graph.imageRefsWired ?? 0) : undefined,
     // A GIF's band of frames and an SVG's level, on a model they price (GPT Image 2.6).
     imageFormatLeversOf(data),
   )

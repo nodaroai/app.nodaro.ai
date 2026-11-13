@@ -13,6 +13,7 @@ import { resolvedModelOfJob } from "../lib/job-resolved-model.js"
 import { applySnappedLevers } from "../lib/image-gen-normalize.js"
 import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { aspectRatioForLoraModel, imageJobPhotoUrl } from "../lib/image-auto-aspect.js"
+import { baseImageReservedSeats } from "../lib/image-input-limit.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX } from "@nodaro/shared/models"
 import { normalizedImageGenModelId, resolveNormalizedImageGen } from "@nodaro/shared/credits"
@@ -93,16 +94,19 @@ export function buildAssembleInput(
     referenceLock?: "standard" | "multi-person"
     referenceImageUrls?: string[]
     negativePrompt?: string
+    baseImageUrl?: string
   },
   throwOnEmpty: boolean,
   userDirection: ResolvedUserDirection | undefined,
 ): AssembleImageInput {
+  const provider = body.provider ?? defaultImageModel("general", body.aspectRatio)
+  const reservedImageSeats = baseImageReservedSeats(provider, body.baseImageUrl)
   return {
     userPrompt: body.prompt ?? "",
     // Default provider mirrors the rest of the route — the credit check and the
     // handler pick it by aspect ratio — so the per-provider reference gate (and
     // a moodboard's free seats) resolve the same way at every call site.
-    provider: body.provider ?? defaultImageModel("general", body.aspectRatio),
+    provider,
     // HYBRID IS THE DEFAULT everywhere (dev AND production). Test runs resolve
     // to legacy (route tests assert the legacy assembly), as does an explicit
     // IMAGE_REFERENCE_FORMAT=legacy. `backendHybridRoles()` IS that
@@ -137,6 +141,9 @@ export function buildAssembleInput(
     ...(userDirection !== undefined
       ? { directionRefs: userDirection.refs, styleReferences: userDirection.styleReferences }
       : {}),
+    // A base image FLUX 3 Klein counts against its limit takes a seat the
+    // moodboard would otherwise fill (`baseImageReservedSeats`).
+    ...(reservedImageSeats > 0 ? { reservedImageSeats } : {}),
     throwOnEmpty,
   }
 }

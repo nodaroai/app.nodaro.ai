@@ -820,6 +820,39 @@ describe("MiniMax H3 Image's estimate", () => {
   })
 })
 
+describe("FLUX 3 Klein's estimate", () => {
+  it("is priced by its size alone, 1K when none is set, the same on the edit whatever the images", () => {
+    expect(buildCreditModelIdentifier("flux-3-klein", {})).toBe("flux-3-klein:1K")
+    expect(buildCreditModelIdentifier("flux-3-klein", { resolution: "2K" })).toBe("flux-3-klein:2K")
+    expect(buildCreditModelIdentifier("flux-3-klein", { resolution: "4K" })).toBe("flux-3-klein:4K")
+    // Any image the run will send (its own, wired, a base image) moves it to
+    // the edit id it runs on, at the same size's row; the count never shows.
+    expect(buildCreditModelIdentifier("flux-3-klein", { resolution: "4K" }, 3)).toBe("flux-3-klein-i2i:4K")
+    expect(buildCreditModelIdentifier("flux-3-klein", { referenceImageUrls: ["https://b.png"] })).toBe("flux-3-klein-i2i:1K")
+    expect(buildCreditModelIdentifier("flux-3-klein", { resolution: "2K", baseImageUrl: "https://a.png" })).toBe("flux-3-klein-i2i:2K")
+    expect(buildCreditModelIdentifier("flux-3-klein", { resolution: "2K" }, 0)).toBe("flux-3-klein:2K")
+    expect(buildCreditModelIdentifier("flux-3-klein-i2i", { resolution: "2K" }, 9)).toBe("flux-3-klein-i2i:2K")
+  })
+
+  it("an entity node is quoted at what its run sends: 1K, the edit id with a source image", () => {
+    const entity = (type: string, data: Record<string, unknown>) =>
+      ({ id: "e", type, position: { x: 0, y: 0 }, data: { label: type, provider: "flux-3-klein", ...data } }) as unknown as WorkflowNode
+    for (const type of ["character", "location", "face", "object"]) {
+      expect(getModelIdentifier(entity(type, { resolution: "4K" })), type).toBe("flux-3-klein:1K")
+      expect(getModelIdentifier(entity(type, { sourceImageUrl: "https://a.png" })), type).toBe("flux-3-klein-i2i:1K")
+    }
+    // Every other model keeps the quote from its own settings.
+    const gpt = { id: "e", type: "character", position: { x: 0, y: 0 }, data: { label: "c", provider: "gpt-image-2", resolution: "4K" } } as unknown as WorkflowNode
+    expect(getModelIdentifier(gpt)).toBe("gpt-image-2:4K")
+  })
+
+  it("a stale ratio on its panel snaps to 1:1, never to the edit's auto", () => {
+    expect(getAspectRatiosForModel("flux-3-klein")[0]?.value).toBe("1:1")
+    expect(getAspectRatiosForModel("flux-3-klein-i2i")[0]?.value).toBe("1:1")
+    expect(getAspectRatiosForModel("flux-3-klein-i2i").map((o) => o.value)).toContain("auto")
+  })
+})
+
 describe("GPT Image 2.6's estimate", () => {
   it("counts every image the run will send", () => {
     expect(buildCreditModelIdentifier("gpt-image-2-6-flare", { baseImageUrl: "https://a.png" })).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")

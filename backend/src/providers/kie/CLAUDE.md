@@ -76,6 +76,8 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `minimax-h3-image-i2i` | `minimax-h3/image-edit` | [minimax-h3 image edit](https://docs.kie.ai/market/minimax-h3/image-edit.md) |
 | `seedream-5-5` | `seedream/5-5-text-to-image` | [seedream 5.5 t2i](https://docs.kie.ai/market/seedream/5-5-text-to-image.md) |
 | `seedream-5-5-i2i` | `seedream/5-5-image-to-image` | [seedream 5.5 i2i](https://docs.kie.ai/market/seedream/5-5-image-to-image.md) |
+| `flux-3-klein` | `flux-3/klein-text-to-image` (NOT FLUX 2 Klein, `flux-2-klein`, which runs on Replicate) | [flux 3 klein t2i](https://docs.kie.ai/market/flux3/klein-text-to-image.md) |
+| `flux-3-klein-i2i` | `flux-3/klein-edit-image` | [flux 3 klein edit](https://docs.kie.ai/market/flux3/klein-edit-image.md) |
 | `z-image` | `z-image` | [z-image](https://docs.kie.ai/market/z-image/z-image.md) |
 | ~~`topaz-image-upscale`~~ | ~~`topaz/image-upscale`~~ | **RETIRED 2026-10-25** — runs on Replicate (`providers/replicate/topaz.ts`); config kept for the credit audit, `KIE_RETIRED_MODEL_KEYS` keeps it out of routing |
 | `recraft-remove-bg` | `recraft/remove-background` | [recraft bg remove](https://docs.kie.ai/market/recraft/remove-background.md) |
@@ -851,7 +853,7 @@ Different models use different param names for input images — getting this wro
 | Pattern | Models | Param |
 |---------|--------|-------|
 | Single URL string | minimax, kling-turbo, kling-avatar, topaz, ideogram-edit, ideogram-remix, qwen-i2i, qwen-edit, topaz-image-upscale | `image_url` |
-| Array of URLs | kling, grok, sora2-pro, flux, gpt-image, nano-banana-edit, seedream-edit, nano-banana-2-lite (up to 10, NOT the family's `image_input`), seedream-5-flash-i2i (up to 10, not the family's 16), minimax-h3-image-i2i (1 to 16), seedream-5-5-i2i (1 to 10, priced per image; `maxInputImages` sends at most 10) | `image_urls` or `input_urls` |
+| Array of URLs | kling, grok, sora2-pro, flux, gpt-image, nano-banana-edit, seedream-edit, nano-banana-2-lite (up to 10, NOT the family's `image_input`), seedream-5-flash-i2i (up to 10, not the family's 16), minimax-h3-image-i2i (1 to 16), seedream-5-5-i2i (1 to 10, priced per image; `maxInputImages` sends at most 10), flux-3-klein-i2i (1 to 10, free of charge; `maxInputImages` sends at most 10) | `image_urls` or `input_urls` |
 | VEO array | veo3, veo3.1 | `imageUrls` (camelCase!) |
 | Video URL | wan v2v | `video_urls` (array) |
 | Video URL | topaz upscale | `video_url` (string) |
@@ -885,6 +887,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | Qwen | `output_format` | `"png"`, `"jpeg"` |
 | MiniMax H3 Image (T2I + edit) | `output_format` | `"png"` (KIE's default: nothing is sent), `"jpeg"` (catalog `outputFormats`, `inputFieldsByFormat`) |
 | Seedream 5.5 (T2I + I2I) | `output_format` | `"png"` (default, sent as nothing), `"jpeg"` — the catalog's `outputFormats`; a transparent background with JPEG is moved to `auto` before the run is priced |
+| FLUX 3 Klein (T2I + edit) | `output_format` | `"png"` (default, sent as nothing), `"jpeg"` — the catalog's `outputFormats`; the schema's `"webp"` is not offered |
 | Other image models | Not supported | — |
 
 ### resolution Support
@@ -900,6 +903,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | Seedream 5 Flash (T2I + I2I) | **`size`** — our `resolution`, renamed on the wire by `resolutionParam: "size"` in `models.ts` (`image.ts` `applyResolutionParam`, both lanes) | `"1K"`, `"2K"` offered (schema also has `"1.5K"`, not offered); flat price at every size |
 | MiniMax H3 Image (T2I + edit) | `resolution` | `"1K"`, `"2K"` (default), `"4K"` at every ratio; 1K and 2K cost the same |
 | Seedream 5.5 (T2I + I2I) | **`size`**, as Flash | `"1K"`, `"1.5K"`, `"2K"` (default, and KIE's): priced per size, 1K and 1.5K the same (see the wire notes below) |
+| FLUX 3 Klein (T2I + edit) | `resolution` | `"1K"` (default, and KIE's), `"2K"`, `"4K"` at every ratio; priced per size, the same on both endpoints |
 | Other image models | Not supported | — |
 
 ### quality Support
@@ -1144,6 +1148,69 @@ text-to-image schema has no image field at all.
 - No `seed` in either schema. `nsfw_checker` (default false) is declared as
   `NSFW_CHECKER_LEVER` and not sent, as on the other Seedream models.
 
+### FLUX 3 Klein wire notes (`flux-3-klein` / `flux-3-klein-i2i`)
+
+The light model of Black Forest Labs' FLUX 3, a different model from FLUX 2
+Klein (`flux-2-klein`, on Replicate); both stay on offer. Two Nodaro ids on the
+standard `createTask` lane: the person picks FLUX 3 Klein, and references (or a
+base image) move a run onto the edit id, in the route (`T2I_TO_I2I_VARIANT`)
+and, for the callers that do not swap (the entity routes, a pipeline pin), in
+`generateImage` here (`GPT_IMAGE_T2I_TO_I2I`, `image-edit-sibling.ts`), since
+the text-to-image schema has no image field at all.
+
+- `resolution` is `1K` (KIE's default and ours), `2K` or `4K`, at every ratio.
+  `applyFlux3KleinResolution` (`image.ts`) sends `flux3KleinResolution` of the
+  value, the one its price was built from: another spelling (`4k`) is sent as
+  `4K`, anything else as `1K`, so the size rendered is the size charged.
+- `aspect_ratio`: 1:1 (text to image's default), 4:3, 3:4, 3:2, 2:3, 16:9, 9:16,
+  21:9 and 9:21; the edit adds `auto`, its default, which by the schema takes
+  the first input image's shape. Not yet measured on a real run: if a 3:4
+  portrait comes back square, give the edit entry `autoAspectFromSourceImage`.
+  Text to image has no `auto`, so an unset Generate Image ratio becomes the
+  ratio nearest a photo, else 1:1. The edit lists `auto` LAST (as MiniMax H3
+  Image does), so a fallback that takes the first ratio lands on 1:1. An
+  image-to-image request naming no ratio runs at `auto`
+  (`UNSET_RATIO_IS_AUTO_EDIT_MODELS`). Both entries declare
+  `strictAspectRatios` (each schema lists a closed set), so a Scene or a
+  surround continuation sends a ratio the model it reaches lists.
+- The body is an explicit list (`inputFields` / `inputFieldsByFormat`):
+  `prompt`, `aspect_ratio`, `resolution`, `seed`, `image_urls` on the edit, and
+  `output_format` with JPEG only (decided 2026-11-11 and 2026-11-12: PNG, the
+  default, sent as nothing, or JPEG; WebP is not offered). Never
+  `enhance_prompt` (KIE's default, on, applies), `width` / `height` (a custom
+  size), `num_images` (KIE's default, one) or another model's lever. `nsfw_checker` (default false) is
+  declared as `NSFW_CHECKER_LEVER` and not sent; an admin's Provider Safety
+  setting adds it at the client, after this list.
+- `seed` is an integer 0 to 2147483647 (`seedRange`): one outside it is dropped
+  before the request is sent. Prompts 1 to 5000 characters (the default cap).
+- 1 to 10 input images (JPEG, PNG, WebP, up to 30 MB each: inside
+  `ensureImageForProvider`'s defaults), the source or base image counted
+  (decided 2026-11-12: an 11th is refused, not left out). `/v1/generate-image`
+  refuses more twice: the body (`requestImageLimit`, `pricedSentImages`
+  counting a base since `priceReadsInputImages` names this model) and, after
+  assembly, the images each plan sends (structured `connectedReferences`
+  included). `/v1/image-to-image` counts its source. A workflow run refuses
+  before any job row (`imageInputLimitProblem`, `lib/image-input-limit.ts`:
+  Generate Image, Image to Image, Modify Image, Scene). A base takes a seat a
+  moodboard would fill (`baseImageReservedSeats` → the assembler's
+  `reservedImageSeats`). `maxInputImages` stays as a backstop; the assembler
+  still trims structured references past the model's reference limit, as for
+  every model.
+- **The id priced is the id run.** The provider runs the edit endpoint whenever
+  any image goes, so every path that prices a run counts what it sends
+  (`priceReadsInputImages`): a Generate Image base alone, references, wired
+  images in an estimate, an entity's source. With one or more the price id is
+  `flux-3-klein-i2i:<size>` (`flux3KleinCreditId`).
+- **Billing:** per picture by size alone, the same on both endpoints, nothing
+  per reference image: 1.6 / 2.5 / 6.5 KIE credits at 1K / 2K / 4K
+  (`FLUX_3_KLEIN_KIE_HUNDREDTHS`, `models.ts`; the schemas' callback says the
+  same). Rows in `ee/billing/flux-3-klein-pricing.ts` (`flux-3-klein:<size>`,
+  `flux-3-klein-i2i:<size>`, built by `flux3KleinCreditId`), and
+  `kieImageCostUsd` records the size sent as `jobs.provider_cost`. The entity
+  runs (face, object, creature, scene, surround, a workflow Character or
+  Location node) send no size, so they are priced at 1K
+  (`plainEntityCreditIdentifier`, `workflowEntityCreditIdentifier`).
+
 ### seed type
 
 KIE checks `seed` against the TYPE in each SKU's schema. Our API/MCP carry a number, and a SKU whose schema says `type: string` refuses it at createTask (`"seed must be a string"`), which fails the job. When adding an image SKU, read its doc's `seed` type; for a string, declare `seedType: "string"` on its `models.ts` entry (with doc URL + fetch date) and `image.ts` converts the seed through `kieSeedForWire` on both lanes.
@@ -1151,7 +1218,7 @@ KIE checks `seed` against the TYPE in each SKU's schema. Our API/MCP carry a num
 | Seed type | Image SKUs (docs fetched 2026-10-04) |
 |-----------|--------------------------------------|
 | string (`seedType: "string"`) | `imagen4`, `imagen4-ultra` |
-| integer (default — declare nothing) | `imagen4-fast`, ideogram, qwen, wan-2.7, `minimax-h3-image` and its edit (0 to 2147483647; fetched 2026-11-11) |
+| integer (default — declare nothing) | `imagen4-fast`, ideogram, qwen, wan-2.7, `minimax-h3-image` and its edit (0 to 2147483647; fetched 2026-11-11), `flux-3-klein` and its edit (0 to 2147483647; fetched 2026-11-12) |
 | no `seed` in the schema | every other image SKU |
 
 Do not declare it per family — the Imagen 4 tiers disagree. A SKU whose schema bounds the seed declares `seedRange: { min, max }` (MiniMax H3 Image: 0 to 2147483647), and a seed outside it is dropped before the request goes out. Only the image lanes read `seedType` and `seedRange`; `__tests__/models.test.ts` fails if a video/audio SKU declares either.

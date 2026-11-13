@@ -34,6 +34,7 @@ import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, MINIMAX_H3_IMAGE_RESOLUTIONS } fro
 import { isAutoVideoDuration } from "./video-duration-auto.js"
 import type { DeclaredSeedanceTaskType } from "./seedance-task-type.js"
 import { SEEDREAM_5_5_DEFAULT_RESOLUTION, SEEDREAM_5_5_RESOLUTIONS } from "./seedream-5-5.js"
+import { FLUX_3_KLEIN_RESOLUTIONS } from "./flux-3-klein.js"
 
 export type ModelKind = "image" | "video" | "audio"
 
@@ -339,7 +340,10 @@ export interface ModelCatalogEntryFields {
    * marked required, with a closed list (Seedream 5.5: text to image requires
    * one of its eight ratios and has no "auto"; its edit takes "auto" and the
    * same eight; docs.kie.ai/market/seedream/5-5-text-to-image.md and
-   * 5-5-image-to-image.md). The lanes that pass a stored ratio straight on (a
+   * 5-5-image-to-image.md). FLUX 3 Klein's schemas give the same evidence: a
+   * closed list of nine ratios on text to image, with no "auto", and the same
+   * nine plus "auto" on the edit (docs.kie.ai/market/flux3/klein-text-to-image.md
+   * and klein-edit-image.md). The lanes that pass a stored ratio straight on (a
    * Scene, a surround continuation) move a ratio such a model does not list to
    * the nearest one it does, checked against the model the request reaches
    * (`aspectRatioForStrictModel` in the backend), and send every other model's
@@ -711,6 +715,14 @@ const SEEDREAM_5_5_I2I_RATIOS = ["auto", ...SEEDREAM_RATIOS] as const
 // moves it to auto with JPEG), and PNG (its default) or JPEG.
 const SEEDREAM_5_5_BACKGROUNDS = ["auto", "opaque", "transparent"] as const
 const SEEDREAM_5_5_FORMATS = ["png", "jpeg"] as const
+// FLUX 3 Klein (docs.kie.ai/market/flux3/klein-text-to-image + klein-edit-image):
+// both endpoints list the same nine ratios, 1:1 first (the text-to-image
+// default). The edit adds "auto", its own default (the first image's shape),
+// listed LAST so a fallback that takes the first ratio lands on 1:1.
+const FLUX_3_KLEIN_RATIOS = ["1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16", "21:9", "9:21"] as const
+const FLUX_3_KLEIN_I2I_RATIOS = [...FLUX_3_KLEIN_RATIOS, "auto"] as const
+// Its files: PNG (its default) or JPEG, the same price (decided 2026-11-12).
+const FLUX_3_KLEIN_FORMATS = ["png", "jpeg"] as const
 const Z_IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 
 const VIDEO_RATIOS_HV = ["16:9", "9:16"] as const
@@ -962,6 +974,63 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: KONTEXT_RATIOS,
     pricing: [{ identifier: "flux-kontext-max", credits: 25 }],
+  },
+  // ── FLUX 3 Klein ──
+  // The light model of Black Forest Labs' FLUX 3 (KIE `flux-3/klein-text-to-image`
+  // and `flux-3/klein-edit-image`). A different model from FLUX 2 Klein
+  // (`flux-2-klein`, below). A prompt runs the text-to-image id; with reference
+  // images the run moves to the edit id (`T2I_TO_I2I_VARIANT`). Priced by size
+  // alone, the same on both ids: reference images cost nothing
+  // (`flux3KleinCreditId`). Both schemas list a closed set of ratios and text to
+  // image has no "auto", so both entries declare `strictAspectRatios`. PNG (the
+  // default) or JPEG, as its siblings write (decided 2026-11-12); KIE's WebP is
+  // not offered. KIE's prompt enhancement is left on (never sent), and its
+  // custom width/height and several pictures per request are not offered.
+  // See: docs.kie.ai/market/flux3/klein-text-to-image.md
+  //      docs.kie.ai/market/flux3/klein-edit-image.md
+  "flux-3-klein": {
+    id: "flux-3-klein",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "Black Forest Labs",
+    maker: "black-forest-labs",
+    label: "FLUX 3 Klein",
+    series: "Flux",
+    description: "FLUX 3 Klein - the light model of FLUX 3: fast and low cost, at 1K by default, 2K or 4K, in nine shapes, PNG or JPEG. Add images and it edits from up to 10 references, at the same price.",
+    useCases: ["fast", "drafts", "iteration", "realistic"],
+    features: ["reference-image"],
+    aspectRatios: FLUX_3_KLEIN_RATIOS,
+    strictAspectRatios: true,
+    resolutions: FLUX_3_KLEIN_RESOLUTIONS,
+    outputFormats: FLUX_3_KLEIN_FORMATS,
+    pricing: [
+      { identifier: "flux-3-klein", credits: 4, note: "1K default" },
+      { identifier: "flux-3-klein:1K", credits: 4, note: "1K" },
+      { identifier: "flux-3-klein:2K", credits: 7, note: "2K" },
+      { identifier: "flux-3-klein:4K", credits: 17, note: "4K" },
+    ],
+  },
+  "flux-3-klein-i2i": {
+    id: "flux-3-klein-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "Black Forest Labs",
+    maker: "black-forest-labs",
+    label: "FLUX 3 Klein (I2I)",
+    series: "Flux",
+    description: "FLUX 3 Klein edits - fast, low-cost changes from 1 to 10 reference images, which cost nothing extra. 1K by default, 2K or 4K, PNG or JPEG; auto keeps the first image's shape.",
+    useCases: ["edit", "iteration", "multi-reference", "fast"],
+    features: ["reference-image"],
+    aspectRatios: FLUX_3_KLEIN_I2I_RATIOS,
+    strictAspectRatios: true,
+    resolutions: FLUX_3_KLEIN_RESOLUTIONS,
+    outputFormats: FLUX_3_KLEIN_FORMATS,
+    pricing: [
+      { identifier: "flux-3-klein-i2i", credits: 4, note: "1K default" },
+      { identifier: "flux-3-klein-i2i:1K", credits: 4, note: "1K" },
+      { identifier: "flux-3-klein-i2i:2K", credits: 7, note: "2K" },
+      { identifier: "flux-3-klein-i2i:4K", credits: 17, note: "4K" },
+    ],
   },
   // ── Replicate "Open" (uncensored) — run direct via Replicate, not KIE ──
   "flux-2-klein": {

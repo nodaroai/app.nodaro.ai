@@ -4,7 +4,7 @@ import type { SourceNodeInfo } from "./types"
 import { unitCreditIdOf } from "@/lib/unit-price-ids"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, isTailExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
-import { defaultImageModelForNode, imageFormatLeversOf, isPricedPerInputImage, maskedEditResolution, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { countImageInputEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
 import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
@@ -486,7 +486,20 @@ export function getModelIdentifier(
   // Entity nodes: use provider field (default nano-banana)
   if (nodeType === "character" || nodeType === "face" || nodeType === "object" || nodeType === "location") {
     const entityProvider = (data.provider as string) || IMAGE_MODEL_ROLE_DEFAULTS.character
+    // FLUX 3 Klein: the job sends no size and only the node's source image, so
+    // it is quoted at the size it renders, 1K, on the edit id with a source
+    // (the server's estimate and reservation, `plainEntityCreditIdentifier`).
+    if (isFlux3Klein(entityProvider)) {
+      const hasSource = typeof data.sourceImageUrl === "string" && data.sourceImageUrl.length > 0
+      return sharedBuildCreditModelIdentifier(entityProvider, undefined, undefined, undefined, undefined, hasSource ? 1 : 0)
+    }
     return buildCreditModelIdentifier(entityProvider, data)
+  }
+  // A Creature node on FLUX 3 Klein is priced like the entities above (the
+  // server's estimate includes it); every other Creature quote is unchanged.
+  if (nodeType === "creature" && isFlux3Klein(data.provider as string)) {
+    const hasSource = typeof data.sourceImageUrl === "string" && data.sourceImageUrl.length > 0
+    return sharedBuildCreditModelIdentifier(data.provider as string, undefined, undefined, undefined, undefined, hasSource ? 1 : 0)
   }
 
   if (nodeType === "web-scrape") {
@@ -843,7 +856,7 @@ export function getModelIdentifier(
   return buildCreditModelIdentifier(
     provider,
     data,
-    edges && isPricedPerInputImage(provider) ? countImageInputEdges(edges, node.id) : 0,
+    edges && priceReadsInputImages(provider) ? countImageInputEdges(edges, node.id) : 0,
     // A masked edit on a model that follows its photo is priced at the size
     // nearest the photo, when the node it comes from records the photo's size.
     {
@@ -877,8 +890,9 @@ export function buildCreditModelIdentifier(
   // refs) so the displayed credit number matches what the route will charge.
   const refs = data.referenceImageUrls as string[] | undefined
   // A model priced per input image (GPT Image 2.6, MiniMax H3 Image, Seedream
-  // 5.5) counts every image the run will send.
-  const refCount = isPricedPerInputImage(provider) ? pricedEstimatedImages(provider, data, wiredImageRefs) : (refs?.length ?? 0)
+  // 5.5), or FLUX 3 Klein (priced on the edit id it runs on whenever an image
+  // goes), counts every image the run will send.
+  const refCount = priceReadsInputImages(provider) ? pricedEstimatedImages(provider, data, wiredImageRefs) : (refs?.length ?? 0)
   // Topaz bills on the upscale FACTOR. The legacy `targetResolution` still on
   // stored node data is mapped forward by resolveTopazUpscale — the same
   // authority the route, the estimator and the worker use — so the credit badge

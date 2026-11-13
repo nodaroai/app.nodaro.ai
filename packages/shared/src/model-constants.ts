@@ -188,7 +188,9 @@ export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   //   docs.kie.ai/market/minimax-h3/text-to-image + image-edit),
   //   seedream-5-5, seedream-5-5-i2i (both "5–5000 characters"; the minimum is
   //   MIN_IMAGE_PROMPT_CHARS_BY_PROVIDER below;
-  //   docs.kie.ai/market/seedream/5-5-text-to-image + 5-5-image-to-image).
+  //   docs.kie.ai/market/seedream/5-5-text-to-image + 5-5-image-to-image),
+  //   flux-3-klein, flux-3-klein-i2i (both "1–5000 characters";
+  //   docs.kie.ai/market/flux3/klein-text-to-image + klein-edit-image).
   // grok-i2i: doc states 390000 (78× its t2i sibling) — treated as a KIE schema
   //   typo and left at the 5000 default per the sanity-cap decision.
   // UNVERIFIED (no limit stated in schema) → 5000 default: flux-kontext(-max)
@@ -663,6 +665,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "seedream-5-5",
   "flux",
   "flux-flex",
+  "flux-3-klein",
   // Image editing / image-to-image (reference = source image)
   "nano-banana-edit",
   "gpt-image-i2i",
@@ -687,6 +690,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "seedream-5-flash-i2i",
   "minimax-h3-image-i2i",
   "seedream-5-5-i2i",
+  "flux-3-klein-i2i",
   "grok-i2i",
   // Upscale / background ops (source acts as the reference)
   "recraft-remove-bg",
@@ -734,6 +738,9 @@ export const T2I_TO_I2I_VARIANT: Record<string, string> = {
   "seedream-5-5": "seedream-5-5-i2i",
   "flux": "flux-pro-i2i",
   "flux-flex": "flux-i2i",
+  // FLUX 3 Klein's text-to-image endpoint takes no image at all: its edit
+  // endpoint reads them (the provider swaps too).
+  "flux-3-klein": "flux-3-klein-i2i",
 }
 
 /**
@@ -776,6 +783,8 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "minimax-h3-image-i2i": 16,
   // Seedream 5.5 takes 1–10 `image_urls` (docs.kie.ai/market/seedream/5-5-image-to-image).
   "seedream-5-5-i2i": 10,
+  // FLUX 3 Klein's edit takes 1–10 `image_urls` (docs.kie.ai/market/flux3/klein-edit-image).
+  "flux-3-klein-i2i": 10,
   // Single-source i2i (one input image)
   "flux-kontext": 1,
   "flux-kontext-max": 1,
@@ -839,8 +848,8 @@ export const DEFAULT_REQUEST_IMAGE_LIMIT = 14
  * {@link DEFAULT_REQUEST_IMAGE_LIMIT}. Separate from
  * {@link REF_IMAGE_MAX_LIMITS}, the cap the canvas and the assembler honour: the
  * routes have their own ceiling, and it moves per model only here. GPT Image
- * 2.6 takes more; a model priced per input image whose provider takes fewer
- * (Seedream 5.5: 10) is held to its own, so a request is refused before it is
+ * 2.6 takes more; a model whose provider takes fewer (Seedream 5.5 and FLUX 3
+ * Klein: 10) is held to its own, so a request is refused before it is
  * reserved instead of failing at the provider.
  */
 const REQUEST_IMAGE_LIMITS: Record<string, number> = {
@@ -848,6 +857,7 @@ const REQUEST_IMAGE_LIMITS: Record<string, number> = {
   "gpt-image-2-6-sunburst-i2i": 16,
   "minimax-h3-image-i2i": 16,
   "seedream-5-5-i2i": 10,
+  "flux-3-klein-i2i": 10,
 }
 
 /** The largest per-model limit: the outer bound of the routes' array schemas. */
@@ -896,6 +906,9 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | 
   // Also priced per reference image on an edit (`minimaxH3ImageCreditId`).
   "minimax-h3-image": "resolution",
   "minimax-h3-image-i2i": "resolution",
+  // By size alone, the same on both ids (`flux3KleinCreditId`).
+  "flux-3-klein": "resolution",
+  "flux-3-klein-i2i": "resolution",
 }
 
 
@@ -962,6 +975,7 @@ export const IMAGE_GEN_PROVIDERS = [
   "flux-flex",
   "flux-kontext",
   "flux-kontext-max",
+  "flux-3-klein",
   "z-image",
   "wan-2.7",
   "wan-2.7-pro",
@@ -1001,6 +1015,7 @@ export const IMAGE_I2I_PROVIDERS = [
   "seedream-5-5-i2i",
   "flux-kontext",
   "flux-kontext-max",
+  "flux-3-klein-i2i",
   // Replicate Open (uncensored) — multi-image Kontext via Replicate
   "kontext-multi",
   // BFL Flux 2 Pro — runs through Replicate
@@ -2083,6 +2098,7 @@ export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
   "seedream-5-flash": "prompt",
   "minimax-h3-image": "prompt",
   "seedream-5-5": "prompt",
+  "flux-3-klein": "prompt",
   "qwen": "prompt",
   "flux-kontext": "prompt",
   "flux-kontext-max": "prompt",
@@ -2115,6 +2131,7 @@ export const SEED_SUPPORT = new Set([
   "flux", "flux-flex", "flux-i2i", "flux-pro-i2i", "flux-kontext", "flux-kontext-max",
   "flux-2-klein", "kontext-multi",
   "minimax-h3-image", "minimax-h3-image-i2i",
+  "flux-3-klein", "flux-3-klein-i2i",
 ])
 
 /** Ideogram models that support rendering_speed selection (TURBO/BALANCED/QUALITY) */

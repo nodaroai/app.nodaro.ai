@@ -1593,6 +1593,15 @@ const LLM_PRICE_KEY_EFFORT_WORDING_BYTES = 62
 // NOT move. Measured by this suite: 528_052 total − 528_030 = 22 B.
 const FLUX_FILL_CATALOG_ENTRY_BYTES = 22
 
+// RAISED 2026-11-12 by FLUX 3 Klein (`flux-3-klein` t2i + `flux-3-klein-i2i`), and nothing else:
+// the two ids join the catalog-derived model lists generate_image, modify_image and image_to_image
+// already carry, and image_to_image's reference note names its 9 (with the source, 10) beside
+// Seedream 5.5's. No tool was added, so the fixture does NOT move. `generate_image` is the one tool
+// past the per-tool budget (9_940 → 9_954 B). Measured by this suite: 66 B (generate_image 14,
+// modify_image 18, image_to_image 34).
+const FLUX_3_KLEIN_PER_TOOL_BYTES = 14
+const FLUX_3_KLEIN_TOTAL_BYTES = 66
+
 // RAISED 2026-11-12 by Nemotron 3.5 Transcribe on `transcribe`, and nothing else: the tool gains
 // a `model` arg (the TRANSCRIBE_PROVIDERS enum, ElevenLabs STT still the default) and a
 // `target_language` arg (Nemotron's 32 translation targets), and its description and describes
@@ -1603,7 +1612,7 @@ const FLUX_FILL_CATALOG_ENTRY_BYTES = 22
 const NEMOTRON_TRANSCRIBE_BYTES = 1_122
 
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -1803,6 +1812,7 @@ export const TOOL_WIRE_BUDGET = {
     LLM_REGISTRY_2026_11_IDS_BYTES +
     LLM_PRICE_KEY_EFFORT_WORDING_BYTES +
     FLUX_FILL_CATALOG_ENTRY_BYTES +
+    FLUX_3_KLEIN_TOTAL_BYTES +
     NEMOTRON_TRANSCRIBE_BYTES,
 }
 

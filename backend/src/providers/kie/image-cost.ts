@@ -1,4 +1,5 @@
 import {
+  FLUX_3_KLEIN_KIE_HUNDREDTHS,
   GPT_IMAGE_2_KIE_CREDITS,
   KIE_CREDIT_USD,
   MINIMAX_H3_IMAGE_KIE_HUNDREDTHS,
@@ -7,7 +8,16 @@ import {
   SEEDREAM_5_5_KIE_HUNDREDTHS,
   type KieModelConfig,
 } from "./models.js"
-import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, isMinimaxH3Image, isMinimaxH3ImageI2i, isSeedream55, isSeedream55I2i, seedream55Resolution } from "@nodaro/shared/model-catalog"
+import {
+  MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION,
+  flux3KleinResolution,
+  isFlux3Klein,
+  isMinimaxH3Image,
+  isMinimaxH3ImageI2i,
+  isSeedream55,
+  isSeedream55I2i,
+  seedream55Resolution,
+} from "@nodaro/shared/model-catalog"
 
 /**
  * What KIE bills for one picture, recorded as the job's provider cost
@@ -17,7 +27,8 @@ import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, isMinimaxH3Image, isMinimaxH3Image
  * GPT Image 2 bills by the resolution sent, so the model entry's one figure
  * (its 1K price) would understate a 2K or 4K picture. MiniMax H3 Image bills by
  * the size sent and, on an edit, by each reference image sent; Seedream 5.5 by
- * the size sent and, on an edit, by each input image sent.
+ * the size sent and, on an edit, by each input image sent; FLUX 3 Klein by the
+ * size sent alone, the same on both endpoints.
  */
 
 const GPT_IMAGE_2_PROVIDERS: ReadonlySet<string> = new Set(["gpt-image-2", "gpt-image-2-i2i"])
@@ -41,6 +52,8 @@ export function kieImageCostUsd(
 ): number {
   if (isMinimaxH3Image(provider)) return minimaxH3ImageCostUsd(provider, resolution, inputImages)
   if (isSeedream55(provider)) return seedream55CostUsd(provider, resolution, inputImages)
+  // FLUX 3 Klein: the size sent (KIE's default 1K when none is), never the images.
+  if (isFlux3Klein(provider)) return (FLUX_3_KLEIN_KIE_HUNDREDTHS[flux3KleinResolution(resolution)] / 100) * KIE_CREDIT_USD
   if (!GPT_IMAGE_2_PROVIDERS.has(provider)) return modelConfig.cost
   const sent = resolution ?? "1K"
   return isGptImage2Resolution(sent) ? GPT_IMAGE_2_KIE_CREDITS[sent] * KIE_CREDIT_USD : modelConfig.cost

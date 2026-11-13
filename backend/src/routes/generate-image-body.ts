@@ -12,6 +12,7 @@ import { imageFormatFields, maskFormatConflict } from "../lib/image-format-schem
 import { presetIdSchema, presetVariablesSchema } from "../lib/presets/generate-image-preset-hook.js"
 import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_BACKGROUND_VALUES, IMAGE_RENDERING_SPEED_VALUES, PROMPT_HARD_CEILING, MAX_REQUEST_IMAGE_LIMIT, requestImageLimit } from "@nodaro/shared/models"
 import { defaultImageModel, pricedSentImages } from "@nodaro/shared/model-catalog"
+import { imageInputLimitProblem } from "../lib/image-input-limit.js"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
 import { subjectSchema } from "../lib/subject-schema.js"
@@ -206,8 +207,12 @@ export const generateImageRequest = generateImageBody.superRefine((data, ctx) =>
   // No model named: the limit of the default the route will run it on.
   for (const model of data.models?.length ? data.models : [data.provider ?? defaultImageModel("general", data.aspectRatio)]) {
     const limit = requestImageLimit(model)
-    if (pricedSentImages(model, references, data.baseImageUrl) > limit) {
-      ctx.addIssue({ code: "custom", path: ["referenceImageUrls"], message: `${model} takes at most ${limit} input images` })
+    const sent = pricedSentImages(model, references, data.baseImageUrl)
+    if (sent > limit) {
+      // FLUX 3 Klein says how many to remove, the base image counted, as its
+      // workflow run does (`imageInputLimitProblem`); every other model keeps its message.
+      const message = imageInputLimitProblem(model, sent)?.message ?? `${model} takes at most ${limit} input images`
+      ctx.addIssue({ code: "custom", path: ["referenceImageUrls"], message })
       break
     }
   }

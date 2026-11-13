@@ -132,6 +132,14 @@ export interface AssembleImageInput {
    */
   styleReferences?: readonly StyleReferenceInput[]
   /**
+   * Seats of the model's reference limit that another image the run sends
+   * takes, outside this assembly: a base image the job sends first, on a model
+   * that counts it against the same limit (FLUX 3 Klein). Style references fill
+   * only the seats left after them, so the platform never adds an image the
+   * model cannot take. 0 (the default) changes nothing.
+   */
+  reservedImageSeats?: number
+  /**
    * Flat subject ids (Person / Styling / props) → folded into the prompt AHEAD
    * of the direction clauses: the subject is the noun phrase the cinematography
    * then modifies. Same provenance as `direction` — Studio / MCP-route, or the
@@ -367,7 +375,9 @@ function fillStyleReferences(
 ): AssembleImageResult {
   const base = assembleOnce(input)
   const own = base.referenceImageUrls ?? []
-  const seats = imageReferenceLimit(input.provider) - own.length
+  const asked = Number(input.reservedImageSeats ?? 0)
+  const reserved = Number.isFinite(asked) ? Math.max(0, Math.trunc(asked)) : 0
+  const seats = imageReferenceLimit(input.provider) - own.length - reserved
   const seen = new Set(own)
   const candidates: StyleReferenceInput[] = []
   for (const s of style) {

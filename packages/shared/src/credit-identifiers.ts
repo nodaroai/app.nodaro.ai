@@ -59,6 +59,7 @@ import {
   type ImageFormatLevers,
 } from "./gpt-image-2-6.js"
 import { isMinimaxH3Image, minimaxH3ImageCreditId } from "./minimax-h3-image.js"
+import { flux3KleinCreditId, isFlux3Klein } from "./flux-3-klein.js"
 import {
   SEEDREAM_5_5_I2I,
   SEEDREAM_5_5_MAX_INPUT_IMAGES,
@@ -209,6 +210,11 @@ export function buildCreditModelIdentifier(
   }
   if (isSeedream55(provider)) {
     return seedream55CreditId(provider, resolution, referenceImageCount)
+  }
+  // FLUX 3 Klein: by size alone, the same on both ids (`flux-3-klein:2K`,
+  // `flux-3-klein-i2i:4K`); images move a text-to-image id onto the edit id.
+  if (isFlux3Klein(provider)) {
+    return flux3KleinCreditId(provider, resolution, referenceImageCount)
   }
   if (HIGH_QUALITY_PROVIDERS.has(provider) && quality === "high") {
     return `${provider}:high`

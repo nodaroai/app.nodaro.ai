@@ -928,6 +928,19 @@ describe("POST /v1/generate-image", () => {
         expect(withBase.json().error.code).toBe("validation_error")
       })
 
+      it("FLUX 3 Klein takes 10, a base image included, and says so when the base is the 11th", async () => {
+        setupSupabaseMock({})
+        expect((await post("flux-3-klein", 10)).statusCode).toBe(200)
+        expect((await post("flux-3-klein", 9, { baseImageUrl: "https://r2.nodaro.ai/base.png" })).statusCode).toBe(200)
+        const eleven = await post("flux-3-klein", 11)
+        expect(eleven.statusCode).toBe(400)
+        expect(eleven.json().error.code).toBe("validation_error")
+        const withBase = await post("flux-3-klein", 10, { baseImageUrl: "https://r2.nodaro.ai/base.png" })
+        expect(withBase.statusCode).toBe(400)
+        expect(withBase.json().error.code).toBe("validation_error")
+        expect(withBase.json().error.message).toContain("would send 11: remove 1")
+      })
+
       it("Seedream 5.5 refuses a prompt shorter than 5 characters, before any job row", async () => {
         setupSupabaseMock({})
         const res = await app.inject({
@@ -1798,6 +1811,47 @@ describe("POST /v1/generate-image", () => {
       const check = checkIdentifierFor(body)
       expect(check).toBe(debit)
       expect(check).toBe("minimax-h3-image-i2i:2K:3ref")
+    })
+
+    // FLUX 3 Klein runs on its edit model whenever any image is sent, and is
+    // priced on it: the CHECK, the DEBIT (the real reservation) and the model
+    // the job records all name the same id.
+    it.each([
+      ["a prompt alone", {}, "flux-3-klein:2K", "flux-3-klein"],
+      ["a base image alone", { baseImageUrl: "https://r2.nodaro.ai/base.png" }, "flux-3-klein-i2i:2K", "flux-3-klein-i2i"],
+      ["flat references", { referenceImageUrls: ["https://r2.nodaro.ai/a.png", "https://r2.nodaro.ai/b.png"] }, "flux-3-klein-i2i:2K", "flux-3-klein-i2i"],
+      ["connected references", { connectedReferences: mkManualRefs(3) }, "flux-3-klein-i2i:2K", "flux-3-klein-i2i"],
+      ["connected references and a base", { connectedReferences: mkManualRefs(9), baseImageUrl: "https://r2.nodaro.ai/base.png" }, "flux-3-klein-i2i:2K", "flux-3-klein-i2i"],
+    ] as const)("CHECK === DEBIT for flux-3-klein with %s, on the model the job runs", async (_label, extra, id, runs) => {
+      const body = { prompt: "a lighthouse at dusk", userId: VALID_UUID, provider: "flux-3-klein", aspectRatio: "1:1", resolution: "2K", direction: DIRECTION, ...extra }
+      const { identifier: debit } = await debitIdentifierFor(body)
+      expect(checkIdentifierFor(body)).toBe(debit)
+      expect(debit).toBe(id)
+      // The worker payload names the model the provider is sent (the job row keeps the one picked).
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(queued.provider).toBe(runs)
+    })
+
+    it("flux-3-klein refuses a base image beside 10 connected references, after assembly, before any job row", async () => {
+      vi.clearAllMocks()
+      const { jobInsert } = setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a lighthouse at dusk",
+          userId: VALID_UUID,
+          provider: "flux-3-klein",
+          connectedReferences: mkManualRefs(10),
+          baseImageUrl: "https://r2.nodaro.ai/base.png",
+          direction: DIRECTION,
+        },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+      expect(res.json().error.message).toContain("would send 11: remove 1")
+      expect(jobInsert).not.toHaveBeenCalled()
+      expect(reserveCreditsForJob).not.toHaveBeenCalled()
     })
 
     // ─── P1: the catalog snap is a PRICING event ────────────────────────────

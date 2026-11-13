@@ -196,6 +196,9 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   // low the cheapest, 1K (1.5K costs the same, and is the panel's to pick).
   "seedream-5-5":         { field: "resolution", values: { low: "1K", mid: SEEDREAM_5_5_DEFAULT_RESOLUTION, high: "2K" } },
   "seedream-5-5-i2i":     { field: "resolution", values: { low: "1K", mid: SEEDREAM_5_5_DEFAULT_RESOLUTION, high: "2K" } },
+  // FLUX 3 Klein: three sizes, 1K its default and cheapest (as GPT Image 2).
+  "flux-3-klein":         { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "flux-3-klein-i2i":     { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
   // Video gen — resolution-style (720p/1080p)
   "veo3":                { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "veo3.1":              { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },

@@ -15,7 +15,7 @@
  */
 
 import { MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, requestImageLimit } from "@nodaro/shared/models"
-import { SEEDREAM_5_5_DEFAULT_RESOLUTION, type Seedream55Resolution } from "@nodaro/shared/model-catalog"
+import { FLUX_3_KLEIN_DEFAULT_RESOLUTION, SEEDREAM_5_5_DEFAULT_RESOLUTION, type Flux3KleinResolution, type Seedream55Resolution } from "@nodaro/shared/model-catalog"
 import { confirmedByRun, ENABLE_SAFETY_CHECKER_LEVER, NSFW_CHECKER_LEVER, NSFW_CHECKER_SENT_FALSE_LEVER, type SafetyLever, MODERATION_LEVER } from "../safety-levers.js"
 
 /** 1 KIE credit = $0.005 USD */
@@ -61,6 +61,20 @@ export const SEEDREAM_5_5_KIE_HUNDREDTHS: Readonly<Record<Seedream55Resolution, 
   "2K": 630,
 }
 export const SEEDREAM_5_5_INPUT_IMAGE_KIE_HUNDREDTHS = 144
+
+/**
+ * What KIE bills for one FLUX 3 Klein picture, in hundredths of a KIE credit:
+ * 1.6 at 1K, 2.5 at 2K, 6.5 at 4K, the same from a prompt and from an edit,
+ * with nothing per reference image (kie.ai/flux-3, KIE's price list and the
+ * schemas' `creditsConsumed` note, read 2026-11-11 and 2026-11-12).
+ * `kieImageCostUsd` (image-cost.ts) records it as the job's provider cost; the
+ * credit rows are built from it (ee/billing/flux-3-klein-pricing.ts).
+ */
+export const FLUX_3_KLEIN_KIE_HUNDREDTHS: Readonly<Record<Flux3KleinResolution, number>> = {
+  "1K": 160,
+  "2K": 250,
+  "4K": 650,
+}
 
 /** Vidu Q4's second KIE endpoint — `runViduQ4` swaps to it whenever a reference
  *  image or reference audio is wired (the `vidu-q4` config's own model is the
@@ -268,6 +282,27 @@ const SEEDREAM_5_5_FORMAT_FIELDS_I2I = {
   png: SEEDREAM_5_5_FIELDS_I2I,
   jpeg: [...SEEDREAM_5_5_FIELDS_I2I, "output_format"],
 } as const satisfies Record<string, readonly string[]>
+// FLUX 3 Klein: what this release sends of each schema, by output format
+// (decided 2026-11-11 and 2026-11-12). The schemas are not
+// `additionalProperties: false`, but a worker passes along whatever a node
+// carries, so the body is an explicit list: never `enhance_prompt` (KIE's
+// default, on, applies), never `width` / `height` (a custom size, not offered),
+// never `num_images` (KIE's default, one picture), never a lever of another
+// model. PNG sends no `output_format` (KIE's default); JPEG sends it; WebP is
+// not offered. `nsfw_checker` is not in the list: nothing sends it today, and
+// an admin's Provider Safety setting adds it at the client, after this list.
+const FLUX_3_KLEIN_FIELDS = ["prompt", "aspect_ratio", "resolution", "seed"] as const
+const FLUX_3_KLEIN_FIELDS_I2I = [...FLUX_3_KLEIN_FIELDS, "image_urls"] as const
+const FLUX_3_KLEIN_FORMAT_FIELDS = {
+  png: FLUX_3_KLEIN_FIELDS,
+  jpeg: [...FLUX_3_KLEIN_FIELDS, "output_format"],
+} as const satisfies Record<string, readonly string[]>
+const FLUX_3_KLEIN_FORMAT_FIELDS_I2I = {
+  png: FLUX_3_KLEIN_FIELDS_I2I,
+  jpeg: [...FLUX_3_KLEIN_FIELDS_I2I, "output_format"],
+} as const satisfies Record<string, readonly string[]>
+// `seed` is an integer from 0 to 2147483647 on both schemas (fetched 2026-11-12).
+const FLUX_3_KLEIN_SEED_RANGE = { min: 0, max: 2147483647 } as const
 const GPT_IMAGE_2_6_FIELDS = ["prompt", "aspect_ratio", "resolution", "quality", "background", "moderation"] as const
 const GPT_IMAGE_2_6_FIELDS_I2I = [...GPT_IMAGE_2_6_FIELDS, "input_urls"] as const
 const GPT_IMAGE_2_6_ECONOMY_FIELDS = ["prompt", "aspect_ratio", "background"] as const
@@ -942,6 +977,45 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     inputType: "image-to-image",
     imageParam: "image_urls",  // Array, 1 to 16
     extraParams: { aspect_ratio: "16:9", resolution: "2K" },
+  },
+
+  // FLUX 3 Klein, the light FLUX 3 model (NOT FLUX 2 Klein, `flux-2-klein`,
+  // which runs on Replicate). The text-to-image endpoint takes no image: with
+  // references the provider moves the run to the edit id (GPT_IMAGE_T2I_TO_I2I,
+  // image-edit-sibling.ts). Ratios 1:1 (text to image's default), 4:3, 3:4,
+  // 3:2, 2:3, 16:9, 9:16, 21:9, 9:21, and on the edit `auto` too (its default:
+  // the first image's shape); `resolution` 1K (KIE's default) / 2K / 4K; `seed`
+  // an integer 0 to 2147483647. The edit takes 1 to 10 `image_urls` (JPEG, PNG,
+  // WebP, up to 30 MB each). `nsfw_checker` (default false) is declared as
+  // NSFW_CHECKER_LEVER and not sent. `output_format` png (default, sent as
+  // nothing) or jpeg. Priced per picture by size alone, the same on both
+  // endpoints and formats (FLUX_3_KLEIN_KIE_HUNDREDTHS above); `credits` /
+  // `cost` state the 1K figure, and the job records the size sent (image-cost.ts).
+  // The body is an explicit field list, by format (FLUX_3_KLEIN_FORMAT_FIELDS).
+  // See: docs.kie.ai/market/flux3/klein-text-to-image.md (fetched 2026-11-12)
+  //      docs.kie.ai/market/flux3/klein-edit-image.md (fetched 2026-11-12)
+  "flux-3-klein": {
+    model: "flux-3/klein-text-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
+    seedRange: FLUX_3_KLEIN_SEED_RANGE,
+    inputFields: FLUX_3_KLEIN_FIELDS,
+    inputFieldsByFormat: FLUX_3_KLEIN_FORMAT_FIELDS,
+    credits: FLUX_3_KLEIN_KIE_HUNDREDTHS["1K"] / 100,
+    cost: (FLUX_3_KLEIN_KIE_HUNDREDTHS["1K"] / 100) * KIE_CREDIT_USD,
+    extraParams: { aspect_ratio: "1:1", resolution: FLUX_3_KLEIN_DEFAULT_RESOLUTION },
+  },
+  "flux-3-klein-i2i": {
+    model: "flux-3/klein-edit-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
+    seedRange: FLUX_3_KLEIN_SEED_RANGE,
+    inputFields: FLUX_3_KLEIN_FIELDS_I2I,
+    inputFieldsByFormat: FLUX_3_KLEIN_FORMAT_FIELDS_I2I,
+    maxInputImages: requestImageLimit("flux-3-klein-i2i"),
+    credits: FLUX_3_KLEIN_KIE_HUNDREDTHS["1K"] / 100,
+    cost: (FLUX_3_KLEIN_KIE_HUNDREDTHS["1K"] / 100) * KIE_CREDIT_USD,
+    inputType: "image-to-image",
+    imageParam: "image_urls",  // Array of URLs, 1 to 10
+    extraParams: { aspect_ratio: "auto", resolution: FLUX_3_KLEIN_DEFAULT_RESOLUTION },
   },
 
   // Flux-2 Flex text-to-image (we already have Flex I2I but were missing T2I)

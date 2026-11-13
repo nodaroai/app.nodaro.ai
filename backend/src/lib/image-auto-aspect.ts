@@ -42,7 +42,9 @@ export function aspectRatioForLoraModel(aspectRatio: unknown): string | undefine
  * (`autoAspectFromSourceImage` on its catalog entries, and on no other).
  * MiniMax H3 Image's edit is here too: its own auto follows the first image.
  * Seedream 5.5's edit receives its own auto (KIE's default there); whether it
- * keeps a portrait photo's shape is to be checked on a real run.
+ * keeps a portrait photo's shape is to be checked on a real run. So does FLUX
+ * 3 Klein's edit, whose auto takes the first image's shape by its schema (not
+ * yet measured on a real run).
  *
  * Every listed model prices by quality, size and input images, never by
  * ratio, and renders every size at "auto", so the default never moves a price
@@ -57,6 +59,7 @@ export const UNSET_RATIO_IS_AUTO_EDIT_MODELS: ReadonlySet<string> = new Set([
   "gpt-image-2-6-economy-i2i",
   "minimax-h3-image-i2i",
   "seedream-5-5-i2i",
+  "flux-3-klein-i2i",
 ])
 
 /**

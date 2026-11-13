@@ -113,7 +113,7 @@ describe("generate-surround-continuation handler", () => {
     expect(mocks.autoAttachLocationAsset).toHaveBeenCalled()
   })
 
-  it("checks only Seedream 5.5's ratio, against the edit the composite reaches", async () => {
+  it("checks Seedream 5.5's ratio, against the edit the composite reaches", async () => {
     const sent = () => (mocks.generateImage.mock.calls.at(-1)?.[3] as Record<string, unknown> | undefined)?.aspect_ratio
     // The composite always goes, so Seedream 5.5 runs on its edit, which takes "auto"
     // (its text-to-image model does not, and would have turned it into 1:1).
@@ -125,6 +125,16 @@ describe("generate-surround-continuation handler", () => {
     expect(sent()).toBe("21:9")
     await handler(makeJob({ provider: "seedream-5-5" }), ctx)
     expect(mocks.generateImage.mock.calls.at(-1)?.[3]).toBeUndefined()
+  })
+
+  it("checks FLUX 3 Klein's ratio against its edit, which the composite reaches", async () => {
+    const sent = () => (mocks.generateImage.mock.calls.at(-1)?.[3] as Record<string, unknown> | undefined)?.aspect_ratio
+    await handler(makeJob({ provider: "flux-3-klein", aspectRatio: "auto" }), ctx)
+    expect(sent()).toBe("auto")
+    await handler(makeJob({ provider: "flux-3-klein", aspectRatio: "4:5" }), ctx)
+    expect(sent()).toBe("3:4")
+    await handler(makeJob({ provider: "flux-3-klein", aspectRatio: "9:21" }), ctx)
+    expect(sent()).toBe("9:21")
   })
 
   it("sends every other model's ratio exactly as it came (a catalog list is not what the provider refuses)", async () => {

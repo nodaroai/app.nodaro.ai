@@ -947,4 +947,103 @@ describe("Scene: only a strict model's ratio is checked; every other model's goe
     }
     for (const ratio of SENDABLE) expect(scene("seedream-5-5", ratio, false), ratio).not.toBe("auto")
   })
+
+  it("FLUX 3 Klein sends a ratio the model it reaches lists, and text to image never gets auto", () => {
+    for (const withReference of [false, true]) {
+      const reached = MODEL_CATALOG[kieImageModelSent("flux-3-klein", withReference ? 1 : 0)]!
+      for (const ratio of reached.aspectRatios!) expect(scene("flux-3-klein", ratio, withReference), ratio).toBe(ratio)
+      for (const ratio of SENDABLE) expect(reached.aspectRatios, ratio).toContain(scene("flux-3-klein", ratio, withReference))
+    }
+    expect(scene("flux-3-klein", "auto", false)).toBe("1:1")
+    expect(scene("flux-3-klein", "auto", true)).toBe("auto")
+  })
+})
+
+describe("FLUX 3 Klein in a workflow run", () => {
+  const SRC = "https://media.nodaro.ai/src.png"
+  const REF = "https://media.nodaro.ai/ref.png"
+  const node = (type: string, data: Record<string, unknown>): SimpleNode => ({ id: "n1", type, data })
+
+  it("Generate Image is priced by its size, 1K when none is named", () => {
+    for (const [resolution, id] of [[undefined, "flux-3-klein:1K"], ["1K", "flux-3-klein:1K"], ["2K", "flux-3-klein:2K"], ["4K", "flux-3-klein:4K"]] as const) {
+      const r = buildPayload(node("generate-image", { prompt: "a", provider: "flux-3-klein", aspectRatio: "1:1", ...(resolution ? { resolution } : {}) }), "j", {}, "u")
+      expect(r.modelIdentifier, String(resolution)).toBe(id)
+    }
+  })
+
+  it("Generate Image with references runs the edit at the same size, its price unmoved by the count", () => {
+    const one = buildPayload(node("generate-image", { prompt: "a", provider: "flux-3-klein", aspectRatio: "1:1", resolution: "4K", referenceImageUrls: [REF] }), "j", {}, "u")
+    expect(one.modelIdentifier).toBe("flux-3-klein-i2i:4K")
+    const many = buildPayload(
+      node("generate-image", { prompt: "a", provider: "flux-3-klein", aspectRatio: "1:1", resolution: "4K", referenceImageUrls: [REF, REF, REF], baseImageUrl: SRC }),
+      "j",
+      {},
+      "u",
+    )
+    expect(many.modelIdentifier).toBe("flux-3-klein-i2i:4K")
+  })
+
+  it("Image to Image is priced by its size", () => {
+    const r = buildPayload(node("image-to-image", { prompt: "a", provider: "flux-3-klein-i2i", resolution: "2K" }), "j", { imageUrl: SRC }, "u")
+    expect(r.modelIdentifier).toBe("flux-3-klein-i2i:2K")
+  })
+
+  it("a face node is priced at the size it sends, on the edit with a source image", () => {
+    expect(buildPayload(node("face", { name: "n", description: "d", provider: "flux-3-klein" }), "j", {}, "u").modelIdentifier)
+      .toBe("flux-3-klein:1K")
+    expect(buildPayload(node("face", { name: "n", description: "d", provider: "flux-3-klein", sourceImageUrl: SRC }), "j", {}, "u").modelIdentifier)
+      .toBe("flux-3-klein-i2i:1K")
+  })
+
+  it("a character node is priced on what its job sends, not on a size it never carries", () => {
+    const r = buildPayload(node("character", { name: "n", description: "d", provider: "flux-3-klein", resolution: "4K" }), "j", {}, "u")
+    expect(r.payload.resolution).toBeUndefined()
+    expect(r.modelIdentifier).toBe("flux-3-klein:1K")
+  })
+
+  it("Generate Image with only a base image runs the edit, and is priced on it", () => {
+    const r = buildPayload(node("generate-image", { prompt: "a", provider: "flux-3-klein", aspectRatio: "1:1", resolution: "2K", baseImageUrl: SRC }), "j", {}, "u")
+    expect(r.modelIdentifier).toBe("flux-3-klein-i2i:2K")
+  })
+
+  const refsOf = (n: number) => Array.from({ length: n }, (_, i) => `https://media.nodaro.ai/ref-${i}.png`)
+
+  it("Generate Image refuses an 11th image, a base image counted, before any job row", () => {
+    const gen = (references: number, base: boolean) =>
+      buildPayload(
+        node("generate-image", { prompt: "a", provider: "flux-3-klein", aspectRatio: "1:1", ...(base ? { baseImageUrl: SRC } : {}) }),
+        "j",
+        { referenceImageUrls: refsOf(references) },
+        "u",
+      )
+    expect(gen(10, false).modelIdentifier).toBe("flux-3-klein-i2i:1K")
+    expect(gen(9, true).modelIdentifier).toBe("flux-3-klein-i2i:1K")
+    expect(() => gen(10, true)).toThrow(/FLUX 3 Klein takes at most 10 input images, the source or base image included, and this run would send 11/)
+  })
+
+  it("Image to Image and Modify Image refuse a source with 10 more images, before any job row", () => {
+    for (const type of ["image-to-image", "modify-image"]) {
+      const run = (references: number) =>
+        buildPayload(node(type, { prompt: "a", provider: "flux-3-klein-i2i" }), "j", { imageUrl: SRC, referenceImageUrls: refsOf(references) }, "u")
+      expect(run(9).modelIdentifier, type).toBe("flux-3-klein-i2i:1K")
+      expect(() => run(10), type).toThrow(/takes at most 10 input images/)
+    }
+  })
+
+  it("a Scene refuses more than 10 references, before any job row", () => {
+    const sceneRun = (references: number) =>
+      buildPayload(
+        { id: "s1", type: "scene", data: { provider: "flux-3-klein", aspectRatio: "16:9" } },
+        "j",
+        { prompt: "a quiet harbour at dawn", referenceImageUrls: refsOf(references) },
+        "u",
+      )
+    expect(sceneRun(10).modelIdentifier).toBe("flux-3-klein-i2i:1K")
+    expect(() => sceneRun(11)).toThrow(/takes at most 10 input images.*would send 11: remove 1/)
+  })
+
+  it("every other model's workflow run is left as it was", () => {
+    const r = buildPayload(node("image-to-image", { prompt: "make it winter", provider: "seedream-5-5-i2i" }), "j", { imageUrl: SRC, referenceImageUrls: refsOf(10) }, "u")
+    expect(r.modelIdentifier).toMatch(/^seedream-5-5-i2i:/)
+  })
 })

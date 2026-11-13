@@ -664,6 +664,38 @@ export const IMAGE_TEST_CONFIGS: TestConfig[] = [
     estimatedTimeSec: 30,
     skipByDefault: false,
   },
+  // FLUX 3 Klein — `resolution` 1K / 2K / 4K (KIE default 1K): 1.6 / 2.5 / 6.5
+  // KIE credits a picture, the same on both endpoints, nothing per reference.
+  {
+    modelKey: "flux-3-klein",
+    category: "image",
+    kieModel: "flux-3/klein-text-to-image",
+    expectedKieCredits: 1.6,
+    expectedCostUsd: 0.008,
+    configDesc: "FLUX 3 Klein T2I (1K)",
+    apiType: "standard",
+    input: { prompt: "a red bicycle", aspect_ratio: "1:1", resolution: "1K" },
+    requiresImage: false,
+    requiresAudio: false,
+    requiresVideo: false,
+    estimatedTimeSec: 30,
+    skipByDefault: false,
+  },
+  {
+    modelKey: "flux-3-klein-i2i",
+    category: "image",
+    kieModel: "flux-3/klein-edit-image",
+    expectedKieCredits: 1.6,
+    expectedCostUsd: 0.008,
+    configDesc: "FLUX 3 Klein edit (1K, 1 reference image)",
+    apiType: "standard",
+    input: { prompt: "make it blue", image_urls: ["{{IMAGE}}"], aspect_ratio: "auto", resolution: "1K" },
+    requiresImage: true,
+    requiresAudio: false,
+    requiresVideo: false,
+    estimatedTimeSec: 30,
+    skipByDefault: false,
+  },
 
   // --- Z-Image ---
   {

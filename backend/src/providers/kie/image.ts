@@ -17,7 +17,7 @@ import { runFluxKontextTask } from "./kontext-client.js"
 import { KIE_IMAGE_MODELS, kieSeedForWire, type KieModelConfig, KIE_CREDIT_USD, GPT_IMAGE_2_6_SVG_AUTHOR_MODELS } from "./models.js"
 import { expectedKieCreditsFor, kieImageCostUsd, kieTaskCreditsConsumed } from "./image-cost.js"
 import { GPT_IMAGE_T2I_TO_I2I } from "./image-edit-sibling.js"
-import { IMAGE_GIF_FRAME_SIZE, isGptImage26AutoRun } from "@nodaro/shared/model-catalog"
+import { IMAGE_GIF_FRAME_SIZE, flux3KleinResolution, isFlux3Klein, isGptImage26AutoRun } from "@nodaro/shared/model-catalog"
 import { ensureImageForProvider } from "./video.js"
 import { TASK_CHAINED_EDIT_PROVIDERS, getMaxImagePromptChars } from "@nodaro/shared/models"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
@@ -223,6 +223,18 @@ function applyResolutionParam(modelConfig: KieModelConfig, input: Record<string,
   if (!key || key === "resolution" || input.resolution === undefined) return
   input[key] = input.resolution
   delete input.resolution
+}
+
+/**
+ * FLUX 3 Klein's size on the wire: one of 1K, 2K and 4K, the one its price was
+ * built from (`flux3KleinResolution`: any case, and anything else is its
+ * default, 1K), so the provider renders the size the run was charged for and
+ * never refuses a spelling the price read. Every other model keeps its own.
+ * Mutates `input`.
+ */
+function applyFlux3KleinResolution(provider: string, input: Record<string, unknown>): void {
+  if (!isFlux3Klein(provider)) return
+  input.resolution = flux3KleinResolution(input.resolution)
 }
 
 /** The resolution value on the wire, wherever `applyResolutionParam` put it. */
@@ -532,6 +544,7 @@ export class KieImageProvider
     // `size`) declares it in models.ts `resolutionParam`; read off the FINAL
     // modelConfig, after the t2i → i2i swaps above.
     applyResolutionParam(modelConfig, input)
+    applyFlux3KleinResolution(provider, input)
 
     // Native negative_prompt: keep for supported models, remove for others.
     // The caller passes negative_prompt via extraParams; it was already spread into input above.
@@ -853,6 +866,7 @@ export class KieImageProvider
 
     // Same resolution-key rule as generateImage (models.ts `resolutionParam`).
     applyResolutionParam(modelConfig, input)
+    applyFlux3KleinResolution(provider, input)
 
     // Set the image parameter based on model config
     const imageParamName = modelConfig.imageParam ?? "image"
@@ -880,6 +894,7 @@ export class KieImageProvider
       provider === "seedream-5-flash-i2i" ||
       provider === "minimax-h3-image-i2i" ||
       provider === "seedream-5-5-i2i" ||
+      provider === "flux-3-klein-i2i" ||
       provider === "grok-2-edit"
     )) {
       input.prompt = clampPromptForProvider(prompt, provider)

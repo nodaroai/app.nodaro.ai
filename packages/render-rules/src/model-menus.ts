@@ -58,6 +58,7 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "wan-2.7",     label: "Wan 2.7",     desc: "T2I, 1K/2K/4K, up to 9 ref images" },
   { value: "wan-2.7-pro", label: "Wan 2.7 Pro", desc: "Higher quality T2I, 1K/2K/4K" },
   { value: "flux-2-klein", label: "Flux 2 Klein (Open)", desc: "BFL Flux 2 9B via Replicate — fast" },
+  { value: "flux-3-klein", label: "FLUX 3 Klein", desc: "Light FLUX 3: fast, low cost, up to 4K, edits from up to 10 references" },
   { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)", desc: "BFL Flux 2 Pro via Replicate — flagship quality" },
   { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)", desc: "BFL Flux 2 Max via Replicate — even larger sibling, up to 8 refs (variable pricing: 2-62 cr)" },
 ]
@@ -91,6 +92,7 @@ export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string
   { value: "seedream-5-5-i2i", label: "Seedream 5.5", desc: "Edits that keep the rest of the picture, up to 10 input images" },
   { value: "seedream-edit", label: "Seedream Edit", desc: "Photorealistic image editing" },
   { value: "kontext-multi", label: "Kontext Multi (Open)", desc: "Multi-image Flux Kontext via Replicate — up to 4 refs" },
+  { value: "flux-3-klein-i2i", label: "FLUX 3 Klein", desc: "Fast, low-cost edits from up to 10 references, no extra cost per image" },
   { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)", desc: "BFL Flux 2 Pro via Replicate — flagship quality" },
   { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)", desc: "BFL Flux 2 Max via Replicate — up to 8 refs (variable pricing: 2-62 cr)" },
   { value: "flux-fill", label: "Flux Fill (Inpaint)", desc: "BFL FLUX Fill Pro via Replicate — dedicated masked inpainting (white = edit area)" },

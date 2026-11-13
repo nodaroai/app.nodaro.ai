@@ -666,6 +666,8 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "Up to 16 reference images in one edit, readable text, up to 4K": "עד 16 תמונות ייחוס בעריכה אחת, טקסט קריא, עד 4K",
   "Natural light, materials and skin, small text, transparent backgrounds": "תאורה, חומרים ועור טבעיים, טקסט קטן, רקע שקוף",
   "Edits that keep the rest of the picture, up to 10 input images": "עריכות ששומרות על שאר התמונה, עד 10 תמונות קלט",
+  "Light FLUX 3: fast, low cost, up to 4K, edits from up to 10 references": "FLUX 3 הקל: מהיר וזול, עד 4K, עריכה עם עד 10 תמונות ייחוס",
+  "Fast, low-cost edits from up to 10 references, no extra cost per image": "עריכות מהירות וזולות עם עד 10 תמונות ייחוס, ללא עלות נוספת לתמונה",
   "Fast Gemini, agentic-tuned": "Gemini מהיר, מכוונן לעבודת סוכנים",
   "Fast Gemini, sharper reasoning": "Gemini מהיר, חשיבה חדה יותר",
   "Fast Imagen, lower latency": "Imagen מהיר, השהיה נמוכה יותר",
