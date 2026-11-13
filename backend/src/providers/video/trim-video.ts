@@ -30,6 +30,10 @@ interface TrimVideoOptions {
    *  moves EARLIER by up to one GOP — the window is over-covered, never cut
    *  into. Non-h264/aac sources still honor the snapped start but re-encode. */
   readonly losslessKeyframe?: boolean
+  /** Called with the downloaded input once it is on disk, before anything is
+   *  probed or encoded: a Trim / Loop job's charge check (the render refuses a
+   *  file longer than its run was priced for). Absent for every other caller. */
+  readonly chargeCheck?: (localPaths: readonly string[]) => Promise<void>
 }
 
 /** Keyframe presentation times via a packet-level probe (no decode). */
@@ -64,6 +68,7 @@ export async function trimVideo(options: TrimVideoOptions): Promise<{ videoPath:
 
     console.log(`[trimVideo] Downloading video from ${videoUrl}`)
     await downloadFile(videoUrl, inputPath)
+    await options.chargeCheck?.([inputPath])
 
     // Frame-based trim overrides time-based when set. Worker probes
     // source fps and converts. A probe failure is a hard error rather

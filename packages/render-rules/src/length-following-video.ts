@@ -29,6 +29,17 @@ import { isAutoVideoDuration, VIDEO_DURATION_AUTO } from "@nodaro/shared/model-c
  */
 export const LENGTH_RECORDING_VIDEO_NODE_TYPES: ReadonlySet<string> = new Set(["generate-video", "image-to-video", "text-to-video", "video-to-video"])
 
+/**
+ * Every node type whose job records the real length of the video it made
+ * (`output_data.durationSec`), which its output carries to the step after it
+ * and its result row keeps as `duration`: the length-recording generations
+ * above (their record rounded to a whole second, `recordedTakeSec` adds back
+ * what it may leave off), and Trim Video, which measures the file it cut —
+ * exact, never rounded. A render records its cut the same way
+ * (`isRenderNodeType`).
+ */
+export const RECORDED_OUTPUT_LENGTH_NODE_TYPES: ReadonlySet<string> = new Set([...LENGTH_RECORDING_VIDEO_NODE_TYPES, "trim-video"])
+
 /** A video generation run as it is SENT: the model, the length and the reference task type after resolution. */
 export interface VideoRunRequest {
   readonly provider: unknown

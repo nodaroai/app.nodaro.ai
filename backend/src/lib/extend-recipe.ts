@@ -21,7 +21,10 @@
  * The tail length lives here and nowhere else (2.5's is the window its price
  * counts, `SEEDANCE_EXTEND_CONTEXT_MAX_SEC`): the run cuts it, and the
  * provider's price rows are held to what a run with it bills
- * (`ee/billing/__tests__/extend-price-rows.test.ts`).
+ * (`ee/billing/__tests__/extend-price-rows.test.ts`). The seconds a run may
+ * add (each recipe's `window`) and the seconds it adds for a request
+ * (`tailRecipeSeconds`) are `@nodaro/render-rules`', so the editor's and the
+ * server's estimates read the same extension the run generates.
  */
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import {
@@ -34,7 +37,10 @@ import {
   type SeedanceExtendProvider,
   type TailExtendProvider,
 } from "@nodaro/shared/models"
-import { SEEDANCE_EXTEND_CONTEXT_MAX_SEC, seedanceExtendAddedSec } from "@nodaro/shared/credits"
+import { SEEDANCE_EXTEND_CONTEXT_MAX_SEC } from "@nodaro/shared/credits"
+import { TAIL_RECIPE_WINDOWS } from "@nodaro/render-rules"
+
+export { isTailRecipeProvider, tailRecipeSeconds } from "@nodaro/render-rules"
 
 /** How the extension is joined onto the source (`stitchExtension`'s boundary options). */
 export interface TailRecipeStitch {
@@ -61,8 +67,8 @@ export interface TailRecipe {
    * and the worker again before it generates.
    */
   minSourceSec: number
-  /** The seconds a run may add. */
-  window: { min: number; max: number }
+  /** The seconds a run may add (`TAIL_RECIPE_WINDOWS`, @nodaro/render-rules). */
+  window: { readonly min: number; readonly max: number }
   /**
    * Whether the source's last frame is sent as the extension's opening image
    * (an anchor the stitch then drops as a duplicate). False: the request
@@ -106,7 +112,7 @@ export const TAIL_RECIPES: Record<TailExtendProvider, TailRecipe> = {
     genModel: "seedance-2-5",
     tailSec: SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
     minSourceSec: SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC,
-    window: { min: 4, max: 30 },
+    window: TAIL_RECIPE_WINDOWS["seedance-2-5-extend"],
     startImage: false,
     referenceTaskType: "extend",
     prompt: seedance25Prompt,
@@ -124,7 +130,7 @@ export const TAIL_RECIPES: Record<TailExtendProvider, TailRecipe> = {
     genModel: "seedance-2",
     tailSec: 2,
     minSourceSec: SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC,
-    window: { min: 4, max: 15 },
+    window: TAIL_RECIPE_WINDOWS["seedance-2-0-extend"],
     startImage: true,
     prompt: seedance20Prompt,
     stitch: ANCHORED_STITCH,
@@ -138,7 +144,7 @@ export const TAIL_RECIPES: Record<TailExtendProvider, TailRecipe> = {
     genModel: "kling-4",
     tailSec: 3,
     minSourceSec: VIDEO_REF_VIDEO_DURATION_LIMITS["kling-4"]!.minSec,
-    window: { min: 3, max: 30 },
+    window: TAIL_RECIPE_WINDOWS["kling-4-extend"],
     startImage: true,
     prompt: klingPrompt,
     stitch: ANCHORED_STITCH,
@@ -195,21 +201,4 @@ export function extensionTooShortMessage(pictureSec: number | undefined, billedS
  */
 export function tailCutSec(provider: keyof typeof TAIL_RECIPES, pictureSec: number): number {
   return Math.min(TAIL_RECIPES[provider].tailSec, pictureSec)
-}
-
-/** Whether an Extend Video provider runs a tail recipe. Own keys only, so `"toString"` answers false. */
-export function isTailRecipeProvider(p: string): p is keyof typeof TAIL_RECIPES {
-  return Object.hasOwn(TAIL_RECIPES, p)
-}
-
-/**
- * The seconds a tail-recipe run adds for a requested `duration`: the seconds
- * its price counts (`pricedOutputDurationSec` — the provider's catalog default
- * when unset or unreadable), rounded and held in the provider's window — the
- * shared reading (`seedanceExtendAddedSec`, @nodaro/shared) every quote
- * counts too. The route queues it, the worker generates it and the
- * output-length rule records it.
- */
-export function tailRecipeSeconds(provider: keyof typeof TAIL_RECIPES, duration: unknown): number {
-  return seedanceExtendAddedSec(provider, duration)
 }

@@ -1005,12 +1005,13 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   "text-to-speech": speechPricingUnits,
   "text-to-dialogue": speechPricingUnits,
   // Dubbing: the started minutes of its span (the window, else the source's
-  // length the graph gives), at most 30 — one minute when it is not known.
+  // length the measured walk gives), at most 30 — one minute when it is not
+  // known (a minimum: the run measures the source).
   "dubbing": (node, allNodes, edges, rerunIds) => dubbingQuotedMinutesOf(withWiredSettings(node, allNodes, edges), allNodes, edges, rerunIds),
   // Video Upscale on Topaz: the Topaz units its target renders at the length
-  // its video wire gives (else 10 s), a 16:9 frame — the server's estimate
-  // reads the same rule (`topazVideoEstimateUnits`). The run measures the real
-  // clip, holds that, and is charged the units Topaz reports. Other providers: 1.
+  // the measured walk gives its video wire (else 10 s, a minimum), a 16:9
+  // frame — the server's estimate reads the same rule (`topazVideoEstimateUnits`). The run measures the
+  // real clip, holds that, and is charged the units Topaz reports. Other providers: 1.
   "video-upscale": videoUpscalePricingUnits,
   // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): the
   // billed seconds of the audio the graph or the node's last run gives, else

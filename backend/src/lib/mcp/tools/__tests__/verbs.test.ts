@@ -712,6 +712,48 @@ describe("combine_videos verb", () => {
     expect((received.body?.videoUrls as string[]).length).toBe(2)
   })
 
+  it.each([
+    ["probe_timeout", "Timed out reading clip 2 of 2 — run it again."],
+    ["source_unreachable", "Could not reach clip 1 of 2 — run it again."],
+  ])("a retryable 503 %s from the measure reaches the agent as its own message, never 'model not available'", async (code, message) => {
+    const fastify = Fastify()
+    fastify.post("/v1/combine-videos", async (_req, reply) => reply.status(503).send({ error: { code, message } }))
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "combine_videos", { videos: [{ url: "https://a/v1.mp4" }, { url: "https://a/v2.mp4" }] })
+
+    expect(result.isError).toBe(true)
+    const text = JSON.stringify(result.content)
+    expect(text).toContain(`${message} [${code}]`)
+    expect(text).not.toContain("not available")
+  })
+
+  it("any other 503 still reads as 'not available', never forwarding its message", async () => {
+    const fastify = Fastify()
+    fastify.post("/v1/combine-videos", async (_req, reply) => reply.status(503).send({ error: { code: "provider_down", message: "internal: upstream 10.0.0.5 refused" } }))
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const text = JSON.stringify((await callTool(server, "combine_videos", { videos: [{ url: "https://a/v1.mp4" }, { url: "https://a/v2.mp4" }] })).content)
+    expect(text).toContain("this model is not available right now. [provider_down]")
+    expect(text).not.toContain("10.0.0.5")
+  })
+
+  it("more than 100 videos is refused before any asset id is looked up or the route is called", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/combine-videos", { jobId: "j-cv-over" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "combine_videos", {
+      videos: Array.from({ length: 101 }, (_, i) => ({ asset_id: `job-${i}` })),
+    })
+
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toContain("Combine Videos joins at most 100 clips; this run has 101.")
+    expect(received.body).toBeUndefined()
+  })
+
   it("forwards trim_start_frames / trim_end_frames as trimStartFrames / trimEndFrames", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/combine-videos", { jobId: "j-cv-trim" })
     const server = buildServer()

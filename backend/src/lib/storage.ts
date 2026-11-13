@@ -711,17 +711,52 @@ const PREVIEW_EXT_TO_MIME: Record<string, string> = {
  * on some edges while the origin has it (incidents 2026-06-10/12). Throws
  * if the object truly doesn't exist, so callers keep a honest failure path.
  */
-export async function downloadR2ObjectToFile(key: string, dest: string): Promise<void> {
+export async function downloadR2ObjectToFile(
+  key: string,
+  dest: string,
+  /**
+   * A caller on a budget (the measure before a Trim / Loop / Combine Videos
+   * charge): stop at `timeoutMs` or when `signal` aborts — rejecting with an
+   * `AbortError` whose `cause` is the signal's reason, a `TimeoutError` when
+   * the time ran out (as `s3.send` and `pipeline` reject) — and refuse an
+   * object over `maxBytes`. Every other caller passes none and is bounded by
+   * the storage limits alone, as before.
+   */
+  bounds: { readonly timeoutMs?: number; readonly signal?: AbortSignal; readonly maxBytes?: number } = {},
+): Promise<void> {
   const controller = new AbortController()
+  const stops = [
+    controller.signal,
+    ...(bounds.signal ? [bounds.signal] : []),
+    ...(bounds.timeoutMs !== undefined ? [AbortSignal.timeout(Math.max(1, bounds.timeoutMs))] : []),
+  ]
+  const signal = stops.length > 1 ? AbortSignal.any(stops) : controller.signal
   const res = await s3.send(
     new GetObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key }),
-    { abortSignal: controller.signal },
+    { abortSignal: signal },
   )
   if (!res.Body) throw new Error(`R2 origin returned no body for ${key}`)
+  const maxBytes = bounds.maxBytes
+  if (maxBytes !== undefined && typeof res.ContentLength === "number" && res.ContentLength > maxBytes) {
+    controller.abort()
+    throw new Error(`Download exceeds ${Math.round(maxBytes / (1024 * 1024))} MB: r2 object ${key}`)
+  }
   const body = guardStorageReadBody(res.Body as Readable, {
     sizeBytes: res.ContentLength, startedAt: Date.now(), label: `r2 object ${key}`, controller, limits: STORAGE_DOWNLOAD_LIMITS,
   })
-  await pipeline(body, createWriteStream(dest))
+  if (stops.length === 1 && maxBytes === undefined) {
+    await pipeline(body, createWriteStream(dest))
+    return
+  }
+  let total = 0
+  const cap = new Transform({
+    transform(chunk: Buffer, _enc, cb) {
+      total += chunk.length
+      if (maxBytes !== undefined && total > maxBytes) cb(new Error(`Download exceeds ${Math.round(maxBytes / (1024 * 1024))} MB: r2 object ${key}`))
+      else cb(null, chunk)
+    },
+  })
+  await pipeline(body, cap, createWriteStream(dest), { signal })
 }
 
 /**

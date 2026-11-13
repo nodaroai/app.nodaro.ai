@@ -52,6 +52,10 @@ export interface SmartLoopCutOptions {
    *  quality; cut snaps to nearest keyframe; supports any resolution at
    *  near-zero memory cost). */
   readonly quality?: "lossless" | "precise"
+  /** Called with the downloaded input once it is on disk, before anything is
+   *  probed or encoded: a Trim / Loop job's charge check (the render refuses a
+   *  file longer than its run was priced for). Absent for every other caller. */
+  readonly chargeCheck?: (localPaths: readonly string[]) => Promise<void>
 }
 
 export interface SmartLoopCutResult {
@@ -87,6 +91,7 @@ export async function smartLoopCut(
 
     console.log(`[smartLoopCut] Downloading video from ${options.videoUrl}`)
     await downloadFile(options.videoUrl, inputPath)
+    await options.chargeCheck?.([inputPath])
 
     const { fps, frameCount } = await probeFpsAndFrameCount(inputPath)
 

@@ -72,7 +72,7 @@ Cut a video clip to a precise time range. Common uses: shortening an animation t
 ## Common gotchas
 
 - If you attach a `trim-video` node WITHOUT executing the underlying trim (just declaring parameters for the user to run later), omit the result fields entirely and leave `executionStatus` unset — the node defaults to `"idle"` and shows its configuration.
-- `endTime - startTime` must be positive. Negative or zero spans are rejected by the FFmpeg worker. The default `endTime: 0` is intentional — you must set a real value before running.
+- `endTime` must be after `startTime`. An `endTime` of 0 (the default) means no end: the cut runs from `startTime` to the end of the clip, and is charged for that length.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

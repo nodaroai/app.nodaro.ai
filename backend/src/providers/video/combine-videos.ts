@@ -7,6 +7,11 @@ import { resolveXfadeName, resolveAudioCrossfadeCurve } from "@nodaro/shared/edl
 
 interface CombineOptions {
   readonly videoUrls: readonly string[]
+  /** Called with every downloaded clip, in order, once they are all on disk and
+   *  before anything is probed or encoded: a Combine Videos job's charge check
+   *  (the render refuses clips longer than its run was priced for). Absent for
+   *  every other caller. */
+  readonly chargeCheck?: (localPaths: readonly string[]) => Promise<void>
   /** Any id from `COMBINE_TRANSITIONS`. Validation happens at the route's
    *  Zod boundary; this signature stays string-typed to avoid pinning the
    *  worker to a stale subset of the catalog. */
@@ -463,6 +468,7 @@ export async function combineVideos(options: CombineOptions): Promise<CombineVid
       await downloadFile(videoUrls[i], rawPath)
       rawPaths.push(rawPath)
     }
+    await options.chargeCheck?.(rawPaths)
 
     const target = options.targetWidth && options.targetHeight
       ? { width: options.targetWidth, height: options.targetHeight }

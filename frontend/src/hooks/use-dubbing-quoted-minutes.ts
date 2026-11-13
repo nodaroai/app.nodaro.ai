@@ -1,6 +1,6 @@
 /**
  * The started minutes a Dubbing node is quoted at (1 to 30; 1 when the span is
- * not known): the reading the confirm dialog and the workflow badge price it
+ * not known — a minimum, the run measures the source): the reading the confirm dialog and the workflow badge price it
  * by (`dubbingQuotedMinutesOf`), so the node's own pill and Run button never
  * disagree with them. The selector returns a number, so it re-renders only
  * when the minutes move.

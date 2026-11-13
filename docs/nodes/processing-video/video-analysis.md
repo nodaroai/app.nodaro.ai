@@ -470,11 +470,15 @@ time, the ceiling bucket (≤600s) price is reserved. In practice the route prob
 duration first and rejects un-probeable sources, so this fallback is only a
 safety net.
 
-**After a generated video in a workflow run.** After a video made at an
+**After a generated video or a Trim in a workflow run.** After a video made at an
 automatic length, or by a Seedance 2.5 Edit or Extend, a workflow run prices
 this node by that video's recorded length, as the editor's own run already
 does, rather than the ceiling bucket (see
 [Steps after a video of automatic length](../ai-video/generate-video.md#steps-after-a-video-of-automatic-length)).
+After a Trim it prices it by the length of the file the Trim made, which the
+Trim records: a Trim with Lossless on can make a file a little longer than its
+window. A Trim whose run recorded no length (an older one) is read at the
+length its settings pass on.
 
 **Links in a workflow run.** A link the node reads in a workflow run — typed in
 the field, or wired from another node such as a trigger's Video link — is probed

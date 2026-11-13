@@ -7,11 +7,10 @@
  * stores (metadata with no result row for the file, an earlier file's length,
  * a Video link's whole length), which the server does not read. A video added
  * from the Library records the row a fresh upload records, so both read its
- * length. Not covered: any other node's output (a generation, an Extend Video,
- * or a step that recorded a length of its own, and a chain built on one), which
- * the editor reads at the length that node records or is set to and the
- * server's estimate does not read. The server
- * half is backend/src/ee/billing/__tests__/mask-composite-quote-parity.test.ts,
+ * length. A video another node makes (a generation, an Extend Video, a step
+ * that re-runs, and a chain built on one) is held to the same parity, for Mask
+ * Composite and Video Overlay both, by planned-length-quote-parity.test.ts. The
+ * server half is backend/src/ee/billing/__tests__/mask-composite-quote-parity.test.ts,
  * over the same fixture.
  */
 import { readFileSync } from "node:fs"

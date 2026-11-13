@@ -13,6 +13,10 @@ interface LoopVideoOptions {
    *  every internal repeat boundary, not just the final wrap. */
   readonly smartLoopCutBeforeRepeat?: boolean
   readonly smartLoopCutLookback?: number
+  /** Called with the downloaded input once it is on disk, before anything is
+   *  probed or encoded: a Trim / Loop job's charge check (the render refuses a
+   *  file longer than its run was priced for). Absent for every other caller. */
+  readonly chargeCheck?: (localPaths: readonly string[]) => Promise<void>
 }
 
 export interface LoopVideoResult {
@@ -33,10 +37,12 @@ export async function loopVideo(options: LoopVideoOptions): Promise<LoopVideoRes
 
     console.log(`[loopVideo] Downloading video from ${videoUrl}`)
     await downloadFile(videoUrl, inputPath)
+    await options.chargeCheck?.([inputPath])
 
     if (smartLoopCutBeforeRepeat) {
       console.log(`[loopVideo] Applying smart loop cut before repeat (lookback=${smartLoopCutLookback ?? 16})`)
-      const slc = await smartLoopCut({ videoUrl, lookbackFrames: smartLoopCutLookback })
+      // Its own download is what the loop repeats: checked against the charge too.
+      const slc = await smartLoopCut({ videoUrl, lookbackFrames: smartLoopCutLookback, chargeCheck: options.chargeCheck })
       // Replace the input with the smart-cut output for the concat step.
       inputPath = slc.videoPath
       smartLoopCutMeta = {

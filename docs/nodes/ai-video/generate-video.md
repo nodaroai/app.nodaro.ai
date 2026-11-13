@@ -1004,25 +1004,32 @@ Duration. A file that reads at most a quarter second past a whole second
 counts as that second (10.04 seconds is a 10-second clip). The same holds on the older Image to Video and
 Text to Video nodes, and on Video to Video's Seedance lane.
 
-- **The step after it is charged by that length.** Trim Video, Loop Video and
-  Combine Videos are priced by the length of the video they receive. After such
-  a video they are charged by its recorded length, in a single-node run, a
-  workflow run and a published app run alike.
+- **The step after it is charged by the clip it measures.** Trim Video, Loop
+  Video and Combine Videos measure the video they receive before anything is
+  held and are charged by that length, in a single-node run, a workflow run and
+  a published app run alike, so after such a video they are charged the length
+  it came out at.
 - **Every quote counts the most it can be until the video exists.** The Run
   button, the workflow's total, a published app's price and the credit check
   before a run count such a video at that longest length while it is still to
-  be made (or the run will make it again), and at its recorded length once it
-  exists. A quote can be above the charge, never below it. For example,
-  Seedance 2.5 on Auto into Combine Videos is quoted as a 30-second clip until
-  the clip exists, and charged for the length it came out at.
+  be made (or the run will make it again), with a reference video wired too:
+  a run that declares nothing lets the model take the clip as a reference and
+  pick its length. Only a run that declares **The video to edit** is counted
+  at that clip's length rounded up, plus a second. Once the video exists, a
+  quote counts its recorded length, plus the quarter second a whole-second
+  record may leave off. A quote can be above the charge, never below it. For
+  example, Seedance 2.5 on Auto into Combine Videos is quoted as a 30-second
+  clip until the clip exists, and charged for the length it came out at.
 - **Video Analysis and AI Audit follow it too.** In a workflow run, after
   such a video, they are priced by its recorded length, as the editor's own
   run already does, rather than their longest bucket.
-- **Everything else is unchanged.** A run at a set Duration that declares no
-  task type hands on its Duration, as before. Steps that measure the clip they are given (Video SFX,
-  Video Mask, Mask Composite, Pitch & Tempo) price it by their own
-  measurement, as before. A video whose length could not be measured, or that
-  was made before lengths were recorded, is charged as before.
+- **A run at a set Duration** that declares no task type records nothing: it
+  makes its Duration, so a step run on its own after its result counts that
+  result at its Duration. Every step that measures the clip it is given (Video
+  SFX, Video Mask, Video Depth, Mask Composite, Pitch & Tempo, Trim, Loop,
+  Combine Videos) is charged by its own measurement. Video Analysis and AI Audit
+  after a video whose length could not be measured, or that was made before
+  lengths were recorded, are priced as before.
 
 ### Start and end frame handling
 

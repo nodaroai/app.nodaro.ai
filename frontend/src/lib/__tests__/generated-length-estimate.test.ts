@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { MODEL_CATALOG, VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
-import { pricedOutputDurationSec, resolveSeedanceTaskType, SEEDANCE_VIDEO_EDIT_PROVIDERS, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, VIDEO_REF_VIDEO_DURATION_LIMITS } from "@nodaro/shared/models"
+import { listedSeedanceTaskType, pricedOutputDurationSec, resolveSeedanceTaskType, SEEDANCE_VIDEO_EDIT_PROVIDERS, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, VIDEO_REF_VIDEO_DURATION_LIMITS } from "@nodaro/shared/models"
 import { estimateCombineVideosCredits, estimateLoopVideoCredits, estimateTrimVideoCredits, VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
-import { knownLength, lengthFollowingBoundSec, utilityOutputLength } from "@nodaro/render-rules"
+import { knownLength, lengthFollowingBoundSec, recordedTakeSec, referenceClipOutputSec, utilityOutputLength, videoUtilityPricedClipSec } from "@nodaro/render-rules"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { estimateVideoUtilityBaseCredits, maskCompositeQuotedSec, pitchTempoQuotedSec, videoMaskQuotedSec, videoSfxQuotedSec } from "../video-utility-estimate"
 
@@ -11,26 +11,32 @@ import { estimateVideoUtilityBaseCredits, maskCompositeQuotedSec, pitchTempoQuot
  * A generated video whose run recorded its real length (an automatic length,
  * a Seedance Edit / Extend) carries it on its result row (`duration`). The
  * editor's estimates of a step that MEASURES the clip it is given (Video SFX,
- * Video Mask, Mask Composite, Pitch & Tempo) read the generation exactly as
- * before: the recorded length is capped at the run's bound and can sit a few
- * hundredths of a second under the file that step measures.
+ * Video Mask, Mask Composite, Pitch & Tempo) read a generation that does not
+ * run again at that record, as the file it is: a record that leaves off the
+ * container's overhang is a whole second, read with the quarter second it may
+ * leave off (`recordedTakeSec`), so the quote is never below the file the step
+ * measures.
  */
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}) => ({ id, type, position: { x: 0, y: 0 }, data }) as unknown as WorkflowNode
 const edge = (source: string, target: string, targetHandle: string) => ({ id: `${source}-${target}`, source, target, targetHandle }) as unknown as WorkflowEdge
 
-const GEN = { provider: "seedance-2-5", duration: 5, prompt: "p" }
-const recorded = node("gen", "generate-video", { ...GEN, generatedVideoUrl: "https://m.test/g.mp4", generatedResults: [{ url: "https://m.test/g.mp4", duration: 23.4 }], activeResultIndex: 0 })
-const unrecorded = node("gen", "generate-video", { ...GEN, generatedVideoUrl: "https://m.test/g.mp4", generatedResults: [{ url: "https://m.test/g.mp4" }], activeResultIndex: 0 })
+const GEN = { provider: "seedance-2-5", duration: VIDEO_DURATION_AUTO, prompt: "p" }
+const recordedAt = (sec: number) => node("gen", "generate-video", { ...GEN, generatedVideoUrl: "https://m.test/g.mp4", generatedResults: [{ url: "https://m.test/g.mp4", duration: sec }], activeResultIndex: 0 })
+const uploadOf = (sec: number) => node("gen", "upload-video", { url: "https://m.test/u.mp4", generatedResults: [{ url: "https://m.test/u.mp4", duration: sec }] })
 
-describe("a step that measures its clip quotes a generated video as before its length was recorded", () => {
+describe("a step that measures its clip quotes a generated video's recorded take as the file it is", () => {
   it.each<[string, (gen: WorkflowNode) => unknown]>([
     ["Video SFX", (gen) => videoSfxQuotedSec(node("sfx", "video-sfx"), [gen, node("sfx", "video-sfx")], [edge("gen", "sfx", "video")])],
     ["Video Mask", (gen) => videoMaskQuotedSec(node("mask", "video-mask"), [gen, node("mask", "video-mask")], [edge("gen", "mask", "video")])],
     ["Mask Composite", (gen) => maskCompositeQuotedSec(node("mc", "mask-composite"), [gen, node("mc", "mask-composite")], [edge("gen", "mc", "video")])],
     ["Pitch & Tempo", (gen) => pitchTempoQuotedSec(node("pt", "pitch-tempo"), [gen, node("pt", "pitch-tempo")], [edge("gen", "pt", "in")])],
   ])("%s", (_name, quote) => {
-    expect(quote(recorded)).toStrictEqual(quote(unrecorded))
+    // A record past a whole second's overhang is the file's own length.
+    expect(quote(recordedAt(23.4))).toStrictEqual(quote(uploadOf(23.4)))
+    // A whole-second record may leave off up to a quarter second.
+    expect(quote(recordedAt(23))).toStrictEqual(quote(uploadOf(recordedTakeSec("generate-video", 23)!)))
+    expect(recordedTakeSec("generate-video", 23)).toBeGreaterThan(23)
   })
 
   it("an upload's recorded length is still read (it is the file the step measures)", () => {
@@ -38,19 +44,21 @@ describe("a step that measures its clip quotes a generated video as before its l
     expect(videoSfxQuotedSec(node("sfx", "video-sfx"), [upload, node("sfx", "video-sfx")], [edge("gen", "sfx", "video")])).toBe(23.4)
   })
 
-  it("Trim, Loop and Combine Videos (charged by the length handed to them) are not this rule's", () => {
-    // Their reading of a generation is the shared generation rule's (generation-source estimate tests).
-    expect(estimateVideoUtilityBaseCredits(node("t", "trim-video", { trimMode: "seconds" }), [unrecorded, node("t", "trim-video")], [edge("gen", "t", "in")])).toBeGreaterThan(0)
+  it("Trim, Loop and Combine Videos (they measure their clip too) read it the same way", () => {
+    const trim = node("t", "trim-video", { trimMode: "seconds" })
+    const quote = (gen: WorkflowNode) => estimateVideoUtilityBaseCredits(trim, [gen, trim], [edge("gen", "t", "in")])
+    expect(quote(recordedAt(23.4))).toBe(quote(uploadOf(23.4)))
+    expect(quote(recordedAt(23))).toBe(quote(uploadOf(recordedTakeSec("generate-video", 23)!)))
   })
 })
 
 /**
- * The steps CHARGED by the length handed to them (Trim, Loop, Combine Videos)
- * read a generated video through the shared rule (`generationSourceEstimateSec`,
- * the server's estimate reads it too): a generation that runs and follows its
- * own length (an automatic length, a Seedance Edit / Extend) at the most it can
- * make, so the quote is never below what the run records and charges; one that
- * does not run at the length its result recorded; any other as before.
+ * Trim, Loop and Combine Videos MEASURE the clip they are handed and are
+ * charged by it. They read a generated video through the shared measured walk
+ * (`measuredWireLengthSec`, the server's estimate reads it too): a generation
+ * that runs at the most it can make (with a reference clip, the length its own
+ * reservation holds it at), so the quote is never below what the run measures
+ * and charges; one that does not run at the length its result recorded.
  */
 const TRIM = { trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0 }
 const LOOP = { mode: "repeat", repeatCount: 2 }
@@ -79,7 +87,7 @@ function charged(gen: Record<string, unknown>, clipSec: number | undefined, resu
   return { nodes, quote }
 }
 
-/** Each step's charge when the generation hands on `sec` seconds (the 8 s fallback when it hands on none), by the estimators the run charges with. */
+/** Each step's charge on a clip of `sec` seconds, by the estimators the run charges with. */
 const chargesAt = (sec: number | undefined) => ({
   trim: estimateTrimVideoCredits(TRIM as never, sec),
   loop: estimateLoopVideoCredits(LOOP as never, sec),
@@ -87,17 +95,27 @@ const chargesAt = (sec: number | undefined) => ({
 })
 
 /**
- * The most the step after the generation can be charged by: the run as SENT —
- * its task type resolved by the shared rule with the clip measured — records at
- * most its bound when it follows its own length; otherwise it hands on its
- * stored length (the fallback when it stores none), as before.
+ * The longest clip the generation can make, which the step after it measures:
+ * the run as SENT — its task type resolved by the shared rule with the clip
+ * measured. A run that declares an edit makes its clip rounded up plus a
+ * second (`referenceClipOutputSec`; the server's test holds the same cases to
+ * the reservation's own rule); any other may be taken as a reference, which
+ * renders a length the model picks — up to the most a run that follows its
+ * own length makes (`lengthFollowingBoundSec`). With no reference clip, the
+ * length its run is priced at.
  */
-function mostCharged(gen: { provider: string; duration: number; referenceTaskType?: string }, clipSec: number | undefined): number | undefined {
+function mostCharged(gen: { provider: string; duration: number; referenceTaskType?: string }, clipSec: number | undefined): number {
   const sent = resolveSeedanceTaskType({
     provider: gen.provider, requested: gen.referenceTaskType, draft: false, referenceImageCount: 0, referenceAudioCount: 0,
     referenceVideoSec: clipSec === undefined ? [] : [clipSec], aspectRatio: "16:9", duration: gen.duration,
   })
-  return lengthFollowingBoundSec({ provider: gen.provider, duration: sent.duration, referenceTaskType: sent.taskType }) ?? (gen.duration > 0 ? gen.duration : undefined)
+  const rendered = pricedOutputDurationSec(gen.provider, sent.duration)
+  if (clipSec === undefined) return rendered
+  // The run's DECLARED task type, as resolved; none declared: none.
+  const declared = gen.referenceTaskType === undefined ? undefined : sent.taskType
+  const edit = referenceClipOutputSec(gen.provider, rendered, sent.duration, [clipSec], declared)
+  if (listedSeedanceTaskType(gen.provider, declared) === SEEDANCE_VIDEO_EDIT_TASK_TYPE) return edit
+  return Math.max(edit, lengthFollowingBoundSec({ provider: gen.provider, duration: sent.duration, referenceTaskType: declared }) ?? 0)
 }
 
 /** Every whole-second clip the model accepts as a reference (its declared bounds; a model that declares none: up to the longest any declares). */
@@ -193,10 +211,11 @@ describe("a generation that does not run is quoted at the length its result reco
     expect(quote("combine", ALL)).toBe(chargesAt(bound).combine)
   })
 
-  it("not re-run: the 5 s its take recorded", () => {
+  it("not re-run: the 5 s its take recorded, with the quarter second a record may leave off", () => {
     const { quote } = charged(gen, undefined, results)
-    expect(quote("trim", new Set(["trim"]))).toBe(chargesAt(5).trim)
-    expect(quote("trim", new Set())).toBe(chargesAt(5).trim)
+    const read = videoUtilityPricedClipSec(recordedTakeSec("generate-video", 5))
+    expect(quote("trim", new Set(["trim"]))).toBe(chargesAt(read).trim)
+    expect(quote("trim", new Set())).toBe(chargesAt(read).trim)
   })
 
   it("a re-run fixed-length generation is quoted at its stored length, never an earlier take's", () => {
@@ -205,12 +224,12 @@ describe("a generation that does not run is quoted at the length its result reco
   })
 })
 
-describe("unchanged: a fixed-length generation is quoted exactly as before", () => {
+describe("a fixed-length generation is quoted at the length its run makes", () => {
   it.each<[string, Record<string, unknown>, number | undefined]>([
     ["Seedance 2.5 at 10 s", { provider: "seedance-2-5", duration: 10 }, 10],
     ["Seedance 2.5 at 5 s, declared Reference", { provider: "seedance-2-5", duration: 5, referenceTaskType: "reference" }, 5],
     ["a model with no automatic length", { provider: "kling-3.0", duration: 10 }, 10],
-    ["a model with no automatic length and no duration (the 8 s fallback)", { provider: "kling-3.0" }, undefined],
+    ["a model with no automatic length and no duration (the model's own default)", { provider: "kling-3.0" }, pricedOutputDurationSec("kling-3.0", undefined)],
   ])("%s", (_name, gen, handed) => {
     const { quote } = charged(gen, undefined)
     for (const rerunIds of [ALL, new Set<string>()]) {

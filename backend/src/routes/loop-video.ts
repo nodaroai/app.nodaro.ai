@@ -8,8 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { loopVideoUnits } from "../lib/video-utility-credits.js"
-import { unitRateBaseCredits } from "../lib/credit-base-cost.js"
+import { measureVideoUtilityPreHandler, stashedVideoUtilityLength, VIDEO_UTILITY_CLIENT_CLOSED, videoUtilityClientGone, videoUtilityMeasuredBaseCredits, withoutVideoUtilityStash } from "../lib/video-utility-length.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -23,19 +22,29 @@ const loopVideoBody = z.object({
   // every internal repeat boundary.
   smartLoopCutBeforeRepeat: z.boolean().optional().default(false),
   smartLoopCutLookback: z.number().int().min(2).max(64).optional(),
-  /** Optional upstream video duration (seconds) for accurate credit
-   *  estimation. When omitted, backend falls back to 8s. */
+  /** Accepted for older clients and ignored: the run is priced by the video's
+   *  length as the route measures it (lib/video-utility-length.ts). */
   upstreamDuration: z.number().positive().optional(),
   userId: z.string().uuid().optional(),
 })
 
 export async function loopVideoRoutes(app: FastifyInstance) {
+  // One unit when the request was not measured yet (the floor), the measured units once it was.
+  const computeCredits = (body: unknown) => videoUtilityMeasuredBaseCredits("loop-video", stashedVideoUtilityLength(body)?.units ?? 1)
+  const guard = creditGuard(() => "loop-video", { computeCredits })
+  const measuredGuard = creditGuard(() => "loop-video", { computeCredits, dedup: false })
   app.post("/v1/loop-video", {
-    preHandler: creditGuard(() => "loop-video", {
-      computeCredits: (body) => unitRateBaseCredits("loop-video", loopVideoUnits(body as Record<string, unknown>)),
-    }),
+    preHandler: [
+      // The balance at the one-unit floor first (and a repeat of the same request), before anything is fetched.
+      guard,
+      // The video is measured next — the body parsed first, so a malformed or oversized request probes nothing.
+      measureVideoUtilityPreHandler("loop-video", loopVideoBody),
+      // Then the measured units are what the guard prices (each at the loop-video row).
+      measuredGuard,
+    ],
   }, async (req, reply) => {
-    const parsed = loopVideoBody.safeParse(req.body)
+    const measured = stashedVideoUtilityLength(req.body)
+    const parsed = loopVideoBody.safeParse(withoutVideoUtilityStash(req.body))
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", ...formatZodError(parsed.error) },
@@ -43,6 +52,8 @@ export async function loopVideoRoutes(app: FastifyInstance) {
     }
 
     const { userId: _bodyUserId, upstreamDuration: _upDur, ...restData } = parsed.data
+    // The length and units it was charged ride the job (after the spread: a client's field never wins).
+    const charged = { upstreamDuration: measured?.secs[0], billedUnits: measured?.units }
     const userId = req.userId
 
     if (!userId) {
@@ -54,13 +65,16 @@ export async function loopVideoRoutes(app: FastifyInstance) {
     const modelIdentifier = "loop-video"
     const mcpClient = extractMcpClient(req.body)
 
+    // Its client went away while its clips were measured: no job, no reservation.
+    if (videoUtilityClientGone(req)) return reply.status(499).send({ error: VIDEO_UTILITY_CLIENT_CLOSED })
+
     const { data: job, error } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "loop-video"),
+        input_data: { ...buildJobInputData(parsed.data, "loop-video"), ...charged },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -72,7 +86,7 @@ export async function loopVideoRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("loop-video", { jobId: job.id, ...restData, usageLogId })
+    await videoQueue.add("loop-video", { jobId: job.id, ...restData, ...charged, usageLogId })
     return { jobId: job.id }
   })
 }

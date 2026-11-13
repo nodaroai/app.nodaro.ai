@@ -88,6 +88,7 @@ import { rendersNeedingSpeakerView, SPEAKER_VIEW_TYPE } from "@/lib/replace-rend
 import { useApplyEdlRenders } from "@/hooks/use-apply-edl-renders"
 import { RunUpToHereNotice } from "./run-up-to-here-notice"
 import { applyEdlRenderSettings } from "@/lib/apply-edl-render-input"
+import { loopVideoRepeatCount, loopVideoRepeatCountEdit } from "@/lib/loop-video-count"
 import {
   editPlanModeUnavailableReason,
   refreshEditPlanModesIfStale,
@@ -2112,6 +2113,8 @@ export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) 
 export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) {
   const t = useT()
   const mode = data.mode ?? "repeat"
+  // The count every run reads (an older node's `loops` included); an edit writes the current field and clears `loops`.
+  const repeatCount = loopVideoRepeatCount(data)
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -2127,15 +2130,15 @@ export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) 
 
       {mode === "repeat" && (
         <div>
-          <Label htmlFor="repeat-count">{t("proccfg.repeatX", { n: data.repeatCount ?? 2 })}</Label>
+          <Label htmlFor="repeat-count">{t("proccfg.repeatX", { n: repeatCount })}</Label>
           <input
             id="repeat-count"
             type="range"
             min={2}
             max={20}
             step={1}
-            value={data.repeatCount ?? 2}
-            onChange={(e) => onUpdate({ repeatCount: parseInt(e.target.value, 10) })}
+            value={repeatCount}
+            onChange={(e) => onUpdate(loopVideoRepeatCountEdit(parseInt(e.target.value, 10)))}
             className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
           />
           <div className="flex justify-between text-[11px] text-muted-foreground mt-1">

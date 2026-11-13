@@ -59,8 +59,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { addCaptionsQuotedSec, isTopazVideoUpscaleProvider, pitchTempoQuotedSec, transcribeQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
-import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
+import { addCaptionsQuotedSec, isTopazVideoUpscaleProvider, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
@@ -623,17 +622,13 @@ export function getModelIdentifier(
   // Video Depth: the price row of the wired clip's length, a whole second after
   // `pricedClipSeconds`, through the SAME provider resolution and row rule the backend
   // estimator and the route reserve by (`resolveVideoDepthProvider` +
-  // `videoDepthCreditId`) — the node's
-  // own badge reads the same upstream length: the producer's own length field,
-  // else the clip's metadata the node caches as `probedVideo`. Unknown length →
-  // the provider's highest reachable row (fal 300 s, Replicate 80 s), never the
-  // cheapest.
+  // `videoDepthCreditId`). The length is `videoDepthQuotedSec` — the measured
+  // walk the server's estimate reads (a clip a node makes in this run at the
+  // length it will produce, plus the container slack), the node's own pill
+  // too. Unknown length → the provider's highest reachable row (fal 300 s,
+  // Replicate 80 s), never the cheapest.
   if (nodeType === "video-depth") {
-    const probedVideo = data.probedVideo as ProbedVideoInfo | undefined
-    return videoDepthCreditId(
-      resolveVideoDepthProvider(data.provider),
-      upstreamVideoDurationSec(node.id, "video", nodes ?? [], edges ?? []) ?? probedVideo?.durationSec,
-    )
+    return videoDepthCreditId(resolveVideoDepthProvider(data.provider), videoDepthQuotedSec(node, nodes ?? [], edges ?? [], reruns))
   }
 
   // Video-audit: family × duration composite — the SAME id the node badge

@@ -109,7 +109,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { UNIT_EXECUTORS } from "@/nodes/_generated/executors";
 import { createUnitExecKit } from "./unit-exec-kit";
 import { runGraph } from "./run-graph";
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, runOutputTaskFields } from "@nodaro/render-rules";
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, loopVideoRunFields, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, runOutputTaskFields, trimVideoRunFields } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -494,6 +494,7 @@ import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings";
 import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, pollScrapeJobOutput, RUN_START_RESET, SCRAPE_POLL_BUDGET_MS } from "./poll-job";
 import type { OutputKeySpec, PollJobResultOptions } from "./poll-job";
+import { runResultIdentity } from "@/lib/run-result-identity";
 import { caughtErrorWords, failedJobError } from "@/lib/failed-job-error";
 import { ensureNodeSheetPanels, SHEET_STAGE_A_CANCELLED } from "../reference-sheet/node-sheet-stage-a";
 import { shouldAbandonNode } from "./abandon-guard";
@@ -623,10 +624,12 @@ function runProcessingNode(
   ) => Record<string, unknown>,
   /** On the node only, in the write that lands the take (PollJobResultOptions.nodeFields). */
   nodeFields?: PollJobResultOptions["nodeFields"],
+  /** On the take's result row only (PollJobResultOptions.resultFields): a Trim's recorded length. */
+  resultFields?: PollJobResultOptions["resultFields"],
 ): Promise<string> {
-  // The legacy call shape exactly, unless a unit lands node-only fields with its take.
-  return nodeFields
-    ? pollJobWithNodeUpdate(nodeId, apiCall, outputKey, label, ctx, extraOutputFields, undefined, { nodeFields })
+  // The legacy call shape exactly, unless a unit lands node-only fields with its take or a node keeps fields on its result.
+  return nodeFields || resultFields
+    ? pollJobWithNodeUpdate(nodeId, apiCall, outputKey, label, ctx, extraOutputFields, undefined, { ...(nodeFields ? { nodeFields } : {}), ...(resultFields ? { resultFields } : {}) })
     : pollJobWithNodeUpdate(nodeId, apiCall, outputKey, label, ctx, extraOutputFields);
 }
 
@@ -8692,7 +8695,21 @@ function executeNodeCore(
     }
     const d = node.data as TrimVideoData;
     setUserPromptTemplate(undefined);
-    const trimMode = d.trimMode ?? "time";
+    // The fields of the node's mode only, as the workflow run sends them and the pill prices them
+    // (`trimVideoRunFields`): a setting left from another mode never reaches the worker, and an end of 0 is no end.
+    const run = trimVideoRunFields(d as unknown as Record<string, unknown>) as {
+      trimMode: NonNullable<TrimVideoData["trimMode"]>
+      startTime?: number
+      endTime?: number
+      trimStartFrames?: number
+      trimEndFrames?: number
+      trimStartSeconds?: number
+      trimEndSeconds?: number
+      keepFirstSeconds?: number
+      keepLastSeconds?: number
+      smartLoopCut: boolean
+      smartLoopCutLookback?: number
+    };
     const { nodes: trimNodes, edges: trimEdges } = runGraph();
     const upstreamDuration = getUpstreamDuration(node.id, trimNodes, trimEdges, runWireDurationReader(trimNodes, trimEdges, videoUrl));
     return runProcessingNode(
@@ -8700,21 +8717,21 @@ function executeNodeCore(
       () =>
         trimVideoApi(
           videoUrl,
-          d.startTime,
-          d.endTime || undefined,
+          run.startTime as number,
+          run.endTime,
           ctx.userId,
           d.outputSilentVideo,
           {
-            trimStartFrames: trimMode === "frames" ? d.trimStartFrames : undefined,
-            trimEndFrames: trimMode === "frames" ? d.trimEndFrames : undefined,
-            trimStartSeconds: trimMode === "seconds" ? d.trimStartSeconds : undefined,
-            trimEndSeconds: trimMode === "seconds" ? d.trimEndSeconds : undefined,
-            keepFirstSeconds: trimMode === "keep-first-seconds" ? d.keepFirstSeconds : undefined,
-            keepLastSeconds: trimMode === "keep-last-seconds" ? d.keepLastSeconds : undefined,
-            smartLoopCut: trimMode === "smart-loop-cut",
-            smartLoopCutLookback: trimMode === "smart-loop-cut" ? d.smartLoopCutLookback : undefined,
-            losslessKeyframe: trimMode !== "smart-loop-cut" && d.losslessKeyframe === true ? true : undefined,
-            trimMode,
+            trimStartFrames: run.trimStartFrames,
+            trimEndFrames: run.trimEndFrames,
+            trimStartSeconds: run.trimStartSeconds,
+            trimEndSeconds: run.trimEndSeconds,
+            keepFirstSeconds: run.keepFirstSeconds,
+            keepLastSeconds: run.keepLastSeconds,
+            smartLoopCut: run.smartLoopCut,
+            smartLoopCutLookback: run.smartLoopCutLookback,
+            losslessKeyframe: run.trimMode !== "smart-loop-cut" && d.losslessKeyframe === true ? true : undefined,
+            trimMode: run.trimMode,
             upstreamDuration,
           },
         ),
@@ -8724,6 +8741,9 @@ function executeNodeCore(
       (od) => ({
         generatedSilentVideoUrl: od.videoUrlSilent as string | undefined,
       }),
+      undefined,
+      // The length of the file the Trim cut, on the result row: what the step after it is handed.
+      (od) => runResultIdentity("trim-video", od),
     );
   }
 
@@ -8848,7 +8868,8 @@ function executeNodeCore(
       );
       return Promise.reject(new Error("No video"));
     }
-    const d = node.data as LoopVideoData;
+    // The one reading of the Loop's settings (its older `loops` count included) every run and quote share.
+    const d = loopVideoRunFields(node.data as Record<string, unknown>) as Pick<LoopVideoData, "mode" | "repeatCount" | "targetDuration" | "smartLoopCutBeforeRepeat" | "smartLoopCutLookback">;
     const { nodes: loopNodes, edges: loopEdges } = runGraph();
     const upstreamDuration = getUpstreamDuration(node.id, loopNodes, loopEdges, runWireDurationReader(loopNodes, loopEdges, videoUrl));
     return runProcessingNode(

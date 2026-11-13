@@ -9,8 +9,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, DEFAULT_AUDIO_CROSSFADE_CURVE_ID, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT } from "@nodaro/shared/edl"
-import { combineVideosUnits } from "../lib/video-utility-credits.js"
-import { unitRateBaseCredits } from "../lib/credit-base-cost.js"
+import { COMBINE_VIDEOS_MAX_CLIPS, measureVideoUtilityPreHandler, stashedVideoUtilityLength, VIDEO_UTILITY_CLIENT_CLOSED, videoUtilityClientGone, videoUtilityMeasuredBaseCredits, withoutVideoUtilityStash } from "../lib/video-utility-length.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isCloud } from "../lib/config.js"
@@ -21,7 +20,10 @@ const TRANSITION_ID_TUPLE = COMBINE_TRANSITION_IDS as unknown as [string, ...str
 const AUDIO_CROSSFADE_CURVE_TUPLE = AUDIO_CROSSFADE_CURVE_IDS as unknown as [string, ...string[]]
 
 const combineVideosBody = z.object({
-  videoUrls: z.array(safeUrlSchema).min(2, "At least 2 video URLs required"),
+  videoUrls: z
+    .array(safeUrlSchema)
+    .min(2, "At least 2 video URLs required")
+    .max(COMBINE_VIDEOS_MAX_CLIPS, `At most ${COMBINE_VIDEOS_MAX_CLIPS} video URLs`),
   transition: z.enum(TRANSITION_ID_TUPLE).optional().default("cut"),
   transitionDuration: z.number().min(0).max(5).optional().default(0.5),
   audioMode: z.enum(["keep", "crossfade", "remove"]).optional().default("crossfade"),
@@ -74,19 +76,28 @@ const combineVideosBody = z.object({
     out: z.number().min(0).max(3).optional(),
   }).optional(),
   userId: z.string().uuid().optional(),
-  /** Optional upstream durations, one per videoUrls entry (same order).
-   *  When length doesn't match videoUrls, ignored (backend falls back to 8s
-   *  per missing entry). */
+  /** Accepted for older clients and ignored: the run is priced by each clip's
+   *  length as the route measures it (lib/video-utility-length.ts). */
   upstreamDurations: z.array(z.number().positive()).optional(),
 })
 
 export async function combineVideosRoutes(app: FastifyInstance) {
+  // One unit when the request was not measured yet (the floor), the measured units once it was.
+  const computeCredits = (body: unknown) => videoUtilityMeasuredBaseCredits("combine-videos", stashedVideoUtilityLength(body)?.units ?? 1)
+  const guard = creditGuard(() => "combine-videos", { computeCredits })
+  const measuredGuard = creditGuard(() => "combine-videos", { computeCredits, dedup: false })
   app.post("/v1/combine-videos", {
-    preHandler: creditGuard(() => "combine-videos", {
-      computeCredits: (body) => unitRateBaseCredits("combine-videos", combineVideosUnits(body as Record<string, unknown>)),
-    }),
+    preHandler: [
+      // The balance at the one-unit floor first (and a repeat of the same request), before anything is fetched.
+      guard,
+      // Each clip is measured next — the body parsed first, so a malformed or oversized request probes nothing.
+      measureVideoUtilityPreHandler("combine-videos", combineVideosBody),
+      // Then the measured units are what the guard prices (each at the combine-videos row).
+      measuredGuard,
+    ],
   }, async (req, reply) => {
-    const parsed = combineVideosBody.safeParse(req.body)
+    const measured = stashedVideoUtilityLength(req.body)
+    const parsed = combineVideosBody.safeParse(withoutVideoUtilityStash(req.body))
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", ...formatZodError(parsed.error) },
@@ -113,15 +124,20 @@ export async function combineVideosRoutes(app: FastifyInstance) {
     }
 
     const modelIdentifier = "combine-videos"
+    // The lengths and units it was charged ride the job (after the spread: a client's field never wins).
+    const charged = { upstreamDurations: measured ? [...measured.secs] : undefined, billedUnits: measured?.units }
 
     const mcpClient = extractMcpClient(req.body)
+    // Its client went away while its clips were measured: no job, no reservation.
+    if (videoUtilityClientGone(req)) return reply.status(499).send({ error: VIDEO_UTILITY_CLIENT_CLOSED })
+
     const { data: job, error } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "combine-videos"),
+        input_data: { ...buildJobInputData(parsed.data, "combine-videos"), ...charged },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -150,6 +166,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       trimEndFrames,
       transitions,
       edgeFades,
+      ...charged,
       usageLogId,
     })
 

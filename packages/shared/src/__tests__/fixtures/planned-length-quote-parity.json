@@ -1,0 +1,1866 @@
+{
+  "$comment": "Mask Composite's and Video Overlay's quote before a run when what reaches them is made by another node — read by BOTH estimates over the same graphs, through the one measured walk (`measuredWireLengthSec`, @nodaro/render-rules): the editor's (frontend maskCompositePricingUnits / videoOverlayPricingUnits — the node's pill, its Run button, the confirm and the workflow badge) and the server's workflow estimate (CreditsService.estimateWorkflowCreditsAt, the composite's own line). Each case wires its sources into the step `c` (an edge with no `target` goes into `c`), which is a Mask Composite with default settings, or a Video Overlay with one stored video layer (so it quotes on its video row) and the case's `video` wire as its base. `expectedUnits` holds the 5-second units both quote, for two run sets (and, where a case gives `partial`, a third: exactly its `runSet`, passed as the editor's run set and the server's `runNodeIds`): `whole` (the editor's whole-run badge and confirm, which pass every executable node, frozen ones included; the server's estimate with no run set, which leaves frozen nodes out) and `alone` (the step's own Run and its pill on the editor; a server run of only `c`). Mask Composite's cap is 60 units (300 s), Video Overlay's 12 (60 s). A video made in the run is read at its planned length plus each step's slack once for every clip a node makes on the way (0.1 s on Mask Composite, which charges the container; 1/24 s on Video Overlay, which charges the video stream) — a step that only passes its input on adds none; a node that does not run hands on its take, at the length recorded with it.",
+  "cases": [
+    {
+      "name": "1. Generate Video on Kling 4.0 set to 5 s, never run: 5 s planned, plus the slack",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 2,
+          "videoOverlay": 1
+        },
+        "alone": {
+          "maskComposite": 2,
+          "videoOverlay": 1
+        }
+      }
+    },
+    {
+      "name": "1b. Image to Video on Kling set to 7 s: the model renders the 5 s it offers",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "image-to-video",
+          "data": {
+            "provider": "kling",
+            "duration": 7
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 2,
+          "videoOverlay": 1
+        },
+        "alone": {
+          "maskComposite": 2,
+          "videoOverlay": 1
+        }
+      }
+    },
+    {
+      "name": "1c. Generate Video naming no model and no duration: the run's default model at its 4 s",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 1,
+          "videoOverlay": 1
+        },
+        "alone": {
+          "maskComposite": 1,
+          "videoOverlay": 1
+        }
+      }
+    },
+    {
+      "name": "1d. Seedance 2.5 on Auto: its longest clip, 30 s",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": -1
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 7,
+          "videoOverlay": 6
+        },
+        "alone": {
+          "maskComposite": 7,
+          "videoOverlay": 6
+        }
+      }
+    },
+    {
+      "name": "1e. Seedance 2.5 set to 5 s with a 12 s reference clip: an edit renders the clip's length",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 12
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "g",
+          "targetHandle": "videoReferences"
+        },
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 3,
+          "videoOverlay": 3
+        },
+        "alone": {
+          "maskComposite": 3,
+          "videoOverlay": 3
+        }
+      }
+    },
+    {
+      "name": "1f. Kling 4.0 set to 5 s with a 12 s reference clip: it renders exactly the 5 s",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 12
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "g",
+          "targetHandle": "videoReferences"
+        },
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 2,
+          "videoOverlay": 1
+        },
+        "alone": {
+          "maskComposite": 2,
+          "videoOverlay": 1
+        }
+      }
+    },
+    {
+      "name": "2. A 10 s upload extended by 5 s on Seedance 2.5: source plus the added clip, plus the slack",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "seedance-2-5-extend",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 4,
+          "videoOverlay": 3
+        },
+        "alone": {
+          "maskComposite": 4,
+          "videoOverlay": 3
+        }
+      }
+    },
+    {
+      "name": "2b. The same on the default VEO extend: a length the catalog does not declare — the cap",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 60,
+          "videoOverlay": 12
+        },
+        "alone": {
+          "maskComposite": 60,
+          "videoOverlay": 12
+        }
+      }
+    },
+    {
+      "name": "2c. A 10 s upload extended on LTX 2.3 Pro set to 6 s: 16 s, plus the slack",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "ltx-2.3-pro",
+            "duration": 6
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 4,
+          "videoOverlay": 4
+        },
+        "alone": {
+          "maskComposite": 4,
+          "videoOverlay": 4
+        }
+      }
+    },
+    {
+      "name": "2d. A 10 s upload extended on PixVerse V6 set to 5 s: 15 s, plus the slack (as Seedance 2.5's 5 s)",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "pixverse-v6-extend",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 4,
+          "videoOverlay": 3
+        },
+        "alone": {
+          "maskComposite": 4,
+          "videoOverlay": 3
+        }
+      }
+    },
+    {
+      "name": "2e. PixVerse V6 set to 40 s is held to its 15 s: a 10 s upload reads 25 s, plus the slack",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "pixverse-v6-extend",
+            "duration": 40
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 6,
+          "videoOverlay": 5
+        },
+        "alone": {
+          "maskComposite": 6,
+          "videoOverlay": 5
+        }
+      }
+    },
+    {
+      "name": "2f. PixVerse V6 with no length set adds its default 5 s: a 30 s upload reads 35 s, plus the slack",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 30
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "pixverse-v6-extend"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 8,
+          "videoOverlay": 7
+        },
+        "alone": {
+          "maskComposite": 8,
+          "videoOverlay": 7
+        }
+      }
+    },
+    {
+      "name": "2g. A 10 s video extended on Grok by 10 s: 20 s, plus the slack",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "grok-extend",
+            "duration": 10
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 5,
+          "videoOverlay": 4
+        },
+        "alone": {
+          "maskComposite": 5,
+          "videoOverlay": 4
+        }
+      }
+    },
+    {
+      "name": "2h. Grok Extend with no length set adds its default 6 s: a 10 s video reads 16 s, plus the slack",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "grok-extend"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 4,
+          "videoOverlay": 4
+        },
+        "alone": {
+          "maskComposite": 4,
+          "videoOverlay": 4
+        }
+      }
+    },
+    {
+      "name": "2i. A Grok Imagine clip set to 6 s, made in the run, extended on Grok by 10 s: 16 s, plus each clip's slack",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "grok",
+            "duration": 6
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "grok-extend",
+            "duration": 10
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 4,
+          "videoOverlay": 4
+        },
+        "alone": {
+          "maskComposite": 4,
+          "videoOverlay": 4
+        }
+      }
+    },
+    {
+      "name": "3. A generation with an old 5.042 s take, now set to 10 s: re-run, its 10 s; not run, the take it hands on",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4",
+                "duration": 5.042
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 1,
+          "videoOverlay": 1
+        }
+      }
+    },
+    {
+      "name": "4. A 10 s generation into a Trim with no fixed window: the generation's length, plus the slack",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10
+          }
+        },
+        {
+          "id": "t",
+          "type": "trim-video",
+          "data": {
+            "trimMode": "smart"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "video"
+        },
+        {
+          "source": "t",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        }
+      }
+    },
+    {
+      "name": "4b. A 5 s generation looped twice: the slack carried by each copy crosses the 10 s boundary on both",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        },
+        {
+          "id": "l",
+          "type": "loop-video",
+          "data": {
+            "mode": "repeat",
+            "repeatCount": 2
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "l",
+          "targetHandle": "video"
+        },
+        {
+          "source": "l",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 3,
+          "videoOverlay": 3
+        },
+        "alone": {
+          "maskComposite": 3,
+          "videoOverlay": 3
+        }
+      }
+    },
+    {
+      "name": "5. A Resize holding a 5 s take, fed a 20 s upload: re-run, the upload's 20 s; not run, its take",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 20
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "r",
+          "type": "resize-video",
+          "data": {
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/r.mp4",
+                "duration": 5
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "r",
+          "targetHandle": "video"
+        },
+        {
+          "source": "r",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 4,
+          "videoOverlay": 4
+        },
+        "alone": {
+          "maskComposite": 1,
+          "videoOverlay": 1
+        }
+      }
+    },
+    {
+      "name": "6. A Lip Sync holding a 7.5 s take, nothing wired into it: re-run, its provider's 300 s audio cap — the step's cap; not run, its take",
+      "nodes": [
+        {
+          "id": "s",
+          "type": "lip-sync",
+          "data": {
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/s.mp4",
+                "duration": 7.5
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "s",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 60,
+          "videoOverlay": 12
+        },
+        "alone": {
+          "maskComposite": 2,
+          "videoOverlay": 2
+        }
+      }
+    },
+    {
+      "name": "7. A FROZEN generation with a 5.042 s take, now set to 10 s: it never runs, so its take, on every run set",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "skipped": true,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4",
+                "duration": 5.042
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 1,
+          "videoOverlay": 1
+        },
+        "alone": {
+          "maskComposite": 1,
+          "videoOverlay": 1
+        }
+      }
+    },
+    {
+      "name": "8. A Combine Videos of a 10 s upload and a VEO extension: a clip of unknown length — the cap, never the 8 s stand-in",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "veo-extend",
+            "duration": 5
+          }
+        },
+        {
+          "id": "m",
+          "type": "combine-videos",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "u",
+          "target": "m",
+          "targetHandle": "in"
+        },
+        {
+          "source": "x",
+          "target": "m",
+          "targetHandle": "in"
+        },
+        {
+          "source": "m",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 60,
+          "videoOverlay": 12
+        },
+        "alone": {
+          "maskComposite": 60,
+          "videoOverlay": 12
+        }
+      }
+    },
+    {
+      "name": "8b. A Duration setting of 10 s reaching a generation stored at 5 s through a Teleport pair: the 10 s the run renders",
+      "nodes": [
+        {
+          "id": "d",
+          "type": "duration",
+          "data": {
+            "seconds": 10
+          }
+        },
+        {
+          "id": "ts",
+          "type": "teleport-send",
+          "data": {}
+        },
+        {
+          "id": "tr",
+          "type": "teleport-receive",
+          "data": {}
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "d",
+          "target": "ts",
+          "targetHandle": "in"
+        },
+        {
+          "source": "ts",
+          "target": "tr",
+          "targetHandle": "in"
+        },
+        {
+          "source": "tr",
+          "target": "g",
+          "targetHandle": "settings"
+        },
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        }
+      }
+    },
+    {
+      "name": "11. A Lip Sync of a 10 s uploaded audio: the clip it makes, 10 s plus the slack, crosses the 10 s boundary on Mask Composite",
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 10
+            }
+          }
+        },
+        {
+          "id": "s",
+          "type": "lip-sync",
+          "data": {
+            "provider": "kling-avatar"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "s",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "s",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        }
+      }
+    },
+    {
+      "name": "12. 3D Render Pro: its 60 s ceiling plus the slack (Video Overlay's base stops at its 60 s cap)",
+      "nodes": [
+        {
+          "id": "p",
+          "type": "pro-3d-render",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "p",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 13,
+          "videoOverlay": 12
+        },
+        "alone": {
+          "maskComposite": 13,
+          "videoOverlay": 12
+        }
+      }
+    },
+    {
+      "name": "13. Two clips made in a row: a Lip Sync of a 10 s uploaded audio driving a Motion Transfer — the slack once per clip made",
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 10
+            }
+          }
+        },
+        {
+          "id": "s",
+          "type": "lip-sync",
+          "data": {
+            "provider": "kling-avatar"
+          }
+        },
+        {
+          "id": "m",
+          "type": "motion-transfer",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "s",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "s",
+          "target": "m",
+          "targetHandle": "video"
+        },
+        {
+          "source": "m",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 3,
+          "videoOverlay": 3
+        },
+        "alone": {
+          "maskComposite": 3,
+          "videoOverlay": 3
+        }
+      }
+    },
+    {
+      "name": "14. A Lip Sync of a 10 s uploaded audio, then a Resize: the pass-through adds none of its own",
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 10
+            }
+          }
+        },
+        {
+          "id": "s",
+          "type": "lip-sync",
+          "data": {
+            "provider": "kling-avatar"
+          }
+        },
+        {
+          "id": "r",
+          "type": "resize-video",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "s",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "s",
+          "target": "r",
+          "targetHandle": "video"
+        },
+        {
+          "source": "r",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        }
+      }
+    },
+    {
+      "name": "15. A partial run of a Trim and the step: the generation before the Trim stays out of the run and hands on its 5.042 s take; the Trim re-runs on it",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4",
+                "duration": 5.042
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "t",
+          "type": "trim-video",
+          "data": {
+            "trimMode": "smart"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "t",
+          "targetHandle": "video"
+        },
+        {
+          "source": "t",
+          "targetHandle": "video"
+        }
+      ],
+      "partial": {
+        "runSet": [
+          "t",
+          "c"
+        ],
+        "expectedUnits": {
+          "maskComposite": 1,
+          "videoOverlay": 1
+        }
+      },
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 1,
+          "videoOverlay": 1
+        }
+      }
+    },
+    {
+      "name": "16. A generation whose duration an LLM Chat's answer sets through a field mapping: not known before the run — the model's longest clip",
+      "nodes": [
+        {
+          "id": "x",
+          "type": "llm-chat",
+          "data": {
+            "provider": "openai"
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5,
+            "fieldMappings": {
+              "duration": {
+                "sourceNodeId": "x"
+              }
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 7,
+          "videoOverlay": 6
+        },
+        "alone": {
+          "maskComposite": 7,
+          "videoOverlay": 6
+        }
+      }
+    },
+    {
+      "name": "16b. A Text node holding \"15\" mapped onto a generation's duration: a value set before the run, read as set — 15 s",
+      "nodes": [
+        {
+          "id": "x",
+          "type": "text-prompt",
+          "data": {
+            "text": "15"
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5,
+            "fieldMappings": {
+              "duration": {
+                "sourceNodeId": "x"
+              }
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 4,
+          "videoOverlay": 3
+        },
+        "alone": {
+          "maskComposite": 4,
+          "videoOverlay": 3
+        }
+      }
+    },
+    {
+      "name": "17. A Duration node of 15 s wired into a generation's field-duration handle: its value, as the run reads it",
+      "nodes": [
+        {
+          "id": "d",
+          "type": "duration",
+          "data": {
+            "seconds": 15
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "d",
+          "target": "g",
+          "targetHandle": "field-duration"
+        },
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 4,
+          "videoOverlay": 3
+        },
+        "alone": {
+          "maskComposite": 4,
+          "videoOverlay": 3
+        }
+      }
+    },
+    {
+      "name": "18. A generation whose model an LLM Chat's answer sets through a field mapping: any model the node may run, the longest at its 5 s (6 s)",
+      "nodes": [
+        {
+          "id": "x",
+          "type": "llm-chat",
+          "data": {
+            "provider": "openai"
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5,
+            "fieldMappings": {
+              "provider": {
+                "sourceNodeId": "x"
+              }
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 2,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 2,
+          "videoOverlay": 2
+        }
+      }
+    },
+    {
+      "name": "18b. A Provider node mapped onto a generation's model: its model, as the run reads it (LTX 2.3 Pro renders 6 s for a 5 s setting)",
+      "nodes": [
+        {
+          "id": "p",
+          "type": "provider",
+          "data": {
+            "provider": "ltx-2.3-pro"
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5,
+            "fieldMappings": {
+              "provider": {
+                "sourceNodeId": "p"
+              }
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 2,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 2,
+          "videoOverlay": 2
+        }
+      }
+    },
+    {
+      "name": "19. Generate Video Pro whose duration an LLM Chat's answer sets through a field mapping: the most a run may ask for (120 s), stitched, one second over",
+      "nodes": [
+        {
+          "id": "x",
+          "type": "llm-chat",
+          "data": {
+            "provider": "openai"
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video-pro",
+          "data": {
+            "provider": "seedance-2",
+            "duration": 10,
+            "fieldMappings": {
+              "duration": {
+                "sourceNodeId": "x"
+              }
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 25,
+          "videoOverlay": 12
+        },
+        "alone": {
+          "maskComposite": 25,
+          "videoOverlay": 12
+        }
+      }
+    },
+    {
+      "name": "19b. Generate Video Pro with a Duration node of 20 s on its field-duration handle: 20 s stitched, one second over",
+      "nodes": [
+        {
+          "id": "d",
+          "type": "duration",
+          "data": {
+            "seconds": 20
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video-pro",
+          "data": {
+            "provider": "seedance-2",
+            "duration": 10
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "d",
+          "target": "g",
+          "targetHandle": "field-duration"
+        },
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 5,
+          "videoOverlay": 5
+        },
+        "alone": {
+          "maskComposite": 5,
+          "videoOverlay": 5
+        }
+      }
+    },
+    {
+      "name": "20. Video to Video on Seedance 2.5 of a 9.2 s upload: an Auto edit of the clip, bounded as Generate Video's reference-clip edit is (rounded up plus a second)",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 9.2
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "v",
+          "type": "video-to-video",
+          "data": {
+            "provider": "seedance-2-5"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "v",
+          "targetHandle": "video"
+        },
+        {
+          "source": "v",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 3,
+          "videoOverlay": 3
+        },
+        "alone": {
+          "maskComposite": 3,
+          "videoOverlay": 3
+        }
+      }
+    },
+    {
+      "name": "21. A Manual Edit holding a 7.5 s take: the run engine never executes it, so its take on every run set",
+      "nodes": [
+        {
+          "id": "e",
+          "type": "manual-edit",
+          "data": {
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/e.mp4",
+                "duration": 7.5
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "e",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 2,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 2,
+          "videoOverlay": 2
+        }
+      }
+    },
+    {
+      "name": "22. A Face Swap of a 10 s upload: it re-renders the clip through a provider, so it adds the slack (a Resize would not)",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "f",
+          "type": "face-swap",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "f",
+          "targetHandle": "video"
+        },
+        {
+          "source": "f",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        }
+      }
+    },
+    {
+      "name": "9. A 23 s upload: its recorded length, no slack",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 23
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 5,
+          "videoOverlay": 5
+        },
+        "alone": {
+          "maskComposite": 5,
+          "videoOverlay": 5
+        }
+      }
+    },
+    {
+      "name": "10. A 30 s upload trimmed to the window 0–10 s: the fixed window, no slack",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 30
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "t",
+          "type": "trim-video",
+          "data": {
+            "trimMode": "time",
+            "startTime": 0,
+            "endTime": 10
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "video"
+        },
+        {
+          "source": "t",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 2,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 2,
+          "videoOverlay": 2
+        }
+      }
+    },
+    {
+      "name": "23. A generation set to 15 s holding a take with no recorded length (a fixed-length run records none, so the take was made at its settings): not run, that take at 15 s plus the slack; re-run, the same",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4"
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 4,
+          "videoOverlay": 3
+        },
+        "alone": {
+          "maskComposite": 4,
+          "videoOverlay": 3
+        }
+      }
+    },
+    {
+      "name": "24. Seedance 2.5 on Auto with a 5 s reference clip and no task type: the model may take it as a reference and pick its length, so its longest clip, 30 s",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u5.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u5.mp4",
+                "duration": 5
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": -1
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "g",
+          "targetHandle": "videoReferences"
+        },
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 7,
+          "videoOverlay": 6
+        },
+        "alone": {
+          "maskComposite": 7,
+          "videoOverlay": 6
+        }
+      }
+    },
+    {
+      "name": "24b. The same run declaring The video to edit: the clip rounded up plus a second, 6 s",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u5.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u5.mp4",
+                "duration": 5
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": -1,
+            "referenceTaskType": "edit"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "g",
+          "targetHandle": "videoReferences"
+        },
+        {
+          "source": "g",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 2,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 2,
+          "videoOverlay": 2
+        }
+      }
+    }
+  ]
+}

@@ -41,27 +41,66 @@ export interface ListingFieldDomain {
   readonly model: boolean
 }
 
+/** An exposed field as the input classifier types it. */
+type ExposedField = ReturnType<typeof extractAppInputSchema>["fields"][number]
+
+/** Every value an exposed field can take, when the listing can enumerate them (a select, a toggle, a bounded number); else `undefined`. */
+function enumerableValues(f: ExposedField): ReadonlyArray<unknown> | undefined {
+  if (f.type === "select" && f.options && f.options.length > 0) return f.options
+  if (f.type === "boolean") return [true, false]
+  if (f.type === "number" && f.min !== undefined && f.max !== undefined) return [...new Set([...(f.options ?? []), f.min, f.max])]
+  return undefined
+}
+
+/** The app's exposed fields, each with the node and field it writes. */
+function exposedFields(
+  snapshotSettings: Record<string, unknown>,
+  nodes: ReadonlyArray<EstimateNode>,
+): { readonly fields: ReadonlyArray<ExposedField>; readonly keyMap: ReturnType<typeof extractAppInputSchema>["keyMap"]; readonly typeById: ReadonlyMap<string, string> } {
+  const withIds = nodes.filter((n): n is EstimateNode & { id: string } => typeof n.id === "string")
+  const { fields, keyMap } = extractAppInputSchema({
+    snapshotSettings,
+    snapshotNodes: withIds.map((n) => ({ id: n.id, type: n.type, data: (n.data ?? {}) as Record<string, unknown> })),
+  })
+  return { fields, keyMap, typeById: new Map(withIds.map((n) => [n.id, n.type])) }
+}
+
+/**
+ * The nodes holding an exposed field whose value the app's user types with no
+ * domain the range can enumerate — free text, or a number with no bounds
+ * (decided 2026-11-12). A length that value decides (a generation's duration
+ * or model mapped from it) is not known before the run, so the listing reads
+ * it as open, the way it gives a recording the user replaces no length
+ * (`withoutMediaLength`). A select, a toggle and a bounded number are
+ * enumerated by the range instead (`listingFieldDomains`).
+ */
+export function listingOpenValueNodeIds(
+  snapshotSettings: Record<string, unknown> | null | undefined,
+  nodes: ReadonlyArray<EstimateNode>,
+): ReadonlySet<string> {
+  if (!snapshotSettings) return new Set()
+  const { fields, keyMap } = exposedFields(snapshotSettings, nodes)
+  const ids = new Set<string>()
+  for (const f of fields) {
+    const target = keyMap[f.key]
+    if (target && (f.type === "text" || f.type === "number") && enumerableValues(f) === undefined) ids.add(target.nodeId)
+  }
+  return ids
+}
+
 /** The exposed fields whose choice can move a price, each with every value it can take. */
 export function listingFieldDomains(
   snapshotSettings: Record<string, unknown> | null | undefined,
   nodes: ReadonlyArray<EstimateNode>,
 ): ListingFieldDomain[] {
   if (!snapshotSettings) return []
-  const withIds = nodes.filter((n): n is EstimateNode & { id: string } => typeof n.id === "string")
-  const { fields, keyMap } = extractAppInputSchema({
-    snapshotSettings,
-    snapshotNodes: withIds.map((n) => ({ id: n.id, type: n.type, data: (n.data ?? {}) as Record<string, unknown> })),
-  })
-  const typeById = new Map(withIds.map((n) => [n.id, n.type]))
+  const { fields, keyMap, typeById } = exposedFields(snapshotSettings, nodes)
   const out: ListingFieldDomain[] = []
   const seen = new Set<string>()
   for (const f of fields) {
     const target = keyMap[f.key]
     if (!target) continue
-    let values: ReadonlyArray<unknown> | undefined
-    if (f.type === "select" && f.options && f.options.length > 0) values = f.options
-    else if (f.type === "boolean") values = [true, false]
-    else if (f.type === "number" && f.min !== undefined && f.max !== undefined) values = [...new Set([...(f.options ?? []), f.min, f.max])]
+    const values = enumerableValues(f)
     if (!values || values.length < 1) continue
     const field = canonicalExposedFieldKey(typeById.get(target.nodeId) ?? "", target.fieldKey)
     const id = `${target.nodeId}\u0000${field}`

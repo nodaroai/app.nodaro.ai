@@ -46,10 +46,14 @@ describe("video-mask credit id (editor quote)", () => {
   })
 
   it("a connected upload of known length quotes that length's row", () => {
-    const up = node("u", "upload-video", { videoUrl: "https://x/v.mp4", duration: 12 })
+    const up = node("u", "upload-video", { url: "https://x/v.mp4", duration: 12 })
     const mask = node("m", "video-mask", { provider: "sam-3" })
     const id = getModelIdentifier(mask, [wire("u", "m", "video")], [up, mask])
     expect(id).toBe(videoMaskCreditId(12, "sam-3"))
+    // A length stored on an upload that hands on no file of its own (no `url`) is not read — the server reads none
+    // either (the measured walk): unknown, the longest row.
+    const fileless = node("u", "upload-video", { videoUrl: "https://x/v.mp4", duration: 12 })
+    expect(getModelIdentifier(mask, [wire("u", "m", "video")], [fileless, mask])).toBe(videoMaskCreditId(undefined, "sam-3"))
   })
 
   it("mask-composite prices its one-unit row × one unit per started 5 s of the foreground (unknown → the 300 s cap)", () => {

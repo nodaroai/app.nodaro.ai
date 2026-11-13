@@ -111,6 +111,7 @@ import { executeUseCaseNode } from "./use-case-node.js"
 import { isUseCaseNodeType, previewRefusalOfCode } from "@nodaro/render-rules"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { videoUtilityChargeBaseCredits } from "../../lib/video-utility-credits.js"
+import { stampVideoUtilityLength, videoUtilityMeasuredBaseCredits, videoUtilityReserveUnits } from "../../lib/video-utility-length.js"
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
 import { stampVideoDepthInput, videoDepthReserveId } from "../../lib/video-depth-input.js"
 import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
@@ -1631,14 +1632,16 @@ async function probeRefVideosForReservation(payload: Record<string, unknown>): P
  * single-node route charges for the same request — one mapping,
  * lib/video-utility-credits.ts — instead of the node's flat one-unit row,
  * which priced a two-minute trim like a five-second one. Each unit at the
- * node's own row, the row its quote reads.
+ * node's own row, the row its quote reads. Trim, Loop and Combine Videos
+ * reserve the units `stampVideoUtilityLength` measured from their clips.
  */
 async function computeVideoUtilityCreditOverride(
   jobName: string,
   payload: Record<string, unknown>,
   modelIdentifier: string,
 ): Promise<number | undefined> {
-  const base = await videoUtilityChargeBaseCredits(jobName, payload)
+  const measuredUnits = videoUtilityReserveUnits(jobName, payload)
+  const base = measuredUnits !== undefined ? await videoUtilityMeasuredBaseCredits(jobName, measuredUnits) : await videoUtilityChargeBaseCredits(jobName, payload)
   if (base === undefined) return undefined
   const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
   return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
@@ -2493,7 +2496,12 @@ async function executeWorkerNode(
   // rule and stamp the units before input_data is written; a base the route
   // refuses (unreadable, past 60 s, a length that leaves nothing to draw or to
   // stack) leaves no jobs row. An image-only run is not measured.
+  // Trim / Loop / Combine Videos: the same — measure each clip by the routes'
+  // rule and stamp the units and the lengths they were charged for, in place of
+  // the length the graph forwarded; a clip the routes refuse (unreadable)
+  // leaves no jobs row.
   const maskRefusal =
+    (await stampVideoUtilityLength(jobName, payload)) ??
     (await stampVideoMaskLength(jobName, payload)) ??
     (await stampMaskCompositeLength(jobName, payload)) ??
     (await stampVideoOverlayLength(jobName, payload))

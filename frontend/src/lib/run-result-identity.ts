@@ -14,7 +14,7 @@
  * where `quality` is the node's own setting.
  */
 import { isRenderNodeType, renderResultStamp, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes"
-import { isUseCaseNodeType, LENGTH_RECORDING_VIDEO_NODE_TYPES, usecaseListsItsResult } from "@nodaro/render-rules"
+import { isUseCaseNodeType, RECORDED_OUTPUT_LENGTH_NODE_TYPES, usecaseListsItsResult } from "@nodaro/render-rules"
 
 export interface RunResultIdentity {
   readonly thumbnailUrl?: string
@@ -50,11 +50,11 @@ export function runResultIdentity(nodeType: string | null | undefined, output: u
     // stamped with that render's plan and settings bases.
     ...(isRenderNodeType(nodeType) || isUseCaseNodeType(nodeType) ? renderResultStamp(o) : {}),
     // A render records the length of its cut, a use-case node its episode's,
-    // and a video generation node the length its video really is when its run
-    // followed its own length (an automatic length, a Seedance Edit / Extend);
-    // on the result row it is the length a Trim / Loop / Combine Videos after
-    // it is charged by.
-    ...(isRenderNodeType(nodeType) || isUseCaseNodeType(nodeType) || LENGTH_RECORDING_VIDEO_NODE_TYPES.has(nodeType ?? "") ? recordedVideoLengthField(o) : {}),
+    // a video generation node the length its video really is when its run
+    // followed its own length (an automatic length, a Seedance Edit / Extend),
+    // and a Trim the length of the file it cut; on the result row it is the
+    // length the step after it is handed.
+    ...(isRenderNodeType(nodeType) || isUseCaseNodeType(nodeType) || RECORDED_OUTPUT_LENGTH_NODE_TYPES.has(nodeType ?? "") ? recordedVideoLengthField(o) : {}),
   }
 }
 

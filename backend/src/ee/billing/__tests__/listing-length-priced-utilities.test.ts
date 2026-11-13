@@ -19,7 +19,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 import { videoUtilityUnits } from "../../../lib/video-utility-credits.js"
-import { TRAILER_MAX_SEC } from "@nodaro/render-rules"
+import { MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, TRAILER_MAX_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, generatedVideoRenderedSec } from "@nodaro/render-rules"
 
 /** A video utility's base price at the static rows these figures are written at: its units × its own one-unit row. */
 const staticUtilityBase = (type: string, body: Record<string, unknown>): number | undefined => {
@@ -29,7 +29,7 @@ const staticUtilityBase = (type: string, body: Record<string, unknown>): number 
 import { VIDEO_SFX_PRICING, videoSfxCreditId } from "@nodaro/shared/credits"
 import { VIDEO_DURATION_AUTO, MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { pricedOutputDurationSec } from "@nodaro/shared/models"
-import { extractVideoDurationFromNode, uiResolutionFill } from "@nodaro/shared/video"
+import { uiResolutionFill } from "@nodaro/shared/video"
 import { resolveVideoRequestNorm } from "../../../lib/video-request-norm.js"
 
 type N = { id: string; type: string; data?: Record<string, unknown> }
@@ -47,7 +47,8 @@ const lengthsIn = (m: number) => [m * 60, m * 60 - 59]
 
 const ops: Array<[string, N, (sec: number) => number]> = [
   ["trim-video (seconds)", { id: "op", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 1 } }, (sec) => staticUtilityBase("trim-video", { trimMode: "seconds", trimStartSeconds: 1, upstreamDuration: sec })!],
-  ["trim-video (smart loop cut)", { id: "op", type: "trim-video", data: { trimMode: "smart-loop-cut" } }, (sec) => staticUtilityBase("trim-video", { trimMode: "smart-loop-cut", upstreamDuration: sec })!],
+  // Charged as its run sends it: the smart loop cut's own flag (the worker runs the cut the fields name).
+  ["trim-video (smart loop cut)", { id: "op", type: "trim-video", data: { trimMode: "smart-loop-cut" } }, (sec) => staticUtilityBase("trim-video", { trimMode: "smart-loop-cut", smartLoopCut: true, upstreamDuration: sec })!],
   // Its own repeat count is left at the default (2 copies): a `repeatCount` on
   // the node is also read as the node's Repeat xN (a separate, existing rule).
   ["loop-video", { id: "op", type: "loop-video", data: { mode: "repeat" } }, (sec) => staticUtilityBase("loop-video", { mode: "repeat", upstreamDuration: sec })!],
@@ -142,12 +143,16 @@ describe("the docs state the Video SFX listing", () => {
     expect(text).toMatch(/rendered video[^.]*render's estimated length/)
   })
 
-  // A generated video lists at its configured duration (decided 2026-10-07).
+  // A generated video lists at the length the generation will render, plus the slack for each clip made: Trim,
+  // Loop, Combine Videos and Video SFX are charged the length their run measures (it was the configured duration,
+  // decided 2026-10-07, while the charge read that forwarded value).
   it.each(["nodes/processing-video/apply-edl.md", "app-view-modes.md", "deployment.md", "nodes/ai-video/video-sfx.md"])(
-    "%s lists a generated video at its configured duration",
+    "%s lists a generated video at the length it will render",
     (rel) => {
       const text = read(rel)
-      expect(text, rel).toMatch(/generated video[^.]*configured duration/)
+      expect(text, rel).toMatch(/(generated video|another node makes)[^.]*(will render|will produce)/)
+      expect(text, rel).toMatch(/a tenth of a second/)
+      expect(text, rel).not.toMatch(/generated video[^.]*configured duration/)
       expect(text, rel).not.toMatch(/generated video[^.]*8-second bucket/)
     },
   )
@@ -360,17 +365,15 @@ describe("on another step's output: the length that step passes on", () => {
   })
 })
 
-// A GENERATED video (decided 2026-10-07): Generate Video, Image to Video and
-// Text to Video feeding Trim, Loop, Combine Videos or Video SFX list at the
-// generation's CONFIGURED duration. The guards below price the step the way
-// its RUN reserves it: the run reads the generation's length with
-// `extractVideoDurationFromNode` (input-resolver.ts), the raw configured
-// duration, and an unset one at the estimators' 8-second fallback. The
-// listing is never below that, nor below the length the generation renders
-// (`resolveVideoRequestNorm` + `pricedOutputDurationSec`: LTX's seeded tiers,
-// the longest clip for AUTO), which a Video SFX run measures (review round,
-// decided 2026-10-07).
-describe("on a generated video: the generation's configured duration", () => {
+// A GENERATED video: Generate Video, Image to Video and Text to Video feeding
+// Trim, Loop or Combine Videos list at the length the generation will RENDER
+// — the measured walk the run estimate and the editor's quote read — plus the
+// slack a clip made in the run needs (`VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC`):
+// these steps are charged the length their run measures, never a configured
+// duration the model does not render. Video SFX keeps the listing's own rule
+// (the configured duration, never below what the generation renders).
+describe("on a generated video: the length the generation renders", () => {
+  const SLACK = VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC
   const gen = (type: string, data: Record<string, unknown>): N => ({ id: "gen", type, data: { prompt: "a fox in snow", ...data } })
   const delta = (g: N, op: N, handle: string) => {
     const withOp = listingOf([g, op], [{ source: "gen", target: op.id, targetHandle: handle }], false)
@@ -380,38 +383,48 @@ describe("on a generated video: the generation's configured duration", () => {
   const combine: N = { id: "op", type: "combine-videos", data: { trimStartFrames: 0, trimEndFrames: 0 } }
   const trimSec: N = { id: "op", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 1 } }
   const trimCharge = (sec: number) => staticUtilityBase("trim-video", { trimMode: "seconds", trimStartSeconds: 1, upstreamDuration: sec })!
+  const loop: N = { id: "op", type: "loop-video", data: { mode: "repeat" } }
+  const loopCharge = (sec: number) => staticUtilityBase("loop-video", { mode: "repeat", upstreamDuration: sec })!
+  /** The length a generation's run renders, by its own rule (its run's default model and duration when it names none). */
+  const rendered = (g: N) => generatedVideoRenderedSec(g, { runDefaultDuration: true })!
 
-  it("Generate Video at 15 seconds -> Combine Videos: the 15-second charge, fixed", () => {
+  it("Generate Video at 15 seconds -> Combine Videos: the 15-second clip plus the slack, fixed", () => {
     const d = delta(gen("generate-video", { provider: "kling-3.0", duration: 15 }), combine, "in")
     expect(d.withOp.previewPerMinute).toBe(d.without.previewPerMinute)
-    expect(d.fixed).toBe(combineCharge([15]))
+    expect(d.fixed).toBe(combineCharge([15 + SLACK]))
   })
 
-  it("Text to Video at 10 seconds -> Trim: the 10-second charge", () => {
-    expect(delta(gen("text-to-video", { provider: "kling-3.0", duration: 10 }), trimSec, "in").fixed).toBe(trimCharge(10))
+  it("Generate Video at 15 seconds -> Trim to 0–60 s: the window ends at the clip, 3 units — the estimate's, the pill's and the charge's", () => {
+    const window: N = { id: "op", type: "trim-video", data: { trimMode: "time", startTime: 0, endTime: 60 } }
+    const d = delta(gen("generate-video", { provider: "kling-4", duration: 15 }), window, "in")
+    expect(d.withOp.previewPerMinute).toBe(d.without.previewPerMinute)
+    expect(d.fixed).toBe(3 * STATIC_CREDIT_COSTS["trim-video"]!)
   })
 
-  it("Image to Video at 20 seconds -> Loop: the 20-second charge", () => {
-    const loop: N = { id: "op", type: "loop-video", data: { mode: "repeat" } }
-    expect(delta(gen("image-to-video", { provider: "wan-3", duration: 20 }), loop, "in").fixed).toBe(
-      staticUtilityBase("loop-video", { mode: "repeat", upstreamDuration: 20 }),
-    )
+  it("Text to Video at 10 seconds -> Trim: the 10-second clip plus the slack", () => {
+    expect(delta(gen("text-to-video", { provider: "kling-3.0", duration: 10 }), trimSec, "in").fixed).toBe(trimCharge(10 + SLACK))
   })
 
-  it("Generate Video at 30 seconds -> Video SFX: the 30-second row", () => {
+  it("Image to Video at 20 seconds -> Loop: the 20-second clip plus the slack", () => {
+    expect(delta(gen("image-to-video", { provider: "wan-3", duration: 20 }), loop, "in").fixed).toBe(loopCharge(20 + SLACK))
+  })
+
+  // Video SFX measures the clip's container before it reserves and rounds every started second up: a 30 s
+  // generation (about a frame past 30 s) is charged the 60-second row, so it is listed there (the measured
+  // walk with the container slack, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC) — as the estimate and the editor quote it.
+  it("Generate Video at 30 seconds -> Video SFX: the 30-second clip plus the slack, the 60-second row", () => {
     const d = delta(gen("generate-video", { provider: "seedance-2-5", duration: 30 }), { id: "op", type: "video-sfx", data: {} }, "video")
-    expect(d.fixed).toBe(STATIC_CREDIT_COSTS[videoSfxCreditId(30)])
+    expect(videoSfxCreditId(30 + MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["video-sfx"])).toBe("replicate-mmaudio:60s")
+    expect(d.fixed).toBe(STATIC_CREDIT_COSTS[videoSfxCreditId(30 + MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["video-sfx"])])
   })
 
   it("AUTO duration is the longest clip the model renders", () => {
     const d = delta(gen("generate-video", { provider: "seedance-2-5", duration: VIDEO_DURATION_AUTO }), { id: "op", type: "video-sfx", data: {} }, "video")
-    expect(d.fixed).toBe(STATIC_CREDIT_COSTS[videoSfxCreditId(pricedOutputDurationSec("seedance-2-5", VIDEO_DURATION_AUTO))])
+    expect(d.fixed).toBe(STATIC_CREDIT_COSTS[videoSfxCreditId(pricedOutputDurationSec("seedance-2-5", VIDEO_DURATION_AUTO) + MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["video-sfx"])])
+    expect(delta(gen("generate-video", { provider: "seedance-2-5", duration: VIDEO_DURATION_AUTO }), combine, "in").fixed).toBe(
+      combineCharge([pricedOutputDurationSec("seedance-2-5", VIDEO_DURATION_AUTO) + SLACK]),
+    )
   })
-
-  // The run's own reservation for the step after a generation.
-  const runCombine = (g: N) => combineCharge([extractVideoDurationFromNode(g.data)])
-  const runLoop = (g: N) => staticUtilityBase("loop-video", { mode: "repeat", upstreamDuration: extractVideoDurationFromNode(g.data) })!
-  const loop: N = { id: "op", type: "loop-video", data: { mode: "repeat" } }
 
   it.each([
     ["generate-video {}", gen("generate-video", {})],
@@ -419,28 +432,26 @@ describe("on a generated video: the generation's configured duration", () => {
     ["generate-video kling-3.0", gen("generate-video", { provider: "kling-3.0" })],
     ["image-to-video (no provider)", gen("image-to-video", {})],
     ["text-to-video (no provider)", gen("text-to-video", {})],
-  ] as const)("no duration (%s): never below the run's charge at its 8-second fallback", (_label, g) => {
-    expect(delta(g, combine, "in").fixed).toBeGreaterThanOrEqual(runCombine(g))
-    expect(delta(g, combine, "in").fixed).toBe(combineCharge([8]))
-    expect(delta(g, loop, "in").fixed).toBeGreaterThanOrEqual(runLoop(g))
+  ] as const)("no duration (%s): the length its run renders at its default, never an 8-second stand-in", (_label, g) => {
+    expect(delta(g, combine, "in").fixed).toBe(combineCharge([rendered(g) + SLACK]))
+    expect(delta(g, loop, "in").fixed).toBe(loopCharge(rendered(g) + SLACK))
   })
 
-  it("LTX: the run charges the configured 11 s, though it renders the 10 s tier", () => {
+  it("LTX set to 11 s renders its 10 s tier: listed at what it renders, not the setting", () => {
     expect(resolveVideoRequestNorm({ provider: "ltx-2.3-pro", duration: 11 }).duration).toBe(10)
     const g = gen("generate-video", { provider: "ltx-2.3-pro", duration: 11 })
-    expect(delta(g, combine, "in").fixed).toBe(combineCharge([11]))
-    expect(delta(g, combine, "in").fixed).toBeGreaterThanOrEqual(runCombine(g))
+    expect(delta(g, combine, "in").fixed).toBe(combineCharge([10 + SLACK]))
   })
 
-  it("LTX Fast at 4k and 20 s: the run charges the configured 20 s, not the 4k band's 10 s", () => {
+  it("LTX Fast at 4k and 20 s: the 4k band's clip, as the run renders and measures it", () => {
     const g = gen("generate-video", { provider: "ltx-2.3-fast", resolution: "4k", duration: 20 })
-    expect(delta(g, combine, "in").fixed).toBeGreaterThanOrEqual(runCombine(g))
-    expect(delta(g, loop, "in").fixed).toBeGreaterThanOrEqual(runLoop(g))
+    expect(delta(g, combine, "in").fixed).toBe(combineCharge([rendered(g) + SLACK]))
+    expect(delta(g, loop, "in").fixed).toBe(loopCharge(rendered(g) + SLACK))
   })
 
   it("several providers: the longest of their lengths", () => {
     const d = delta(gen("generate-video", { providers: ["kling-3.0", "seedance-2-5"], duration: VIDEO_DURATION_AUTO }), trimSec, "in")
-    expect(d.fixed).toBe(trimCharge(Math.max(pricedOutputDurationSec("kling-3.0", VIDEO_DURATION_AUTO), pricedOutputDurationSec("seedance-2-5", VIDEO_DURATION_AUTO))))
+    expect(d.fixed).toBe(trimCharge(Math.max(pricedOutputDurationSec("kling-3.0", VIDEO_DURATION_AUTO), pricedOutputDurationSec("seedance-2-5", VIDEO_DURATION_AUTO)) + SLACK))
   })
 
   it("the length carries on: Generate Video at 15 s -> Trim -> Combine Videos", () => {
@@ -450,23 +461,21 @@ describe("on a generated video: the generation's configured duration", () => {
     const wires: E[] = [{ source: "gen", target: "trim", targetHandle: "in" }]
     const withOp = listingOf([...graph, combine], [...wires, { source: "trim", target: "op", targetHandle: "in" }], false)
     const without = listingOf(graph, wires, false)
-    expect(withOp.preview - without.preview).toBe(combineCharge([15]))
+    expect(withOp.preview - without.preview).toBe(combineCharge([15 + SLACK]))
   })
 
   // Every model a Generate Video node runs, unset and at every duration and
-  // resolution it offers: the listed Combine and Loop are never below what
-  // the run reserves for them (the length `extractVideoDurationFromNode`
-  // reads, else the 8-second fallback) nor below the charge at the length the
-  // generation renders.
+  // resolution it offers: the listed Combine and Loop are never below the
+  // charge at the length the generation renders, plus the slack.
   const models = Object.values(MODEL_CATALOG).filter((m) => m.kind === "video" && (m.modes.includes("i2v") || m.modes.includes("t2v")))
   it.each(models.map((m) => [m.id, m] as const))("%s: never below the run's charge", (_id, m) => {
     for (const resolution of [undefined, ...((m.resolutions ?? []) as ReadonlyArray<string>)]) {
       for (const duration of [undefined, ...(m.durations ?? [])]) {
         const g = gen("generate-video", { provider: m.id, duration, ...(resolution ? { resolution } : {}) })
-        const rendered = pricedOutputDurationSec(m.id, resolveVideoRequestNorm({ provider: m.id, resolution: resolution ?? uiResolutionFill(m.id), duration }).duration ?? duration)
+        const renders = pricedOutputDurationSec(m.id, resolveVideoRequestNorm({ provider: m.id, resolution: resolution ?? uiResolutionFill(m.id), duration }).duration ?? duration)
         const at = `${m.id} @ ${resolution ?? "-"} / ${duration}`
-        expect(delta(g, combine, "in").fixed, at).toBeGreaterThanOrEqual(Math.max(runCombine(g), combineCharge([rendered])))
-        expect(delta(g, loop, "in").fixed, at).toBeGreaterThanOrEqual(runLoop(g))
+        expect(delta(g, combine, "in").fixed, at).toBeGreaterThanOrEqual(combineCharge([renders + SLACK]))
+        expect(delta(g, loop, "in").fixed, at).toBeGreaterThanOrEqual(loopCharge(renders + SLACK))
       }
     }
   })

@@ -1,0 +1,1435 @@
+{
+  "$comment": "The quote before a run of the seven steps whose run measures the file it is given — Video SFX, Video Mask, Video Depth, Pitch & Tempo, Dubbing, and Video Upscale on each of its two measuring models (`topaz`, and `nodaroUpscale`, the per-second model) — read by BOTH estimates over the same graphs through the one measured walk (`measuredWireLengthSec`, @nodaro/render-rules) with each step's slack (`MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC`: 0.1 s on each clip a node makes for the five that measure the container, one 24 fps frame for both Video Upscale steps: one hold counts the video stream's frames, the other bills the clip's seconds rounded up, so any slack under a second is the same figure there): the editor's (frontend getModelIdentifier for the row steps, PRICING_UNIT_ESTIMATORS for Dubbing and both Video Upscale providers — the node's pill, its Run button, the confirm and the workflow badge) and the server's workflow estimate (CreditsService.estimateWorkflowCreditsAt, the step's own line). Each case wires its sources into the step `c`; an edge with no `target` goes into `c` on the step's input (`@input`: `video`, Pitch & Tempo's `in`; `handles` overrides it). `steps` limits a case to some steps (default every step but `lipSync`, a Lip Sync priced by the seconds of its audio, which only the cases that list it name; its figure is the billed seconds, `null` a length nothing knows before the run: the server quotes the most a run takes, the editor a 15 s estimate marked ≈). Expected figures: the row's seconds for Video SFX (`replicate-mmaudio:<N>s`), Video Mask (`<provider>-video:<N>s`) and Video Depth (`video-depth-anything:<N>s`); the started minutes for Pitch & Tempo (`pitch-tempo:<N>m`) and Dubbing (target `es`); the Topaz units (a 1080p target, 30 fps, a 16:9 frame); the seconds `nodaroUpscale` bills (at least 1): 0 for a clip the graph KNOWS is past its 60-second limit (an upload, a measured Library clip, a take's record — the run refuses it before anything is held, and no estimate prices it), and the 60 seconds a run bills at most for a PLANNED length past it, which is an upper bound and no proof the run refuses it. An input whose length nothing can tell before the run is quoted at the step's cap for Video SFX, Video Mask, Video Depth and Pitch & Tempo, and at a minimum for Dubbing (1 minute) and both Video Upscale providers (a 10-second clip) — those runs measure their input and are charged its real length. `whole` = a whole run (the editor's whole-run set, the server with no run set); `alone` = the step's own Run and its pill (editor) and a run of `c` alone (server); `partial` = exactly that run set on both sides.",
+  "cases": [
+    {
+      "name": "1. Generate Video on Kling 4.0 set to 5 s, never run: 5 s planned plus the slack (5.1 s; 5.042 s on the stream for Topaz)",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 8,
+          "videoMask": 10,
+          "videoDepth": 6,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 4,
+          "nodaroUpscale": 6
+        },
+        "alone": {
+          "videoSfx": 8,
+          "videoMask": 10,
+          "videoDepth": 6,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 4,
+          "nodaroUpscale": 6
+        }
+      }
+    },
+    {
+      "name": "2. Generate Video set to 10 s: 10.1 s",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 15,
+          "videoMask": 15,
+          "videoDepth": 11,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 11
+        },
+        "alone": {
+          "videoSfx": 15,
+          "videoMask": 15,
+          "videoDepth": 11,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 11
+        }
+      }
+    },
+    {
+      "name": "3. Generate Video set to 15 s, Video SFX's 15-second boundary: 15.1 s is the 30-second row, as a clip a frame past 15 s is charged",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 30,
+          "videoMask": 30,
+          "videoDepth": 16,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 10,
+          "nodaroUpscale": 16
+        },
+        "alone": {
+          "videoSfx": 30,
+          "videoMask": 30,
+          "videoDepth": 16,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 10,
+          "nodaroUpscale": 16
+        }
+      }
+    },
+    {
+      "name": "4. Auto on Seedance 2.5: its longest clip, 30 s, plus the slack",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": -1
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 60,
+          "videoMask": 60,
+          "videoDepth": 31,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 19,
+          "nodaroUpscale": 31
+        },
+        "alone": {
+          "videoSfx": 60,
+          "videoMask": 60,
+          "videoDepth": 31,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 19,
+          "nodaroUpscale": 31
+        }
+      }
+    },
+    {
+      "name": "5. A 10 s upload extended by 5 s on Seedance 2.5: the source plus what it adds, 15 s, plus the slack",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "seedance-2-5-extend",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 30,
+          "videoMask": 30,
+          "videoDepth": 16,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 10,
+          "nodaroUpscale": 16
+        },
+        "alone": {
+          "videoSfx": 30,
+          "videoMask": 30,
+          "videoDepth": 16,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 10,
+          "nodaroUpscale": 16
+        }
+      }
+    },
+    {
+      "name": "6. A 10 s upload: its recorded length, no slack",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 15,
+          "videoMask": 10,
+          "videoDepth": 10,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 10
+        },
+        "alone": {
+          "videoSfx": 15,
+          "videoMask": 10,
+          "videoDepth": 10,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 10
+        }
+      }
+    },
+    {
+      "name": "7. A Library clip measured at upload, 12.5 s: its recorded length, no slack",
+      "nodes": [
+        {
+          "id": "l",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/lib.mp4",
+            "assetId": "a1",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/lib.mp4",
+                "duration": 12.5
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "l",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 15,
+          "videoMask": 15,
+          "videoDepth": 13,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 8,
+          "nodaroUpscale": 13
+        },
+        "alone": {
+          "videoSfx": 15,
+          "videoMask": 15,
+          "videoDepth": 13,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 8,
+          "nodaroUpscale": 13
+        }
+      }
+    },
+    {
+      "name": "8. A Library clip with no recorded length: unknown — the cap for four steps; Dubbing (1 minute) and Topaz (a 10 s clip) keep their minimum, the run charges what it measures",
+      "nodes": [
+        {
+          "id": "l",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/lib.mp4",
+            "assetId": "a2",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/lib.mp4"
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "l",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 300,
+          "videoMask": 300,
+          "videoDepth": 300,
+          "pitchTempo": 30,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 10
+        },
+        "alone": {
+          "videoSfx": 300,
+          "videoMask": 300,
+          "videoDepth": 300,
+          "pitchTempo": 30,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 10
+        }
+      }
+    },
+    {
+      "name": "9. A 10 s upload extended on the default (VEO) extend: a length nothing declares, unknown — never the 8 seconds it adds",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "duration": 8
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 300,
+          "videoMask": 300,
+          "videoDepth": 300,
+          "pitchTempo": 30,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 10
+        },
+        "alone": {
+          "videoSfx": 300,
+          "videoMask": 300,
+          "videoDepth": 300,
+          "pitchTempo": 30,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 10
+        }
+      }
+    },
+    {
+      "name": "10. Generate Video now set to 10 s, holding an old 5.042 s take: a whole run plans 10 s; the step alone is handed the take",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/old.mp4",
+                "duration": 5.042
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 15,
+          "videoMask": 15,
+          "videoDepth": 11,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 11
+        },
+        "alone": {
+          "videoSfx": 8,
+          "videoMask": 5,
+          "videoDepth": 5,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 4,
+          "nodaroUpscale": 6
+        }
+      }
+    },
+    {
+      "name": "11. A FROZEN generation holding a 5.042 s take, now set to 10 s: it never runs, so its take, no slack",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "skipped": true,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/old.mp4",
+                "duration": 5.042
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 8,
+          "videoMask": 5,
+          "videoDepth": 5,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 4,
+          "nodaroUpscale": 6
+        },
+        "alone": {
+          "videoSfx": 8,
+          "videoMask": 5,
+          "videoDepth": 5,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 4,
+          "nodaroUpscale": 6
+        }
+      }
+    },
+    {
+      "name": "12. Generate Video Pro set to 60 s, stitched to 61 s: past a whole minute; for `nodaroUpscale` a planned length past the 60-second limit, quoted at it",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video-pro",
+          "data": {
+            "duration": 60
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 120,
+          "videoMask": 90,
+          "videoDepth": 62,
+          "pitchTempo": 2,
+          "dubbing": 2,
+          "topaz": 38,
+          "nodaroUpscale": 60
+        },
+        "alone": {
+          "videoSfx": 120,
+          "videoMask": 90,
+          "videoDepth": 62,
+          "pitchTempo": 2,
+          "dubbing": 2,
+          "topaz": 38,
+          "nodaroUpscale": 60
+        }
+      }
+    },
+    {
+      "name": "13. Generation (now 10 s, take 5.042 s) → Resize (take 7.5 s) → the step: a whole run plans 10 s; alone, the Resize's take; a run of {Resize, step}, the generation's take carried through",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/old.mp4",
+                "duration": 5.042
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "r",
+          "type": "resize-video",
+          "data": {
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/r.mp4",
+                "duration": 7.5
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "r",
+          "targetHandle": "video"
+        },
+        {
+          "source": "r",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 15,
+          "videoMask": 15,
+          "videoDepth": 11,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 11
+        },
+        "alone": {
+          "videoSfx": 8,
+          "videoMask": 10,
+          "videoDepth": 8,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 5,
+          "nodaroUpscale": 8
+        }
+      },
+      "partial": {
+        "runSet": [
+          "r",
+          "c"
+        ],
+        "expected": {
+          "videoSfx": 8,
+          "videoMask": 5,
+          "videoDepth": 5,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 4,
+          "nodaroUpscale": 6
+        }
+      }
+    },
+    {
+      "name": "14. Loop ×2 of a 5 s generation: each copy carries the clip's slack (10.2 s)",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        },
+        {
+          "id": "p",
+          "type": "loop-video",
+          "data": {
+            "mode": "repeat",
+            "repeatCount": 2
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "target": "p",
+          "targetHandle": "video"
+        },
+        {
+          "source": "p",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 15,
+          "videoMask": 15,
+          "videoDepth": 11,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 11
+        },
+        "alone": {
+          "videoSfx": 15,
+          "videoMask": 15,
+          "videoDepth": 11,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 11
+        }
+      }
+    },
+    {
+      "name": "15. An uploaded audio of 75 s into Pitch & Tempo and Dubbing's audio input: its recorded length",
+      "steps": [
+        "pitchTempo",
+        "dubbing"
+      ],
+      "handles": {
+        "dubbing": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/v.mp3",
+            "metadata": {
+              "durationSeconds": 75
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "pitchTempo": 2,
+          "dubbing": 2
+        },
+        "alone": {
+          "pitchTempo": 2,
+          "dubbing": 2
+        }
+      }
+    },
+    {
+      "name": "16. Text to Speech holding a 4 s take: a whole run re-runs it, a length nothing knows before the run (unknown); the step alone is handed the take",
+      "steps": [
+        "pitchTempo",
+        "dubbing"
+      ],
+      "handles": {
+        "dubbing": "audio"
+      },
+      "nodes": [
+        {
+          "id": "t",
+          "type": "text-to-speech",
+          "data": {
+            "text": "hello",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/t.mp3",
+                "duration": 4
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "t",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "pitchTempo": 30,
+          "dubbing": 1
+        },
+        "alone": {
+          "pitchTempo": 1,
+          "dubbing": 1
+        }
+      }
+    },
+    {
+      "name": "17. A generation set to 15 s holding a take with no recorded length (a fixed-length run records none, so the take was made at its settings): the step alone is handed that take, 15 s plus the slack, as a whole run plans",
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 15,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/take.mp4"
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 30,
+          "videoMask": 30,
+          "videoDepth": 16,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 10,
+          "nodaroUpscale": 16
+        },
+        "alone": {
+          "videoSfx": 30,
+          "videoMask": 30,
+          "videoDepth": 16,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 10,
+          "nodaroUpscale": 16
+        }
+      }
+    },
+    {
+      "name": "18. Four Seedance 2.5 generations at 15 s → Combine Videos → the step: a planned 60.17 s (a frame of slack on each clip, the joins' trims not taken off) is an upper bound, not proof the run refuses it, so Nodaro Video Upscale is quoted at its 60-second limit",
+      "steps": [
+        "nodaroUpscale"
+      ],
+      "nodes": [
+        {
+          "id": "g1",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": 15
+          }
+        },
+        {
+          "id": "g2",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": 15
+          }
+        },
+        {
+          "id": "g3",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": 15
+          }
+        },
+        {
+          "id": "g4",
+          "type": "generate-video",
+          "data": {
+            "provider": "seedance-2-5",
+            "duration": 15
+          }
+        },
+        {
+          "id": "k",
+          "type": "combine-videos",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "g1",
+          "target": "k",
+          "targetHandle": "videos"
+        },
+        {
+          "source": "g2",
+          "target": "k",
+          "targetHandle": "videos"
+        },
+        {
+          "source": "g3",
+          "target": "k",
+          "targetHandle": "videos"
+        },
+        {
+          "source": "g4",
+          "target": "k",
+          "targetHandle": "videos"
+        },
+        {
+          "source": "k",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "nodaroUpscale": 60
+        },
+        "alone": {
+          "nodaroUpscale": 60
+        }
+      }
+    },
+    {
+      "name": "19. A 75 s upload: a length the graph knows is past the 60-second limit, so the run refuses it and no estimate prices it",
+      "steps": [
+        "nodaroUpscale"
+      ],
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up75.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up75.mp4",
+                "duration": 75
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "nodaroUpscale": 0
+        },
+        "alone": {
+          "nodaroUpscale": 0
+        }
+      }
+    },
+    {
+      "name": "20. Lip Sync (OmniHuman 2.0, per second of its audio) on a 7.3 s audio upload: its recorded length, billed as 8 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/v.mp3",
+            "metadata": {
+              "durationSeconds": 7.3
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 8
+        },
+        "alone": {
+          "lipSync": 8
+        }
+      }
+    },
+    {
+      "name": "21. Lip Sync on a Text to Speech holding a 5 s take: a whole run makes the voice again, priced from that take as a minimum (the run charges the audio it measures); the step alone is handed the take, 5 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "t",
+          "type": "text-to-speech",
+          "data": {
+            "text": "hello there",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/t.mp3",
+                "duration": 5
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "t",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 5
+        },
+        "alone": {
+          "lipSync": 5
+        }
+      }
+    },
+    {
+      "name": "22. Lip Sync on a Text to Speech holding a 10 s take: the same, 10 s, a minimum on a whole run",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "t",
+          "type": "text-to-speech",
+          "data": {
+            "text": "hello there",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/t.mp3",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "t",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 10
+        },
+        "alone": {
+          "lipSync": 10
+        }
+      }
+    },
+    {
+      "name": "23. Lip Sync on a FROZEN Text to Speech holding a 4.2 s take: it never runs, so its take on every run set, billed as 5 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "t",
+          "type": "text-to-speech",
+          "data": {
+            "text": "hello there",
+            "skipped": true,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/t.mp3",
+                "duration": 4.2
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "t",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 5
+        },
+        "alone": {
+          "lipSync": 5
+        }
+      }
+    },
+    {
+      "name": "24. Lip Sync on an audio upload with no recorded length: unknown",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/nolen.mp3"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": null
+        },
+        "alone": {
+          "lipSync": null
+        }
+      }
+    },
+    {
+      "name": "25. Lip Sync on the sound of a clip made in the run, set to 5 s: 5 s planned plus the container slack, billed as 6 s, as a file a few hundredths over 5 s is",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 6
+        },
+        "alone": {
+          "lipSync": 6
+        }
+      }
+    },
+    {
+      "name": "26. Lip Sync on the sound of a clip made in the run, set to 10 s: 11 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 11
+        },
+        "alone": {
+          "lipSync": 11
+        }
+      }
+    },
+    {
+      "name": "27. Lip Sync on a 2.5 s audio upload: shorter audio is padded to the model's 4 s minimum",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/short.mp3",
+            "metadata": {
+              "durationSeconds": 2.5
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 4
+        },
+        "alone": {
+          "lipSync": 4
+        }
+      }
+    },
+    {
+      "name": "28. A render that does not run again, holding a cut recorded at 59.5 s (its EDL's length; the file measures at or past it): known and within the 60 s limit, priced; a whole run renders it again, an estimate",
+      "steps": [
+        "nodaroUpscale"
+      ],
+      "nodes": [
+        {
+          "id": "r",
+          "type": "apply-edl",
+          "data": {
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/cut.mp4",
+                "duration": 59.5
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "r",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "nodaroUpscale": 60
+        },
+        "alone": {
+          "nodaroUpscale": 60
+        }
+      }
+    },
+    {
+      "name": "29. A render that does not run again, holding a cut recorded at 75 s: a length the graph knows is past the limit, so the run refuses it and no estimate prices it",
+      "steps": [
+        "nodaroUpscale"
+      ],
+      "nodes": [
+        {
+          "id": "r",
+          "type": "apply-edl",
+          "data": {
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/cut.mp4",
+                "duration": 75
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "r",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "nodaroUpscale": 60
+        },
+        "alone": {
+          "nodaroUpscale": 0
+        }
+      }
+    },
+    {
+      "name": "30. Lip Sync after a Voice Changer of an 8 s upload: the changed voice is a new file, 8 s plus the container slack, billed as 9 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/v8.mp3",
+            "metadata": {
+              "durationSeconds": 8
+            }
+          }
+        },
+        {
+          "id": "v",
+          "type": "voice-changer",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "v",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "v",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 9
+        },
+        "alone": {
+          "lipSync": 9
+        }
+      }
+    },
+    {
+      "name": "31. Lip Sync after an Adjust Volume of an 8 s upload: re-rendered, 8 s plus the container slack, billed as 9 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/v8.mp3",
+            "metadata": {
+              "durationSeconds": 8
+            }
+          }
+        },
+        {
+          "id": "v",
+          "type": "adjust-volume",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "v",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "v",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 9
+        },
+        "alone": {
+          "lipSync": 9
+        }
+      }
+    },
+    {
+      "name": "32. Lip Sync on a Text to Dialogue holding a 33 s take: a whole run makes it again, priced from that take as a minimum; alone, the take",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "t",
+          "type": "text-to-dialogue",
+          "data": {
+            "dialogue": [
+              {
+                "text": "hi"
+              }
+            ],
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/d.mp3",
+                "duration": 33
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "t",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 33
+        },
+        "alone": {
+          "lipSync": 33
+        }
+      }
+    },
+    {
+      "name": "33. Lip Sync on a Text to Speech with no take yet: a length nothing knows before the run",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "t",
+          "type": "text-to-speech",
+          "data": {
+            "text": "hello there"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "t",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": null
+        },
+        "alone": {
+          "lipSync": null
+        }
+      }
+    }
+  ]
+}

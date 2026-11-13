@@ -137,6 +137,14 @@ describe("a slow but progressing transfer survives (Track 0.12)", () => {
       .rejects.toMatchObject({ name: "TimeoutError" })
   }, 15_000)
 
+  it("a caller's timeout stops a body that is still trickling in, rejecting as an abort caused by a TimeoutError", async () => {
+    const err = await storage.downloadR2ObjectToFile("trickle.bin", join(dir, "trickle-timeout.bin"), { timeoutMs: 300 }).then(() => undefined, (e: unknown) => e)
+    expect(err).toBeDefined()
+    const e = err as { name?: unknown; cause?: { name?: unknown } }
+    // The measure reads either shape as out of time (video-utility-length's `timedOut`).
+    expect(e.name === "TimeoutError" || (e.name === "AbortError" && e.cause?.name === "TimeoutError"), `${String(e.name)} / ${String(e.cause?.name)}`).toBe(true)
+  }, 15_000)
+
   it("a body that trickles in above the floor is read to its end, past the flat bound", async () => {
     const started = Date.now()
     await storage.downloadR2ObjectToFile("trickle.bin", join(dir, "trickle.bin"))

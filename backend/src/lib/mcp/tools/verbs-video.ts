@@ -2,6 +2,7 @@ import { z } from "zod"
 import { creditLadderHint, lipSyncPriceSuffix } from "./_credit-hint.js"
 import { MAX_LIP_SYNC_AUDIO_SEC, measuredAudioSeconds } from "./_audio-length.js"
 import { resolveAssetId } from "../asset-resolver.js"
+import { COMBINE_VIDEOS_MAX_CLIPS, combineVideosTooManyClipsMessage } from "../../video-utility-credits.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
@@ -1025,6 +1026,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
     },
     async (args) => {
+      // More clips than one run joins: refused before any asset id is looked up (the route answers the same 400).
+      if (args.videos.length > COMBINE_VIDEOS_MAX_CLIPS) {
+        return { content: [{ type: "text", text: combineVideosTooManyClipsMessage(args.videos.length) }], isError: true }
+      }
       const videoUrls: string[] = []
       for (const item of args.videos) {
         const url =

@@ -5,13 +5,14 @@
  * it, and the workflow estimate divides it into pricing units
  * (`workflow-editor/types.ts :: getPricingUnits`), so the two read one number.
  * The estimators are the ones the routes and the workflow run charge with
- * (`@nodaro/shared`).
+ * (`@nodaro/shared`); Trim, Loop and Combine Videos are charged at the lengths
+ * their run measures, so they are quoted from the measured walk. So are the
+ * other steps here whose run measures its input (Mask Composite, Video
+ * Overlay, Video SFX, Video Mask, Video Depth, Pitch & Tempo, Dubbing, Topaz
+ * Video Upscale).
  */
 import {
   assembleNarratedVideoCredits,
-  estimateCombineVideosCredits,
-  estimateLoopVideoCredits,
-  estimateTrimVideoCredits,
   VIDEO_UTIL_PRICING,
   PITCH_TEMPO_PRICING,
   NEMOTRON_TRANSCRIBE_PRICING,
@@ -19,12 +20,9 @@ import {
   lipSyncAudioRateOf,
   lipSyncEstimateSeconds,
   videoOverlayVideoUnits,
-  type CombineVideosEstimatorInput,
-  type LoopVideoEstimatorInput,
-  type TrimVideoEstimatorInput,
 } from "@nodaro/shared/credits"
 import { maskCompositeUnits } from "@nodaro/shared/media"
-import { fanInClipCount, forwardedVideoLengthSec, maskCompositeLeadSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, generationSourceEstimateSec, withoutRecordedVideoLength } from "@nodaro/render-rules"
+import { fanInClipCount, forwardedVideoLengthSec, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, loopVideoRunFields, runWireLengthSec, withoutRecordedVideoLength, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, maskCompositeLeadSec, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, measuredWireLengthSec, runWireFps, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, trimVideoRunFields, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, videoUtilityUnitsOf, type MeasuredInputStepType, type MeasuredWireLengthOptions } from "@nodaro/render-rules"
 import { clampTopazVideoFps, isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER, resolveTopazVideoTarget, type TopazVideoResolution, type TopazVideoSource } from "@nodaro/shared/models"
 import { withWiredSettings } from "@nodaro/shared/nodes"
 import { nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, resolveGraphOrigin, topazVideoEstimateUnits } from "@nodaro/render-rules"
@@ -35,18 +33,14 @@ import { getCombineUpstreamDurations, getUpstreamDuration, type WireDurationRead
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 /**
- * The seconds the video on a wire runs, as an ESTIMATE reads it
- * (`runWireLengthSec`, the rule the server's run estimate and the listing
- * read): a render's output at the render's estimated minutes, a chain of
- * Trim / Loop / Combine Videos / Video SFX at the length each passes on, and
- * any other source at the length a run forwards from it
- * (`forwardedVideoLengthSec`: an upload's length, a generation's duration).
- * Unknown stays `undefined`: the estimators' fallback length stands in.
- *
- * A generated video is read as it was before its runs recorded a length
- * (`withoutRecordedVideoLength`): the steps priced through this reader
- * measure the clip they are given, and a recorded length is capped at its run's
- * bound, so it can sit under the file they measure.
+ * The length, in seconds, of the media on a wire as a RUN estimate reads it,
+ * without the measured walk's slack: a render's output at the render's
+ * estimated minutes, a chain of Trim / Loop / Combine Videos / Video SFX at the
+ * length each passes on, and any other source at the length a run forwards
+ * from it (`forwardedVideoLengthSec`), a generated video read as it was before
+ * its runs recorded a length (`withoutRecordedVideoLength`). The reading the
+ * server's run estimate gives the same step (`runWireLengthOf`): Transcribe on
+ * Nemotron 3.5. Unknown stays `undefined`.
  *
  * @param rerunIds the nodes about to EXECUTE (empty for a single node's own price).
  */
@@ -63,37 +57,69 @@ function wireDurationReader(
 }
 
 /**
- * {@link wireDurationReader} for the steps CHARGED by the length they are
- * handed (Trim, Loop, Combine Videos): a generated video by the shared rule
- * (`generationSourceEstimateSec`, the server's run estimate reads it too) —
- * a generation that runs in the estimated run and follows its own length (an
- * automatic length, a Seedance Edit / Extend) at the most it can make, the
- * length its record is capped at, so the quote is never below the charge; one
- * that does not run at the length its result recorded. Every other source as
- * before, so a fixed-length generation is quoted as it always was.
+ * The seconds the video on a wire into a step whose run measures it (Mask
+ * Composite, Video Overlay, Trim / Loop / Combine Videos, and the steps of
+ * `MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC`) runs, as an ESTIMATE reads it
+ * (`measuredWireLengthSec`, the walk the server's workflow estimate reads too):
+ * a render at its estimated length, a recording at the length a run forwards,
+ * a node outside the run at the take it hands on, and a node the run executes
+ * (or that holds no take) at the length it will produce at its settings, plus
+ * the step's slack once on each clip a node makes on the way. Frozen nodes never count as
+ * running. Unknown stays `undefined`: the step's cap. The editor knows no
+ * deployment's Generate Video Pro cap, so it reads the default one.
+ *
+ * A take a generation that does not run hands on may carry the length its run
+ * recorded (an automatic length, a Seedance Edit / Extend): the walk reads it
+ * with the allowance that record leaves off (`recordedTakeSec`), never below
+ * the file these steps measure.
  *
  * @param rerunIds the nodes about to EXECUTE (empty for a single node's own price).
  */
-function utilityWireDurationReader(
+function measuredWireReader(
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string>,
+  plannedClipSlackSec: number,
+  /** What one step's reading adds (Lip Sync: a re-run voice at its earlier take, a minimum). */
+  extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum">,
 ): WireDurationReader {
   return (sourceId) =>
-    runWireLengthSec(sourceId, nodes, edges, rerunIds, {
+    measuredWireLengthSec(sourceId, nodes, edges, rerunIds, {
       planOutputOf: readPlan,
-      otherSec: (origin) => generationSourceEstimateSec(origin, nodes, edges, rerunIds, forwardedVideoLengthSec),
+      generateVideoProCapSec: GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC,
+      plannedClipSlackSec,
+      ...extra,
     })
 }
 
 /**
+ * The seconds the clip on a wire into one of the measuring steps of
+ * `MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC` (Video SFX, Video Mask, Video Depth,
+ * Pitch & Tempo, Dubbing, Topaz Video Upscale) runs, as its quote reads it:
+ * the measured walk ({@link measuredWireReader}) with that step's slack — the
+ * reading the server's workflow estimate and the app listing share. No
+ * fallback to a length the upstream node merely stores (a generation's
+ * setting, an Extend Video's added seconds, an earlier take of a node that
+ * runs): the server reads none either.
+ */
+function measuredInputReader(
+  type: MeasuredInputStepType,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string>,
+  extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum">,
+): WireDurationReader {
+  return measuredWireReader(nodes, edges, rerunIds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC[type], extra)
+}
+
+/**
  * The clip length a RUN estimate prices a Video SFX at, in seconds: its
- * `video` wire's length where a run estimate follows it (a render's output, a
- * chain of Trim / Loop / Combine Videos / Video SFX), at most the 300 seconds
- * a run accepts, as the listing and the server's run estimate read it
- * (`videoSfxClipSec`, decided 2026-10-07). `undefined` when no wire's length
- * is known: the caller falls back to the length the upstream node reports, then
- * to the unmeasured-clip row.
+ * `video` wire's length as the measured walk reads it
+ * ({@link measuredInputReader}: a render's output, a recording, a node outside
+ * the run at its take, a node that runs at the length it will produce plus the
+ * container slack on each clip made), at most the 300 seconds a run accepts
+ * (`videoSfxClipSec`). `undefined` when no wire's length is known: the 300 s
+ * row, the most a run is charged.
  *
  * @param rerunIds the nodes about to EXECUTE (empty for a single node's own price).
  */
@@ -104,15 +130,14 @@ export function estimateVideoSfxClipSec(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | undefined {
   const inputs = edges.filter((e) => e.target === node.id)
-  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
+  const lengthOf = measuredInputReader("video-sfx", nodes, edges, rerunIds)
   return videoSfxClipSec(inputs, inputs.map((e) => lengthOf(e.source)))
 }
 
 /**
- * The clip length, in seconds, a Video SFX is QUOTED at, or `null` for an
- * unmeasured clip (the 8-second row): the length the graph gives the video
- * ({@link estimateVideoSfxClipSec}), else what the upstream node itself
- * reports. The one reading behind the node's own Run button, its toolbar, the
+ * The clip length, in seconds, a Video SFX is QUOTED at, or `null` when it is
+ * not known (the 300 s row): {@link estimateVideoSfxClipSec}, the server's
+ * reading. The one reading behind the node's own Run button, its toolbar, the
  * confirm dialog and the workflow badge, so they quote one row.
  */
 export function videoSfxQuotedSec(
@@ -121,15 +146,16 @@ export function videoSfxQuotedSec(
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | null {
-  return estimateVideoSfxClipSec(node, nodes, edges, rerunIds) ?? upstreamVideoDurationSec(node.id, "video", nodes, edges)
+  return estimateVideoSfxClipSec(node, nodes, edges, rerunIds) ?? null
 }
 
 /**
  * The input length, in seconds, a Pitch & Tempo is QUOTED at, or `null` when
- * unknown (the one-minute price): the length the graph gives its `in` wire (a
- * render's output, a chain of length-priced steps), else what the upstream
- * node itself reports (an upload's length — audio uploads included). Capped at
- * the 30 minutes a run accepts. The run itself measures the real file.
+ * unknown (the 30-minute id): the first wire whose length the measured walk
+ * knows ({@link measuredInputReader}: an upload's — audio uploads included —, a
+ * render's output, a node outside the run at its take, a node that runs at
+ * the length it will produce plus the container slack), the server's reading.
+ * Capped at the 30 minutes a run accepts. The run itself measures the real file.
  */
 export function pitchTempoQuotedSec(
   node: Pick<WorkflowNode, "id">,
@@ -137,10 +163,9 @@ export function pitchTempoQuotedSec(
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | null {
-  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
-  const fromGraph = edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source)).find((v) => v !== undefined)
-  const sec = fromGraph ?? upstreamVideoDurationSec(node.id, "in", nodes, edges)
-  return sec === null || sec === undefined ? null : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC)
+  const lengthOf = measuredInputReader("pitch-tempo", nodes, edges, rerunIds)
+  const sec = edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source)).find((v) => v !== undefined)
+  return sec === undefined ? null : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC)
 }
 
 /**
@@ -187,9 +212,9 @@ export function addCaptionsQuotedSec(
 /**
  * The source length, in seconds, a Dubbing is QUOTED at, or `undefined` when
  * it is unknown: its source wire's (`video` wins over `audio`, as the node
- * dubs; a `sourceUrl` replaces both and is measured by the run) — the length
- * the graph gives the wire, else what the upstream node itself reports. The
- * span and its started minutes are `dubbingQuotedMinutes`
+ * dubs; a `sourceUrl` replaces both and is measured by the run) as the
+ * measured walk reads it ({@link measuredInputReader}), the server's reading.
+ * The span and its started minutes are `dubbingQuotedMinutes`
  * (`@nodaro/render-rules`), the rule the server's run estimate reads too.
  */
 export function dubbingQuotedSourceSec(
@@ -202,7 +227,7 @@ export function dubbingQuotedSourceSec(
   const handle = dubbingSourceHandle((node.data ?? {}) as Record<string, unknown>, inputs.map((e) => e.targetHandle))
   const wire = handle === undefined ? undefined : inputs.find((e) => e.targetHandle === handle)
   if (!wire || !handle) return undefined
-  return wireDurationReader(nodes, edges, rerunIds)(wire.source) ?? upstreamVideoDurationSec(node.id, handle, nodes, edges) ?? undefined
+  return measuredInputReader("dubbing", nodes, edges, rerunIds)(wire.source)
 }
 
 /** The started minutes a Dubbing is QUOTED at (1 to 30; 1 when the span is not known) — its pill, its Run button, the confirm and the badge. */
@@ -217,14 +242,14 @@ export function dubbingQuotedMinutesOf(
 
 /**
  * The PRICED clip length, in seconds, a Video Mask is QUOTED at, or `null`
- * when it is unknown (the longest price row): the clip Video SFX reads
- * ({@link estimateVideoSfxClipSec}) at the 30 fps basis when that wire's
- * origin declares a frame rate (`videoMaskClipSec` / `runWireFps` in
+ * when it is unknown (the longest price row): the clip its `video` wire
+ * brings as the measured walk reads it ({@link measuredInputReader}, the
+ * container slack on each clip a node makes), at the 30 fps basis when that
+ * wire's origin declares a frame rate (`videoMaskClipSec` / `runWireFps` in
  * @nodaro/render-rules — an upload's `fps`, through teleports, Trim, Loop and
- * a Combine Videos whose clips share one rate), the reading
- * the server's run estimate prices Video Mask by, so the node's Run button,
- * the confirm dialog, the workflow badge and the server quote one row. With
- * no graph length, what the upstream node itself reports. Rows above the cap
+ * a Combine Videos whose clips share one rate), the reading the server's run
+ * estimate prices Video Mask by, so the node's Run button, the confirm dialog,
+ * the workflow badge and the server quote one row. Rows above the cap
  * collapse onto the last row inside `videoMaskCreditId`.
  */
 export function videoMaskQuotedSec(
@@ -234,11 +259,57 @@ export function videoMaskQuotedSec(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | null {
   const inputs = edges.filter((e) => e.target === node.id)
-  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
-  const fromGraph = videoMaskClipSec(inputs, inputs.map((e) => lengthOf(e.source)), inputs.map((e) => runWireFps(e.source, nodes, edges)))
-  return fromGraph ?? upstreamVideoDurationSec(node.id, "video", nodes, edges)
+  const lengthOf = measuredInputReader("video-mask", nodes, edges, rerunIds)
+  return videoMaskClipSec(inputs, inputs.map((e) => lengthOf(e.source)), inputs.map((e) => runWireFps(e.source, nodes, edges))) ?? null
 }
 
+/**
+ * The clip length, in seconds, a Video Depth is QUOTED at, or `null` when it
+ * is unknown (the provider's highest reachable row): its `video` wire's (else
+ * the first wire's with a known length — `videoDepthClipSec`) as the measured
+ * walk reads it ({@link measuredInputReader}, the container slack on each clip
+ * a node makes), the server's reading. An upload whose file records no
+ * length is read at the length the editor's own read of that file found
+ * (`probedVideo`, cached on the node by `useUpstreamVideoProbe`, trusted only
+ * for the file the upload hands on) — as the server's estimate probes an
+ * upload's file. The node's pill, its Run button, the confirm and the badge
+ * all read this.
+ */
+export function videoDepthQuotedSec(
+  node: Pick<WorkflowNode, "id" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | null {
+  const inputs = edges.filter((e) => e.target === node.id)
+  const lengthOf = measuredInputReader("video-depth", nodes, edges, rerunIds)
+  const known = videoDepthClipSec(inputs, inputs.map((e) => lengthOf(e.source)))
+  if (known !== undefined) return known
+  const wire = inputs.find((e) => e.targetHandle === "video") ?? inputs[0]
+  const source = wire ? nodes.find((n) => n.id === wire.source) : undefined
+  const url = source?.type === "upload-video" ? (source.data as { url?: unknown }).url : undefined
+  const probed = ((node.data ?? {}) as { probedVideo?: { url?: unknown; durationSec?: unknown } }).probedVideo
+  const sec = probed?.durationSec
+  return typeof url === "string" && url.trim() !== "" && probed?.url === url.trim() && typeof sec === "number" && Number.isFinite(sec) && sec > 0 ? sec : null
+}
+
+/**
+ * BASE credits of a video-utility node, as the workflow badge, the confirm, its
+ * Run button and its pill quote it. Trim, Loop and Combine Videos run measure
+ * each clip they are given before they reserve, so each wire is read by the
+ * measured walk ({@link measuredWireReader}, the reading the server's workflow
+ * estimate and the app listing share): a clip another node makes in this run
+ * at the length that node will produce plus
+ * {@link VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC} for each clip made on the way, a
+ * node outside the run at the take it hands on, an upload at its measured
+ * length. A clip nothing can size before the run stands at the estimators'
+ * 8-second fallback — a minimum, since the run is charged the length it
+ * measures. Units are counted by the one rule the charge counts by
+ * (`videoUtilityUnitsOf`: each clip less the frame grace, then the node's
+ * formula), a Trim over the fields its run sends (`trimVideoRunFields`).
+ *
+ * @param rerunIds the nodes about to EXECUTE (empty for a single node's own price).
+ */
 export function estimateVideoUtilityBaseCredits(
   node: WorkflowNode,
   nodes: ReadonlyArray<WorkflowNode>,
@@ -246,20 +317,24 @@ export function estimateVideoUtilityBaseCredits(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | undefined {
   const data = node.data as Record<string, unknown>
-  // Charged by the length handed to them: a generated video by the shared rule.
-  const durationOf = utilityWireDurationReader(nodes, edges, rerunIds)
+  const durationOf = measuredWireReader(nodes, edges, rerunIds, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC)
+  const credits = (units: number | undefined) => (units === undefined ? undefined : units * VIDEO_UTIL_PRICING.CREDIT_UNIT)
   switch (node.type) {
     case "loop-video":
-      return estimateLoopVideoCredits(data as LoopVideoEstimatorInput, getUpstreamDuration(node.id, nodes, edges, durationOf))
     case "trim-video":
-      return estimateTrimVideoCredits(data as TrimVideoEstimatorInput, getUpstreamDuration(node.id, nodes, edges, durationOf))
+      return credits(videoUtilityUnitsOf(
+        node.type,
+        node.type === "trim-video" ? trimVideoRunFields(data) : loopVideoRunFields(data),
+        [getUpstreamDuration(node.id, nodes, edges, durationOf)],
+      ))
     case "combine-videos":
       // One length per clip it receives: a Bundle from a fanned-out source hands it every run's clip
       // (`fanInClipCount`, the count the server's estimate reads).
-      return estimateCombineVideosCredits(
-        data as CombineVideosEstimatorInput,
+      return credits(videoUtilityUnitsOf(
+        node.type,
+        data,
         getCombineUpstreamDurations(node, nodes, edges, durationOf, (e) => fanInClipCount(e, nodes, edges, rerunIds)),
-      )
+      ))
     case "assemble-narrated-video": {
       // Block count = edges wired into the "video" handle (the `blocks` array
       // driver — see execute-node.ts). No inputs wired yet still prices the
@@ -289,19 +364,16 @@ export function videoUtilityPricingUnits(
  * The length, in seconds, a Mask Composite is QUOTED at, or `null` when it is
  * not known (the 300 s cap): its leading video's — the foreground on its
  * `video` wire, or, with a pixelate / blur fill, the background on its
- * `background-video` wire — as the graph gives it (`maskCompositeLeadSec`,
- * the rule the server's run estimate prices it by). For an upload, a clip
- * added from the Library, a Video link, and Trim / Loop / Combine Videos or
- * length-keeping steps built only on those, the reading is the server's. Any
- * other node's output (a generation, an Extend Video, or a step that recorded
- * a length of its own) is read at the length its node records or is set to
- * (`forwardedVideoLengthSec`), which the server's estimate does not read, and
- * which can differ from what the run produces (an Extend Video adds seconds; a
- * re-run can come out longer; a step's recorded take can be stale). The run is
- * always charged the length it measures. No fallback
- * to a length the upstream node merely stores (metadata with no result row for
- * its file, an earlier file's length, a Video link's whole length): the server
- * does not read one either.
+ * `background-video` wire — as the measured walk reads it
+ * ({@link measuredWireReader}, `maskCompositeLeadSec`), exactly the server's
+ * workflow estimate's reading on every graph. A video another node makes in
+ * this run is quoted at the length that node will produce, with
+ * {@link MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC} on each clip a node makes (the run
+ * charges the container's length); a node that does not run, at the take it
+ * hands on. The run is always charged the length it measures. No fallback to a
+ * length the upstream node merely stores (metadata with no result row for its
+ * file, an earlier file's length, a Video link's whole length): the server does
+ * not read one either.
  */
 export function maskCompositeQuotedSec(
   node: Pick<WorkflowNode, "id" | "data">,
@@ -311,7 +383,7 @@ export function maskCompositeQuotedSec(
 ): number | null {
   const data = (node.data ?? {}) as Record<string, unknown>
   const inputs = edges.filter((e) => e.target === node.id)
-  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
+  const lengthOf = measuredWireReader(nodes, edges, rerunIds, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC)
   return maskCompositeLeadSec(data, inputs, inputs.map((e) => lengthOf(e.source))) ?? null
 }
 
@@ -346,10 +418,14 @@ export function videoOverlayQuotesVideoOf(
 /**
  * The base length, in seconds, a Video Overlay with a video layer is QUOTED
  * at, or `null` when it is not known (the 60 s cap): its `video` wire's length
- * as the graph gives it (`videoOverlayBaseSec`) — exactly the server's run
- * estimate's reading. No fallback to a length the upstream node merely stores
- * (an upload's earlier file): the server does not read one, and a quote below
- * the run, or one that differs between paths, is what this rule rules out.
+ * as the measured walk reads it ({@link measuredWireReader},
+ * `videoOverlayBaseSec`) — exactly the server's workflow estimate's reading. A
+ * video another node makes in this run is quoted at the length that node will
+ * produce, with {@link VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC} on each generated
+ * clip (the run charges the video stream's length). No fallback to a length the
+ * upstream node merely stores (an upload's earlier file): the server does not
+ * read one, and a quote below the run, or one that differs between paths, is
+ * what this rule rules out.
  */
 export function videoOverlayQuotedSec(
   node: Pick<WorkflowNode, "id" | "data">,
@@ -358,7 +434,7 @@ export function videoOverlayQuotedSec(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | null {
   const inputs = edges.filter((e) => e.target === node.id)
-  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
+  const lengthOf = measuredWireReader(nodes, edges, rerunIds, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC)
   return videoOverlayBaseSec(inputs, inputs.map((e) => lengthOf(e.source))) ?? null
 }
 
@@ -374,7 +450,7 @@ export function videoOverlayWireBaseSec(
   edges: ReadonlyArray<WorkflowEdge>,
 ): number | null {
   const inputs = edges.filter((e) => e.target === node.id)
-  const lengthOf = wireDurationReader(nodes, edges, new Set())
+  const lengthOf = measuredWireReader(nodes, edges, new Set(), VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC)
   return videoOverlayBaseWireSec(inputs, inputs.map((e) => lengthOf(e.source))) ?? null
 }
 
@@ -402,9 +478,10 @@ export function isTopazVideoUpscaleProvider(provider: unknown): boolean {
 /**
  * The source length, in seconds, a Topaz Video Upscale is QUOTED at, or
  * `undefined` when it is not known (the estimate's fallback length then
- * stands in): the length the graph gives its video wire — the reading the
- * server's run estimate prices it by — else what the upstream node itself
- * reports. The run measures the real clip before it reserves.
+ * stands in): the length the measured walk gives its video wire
+ * ({@link measuredInputReader}, one frame of slack on each clip a node makes —
+ * the hold counts the video stream's frames), the reading the server's run
+ * estimate prices it by. The run measures the real clip before it reserves.
  */
 export function topazVideoQuotedSourceSec(
   node: Pick<WorkflowNode, "id">,
@@ -412,9 +489,8 @@ export function topazVideoQuotedSourceSec(
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | undefined {
-  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
-  const fromGraph = edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source)).find((v) => v !== undefined)
-  return fromGraph ?? upstreamVideoDurationSec(node.id, "video", nodes, edges) ?? undefined
+  const lengthOf = measuredInputReader("video-upscale", nodes, edges, rerunIds)
+  return edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source)).find((v) => v !== undefined)
 }
 
 /** The old relative levers a saved Video Upscale may still hold (the shared resolver's own set). */
@@ -435,7 +511,7 @@ const positivePx = (v: unknown): number | undefined => (typeof v === "number" &&
 
 /**
  * The pixel size of the video wired into a Video Upscale's `video` input, when
- * the editor has MEASURED it: the source (through teleports) hands on a url,
+ * the editor has measured it: the source (through teleports) hands on a url,
  * and the result row holding that url records its width and height (an
  * upload records them at upload, any other video when its result is first
  * shown — `useResultAspectRatio`); an upload with no such row, its upload
@@ -507,11 +583,14 @@ export function topazVideoQuotedResolution(
 
 /**
  * The length of the clip a Nodaro Video Upscale node is given, when the graph
- * knows it is past the longest clip a run takes — such a run is refused before
- * anything is held, so the node's pill shows no figure and the Run confirm
- * says the node is not priced (`nodaroVideoUpscaleRefusesLength`, the rule the
- * server's run estimate reads too). Undefined for any other node, provider or
- * length (a length the graph does not know is measured by the run).
+ * KNOWS it is past the longest clip a run takes — an upload, a measured Library
+ * clip or a take's recorded length (the measured walk's `knownOnly` reading) —
+ * such a run is refused before anything is held, so the node's pill shows no
+ * figure and the Run confirm says the node is not priced
+ * (`nodaroVideoUpscaleRefusesLength`, the rule the server's run estimate reads
+ * too). Undefined for any other node, provider or length: a planned length
+ * past the limit is quoted at it (`nodaroVideoUpscaleEstimateUnits`), and a
+ * length the graph does not know is measured by the run.
  */
 export function nodaroVideoUpscaleRefusedSec(
   node: WorkflowNode,
@@ -523,7 +602,8 @@ export function nodaroVideoUpscaleRefusedSec(
   // As it runs: a wired Settings input can set the provider.
   const data = (withWiredSettings(node, nodes, edges).data ?? {}) as Record<string, unknown>
   if (data.provider !== NODARO_VIDEO_UPSCALE_PROVIDER) return undefined
-  const sec = topazVideoQuotedSourceSec(node, nodes, edges, rerunIds)
+  const knownOf = (sourceId: string) => measuredWireLengthSec(sourceId, nodes, edges, rerunIds, { planOutputOf: readPlan, knownOnly: true })
+  const sec = edges.filter((e) => e.target === node.id).map((e) => knownOf(e.source)).find((v) => v !== undefined)
   return nodaroVideoUpscaleRefusesLength(sec) ? sec : undefined
 }
 
@@ -544,12 +624,12 @@ export function videoUpscalePricingUnits(
   // Priced as it runs: a wired Settings input can set the provider and the target.
   const data = (withWiredSettings(node, nodes, edges).data ?? {}) as Record<string, unknown>
   // Nodaro Video Upscale: a quarter of its tier's four-second row per billed
-  // second of the clip, at the length the graph gives (else 10 s) — the rule
-  // the server's run estimate reads (`nodaroVideoUpscaleEstimateUnits`). A clip
-  // past the limit has no units: no estimate prices it
-  // ({@link nodaroVideoUpscaleRefusedSec}), so the one unit here is never priced.
+  // second of the clip, at the length the graph gives (else 10 s), at most the
+  // longest clip a run takes — the rule the server's run estimate reads
+  // (`nodaroVideoUpscaleEstimateUnits`). A clip the graph KNOWS is past the
+  // limit is never priced ({@link nodaroVideoUpscaleRefusedSec}).
   if (data.provider === NODARO_VIDEO_UPSCALE_PROVIDER) {
-    return nodaroVideoUpscaleEstimateUnits(topazVideoQuotedSourceSec(node, nodes, edges, rerunIds)) ?? 1
+    return nodaroVideoUpscaleEstimateUnits(topazVideoQuotedSourceSec(node, nodes, edges, rerunIds))
   }
   if (!isTopazVideoUpscaleProvider(data.provider)) return 1
   return topazVideoEstimateUnits({
@@ -560,13 +640,13 @@ export function videoUpscalePricingUnits(
 }
 
 /**
- * The length, in seconds, of the audio a Lip Sync is QUOTED on, or `undefined`
- * when it is not known yet: its `audio` wire's length where a run estimate
- * follows it (the rule the server's run estimate reads), else what the
- * upstream node itself reports (an audio upload's recorded length), else the
- * length the node measured of its audio at its last run (`audioDurationSec`).
- * The server measures the real audio before it holds anything; this is only
- * what the editor shows.
+ * The length, in seconds, of the audio a Lip Sync priced by its audio's seconds
+ * is QUOTED on, or `undefined` when it is not known yet: a wired `audio` as the
+ * measured walk reads it ({@link measuredInputReader}, with the container
+ * slack on audio a node makes in the run, and a voice made again in the run at
+ * the take it holds — a minimum) — the server's reading; with no audio wired
+ * (the node's own audio), the length the node measured of it at its last run
+ * (`audioDurationSec`). The run measures the real audio before it holds.
  */
 export function lipSyncQuotedAudioSec(
   node: Pick<WorkflowNode, "id" | "data">,
@@ -575,11 +655,9 @@ export function lipSyncQuotedAudioSec(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | undefined {
   const wire = edges.find((e) => e.target === node.id && e.targetHandle === "audio")
-  const fromGraph = wire
-    ? wireDurationReader(nodes, edges, rerunIds)(wire.source) ?? upstreamVideoDurationSec(node.id, "audio", nodes, edges) ?? undefined
-    : undefined
+  if (wire) return measuredInputReader("lip-sync", nodes, edges, rerunIds, { voiceTakeAsMinimum: true })(wire.source)
   const own = (node.data as { audioDurationSec?: unknown } | undefined)?.audioDurationSec
-  return fromGraph ?? (typeof own === "number" && Number.isFinite(own) && own > 0 ? own : undefined)
+  return typeof own === "number" && Number.isFinite(own) && own > 0 ? own : undefined
 }
 
 /**

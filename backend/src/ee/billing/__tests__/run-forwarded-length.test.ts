@@ -1,8 +1,16 @@
 /**
- * The length a workflow RUN hands a length-priced step (Trim, Loop, Combine
- * Videos) — what the step is CHARGED at — is the length the run estimates
- * price that wire at (decided 2026-10-13). One read, both engines:
+ * The length a workflow RUN forwards to a length-priced step (Trim, Loop,
+ * Combine Videos) on its payload is the length the run estimates price that
+ * wire at (decided 2026-10-13). One read, both engines:
  * `runForwardedVideoLengthSec` (@nodaro/render-rules).
+ *
+ * The forwarded length is no longer what these steps are CHARGED: the run
+ * measures each clip before it reserves and the measurement replaces the
+ * forwarded length on the job (lib/video-utility-length.ts; held by
+ * node-executor-video-utility-billed-units.test.ts and the routes' tests).
+ * These cases pin the forwarded reading itself — the payload's starting value,
+ * and the reading other steps take as a hint — through the unit formula the
+ * charge runs.
  *
  * - A chain (an upload → Trim → Loop): the Loop is handed the length the Trim
  *   passes on, as the estimate prices it — not the 8 s fallback.
@@ -14,7 +22,7 @@
  *   file's length is never read for the pasted one.
  *
  * Each case drives the real input resolver, the real payload builder and the
- * charge function the run's reservation calls (`videoUtilityChargeBaseCredits`).
+ * unit formula (`videoUtilityChargeBaseCredits`) at the forwarded length.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 

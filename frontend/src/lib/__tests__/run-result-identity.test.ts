@@ -37,6 +37,14 @@ describe("runResultIdentity — what a landed take carries (A1b)", () => {
     }
   })
 
+  it("a Trim's recorded length (the file it cut, exact), as the result row's duration; Loop and Combine Videos record none", () => {
+    expect(runResultIdentity("trim-video", { videoUrl: "v", thumbnailUrl: "t", durationSec: 8.083 })).toEqual({ thumbnailUrl: "t", duration: 8.083 })
+    expect(runResultIdentity("trim-video", { videoUrl: "v", thumbnailUrl: "t" })).toEqual({ thumbnailUrl: "t" })
+    for (const type of ["loop-video", "combine-videos"]) {
+      expect(runResultIdentity(type, { videoUrl: "v", durationSec: 23.4 }), type).toEqual({})
+    }
+  })
+
   it("recordedVideoLengthField reads the recorded length only", () => {
     expect(recordedVideoLengthField({ durationSec: 23.4 })).toStrictEqual({ duration: 23.4 })
     for (const bad of [undefined, null, {}, { durationSec: 0 }, { durationSec: -1 }, { durationSec: Number.NaN }, { durationSec: "23" }]) {

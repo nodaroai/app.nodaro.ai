@@ -73,10 +73,18 @@ describe("Video SFX quick toolbar price", () => {
     trailerRenderGraph()
     expect(credits(3)).toBe(fixture.prices[videoSfxCreditId(40)]! * 3)
   })
-  it("keeps the upstream video's own reported length where the graph tells none", () => {
-    store.state.nodes = [node("up", "upload-video", { duration: 25 }), node("sfx", "video-sfx")]
+  it("reads an upload at its recorded length, and never a length it merely stores beside no file of its own (the server reads none)", () => {
+    const url = "https://cdn.example/up.mp4"
+    store.state.nodes = [node("up", "upload-video", { url, generatedResults: [{ url, duration: 25 }] }), node("sfx", "video-sfx")]
     store.state.edges = [edge("up", "sfx", "video")]
     expect(credits()).toBe(fixture.prices[videoSfxCreditId(25)])
+    store.state.nodes = [node("up", "upload-video", { duration: 25 }), node("sfx", "video-sfx")]
+    expect(credits()).toBe(fixture.prices[videoSfxCreditId(300)])
+  })
+  it("reads a generation that has not run at the length it will render plus the container slack (15 s → the 30-second row)", () => {
+    store.state.nodes = [node("g", "generate-video", { provider: "kling-4", duration: 15 }), node("sfx", "video-sfx")]
+    store.state.edges = [edge("g", "sfx", "video")]
+    expect(credits()).toBe(fixture.prices[videoSfxCreditId(30)])
   })
   it("with nothing wired quotes the 300-second row, the most a run that measures the clip can be charged", () => {
     store.state.nodes = [node("sfx", "video-sfx")]

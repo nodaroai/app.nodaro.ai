@@ -4101,7 +4101,13 @@ describe("trim-video", () => {
       "Trim Video",
       expect.anything(),
       expect.any(Function),
+      undefined,
+      { resultFields: expect.any(Function) },
     )
+    // The length of the file the Trim cut lands on its result row: what the step after it is handed.
+    const { resultFields } = mockPollJobWithNodeUpdate.mock.calls[0]![7] as { resultFields: (od: Record<string, unknown>) => Record<string, unknown> }
+    expect(resultFields({ videoUrl: "v", durationSec: 8.083 })).toMatchObject({ duration: 8.083 })
+    expect(resultFields({ videoUrl: "v" })).not.toHaveProperty("duration")
   })
 })
 

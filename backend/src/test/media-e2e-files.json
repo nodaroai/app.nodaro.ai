@@ -2,6 +2,7 @@
   "$comment": "The real-media end-to-end test files that run in the Media E2E CI job instead of Backend Tests (decided 2026-11-08): each is bound by real encodes, or real models on real frames, at real sizes and lengths, and cannot shrink without losing what it proves. backend/vitest.config.ts excludes exactly these and backend/vitest.media-e2e.config.ts runs exactly these, so a file is in one suite or the other; tools/__tests__/media-e2e-ownership.test.mjs holds the list to that. Paths are relative to backend/, sorted. Moving a file in or out of this list moves it between the two jobs.",
   "files": [
     "src/ee/lib/trends/__tests__/crop-media.e2e.test.ts",
+    "src/lib/__tests__/video-utility-probe-long.e2e.test.ts",
     "src/providers/video/__tests__/apply-edl.e2e.test.ts",
     "src/providers/video/__tests__/split-media.e2e.test.ts",
     "src/services/__tests__/video-proxy-encode.e2e.test.ts",

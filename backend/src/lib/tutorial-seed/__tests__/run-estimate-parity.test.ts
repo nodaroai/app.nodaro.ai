@@ -286,7 +286,6 @@ describe("a step priced by the length it is given, on a render's output", () => 
   const linear: Array<[string, Graph]> = [
     ["a Combine Videos of a trailer render and a second recording", chain("trailer", [{ id: "intro", type: "upload-video", data: {} }, combine("c")], [wire("render", "c"), wire("intro", "c")])],
     ["a Combine Videos of a tighten render (per minute of the episode) and a second recording", chain("tighten", [{ id: "intro", type: "upload-video", data: {} }, combine("c")], [wire("render", "c"), wire("intro", "c")])],
-    ["a Trim of a tighten render", chain("tighten", [trim("t")], [wire("render", "t")])],
     ["a Loop of a trailer render", chain("trailer", [loop("l")], [wire("render", "l")])],
   ]
   it.each(linear)("%s: the run estimate is the listing at the cap", (_name, { nodes, edges }) => {
@@ -294,10 +293,12 @@ describe("a step priced by the length it is given, on a render's output", () => 
   })
 
   // A chain, or a step whose price is not linear in its input (Trim to the
-  // first N seconds, Loop by duration): the listing is the steepest rise per
-  // minute, so at the cap it is never below the run estimate, and above it by
-  // no more than that rounding up or that steepness.
+  // first N seconds, Loop by duration, a Trim with no end: its one-unit floor
+  // on an empty clip less the frame grace): the listing is the steepest rise
+  // per minute, so at the cap it is never below the run estimate, and above it
+  // by no more than that rounding up or that steepness.
   const chained: Array<[string, Graph]> = [
+    ["a Trim with no end of a tighten render", chain("tighten", [trim("t")], [wire("render", "t")])],
     ["a Loop in repeat mode, then a Combine, on a tighten render", chain("tighten", [loop("l", { repeatCount: 3 }), combine("c")], [wire("render", "l"), wire("l", "c")])],
     ["a Trim to the first 20 seconds, then a Combine, on a tighten render", chain("tighten", [trim("t", { trimMode: "keep-first-seconds", keepFirstSeconds: 20 }), combine("c")], [wire("render", "t"), wire("t", "c")])],
   ]

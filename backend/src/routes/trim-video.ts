@@ -8,8 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { trimVideoUnits } from "../lib/video-utility-credits.js"
-import { unitRateBaseCredits } from "../lib/credit-base-cost.js"
+import { measureVideoUtilityPreHandler, stashedVideoUtilityLength, VIDEO_UTILITY_CLIENT_CLOSED, videoUtilityClientGone, videoUtilityMeasuredBaseCredits, withoutVideoUtilityStash } from "../lib/video-utility-length.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -41,9 +40,9 @@ const trimVideoBody = z.object({
   // and stream-copy (no re-encode). Ignored by smart-loop-cut.
   losslessKeyframe: z.boolean().optional().default(false),
   userId: z.string().uuid().optional(),
-  // Optional upstream video duration (seconds). Used by both the credit
-  // estimator (frames + smart-loop-cut modes need to know input length) and
-  // for telemetry. Omit and the backend falls back to 8s.
+  // Accepted for older clients and ignored: the run is priced by the video's
+  // length as the route measures it (lib/video-utility-length.ts), never by a
+  // length the request sends.
   upstreamDuration: z.number().positive().optional(),
   // Mirror frontend's trimMode for the estimator (default "time"). Worker
   // doesn't read this directly — it dispatches based on which fields are set.
@@ -51,19 +50,31 @@ const trimVideoBody = z.object({
 })
 
 export async function trimVideoRoutes(app: FastifyInstance) {
+  // One unit when the request was not measured yet (the floor), the measured units once it was.
+  const computeCredits = (body: unknown) => videoUtilityMeasuredBaseCredits("trim-video", stashedVideoUtilityLength(body)?.units ?? 1)
+  const guard = creditGuard(() => "trim-video", { computeCredits })
+  const measuredGuard = creditGuard(() => "trim-video", { computeCredits, dedup: false })
   app.post("/v1/trim-video", {
-    preHandler: creditGuard(() => "trim-video", {
-      computeCredits: (body) => unitRateBaseCredits("trim-video", trimVideoUnits(body as Record<string, unknown>)),
-    }),
+    preHandler: [
+      // The balance at the one-unit floor first (and a repeat of the same request), before anything is fetched.
+      guard,
+      // The video is measured next — the body parsed first, so a malformed or oversized request probes nothing.
+      measureVideoUtilityPreHandler("trim-video", trimVideoBody),
+      // Then the measured units are what the guard prices (each at the trim-video row).
+      measuredGuard,
+    ],
   }, async (req, reply) => {
-    const parsed = trimVideoBody.safeParse(req.body)
+    const measured = stashedVideoUtilityLength(req.body)
+    const parsed = trimVideoBody.safeParse(withoutVideoUtilityStash(req.body))
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 
-    const { userId: _bodyUserId, upstreamDuration: _upDur, trimMode: _mode, ...restData } = parsed.data
+    const { userId: _bodyUserId, upstreamDuration: _upDur, ...restData } = parsed.data
+    // The length and units it was charged ride the job (after the spread: a client's field never wins).
+    const charged = { upstreamDuration: measured?.secs[0], billedUnits: measured?.units }
     const userId = req.userId
 
     if (!userId) {
@@ -75,13 +86,16 @@ export async function trimVideoRoutes(app: FastifyInstance) {
     const modelIdentifier = "trim-video"
     const mcpClient = extractMcpClient(req.body)
 
+    // Its client went away while its clips were measured: no job, no reservation.
+    if (videoUtilityClientGone(req)) return reply.status(499).send({ error: VIDEO_UTILITY_CLIENT_CLOSED })
+
     const { data: job, error } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "trim-video"),
+        input_data: { ...buildJobInputData(parsed.data, "trim-video"), ...charged },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -94,7 +108,9 @@ export async function trimVideoRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("trim-video", { jobId: job.id, ...restData, usageLogId })
+    // `trimMode` stays on the payload (the worker cuts by the fields it sets) so the
+    // render's charge check prices the downloaded video by the same formula.
+    await videoQueue.add("trim-video", { jobId: job.id, ...restData, ...charged, usageLogId })
     return { jobId: job.id }
   })
 }

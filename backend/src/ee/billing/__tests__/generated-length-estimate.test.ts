@@ -1,16 +1,18 @@
 // @test-units-by-name prices the node types it names (upload-video, generate-video, trim-video, loop-video, combine-videos)
 /**
  * A generated video made at an automatic length (or by a Seedance Edit /
- * Extend) records the length it really is, at most its run's upper bound, and
- * the step after it — Trim, Loop, Combine Videos — is charged by that. Every
+ * Extend) records the length it really is. The step after it — Trim, Loop,
+ * Combine Videos — measures the clip it is handed and is charged by that. Every
  * quote the server makes before the video exists (the run estimate, which the
  * run-set credit check is handed; the published listing) must be at least that
- * charge. The run estimate reads a generation source through the shared rule
- * (`generationSourceEstimateSec`, the editor's estimate reads it too); the
- * listing through each producer's length rule (`generatedVideoLengthSec`).
+ * charge. The run estimate and the listing read a generation through the
+ * shared measured walk (`measuredWireLengthSec`, the editor's estimate reads it
+ * too): a generation that runs at the length it makes at most, with a small
+ * slack; one that does not at the length its take recorded.
  *
  * The run side is computed through the run's own functions: the executor's
- * reference task type stamp (the clip measured), the shared bound, and the
+ * reference task type stamp (the clip measured), the length the generation's
+ * own reservation holds its clip at (`seedance2RefVideoHeldOutputSec`), and the
  * estimators the run charges with. No credit figure is typed here.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
@@ -50,11 +52,13 @@ vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
 }))
 
 import { MODEL_CATALOG, VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
-import { pricedOutputDurationSec, SEEDANCE_VIDEO_EDIT_PROVIDERS, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, VIDEO_REF_VIDEO_DURATION_LIMITS } from "@nodaro/shared/models"
+import { listedSeedanceTaskType, pricedOutputDurationSec, SEEDANCE_VIDEO_EDIT_PROVIDERS, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, VIDEO_REF_VIDEO_DURATION_LIMITS } from "@nodaro/shared/models"
 import { estimateCombineVideosCredits, estimateLoopVideoCredits, estimateTrimVideoCredits, VIDEO_SFX_PRICING, videoSfxCreditId } from "@nodaro/shared/credits"
-import { knownLength, lengthFollowingBoundSec, utilityOutputLength } from "@nodaro/render-rules"
+import { videoSfxQuoteCreditId } from "@nodaro/shared/credits"
+import { knownLength, lengthFollowingBoundSec, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, recordedTakeSec, referenceClipOutputSec, utilityOutputLength, videoUtilityPricedClipSec } from "@nodaro/render-rules"
 import { CreditsService, estimateWorkflowCreditsDetailed, invalidateModelPricingCache, STATIC_CREDIT_COSTS } from "../credits.js"
 import { applyServiceMarkup } from "../service-margin.js"
+import { seedance2RefVideoHeldOutputSec } from "../seedance2-ref-video-credits.js"
 import { __forgetUploadClipLengths } from "../upload-clip-lengths.js"
 import { stampSeedanceReferenceTaskType } from "../../../lib/seedance-task-type-stamp.js"
 
@@ -101,15 +105,24 @@ const baseChargesAt = (sec: number | undefined): Record<Step, number> => ({
 const marked = (base: number, step: Step) => applyServiceMarkup(base, settings.current as never, STEP_TYPE[step])
 
 /**
- * The most the run can hand the step after the generation: the request as the
- * executor sends it (its reference task type stamped with the clip measured)
- * records at most its bound when it follows its own length; otherwise the
- * stored length, as before (none: the fallback).
+ * The longest clip the generation can make, which the step after it measures:
+ * the request as the executor sends it (its reference task type stamped with
+ * the clip measured). A run that declares an edit makes the length the
+ * generation's own reservation holds its clip at (`seedance2RefVideoHeldOutputSec`);
+ * any other may be taken as a reference, which renders a length the model
+ * picks — up to the most a run that follows its own length makes
+ * (`lengthFollowingBoundSec`), never below that hold. With no reference clip,
+ * the length its run is priced at.
  */
-function mostHanded(gen: { provider: string; duration: number; referenceTaskType?: string }, clipSec: number | undefined): number | undefined {
+function mostHanded(gen: { provider: string; duration: number; referenceTaskType?: string }, clipSec: number | undefined): number {
   const payload = { ...gen, aspectRatio: "16:9", resolution: "720p", ...(clipSec === undefined ? {} : { referenceVideoUrls: [CLIP_URL] }) }
   const sent = stampSeedanceReferenceTaskType(payload, clipSec === undefined ? [] : [clipSec])
-  return lengthFollowingBoundSec({ provider: sent.provider, duration: sent.duration, referenceTaskType: sent.referenceTaskType }) ?? (gen.duration > 0 ? gen.duration : undefined)
+  const provider = sent.provider as string
+  const outputDurationSec = pricedOutputDurationSec(provider, sent.duration as number)
+  if (clipSec === undefined) return outputDurationSec
+  const held = seedance2RefVideoHeldOutputSec({ provider, outputDurationSec, requestedDuration: sent.duration, referenceTaskType: sent.referenceTaskType, durationsSec: [clipSec] })
+  if (listedSeedanceTaskType(provider, sent.referenceTaskType) === SEEDANCE_VIDEO_EDIT_TASK_TYPE) return held
+  return Math.max(held, lengthFollowingBoundSec({ provider, duration: sent.duration, referenceTaskType: sent.referenceTaskType }) ?? 0)
 }
 
 /** The server's run estimate of each step (marked up, as charged), for a run of `runNodeIds`. */
@@ -202,12 +215,13 @@ describe("never under-quote: a length-following generation into Trim, Loop and C
   it("the editor's and the server's quote agree: Seedance 2.5, a declared Edit at a stored 5 s, a 25 s clip, into Combine Videos", async () => {
     const g = graph({ provider: "seedance-2-5", duration: 5, referenceTaskType: "edit" }, 25)
     const quoted = await runEstimate(g, ALL)
-    // The editor's quote is this base (`generated-length-estimate.test.ts` in the editor holds it to the same rule).
-    expect(quoted.combine).toBe(marked(baseChargesAt(pricedOutputDurationSec("seedance-2-5", VIDEO_DURATION_AUTO)).combine, "combine"))
+    // The editor's quote is this base (`generated-length-estimate.test.ts` in the editor holds it to the same rule):
+    // the clip the edit makes at most, as its reservation holds it (the slack on it is the charge's grace).
+    expect(quoted.combine).toBe(marked(baseChargesAt(mostHanded({ provider: "seedance-2-5", duration: 5, referenceTaskType: "edit" }, 25)).combine, "combine"))
   })
 })
 
-describe("the listing reads a Video to Video Seedance edit at its bound only for the steps charged by the length handed to them", () => {
+describe("the listing reads a Video to Video Seedance edit whose source clip it does not know at the most the edit can make", () => {
   /** A Video to Video Seedance edit whose source clip is not known to the listing (nothing wired), into `step`. */
   function editInto(step: { id: string; type: string; data: Record<string, unknown> }, handle: string) {
     const nodes: N[] = [{ id: "gen", type: "video-to-video", data: { provider: "seedance-2-5", prompt: "p" } }, step]
@@ -220,12 +234,14 @@ describe("the listing reads a Video to Video Seedance edit at its bound only for
     return { fixed: a.preview - b.preview, perMinute: a.previewPerMinute - b.previewPerMinute }
   }
 
-  it("into Video SFX (it measures its clip): listed exactly as before this rule, at its longest row", async () => {
+  it("into Video SFX (it measures its clip): its source clip at the longest the edit accepts, never above its longest row", async () => {
     const listedSfx = await listedStep(editInto({ id: "sfx", type: "video-sfx", data: {} }, "video"), "sfx")
-    expect(listedSfx).toStrictEqual({ fixed: STATIC_CREDIT_COSTS[videoSfxCreditId(VIDEO_SFX_PRICING.MAX_DURATION_SEC)], perMinute: 0 })
+    const most = referenceClipOutputSec("seedance-2-5", pricedOutputDurationSec("seedance-2-5", VIDEO_DURATION_AUTO), VIDEO_DURATION_AUTO, [undefined])
+    expect(listedSfx).toStrictEqual({ fixed: STATIC_CREDIT_COSTS[videoSfxQuoteCreditId(most + MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["video-sfx"])], perMinute: 0 })
+    expect(listedSfx.fixed).toBeLessThanOrEqual(STATIC_CREDIT_COSTS[videoSfxCreditId(VIDEO_SFX_PRICING.MAX_DURATION_SEC)]!)
   })
 
-  it("into Trim, Loop and Combine Videos (charged by the length handed to them): at least the most the run can charge", async () => {
+  it("into Trim, Loop and Combine Videos (they measure their clip): at least the most the run can charge", async () => {
     const bound = lengthFollowingBoundSec({ provider: "seedance-2-5", duration: SEEDANCE_VIDEO_EDIT_SHAPE.duration })!
     const steps: Record<Step, { data: Record<string, unknown>; handle: string; base: number }> = {
       trim: { data: TRIM, handle: "in", base: estimateTrimVideoCredits(TRIM as never, bound) },
@@ -249,14 +265,14 @@ describe("a generation that does not run is quoted at the length its result reco
     for (const step of STEPS) expect(quoted[step], step).toBe(marked(baseChargesAt(bound)[step], step))
   })
 
-  it("not re-run: the 5 s its take recorded", async () => {
+  it("not re-run: the 5 s its take recorded, with the quarter second a record may leave off", async () => {
     const quoted = await runEstimate(graph(gen, undefined, results), new Set(["trim", "loop", "combine"]))
-    for (const step of STEPS) expect(quoted[step], step).toBe(marked(baseChargesAt(5)[step], step))
+    const read = videoUtilityPricedClipSec(recordedTakeSec("generate-video", 5))
+    for (const step of STEPS) expect(quoted[step], step).toBe(marked(baseChargesAt(read)[step], step))
   })
 })
 
-describe("a fixed-length generation is quoted at its stored Duration, the length the run hands on", () => {
-  // Before, the server read the estimators' fallback here (decided 2026-11-11: the stored Duration, as the editor and the run read it).
+describe("a fixed-length generation is quoted at its stored Duration, the length its run makes", () => {
   it.each<[string, { duration: number } & Record<string, unknown>]>([
     ["Seedance 2.5 at 10 s", { provider: "seedance-2-5", duration: 10 }],
     ["Seedance 2.5 at 5 s, declared Reference", { provider: "seedance-2-5", duration: 5, referenceTaskType: "reference" }],
@@ -269,9 +285,9 @@ describe("a fixed-length generation is quoted at its stored Duration, the length
     }
   })
 
-  it("a generation that stores no length is read at the estimators' fallback, as the run hands it on", async () => {
+  it("a generation that stores no length is read at the length its run makes: the model's own default", async () => {
     const quoted = await runEstimate(graph({ provider: "kling-3.0" }, undefined), ALL)
-    for (const step of STEPS) expect(quoted[step], step).toBe(marked(baseChargesAt(undefined)[step], step))
+    for (const step of STEPS) expect(quoted[step], step).toBe(marked(baseChargesAt(pricedOutputDurationSec("kling-3.0", undefined))[step], step))
   })
 })
 

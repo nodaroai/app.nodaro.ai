@@ -279,10 +279,14 @@ describe("getModelIdentifier", () => {
 
   it("prices Video SFX at the row for the wired clip's length, the 300s row (the most a run is charged) when it is unknown", () => {
     const sfx = makeNode({ id: "sfx", type: "video-sfx", data: { label: "SFX", provider: "replicate-mmaudio" } as any })
-    const clip = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", videoDuration: 42 } as any })
+    const url = "https://cdn.example/clip.mp4"
+    const clip = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", url, generatedResults: [{ url, duration: 42 }] } as any })
     const wire = makeEdge({ source: "clip", target: "sfx", targetHandle: "video" })
     expect(getModelIdentifier(sfx, [wire], [clip, sfx])).toBe("replicate-mmaudio:60s")
     expect(getModelIdentifier(sfx)).toBe("replicate-mmaudio:300s")
+    // A length the upload only stores beside no file of its own is not read (the server reads none either): unknown.
+    const stored = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", videoDuration: 42 } as any })
+    expect(getModelIdentifier(sfx, [wire], [stored, sfx])).toBe("replicate-mmaudio:300s")
   })
 
   it("prices Pitch & Tempo at the started minutes of its input, the 30-minute id when the length is unknown", () => {
@@ -296,13 +300,15 @@ describe("getModelIdentifier", () => {
   it("prices Video Depth at the row for the wired clip's length (a whole second on either provider), the ceiling when it is unknown", () => {
     const depth = (data: Record<string, unknown> = {}) =>
       makeNode({ id: "vd", type: "video-depth", data: { label: "Video Depth", modelSize: "large", ...data } as any })
-    const clip = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", durationSeconds: 40 } as any })
+    const url = "https://cdn.example/clip.mp4"
+    const upload = (sec: number) => makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", url, generatedResults: [{ url, duration: sec }] } as any })
+    const clip = upload(40)
     const wire = makeEdge({ source: "clip", target: "vd", targetHandle: "video" })
     const fal = depth({ provider: "video-depth-anything" })
     expect(getModelIdentifier(fal, [wire], [clip, fal])).toBe("video-depth-anything:40s")
     expect(getModelIdentifier(fal)).toBe("video-depth-anything:300s")
     // A fractional length is rounded up to whole seconds, as the server measures and charges it.
-    const short = { ...clip, data: { ...clip.data, durationSeconds: 9.2 } }
+    const short = upload(9.2)
     expect(getModelIdentifier(fal, [wire], [short, fal])).toBe("video-depth-anything:10s")
     const replicate = depth({ provider: "depth-anything-frames" })
     expect(getModelIdentifier(replicate, [wire], [clip, replicate])).toBe("depth-anything-frames:40s")
@@ -314,18 +320,25 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(stray, [wire], [clip, stray])).toBe("video-depth-anything:40s")
   })
 
-  it("prices Video Depth from the clip's probed length when its producer stores none", () => {
-    const clip = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip" } as any })
+  it("prices Video Depth from an upload's probed length when its file records none (as the server probes an upload)", () => {
+    const url = "https://cdn.example/clip.mp4"
+    const clip = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", url } as any })
     const wire = makeEdge({ source: "clip", target: "vd", targetHandle: "video" })
     const probed = makeNode({
       id: "vd",
       type: "video-depth",
-      data: { label: "Video Depth", modelSize: "large", probedVideo: { url: "https://cdn.example/clip.mp4", durationSec: 12 } } as any,
+      data: { label: "Video Depth", modelSize: "large", probedVideo: { url, durationSec: 12 } } as any,
     })
     expect(getModelIdentifier(probed, [wire], [clip, probed])).toBe("video-depth-anything:12s")
-    // The producer's own length wins over the probe.
-    const known = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", durationSeconds: 40 } as any })
+    // The upload's recorded length wins over the probe.
+    const known = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", url, generatedResults: [{ url, duration: 40 }] } as any })
     expect(getModelIdentifier(probed, [wire], [known, probed])).toBe("video-depth-anything:40s")
+    // A probe of another file (the upload was replaced since) is not this clip's length: the ceiling.
+    const replaced = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", url: "https://cdn.example/other.mp4" } as any })
+    expect(getModelIdentifier(probed, [wire], [replaced, probed])).toBe("video-depth-anything:300s")
+    // A generation's probed take is never read: a node that runs is read at its planned length (5 s + the slack: 6 s).
+    const gen = makeNode({ id: "clip", type: "generate-video", data: { label: "Gen", provider: "kling-4", duration: 5 } as any })
+    expect(getModelIdentifier(probed, [wire], [gen, probed], new Set(["clip", "vd"]))).toBe("video-depth-anything:6s")
     // A failed probe (no length) keeps the ceiling.
     const failed = makeNode({
       id: "vd",

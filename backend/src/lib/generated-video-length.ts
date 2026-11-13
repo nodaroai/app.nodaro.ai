@@ -7,77 +7,23 @@
  * `extractVideoDurationFromNode` reads from the generation's data
  * (input-resolver.ts): the raw configured duration, or the estimators'
  * fallback (`VIDEO_UTIL_PRICING.FALLBACK_DURATION_SECONDS`) when none is set.
- * The listing takes the longer of that and the rendered length below, so it
- * is never below the charge, whichever of the two a run prices.
+ * The listing takes the longer of that and the rendered length, so it is never
+ * below the charge, whichever of the two a run prices.
  *
- * The rendered length is read by the rule the generation's own run is priced
- * by, step for step (payload-builder.ts, the `image-to-video`,
- * `text-to-video` and `generate-video` cases):
- *   1. the provider: the node's, else the run's default
- *      (`applyDefaultVideoSelection` for Generate Video,
- *      {@link LEGACY_VIDEO_NODE_DEFAULT_PROVIDER} for the legacy two);
- *   2. the catalog normalisation the run applies (`resolveVideoRequestNorm`:
- *      LTX's seeded duration tiers, at the node's resolution or the UI fill);
- *   3. `pricedOutputDurationSec`: the requested seconds, else the length the
- *      run prices an unset duration at, the longest clip for AUTO.
- * A Seedance reference task type the node declares can move that length (an
- * `edit` runs at AUTO, an `extend` turns AUTO into a set length), but only
- * when a reference clip qualifies — which the listing cannot see. So the
- * length is read both ways, as declared with a clip assumed wired and as
- * undeclared, and the longer kept: never shorter than either run.
- *
- * The listing reads the result to price a Trim, Loop, Combine Videos or Video SFX fed
- * by the generation (`wireInputLength` in ee/billing/credits.ts). A node that
- * names several providers runs each, so its length is the longest of theirs;
- * Generate Video's provider also depends on the run's mode (a split-id model
- * resolves to its i2v or t2v twin), which a listing cannot see, so both twins
- * are read and the longer kept: never shorter than a run's.
+ * The rendered length is `@nodaro/render-rules`' `generatedVideoRenderedSec`:
+ * the rule the generation's own run is priced by, the one the measured walk of
+ * the run estimates reads too — a Seedance reference task type the node
+ * declares included (an `edit` runs at AUTO, an `extend` turns AUTO into a set
+ * length, only when a reference clip qualifies, which the listing cannot see:
+ * read both ways, the longer kept). The floor above is the listing's alone: a
+ * step that measures its input never reads a stored take for a node that
+ * re-runs.
  */
-import {
-  applyDefaultVideoSelection,
-  pricedOutputDurationSec,
-  resolveVideoProviderForMode,
-} from "@nodaro/shared/models"
-import {
-  extractVideoDurationFromNode,
-  uiResolutionFill,
-} from "@nodaro/shared/video"
-import {
-  VIDEO_UTIL_PRICING,
-} from "@nodaro/shared/credits"
-import { LEGACY_VIDEO_NODE_DEFAULT_PROVIDER, nodeProviders } from "@nodaro/render-rules"
-import { resolveVideoRequestNorm, videoRequestReferenceMedia } from "./video-request-norm.js"
-import { refVideoWorstCaseSecFor } from "./ref-video-worst-case.js"
+import { extractVideoDurationFromNode } from "@nodaro/shared/video"
+import { VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
+import { generatedVideoRenderedSec } from "@nodaro/render-rules"
 
-/** The provider a legacy Image to Video / Text to Video node runs when it names none (one definition, shared with the run estimates). */
-export { LEGACY_VIDEO_NODE_DEFAULT_PROVIDER }
-
-/** The generation nodes whose output length is their configured duration. */
-export const CONFIGURED_DURATION_VIDEO_TYPES: ReadonlySet<string> = new Set(["generate-video", "image-to-video", "text-to-video"])
-
-/**
- * The seconds one provider renders for this node's settings, as its run prices
- * them. A declared reference task type is read with one reference clip assumed
- * wired, at the provider's worst-case length (the convention the reservation
- * counts an unknown clip by), and the longer of that and the undeclared length
- * is kept — whether a clip is wired, and qualifies, is a graph fact.
- */
-function providerLengthSec(provider: string, data: Record<string, unknown>): number {
-  const duration = data.duration as number | string | undefined
-  const lengthOf = (referenceTaskType: unknown): number => {
-    const clips = referenceTaskType === undefined ? undefined : [refVideoWorstCaseSecFor(provider)]
-    const norm = resolveVideoRequestNorm({
-      provider,
-      resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
-      duration,
-      // Undeclared: exactly the call the length was always read by. A draft
-      // declares as any other run does.
-      ...(clips ? { draft: data.draft === true, referenceTaskType, referenceMedia: videoRequestReferenceMedia({ referenceVideoUrls: clips }, clips) } : {}),
-    })
-    return pricedOutputDurationSec(provider, norm.duration ?? duration)
-  }
-  return Math.max(lengthOf(undefined), lengthOf(data.referenceTaskType))
-}
+export { CONFIGURED_DURATION_VIDEO_TYPES, LEGACY_VIDEO_NODE_DEFAULT_PROVIDER } from "@nodaro/render-rules"
 
 /**
  * The length, in seconds, of the video this node generates; `undefined` for a
@@ -85,20 +31,8 @@ function providerLengthSec(provider: string, data: Record<string, unknown>): num
  * Video to Video and every other step).
  */
 export function generatedVideoLengthSec(node: { type?: string; data?: unknown }): number | undefined {
-  const type = node.type ?? ""
-  if (!CONFIGURED_DURATION_VIDEO_TYPES.has(type)) return undefined
-  const data = (node.data ?? {}) as Record<string, unknown>
-  const named =
-    nodeProviders(type, data) ??
-    [
-      type === "generate-video"
-        ? applyDefaultVideoSelection({ provider: data.provider as string | undefined }).provider
-        : ((data.provider as string | undefined) ?? LEGACY_VIDEO_NODE_DEFAULT_PROVIDER),
-    ]
-  const providers =
-    type === "generate-video"
-      ? named.flatMap((p) => [resolveVideoProviderForMode(p, "image-to-video"), resolveVideoProviderForMode(p, "text-to-video")])
-      : named
-  const chargedSec = extractVideoDurationFromNode(data) ?? VIDEO_UTIL_PRICING.FALLBACK_DURATION_SECONDS
-  return Math.max(chargedSec, ...providers.map((p) => providerLengthSec(p, data)))
+  const rendered = generatedVideoRenderedSec(node)
+  if (rendered === undefined) return undefined
+  const chargedSec = extractVideoDurationFromNode((node.data ?? {}) as Record<string, unknown>) ?? VIDEO_UTIL_PRICING.FALLBACK_DURATION_SECONDS
+  return Math.max(chargedSec, rendered)
 }

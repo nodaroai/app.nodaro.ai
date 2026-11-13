@@ -131,7 +131,7 @@ A step priced by the length of the video (or audio) it is given — [Trim](./tri
 
 - The estimate before you run prices it at the render's estimated length: the recording's full length, or the 180-minute ceiling when the recording's length is not known (a Video SFX at most its 300-second price, a Pitch & Tempo at most its 30-minute price).
 - A published app's or template's listed price lists a Trim, Loop or Combine Videos per minute of the recording, a Video SFX at its fixed 300-second price (it refuses a longer video), and a Pitch & Tempo at its 30-minute price (660 credits<!-- credits: pitch-tempo:30m -->), the most a run of it is charged.
-- The run charges it at the length of the cut that was rendered, which the run reports on the node's output.
+- The run charges it at the length of the cut that was rendered: a Trim, Loop or Combine Videos measures the episode it is given before it is charged; a Video SFX or a Pitch & Tempo reads the length the run reports on the node's output.
 
 For example, a Trim set to **Seconds** with nothing cut, after a Tighten Episode of a 60-minute recording with captions on, is estimated at 60 minutes: 7920 credits<!-- credits: trim-video@720 -->, not the 22 credits<!-- credits: trim-video@2 --> of the 8-second fallback length it was estimated at before.
 

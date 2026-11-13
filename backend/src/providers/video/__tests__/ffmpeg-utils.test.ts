@@ -191,6 +191,8 @@ import {
   parseStreamListing,
   probeStreamEnds,
   probeVideoFramePtsMs,
+  assertSafeProbeSource,
+  ProbeSourceBlockedError,
 } from "../ffmpeg-utils.js"
 import { DEFAULT_FFMPEG_TIMEOUT_MS } from "../ffmpeg-timeouts.js"
 
@@ -307,6 +309,20 @@ describe("downloadFile", () => {
 
     expect(storageMocks.downloadR2ObjectToFile).toHaveBeenCalledWith("videos/job-1.mp4", "/tmp/o.mp4")
     expect(mocks.pipeline).not.toHaveBeenCalled()
+  })
+
+  it("a caller on a budget hands it to the 404 fallback: what is left of its time, its signal, its cap", async () => {
+    mocks.safeFetch.mockResolvedValueOnce({ ok: false, status: 404, body: null })
+    const stop = new AbortController()
+
+    await downloadFile("https://r2.example.com/videos/job-1.mp4", "/tmp/o.mp4", { timeoutMs: 40_000, signal: stop.signal, maxBytes: 1024 })
+
+    const [key, dest, bounds] = storageMocks.downloadR2ObjectToFile.mock.calls[0] as [string, string, { timeoutMs: number; signal: AbortSignal; maxBytes: number }]
+    expect([key, dest]).toEqual(["videos/job-1.mp4", "/tmp/o.mp4"])
+    expect(bounds.timeoutMs).toBeGreaterThan(39_000)
+    expect(bounds.timeoutMs).toBeLessThanOrEqual(40_000)
+    expect(bounds.signal).toBe(stop.signal)
+    expect(bounds.maxBytes).toBe(1024)
   })
 
   it("404 on a foreign URL does NOT touch the R2 origin", async () => {
@@ -990,6 +1006,23 @@ describe("probeVideoSource", () => {
   it("rejects non-http(s) protocols (e.g. file://) BEFORE invoking ffprobe", async () => {
     await expect(probeVideoSource("file:///etc/passwd")).rejects.toThrow(/protocol/i)
     expect(mocks.execFile).not.toHaveBeenCalled()
+  })
+
+  it("says why a host could not be resolved: one that does not exist is `host`, a failing or slow resolver `dns`", async () => {
+    const reasonFor = async (failure: unknown) => {
+      mocks.dnsLookup.mockImplementationOnce(async () => { if (Array.isArray(failure)) return failure; throw failure })
+      return assertSafeProbeSource("https://cdn.example.com/v.mp4").then(() => undefined, (e: unknown) => e as ProbeSourceBlockedError)
+    }
+    expect((await reasonFor(Object.assign(new Error("getaddrinfo ENOTFOUND"), { code: "ENOTFOUND" })))?.reason).toBe("host")
+    expect((await reasonFor([]))?.reason).toBe("host")
+    expect((await reasonFor(Object.assign(new Error("getaddrinfo EAI_AGAIN"), { code: "EAI_AGAIN" })))?.reason).toBe("dns")
+    // The codes `dns.lookup` (getaddrinfo) returns for a failing resolver.
+    expect((await reasonFor(Object.assign(new Error("getaddrinfo EAI_FAIL"), { code: "EAI_FAIL" })))?.reason).toBe("dns")
+    // The message and the name are the guard's own, as before: a caller that reads them sees no difference.
+    const err = await reasonFor(Object.assign(new Error("getaddrinfo EAI_AGAIN"), { code: "EAI_AGAIN" }))
+    expect(err?.message).toBe("probeVideoSource: blocked — DNS resolution failed for cdn.example.com")
+    expect(err?.name).toBe("Error")
+    expect(err).toBeInstanceOf(ProbeSourceBlockedError)
   })
 
   it("rejects a hostname that RESOLVES to a private IP (DNS-rebinding class)", async () => {
