@@ -81,8 +81,14 @@ describe("billing figures", () => {
     const base = llmHoldBaseCredits("gpt-6.1-terra", { request: req("gpt-6.1-terra", [{ type: "text", text: "hi" }], { maxTokens: 1000 }) })
     const withPdf = llmHoldBaseCredits("gpt-6.1-terra", { request: req("gpt-6.1-terra", [pdf(10), { type: "text", text: "hi" }], { maxTokens: 1000 }) })
     expect(withPdf).toBeGreaterThan(base)
-    expect(withPdf - base).toBeGreaterThanOrEqual(3)
-    expect(withPdf - base).toBeLessThanOrEqual(4)
+    // 10 × 3,500 + 1,000 = 36,000 input tokens more; each hold is rounded up on its own.
+    expect(withPdf - base).toBeGreaterThanOrEqual(5)
+    expect(withPdf - base).toBeLessThanOrEqual(6)
+  })
+
+  it("a page is held at least at what a scanned page measured (2026-11-14: about 3,400 input tokens on Terra)", () => {
+    expect(LLM_FILE_PAGE_TOKENS).toBe(3_500)
+    expect(LLM_FILE_PAGE_TOKENS).toBeGreaterThanOrEqual(Math.ceil(13_592 / 4))
   })
 
   it("the hold counts a document's larger hold count; the floor and the size estimate its reader's pages", async () => {

@@ -48,11 +48,13 @@ export const LLM_UNKNOWN_MEDIA_SECONDS = 60
 
 /**
  * Input tokens one page of a document (`file_base64`) is held for: a ceiling,
- * so the hold is not below the charge. Measured 2026-11-13 on GPT-6.1 Terra: a
- * dense 3-page text PDF added about 1,500 input tokens (about 500 a page);
- * a page's picture may also be read, so the hold allows four times that.
+ * so the hold is not below the charge. Sized by the costliest page measured on
+ * GPT-6.1 Terra, a scanned one: on 2026-11-14 a 4-page PDF of image-only pages
+ * reported about 13,600 input tokens for a ~50-token prompt, about 3,400 a page
+ * (a 1-page text PDF reported 44; on 2026-11-13 a dense 3-page text PDF added
+ * about 1,500, about 500 a page). The settle releases what a page did not use.
  */
-export const LLM_FILE_PAGE_TOKENS = 2_000
+export const LLM_FILE_PAGE_TOKENS = 3_500
 
 /** Input tokens each document is held for on top of its pages (its name and framing). */
 export const LLM_FILE_TOKENS = 1_000
