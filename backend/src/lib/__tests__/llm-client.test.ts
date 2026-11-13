@@ -563,7 +563,7 @@ describe("reasoningEffort wire mapping + temperature strip", () => {
   // gemini-3.8-flash, registered 2026-09-06 — the third model on the KIE
   // OpenAI-compatible dialect, and the first whose output cap was MEASURED
   // rather than pinned to the 8192 KIE-safe intersection its 3.6/3.7 siblings sit at.
-  it("chat-completions format (gemini-3.8-flash): slug path, reasoning_effort, response_format, measured 16384 cap", async () => {
+  it("chat-completions format (gemini-3.8-flash): slug path, reasoning_effort, the schema in the prompt, measured 16384 cap", async () => {
     const { llmComplete } = await import("../llm-client.js")
     fetchMock.mockResolvedValue(jsonResponse({ choices: [{ message: { content: "ok" } }], usage: { prompt_tokens: 1, completion_tokens: 1 } }))
     await llmComplete({
@@ -583,12 +583,11 @@ describe("reasoningEffort wire mapping + temperature strip", () => {
     // honoured for 14,892 completion tokens on 2026-09-06, so the registry
     // raised the cap and this is the only place that reaches the wire.
     expect(body.max_tokens).toBe(16384)
-    // structuredOutputMode "kie-response-format" — live-verified enforced, not
-    // accepted-and-ignored.
-    expect(body.response_format).toEqual({
-      type: "json_schema",
-      json_schema: { name: "answer", strict: false, schema: { type: "object", properties: { a: { type: "string" } } } },
-    })
+    // `kieSchemaInPrompt` (2026-11-13): the endpoint fails any request that
+    // carries `response_format`, so the schema rides the system prompt.
+    expect(body).not.toHaveProperty("response_format")
+    expect(body.messages[0]).toMatchObject({ role: "system" })
+    expect(body.messages[0].content).toContain('{"type":"object","properties":{"a":{"type":"string"}}}')
   })
 
   it("chat-completions format: clamps an above-ladder effort down to gemini-3.8-flash's KIE-safe max", async () => {

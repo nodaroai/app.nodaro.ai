@@ -110,7 +110,7 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
   // is, and `llmCompleteStructured` re-asks: `POST /v1/llm/structured` gives
   // each lane 240 s (`STRUCTURED_LLM_TIMEOUT_MS`), `llmComplete` spends up to
   // two lanes per attempt, and the caller may buy four attempts — plus one
-  // direct-tool backup ask for a Claude call whose KIE answers never validated:
+  // direct-lane backup ask for a call whose KIE prompt-JSON answers never validated:
   // 36 minutes of LEGITIMATE runtime (`STRUCTURED_LLM_MAX_RUNTIME_MS`), against a threshold
   // that fired at 5. The sweep then marked a RUNNING draft
   // "Reconciliation could not recover this job" and refunded under it

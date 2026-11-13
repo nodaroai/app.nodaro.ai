@@ -3,6 +3,7 @@ import { LLM_FEATURE_DEFAULTS, LLM_MODELS, getLlmModel, type LlmModelDef, type L
 import { laneAddedInputModelIds, llmLaneAddedInputTokens, llmPossibleLanes, llmPrimaryLane } from "../../../lib/pricing/llm-cost.js"
 import { claudeMustServeDirect } from "../../../lib/llm/router.js"
 import type { LlmContentBlock, LlmRequest } from "../../../lib/llm/types.js"
+import { kieChatPromptJsonFormat, kiePromptJsonSystem } from "../../../lib/llm/structured-schema.js"
 import {
   LLM_CEILING_CHARS_PER_TOKEN,
   LLM_IMAGE_TOKENS,
@@ -205,6 +206,26 @@ describe("llmRequestInputBound: the schema counts only when it is sent", () => {
     expect(llmRequestInputBound(withSchema("gemini-4-carbon"))).toBe(10 + schemaTokens)
     expect(llmRequestInputBound(withSchema(""))).toBe(10 + schemaTokens)
     expect(llmRequestInputBound(withSchema("no-such-model"))).toBe(10 + schemaTokens)
+  })
+
+  // A prompt-JSON model's KIE lane appends the one-object rule and the schema
+  // to the system prompt: the bound counts that text, in the form it is sent.
+  it("a prompt-JSON model counts what its prompt adds: 3.8 Flash's rule and compact schema, Claude's rule and schema", () => {
+    const shades = Array.from({ length: 150 }, (_, i) => `shade-${i}`)
+    const wide = { type: "object", properties: { subject: { type: "object", properties: { type: { type: "string" }, shade: { type: "string", enum: shades } } } } }
+    const req = (modelId: string): LlmRequest => ({
+      modelId, system: "read it", messages: [{ role: "user", content: "x".repeat(30) }], jsonSchema: { name: "r", schema: wide },
+    })
+    const bound = (text: string) => llmInputTokenBound({ text, imageCount: 0, mediaSeconds: 0 })
+    const sent38 = kieChatPromptJsonFormat(getLlmModel("gemini-3.8-flash")!, req("gemini-3.8-flash"))!.system
+    expect(llmRequestInputBound(req("gemini-3.8-flash"))).toBe(bound(sent38 + "x".repeat(30)))
+    // The compact form leaves out the list of 150, so it is well under the caller's full schema.
+    expect(llmRequestInputBound(req("gemini-3.8-flash"))).toBeLessThan(bound("read it" + JSON.stringify(wide) + "x".repeat(30)))
+    // Claude's KIE prompt carries the caller's own schema, plus the rule.
+    const sentClaude = kiePromptJsonSystem("read it", { name: "r", schema: wide })
+    expect(llmRequestInputBound(req("claude-sonnet-5.5"))).toBe(bound(sentClaude + "x".repeat(30)))
+    // Any other model counts the caller's schema, as before.
+    expect(llmRequestInputBound(req("gemini-3.6-flash"))).toBe(bound("read it" + JSON.stringify(wide) + "x".repeat(30)))
   })
 })
 

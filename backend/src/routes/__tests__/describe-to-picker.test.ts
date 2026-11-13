@@ -1011,7 +1011,7 @@ describe("isEmptyPickerRead", () => {
 
 // The reconciliation sweep fails and refunds an anthropic-sync row past its
 // threshold, so the whole request — Claude at its slowest, every lane, the
-// direct-tool backup, then Gemini — must end before it.
+// direct-lane backup, then Gemini with its own — must end before it.
 describe("describe-to-picker's runtime budget", () => {
   const claudeWorstMs = (LLM_STRUCTURED_DEFAULT_ATTEMPTS * LLM_MAX_LANES_PER_CALL + LLM_STRUCTURED_DIRECT_BACKUP_ASKS) * effortTimeoutMs("max")!
   const prefetchMs = 30_000
@@ -1024,7 +1024,9 @@ describe("describe-to-picker's runtime budget", () => {
     const elapsed = prefetchMs + claudeWorstMs
     const perLane = fallbackLaneTimeoutMs(elapsed)
     expect(perLane).toBeGreaterThan(10_000)
-    expect(elapsed + LLM_STRUCTURED_DEFAULT_ATTEMPTS * LLM_MAX_LANES_PER_CALL * perLane).toBeLessThanOrEqual(DESCRIBE_TO_PICKER_MAX_RUNTIME_MS)
+    // Gemini 3.8 Flash's own run may end on its direct-lane backup too.
+    expect(elapsed + (LLM_STRUCTURED_DEFAULT_ATTEMPTS * LLM_MAX_LANES_PER_CALL + LLM_STRUCTURED_DIRECT_BACKUP_ASKS) * perLane)
+      .toBeLessThanOrEqual(DESCRIBE_TO_PICKER_MAX_RUNTIME_MS)
   })
 
   it("a Claude failure that came back at once leaves Gemini the client's default timeout", () => {

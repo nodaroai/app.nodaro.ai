@@ -60,7 +60,7 @@ describe("video-analysis-pricing", () => {
   })
 
   it("model SSOT is capability-derived and Gemini-only today", () => {
-    expect(VIDEO_ANALYSIS_LLM_MODELS).toEqual(["gemini-3-flash", "gemini-3.6-flash", "gemini-3.1-pro"])
+    expect(VIDEO_ANALYSIS_LLM_MODELS).toEqual(["gemini-3-flash", "gemini-3.6-flash", "gemini-3.8-flash", "gemini-3.1-pro"])
   })
 
   it("tier layer: every model-backed tier maps to a real model AND every model is tier-reachable or explicitly legacy (no vendor leak)", () => {
@@ -103,9 +103,10 @@ describe("video-analysis-pricing", () => {
     expect(DEFAULT_VIDEO_ANALYSIS_TIER).toBe("pro")
     expect(DEFAULT_VIDEO_ANALYSIS_MODEL).toBe("gemini-3.1-pro")
     expect(resolveVideoAnalysisModel("pro")).toBe("gemini-3.1-pro")
-    // The economy tiers moved to the cheaper flash generation when they moved to
-    // the cheaper transport; the newer flash now sits behind the `smart` sentinel.
-    expect(resolveVideoAnalysisModel("fast")).toBe("gemini-3-flash")
+    // The fast tier moved to gemini-3.8-flash when KIE dropped gemini-3-flash's
+    // channel (2026-11-13); gemini-3-flash is now a legacy fast backing.
+    expect(resolveVideoAnalysisModel("fast")).toBe("gemini-3.8-flash")
+    expect(VIDEO_ANALYSIS_LEGACY_MODELS["gemini-3-flash"]).toBe("fast")
     expect(resolveVideoAnalysisModel("mixed")).toBe("mixed") // roll-plan sentinel passthrough
     expect(resolveVideoAnalysisModel("mixed-fast")).toBe("mixed-fast")
     // `smart` is a sentinel too — it names an engine plan, never a model id, so the
@@ -193,11 +194,11 @@ describe("video-audit-pricing", () => {
 
   it("videoAuditCreditsForBucket: table lookup by resolved bucket + family, snapping a raw duration onto the ladder", () => {
     expect(videoAuditCreditsForBucket(60, false)).toBe(215)
-    expect(videoAuditCreditsForBucket(60, true)).toBe(396)
+    expect(videoAuditCreditsForBucket(60, true)).toBe(401)
     expect(videoAuditCreditsForBucket(180, false)).toBe(290)
     expect(videoAuditCreditsForBucket(360, false)).toBe(663)
     expect(videoAuditCreditsForBucket(600, false)).toBe(1073)
-    expect(videoAuditCreditsForBucket(600, true)).toBe(1921)
+    expect(videoAuditCreditsForBucket(600, true)).toBe(1953)
     // Not just exact ladder values — a raw duration snaps up to its bucket.
     expect(videoAuditCreditsForBucket(70, false)).toBe(VIDEO_AUDIT_BUCKET_CREDITS["video-audit:180s"])
     expect(videoAuditCreditsForBucket(9999, true)).toBe(VIDEO_AUDIT_BUCKET_CREDITS["video-audit:auto:600s"])
@@ -239,17 +240,17 @@ describe("video-audit-pricing", () => {
     expect(Object.keys(VIDEO_AUDIT_BUCKET_CREDITS)).toHaveLength(8)
     // Bare-id values quoted in the task/catalog must equal each family's 600s ceiling.
     expect(VIDEO_AUDIT_BUCKET_CREDITS["video-audit:600s"]).toBe(1073)
-    expect(VIDEO_AUDIT_BUCKET_CREDITS["video-audit:auto:600s"]).toBe(1921)
+    expect(VIDEO_AUDIT_BUCKET_CREDITS["video-audit:auto:600s"]).toBe(1953)
   })
 
-  it("auto family = base family + the gemini-3-flash (legacy fast tier) row at the same bucket, exactly — single-source, never hand-added", () => {
+  it("auto family = base family + the fast tier's row at the same bucket, exactly — single-source, never hand-added", () => {
     // Single-source assertion: reads the fast-tier row straight out of
     // VIDEO_ANALYSIS_BUCKET_CREDITS rather than re-hardcoding 180/185/514/846
     // here, so this test can't silently drift from that table either.
     for (const bucketSec of VIDEO_ANALYSIS_DURATION_BUCKETS) {
       const base = VIDEO_AUDIT_BUCKET_CREDITS[`video-audit:${bucketSec}s`]!
       const auto = VIDEO_AUDIT_BUCKET_CREDITS[`video-audit:auto:${bucketSec}s`]!
-      const fastRow = VIDEO_ANALYSIS_BUCKET_CREDITS[`video-analysis:gemini-3-flash:${bucketSec}s`]!
+      const fastRow = VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(VIDEO_ANALYSIS_TIERS.fast, bucketSec)]!
       expect(auto - base, `auto-base mismatch at ${bucketSec}s`).toBe(fastRow)
     }
   })

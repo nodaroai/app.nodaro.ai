@@ -22,7 +22,7 @@ import type { LlmRequest } from "./types.js"
 const KIE_CLAUDE_EFFORT_VERIFIED = false
 // "Can KIE serve a structured Claude call?" Yes — but NOT as a tool: since
 // 2026-10-16 KIE's messages lane sends every structured Claude call as
-// prompt-JSON (`kieClaudePromptJson` in ./message-builders.ts says why: a tool
+// prompt-JSON (`kieClaudePromptJson` in ./structured-schema.ts says why: a tool
 // 503s, or answers without having seen the image). Before that, a forced
 // tool came back as a malformed `<tool_calls>` pseudo-tag (live-captured
 // 2026-07-14), which callKieMessages still decodes if it ever reappears.

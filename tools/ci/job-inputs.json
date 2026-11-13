@@ -529,6 +529,7 @@
         "backend/src/lib/llm/router.ts",
         "backend/src/lib/llm/sse.ts",
         "backend/src/lib/llm/stream-abort.ts",
+        "backend/src/lib/llm/structured-schema.ts",
         "backend/src/lib/llm/structured.ts",
         "backend/src/lib/llm/transport-retry.ts",
         "backend/src/lib/lottie-request.ts",

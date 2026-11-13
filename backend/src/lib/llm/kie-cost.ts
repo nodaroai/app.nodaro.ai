@@ -5,10 +5,11 @@
  * wires that count leaves out the caller's own prompt (a few tokens for a
  * long request), so a cost read from it is close to nothing whatever was sent.
  */
-import { getLlmModel, llmSendsSchema } from "@nodaro/shared/llm-models"
+import { getLlmModel } from "@nodaro/shared/llm-models"
 import { calculateLlmCost } from "../pricing/llm-cost.js"
 import type { LlmFailureUsage } from "../llm-errors.js"
 import { extractActualUsd } from "./response.js"
+import { sentSchemaText } from "./structured-schema.js"
 import type { LlmRequest } from "./types.js"
 
 /** Characters one image stands for in the size estimate — about 1,600 tokens at 4 characters a token. */
@@ -39,12 +40,13 @@ export function kieInputUntrusted(modelId: string): boolean {
 }
 
 /**
- * The request's size in characters: system prompt, schema (only when the
- * model's calls send it: `llmSendsSchema`), text, and
+ * The request's size in characters: system prompt, schema as it is sent (only
+ * when the model's calls send it — `sentSchemaText`, which counts a prompt-JSON
+ * call's one-object rule and the schema's wire form), text, and
  * {@link KIE_IMAGE_ESTIMATE_CHARS} per media block.
  */
 export function requestChars(req: LlmRequest): number {
-  let chars = req.system.length + (req.jsonSchema && llmSendsSchema(req.modelId, req.feature) ? JSON.stringify(req.jsonSchema.schema).length : 0)
+  let chars = req.system.length + sentSchemaText(req).length
   for (const message of req.messages) {
     if (typeof message.content === "string") {
       chars += message.content.length

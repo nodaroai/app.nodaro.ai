@@ -142,6 +142,7 @@ const PURE_CLIENT_HELPERS: ReadonlyMap<string, string> = new Map([
   ["kieCreditsUsdOf", "KIE cost arithmetic"],
   ["kieInputUntrusted", "KIE usage trust predicate"],
   ["requestChars", "request size arithmetic (the D2 estimate)"],
+  ["sentSchemaText", "the schema text a request sends — request size arithmetic (the hold bound)"],
   ["KIE_IMAGE_ESTIMATE_CHARS", "a constant"],
   ["anthropicStructuredTool", "builds the Anthropic tool block for a structured request — no call"],
   ["inlineImagesForClaudeKie", "rewrites a request's image blocks for the Claude KIE lane — no LLM call"],

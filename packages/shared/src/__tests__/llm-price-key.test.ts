@@ -195,6 +195,18 @@ describe("structured output: a trusted mode vs a schema hint", () => {
     }
   })
 
+  it("kieSchemaInPrompt: only 3.8 Flash and 3.7 Flash (one KIE endpoint), only on a chat-completions response_format model, trust kept", () => {
+    expect(LLM_MODELS.filter((m) => m.kieSchemaInPrompt).map((m) => m.id).sort()).toEqual(["gemini-3.7-flash", "gemini-3.8-flash"])
+    for (const m of LLM_MODELS.filter((x) => x.kieSchemaInPrompt)) {
+      expect(m.kieFormat, m.id).toBe("chat-completions")
+      expect(structuredWireMode(m), m.id).toBe("kie-response-format")
+      // Per lane: the model-level mode, and the trust it carries, stay.
+      expect(m.structuredOutputMode, m.id).toBe("kie-response-format")
+      expect(llmSendsSchema(m.id), m.id).toBe(true)
+    }
+    expect(STRUCTURED_VISION_MODELS.map((m) => m.id)).toContain("gemini-3.8-flash")
+  })
+
   it("llmSendsSchema: a model that sends its schema (trusted or hinted) counts it; one that sends none does not", () => {
     expect(llmSendsSchema("gemini-4-carbon")).toBe(true)
     expect(llmSendsSchema("gpt-6.1-terra")).toBe(true)

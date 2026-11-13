@@ -4038,8 +4038,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   // structural credit formula lives in video-analysis-pricing.ts. Composite id
   // shape `video-analysis:<model>:<bucket>s` mirrors volcengine-lipsync: bare
   // row = per-model namespace root at the 10-min ceiling, plus one row per bucket.)
-  "gemini-3-flash-video-analysis": {
-    id: "gemini-3-flash-video-analysis",
+  "gemini-3.8-flash-video-analysis": {
+    id: "gemini-3.8-flash-video-analysis",
     kind: "video",
     modes: ["video-analysis"] as const,
     family: "Nodaro",
@@ -4047,6 +4047,24 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Video Analysis (Fast)",
     series: "Video Analysis",
     description: "Analyze a video into a structured shot list (scenes, camera, audio) — fast, economy tier. Billed per duration bucket.",
+    useCases: ["video-analysis", "shot-list", "fast"],
+    pricing: [
+      { identifier: "video-analysis:gemini-3.8-flash", credits: 880, note: "10-min ceiling (no duration given)" },
+      { identifier: "video-analysis:gemini-3.8-flash:60s", credits: 186 },
+      { identifier: "video-analysis:gemini-3.8-flash:180s", credits: 193 },
+      { identifier: "video-analysis:gemini-3.8-flash:360s", credits: 534 },
+      { identifier: "video-analysis:gemini-3.8-flash:600s", credits: 880, note: "10-min ceiling" },
+    ],
+  },
+  "gemini-3-flash-video-analysis": {
+    id: "gemini-3-flash-video-analysis",
+    kind: "video",
+    modes: ["video-analysis"] as const,
+    family: "Nodaro",
+    maker: "nodaro",
+    label: "Video Analysis (Fast — previous)",
+    series: "Video Analysis",
+    description: "Previous fast-tier analysis model (backed the fast tier until 2026-11-13). Kept so stored raw-model configs keep running and keep pricing under their own identifier; their runs are served by the current fast model.",
     useCases: ["video-analysis", "shot-list", "fast"],
     pricing: [
       { identifier: "video-analysis:gemini-3-flash", credits: 848, note: "10-min ceiling (no duration given)" },
@@ -4106,11 +4124,11 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Our most advanced analysis tier — multiple analysis engines combined into one result for maximum completeness and accuracy. Billed per duration bucket.",
     useCases: ["video-analysis", "shot-list", "premium", "most-complete"],
     pricing: [
-      { identifier: "video-analysis:mixed", credits: 1177, note: "10-min ceiling (no duration given)" },
-      { identifier: "video-analysis:mixed:60s", credits: 270 },
-      { identifier: "video-analysis:mixed:180s", credits: 291 },
-      { identifier: "video-analysis:mixed:360s", credits: 729 },
-      { identifier: "video-analysis:mixed:600s", credits: 1177, note: "10-min ceiling" },
+      { identifier: "video-analysis:mixed", credits: 1209, note: "10-min ceiling (no duration given)" },
+      { identifier: "video-analysis:mixed:60s", credits: 275 },
+      { identifier: "video-analysis:mixed:180s", credits: 298 },
+      { identifier: "video-analysis:mixed:360s", credits: 748 },
+      { identifier: "video-analysis:mixed:600s", credits: 1209, note: "10-min ceiling" },
     ],
   },
   // SMART — the accuracy tier. Since the 2026-08-03 hybrid re-plan it is a
@@ -4129,11 +4147,11 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Highest-accuracy analysis — a hybrid pass that blends a native skeleton read with several donor analysis rolls, then always refines the merged result to find shot boundaries and identify the cast by appearance. Best choice when the shot list will drive regeneration. Billed per duration bucket.",
     useCases: ["video-analysis", "shot-list", "premium", "most-accurate"],
     pricing: [
-      { identifier: "video-analysis:smart", credits: 2076, note: "10-min ceiling (no duration given)" },
-      { identifier: "video-analysis:smart:60s", credits: 413 },
-      { identifier: "video-analysis:smart:180s", credits: 503 },
-      { identifier: "video-analysis:smart:360s", credits: 1267 },
-      { identifier: "video-analysis:smart:600s", credits: 2076, note: "10-min ceiling" },
+      { identifier: "video-analysis:smart", credits: 2097, note: "10-min ceiling (no duration given)" },
+      { identifier: "video-analysis:smart:60s", credits: 416 },
+      { identifier: "video-analysis:smart:180s", credits: 508 },
+      { identifier: "video-analysis:smart:360s", credits: 1280 },
+      { identifier: "video-analysis:smart:600s", credits: 2097, note: "10-min ceiling" },
     ],
   },
   // ── AI Audit (`video-audit`) ── a SEPARATE node from video-analysis (own
@@ -4178,11 +4196,11 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Same video-verified audit as AI Audit, but auto-runs a fast analysis first when none is wired in, then applies corrections under guards and returns a disclosed report. Billed per duration bucket.",
     useCases: ["video-audit", "qa", "shot-list", "verification", "auto-analysis"],
     pricing: [
-      { identifier: "video-audit:auto", credits: 1921, note: "10-min ceiling (no duration given)" },
-      { identifier: "video-audit:auto:60s", credits: 396 },
-      { identifier: "video-audit:auto:180s", credits: 475 },
-      { identifier: "video-audit:auto:360s", credits: 1178 },
-      { identifier: "video-audit:auto:600s", credits: 1921, note: "10-min ceiling" },
+      { identifier: "video-audit:auto", credits: 1953, note: "10-min ceiling (no duration given)" },
+      { identifier: "video-audit:auto:60s", credits: 401 },
+      { identifier: "video-audit:auto:180s", credits: 483 },
+      { identifier: "video-audit:auto:360s", credits: 1197 },
+      { identifier: "video-audit:auto:600s", credits: 1953, note: "10-min ceiling" },
     ],
   },
 }

@@ -391,10 +391,10 @@ charged on Nodaro Cloud.
 
 | Tier | ≤60s | ≤180s | ≤360s | ≤600s |
 |------|------|-------|-------|-------|
-| `fast` (economy) | 200<!-- credits: video-analysis:gemini-3-flash:60s --> | 204<!-- credits: video-analysis:gemini-3-flash:180s --> | 567<!-- credits: video-analysis:gemini-3-flash:360s --> | 933<!-- credits: video-analysis:gemini-3-flash:600s --> |
+| `fast` (economy) | 205<!-- credits: video-analysis:gemini-3.8-flash:60s --> | 213<!-- credits: video-analysis:gemini-3.8-flash:180s --> | 588<!-- credits: video-analysis:gemini-3.8-flash:360s --> | 968<!-- credits: video-analysis:gemini-3.8-flash:600s --> |
 | `pro` (default) | 238<!-- credits: video-analysis:gemini-3.1-pro:60s --> | 256<!-- credits: video-analysis:gemini-3.1-pro:180s --> | 704<!-- credits: video-analysis:gemini-3.1-pro:360s --> | 1162<!-- credits: video-analysis:gemini-3.1-pro:600s --> |
-| `mixed` / `mixed-fast` | 297<!-- credits: video-analysis:mixed:60s --> | 321<!-- credits: video-analysis:mixed:180s --> | 802<!-- credits: video-analysis:mixed:360s --> | 1295<!-- credits: video-analysis:mixed:600s --> |
-| `smart` (highest accuracy) | 455<!-- credits: video-analysis:smart:60s --> | 554<!-- credits: video-analysis:smart:180s --> | 1394<!-- credits: video-analysis:smart:360s --> | 2284<!-- credits: video-analysis:smart:600s --> |
+| `mixed` / `mixed-fast` | 303<!-- credits: video-analysis:mixed:60s --> | 328<!-- credits: video-analysis:mixed:180s --> | 823<!-- credits: video-analysis:mixed:360s --> | 1330<!-- credits: video-analysis:mixed:600s --> |
+| `smart` (highest accuracy) | 458<!-- credits: video-analysis:smart:60s --> | 559<!-- credits: video-analysis:smart:180s --> | 1408<!-- credits: video-analysis:smart:360s --> | 2307<!-- credits: video-analysis:smart:600s --> |
 
 The two mixed tiers are variants of the same advanced analysis and share one
 price: `mixed` is tuned for maximum result quality; `mixed-fast` for the most
@@ -407,6 +407,13 @@ disappears from later scenes). Every correction and watch flag is disclosed in
 the result's `warnings`.
 
 > These values are the internal pricing formula's current outputs.
+
+> **Fast tier on a newer model, 2026-11-13.** The `fast` tier now runs on a
+> newer flash model: its previous model stopped being served. The `fast` row
+> moved with it, and so did the `mixed` and `smart` rows, whose plans also run
+> the fast model; `pro` did not change. A workflow saved with the previous fast
+> model's own id keeps that id's price and is analysed by the current fast
+> model.
 
 > **Schedule refreshed, 2026-08-30.** The analysis doctrine gained a defined
 > transition vocabulary (twelve named values, with an absent transition

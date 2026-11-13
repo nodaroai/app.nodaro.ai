@@ -11,8 +11,8 @@ import { extractJsonFromAIResponse } from "../json-utils.js"
 import { restrictObjectSchemas } from "../json-schema-strict.js"
 import { resolveModel } from "./params.js"
 import { llmPrimaryLane } from "../pricing/llm-cost.js"
-import { anthropicKeySet } from "./anthropic-availability.js"
-import { assertInlineVideoLane, claudeMustServeDirect, llmComplete, llmSlot } from "./router.js"
+import { anthropicKeySet, geminiKeySet } from "./anthropic-availability.js"
+import { assertInlineVideoLane, callGeminiDirectLane, claudeMustServeDirect, llmComplete, llmSlot } from "./router.js"
 import { withConcurrencySlot } from "../concurrency-lanes/slot.js"
 import { directFallbackAllowed, kieFallback, serveFromFallback } from "./lane-fallback.js"
 import { advancedModeRefusalOf, assertAdvancedModeServable, exhaustionKieFallback, serveIfDirectLatched } from "./exhaustion-fallback.js"
@@ -90,7 +90,7 @@ export async function llmCompleteStructured<T>(
   schema: ZodType<T>,
   opts?: { schemaName?: string; maxRetries?: number },
 ): Promise<StructuredLlmOutput<T>> {
-  // One `llm` slot for the whole call — every attempt, and the direct-tool
+  // One `llm` slot for the whole call — every attempt, and the direct-lane
   // backup that goes past the router — so its attempts run under it.
   return inStructuredSlot(req, undefined, () =>
     runStructuredAttempts(req, schema, opts, (attemptReq) => llmComplete(attemptReq)))
@@ -312,21 +312,21 @@ async function runStructuredAttempts<T>(
     messages = withCorrection(messages, resp.text, lastError)
   }
   let attempts = retries + 1
-  const backup = directToolBackup(req, lastLane)
+  const backup = directLaneBackup(req, lastLane)
   if (backup) {
     attempts++
     console.warn(
       `[llm-lane-fallback] ${backup.modelId}: KIE's prompt-JSON answers failed validation (${lastError.slice(0, 200)}), ` +
-        "asking the direct-anthropic tool once",
+        `asking ${backup.ask} once`,
     )
     let resp: LlmResponse
     // The caller's own messages, not the correction turns: a fresh ask on
-    // the lane whose tool enforces the schema.
+    // the lane that enforces the schema.
     const backupReq: LlmRequest = { ...req, failOnRefusal: true, jsonSchema: { name: schemaName, schema: jsonSchema } }
     try {
       resp = await backup.call(backupReq)
     } catch (error) {
-      throw failureWithSpend(spend, error, backupReq, "direct-anthropic")
+      throw failureWithSpend(spend, error, backupReq, backup.lane)
     }
     spend = addSpend(spend, resp, backupReq)
     const answer = parseStructuredAnswer(schema, resp.text)
@@ -343,9 +343,9 @@ async function runStructuredAttempts<T>(
 }
 
 /**
- * How many extra asks the direct-tool backup ({@link directToolBackup}) adds to
- * one structured call: one, on one lane. Named because runtime budgets
- * (`STRUCTURED_LLM_MAX_RUNTIME_MS`, describe-to-picker's) count it.
+ * How many extra asks the direct-lane backup ({@link directLaneBackup}) adds to
+ * one structured call: one, on one lane, whichever model it is. Named because
+ * runtime budgets (`STRUCTURED_LLM_MAX_RUNTIME_MS`, describe-to-picker's) count it.
  */
 export const LLM_STRUCTURED_DIRECT_BACKUP_ASKS = 1
 
@@ -353,20 +353,23 @@ export const LLM_STRUCTURED_DIRECT_BACKUP_ASKS = 1
 export const LLM_STRUCTURED_DEFAULT_ATTEMPTS = 3
 
 /**
- * The direct Anthropic tool as ONE last ask for a structured Claude call
- * whose KIE answers never validated — or undefined when there is none to ask.
+ * The model's direct lane as ONE last ask for a structured call whose KIE
+ * answers never validated — or undefined when there is none to ask.
  *
- * KIE serves a structured Claude call as prompt-JSON (`kieClaudePromptJson`,
- * ./message-builders.ts — its tool shape 503s or drops the image), and
- * nothing on that wire enforces the schema: the answer is only as good as the
- * model's reading of an instruction. The direct lane's forced/strict tool
- * does enforce it, so a call KIE served (KIE-first, or KIE after a failed
- * direct call) gets it once before the call fails (decided 2026-10-16). It
- * bills nothing extra to the person — the charge is the node's reservation;
- * only the provider cost recorded grows. It applies under `maxRetries: 0`
- * too: those callers were answered by the direct tool until KIE stopped
- * carrying one (a KIE call 503'd, the direct lane answered), so this keeps
- * what they had.
+ * KIE serves two kinds of structured call as prompt-JSON, the schema in the
+ * system prompt and nothing on the wire enforcing it, so the answer is only as
+ * good as the model's reading of an instruction:
+ * - a Claude call (`kieClaudePromptJson`, ./structured-schema.ts — its tool
+ *   shape 503s or drops the image). The direct lane's forced/strict tool does
+ *   enforce the schema (decided 2026-10-16);
+ * - a `kieSchemaInPrompt` Gemini call (`kieChatPromptJson` — that endpoint
+ *   fails any request carrying `response_format`). The direct lane's
+ *   `responseJsonSchema` does enforce it (decided 2026-11-13).
+ * So a call KIE served (KIE-first, or KIE after a failed direct call) gets
+ * that lane once before the call fails. It is costed and recorded on the
+ * direct lane, at its rate, like any attempt. It applies under `maxRetries: 0`
+ * too: those callers were answered by an enforced schema until KIE stopped
+ * carrying one, so this keeps what they had.
  *
  * Not when the call is pinned to KIE, there is no direct key or model, the
  * direct account is latched out (out of credit, or a latched key refusal), or
@@ -375,14 +378,30 @@ export const LLM_STRUCTURED_DEFAULT_ATTEMPTS = 3
  * The ask goes straight to the guarded direct adapter, so a platform refusal
  * there fails the call with the capacity sentence — it never loops back to KIE.
  */
-function directToolBackup(
-  req: LlmRequest, lastLane: LlmServedLane | undefined,
-): { modelId: string; call: (attemptReq: LlmRequest) => Promise<LlmResponse> } | undefined {
-  if (lastLane !== "kie" || req.requireLane === "kie" || req.cheapLanesOnly === true || !anthropicKeySet()) return undefined
+function directLaneBackup(req: LlmRequest, lastLane: LlmServedLane | undefined): {
+  modelId: string
+  lane: "direct-anthropic" | "direct-gemini"
+  /** What the warn line says is asked. */
+  ask: string
+  call: (attemptReq: LlmRequest) => Promise<LlmResponse>
+} | undefined {
+  if (lastLane !== "kie" || req.requireLane === "kie" || req.cheapLanesOnly === true) return undefined
   const model = resolveModel(req)
-  if (model.structuredOutputMode !== "anthropic-tool" || !model.directFallbackModel) return undefined
-  if (directLaneLatch("anthropic")) return undefined
-  return { modelId: model.id, call: (attemptReq) => callAnthropicDirect(model, attemptReq) }
+  if (model.structuredOutputMode === "anthropic-tool" && model.directFallbackModel) {
+    if (!anthropicKeySet() || directLaneLatch("anthropic")) return undefined
+    return {
+      modelId: model.id, lane: "direct-anthropic", ask: "the direct-anthropic tool",
+      call: (attemptReq) => callAnthropicDirect(model, attemptReq),
+    }
+  }
+  if (model.kieSchemaInPrompt && model.directGeminiModel) {
+    if (!geminiKeySet() || directLaneLatch("google")) return undefined
+    return {
+      modelId: model.id, lane: "direct-gemini", ask: "the direct-gemini lane's enforced schema",
+      call: (attemptReq) => callGeminiDirectLane(model, attemptReq),
+    }
+  }
+  return undefined
 }
 
 /** The forced output's JSON Schema — the caller's contract, before any lane's wire rewrite. */

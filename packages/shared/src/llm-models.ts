@@ -87,6 +87,26 @@ export interface LlmModelDef {
    * any model. Never set together with `structuredOutputMode` (registry test).
    */
   structuredOutputHint?: "kie-response-format" | "responses-json-schema"
+  /**
+   * The KIE lane sends this model's structured calls NO `response_format`: the
+   * schema rides the system prompt instead (the one-object rule and the schema,
+   * as the KIE Claude lane's prompt-JSON), in the wire form `response_format`
+   * sent (keyword-named properties aliased and restored on the answer; Google's
+   * compact form), and `llmCompleteStructured` parses, validates and re-asks the
+   * answer as it does for any model. When every KIE answer of an unpinned call
+   * fails validation, the direct lane, which enforces the schema, is asked once
+   * before the call fails. For a model whose KIE endpoint fails a request that
+   * carries `response_format`.
+   *
+   * Per LANE, not per model: `structuredOutputMode` stays, so the trust readers
+   * (STRUCTURED_VISION_MODELS, the structured-model filters) and the direct
+   * lane's enforced `responseJsonSchema` are unchanged. Nothing reads trust to
+   * skip validation, and only an `anthropic-tool` model streams partial values,
+   * so a KIE-served answer here is checked like any untrusted one. Only on a
+   * `kieFormat: "chat-completions"` model whose wire mode is
+   * `kie-response-format` (registry test).
+   */
+  kieSchemaInPrompt?: true
   /** If set, fallback to direct Anthropic SDK with this model ID when KIE.ai fails */
   directFallbackModel?: string
   /**
@@ -350,6 +370,9 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     retired: true,
     vendor: "google",
     structuredOutputMode: "kie-response-format",
+    // The KIE endpoint is 3.8's, so it takes 3.8's rule: no `response_format`
+    // there, the schema in the prompt (see gemini-3.8-flash below).
+    kieSchemaInPrompt: true,
     supportsImages: true,
     // Google's own cap is 65,536, but the field feeds BOTH lanes and the KIE
     // flash endpoints cap at 8192 (the measured 3.6 posture) — stay at the
@@ -372,8 +395,9 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     series: "Gemini",
     // Inherits "Newest" from 3.7 (demoted above). Deliberately does NOT name
     // agentic video: that capability exists only on the direct Google lane
-    // (Interactions API, not wired here) and the modality caps below withhold
-    // video — a picker desc must not promise a lever this entry cannot expose.
+    // (Interactions API, not wired here). Plain video + audio input is wired
+    // (LLM_MODALITY_CAPS below) — a picker desc must not promise a lever this
+    // entry cannot expose.
     desc: "Newest fast Gemini, agentic-tuned",
     tier: "economy",
     kieFormat: "chat-completions",
@@ -387,6 +411,16 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     // is ENFORCED (the reply came back exact-schema valid, credits_consumed
     // present) — not merely accepted-and-ignored.
     structuredOutputMode: "kie-response-format",
+    // Since 2026-11-13 the KIE endpoint answers ANY request carrying
+    // `response_format` (json_schema strict or not, json_object; any effort or
+    // none; with or without media) with HTTP 200 and an in-band
+    // `{"code":500}` after ~34 s, while the same request without it answers;
+    // 3.6 Flash, 3.1 Pro and Carbon take the same body. So the KIE lane sends
+    // the schema in the prompt (measured: a real Video Analysis roll, video
+    // included, answered schema-valid that way). The direct lane keeps its
+    // enforced `responseJsonSchema` (asked once when a call's KIE answers never
+    // validate), and the trust this mode carries stays.
+    kieSchemaInPrompt: true,
     supportsImages: true,
     // 16384 here, NOT the 8192 its 3.6 / 3.7 siblings sit at. Those two stay at
     // the KIE-safe intersection because nobody measured their endpoints past
@@ -1268,10 +1302,12 @@ export function structuredWireMode(
 }
 
 /**
- * Does a structured call on `modelId` (unset = `feature`'s default model) put
- * its schema on the wire ({@link structuredWireMode})? What a request's size
- * counts the schema by — a schema that is not sent is not read by the model.
- * A model the registry does not know counts as yes (the larger size).
+ * Does a structured call on `modelId` (unset = `feature`'s default model) send
+ * its schema ({@link structuredWireMode})? On the wire, or in the system prompt
+ * on a lane that carries it there (`kieSchemaInPrompt`): either way the model
+ * reads it, so a request's size counts it. A schema that is not sent is not
+ * read by the model. A model the registry does not know counts as yes (the
+ * larger size).
  */
 export function llmSendsSchema(modelId: string | undefined, feature?: string): boolean {
   const id = modelId || (feature ? LLM_FEATURE_DEFAULTS[feature as LlmFeature] : undefined)
@@ -1532,6 +1568,10 @@ export function defaultReasoningEffort(feature: string, modelId?: string): LlmRe
  * input requires a separate audio-capable model we don't route to today.
  */
 export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean; audio: boolean }> = {
+  // Keeps full caps after KIE dropped its channel (2026-11-13): it stays a
+  // VIDEO_ANALYSIS_LLM_MODELS member as the legacy `fast` backing (below), so a
+  // stored raw `llmModel: "gemini-3-flash"` still resolves and prices under its
+  // own credit family.
   "gemini-3-flash":    { image: true,  video: true,  audio: true  },
   "gemini-3.6-flash":  { image: true,  video: true,  audio: true  },
   // gemini-3.7-flash is IMAGE-ONLY by DECISION, not omission: full video+audio
@@ -1540,15 +1580,13 @@ export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean;
   // deferred while the smart-family A/B routes this model internally (#747).
   // Flip these two flags ONLY together with that VA-side decision.
   "gemini-3.7-flash":  { image: true,  video: false, audio: false },
-  // gemini-3.8-flash is IMAGE-ONLY by DECISION, not omission — 3.7's rationale
-  // exactly: full video+audio caps would auto-enroll it in
-  // VIDEO_ANALYSIS_LLM_MODELS (derived below) and force a video-analysis tier +
-  // pricing decision that stays deferred until the 3.8-vs-3.7 analysis A/B
-  // concludes. Google's own 3.8 lane DOES understand video (agentic video, via
-  // the Interactions API we don't wire) — which is precisely why withholding it
-  // has to be a decision rather than a gap. Flip these two flags ONLY together
-  // with that VA-side decision.
-  "gemini-3.8-flash":  { image: true,  video: false, audio: false },
+  // gemini-3.8-flash takes video + audio (decided 2026-11-13): it backs the
+  // video-analysis `fast` tier (VIDEO_ANALYSIS_TIERS below) since KIE dropped
+  // gemini-3-flash's channel, which is what enrols it in
+  // VIDEO_ANALYSIS_LLM_MODELS. Its KIE lane reads a video URL sent as an
+  // `image_url` part, the same channel gemini-3-flash used (live-verified
+  // 2026-11-13 with the analysis request: prompt tokens include the clip).
+  "gemini-3.8-flash":  { image: true,  video: true,  audio: true  },
   "gemini-3.1-pro":    { image: true,  video: true,  audio: true  },
   // gemini-4-argon is IMAGE-ONLY by DECISION, not omission (decided 2026-10-17):
   // the model DOES read video and audio, but full caps would
@@ -1960,7 +1998,7 @@ export const VIDEO_ANALYSIS_LLM_MODELS: string[] = LLM_MODELS
  * VIDEO_ANALYSIS_LLM_MODELS member AND every such model is reachable by a tier,
  * so adding a video model forces a tier decision instead of silently leaking.
  */
-export const VIDEO_ANALYSIS_TIERS = { fast: "gemini-3-flash", pro: "gemini-3.1-pro" } as const
+export const VIDEO_ANALYSIS_TIERS = { fast: "gemini-3.8-flash", pro: "gemini-3.1-pro" } as const
 export type VideoAnalysisModelTier = keyof typeof VIDEO_ANALYSIS_TIERS
 /**
  * Models that PREVIOUSLY backed a tier, mapped to the tier they backed.
@@ -1981,6 +2019,12 @@ export const VIDEO_ANALYSIS_LEGACY_MODELS: Record<string, VideoAnalysisModelTier
   // belongs here: stored raw `llmModel` values keep resolving and keep pricing
   // under their own credit family.
   "gemini-3.6-flash": "fast",
+  // Backed the fast tier from 2026-07-29 until 2026-11-13, when KIE dropped its
+  // channel (every call answers `code 422 "The channel is not supported"`) and
+  // the fast tier moved to gemini-3.8-flash. Stored raw `llmModel` values keep
+  // resolving and keep pricing under their own credit family; the analysis
+  // engine serves their rolls with the current fast model.
+  "gemini-3-flash": "fast",
 }
 /**
  * MIXED tiers — advanced multi-engine analysis plans whose identifier resolves

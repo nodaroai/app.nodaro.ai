@@ -2,8 +2,9 @@
  * `cheapLanesOnly` (decided 2026-10-20: a scheduled run should wait for the
  * cheap lane instead of paying the direct fallback) removes exactly the
  * KIE→direct legs: a KIE-primary call's failure fallback (complete, stream,
- * the structured stream), the Gemini KIE-first fallback, and the direct-tool
- * backup of a structured call KIE never answered well. It never changes the
+ * the structured stream), the Gemini KIE-first fallback, and the direct-lane
+ * backup of a structured call KIE never answered well (Claude's direct tool,
+ * Gemini 3.8 Flash's direct Google lane). It never changes the
  * primary lane, and a direct-primary call's own fallback TO KIE stays —
  * that leg goes toward the cheap lane. Without the flag, routing is as it was.
  */
@@ -190,5 +191,30 @@ describe("cheapLanesOnly — never pay the direct-vendor fallback", () => {
     const res = await llmCompleteStructured(request(), schema, { schemaName: "out", maxRetries: 0 })
     expect(res.output).toEqual({ capital: "Paris" })
     expect(createSpy).toHaveBeenCalledOnce()
+  })
+
+  // Gemini 3.8 Flash's KIE lane is prompt-JSON too (`kieSchemaInPrompt`); its
+  // last-resort ask is the direct Google lane, and the flag removes it the same way.
+  it("a 3.8 Flash structured call KIE never answered well: the direct Google lane is NOT asked under the flag", async () => {
+    const schema = z.object({ capital: z.string() })
+    const request = (extra: Record<string, unknown> = {}) => ({
+      modelId: "gemini-3.8-flash",
+      system: "facts",
+      messages: [{ role: "user" as const, content: "capital of France?" }],
+      ...extra,
+    })
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({
+      choices: [{ finish_reason: "stop", message: { content: '{"city":"Paris"}' } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }))
+    callGeminiDirect.mockResolvedValue({ text: '{"capital":"Paris"}', usage: { inputTokens: 1, outputTokens: 1 }, model: "gemini-3.8-flash", lane: "direct-gemini" })
+
+    const err = await llmCompleteStructured(request({ cheapLanesOnly: true }), schema, { schemaName: "out", maxRetries: 0 }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(StructuredLlmError)
+    expect(callGeminiDirect).not.toHaveBeenCalled()
+
+    const res = await llmCompleteStructured(request(), schema, { schemaName: "out", maxRetries: 0 })
+    expect(res).toMatchObject({ output: { capital: "Paris" }, lane: "direct-gemini" })
+    expect(callGeminiDirect).toHaveBeenCalledOnce()
   })
 })

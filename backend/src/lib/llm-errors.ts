@@ -298,11 +298,11 @@ export const LLM_CONTENT_REFUSAL_MESSAGE =
  * refusal's text as its answer, as it always has.
  *
  * An ANSWER about the request, not a lane's failure: the same request on the
- * other lane, on a direct-tool retry or on another vendor's model is the same
+ * other lane, on a direct-lane retry or on another vendor's model is the same
  * request, and routing around a refusal is exactly what must not happen. So
  * it is a usage-carrying failure (the provider answered and billed): never
  * transport-retried, never re-asked on the other lane (`laneFallbackAllowed`),
- * never given the direct-tool backup (that follows a malformed answer, not a
+ * never given the direct-lane backup (that follows a malformed answer, not a
  * thrown one), and describe-to-picker's Gemini fallback refuses it.
  *
  * `contentPolicyClass` is the cross-repo duck-typed contract the safety-block

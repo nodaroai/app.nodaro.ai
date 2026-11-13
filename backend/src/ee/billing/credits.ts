@@ -283,7 +283,7 @@ const VIDEO_ANALYSIS_STATIC: Record<string, number> = {}
 // Model-backed tiers plus the two engine-plan SENTINELS that own credit rows
 // (`mixed` and `smart`). `mixed-fast` is absent because it shares `mixed`'s credit
 // family, so its colon ids are never built.
-for (const model of ["gemini-3-flash", "gemini-3.6-flash", "gemini-3.1-pro", "mixed", "smart"]) {
+for (const model of ["gemini-3.8-flash", "gemini-3-flash", "gemini-3.6-flash", "gemini-3.1-pro", "mixed", "smart"]) {
   // Bare per-model id (`video-analysis:<model>`) = the unknown-duration ceiling
   // (600s). buildVideoAnalysisCreditId NEVER produces this id — it always appends
   // a `:<bucket>s` suffix; the bare id exists in STATIC only because MODEL_CATALOG

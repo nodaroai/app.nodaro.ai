@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { z } from "zod"
 import { buildMultiPickerAnalyzerSpec } from "@nodaro/prompts/picker-catalogs"
+import { getLlmModel } from "@nodaro/shared/llm-models"
 
 // ANTHROPIC_API_KEY set so claude models route to the direct SDK (tool path);
 // Gemini/GPT have no directFallbackModel so they always go through KIE.
@@ -327,6 +328,8 @@ describe("llmCompleteStructured", () => {
   // .json_schema.schema.properties.person.properties.type must be string or
   // array`. The Person analyzer's first dimension is `type`, so every Gemini
   // Describe-to-Picker run failed on this lane.
+  // Gemini 3.6 Flash is the KIE chat-completions model under test: 3.8 (and
+  // 3.7, on 3.8's endpoint) send no response_format there (`kieSchemaInPrompt`).
   describe("a property named like a keyword the KIE validator misreads", () => {
     const personAnswer = { person: { type_: "woman", age: "age-30s" }, gaps: { missingItems: [], missingCategories: [] } }
 
@@ -335,7 +338,7 @@ describe("llmCompleteStructured", () => {
       const spec = buildMultiPickerAnalyzerSpec(["person"])
       fetchMock.mockImplementation(async () => geminiContent(JSON.stringify(personAnswer)))
       const r = await llmCompleteStructured(
-        { modelId: "gemini-3.8-flash", system: "", messages: [{ role: "user", content: "x" }] },
+        { modelId: "gemini-3.6-flash", system: "", messages: [{ role: "user", content: "x" }] },
         spec.schema,
         { schemaName: spec.toolName },
       )
@@ -357,7 +360,7 @@ describe("llmCompleteStructured", () => {
       const { llmCompleteStructured, structuredJsonSchema } = await import("../llm-client.js")
       fetchMock.mockResolvedValue(geminiContent('{"prompt":"x"}'))
       await llmCompleteStructured(
-        { modelId: "gemini-3.8-flash", system: "", messages: [{ role: "user", content: "x" }] },
+        { modelId: "gemini-3.6-flash", system: "", messages: [{ role: "user", content: "x" }] },
         schema,
       )
       const sent = (fetchMock.mock.calls[0][1] as { body: string }).body
@@ -371,7 +374,7 @@ describe("llmCompleteStructured", () => {
         .mockResolvedValueOnce(geminiContent('{"person":{"type_":"woman"'))
         .mockResolvedValueOnce(geminiContent(JSON.stringify(personAnswer)))
       const r = await llmCompleteStructured(
-        { modelId: "gemini-3.8-flash", system: "", messages: [{ role: "user", content: "x" }] },
+        { modelId: "gemini-3.6-flash", system: "", messages: [{ role: "user", content: "x" }] },
         spec.schema,
       )
       expect((r.output as { person: unknown }).person).toEqual({ type: "woman", age: "age-30s" })
@@ -445,7 +448,7 @@ describe("llmCompleteStructured", () => {
       const tokens: string[] = []
       const res = await llmStream(
         {
-          modelId: "gemini-3.8-flash",
+          modelId: "gemini-3.6-flash",
           system: "",
           messages: [{ role: "user", content: "x" }],
           jsonSchema: { name: "shot", schema: { type: "object", properties: { type: { type: "string" } } } },
@@ -458,6 +461,28 @@ describe("llmCompleteStructured", () => {
       expect(JSON.parse(res.text)).toEqual({ type: "wide" })
       // Chunks reach the caller as they arrive, so they carry the wire name.
       expect(tokens.join("")).toBe('{"type_":"wide"}')
+    })
+
+    // Describe-to-Picker's default model: on its KIE lane the schema rides the
+    // system prompt (`kieSchemaInPrompt`) in the wire form `response_format`
+    // sent, so `type` goes as `type_` there too and the answer is restored.
+    it("gemini-3.8-flash's KIE lane puts the Person analyzer's wire form in the prompt and restores the answer", async () => {
+      const { llmCompleteStructured, structuredJsonSchema } = await import("../llm-client.js")
+      const { kieWireSchema } = await import("../llm/structured-schema.js")
+      const spec = buildMultiPickerAnalyzerSpec(["person"])
+      fetchMock.mockImplementation(async () => geminiContent(JSON.stringify(personAnswer)))
+      const r = await llmCompleteStructured(
+        { modelId: "gemini-3.8-flash", system: "", messages: [{ role: "user", content: "x" }] },
+        spec.schema,
+        { schemaName: spec.toolName },
+      )
+      expect((r.output as { person: unknown }).person).toEqual({ type: "woman", age: "age-30s" })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+      expect(body).not.toHaveProperty("response_format")
+      const wire = kieWireSchema({ name: spec.toolName, schema: structuredJsonSchema(spec.schema) }, getLlmModel("gemini-3.8-flash")!).schema
+      expect(body.messages[0].content).toContain(JSON.stringify(wire))
+      expect(body.messages[0].content).not.toContain(JSON.stringify(structuredJsonSchema(spec.schema)))
     })
   })
 

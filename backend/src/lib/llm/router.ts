@@ -288,6 +288,15 @@ function callGeminiDirect(model: LlmModelDef, req: LlmRequest, params: GeminiPar
   return guardLaneAccount({ lane: "direct", provider: "google", modelId: model.id }, () => callGeminiDirectUnguarded(model, req, params))
 }
 
+/**
+ * The direct Google lane, guarded, for an ask that goes past the routing: a
+ * structured call's last-resort ask (./structured.ts), which must never fall
+ * back to KIE — a platform refusal here fails the call with the capacity sentence.
+ */
+export function callGeminiDirectLane(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
+  return callGeminiDirect(model, req, deriveParams(model, req))
+}
+
 function streamGeminiDirect(
   model: LlmModelDef, req: LlmRequest, params: GeminiParams, onToken: (chunk: string) => void, signal?: AbortSignal,
 ): Promise<LlmResponse> {
