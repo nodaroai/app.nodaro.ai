@@ -41,6 +41,18 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   reserveCreditsForJob: vi.fn().mockResolvedValue(DEFAULTS.reservation),
 }))
 
+// What a job the queue refused goes through (lib/enqueue-route-job.ts): the
+// failure write, the confirmed refund, and the app report when either cannot
+// be confirmed. Only the partial-batch case reaches them.
+const unqueued = vi.hoisted(() => ({
+  markJobFailedDetailed: vi.fn(),
+  refundJobHoldsConfirmed: vi.fn(),
+  insertAppReport: vi.fn(),
+}))
+vi.mock("@/lib/job-failure.js", () => ({ markJobFailedDetailed: unqueued.markJobFailedDetailed }))
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundJobHoldsConfirmed: unqueued.refundJobHoldsConfirmed }))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: unqueued.insertAppReport }))
+
 // Per-job creditOverride correction relies on these two dynamic imports inside
 // the route. The route imports them as `../ee/billing/credits.js` and
 // `../lib/app-settings.js`; the `@/` alias resolves to the same files, so these
@@ -107,6 +119,7 @@ import { resolveEntityImageParams } from "../../lib/entity-credit-identifier.js"
 import { PORTRAIT_SCAFFOLDING, CLOTHED_DEFAULT } from "../../lib/character-prompts.js"
 import { MODEST_ATTIRE_CLAUSE, registerMainlinePromptPolicies } from "../../lib/prompt-policies/index.js"
 import { applyPromptPolicies, clearPromptPolicies } from "../../lib/prompt-policy.js"
+import { UNQUEUED_BATCH_CLIENT_MESSAGE } from "../../lib/enqueue-route-job.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -147,6 +160,13 @@ function resetModuleMocks(): void {
 
   mockResolveFacetInjections.mockReset()
   mockResolveFacetInjections.mockImplementation(async () => "")
+
+  unqueued.markJobFailedDetailed.mockReset()
+  unqueued.markJobFailedDetailed.mockResolvedValue("flipped")
+  unqueued.refundJobHoldsConfirmed.mockReset()
+  unqueued.refundJobHoldsConfirmed.mockResolvedValue(true)
+  unqueued.insertAppReport.mockReset()
+  unqueued.insertAppReport.mockResolvedValue(true)
 
   // No factory default — the route only reads these when a creditReservation
   // exists, which the per-job block is alone in setting up.
@@ -762,6 +782,30 @@ describe("POST /v1/generate-character", () => {
     expect(chain.in).toHaveBeenCalledWith("id", ["job-3", "job-4"])
     // Critical: nothing enqueued — Phase 2B never reached.
     expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("a queue that refuses the 2nd of 3 candidates: the 1st keeps running, the 2nd and 3rd are failed and refunded, 500 names the 1st", async () => {
+    vi.mocked(videoQueue.add)
+      .mockResolvedValueOnce(DEFAULTS.queuedJob as never)
+      .mockRejectedValueOnce(new Error("OOM command not allowed when used memory > 'maxmemory'."))
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Kira", seedPrompt: "y w", count: 3 },
+    })
+
+    expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({
+      error: { code: "internal_error", message: UNQUEUED_BATCH_CLIENT_MESSAGE, startedJobIds: ["job-1"] },
+    })
+    // job-3 is never handed to the queue once job-2 is refused.
+    expect(vi.mocked(videoQueue.add).mock.calls.map((c) => (c[1] as { jobId: string }).jobId)).toEqual(["job-1", "job-2"])
+    expect(unqueued.markJobFailedDetailed.mock.calls.map((c) => c[0])).toEqual(["job-2", "job-3"])
+    expect(unqueued.refundJobHoldsConfirmed.mock.calls.map((c) => c[0])).toEqual(["job-2", "job-3"])
   })
 
   it("enqueues videoQueue with provider, prompt, attachToCharacterId, usageLogId", async () => {

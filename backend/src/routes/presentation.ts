@@ -17,6 +17,7 @@ import { supabase } from "../lib/supabase.js"
 import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { enqueueExecution } from "../lib/enqueue-execution.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
 import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { sendCredentialUnbound, unboundCredentialUsesFor } from "../lib/credential-gate.js"
@@ -466,9 +467,12 @@ export async function presentationRoutes(app: FastifyInstance) {
       ...(sharedViewer ? { shareLinkViewer: true } : {}),
     }
 
-    await orchestrationQueue.add("workflow-execution", jobData, {
-      jobId: execution.id,
-    })
+    // A queue that refuses the run fails it from `pending` and answers 500
+    // (lib/enqueue-execution.ts); nothing is held before this point.
+    await enqueueExecution(req, reply, execution.id, () =>
+      orchestrationQueue.add("workflow-execution", jobData, { jobId: execution.id }),
+    )
+    if (reply.sent) return
 
     return reply.status(202).send({
       executionId: execution.id,

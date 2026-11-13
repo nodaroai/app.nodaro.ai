@@ -44,6 +44,19 @@ vi.mock("@/lib/orchestration-queue.js", () => ({
   orchestrationQueue: { add: vi.fn().mockResolvedValue({}) },
 }))
 
+// The run's own failure write (lib/concurrency-lanes/run-failure.ts), reached only when the queue
+// refuses a run (lib/enqueue-execution.ts). Default: it flipped the run from `pending`.
+const mockFailWaiting = vi.hoisted(() => vi.fn(async (..._a: unknown[]) => true))
+vi.mock("@/lib/concurrency-lanes/run-failure.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/concurrency-lanes/run-failure.js")>()),
+  failWaitingExecution: mockFailWaiting,
+  // The form the refused-run settle calls (lib/enqueue-execution.ts): mockFailWaiting's answer after
+  // one write, so a false is believed without a read-back.
+  failWaitingExecutionDetailed: async (...a: unknown[]) => ({ failed: await mockFailWaiting(...a), attempts: 1 }),
+}))
+const mockAppReport = vi.hoisted(() => vi.fn(async (_r: unknown) => true))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: mockAppReport }))
+
 // Audit 2026-09-06 follow-up: the run route hands the `idempotency-key`
 // header to the core, which dedups the execution. Spied here so the header
 // → key plumbing is asserted without a real UNIQUE index.
@@ -71,6 +84,7 @@ import { appRunnerRoutes, invalidateAppCache } from "../app-runner.js"
 import { supabase } from "../../lib/supabase.js"
 import { orchestrationQueue } from "../../lib/orchestration-queue.js"
 import { appRunStampOf } from "../../lib/app-run-stamp.js"
+import { UNQUEUED_EXECUTION_CLIENT_MESSAGE, UNQUEUED_EXECUTION_MESSAGE } from "../../lib/enqueue-execution.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1399,6 +1413,32 @@ describe("the draft lane writes an execution only onto a run of this app", () =>
     expect(res.statusCode).toBe(404)
     expect(runs.get(TEST_RUN_ID)).toEqual(before)
     expect(executionInserts).toEqual([])
+  })
+
+  // A queue that refuses the run (lib/enqueue-execution.ts): its execution is
+  // failed from `pending` at once, so the run reads as ended, never stuck.
+  it("a queue that refuses the run: its execution is failed from pending and the run answers 500", async () => {
+    const { runs } = setupDraftLane(runRow({}))
+    vi.mocked(orchestrationQueue.add).mockRejectedValueOnce(new Error("Connection is closed."))
+
+    const res = await post()
+
+    expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({ error: { code: "internal_error", message: UNQUEUED_EXECUTION_CLIENT_MESSAGE } })
+    expect(mockFailWaiting).toHaveBeenCalledWith(TEST_EXECUTION_ID, UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null })
+    // The run names the failed execution, as any run names the execution that ended it.
+    expect(runs.get(TEST_RUN_ID)).toMatchObject({ execution_id: TEST_EXECUTION_ID })
+  })
+
+  it("a queue that refuses a run that has since moved on: answered as started", async () => {
+    setupDraftLane(runRow({}))
+    vi.mocked(orchestrationQueue.add).mockRejectedValueOnce(new Error("Connection is closed."))
+    mockFailWaiting.mockResolvedValueOnce(false)
+
+    const res = await post()
+
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toMatchObject({ executionId: TEST_EXECUTION_ID, runId: TEST_RUN_ID, status: "pending" })
   })
 })
 

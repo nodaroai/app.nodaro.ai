@@ -66,8 +66,9 @@ vi.mock("../../lib/supabase.js", () => ({
   },
 }))
 vi.mock("../../workers/shared.js", () => ({ markJobCompleted: h.completed, markJobCompletedDetailed: h.completedDetailed, commitJobCredits: h.commitJobCredits }))
-vi.mock("../../lib/job-failure.js", () => ({ markJobFailed: h.failed }))
-vi.mock("../../lib/credits-job-lifecycle.js", () => ({ commitReservedCreditsForJob: h.commit, refundReservedCreditsForJob: h.refund }))
+vi.mock("../../lib/job-failure.js", () => ({ markJobFailed: h.failed, markJobFailedDetailed: async (...args: unknown[]) => ((await h.failed(...args)) ? "flipped" : "missed") }))
+vi.mock("../../lib/app-reports.js", () => ({ insertAppReport: vi.fn().mockResolvedValue(true) }))
+vi.mock("../../lib/credits-job-lifecycle.js", () => ({ commitReservedCreditsForJob: h.commit, refundReservedCreditsForJob: h.refund, refundJobHoldsConfirmed: async (id: string) => (await h.refund(id), true) }))
 vi.mock("../../providers/nodaro/run-on-cloud.js", () => ({ shouldRunOnCloud: async () => false }))
 vi.mock("../../providers/apify/scraper.js", () => ({ runScraper: h.runScraper }))
 vi.mock("../../providers/apify/meta-ads.js", () => ({ runMetaAdsScrape: h.runMetaAds }))
@@ -245,11 +246,12 @@ describe("a request answered with a job id", () => {
     const { videoQueue } = await import("../../lib/queue.js")
     for (const url of URLS) {
       resetSettlement()
-      vi.mocked(videoQueue.add).mockRejectedValueOnce(new Error("redis down"))
+      vi.mocked(videoQueue.add).mockRejectedValueOnce(new Error("Connection is closed."))
       const res = await post(url, jobIdFirstBody(url))
       expect(res.statusCode, url).toBe(500)
       expect(res.json().error.code, url).toBe("internal_error")
-      expect(h.failed, url).toHaveBeenCalledWith("job-1", expect.objectContaining({ error_message: "Could not start the job" }))
+      // The shared rule (lib/enqueue-route-job.ts): failed from pending with its key released, refunded confirmed.
+      expect(h.failed, url).toHaveBeenCalledWith("job-1", expect.objectContaining({ from: ["pending"], extra: { idempotency_key: null } }))
       expect(h.refund, url).toHaveBeenCalledWith("job-1")
     }
   })

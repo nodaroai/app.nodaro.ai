@@ -31,6 +31,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { createsChildJob } from "../lib/job-submission-context.js"
 import { maskEraseBoxSchema } from "../lib/cast-swap-face-masking.js"
 import { maskEraseBaseCredits, measureMaskEraseLength } from "../lib/mask-erase-length.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const MAX_BOXES = CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks
 
@@ -113,7 +114,8 @@ export async function maskEraseRoutes(app: FastifyInstance) {
     if (error) return sendInternalError(reply, req, error, "Failed to create job")
     const reservation = await reserveCreditsForJob(req, reply, job.id, "mask-erase")
     if (reply.sent) return
-    await videoQueue.add("mask-erase", { jobId: job.id, ...body, usageLogId: reservation?.usageLogId })
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("mask-erase", { jobId: job.id, ...body, usageLogId: reservation?.usageLogId }))
+    if (reply.sent) return
     return reply.status(202).send({ jobId: job.id })
   })
 }

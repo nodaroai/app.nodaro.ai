@@ -4,7 +4,9 @@
  * `scripts/check-admin-client-import.mjs`). What must hold: both writes are
  * pinned to the caller's OWN row, the stamp carries the child id into both
  * the stored projection and `output_data`, and the discard refunds BEFORE it
- * deletes (a delete-first order would orphan a `reserved` hold).
+ * deletes (a delete-first order would orphan a `reserved` hold). The cancel of
+ * an analysis child whose parent will never run goes through the single-job
+ * cancel and never throws.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
@@ -50,8 +52,11 @@ vi.mock("../supabase.js", () => {
 vi.mock("../credits-job-lifecycle.js", () => ({
   refundReservedCreditsForJob: mocks.refundReservedCreditsForJob,
 }))
+const cancel = vi.hoisted(() => ({ cancelOwnedJob: vi.fn() }))
+vi.mock("../cancel-job.js", () => ({ cancelOwnedJob: cancel.cancelOwnedJob }))
 
-import { stampAnalysisChild, discardUnstartedJob, readOwnAnalysisChild } from "../llm-structured-job-row.js"
+import type { FastifyRequest } from "fastify"
+import { stampAnalysisChild, discardUnstartedJob, readOwnAnalysisChild, cancelUnusedAnalysisChild } from "../llm-structured-job-row.js"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -120,5 +125,28 @@ describe("discardUnstartedJob", () => {
     await discardUnstartedJob("parent-1", "user-1")
     expect(mocks.eqId).toHaveBeenCalledWith("id", "parent-1")
     expect(mocks.eqUser).toHaveBeenCalledWith("user_id", "user-1")
+  })
+})
+
+describe("cancelUnusedAnalysisChild", () => {
+  const log = { error: vi.fn() }
+  const req = { log } as unknown as FastifyRequest
+
+  it("cancels the child through the single-job cancel, as the caller (its ownership checked there)", async () => {
+    cancel.cancelOwnedJob.mockResolvedValue({ kind: "cancelled", analysisJobId: null })
+    await cancelUnusedAnalysisChild(req, "analysis-1", "user-1")
+    expect(cancel.cancelOwnedJob).toHaveBeenCalledWith("analysis-1", "user-1")
+    // It writes nothing itself: the cancel owns the flip and the child's refund.
+    expect(mocks.jobUpdate).not.toHaveBeenCalled()
+    expect(mocks.jobDelete).not.toHaveBeenCalled()
+  })
+  it("does nothing without a child", async () => {
+    await cancelUnusedAnalysisChild(req, undefined, "user-1")
+    expect(cancel.cancelOwnedJob).not.toHaveBeenCalled()
+  })
+  it("never throws: a cancel that fails is logged, the caller's answer stands", async () => {
+    cancel.cancelOwnedJob.mockRejectedValue(new Error("supabase unreachable"))
+    await expect(cancelUnusedAnalysisChild(req, "analysis-1", "user-1")).resolves.toBeUndefined()
+    expect(log.error).toHaveBeenCalledWith(expect.objectContaining({ analysisJobId: "analysis-1" }), expect.any(String))
   })
 })

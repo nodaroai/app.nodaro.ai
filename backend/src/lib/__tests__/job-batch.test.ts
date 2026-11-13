@@ -14,6 +14,10 @@
  *    queued, so no part of a batch runs unpaid or stays paid but unqueued; a
  *    row whose refund is not confirmed stays pending for the never-started
  *    sweep, never deleted (its hold would be stranded);
+ *  - a queue that refuses the bulk add may still have delivered it: each job
+ *    is failed from `pending` first (key released), and only the ones that
+ *    write failed are refunded and removed; a job a worker took keeps running
+ *    and is named in `error.startedJobIds`;
  *  - an earlier request's job left pending and unpaid is taken over (reserved
  *    and queued); one pending and paid is queued again (idempotent queue id);
  *  - a keyed batch runs under one claim per key: a concurrent repeat waits.
@@ -44,6 +48,14 @@ const h = vi.hoisted(() => ({
   holdsAfterReserve: new Map<string, string>(),
   refundedLogs: [] as string[],
   repoints: [] as Array<{ jobId: string; to: unknown; from: unknown }>,
+  /** Every failure write, refund and removal, in the order they ran. */
+  log: [] as string[],
+  fails: [] as Array<{ jobId: string; input: Record<string, unknown> }>,
+  /** What each failure write of a job answers, in order (then "flipped"). */
+  failOutcomes: new Map<string, Array<"flipped" | "missed" | "error">>(),
+  /** What the read-back of a job finds (`{ data, error }`); absent = no row. */
+  readbacks: new Map<string, { data: Record<string, unknown> | null; error: unknown }>(),
+  reports: [] as Array<Record<string, unknown>>,
 }))
 
 vi.mock("../insert-job.js", () => ({
@@ -65,6 +77,7 @@ vi.mock("../../middleware/credit-guard.js", () => ({
 vi.mock("../credits-job-lifecycle.js", () => ({
   refundJobHoldsConfirmed: vi.fn(async (jobId: string) => {
     h.refunded.push(jobId)
+    h.log.push(`refund:${jobId}`)
     return !h.unconfirmed.has(jobId)
   }),
   jobCreditHolds: vi.fn(async (ids: readonly string[]) => {
@@ -84,14 +97,41 @@ vi.mock("../job-batch-claim.js", () => ({
     return h.claimImpl!()
   }),
 }))
+vi.mock("../job-failure.js", () => ({
+  markJobFailedDetailed: vi.fn(async (jobId: string, input: Record<string, unknown>) => {
+    h.fails.push({ jobId, input })
+    h.log.push(`fail:${jobId}`)
+    return h.failOutcomes.get(jobId)?.shift() ?? "flipped"
+  }),
+}))
+vi.mock("../app-reports.js", () => ({
+  insertAppReport: vi.fn(async (input: Record<string, unknown>) => {
+    h.reports.push(input)
+    return true
+  }),
+}))
+// The twins whose words the batch's own constants repeat (their module builds the queue at import).
+vi.mock("../queue.js", () => ({ videoQueue: {} }))
 vi.mock("../supabase.js", () => ({
   supabase: {
     from: () => ({
       delete: () => ({
         in: (_col: string, ids: string[]) => {
           h.deleted.push(ids)
-          return { eq: (...scope: unknown[]) => { h.deleteScopes.push(scope); return Promise.resolve({ error: null }) } }
+          h.log.push(`delete:${ids.join(",")}`)
+          const scope: unknown[] = []
+          h.deleteScopes.push(scope)
+          const chain = {
+            eq: (...s: unknown[]) => { scope.push(...s); return chain },
+            then: (resolve: (v: { error: null }) => void) => resolve({ error: null }),
+          }
+          return chain
         },
+      }),
+      select: () => ({
+        eq: (_c: string, jobId: string) => ({
+          maybeSingle: async () => h.readbacks.get(jobId) ?? { data: null, error: null },
+        }),
       }),
       update: (to: unknown) => ({
         eq: (_c: string, jobId: string) => ({
@@ -102,7 +142,14 @@ vi.mock("../supabase.js", () => ({
   },
 }))
 
-import { batchJobKey, runJobBatch, type PlannedBatchJob } from "../job-batch.js"
+import { batchJobKey, PARTLY_STARTED_BATCH_MESSAGE, runJobBatch, type PlannedBatchJob } from "../job-batch.js"
+import { REFUSED_BATCH_FAILURE_UNCONFIRMED_KIND, REFUSED_BATCH_JOB_MESSAGE, REFUSED_BATCH_REFUND_UNCONFIRMED_KIND } from "../job-batch-holds.js"
+import {
+  UNQUEUED_BATCH_CLIENT_MESSAGE,
+  UNQUEUED_FAILURE_UNCONFIRMED_KIND,
+  UNQUEUED_JOB_MESSAGE,
+  UNQUEUED_REFUND_UNCONFIRMED_KIND,
+} from "../enqueue-route-job.js"
 import { InvalidClientOriginError } from "../client-origin-error.js"
 
 const OWNER = "00000000-0000-4000-8000-0000000000a1"
@@ -153,6 +200,11 @@ beforeEach(() => {
   h.holdsAfterReserve.clear()
   h.refundedLogs.length = 0
   h.repoints.length = 0
+  h.log.length = 0
+  h.fails.length = 0
+  h.failOutcomes.clear()
+  h.readbacks.clear()
+  h.reports.length = 0
   h.claimImpl = async () => ({
     renew: async () => { h.renewCalls++; return h.renews.length > 0 ? h.renews.shift()! : true },
     release: async () => { h.released++ },
@@ -289,20 +341,121 @@ describe("runJobBatch — all or nothing", () => {
     expect(h.deleted).toEqual([["job-1"]])
   })
 
-  it("a queue that refuses the batch refunds and removes every job, and answers 500", async () => {
+  it("a queue that refuses the batch fails, refunds and removes every job, and answers 500", async () => {
     const { res } = await run(plan(2), { key: "client-key-1", enqueue: async () => { throw new Error("redis down") } })
     expect(res.statusCode).toBe(500)
     expect(res.json().error).toEqual({ code: "internal_error", message: "Failed to create image generation jobs" })
+    expect(h.fails.map((f) => f.jobId)).toEqual(["job-0", "job-1"])
     expect(h.refunded).toEqual(["job-0", "job-1"])
     expect(h.deleted).toEqual([["job-0", "job-1"]])
+  })
+
+  it("the steps before the queue undo without a failure write (nothing was queued)", async () => {
+    h.reserveImpl = async (jobId, reply) => {
+      if (jobId === "job-1") {
+        reply.status(402).send({ error: { code: "insufficient_credits", message: "x" } })
+        return undefined
+      }
+      return { usageLogId: `log-${jobId}`, creditsReserved: 60, watermark: false }
+    }
+    await run(plan(2), { key: "client-key-1" })
+    expect(h.fails).toEqual([])
+    expect(h.deleted).toEqual([["job-0", "job-1"]])
+    expect(h.deleteScopes).toEqual([["user_id", OWNER]])
+  })
+})
+
+describe("runJobBatch — a refused bulk add may have been delivered: fail from pending first", () => {
+  const refuse = { key: "client-key-1", enqueue: async () => { throw new Error("Connection is closed.") } }
+  /** The reports this lane files (the 500 itself files its own, `internal-error`). */
+  const filed = () => h.reports.filter((r) => r.kind !== "internal-error")
+
+  it("fails each job from `pending` with its key released, THEN refunds, THEN removes only the failed rows", async () => {
+    await run(plan(2), refuse)
+    expect(h.log).toEqual(["fail:job-0", "refund:job-0", "fail:job-1", "refund:job-1", "delete:job-0,job-1"])
+    expect(h.fails[0]!.input).toEqual({ error_message: REFUSED_BATCH_JOB_MESSAGE, from: ["pending"], extra: { idempotency_key: null } })
+    expect(h.deleteScopes).toEqual([["user_id", OWNER, "status", "failed"]])
+  })
+
+  it("a job a worker already took is neither refunded nor removed, and the 500 names it in startedJobIds", async () => {
+    h.failOutcomes.set("job-1", ["missed"])
+    const { res } = await run(plan(3), refuse)
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error).toEqual({ code: "internal_error", message: PARTLY_STARTED_BATCH_MESSAGE, startedJobIds: ["job-1"] })
+    expect(h.refunded).toEqual(["job-0", "job-2"])
+    expect(h.deleted).toEqual([["job-0", "job-2"]])
+  })
+
+  it("every job already moved on: the add landed with its answer lost, so the batch is answered as started", async () => {
+    h.failOutcomes.set("job-0", ["missed"])
+    h.failOutcomes.set("job-1", ["missed"])
+    const { res } = await run(plan(2), refuse)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().jobs.map((j: { jobId: string }) => j.jobId)).toEqual(["job-0", "job-1"])
+    expect(h.refunded).toEqual([])
+    expect(h.deleted).toEqual([])
+  })
+
+  it("a failure write that errors twice is reported, never refunded, removed or called started", async () => {
+    h.failOutcomes.set("job-0", ["error", "error"])
+    const { res } = await run(plan(2), refuse)
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error).toEqual({ code: "internal_error", message: "Failed to create image generation jobs" })
+    expect(h.fails.map((f) => f.jobId)).toEqual(["job-0", "job-0", "job-1"])
+    expect(h.refunded).toEqual(["job-1"])
+    expect(h.deleted).toEqual([["job-1"]])
+    expect(filed().map((r) => [r.kind, r.jobId])).toEqual([[REFUSED_BATCH_FAILURE_UNCONFIRMED_KIND, "job-0"]])
+  })
+
+  it("a first write whose answer was lost: the read-back decides — landed is failed and undone, moved on is started", async () => {
+    h.failOutcomes.set("job-0", ["error", "missed"])
+    h.readbacks.set("job-0", { data: { status: "failed", error_message: REFUSED_BATCH_JOB_MESSAGE }, error: null })
+    h.failOutcomes.set("job-1", ["error", "missed"])
+    h.readbacks.set("job-1", { data: { status: "processing", error_message: null }, error: null })
+    const { res } = await run(plan(2), refuse)
+    expect(res.json().error.startedJobIds).toEqual(["job-1"])
+    expect(h.refunded).toEqual(["job-0"])
+    expect(h.deleted).toEqual([["job-0"]])
+  })
+
+  it("a read-back that fails leaves the outcome unknown: reported, untouched", async () => {
+    h.failOutcomes.set("job-0", ["error", "missed"])
+    h.readbacks.set("job-0", { data: null, error: { message: "timeout" } })
+    await run(plan(1), refuse)
+    expect(h.refunded).toEqual([])
+    expect(h.deleted).toEqual([])
+    expect(filed().map((r) => r.kind)).toEqual([REFUSED_BATCH_FAILURE_UNCONFIRMED_KIND])
+  })
+
+  it("a failed job whose refund is not confirmed is kept (its hold would be stranded) and reported: no sweep revisits it", async () => {
+    h.unconfirmed.add("job-1")
+    const { res } = await run(plan(3), refuse)
+    expect(res.statusCode).toBe(500)
+    expect(h.refunded).toEqual(["job-0", "job-1", "job-2"])
+    expect(h.deleted).toEqual([["job-0", "job-2"]])
+    expect(filed().map((r) => [r.kind, r.jobId])).toEqual([[REFUSED_BATCH_REFUND_UNCONFIRMED_KIND, "job-1"]])
+  })
+
+  it("speaks the same words as every other route the queue refused", () => {
+    expect(REFUSED_BATCH_JOB_MESSAGE).toBe(UNQUEUED_JOB_MESSAGE)
+    expect(PARTLY_STARTED_BATCH_MESSAGE).toBe(UNQUEUED_BATCH_CLIENT_MESSAGE)
+    expect(REFUSED_BATCH_REFUND_UNCONFIRMED_KIND).toBe(UNQUEUED_REFUND_UNCONFIRMED_KIND)
+    expect(REFUSED_BATCH_FAILURE_UNCONFIRMED_KIND).toBe(UNQUEUED_FAILURE_UNCONFIRMED_KIND)
   })
 })
 
 describe("runJobBatch — undo never strands a hold", () => {
   it("removes only the jobs whose refund is confirmed; the rest stay pending for the never-started sweep", async () => {
     h.unconfirmed.add("job-1")
-    const { res, enqueued } = await run(plan(3), { key: "client-key-1", enqueue: async () => { throw new Error("redis down") } })
-    expect(res.statusCode).toBe(500)
+    h.reserveImpl = async (jobId, reply) => {
+      if (jobId === "job-2") {
+        reply.status(402).send({ error: { code: "insufficient_credits", message: "x" } })
+        return undefined
+      }
+      return { usageLogId: `log-${jobId}`, creditsReserved: 60, watermark: false }
+    }
+    const { res, enqueued } = await run(plan(3), { key: "client-key-1" })
+    expect(res.statusCode).toBe(402)
     expect(h.refunded).toEqual(["job-0", "job-1", "job-2"])
     expect(h.deleted).toEqual([["job-0", "job-2"]])
     expect(enqueued).toHaveLength(0)
@@ -381,6 +534,7 @@ describe("runJobBatch — the jobs an earlier request created", () => {
     h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: null, status: "pending" }, created: false })
     h.holds = new Map([["job-0", "log-earlier-0"]])
     await run(plan(2), { key: "client-key-1", enqueue: async () => { throw new Error("redis down") } })
+    expect(h.fails.map((f) => f.jobId)).toEqual(["job-1"])
     expect(h.refunded).toEqual(["job-1"])
     expect(h.deleted).toEqual([["job-1"]])
   })
@@ -446,10 +600,11 @@ describe("runJobBatch — the claim is checked before every step that charges, q
     expect(h.deleted).toEqual([])
   })
 
-  it("a claim lost before an undo: the failure is answered, nothing is refunded or removed", async () => {
+  it("a claim lost before an undo: the failure is answered, nothing is failed, refunded or removed", async () => {
     h.renews = [true, true, true, false]
     const { res } = await run(plan(2), { key: "client-key-1", enqueue: async () => { throw new Error("redis down") } })
     expect(res.statusCode).toBe(500)
+    expect(h.fails).toEqual([])
     expect(h.refunded).toEqual([])
     expect(h.deleted).toEqual([])
   })
@@ -528,6 +683,7 @@ describe("runJobBatch — a job holding another request's hold after this one re
   it("a later failure undoes only the jobs this request still pays for", async () => {
     h.holdsAfterReserve.set("job-0", "log-other-0")
     await run(plan(2), { key: "client-key-1", enqueue: async () => { throw new Error("redis down") } })
+    expect(h.fails.map((f) => f.jobId)).toEqual(["job-1"])
     expect(h.refunded).toEqual(["job-1"])
     expect(h.deleted).toEqual([["job-1"]])
   })

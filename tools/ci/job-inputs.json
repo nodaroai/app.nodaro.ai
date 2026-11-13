@@ -412,6 +412,7 @@
         "backend/src/lib/dubbing-model.ts",
         "backend/src/lib/dynamic-origins.ts",
         "backend/src/lib/edge-purge.ts",
+        "backend/src/lib/enqueue-route-job.ts",
         "backend/src/lib/entity-credit-identifier.ts",
         "backend/src/lib/evidence-keys.ts",
         "backend/src/lib/execution-inline-graph.ts",

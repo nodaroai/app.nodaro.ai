@@ -28,6 +28,7 @@ import {
   OVERLAY_FITS,
   OVERLAY_MAX_LAYERS,
 } from "../providers/image/overlay.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const hex6 = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Expected a #RRGGBB color")
 
@@ -172,7 +173,7 @@ export async function imageOverlayRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("image-overlay", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("image-overlay", {
         jobId: job.id,
         imageUrl,
         layers,
@@ -184,7 +185,8 @@ export async function imageOverlayRoutes(app: FastifyInstance) {
         maskSpread,
         ...(qrText ? { qrText } : {}),
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     },

@@ -114,7 +114,7 @@ Identity controls for the location itself: name, description, category, style, a
 The main image generation supports **multi-candidate approval** so you can compare options before committing:
 
 1. Set count to **1, 2, or 4** in the Appearance tab. (Use **1** for "I trust the model and want it auto-attached"; **2** or **4** for "show me options.")
-2. Click **Generate** — the studio fires `POST /v1/generate-location` and tracks the returned job ids. (When the row hasn't been saved yet, the studio first calls `ensureSavedBeforeGen()` to create it so the worker has a target.)
+2. Click **Generate** — the studio fires `POST /v1/generate-location` and tracks the returned job ids. (When the row hasn't been saved yet, the studio first calls `ensureSavedBeforeGen()` to create it so the worker has a target.) If the candidates cannot all be queued to start, the route answers `500 internal_error` with `error.startedJobIds` naming the ones that did start (follow those; the list is empty when none did); the others are failed and their credits refunded.
 3. Candidates stream in via the studio's polling hook as each job completes.
 4. For `count === 1`, the worker writes the result directly to `locations.source_image_url` on completion — no manual approval required.
 5. For `count === 2 | 4`, each candidate appears as a card in the grid. Click **Approve** to call `POST /v1/locations/:id/approve-main-image` with the chosen `candidateJobId`. The route:

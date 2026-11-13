@@ -29,6 +29,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 import { measureVideoDepthInput } from "../lib/video-depth-input.js"
 
 const videoDepthBody = z.object({
@@ -143,7 +144,7 @@ export async function videoDepthRoutes(app: FastifyInstance) {
       const reservation = await reserveCreditsForJob(req, reply, job.id, stash.creditId)
       if (reply.sent) return
 
-      await videoQueue.add("video-depth", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("video-depth", {
         jobId: job.id,
         videoUrl: d.videoUrl,
         provider: d.provider,
@@ -151,7 +152,8 @@ export async function videoDepthRoutes(app: FastifyInstance) {
         ...levers,
         durationSec: stash.durationSec,
         usageLogId: reservation?.usageLogId,
-      })
+      }))
+      if (reply.sent) return
       return { jobId: job.id }
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to create job")

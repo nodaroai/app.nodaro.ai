@@ -4,7 +4,10 @@ import { supabase } from "./supabase.js"
 export interface ExecutionUpdateResult {
   /** True iff the UPDATE matched at least one row AND no error was returned. */
   ok: boolean
-  /** How many round-trips we made. Useful for telemetry / log filtering. */
+  /** How many round-trips we made. Useful for telemetry / log filtering, and
+   *  for a CAS miss (`cancelledRace`): after more than one, an earlier write
+   *  that errored may have landed with only its answer lost
+   *  (`failWaitingExecutionDetailed`, lib/concurrency-lanes/run-failure.ts). */
   attempts: number
   /** True when the UPDATE returned 0 rows because the row was concurrently
    *  flipped to "cancelled" by the user, BLOCKING our `.neq("status",

@@ -14,6 +14,7 @@ import { unitRateBaseCredits } from "../lib/credit-base-cost.js"
 import { buildEffectiveEdl, effectiveRenderBasis, validateEffectiveEdl, applyEdlReserveMinutes } from "../lib/apply-edl-plan.js"
 import { isPreviewRender } from "../lib/preview-render.js"
 import { APPLY_EDL_CLIP_KEY_PATTERN } from "../lib/apply-edl-output.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 /** An SDK/MCP caller may send the EDL as a JSON string on the `edl` field;
  *  parse it before `buildEffectiveEdl` so this ingress behaves identically to
@@ -181,7 +182,7 @@ export async function applyEdlRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("apply-edl", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("apply-edl", {
       jobId: job.id,
       edl: effectiveEdl,
       transcript,
@@ -189,7 +190,8 @@ export async function applyEdlRoutes(app: FastifyInstance) {
       quality,
       ...stamps,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

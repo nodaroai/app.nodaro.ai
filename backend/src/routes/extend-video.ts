@@ -33,6 +33,7 @@ import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { supabase } from "../lib/supabase.js"
 import { kieTaskOwnedByAnother } from "../lib/kie-task-ownership.js"
 import { videoQueue } from "../lib/queue.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
@@ -608,7 +609,8 @@ export async function extendVideoRoutes(app: FastifyInstance) {
             quality,
             usageLogId,
           }
-    await videoQueue.add("extend-video", queuePayload)
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("extend-video", queuePayload))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

@@ -6,6 +6,7 @@
 import { supabase } from "../lib/supabase.js"
 import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { settleUnqueuedRun, UnqueuedRunError } from "../lib/enqueue-execution.js"
 import { payloadBillingContext, type BillingContext } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
@@ -91,6 +92,10 @@ export interface ExecuteAppRunResult {
  *
  * Credit / eligibility checks are NOT included here — callers must verify
  * eligibility before invoking this function.
+ *
+ * Throws a plain Error when a row cannot be created (nothing was queued), and
+ * an `UnqueuedRunError` (lib/enqueue-execution.ts) when the queue refused the
+ * run: its `outcome` says whether the run is known not to run.
  */
 export async function executeAppRun(
   params: ExecuteAppRunParams,
@@ -205,9 +210,18 @@ export async function executeAppRun(
     ...(cheapLanesOnly === true ? { cheapLanesOnly: true } : {}),
   }
 
-  await orchestrationQueue.add("workflow-execution", jobData, {
-    jobId: execution.id,
-  })
+  try {
+    await orchestrationQueue.add("workflow-execution", jobData, {
+      jobId: execution.id,
+    })
+  } catch (err) {
+    // Never left `pending` with nothing queued, holding its Idempotency-Key:
+    // failed from `pending` with its key released (a run that moved on is
+    // running). The caller answers the error, told by its outcome whether the
+    // run is known not to run ("failed") or may still run ("unsettled").
+    const outcome = await settleUnqueuedRun(execution.id, userId)
+    if (outcome !== "moved-on") throw new UnqueuedRunError(execution.id, outcome, err)
+  }
 
   return {
     executionId: execution.id,

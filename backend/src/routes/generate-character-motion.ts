@@ -21,6 +21,7 @@ import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { isFilledText, llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
 import { ASSET_DESCRIPTION_MODEL } from "../lib/asset-description-prompt.js"
 import { jobRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 export const generateCharacterMotionBody = z.object({
   motionPrompt: z.string().min(1).max(2000),
@@ -346,7 +347,7 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
         assetType: "motions",
       })
 
-      await videoQueue.add("generate-character-motion", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-character-motion", {
         jobId: job.id,
         prompt,
         sourceImageUrl: resolvedSourceImageUrl,
@@ -358,7 +359,8 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
         realLifeRefs: parsed.data.realLifeRefs,
         aspectRatio,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     },

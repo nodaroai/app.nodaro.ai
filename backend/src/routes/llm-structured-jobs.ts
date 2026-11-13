@@ -5,7 +5,13 @@ import { videoAnalysisResultSchema, type VideoAnalysisResult } from "@nodaro/sha
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
 import { shouldProxyLlmToCloud } from "../lib/cloud-llm-proxy.js"
 import { insertJob } from "../lib/insert-job.js"
-import { stampAnalysisChild, discardUnstartedJob, readOwnAnalysisChild } from "../lib/llm-structured-job-row.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import {
+  stampAnalysisChild,
+  discardUnstartedJob,
+  readOwnAnalysisChild,
+  cancelUnusedAnalysisChild,
+} from "../lib/llm-structured-job-row.js"
 import { config } from "../lib/config.js"
 import { videoQueue } from "../lib/queue.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
@@ -176,6 +182,26 @@ async function precheckReusedAnalysis(analysisJobId: string, userId: string): Pr
   return { ok: true, credits: row.credits, analysis: parsed.data }
 }
 
+/**
+ * Record the run's analysis on its parent row: a reused one as reused (it
+ * costs this run nothing, so no price is stamped), one this run started with
+ * its price, which is on the child's row from its own reservation — stamped
+ * now so a run list shows the whole cost from the first read. No analysis,
+ * nothing to stamp. Throws when the child's read or the stamp throws.
+ */
+async function stampRunAnalysis(
+  jobId: string,
+  userId: string,
+  inputData: Record<string, unknown>,
+  analysisJobId: string | undefined,
+  reused: boolean,
+): Promise<void> {
+  if (!analysisJobId) return
+  if (reused) return stampAnalysisChild(jobId, userId, inputData, { analysisJobId, reused: true })
+  const analysisCredits = (await readOwnAnalysisChild(analysisJobId, userId))?.credits ?? null
+  await stampAnalysisChild(jobId, userId, inputData, { analysisJobId, analysisCredits })
+}
+
 /** The enqueue payload: the body the worker needs, minus the create-time-only
  *  fields (the child is already made — or admitted; the label lives on the row). */
 function workerPayload(body: LlmStructuredJobBody): Omit<LlmStructuredJobPayload, "jobId" | "usageLogId" | "analysisJobId" | "analysisReused"> {
@@ -268,12 +294,12 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
         : await reserveCreditsForJob(req, reply, job.id, prepared.modelIdentifier)
       if (reply.sent) return
 
+      // The analysis the draft reads: the caller's own finished one (admitted
+      // above), or one created for it now through the analysis route.
       let analysisJobId: string | undefined
       const analysisReused = Boolean(parsed.data.analysisJobId)
       if (parsed.data.analysisJobId) {
-        // Admitted above; it costs this run nothing, so no price is stamped.
         analysisJobId = parsed.data.analysisJobId
-        await stampAnalysisChild(job.id, userId, inputData, { analysisJobId, reused: true })
       } else if (parsed.data.videoUrl) {
         const child = await createAnalysisChild(app, req, parsed.data)
         if (!child.ok) {
@@ -283,10 +309,6 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
           return reply.status(child.status).send(child.body)
         }
         analysisJobId = child.jobId
-        // The child's price is on its row from its own reservation; stamped
-        // now so a run list shows the whole cost from the first read.
-        const analysisCredits = (await readOwnAnalysisChild(analysisJobId, userId))?.credits ?? null
-        await stampAnalysisChild(job.id, userId, inputData, { analysisJobId, analysisCredits })
       }
 
       // attempts: 1 — the LLM call is the paid step; a BullMQ re-run after a
@@ -301,10 +323,25 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
       }
       // A tighter fail window than the shared queue's 5000: the full system
       // prompt (≤ 100k chars) + jsonSchema (≤ 64 KB) ride job.data into Redis.
-      await videoQueue.add(LLM_STRUCTURED_JOB_TYPE, payload as unknown as Record<string, unknown>, {
-        attempts: 1,
-        removeOnFail: { count: 200 },
+      //
+      // The analysis is stamped on the parent as part of handing it over: the
+      // read of the child's price throws on a failed read, and the stamp can
+      // throw too. A throw there, like a queue that refuses the job, fails the
+      // job from `pending` with its key released, refunds it confirmed, and
+      // answers the 500 (lib/enqueue-route-job.ts), instead of leaving it
+      // pending and reserved while its analysis runs for nobody. An analysis
+      // child this run started then has nobody left to draft from it, so it is
+      // cancelled, as when the draft is cancelled; a reused analysis is the
+      // caller's own finished one and is never touched. A job that moved on is
+      // answered as started.
+      await enqueueRouteJob(req, reply, job.id, async () => {
+        await stampRunAnalysis(job.id, userId, inputData, analysisJobId, analysisReused)
+        return videoQueue.add(LLM_STRUCTURED_JOB_TYPE, payload as unknown as Record<string, unknown>, {
+          attempts: 1,
+          removeOnFail: { count: 200 },
+        })
       })
+      if (reply.sent) return cancelUnusedAnalysisChild(req, analysisReused ? undefined : analysisJobId, userId)
 
       return { jobId: job.id }
     },

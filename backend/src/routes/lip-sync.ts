@@ -18,6 +18,7 @@ import { checkLipSyncInputs, lipSyncRateBaseCredits } from "../lib/lip-sync-inpu
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const lipSyncBody = z.object({
   imageUrl: safeUrlSchema.optional(),     // Portrait/face image (required for the KIE avatars)
@@ -324,7 +325,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("lip-sync", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("lip-sync", {
       jobId: job.id,
       imageUrl,
       videoUrl,
@@ -341,7 +342,8 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       syncMode, temperature, activeSpeaker,
       mode, separateVocal, openScenedet, alignAudio, alignAudioReverse, templStartSeconds,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { speedRampCreditId } from "@nodaro/shared/credits"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const rampSegmentSchema = z.object({
   start: z.number().min(0),
@@ -82,7 +83,8 @@ export async function speedRampRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("speed-ramp", { jobId: job.id, ...restData, usageLogId })
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("speed-ramp", { jobId: job.id, ...restData, usageLogId }))
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

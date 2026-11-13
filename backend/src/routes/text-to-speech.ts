@@ -19,6 +19,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { judgeVoice, voiceNotAvailableBody } from "../lib/voice-gender.js"
 import { TTS_VOICE_SETTING_RANGES, type TtsVoiceSettingKey } from "../providers/elevenlabs/voice-settings.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../providers/elevenlabs/neighbour-text.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 /**
  * A voice setting, validated with the range the provider funnel clamps into (one source of truth, so the route and
@@ -194,7 +195,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("text-to-speech", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("text-to-speech", {
       jobId: job.id,
       text,
       voice,
@@ -217,7 +218,8 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       allowDefaultVoiceFallback: Boolean(mcpClient),
       // A coordinator's child (the video director's speech job) goes ahead in its lane; nothing else changes.
       ...laneParentPayload(req),
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

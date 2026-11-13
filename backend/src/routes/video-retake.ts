@@ -29,6 +29,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared/credits"
 import { ltxRetakeBaseCredits } from "../lib/ltx-retake-credits.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const RETAKE_MODEL_IDENTIFIER = LTX_RETAKE_PER_SECOND_CREDIT_ID
 
@@ -120,7 +121,7 @@ export async function videoRetakeRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("video-retake", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("video-retake", {
       jobId: job.id,
       provider: VIDEO_RETAKE_MODEL,
       video: videoUrl,
@@ -134,7 +135,8 @@ export async function videoRetakeRoutes(app: FastifyInstance) {
       generate_audio: generateAudio,
       camera_motion: cameraMotion ?? "none",
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

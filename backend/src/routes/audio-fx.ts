@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { AUDIO_FX_PRESETS } from "@nodaro/shared/media"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const audioFxBody = z.object({
   audioUrl: safeUrlSchema,
@@ -56,7 +57,8 @@ export async function audioFxRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("audio-fx", { jobId: job.id, ...restData, usageLogId })
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("audio-fx", { jobId: job.id, ...restData, usageLogId }))
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

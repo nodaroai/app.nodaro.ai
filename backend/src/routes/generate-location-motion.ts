@@ -17,6 +17,7 @@ import { jobRunModel } from "../lib/run-model.js"
 import { LOCATION_ATMOSPHERE_PROVIDERS } from "@nodaro/shared/models"
 import { CHARACTER_ASPECT_OPTIONS } from "@nodaro/shared/entities"
 import { buildLocationMotionPrompt } from "@nodaro/prompts/doctrine"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 /**
  * Body schema for `POST /v1/generate-location-motion`.
  *
@@ -164,7 +165,7 @@ export async function generateLocationMotionRoutes(app: FastifyInstance) {
       //    live worker and by nothing else — a crashed worker's recovered clip
       //    had no column to attach to.
       // ───────────────────────────────────────────────────────────────────
-      await videoQueue.add("generate-location-motion", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-location-motion", {
         jobId: job.id,
         prompt,
         sourceImageUrl: parsed.data.sourceImageUrl,
@@ -174,7 +175,8 @@ export async function generateLocationMotionRoutes(app: FastifyInstance) {
         usageLogId,
         attachToLocationId: parsed.data.attachToLocationId,
         attachName: parsed.data.attachName,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     },

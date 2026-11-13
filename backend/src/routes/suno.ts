@@ -43,6 +43,7 @@ import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 import { jobRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const SUNO_VOICE_CREATE_CREDIT_ID = "suno-voice-create"
 const SUNO_VOICE_VALIDATE_TAG = "suno-voice-validate"
@@ -435,7 +436,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("suno-generate", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-generate", {
         jobId: job.id,
         prompt,
         model,
@@ -453,7 +454,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         personaId,
         personaModel: personaId ? (personaModel ?? "voice_persona") : undefined,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     }
@@ -512,7 +514,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("suno-cover", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-cover", {
         jobId: job.id,
         // A link as the source is an import of the link: the confirmation, the
         // way in (and the connected app), for the worker's gate (`importRightsOf`).
@@ -531,7 +533,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         personaId,
         personaModel: personaId ? (personaModel ?? "voice_persona") : undefined,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     }
@@ -593,7 +596,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("suno-extend", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-extend", {
         jobId: job.id,
         audioId,
         defaultParamFlag,
@@ -610,7 +613,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         personaId,
         personaModel: personaId ? (personaModel ?? "voice_persona") : undefined,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     }
@@ -659,11 +663,12 @@ export async function sunoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("suno-lyrics", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-lyrics", {
         jobId: job.id,
         prompt,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     }
@@ -733,7 +738,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         ...(fallbackToDemucs ? { fallbackToDemucs: true } : {}),
         usageLogId,
       }
-      await videoQueue.add("suno-separate", jobData)
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-separate", jobData))
+      if (reply.sent) return
 
       return { jobId: job.id }
     }
@@ -782,12 +788,13 @@ export async function sunoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("suno-music-video", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-music-video", {
         jobId: job.id,
         taskId,
         audioId,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     }
@@ -841,7 +848,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("suno-mashup", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-mashup", {
         jobId: job.id,
         uploadUrlList,
         model,
@@ -851,7 +858,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         negativeStyle,
         vocalGender,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     }
@@ -906,7 +914,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("suno-replace-section", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-replace-section", {
         jobId: job.id,
         taskId,
         audioId,
@@ -918,7 +926,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         fullLyrics,
         negativeTags,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     }
@@ -1053,13 +1062,14 @@ export async function sunoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("suno-add-instrumental", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-add-instrumental", {
         jobId: job.id,
         taskId,
         audioId,
         model,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     }
@@ -1108,13 +1118,14 @@ export async function sunoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("suno-add-vocals", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-add-vocals", {
         jobId: job.id,
         taskId,
         audioId,
         model,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     }
@@ -1163,12 +1174,13 @@ export async function sunoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("suno-convert-wav", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-convert-wav", {
         jobId: job.id,
         taskId,
         audioId,
         usageLogId,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     }
@@ -1225,7 +1237,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("suno-upload-extend", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-upload-extend", {
         jobId: job.id,
         uploadUrl,
         continueAt,
@@ -1239,7 +1251,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         usageLogId,
         ...(confirmationId ? { confirmationId } : {}),
         ...importJobFields(req),
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     }

@@ -17,6 +17,7 @@ import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TONE_MAX
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const generateScriptBody = z.object({
   // LLM_TEXT_INPUT_MAX (100K) — same rationale as llm-chat: LLM input, huge
@@ -123,7 +124,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       usageLogId = reservation?.usageLogId
     }
 
-    await videoQueue.add("generate-script", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-script", {
       jobId: job.id,
       prompt,
       sceneCount,
@@ -140,7 +141,8 @@ export async function generateScriptRoutes(app: FastifyInstance) {
       // Same reason: the lane rule rides the payload to the worker's call.
       ...(parsed.data.cheapLanesOnly === true ? { cheapLanesOnly: true } : {}),
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

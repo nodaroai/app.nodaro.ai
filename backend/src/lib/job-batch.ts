@@ -24,7 +24,15 @@
  *     below). After each, a job found holding another request's hold too keeps
  *     that one and this request's is refunded (`job-batch-holds.ts`).
  *  4. Queue them in ONE call (`enqueue` must be atomic — BullMQ's `addBulk`
- *     is — and must not queue a job twice).
+ *     is — and must not queue a job twice). A throw there does NOT prove
+ *     nothing was queued: a closed connection can deliver the add and lose
+ *     only its answer, and a worker may claim a job at once. So a refused add
+ *     takes its own undo (`settleRefusedBatch`): each job this request owns is
+ *     failed from `pending` first (its key released), and only the jobs that
+ *     write failed are refunded and removed; a job no longer `pending` is
+ *     left running and named in the 500's `error.startedJobIds`. When every
+ *     one of them had moved on, the add landed: the batch is answered as
+ *     started.
  *
  * A keyed batch runs under a claim (`job-batch-claim.ts`), renewed before
  * every reservation, before the queue and before an undo. A renewal that
@@ -33,12 +41,15 @@
  * What it already did stays for that request to find (it pays for and queues
  * what is unpaid, and queues what is paid), or for the never-started sweep.
  *
- * Undo = refund what this request reserved and remove the rows it owns whose
- * refund is CONFIRMED (`undoOwnedJobs`); a row whose refund is not stays
- * `pending` and unqueued for `sweepNeverStartedJobs` (lib/reconcile/cron.ts),
- * which fails it and refunds its hold after 30 minutes. Removing (not failing)
- * the others is the established answer for a job that never ran, and frees
- * their keys, so the request can be retried once the cause is fixed.
+ * Undo, before anything is queued (an insert, a charge, a holds read or a
+ * reused key that fails) = refund what this request reserved and remove the
+ * rows it owns whose refund is CONFIRMED (`undoOwnedJobs`); a row whose refund
+ * is not stays `pending` and unqueued for `sweepNeverStartedJobs`
+ * (lib/reconcile/cron.ts), which fails it and refunds its hold after 30
+ * minutes. Removing (not failing) the others is the established answer for a
+ * job that never ran, and frees their keys, so the request can be retried
+ * once the cause is fixed. After a refused queue the removal waits for the
+ * failure write (step 4), so a job a worker took is never refunded or removed.
  */
 import type { FastifyReply, FastifyRequest } from "fastify"
 import { insertJobIdempotent } from "./insert-job.js"
@@ -47,7 +58,7 @@ import { jobCreditHolds } from "./credits-job-lifecycle.js"
 import { computeFingerprint } from "./dedup-fingerprint.js"
 import { sendInternalError } from "./http-errors.js"
 import { batchClaimKey, claimBatch, type BatchClaim } from "./job-batch-claim.js"
-import { undoOwnedJobs, yieldToOtherHold } from "./job-batch-holds.js"
+import { settleRefusedBatch, undoOwnedJobs, yieldToOtherHold } from "./job-batch-holds.js"
 
 /** One job of a batch, planned by the route before anything is created. */
 export interface PlannedBatchJob {
@@ -81,7 +92,9 @@ export interface RunJobBatchOptions {
   /** The request's Idempotency-Key; job i is keyed `<key>:<i>`. */
   readonly idempotencyKey?: string | null
   /**
-   * Queue the jobs, all at once: a throw must mean none was queued. A job
+   * Queue the jobs, all at once: all of them or none. A throw may still have
+   * queued them all with only its answer lost, so the jobs are settled from
+   * `pending` (`settleRefusedBatch`) rather than assumed unqueued. A job
    * already in the queue must not be queued again (give each entry the job's
    * own queue id) — a retry re-queues the paid jobs an earlier request left.
    */
@@ -148,10 +161,58 @@ async function undoIfHeld(req: FastifyRequest, run: Run, owned: readonly OwnedJo
 }
 
 /**
+ * The 500's message when some of the batch's jobs did start (`error.startedJobIds`
+ * lists them): the words `UNQUEUED_BATCH_CLIENT_MESSAGE` (lib/enqueue-route-job.ts)
+ * gives every batch route; a test holds the two equal. Kept here, not
+ * imported: that module builds the queue at import.
+ */
+export const PARTLY_STARTED_BATCH_MESSAGE =
+  "Some of the jobs could not be started. The jobs in startedJobIds are running; please try the rest again."
+
+/**
+ * The queue refused the batch's bulk add: settle what this request owns
+ * (`settleRefusedBatch`, while it still holds the batch) and answer. True
+ * when nothing was failed and the jobs it owns had all moved on — the add
+ * landed with its answer lost, so the batch is answered as started; false
+ * once the 500 is sent (with `error.startedJobIds` when some did start).
+ */
+async function answerRefusedQueue(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  run: Run,
+  owned: readonly OwnedJob[],
+  err: unknown,
+  opts: RunJobBatchOptions,
+): Promise<boolean> {
+  if (!(await stillHeld(run))) {
+    req.log.warn("[job-batch] the batch's claim was lost before its undo: its jobs are left to the request that holds it")
+    sendInternalError(reply, req, err, opts.failureMessage)
+    return false
+  }
+  // Only what this request owns is settled: a paid job an earlier request
+  // left is that request's (queued already, or failed and refunded by the
+  // never-started sweep).
+  const { started, failed } = await settleRefusedBatch(req, owned)
+  if (failed.length === 0 && started.length > 0) {
+    req.log.warn({ err, jobIds: started }, "[job-batch] the queue refused a batch whose jobs have all since moved on — answered as started")
+    return true
+  }
+  if (started.length === 0) {
+    sendInternalError(reply, req, err, opts.failureMessage)
+    return false
+  }
+  req.log.error({ startedJobIds: started, failedJobIds: failed }, "[job-batch] the queue refused a batch that partly started: the rest is failed and refunded")
+  sendInternalError(reply, req, err, PARTLY_STARTED_BATCH_MESSAGE, { startedJobIds: started })
+  return false
+}
+
+/**
  * Insert, reserve and queue `planned`, all or nothing. Resolves the batch's
  * jobs in planned order, or `null` once the request has been answered with
  * the failure (the reply is sent; nothing this request owned is left running
- * or paid for, unless it lost the batch to another request, which then owns it).
+ * or paid for, unless it lost the batch to another request, which then owns
+ * it, or a refused queue add was delivered after all and a worker took some
+ * of its jobs: those keep running and the 500 names them).
  */
 export async function runJobBatch(
   req: FastifyRequest,
@@ -309,12 +370,7 @@ async function runBatch(
     try {
       await opts.enqueue(toQueue)
     } catch (err) {
-      // Only what this request owns is undone: a paid job an earlier request
-      // left is that request's (queued already, or failed and refunded by the
-      // never-started sweep).
-      await undoIfHeld(req, run, owned)
-      sendInternalError(reply, req, err, opts.failureMessage)
-      return null
+      if (!(await answerRefusedQueue(req, reply, run, owned, err, opts))) return null
     }
   }
 

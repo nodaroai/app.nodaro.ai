@@ -13,6 +13,7 @@ import { COMBINE_VIDEOS_MAX_CLIPS, measureVideoUtilityPreHandler, stashedVideoUt
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isCloud } from "../lib/config.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 // Zod doesn't accept a readonly string[] directly in z.enum, but the runtime
 // shape is identical. Cast to a non-empty tuple on the type side only.
@@ -150,7 +151,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("combine-videos", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("combine-videos", {
       jobId: job.id,
       videoUrls,
       transition,
@@ -168,7 +169,8 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       edgeFades,
       ...charged,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

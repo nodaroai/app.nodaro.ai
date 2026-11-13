@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { PLATFORM_SPECS } from "@nodaro/shared/social"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const VALID_SPEC_KEYS = Object.keys(PLATFORM_SPECS) as [string, ...string[]]
 
@@ -61,7 +62,8 @@ export async function socialMediaFormatRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("social-media-format", { jobId: job.id, ...restData, usageLogId })
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("social-media-format", { jobId: job.id, ...restData, usageLogId }))
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

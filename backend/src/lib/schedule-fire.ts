@@ -15,7 +15,7 @@ import { recordTriggerFireRefusal } from "./trigger-fire-refusal.js"
 import { refusePreviewFire } from "./preview-fire-refusal.js"
 import { refuseUnpricedFire } from "./llm-unpriced-fire-refusal.js"
 import { getRuntimeEnv } from "./runtime-env.js"
-import { failWaitingExecution } from "./concurrency-lanes/run-failure.js"
+import { failUnqueuedRun, type UnqueuedExecutionOutcome } from "./enqueue-execution.js"
 import type { ScheduleRetryStamp } from "./schedule-retry.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
@@ -201,7 +201,7 @@ export async function createScheduleExecution(args: ScheduleExecutionArgs): Prom
     // The row left `pending` meanwhile: the job reached the queue after all
     // (only the reply was lost) and an orchestrator claimed it, or its owner
     // cancelled it. Either way the run exists, and it is not this call's to fail.
-    if ((await settleUnqueuedRun(execution.id)) === "moved-on") return { ok: true, executionId: execution.id }
+    if ((await settleUnqueuedScheduledRun(execution.id)) === "moved-on") return { ok: true, executionId: execution.id }
     return { ok: false, keepClaim: true }
   }
 
@@ -209,25 +209,25 @@ export async function createScheduleExecution(args: ScheduleExecutionArgs): Prom
 }
 
 /**
- * What became of a run the queue refused:
+ * What became of a run the queue refused (`failUnqueuedRun`,
+ * lib/enqueue-execution.ts, with this lane's message and its key kept):
  *   - "failed": this call failed it, through the run's own failure path (a
- *     compare-and-set from `pending`);
- *   - "moved-on": the row was no longer `pending`, so the compare-and-set
- *     matched nothing;
- *   - "unsettled": the failure write itself failed. The row stays `pending`
- *     and the never-started sweep settles it later.
+ *     compare-and-set from `pending`) — including a retried write that landed
+ *     with its answer lost, found by reading the row back;
+ *   - "moved-on": the row was no longer `pending` and no write of this
+ *     call's failed it;
+ *   - "unsettled": the failure write itself failed, or the read-back after a
+ *     retried write did. The row may still be `pending` (the never-started
+ *     sweep settles it later) or failed.
  */
-type UnqueuedRunOutcome = "failed" | "moved-on" | "unsettled"
-
-async function settleUnqueuedRun(executionId: string): Promise<UnqueuedRunOutcome> {
-  try {
-    return (await failWaitingExecution(executionId, UNQUEUED_RUN_MESSAGE)) ? "failed" : "moved-on"
-  } catch (err) {
+async function settleUnqueuedScheduledRun(executionId: string): Promise<UnqueuedExecutionOutcome> {
+  const { outcome, err } = await failUnqueuedRun(executionId, UNQUEUED_RUN_MESSAGE, {})
+  if (outcome === "unsettled") {
     console.error(
-      `[schedule-fire] could not fail unqueued execution ${executionId}; the never-started sweep will: ${err instanceof Error ? err.message : String(err)}`,
+      `[schedule-fire] could not confirm unqueued execution ${executionId} failed; if it is still pending the never-started sweep will fail it: ${err === undefined ? "the read-back failed" : err instanceof Error ? err.message : String(err)}`,
     )
-    return "unsettled"
   }
+  return outcome
 }
 
 /** The orchestrator job for a scheduled execution (a fire's or a retry's). */

@@ -74,6 +74,17 @@ describe("updateExecutionWithRetry", () => {
     expect(claimed).toEqual({ ok: true, attempts: 1 })
   })
 
+  it("a terminal compare-and-set that errored, then matched nothing, answers how many writes it sent (the first may have landed)", async () => {
+    // The failure write of a run still waiting (failWaitingExecutionDetailed): the
+    // first errored — it may have committed with its answer lost — and the retry
+    // found the row no longer `pending`.
+    mocks.errorQueue.push({ message: "fetch failed" })
+    mocks.errorQueue.push(null)
+    mocks.dataQueue.push(null, [])
+    const missed = await updateExecutionWithRetry("exec-1", { status: "failed" }, { fromStatuses: ["pending"] })
+    expect(missed).toEqual({ ok: false, cancelledRace: true, attempts: 2 })
+  })
+
   it("a non-terminal write with no compare-and-set is ok however many rows it matched (unchanged)", async () => {
     mocks.errorQueue.push(null)
     mocks.dataQueue.push([])

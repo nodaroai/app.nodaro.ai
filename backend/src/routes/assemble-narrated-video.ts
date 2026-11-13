@@ -12,6 +12,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { assembleNarratedVideoUnits } from "../lib/video-utility-credits.js"
 import { unitRateBaseCredits } from "../lib/credit-base-cost.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const body = z.object({
   blocks: z.array(z.object({
@@ -56,9 +57,10 @@ export async function assembleNarratedVideoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("assemble-narrated-video", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("assemble-narrated-video", {
         jobId: job.id, blocks, voiceVolume, clipAudioVolume, maxSlowdown, trimStartFrames, trimEndFrames, usageLogId,
-      })
+      }))
+      if (reply.sent) return
       return { jobId: job.id }
     },
   )

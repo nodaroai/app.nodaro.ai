@@ -18,6 +18,7 @@ import { resolveObjectAspectRatio, OBJECT_ASPECT_OPTIONS } from "@nodaro/shared/
 import { getDurationsForModel } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { buildObjectMotionPrompt } from "@nodaro/prompts/doctrine"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 /**
  * Body schema for `POST /v1/generate-object-motion`.
  *
@@ -227,7 +228,7 @@ export async function generateObjectMotionRoutes(app: FastifyInstance) {
       //    live worker and by nothing else — a crashed worker's recovered clip
       //    had no column to attach to.
       // ───────────────────────────────────────────────────────────────────
-      await videoQueue.add("generate-object-motion", {
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-object-motion", {
         jobId: job.id,
         prompt,
         sourceImageUrl: parsed.data.sourceImageUrl,
@@ -238,7 +239,8 @@ export async function generateObjectMotionRoutes(app: FastifyInstance) {
         usageLogId,
         attachToObjectId: parsed.data.attachToObjectId,
         attachName: parsed.data.attachName,
-      })
+      }))
+      if (reply.sent) return
 
       return { jobId: job.id }
     },

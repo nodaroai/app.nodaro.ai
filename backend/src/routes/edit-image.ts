@@ -43,6 +43,7 @@ import {
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 export const editImageBody = z.object({
   // imageUrl is required for every provider EXCEPT the task-chained Grok ops
@@ -433,7 +434,7 @@ export async function editImageRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("edit-image", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("edit-image", {
       jobId: job.id,
       imageUrl,
       taskId,
@@ -450,7 +451,8 @@ export async function editImageRoutes(app: FastifyInstance) {
       maskIndexes,
       usageLogId,
       ...(nodaroImageUpscale ? { ...req.nodaroImageUpscale?.stamp, nodaroImageUpscaleCreditId: modelIdentifier } : {}),
-    })
+    }))
+    if (reply.sent) return
 
     return withAdjustments({ jobId: job.id }, normalized.adjustments)
   })

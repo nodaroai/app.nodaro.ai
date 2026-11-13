@@ -42,6 +42,7 @@ import {
   type ImageJobPlan,
 } from "./generate-image-plan.js"
 import { imageCreditIdentifierFor, modelCreditIdentifier, resolveImageCreditIdentifier, resolveImageRunModel } from "./generate-image-credit-id.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 // Re-exported for the key-set drift guard in `__tests__/generate-image.test.ts`.
 // The canonical definition now lives in `lib/connected-reference-schema.ts`
@@ -394,7 +395,8 @@ export async function generateImageRoutes(app: FastifyInstance) {
     const reservation = await reserveCreditsForJob(req, reply, job.id, plan.creditIdentifier)
     if (reply.sent) return
 
-    await videoQueue.add("generate-image", { jobId: job.id, ...plan.queueData, usageLogId: reservation?.usageLogId })
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-image", { jobId: job.id, ...plan.queueData, usageLogId: reservation?.usageLogId }))
+    if (reply.sent) return
 
     // Disclose corrections rather than silently handing back something else.
     // Absent when nothing changed, so the mainline body is unchanged.

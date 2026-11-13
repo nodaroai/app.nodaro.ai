@@ -26,6 +26,7 @@ import { rawBodyRecord } from "../lib/run-model.js"
 // reserved); one that cannot is held at the 30-minute ceiling and settled to
 // the length actually dubbed at delivery (lib/dubbing-duration.ts).
 import { DUBBING_MAX_DURATION_SEC, DUBBING_FALLBACK_SECONDS } from "../providers/elevenlabs/dubbing.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 export { DUBBING_MAX_DURATION_SEC, DUBBING_FALLBACK_SECONDS }
 
@@ -264,7 +265,7 @@ export async function dubbingRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("dubbing", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("dubbing", {
       jobId: job.id,
       audioUrl,
       videoUrl,
@@ -288,7 +289,8 @@ export async function dubbingRoutes(app: FastifyInstance) {
       // gate (`importRightsOf`).
       ...(confirmationId ? { confirmationId } : {}),
       ...importJobFields(req),
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

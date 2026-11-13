@@ -11,6 +11,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { measureVideoUtilityPreHandler, stashedVideoUtilityLength, VIDEO_UTILITY_CLIENT_CLOSED, videoUtilityClientGone, videoUtilityMeasuredBaseCredits, withoutVideoUtilityStash } from "../lib/video-utility-length.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const trimVideoBody = z.object({
   videoUrl: safeUrlSchema,
@@ -110,7 +111,8 @@ export async function trimVideoRoutes(app: FastifyInstance) {
 
     // `trimMode` stays on the payload (the worker cuts by the fields it sets) so the
     // render's charge check prices the downloaded video by the same formula.
-    await videoQueue.add("trim-video", { jobId: job.id, ...restData, ...charged, usageLogId })
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("trim-video", { jobId: job.id, ...restData, ...charged, usageLogId }))
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

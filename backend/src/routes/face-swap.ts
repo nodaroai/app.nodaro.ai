@@ -17,6 +17,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const faceSwapBody = z.object({
   faceImageUrl: safeUrlSchema,
@@ -64,13 +65,14 @@ export async function faceSwapRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("face-swap", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("face-swap", {
       jobId: job.id,
       faceImageUrl,
       videoUrl,
       provider,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

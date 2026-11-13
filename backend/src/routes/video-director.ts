@@ -12,6 +12,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { brandTokensSchema } from "../lib/plan-schemas.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 /**
  * Credit / model identifier for the video-director authoring run. The
@@ -110,14 +111,15 @@ export async function videoDirectorRoutes(app: FastifyInstance) {
     // reserveCreditsForJob may short-circuit the response on a dedup-key race.
     if (reply.sent) return
 
-    await videoDirectorQueue.add("video-director", {
+    await enqueueRouteJob(req, reply, job.id, () => videoDirectorQueue.add("video-director", {
       jobId: job.id,
       genre,
       brief,
       userId,
       tier,
       brand,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

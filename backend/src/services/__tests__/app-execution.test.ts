@@ -9,12 +9,18 @@ const mocks = vi.hoisted(() => ({
   insertWithIdempotencyKey: vi.fn(),
   queueAdd: vi.fn().mockResolvedValue({}),
   from: vi.fn(),
+  settleUnqueuedRun: vi.fn(),
 }))
 vi.mock("../../lib/idempotent-insert.js", () => ({ insertWithIdempotencyKey: mocks.insertWithIdempotencyKey }))
 vi.mock("../../lib/orchestration-queue.js", () => ({ orchestrationQueue: { add: mocks.queueAdd } }))
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: mocks.from } }))
+vi.mock("../../lib/enqueue-execution.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/enqueue-execution.js")>()),
+  settleUnqueuedRun: mocks.settleUnqueuedRun,
+}))
 
 const { executeAppRun } = await import("../app-execution.js")
+const { UnqueuedRunError } = await import("../../lib/enqueue-execution.js")
 const { appRunStampOf } = await import("../../lib/app-run-stamp.js")
 
 function chain(result: unknown) {
@@ -102,3 +108,46 @@ describe("executeAppRun — the run stamp", () => {
   })
 })
 
+describe("executeAppRun — a run the queue refuses", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.insertWithIdempotencyKey.mockResolvedValue({ row: { id: "exec-1" }, created: true })
+    mocks.from.mockReturnValue(chain({ data: { id: "run-1" }, error: null }))
+  })
+
+  it.each([["failed"], ["unsettled"]] as const)(
+    "is settled from pending with its key released (settleUnqueuedRun) and, when %s, the caller gets an UnqueuedRunError saying so, the queue's error as its cause",
+    async (outcome) => {
+      const refused = new Error("Connection is closed.")
+      mocks.queueAdd.mockRejectedValueOnce(refused)
+      mocks.settleUnqueuedRun.mockResolvedValueOnce(outcome)
+      const err = await executeAppRun({ appVersionId: "app-v", workflowId: "wf-1", userId: "u1", appId: "app-1", idempotencyKey: "mcp:retry-1234" }).then(
+        () => null,
+        (e: unknown) => e,
+      )
+      expect(err).toBeInstanceOf(UnqueuedRunError)
+      expect(err).toMatchObject({ outcome, executionId: "exec-1" })
+      expect((err as Error).cause).toBe(refused)
+      expect(mocks.settleUnqueuedRun).toHaveBeenCalledWith("exec-1", "u1")
+    },
+  )
+
+  it("a row that cannot be created throws a plain error: nothing was queued, nothing settled", async () => {
+    mocks.from.mockReturnValue(chain({ data: null, error: { message: "insert failed" } }))
+    const err = await executeAppRun({ appVersionId: "app-v", workflowId: "wf-1", userId: "u1", appId: "app-1" }).then(
+      () => null,
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(Error)
+    expect(err).not.toBeInstanceOf(UnqueuedRunError)
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+    expect(mocks.settleUnqueuedRun).not.toHaveBeenCalled()
+  })
+
+  it("one that moved on meanwhile (a worker claimed it) is answered as started", async () => {
+    mocks.queueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    mocks.settleUnqueuedRun.mockResolvedValueOnce("moved-on")
+    const result = await executeAppRun({ appVersionId: "app-v", workflowId: "wf-1", userId: "u1", appId: "app-1" })
+    expect(result).toEqual({ executionId: "exec-1", appRunId: "run-1", deduped: false })
+  })
+})

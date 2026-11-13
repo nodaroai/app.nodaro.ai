@@ -57,6 +57,18 @@ vi.mock("@/lib/orchestration-queue.js", () => ({
   },
 }))
 
+// The run's own failure write (lib/concurrency-lanes/run-failure.ts), reached only when the queue
+// refuses a run (lib/enqueue-execution.ts). Default: it flipped the run from `pending`.
+const mockFailWaiting = vi.hoisted(() => vi.fn(async (..._a: unknown[]) => true))
+vi.mock("@/lib/concurrency-lanes/run-failure.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/concurrency-lanes/run-failure.js")>()),
+  failWaitingExecution: mockFailWaiting,
+  // The form the refused-run settle calls (lib/enqueue-execution.ts): mockFailWaiting's answer after
+  // one write, so a false is believed without a read-back.
+  failWaitingExecutionDetailed: async (...a: unknown[]) => ({ failed: await mockFailWaiting(...a), attempts: 1 }),
+}))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn(async () => true) }))
+
 const schemaEstimate = vi.hoisted(() => ({ fn: vi.fn() }))
 // The run pre-check (R51; the estimator is unit-tested in workflow-estimate-metered.test.ts):
 // a node naming "unpriced-model" is the call a run would be refused at.
@@ -87,6 +99,7 @@ import type { LaneEntryMeta } from "../../lib/concurrency-lanes/types.js"
 import { resetLaneColumnsForTests } from "../../lib/concurrency-lanes/columns.js"
 import { resetQueueInfoWarningForTests } from "../../lib/concurrency-lanes/queue-info.js"
 import { supabase } from "../../lib/supabase.js"
+import { UNQUEUED_EXECUTION_CLIENT_MESSAGE, UNQUEUED_EXECUTION_MESSAGE } from "../../lib/enqueue-execution.js"
 import {
   __setDeploymentPayerForTests,
   __resetDeploymentPayerForTests,
@@ -1061,6 +1074,59 @@ describe("POST /v1/api/run — the override lock (issue #1555)", () => {
       expect.objectContaining({ inputOverrides: { "text-1": { text: "a cat" } } }),
       expect.anything(),
     )
+  })
+})
+
+// A queue that refuses the run (lib/enqueue-execution.ts): the execution is
+// failed from `pending` at once and the caller gets a 500 to retry, never a
+// 202 for a run nothing will start.
+describe("POST /v1/api/run — a queue that refuses the run", () => {
+  const WORKFLOW_ID = "00000000-0000-4000-8000-000000000043"
+  const EXEC_ID = "00000000-0000-4000-8000-0000000000e2"
+
+  function mockTokenRun() {
+    mockResolveToken.mockResolvedValue({
+      id: TEST_TOKEN_ID,
+      userId: TEST_USER_ID,
+      workflowIds: [],
+      rateLimit: 60,
+      tokenHash: "th-run-refused",
+      workspaceId: null,
+    })
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      const chain: Record<string, unknown> = {}
+      for (const m of ["select", "eq", "in", "is", "order", "limit", "lt", "insert"]) {
+        chain[m] = vi.fn().mockReturnValue(chain)
+      }
+      chain.single = vi.fn().mockResolvedValue(
+        table === "workflows"
+          ? { data: { id: WORKFLOW_ID, nodes: [{ id: "text-1", type: "text-prompt", data: { label: "Prompt", text: "" } }] }, error: null }
+          : { data: { id: EXEC_ID }, error: null },
+      )
+      chain.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+      return chain as never
+    })
+  }
+
+  const runIt = (url = "/v1/api/run") =>
+    app.inject({ method: "POST", url, headers: { authorization: "Bearer ndr_test_token" }, payload: { workflowId: WORKFLOW_ID } })
+
+  it("the execution is failed from pending and answered 500, with no wait", async () => {
+    mockTokenRun()
+    mockOrchestrationQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    const res = await runIt("/v1/api/run?wait=true&timeout=5")
+    expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({ error: { code: "internal_error", message: UNQUEUED_EXECUTION_CLIENT_MESSAGE } })
+    expect(mockFailWaiting).toHaveBeenCalledWith(EXEC_ID, UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null })
+  })
+
+  it("a run that moved on meanwhile is answered as started", async () => {
+    mockTokenRun()
+    mockOrchestrationQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    mockFailWaiting.mockResolvedValueOnce(false)
+    const res = await runIt()
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toEqual({ executionId: EXEC_ID, status: "pending" })
   })
 })
 

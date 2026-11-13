@@ -1,8 +1,10 @@
 /**
- * The `jobs`-row reads and writes the async structured-draft route needs
- * AFTER `insertJob` — the analysis child's stamp, the undo of a parent that
- * never started — and the ONE read it needs BEFORE it: the caller's own
- * finished analysis, when a run drafts from one instead of buying one.
+ * The `jobs`-row reads and writes the async structured-draft route (and the
+ * 3D-scene routes, which spawn the same analysis child) need AFTER
+ * `insertJob` — the analysis child's stamp, the undo of a parent that never
+ * started, the cancel of a child whose parent will never run — and the ONE
+ * read it needs BEFORE it: the caller's own finished analysis, when a run
+ * drafts from one instead of buying one.
  *
  * They live here rather than in `routes/llm-structured-jobs.ts` because the
  * route would otherwise have to import the service-role client, which
@@ -14,10 +16,13 @@
  *
  * Which is the invariant this file keeps: every query is pinned with
  * `.eq("id", jobId).eq("user_id", userId)`, so an id that is not the caller's
- * touches — and reveals — nothing.
+ * touches — and reveals — nothing. The child cancel goes through
+ * `cancelOwnedJob`, which verifies ownership itself.
  */
+import type { FastifyRequest } from "fastify"
 import { supabase } from "./supabase.js"
 import { refundReservedCreditsForJob } from "./credits-job-lifecycle.js"
+import { cancelOwnedJob } from "./cancel-job.js"
 
 /** What the parent row records about its analysis child. */
 export interface AnalysisChildStamp {
@@ -105,4 +110,31 @@ export async function readOwnAnalysisChild(
 export async function discardUnstartedJob(jobId: string, userId: string): Promise<void> {
   await refundReservedCreditsForJob(jobId)
   await supabase.from("jobs").delete().eq("id", jobId).eq("user_id", userId)
+}
+
+/**
+ * Cancel the `video-analysis` child a parent started, once the parent will
+ * never run: the parent was undone before it was queued, or the queue refused
+ * it and it was failed and refunded (`lib/enqueue-route-job.ts`). Nothing will
+ * wait for the analysis, so it goes through the single-job cancel, as when
+ * its parent is cancelled (`routes/cancel-jobs.ts`), with that cancel's own
+ * rules: a child still waiting is cancelled and its hold refunded, one already
+ * out at its provider is left to finish, a finished one is left alone.
+ *
+ * No id (no child, or a reused finished analysis the caller handed in, which
+ * this run did not start) does nothing. Never throws: the request is already
+ * being answered with the parent's failure, and a failed cleanup must not
+ * replace that answer.
+ */
+export async function cancelUnusedAnalysisChild(
+  req: FastifyRequest,
+  analysisJobId: string | undefined,
+  userId: string,
+): Promise<void> {
+  if (!analysisJobId) return
+  try {
+    await cancelOwnedJob(analysisJobId, userId)
+  } catch (err) {
+    req.log.error({ err, analysisJobId }, "could not cancel the analysis child of a job that will never run")
+  }
 }

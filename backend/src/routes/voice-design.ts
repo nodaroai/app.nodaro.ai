@@ -14,6 +14,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { isNodeDeniedForUser } from "../lib/availability-viewer.js"
 import { fixedRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 /** The catalog model every run of this route runs — and the credit id it bills under. */
 const VOICE_DESIGN_MODEL_ID = "elevenlabs-voice-design"
@@ -89,7 +90,7 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("voice-design", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("voice-design", {
       jobId: job.id,
       text,
       voiceDescription: finalVoiceDescription,
@@ -100,7 +101,8 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
       quality,
       shouldEnhance,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

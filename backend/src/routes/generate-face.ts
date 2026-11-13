@@ -16,6 +16,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { providerRunModel } from "../lib/run-model.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const generateFaceBody = z.object({
   name: z.string().min(1).max(200),
@@ -119,7 +120,7 @@ export async function generateFaceRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("generate-face", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-face", {
       jobId: job.id,
       prompt,
       sourceImageUrl,
@@ -129,7 +130,8 @@ export async function generateFaceRoutes(app: FastifyInstance) {
       // name it serves, this one included). Absent → identity.
       subjectMinor,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

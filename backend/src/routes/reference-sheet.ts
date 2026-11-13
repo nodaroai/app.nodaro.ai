@@ -10,6 +10,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { referenceSheetCreditId } from "@nodaro/shared/entities"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const TABLE: Record<string, string> = { character: "characters", object: "objects", location: "locations" }
 
@@ -61,7 +62,8 @@ export async function referenceSheetRoutes(app: FastifyInstance): Promise<void> 
       const reservation = await reserveCreditsForJob(req, reply, job.id, sheetCreditId(body))
       if (reply.sent) return
 
-      await videoQueue.add("reference-sheet", { jobId: job.id, usageLogId: reservation?.usageLogId, userId, ...body })
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("reference-sheet", { jobId: job.id, usageLogId: reservation?.usageLogId, userId, ...body }))
+      if (reply.sent) return
       return reply.status(202).send({ jobId: job.id })
     },
   )

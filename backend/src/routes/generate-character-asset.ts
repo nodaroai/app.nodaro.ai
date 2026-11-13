@@ -38,6 +38,7 @@ import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { providerRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { isFilledText, llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 // `headAngles` is an alias for `angles` (the legacy single-surface column,
 // now treated as head-angles in the UI). `bodyAngles` writes to the new
@@ -558,7 +559,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       assetType: pickAspectAssetType(assetType),
     })
 
-    await videoQueue.add("generate-character-asset", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("generate-character-asset", {
       jobId: job.id,
       prompt,
       sourceImageUrl: resolvedSourceImageUrl,
@@ -577,7 +578,8 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       // W1-a: arms the minor-age-floor policy at the entity image chokepoint.
       subjectMinor,
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

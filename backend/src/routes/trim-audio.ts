@@ -14,6 +14,7 @@ import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
 import { isImportRefusal, requireImportAllowed } from "../lib/import-gate.js"
 import { importJobFields, importViaOf } from "../lib/import-via.js"
 import { linkImportRefusal } from "../lib/link-imports.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const trimAudioBody = z.object({
   videoUrl: safeUrlSchema,
@@ -87,7 +88,8 @@ export async function trimAudioRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("trim-audio", { jobId: job.id, ...restData, usageLogId, ...importJobFields(req) })
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("trim-audio", { jobId: job.id, ...restData, usageLogId, ...importJobFields(req) }))
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

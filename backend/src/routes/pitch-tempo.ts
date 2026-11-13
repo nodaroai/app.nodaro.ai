@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { measurePitchTempoDuration } from "../lib/pitch-tempo-duration.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 export const PitchTempoBody = z
   .object({
@@ -98,7 +99,8 @@ export async function pitchTempoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await videoQueue.add("pitch-tempo", { jobId: job.id, ...settings, usageLogId })
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("pitch-tempo", { jobId: job.id, ...settings, usageLogId }))
+      if (reply.sent) return
       return { jobId: job.id }
     },
   )

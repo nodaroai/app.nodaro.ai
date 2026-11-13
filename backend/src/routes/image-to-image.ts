@@ -31,6 +31,7 @@ import {
 } from "../lib/asset-description-prompt.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { isFilledText, llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 export const imageToImageBody = z.object({
   imageUrl: safeUrlSchema,
@@ -361,7 +362,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("image-to-image", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("image-to-image", {
       jobId: job.id,
       imageUrl,
       referenceImageUrls,
@@ -394,7 +395,8 @@ export async function imageToImageRoutes(app: FastifyInstance) {
           }
         : {}),
       usageLogId,
-    })
+    }))
+    if (reply.sent) return
 
     return withAdjustments({ jobId: job.id }, adjustments)
   })

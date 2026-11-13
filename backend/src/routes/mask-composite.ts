@@ -38,6 +38,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { maskCompositeBaseCredits, maskCompositeLeadOf, measureMaskCompositeLength } from "../lib/mask-composite-length.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const b = MASK_COMPOSITE_BOUNDS
 const d = MASK_COMPOSITE_DEFAULTS
@@ -138,7 +139,8 @@ export async function maskCompositeRoutes(app: FastifyInstance) {
     if (reply.sent) return
     // The units it was charged ride the job (after the spread: a client's field never wins;
     // Zod strips one anyway): the render refuses a foreground / background that needs more.
-    await videoQueue.add("mask-composite", { jobId: job.id, ...body, billedUnits, usageLogId: reservation?.usageLogId })
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("mask-composite", { jobId: job.id, ...body, billedUnits, usageLogId: reservation?.usageLogId }))
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

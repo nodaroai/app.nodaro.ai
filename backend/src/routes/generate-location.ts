@@ -6,6 +6,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
+import { enqueueRouteJobs } from "../lib/enqueue-route-job.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { resolveEntityImageCreditIdentifier, resolveEntityImageParams } from "../lib/entity-credit-identifier.js"
@@ -312,22 +313,32 @@ export async function generateLocationRoutes(app: FastifyInstance) {
       }
 
       // ──────────────────────────────────────────────────────────────────────
-      // Phase 2B: All reservations succeeded — enqueue every job.
+      // Phase 2B: All reservations succeeded — enqueue every job, in order.
       // `attachToLocationId` flows through the queue payload too, but ONLY
       // when count=1 (matches what's in input_data — single source of truth).
+      // When the queue refuses one, it and the jobs after it are failed and
+      // refunded, the ones already queued keep running, and the request is
+      // answered 500 with `error.startedJobIds` (enqueueRouteJobs).
       // ──────────────────────────────────────────────────────────────────────
-      for (const r of reservations) {
-        await videoQueue.add("generate-location", {
+      await enqueueRouteJobs(
+        req,
+        reply,
+        reservations.map((r) => ({
           jobId: r.jobId,
-          prompt,
-          sourceImageUrl,
-          provider: parsed.data.provider,
-          resolution: parsed.data.resolution,
-          quality: parsed.data.quality,
-          usageLogId: r.usageLogId,
-          ...(includeAttach ? { attachToLocationId: parsed.data.attachToLocationId } : {}),
-        })
-      }
+          enqueue: () =>
+            videoQueue.add("generate-location", {
+              jobId: r.jobId,
+              prompt,
+              sourceImageUrl,
+              provider: parsed.data.provider,
+              resolution: parsed.data.resolution,
+              quality: parsed.data.quality,
+              usageLogId: r.usageLogId,
+              ...(includeAttach ? { attachToLocationId: parsed.data.attachToLocationId } : {}),
+            }),
+        })),
+      )
+      if (reply.sent) return
 
       // `jobIds` is ALWAYS present now (the harmonized contract — matches
       // characters). `jobId` is kept ONLY for count===1 as a deprecated

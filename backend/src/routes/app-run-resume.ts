@@ -53,6 +53,7 @@ import { personalPayer, shouldRefuseDegradedRunFor, type BillingContext } from "
 import { billingPairColumns } from "../lib/insert-job.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { enqueueExecution } from "../lib/enqueue-execution.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
 import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
@@ -378,7 +379,13 @@ export async function appRunResumeRoutes(app: FastifyInstance) {
         billingContext,
         reviewerPresent,
       }
-      await orchestrationQueue.add("workflow-execution", jobData, { jobId: execution.id })
+      // A queue that refuses the Retry fails its execution from `pending`, its key released, and
+      // answers 500 (lib/enqueue-execution.ts); nothing is held before this point. The run then
+      // points at a Retry refused before it started, which the next Retry steps over (`resumeSource`).
+      await enqueueExecution(req, reply, execution.id, () =>
+        orchestrationQueue.add("workflow-execution", jobData, { jobId: execution.id }),
+      )
+      if (reply.sent) return
       return reply.status(202).send({ executionId: execution.id, runId, status: "pending", nodeIds: runSet })
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to retry the run")

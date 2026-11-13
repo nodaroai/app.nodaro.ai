@@ -148,6 +148,16 @@ vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: mockAppReport }))
 // The live use-case wrappers an execution's node states name (lib/use-case/execution-wrappers.ts).
 const mockLiveWrappers = vi.hoisted(() => vi.fn(async (_exec: string, _owner: string): Promise<string[]> => []))
 vi.mock("@/lib/use-case/execution-wrappers.js", () => ({ liveUseCaseWrappersOf: mockLiveWrappers }))
+// The run's own failure write (lib/concurrency-lanes/run-failure.ts), reached only when the queue
+// refuses a run (lib/enqueue-execution.ts). Default: it flipped the run from `pending`.
+const mockFailWaiting = vi.hoisted(() => vi.fn(async (..._a: unknown[]) => true))
+vi.mock("@/lib/concurrency-lanes/run-failure.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/concurrency-lanes/run-failure.js")>()),
+  failWaitingExecution: mockFailWaiting,
+  // The form the refused-run settle calls (lib/enqueue-execution.ts): mockFailWaiting's answer after
+  // one write, so a false is believed without a read-back.
+  failWaitingExecutionDetailed: async (...a: unknown[]) => ({ failed: await mockFailWaiting(...a), attempts: 1 }),
+}))
 
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
@@ -164,6 +174,7 @@ import type { LaneEntryMeta } from "../../lib/concurrency-lanes/types.js"
 import { makeFakeLaneClient, makeFakeLaneStore } from "../../lib/concurrency-lanes/__tests__/fake-lane-redis.js"
 import { supabase } from "../../lib/supabase.js"
 import type { RunCredits } from "../../lib/job-credit-status.js"
+import { UNQUEUED_EXECUTION_CLIENT_MESSAGE, UNQUEUED_EXECUTION_MESSAGE, UNQUEUED_EXECUTION_UNSETTLED_KIND } from "../../lib/enqueue-execution.js"
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -982,6 +993,73 @@ describe("POST /v1/workflows/:id/run", () => {
     const res = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`)
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("internal_error")
+  })
+
+  // -------------------------------------------------------------------------
+  // A queue that refuses the run (lib/enqueue-execution.ts): the execution is
+  // failed from `pending` at once with its Idempotency-Key released, so a
+  // retry with the same key starts a new run; nothing was held to refund.
+  // -------------------------------------------------------------------------
+
+  /**
+   * A run of a one-node workflow, keyed by table rather than by call order, so
+   * the reads a fresh process makes once (settings, account checks) answer
+   * "nothing" wherever these tests sit in the file: nothing already running,
+   * the execution inserted under its Idempotency-Key.
+   */
+  function mockKeyedRun() {
+    const graph = { nodes: [{ id: "gen", type: "generate-image", data: { prompt: "a cat" } }], edges: [] }
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "workflows") {
+        return makeRecorder({ data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID, workspace_id: null, visibility: "private", ...graph }, error: null }).proxy
+      }
+      if (table === "workflow_executions") {
+        return {
+          select: () => makeRecorder({ data: [], error: null }).proxy,
+          insert: () => makeRecorder({ data: { id: TEST_EXEC_ID }, error: null }).proxy,
+          upsert: () => makeRecorder({ data: [{ id: TEST_EXEC_ID }], error: null }).proxy,
+        }
+      }
+      return makeRecorder({ data: null, error: null }).proxy
+    }) as never)
+  }
+
+  const runWithKey = () => {
+    mockKeyedRun()
+    return app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/run`,
+      headers: { "x-user-id": TEST_USER_ID, "idempotency-key": "run-click-00000001" },
+      payload: {},
+    })
+  }
+
+  it("a queue that refuses the run: the execution is failed from pending with its key released, answered 500", async () => {
+    mockOrchestrationQueueAdd.mockRejectedValueOnce(new Error("OOM command not allowed when used memory > 'maxmemory'."))
+    const res = await runWithKey()
+    expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({ error: { code: "internal_error", message: UNQUEUED_EXECUTION_CLIENT_MESSAGE } })
+    expect(res.body).not.toContain("maxmemory")
+    expect(mockFailWaiting).toHaveBeenCalledTimes(1)
+    expect(mockFailWaiting).toHaveBeenCalledWith(TEST_EXEC_ID, UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null })
+    expect(mockRefundCredits).not.toHaveBeenCalled()
+    expect(mockAppReport).not.toHaveBeenCalledWith(expect.objectContaining({ kind: UNQUEUED_EXECUTION_UNSETTLED_KIND }))
+  })
+
+  it("a queue that refuses a run that has since moved on (a worker claimed it): answered as started", async () => {
+    mockOrchestrationQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    mockFailWaiting.mockResolvedValueOnce(false)
+    const res = await runWithKey()
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toMatchObject({ executionId: TEST_EXEC_ID, status: "pending" })
+  })
+
+  it("a failure write that cannot land: the run is left for the never-started sweep, reported, and still answered 500", async () => {
+    mockOrchestrationQueueAdd.mockRejectedValueOnce(new Error("OOM command not allowed when used memory > 'maxmemory'."))
+    mockFailWaiting.mockRejectedValueOnce(new Error("could not write the execution"))
+    const res = await runWithKey()
+    expect(res.statusCode).toBe(500)
+    expect(mockAppReport).toHaveBeenCalledWith(expect.objectContaining({ kind: UNQUEUED_EXECUTION_UNSETTLED_KIND, executionId: TEST_EXEC_ID, userId: TEST_USER_ID }))
   })
 })
 

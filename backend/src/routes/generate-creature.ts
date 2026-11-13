@@ -6,6 +6,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
+import { enqueueRouteJobs } from "../lib/enqueue-route-job.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { plainEntityCheckIdentifier, plainEntityCreditIdentifier } from "../lib/entity-credit-identifier.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -351,31 +352,41 @@ export async function generateCreatureRoutes(app: FastifyInstance) {
       }
 
       // ──────────────────────────────────────────────────────────────────────
-      // Phase 2B: All reservations succeeded — enqueue every job.
+      // Phase 2B: All reservations succeeded — enqueue every job, in order.
       // `attachToCreatureId` + auto-attach metadata flows through the queue
       // payload too, but ONLY when count=1 (matches what's in input_data —
       // single source of truth). The BullMQ job name `"generate-creature"`
       // matches the Phase C2 entityHandlers key the creature worker registered.
+      // When the queue refuses one, it and the jobs after it are failed and
+      // refunded, the ones already queued keep running, and the request is
+      // answered 500 with `error.startedJobIds` (enqueueRouteJobs).
       // ──────────────────────────────────────────────────────────────────────
-      for (const r of reservations) {
-        await videoQueue.add("generate-creature", {
+      await enqueueRouteJobs(
+        req,
+        reply,
+        reservations.map((r) => ({
           jobId: r.jobId,
-          prompt,
-          sourceImageUrl,
-          provider: parsed.data.provider,
-          aspectRatio,
-          usageLogId: r.usageLogId,
-          seedPromptHint: parsed.data.seedPromptHint,
-          subjectMinor,
-          ...(includeAttach
-            ? {
-                attachToCreatureId: parsed.data.attachToCreatureId,
-                attachName: parsed.data.attachName,
-                expectedUpdatedAt: parsed.data.expectedUpdatedAt,
-              }
-            : {}),
-        })
-      }
+          enqueue: () =>
+            videoQueue.add("generate-creature", {
+              jobId: r.jobId,
+              prompt,
+              sourceImageUrl,
+              provider: parsed.data.provider,
+              aspectRatio,
+              usageLogId: r.usageLogId,
+              seedPromptHint: parsed.data.seedPromptHint,
+              subjectMinor,
+              ...(includeAttach
+                ? {
+                    attachToCreatureId: parsed.data.attachToCreatureId,
+                    attachName: parsed.data.attachName,
+                    expectedUpdatedAt: parsed.data.expectedUpdatedAt,
+                  }
+                : {}),
+            }),
+        })),
+      )
+      if (reply.sent) return
 
       // `jobIds` is ALWAYS present now (the harmonized contract — matches
       // characters). `jobId` is kept ONLY for count===1 as a deprecated

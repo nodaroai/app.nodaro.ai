@@ -74,6 +74,7 @@ In the price a published app or template lists, a Video SFX node on any recordin
 - Supported input formats: MP4 (H.264), MOV, WebM.
 - Maximum duration: **300 seconds** (5 minutes). Longer videos are rejected with HTTP 400 `video_duration_exceeds_limit`.
 - Maximum versions per run: **4**.
+- If a run's versions cannot all be queued to start, `POST /v1/video-sfx` answers `500 internal_error` with `error.startedJobIds` naming the versions that did start (follow those; the list is empty when none did); the others are failed and their credits refunded.
 - Recommended input resolution: up to 1080p (higher resolutions are untested and increase processing time).
 
 ## Determinism

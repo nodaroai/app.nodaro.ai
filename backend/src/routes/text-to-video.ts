@@ -35,6 +35,7 @@ import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_
 import { formatZodError } from "../lib/zod-error.js"
 import { videoRunModel } from "../lib/run-model.js"
 import { seedance25OutputFormatFor } from "../lib/seedance25-output-format.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 export const textToVideoBody = z.object({
   /** The client app that sent this request (`GET /v1/jobs?origin=` filters on it). */
@@ -605,7 +606,7 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
   if (reply.sent) return
   const usageLogId = reservation?.usageLogId
 
-  await videoQueue.add("text-to-video", {
+  await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("text-to-video", {
     jobId: job.id,
     prompt,
     provider,
@@ -635,7 +636,8 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
     contentPolicyRewrite,
     ...(outputFormat ? { outputFormat } : {}),
     usageLogId,
-  })
+  }))
+  if (reply.sent) return
 
   // Disclose any lever the caller asked for and did not get. The route has no
   // pre-existing `warnings` vocabulary (unlike generate-video), so the

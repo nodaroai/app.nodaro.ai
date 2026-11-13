@@ -29,6 +29,7 @@ import { supabase } from "../lib/supabase.js"
 import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { isUserBlocked } from "../lib/access-blocks.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { enqueueExecution } from "../lib/enqueue-execution.js"
 import { checkPayerCanAfford, resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { hasCredits, llmMeteredPricing } from "../lib/config.js"
@@ -789,9 +790,15 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         reviewerPresent,
       }
 
-      await orchestrationQueue.add("workflow-execution", jobData, {
-        jobId: execution.id,
-      })
+      // A queue that refuses the run fails its execution from `pending` and
+      // answers 500 (lib/enqueue-execution.ts). Nothing is held before this
+      // point: the creator's fee and the UGC worst case above are balance
+      // checks, and the fee is settled after the run. The run keeps pointing
+      // at the failed execution, which is how a reader sees it ended.
+      await enqueueExecution(req, reply, execution.id, () =>
+        orchestrationQueue.add("workflow-execution", jobData, { jobId: execution.id }),
+      )
+      if (reply.sent) return
 
       return reply.status(202).send({
         executionId: execution.id,

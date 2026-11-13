@@ -11,6 +11,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isImportRefusal, requireImportAllowed } from "../lib/import-gate.js"
 import { importJobFields, importViaOf } from "../lib/import-via.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 const extractYouTubeAudioBody = z.object({
   youtubeUrl: safeUrlSchema.refine(
@@ -67,13 +68,14 @@ export async function extractYouTubeAudioRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to create job")
     }
 
-    await videoQueue.add("extract-youtube-audio", {
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("extract-youtube-audio", {
       jobId: job.id,
       youtubeUrl,
       ...(confirmationId ? { confirmationId } : {}),
       // The way in (and the connected app), for the worker's spend (`importRightsOf`): a key's or an agent's job stands on a standing authorization.
       ...importJobFields(req),
-    })
+    }))
+    if (reply.sent) return
 
     return { jobId: job.id }
   })

@@ -33,6 +33,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 import { creditGuard } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -361,12 +362,13 @@ async function enqueueExclusive({ req, reply, jobType, body: rawBody, extraPaylo
   if (error) {
     return sendInternalError(reply, req, error, "Failed to create job")
   }
-  await videoQueue.add(jobType, {
+  await enqueueRouteJob(req, reply, job.id, () => videoQueue.add(jobType, {
     ...body,
     jobId: job.id,
     userId,
     ...(extraPayload ?? {}),
-  })
+  }))
+  if (reply.sent) return reply
   return reply.send({ jobId: job.id })
 }
 

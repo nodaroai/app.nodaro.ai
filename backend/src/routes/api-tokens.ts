@@ -29,6 +29,7 @@ import { ACCESS_BLOCKED_BODY, isUserBlocked } from "../lib/access-blocks.js"
 import { getPluginServices } from "../lib/private-plugins/load.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { enqueueExecution } from "../lib/enqueue-execution.js"
 import { personalPayer } from "../lib/billing-context.js"
 import { deploymentPayerActive, deploymentPayerId } from "../lib/deployment-payer.js"
 import { billingPairColumns } from "../lib/insert-job.js"
@@ -860,9 +861,13 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         reviewerPresent: false,
       }
 
-      await orchestrationQueue.add("workflow-execution", jobData, {
-        jobId: execution.id,
-      })
+      // A queue that refuses the run fails it from `pending` and answers 500
+      // (lib/enqueue-execution.ts); nothing is held before this point. A run
+      // that moved on meanwhile is answered as started, below.
+      await enqueueExecution(req, reply, execution.id, () =>
+        orchestrationQueue.add("workflow-execution", jobData, { jobId: execution.id }),
+      )
+      if (reply.sent) return
 
       // Sync mode: wait for completion
       const query = req.query as Record<string, string>

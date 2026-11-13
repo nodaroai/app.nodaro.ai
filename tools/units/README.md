@@ -839,7 +839,7 @@ which the two engines' parity tests read.)
 | G5 | a unit imports no other unit, no aggregate, no engine module | the `node-units-*` boundary rules in `tools/structure/` |
 | G6 | the manifest is valid | `gen:units --check` + `tools/__tests__/units-manifest.test.mjs` |
 | | the scaffold of every kind passes the guards above, and its templates typecheck against the product (in memory, nothing written) | `tools/__tests__/units-scaffold.test.mjs`, `frontend/src/__tests__/units-scaffold.test.ts`, `frontend/src/__tests__/units-scaffold-typecheck.test.ts` |
-| | a unit's route imports no queue: a worker unit's route queues its job with `enqueueUnitJob` (`backend/src/lib/enqueue-route-job.ts`) and stops when it has answered (`if (reply.sent) return`), so a job the queue refuses is failed, refunded and its Idempotency-Key freed at once | `backend/src/lib/__tests__/unit-route-enqueue-guard.test.ts` |
+| | a unit's route imports no queue: a worker unit's route queues its job with `enqueueUnitJob` (`backend/src/lib/enqueue-route-job.ts`) and stops when it has answered (`if (reply.sent) return`), so a job the queue refuses is failed, refunded and its Idempotency-Key freed at once | `backend/src/lib/__tests__/route-enqueue-guard.test.ts` |
 | G7 | unit modules have no top-level side effects. A top-level call is pure only as a known constructor or a zod chain whose callee text starts `z.` — so keep `z.enum(` on one line (`z` then `.enum(` on the next line is refused) — with pure arguments: an enum over a list is `z.enum(LIST as unknown as [string, ...string[]])`, never `z.enum(tuple(LIST))` | `node-units-structure.test.ts` |
 
 A unit's `node.tsx` and `config.tsx` live under `frontend/src/nodes/<type>/`,
