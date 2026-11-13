@@ -78,7 +78,7 @@ import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE } from "../../../lib/speaker-vie
 import { dubbingBaseCredits } from "../../../lib/dubbing-span.js"
 import { topazVideoHoldBaseCredits } from "../../../lib/topaz-video-plan.js"
 import { nodaroVideoUpscaleBaseCredits } from "../../../lib/nodaro-video-upscale-plan.js"
-import { isNodaroVideoUpscaleCreditId, NODARO_VIDEO_UPSCALE_RATE_SECONDS } from "@nodaro/render-rules"
+import { isNodaroVideoUpscaleCreditId, isSeedanceExtendRateCreditId, NODARO_VIDEO_UPSCALE_RATE_SECONDS } from "@nodaro/render-rules"
 import { UNIT_QUOTE_MAX_UNITS, UNIT_QUOTE_RATE_IDS, parseRateQuoteCreditId } from "../../../lib/unit-quote-rates.js"
 import { lipSyncRateBaseCredits } from "../../../lib/lip-sync-inputs.js"
 import { lipSyncAudioRateOf } from "@nodaro/shared/credits"
@@ -128,6 +128,9 @@ async function routeBase(nodeType: string, rateId: string, units: number): Promi
       // routes/video-overlay.ts computeCredits, a run with a video layer: the video row × the base's units.
       return videoOverlayBaseCredits(units)
     case "extend-video":
+      // Seedance 2.5 (routes/extend-video.ts computeCredits, lib/seedance-extend-credits.ts):
+      // its resolution's two-second row × (seconds sent + seconds added) ÷ 2. LTX: the per-second row × the seconds.
+      if (isSeedanceExtendRateCreditId(rateId)) return unitRateBaseCredits(rateId, units)
       return ltxExtendBaseCredits(units)
     case "video-retake":
       return ltxRetakeBaseCredits(units)

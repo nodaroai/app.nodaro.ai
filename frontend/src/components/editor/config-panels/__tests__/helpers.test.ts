@@ -347,14 +347,15 @@ describe("getModelIdentifier", () => {
 
   it("prices a Seedance extend on its own provider's row — the one builder the route and the run reserve on", () => {
     const extend = (data: Record<string, unknown>) => makeNode({ type: "extend-video", data: { label: "Extend", ...data } as any })
-    for (const provider of ["seedance-2-5-extend", "seedance-2-0-extend"] as const) {
-      expect(getModelIdentifier(extend({ provider, duration: 12, resolution: "1080p" }))).toBe(tailExtendCreditId(provider, 12, "1080p"))
-      expect(getModelIdentifier(extend({ provider }))).toBe(tailExtendCreditId(provider, undefined, undefined))
-    }
-    expect(getModelIdentifier(extend({ provider: "seedance-2-5-extend", duration: 22, resolution: "480p" }))).toBe("seedance-2-5-extend:22s:480p")
+    expect(getModelIdentifier(extend({ provider: "seedance-2-0-extend", duration: 12, resolution: "1080p" }))).toBe(tailExtendCreditId("seedance-2-0-extend", 12, "1080p"))
+    expect(getModelIdentifier(extend({ provider: "seedance-2-0-extend" }))).toBe(tailExtendCreditId("seedance-2-0-extend", undefined, undefined))
     expect(getModelIdentifier(extend({ provider: "seedance-2-0-extend", duration: 12, resolution: "1080p" }))).toBe("seedance-2-0-extend:12s:1080p")
+    // Seedance 2.5 is charged per second sent and added: its resolution's two-second row
+    // (the estimate multiplies by the run's units).
+    expect(getModelIdentifier(extend({ provider: "seedance-2-5-extend", duration: 22, resolution: "480p" }))).toBe("seedance-2-5-extend:480p:per-2s")
+    expect(getModelIdentifier(extend({ provider: "seedance-2-5-extend" }))).toBe("seedance-2-5-extend:720p:per-2s")
     // A node still naming the retired id is priced as the Seedance 2.5 extend it runs as.
-    expect(getModelIdentifier(extend({ provider: "seedance-2-extend", duration: 8 }))).toBe("seedance-2-5-extend:8s:720p")
+    expect(getModelIdentifier(extend({ provider: "seedance-2-extend", duration: 8 }))).toBe("seedance-2-5-extend:720p:per-2s")
   })
 
   it("prices a Kling 4 extend on its own rows, a resolution it does not render at 720p", () => {

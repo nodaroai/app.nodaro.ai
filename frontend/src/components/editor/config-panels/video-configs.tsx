@@ -47,6 +47,7 @@ import type {
   SwitchXData,
   VideoAnalysisNodeData,
   VideoAuditNodeData,
+  WorkflowNode,
 } from "@/types/nodes"
 import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, EVP_PROVIDERS, MOTION_TRANSFER_MODELS, VIDEO_DEPTH_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, gvpVideoResolutionOptions, gvpShownResolution, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip, withoutDeniedModels } from "./model-options"
 import { isMenuRowWithheld } from "./model-options"
@@ -60,7 +61,9 @@ import {
   videoUpscaleResolutionsFor,
 } from "@nodaro/shared/model-catalog"
 import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER, type TopazVideoResolution } from "@nodaro/shared/models"
-import { nodaroVideoUpscaleTierOf } from "@nodaro/render-rules"
+import { isSeedanceExtendPricedBySecondsSent, nodaroVideoUpscaleTierOf, seedanceExtendRateCreditId } from "@nodaro/render-rules"
+import { extendVideoPricingUnits } from "@/lib/extend-video-estimate"
+import { unitQuoteCredits, unitQuoteIdFor } from "@/lib/unit-quote"
 import { motionTransferShownSize, motionTransferSizes, motionTransferSnap } from "@/lib/motion-transfer-sizes"
 import { TOPAZ_VIDEO_RESOLUTION_LABELS, VIDEO_UPSCALE_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText } from "@/lib/video-start-frame-only"
@@ -5249,12 +5252,32 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
   // The sound the run is priced with where it is priced (PixVerse V6's
   // `:audio` rows): on until it is turned off.
   const catalogSound = data.generateAudio !== false
+  // Seedance 2.5 is charged per second sent and added: each resolution's
+  // two-second row × the run's units, read off the canvas as the node's pill
+  // and the Run button read them (`extendVideoPricingUnits`; the whole 10 s
+  // window while the source's length is not known). Every other catalog
+  // model (Seedance 2.0, Kling 4, PixVerse V6): its row for the length,
+  // resolution and (PixVerse V6) sound.
+  const sentPriced = isSeedanceExtendPricedBySecondsSent(catalogProvider)
+  const sentUnits = sentPriced
+    ? extendVideoPricingUnits({ id: nodeId ?? "", type: "extend-video", position: { x: 0, y: 0 }, data } as unknown as WorkflowNode, nodes, edges ?? [])
+    : 1
+  const catalogPriceIds = (r: string): { rateId: string; quoteId: string | undefined } => {
+    if (sentPriced) {
+      const rateId = seedanceExtendRateCreditId(r)
+      return { rateId, quoteId: unitQuoteIdFor(rateId, sentUnits) }
+    }
+    return { rateId: catalogProvider ? catalogExtendCreditId(catalogProvider, catalogDuration, r, catalogSound) : "", quoteId: undefined }
+  }
 
-  // Credit labels name the model's own row for the length (and sound) chosen — re-prefetch when one changes.
+  // Credit labels name each resolution's price for the run chosen — re-prefetch when any of it changes.
   useEffect(() => {
     if (!catalogProvider) return
-    prefetchModelCredits(catalogResolutions.map((r) => catalogExtendCreditId(catalogProvider, catalogDuration, r, catalogSound)))
-  }, [catalogProvider, catalogDuration, catalogSound]) // eslint-disable-line react-hooks/exhaustive-deps
+    prefetchModelCredits(catalogResolutions.flatMap((r) => {
+      const { rateId, quoteId } = catalogPriceIds(r)
+      return quoteId ? [rateId, quoteId] : [rateId]
+    }))
+  }, [catalogProvider, catalogDuration, catalogSound, sentUnits]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fail-safe (Provider Enum Sync step 12b): when the provider changes, snap
   // a stale length into the new provider's window (a catalog model's lengths;
@@ -5446,7 +5469,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {catalogResolutions.map((r) => {
-                  const credits = getCachedCredits(catalogExtendCreditId(catalogProvider, catalogDuration, r, catalogSound))
+                  const credits = unitQuoteCredits(catalogPriceIds(r).rateId, sentUnits, getCachedCredits)
                   return (
                     <SelectItem key={r} value={r}>{credits != null ? t("vidcfg.resWithCredits", { res: r, credits: creditUnits(credits) }) : r}</SelectItem>
                   )

@@ -27,9 +27,13 @@ const RESOLUTIONS = ["480p", "720p", "1080p"] as const
 
 /**
  * Extend Video runs Seedance as two providers, one per model: Seedance 2.5
- * (4–30 s added) and Seedance 2.0 (4–15 s). Each is priced on its own rows,
- * one per second added and resolution.
+ * (4–30 s added) and Seedance 2.0 (4–15 s). Seedance 2.0 is priced on its own
+ * rows, one per second added and resolution. Seedance 2.5 is charged per second
+ * it sends and adds (the source's last 10 s, all of a shorter source): the
+ * builder names the most a run of that length costs, the whole-window quote of
+ * its resolution's two-second row, `seedance-2-5-extend:<res>:per-2s:<(10 + N) / 2>u`.
  */
+const fullWindow = (seconds: number, res: string): string => `seedance-2-5-extend:${res}:per-2s:${(10 + seconds) / 2}u`
 describe("Seedance Extend Video providers", () => {
   it("lists Seedance 2.5 and 2.0 as two extend providers", () => {
     expect(EXTEND_VIDEO_PROVIDERS).toEqual(expect.arrayContaining(["seedance-2-5-extend", "seedance-2-0-extend"]))
@@ -46,16 +50,17 @@ describe("Seedance Extend Video providers", () => {
     expect(isSeedanceExtendProvider(undefined)).toBe(false)
   })
 
-  it("prices each Seedance extend on its own rows", () => {
-    expect(tailExtendCreditId("seedance-2-5-extend", 8, "720p")).toBe("seedance-2-5-extend:8s:720p")
+  it("prices Seedance 2.0 on its own rows, and Seedance 2.5 at its whole-window quote", () => {
+    expect(tailExtendCreditId("seedance-2-5-extend", 8, "720p")).toBe("seedance-2-5-extend:720p:per-2s:9u")
     expect(tailExtendCreditId("seedance-2-0-extend", 8, "720p")).toBe("seedance-2-0-extend:8s:720p")
-    expect(tailExtendCreditId("seedance-2-5-extend", 30, "1080p")).toBe("seedance-2-5-extend:30s:1080p")
+    expect(tailExtendCreditId("seedance-2-5-extend", 30, "1080p")).toBe("seedance-2-5-extend:1080p:per-2s:20u")
     expect(tailExtendCreditId("seedance-2-0-extend", 25, "480p")).toBe("seedance-2-0-extend:15s:480p")
-    expect(tailExtendCreditId("seedance-2-5-extend")).toBe("seedance-2-5-extend:8s:720p")
+    expect(tailExtendCreditId("seedance-2-5-extend")).toBe("seedance-2-5-extend:720p:per-2s:9u")
   })
 
   it("prices both Seedance models per second added", () => {
-    expect(tailExtendCreditId("seedance-2-5-extend", 6, "480p")).toBe("seedance-2-5-extend:6s:480p")
+    expect(tailExtendCreditId("seedance-2-5-extend", 6, "480p")).toBe("seedance-2-5-extend:480p:per-2s:8u")
+    expect(tailExtendCreditId("seedance-2-5-extend", 5, "480p")).toBe("seedance-2-5-extend:480p:per-2s:7.5u")
     expect(tailExtendCreditId("seedance-2-0-extend", 6, "480p")).toBe("seedance-2-0-extend:6s:480p")
     expect(tailExtendCreditId("seedance-2-0-extend", 10, "1080p")).toBe("seedance-2-0-extend:10s:1080p")
     expect(tailExtendCreditId("seedance-2-0-extend", 4, "720p")).toBe("seedance-2-0-extend:4s:720p")
@@ -63,12 +68,12 @@ describe("Seedance Extend Video providers", () => {
   })
 
   it("snaps a length or a resolution the provider does not offer", () => {
-    expect(tailExtendCreditId("seedance-2-5-extend", 2, "720p")).toBe("seedance-2-5-extend:4s:720p")
-    expect(tailExtendCreditId("seedance-2-5-extend", 45, "720p")).toBe("seedance-2-5-extend:30s:720p")
-    expect(tailExtendCreditId("seedance-2-5-extend", 8, "4k")).toBe("seedance-2-5-extend:8s:720p")
+    expect(tailExtendCreditId("seedance-2-5-extend", 2, "720p")).toBe(fullWindow(4, "720p"))
+    expect(tailExtendCreditId("seedance-2-5-extend", 45, "720p")).toBe(fullWindow(30, "720p"))
+    expect(tailExtendCreditId("seedance-2-5-extend", 8, "4k")).toBe(fullWindow(8, "720p"))
     expect(tailExtendCreditId("seedance-2-0-extend", 8, "4k")).toBe("seedance-2-0-extend:8s:720p")
     expect(tailExtendCreditId("seedance-2-0-extend", 2, "480p")).toBe("seedance-2-0-extend:4s:480p")
-    expect(tailExtendCreditId("seedance-2-5-extend", 0, "480p")).toBe("seedance-2-5-extend:8s:480p")
+    expect(tailExtendCreditId("seedance-2-5-extend", 0, "480p")).toBe(fullWindow(8, "480p"))
   })
 
   it("renders at the resolution it is priced at: one the model offers, else 720p", () => {
@@ -79,7 +84,9 @@ describe("Seedance Extend Video providers", () => {
       }
       // The id names exactly the resolution the run renders at.
       for (const res of [...RESOLUTIONS, undefined, "4k"]) {
-        expect(tailExtendCreditId(provider, 8, res)).toBe(`${provider}:8s:${tailExtendResolution(provider, res)}`)
+        expect(tailExtendCreditId(provider, 8, res)).toBe(
+          provider === "seedance-2-5-extend" ? fullWindow(8, tailExtendResolution(provider, res)) : `${provider}:8s:${tailExtendResolution(provider, res)}`,
+        )
       }
     }
   })
@@ -87,8 +94,8 @@ describe("Seedance Extend Video providers", () => {
   it("names only rows each provider is priced on, for any length and resolution", () => {
     // The Seedance 2.0 rows: every second of its window at three resolutions.
     const rows20 = new Set(range(4, 15).flatMap((n) => RESOLUTIONS.map((r) => `seedance-2-0-extend:${n}s:${r}`)))
-    // The Seedance 2.5 rows: every second of its window at three resolutions.
-    const rows25 = new Set(range(4, 30).flatMap((n) => RESOLUTIONS.map((r) => `seedance-2-5-extend:${n}s:${r}`)))
+    // Seedance 2.5: the whole-window quote of every second of its window at three resolutions.
+    const rows25 = new Set(range(4, 30).flatMap((n) => RESOLUTIONS.map((r) => fullWindow(n, r))))
     for (const res of [...RESOLUTIONS, undefined, "4k"]) {
       for (const duration of [undefined, ...range(-1, 35)]) {
         expect(rows20.has(tailExtendCreditId("seedance-2-0-extend", duration, res)), `2.0 ${duration}s ${res}`).toBe(true)
@@ -97,7 +104,7 @@ describe("Seedance Extend Video providers", () => {
     }
   })
 
-  it("the generic video builder prices a Seedance extend on its own rows, never a bare unpriced id", () => {
+  it("the generic video builder prices a Seedance extend through the extend builder, never a bare unpriced id", () => {
     for (const provider of ["seedance-2-5-extend", "seedance-2-0-extend"] as const) {
       for (const duration of [undefined, 1, 6, 12, 25, 45, "12"]) {
         for (const res of [undefined, "480p", "720p", "1080p", "4k"]) {
@@ -107,8 +114,8 @@ describe("Seedance Extend Video providers", () => {
       }
     }
     // The retired id is priced as the provider it runs as.
-    expect(buildVideoCreditModelIdentifier("seedance-2-extend", 12, undefined, undefined, undefined, "1080p")).toBe("seedance-2-5-extend:12s:1080p")
-    expect(buildVideoCreditModelIdentifier("seedance-2-extend")).toBe("seedance-2-5-extend:8s:720p")
+    expect(buildVideoCreditModelIdentifier("seedance-2-extend", 12, undefined, undefined, undefined, "1080p")).toBe("seedance-2-5-extend:1080p:per-2s:11u")
+    expect(buildVideoCreditModelIdentifier("seedance-2-extend")).toBe("seedance-2-5-extend:720p:per-2s:9u")
   })
 
   it("catalogs each with its own window", () => {
@@ -121,14 +128,23 @@ describe("Seedance Extend Video providers", () => {
       expect(entry.maker).toBe("bytedance")
       expect(entry.defaultDuration).toBe(8)
       expect(entry.resolutions).toEqual([...RESOLUTIONS])
-      // Each catalog entry lists the rows its default length is priced on.
-      const ids = entry.pricing.map((p) => p.identifier)
-      for (const res of RESOLUTIONS) expect(ids, `${id} ${res}`).toContain(tailExtendCreditId(id, 8, res))
-      // The first row is the default run's price; the retired provider id is
-      // never listed (sent as a provider, it runs and bills as Seedance 2.5).
-      expect(entry.pricing[0]!.identifier, id).toBe(tailExtendCreditId(id))
-      expect(ids, id).not.toContain("seedance-2-extend")
+      // The retired provider id is never listed (sent as a provider, it runs and bills as Seedance 2.5).
+      expect(entry.pricing.map((p) => p.identifier), id).not.toContain("seedance-2-extend")
     }
+    // Seedance 2.0 lists the rows its default length is priced on, the default run's first.
+    const ids20 = MODEL_CATALOG["seedance-2-0-extend"]!.pricing.map((p) => p.identifier)
+    for (const res of RESOLUTIONS) expect(ids20, res).toContain(tailExtendCreditId("seedance-2-0-extend", 8, res))
+    expect(ids20[0]).toBe(tailExtendCreditId("seedance-2-0-extend"))
+    // Seedance 2.5 is charged per second sent and added (decided 2026-11-12): it
+    // lists its default run (8 s added to a source of 10 s or more: 9 units of
+    // each resolution's two-second rate row) as whole-run quote ids, 720p first.
+    expect(MODEL_CATALOG["seedance-2-5-extend"]!.pricing.map((p) => p.identifier)).toEqual([
+      "seedance-2-5-extend:720p:per-2s:9u",
+      "seedance-2-5-extend:480p:per-2s:9u",
+      "seedance-2-5-extend:1080p:per-2s:9u",
+    ])
+    // Its default run is the builder's default.
+    expect(MODEL_CATALOG["seedance-2-5-extend"]!.pricing[0]!.identifier).toBe(tailExtendCreditId("seedance-2-5-extend"))
   })
 })
 

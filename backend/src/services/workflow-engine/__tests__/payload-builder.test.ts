@@ -1279,10 +1279,11 @@ describe("buildPayload", () => {
     })
 
     it.each([
-      // Each Seedance model: a row per second added.
-      ["seedance-2-5-extend", "seedance-2-5-extend:12s:1080p"],
+      // Seedance 2.5: its resolution's two-second row (charged per second sent and added).
+      ["seedance-2-5-extend", "seedance-2-5-extend:1080p:per-2s"],
+      // Seedance 2.0: a row per second added.
       ["seedance-2-0-extend", "seedance-2-0-extend:12s:1080p"],
-    ])("extend-video %s — URL payload + its own duration×resolution row", (provider, row) => {
+    ])("extend-video %s — URL payload + its own price row", (provider, row) => {
       const n = node("n1", "extend-video", {
         provider,
         prompt: "the ball keeps rolling",
@@ -1306,11 +1307,11 @@ describe("buildPayload", () => {
     })
 
     it.each([
-      ["seedance-2-5-extend", "seedance-2-5-extend:8s:720p"],
+      ["seedance-2-5-extend", "seedance-2-5-extend:720p:per-2s"],
       ["seedance-2-0-extend", "seedance-2-0-extend:8s:720p"],
       // The retired id runs, and reserves, as Seedance 2.5.
-      ["seedance-2-extend", "seedance-2-5-extend:8s:720p"],
-    ])("extend-video %s defaults reserve at the 8s/720p row", (provider, row) => {
+      ["seedance-2-extend", "seedance-2-5-extend:720p:per-2s"],
+    ])("extend-video %s defaults reserve at the 720p (8 s) row", (provider, row) => {
       const n = node("n1", "extend-video", { provider, prompt: "keep going" })
       const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4" })
       expect(result.modelIdentifier).toBe(row)

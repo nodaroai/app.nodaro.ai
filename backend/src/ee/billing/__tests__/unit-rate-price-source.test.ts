@@ -1,6 +1,7 @@
 // @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,video-overlay,extend-video,video-retake,dubbing,lip-sync}.ts
 // @test-watches backend/src/services/workflow-engine/node-executor.ts
-// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,video-overlay-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span,lip-sync-inputs,nodaro-video-upscale-plan}.ts backend/src/lib/private-plugins/toolkit.ts
+// @test-watches backend/src/workers/handlers/video-ai.ts
+// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,video-overlay-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span,lip-sync-inputs,nodaro-video-upscale-plan,seedance-extend-credits}.ts backend/src/lib/private-plugins/toolkit.ts
 /**
  * A per-unit run is CHARGED from the same price source it is QUOTED from.
  *
@@ -32,9 +33,10 @@
  * host that lacks the member.)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { NODARO_VIDEO_UPSCALE_CREDIT_IDS, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { NODARO_VIDEO_UPSCALE_CREDIT_IDS, SEEDANCE_EXTEND_RATE_CREDIT_IDS, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { topazVideoHoldBaseCredits } from "@/lib/topaz-video-plan.js"
 import { nodaroVideoUpscaleBaseCredits } from "@/lib/nodaro-video-upscale-plan.js"
+import { seedanceExtendBaseCredits } from "@/lib/seedance-extend-credits.js"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -185,6 +187,15 @@ const CHARGES: Readonly<Record<string, Charge>> = {
       { units: 2.5, charge: async () => markedUp(id, await nodaroVideoUpscaleBaseCredits({ creditId: id, billedSec: 10 })) },
     ]),
   ),
+  // routes/extend-video.ts (computeCredits), the workflow run's computeSeedanceExtendCreditOverride
+  // and the worker's settlement: Seedance 2.5 on a 4.5 s source with 8 s added — (4.5 + 8) ÷ 2
+  // = 6.25 units of its resolution's two-second row.
+  ...Object.fromEntries(
+    Object.entries(SEEDANCE_EXTEND_RATE_CREDIT_IDS).map(([resolution, id]): [string, Charge] => [
+      id,
+      { units: 6.25, charge: async () => markedUp(id, await seedanceExtendBaseCredits({ duration: 8, resolution, sourcePictureSec: 4.5 })) },
+    ]),
+  ),
 }
 
 beforeEach(() => {
@@ -317,7 +328,7 @@ describe("each charge site prices through the function this suite drives", () =>
     "routes/apply-edl.ts": ["unitRateBaseCredits"],
     "routes/mask-composite.ts": ["maskCompositeBaseCredits"],
     "routes/video-overlay.ts": ["videoOverlayBaseCredits"],
-    "routes/extend-video.ts": ["ltxExtendBaseCredits"],
+    "routes/extend-video.ts": ["ltxExtendBaseCredits", "seedanceExtendBaseCredits"],
     "routes/video-retake.ts": ["ltxRetakeBaseCredits"],
     "routes/dubbing.ts": ["dubbingBaseCredits"],
     "routes/lip-sync.ts": ["lipSyncRateBaseCredits"],
@@ -330,7 +341,9 @@ describe("each charge site prices through the function this suite drives", () =>
       "applyEdlCreditOverride",
       "speakerViewCreditOverride",
       "lipSyncRateBaseCredits",
+      "seedanceExtendStampedBaseCredits",
     ],
+    "workers/handlers/video-ai.ts": ["seedanceExtendBaseCredits"],
     // The library functions the sites call: each reads the row through the shared lookup.
     "lib/video-utility-credits.ts": ["unitRateBaseCredits"],
     "lib/mask-composite-length.ts": ["unitRateBaseCredits"],
@@ -344,6 +357,7 @@ describe("each charge site prices through the function this suite drives", () =>
     "lib/dubbing-span.ts": ["baseCreditCostFor"],
     "lib/lip-sync-inputs.ts": ["unitRateBaseCredits"],
     "lib/nodaro-video-upscale-plan.ts": ["unitRateBaseCredits"],
+    "lib/seedance-extend-credits.ts": ["unitRateBaseCredits"],
   }
 
   it("this file's @test-watches name every site it reads, so a change to one selects it", () => {

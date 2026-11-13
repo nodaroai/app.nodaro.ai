@@ -3,9 +3,11 @@
  * migration 383): `extend-video` / `seedance-2-5-extend` and `seedance-2-0-extend`.
  *
  * This branch generates its continuation through the CAPABILITY ROUTER
- * (`providers/index.ts` imageToVideo) with `seedance-2-5` / `seedance-2` — both
- * of them keys of `KIE_VIDEO_MODELS`, which `providers/nodaro/index.ts` declares
- * as the cloud provider's "image-to-video" models. So on a keyless install with
+ * (`providers/index.ts`): Seedance 2.0 through imageToVideo (its start image),
+ * Seedance 2.5 through textToVideo (no start image, the extension declared) —
+ * `seedance-2` and `seedance-2-5` are keys of `KIE_VIDEO_MODELS` and
+ * `KIE_TEXT_TO_VIDEO_MODELS`, which `providers/nodaro/index.ts` declares as the
+ * cloud provider's "image-to-video" and "text-to-video" models. So on a keyless install with
  * a live nodaro.ai connection the chain is `[nodaro]`, the far end runs the
  * generation and reserves credits for it, and `walkChainAndExecute` copies
  * `relayJobId`/`relayCredits` onto the RouteResult.
@@ -22,6 +24,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   mockImageToVideo: vi.fn(),
+  mockTextToVideo: vi.fn(),
   mockFinalize: vi.fn(),
   mockUploadJobScratchFile: vi.fn(),
   mockUploadToR2: vi.fn(),
@@ -41,7 +44,7 @@ vi.mock("@/lib/supabase.js", () => ({
 
 vi.mock("@/providers/index.js", () => ({
   imageToVideo: mocks.mockImageToVideo,
-  textToVideo: vi.fn(),
+  textToVideo: mocks.mockTextToVideo,
   videoToVideo: vi.fn(),
   lipSync: vi.fn(),
   lipSyncVideo: vi.fn(),
@@ -172,25 +175,34 @@ beforeEach(() => {
   mocks.mockUploadJobScratchFile.mockResolvedValue("https://r2.example.com/tail.mp4")
   mocks.mockUploadToR2.mockResolvedValue("https://r2.example.com/raw.mov")
   mocks.mockImageToVideo.mockResolvedValue(VENDOR_ROUTE_RESULT)
+  mocks.mockTextToVideo.mockResolvedValue(VENDOR_ROUTE_RESULT)
 })
 
 describe("extend-video / Seedance extend — relay provenance on the rebuilt literal", () => {
-  it.each([
-    ["seedance-2-0-extend", "seedance-2"],
-    ["seedance-2-5-extend", "seedance-2-5"],
-  ])("routes the continuation through the capability router (so a relay lane exists at all): %s", async (provider, model) => {
-    await runExtend(provider)
+  it("routes the continuation through the capability router (so a relay lane exists at all): seedance-2-0-extend, image-to-video", async () => {
+    await runExtend("seedance-2-0-extend")
     expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
-    expect(mocks.mockImageToVideo.mock.calls[0][1]).toBe(model)
+    expect(mocks.mockImageToVideo.mock.calls[0][1]).toBe("seedance-2")
+    expect(mocks.mockTextToVideo).not.toHaveBeenCalled()
     // The deliverable is the extend stitch's, never the general combine's.
     expect(mocks.mockStitchExtension).toHaveBeenCalledTimes(1)
     expect(mocks.mockCombineVideos).not.toHaveBeenCalled()
   })
 
-  it("carries relayJobId/relayCredits into finalizeJobWithMedia", async () => {
-    mocks.mockImageToVideo.mockResolvedValue(RELAYED_ROUTE_RESULT)
+  it("routes the continuation through the capability router (so a relay lane exists at all): seedance-2-5-extend, text-to-video", async () => {
+    await runExtend("seedance-2-5-extend")
+    expect(mocks.mockTextToVideo).toHaveBeenCalledTimes(1)
+    expect(mocks.mockTextToVideo.mock.calls[0][1]).toBe("seedance-2-5")
+    expect(mocks.mockImageToVideo).not.toHaveBeenCalled()
+    expect(mocks.mockStitchExtension).toHaveBeenCalledTimes(1)
+    expect(mocks.mockCombineVideos).not.toHaveBeenCalled()
+  })
 
-    await runExtend()
+  it.each(["seedance-2-0-extend", "seedance-2-5-extend"])("carries relayJobId/relayCredits into finalizeJobWithMedia (%s)", async (provider) => {
+    mocks.mockImageToVideo.mockResolvedValue(RELAYED_ROUTE_RESULT)
+    mocks.mockTextToVideo.mockResolvedValue(RELAYED_ROUTE_RESULT)
+
+    await runExtend(provider)
 
     expect(mocks.mockFinalize).toHaveBeenCalledTimes(1)
     expect(mocks.mockFinalize.mock.calls[0][0].result).toMatchObject({

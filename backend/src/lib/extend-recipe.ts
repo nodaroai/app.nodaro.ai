@@ -4,7 +4,22 @@
  * `@video_1` reference; all of a shorter source's picture, `tailCutSec`),
  * then the two are stitched into one.
  *
- * The tail length lives here and nowhere else: the run cuts it, and the
+ * - Seedance 2.5 (decided 2026-11-12, the provider guide's recipe, rated best
+ *   in a blind comparison): the source's last 10 seconds (the whole source
+ *   when it is shorter), declared as an extension (`omni_reference_task_type:
+ *   "extend"`), with NO start image; the extension is new footage only, so
+ *   the stitch is a hard cut at the source's end with a sound crossfade.
+ *   Charged per second sent and added (@nodaro/render-rules
+ *   `seedance-extend-pricing.ts`).
+ * - Seedance 2.0 (unchanged since the 2026-07-12 spike): the last 2 seconds
+ *   and the source's last frame as the opening image, undeclared; the stitch
+ *   finds and drops the duplicated boundary frame. Priced on its per-length rows.
+ * - Kling 4: the last 3 seconds and the source's last frame as the opening
+ *   image, with its own prompt, and the same stitch as Seedance 2.0. Priced on
+ *   its per-length rows.
+ *
+ * The tail length lives here and nowhere else (2.5's is the window its price
+ * counts, `SEEDANCE_EXTEND_CONTEXT_MAX_SEC`): the run cuts it, and the
  * provider's price rows are held to what a run with it bills
  * (`ee/billing/__tests__/extend-price-rows.test.ts`).
  */
@@ -12,12 +27,24 @@ import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import {
   EXTEND_VIDEO_PROVIDERS,
   isSeedanceExtendProvider,
-  pricedOutputDurationSec,
+  SEEDANCE_2_EXTEND_STITCH,
   SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC,
   VIDEO_REF_VIDEO_DURATION_LIMITS,
+  type DeclaredSeedanceTaskType,
   type SeedanceExtendProvider,
   type TailExtendProvider,
 } from "@nodaro/shared/models"
+import { SEEDANCE_EXTEND_CONTEXT_MAX_SEC, seedanceExtendAddedSec } from "@nodaro/render-rules"
+
+/** How the extension is joined onto the source (`stitchExtension`'s boundary options). */
+export interface TailRecipeStitch {
+  /** Search the boundary with the smart-cut matcher over these windows. Absent: no search, the trims below. */
+  smartCut?: { framesFromPrev: number; framesFromNext: number }
+  /** Frames dropped from the source's end and the extension's start when no match is applied. */
+  fallbackTrims: { trimEndFrames: number; trimStartFrames: number }
+  /** The sound's crossfade at the join, in seconds. */
+  audioFadeSec: number
+}
 
 export interface TailRecipe {
   /** The video model that generates the continuation. */
@@ -36,30 +63,71 @@ export interface TailRecipe {
   minSourceSec: number
   /** The seconds a run may add. */
   window: { min: number; max: number }
-  /** The prompt sent to the model, from the user's own (absent in untyped job data reads as empty). */
-  prompt(userPrompt: string | null | undefined): string
+  /**
+   * Whether the source's last frame is sent as the extension's opening image
+   * (an anchor the stitch then drops as a duplicate). False: the request
+   * carries no image of its own beside the user's references.
+   */
+  startImage: boolean
+  /** The reference task type the request declares (`resolveSeedanceTaskType` decides it is sent), or none. */
+  referenceTaskType?: DeclaredSeedanceTaskType
+  /** The prompt sent to the model, from the user's own (absent in untyped job data reads as empty) and the seconds added. */
+  prompt(userPrompt: string | null | undefined, addedSec: number): string
+  /** How the extension is joined onto the source. */
+  stitch: TailRecipeStitch
 }
 
-const seedancePrompt = (userPrompt: string | null | undefined): string =>
-  "extend @video_1 as follows:\n" + String(userPrompt ?? "").trim()
+const userText = (userPrompt: string | null | undefined): string => String(userPrompt ?? "").trim()
 
+/** Seedance 2.0's prompt (the 2026-07-12 spike's template). */
+const seedance20Prompt = (userPrompt: string | null | undefined): string =>
+  "extend @video_1 as follows:\n" + userText(userPrompt)
+
+/** Seedance 2.5's prompt: the provider guide's extension trigger, then what happens next. */
+const seedance25Prompt = (userPrompt: string | null | undefined, addedSec: number): string =>
+  `Extend @video_1 forward by ${addedSec} seconds: ${userText(userPrompt)}`
+
+/** Kling 4's prompt. */
 const klingPrompt = (userPrompt: string | null | undefined): string =>
-  "Continue @video_1 as one continuous shot, starting exactly where it ends: " + String(userPrompt ?? "").trim()
+  "Continue @video_1 as one continuous shot, starting exactly where it ends: " + userText(userPrompt)
+
+/** The stitch of a recipe whose extension opens on the source's last frame: find and drop the duplicate. */
+const ANCHORED_STITCH: TailRecipeStitch = {
+  smartCut: { framesFromPrev: 8, framesFromNext: 8 },
+  fallbackTrims: {
+    trimEndFrames: SEEDANCE_2_EXTEND_STITCH.trimTailFrames,
+    trimStartFrames: SEEDANCE_2_EXTEND_STITCH.trimHeadFrames,
+  },
+  audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+}
 
 export const TAIL_RECIPES: Record<TailExtendProvider, TailRecipe> = {
   "seedance-2-5-extend": {
     genModel: "seedance-2-5",
-    tailSec: 2,
+    tailSec: SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
     minSourceSec: SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC,
     window: { min: 4, max: 30 },
-    prompt: seedancePrompt,
+    startImage: false,
+    referenceTaskType: "extend",
+    prompt: seedance25Prompt,
+    // A declared extension is new footage only: its first frame follows the
+    // source's last, it does not repeat it. Nothing is a duplicate, so nothing
+    // is searched for or trimmed (a smart cut would "match" two neighbouring
+    // frames and cut real footage): a hard cut at the source's end, the sound
+    // crossfaded across it.
+    stitch: {
+      fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
+      audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+    },
   },
   "seedance-2-0-extend": {
     genModel: "seedance-2",
     tailSec: 2,
     minSourceSec: SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC,
     window: { min: 4, max: 15 },
-    prompt: seedancePrompt,
+    startImage: true,
+    prompt: seedance20Prompt,
+    stitch: ANCHORED_STITCH,
   },
   // Kling 4.0 refuses a reference clip under 2 s, and a 2 s cut can measure a
   // frame short of it (1.958 s), so a Kling run sends a 3 s tail; a source
@@ -71,7 +139,9 @@ export const TAIL_RECIPES: Record<TailExtendProvider, TailRecipe> = {
     tailSec: 3,
     minSourceSec: VIDEO_REF_VIDEO_DURATION_LIMITS["kling-4"]!.minSec,
     window: { min: 3, max: 30 },
+    startImage: true,
     prompt: klingPrompt,
+    stitch: ANCHORED_STITCH,
   },
 }
 
@@ -135,12 +205,11 @@ export function isTailRecipeProvider(p: string): p is keyof typeof TAIL_RECIPES 
 /**
  * The seconds a tail-recipe run adds for a requested `duration`: the seconds
  * its price counts (`pricedOutputDurationSec` — the provider's catalog default
- * when unset or unreadable), rounded and held in the recipe's window. The one
- * reading of the length: the route queues it, the worker generates it and the
+ * when unset or unreadable), rounded and held in the provider's window — the
+ * shared reading (`seedanceExtendAddedSec`, @nodaro/render-rules) every quote
+ * counts too. The route queues it, the worker generates it and the
  * output-length rule records it.
  */
 export function tailRecipeSeconds(provider: keyof typeof TAIL_RECIPES, duration: unknown): number {
-  const { window } = TAIL_RECIPES[provider]
-  const requested = typeof duration === "number" || typeof duration === "string" ? duration : undefined
-  return Math.min(window.max, Math.max(window.min, Math.round(pricedOutputDurationSec(provider, requested))))
+  return seedanceExtendAddedSec(provider, duration)
 }

@@ -1594,6 +1594,28 @@ describe("GET /pricing", () => {
     expect(quiet.json().updatedAt).toBe("2026-08-30T09:12:00.000Z")
   })
 
+  // Seedance 2.5 Extend lists its default run as a whole-run quote id
+  // (`seedance-2-5-extend:720p:per-2s:9u`), which has no row of its own: its
+  // rate row prices it, so a reprice of that row is a change to the model.
+  it("?since= sees a reprice of the rate row a whole-run quote id is priced through", async () => {
+    payerDeployment({}, { allow: ["seedance-2-5-extend"] })
+    tableResults.set("model_pricing:list", {
+      data: [{ model_identifier: "seedance-2-5-extend:720p:per-2s", category: "video", is_enabled: true, updated_at: "2026-09-10T00:00:00.000Z" }],
+      error: null,
+    })
+    rec.filterCalls = []
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/deployment-billing/pricing?since=${encodeURIComponent("2026-09-01T00:00:00Z")}`,
+      headers: AS_PAYER,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.map((r: { modelIdentifier: string }) => r.modelIdentifier)).toEqual(["seedance-2-5-extend"])
+    expect(res.json().data[0].updatedAt).toBe("2026-09-10T00:00:00.000Z")
+    const read = rec.filterCalls.find((c) => c.table === "model_pricing" && c.op === "in")?.args[1] as string[] | undefined
+    expect(read).toEqual(expect.arrayContaining(["seedance-2-5-extend:480p:per-2s", "seedance-2-5-extend:720p:per-2s", "seedance-2-5-extend:1080p:per-2s"]))
+  })
+
   it("lists an allowed model with no configured price in missing[], with creditCost null", async () => {
     h.getModelCreditCost.mockImplementation(async (id: string) => {
       if (id === "flux") throw new h.PriceNotConfiguredError(id)

@@ -26,6 +26,8 @@ export {
   seedanceVideoEditCreditId,
   tailExtendCreditId,
   tailExtendResolution,
+  seedanceExtendRateCreditId,
+  seedanceExtendFullWindowCreditId,
   pixverseExtendCreditId,
   pixverseExtendQuality,
   catalogExtendCreditId,
@@ -50,6 +52,15 @@ export {
   SUNO_SELECT_OPERATIONS,
 } from "../credit-identifiers.js"
 export type { NormalizedImageGen, PricedVideoSelection } from "../credit-identifiers.js"
+export {
+  SEEDANCE_EXTEND_SENT_PRICED_PROVIDER,
+  SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
+  SEEDANCE_EXTEND_RATE_SECONDS,
+  SEEDANCE_EXTEND_RATE_CREDIT_IDS,
+  isSeedanceExtendPricedBySecondsSent,
+  isSeedanceExtendRateCreditId,
+  type SentPricedSeedanceExtendProvider,
+} from "../seedance-extend-rate.js"
 export * from "../credit-estimators/index.js"
 export {
   resolveTopazUpscale,

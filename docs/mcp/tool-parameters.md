@@ -865,7 +865,7 @@ Needs `workflows:execute`.
 | `duration` | integer |  | Seconds to add: seedance-2-5-extend 4–30 seconds (default 8), seedance-2-0-extend 4–15 seconds (default 8), kling-4-extend 3–30 seconds (default 5), pixverse-v6-extend 1–15 seconds (default 5). Any other length is refused. From 1 to 30. |
 | `resolution` | string |  | Extension resolution (seedance-2-5-extend / seedance-2-0-extend: 480p, 720p or 1080p; kling-4-extend: 720p or 1080p; pixverse-v6-extend: 360p, 540p, 720p or 1080p; default 720p — match the source for the cleanest seam). Any other is refused. One of `360p`, `480p`, `540p`, `720p`, `1080p`. |
 | `generate_audio` | boolean |  | Continue the soundtrack into the extension (seedance-2-5-extend / seedance-2-0-extend / pixverse-v6-extend only, default true) |
-| `reference_image_urls` | string (URL)[] |  | Reference images for the extension (seedance-2-5-extend / seedance-2-0-extend only, up to 8 — one seat is reserved for the continuation anchor). Mention them in the prompt as @image_1…@image_N in list order. At most 8 items. |
+| `reference_image_urls` | string (URL)[] |  | Reference images for the extension (seedance-2-5-extend / seedance-2-0-extend only, up to 8). Mention them in the prompt as @image_1…@image_N in list order. At most 8 items. |
 | `seed` | integer |  | From 10000 to 99999. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 | `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |

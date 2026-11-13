@@ -813,7 +813,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       title: "Extend Video",
       description:
         "Extend a video. veo-extend / runway-extend continue a previously-generated VEO or Runway video and require the task_id from that job (NOT the URL). " +
-        `${URL_EXTEND_LABEL} extend ANY video by URL (or asset id) — they generate what happens next and stitch it onto the source into one seamless clip; ` +
+        `${URL_EXTEND_LABEL} extend ANY video by URL (or asset id) — they generate what happens next and join it to the source (2.5: from its last 10 s, billed per second sent + added); ` +
         "describe only the continuation content in `prompt` (plain action description — no 'reference video' phrasing needed).",
       inputSchema: {
         prompt: z.string().min(1).max(8000),
@@ -838,7 +838,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .max(SEEDANCE_2_REF_LIMITS.images - 1)
           .optional()
           .describe(
-            `Reference images for the extension (${REFERENCE_EXTEND_LABEL} only, up to 8 — one seat is reserved for the continuation anchor). Mention them in the prompt as @image_1…@image_N in list order.`,
+            `Reference images for the extension (${REFERENCE_EXTEND_LABEL} only, up to 8). Mention them in the prompt as @image_1…@image_N in list order.`,
           ),
         seed: z.number().int().min(10000).max(99999).optional(),
       },

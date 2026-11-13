@@ -43,7 +43,7 @@ import { createHash } from "node:crypto"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
-import { resolveDeploymentPrices } from "../billing/deployment-pricing.js"
+import { pricingRowsOf, resolveDeploymentPrices } from "../billing/deployment-pricing.js"
 import { usageAmount } from "../../lib/usage-amount.js"
 import { LOAD_RATE_ANCHORS } from "../billing/load-rate.js"
 import { supabase } from "../../lib/supabase.js"
@@ -1709,8 +1709,8 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
         errors.push(id)
         console.error(`[deployment-billing] pricing lookup failed for "${id}":`, settledOne.reason)
       }
-      const rowId = ("rowIdentifier" in definition && definition.rowIdentifier) || undefined
-      const timestamps = [definition.baseIdentifier, ...(rowId ? [rowId] : []), ...definition.variants.map(v => v.identifier)]
+      // Every row the model's prices are read from — a whole-run quote id's rate row among them.
+      const timestamps = pricingRowsOf(definition)
         .map(key => byId.get(key)?.updated_at).filter((value): value is string => Boolean(value)).sort()
       const rowUpdatedAt = timestamps.at(-1) ?? null
       if (rowUpdatedAt !== null && (updatedAt === null || rowUpdatedAt > updatedAt)) updatedAt = rowUpdatedAt

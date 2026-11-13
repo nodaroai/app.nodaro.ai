@@ -5,6 +5,7 @@ import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { speechUnitRowServed } from "../../lib/speech-credits.js"
 import { llmMeteredPricing } from "../../lib/config.js"
 import { PriceNotConfiguredError, getChargedPriceTable, meteredLlmPriceKey, meteredLlmQuote } from "./credits.js"
+import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
 
 /**
  * LLM steps that are never billed as calls of their own: `translate` runs
@@ -73,8 +74,24 @@ export async function resolveDeploymentPrices(ids: readonly string[], price: (id
     return quote.credits
   }
   const results = await Promise.allSettled(identifiers.map(priceOf))
-  // The `model_pricing` rows a caller reads a model's switches and metadata from: the priced ids, and
-  // a metered model's feature row (`rowIdentifier`).
-  const rowIdentifiers = [...new Set([...identifiers, ...[...definitions.values()].flatMap((d) => ("rowIdentifier" in d && d.rowIdentifier ? [d.rowIdentifier] : []))])]
+  // The `model_pricing` rows a caller reads a model's switches, metadata and last change from.
+  const rowIdentifiers = [...new Set([...definitions.values()].flatMap(pricingRowsOf))]
   return { definitions, identifiers, rowIdentifiers, prices: new Map(identifiers.map((id, index) => [id, results[index]!])) }
+}
+
+/**
+ * The `model_pricing` rows a model's listed prices are read from — so a
+ * change to any of them is a change to the model's prices (`updatedAt`,
+ * `?since=`): its base id and each variant's, a metered model's feature row
+ * (`rowIdentifier`), and the rows a whole-run quote id is priced through
+ * (`wholeRequestQuoteOf`: `<rate>:<units>u` has no row of its own, its rate
+ * row prices it — Seedance 2.5 Extend lists its default run that way).
+ */
+export function pricingRowsOf(definition: ReturnType<typeof deploymentPriceDefinitions>): string[] {
+  const priced = [definition.baseIdentifier, ...definition.variants.map((v) => v.identifier)]
+  return [...new Set([
+    ...priced,
+    ...("rowIdentifier" in definition && definition.rowIdentifier ? [definition.rowIdentifier] : []),
+    ...priced.flatMap((id) => wholeRequestQuoteOf(id)?.rows ?? []),
+  ])]
 }

@@ -25,6 +25,7 @@ import { extendStitchArgs } from "../extend-stitch-args.js"
 import { probeMatched } from "../matched-encode.js"
 import { getSmartCutMatcher, registerSmartCutMatcher, type SmartCutMatcher } from "../smart-cut.js"
 import { colourTagArgs, hdrTags, writeTaggedClip, type ColourTags } from "./colour-tagged-clip.js"
+import { TAIL_RECIPES } from "../../../lib/extend-recipe.js"
 
 function isFfmpegAvailable(): boolean {
   try {
@@ -802,4 +803,87 @@ describe.skipIf(!ffmpegAvailable)("stitchExtension (real ffmpeg)", () => {
       expectLocked(probed)
     }, 60_000)
   })
+})
+
+/**
+ * Seedance 2.5's extension is UN-ANCHORED (decided 2026-11-12): the model is
+ * sent no start image and declares the request an extension, so its first
+ * frame follows the source's last instead of repeating it. Nothing at the join
+ * is a duplicate, and the recipe's stitch (`TAIL_RECIPES["seedance-2-5-extend"].stitch`)
+ * searches nothing and trims nothing: a hard cut at the source's end, the
+ * sound crossfaded across it. Pinned on real media: every frame of both clips
+ * is kept, in order, the extension's first right after the source's last, and
+ * the sound still ends with the picture. The 2.0 recipe's fallback trims on
+ * the same pair would have dropped 4 + 3 real frames.
+ */
+describe.skipIf(!ffmpegAvailable)("stitchExtension — an un-anchored extension (Seedance 2.5's recipe, real ffmpeg)", () => {
+  let dir: string
+  /** An 854×480 @ 24 MP4, 3 s (72 frames) of white, with a 440 Hz tone. */
+  let source: string
+  /** A 1280×720 @ 24 MP4, 2 s (48 frames) of black — nothing like the source's last frame — with a 660 Hz tone. */
+  let extension: string
+
+  /** Every frame's mean luma (0–255). */
+  const meanLumas = async (file: string): Promise<number[]> =>
+    (await lumaPlanes(file)).map((plane) => plane.reduce((sum, v) => sum + v, 0) / plane.length)
+
+  beforeAll(async () => {
+    dir = await fs.mkdtemp(join(tmpdir(), "extend-stitch-unanchored-"))
+    source = join(dir, "source.mp4")
+    extension = join(dir, "extension.mp4")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "color=c=white:size=854x480:rate=24:duration=3",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3:sample_rate=48000",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+      source,
+    ])
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "color=c=black:size=1280x720:rate=24:duration=2",
+      "-f", "lavfi", "-i", "sine=frequency=660:duration=2:sample_rate=48000",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+      extension,
+    ])
+  }, 120_000)
+
+  afterAll(async () => {
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => {})
+  })
+
+  it("keeps every frame of both clips: the source whole, then the extension from its first frame, the sound locked", async () => {
+    const recipe = TAIL_RECIPES["seedance-2-5-extend"].stitch
+    const workDir = await fs.mkdtemp(join(dir, "w-"))
+    const { outputPath, boundary } = await stitchExtension({ sourcePath: source, extensionPath: extension, workDir, ...recipe })
+
+    // No search ran, nothing was trimmed.
+    expect(boundary).toEqual({ matched: false, psnrDb: null, trimEndFrames: 0, trimStartFrames: 0, searchedPrevFrames: null, searchedNextFrames: null })
+    const probed = await probe(outputPath)
+    expect([probed.video.width, probed.video.height]).toEqual([854, 480])
+    expect(Number(probed.video.nb_read_frames)).toBe(72 + 48)
+    // The source's 72 white frames, then the extension's 48 black ones: the cut
+    // falls exactly at the source's end, and the extension's first frame is there.
+    const lumas = await meanLumas(outputPath)
+    expect(lumas).toHaveLength(120)
+    expect(lumas.slice(0, 72).every((l) => l > 200), "the source's frames, all of them").toBe(true)
+    expect(lumas.slice(72).every((l) => l < 50), "the extension's frames, from its first").toBe(true)
+    expectLocked(probed)
+  }, 60_000)
+
+  it("a registered matcher is never asked: an un-anchored join has no duplicate to find", async () => {
+    const previous = getSmartCutMatcher()
+    let asked = 0
+    registerSmartCutMatcher(async (...args) => {
+      asked++
+      return standInMatcher(...args)
+    })
+    try {
+      const workDir = await fs.mkdtemp(join(dir, "w-"))
+      const { boundary } = await stitchExtension({ sourcePath: source, extensionPath: extension, workDir, ...TAIL_RECIPES["seedance-2-5-extend"].stitch })
+      expect(asked).toBe(0)
+      expect(boundary.trimEndFrames + boundary.trimStartFrames).toBe(0)
+    } finally {
+      registerSmartCutMatcher(previous as SmartCutMatcher)
+    }
+  }, 60_000)
 })

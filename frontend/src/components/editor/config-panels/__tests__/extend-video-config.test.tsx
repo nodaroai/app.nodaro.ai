@@ -97,10 +97,16 @@ describe("ExtendVideoConfig — Seedance 2.5 and Seedance 2.0", () => {
   it("labels each resolution with its own provider's price id", () => {
     const asked = () => credits.getCachedCredits.mock.calls.map(([id]) => id)
     const prefetched = () => credits.prefetchModelCredits.mock.calls.flatMap(([ids]) => ids as string[])
+    // Seedance 2.5: each resolution's run — its two-second row × the run's units
+    // (no source known here: the whole 10 s window + the 8 s default, 9 units).
     const on25 = render(<ExtendVideoConfig data={data()} onUpdate={vi.fn()} {...EXTRA} />)
-    const ids25 = ["seedance-2-5-extend:8s:480p", "seedance-2-5-extend:8s:720p", "seedance-2-5-extend:8s:1080p"]
+    const ids25 = ["seedance-2-5-extend:480p:per-2s:9u", "seedance-2-5-extend:720p:per-2s:9u", "seedance-2-5-extend:1080p:per-2s:9u"]
     expect(asked()).toEqual(expect.arrayContaining(ids25))
-    expect(prefetched()).toEqual(ids25)
+    expect(prefetched()).toEqual([
+      "seedance-2-5-extend:480p:per-2s", "seedance-2-5-extend:480p:per-2s:9u",
+      "seedance-2-5-extend:720p:per-2s", "seedance-2-5-extend:720p:per-2s:9u",
+      "seedance-2-5-extend:1080p:per-2s", "seedance-2-5-extend:1080p:per-2s:9u",
+    ])
     on25.unmount()
     credits.getCachedCredits.mockClear()
     credits.prefetchModelCredits.mockClear()
@@ -112,11 +118,25 @@ describe("ExtendVideoConfig — Seedance 2.5 and Seedance 2.0", () => {
   })
 
   it("prices the seconds chosen on the row the run reserves", () => {
-    credits.getCachedCredits.mockImplementation((id: string) => (id === tailExtendCreditId("seedance-2-5-extend", 22, "1080p") ? 4321 : undefined))
-    const { container } = render(<ExtendVideoConfig data={data({ duration: 22 })} onUpdate={vi.fn()} {...EXTRA} />)
+    credits.getCachedCredits.mockImplementation((id: string) => (id === tailExtendCreditId("seedance-2-0-extend", 12, "1080p") ? 4321 : undefined))
+    const { container } = render(<ExtendVideoConfig data={data({ provider: "seedance-2-0-extend", duration: 12 })} onUpdate={vi.fn()} {...EXTRA} />)
     const res = container.querySelector('output[aria-label="Resolution"]')!.closest("[data-testid=select]") as HTMLElement
     expect(within(res).getByRole("button", { name: /1080p \(.+ credits\)/ })).toBeTruthy()
-    expect(credits.getCachedCredits).toHaveBeenCalledWith("seedance-2-5-extend:22s:1080p")
+    expect(credits.getCachedCredits).toHaveBeenCalledWith("seedance-2-0-extend:12s:1080p")
+    credits.getCachedCredits.mockImplementation(() => undefined)
+  })
+
+  it("Seedance 2.5: prices each resolution's run per second sent and added, the source read off the canvas", () => {
+    // A 4 s upload wired in, 22 s added: (4 + 22) ÷ 2 = 13 units of the two-second row.
+    const nodes = [{ id: "u", type: "upload-video", position: { x: 0, y: 0 }, data: { url: "https://cdn.example.com/u.mp4", duration: 4, videoDurationSec: 4 } }]
+    const edges = [{ id: "u-x", source: "u", target: "x", targetHandle: "video" }]
+    credits.getCachedCredits.mockImplementation((id: string) => (id === "seedance-2-5-extend:1080p:per-2s:13u" ? 4321 : undefined))
+    const { container } = render(
+      <ExtendVideoConfig data={data({ duration: 22 })} onUpdate={vi.fn()} {...EXTRA} nodes={nodes as never} edges={edges as never} nodeId="x" />,
+    )
+    const res = container.querySelector('output[aria-label="Resolution"]')!.closest("[data-testid=select]") as HTMLElement
+    expect(within(res).getByRole("button", { name: /1080p \(.+ credits\)/ })).toBeTruthy()
+    expect(credits.getCachedCredits).toHaveBeenCalledWith("seedance-2-5-extend:1080p:per-2s:13u")
     credits.getCachedCredits.mockImplementation(() => undefined)
   })
 

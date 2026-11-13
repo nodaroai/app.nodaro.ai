@@ -11,7 +11,9 @@
  * - seedance-2-5-extend / seedance-2-0-extend / kling-4-extend: Seedance 2.5 /
  *   Seedance 2.0 / Kling 4, from a video URL — the tail recipe
  *   (lib/extend-recipe.ts): the source's last seconds as the `@video_1`
- *   reference, then a stitch. The earlier id `seedance-2-extend` is retired:
+ *   reference, then a stitch. Seedance 2.5 is charged per second sent and
+ *   added (@nodaro/render-rules `seedance-extend-pricing.ts`), on the source
+ *   the preHandler measures. The earlier id `seedance-2-extend` is retired:
  *   the app-wide hook (middleware/retired-video-provider.ts) runs it as
  *   `seedance-2-5-extend`.
  * - pixverse-v6-extend: PixVerse V6, from a video URL — a native extend
@@ -19,7 +21,7 @@
  *   seconds joined on back, of which only the new seconds are stitched to it.
  */
 
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -46,10 +48,12 @@ import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { LTX_EXTEND_PER_SECOND_CREDIT_ID, catalogExtendCreditId, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
+import { isSeedanceExtendPricedBySecondsSent, seedanceExtendRateCreditId } from "@nodaro/render-rules"
 import { EXTEND_REFERENCE_IMAGE_PROVIDERS, extendSourceTooShortMessage, isTailRecipeProvider, tailRecipeSeconds, TAIL_RECIPES } from "../lib/extend-recipe.js"
 import { EXTEND_DURATION_MAX_SEC, EXTEND_DURATION_SECONDS, describeSeconds } from "../lib/extend-durations.js"
 import { pixverseExtendPromptProblem, pixverseExtendSeconds } from "../lib/extend-native.js"
 import { ltxExtendBaseCredits } from "../lib/ltx-extend-credits.js"
+import { SEEDANCE_EXTEND_SOURCE_SEC_KEY, seedanceExtendBaseCredits } from "../lib/seedance-extend-credits.js"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 import { assembleVideoConnectedReferences } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -111,11 +115,13 @@ export const extendVideoBody = z.object({
 const EXTEND_REFERENCE_CAPS_MODEL = "seedance-2"
 
 /**
- * Image-reference slots the extend transport consumes on its own: the source's
- * last frame, which the shared seedance input resolver appends into
- * `reference_image_urls` as the anchor (bound as the opening frame by its
+ * Image-reference slots the Seedance 2.0 extend transport consumes on its own:
+ * the source's last frame, which the shared seedance input resolver appends
+ * into `reference_image_urls` as the anchor (bound as the opening frame by its
  * prompt suffix). User references must leave it a free seat or the assembly's
- * `@image_N` directives would number onto the anchor's seat.
+ * `@image_N` directives would number onto the anchor's seat. Seedance 2.5
+ * sends no anchor (it declares the extension instead), and keeps the same cap
+ * so the prompt and reference list a saved node assembles do not change.
  */
 const EXTEND_ANCHOR_IMAGE_SLOTS = 1
 
@@ -124,7 +130,7 @@ const EXTEND_ANCHOR_IMAGE_SLOTS = 1
  * assembler generate-video uses, with two extend-specific facts pinned:
  * the provider is the underlying generation model (the caps source), and the
  * image budget reserves the anchor's seat. `referenceVideoCount: 1` because
- * the worker's 2s source tail rides as `@video_1`. Pure; exported for tests.
+ * the worker's cut of the source's end rides as `@video_1`. Pure; exported for tests.
  */
 export function assembleExtendVideoReferences(args: {
   prompt: string | undefined
@@ -163,7 +169,11 @@ export function resolveExtendVideoIdentifier(body: Record<string, unknown> | und
   // the guard and the workflow run multiply by the seconds
   // (ltxExtendBaseCredits).
   if (provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
-  // Each catalog extend provider (Seedance 2.5 / 2.0, Kling 4, PixVerse V6)
+  // Seedance 2.5 is charged per second sent and added: its resolution's
+  // two-second row, which the guard multiplies by the run's units
+  // (`seedanceExtendBaseCredits`, on the source the preHandler measured).
+  if (isSeedanceExtendPricedBySecondsSent(provider)) return seedanceExtendRateCreditId(body?.resolution)
+  // Every other catalog extend provider (Seedance 2.0, Kling 4, PixVerse V6)
   // on its own rows (per second added × resolution; PixVerse's `:audio` with
   // its sound on) — the one builder every surface prices such an extend with.
   if (isCatalogExtendProvider(provider)) {
@@ -173,6 +183,27 @@ export function resolveExtendVideoIdentifier(body: Record<string, unknown> | und
     return catalogExtendCreditId(provider, duration, resolution, generateAudio)
   }
   return provider
+}
+
+/**
+ * The length of the source's picture the preHandler measured for a request,
+ * by request: what its Seedance 2.5 price counts. Never read from the body, so
+ * a caller cannot name the length it is charged for. No entry (the probe
+ * failed, or a quote that never ran the preHandler): the whole 10-second
+ * window is held, and the worker settles the run on the source it measures.
+ */
+const measuredSourcePictureSec = new WeakMap<FastifyRequest, number>()
+
+/**
+ * BASE credits of a Seedance 2.5 extend request (the guard marks them up once
+ * at the rate row): the run's seconds sent and added at its resolution's
+ * rate. Undefined for every other provider (its row prices it). Exported for tests.
+ */
+export async function extendVideoComputeCredits(body: unknown, req: FastifyRequest): Promise<number | undefined> {
+  const b = body as Record<string, unknown> | undefined
+  const provider = canonicalVideoProvider(typeof b?.provider === "string" ? b.provider : "veo-extend")
+  if (!isSeedanceExtendPricedBySecondsSent(provider)) return undefined
+  return seedanceExtendBaseCredits({ duration: b?.duration, resolution: b?.resolution, sourcePictureSec: measuredSourcePictureSec.get(req) })
 }
 
 type ExtendVideoBody = z.infer<typeof extendVideoBody>
@@ -247,8 +278,11 @@ function retiredLengthInWindow(data: ExtendVideoBody, retiredId: string | undefi
   return seconds === data.duration ? data : { ...data, duration: seconds }
 }
 
-/** {@link checkExtendSource}'s answer. */
-export type ExtendSourceCheck = { ok: true } | { ok: false; code: "video_too_short"; message: string }
+/**
+ * {@link checkExtendSource}'s answer. `pictureSec`: the length of the source's
+ * picture, when it was measured (what a Seedance 2.5 run's price counts).
+ */
+export type ExtendSourceCheck = { ok: true; pictureSec?: number } | { ok: false; code: "video_too_short"; message: string }
 
 /**
  * Whether a tail-recipe provider can continue `videoUrl`. The run sends the
@@ -260,13 +294,14 @@ export type ExtendSourceCheck = { ok: true } | { ok: false; code: "video_too_sho
  * is refused here — before anything is reserved — instead of failing in the
  * worker after the reservation. The picture's length is the video stream's
  * own (`videoDurationSeconds`: the sound can run past the last frame), the
- * container's when the stream reports none.
+ * container's when the stream reports none. A source that can run answers
+ * with that length (`pictureSec`).
  *
  * Best-effort, like the route's other source probes: a probe that fails (the
- * source unreachable from here, a timeout) answers ok — `onProbeError` hears
- * why — and the worker measures the source again before it generates. A
- * provider with no tail, or a value that is no safe http(s) URL (the probe
- * reads local paths too), is not probed at all.
+ * source unreachable from here, a timeout) answers ok with no length —
+ * `onProbeError` hears why — and the worker measures the source again before
+ * it generates. A provider with no tail, or a value that is no safe http(s)
+ * URL (the probe reads local paths too), is not probed at all.
  */
 export async function checkExtendSource(
   provider: string,
@@ -282,7 +317,7 @@ export async function checkExtendSource(
     onProbeError?.(err)
     return { ok: true }
   }
-  if (pictureSec >= TAIL_RECIPES[provider].minSourceSec) return { ok: true }
+  if (pictureSec >= TAIL_RECIPES[provider].minSourceSec) return { ok: true, pictureSec }
   return { ok: false, code: "video_too_short", message: extendSourceTooShortMessage(provider, pictureSec) }
 }
 
@@ -293,7 +328,13 @@ export async function extendVideoRoutes(app: FastifyInstance) {
   const ltxExtendGuard = creditGuard(() => LTX_EXTEND_PER_SECOND_CREDIT_ID, {
     computeCredits: (body) => ltxExtendBaseCredits((body as Record<string, unknown> | undefined)?.duration),
   })
-  const rowPricedGuard = creditGuard((req) => resolveExtendVideoIdentifier(req.body as Record<string, unknown> | undefined))
+  // Seedance 2.5 is charged per second sent and added: its two-second row times
+  // the run's units, on the source the preHandler measured (the whole 10 s
+  // window when it could not). Every other provider (computeCredits answers
+  // undefined) keeps its row-priced guard.
+  const rowPricedGuard = creditGuard((req) => resolveExtendVideoIdentifier(req.body as Record<string, unknown> | undefined), {
+    computeCredits: extendVideoComputeCredits,
+  })
 
   app.post("/v1/extend-video", {
     // Everything that refuses a request is answered here, BEFORE the credit
@@ -320,6 +361,7 @@ export async function extendVideoRoutes(app: FastifyInstance) {
           req.log.warn({ err, provider }, "extend-video: source ffprobe failed; the worker measures it again")
         })
         if (!source.ok) return reply.status(400).send({ error: { code: source.code, message: source.message } })
+        if (source.pictureSec !== undefined) measuredSourcePictureSec.set(req, source.pictureSec)
       }
       // The free-credit video limits judge the provider the request RUNS, as
       // an extension (no extension on free credits). Left to themselves they
@@ -457,10 +499,16 @@ export async function extendVideoRoutes(app: FastifyInstance) {
             resolution: parsed.data.resolution,
             generateAudio: parsed.data.generateAudio,
             // Assembled + anchor-budgeted user refs; the worker forwards them
-            // into the i2v call, where the shared resolver seats them FIRST
-            // (@image_1…N) and appends the last-frame anchor after them.
+            // into the generation, where the shared resolver seats them FIRST
+            // (@image_1…N) — on Seedance 2.0 the last-frame anchor after them.
             ...(assembled?.referenceImageUrls?.length
               ? { referenceImageUrls: assembled.referenceImageUrls }
+              : {}),
+            // Seedance 2.5: the source length the hold was priced on, so the
+            // worker sends (and settles on) no more of the source than was
+            // held, even if the link answers it a longer file.
+            ...(isSeedanceExtendPricedBySecondsSent(canonicalVideoProvider(provider)) && measuredSourcePictureSec.has(req)
+              ? { [SEEDANCE_EXTEND_SOURCE_SEC_KEY]: measuredSourcePictureSec.get(req) }
               : {}),
             usageLogId,
           }

@@ -1,15 +1,32 @@
 import { describe, it, expect } from "vitest"
 import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByFamily, validateModelInput } from "@nodaro/shared/model-catalog"
 import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
+import { parseRateQuoteCreditId, quoteBaseCredits } from "../../unit-quote-rates.js"
+
+/**
+ * A catalog row's static figure: its `STATIC_CREDIT_COSTS` entry, or — for a
+ * whole-run quote id of a per-unit rate the price table prices
+ * (`parseRateQuoteCreditId`, the reader the price lookups use: a unit count
+ * the rate's runs can have) that belongs to the model listing it (the rate is
+ * one of `modelId`'s own rows, `<modelId>:…`) — the rate's row × the units,
+ * rounded up once. Undefined for any id the price table cannot price, and for
+ * another model's rate.
+ */
+function staticFigureOf(identifier: string, modelId: string): number | undefined {
+  const row = (STATIC_CREDIT_COSTS as Record<string, number | undefined>)[identifier]
+  if (row !== undefined) return row
+  const quote = parseRateQuoteCreditId(identifier)
+  if (!quote || !quote.rateId.startsWith(`${modelId}:`)) return undefined
+  const rate = (STATIC_CREDIT_COSTS as Record<string, number | undefined>)[quote.rateId]
+  return rate !== undefined ? quoteBaseCredits(rate, quote.units) : undefined
+}
 
 describe("Model catalog ↔ STATIC_CREDIT_COSTS", () => {
-  it("every catalog pricing identifier exists in STATIC_CREDIT_COSTS with matching cost", () => {
+  it("every catalog pricing identifier exists in STATIC_CREDIT_COSTS (or is a whole-run quote of a priced rate) with matching cost", () => {
     const mismatches: string[] = []
     for (const entry of Object.values(MODEL_CATALOG)) {
       for (const variant of entry.pricing) {
-        const expected = (STATIC_CREDIT_COSTS as Record<string, number | undefined>)[
-          variant.identifier
-        ]
+        const expected = staticFigureOf(variant.identifier, entry.id)
         if (expected === undefined) {
           mismatches.push(`MISSING in STATIC_CREDIT_COSTS: ${variant.identifier}`)
         } else if (expected !== variant.credits) {
@@ -20,6 +37,24 @@ describe("Model catalog ↔ STATIC_CREDIT_COSTS", () => {
       }
     }
     expect(mismatches).toEqual([])
+  })
+
+  // A whole-run quote id is accepted only for a rate the price table charges a
+  // multiple of, at a unit count its runs can have; anything else still fails.
+  it("accepts a whole-run quote id only for a priced per-unit rate of the model listing it", () => {
+    const S25 = "seedance-2-5-extend"
+    expect(staticFigureOf("seedance-2-5-extend:720p:per-2s:9u", S25)).toBe(1710)
+    expect(staticFigureOf("seedance-2-5-extend:720p:per-2s", S25)).toBe(190)
+    expect(staticFigureOf("seedance-2-5-extend:720p:per-2s:2.9u", S25)).toBe(551) // the fewest a run can be: 1.8 s sent + 4 s added
+    expect(staticFigureOf("seedance-2-5-extend:720p:per-2s:2.5u", S25)).toBeUndefined() // under the fewest a run can be
+    expect(staticFigureOf("seedance-2-5-extend:720p:per-2s:0.5u", S25)).toBeUndefined()
+    expect(staticFigureOf("seedance-2-5-extend:720p:per-2s:99u", S25)).toBeUndefined() // past the most a run can be
+    expect(staticFigureOf("seedance-2-5-extend:8s:720p:9u", S25)).toBeUndefined() // not a per-unit rate
+    expect(staticFigureOf("not-a-model:9u", S25)).toBeUndefined()
+    // Another model's rate, listed under this one: priced by the table, but not this model's price.
+    expect(parseRateQuoteCreditId("topaz-video:per-unit:5u")).toBeDefined()
+    expect(staticFigureOf("topaz-video:per-unit:5u", S25)).toBeUndefined()
+    expect(staticFigureOf("seedance-2-5-extend:720p:per-2s:9u", "seedance-2-0-extend")).toBeUndefined()
   })
 
   it("every featured model has a description and useCases", () => {

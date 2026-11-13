@@ -78,7 +78,14 @@ export type ModelMode =
   | "video-audit"
 
 export interface PriceVariant {
-  /** Composite identifier as it appears in `STATIC_CREDIT_COSTS`. */
+  /**
+   * Composite identifier as it appears in `STATIC_CREDIT_COSTS` — or, for a
+   * model a run is charged a multiple of a rate for, the whole-run quote id of
+   * one run (`<rateId>:<units>u`, `unitQuoteCreditId`): its rate's row × the
+   * units, rounded up once, as the price table and `GET
+   * /v1/credits/model-cost` price it (Seedance 2.5 Extend lists its default
+   * run this way). `credits` is then that run's list price.
+   */
   identifier: string
   /** The catalog's list price in credits. `GET /v1/models` and the MCP
    *  `list_models` tool serve the price a run is charged on the instance,
@@ -3498,8 +3505,11 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["extend"],
     pricing: [{ identifier: "runway-extend", credits: 320 }],
   },
-  // Seedance extends ANY video, one provider per model. Each is priced on its
-  // own rows (`tailExtendCreditId`), one per second added and resolution.
+  // Seedance extends ANY video, one provider per model. Seedance 2.5 is charged
+  // per second of video sent (the source's last 10 s, all of a shorter one)
+  // and added, at its resolution's row, the price of two seconds (decided
+  // 2026-11-12). Seedance 2.0 is priced on its own rows
+  // (`tailExtendCreditId`), one per second added and resolution.
   // The earlier single id `seedance-2-extend` is retired and runs as Seedance 2.5.
   "seedance-2-5-extend": {
     id: "seedance-2-5-extend",
@@ -3509,15 +3519,18 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "bytedance",
     label: "Seedance 2.5 Extend",
     series: "Seedance",
-    description: "Extend ANY video with Seedance 2.5: 4–30s continuation (audio included), stitched into one seamless clip.",
+    description: "Extend ANY video with Seedance 2.5: a 4–30s continuation (audio included) of the source's last 10 seconds, joined onto it. Charged per second of video sent and added; the figure is the default run, 8s added at 720p to a source of 10s or more.",
     useCases: ["extend"],
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
     defaultDuration: 8,
     resolutions: ["480p", "720p", "1080p"],
     pricing: [
-      { identifier: "seedance-2-5-extend:8s:720p", credits: 950, note: "default 8s 720p — see :Ns:res variants for exact" },
-      { identifier: "seedance-2-5-extend:8s:480p", credits: 425, note: "8s 480p" },
-      { identifier: "seedance-2-5-extend:8s:1080p", credits: 2375, note: "8s 1080p" },
+      // The default run (8 s added to a source of 10 s or more: 18 s sent and
+      // added, 9 units of the two-second row) at each resolution. A run is
+      // charged its own seconds: `seedance-2-5-extend:<res>:per-2s` × (sent + added) ÷ 2.
+      { identifier: "seedance-2-5-extend:720p:per-2s:9u", credits: 1710, note: "default run: 8s added at 720p to a source of 10s or more — priced per second sent and added" },
+      { identifier: "seedance-2-5-extend:480p:per-2s:9u", credits: 765, note: "8s added at 480p to a source of 10s or more" },
+      { identifier: "seedance-2-5-extend:1080p:per-2s:9u", credits: 4275, note: "8s added at 1080p to a source of 10s or more" },
     ],
   },
   "seedance-2-0-extend": {

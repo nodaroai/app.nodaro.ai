@@ -953,16 +953,18 @@ describe("CreditsService", () => {
       ])).toBe(STATIC_CREDIT_COSTS["seedance-2-0-extend:6s:480p"])
     })
 
-    it("resolves extend-video seedance-2-5-extend per second added (6s 480p is its own row)", () => {
+    // Seedance 2.5 is charged per second sent and added: with no source wired,
+    // the whole 10 s window + the seconds added, on its resolution's two-second row.
+    it("resolves extend-video seedance-2-5-extend per second sent and added (no source: the 10 s window)", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "extend-video", data: { provider: "seedance-2-5-extend", duration: 6, resolution: "480p" } },
-      ])).toBe(STATIC_CREDIT_COSTS["seedance-2-5-extend:6s:480p"])
+      ])).toBe(Math.ceil(STATIC_CREDIT_COSTS["seedance-2-5-extend:480p:per-2s"]! * (10 + 6) / 2))
     })
 
     it("quotes a stored node on the retired seedance-2-extend as seedance-2-5-extend", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "extend-video", data: { provider: "seedance-2-extend", duration: 12, resolution: "1080p" } },
-      ])).toBe(STATIC_CREDIT_COSTS["seedance-2-5-extend:12s:1080p"])
+      ])).toBe(Math.ceil(STATIC_CREDIT_COSTS["seedance-2-5-extend:1080p:per-2s"]! * (10 + 12) / 2))
     })
 
     it("resolves I2V kling-3.0:5s — no sound field estimates the :audio tier (model default is audio ON)", () => {

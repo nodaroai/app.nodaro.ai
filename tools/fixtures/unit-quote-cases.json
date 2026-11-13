@@ -27,7 +27,8 @@
    "speaker-frames": 2,
    "topaz-video:per-unit": 40,
    "omnihuman-2-0:per-second": 35,
-   "nodaro-video-upscale:2k:per-4s": 30
+   "nodaro-video-upscale:2k:per-4s": 30,
+   "seedance-2-5-extend:720p:per-2s": 190
   }
  },
  "cases": [
@@ -825,6 +826,72 @@
     "servedUnit": 45,
     "credits": 583,
     "perUnitQuote": 585
+   }
+  },
+  {
+   "name": "Extend (Seedance 2.5): a 6 s upload, 8 s added at 720p \u2014 7 two-second units",
+   "nodes": [
+    {
+     "id": "v",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/v.mp4",
+      "videoDurationSec": 6,
+      "duration": 6
+     }
+    },
+    {
+     "id": "x",
+     "type": "extend-video",
+     "data": {
+      "provider": "seedance-2-5-extend",
+      "duration": 8,
+      "resolution": "720p",
+      "prompt": "keep going"
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-video",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "video"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "seedance-2-5-extend:720p:per-2s",
+    "units": 7,
+    "quoteId": "seedance-2-5-extend:720p:per-2s:7u",
+    "servedUnit": 219,
+    "credits": 1530,
+    "perUnitQuote": 1533
+   }
+  },
+  {
+   "name": "Extend (Seedance 2.5): no source known \u2014 the whole 10 s window, 8 s added at 720p \u2014 9 two-second units",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "extend-video",
+     "data": {
+      "provider": "seedance-2-5-extend",
+      "duration": 8,
+      "resolution": "720p",
+      "prompt": "keep going"
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "seedance-2-5-extend:720p:per-2s",
+    "units": 9,
+    "quoteId": "seedance-2-5-extend:720p:per-2s:9u",
+    "servedUnit": 219,
+    "credits": 1967,
+    "perUnitQuote": 1971
    }
   },
   {

@@ -3213,11 +3213,14 @@ orchestrator already use):
   (Seedance 2.5) or `seedance-2-0-extend` (Seedance 2.0) — the only extend
   transports with a reference path; any other extend provider refuses them with
   a 400 rather than silently dropping. The image budget, on both, is the
-  Seedance 2.0 cap **minus one** (up to **8** user references): the extension
-  pipeline itself occupies one reference seat with the source's last frame (the
+  Seedance 2.0 cap **minus one** (up to **8** user references): Seedance 2.0's
+  extension itself occupies one reference seat with the source's last frame (the
   continuation anchor), appended AFTER the user references so `@image_1…@image_8`
-  ordinals never shift. The source's 2-second tail rides as `@video_1`.
-  Reference images add no extra credits.
+  ordinals never shift; Seedance 2.5 sends no anchor and keeps the same budget.
+  The source's end rides as `@video_1`: its last 10 seconds on Seedance 2.5
+  (declared as an extension, priced per second sent and added — see
+  [Extend Video](nodes/ai-video/extend-video.md#seedance-25-extend-credits)),
+  its last 2 seconds on Seedance 2.0. Reference images add no extra credits.
 
 Each ref's `url` rides the same SSRF gate as the flat `referenceImageUrls`, so a
 ref pointing at a private address / non-http(s) scheme is rejected at the route

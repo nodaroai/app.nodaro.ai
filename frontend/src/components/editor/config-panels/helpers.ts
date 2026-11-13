@@ -46,7 +46,7 @@ import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsReferenceVideo } from "@/lib/audio-reference-handles"
 import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
@@ -825,13 +825,17 @@ export function getModelIdentifier(
   // which every estimate multiplies by the seconds (PRICING_UNIT_ESTIMATORS).
   if (nodeType === "extend-video" && provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
 
-  // Extend-video on a catalog extend model (Seedance 2.5 / 2.0, Kling 4,
-  // PixVerse V6): each model on its own rows, by the seconds added and the
-  // resolution (PixVerse's `:audio` with its sound on) — the one builder the
+  // Extend-video on a catalog extend model: Seedance 2.5 is charged per second
+  // sent and added — its resolution's two-second row, which every estimate
+  // multiplies by the run's units (PRICING_UNIT_ESTIMATORS →
+  // extendVideoPricingUnits); every other (Seedance 2.0, Kling 4, PixVerse V6)
+  // on its own rows, by the seconds added and the resolution (PixVerse's
+  // `:audio` with its sound on) — the one builder the
   // route's guard and the workflow run reserve on. A retired id
   // (`seedance-2-extend`) is priced as the model it runs as.
   if (nodeType === "extend-video") {
     const runsAs = canonicalVideoProvider(provider)
+    if (isSeedanceExtendPricedBySecondsSent(runsAs)) return seedanceExtendRateCreditId(data.resolution)
     if (isCatalogExtendProvider(runsAs)) {
       return catalogExtendCreditId(
         runsAs,

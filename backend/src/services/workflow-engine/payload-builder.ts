@@ -64,7 +64,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -6038,11 +6038,15 @@ function buildPayloadOf(
         return pWithNeg
       }
 
-      // ─── Tail-recipe trim-stitch extend (Seedance 2.5 / 2.0, Kling 4) ────
+      // ─── Tail-recipe stitch extend (Seedance 2.5 / 2.0, Kling 4) ─────────
       // URL-based like LTX, but the continuation CONTENT is required — the
       // worker wraps it in the provider's own prompt (lib/extend-recipe.ts)
-      // and then stitches source+extension. Each provider is priced on its own
-      // rows (seconds added × resolution) through the one builder the HTTP
+      // and then stitches source+extension. Seedance 2.5 is charged per second
+      // sent and added: its resolution's two-second row, which node-executor
+      // multiplies by the run's units on the source it measured
+      // (`computeSeedanceExtendCreditOverride`, the route guard's twin). Every
+      // other provider (Seedance 2.0, Kling 4) is priced on its own rows
+      // (seconds added × resolution). All through the one builder the HTTP
       // route (`resolveExtendVideoIdentifier`) and the estimate use, so
       // orchestrator and single-node runs reserve identically — commit_credits
       // only ever refunds a surplus, so a lower reservation would be a
@@ -6058,7 +6062,9 @@ function buildPayloadOf(
         return {
           jobName: "extend-video",
           queueName: "video-generation",
-          modelIdentifier: tailExtendCreditId(tailProvider, duration, resolution),
+          modelIdentifier: isSeedanceExtendPricedBySecondsSent(tailProvider)
+            ? seedanceExtendRateCreditId(resolution)
+            : tailExtendCreditId(tailProvider, duration, resolution),
           payload: {
             jobId,
             provider: tailProvider,
