@@ -54,9 +54,12 @@ import {
 import {
   SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
   SEEDANCE_EXTEND_RATE_CREDIT_IDS,
-  SEEDANCE_EXTEND_RATE_SECONDS,
   SEEDANCE_EXTEND_SENT_PRICED_PROVIDER,
   isSeedanceExtendPricedBySecondsSent,
+  seedanceExtendAddedSec,
+  seedanceExtendRefusesSource,
+  seedanceExtendSentSec,
+  seedanceExtendUnits,
 } from "./seedance-extend-rate.js"
 import { unitQuoteCreditId } from "./credit-estimators/unit-quote.js"
 import { isFlux2Model, FLUX2_RES_MP, type Flux2Model } from "./flux2-pricing.js"
@@ -824,20 +827,61 @@ export function seedanceExtendRateCreditId(resolution: unknown): string {
 }
 
 /**
+ * The ONE id a Seedance 2.5 Extend run on a known source is charged: the
+ * whole-run quote (`<rate row>:<units>u`, {@link unitQuoteCreditId}) of that
+ * run, which the price lookups (`GET /v1/credits/model-cost`,
+ * `POST /v1/credits/model-costs`) answer with exactly what the run is charged.
+ *
+ * The units are (seconds sent + seconds added) ÷ 2, by the rule the server
+ * charges a run by (seedance-extend-rate.ts): the seconds sent are the
+ * source's last {@link SEEDANCE_EXTEND_CONTEXT_MAX_SEC} seconds, or all of a
+ * shorter source, its picture's length read by the container-overhang rule
+ * (`CONTAINER_OVERHANG_SEC`: 8.04 s counts as 8 s, 8.3 s as 8.3 s); the seconds
+ * added snap into the catalog window as {@link tailExtendCreditId} reads them.
+ *
+ * @param sourcePictureSec the source's measured picture length, in seconds.
+ *   Not known or unreadable (undefined, null, not a positive finite number):
+ *   the whole window is counted — {@link seedanceExtendFullWindowCreditId},
+ *   the most a run of that length costs.
+ * @param duration the seconds added (the request's `duration`).
+ * @param resolution the request's resolution (one the model does not offer is 720p).
+ * @returns the id, or `undefined` for a source the extend refuses: a measured
+ *   picture shorter than the shortest source it takes
+ *   (`SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC`, 1.8 s, compared as measured, as the
+ *   route and the worker compare it), whatever the seconds added. No run on
+ *   such a source is made or charged, so there is no price to name.
+ */
+export function seedanceExtendSourceCreditId(
+  sourcePictureSec: number | null | undefined,
+  duration?: number | string,
+  resolution?: unknown,
+): string | undefined {
+  if (seedanceExtendRefusesSource(sourcePictureSec)) return undefined
+  return seedanceExtendWholeRunCreditId(seedanceExtendSentSec(sourcePictureSec), duration, resolution)
+}
+
+/** The whole-run quote of a Seedance 2.5 Extend run that sends `sentSec` and adds `duration` at `resolution`. */
+function seedanceExtendWholeRunCreditId(sentSec: number, duration: number | string | undefined, resolution: unknown): string {
+  const units = seedanceExtendUnits(sentSec, seedanceExtendAddedSec(SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, duration))
+  return unitQuoteCreditId(seedanceExtendRateCreditId(resolution), units)
+}
+
+/**
  * The most a Seedance 2.5 Extend run that adds `duration` seconds at
  * `resolution` can cost, as ONE id: the whole-run quote
  * (`<rate row>:<units>u`, {@link unitQuoteCreditId}) of a run that sends the
  * whole {@link SEEDANCE_EXTEND_CONTEXT_MAX_SEC}-second window — the units are
  * (10 + the seconds added) ÷ 2. A run sends at most that window, so this is
  * never below what a run of that length is charged; the price lookups answer
- * it at the rate row's current price.
+ * it at the rate row's current price. A client that knows the source names
+ * its run exactly with {@link seedanceExtendSourceCreditId}; this is that id
+ * for a source not known.
  *
  * The seconds added snap into the catalog window exactly as
  * {@link tailExtendCreditId} reads them for every tail-recipe provider.
  */
 export function seedanceExtendFullWindowCreditId(duration?: number | string, resolution?: unknown): string {
-  const addedSec = pricedOutputDurationSec(SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, duration)
-  return unitQuoteCreditId(seedanceExtendRateCreditId(resolution), (SEEDANCE_EXTEND_CONTEXT_MAX_SEC + addedSec) / SEEDANCE_EXTEND_RATE_SECONDS)
+  return seedanceExtendWholeRunCreditId(seedanceExtendSentSec(undefined), duration, resolution)
 }
 
 /**
@@ -857,7 +901,7 @@ export function seedanceExtendFullWindowCreditId(duration?: number | string, res
  *   that length costs, the whole 10-second window sent
  *   ({@link seedanceExtendFullWindowCreditId},
  *   `seedance-2-5-extend:<res>:per-2s:<units>u`). A client that knows the
- *   source prices the run itself (`@nodaro/render-rules` `seedanceExtendPrice`).
+ *   source names the run's own id with {@link seedanceExtendSourceCreditId}.
  *
  * A retired id (`seedance-2-extend`) is not a {@link TailExtendProvider}:
  * pass a stored or sent provider through `canonicalVideoProvider` first

@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { withListedReferenceTaskTypes } from "@nodaro/shared/nodes"
 import { createClient } from "@/lib/supabase"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
@@ -467,7 +468,8 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           user_id: user.id,
           folder_id: original.folder_id,
           name: `${original.name} (Copy)`,
-          nodes: original.nodes as Json,
+          // A stored reference task type no model the node runs lists is removed (withListedReferenceTaskTypes).
+          nodes: withListedReferenceTaskTypes(original.nodes) as Json,
           edges: original.edges as Json,
           settings: original.settings as Json,
         })
@@ -506,7 +508,8 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           project_id: targetProjectId,
           user_id: user.id,
           name: `${original.name} (Copy)`,
-          nodes: original.nodes as Json,
+          // A stored reference task type no model the node runs lists is removed (withListedReferenceTaskTypes).
+          nodes: withListedReferenceTaskTypes(original.nodes) as Json,
           edges: original.edges as Json,
           settings: settings as Json,
         })
@@ -533,7 +536,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
           project_id: projectId,
           user_id: user.id,
           name: content.name,
-          nodes: content.nodes as Json,
+          nodes: withListedReferenceTaskTypes(content.nodes) as Json,
           edges: content.edges as Json,
           settings: content.settings as Json,
         })

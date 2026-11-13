@@ -1,3 +1,4 @@
+import { withListedReferenceTaskTypes } from "@nodaro/shared/nodes"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { randomUUID } from "node:crypto"
 import { withOfferedServerNodeModels } from "../../../lib/new-node-models.js"
@@ -129,7 +130,8 @@ export async function materializeEntityOnCanvas(
   const [placed] = (await withOfferedServerNodeModels([node], { userId: null, storedIds: existingNodes.map((n) => n.id) })).nodes
   await args.supabase
     .from("workflows")
-    .update({ nodes: [...existingNodes, placed ?? node] })
+    // The stored graph is written back: a stored reference task type no model its node runs lists goes (withListedReferenceTaskTypes).
+    .update({ nodes: withListedReferenceTaskTypes([...existingNodes, placed ?? node]) })
     .eq("id", workflowId)
 
   await args.supabase.from("pipeline_entity_nodes").insert({

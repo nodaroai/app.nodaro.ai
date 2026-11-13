@@ -15,6 +15,7 @@ import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
 import { chargedCredits, estimateWorkflowCreditsDetailed, getChargedPriceTable, isMeteredLlmQuoteId, meteredLlmQuote, type UserBalance } from "../billing/credits.js"
+import { existingDraftsFor } from "../billing/existing-drafts-option.js"
 import { replyIfLlmUnpriced } from "../../lib/llm-unpriced-refusal.js"
 import { llmModelUnpricedMessage, sendLlmModelUnpriced } from "../billing/llm-unpriced-reply.js"
 import { callerKeyHash } from "../../routes/oauth-register.js"
@@ -706,11 +707,10 @@ export async function creditsRoutes(app: FastifyInstance) {
 
     try {
       // A use-case node is priced on what the caller's run reads: several recordings only while Speaker Map
-      // is theirs, an `auto` framing source as the even split while Speaker Frames is not.
+      // is theirs, an `auto` framing source as the even split while Speaker Frames is not. A finalize of a
+      // Seedance draft the caller already has is priced exactly, as its gate prices it for them.
       const viewer = await usecaseViewerEstimateFor(nodes, req.userId)
-      const detailed = viewer.multicam || viewer.framesWithheld
-        ? await estimateWorkflowCreditsDetailed(nodes, edges, viewer)
-        : await estimateWorkflowCreditsDetailed(nodes, edges)
+      const detailed = await estimateWorkflowCreditsDetailed(nodes, edges, { ...viewer, ...existingDraftsFor(req.userId) })
       const totalCredits = detailed.credits
       // A metered LLM line makes the total an ESTIMATE (spec §8.5: the
       // metered estimates plus the fixed prices, shown `≈`). Present only

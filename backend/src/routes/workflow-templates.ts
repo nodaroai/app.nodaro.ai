@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { LISTED_PER_MINUTE_COLUMN, PER_MINUTE_SORT_COLUMN, perMinuteOf, selectWithPerMinute, writeWithPerMinute } from "../lib/listing-per-minute-columns.js"
 import { typicalEpisodeCredits } from "@nodaro/render-rules"
+import { withListedReferenceTaskTypes } from "@nodaro/shared/nodes"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
@@ -668,7 +669,8 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, err, "Failed to publish template")
       }
     }
-    const snapshotNodes = published.nodes
+    // A stored reference task type no model the node runs lists never ships (withListedReferenceTaskTypes).
+    const snapshotNodes = withListedReferenceTaskTypes(published.nodes)
     const keptResults = published.kept ?? { included: false, reason: includeRunResults && !holdsUgcVideo ? ("no_ugc_video" as const) : ("not_requested" as const) }
     const estimatedCredits = listing.preview + listing.final
     // Per minute of the episode (decided 2026-10-07): 0 when the price does not follow a recording's length.
@@ -1120,7 +1122,9 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         project_id: projectId,
         user_id: userId,
         name: workflowName,
-        nodes: snapshotNodes,
+        // A stored reference task type no model the node runs lists is removed (withListedReferenceTaskTypes):
+        // a template published before the rule can still carry one.
+        nodes: withListedReferenceTaskTypes(snapshotNodes),
         edges: template.snapshot_edges || [],
         settings: template.snapshot_settings || {},
         template_id: template.id,

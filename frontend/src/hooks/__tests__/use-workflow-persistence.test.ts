@@ -2791,3 +2791,97 @@ describe("a Clip Pack run reopens with every clip on both load lanes — one not
     expect(data).toMatchObject({ failedClips: 1, __listResults: ["https://r2/c0.mp4", "https://r2/c1.mp4"], __listResultStamps: stamps })
   })
 })
+
+// ---------------------------------------------------------------------------
+// A stored reference task type on load (decided 2026-11-13). Every write holds
+// the rule, but a value stored before it did is still in the row: the load
+// removes it (`withListedReferenceTaskTypes`) before the store sees the graph,
+// so it can never come back on a later switch to Seedance 2.5, and writes the
+// cleaned graph back — never on a read-only document, which is cleaned in
+// memory only.
+// ---------------------------------------------------------------------------
+
+describe("useWorkflowPersistence — load, a stored reference task type", () => {
+  const at = { x: 0, y: 0 }
+  const KLING = { id: "kling", type: "generate-video", position: at, data: { label: "Kling", provider: "kling-3.0", prompt: "a cat", referenceTaskType: "edit" } }
+  const SD25 = { id: "sd25", type: "generate-video", position: at, data: { label: "Seedance", provider: "seedance-2-5", prompt: "a cat", referenceTaskType: "edit" } }
+  const KLING_CLEAN = { id: "kling", type: "generate-video", position: at, data: { label: "Kling", provider: "kling-3.0", prompt: "a cat" } }
+
+  /** Serves the row; records every `update` payload written to `workflows`. */
+  function serveRow(row: Record<string, unknown>): Array<Record<string, unknown>> {
+    const updates: Array<Record<string, unknown>> = []
+    const answered = { data: { updated_at: "2026-01-02T00:00:00Z", version: 7 }, error: null }
+    const tail = { select: () => ({ maybeSingle: async () => answered }), eq: () => tail }
+    mockSupabaseFrom.mockReturnValue({
+      select: () => rowQuery({ updated_at: "2026-01-01T00:00:00Z", user_id: "u1", version: 6, ...row }),
+      update: (payload: Record<string, unknown>) => {
+        updates.push(payload)
+        return { eq: () => tail }
+      },
+    })
+    return updates
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    returned.length = 0
+    mockGetBatchJobStatus.mockResolvedValue([])
+    mockListWorkflowExecutions.mockResolvedValue({ data: [] })
+  })
+
+  it("hands the store the graph without the stale value, and writes the cleaned graph back", async () => {
+    const updates = serveRow({ id: "w1", name: "Test", nodes: [KLING, SD25], edges: [], settings: {} })
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+    expect(getSyncedNodes()).toStrictEqual([KLING_CLEAN, SD25])
+    const written = updates.filter((u) => Array.isArray(u.nodes))
+    expect(written).toHaveLength(1)
+    expect(written[0]!.nodes).toStrictEqual([KLING_CLEAN, SD25])
+  })
+
+  it("a graph without such a value is handed over as stored and causes no write-back", async () => {
+    const updates = serveRow({ id: "w1", name: "Test", nodes: [SD25], edges: [], settings: {} })
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+    expect(getSyncedNodes()).toStrictEqual([SD25])
+    expect(updates.filter((u) => Array.isArray(u.nodes))).toEqual([])
+  })
+
+  // A document owned only through a node's keys is not read-only in the editor,
+  // but it is codec-owned (`isCodecOwnedDocument`, the server's predicate): its
+  // write guard refuses any other writer's change, so it is cleaned in memory only.
+  it.each([
+    ["keyframeId", { keyframeId: "kf-1" }],
+    ["sequenceBinding", { sequenceBinding: { sequenceId: "seq-1" } }],
+    ["requiredCapabilities", { requiredCapabilities: ["studio-dependent-frames-v1"] }],
+  ])("a document codec-owned only through a node's %s is cleaned in the store and not saved back", async (_key, extra) => {
+    const owned = { id: "kf", type: "generate-image", position: at, data: { label: "Frame", ...extra } }
+    const updates = serveRow({ id: "w1", name: "Test", nodes: [owned, KLING, SD25], edges: [], settings: {} })
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+    expect(getSyncedNodes()).toStrictEqual([owned, KLING_CLEAN, SD25])
+    expect(updates.filter((u) => Array.isArray(u.nodes))).toEqual([])
+  })
+
+  it("a read-only document is cleaned in memory only: nothing is written back", async () => {
+    const updates = serveRow({ id: "w1", name: "A production", nodes: [KLING, SD25], edges: [], settings: { studio: { shots: [] } } })
+    const getState = useWorkflowStore.getState
+    Object.assign(useWorkflowStore, { getState: () => ({ ...getState(), isReadOnly: true }) })
+    try {
+      const { result } = renderHook(() => useWorkflowPersistence("p1"))
+      await act(async () => {
+        await result.current.load("w1")
+      })
+    } finally {
+      Object.assign(useWorkflowStore, { getState })
+    }
+    expect(getSyncedNodes()).toStrictEqual([KLING_CLEAN, SD25])
+    expect(updates.filter((u) => Array.isArray(u.nodes))).toEqual([])
+  })
+})

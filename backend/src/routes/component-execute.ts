@@ -15,6 +15,7 @@ import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/work
 import { BudgetedDeadline, executionBudgetExcessMs, executionMayDispatchBudgetedJob } from "../lib/execution-budget.js"
 import { executionQueuedMs } from "../lib/concurrency-lanes/execution-wait.js"
 import { estimateWorkflowCreditsDetailed, type EstimateEdge, type EstimateNode } from "../ee/billing/credits.js"
+import { existingDraftsFor } from "../ee/billing/existing-drafts-option.js"
 import { refuseIfRunUnpriced, replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
 import { usecaseViewerEstimateFor } from "../lib/use-case/inner-availability.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
@@ -424,11 +425,12 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       return { id: nodeId, type: node.type ?? "", data, parentId: node.parentId }
     })
 
-    // A use-case node is priced on the recordings and framing source the caller's run reads (decided 2026-10-19/20).
+    // A use-case node is priced on the recordings and framing source the caller's run reads (decided 2026-10-19/20),
+    // and a finalize of a Seedance draft the caller already has at its exact price (decided 2026-11-13).
     const viewer = await usecaseViewerEstimateFor(priced, req.userId)
     let estimate: Awaited<ReturnType<typeof estimateWorkflowCreditsDetailed>>
     try {
-      estimate = await (viewer.multicam || viewer.framesWithheld ? estimateWorkflowCreditsDetailed(priced, edges, viewer) : estimateWorkflowCreditsDetailed(priced, edges))
+      estimate = await estimateWorkflowCreditsDetailed(priced, edges, { ...viewer, ...existingDraftsFor(req.userId) })
     } catch (err) {
       // A metered LLM model with no price (R49): refused, as its run would be.
       if (await replyIfLlmUnpriced(reply, err)) return reply

@@ -435,6 +435,68 @@ describe("useProjectsStore", () => {
         fetchSpy.mockRestore()
       }
     })
+
+    // A stored reference task type (decided 2026-11-13): a copy, a copy into
+    // another project and a workflow made from imported content store the
+    // graph with a `referenceTaskType` no model the node runs lists removed —
+    // that one key, nothing else (`withListedReferenceTaskTypes`).
+    describe("a stored reference task type on the copies", () => {
+      const at = { x: 0, y: 0 }
+      const KLING = { id: "kling", type: "generate-video", position: at, data: { provider: "kling-3.0", prompt: "a cat", aspectRatio: "21:9", referenceTaskType: "edit" } }
+      const SD25 = { id: "sd25", type: "generate-video", position: at, data: { provider: "seedance-2-5", prompt: "a cat", referenceTaskType: "edit" } }
+      const IMG = { id: "img", type: "generate-image", position: at, data: { provider: "gpt-image", aspectRatio: "16:9", resolution: "2K" } }
+      const KLING_STORED = { id: "kling", type: "generate-video", position: at, data: { provider: "kling-3.0", prompt: "a cat", aspectRatio: "21:9" } }
+
+      /** The owner's stored row holds `nodes`; returns the inserts written. */
+      function serveOwnerRow(nodes: unknown[]): Record<string, unknown>[] {
+        const inserted: Record<string, unknown>[] = []
+        let calls = 0
+        mockSupabase = createMockSupabase({
+          fromHandler: (table: string) => {
+            if (table !== "workflows") return makeChain({ data: [], error: null })
+            calls++
+            if (calls === 1) {
+              return makeChain({ data: { id: "w1", user_id: FAKE_USER_ID, project_id: "p1", folder_id: null, name: "Original", nodes, edges: [], settings: {}, created_at: NOW, updated_at: NOW }, error: null })
+            }
+            const chain = makeChain({ data: { id: "w2", project_id: "p1", folder_id: null, name: "Original (Copy)", created_at: NOW, updated_at: NOW }, error: null })
+            chain.insert = vi.fn((payload: Record<string, unknown>) => { inserted.push(payload); return chain })
+            return chain
+          },
+        })
+        return inserted
+      }
+
+      for (const [label, act] of [
+        ["duplicateWorkflow", () => useProjectsStore.getState().duplicateWorkflow("w1")],
+        ["copyWorkflowToProject", () => useProjectsStore.getState().copyWorkflowToProject("w1", "p2")],
+      ] as const) {
+        it(`${label}: the Kling node loses only that key; everything else is copied as stored`, async () => {
+          const inserted = serveOwnerRow([KLING, SD25, IMG])
+          expect(await act()).not.toBeNull()
+          expect(inserted).toHaveLength(1)
+          expect(inserted[0]!.nodes).toStrictEqual([KLING_STORED, SD25, IMG])
+        })
+
+        it(`${label}: a graph without the field is copied byte for byte`, async () => {
+          const inserted = serveOwnerRow([SD25, IMG])
+          await act()
+          expect(JSON.stringify(inserted[0]!.nodes)).toBe(JSON.stringify([SD25, IMG]))
+        })
+      }
+
+      it("createWorkflowWithContent (an imported graph): the same rule", async () => {
+        const inserted: Record<string, unknown>[] = []
+        mockSupabase = createMockSupabase({
+          fromHandler: (table: string) => {
+            const chain = makeChain({ data: { id: "w3", project_id: "p1", folder_id: null, name: "Imported", created_at: NOW, updated_at: NOW }, error: null })
+            if (table === "workflows") chain.insert = vi.fn((payload: Record<string, unknown>) => { inserted.push(payload); return chain })
+            return chain
+          },
+        })
+        await useProjectsStore.getState().createWorkflowWithContent("p1", { name: "Imported", nodes: [KLING, SD25, IMG], edges: [], settings: {} } as never)
+        expect(inserted[0]!.nodes).toStrictEqual([KLING_STORED, SD25, IMG])
+      })
+    })
   })
 
   describe("fetchProjects", () => {

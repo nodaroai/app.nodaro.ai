@@ -6,6 +6,7 @@
  */
 
 import { pressable } from "@/lib/pressable"
+import { withListedReferenceTaskTypes } from "@nodaro/shared/nodes"
 import { useState, useMemo, useCallback, useRef, useEffect, lazy, Suspense } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { Play, Loader2, ExternalLink, Pencil, Eye, LogIn, LogOut, RotateCcw, Plus, Maximize2, Minimize2, Sparkles, LayoutGrid, Copy } from "lucide-react"
@@ -709,7 +710,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           project_id: projectId,
           user_id: user.id,
           name: `${appData.name} (Remix)`,
-          nodes: JSON.parse(JSON.stringify(appData.snapshotNodes)),
+          nodes: JSON.parse(JSON.stringify(withListedReferenceTaskTypes(appData.snapshotNodes))),
           edges: JSON.parse(JSON.stringify(appData.snapshotEdges)),
           settings: JSON.parse(JSON.stringify(appData.snapshotSettings)),
           thumbnail_url: null,

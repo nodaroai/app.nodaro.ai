@@ -5,7 +5,7 @@ import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { useDismissableLayerSurface } from "@radix-ui/react-dismissable-layer"
 import { isModalDialogOpen, refuseDeleteUnderModal } from "@/lib/modal-open"
 import { buildRangeLabel as buildRangeLabelShared, isCollectInEdge, type SelectorMode } from "@nodaro/shared/workflow"
-import { isListOutputHandle, withWiredSettings } from "@nodaro/shared/nodes"
+import { isListOutputHandle, withListedReferenceTaskTypes, withWiredSettings } from "@nodaro/shared/nodes"
 import { bypassTeleports } from "@nodaro/render-rules"
 import {
   ReactFlow,
@@ -2801,7 +2801,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     }
     const supabase = createClient()
     const { error } = await supabase.from("workflows").update({
-      nodes: JSON.parse(JSON.stringify(newNodes)),
+      // A stored reference task type no model the node runs lists is removed (withListedReferenceTaskTypes).
+      nodes: JSON.parse(JSON.stringify(withListedReferenceTaskTypes(newNodes))),
       edges: JSON.parse(JSON.stringify(newEdges)),
     }).eq("id", wf.id)
     if (error) {

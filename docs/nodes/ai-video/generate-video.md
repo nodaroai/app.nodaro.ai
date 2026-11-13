@@ -950,7 +950,11 @@ the model what the clip is for, instead of leaving it to guess from your prompt
   and they are shown again. Disconnecting the reference video hides the setting
   and keeps your choice for when a video is connected again (a run without a
   reference video ignores it). Switching to a model that does not take the
-  setting clears it.
+  setting clears it. Every save of a workflow is held to the same rule — the
+  editor's, the API's, an agent's, an import, a copy, a template clone and a
+  published app's snapshot — and the editor applies it when it opens a
+  workflow too: a choice the node's model does not take is removed, so a later
+  switch to Seedance 2.5 does not bring it back.
 - **Apply settings restores it.** Applying the settings of an earlier Seedance
   2.5 result sets this choice back to what that run used (Auto when it said
   nothing about the clip), together with its Aspect ratio and Duration, so the

@@ -28,6 +28,7 @@ export {
   tailExtendResolution,
   seedanceExtendRateCreditId,
   seedanceExtendFullWindowCreditId,
+  seedanceExtendSourceCreditId,
   pixverseExtendCreditId,
   pixverseExtendQuality,
   catalogExtendCreditId,
@@ -62,6 +63,11 @@ export {
   SEEDANCE_EXTEND_RATE_CREDIT_IDS,
   isSeedanceExtendPricedBySecondsSent,
   isSeedanceExtendRateCreditId,
+  seedanceExtendAddedSec,
+  seedanceExtendRefusesSource,
+  seedanceExtendSourceSec,
+  seedanceExtendSentSec,
+  seedanceExtendUnits,
   type SentPricedSeedanceExtendProvider,
 } from "../seedance-extend-rate.js"
 export * from "../credit-estimators/index.js"

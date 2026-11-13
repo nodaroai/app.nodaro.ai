@@ -225,6 +225,7 @@ export {
   PHOTO_AUTO_ASPECT_NODE_TYPES,
   nodeAspectRatio,
   normalizeNodeModelParams,
+  withListedReferenceTaskTypes,
   describeNodeAdjustments,
 } from "../normalize-node-params.js"
 export type { NodeParamAdjustment, NormalizedNodes } from "../normalize-node-params.js"

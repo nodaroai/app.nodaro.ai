@@ -33,6 +33,7 @@ import { personalPayer } from "../lib/billing-context.js"
 import { deploymentPayerActive, deploymentPayerId } from "../lib/deployment-payer.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { estimateWorkflowCreditsDetailed, type EstimateNode } from "../ee/billing/credits.js"
+import { existingDraftsFor } from "../ee/billing/existing-drafts-option.js"
 import { isLlmUnpricedError, llmUnpricedMessage, refuseIfRunUnpriced } from "../lib/llm-unpriced-refusal.js"
 import { usecaseViewerEstimateFor } from "../lib/use-case/inner-availability.js"
 import { exposedTextCaps } from "../lib/exposed-text-caps.js"
@@ -705,6 +706,8 @@ export async function apiTokenRoutes(app: FastifyInstance) {
           speechTextCaps: exposedTextCaps(settings, nodes as EstimateNode[]),
           // A use-case node is priced on the recordings and framing source the caller's run reads (decided 2026-10-19/20).
           ...(await usecaseViewerEstimateFor(nodes as EstimateNode[], resolved.userId)),
+          // A finalize of a Seedance draft the token's user already has: its exact price (decided 2026-11-13).
+          ...existingDraftsFor(resolved.userId),
         })
       } catch (err) {
         if (!isLlmUnpricedError(err)) throw err

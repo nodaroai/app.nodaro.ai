@@ -5,6 +5,7 @@
  */
 
 import { pressable } from "@/lib/pressable"
+import { withListedReferenceTaskTypes } from "@nodaro/shared/nodes"
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { Plus, Inbox, Play, PenLine, Loader2, Square } from "lucide-react"
@@ -621,7 +622,7 @@ export function MobileAppShell({
           project_id: projectId,
           user_id: user.id,
           name: `${appData.name} (Remix)`,
-          nodes: JSON.parse(JSON.stringify(appData.snapshotNodes)),
+          nodes: JSON.parse(JSON.stringify(withListedReferenceTaskTypes(appData.snapshotNodes))),
           edges: JSON.parse(JSON.stringify(appData.snapshotEdges)),
           settings: JSON.parse(JSON.stringify(appData.snapshotSettings)),
           thumbnail_url: null,

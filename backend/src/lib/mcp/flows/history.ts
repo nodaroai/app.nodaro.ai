@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { withListedReferenceTaskTypes } from "@nodaro/shared/nodes"
 import { supabase } from "../../supabase.js"
 import { newSession } from "../session.js"
 import { ensureMcpProject } from "../tools/_mcp-project.js"
@@ -236,7 +237,8 @@ export async function applyHistory(userId: string, plan: HistoryPlan): Promise<{
       user_id: userId,
       parent_workflow_id: hubId,
       name: conv.name,
-      nodes,
+      // A stored reference task type no model the node runs lists is removed (withListedReferenceTaskTypes).
+      nodes: withListedReferenceTaskTypes(nodes),
       edges,
       settings: { mcpConversation: { ...settings, steps: conv.steps.length, imported: true } },
     })

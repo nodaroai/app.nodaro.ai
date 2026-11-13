@@ -1,0 +1,7 @@
+---
+"@nodaro/shared": minor
+---
+
+New in `@nodaro/shared/credits`: `seedanceExtendSourceCreditId(sourcePictureSec, duration?, resolution?)`, the one id a Seedance 2.5 Extend run on a known source is charged. It is the whole-run quote `seedance-2-5-extend:<resolution>:per-2s:<units>u`, with units = (seconds of the source sent + seconds added) ÷ 2, by the rule the server charges the run by: the seconds sent are the source's last 10 seconds, or all of a shorter source, its picture length read by the container-overhang rule (8.04 s counts as 8 s, 8.3 s as 8.3 s). `GET /v1/credits/model-cost` and `POST /v1/credits/model-costs` answer it with exactly what that run is charged. A length not known or not readable (undefined, null, not a positive finite number) gives the full-window id, `seedanceExtendFullWindowCreditId`'s, which now reads the same rule and returns the same ids as before. A measured source shorter than the shortest the extend takes (`SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC`, 1.8 s) gives `undefined`, whatever the seconds added: the extend refuses that source, so no run on it is made or charged (`seedanceExtendRefusesSource` answers the same question).
+
+The seconds rule itself moves here from the private render rules, unchanged, so clients and the server read one rule: `seedanceExtendSentSec`, `seedanceExtendSourceSec`, `seedanceExtendAddedSec` and `seedanceExtendUnits`, with `seedanceExtendRefusesSource` beside them.

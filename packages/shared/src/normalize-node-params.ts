@@ -18,11 +18,23 @@
  * rejecting it, so the user sees a valid value on the canvas rather than a
  * failed run. It reads exclusively from `MODEL_CATALOG`, so a model added later
  * is covered without touching this file.
+ *
+ * Besides the image trio below, it holds three single levers: a Video Upscale
+ * node's `targetResolution`, a Motion Transfer node's `resolution`, and a
+ * video node's stored Seedance reference task type (`referenceTaskType`,
+ * removed where no model the node runs lists it).
  */
 
-import { autoAspectNeedsSourceImage, normalizeModelInput, type ModelInputAdjustment } from "./model-catalog.js"
+import { autoAspectNeedsSourceImage, MODEL_CATALOG, normalizeModelInput, type ModelInputAdjustment, type ModelInputAdjustmentField } from "./model-catalog.js"
 import { imageGenAutoAspectNeedsSourceImage, motionTransferResolution } from "./credit-identifiers.js"
 import { normalizeVideoUpscaleResolution, VIDEO_UPSCALE_RESOLUTIONS, videoUpscaleResolutionsFor } from "./video-upscale-params.js"
+import {
+  applyDefaultVideoSelection,
+  DEFAULT_VIDEO_TO_VIDEO_PROVIDER,
+  LEGACY_VIDEO_NODE_DEFAULT_PROVIDER,
+  listedSeedanceTaskType,
+  resolveVideoProviderForMode,
+} from "./model-constants.js"
 
 /**
  * Node types whose `data` carries catalog-governed model parameters under the
@@ -105,7 +117,9 @@ export function nodeAspectRatio(nodeType: string | undefined, aspectRatio: unkno
   return nodeType !== undefined && PHOTO_AUTO_ASPECT_NODE_TYPES.has(nodeType) ? "auto" : undefined
 }
 
-export interface NodeParamAdjustment extends ModelInputAdjustment {
+export interface NodeParamAdjustment extends Omit<ModelInputAdjustment, "field"> {
+  /** A catalog-governed parameter, or a video node's stored `referenceTaskType` (always removed: `to` is undefined). */
+  field: ModelInputAdjustmentField | "referenceTaskType"
   nodeId: string
   provider: string
 }
@@ -143,6 +157,8 @@ export function normalizeNodeModelParams<T extends NodeLike>(
     const type = typeof node.type === "string" ? node.type : ""
     if (type === "video-upscale") return normalizeVideoUpscaleNode(node, adjustments)
     if (type === "motion-transfer") return normalizeMotionTransferNode(node, adjustments)
+    // The stored reference task type: the one rule every workflow write runs.
+    if (REFERENCE_TASK_TYPE_NODE_MODES.has(type)) return withListedReferenceTaskTypes([node], adjustments)[0]!
     if (!MODEL_PARAM_NODE_TYPES.has(type)) return node
 
     const data = node.data
@@ -245,6 +261,111 @@ function normalizeMotionTransferNode<T extends NodeLike>(node: T, adjustments: N
   const nodeId = typeof node.id === "string" ? node.id : "(unknown node)"
   for (const adj of sized.adjustments) adjustments.push({ ...adj, nodeId, provider })
   return { ...node, data: { ...d, resolution: sized.resolution } }
+}
+
+/** A video run's mode: the twin of an aliased model it sends to (`resolveVideoProviderForMode`). */
+type VideoRunMode = "image-to-video" | "text-to-video"
+
+/**
+ * The video node types that store a Seedance reference task type
+ * (`referenceTaskType`, "Use the reference video as"), each with the modes its
+ * run sends a model in: Generate Video either (the wiring picks), Image to
+ * Video and Text to Video their own, Video to Video none (its model's own id;
+ * its run is an edit whatever is stored).
+ */
+const REFERENCE_TASK_TYPE_NODE_MODES: ReadonlyMap<string, readonly VideoRunMode[]> = new Map([
+  ["generate-video", ["image-to-video", "text-to-video"]],
+  ["image-to-video", ["image-to-video"]],
+  ["text-to-video", ["text-to-video"]],
+  ["video-to-video", []],
+])
+
+const namedModel = (v: unknown): string | undefined => (typeof v === "string" && v !== "" ? v : undefined)
+
+/**
+ * The models a video node's run uses: each entry of a Provider list
+ * (`data.providers`, two or more, each run on its own), else its one model —
+ * the run's own default when it names none (Generate Video's
+ * `applyDefaultVideoSelection`, the legacy Image / Text to Video default, Video
+ * to Video's).
+ */
+function videoRunModels(type: string, d: Record<string, unknown>): string[] {
+  const list = Array.isArray(d.providers) ? d.providers.flatMap((p) => namedModel(p) ?? []) : []
+  if (list.length >= 2) return list
+  const named = namedModel(d.provider)
+  if (type === "generate-video") return [applyDefaultVideoSelection({ provider: named }).provider]
+  return [named ?? (type === "video-to-video" ? DEFAULT_VIDEO_TO_VIDEO_PROVIDER : LEGACY_VIDEO_NODE_DEFAULT_PROVIDER)]
+}
+
+/**
+ * A video node's stored reference task type (decided 2026-11-13): kept, the
+ * node returned as it came, while a model its run sends to lists the value
+ * (`listedSeedanceTaskType`, the one membership test the run itself asks —
+ * matched exactly, read from `MODEL_CATALOG[id].referenceTaskTypes`);
+ * otherwise the key is REMOVED (absent is Auto, the setting's own meaning).
+ * A run already ignores such a value, so nothing a run sends or is charged
+ * changes; what changes is that it can no longer ride hidden on a model that
+ * ignores it and come back when the node is later switched to one that reads
+ * it. `auto`, a wrong case, a number and every value no model lists are
+ * removed on every model. A node storing no value is returned as it came.
+ */
+function normalizeReferenceTaskTypeNode<T extends NodeLike>(node: T, type: string, adjustments: NodeParamAdjustment[]): T {
+  const data = node.data
+  if (!data || typeof data !== "object" || Array.isArray(data)) return node
+  const d = data as Record<string, unknown>
+  const value = d.referenceTaskType
+  // Unset (absent, or an in-memory `undefined` the editor writes for Auto): nothing to judge.
+  if (value === undefined) return node
+  const modes = REFERENCE_TASK_TYPE_NODE_MODES.get(type) ?? []
+  const models = videoRunModels(type, d)
+  const sentTo = models.flatMap((m) => [m, ...modes.map((mode) => resolveVideoProviderForMode(m, mode))])
+  if (sentTo.some((m) => listedSeedanceTaskType(m, value) !== undefined)) return node
+
+  const listedAnywhere = Object.values(MODEL_CATALOG).some((m) => m.referenceTaskTypes?.some((t) => t === value))
+  const label = MODEL_CATALOG[models[0]!]?.label ?? models[0]!
+  const reason = listedAnywhere
+    ? `${label} does not take the reference task type "${String(value)}": removed, so the run declares none (Auto).`
+    : `"${String(value)}" is not a reference task type a model takes (reference, edit or extend): removed — Auto is the setting left unset.`
+  const nodeId = typeof node.id === "string" ? node.id : "(unknown node)"
+  adjustments.push({ field: "referenceTaskType", from: typeof value === "number" ? value : String(value), to: undefined, reason, nodeId, provider: models[0]! })
+  const { referenceTaskType: _removed, ...rest } = d
+  return { ...node, data: rest }
+}
+
+/**
+ * A workflow graph's nodes with every stored Seedance reference task type held
+ * to the models its node runs (decided 2026-11-13) — the ONE rule for that
+ * field, which {@link normalizeNodeModelParams} runs too: on a Generate Video,
+ * Image to Video, Text to Video or Video to Video node, a `referenceTaskType`
+ * no model the node runs lists (and `auto`, or any value no model lists) is
+ * removed; nothing else on any node is touched.
+ *
+ * Every path that stores a workflow graph runs it: the editor's saves, the
+ * REST and MCP writes, imports, copies, template clones and the published
+ * snapshots. So a value can never sit unused on a model that ignores it and
+ * take effect when the node is later switched to one that reads it.
+ *
+ * Takes the stored value as it comes (`nodes` may be any JSON): anything that
+ * is not an array is returned as it came. The SAME array is returned when no
+ * node changes, and an unchanged node keeps its reference, so a graph without
+ * such a value is written byte for byte as before.
+ *
+ * @param adjustments told each removal (what `normalizeNodeModelParams` reports).
+ */
+export function withListedReferenceTaskTypes<N>(nodes: N, adjustments?: NodeParamAdjustment[]): N {
+  if (!Array.isArray(nodes)) return nodes
+  const sink = adjustments ?? []
+  let changed = false
+  const out = (nodes as unknown[]).map((node) => {
+    if (!node || typeof node !== "object" || Array.isArray(node)) return node
+    const n = node as NodeLike
+    const type = typeof n.type === "string" ? n.type : ""
+    if (!REFERENCE_TASK_TYPE_NODE_MODES.has(type)) return node
+    const next = normalizeReferenceTaskTypeNode(n, type, sink)
+    if (next !== n) changed = true
+    return next
+  })
+  return (changed ? out : nodes) as N
 }
 
 /** One-line-per-change summary, for surfacing back to an agent or a log. */
