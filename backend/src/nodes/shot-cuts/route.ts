@@ -8,7 +8,8 @@ import { buildJobInputData } from "../../lib/job-input-data.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { insertJob } from "../../lib/insert-job.js"
-import { videoQueue } from "../../lib/queue.js"
+import { enqueueUnitJob } from "../../lib/enqueue-route-job.js"
+import { descriptor } from "./descriptor.generated.js"
 
 // The video, and whether to save every shot's first and last frame too. The
 // caller is req.userId (auth), never the body. The clip is measured by the job
@@ -59,7 +60,9 @@ export const route: UnitRoute = async function shotCutsRoutes(app) {
     const usageLogId = reservation?.usageLogId
 
     // The BullMQ job name is the node type: the video worker dispatches it to ./worker.ts.
-    await videoQueue.add("shot-cuts", { jobId: job.id, videoUrl: input.videoUrl, frames: input.frames === true, usageLogId })
+    // A queue that refuses the job fails it, refunds it and frees its key at once (500).
+    await enqueueUnitJob(req, reply, descriptor, { jobId: job.id, videoUrl: input.videoUrl, frames: input.frames === true, usageLogId })
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

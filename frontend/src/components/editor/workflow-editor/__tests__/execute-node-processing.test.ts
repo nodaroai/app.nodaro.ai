@@ -588,6 +588,55 @@ describe("extend-video: the seconds sent are the ones the estimate prices", () =
   })
 })
 
+// A VEO or Runway extend's run records its OWN output task as `outputKieTaskId`
+// (what a VEO extend or upscale after it continues), never in `kieTaskId`,
+// which holds the task it works on.
+describe("extend-video: the run's own output task", () => {
+  it("records the extension's task on the node as outputKieTaskId", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://source.mp4" })
+    mockExtendVideo.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("extend-video", { prompt: "she turns", provider: "veo-extend", kieTaskId: "orig-veo-task" }), makeCtx())
+    const extraOutputFields = mockPollJobWithNodeUpdate.mock.calls[0][5] as (od: Record<string, unknown>) => Record<string, unknown>
+    expect(extraOutputFields({ videoUrl: "http://ext.mp4", kieTaskId: "task-ext1" })).toEqual({ outputKieTaskId: "task-ext1" })
+    expect(extraOutputFields({ videoUrl: "http://ext.mp4" })).toEqual({})
+  })
+})
+
+// Grok extends its own clip by the upstream task (as VEO's), the seconds it
+// adds sent as the estimate prices them; the resolution is its source's, read
+// by the server, never sent. A run with no upstream task is still sent: the
+// server refuses it, before anything is reserved, in the approved words.
+describe("extend-video: Grok", () => {
+  async function sent(data: Record<string, unknown>) {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://source.mp4" })
+    mockExtendVideo.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("extend-video", { prompt: "she turns", ...data }), makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    return mockExtendVideo.mock.calls[0][0] as Record<string, unknown>
+  }
+
+  it("sends the upstream task, the prompt and the seconds it adds — never a resolution or the video", async () => {
+    const body = await sent({ provider: "grok-extend", kieTaskId: "task-grok-src", duration: 10, resolution: "480p" })
+    expect(body).toMatchObject({ provider: "grok-extend", kieTaskId: "task-grok-src", duration: 10, prompt: "she turns" })
+    expect(body.resolution).toBeUndefined()
+    expect(body.videoUrl).toBeUndefined()
+  })
+
+  it("sends 6 s with no length set, and a stale length at the nearer of 6 and 10", async () => {
+    expect(await sent({ provider: "grok-extend", kieTaskId: "t" })).toMatchObject({ duration: 6 })
+    vi.clearAllMocks()
+    expect(await sent({ provider: "grok-extend", kieTaskId: "t", duration: 25 })).toMatchObject({ duration: 10 })
+  })
+
+  it("is sent with no task when none is wired, for the server to refuse", async () => {
+    const body = await sent({ provider: "grok-extend" })
+    expect(body).toMatchObject({ provider: "grok-extend" })
+    expect(body.kieTaskId).toBeUndefined()
+  })
+})
+
 // ---------------------------------------------------------------------------
 // video-upscale
 // ---------------------------------------------------------------------------

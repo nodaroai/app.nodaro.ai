@@ -19,6 +19,10 @@
  * - pixverse-v6-extend: PixVerse V6, from a video URL — a native extend
  *   (lib/extend-native.ts): the whole source in, the source with the new
  *   seconds joined on back, of which only the new seconds are stitched to it.
+ * - grok-extend: Grok, a native extend of Grok's OWN clips only — the source
+ *   generation's task id (`taskId`, as VEO's). Its source is checked
+ *   (lib/grok-extend-source.ts) before anything is priced or reserved, and the
+ *   run is priced at the SOURCE's resolution, never the request's.
  */
 
 import type { FastifyInstance, FastifyRequest } from "fastify"
@@ -42,16 +46,18 @@ import {
   applyVideoNegativePrompt,
   canonicalVideoProvider,
   isCatalogExtendProvider,
+  isGrokExtendProvider,
   isPixverseExtendProvider,
 } from "@nodaro/shared/models"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
-import { LTX_EXTEND_PER_SECOND_CREDIT_ID, catalogExtendCreditId, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
+import { LTX_EXTEND_PER_SECOND_CREDIT_ID, catalogExtendCreditId, grokExtendCreditId, grokExtendSeconds, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { isSeedanceExtendPricedBySecondsSent, seedanceExtendRateCreditId } from "@nodaro/render-rules"
 import { EXTEND_REFERENCE_IMAGE_PROVIDERS, extendSourceTooShortMessage, isTailRecipeProvider, tailRecipeSeconds, TAIL_RECIPES } from "../lib/extend-recipe.js"
 import { EXTEND_DURATION_MAX_SEC, EXTEND_DURATION_SECONDS, describeSeconds } from "../lib/extend-durations.js"
 import { pixverseExtendPromptProblem, pixverseExtendSeconds } from "../lib/extend-native.js"
+import { GROK_EXTEND_SOURCE_CODE, GROK_EXTEND_SOURCE_MESSAGE, resolveGrokExtendSource, type GrokExtendSource } from "../lib/grok-extend-source.js"
 import { ltxExtendBaseCredits } from "../lib/ltx-extend-credits.js"
 import { SEEDANCE_EXTEND_SOURCE_SEC_KEY, seedanceExtendBaseCredits } from "../lib/seedance-extend-credits.js"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
@@ -65,7 +71,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 // `extendRequestProblem`, so each provider's required input set is enforced
 // precisely.
 export const extendVideoBody = z.object({
-  taskId: z.string().min(1).optional(),    // Required for veo-extend / runway-extend (the job output's providerTaskId)
+  taskId: z.string().min(1).optional(),    // Required for veo-extend / runway-extend / grok-extend (the job output's providerTaskId)
   kieTaskId: z.string().min(1).optional(), // Deprecated alias of taskId, still accepted
   videoUrl: safeUrlSchema.optional(),       // Required for ltx-2.3-pro, the tail-recipe providers (Seedance, Kling 4) and PixVerse V6
   prompt: z.string().min(1).max(PROMPT_HARD_CEILING).optional(),    // Required for every provider but LTX
@@ -156,8 +162,9 @@ export function assembleExtendVideoReferences(args: {
 // price, which can let under-funded users through or over-charge paying ones.
 // Exported so the three producers of a Seedance extend's id (here, the
 // workflow payload builder, the workflow estimate) can be asserted equal in
-// one test.
-export function resolveExtendVideoIdentifier(body: Record<string, unknown> | undefined): string {
+// one test. `grokSourceResolution`: a Grok Extend's source resolution, as its
+// source check answered it — never the body's; without it, the dearer row.
+export function resolveExtendVideoIdentifier(body: Record<string, unknown> | undefined, grokSourceResolution?: string): string {
   // A retired id is priced as the provider it runs as. A request's was already
   // rewritten by the app-wide hook; a direct caller gets the same answer
   // rather than the retired id's own (Seedance 2.0) price row.
@@ -182,8 +189,24 @@ export function resolveExtendVideoIdentifier(body: Record<string, unknown> | und
     const generateAudio = typeof body?.generateAudio === "boolean" ? body.generateAudio : undefined
     return catalogExtendCreditId(provider, duration, resolution, generateAudio)
   }
+  // Grok on its own rows: the seconds added at the SOURCE's resolution.
+  if (isGrokExtendProvider(provider)) return grokExtendCreditId(body?.duration, grokSourceResolution)
   return provider
 }
+
+/**
+ * The Grok clip a Grok Extend request extends, by request, as the preHandler's
+ * source check answered it: the task id it matched, the clip's picture length
+ * and the resolution it was rendered at — what the guard's id, the
+ * reservation, the job and the queue read. Never read from the body.
+ */
+const grokExtendSources = new WeakMap<FastifyRequest, Extract<GrokExtendSource, { ok: true }>>()
+
+/** How long the preHandler waits to measure a Grok source before it falls back to the length its run asked for. */
+const GROK_SOURCE_PROBE_TIMEOUT_MS = 20_000
+
+/** The resolution a request's Grok source was rendered at (undefined before its check). */
+const grokSourceResolutionOf = (req: FastifyRequest): string | undefined => grokExtendSources.get(req)?.resolution
 
 /**
  * The length of the source's picture the preHandler measured for a request,
@@ -229,6 +252,11 @@ function extendRequestProblem(data: ExtendVideoBody): string | null {
     if (!videoUrl) return `videoUrl is required for ${provider}`
     const promptProblem = pixverseExtendPromptProblem(prompt)
     if (promptProblem) return promptProblem
+  } else if (isGrokExtendProvider(provider)) {
+    // Task-based like VEO, but its source (the task) is checked after these
+    // rules, with its own refusal: a missing task is a source Grok cannot
+    // extend (an uploaded video wired in), not a malformed request.
+    if (!prompt) return `prompt (what happens next) is required for ${provider}`
   } else {
     // veo-extend, runway-extend — KIE-based, require the task id from
     // upstream + a prompt.
@@ -332,7 +360,7 @@ export async function extendVideoRoutes(app: FastifyInstance) {
   // the run's units, on the source the preHandler measured (the whole 10 s
   // window when it could not). Every other provider (computeCredits answers
   // undefined) keeps its row-priced guard.
-  const rowPricedGuard = creditGuard((req) => resolveExtendVideoIdentifier(req.body as Record<string, unknown> | undefined), {
+  const rowPricedGuard = creditGuard((req) => resolveExtendVideoIdentifier(req.body as Record<string, unknown> | undefined, grokSourceResolutionOf(req)), {
     computeCredits: extendVideoComputeCredits,
   })
 
@@ -355,7 +383,21 @@ export async function extendVideoRoutes(app: FastifyInstance) {
       if (problem) {
         return reply.status(400).send({ error: { code: "validation_error", message: problem } })
       }
-      const { provider, videoUrl, duration, resolution } = data
+      const { provider, videoUrl, duration } = data
+      // Grok extends only its own clips: the source the task names is checked
+      // here — before any balance check, probe of ours or reservation — and
+      // its resolution is what the run is priced at, never the body's. A
+      // request naming no task has no Grok clip to extend.
+      if (isGrokExtendProvider(provider)) {
+        const taskId = (data.taskId ?? data.kieTaskId)?.trim()
+        if (!taskId) return reply.status(400).send({ error: { code: GROK_EXTEND_SOURCE_CODE, message: GROK_EXTEND_SOURCE_MESSAGE } })
+        if (req.userId) {
+          const grokSource = await resolveGrokExtendSource({ taskId, userId: req.userId, probeTimeoutMs: GROK_SOURCE_PROBE_TIMEOUT_MS })
+          if (!grokSource.ok) return reply.status(400).send({ error: { code: grokSource.code, message: grokSource.message } })
+          grokExtendSources.set(req, grokSource)
+        }
+      }
+      const resolution = isGrokExtendProvider(provider) ? grokSourceResolutionOf(req) : data.resolution
       if (isTailRecipeProvider(provider) && videoUrl && req.userId) {
         const source = await checkExtendSource(provider, videoUrl, (err) => {
           req.log.warn({ err, provider }, "extend-video: source ffprobe failed; the worker measures it again")
@@ -389,6 +431,14 @@ export async function extendVideoRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    // Grok: the source its preHandler checked (owner, model, status) — the
+    // matched task, its length and resolution. Missing only for a request that
+    // skipped the check, which has nothing Grok can extend.
+    const grokSource = isGrokExtendProvider(provider) ? grokExtendSources.get(req) : undefined
+    if (isGrokExtendProvider(provider) && !grokSource) {
+      return reply.status(400).send({ error: { code: GROK_EXTEND_SOURCE_CODE, message: GROK_EXTEND_SOURCE_MESSAGE } })
     }
 
     // IDOR guard: a kieTaskId references the caller's upstream generation. Reject
@@ -452,7 +502,11 @@ export async function extendVideoRoutes(app: FastifyInstance) {
         user_id: userId,
         job_type: "extend-video",
         status: "pending",
-        input_data: withResolvedModel(buildJobInputData(parsed.data, "extend-video"), "extend-video"),
+        // A Grok run records the resolution it is billed at: its source's.
+        input_data: withResolvedModel(
+          { ...buildJobInputData(parsed.data, "extend-video"), ...(grokSource ? { resolution: grokSource.resolution } : {}) },
+          "extend-video",
+        ),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -464,7 +518,7 @@ export async function extendVideoRoutes(app: FastifyInstance) {
       req,
       reply,
       job.id,
-      resolveExtendVideoIdentifier(req.body as Record<string, unknown> | undefined),
+      resolveExtendVideoIdentifier(req.body as Record<string, unknown> | undefined, grokSource?.resolution),
     )
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
@@ -525,6 +579,23 @@ export async function extendVideoRoutes(app: FastifyInstance) {
             duration: pixverseExtendSeconds(duration),
             resolution: pixverseExtendQuality(parsed.data.resolution),
             generateAudio: parsed.data.generateAudio !== false,
+            usageLogId,
+          }
+        : grokSource
+        ? {
+            jobId: job.id,
+            provider,
+            // The task id the source check matched (trimmed), never the body's
+            // spelling: the one KIE is asked to extend.
+            kieTaskId: grokSource.taskId,
+            // The user's prompt as written (any negative as in-prompt "Avoid: …").
+            prompt: effectivePrompt,
+            // The seconds the guard priced (6 when none was given).
+            duration: grokExtendSeconds(duration),
+            // The source's resolution (what Grok bills) and picture length
+            // (where the extension starts), as the check answered them.
+            resolution: grokSource.resolution,
+            sourceSec: grokSource.sourceSec,
             usageLogId,
           }
         : {

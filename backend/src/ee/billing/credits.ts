@@ -17,6 +17,8 @@ import {
   buildVideoCreditModelIdentifier,
   seedanceVideoEditCreditId,
   catalogExtendCreditId,
+  grokExtendCreditId,
+  grokExtendWiredSourceResolution,
   buildMotionCreditModelIdentifier,
   AI_AVATAR_DURATION_BUCKETS,
   resolveAiAvatarCreditId,
@@ -77,6 +79,7 @@ import {
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
   isSeedanceVideoEditProvider,
   isCatalogExtendProvider,
+  isGrokExtendProvider,
   canonicalVideoProvider,
   sunoSeparateCreditId,
   audioSoundtrackActive,
@@ -1835,6 +1838,12 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "pixverse-v6-extend:1s:1080p:audio": 50, "pixverse-v6-extend:2s:1080p:audio": 100, "pixverse-v6-extend:3s:1080p:audio": 140, "pixverse-v6-extend:4s:1080p:audio": 190, "pixverse-v6-extend:5s:1080p:audio": 230,
   "pixverse-v6-extend:6s:1080p:audio": 280, "pixverse-v6-extend:7s:1080p:audio": 330, "pixverse-v6-extend:8s:1080p:audio": 370, "pixverse-v6-extend:9s:1080p:audio": 420, "pixverse-v6-extend:10s:1080p:audio": 460,
   "pixverse-v6-extend:11s:1080p:audio": 510, "pixverse-v6-extend:12s:1080p:audio": 560, "pixverse-v6-extend:13s:1080p:audio": 600, "pixverse-v6-extend:14s:1080p:audio": 650, "pixverse-v6-extend:15s:1080p:audio": 690,
+  // ── Grok Extend (KIE grok-imagine/extend) — Grok extends only its own clips,
+  //    by 6 or 10 seconds, and bills the seconds it adds at the SOURCE's
+  //    resolution: one row per length added × source resolution (480p /
+  //    720p); no bare id. Seeded by `645_extend_grok_pricing.sql` at the same
+  //    values; grok-extend-pricing.test.ts holds them. ──
+  "grok-extend:6s:480p": 40, "grok-extend:6s:720p": 70, "grok-extend:10s:480p": 60, "grok-extend:10s:720p": 120,
   "ltx-2.3-pro-retake:per-second": 40,
   "runway-kie": 30,               // (5s, 720p)
   // ── Video Extend ──
@@ -6065,6 +6074,7 @@ function estimateNodeCredits(
     // A masked edit on a model that follows its photo is priced at the photo's size, when its source records it.
     sourceImage: edges && node.id ? wiredImageSize(node.id, nodes, edges) : undefined,
     masked: node.id ? nodeIsMasked(node.id, node.data, edges) : undefined,
+    grokExtendSourceResolution: node.type === "extend-video" ? grokExtendWiredSourceResolution(node.id, nodes, edges) : undefined,
   })
   // An LLM Chat node that says how large its call is (`data.expectedUsage`, a plugin's quote graph): that call on
   // the model's primary lane, never below the feature's typical one (each token count floored at it, so the field
@@ -7335,6 +7345,9 @@ export function getNodeModelIdentifier(
     sourceImage?: SourceImageSize
     /** The node carries an inpainting mask, its own or wired (a GRAPH fact; undefined = its own `maskUrl` only). */
     masked?: boolean
+    /** Grok Extend: the resolution of the source wired in, when the graph says for sure (a GRAPH fact,
+     *  `grokExtendWiredSourceResolution`; undefined = unknown → the dearer 720p row). */
+    grokExtendSourceResolution?: string
   } = {},
 ): string {
   // A retired video model is quoted as the model it runs as — what the run reserves.
@@ -7685,6 +7698,12 @@ export function getNodeModelIdentifier(
     const generateAudio = typeof data.generateAudio === "boolean" ? data.generateAudio : undefined
     return catalogExtendCreditId(catalogExtend, duration, resolution, generateAudio)
   }
+  // Extend-video on Grok: the seconds added at the SOURCE's resolution, which
+  // the run reads off its source's job. A quote knows it only when the graph
+  // says for sure (a Grok Imagine node set to 480p wired in); otherwise the
+  // dearer 720p row — a quote may run above the charge, never below. Never a
+  // resolution the node names.
+  if (isGrokExtendProvider(catalogExtend)) return grokExtendCreditId(data.duration, graph.grokExtendSourceResolution)
 
   // Motion transfer: duration-tiered pricing
   if (nodeType === "motion-transfer") {

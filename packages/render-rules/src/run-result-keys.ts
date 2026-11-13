@@ -104,6 +104,8 @@ export const RUN_RESULT_EXTRA_KEYS: readonly string[] = [
   "sunoTrackId",
   "sunoTaskId",
   "kieTaskId",
+  // (An Extend / Upscale Video node's own run's output task, `outputKieTaskId`,
+  // lives in EXECUTION_DATA_KEYS — cleared from there.)
   // Echoes of the last run.
   "lastRunOutcome",
   "lastAuditReport",

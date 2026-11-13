@@ -3054,7 +3054,8 @@ export type VideoUpscaleData = {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
-  kieTaskId?: string              // KIE task ID from upstream VEO node (for VEO upscale providers)
+  kieTaskId?: string              // KIE task ID from upstream VEO node (for VEO upscale providers) — the task it works on
+  outputKieTaskId?: string        // Its own run's output task, recorded apart from the task it works on
 }
 
 // Video Depth: video → depth video (fal Video Depth Anything / Replicate Depth Anything)
@@ -3091,8 +3092,8 @@ export type ExtendVideoData = PromptAffixFields & {
   seeds?: number                   // VEO only
   quality?: "720p" | "1080p"      // Runway only
   extendMode?: "start" | "end"    // LTX 2.3 Pro only — default "end"
-  duration?: number                // Seconds to add — LTX 1-20; Seedance 2.5 4-30, Seedance 2.0 4-15, Kling 4 3-30, PixVerse V6 1-15 (their catalog `durations`)
-  resolution?: "360p" | "480p" | "540p" | "720p" | "1080p" // Catalog extend providers only (Seedance: 480p / 720p / 1080p; Kling 4: 720p / 1080p; PixVerse V6: 360p / 540p / 720p / 1080p) — default 720p
+  duration?: number                // Seconds to add — LTX 1-20; Seedance 2.5 4-30, Seedance 2.0 4-15, Kling 4 3-30, PixVerse V6 1-15, Grok 6 or 10 (their catalog `durations`)
+  resolution?: "360p" | "480p" | "540p" | "720p" | "1080p" // Catalog extend providers only (Seedance: 480p / 720p / 1080p; Kling 4: 720p / 1080p; PixVerse V6: 360p / 540p / 720p / 1080p) — default 720p. Never Grok's: it extends at its source's resolution
   generateAudio?: boolean          // Seedance and PixVerse V6 only — default true (Kling 4's sound is always on)
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -3102,7 +3103,8 @@ export type ExtendVideoData = PromptAffixFields & {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
-  kieTaskId?: string              // KIE task ID from upstream video node (veo/runway only)
+  kieTaskId?: string              // KIE task ID from upstream video node (veo/runway/grok) — the task it works on
+  outputKieTaskId?: string        // Its own run's output task (a VEO / Runway extension's), what a VEO / Runway extend after it continues
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }

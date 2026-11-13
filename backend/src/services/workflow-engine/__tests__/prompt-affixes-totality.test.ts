@@ -38,6 +38,9 @@ const EXTRA_DATA: Record<string, Record<string, unknown>> = {
   "suno-upload-extend": { uploadUrl: "https://x/a.mp3" },
   "video-analysis": { videoUrl: "https://x/v.mp4" },
   "video-retake": { videoUrl: "https://x/v.mp4" },
+  // Extend Video on its default provider (VEO) continues a generation's task:
+  // with none it is refused at build, before the prompt is read.
+  "extend-video": { kieTaskId: "task-1" },
   // edit-plan throws before the prompt read without a transcript (json input);
   // the media sources come from INPUTS.editPlanSources below.
   "edit-plan": { transcript: { version: 1, words: [{ text: "hi", startMs: 0, endMs: 100 }] } },

@@ -4,6 +4,8 @@
  * reserves the type's own row at the guard and at the reservation — with or
  * without frames — inserts the job and queues it on the video queue under the
  * same name. The clip itself is measured by the job, never on the request.
+ * A queue that refuses the job fails it, refunds it and frees its key at once
+ * (lib/enqueue-route-job.ts).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
@@ -13,6 +15,8 @@ const m = vi.hoisted(() => ({
   reserveIds: [] as string[],
   insertJob: vi.fn(),
   queueAdd: vi.fn(),
+  markJobFailedDetailed: vi.fn(),
+  refund: vi.fn(),
 }))
 
 vi.mock("@/lib/url-validator.js", async () => {
@@ -21,6 +25,9 @@ vi.mock("@/lib/url-validator.js", async () => {
 })
 vi.mock("@/lib/insert-job.js", () => ({ insertJob: m.insertJob }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: m.queueAdd }, redis: {} }))
+vi.mock("@/lib/job-failure.js", () => ({ markJobFailedDetailed: m.markJobFailedDetailed }))
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundJobHoldsConfirmed: m.refund }))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn().mockResolvedValue(true) }))
 vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard: (resolver: (req: FastifyRequest) => string) => async (req: FastifyRequest) => {
     m.resolved.push(resolver(req))
@@ -52,6 +59,8 @@ beforeEach(() => {
   m.reserveIds = []
   m.insertJob.mockReset().mockResolvedValue({ data: { id: "job-1" }, error: null })
   m.queueAdd.mockReset().mockResolvedValue({ id: "q-1" })
+  m.markJobFailedDetailed.mockReset().mockResolvedValue("flipped")
+  m.refund.mockReset().mockResolvedValue(true)
 })
 
 describe("POST /v1/shot-cuts", () => {
@@ -110,5 +119,27 @@ describe("POST /v1/shot-cuts", () => {
     const res = await app.inject({ method: "POST", url: URL, payload: { videoUrl: CLIP } })
     expect(res.statusCode).toBe(500)
     expect(m.queueAdd).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /v1/shot-cuts: a queue that refuses the job", () => {
+  it("fails the job from pending, frees its Idempotency-Key, refunds its hold and answers 500 internal_error", async () => {
+    m.queueAdd.mockRejectedValue(new Error("OOM command not allowed when used memory > 'maxmemory'."))
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: "/v1/shot-cuts", payload: { videoUrl: CLIP } })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    expect(m.markJobFailedDetailed).toHaveBeenCalledWith("job-1", expect.objectContaining({ from: ["pending"], extra: { idempotency_key: null } }))
+    expect(m.refund).toHaveBeenCalledWith("job-1")
+  })
+
+  it("a job the queue took after all (no longer pending) is answered as started, and not refunded", async () => {
+    m.queueAdd.mockRejectedValue(new Error("Connection is closed."))
+    m.markJobFailedDetailed.mockResolvedValue("missed")
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: "/v1/shot-cuts", payload: { videoUrl: CLIP } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ jobId: "job-1" })
+    expect(m.refund).not.toHaveBeenCalled()
   })
 })

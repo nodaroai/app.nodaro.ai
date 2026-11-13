@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { execFileSync } from "node:child_process"
 import { promises as fs, mkdtempSync, realpathSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -9,15 +9,32 @@ import { dirname, join } from "node:path"
  * librubberband can run these — the production-pinned build CI installs does;
  * a Homebrew ffmpeg does not, so they skip on a dev Mac (and say so).
  *
- * The download is the only thing replaced: it copies a local fixture.
+ * The download is the only thing replaced: it copies a local fixture. The
+ * ffmpeg launch is the real one; a test can ask it to run at the narrowest
+ * SIMD alignment (below).
  */
+
+/**
+ * ffmpeg's encoder queue passes a cut frame on whenever it is aligned to the
+ * CPU's widest SIMD register: 16 bytes on arm64 (and on an x86 without AVX),
+ * 32 with AVX2, 64 with AVX-512. Some WAVs at tempo 0.8 failed MP3 encoding
+ * only at 16. On an x86 runner these flags clear the wider sets, so the run
+ * meets that case on any machine; arm64 is at 16 already.
+ */
+const simd = vi.hoisted(() => ({
+  narrow: false,
+  args: process.arch === "x64" ? ["-cpuflags", "-avx512-avx512icl-avx2-avx-fma3-fma4-xop-avxslow"] : [],
+}))
+
 vi.mock("../ffmpeg-utils.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../ffmpeg-utils.js")>()
+  const runFfmpeg: typeof orig.runFfmpeg = (args, ...rest) => orig.runFfmpeg(simd.narrow ? [...simd.args, ...args] : args, ...rest)
   return {
     ...orig,
     downloadFile: async (src: string, dest: string) => {
       await fs.copyFile(src, dest)
     },
+    runFfmpeg,
   }
 })
 
@@ -54,8 +71,20 @@ function formatDuration(path: string): number {
   return Number((probe(path, "format=duration") as unknown as { format: { duration: string } }).format.duration)
 }
 
+function audioStream(path: string): { codec: string; sampleRate: number; channels: number } {
+  const out = execFileSync(
+    "ffprobe",
+    ["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name,sample_rate,channels", "-of", "json", path],
+    { encoding: "utf8" },
+  )
+  const s = (JSON.parse(out) as { streams: Array<{ codec_name: string; sample_rate: string; channels: number }> }).streams[0]!
+  return { codec: s.codec_name, sampleRate: Number(s.sample_rate), channels: s.channels }
+}
+
 let sandbox: string
 let toneWav: string
+let wav44k: string
+let wav48k: string
 let clipMp4: string
 let silentMp4: string
 
@@ -63,9 +92,13 @@ beforeAll(() => {
   if (!RUBBERBAND) return
   sandbox = realpathSync(mkdtempSync(join(tmpdir(), "pitch-tempo-test-")))
   toneWav = join(sandbox, "tone.wav")
+  wav44k = join(sandbox, "tone-44k.wav")
+  wav48k = join(sandbox, "tone-48k.wav")
   clipMp4 = join(sandbox, "clip.mp4")
   silentMp4 = join(sandbox, "silent.mp4")
   execFileSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "sine=frequency=220:sample_rate=48000:duration=4", "-ac", "2", toneWav])
+  execFileSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=5", "-ac", "2", wav44k])
+  execFileSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=10", "-ac", "2", wav48k])
   execFileSync("ffmpeg", [
     "-v", "error",
     "-f", "lavfi", "-i", "testsrc=size=320x240:rate=25:duration=3",
@@ -128,4 +161,52 @@ describe.skipIf(!RUBBERBAND)("pitchTempo (real rubberband)", () => {
       message: "This media has no audio track to shift.",
     })
   })
+})
+
+/**
+ * Both WAVs failed at tempo 0.8 on the pinned ffmpeg at a 16-byte alignment
+ * ("inadequate AVFrame plane padding" from libmp3lame on the last frame),
+ * while every other tempo passed. The audio lane now hands the encoder
+ * 1152-sample frames, so the encode reaches the end at every alignment and
+ * every tempo, with the same length and format as before.
+ */
+describe.skipIf(!RUBBERBAND)("pitchTempo: WAVs that failed at tempo 0.8 encode to the end (real rubberband)", () => {
+  afterEach(() => {
+    simd.narrow = false
+  })
+
+  const cases = [
+    { name: "5 s at 44.1 kHz", input: () => wav44k, seconds: 5, sampleRate: 44100 },
+    { name: "10 s at 48 kHz", input: () => wav48k, seconds: 10, sampleRate: 48000 },
+  ] as const
+
+  async function render(input: string, tempo: number): Promise<{ seconds: number; codec: string; sampleRate: number; channels: number }> {
+    const { outputPath, inputType } = await pitchTempo({ audioUrl: input, semitones: 0, tempo, preserveFormants: true })
+    expect(inputType).toBe("audio")
+    expect(outputPath.endsWith(".mp3")).toBe(true)
+    const result = { seconds: formatDuration(outputPath), ...audioStream(outputPath) }
+    await fs.rm(dirname(outputPath), { recursive: true, force: true })
+    return result
+  }
+
+  for (const c of cases) {
+    it(`${c.name}: tempo 0.8 and the other tempos, at a 16-byte alignment, keep the length and the format`, async () => {
+      simd.narrow = true
+      for (const tempo of [0.8, 0.5, 1, 1.25, 2]) {
+        const out = await render(c.input(), tempo)
+        expect(out.codec, String(tempo)).toBe("mp3")
+        expect(out.sampleRate, String(tempo)).toBe(c.sampleRate)
+        expect(out.channels, String(tempo)).toBe(2)
+        // Rubber Band ends a stretch within a few hundredths of a second of input ÷ tempo.
+        expect(Math.abs(out.seconds - c.seconds / tempo), String(tempo)).toBeLessThan(0.1)
+      }
+      // Five real rubberband passes of up to 20 s of output each.
+    }, 120_000)
+
+    it(`${c.name}: tempo 0.8 at this machine's own alignment`, async () => {
+      const out = await render(c.input(), 0.8)
+      expect(out.codec).toBe("mp3")
+      expect(Math.abs(out.seconds - c.seconds / 0.8)).toBeLessThan(0.1)
+    }, 60_000)
+  }
 })

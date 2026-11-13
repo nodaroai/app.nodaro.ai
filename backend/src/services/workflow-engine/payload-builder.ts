@@ -64,7 +64,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, type UpstreamTaskGraph } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -128,6 +128,8 @@ import {
   tailExtendCreditId,
   tailExtendResolution,
   pixverseExtendCreditId,
+  grokExtendCreditId,
+  grokExtendSeconds,
   pixverseExtendQuality,
   resolveTopazUpscale,
   resolveUpscaleFactor,
@@ -157,6 +159,7 @@ import {
   isSeedanceVideoEditProvider,
   isTailExtendProvider,
   isPixverseExtendProvider,
+  isGrokExtendProvider,
   canonicalVideoProvider,
   SEEDANCE_VIDEO_EDIT_SHAPE,
   SEEDANCE_VIDEO_EDIT_TASK_TYPE,
@@ -596,7 +599,7 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   "social-media-format": { anyOf: ["videoUrl", "imageUrl", "mediaUrl"], kind: "video", noun: "a video or image" },
   // Non-media alternative: an upstream VEO/Runway task id runs without a URL.
   "video-upscale": { anyOf: ["videoUrl", "kieTaskId"], kind: "video", noun: "a video (or an upstream VEO task)" },
-  "extend-video": { anyOf: ["videoUrl", "kieTaskId"], kind: "video", noun: "a video (or an upstream VEO/Runway task)" },
+  "extend-video": { anyOf: ["videoUrl", "kieTaskId"], kind: "video", noun: "a video (or an upstream VEO/Runway/Grok task)" },
   // Non-media alternatives: a post's link wired into the `video` handle, or the
   // node's own link field.
   "video-analysis": { anyOf: ["videoUrl", "videoPageUrl", "youtubeUrl"], kind: "video", noun: "a video, or a link to a post's video" },
@@ -763,6 +766,13 @@ function playsAudioSoundtrack(provider: string | undefined, data: Record<string,
     audioSoundtrack: typeof data.audioSoundtrack === "boolean" ? data.audioSoundtrack : undefined,
     audioRefCount: referenceAudioUrls?.length ?? 0,
   })
+}
+
+/** The graph a task-chained node reads its task in (`@nodaro/render-rules` upstream-task.ts): none for a direct caller. */
+function upstreamTaskGraphOf(buildCtx: PayloadBuildContext | undefined): UpstreamTaskGraph | undefined {
+  if (!buildCtx?.nodes || !buildCtx.edges) return undefined
+  const states = buildCtx.nodeStates
+  return { nodes: buildCtx.nodes, edges: buildCtx.edges, runOutputTaskOf: (id) => states?.[id]?.output?.kieTaskId }
 }
 
 function codedMediaRefusal(code: `${"video" | "audio" | "image"}_required`, detail: string): Error {
@@ -5933,6 +5943,9 @@ function buildPayloadOf(
           },
         }
       }
+      // The task it works on: the one its wired source hands on, else (no
+      // source that fits wired) the one it holds — never its own old output.
+      const vuTask = resolvedInputs.kieTaskId || ownTaskInputOf(node, upstreamTaskGraphOf(buildCtx))
       const vuModel = vuProvider === "veo-1080p" ? "veo-1080p"
         : vuProvider === "veo-4k" ? "veo-4k"
         // The draft finalize's exact per-length id is stamped by node-executor
@@ -5949,7 +5962,7 @@ function buildPayloadOf(
       // with the fix spelled out (2026-09-09: an uploaded clip + provider VEO 1080p).
       // Seedance 2.5 HD re-renders a Seedance 2.5 DRAFT by its task id — same
       // shape of refusal, with its own fix spelled out.
-      if (vuProvider === SEEDANCE_DRAFT_FINALIZE_PROVIDER && !(resolvedInputs.kieTaskId || data.kieTaskId)) {
+      if (vuProvider === SEEDANCE_DRAFT_FINALIZE_PROVIDER && !vuTask) {
         const vuLabel = typeof data.label === "string" && data.label.trim() ? data.label : "Upscale Video"
         throw codedMediaRefusal(
           "video_required",
@@ -5957,7 +5970,7 @@ function buildPayloadOf(
         )
       }
       const vuVeo = vuProvider === "veo-1080p" || vuProvider === "veo-4k"
-      if (vuVeo && !(resolvedInputs.kieTaskId || data.kieTaskId)) {
+      if (vuVeo && !vuTask) {
         const vuLabel = typeof data.label === "string" && data.label.trim() ? data.label : "Upscale Video"
         throw codedMediaRefusal(
           "video_required",
@@ -5981,7 +5994,7 @@ function buildPayloadOf(
           ...(topazFpsOf(data.targetFps) !== undefined ? { targetFps: topazFpsOf(data.targetFps) } : {}),
           upscaleFactor: data.upscaleFactor,
           provider: vuProvider,
-          kieTaskId: resolvedInputs.kieTaskId || data.kieTaskId,
+          kieTaskId: vuTask,
           usageLogId,
         },
       }
@@ -6111,6 +6124,44 @@ function buildPayloadOf(
         }
       }
 
+      // ─── Grok Extend (native, Grok's own clips only) ─────────────────────
+      // Task-based like VEO: the upstream Grok node's task (`kieTaskId`, the
+      // input resolver hands it on). What the source is — and so the row the
+      // run is held on, the task id it sends and where the extension starts —
+      // is answered by the source check in node-executor
+      // (`stampGrokExtendSource`, the route preHandler's twin), before
+      // input_data and the reservation; a source Grok cannot extend is refused
+      // there. Until then the id is the dearer row (a 720p source), never a
+      // resolution the node names. The prompt is sent as written (its negative
+      // as in-prompt "Avoid: …"); one is required, refused here before the
+      // reservation in the route's words.
+      if (isGrokExtendProvider(tailProvider)) {
+        const prompt = buildExtendPrompt()
+        if (!prompt?.trim()) throw new Error(`prompt (what happens next) is required for ${tailProvider}`)
+        return {
+          jobName: "extend-video",
+          queueName: "video-generation",
+          modelIdentifier: grokExtendCreditId(data.duration),
+          payload: {
+            jobId,
+            provider: tailProvider,
+            kieTaskId: resolvedInputs.kieTaskId || ownTaskInputOf(node, upstreamTaskGraphOf(buildCtx)),
+            prompt,
+            duration: grokExtendSeconds(data.duration),
+            usageLogId,
+          },
+        }
+      }
+
+      // VEO / Runway: the task it continues — the one its wired source hands
+      // on, else (no source that fits wired) the one it holds, never its own
+      // old output. None at all is refused here, before anything is held, in
+      // the words the editor shows: the provider would refuse it only after.
+      const evTask = resolvedInputs.kieTaskId || ownTaskInputOf(node, upstreamTaskGraphOf(buildCtx))
+      if (!evTask && (evProvider === "veo-extend" || evProvider === "runway-extend")) {
+        const evLabel = typeof data.label === "string" && data.label.trim() ? data.label : "Extend Video"
+        throw codedMediaRefusal("video_required", `Node "${evLabel}": no source generation found upstream. Connect a VEO or Runway video node.`)
+      }
       const evModel = evProvider === "veo-extend"
         ? (evProvider + (data.model === "quality" ? ":quality" : ""))
         : evProvider
@@ -6120,7 +6171,7 @@ function buildPayloadOf(
         modelIdentifier: evModel,
         payload: {
           jobId,
-          kieTaskId: resolvedInputs.kieTaskId || data.kieTaskId,
+          kieTaskId: evTask,
           prompt: buildExtendPrompt(),
           provider: evProvider,
           model: evProvider === "veo-extend" ? (data.model ?? "fast") : undefined,

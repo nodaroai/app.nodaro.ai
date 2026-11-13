@@ -1551,6 +1551,10 @@ export const EXTEND_VIDEO_PROVIDERS = [
   // switch): the whole source goes in and comes back with the new seconds
   // joined on, of which only the new ones are kept. Priced on its own rows.
   "pixverse-v6-extend",
+  // Grok extends only its OWN clips (a Grok Imagine text-to-video or
+  // image-to-video run of the same user), named by their task: 6 or 10 s
+  // added at the source's resolution, delivered as Grok returns it.
+  "grok-extend",
 ] as const
 export type ExtendVideoProvider = typeof EXTEND_VIDEO_PROVIDERS[number]
 
@@ -1622,6 +1626,34 @@ export function isCatalogExtendProvider(p: unknown): p is CatalogExtendProvider 
  */
 export function extendHasSoundSwitch(p: unknown): boolean {
   return isSeedanceExtendProvider(p) || isPixverseExtendProvider(p)
+}
+
+/**
+ * Grok Extend: a native extend of Grok's OWN clips only — a completed Grok
+ * Imagine text-to-video or image-to-video run of the same user, named by its
+ * task (the upstream node hands it on, as VEO's extend takes its own). It adds
+ * 6 or 10 s at the SOURCE's resolution, which is never a lever: so it is no
+ * {@link CatalogExtendProvider}, and is priced by `grokExtendCreditId` on the
+ * resolution the source check answers.
+ */
+export type GrokExtendProvider = Extract<ExtendVideoProvider, "grok-extend">
+export const GROK_EXTEND_PROVIDER: GrokExtendProvider = "grok-extend"
+
+/** Whether a value is {@link GROK_EXTEND_PROVIDER}. */
+export function isGrokExtendProvider(p: unknown): p is GrokExtendProvider {
+  return p === GROK_EXTEND_PROVIDER
+}
+
+/**
+ * The Grok Imagine video models whose clips Grok Extend can extend: text-to-
+ * video's id and image-to-video's (not Grok Imagine Video 1.5, a different
+ * model on the provider's side).
+ */
+export const GROK_EXTEND_SOURCE_MODELS = ["grok", "grok-i2v"] as const
+
+/** Whether a model is one of {@link GROK_EXTEND_SOURCE_MODELS}. */
+export function isGrokExtendSourceModel(p: unknown): boolean {
+  return typeof p === "string" && (GROK_EXTEND_SOURCE_MODELS as readonly string[]).includes(p)
 }
 
 /** Lip sync providers */

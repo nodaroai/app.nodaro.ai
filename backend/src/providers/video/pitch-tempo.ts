@@ -122,6 +122,29 @@ export function buildRubberbandFilter(settings: PitchTempoSettings): string {
 }
 
 /**
+ * The audio lane hands libmp3lame frames of exactly 1152 samples (the last one
+ * shorter), re-cut inside the filter graph by `asetnsamples` (`p=0`: the last
+ * frame is not padded, so the length is unchanged).
+ *
+ * Why: libmp3lame reads each float plane in whole groups of 8 samples and
+ * refuses a frame whose plane is not padded to the next group ("inadequate
+ * AVFrame plane padding"). Rubber Band emits frames of uneven length. ffmpeg's
+ * encoder queue cuts them into the encoder's frames by moving a frame's start
+ * inside its buffer, and passes the cut frame on whenever it is aligned to the
+ * CPU's SIMD width. At 16 bytes (4 samples: arm64, or x86 without AVX) the
+ * last frame of a stream can then end 4 samples short of an 8-sample group at
+ * the very end of its buffer, and the encode fails on it. (At the 32 or
+ * 64 bytes of AVX2 or AVX-512 the cut cannot land there.) The filter graph
+ * copies a cut frame instead of moving its start. Frames that already have
+ * the encoder's length are never cut by the queue: 1152 is LAME's frame at
+ * 32–48 kHz, and at 24 kHz and below its 576-sample frame divides 1152, so a
+ * cut moves a start by whole groups of 8. The encoder gets the same samples in
+ * the same frames as before, so every output that encoded before is
+ * byte-identical.
+ */
+const MP3_FRAME_SAMPLES = 1152
+
+/**
  * The ffmpeg arguments for one lane. The video lane copies the first picture
  * stream, shifts the first audio stream and pads/trims it to `sourceSec` (the
  * picture's length).
@@ -134,7 +157,15 @@ export function buildPitchTempoArgs(opts: {
   readonly sourceSec?: number
 }): string[] {
   if (opts.lane === "audio") {
-    return ["-y", "-i", opts.inputPath, "-vn", "-af", opts.filter, "-c:a", "libmp3lame", "-b:a", "192k", opts.outputPath]
+    return [
+      "-y",
+      "-i", opts.inputPath,
+      "-vn",
+      "-af", `${opts.filter},asetnsamples=n=${MP3_FRAME_SAMPLES}:p=0`,
+      "-c:a", "libmp3lame",
+      "-b:a", "192k",
+      opts.outputPath,
+    ]
   }
   if (opts.sourceSec === undefined || !(opts.sourceSec > 0)) {
     throw new Error("buildPitchTempoArgs: the video lane needs the picture's length")

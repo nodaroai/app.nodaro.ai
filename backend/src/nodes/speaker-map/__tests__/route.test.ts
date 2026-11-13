@@ -9,7 +9,9 @@
  *  - a transcript with no speaker labels is a 422 `no_speakers`, also before
  *    the guard, so nothing is reserved;
  *  - the guard and the reservation both name the one flat row, and the queued
- *    job carries the body with the lead defaulted to 3 dB.
+ *    job carries the body with the lead defaulted to 3 dB;
+ *  - a queue that refuses the job fails it, refunds it and frees its key at
+ *    once (lib/enqueue-route-job.ts).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
@@ -20,11 +22,16 @@ const m = vi.hoisted(() => ({
   insertJob: vi.fn(),
   reserve: vi.fn(),
   queueAdd: vi.fn(),
+  markJobFailedDetailed: vi.fn(),
+  refund: vi.fn(),
 }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/lib/insert-job.js", () => ({ insertJob: m.insertJob }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: m.queueAdd }, redis: {} }))
+vi.mock("@/lib/job-failure.js", () => ({ markJobFailedDetailed: m.markJobFailedDetailed }))
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundJobHoldsConfirmed: m.refund }))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn().mockResolvedValue(true) }))
 vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard: (resolve: (req: FastifyRequest) => string) =>
     async (req: FastifyRequest, reply: { status: (n: number) => { send: (b: unknown) => unknown } }) => {
@@ -73,6 +80,8 @@ beforeEach(() => {
   m.insertJob.mockReset().mockResolvedValue({ data: { id: "job-1" }, error: null })
   m.reserve.mockReset().mockResolvedValue({ usageLogId: "ul-1", creditsReserved: 10, watermark: false })
   m.queueAdd.mockReset().mockResolvedValue({ id: "q-1" })
+  m.markJobFailedDetailed.mockReset().mockResolvedValue("flipped")
+  m.refund.mockReset().mockResolvedValue(true)
 })
 
 describe("POST /v1/speaker-map — validation", () => {
@@ -186,5 +195,27 @@ describe("POST /v1/speaker-map — pricing and dispatch", () => {
     const words = Array.from({ length: 30_000 }, (_, i) => ({ text: "word", startMs: i * 300, endMs: i * 300 + 250, speaker: i % 2 ? "A" : "B" }))
     const res = await post(body({ transcript: { text: "", words } }))
     expect(res.statusCode).toBe(200)
+  })
+})
+
+describe("POST /v1/speaker-map: a queue that refuses the job", () => {
+  it("fails the job from pending, frees its Idempotency-Key, refunds its hold and answers 500 internal_error", async () => {
+    m.queueAdd.mockRejectedValue(new Error("OOM command not allowed when used memory > 'maxmemory'."))
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: "/v1/speaker-map", payload: body() })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    expect(m.markJobFailedDetailed).toHaveBeenCalledWith("job-1", expect.objectContaining({ from: ["pending"], extra: { idempotency_key: null } }))
+    expect(m.refund).toHaveBeenCalledWith("job-1")
+  })
+
+  it("a job the queue took after all (no longer pending) is answered as started, and not refunded", async () => {
+    m.queueAdd.mockRejectedValue(new Error("Connection is closed."))
+    m.markJobFailedDetailed.mockResolvedValue("missed")
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: "/v1/speaker-map", payload: body() })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ jobId: "job-1" })
+    expect(m.refund).not.toHaveBeenCalled()
   })
 })

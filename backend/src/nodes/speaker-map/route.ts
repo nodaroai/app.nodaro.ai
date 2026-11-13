@@ -3,7 +3,7 @@ import { SPEAKER_MAP_DEFAULT_MARGIN_DB, SPEAKER_MAP_MAX_SOURCES, SPEAKER_MAP_MIN
 import { SPEAKER_MAP_MAX_MARGIN_DB, isAudioSyncResult, parseJsonInput } from "@nodaro/render-rules"
 import { safeUrlSchema } from "../../lib/url-validator.js"
 import { insertJob } from "../../lib/insert-job.js"
-import { videoQueue } from "../../lib/queue.js"
+import { enqueueUnitJob } from "../../lib/enqueue-route-job.js"
 import { creditGuard, reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../../lib/request-helpers.js"
 import { extractMcpClient } from "../../lib/extract-mcp-client.js"
@@ -11,6 +11,7 @@ import { buildJobInputData } from "../../lib/job-input-data.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import type { UnitRoute } from "../kit.js"
+import { descriptor } from "./descriptor.generated.js"
 
 // Keyless, ffmpeg + in-process level comparison: which camera each speaker is
 // on, from 2–6 recordings' own microphones, a diarized transcript and
@@ -138,7 +139,9 @@ export const route: UnitRoute = async function speakerMapRoutes(app) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("speaker-map", { jobId: job.id, ...restData, marginDb: restData.marginDb ?? SPEAKER_MAP_DEFAULT_MARGIN_DB, usageLogId })
+    // A queue that refuses the job fails it, refunds it and frees its key at once (500).
+    await enqueueUnitJob(req, reply, descriptor, { jobId: job.id, ...restData, marginDb: restData.marginDb ?? SPEAKER_MAP_DEFAULT_MARGIN_DB, usageLogId })
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

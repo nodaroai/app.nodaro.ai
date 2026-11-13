@@ -158,6 +158,13 @@ describe("EXECUTION_DATA_KEYS", () => {
     }
   })
 
+  it("files an Extend / Upscale Video run's own output task as a run result: never undo, preset or template state, and persisted", () => {
+    for (const type of ["extend-video", "video-upscale", undefined]) {
+      expect(isExecutionDataKey("outputKieTaskId", type), String(type)).toBe(true)
+    }
+    expect(TRANSIENT_RUNTIME_KEYS.has("outputKieTaskId")).toBe(false)
+  })
+
   it("a type's own keys come with every global one, as a set", () => {
     const ugcClip = executionDataKeysOf("ugc-clip")
     for (const key of EXECUTION_DATA_KEYS) expect(ugcClip.has(key), key).toBe(true)

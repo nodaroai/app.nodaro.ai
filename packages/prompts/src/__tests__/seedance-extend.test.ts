@@ -74,3 +74,19 @@ describe("PixVerse V6 extend shared wiring", () => {
     expect(PROVIDER_CAPABILITIES["extend-video"]!["pixverse-v6-extend"]).toMatch(/ANY video.*PixVerse V6/i)
   })
 })
+
+describe("Grok extend shared wiring", () => {
+  it("is a registered extend provider adding 6 or 10 s, with no resolution lever (the source's is used)", () => {
+    expect(EXTEND_VIDEO_PROVIDERS).toContain("grok-extend")
+    const m = MODEL_CATALOG["grok-extend"]!
+    expect(m.modes).toEqual(["extend"])
+    expect(m.family).toBe("xAI")
+    expect(m.durations).toEqual([6, 10])
+    expect(m.resolutions).toBeUndefined()
+  })
+
+  it("is advertised to the wizard's extend-video capabilities, as extending Grok Imagine videos only", () => {
+    expect(PROVIDER_CAPABILITIES["extend-video"]!["grok-extend"]).toMatch(/Grok Imagine video.*Grok/i)
+    expect(PROVIDER_CAPABILITIES["extend-video"]!["grok-extend"]).not.toMatch(/ANY video/i)
+  })
+})

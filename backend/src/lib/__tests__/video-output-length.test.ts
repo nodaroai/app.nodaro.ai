@@ -352,6 +352,12 @@ describe("Extend Video: the input and what the extension adds", () => {
       expect(run("extend-video", [video(fixed(30))], { provider: "pixverse-v6-extend", duration }), String(duration)).toEqual(fixed(30 + pixverseExtendSeconds(duration)))
     }
   })
+  it("Grok extend adds its 6 or 10 s to the source, 6 when unset (grokExtendSeconds)", () => {
+    expect(run("extend-video", [video(fixed(6))], { provider: "grok-extend", duration: 10 })).toEqual(fixed(16))
+    expect(run("extend-video", [video(fixed(6))], { provider: "grok-extend" })).toEqual(fixed(12))
+    expect(run("extend-video", [video(fixed(10))], { provider: "grok-extend", duration: "10" })).toEqual(fixed(20))
+    expect(run("extend-video", [video(fixed(10))], { provider: "grok-extend", duration: 8 })).toEqual(fixed(16))
+  })
   it("VEO and Runway extend add a length the catalog does not declare: unknown", () => {
     expect(run("extend-video", [video(fixed(8))], { provider: "veo-extend" })).toBe("unknown")
     expect(run("extend-video", [video(fixed(8))], { provider: "runway-extend" })).toBe("unknown")

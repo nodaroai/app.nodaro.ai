@@ -36,6 +36,46 @@ function makeEdge(source: string, target: string): any {
 // resolveNodeInputs
 // ---------------------------------------------------------------------------
 
+// A generation's task rides with its video only to a node that works on that
+// model's task (Extend Video on VEO / Runway / Grok, Upscale Video on VEO or
+// Seedance 2.5 HD) — the server's rule (input-resolver.ts) too. An Extend or
+// Upscale Video node's own `kieTaskId` is the task it works ON: never handed on.
+describe("resolveNodeInputs — the upstream task", () => {
+  const clip = "http://clip.mp4"
+  const inputsOf = (src: any, target: any) => resolveNodeInputs(target, [src, target], [makeEdge(src.id, target.id)])
+
+  it("hands a generation's task to the node that works on that model's task", () => {
+    expect(inputsOf(makeNode("g", "generate-video", { provider: "grok-i2v", generatedVideoUrl: clip, kieTaskId: "task-grok" }), makeNode("x", "extend-video", { provider: "grok-extend" })).kieTaskId).toBe("task-grok")
+    expect(inputsOf(makeNode("g", "image-to-video", { provider: "veo3.1", generatedVideoUrl: clip, kieTaskId: "task-veo" }), makeNode("u", "video-upscale", { provider: "veo-1080p" })).kieTaskId).toBe("task-veo")
+  })
+
+  it("hands nothing to a node that works on another model's task", () => {
+    expect(inputsOf(makeNode("g", "generate-video", { provider: "kling-3.0", generatedVideoUrl: clip, kieTaskId: "task-kling" }), makeNode("u", "video-upscale", { provider: "veo-1080p" })).kieTaskId).toBeUndefined()
+    expect(inputsOf(makeNode("g", "generate-video", { provider: "veo3.1", generatedVideoUrl: clip, kieTaskId: "task-veo" }), makeNode("x", "extend-video", { provider: "grok-extend" })).kieTaskId).toBeUndefined()
+  })
+
+  it("an extension or an upscale never hands on the source task it holds", () => {
+    const target = makeNode("x2", "extend-video", { provider: "grok-extend" })
+    expect(inputsOf(makeNode("x1", "extend-video", { provider: "grok-extend", generatedVideoUrl: clip, kieTaskId: "orig-grok-task" }), target).kieTaskId).toBeUndefined()
+    expect(inputsOf(makeNode("u", "video-upscale", { provider: "veo-1080p", generatedVideoUrl: clip, kieTaskId: "orig-veo-task" }), makeNode("x", "extend-video", { provider: "veo-extend" })).kieTaskId).toBeUndefined()
+  })
+
+  it("a saved chain: an extension whose kieTaskId an old server run overwrote hands it on; one equal to its source's does not", () => {
+    const gen = makeNode("g", "generate-video", { provider: "veo3.1", generatedVideoUrl: clip, kieTaskId: "task-gen" })
+    const target = makeNode("x2", "extend-video", { provider: "veo-extend" })
+    const edges = [makeEdge("g", "x1"), makeEdge("x1", "x2")]
+    const legacy = makeNode("x1", "extend-video", { provider: "veo-extend", generatedVideoUrl: clip, kieTaskId: "task-ext1-old" })
+    expect(resolveNodeInputs(target, [gen, legacy, target], edges).kieTaskId).toBe("task-ext1-old")
+    const mapped = makeNode("x1", "extend-video", { provider: "veo-extend", generatedVideoUrl: clip, kieTaskId: "task-gen" })
+    expect(resolveNodeInputs(target, [gen, mapped, target], edges).kieTaskId).toBeUndefined()
+  })
+
+  it("a VEO extension hands a VEO extend its OWN run's output task; a Grok extension hands a Grok extend nothing", () => {
+    expect(inputsOf(makeNode("x1", "extend-video", { provider: "veo-extend", generatedVideoUrl: clip, kieTaskId: "orig-veo-task", outputKieTaskId: "task-ext1" }), makeNode("x2", "extend-video", { provider: "veo-extend" })).kieTaskId).toBe("task-ext1")
+    expect(inputsOf(makeNode("x1", "extend-video", { provider: "grok-extend", generatedVideoUrl: clip, outputKieTaskId: "task-grok-ext" }), makeNode("x2", "extend-video", { provider: "grok-extend" })).kieTaskId).toBeUndefined()
+  })
+})
+
 describe("resolveNodeInputs", () => {
   it("resolves text-prompt source as prompt input", () => {
     const textNode = makeNode("t1", "text-prompt", { text: "hello" })

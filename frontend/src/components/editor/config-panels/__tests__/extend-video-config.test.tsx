@@ -298,6 +298,65 @@ describe("ExtendVideoConfig — PixVerse V6", () => {
   })
 })
 
+describe("ExtendVideoConfig — Grok", () => {
+  const grok = (overrides: Partial<ExtendVideoData> = {}) => data({ provider: "grok-extend", ...overrides })
+  const extendNode = { id: "ext", type: "extend-video", position: { x: 0, y: 0 }, data: grok() }
+  const grokNode = (resolution?: string) => ({ id: "src", type: "generate-video", position: { x: 0, y: 0 }, data: { label: "Grok", provider: "grok-i2v", ...(resolution ? { resolution } : {}) } })
+  const wired = (resolution?: string) =>
+    ({ ...EXTRA, nodes: [grokNode(resolution), extendNode], edges: [{ id: "w", source: "src", target: "ext", sourceHandle: "video", targetHandle: "video" }], nodeId: "ext" }) as unknown as typeof EXTRA
+
+  it("offers 6 or 10 s, its 6 s default shown, and no resolution or sound lever (its source's are used)", () => {
+    const { container } = render(<ExtendVideoConfig data={grok()} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(menuValues(container, "Seconds to add")).toEqual(["6", "10"])
+    expect(container.querySelector('output[aria-label="Seconds to add"]')!.textContent).toBe("6")
+    expect(container.querySelector('output[aria-label="Resolution"]')).toBeNull()
+    expect(container.querySelector("#extendGenerateAudio")).toBeNull()
+  })
+
+  it("labels each length with its price at the wired source's resolution, the dearer 720p row when it is not known", () => {
+    const asked = () => credits.getCachedCredits.mock.calls.map(([id]) => id)
+    const prefetched = () => credits.prefetchModelCredits.mock.calls.flatMap(([ids]) => ids as string[])
+    const unknown = render(<ExtendVideoConfig data={grok()} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(prefetched()).toEqual(["grok-extend:6s:720p", "grok-extend:10s:720p"])
+    expect(asked()).toEqual(expect.arrayContaining(["grok-extend:6s:720p", "grok-extend:10s:720p"]))
+    unknown.unmount()
+    credits.getCachedCredits.mockClear()
+    credits.prefetchModelCredits.mockClear()
+    render(<ExtendVideoConfig data={grok()} onUpdate={vi.fn()} {...wired("480p")} />)
+    expect(prefetched()).toEqual(["grok-extend:6s:480p", "grok-extend:10s:480p"])
+    expect(asked().some((id) => id.endsWith(":720p"))).toBe(false)
+  })
+
+  it("shows each length's price", () => {
+    credits.getCachedCredits.mockImplementation((id: string) => (id === "grok-extend:10s:480p" ? 84 : undefined))
+    const { container } = render(<ExtendVideoConfig data={grok({ duration: 10 })} onUpdate={vi.fn()} {...wired("480p")} />)
+    const len = container.querySelector('output[aria-label="Seconds to add"]')!.closest("[data-testid=select]") as HTMLElement
+    expect(within(len).getByRole("button", { name: /^10 seconds \(.+ credits\)$/ })).toBeTruthy()
+    credits.getCachedCredits.mockImplementation(() => undefined)
+  })
+
+  it("asks what happens next, and says Grok extends only a Grok Imagine video made here", () => {
+    const { container } = render(<ExtendVideoConfig data={grok()} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(container.textContent).toContain("What happens next")
+    expect(container.textContent).toContain("Extends a Grok Imagine video you made here")
+    expect(container.textContent).not.toContain("Extends ANY connected video")
+  })
+
+  it("switching from Seedance at 25 s and 480p with sound snaps the length to 10 s and clears the resolution and the sound switch", () => {
+    const onUpdate = vi.fn()
+    const { rerender } = render(<ExtendVideoConfig data={data({ duration: 25, resolution: "480p", generateAudio: false })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(onUpdate).not.toHaveBeenCalled()
+    rerender(<ExtendVideoConfig data={grok({ duration: 25, resolution: "480p", generateAudio: false })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(onUpdate).toHaveBeenCalledWith({ duration: 10, resolution: undefined, generateAudio: undefined })
+  })
+
+  it("keeps a length Grok adds", () => {
+    const onUpdate = vi.fn()
+    render(<ExtendVideoConfig data={grok({ duration: 10 })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(onUpdate).not.toHaveBeenCalled()
+  })
+})
+
 describe("ExtendVideoConfig — free credits", () => {
   it("locks every Extend Video model for an account that never paid, LTX 2.3 Pro included", () => {
     freeLimits.current = { enabled: true, maxSeconds: 4 }

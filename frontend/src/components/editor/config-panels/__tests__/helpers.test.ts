@@ -373,6 +373,25 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(extend({ provider: "pixverse-v6-extend", duration: 30, resolution: "480p" }))).toBe("pixverse-v6-extend:15s:540p:audio")
   })
 
+  it("prices a Grok extend at its source's resolution: 480p only for a wired Grok Imagine node set to 480p, else the dearer 720p row", () => {
+    const extend = (data: Record<string, unknown>) => makeNode({ id: "ext", type: "extend-video", data: { label: "Extend", provider: "grok-extend", ...data } as any })
+    const grok = (data: Record<string, unknown>) => makeNode({ id: "src", type: "generate-video", data: { label: "Grok", ...data } as any })
+    const wire = { id: "w", source: "src", target: "ext", sourceHandle: "video", targetHandle: "video" } as any
+    // Nothing wired: the dearer row, at the seconds it adds (6 or 10; 6 when none).
+    expect(getModelIdentifier(extend({}))).toBe("grok-extend:6s:720p")
+    expect(getModelIdentifier(extend({ duration: 10 }))).toBe("grok-extend:10s:720p")
+    // A resolution the node names is never the price.
+    expect(getModelIdentifier(extend({ duration: 10, resolution: "480p" }))).toBe("grok-extend:10s:720p")
+    // A Grok Imagine node set to 480p wired in: the 480p row.
+    expect(getModelIdentifier(extend({ duration: 10 }), [wire], [grok({ provider: "grok-i2v", resolution: "480p" }), extend({ duration: 10 })])).toBe("grok-extend:10s:480p")
+    expect(getModelIdentifier(extend({}), [wire], [grok({ provider: "grok", resolution: "480p" }), extend({})])).toBe("grok-extend:6s:480p")
+    // One set to 720p, or to none (Grok may render it at either): the 720p row.
+    expect(getModelIdentifier(extend({}), [wire], [grok({ provider: "grok-i2v", resolution: "720p" }), extend({})])).toBe("grok-extend:6s:720p")
+    expect(getModelIdentifier(extend({}), [wire], [grok({ provider: "grok-i2v" }), extend({})])).toBe("grok-extend:6s:720p")
+    // A stale length is quoted at the one it runs: the nearer of 6 and 10.
+    expect(getModelIdentifier(extend({ duration: 15 }))).toBe("grok-extend:10s:720p")
+  })
+
   it("prices an Extend node naming no provider as the VEO extend it runs (EXTEND_VIDEO_DEFAULT_PROVIDER), never the node-type row", () => {
     const extend = (data: Record<string, unknown>) => makeNode({ type: "extend-video", data: { label: "Extend", ...data } as any })
     expect(getModelIdentifier(extend({}))).toBe("veo-extend")

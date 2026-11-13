@@ -98,6 +98,22 @@ describe("Extend Video card — the Run price", () => {
   })
 })
 
+describe("Extend Video card — Grok's Run price", () => {
+  it("quotes the source's row: 480p for a wired Grok Imagine node set to 480p, else the dearer 720p row — as the panel and the estimate do", () => {
+    expect(mount({ provider: "grok-extend", duration: 10 }).quote).toEqual({ id: "grok-extend:10s:720p", units: 1 })
+    canvas.nodes = [{ id: "g", type: "generate-video", position: { x: 0, y: 0 }, data: { label: "Grok", provider: "grok-i2v", resolution: "480p" } }]
+    canvas.edges = [{ id: "g-x1", source: "g", target: "x1", sourceHandle: "video", targetHandle: "video" }]
+    const { quote, node } = mount({ provider: "grok-extend", duration: 10 })
+    expect(quote).toEqual({ id: "grok-extend:10s:480p", units: 1 })
+    expect(quote.id).toBe(getModelIdentifier(node, canvas.edges as never, canvas.nodes as never))
+  })
+
+  it("reads Grok Extend", () => {
+    mount({ provider: "grok-extend" })
+    expect(screen.getByText("Grok Extend")).toBeTruthy()
+  })
+})
+
 describe("Extend Video card — the model it names", () => {
   it.each([
     ["seedance-2-5-extend", "Seedance 2.5 Extend"],

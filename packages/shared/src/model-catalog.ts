@@ -3604,6 +3604,34 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "pixverse-v6-extend:15s:1080p:audio", credits: 690, note: "15s 1080p with sound (max)" },
     ],
   },
+  // Grok extends only its OWN clips: a completed Grok Imagine text-to-video
+  // or image-to-video run of the same user, named by its task (KIE takes no
+  // clip URL and no other model's task). It adds 6 or 10 s and returns the
+  // source with them joined on, delivered as it is. Billed at the SOURCE's
+  // resolution, which is never a lever — so no `resolutions` here: the run is
+  // priced on the row the source check answers (`grokExtendCreditId`), and a
+  // run whose source is not known yet is quoted at the dearer 720p row, the
+  // row this entry leads with. Its own entry, so a deployment can withhold it
+  // apart from Grok Imagine.
+  "grok-extend": {
+    id: "grok-extend",
+    kind: "video",
+    modes: ["extend"] as const,
+    family: "xAI",
+    maker: "xai",
+    label: "Grok Imagine Extend",
+    series: "Grok",
+    description: "Extend a Grok Imagine video you made here (from text or an image) by 6 or 10 seconds, at the video's own resolution (480p or 720p).",
+    useCases: ["extend"],
+    durations: [6, 10],
+    defaultDuration: 6,
+    pricing: [
+      { identifier: "grok-extend:6s:720p", credits: 70, note: "6s from a 720p source (the quote while the source is not known)" },
+      { identifier: "grok-extend:6s:480p", credits: 40, note: "6s from a 480p source" },
+      { identifier: "grok-extend:10s:480p", credits: 60, note: "10s from a 480p source" },
+      { identifier: "grok-extend:10s:720p", credits: 120, note: "10s from a 720p source" },
+    ],
+  },
   "veo-1080p": {
     id: "veo-1080p",
     kind: "video",

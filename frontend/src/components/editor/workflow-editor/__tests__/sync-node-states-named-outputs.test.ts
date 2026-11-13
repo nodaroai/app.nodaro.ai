@@ -137,6 +137,23 @@ describe("syncNodeStatesToStore — a finished node's named side outputs", () =>
     expect(byId.split.splitResults).toEqual(["a", "b"])
   })
 
+  it("an Extend Video run records its OWN output task as outputKieTaskId; a generation keeps kieTaskId", () => {
+    mockNodes = [
+      { id: "ext", type: "extend-video", data: { executionStatus: "running", provider: "veo-extend", kieTaskId: "orig-veo-task" } },
+      { id: "gen", type: "generate-video", data: { executionStatus: "running", provider: "veo3.1" } },
+    ]
+    streamBackendExecution("exec-1", ctx, vi.fn(), vi.fn())
+    const byId = sync({
+      ext: { status: "completed", output: { videoUrl: "https://cdn.test/ext.mp4", kieTaskId: "task-ext1" } },
+      gen: { status: "completed", output: { videoUrl: "https://cdn.test/gen.mp4", kieTaskId: "task-gen" } },
+    })
+    expect(byId.ext.outputKieTaskId).toBe("task-ext1")
+    // Its kieTaskId is the task it works on, never overwritten with its own output's.
+    expect(byId.ext.kieTaskId).toBe("orig-veo-task")
+    expect(byId.gen.kieTaskId).toBe("task-gen")
+    expect(byId.gen.outputKieTaskId).toBeUndefined()
+  })
+
   it("a Suno Separate run lands its other stems, its takes and how it ran — the reload lanes' mapping", () => {
     const output = {
       audioUrl: "https://cdn.test/vocals.mp3",

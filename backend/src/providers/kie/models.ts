@@ -14,7 +14,7 @@
  * the migration is complete.
  */
 
-import { MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, PIXVERSE_V6_EXTEND_PROVIDER, requestImageLimit } from "@nodaro/shared/models"
+import { GROK_EXTEND_PROVIDER, MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, PIXVERSE_V6_EXTEND_PROVIDER, requestImageLimit } from "@nodaro/shared/models"
 import { FLUX_3_KLEIN_DEFAULT_RESOLUTION, SEEDREAM_5_5_DEFAULT_RESOLUTION, type Flux3KleinResolution, type Seedream55Resolution } from "@nodaro/shared/model-catalog"
 import { confirmedByRun, ENABLE_SAFETY_CHECKER_LEVER, NSFW_CHECKER_LEVER, NSFW_CHECKER_SENT_FALSE_LEVER, type SafetyLever, MODERATION_LEVER } from "../safety-levers.js"
 
@@ -112,6 +112,16 @@ export const PIXVERSE_V6_MAX_TEXT_TO_VIDEO_MODEL = "pixverse-v6-max/text-to-vide
  *  Doc: https://docs.kie.ai/market/pixverse/extend (read 2026-11-13). */
 export const PIXVERSE_V6_EXTEND_WIRE_MODEL = "pixverse-v6/extend"
 export const PIXVERSE_V6_EXTEND_MODEL_KEY = PIXVERSE_V6_EXTEND_PROVIDER
+
+/** Grok Imagine's extend endpoint: Grok's OWN clips only — a successful
+ *  `grok-imagine/text-to-video` or `image-to-video` task of this account, by
+ *  `task_id` (no URL form: "external videos are not supported") — returned
+ *  with the new seconds joined on. No routing config of its own: grok-extend.ts
+ *  sends it directly. Its model key (the Extend Video provider id) names it to
+ *  the egress seam and a job's `model`.
+ *  Doc: https://docs.kie.ai/market/grok-imagine/extend (read 2026-11-13). */
+export const GROK_EXTEND_WIRE_MODEL = "grok-imagine/extend"
+export const GROK_EXTEND_MODEL_KEY = GROK_EXTEND_PROVIDER
 
 export interface KieModelConfig {
   model: string           // KIE.ai model identifier
@@ -2459,6 +2469,18 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
     model: PIXVERSE_V6_EXTEND_WIRE_MODEL,
     credits: 48,
     cost: 0.24,
+  },
+
+  // Grok Extend: one of Grok's own clips by `task_id`, returned whole with the
+  // new seconds joined on. Never routed through this table (grok-extend.ts
+  // sends it directly); listed so the admin credit audit maps KIE's
+  // `grok-imagine/extend` records to `grok-extend`. `credits`/`cost` are a 6 s
+  // extension of a 720p source, for audit logging only; a run is priced on its
+  // own rows (`grokExtendCreditId`, at the source's resolution).
+  "grok-extend": {
+    model: GROK_EXTEND_WIRE_MODEL,
+    credits: 27,
+    cost: 0.135,
   },
 
 }

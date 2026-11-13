@@ -46,10 +46,11 @@ import {
   isVeoProvider,
   isSeedanceExtendProvider,
   isPixverseExtendProvider,
+  isGrokExtendProvider,
   getVideoAudioCapability,
   type VideoUpscaleProvider
 } from "@nodaro/shared/models"
-import { ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendQuality, tailExtendResolution } from "@nodaro/shared/credits"
+import { grokExtendSeconds, ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendQuality, tailExtendResolution } from "@nodaro/shared/credits"
 import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
 import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
@@ -57,6 +58,8 @@ import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { extendTailPicture, extensionPictureSeconds, pictureSecondsOf, stitchExtension, type ExtendStitchResult } from "../../providers/video/extend-stitch.js"
 import { cutNativeExtension, nativeExtensionCutStartSec, pictureStartOffsetSec } from "../../providers/video/native-extension-cut.js"
 import { runPixverseExtend } from "../../providers/kie/pixverse-extend.js"
+import { runGrokExtend, type GrokExtendSeconds } from "../../providers/kie/grok-extend.js"
+import { resolveGrokExtendSource, type GrokExtendSource } from "../../lib/grok-extend-source.js"
 import { probeMatched, probeMatchedOrThrow } from "../../providers/video/matched-encode.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
 import { extractFrame } from "../../providers/video/extract-frame.js"
@@ -1969,6 +1972,90 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     } finally {
       await cleanupWorkDir(prepDir)
     }
+  }
+
+  // ─── Native extend: Grok (its own clips only) ─────────────────────────
+  // Grok extends one of its OWN clips by the source's task (checked, before
+  // the reservation, by the route or the workflow run: the task id it matched,
+  // the source's picture length and resolution ride on the job). It returns
+  // the source — its own render of it — with the new seconds joined on, and
+  // that clip IS the deliverable, stored as it is: nothing of the user's is
+  // cut, stitched or re-encoded here (the shared upload re-encodes it only to
+  // add the free-tier watermark, or when its codec is not browser-safe). Its new seconds are what it returns
+  // beyond the source's picture; under half the billed seconds fails the run
+  // (`extensionTooShort`), final and refunded in full, before anything is
+  // stored.
+  if (isGrokExtendProvider(provider)) {
+    const d = job.data as { kieTaskId?: string; prompt: string; duration?: number | string; resolution?: string; sourceSec?: number }
+    // The seconds the run is priced at (6 or 10; the route and the workflow
+    // run queue this reading; repeated so a hand-queued job holds to it).
+    const extSeconds = grokExtendSeconds(d.duration) as GrokExtendSeconds
+    // The checked source. A job queued without it (none is, today) is checked
+    // here by the same rule, and fails — refunded — on a source Grok cannot
+    // extend, the same on every attempt.
+    let source: Extract<GrokExtendSource, { ok: true }>
+    if (typeof d.sourceSec === "number" && Number.isFinite(d.sourceSec) && d.sourceSec > 0 && typeof d.kieTaskId === "string" && (d.resolution === "480p" || d.resolution === "720p")) {
+      source = { ok: true, sourceSec: d.sourceSec, resolution: d.resolution, taskId: d.kieTaskId.trim() }
+    } else {
+      const checked = await resolveGrokExtendSource({ taskId: d.kieTaskId ?? "", userId: ctx.jobUserId ?? "" })
+      if (!checked.ok) throw new DeterministicJobError(checked.message)
+      source = checked
+    }
+    console.log(`[worker] extend-video ${ctx.jobId} (provider: ${provider}, ${extSeconds}s from a ${source.resolution} source of ${source.sourceSec.toFixed(3)}s)`)
+    await setJobProgress(job, ctx.jobId, 5)
+
+    const grokRamp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 75 })
+    let gen
+    try {
+      // Its task IS persisted (as VEO's extend): the task's result is the
+      // deliverable as it is, so a reconcile finalize after a worker death
+      // delivers the same clip. The source's resolution is named to the
+      // egress seam: the body carries none (Grok bills at the source's).
+      gen = await runGrokExtend(
+        { taskId: source.taskId, prompt: d.prompt, extendAtSec: source.sourceSec, extendSec: extSeconds },
+        { onTaskCreated: makeOnTaskCreated(ctx.jobId, providerKindForVideoModel(provider)), dimensions: { resolution: source.resolution } },
+      )
+    } finally {
+      grokRamp.stop()
+    }
+
+    // Grok's clip is measured, then stored as it is (the same file); the
+    // folder is removed on every way out.
+    const workDir = await createWorkDir("extend-grok")
+    let r2Url: string
+    try {
+      const grokPath = join(workDir, "grok.mp4")
+      await downloadFile(gen.url, grokPath)
+      // Grok's new seconds: its clip's picture less the source's. A probe that
+      // FAILED throws a plain error, which is retried (`extensionPictureSeconds`).
+      const grokSec = await extensionPictureSeconds(grokPath)
+      const newSec = grokSec === undefined ? undefined : grokSec - source.sourceSec
+      const secs = (n: number | undefined): string => (n === undefined ? "none" : `${n.toFixed(3)}s`)
+      console.log(`[worker] extend-video ${ctx.jobId} Grok clip ${secs(grokSec)}: source ${secs(source.sourceSec)}, new ${secs(newSec)}, billed ${extSeconds}s`)
+      if (extensionTooShort(newSec, extSeconds)) {
+        throw new DeterministicJobError(extensionTooShortMessage(newSec, extSeconds))
+      }
+      await setJobProgress(job, ctx.jobId, 85)
+      r2Url = await watermarkLocalVideoAndUpload(grokPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+    } finally {
+      await cleanupWorkDir(workDir)
+    }
+    await setJobProgress(job, ctx.jobId, 100)
+
+    const grokThumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+    const { ok: grokOk } = await finalizeJobWithMedia({
+      jobId: ctx.jobId,
+      jobType: "extend-video",
+      // Recorded as a grok-extend run with the extension's own task: never a
+      // Grok Imagine source, so it is never taken as one to extend again (KIE
+      // extends only a text- or image-to-video task). No task on its output
+      // for a node after it to extend.
+      result: { url: gen.url, cost: null, providerUsed: provider, kieTaskId: gen.kieTaskId, ...(gen.providerMs !== undefined ? { providerMs: gen.providerMs } : {}) },
+      mediaUrl: r2Url,
+      extraOutputData: { thumbnailUrl: grokThumbUrl },
+    })
+    if (grokOk) console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${provider})`)
+    return
   }
 
   const { kieTaskId, prompt, model, seeds, quality } = job.data as {

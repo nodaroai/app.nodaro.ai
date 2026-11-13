@@ -447,7 +447,11 @@ export function routeTs(o) {
   const head = [
     ...ROUTE_IMPORTS,
     ...(o.kind === "worker"
-      ? ['import { insertJob } from "../../lib/insert-job.js"', 'import { videoQueue } from "../../lib/queue.js"']
+      ? [
+          'import { insertJob } from "../../lib/insert-job.js"',
+          'import { enqueueUnitJob } from "../../lib/enqueue-route-job.js"',
+          'import { descriptor } from "./descriptor.generated.js"',
+        ]
       : [
           'import { insertSyncJob } from "../../lib/insert-job.js"',
           'import { markJobFailed } from "../../lib/job-failure.js"',
@@ -492,8 +496,10 @@ export function routeTs(o) {
       ...prelude,
       ...jobRow("insertJob"),
       "",
-      "    // The BullMQ job name is the node type: the video worker dispatches it to ./worker.ts.",
-      "    await videoQueue.add(TYPE, { jobId: job.id, ...input, usageLogId })",
+      "    // On the unit's queue, under its type: the video worker dispatches it to ./worker.ts.",
+      "    // A queue that refuses the job fails it, refunds it and frees its key at once (500).",
+      "    await enqueueUnitJob(req, reply, descriptor, { jobId: job.id, ...input, usageLogId })",
+      "    if (reply.sent) return",
       "    return { jobId: job.id }",
       "  })",
       "}",

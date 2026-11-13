@@ -442,8 +442,9 @@ describe("resolveNodeInputs", () => {
   })
 
   it("passes kieTaskId for extend-video target", () => {
+    // A VEO extend (the node's default provider) continues a VEO generation's task.
     const target = node("t", "extend-video")
-    const src = node("s", "image-to-video")
+    const src = node("s", "image-to-video", { provider: "veo3.1" })
     const allNodes = [src, target]
     const edges = [edge("s", "t")]
     const states: Record<string, NodeExecutionState> = {
@@ -453,6 +454,131 @@ describe("resolveNodeInputs", () => {
     const result = resolveNodeInputs(target, edges, states, allNodes)
     expect(result.videoUrl).toBe("https://v.mp4")
     expect(result.kieTaskId).toBe("task-123")
+  })
+
+  // The canvas wires a video into Extend Video / Upscale Video on their `video` pip: the
+  // generation's task rides with it — only to a target that works on that model's task.
+  it.each([
+    ["extend-video", "veo-extend", "veo3.1"],
+    ["extend-video", "runway-extend", "runway-kie"],
+    ["extend-video", "grok-extend", "grok-i2v"],
+    ["extend-video", "grok-extend", "grok"],
+    ["video-upscale", "veo-1080p", "veo3.1"],
+    ["video-upscale", "veo-4k", "veo3_lite"],
+    ["video-upscale", "seedance-2-5-hd", "seedance-2-5"],
+  ])("passes kieTaskId to a %s on %s wired on its video handle from a %s generation", (targetType, provider, sourceModel) => {
+    const target = node("t", targetType, { provider })
+    const src = node("s", "generate-video", { provider: sourceModel })
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { videoUrl: "https://v.mp4", kieTaskId: "task-123" } },
+    }
+    const result = resolveNodeInputs(target, [edge("s", "t", "video", "video")], states, [src, target])
+    expect(result.videoUrl).toBe("https://v.mp4")
+    expect(result.kieTaskId).toBe("task-123")
+    // A node that did not run hands on the task its data holds (matches the editor).
+    const frozen = resolveNodeInputs(target, [edge("s", "t", "video", "video")], { s: { status: "completed", output: { videoUrl: "https://v.mp4" } } }, [node("s", "generate-video", { provider: sourceModel, kieTaskId: "task-saved" }), target])
+    expect(frozen.kieTaskId).toBe("task-saved")
+  })
+
+  // A task goes only to a target that works on that model's task: a mis-wired node gets
+  // none, and keeps the refusal it gives without one (before anything is reserved).
+  it.each([
+    ["extend-video", "veo-extend", "kling-3.0"],
+    ["extend-video", "runway-extend", "veo3.1"],
+    ["extend-video", "grok-extend", "veo3.1"],
+    ["extend-video", "grok-extend", "grok-imagine-video-1.5"],
+    ["video-upscale", "veo-1080p", "kling-3.0"],
+    ["video-upscale", "veo-4k", "grok-i2v"],
+    ["video-upscale", "seedance-2-5-hd", "veo3.1"],
+    // A provider that takes a video by URL takes no task.
+    ["extend-video", "seedance-2-5-extend", "veo3.1"],
+    ["video-upscale", "topaz", "veo3.1"],
+  ])("hands no task to a %s on %s from a %s generation", (targetType, provider, sourceModel) => {
+    const target = node("t", targetType, { provider })
+    const src = node("s", "generate-video", { provider: sourceModel, kieTaskId: "task-saved" })
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { videoUrl: "https://v.mp4", kieTaskId: "task-123" } },
+    }
+    for (const e of [edge("s", "t", "video", "video"), edge("s", "t")]) {
+      const result = resolveNodeInputs(target, [e], states, [src, target])
+      expect(result.videoUrl).toBe("https://v.mp4")
+      expect(result.kieTaskId).toBeUndefined()
+    }
+  })
+
+  // An Extend or Upscale Video node's `kieTaskId` is the task it works ON (its source's,
+  // e.g. one an MCP call wrote): never handed on. What it hands on is its OWN run's output
+  // task — the run's output in this run, else `outputKieTaskId`, where a run records it —
+  // and only to a target that works on that model's task.
+  describe("an extension's task", () => {
+    const wires = () => [edge("s", "t", "video", "video"), edge("s", "t")]
+    const resolveFrom = (src: SimpleNode, target: SimpleNode, output: Record<string, unknown>) =>
+      wires().map((e) => resolveNodeInputs(target, [e], { s: { status: "completed", output } }, [src, target]).kieTaskId)
+
+    it("VEO extend → VEO extend: the second gets the FIRST extension's own output task", () => {
+      const first = node("s", "extend-video", { provider: "veo-extend", kieTaskId: "orig-veo-task" })
+      const second = node("t", "extend-video", { provider: "veo-extend" })
+      // It ran in this run: its output's task.
+      expect(resolveFrom(first, second, { videoUrl: "https://e.mp4", kieTaskId: "task-ext1" })).toEqual(["task-ext1", "task-ext1"])
+      // It ran before (a frozen or skipped node): the output task its run recorded — never the task it holds as input.
+      const recorded = node("s", "extend-video", { provider: "veo-extend", kieTaskId: "orig-veo-task", outputKieTaskId: "task-ext1-saved" })
+      expect(resolveFrom(recorded, second, { videoUrl: "https://e.mp4" })).toEqual(["task-ext1-saved", "task-ext1-saved"])
+      // An extension a VEO upscale and a Runway extension a Runway extend take the same way.
+      expect(resolveFrom(first, node("t", "video-upscale", { provider: "veo-1080p" }), { videoUrl: "https://e.mp4", kieTaskId: "task-ext1" })).toEqual(["task-ext1", "task-ext1"])
+      expect(resolveFrom(node("s", "extend-video", { provider: "runway-extend" }), node("t", "extend-video", { provider: "runway-extend" }), { videoUrl: "https://e.mp4", kieTaskId: "task-rw-ext" })).toEqual(["task-rw-ext", "task-rw-ext"])
+    })
+
+    // A graph saved before extensions recorded their output task apart: a server run wrote an
+    // extension's OWN output task into its `kieTaskId`. Read as its output exactly when it
+    // differs from what its source hands it; equal to it, it is the task it worked on.
+    it("a saved chain: an extension whose kieTaskId an old server run overwrote hands it on; one equal to its source's does not", () => {
+      const gen = node("g", "generate-video", { provider: "veo3.1", kieTaskId: "task-gen" })
+      const second = node("t", "extend-video", { provider: "veo-extend" })
+      const edges = (first: SimpleNode) => [edge("g", first.id, "video", "video"), edge(first.id, "t", "video", "video")]
+      const seeded = (first: SimpleNode): Record<string, NodeExecutionState> => ({
+        g: { status: "completed", output: { videoUrl: "https://g.mp4" } },
+        [first.id]: { status: "completed", output: { videoUrl: "https://e.mp4" } },
+      })
+      const legacy = node("s", "extend-video", { provider: "veo-extend", kieTaskId: "task-ext1-old" })
+      expect(resolveNodeInputs(second, edges(legacy), seeded(legacy), [gen, legacy, second]).kieTaskId).toBe("task-ext1-old")
+      // The MCP-mapped case: the task it holds is its source's — the one it extended.
+      const mapped = node("s", "extend-video", { provider: "veo-extend", kieTaskId: "task-gen" })
+      expect(resolveNodeInputs(second, edges(mapped), seeded(mapped), [gen, mapped, second]).kieTaskId).toBeUndefined()
+      // A source that fits but recorded no task: the first's saved task differs from nothing → its old output.
+      const bare = node("g", "generate-video", { provider: "veo3.1" })
+      expect(resolveNodeInputs(second, edges(legacy), seeded(legacy), [bare, legacy, second]).kieTaskId).toBe("task-ext1-old")
+    })
+
+    it("an MCP-mapped extension that holds only its input task hands on nothing", () => {
+      for (const provider of ["veo-extend", "grok-extend"]) {
+        const first = node("s", "extend-video", { provider, kieTaskId: "orig-task" })
+        expect(resolveFrom(first, node("t", "extend-video", { provider }), { videoUrl: "https://e.mp4" }), provider).toEqual([undefined, undefined])
+      }
+    })
+
+    it("a Grok extension that ran hands a Grok extend nothing (Grok extends only a text- or image-to-video run)", () => {
+      const first = node("s", "extend-video", { provider: "grok-extend", kieTaskId: "orig-grok-task", outputKieTaskId: "task-grok-ext" })
+      expect(resolveFrom(first, node("t", "extend-video", { provider: "grok-extend" }), { videoUrl: "https://e.mp4", kieTaskId: "task-grok-ext" })).toEqual([undefined, undefined])
+    })
+
+    it("an extension of one model hands another model's extend or upscale nothing", () => {
+      const veoExt = node("s", "extend-video", { provider: "veo-extend" })
+      expect(resolveFrom(veoExt, node("t", "extend-video", { provider: "runway-extend" }), { videoUrl: "https://e.mp4", kieTaskId: "task-ext1" })).toEqual([undefined, undefined])
+      expect(resolveFrom(veoExt, node("t", "video-upscale", { provider: "seedance-2-5-hd" }), { videoUrl: "https://e.mp4", kieTaskId: "task-ext1" })).toEqual([undefined, undefined])
+    })
+
+    it("an upscale hands on nothing: neither the task it holds nor its own output's", () => {
+      const up = node("s", "video-upscale", { provider: "veo-1080p", kieTaskId: "orig-veo-task", outputKieTaskId: "task-up" })
+      expect(resolveFrom(up, node("t", "extend-video", { provider: "veo-extend" }), { videoUrl: "https://e.mp4", kieTaskId: "task-up" })).toEqual([undefined, undefined])
+    })
+  })
+
+  it("an uploaded video wired on the video handle hands on no task", () => {
+    const target = node("t", "extend-video")
+    const src = node("s", "upload-video", { kieTaskId: "stale" })
+    const result = resolveNodeInputs(target, [edge("s", "t", null, "video")], { s: { status: "completed", output: { videoUrl: "https://u.mp4" } } }, [src, target])
+    expect(result.videoUrl).toBe("https://u.mp4")
+    expect(result.kieTaskId).toBeUndefined()
   })
 
   it("a frozen Suno source hands over its ACTIVE track's id, not the node-level track 1 (#819)", () => {

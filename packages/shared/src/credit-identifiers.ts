@@ -44,6 +44,9 @@ import {
   isTailExtendProvider,
   isPixverseExtendProvider,
   PIXVERSE_V6_EXTEND_PROVIDER,
+  isGrokExtendProvider,
+  isGrokExtendSourceModel,
+  GROK_EXTEND_PROVIDER,
   type CatalogExtendProvider,
   type SeedanceExtendProvider,
   type TailExtendProvider,
@@ -556,6 +559,9 @@ export function buildVideoCreditModelIdentifier(
   // PixVerse V6 Extend on its own rows too, its sound read from the extend's
   // own switch (`generateAudio`), else the request's `sound`.
   if (isPixverseExtendProvider(provider)) return pixverseExtendCreditId(duration, resolution, audio.generateAudio ?? audio.sound)
+  // Grok Extend is priced at its SOURCE's resolution, which only its source
+  // check knows: a resolution handed here is never read, so the dearer row.
+  if (isGrokExtendProvider(provider)) return grokExtendCreditId(duration)
   // T2V overrides: some providers have different base costs for text-to-video
   let effectiveProvider = provider
   if (nodeType === "text-to-video") {
@@ -926,6 +932,69 @@ export function catalogExtendCreditId(
   return isPixverseExtendProvider(provider)
     ? pixverseExtendCreditId(duration, resolution, generateAudio)
     : tailExtendCreditId(provider, duration, resolution)
+}
+
+/** The source resolutions Grok Extend is priced at (one row each per length added). */
+export type GrokExtendSourceResolution = "480p" | "720p"
+
+/**
+ * The seconds a Grok Extend run adds for a requested `duration`: 6 or 10 as
+ * asked, its default 6 when unset or unreadable, any other length snapped to
+ * the nearer of the two ({@link pricedOutputDurationSec} on its catalog
+ * `durations`). The route refuses any other length; a saved node, a quick-strip
+ * switch or a workflow written elsewhere runs, and is priced, at this one.
+ */
+export function grokExtendSeconds(duration: unknown): number {
+  const requested = typeof duration === "number" || typeof duration === "string" ? duration : undefined
+  return pricedOutputDurationSec(GROK_EXTEND_PROVIDER, requested)
+}
+
+/**
+ * The credit identifier one Grok Extend run is priced at:
+ * `grok-extend:<6|10>s:<480p|720p>`. The resolution is the SOURCE's — what
+ * Grok bills an extension at — as the source check answers it (the route's
+ * hold, the workflow hold); never a resolution the request names. Anything but
+ * `480p` (a source not known yet, an estimate) is priced at the dearer 720p
+ * row, so a quote never falls below the charge.
+ */
+export function grokExtendCreditId(duration?: unknown, sourceResolution?: unknown): string {
+  const resolution: GrokExtendSourceResolution = sourceResolution === "480p" ? "480p" : "720p"
+  return `${GROK_EXTEND_PROVIDER}:${grokExtendSeconds(duration)}s:${resolution}`
+}
+
+/** The video node types whose run Grok Extend can extend, set to a Grok Imagine model. */
+const GROK_EXTEND_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set(["generate-video", "text-to-video", "image-to-video"])
+
+/**
+ * The source resolution a Grok Extend node is QUOTED at (its estimate, its
+ * editor price), read off the node wired into its `video` input: `480p` only
+ * when that node surely renders at 480p — a Grok Imagine video node (text- or
+ * image-to-video) set to 480p, which every mode sends as set — and `720p`, the
+ * dearer row, for anything else: nothing wired, another model, a Grok node with
+ * no resolution set (Grok may render it at either). The run is held and
+ * charged at the source's own row, read off its job.
+ */
+export function grokExtendWiredSourceResolution(
+  nodeId: string | undefined,
+  nodes: ReadonlyArray<{ readonly id?: string; readonly type?: string; readonly data?: unknown }>,
+  edges: ReadonlyArray<{ readonly source?: string; readonly target?: string; readonly targetHandle?: string | null }> | undefined,
+): GrokExtendSourceResolution {
+  if (nodeId === undefined || !edges) return "720p"
+  const sources = edges
+    .filter((e) => e.target === nodeId && (e.targetHandle == null || e.targetHandle === "video"))
+    .map((e) => nodes.find((n) => n.id !== undefined && n.id === e.source))
+  if (sources.length === 0) return "720p"
+  const surely480p = sources.every((n) => {
+    const data = (n?.data ?? {}) as Record<string, unknown>
+    return (
+      n?.type !== undefined &&
+      GROK_EXTEND_SOURCE_NODE_TYPES.has(n.type) &&
+      isGrokExtendSourceModel(data.provider) &&
+      typeof data.resolution === "string" &&
+      data.resolution.trim().toLowerCase() === "480p"
+    )
+  })
+  return surely480p ? "480p" : "720p"
 }
 
 /** @deprecated Use {@link tailExtendResolution}, which also answers for Kling 4 Extend. */

@@ -35,6 +35,7 @@ export const EXTEND_DURATION_SECONDS: Readonly<Record<ExtendVideoProvider, reado
   "seedance-2-0-extend": catalogDurations("seedance-2-0-extend"),
   "kling-4-extend": catalogDurations("kling-4-extend"),
   "pixverse-v6-extend": catalogDurations("pixverse-v6-extend"),
+  "grok-extend": catalogDurations("grok-extend"),
 }
 
 /** The longest any provider adds: the request schema's ceiling (each provider's own list is checked after it). */

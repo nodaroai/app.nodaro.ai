@@ -1,7 +1,7 @@
 ---
 node_type: video-upscale
-generated_at: 2026-11-11T17:21:36.293Z
-generated_from: 0e5b1dff4
+generated_at: 2026-11-13T13:09:37.857Z
+generated_from: 69fd86aa98
 ---
 
 # Upscale Video
@@ -30,6 +30,7 @@ generated_from: 0e5b1dff4
 - `currentJobId?: string`
 - `currentJobProgress?: number`
 - `kieTaskId?: string`
+- `outputKieTaskId?: string`
 
 **Default data:**
 ```json

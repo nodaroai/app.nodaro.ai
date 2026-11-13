@@ -51,6 +51,7 @@ import {
   retiredLipSyncProviderName,
   canonicalVideoProvider,
   isPixverseExtendProvider,
+  isGrokExtendProvider,
 } from "@nodaro/shared/models"
 import { baseProviderChain } from "../../providers/base-chain.js"
 import type { ProviderCapability } from "../../providers/provider.interface.js"
@@ -188,6 +189,8 @@ function extendVideoProvider(d: Data): string | null {
   if (typeof model === "string" && isTailRecipeProvider(model)) return route("image-to-video", TAIL_RECIPES[model].genModel)
   // PixVerse V6 extends on KIE's own extend endpoint, called directly (runPixverseExtend).
   if (isPixverseExtendProvider(model)) return "kie"
+  // Grok extends on KIE's own extend endpoint, called directly (runGrokExtend).
+  if (isGrokExtendProvider(model)) return "kie"
   return "kie" // veo-extend / runway-extend: KIE task extensions of a prior KIE generation
 }
 

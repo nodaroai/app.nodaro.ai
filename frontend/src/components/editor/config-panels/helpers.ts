@@ -2,7 +2,7 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
 import { unitCreditIdOf } from "@/lib/unit-price-ids"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, isCatalogExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, isCatalogExtendProvider, isGrokExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
 import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { countImageInputEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
@@ -25,6 +25,8 @@ import {
   LTX_EXTEND_PER_SECOND_CREDIT_ID,
   LTX_RETAKE_PER_SECOND_CREDIT_ID,
   catalogExtendCreditId,
+  grokExtendCreditId,
+  grokExtendWiredSourceResolution,
   pitchTempoQuoteCreditId,
   NEMOTRON_TRANSCRIBE_ID,
   nemotronTranscribeQuoteCreditId,
@@ -902,6 +904,13 @@ export function getModelIdentifier(
         data.resolution as string | undefined,
         typeof data.generateAudio === "boolean" ? data.generateAudio : undefined,
       )
+    }
+    // Grok: the seconds added at its SOURCE's resolution — the row its run is
+    // held on, read off the source's job. Quoted at it when the wiring says
+    // for sure (a Grok Imagine node set to 480p), else at the dearer 720p row
+    // (the server's estimate reads the same rule); never the node's resolution.
+    if (isGrokExtendProvider(runsAs)) {
+      return grokExtendCreditId(data.duration, grokExtendWiredSourceResolution(node.id, nodes ?? [], edges))
     }
   }
 

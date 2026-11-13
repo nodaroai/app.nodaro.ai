@@ -11,7 +11,7 @@ import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
 import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
 import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, ugcClipSavedList } from "@nodaro/shared/ugc"
 import { outputPipSourceType, wiredCharacterNamesOf, wiredCharacterKey, type EntityKind } from "@nodaro/shared/entities"
-import { bypassTeleports, editPlanProducerKind, splitMediaParts } from "@nodaro/render-rules"
+import { bypassTeleports, editPlanProducerKind, handedOnTaskOf, splitMediaParts } from "@nodaro/render-rules"
 import {
   DYNAMIC_PRODUCER_TYPES,
   VIDEO_PRODUCER_TYPES,
@@ -2926,13 +2926,11 @@ export function resolveNodeInputs(
       } else {
         inputs.videoUrl = output;
       }
-      // Pass through kieTaskId for VEO/Runway extend and upscale nodes (matches backend)
-      if (node.type === "extend-video" || node.type === "video-upscale") {
-        const srcData = src.data as Record<string, unknown>;
-        if (srcData.kieTaskId) {
-          inputs.kieTaskId = srcData.kieTaskId as string;
-        }
-      }
+      // The source's own run's output task, to a node that works on that
+      // model's task (`handedOnTaskOf`, the server's rule too): never the task
+      // an Extend or Upscale Video node works ON, never across models.
+      const handedTask = handedOnTaskOf(node, src, { nodes, edges });
+      if (handedTask) inputs.kieTaskId = handedTask;
     } else if (src.type === "reference-audio") {
       if (node.type === "generate-music") {
         inputs.audioUrl = output;

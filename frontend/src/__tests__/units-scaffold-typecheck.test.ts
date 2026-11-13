@@ -8,11 +8,13 @@
 // @test-watches backend/src/lib/url-validator.ts backend/src/lib/request-helpers.ts backend/src/lib/job-input-data.ts backend/src/lib/zod-error.ts backend/src/lib/http-errors.ts
 // @test-watches backend/src/providers/video/__characterization__/operation-types.ts
 // @test-watches backend/src/lib/insert-job.ts backend/src/lib/queue.ts backend/src/lib/job-failure.ts backend/src/middleware/credit-guard.ts backend/src/workers/shared.ts
+// @test-watches backend/src/lib/enqueue-route-job.ts
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import ts from "typescript"
 import { describe, expect, it } from "vitest"
-import { scaffoldFiles } from "../../../tools/units/scaffold.mjs"
+import { scaffoldFiles, unitFromFiles } from "../../../tools/units/scaffold.mjs"
+import { descriptorSource } from "../../../tools/units/templates.mjs"
 import { parseAnnotations } from "../../../tools/test-select/annotations.mjs"
 import { matchesAny } from "../../../tools/test-select/glob.mjs"
 
@@ -43,7 +45,7 @@ type Kind = (typeof KINDS)[number]
 function scaffolded(): Map<string, string> {
   const all = new Map<string, string>()
   for (const kind of KINDS) {
-    const files = scaffoldFiles({
+    const o = {
       type: `scaffold-typecheck-${kind}`,
       category: "processing",
       kind,
@@ -56,8 +58,12 @@ function scaffolded(): Map<string, string> {
       // The worker carries the optional ffmpeg characterization too (characterize.char.ts).
       characterizeAfter: kind === "worker" ? "first" : undefined,
       ...(kind === "use-case" ? { builder: "scaffold" } : {}),
-    } as { type: string; category: string; kind: Kind; label: string; description: string; after: null; family: string; pickerAfter: null; price: number | null; characterizeAfter?: string | null; builder?: string })
+    } as { type: string; category: string; kind: Kind; label: string; description: string; after: null; family: string; pickerAfter: null; price: number | null; characterizeAfter?: string | null; builder?: string }
+    const files = scaffoldFiles(o)
     for (const [p, src] of files) if (/\.tsx?$/.test(p)) all.set(p, src)
+    // What gen:units writes beside a unit's server files, and a worker's route imports (enqueueUnitJob).
+    const unit = unitFromFiles(o, files)
+    if (unit.files.backend.length > 0) all.set(`${unit.dirs.backend}/descriptor.generated.ts`, descriptorSource(unit))
   }
   return all
 }
@@ -126,7 +132,8 @@ describe("the gen:units --new templates typecheck against the product", () => {
   }, 120_000)
 
   it("backend: every kind's unit files", () => {
-    expect([...files.keys()].filter((p) => p.startsWith("backend/")).length).toBe(5 + 2 + 2)
+    // Each kind's server files and the descriptor gen:units writes beside them.
+    expect([...files.keys()].filter((p) => p.startsWith("backend/")).length).toBe((5 + 1) + (2 + 1) + (2 + 1))
     expect(diagnostics("backend", files)).toEqual([])
   }, 120_000)
 

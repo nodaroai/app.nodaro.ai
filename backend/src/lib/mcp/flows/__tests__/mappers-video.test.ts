@@ -98,6 +98,16 @@ describe("a mapped video node re-runs the call it was made from", () => {
     expect(run("/v1/extend-video", runway)).toMatchObject({ kieTaskId: "rw-1", provider: "runway-extend", quality: "1080p" })
   })
 
+  it("extend_video, grok-extend: the prior Grok task and the seconds it adds, never a resolution", () => {
+    const grok = { taskId: "grok-task-1", prompt: "the fox runs on", provider: "grok-extend", duration: 10, resolution: "480p" }
+    expect(nodeFor("/v1/extend-video", grok)?.inputs).toEqual([])
+    expect(nodeFor("/v1/extend-video", grok)?.data).toMatchObject({ provider: "grok-extend", kieTaskId: "grok-task-1", duration: 10 })
+    expect(nodeFor("/v1/extend-video", grok)?.data).not.toHaveProperty("resolution")
+    expect(run("/v1/extend-video", grok)).toEqual({ jobId: "job1", provider: "grok-extend", kieTaskId: "grok-task-1", prompt: "the fox runs on", duration: 10, usageLogId: "usage1" })
+    // Grok takes no clip by URL: such a call is no node.
+    expect(nodeFor("/v1/extend-video", { ...grok, videoUrl: VIDEO })).toBeNull()
+  })
+
   it("video_upscale: Topaz upscales the wired video, VEO and the draft finalize name their task", () => {
     const topaz = { provider: "topaz", upscaleFactor: "4", videoUrl: VIDEO }
     expect(wires("/v1/video-upscale", topaz)).toEqual([[VIDEO, "video", "video"]])
