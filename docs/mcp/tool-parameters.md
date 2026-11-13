@@ -1056,15 +1056,28 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `model` | string |  | Dialogue model. Default `elevenlabs-dialogue` (v3). `elevenlabs-dialogue-v4` is newer: the same [audio tags], any stability from 0 to 1, and a similarity setting. One of `elevenlabs-dialogue`, `elevenlabs-dialogue-v4`. |
+| `model` | string |  | Dialogue model. Default `elevenlabs-dialogue` (v3). `elevenlabs-dialogue-v4` is newer: the same [audio tags], any stability from 0 to 1, and a similarity setting. The `gemini-*` models: two named voices at most. One of `elevenlabs-dialogue`, `elevenlabs-dialogue-v4`, `gemini-3-8-flash-lite-tts`, `gemini-3-8-flash-tts`, `gemini-3-1-flash-tts`, `gemini-2-5-pro-tts`. |
 | `dialogue` | object[] | yes | The script, in speaking order. Reuse voice_ids across lines for the same character. From 1 to 200 items. |
 | `dialogue[].text` | string | yes | What this line says. `[audio tags]` allowed. At least 1 character. |
-| `dialogue[].voice_id` | string | yes | Voice for this line — a premade voice NAME (recommended; same naming as `generate_speech`: Rachel, Aria, Roger, Sarah, Laura, Charlie, George, Callum, River, Liam, Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, Brian, Daniel, Lily, Bill) or an ElevenLabs UUID of a voice the user has cloned/saved. DO NOT invent UUIDs. At least 1 character. |
+| `dialogue[].voice_id` | string | yes | Voice for this line — a premade voice NAME (recommended; same naming as `generate_speech`: Rachel, Aria, Roger, Sarah, Laura, Charlie, George, Callum, River, Liam, Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, Brian, Daniel, Lily, Bill) or an ElevenLabs UUID of a voice the user has cloned/saved. DO NOT invent UUIDs. On a Gemini model: one of its voices. At least 1 character. |
+| `dialogue[].style_direction` | string |  | Gemini 3.8: how this line is spoken, in words. Not spoken, not billed. At most 1000 characters. |
 | `stability` | number |  | v3 (default): exactly 0, 0.5 or 1 (0 = most variable, 1 = most stable). v4: any value 0–1. From 0 to 1. |
 | `similarity_boost` | number |  | v4 only (v3 ignores it): how closely each line keeps its voice's character. From 0 to 1. |
 | `language_code` | string |  | ISO 639-1 hint (e.g. "en", "he"). Omit for auto-detect. At most 10 characters. |
 | `seed` | integer |  | Deterministic sampling. Omit for random. From 0 to 4294967295. |
 | `apply_text_normalization` | string |  | Spell out numbers/dates/abbreviations. Default auto. One of `auto`, `on`, `off`. |
+| `speakers` | object[] |  | Gemini: each voice's direction (3.1 / 2.5) or a one-off clone (3.8 Flash). At most 2 items. |
+| `speakers[].voice_id` | string | yes | A voice the script uses. At least 1 character. |
+| `speakers[].style_direction` | string |  | One of `Vocal Smile`, `Newscaster`, `Whisper`, `Empathetic`, `Promo/Hype`, `Deadpan`. |
+| `speakers[].pace` | string |  | One of `Natural`, `Rapid Fire`, `The Drift`, `Staccato`. |
+| `speakers[].accent` | string |  | One of `Neutral`, `American (Gen)`, `American (Valley)`, `American (South)`, `British (RP)`, `British (Brixton)`, `Transatlantic`, `Australian`. |
+| `speakers[].audio_profile` | string |  | Who is speaking, in words. At most 1000 characters. |
+| `speakers[].replica` | object |  | gemini-3-8-flash-tts only: this voice_id is a label spoken in a person's voice cloned for this request (as generate_speech's replica). |
+| `speakers[].replica.source_audio_url` | string (URL) | yes |  |
+| `speakers[].replica.consent_audio_url` | string (URL) | yes |  |
+| `speakers[].replica.consent` | boolean | yes | Required true, as generate_speech's replica.consent. |
+| `filler_words` | boolean |  | Gemini 3.8, two voices: natural filler words between them. |
+| `output_format` | string |  | The file: mp3_44100_128 (default), mp3_44100_192 or wav_24000, same credits. ElevenLabs dialogue: the default MP3 only. One of `mp3_44100_128`, `mp3_44100_192`, `wav_24000`. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 | `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
@@ -1303,8 +1316,8 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `text` | string | yes | From 1 to 10000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; the preset tunes delivery (speed/stability/style). Explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your text. From 1 to 200 characters. |
-| `voice_id` | string |  | Voice — pass a premade voice NAME (recommended) or an ElevenLabs UUID (only for custom voices the user has explicitly cloned). DO NOT invent UUIDs — passing an unknown UUID fails with 'voice_not_found'. Premade names: Rachel, Aria, Roger, Sarah, Laura, Charlie, George, Callum, River, Liam, Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, Brian, Daniel, Lily, Bill. If unsure pick by character: female warm = Rachel; female young = Aria / Lily; male deep = Roger / Brian; male neutral = George / Daniel; British = Charlie / Charlotte. Defaults to Rachel. |
-| `model` | string |  | TTS model. `elevenlabs-v4` (default) supports `[audio tags]` like `[laughs]`, `[whispers]`, `[sighs]` for emotion, and is fully multilingual — use it for ALL languages including Hebrew/Arabic/CJK (stability + similarity only, no speed/style). `elevenlabs-v3` is the previous model (same tags; stability only). `elevenlabs-v4-turbo` is the fast v4 (same tags and levers; Turbo's price). `elevenlabs-turbo` is cheaper for plain narration. `elevenlabs-multilingual` is a legacy v2 model via a third-party wrapper known to garble some languages (Hebrew observed) — only use it for a v2-only-verified voice (`text` is capped per model: 10,000 chars on v4, 5,000 on v3 — split longer scripts). `elevenlabs` is the legacy id of `elevenlabs-turbo`. Call list_models { kind: "audio", mode: "tts" } for the full sheet. One of `elevenlabs-v3`, `elevenlabs-v4`, `elevenlabs-v4-turbo`, `elevenlabs-turbo`, `elevenlabs-multilingual`, `elevenlabs`. |
+| `voice_id` | string |  | Voice — pass a premade voice NAME (recommended) or an ElevenLabs UUID (only for custom voices the user has explicitly cloned). DO NOT invent UUIDs — passing an unknown UUID fails with 'voice_not_found'. Premade names: Rachel, Aria, Roger, Sarah, Laura, Charlie, George, Callum, River, Liam, Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, Brian, Daniel, Lily, Bill. If unsure pick by character: female warm = Rachel; female young = Aria / Lily; male deep = Roger / Brian; male neutral = George / Daniel; British = Charlie / Charlotte. Defaults to Rachel. A gemini-*-tts model takes only its own voices. |
+| `model` | string |  | TTS model. `elevenlabs-v4` (default) supports `[audio tags]` like `[laughs]`, `[whispers]`, `[sighs]` for emotion, and is fully multilingual — use it for ALL languages including Hebrew/Arabic/CJK (stability + similarity only, no speed/style). `elevenlabs-v3` is the previous model (same tags; stability only). `elevenlabs-v4-turbo` is the fast v4 (same tags and levers; Turbo's price). `elevenlabs-turbo` is cheaper for plain narration. `elevenlabs-multilingual` is a legacy v2 model via a third-party wrapper known to garble some languages (Hebrew observed) — only use it for a v2-only-verified voice (`text` is capped per model: 10,000 chars on v4, 5,000 on v3 — split longer scripts). `elevenlabs` is the legacy id of `elevenlabs-turbo`. Call list_models { kind: "audio", mode: "tts" } for the full sheet. One of `elevenlabs-v3`, `elevenlabs-v4`, `elevenlabs-v4-turbo`, `elevenlabs-turbo`, `elevenlabs-multilingual`, `gemini-3-8-flash-lite-tts`, `gemini-3-8-flash-tts`, `gemini-3-1-flash-tts`, `gemini-2-5-pro-tts`, `elevenlabs`. |
 | `voice_type` | string |  | One of `premade`, `custom`, `library`. |
 | `stability` | number |  | From 0 to 1. |
 | `similarity_boost` | number |  | From 0 to 1. |
@@ -1314,6 +1327,14 @@ Needs `workflows:execute`.
 | `output_format` | string |  | The audio file to deliver: `mp3_44100_128` (default), `mp3_44100_192` (a higher MP3 bitrate) or `wav_24000` (an uncompressed WAV). Same credits. One of `mp3_44100_128`, `mp3_44100_192`, `wav_24000`. |
 | `previous_text` | string |  | The line spoken just BEFORE this one in the finished piece (the previous clip's text) — context for continuous intonation across clips; up to 1,000 characters, the end of a longer passage. Used by models that stitch; others ignore it. Not spoken. At most 1000 characters. |
 | `next_text` | string |  | The line spoken just AFTER this one (the next clip's text) — the start of a longer passage; up to 1,000 characters. Same continuity rule as previous_text. At most 1000 characters. |
+| `style_direction` | string |  | Gemini only. 3.8: free text — tone, emotion, pace. 3.1 / 2.5: one of Vocal Smile, Newscaster, Whisper, Empathetic, Promo/Hype, Deadpan. Not spoken, not billed. At most 1000 characters. |
+| `pace` | string |  | Gemini 3.1 / 2.5 only. One of `Natural`, `Rapid Fire`, `The Drift`, `Staccato`. |
+| `accent` | string |  | Gemini 3.1 / 2.5 only. One of `Neutral`, `American (Gen)`, `American (Valley)`, `American (South)`, `British (RP)`, `British (Brixton)`, `Transatlantic`, `Australian`. |
+| `audio_profile` | string |  | Gemini 3.1 / 2.5 only: who is speaking, in words ("a warm, unhurried narrator"). At most 1000 characters. |
+| `replica` | object |  | gemini-3-8-flash-tts only: speak in a person's own voice, cloned for this request alone (not saved), from two real recordings of the same adult — never AI-generated. Replaces voice_id. No extra charge. |
+| `replica.source_audio_url` | string (URL) | yes | https link to a WAV: 10–30 s of the person speaking naturally, in a quiet room. |
+| `replica.consent_audio_url` | string (URL) | yes | https link to a WAV of the same person, same room and microphone, reading: "I am the owner of this voice and I consent to Google using this voice to create a synthetic voice model." |
+| `replica.consent` | boolean | yes | Required true: the user confirms "I confirm the voice in these recordings is my own, or that its owner, an adult, has given me consent to clone it for this generation, and that neither recording is AI-generated." Ask them; never assume it. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 | `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
@@ -2069,7 +2090,9 @@ No parameters.
 
 Needs `workflows:execute`.
 
-No parameters.
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `model` | string |  | One of `elevenlabs-v3`, `elevenlabs-v4`, `elevenlabs-v4-turbo`, `elevenlabs-turbo`, `elevenlabs-multilingual`, `gemini-3-8-flash-lite-tts`, `gemini-3-8-flash-tts`, `gemini-3-1-flash-tts`, `gemini-2-5-pro-tts`, `elevenlabs`. |
 
 ## `list_workflows`
 

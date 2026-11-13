@@ -46,6 +46,8 @@ import { ORIGINAL_SLOT_ID } from "./types"
 import type { useRunSlots } from "./use-run-slots"
 
 import { InputCard } from "@/components/presentation/input-card"
+import { useAppCloneInputs } from "@/components/presentation/use-app-clone-inputs"
+import { appCloneTargetId } from "@/lib/app-clone-inputs"
 import { OutputCard, type FieldBadgeEntry } from "@/components/presentation/output-card"
 import { useAppRunGatedIds } from "@/components/render/app-render-review"
 import { anyOutputIsPreview, outputIsPreview } from "@/components/presentation/render-preview"
@@ -156,7 +158,23 @@ export function MobileAppShell({
   // ---- Items-based input rendering (field items, groups, richtext) ----
   const inputItems = useMemo(() => resolveInputItems(settings), [settings.inputItems, settings.inputOrder])
   const outputItems = useMemo(() => resolveOutputItems(settings), [settings.outputItems, settings.outputOrder])
-  const useItemsRendering = inputItems && inputItems.length > 0
+
+  // A clone node's "Your voice" card, appended to the inputs whatever the author
+  // curated (decided 2026-11-13) — the same hook as the desktop runner: the app
+  // ships its clones emptied, so the runner's own recordings and tick are inputs.
+  const appClones = useAppCloneInputs({
+    enabled: true,
+    nodes: presNodes,
+    inputValues: presInputValues,
+    orderedInputNodes,
+    inputItems,
+    userId: user?.id,
+    edges: presEdges,
+    settings,
+  })
+  const runnerInputNodes = appClones.inputNodes
+  const runnerInputItems = appClones.inputItems
+  const useItemsRendering = runnerInputItems && runnerInputItems.length > 0
   const useOutputItemsRendering = outputItems && outputItems.length > 0
 
   const findFieldDef = useCallback(
@@ -224,9 +242,10 @@ export function MobileAppShell({
 
   // A Video URL input's content rights box is read inside (`isVideoLinkRightsTicked`): its version re-reads on a tick.
   const rightsVersion = useVideoLinkRightsVersion()
+  // Run waits for every clone's recordings and the runner's own tick too (the card says so).
   const allInputsFilled = useMemo(
-    () => areAllInputsFilled(orderedInputNodes, presInputValues, { nodes: presNodes, edges: presEdges }),
-    [orderedInputNodes, presInputValues, presNodes, presEdges, rightsVersion],
+    () => areAllInputsFilled(orderedInputNodes, presInputValues, { nodes: presNodes, edges: presEdges }) && appClones.ready,
+    [orderedInputNodes, presInputValues, presNodes, presEdges, rightsVersion, appClones.ready],
   )
 
   // ---- Local state ----
@@ -446,7 +465,9 @@ export function MobileAppShell({
   // identity so the memoized InputCard bails out: a keystroke only changes the
   // touched node's slice identity, leaving every other card's props equal.
   const inputSliceCache = useRef(new Map<string, { slice: unknown; map: Record<string, Record<string, unknown>> }>())
-  const getInputSliceMap = useCallback((nodeId: string): Record<string, Record<string, unknown>> => {
+  const getInputSliceMap = useCallback((cardId: string): Record<string, Record<string, unknown>> => {
+    // A "Your voice" card reads (and writes) its clone node's values.
+    const nodeId = appCloneTargetId(cardId) ?? cardId
     const slice = presInputValues[nodeId]
     const cached = inputSliceCache.current.get(nodeId)
     if (cached && cached.slice === slice) return cached.map
@@ -471,7 +492,7 @@ export function MobileAppShell({
     (item: PresentationItem): React.ReactNode => {
       switch (item.type) {
         case "node": {
-          const node = nodeMap.get(item.nodeId)
+          const node = nodeMap.get(item.nodeId) ?? appClones.cloneNodeMap.get(item.nodeId)
           if (!node) return null
           return (
             <InputCard
@@ -537,7 +558,7 @@ export function MobileAppShell({
           return null
       }
     },
-    [nodeMap, presNodes, presEdges, presInputValues, presUpdateInput, inputsReadOnly, isRunning, handleOpenMedia, setConfigNode, findFieldDef, settings.cardMeta, getInputSliceMap, getMergedDisplay],
+    [nodeMap, appClones.cloneNodeMap, presNodes, presEdges, presInputValues, presUpdateInput, inputsReadOnly, isRunning, handleOpenMedia, setConfigNode, findFieldDef, settings.cardMeta, getInputSliceMap, getMergedDisplay],
   )
 
   // ---- Media lightbox ----
@@ -1015,6 +1036,7 @@ export function MobileAppShell({
           ) : viewMode === "chat" ? (
             <ChatView
               {...viewProps}
+              orderedInputNodes={runnerInputNodes}
               renderInputCard={renderChatInputCard}
               runSlots={runSlots}
               appName={app.name}
@@ -1027,18 +1049,18 @@ export function MobileAppShell({
         ) : activeTab === "inputs" ? (
           // Inputs tab
           <div className="space-y-4 p-4">
-            {orderedInputNodes.length === 0 && !useItemsRendering ? (
+            {runnerInputNodes.length === 0 && !useItemsRendering ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Play className="h-8 w-8 mb-3 opacity-40" />
                 <p className="text-sm">{t("runner.runsAutomatically")}</p>
               </div>
             ) : useItemsRendering ? (
-              inputItems!.map((item) => {
+              runnerInputItems!.map((item) => {
                 const key = item.type === "node" ? item.nodeId : item.id
                 return <div key={key}>{renderInputItem(item)}</div>
               })
             ) : (
-              orderedInputNodes.map((node) => (
+              runnerInputNodes.map((node) => (
                 <InputCard
                   key={node.id}
                   node={node}
@@ -1168,6 +1190,7 @@ export function MobileAppShell({
           onGetCredits={() => setShowGetCreditsModal(true)}
           inputsReadOnly={inputsReadOnly}
           hidden={activeTab !== "inputs"}
+          waitReason={appClones.ready ? "" : t(appClones.withheld ? "audiocfg.cloneUnavailable" : "appClone.runWaits")}
         />
       )}
 

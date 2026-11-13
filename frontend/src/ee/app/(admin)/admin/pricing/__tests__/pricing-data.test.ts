@@ -108,6 +108,8 @@ describe("detectCategory", () => {
   it("detects audio models", () => {
     expect(detectCategory("suno-generate")).toBe("audio")
     expect(detectCategory("elevenlabs-turbo")).toBe("audio")
+    expect(detectCategory("gemini-3-8-flash-lite-tts")).toBe("audio")
+    expect(detectCategory("gemini-2-5-pro-tts:per-1k-chars")).toBe("audio")
   })
 
   it("detects processing models", () => {

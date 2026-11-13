@@ -2388,6 +2388,159 @@ describe("text-to-speech", () => {
   })
 })
 
+describe("text-to-speech: the file (decided 2026-11-13)", () => {
+  const optionsOf = async (data: Record<string, unknown>) => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToSpeechGeneration.mockResolvedValue(undefined)
+    await executeNode(makeNode("text-to-speech", { textSource: "direct", directText: "hello", ...data }), makeCtx())
+    return mockRunTextToSpeechGeneration.mock.calls.at(-1)![5] as Record<string, unknown>
+  }
+
+  it("sends the node's file on any model; none, or one the platform does not offer, sends none (the default MP3)", async () => {
+    expect((await optionsOf({ provider: "elevenlabs-v4", outputFormat: "wav_24000" })).outputFormat).toBe("wav_24000")
+    expect((await optionsOf({ provider: "gemini-3-1-flash-tts", outputFormat: "mp3_44100_192" })).outputFormat).toBe("mp3_44100_192")
+    expect("outputFormat" in (await optionsOf({ provider: "elevenlabs-v4" }))).toBe(false)
+    expect("outputFormat" in (await optionsOf({ provider: "elevenlabs-v4", outputFormat: "flac" }))).toBe(false)
+  })
+})
+
+describe("text-to-speech: a voice the chosen model cannot speak (decided 2026-11-13)", () => {
+  const run = async (data: Record<string, unknown>) => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToSpeechGeneration.mockResolvedValue(undefined)
+    await executeNode(makeNode("text-to-speech", { textSource: "direct", directText: "hello", ...data }), makeCtx())
+    const call = mockRunTextToSpeechGeneration.mock.calls.at(-1)!
+    return { voice: call[3] as string | undefined, options: call[5] as Record<string, unknown> | undefined }
+  }
+
+  it("an ElevenLabs voice on a Gemini model (a mapped model) runs the model's default voice", async () => {
+    expect(await run({ provider: "gemini-3-8-flash-tts", voiceId: "Rachel", voiceType: "library" })).toMatchObject({ voice: "Fola", options: { voiceType: "premade" } })
+  })
+
+  it("a Gemini voice on an ElevenLabs model runs no voice (the deployment's default)", async () => {
+    expect((await run({ provider: "elevenlabs-v4", voiceId: "Kore" })).voice).toBeUndefined()
+  })
+
+  it("a voice the model speaks is sent as it is", async () => {
+    expect(await run({ provider: "gemini-3-1-flash-tts", voiceId: "Puck" })).toMatchObject({ voice: "Puck" })
+    expect(await run({ provider: "elevenlabs-v4", voiceId: "Rachel", voiceType: "library" })).toMatchObject({ voice: "Rachel", options: { voiceType: "library" } })
+  })
+})
+
+describe("a one-off clone of a person's voice (decided 2026-11-13)", () => {
+  const replica = { sourceAudioUrl: "https://cdn.example/me.wav", consentAudioUrl: "https://cdn.example/consent.wav" }
+  // The consent record the server issued to the runner (`makeCtx`'s user), and one it issued to someone else.
+  const OWN = { userId: "u1", signature: "sig-u1" }
+  const SOMEONE_ELSES = { userId: "someone-else", signature: "sig-other" }
+
+  async function refused(type: string, data: Record<string, unknown>, error: string, words: string) {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToSpeechGeneration.mockResolvedValue(undefined)
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    const promise = executeNode(makeNode(type, { label: "Speak", ...data }), makeCtx())
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow(error)
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining(words))
+    expect(mockRunTextToSpeechGeneration).not.toHaveBeenCalled()
+    expect(mockPollJobWithNodeUpdate).not.toHaveBeenCalled()
+    expect(mockTextToDialogueApi).not.toHaveBeenCalled()
+  }
+  const refusedForModel = (type: string, data: Record<string, unknown>) =>
+    refused(type, data, "This model can't use a cloned voice", "this model can't use a cloned voice; choose Gemini 3.8 Flash TTS")
+  const refusedForRecordings = (type: string, data: Record<string, unknown>) =>
+    refused(type, data, "The cloned voice needs both recordings", "add both recordings for the cloned voice")
+  const refusedForConsent = (type: string, data: Record<string, unknown>) =>
+    refused(type, data, "The cloned voice needs its consent", "tick the consent box for the cloned voice yourself")
+
+  const speech = (data: Record<string, unknown>) => ({ textSource: "direct", directText: "hello", provider: "gemini-3-8-flash-tts", voiceId: "Kore", ...data })
+
+  it("Text to Speech on Gemini 3.8 Flash sends the clone with both recordings and the consent", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToSpeechGeneration.mockResolvedValue(undefined)
+    await executeNode(makeNode("text-to-speech", speech({ replica, replicaConsent: OWN })), makeCtx())
+    const options = mockRunTextToSpeechGeneration.mock.calls.at(-1)![5] as Record<string, unknown>
+    expect(options).toMatchObject({ replica: { ...replica, consent: true } })
+    expect(options).not.toHaveProperty("replicaConsent")
+  })
+
+  it("Text to Speech without a clone sends none", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToSpeechGeneration.mockResolvedValue(undefined)
+    await executeNode(makeNode("text-to-speech", speech({})), makeCtx())
+    expect(mockRunTextToSpeechGeneration.mock.calls.at(-1)![5]).not.toHaveProperty("replica")
+  })
+
+  it("Text to Speech refuses before any request: recordings but no consent", async () => {
+    await refusedForConsent("text-to-speech", speech({ replica }))
+  })
+
+  it("Text to Speech refuses a consent ticked by someone else (a template's or a copy's record), or an old-style one", async () => {
+    await refusedForConsent("text-to-speech", speech({ replica, replicaConsent: SOMEONE_ELSES }))
+    vi.clearAllMocks()
+    await refusedForConsent("text-to-speech", speech({ replica, replicaConsent: true }))
+  })
+
+  it("Text to Speech refuses before any request: the clone on with a recording missing (or not an https link)", async () => {
+    await refusedForRecordings("text-to-speech", speech({ replica: { sourceAudioUrl: replica.sourceAudioUrl, consentAudioUrl: "" }, replicaConsent: OWN }))
+    vi.clearAllMocks()
+    await refusedForRecordings("text-to-speech", speech({ replica: { sourceAudioUrl: "http://insecure/me.wav", consentAudioUrl: replica.consentAudioUrl }, replicaConsent: OWN }))
+  })
+
+  it("Text to Speech refuses a clone on a model that does not clone (Flash-Lite, a mapped model, no model)", async () => {
+    await refusedForModel("text-to-speech", speech({ provider: "gemini-3-8-flash-lite-tts", replica, replicaConsent: OWN }))
+    vi.clearAllMocks()
+    await refusedForModel("text-to-speech", speech({ provider: undefined, replica, replicaConsent: OWN }))
+  })
+
+  const dialogueOn38 = (speakers: unknown[], lines = [{ id: "1", voice: "Me", text: "Hello" }, { id: "2", voice: "Kore", text: "Hi" }]) => ({
+    provider: "gemini-3-8-flash-tts", dialogue: lines, speakers,
+  })
+
+  it("Text to Dialogue on 3.8 Flash: a consented clone keeps its label on its lines and its { voice, replica } is sent", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    mockTextToDialogueApi.mockResolvedValue({ jobId: "j-dlg" })
+    await executeNode(makeNode("text-to-dialogue", dialogueOn38([{ voice: "Me", replica, replicaConsent: OWN }])), makeCtx())
+    const start = mockPollJobWithNodeUpdate.mock.calls.at(-1)![1] as () => Promise<unknown>
+    await start()
+    const args = mockTextToDialogueApi.mock.calls.at(-1)!
+    expect(args[0]).toEqual([{ text: "Hello", voice: "Me" }, { text: "Hi", voice: "Kore" }])
+    expect(args[8]).toEqual({ speakers: [{ voice: "Me", replica: { ...replica, consent: true } }] })
+  })
+
+  it("Text to Dialogue refuses a clone its lines use without the consent, or without both recordings", async () => {
+    await refusedForConsent("text-to-dialogue", dialogueOn38([{ voice: "Me", replica }]))
+    vi.clearAllMocks()
+    await refusedForConsent("text-to-dialogue", dialogueOn38([{ voice: "Me", replica, replicaConsent: SOMEONE_ELSES }]))
+    vi.clearAllMocks()
+    await refusedForRecordings("text-to-dialogue", dialogueOn38([{ voice: "Me", replica: { sourceAudioUrl: "", consentAudioUrl: "" } }]))
+  })
+
+  it("Text to Dialogue ignores a clone no line uses (it is not sent)", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    mockTextToDialogueApi.mockResolvedValue({ jobId: "j-dlg" })
+    await executeNode(makeNode("text-to-dialogue", dialogueOn38([{ voice: "Me", replica: { sourceAudioUrl: "", consentAudioUrl: "" } }], [{ id: "1", voice: "Kore", text: "Hi" }])), makeCtx())
+    const start = mockPollJobWithNodeUpdate.mock.calls.at(-1)![1] as () => Promise<unknown>
+    await start()
+    expect(mockTextToDialogueApi.mock.calls.at(-1)![8]).toBeUndefined()
+  })
+
+  it("Text to Dialogue refuses a cloned speaker on a model that does not clone", async () => {
+    await refusedForModel("text-to-dialogue", {
+      provider: "gemini-3-1-flash-tts",
+      dialogue: [{ id: "1", voice: "Me", text: "Hello" }, { id: "2", voice: "Kore", text: "Hi" }],
+      speakers: [{ voice: "Me", replica, replicaConsent: OWN, pace: "Natural" }],
+    })
+    vi.clearAllMocks()
+    await refusedForModel("text-to-dialogue", {
+      provider: "elevenlabs-dialogue",
+      dialogue: [{ id: "1", voice: "Me", text: "Hello" }],
+      speakers: [{ voice: "Me", replica, replicaConsent: OWN }],
+    })
+  })
+})
+
 describe("text-to-speech neighbour text (continuity)", () => {
   const run = async (data: Record<string, unknown>) => {
     mockResolveNodeInputs.mockReturnValue({})
@@ -3155,6 +3308,130 @@ describe("text-to-dialogue", () => {
     await start()
     expect(mockTextToDialogueApi.mock.calls.at(-1)![6]).toBeUndefined()
     expect(mockTextToDialogueApi.mock.calls.at(-1)![7]).toBeUndefined()
+    // No Gemini options on an ElevenLabs model: the request is what it was.
+    expect(mockTextToDialogueApi.mock.calls.at(-1)![8]).toBeUndefined()
+  })
+
+  async function sentDialogue(data: Record<string, unknown>) {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    mockTextToDialogueApi.mockResolvedValue({ jobId: "j-dlg" })
+    await executeNode(makeNode("text-to-dialogue", data), makeCtx())
+    const start = mockPollJobWithNodeUpdate.mock.calls.at(-1)![1] as () => Promise<unknown>
+    await start()
+    return mockTextToDialogueApi.mock.calls.at(-1)!
+  }
+
+  it("Gemini 3.8: each line's style (trimmed), and filler words with exactly two speakers (decided 2026-11-12)", async () => {
+    const args = await sentDialogue({
+      provider: "gemini-3-8-flash-tts",
+      dialogue: [
+        { id: "1", voice: "Kore", text: "Hello", styleDirection: "  Warm  " },
+        { id: "2", voice: "Puck", text: "Hi", styleDirection: "" },
+      ],
+      speakers: [{ voice: "Kore", styleDirection: "Never sent on 3.8" }],
+      fillerWords: true,
+    })
+    expect(args[0]).toEqual([{ text: "Hello", voice: "Kore", styleDirection: "Warm" }, { text: "Hi", voice: "Puck" }])
+    expect(args[6]).toBe("gemini-3-8-flash-tts")
+    expect(args[8]).toEqual({ fillerWords: true })
+  })
+
+  it("Gemini 3.8 with one speaker sends no filler words", async () => {
+    const args = await sentDialogue({
+      provider: "gemini-3-8-flash-tts",
+      dialogue: [{ id: "1", voice: "Kore", text: "Hello" }, { id: "2", voice: "Kore", text: "Again" }],
+      fillerWords: true,
+    })
+    expect(args[8]).toBeUndefined()
+  })
+
+  it("Gemini 3.1: the speakers of the script's voices, each with only what 3.1 takes; no line style, no filler words", async () => {
+    const args = await sentDialogue({
+      provider: "gemini-3-1-flash-tts",
+      dialogue: [
+        { id: "1", voice: "Kore", text: "Hello", styleDirection: "Whisper" },
+        { id: "2", voice: "Puck", text: "Hi" },
+      ],
+      speakers: [
+        { voice: "Kore", styleDirection: "Whisper", pace: "Natural", accent: "Not an accent" },
+        { voice: "Charon", pace: "Natural" },
+      ],
+      fillerWords: true,
+    })
+    expect(args[0]).toEqual([{ text: "Hello", voice: "Kore" }, { text: "Hi", voice: "Puck" }])
+    expect(args[8]).toEqual({ speakers: [{ voice: "Kore", styleDirection: "Whisper", pace: "Natural" }] })
+  })
+
+  it("a Gemini model with ElevenLabs voices (a mapped model): the voices move onto the model's own, two speakers stay two", async () => {
+    const args = await sentDialogue({
+      provider: "gemini-3-1-flash-tts",
+      dialogue: [
+        { id: "1", voice: "Sarah", text: "Hello" },
+        { id: "2", voice: "Rachel", text: "Hi" },
+        { id: "3", voice: "Sarah", text: "Bye" },
+      ],
+      speakers: [{ voice: "Sarah", pace: "Natural" }],
+    })
+    expect(args[0]).toEqual([
+      { text: "Hello", voice: "Kore" },
+      { text: "Hi", voice: "Achernar" },
+      { text: "Bye", voice: "Kore" },
+    ])
+    expect(args[8]).toEqual({ speakers: [{ voice: "Kore", pace: "Natural" }] })
+  })
+
+  it("the file format: sent where the model delivers it, never where it does not (decided 2026-11-13)", async () => {
+    const gemini = await sentDialogue({
+      provider: "gemini-3-8-flash-tts",
+      dialogue: [{ id: "1", voice: "Kore", text: "Hello" }],
+      outputFormat: "wav_24000",
+    })
+    expect(gemini[8]).toEqual({ outputFormat: "wav_24000" })
+    const elevenLabs = await sentDialogue({
+      provider: "elevenlabs-dialogue",
+      dialogue: [{ id: "1", voice: "Rachel", text: "Hello" }],
+      outputFormat: "wav_24000",
+    })
+    expect(elevenLabs[8]).toBeUndefined()
+    const unknown = await sentDialogue({
+      provider: "gemini-3-8-flash-tts",
+      dialogue: [{ id: "1", voice: "Kore", text: "Hello" }],
+      outputFormat: "flac",
+    })
+    expect(unknown[8]).toBeUndefined()
+  })
+
+  async function refusedDialogue(data: Record<string, unknown>) {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    mockTextToDialogueApi.mockResolvedValue({ jobId: "j-dlg" })
+    const promise = executeNode(makeNode("text-to-dialogue", { label: "Talk", ...data }), makeCtx())
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("A dialogue line has no voice")
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining("choose a voice for every line"))
+    expect(mockPollJobWithNodeUpdate).not.toHaveBeenCalled()
+    expect(mockTextToDialogueApi).not.toHaveBeenCalled()
+  }
+
+  it("an ElevenLabs model with a Gemini voice (a node switched back, or a mapped model) is refused before any request", async () => {
+    await refusedDialogue({
+      provider: "elevenlabs-dialogue",
+      dialogue: [{ id: "1", voice: "Kore", text: "Hello", styleDirection: "Warm" }, { id: "2", voice: "Rachel", text: "Hi" }],
+      fillerWords: true,
+    })
+  })
+
+  it("a node with no model (v3 dialogue) and a line with no voice is refused before any request", async () => {
+    await refusedDialogue({ dialogue: [{ id: "1", voice: "", text: "Hello" }, { id: "2", voice: "Rachel", text: "Hi" }] })
+  })
+
+  it("a Gemini model never refuses for a missing voice: the line runs with one of the model's own", async () => {
+    const args = await sentDialogue({
+      provider: "gemini-3-8-flash-tts",
+      dialogue: [{ id: "1", voice: "", text: "Hello" }, { id: "2", voice: "Puck", text: "Hi" }],
+    })
+    expect(args[0]).toEqual([{ text: "Hello", voice: "Fola" }, { text: "Hi", voice: "Puck" }])
   })
 })
 

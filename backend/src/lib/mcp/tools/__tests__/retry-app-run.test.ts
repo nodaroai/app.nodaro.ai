@@ -26,7 +26,7 @@ vi.mock("../../../config.js", async (importOriginal) => ({
   hasCredits: () => edition.credits,
 }))
 
-const { registerApps, retryRefusalNext } = await import("../apps.js")
+const { registerApps, retryRefusalNext, cloneRefusalNext } = await import("../apps.js")
 
 const RUN = "33333333-3333-4333-8333-333333333333"
 const session = () => newSession({ userId: "u1", scopes: ["workflows:execute"] as Scope[], clientName: "Claude" })
@@ -190,5 +190,20 @@ describe("retryRefusalNext", () => {
   it("anything else adds nothing", () => {
     expect(retryRefusalNext("a", RUN, { error: { code: "locked_field" } })).toBeNull()
     expect(retryRefusalNext("a", RUN, {})).toBeNull()
+  })
+})
+
+describe("cloneRefusalNext: an app that clones a voice, refused for want of the runner's own (decided 2026-11-13)", () => {
+  it("tells an agent the runner gives the recordings and the consent, on the app page or over the API — never to tick a box", () => {
+    for (const code of ["clone_recordings_required", "clone_consent_required"]) {
+      const next = cloneRefusalNext({ error: { code } })!
+      expect(next, code).toContain("app's page")
+      expect(next, code).toContain("inputOverrides")
+      expect(next, code).toContain("POST /v1/voice-clone/consent")
+      expect(next, code).not.toMatch(/\btick\b/i)
+      expect(retryRefusalNext("a", "run-1", { error: { code } }), code).toBe(next)
+    }
+    expect(cloneRefusalNext({ error: { code: "clone_not_fillable" } })).toContain("can't be run")
+    expect(cloneRefusalNext({ error: { code: "insufficient_credits" } })).toBeNull()
   })
 })

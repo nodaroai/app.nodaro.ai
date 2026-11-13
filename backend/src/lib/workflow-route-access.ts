@@ -5,6 +5,7 @@ import { accessAtLeast, workflowAccessFromRow, type AccessLevel } from "./workfl
 import type { WorkflowAccessRow } from "./private-plugins/types.js"
 import { withResolvedResultIds } from "./canvas-result-ids.js"
 import { ugcPublishedGraph } from "./ugc-composed-graph.js"
+import { withoutCloneRecordings } from "./clone-recordings.js"
 import { surfaceAllowsPublicOutputs } from "./surface-profile.js"
 
 /**
@@ -182,6 +183,14 @@ async function loadWorkflowSnapshot(
     // The settings too: a character definition whose picture is tainted goes without it.
     const published = await ugcPublishedGraph(resolved.nodes as Array<Record<string, unknown>>, edges, resolved.user_id, { settings })
     return { ok: true, row: { ...resolved, nodes: published.nodes, ...(settings ? { settings: published.settings } : {}) }, access }
+  }
+  // A collaborator who may only view the workflow reads each one-off voice clone switched on and empty,
+  // with no consent record (decided 2026-11-13; lib/clone-recordings.ts): the recordings are their
+  // signer's alone. Its results stay (they are shown the work). `view` only, as the studio's drafts
+  // (routes/workflows.ts): an `edit` collaborator's editor saves the graph back whole, so an emptied
+  // clone would erase the owner's recordings on their next save.
+  if (access === "view" && resolved.user_id !== userId && Array.isArray(resolved.nodes)) {
+    return { ok: true, row: { ...resolved, nodes: withoutCloneRecordings(resolved.nodes as Array<Record<string, unknown>>) }, access }
   }
   return { ok: true, row: resolved, access }
 }

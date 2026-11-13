@@ -1,3 +1,4 @@
+import { replicaConsentIsFor } from "../../../voice-clone-consent.js"
 import { describe, expect, it } from "vitest"
 import { buildPayload } from "../../../../services/workflow-engine/payload-builder.js"
 import type { ResolvedInputs, SimpleNode } from "../../../../services/workflow-engine/types.js"
@@ -51,11 +52,11 @@ describe("audio mappers re-run the call they were made from", () => {
   // The node always delivers the default MP3 and never asks for timings: a call that chose
   // either is one the node could not re-run faithfully, so it becomes no node (the rule for
   // every field outside a mapper's set), rather than a node that quietly delivers something else.
-  it("generate_speech with an output format or timings is not a node", () => {
+  it("generate_speech with timings is not a node; its output format is the node's own File (decided 2026-11-13)", () => {
     const body = { text: "Welcome.", voice: "Rachel", provider: "elevenlabs-v3" }
-    expect(flowNodeFor("/v1/text-to-speech", { ...TRANSPORT, ...body, outputFormat: "wav_24000" }, "generate_speech")).toBeNull()
     expect(flowNodeFor("/v1/text-to-speech", { ...TRANSPORT, ...body, withTimestamps: true }, "generate_speech")).toBeNull()
     expect(flowNodeFor("/v1/text-to-speech", { ...TRANSPORT, ...body }, "generate_speech")).not.toBeNull()
+    expect(run(node("/v1/text-to-speech", { ...body, outputFormat: "wav_24000" }, "generate_speech"))).toMatchObject({ outputFormat: "wav_24000" })
   })
 
   it("generate_dialogue → Text to Dialogue", () => {
@@ -177,3 +178,18 @@ describe("audio mappers re-run the call they were made from", () => {
     expect(run(video, { videoUrl: VIDEO })).toMatchObject({ videoUrl: VIDEO, semitones: 0, tempo: 1, preserveFormants: true })
   })
 })
+
+describe("a one-off clone through the flow mappers (decided 2026-11-13)", () => {
+  it("the caller's consent (replica.consent: true) is the node's consent box, ticked for the call's own user; without it the box stays empty", () => {
+    const replica = { sourceAudioUrl: "https://media.example/s.wav", consentAudioUrl: "https://media.example/c.wav" }
+    const userId = typeof (TRANSPORT as { userId?: unknown }).userId === "string" ? (TRANSPORT as { userId: string }).userId : "00000000-0000-4000-8000-0000000000a1"
+    const consented = flowNodeFor("/v1/text-to-speech", { ...TRANSPORT, userId, text: "Hi.", provider: "gemini-3-8-flash-tts", replica: { ...replica, consent: true } }, "generate_speech")
+    expect(consented?.data).toMatchObject({ replica })
+    // A record the server signed for that user: a run by anyone else (a copy of the flow) is refused.
+    expect(replicaConsentIsFor(consented?.data.replicaConsent, userId, replica)).toBe(true)
+    expect(replicaConsentIsFor(consented?.data.replicaConsent, "00000000-0000-4000-8000-0000000000b2", replica)).toBe(false)
+    const bare = flowNodeFor("/v1/text-to-speech", { ...TRANSPORT, text: "Hi.", provider: "gemini-3-8-flash-tts", replica }, "generate_speech")
+    expect(bare?.data.replicaConsent).toBeUndefined()
+  })
+})
+

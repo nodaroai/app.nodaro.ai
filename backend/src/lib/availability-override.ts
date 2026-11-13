@@ -65,6 +65,9 @@ export const FILM_PIPELINE_FEATURE = "film-pipeline"
 /** The availability id of the Video Director: {@link GATEABLE_FEATURES}. */
 export const VIDEO_DIRECTOR_FEATURE = "video-director"
 
+/** The availability id of a one-off voice clone inside a speech node (`replica`): {@link GATEABLE_FEATURES}. */
+export const ONE_OFF_VOICE_CLONE_FEATURE = "voice-clone-one-off"
+
 /** A gateable id with no canvas node: see {@link GATEABLE_FEATURES}. */
 export interface GateableFeature {
   readonly type: string
@@ -94,6 +97,11 @@ export const GATEABLE_FEATURES: readonly GateableFeature[] = Object.freeze([
   // create_launch_video). Its speech, alignment and render steps are each gated
   // as their own node by their own routes.
   Object.freeze({ type: VIDEO_DIRECTOR_FEATURE, label: "Video Director (explainer / launch video)", category: "composition" }),
+  // A one-off clone of a person's voice inside Text to Speech / Text to Dialogue (`replica`, Gemini 3.8
+  // Flash; decided 2026-11-13): the speech routes, the workflow run, MCP and the worker refuse it while it is
+  // withheld (lib/surface-deny.ts, its governed capability). A profile that denies the Voice Clone node
+  // withholds it too.
+  Object.freeze({ type: ONE_OFF_VOICE_CLONE_FEATURE, label: "One-off voice clone (Gemini 3.8 Flash)", category: "ai-audio" }),
 ])
 
 for (const f of GATEABLE_FEATURES) {
@@ -138,10 +146,10 @@ export const NOT_OVERRIDE_GATED_NODE_TYPES: ReadonlySet<string> = new Set(["site
 // the release switch unchanged. Only an id that was live and UNGATED before it
 // joined the universe gets a generation: bump GATING_GENERATION and list the id
 // at the new number. (Generation 1: cast-swap, and route gating. Generation 2:
-// the film pipeline and the Video Director.)
+// the film pipeline and the Video Director. Generation 3: the one-off voice clone.)
 
 /** The generation this code saves an override at. */
-export const GATING_GENERATION = 2
+export const GATING_GENERATION = 3
 
 /** The generation route gating arrived in: a route refused under a node the
  *  old path derivation never named (lib/route-node-gate.ts). */
@@ -156,6 +164,9 @@ const GATED_SINCE: ReadonlyMap<string, number> = new Map([
   // at generation 1 (which already knew cast-swap) never decided them either.
   [FILM_PIPELINE_FEATURE, 2],
   [VIDEO_DIRECTOR_FEATURE, 2],
+  // The one-off voice clone (decided 2026-11-13): live on the speech routes before it was gateable, so an
+  // override saved before it never decided it — the profile answers until an admin does.
+  [ONE_OFF_VOICE_CLONE_FEATURE, 3],
 ])
 
 /** The generation `type` became gateable in (0 = since the beginning). */

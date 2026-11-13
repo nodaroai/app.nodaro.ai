@@ -75,7 +75,13 @@ import {
   clampTopazVideoFps,
   isTopazVideoResolution,
   NODARO_VIDEO_UPSCALE_PROVIDER,
+  dialogueVoicesForModel,
+  dialogueOutputFormatFor,
+  getDialogueCapabilities,
 } from "@nodaro/shared/models";
+import { dialogueFillerWordsFor, dialogueHoldsReplica, dialogueLineStyleFor, dialogueSpeakersFor, dialogueTakesReplica } from "@/lib/dialogue-direction";
+import { dialogueCloneRunProblem, ttsCloneRunProblem } from "@/lib/voice-clone";
+import { ttsOutputFormatOf } from "@/lib/speech-output-format";
 import { sunoSeparateRunOutputFields } from "@/lib/named-run-outputs";
 import {
   resolveEditPlanSources,
@@ -278,6 +284,10 @@ import {
 } from "@nodaro/shared/credits";
 import {
   ttsSupportsStitching,
+  ttsDirectionFor,
+  ttsVoiceForModel,
+  replicaOf,
+  replicaModels,
   isSeedanceDraftCapable,
   SEEDANCE_DRAFT_RESOLUTION,
   SEEDANCE_DRAFT_FINALIZE_PROVIDER,
@@ -286,7 +296,7 @@ import {
   IMAGE_MODEL_ROLE_DEFAULTS,
   defaultImageModel
 } from "@nodaro/shared/model-catalog";
-import { tx } from "@/lib/i18n";
+import { tx, type MessageKey } from "@/lib/i18n";
 import { confirmNodeLink, hasOwnLinkBox, isNodeLinkRightsTicked } from "@/lib/node-link-rights";
 import { previewSingleRunRefusal } from "./preview-gate";
 import { completeAsPassThrough } from "./pass-through";
@@ -546,6 +556,23 @@ import {
 } from "@/lib/upstream-duration";
 import { editPlanIssueText, nodeRunError, nodeRunText } from "@/components/editor/workflow-editor/node-run-message";
 import { startFrameOnlyText } from "@/lib/video-start-frame-only";
+
+/** The models that clone a voice, by their names, for the refusal on any other model (`replicaModels`). */
+function cloningModelNames(): string {
+  return replicaModels().map((id) => MODEL_CATALOG[id]?.label ?? id).join(tx("common.listComma"));
+}
+
+/** Why a clone is refused before any request, in the person's language. Typed by the reasons, so a new one needs its words. */
+const CLONE_REFUSAL_KEYS: Record<"model" | "recordings" | "consent", MessageKey> = {
+  model: "nodeRun.cloneNeedsCloningModel",
+  recordings: "nodeRun.cloneNeedsRecordings",
+  consent: "nodeRun.cloneNeedsConsent",
+};
+const CLONE_REFUSAL_ERRORS: Record<"model" | "recordings" | "consent", string> = {
+  model: "This model can't use a cloned voice",
+  recordings: "The cloned voice needs both recordings",
+  consent: "The cloned voice needs its consent",
+};
 
 // ---------------------------------------------------------------------------
 // Manual-edit pending promise bridge
@@ -3671,7 +3698,20 @@ function executeNodeCore(
       toast.error(nodeRunError(ttsData.label, "nodeRun.noTextFound"));
       return Promise.reject(new Error("No text"));
     }
-    const voice = ttsData.voiceId;
+    // A one-off clone of a person's voice (decided 2026-11-13) runs only on a model that clones (the model may
+    // come from a field mapping), with both recordings and the person's consent. Otherwise the run is refused
+    // before any request — never sent without the consent, never dropped for another voice.
+    // The consent must be the runner's own (a template's or a copy's is someone else's: decided 2026-11-13).
+    const cloneProblem = ttsCloneRunProblem(ttsData.provider || undefined, ttsData, ctx.userId);
+    if (cloneProblem) {
+      toast.error(nodeRunError(ttsData.label, CLONE_REFUSAL_KEYS[cloneProblem], { models: cloningModelNames() }));
+      return Promise.reject(new Error(CLONE_REFUSAL_ERRORS[cloneProblem]));
+    }
+    const replica = replicaOf(ttsData.replica);
+    // The voice the chosen model can speak — the model may come from a field mapping, apart from the voice:
+    // the editor's model-switch rule (decided 2026-11-13, `ttsVoiceForModel`), as the server's workflow run applies it.
+    const voice = ttsVoiceForModel(ttsData.provider || undefined, ttsData.voiceId);
+    const voiceMoved = Boolean(ttsData.voiceId) && voice !== ttsData.voiceId;
     const ttsOptions = {
       ...(ttsData.stability != null && { stability: ttsData.stability }),
       ...(ttsData.similarityBoost != null && {
@@ -3684,7 +3724,14 @@ function executeNodeCore(
       // Only for a model whose sheet stitches (a node switched away from one keeps a mapping the panel no longer shows), and
       // through the one rule the server's exits apply — trimmed, shortened to the cap — so the route never answers 400.
       ...(ttsSupportsStitching(ttsData.provider) ? normalizeTtsNeighbourText(ttsData) : {}),
-      voiceType: (ttsData.voiceType as "premade" | "custom" | "library" | undefined) || "premade",
+      // Style direction (Gemini): only what the model takes, as the server's exits read it.
+      ...ttsDirectionFor(ttsData.provider, ttsData),
+      // The clone: on a model that clones, both recordings in and the consent given (checked above), which the
+      // request says (`consent: true`, the route's attestation of the checkbox's sentence).
+      ...(replica ? { replica: { ...replica, consent: true as const } } : {}),
+      voiceType: voiceMoved ? "premade" : (ttsData.voiceType as "premade" | "custom" | "library" | undefined) || "premade",
+      // The file (decided 2026-11-13): only a format the platform offers; none ⇒ the default MP3.
+      ...(ttsOutputFormatOf(ttsData.outputFormat) ? { outputFormat: ttsOutputFormatOf(ttsData.outputFormat) } : {}),
     };
     setUserPromptTemplate(ttsData.directText?.trim() || undefined);
     return runTextToSpeechGeneration(
@@ -3870,6 +3917,30 @@ function executeNodeCore(
       toast.error(nodeRunError(d.label, "nodeRun.noDialogueLines"));
       return Promise.reject(new Error("No dialogue lines"));
     }
+    // A speaker cloned from a person's own voice (decided 2026-11-13) is refused on a model that does not
+    // clone, never dropped — before anything else, since its label is no voice of any other model.
+    if (dialogueHoldsReplica(d.speakers) && !dialogueTakesReplica(d.provider)) {
+      toast.error(nodeRunError(d.label, CLONE_REFUSAL_KEYS.model, { models: cloningModelNames() }));
+      return Promise.reject(new Error(CLONE_REFUSAL_ERRORS.model));
+    }
+    // A clone the script speaks with needs both recordings and the person's consent (a clone no line uses is not sent).
+    const dialogueCloneProblem = dialogueCloneRunProblem(d.provider, d.speakers, dialogue.map((l) => l.voice), ctx.userId);
+    if (dialogueCloneProblem) {
+      toast.error(nodeRunError(d.label, CLONE_REFUSAL_KEYS[dialogueCloneProblem]));
+      return Promise.reject(new Error(CLONE_REFUSAL_ERRORS[dialogueCloneProblem]));
+    }
+    // The voices the chosen model speaks — the model may come from a field mapping, apart from the
+    // voices (`node.data` is mapping-resolved here): the editor's model-switch rule, per line. A cloned
+    // speaker's label stays on a model that clones.
+    const storedVoices = dialogue.map((l) => l.voice);
+    const voices = dialogueVoicesForModel(d.provider || undefined, storedVoices, d.speakers);
+    // A model that speaks the ElevenLabs voices needs one on every line: a line with none (a Gemini voice
+    // the model does not speak, a node switched back from Gemini) is refused before any request — the route
+    // refuses it too, and two such lines must not merge into one default voice.
+    if (!getDialogueCapabilities(d.provider).voices && voices.some((v) => !v)) {
+      toast.error(nodeRunError(d.label, "nodeRun.chooseVoiceForEveryLine"));
+      return Promise.reject(new Error("A dialogue line has no voice"));
+    }
     const dialogueTemplate = (d.dialogue ?? [])
       .map((l) => l.text)
       .join("\n")
@@ -3884,11 +3955,25 @@ function executeNodeCore(
     // write `transcript` alone — lib/json-run-result.ts. Both engines read
     // `transcript` first, then the bare field.)
     const transcriptOf = (od: Record<string, unknown>) => (od.transcript !== undefined ? { transcript: od.transcript } : {});
+    // A style per line, a direction per speaker, filler words: only what the model takes (decided 2026-11-12).
+    const lines = dialogue.map((l, i) => {
+      const styleDirection = dialogueLineStyleFor(d.provider, l.styleDirection);
+      return { text: l.text, voice: voices[i]!, ...(styleDirection !== undefined ? { styleDirection } : {}) };
+    });
+    const speakers = dialogueSpeakersFor(d.provider, d.speakers, storedVoices, voices, ctx.userId);
+    const fillerWords = dialogueFillerWordsFor(d.provider, d.fillerWords, voices);
+    // The file asked for, only one the model delivers (none: the default MP3; decided 2026-11-13).
+    const outputFormat = dialogueOutputFormatFor(d.provider, d.outputFormat);
+    const extras = {
+      ...(speakers.length > 0 ? { speakers } : {}),
+      ...(fillerWords !== undefined ? { fillerWords } : {}),
+      ...(outputFormat !== undefined ? { outputFormat } : {}),
+    };
     return pollJobWithNodeUpdate(
       node.id,
       () =>
         textToDialogueApi(
-          dialogue.map((l) => ({ text: l.text, voice: l.voice })),
+          lines,
           ctx.userId,
           d.stability,
           d.languageCode || undefined,
@@ -3896,6 +3981,7 @@ function executeNodeCore(
           d.applyTextNormalization,
           d.provider,
           d.similarityBoost,
+          Object.keys(extras).length > 0 ? extras : undefined,
         ),
       "generatedAudioUrl",
       "Text to Dialogue",

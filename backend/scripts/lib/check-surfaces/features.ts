@@ -50,7 +50,7 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "pipelines", cli: [], routePrefixes: ["/v1/pipelines"], mcpFiles: ["pipelines.ts"] },
   { id: "reduce", cli: [], routePrefixes: ["/v1/reduce"], mcpFiles: ["reduce.ts"] },
   { id: "promptHelper", cli: ["prompt"], routePrefixes: ["/v1/prompt-helper"], mcpFiles: ["prompt-helper.ts"] },
-  { id: "voices", cli: ["voice"], routePrefixes: ["/v1/voices", "/v1/voice-clones", "/v1/voice-changer-pro"], mcpFiles: ["voice-changer-pro-engines.ts", "voice-favorites.ts"] },
+  { id: "voices", cli: ["voice"], routePrefixes: ["/v1/voices", "/v1/voice-clones", "/v1/voice-clone", "/v1/voice-changer-pro"], mcpFiles: ["voice-changer-pro-engines.ts", "voice-favorites.ts"] },
   { id: "llm", cli: [], routePrefixes: ["/v1/llm"], mcpFiles: [] },
   { id: "media", cli: ["media"], routePrefixes: ["/v1/media"], mcpFiles: [] },
   // Content rights: the declaration a person confirms before a link is imported, and the confirmation a download carries.

@@ -1,4 +1,5 @@
 // @reads-none reads only the audio it extracts into work dirs
+import type { Job } from "bullmq"
 import { dirname } from "node:path"
 import { safeFetch } from "../../lib/safe-fetch.js"
 import { config } from "../../lib/config.js"
@@ -13,11 +14,22 @@ import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { directElevenLabsTTS, directElevenLabsTTSWithTimestamps, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
 import { generateSoundEffect } from "../../providers/elevenlabs/sound-effects.js"
-import { ttsSupportsAudioTags, ttsSupportsTimestamps } from "@nodaro/shared/model-catalog"
-import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_OUTPUT_FORMAT, TTS_OUTPUT_FORMATS, TTS_OUTPUT_FORMAT_FILES, type TextToAudioProvider, type TtsOutputFormat } from "@nodaro/shared/models"
+import { canonicalTtsProvider, getTtsCapabilities, replicaOf, ttsDirectionFor, ttsNamedVoiceFor, ttsReplicaProblem, ttsSupportsTimestamps } from "@nodaro/shared/model-catalog"
+import { sentSpeechText, toAngleTags } from "@nodaro/prompts/prompt-fields"
+import { isGeminiTtsModel } from "../../providers/kie/gemini-tts-models.js"
+import { geminiSpeechInput, runGeminiSpeech } from "../../providers/kie/gemini-tts.js"
+import { deliverGeminiSpeech, geminiDialogueSentLines, geminiSpeechSentText } from "../../lib/gemini-speech.js"
+import { replicaRefusalMessage, stageReplica } from "../../lib/voice-replica.js"
+import { deniedCapabilityForUser } from "../../lib/availability-viewer.js"
+import { KieError } from "../../providers/kie/client.js"
+import {
+  DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_OUTPUT_FORMAT, TTS_OUTPUT_FORMATS, TTS_OUTPUT_FORMAT_FILES, type TextToAudioProvider, type TtsOutputFormat,
+  dialogueLineStyleFor, dialogueMaxSpeakers, dialogueOutputFormatFor, dialogueProviderOf, dialogueReplicaOf, dialogueSpeakerDirectionFor, dialogueVoicesForModel,
+  type TtsReplica,
+} from "@nodaro/shared/models"
 import { normalizeTranscript, type Transcript } from "@nodaro/shared/edl"
 import { defaultAllowedVoiceId, voiceLockActive } from "../../lib/voice-policy.js"
-import { assertUnnamedVoicesAllowed, assertVoicesAllowed } from "../../lib/voice-lock.js"
+import { assertNamedVoiceModelAllowed, assertUnnamedVoicesAllowed, assertVoicesAllowed } from "../../lib/voice-lock.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { elevenlabsSpeechCostUsd } from "../../lib/pricing/elevenlabs-speech-cost.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
@@ -55,6 +67,7 @@ import {
   isSocialUrl,
   downloadAudioToR2,
   type HandlerFn,
+  type JobContext,
 } from "../shared.js"
 import { YOUTUBE_HOSTS, isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
 import { requireImportAllowed, spendImportConfirmation } from "../../lib/import-gate.js"
@@ -146,7 +159,7 @@ export function speechFileFor(audio: Buffer): { readonly ext: "mp3" | "wav"; rea
 }
 
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
-  const { text, voice, provider: rawProvider, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, allowDefaultVoiceFallback, withTimestamps, outputFormat } = job.data as {
+  const { text, voice, provider: rawProvider, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, allowDefaultVoiceFallback, withTimestamps, outputFormat, styleDirection, pace, accent, audioProfile, replica } = job.data as {
     jobId: string
     text: string
     voice?: string
@@ -165,6 +178,13 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     withTimestamps?: boolean
     /** The file asked for (`TTS_OUTPUT_FORMATS`); absent ⇒ the MP3 every speech job delivered before the field existed. */
     outputFormat?: TtsOutputFormat
+    /** Style direction (a model whose sheet takes it: Gemini); read through `ttsDirectionFor`, never sent to a model that does not take it. */
+    styleDirection?: string
+    pace?: string
+    accent?: string
+    audioProfile?: string
+    /** A one-off clone (Gemini 3.8 Flash): the two recordings' https links, judged again here before anything is sent. */
+    replica?: TtsReplica
   }
   // B4c: the voice lock's backstop, FIRST. Every enqueuer judges the voice
   // before the job exists (the route, the workflow engine, the film-studio
@@ -179,24 +199,55 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   // resolves it through the same omitted-provider rule those enqueuers use (the
   // default speech model up to its own cap, turbo above it).
   const provider = rawProvider ?? resolveOmittedTtsProvider(text)
+  // The lock's backstop for a model that speaks only its own named voices (Gemini): refused whole under any lock,
+  // whatever voice the job names — none of them has a recorded gender (decided 2026-11-13). No lock: returns.
+  assertNamedVoiceModelAllowed(canonicalTtsProvider(provider))
+  // A one-off clone on a model that does not clone is refused, never dropped (someone else's voice would speak).
+  const replicaProblem = ttsReplicaProblem(canonicalTtsProvider(provider), replica)
+  if (replicaProblem) throw new DeterministicJobError(replicaProblem)
+  // ...and where the deployment withholds voice cloning (the Voice Clone node), before any recording is read.
+  await assertOneOffCloneAllowed("text-to-speech", { replica }, ctx.jobUserId)
+  // The consent backstop: a clone runs only with the consent the request said (`consent: true`), as the route
+  // and the workflow run require it; a job without it is refused before any recording is read.
+  if (replica != null && (replica as { consent?: unknown }).consent !== true) throw new DeterministicJobError(ONE_OFF_CLONE_UNCONSENTED_MESSAGE)
   // Only a format the platform offers reaches the vendor; anything else keeps the plain MP3 request.
   const requestedFormat = knownOutputFormat(outputFormat)
-  console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider}, direct API)`)
+  // A speech model of another provider (Gemini, on KIE) is decided here, BEFORE the ElevenLabs
+  // key is looked at: with a KIE key it runs as a KIE task; without one, the connected cloud
+  // (below) or the missing-KIE-key error — never an ElevenLabs model in its place.
+  const gemini = isGeminiTtsModel(canonicalTtsProvider(provider))
+  const direction = ttsDirectionFor(provider, { styleDirection, pace, accent, audioProfile })
+  if (gemini && config.KIE_API_KEY) {
+    await runGeminiTextToSpeech(job, ctx, { provider: canonicalTtsProvider(provider), text, voice, outputFormat: requestedFormat, direction, replica: replicaOf(replica) })
+    return
+  }
+  console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider}, ${gemini ? "cloud relay" : "direct API"})`)
 
-  // Strip [audio tags] when the model does not perform them — v2 models speak them as literal
-  // text. The neighbour texts follow the same rule: they are context the model reads, and a
-  // literal "[laughs]" in the run-in would be read aloud by a model that does not perform tags.
+  // Tags as the model takes them (its sheet): kept, rewritten to its own tags, or stripped — v2
+  // models speak them as literal text. The neighbour texts follow the same rule: they are context
+  // the model reads, and a literal "[laughs]" in the run-in would be read aloud by a model that
+  // does not perform tags.
+  // (The rule of `speakableText`, @nodaro/prompts — what the credit counter counts.)
+  const sheet = getTtsCapabilities(provider)
   const speakable = (value: unknown): string | undefined =>
-    typeof value === "string" ? (ttsSupportsAudioTags(provider) ? value : stripAudioTags(value)) : undefined
-  const processedText = speakable(text) ?? text
+    typeof value !== "string" ? undefined
+      : !sheet.audioTags ? stripAudioTags(value)
+      : sheet.tagSyntax === "angle" ? toAngleTags(value, sheet.tags ?? [])
+      : value
+  // A Gemini model reaches this path only through the cloud relay, which is forwarded the RAW text: the
+  // cloud applies the one rule (`sentSpeechText`: its tags rewritten, then the cap, decided 2026-11-13)
+  // once, as it would to its own request — a rewritten text rewritten again can change (`[[laughs]]`).
+  // `processedText` is still that rule's text: what the cloud sends, and what this run is billed for.
+  const processedText = gemini ? sentSpeechText(text, sheet) : (speakable(text) ?? text)
   const ttsOptions = {
     stability, similarityBoost, style, speed, languageCode,
     previousText: speakable(previousText),
     nextText: speakable(nextText),
+    ...direction,
   }
   const hasOptions =
     stability != null || similarityBoost != null || style != null || speed != null || languageCode != null ||
-    ttsOptions.previousText != null || ttsOptions.nextText != null
+    ttsOptions.previousText != null || ttsOptions.nextText != null || Object.keys(direction).length > 0
 
   // Three ways out, in this order — the order IS the contract:
   //   1. local key      -> direct ElevenLabs (keyed installs are byte-identical)
@@ -217,7 +268,7 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   // Set only on the cloud branch — the relay provenance the finalize literal
   // below carries onto the row.
   let cloudAudio: CloudAudioResult | undefined
-  if (config.ELEVENLABS_API_KEY) {
+  if (!gemini && config.ELEVENLABS_API_KEY) {
     const ttsArgs = [processedText, voice ?? defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel"), provider, {
       ...(hasOptions ? ttsOptions : {}),
       allowDefaultVoiceFallback: Boolean(allowDefaultVoiceFallback),
@@ -240,15 +291,25 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     // (the cloud's own default knows nothing of the lock); with no lock the
     // relay picks its default, as before.
     cloudAudio = await generateSpeechViaCloud(
-      processedText,
-      voice || (voiceLockActive() ? defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel") : voice),
+      gemini ? text : processedText,
+      // A named-voice model's voice is its own (the cloud refuses another); an ElevenLabs model's
+      // unnamed voice, under a voice lock, is this deployment's default.
+      gemini ? ttsNamedVoiceFor(provider, voice) : voice || (voiceLockActive() ? defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel") : voice),
       provider,
-      { ...(hasOptions ? ttsOptions : {}), ...(requestedFormat ? { outputFormat: requestedFormat } : {}) },
+      {
+        ...(hasOptions ? ttsOptions : {}),
+        ...(requestedFormat ? { outputFormat: requestedFormat } : {}),
+        // A one-off clone's links as given: the cloud judges the recordings itself.
+        // The consent this job received (the caller's at the route, the runner's own on a workflow run, checked
+        // by the backstop above), passed on as it came: the cloud judges it again.
+        ...(gemini && replicaOf(replica) ? { replica: { ...replicaOf(replica)!, consent: (replica as { consent?: true }).consent } } : {}),
+      },
     )
     audioBuffer = cloudAudio.audio
   } else {
-    // Throws MissingProviderKeyError — the one phrasing every provider uses.
-    requireProviderKey(config.ELEVENLABS_API_KEY, "ELEVENLABS_API_KEY")
+    // Throws MissingProviderKeyError — the one phrasing every provider uses — naming the key THIS model needs.
+    if (gemini) requireProviderKey(config.KIE_API_KEY, "KIE_API_KEY")
+    else requireProviderKey(config.ELEVENLABS_API_KEY, "ELEVENLABS_API_KEY")
     throw new Error("unreachable: requireProviderKey throws on an empty key")
   }
   await setJobProgress(job, ctx.jobId, 50)
@@ -272,7 +333,8 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     result: {
       url: r2Url,
       cost: cloudAudio ? null : elevenlabsSpeechCostUsd(provider, billedCharacters),
-      providerUsed: "elevenlabs-direct",
+      // A Gemini model reaches this tail only through the cloud relay (a keyed run is delivered above).
+      providerUsed: gemini ? "nodaro-cloud" : "elevenlabs-direct",
       // Relay provenance (spec §8.2 lane 1, migration 383): this literal is
       // rebuilt from locals, so the pair only reaches finalize if carried by
       // hand. Absent on the local-key branch ⇒ no key, no column written.
@@ -287,6 +349,58 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   })
   if (!ok) return
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: elevenlabs-direct)`)
+}
+
+/**
+ * A Gemini speech run (KIE): its named voice (the one asked for when the model
+ * speaks it, else the model's default — the route and the workflow engine have
+ * already refused any other), its tags in the model's syntax, its direction
+ * where the model takes it, one speaker and one turn. The KIE task is recorded
+ * on the job, so a worker that dies leaves a task the reconcile delivers the
+ * same way (`deliverGeminiSpeech`, lib/gemini-speech.ts).
+ */
+async function runGeminiTextToSpeech(
+  job: Job,
+  ctx: JobContext,
+  req: {
+    provider: string
+    text: string
+    voice: string | undefined
+    outputFormat: TtsOutputFormat | undefined
+    direction: ReturnType<typeof ttsDirectionFor>
+    /** A one-off clone (3.8 Flash): its recordings are judged and staged in the job's scratch before the task. */
+    replica?: TtsReplica
+  },
+): Promise<void> {
+  console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${req.provider}, KIE${req.replica ? ", one-off clone" : ""})`)
+  const sent = geminiSpeechSentText(req.provider, req.text)
+  const voice = ttsNamedVoiceFor(req.provider, req.voice)!
+  // The recordings KIE fetches are the job's own scratch copies of the bytes just judged.
+  const staged = req.replica ? await stageReplica(req.replica) : undefined
+  const input = geminiSpeechInput(
+    req.provider,
+    [{ voice, direction: req.direction, ...(staged ? { replica: staged } : {}) }],
+    [{ speaker: 0, text: sent, ...(req.direction.styleDirection ? { style: req.direction.styleDirection } : {}) }],
+  )
+  const result = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, () =>
+    runGeminiSpeech(req.provider, input, { onTaskCreated: makeOnTaskCreated(ctx.jobId, "kie-standard") }).catch((err: unknown) => {
+      throw staged ? replicaFailure(err) : err
+    }),
+  )
+  await setJobProgress(job, ctx.jobId, 50)
+  const { ok, url } = await deliverGeminiSpeech({
+    jobId: ctx.jobId,
+    userId: ctx.jobUserId,
+    provider: req.provider,
+    wavUrl: result.url,
+    outputFormat: req.outputFormat,
+    billedCharacters: sent.length,
+    ...(result.kieCredits !== undefined && { kieCredits: result.kieCredits }),
+    ...(result.providerMs !== undefined && { providerMs: result.providerMs }),
+  })
+  await setJobProgress(job, ctx.jobId, 100)
+  if (!ok) return
+  console.log(`[worker] Job ${ctx.jobId} completed: ${url} (provider: kie)`)
 }
 
 const handleGenerateMusic: HandlerFn = async function handleGenerateMusic(job, ctx) {
@@ -607,12 +721,37 @@ async function generateDialogueViaCloud(body: Record<string, unknown>): Promise<
   }
 }
 
+/** A dialogue line as the route and the workflow engine enqueue it. */
+interface DialogueJobLine {
+  text: string
+  voice: string
+  /** Gemini 3.8: this line's free-text style (`dialogueLineStyleFor`); never sent to a model that does not take it. */
+  styleDirection?: string
+}
+
+/** A speaker's direction as enqueued (Gemini 3.1 / 2.5), keyed by the voice its lines name. */
+interface DialogueJobSpeaker {
+  voice: string
+  /** A one-off clone of this speaker (3.8 Flash): the two recordings' https links. */
+  replica?: TtsReplica
+  styleDirection?: string
+  pace?: string
+  accent?: string
+  audioProfile?: string
+}
+
 const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job, ctx) {
-  const { dialogue, provider, stability, similarityBoost, languageCode, seed, applyTextNormalization } = job.data as {
+  const { dialogue, provider, stability, similarityBoost, languageCode, seed, applyTextNormalization, speakers, fillerWords, outputFormat } = job.data as {
     jobId: string
-    dialogue: Array<{ text: string; voice: string }>
+    dialogue: DialogueJobLine[]
+    /** The file asked for, on a model that delivers it (`dialogueOutputFormatFor`); absent ⇒ the default MP3. */
+    outputFormat?: TtsOutputFormat
     /** Our dialogue model id; the funnel runs an unknown or missing one as v3 dialogue. */
     provider?: string
+    /** Gemini 3.1 / 2.5: each speaker's style, pace, accent and audio profile. */
+    speakers?: DialogueJobSpeaker[]
+    /** Gemini 3.8, two speakers: filler words between them. */
+    fillerWords?: boolean
     stability?: number
     similarityBoost?: number
     languageCode?: string
@@ -621,8 +760,31 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   }
   // B4c: the voice lock's backstop, FIRST — every line's voice, as the job's
   // user (see text-to-speech above). No lock: nothing is read.
+  // The lock's backstop for a model that speaks only its own named voices (Gemini): refused whole under any
+  // lock, as one speaker is (decided 2026-11-13) — first, so no voice of its is looked up. No lock: returns.
+  const model = dialogueProviderOf(provider)
+  assertNamedVoiceModelAllowed(model)
+  // A one-off clone on a speaker a line uses, on a model that does not clone, is refused, never dropped; a
+  // speaker no line uses is not sent, so it is not judged (as the workflow run judges it).
+  const spokenVoices = new Set(dialogue.map((l) => l.voice))
+  const spokenClones = (speakers ?? []).filter((sp) => sp?.replica != null && spokenVoices.has(sp.voice))
+  for (const sp of spokenClones) {
+    const problem = ttsReplicaProblem(model, sp.replica)
+    if (problem) throw new DeterministicJobError(problem)
+  }
+  await assertOneOffCloneAllowed("text-to-dialogue", { dialogue, speakers }, ctx.jobUserId)
+  // The consent backstop for each of them (as the route and the workflow run require it).
+  if (spokenClones.some((sp) => (sp.replica as { consent?: unknown }).consent !== true)) throw new DeterministicJobError(ONE_OFF_CLONE_UNCONSENTED_MESSAGE)
   await assertVoicesAllowed(dialogue.map((line) => line.voice), { userId: ctx.jobUserId })
-  console.log(`[worker] text-to-dialogue ${ctx.jobId} (${dialogue.length} lines, direct API)`)
+  // A Gemini model (on KIE) is decided here, BEFORE the ElevenLabs key is looked at: with a KIE key it runs
+  // as a KIE task; without one, the connected cloud (below) or the missing-KIE-key error — never an
+  // ElevenLabs dialogue in its place.
+  const gemini = isGeminiTtsModel(model)
+  if (gemini && config.KIE_API_KEY) {
+    await runGeminiDialogue(job, ctx, { provider: model, dialogue, speakers, fillerWords, outputFormat: dialogueOutputFormatFor(model, outputFormat) })
+    return
+  }
+  console.log(`[worker] text-to-dialogue ${ctx.jobId} (${dialogue.length} lines, ${gemini ? "cloud relay" : "direct API"})`)
 
   // Same three ways out as handleTextToSpeech, same order, same reasons —
   // the order IS the contract (see the TTS ladder comment above):
@@ -642,8 +804,18 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   let cloudAudio: CloudAudioResult | undefined
   // The cloud relay spreads these into its body too, so the model reaches a
   // cloud that knows it; an older cloud strips the key and renders v3 dialogue.
-  const dialogueOptions = { provider, stability, similarityBoost, languageCode, seed, applyTextNormalization }
-  if (config.ELEVENLABS_API_KEY) {
+  // A Gemini model's own fields ride the relay too (the cloud validates and sends them as this install would).
+  const dialogueOptions = {
+    provider, stability, similarityBoost, languageCode, seed, applyTextNormalization,
+    ...(gemini
+      ? {
+          ...(speakers ? { speakers } : {}),
+          ...(fillerWords !== undefined ? { fillerWords } : {}),
+          ...(dialogueOutputFormatFor(model, outputFormat) ? { outputFormat: dialogueOutputFormatFor(model, outputFormat) } : {}),
+        }
+      : {}),
+  }
+  if (!gemini && config.ELEVENLABS_API_KEY) {
     const rendered = await withProgressRamp(
       job,
       ctx.jobId,
@@ -662,37 +834,151 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
     audioBuffer = cloudAudio.audio
     transcript = cloudAudio.transcript
   } else {
-    // Throws MissingProviderKeyError — the one phrasing every provider uses.
-    requireProviderKey(config.ELEVENLABS_API_KEY, "ELEVENLABS_API_KEY")
+    // Throws MissingProviderKeyError — the one phrasing every provider uses — naming the key THIS model needs.
+    if (gemini) requireProviderKey(config.KIE_API_KEY, "KIE_API_KEY")
+    else requireProviderKey(config.ELEVENLABS_API_KEY, "ELEVENLABS_API_KEY")
     throw new Error("unreachable: requireProviderKey throws on an empty key")
   }
   await setJobProgress(job, ctx.jobId, 50)
   // POST-PROVIDER: the provider already delivered the audio (we were billed) —
   // an R2 upload failure here is post-delivery, so skip the refund.
-  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
+  // Stored and served as the file that came back: the bytes decide (a Gemini dialogue relayed for its WAV is a
+  // WAV; an ElevenLabs dialogue, and a relay that predates the field, an MP3).
+  const file = speechFileFor(audioBuffer)
+  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", file.ext), file.mime, ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
   // The characters across the lines and what they cost the platform (same rule
   // and same charge-neutrality as text-to-speech above).
-  const billedCharacters = dialogue.reduce((sum, l) => sum + l.text.length, 0)
+  // A Gemini model reaches this tail only through the cloud relay: billed for its lines as sent (the one rule).
+  const billedCharacters = gemini
+    ? geminiDialogueSentLines(model, dialogue).reduce((sum, t) => sum + t.length, 0)
+    : dialogue.reduce((sum, l) => sum + l.text.length, 0)
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "generate-dialogue",
     result: {
       url: r2Url,
       cost: cloudAudio ? null : elevenlabsSpeechCostUsd("elevenlabs-dialogue", billedCharacters),
-      providerUsed: "elevenlabs-direct",
+      providerUsed: gemini ? "nodaro-cloud" : "elevenlabs-direct",
       // Same rebuilt-literal carry as text-to-speech above, same reason.
       ...(cloudAudio?.relayJobId && { relayJobId: cloudAudio.relayJobId, relayCredits: cloudAudio.relayCredits ?? null }),
     },
     // Per-line timings (the node's `json` handle, captions without a paid
     // transcription). Absent on a model without timings — then no `transcript`
     // key at all (billedCharacters stays).
-    extraOutputData: { billedCharacters, ...(transcript ? { transcript } : {}) },
+    // `audioMimeType` on a Gemini dialogue (the relay's): the file this job stored, as one speaker's records it.
+    extraOutputData: { billedCharacters, ...(gemini ? { audioMimeType: file.mime } : {}), ...(transcript ? { transcript } : {}) },
     mediaUrl: r2Url,
   })
   if (!ok) return
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: elevenlabs-direct)`)
 }
+
+/**
+ * A Gemini dialogue run (KIE): one or two named voices (each the one asked for
+ * when the model speaks it — the route and the workflow engine have already
+ * refused any other; `dialogueVoicesForModel` is the backstop), each line's
+ * text by the one rule (`geminiDialogueSentLines`: tags in the model's syntax,
+ * the script cut once at the total cap), the direction where the model takes
+ * it (a style per line on 3.8, a speaker's style, pace, accent and profile on
+ * 3.1 / 2.5), filler words on request where taken. A line left with nothing
+ * to say is not sent. Delivered as a dialogue in the file asked for (the WAV
+ * as rendered, or MP3 encoded from it; the default MP3), the task
+ * recorded on the job so the reconcile can deliver it the same way.
+ */
+async function runGeminiDialogue(
+  job: Job,
+  ctx: JobContext,
+  req: {
+    provider: string
+    dialogue: readonly DialogueJobLine[]
+    speakers: readonly DialogueJobSpeaker[] | undefined
+    fillerWords: boolean | undefined
+    /** A format the model delivers, or undefined (the default MP3). */
+    outputFormat: TtsOutputFormat | undefined
+  },
+): Promise<void> {
+  console.log(`[worker] text-to-dialogue ${ctx.jobId} (${req.dialogue.length} lines, provider: ${req.provider}, KIE)`)
+  const sent = geminiDialogueSentLines(req.provider, req.dialogue)
+  const voices = dialogueVoicesForModel(req.provider, req.dialogue.map((l) => l.voice), req.speakers)
+  const spoken = req.dialogue.flatMap((line, i) => (sent[i]!.trim() ? [{ line, voice: voices[i]!, text: sent[i]! }] : []))
+  if (spoken.length === 0) throw new DeterministicJobError("Text to Dialogue has nothing left to say once its tags are taken out — add some words to a line")
+  // The speakers, in the order they first speak; each one's direction is read under the voice its lines named.
+  const cast: Array<{ voice: string; named: string }> = []
+  for (const s of spoken) if (!cast.some((c) => c.voice === s.voice)) cast.push({ voice: s.voice, named: s.line.voice })
+  const max = dialogueMaxSpeakers(req.provider)
+  if (cast.length > max) throw new DeterministicJobError(`A dialogue on ${req.provider} can use at most ${max} voices; this one uses ${cast.length}`)
+  // A cloned speaker's recordings, judged and staged in the job's scratch: KIE fetches those copies.
+  const staged = new Map<string, { sourceAudioUrl: string; consentAudioUrl: string }>()
+  for (const c of cast) {
+    const replica = dialogueReplicaOf(req.provider, req.speakers, c.voice)
+    if (replica) staged.set(c.voice, await stageReplica(replica))
+  }
+  const input = geminiSpeechInput(
+    req.provider,
+    cast.map((c) => ({
+      voice: c.voice,
+      direction: dialogueSpeakerDirectionFor(req.provider, { ...req.speakers?.find((sp) => sp?.voice === c.named) }),
+      ...(staged.has(c.voice) ? { replica: staged.get(c.voice)! } : {}),
+    })),
+    spoken.map((s) => {
+      const style = dialogueLineStyleFor(req.provider, s.line.styleDirection)
+      return { speaker: cast.findIndex((c) => c.voice === s.voice), text: s.text, ...(style ? { style } : {}) }
+    }),
+    { fillerWords: req.fillerWords === true },
+  )
+  const result = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, () =>
+    runGeminiSpeech(req.provider, input, { onTaskCreated: makeOnTaskCreated(ctx.jobId, "kie-standard") }).catch((err: unknown) => {
+      throw staged.size > 0 ? replicaFailure(err) : err
+    }),
+  )
+  await setJobProgress(job, ctx.jobId, 50)
+  const { ok, url } = await deliverGeminiSpeech({
+    jobId: ctx.jobId,
+    jobType: "generate-dialogue",
+    userId: ctx.jobUserId,
+    provider: req.provider,
+    wavUrl: result.url,
+    outputFormat: req.outputFormat,
+    billedCharacters: sent.reduce((n, t) => n + t.length, 0),
+    ...(result.kieCredits !== undefined && { kieCredits: result.kieCredits }),
+    ...(result.providerMs !== undefined && { providerMs: result.providerMs }),
+  })
+  await setJobProgress(job, ctx.jobId, 100)
+  if (!ok) return
+  console.log(`[worker] Job ${ctx.jobId} completed: ${url} (provider: kie)`)
+}
+
+/**
+ * The worker's backstop for a deployment that withholds voice cloning (decided 2026-11-13): a one-off clone
+ * follows the Voice Clone node's availability, as the route's guard and the workflow run ask it. Asked as the
+ * job's user; inert when no clone is asked or the node is offered.
+ */
+async function assertOneOffCloneAllowed(hostType: "text-to-speech" | "text-to-dialogue", data: Record<string, unknown>, userId: string | undefined): Promise<void> {
+  const denied = await deniedCapabilityForUser(hostType, data, userId)
+  if (denied && denied !== hostType) throw new DeterministicJobError(ONE_OFF_CLONE_UNAVAILABLE_MESSAGE)
+}
+
+/** What a run asking a one-off clone is told where the deployment withholds voice cloning. */
+const ONE_OFF_CLONE_UNAVAILABLE_MESSAGE = "Voice cloning is not available on this deployment, so this run can't use a cloned voice. Choose one of the model's voices instead."
+
+/**
+ * A one-off clone KIE refused (a consent recording it did not accept, AI-made audio), worded by the
+ * platform from its failure text and never retried (the same recordings fail again); any other error as it is.
+ */
+function replicaFailure(err: unknown): unknown {
+  // Only a failure about the recordings is theirs; a transient provider failure (busy, timed out, an internal
+  // error) is left as it came, retried and refunded as any other.
+  return err instanceof KieError && err.isUpstreamFailure && REPLICA_REFUSAL.test(err.internalDetails)
+    ? new DeterministicJobError(replicaRefusalMessage(err.internalDetails))
+    : err
+}
+
+/** A provider failure that is about a clone's recordings: the consent or reference audio, the sample, AI-made audio. */
+const REPLICA_REFUSAL = /consent|replica|replication|voice sample|source audio|reference audio|recording|ai[- ]generated|synthetic/i
+
+/** What a job asking a clone without its consent is told (the backstop: the route and the workflow run refuse first). */
+const ONE_OFF_CLONE_UNCONSENTED_MESSAGE = "A cloned voice runs only with the consent of the person running it; this run did not carry it."
 
 const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx) {
   const { audioUrl, videoUrl, voiceId, model, stability, similarityBoost, style, removeBackgroundNoise, useSpeakerBoost, seed } = job.data as {

@@ -17,6 +17,7 @@
  */
 import { judgeUnnamedVoices, voiceLockActive, VoiceNotAvailableError, type VoiceVerdict } from "./voice-policy.js"
 import type { VoiceLookup } from "./voice-gender.js"
+import { ttsNamedVoices } from "@nodaro/shared/model-catalog"
 
 const ALLOWED: VoiceVerdict = Object.freeze({ allowed: true })
 
@@ -39,6 +40,24 @@ export async function judgeVoicesUnderLock(voices: ReadonlyArray<unknown>, looku
 /** Throws `VoiceNotAvailableError` when the lock refuses any of `voices` (`judgeVoicesUnderLock`). */
 export async function assertVoicesAllowed(voices: ReadonlyArray<unknown>, lookup: VoiceLookup): Promise<void> {
   const verdict = await judgeVoicesUnderLock(voices, lookup)
+  if (!verdict.allowed) throw new VoiceNotAvailableError(verdict.reason)
+}
+
+/**
+ * The lock's answer for a speech model that speaks only its own named voices
+ * (Gemini; `TtsCapabilities.voices`): the platform records no gender for
+ * them, and a request that names no voice runs the model's default, so under
+ * any lock the model is refused whole, whatever voice is named (decided
+ * 2026-11-13) — as a voice of unknown gender. No lock, or any other model: an
+ * allow.
+ */
+export function judgeNamedVoiceModel(provider: string | undefined): VoiceVerdict {
+  return ttsNamedVoices(provider) ? judgeUnnamedVoices() : ALLOWED
+}
+
+/** Throws `VoiceNotAvailableError` when the lock refuses a named-voice model (`judgeNamedVoiceModel`). */
+export function assertNamedVoiceModelAllowed(provider: string | undefined): void {
+  const verdict = judgeNamedVoiceModel(provider)
   if (!verdict.allowed) throw new VoiceNotAvailableError(verdict.reason)
 }
 

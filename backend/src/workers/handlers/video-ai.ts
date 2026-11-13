@@ -113,6 +113,7 @@ import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
 import { planVoicedDialogue, voicesTheVoicedVideoSends } from "../../lib/voiced-dialogue-lines.js"
+import { voicedSpeechProvider } from "../../lib/voiced-dialogue-model.js"
 import { assertVoicesAllowed } from "../../lib/voice-lock.js"
 
 /**
@@ -2390,7 +2391,8 @@ async function synthesizeDialogueTrack(
   }
   // Single voice → direct ElevenLabs TTS (supports library/custom by id;
   // premade names resolve too). Honour the voice's ttsProvider.
-  const ttsProvider = voices[0]?.ttsProvider
+  // (A Gemini model, which speaks only its own named voices, is not offered on this lane: voicedSpeechProvider.)
+  const ttsProvider = voicedSpeechProvider(voices[0]?.ttsProvider)
   const joined = resolved.map((r) => r.text).join(" ")
   const processed = ttsSupportsAudioTags(ttsProvider) ? joined : stripAudioTags(joined)
   const buf = await directElevenLabsTTS(processed, resolved[0]!.voice, ttsProvider, {

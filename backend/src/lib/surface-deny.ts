@@ -7,6 +7,7 @@ import {
   nodesOverrideGeneration,
   GATEABLE_NODE_TYPES,
   GATEABLE_MODEL_IDS,
+  ONE_OFF_VOICE_CLONE_FEATURE,
 } from "./availability-override.js"
 import { isModelSwitchedOff, switchedOffModelIds } from "./model-switch.js"
 import { houseModelServed, houseRuleWithholdsAModel, isOwnLabelModel } from "./house-models-served.js"
@@ -93,6 +94,8 @@ export function isNodeFactoryDenied(type: string): boolean {
   if (switchedOffNodeTypes().includes(type)) return true
   const { deny, allow } = runtimeSurfaceProfile().nodes
   if (allow.length && GATEABLE_NODE_TYPES.has(type) && !allow.includes(type)) return true
+  // A profile that denies the Voice Clone node withholds a one-off clone too (decided 2026-11-13).
+  if (type === ONE_OFF_VOICE_CLONE_FEATURE && deny.includes("voice-clone")) return true
   return deny.includes(type)
 }
 
@@ -155,6 +158,21 @@ export function deniedNodeRejectionMessage(types: readonly string[]): string {
  */
 const WEB_SCRAPE_SOURCE_GOVERNED_BY: ReadonlyMap<string, string> = new Map([["instagram", "instagram-scrape"]])
 
+/**
+ * A one-off voice clone inside a speech node (`replica`, Gemini 3.8 Flash) is
+ * voice cloning behind another door (decided 2026-11-13): a deployment that
+ * withholds the Voice Clone node withholds it too. Any `replica` asked counts,
+ * well formed or not, so the refusal comes before anything is read.
+ */
+const ONE_OFF_CLONE = { governedBy: ONE_OFF_VOICE_CLONE_FEATURE, label: "a one-off voice clone" } as const
+const asksClone = (value: unknown): boolean => value !== undefined && value !== null
+/** The voices a dialogue's lines speak with: only a clone a line uses is sent, so only it is judged. */
+export function dialogueLineVoices(data: Readonly<Record<string, unknown>>): Set<string> {
+  const lines = Array.isArray(data.dialogue) ? data.dialogue : Array.isArray(data.script) ? data.script : []
+  return new Set(lines.map((l) => (l as { voice?: unknown } | null)?.voice).filter((v): v is string => typeof v === "string"))
+}
+
+
 const GOVERNED_CAPABILITIES: ReadonlyMap<
   string,
   (data: Readonly<Record<string, unknown>>) => { governedBy: string; label: string } | undefined
@@ -162,6 +180,20 @@ const GOVERNED_CAPABILITIES: ReadonlyMap<
   // A competitor scan is Social Search run once per account and per platform:
   // withholding the node withholds the scans (manual and scheduled) too.
   ["competitor-scan", (_data: Readonly<Record<string, unknown>>) => ({ governedBy: "social-search", label: "competitor-scan" })],
+  ["text-to-speech", (data) => (asksClone(data.replica) ? ONE_OFF_CLONE : undefined)],
+  [
+    "text-to-dialogue",
+    (data) => {
+      if (!Array.isArray(data.speakers)) return undefined
+      const spoken = dialogueLineVoices(data)
+      return data.speakers.some((s) => {
+        const entry = s as { voice?: unknown; replica?: unknown } | null
+        return !!entry && typeof entry.voice === "string" && spoken.has(entry.voice) && asksClone(entry.replica)
+      })
+        ? ONE_OFF_CLONE
+        : undefined
+    },
+  ],
   [
     "web-scrape",
     (data) => {

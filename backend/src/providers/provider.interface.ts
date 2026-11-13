@@ -380,6 +380,13 @@ export interface TextToSpeechOptions {
   nextText?: string
   /** The file to deliver (`TTS_OUTPUT_FORMATS`); absent ⇒ the vendor's default MP3, as every request delivered before the field existed. */
   outputFormat?: TtsOutputFormat
+  /** Style direction, on a model whose sheet takes it (Gemini) — already filtered by `ttsDirectionFor`. */
+  styleDirection?: string
+  pace?: string
+  accent?: string
+  audioProfile?: string
+  /** A one-off clone (Gemini 3.8 Flash): the two recordings' https links, relayed as the caller gave them (the cloud judges them). */
+  replica?: { sourceAudioUrl: string; consentAudioUrl: string; consent?: true }
 }
 
 export interface TextToSpeechProvider {

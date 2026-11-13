@@ -5,6 +5,8 @@ import { isExecutableNode } from "@/components/editor/workflow-editor/types"
 import { previewRunnable } from "@/components/editor/workflow-editor/preview-gate"
 import { getNodeLabel } from "@/lib/presentation-utils"
 import { isMultiColumnList } from "@/lib/list-loop-migration"
+import { APP_CLONE_INPUT_TYPE, appCloneInputFilled } from "@/lib/app-clone-inputs"
+import { tx } from "@/lib/i18n"
 import { deriveSingleColumnListItems } from "../helpers"
 
 const UPLOAD_TYPES = new Set(["upload-image", "upload-video", "upload-audio"])
@@ -53,6 +55,8 @@ export function getChipValue(
     return (((inputVals?.text as string) ?? (data.text as string) ?? "").trim()) || undefined
   }
   if (isUploadNode(type)) return undefined
+  // "Your voice" writes onto its clone node's values, never its own.
+  if ((type as string) === APP_CLONE_INPUT_TYPE) return appCloneInputFilled(node, inputValues) ? tx("appClone.ready") : undefined
   if (type === "list") {
     const n = countListItems(data, inputVals)
     return n > 0 ? `${n} item${n === 1 ? "" : "s"}` : undefined

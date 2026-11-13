@@ -295,6 +295,10 @@ export const TTS_MODELS: readonly { value: string; label: string; desc: string }
   { value: "elevenlabs-v4-turbo", label: "ElevenLabs v4 Turbo", desc: "Faster, cheaper v4 at lower fidelity; supports audio tags" },
   { value: "elevenlabs-turbo", label: "ElevenLabs Turbo v2.5", desc: "Fast generation, 32 languages" },
   { value: "elevenlabs-multilingual", label: "ElevenLabs Multilingual v2", desc: "29 languages, natural delivery" },
+  { value: "gemini-3-8-flash-lite-tts", label: "Gemini 3.8 Flash-Lite TTS", desc: "Cheapest speech; 70 named voices, tone tags and a free-text style" },
+  { value: "gemini-3-8-flash-tts", label: "Gemini 3.8 Flash TTS", desc: "70 named voices, tone tags and a free-text style" },
+  { value: "gemini-3-1-flash-tts", label: "Gemini 3.1 Flash TTS", desc: "30 named voices with style, pace, accent and audio profile" },
+  { value: "gemini-2-5-pro-tts", label: "Gemini 2.5 Pro TTS", desc: "Pro model: 30 named voices with style, pace, accent and audio profile" },
 ]
 
 /**
@@ -305,6 +309,10 @@ export const TTS_MODELS: readonly { value: string; label: string; desc: string }
 export const DIALOGUE_MODELS: readonly { value: DialogueProvider; label: string; desc: string }[] = [
   { value: "elevenlabs-dialogue", label: "ElevenLabs Dialogue v3", desc: "Expressive, supports audio tags; stability in three steps" },
   { value: "elevenlabs-dialogue-v4", label: "ElevenLabs Dialogue v4", desc: "Newest, supports audio tags, stability and similarity" },
+  { value: "gemini-3-8-flash-lite-tts", label: "Gemini 3.8 Flash-Lite TTS", desc: "Cheapest; two named voices, tone tags, a style per line" },
+  { value: "gemini-3-8-flash-tts", label: "Gemini 3.8 Flash TTS", desc: "Two named voices, tone tags, a style per line" },
+  { value: "gemini-3-1-flash-tts", label: "Gemini 3.1 Flash TTS", desc: "Two named voices, each with its style, pace, accent and audio profile" },
+  { value: "gemini-2-5-pro-tts", label: "Gemini 2.5 Pro TTS", desc: "Pro model: two named voices, each with its style, pace, accent and audio profile" },
 ]
 
 export const MOTION_TRANSFER_MODELS: readonly { value: MotionTransferProviderType; label: string; desc: string }[] = [

@@ -1805,6 +1805,12 @@ export const TTS_PROVIDERS = [
   "elevenlabs-v4-turbo",
   "elevenlabs-turbo",
   "elevenlabs-multilingual",
+  // Google's Gemini speech through KIE (decided 2026-11-12): named voices of
+  // their own (`TtsCapabilities.voices`), never ElevenLabs'.
+  "gemini-3-8-flash-lite-tts",
+  "gemini-3-8-flash-tts",
+  "gemini-3-1-flash-tts",
+  "gemini-2-5-pro-tts",
   "elevenlabs",
 ] as const
 export type TtsProvider = typeof TTS_PROVIDERS[number]
@@ -1831,10 +1837,20 @@ export const TTS_OUTPUT_FORMAT_FILES: Readonly<Record<TtsOutputFormat, { readonl
 /**
  * Text-to-dialogue models (the `provider` of `/v1/text-to-dialogue` and of the
  * Text to Dialogue node). Each IS its catalog id and its credit identifier.
- * Never members of TTS_PROVIDERS: a dialogue model takes a script of lines, not
- * one text (`dialogue-capabilities.test.ts` pins both directions).
+ * The ElevenLabs dialogue models are dialogue-only ids, never members of
+ * TTS_PROVIDERS: their dialogue endpoint is its own model. Google's Gemini
+ * models take one speaker and two under ONE id, so each is in both lists,
+ * priced on its one row (dialogue costs what one speaker costs per character,
+ * decided 2026-11-12); `dialogue-capabilities.test.ts` pins exactly that.
  */
-export const DIALOGUE_PROVIDERS = ["elevenlabs-dialogue", "elevenlabs-dialogue-v4"] as const
+export const DIALOGUE_PROVIDERS = [
+  "elevenlabs-dialogue",
+  "elevenlabs-dialogue-v4",
+  "gemini-3-8-flash-lite-tts",
+  "gemini-3-8-flash-tts",
+  "gemini-3-1-flash-tts",
+  "gemini-2-5-pro-tts",
+] as const
 export type DialogueProvider = typeof DIALOGUE_PROVIDERS[number]
 
 /** The model a dialogue request runs on when its provider is missing or unknown: v3 dialogue (decided 2026-10-04 — v3 stays the default). */

@@ -35,7 +35,8 @@ import {
   speechQuoteCreditId,
   speechUnitCreditId,
 } from "@nodaro/shared/credits"
-import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
+import { ttsAngleTags } from "@nodaro/shared/model-catalog"
+import { angleTagGrowth, applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { GENERATED_VOICE_NODE_TYPES } from "@nodaro/render-rules"
 import { getAppSettings } from "./app-settings.js"
 import { speechLengthPricingEnabled } from "./config.js"
@@ -212,7 +213,29 @@ export function llmScriptChars(nodeType: string, data: Record<string, unknown>, 
 function limitedChars(runsAs: string, cap: number, textCap: number | undefined, data: Record<string, unknown>): number {
   if (textCap === undefined) return cap
   const wrapped = applyPromptAffixes("a".repeat(Math.min(textCap, cap)), readPromptAffixes(data), NO_REFS)
-  return REFERENCE.test(wrapped) ? cap : billableSpeechChars(runsAs, wrapped)
+  if (REFERENCE.test(wrapped)) return cap
+  return billableSpeechChars(runsAs, wrapped)
+}
+
+/**
+ * The characters a speech node is PRICED at: its script (`speechEstimateChars`)
+ * and, on an angle-tag model (Gemini 3.8), the most an input it does not know
+ * yet can grow when its tags are rewritten (`[pause]` → `<short pause>`, ×13/7:
+ * the worst case is listed, decided 2026-11-13) — the INPUT part only, under
+ * its limit: a literal pre/post text is already counted exactly as it is sent.
+ * Never above the cap. The price's count only: the script's length for timing
+ * (a voice's listed seconds, `generatedVoiceLength`) is `speechEstimateChars`,
+ * which never grows.
+ */
+export function speechPriceChars(nodeType: string, data: Record<string, unknown>, ctx: SpeechEstimateContext = {}): SpeechEstimateChars {
+  const script = speechEstimateChars(nodeType, data, ctx)
+  if (script.exact || ctx.textCap === undefined || script.chars >= script.cap) return script
+  // A dialogue's script under a limit is all input (no pre/post text); a Gemini 3.8 dialogue grows as one speaker does.
+  const sheet = nodeType === "text-to-dialogue" ? getDialogueCapabilities(script.runsAs) : undefined
+  const tags = sheet ? (sheet.tagSyntax === "angle" ? sheet.tags ?? [] : undefined) : ttsAngleTags(script.runsAs)
+  if (!tags) return script
+  const input = Math.min(ctx.textCap, script.cap)
+  return { ...script, chars: Math.min(script.cap, script.chars + Math.ceil(input * (angleTagGrowth(tags) - 1))) }
 }
 
 export interface SpeechEstimate extends SpeechEstimateChars {
@@ -227,7 +250,7 @@ export interface SpeechEstimate extends SpeechEstimateChars {
 /** The (unit row, units) pair for a speech node, and the id of its whole price; undefined for any other node and for every node while the flag is off. */
 export function speechEstimate(nodeType: string, data: Record<string, unknown>, ctx?: SpeechEstimateContext): SpeechEstimate | undefined {
   if (!SPEECH_NODE_TYPES.has(nodeType) || !speechLengthPricingEnabled()) return undefined
-  const chars = speechEstimateChars(nodeType, data, ctx)
+  const chars = speechPriceChars(nodeType, data, ctx)
   const units = speechPriceUnits(chars.chars)
   return { ...chars, id: speechUnitCreditId(chars.runsAs), units, quoteId: speechQuoteCreditId(chars.runsAs, units) }
 }

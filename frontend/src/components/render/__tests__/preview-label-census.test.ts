@@ -77,6 +77,7 @@ const EXEMPT: Record<string, string> = {
   "components/presentation/input-cards/loop-input-card.tsx": "an app INPUT the user supplied, not a node's result",
   "components/presentation/input-cards/video-upload-card.tsx": "an app INPUT the user uploaded, not a node's result",
   "components/presentation/input-cards/audio-upload-card.tsx": "an app INPUT the user uploaded, not a node's result",
+  "components/presentation/input-cards/voice-clone-input-card.tsx": "an app INPUT: the runner's own voice recordings for a cloned voice, not a node's result",
   "components/presentation/workflow-thumbnail-button.tsx": "the workflow's cover picture the author uploads; never a node's result",
   "components/presentation/output-cards/video-carousel-output.tsx": "the body of a gallery OutputCard, whose header carries the label (output-card.tsx, asserted below)",
   "components/presentation/output-cards/audio-list-output.tsx": "the body of a gallery OutputCard, whose header carries the label (output-card.tsx, asserted below)",

@@ -588,7 +588,7 @@ Convert text to spoken audio.
 }
 ```
 
-**Providers:** `elevenlabs-v4` (default; audio tags; stability + similarity only; up to 10,000 characters), `elevenlabs-v3` (the previous model; audio tags; stability only; up to 5,000 characters), `elevenlabs-v4-turbo` (the fast v4; audio tags; stability + similarity only; Turbo's credit price), `elevenlabs-turbo`, `elevenlabs-multilingual`, `elevenlabs` (legacy id of `elevenlabs-turbo`)
+**Providers:** `elevenlabs-v4` (default; audio tags; stability + similarity only; up to 10,000 characters), `elevenlabs-v3` (the previous model; audio tags; stability only; up to 5,000 characters), `elevenlabs-v4-turbo` (the fast v4; audio tags; stability + similarity only; Turbo's credit price), `elevenlabs-turbo`, `elevenlabs-multilingual`, `elevenlabs` (legacy id of `elevenlabs-turbo`); Google's `gemini-3-8-flash-lite-tts`, `gemini-3-8-flash-tts`, `gemini-3-1-flash-tts`, `gemini-2-5-pro-tts` (cheaper per character; each speaks only its own named voices — `GET /v1/voices?model=<id>`; no language code; style direction `styleDirection`, plus `pace` / `accent` / `audioProfile` on 3.1 and 2.5)
 
 **Common voice IDs:** `"Rachel"`, `"Clyde"`, `"Dave"`, `"Fin"`, `"Sarah"`, `"Antoni"`, `"Thomas"`, `"Charlie"`, `"George"`, `"Emily"`, `"Elli"`, `"Callum"`, `"Patrick"`, `"Harry"`, `"Liam"`, `"Dorothy"`, `"Josh"`, `"Arnold"`, `"Charlotte"`, `"Matilda"`, `"Jessica"`, `"Michael"`, `"Ethan"`, `"Gigi"`, `"Freya"`, `"Grace"`, `"Daniel"`, `"Lily"`, `"Serena"`, `"Adam"`, `"Nicole"`, `"Bill"`, `"Sam"`, `"Glinda"`, `"Giovanni"`, `"Mimi"`, `"Brian"`, `"Chris"`, `"James"`, `"Joseph"`, `"Drew"`, `"Paul"`, `"Aria"`, `"Roger"`, `"Eric"`, `"Valentino"`, `"Alice"`, `"Joanne"`, `"Laura"`, `"Will"`, `"Andrea"`, `"River"`
 
@@ -747,7 +747,7 @@ Animate a face to match audio.
 | `image` (image), `audio` (audio) | `video` (video) |
 
 #### text-to-dialogue (4 credits)
-Multi-speaker dialogue generation.
+Multi-speaker dialogue generation. `provider`: `elevenlabs-dialogue` (default), `elevenlabs-dialogue-v4`, or a Gemini speech model (`gemini-3-8-flash-lite-tts`, `gemini-3-8-flash-tts`, `gemini-3-1-flash-tts`, `gemini-2-5-pro-tts`) for one or two of its own named voices — a line's `styleDirection` and `fillerWords` on 3.8, `speakers` (each voice's `styleDirection`, `pace`, `accent`, `audioProfile`) on 3.1 / 2.5; `outputFormat` (`mp3_44100_128` default, `mp3_44100_192`, `wav_24000`) on any Gemini model.
 
 ```json
 {

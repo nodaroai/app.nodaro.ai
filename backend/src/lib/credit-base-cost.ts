@@ -14,9 +14,14 @@ export async function baseCreditCostFor(modelIdentifier: string): Promise<number
   return (await getModelCreditBaseCost(modelIdentifier)).creditCost
 }
 
-/** The base of `units` of a rate whose one-unit base is `unitBase`: rounded up once, as a route reserves it. */
-export function quoteBaseCredits(unitBase: number, units: number): number {
-  return Math.ceil(unitBase * units)
+/**
+ * The base of `units` of a rate whose row is `unitBase`: rounded up once, as a
+ * route reserves it. `rowUnits` is how many units one row prices — 10 for a
+ * speech model's per-1,000-characters row read in started hundreds
+ * (`speechRowUnits`, @nodaro/shared) — computed in whole numbers then.
+ */
+export function quoteBaseCredits(unitBase: number, units: number, rowUnits: number = 1): number {
+  return rowUnits === 1 ? Math.ceil(unitBase * units) : Math.ceil((unitBase * units) / rowUnits)
 }
 
 /**

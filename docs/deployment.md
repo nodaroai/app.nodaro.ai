@@ -255,7 +255,11 @@ echo "NODARO_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env
 ```
 
 `INTERNAL_ORCHESTRATOR_SECRET` authenticates the orchestrator process to
-the API server within a Nodaro container. `NODARO_ENCRYPTION_KEY` is
+the API server within a Nodaro container. It also keys the consent records of
+one-off voice clones ([Text to Speech](./nodes/ai-audio/text-to-speech.md)):
+rotating it voids every record issued before, and each cloned voice runs again
+only once its consent box is ticked again (with a bundled install's generated
+secret, a new container generates a new one unless it is set). `NODARO_ENCRYPTION_KEY` is
 AES-256-GCM key material used to encrypt stored credentials at rest —
 social-OAuth tokens and in-app provider keys (§12). `SOCIAL_ENCRYPTION_KEY`
 is the older name for the same variable and still works (see §8).

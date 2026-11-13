@@ -56,6 +56,7 @@ import { recoveredMaskComposite } from "./mask-paste-back.js"
 import { isEntityMediaJobType, recoverEntityJob } from "./entity-recovery.js"
 import { resubmitSeedanceEdit } from "./seedance-edit-resubmit.js"
 import { requestedAspectRatioOf } from "../../providers/kie/aspect-ratio-sentence.js"
+import { geminiSpeechJobOf, recoverGeminiSpeechJob } from "../gemini-speech.js"
 
 export interface KieJobRow {
   id: string
@@ -591,6 +592,19 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
   }
   if (!isFinalizeJobType(row.job_type)) {
     await bumpAttemptsOrExhaust(row.id, `unknown job_type for finalize: ${row.job_type ?? "null"}`)
+    return
+  }
+
+  // A Gemini speech task is delivered through the worker's own path
+  // (lib/gemini-speech.ts): its WAV made into the format asked for, with the
+  // same billedCharacters, audioMimeType and cost — never the raw WAV the
+  // generic finalize below would store.
+  if (geminiSpeechJobOf(row)) {
+    try {
+      await recoverGeminiSpeechJob(row, result, opts?.claimant ?? "cron")
+    } catch (err) {
+      await bumpAttemptsOrExhaust(row.id, err)
+    }
     return
   }
 

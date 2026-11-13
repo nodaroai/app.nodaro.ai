@@ -171,12 +171,25 @@ describe("MCP tool enums match catalog modes", () => {
   })
 })
 
+describe("list_models — the Gemini speech models (decided 2026-11-12)", () => {
+  it("lists each with its flat row and its per-1,000-characters rate row, after the ElevenLabs models", () => {
+    const rows = listModels({ kind: "audio", mode: "tts" }).filter((m) => m.id.startsWith("gemini-"))
+    expect(rows.map((m) => [m.id, m.pricing.map((p) => [p.identifier, p.credits])])).toEqual([
+      ["gemini-3-8-flash-lite-tts", [["gemini-3-8-flash-lite-tts", 4], ["gemini-3-8-flash-lite-tts:per-1k-chars", 4]]],
+      ["gemini-3-8-flash-tts", [["gemini-3-8-flash-tts", 6], ["gemini-3-8-flash-tts:per-1k-chars", 6]]],
+      ["gemini-3-1-flash-tts", [["gemini-3-1-flash-tts", 13], ["gemini-3-1-flash-tts:per-1k-chars", 13]]],
+      ["gemini-2-5-pro-tts", [["gemini-2-5-pro-tts", 16], ["gemini-2-5-pro-tts:per-1k-chars", 16]]],
+    ])
+  })
+})
+
 describe("list_models — the speech rows the existing models serve", () => {
   it("the four existing text-to-speech catalog rows are exactly what they were before v4 Turbo was added (decided 2026-10-06)", () => {
     // Characterization written BEFORE the new entry landed: the new id is filtered
     // out, so this passes both before and after — what it pins is that nothing
     // about the four existing rows (id, label, both price rows, the star) moved.
-    const rows = listModels({ kind: "audio", mode: "tts" }).filter((m) => m.id !== "elevenlabs-v4-turbo")
+    // The Gemini models (decided 2026-11-12) are filtered out the same way: they add rows, they move none.
+    const rows = listModels({ kind: "audio", mode: "tts" }).filter((m) => m.id !== "elevenlabs-v4-turbo" && !m.id.startsWith("gemini-"))
     expect(rows.map((m) => [m.id, m.label, m.pricing.map((p) => [p.identifier, p.credits]), m.featured ?? false])).toEqual([
       ["elevenlabs-v3", "ElevenLabs v3", [["elevenlabs-v3", 30], ["elevenlabs-v3:per-100-chars", 4]], false],
       ["elevenlabs-v4", "ElevenLabs v4", [["elevenlabs-v4", 30], ["elevenlabs-v4:per-100-chars", 4]], true],

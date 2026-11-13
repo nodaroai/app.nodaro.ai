@@ -113,6 +113,18 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   // An app's run (POST /v1/app/:slug/run), a share link's viewer's (POST /v1/present/:token/run) or
   // a component's (POST /v1/component/execute): a UGC Creator is set to "My photo" and the run gave it none.
   ugc_photo_required: "apiErr.reason.ugcPhotoRequired",
+  // The same runs, of a graph that clones a voice (decided 2026-11-13): the runner's own two recordings,
+  // the runner's own tick, a clone the runner's recordings cannot reach (inside a sub-workflow or a
+  // component), and the recordings themselves (`replica_*`, also on a direct speech run).
+  clone_recordings_required: "apiErr.reason.cloneRecordingsRequired",
+  clone_consent_required: "apiErr.reason.cloneConsentRequired",
+  clone_not_fillable: "apiErr.reason.cloneNotFillable",
+  clone_model_unsupported: "apiErr.reason.cloneModelUnsupported",
+  replica_unreachable: "apiErr.reason.replicaUnreachable",
+  replica_too_large: "apiErr.reason.replicaTooLarge",
+  replica_not_wav: "apiErr.reason.replicaNotWav",
+  replica_length: "apiErr.reason.replicaLength",
+  replica_link_refused: "apiErr.reason.replicaLinkRefused",
   already_tracked: "apiErr.reason.alreadyTracked",
   too_many_competitors: "apiErr.reason.tooManyBrands",
   nothing_to_scan: "apiErr.reason.nothingToScan",

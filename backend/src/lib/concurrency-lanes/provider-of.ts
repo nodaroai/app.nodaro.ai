@@ -70,18 +70,18 @@ import { composeRecord, unitRecord } from "../unit-compose.js"
 import { providerOf, UNIT_NODE_DESCRIPTORS } from "../unit-descriptors.js"
 import { laneClassOf } from "./registry.js"
 import { HOUSE_MODELS_PROVIDER, isOwnLabelModel } from "../house-models-served.js"
+import { canonicalTtsProvider } from "@nodaro/shared/model-catalog"
+import { isGeminiTtsModel } from "../../providers/kie/gemini-tts-models.js"
 
 /**
  * Core handlers that call one provider client whatever the payload (each
  * checked against its handler under workers/handlers/).
  */
 const CORE_HANDLER_PROVIDERS: Readonly<Record<string, string>> = Object.freeze({
-  "text-to-speech": "elevenlabs", // directElevenLabsTTS
   "voice-changer": "elevenlabs", // directVoiceChanger / voiceChangerFromUrl
   "voice-design": "elevenlabs", // designVoice
   "voice-remix": "elevenlabs", // remixVoice
   "dubbing": "elevenlabs", // startDubbing
-  "text-to-dialogue": "elevenlabs", // directElevenLabsDialogue
   "forced-alignment": "elevenlabs", // forcedAlignment / forcedAlignmentFromBuffer
   "audio-isolation": "kie", // KieAudioProvider.isolateAudio (KIE's elevenlabs-isolation task)
   "audio-separation": "replicate", // ReplicateAudioSeparationProvider (Demucs)
@@ -231,6 +231,10 @@ export const ROUTED_JOBS: Readonly<Record<string, (d: Data) => string | null>> =
   "voiced-video": (d) => route("image-to-video", str(d.provider) ?? VOICED_VIDEO_DEFAULT_PROVIDER),
   "extend-video": extendVideoProvider,
   "video-depth": videoDepthProvider,
+  // A Gemini speech model runs as a KIE task (workers/handlers/audio-ai.ts); every other is directElevenLabsTTS.
+  "text-to-speech": (d) => (isGeminiTtsModel(canonicalTtsProvider(str(d.provider) ?? "")) ? "kie" : "elevenlabs"),
+  // A Gemini dialogue model runs as a KIE task too; every other is directElevenLabsDialogue.
+  "text-to-dialogue": (d) => (isGeminiTtsModel(str(d.provider)) ? "kie" : "elevenlabs"),
   // tangoflux (Replicate) is reachable only from a stale payload; elevenlabs-sfx is the default.
   "text-to-audio": (d) => (str(d.provider) === "tangoflux" ? "replicate" : "elevenlabs"),
   "transcribe": (d) => {

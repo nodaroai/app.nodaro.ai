@@ -200,6 +200,7 @@ vi.mock("../../../providers/nodaro/client.js", () => ({
 vi.mock("../../../lib/safe-fetch.js", () => ({ safeFetch: mocks.mockSafeFetch }))
 
 import { TTS_PROVIDERS } from "@nodaro/shared/models"
+import { GEMINI_TTS_WIRE_MODELS } from "../../../providers/kie/gemini-tts-models.js"
 import { ttsSupportsTimestamps } from "@nodaro/shared/model-catalog"
 import { audioAIHandlers } from "../audio-ai.js"
 // The REAL config object (not a module mock — the handler's siblings read other
@@ -220,6 +221,9 @@ import { isPostProcessingError } from "../../../lib/post-processing-error.js"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 import { NoAudioTrackError } from "../../../providers/video/extract-audio-track.js"
 import { OWN_MEDIA_URL, withLinkImportsOff } from "@/test/link-imports-off.js"
+
+/** The speech models the direct ElevenLabs funnel renders (a Gemini model runs as a KIE task). */
+const ELEVENLABS_TTS_PROVIDERS = TTS_PROVIDERS.filter((p) => !Object.hasOwn(GEMINI_TTS_WIRE_MODELS, p))
 
 function makeJob(name: string, data: Record<string, unknown> = {}) {
   return { name, data: { jobId: "job-1", ...data }, id: "bull-1", updateProgress: vi.fn() }
@@ -521,8 +525,8 @@ describe("text-to-speech handler", () => {
   // a sheet that says `timestamps: true` takes the timed funnel and writes the
   // transcript; one that says false stays on the plain funnel with no key. The
   // list is not written by hand, so a new model or a re-measured sheet (the v4
-  // Turbo probe) needs no edit here.
-  it.each([...TTS_PROVIDERS])(
+  // Turbo probe) needs no edit here. The ElevenLabs models (the direct funnel); a Gemini model runs on KIE (below).
+  it.each(ELEVENLABS_TTS_PROVIDERS)(
     "withTimestamps on %s → the funnel its sheet says: timed with a transcript, or plain with none",
     async (provider) => {
       config.ELEVENLABS_API_KEY = "el_test"
@@ -540,7 +544,7 @@ describe("text-to-speech handler", () => {
     },
   )
 
-  it.each([...TTS_PROVIDERS])(
+  it.each(ELEVENLABS_TTS_PROVIDERS)(
     "no flag → today's plain funnel on %s: no timed call, no transcript key",
     async (provider) => {
       config.ELEVENLABS_API_KEY = "el_test"
@@ -1769,3 +1773,388 @@ describe("transcribe handler on a deployment that turned link imports off (a run
     expect(mocks.mockTranscribe).toHaveBeenCalled()
   })
 })
+
+// ── Gemini speech (KIE), decided 2026-11-12 ──────────────────────────────────
+const gemini = vi.hoisted(() => ({
+  runGeminiSpeech: vi.fn(async (_provider: string, _input: Record<string, unknown>, _opts?: unknown) => ({ url: "https://kie.example/speech.wav", kieCredits: 0.42, providerMs: 9000 })),
+  wavToMp3: vi.fn(async () => Buffer.from("ID3-mp3")),
+}))
+vi.mock("../../../providers/kie/gemini-tts.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../providers/kie/gemini-tts.js")>()),
+  runGeminiSpeech: gemini.runGeminiSpeech,
+}))
+vi.mock("../../../providers/audio/speech-mp3.js", () => ({
+  isMp3SpeechFormat: (f: string) => f.startsWith("mp3_"),
+  wavToMp3: gemini.wavToMp3,
+}))
+
+// A one-off clone's recordings (lib/voice-replica.ts has its own tests): judged and staged by a stand-in.
+const replicaStage = vi.hoisted(() => ({
+  stageReplica: vi.fn(async (r: { sourceAudioUrl: string }) => ({
+    sourceAudioUrl: `https://r2.example/tmp/provider-input/job-1/replica-source-${r.sourceAudioUrl.length}.wav`,
+    consentAudioUrl: "https://r2.example/tmp/provider-input/job-1/replica-consent.wav",
+  })),
+}))
+vi.mock("../../../lib/voice-replica.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/voice-replica.js")>()),
+  stageReplica: replicaStage.stageReplica,
+}))
+
+describe("text-to-speech on a Gemini model (KIE)", () => {
+  const handler = audioAIHandlers["text-to-speech"]!
+  afterEach(() => {
+    config.KIE_API_KEY = ""
+  })
+
+  it("runs as a KIE task BEFORE the ElevenLabs key is looked at: its voice, its tags, its direction, one speaker and one turn", async () => {
+    config.KIE_API_KEY = "kie_test"
+    await handler(makeJob("text-to-speech", {
+      text: "Hello [laughs] there [excited] friend.",
+      provider: "gemini-3-8-flash-lite-tts",
+      voice: "Zephyr",
+      styleDirection: "slow and dry",
+      pace: "Staccato",
+    }) as never, makeCtx())
+    expect(mocks.mockDirectElevenLabsTTS).not.toHaveBeenCalled()
+    const [provider, input, opts] = gemini.runGeminiSpeech.mock.calls[0]!
+    expect(provider).toBe("gemini-3-8-flash-lite-tts")
+    expect(input).toEqual({
+      speakers: [{ speaker_id: "Speaker 1", voice_name: "Zephyr" }],
+      dialogue_turns: [{ speaker_id: "Speaker 1", text: "Hello <laugh> there friend.", style: "slow and dry" }],
+    })
+    // The task is recorded on the job, so a dead worker leaves a task the reconcile delivers.
+    expect(opts).toMatchObject({ onTaskCreated: expect.any(Function) })
+  })
+
+  it("delivers the default MP3 encoded from KIE's WAV, with what was sent, the file type and the task's own cost", async () => {
+    config.KIE_API_KEY = "kie_test"
+    await handler(makeJob("text-to-speech", { text: "Hi [whispers] there", provider: "gemini-3-1-flash-tts" }) as never, makeCtx())
+    expect(gemini.runGeminiSpeech.mock.calls[0]![1]).toMatchObject({ speakers: [{ voice_name: "Kore" }] }) // no voice → the model's default
+    expect(gemini.wavToMp3).toHaveBeenCalledWith(expect.any(Buffer), "mp3_44100_128")
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({
+      jobType: "text-to-speech",
+      result: expect.objectContaining({ providerUsed: "kie", cost: expect.closeTo(0.42 * 0.005, 10) }),
+      extraOutputData: { billedCharacters: "Hi [whispers] there".length, audioMimeType: "audio/mpeg" },
+    }))
+  })
+
+  it("withTimestamps is not a Gemini model's (its sheet returns none): the KIE task, no transcript key", async () => {
+    config.KIE_API_KEY = "kie_test"
+    await handler(makeJob("text-to-speech", { text: "Hi", provider: "gemini-3-8-flash-tts", withTimestamps: true }) as never, makeCtx())
+    expect(mocks.mockDirectElevenLabsTTSWithTimestamps).not.toHaveBeenCalled()
+    const call = mocks.mockFinalizeJobWithMedia.mock.calls.at(-1)![0] as Record<string, unknown>
+    expect("transcript" in ((call.extraOutputData ?? {}) as Record<string, unknown>)).toBe(false)
+  })
+
+  it("under a voice lock a Gemini job is refused whole, before any provider call — no gender is recorded for its voices (decided 2026-11-13)", async () => {
+    config.KIE_API_KEY = "kie_test"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male", "female", "neutral"] } })
+    __resetSurfaceProfileCacheForTests()
+    try {
+      const err = await handler(makeJob("text-to-speech", { text: "Hi", provider: "gemini-3-8-flash-tts" }) as never, makeCtx()).catch((e: unknown) => e)
+      expect((err as { code?: string }).code).toBe("voice_not_available")
+      expect(gemini.runGeminiSpeech).not.toHaveBeenCalled()
+    } finally {
+      delete process.env.NODARO_SURFACE_PROFILE
+      __resetSurfaceProfileCacheForTests()
+    }
+  })
+
+  it("3.8: the text is rewritten, then cut to the cap — never sent past it (decided 2026-11-13)", async () => {
+    config.KIE_API_KEY = "kie_test"
+    await handler(makeJob("text-to-speech", { text: " [pause]".repeat(1250), provider: "gemini-3-8-flash-lite-tts" }) as never, makeCtx())
+    const sent = (gemini.runGeminiSpeech.mock.calls[0]![1] as { dialogue_turns: Array<{ text: string }> }).dialogue_turns[0]!.text
+    expect(sent.length).toBeLessThanOrEqual(10000)
+    expect(sent.endsWith("<short pause>")).toBe(true)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ extraOutputData: expect.objectContaining({ billedCharacters: sent.length }) }))
+  })
+
+  it("wav_24000 keeps KIE's WAV as rendered", async () => {
+    config.KIE_API_KEY = "kie_test"
+    await handler(makeJob("text-to-speech", { text: "Hi", provider: "gemini-2-5-pro-tts", voice: "Puck", outputFormat: "wav_24000" }) as never, makeCtx())
+    expect(gemini.wavToMp3).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ extraOutputData: { billedCharacters: 2, audioMimeType: "audio/wav" } }))
+  })
+
+  it("with no KIE key and no connection, fails naming the KIE key — never an ElevenLabs model in its place", async () => {
+    config.KIE_API_KEY = ""
+    const err = await handler(makeJob("text-to-speech", { text: "Hi", provider: "gemini-3-8-flash-tts" }) as never, makeCtx()).catch((e: unknown) => e)
+    expect(String(err)).toContain("KIE_API_KEY")
+    expect(mocks.mockDirectElevenLabsTTS).not.toHaveBeenCalled()
+    expect(gemini.runGeminiSpeech).not.toHaveBeenCalled()
+  })
+
+  it("with no KIE key but a connection, relays to the cloud with the model's own voice and direction", async () => {
+    config.KIE_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+    await handler(makeJob("text-to-speech", { text: "Hi [laughs]", provider: "gemini-3-8-flash-tts", voice: "Rachel", styleDirection: "warm" }) as never, makeCtx())
+    expect(mocks.mockDirectElevenLabsTTS).not.toHaveBeenCalled()
+    // The RAW text: the cloud applies the one rule once (decided 2026-11-13).
+    expect(mocks.mockCloudTextToSpeech).toHaveBeenCalledWith("Hi [laughs]", "Fola", "gemini-3-8-flash-tts", expect.objectContaining({ styleDirection: "warm" }))
+  })
+
+  it("the relay forwards a nested-bracket text as written, so the rule runs once; the run is billed for what the cloud sends", async () => {
+    config.KIE_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+    const raw = "Hi [[laughs]] there"
+    await handler(makeJob("text-to-speech", { text: raw, provider: "gemini-3-8-flash-tts" }) as never, makeCtx())
+    expect(mocks.mockCloudTextToSpeech.mock.calls.at(-1)![0]).toBe(raw)
+    // Rewritten once: "Hi [<laugh>] there" (18). Rewritten twice it would have been "Hi there".
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ extraOutputData: expect.objectContaining({ billedCharacters: "Hi [<laugh>] there".length }) }))
+  })
+})
+
+describe("text-to-dialogue on a Gemini model (KIE), two speakers (decided 2026-11-12)", () => {
+  const handler = audioAIHandlers["text-to-dialogue"]!
+  afterEach(() => {
+    config.KIE_API_KEY = ""
+  })
+
+  it("3.8: one KIE task before the ElevenLabs key is looked at — two speakers in the order they speak, each line a turn with its tags rewritten and its style, filler words with two voices", async () => {
+    config.KIE_API_KEY = "kie_test"
+    await handler(makeJob("text-to-dialogue", {
+      provider: "gemini-3-8-flash-lite-tts",
+      dialogue: [
+        { text: "Did it work? [laughs]", voice: "Fola", styleDirection: "  excited host " },
+        { text: "It did.", voice: "Puck" },
+        { text: "Great [excited]", voice: "Fola" },
+      ],
+      fillerWords: true,
+      // A speaker's direction is 3.1 / 2.5's: never sent to 3.8.
+      speakers: [{ voice: "Fola", pace: "Staccato" }],
+      stability: 0.5,
+    }) as never, makeCtx())
+    expect(mocks.mockDirectElevenLabsDialogue).not.toHaveBeenCalled()
+    const [provider, input, opts] = gemini.runGeminiSpeech.mock.calls.at(-1)!
+    expect(provider).toBe("gemini-3-8-flash-lite-tts")
+    expect(input).toEqual({
+      filler_words: true,
+      speakers: [{ speaker_id: "Speaker 1", voice_name: "Fola" }, { speaker_id: "Speaker 2", voice_name: "Puck" }],
+      dialogue_turns: [
+        { speaker_id: "Speaker 1", text: "Did it work? <laugh>", style: "excited host" },
+        { speaker_id: "Speaker 2", text: "It did." },
+        { speaker_id: "Speaker 1", text: "Great" },
+      ],
+    })
+    expect(opts).toMatchObject({ onTaskCreated: expect.any(Function) })
+    // Delivered as a dialogue, the default MP3, billed over every line as sent.
+    expect(gemini.wavToMp3).toHaveBeenCalledWith(expect.any(Buffer), "mp3_44100_128")
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({
+      jobType: "generate-dialogue",
+      result: expect.objectContaining({ providerUsed: "kie" }),
+      extraOutputData: { billedCharacters: "Did it work? <laugh>".length + "It did.".length + "Great".length, audioMimeType: "audio/mpeg" },
+    }))
+  })
+
+  it("3.1: each speaker's style, pace, accent and audio profile on the speaker; no style on a turn; one voice runs as one speaker with no filler words", async () => {
+    config.KIE_API_KEY = "kie_test"
+    await handler(makeJob("text-to-dialogue", {
+      provider: "gemini-3-1-flash-tts",
+      dialogue: [{ text: "Hi.", voice: "Kore", styleDirection: "ignored here" }, { text: "Hey [whispers]", voice: "Puck" }],
+      speakers: [{ voice: "Kore", styleDirection: "Vocal Smile", pace: "Rapid Fire", accent: "American (Gen)" }, { voice: "Puck", audioProfile: " A tired engineer " }],
+      fillerWords: true,
+    }) as never, makeCtx())
+    expect(gemini.runGeminiSpeech.mock.calls.at(-1)![1]).toEqual({
+      speakers: [
+        { speaker_id: "Speaker 1", voice_name: "Kore", style: "Vocal Smile", pace: "Rapid Fire", accent: "American (Gen)" },
+        { speaker_id: "Speaker 2", voice_name: "Puck", audio_profile: "A tired engineer" },
+      ],
+      dialogue_turns: [{ speaker_id: "Speaker 1", text: "Hi." }, { speaker_id: "Speaker 2", text: "Hey [whispers]" }],
+    })
+    await handler(makeJob("text-to-dialogue", { provider: "gemini-3-8-flash-tts", dialogue: [{ text: "Solo.", voice: "Zephyr" }], fillerWords: true }) as never, makeCtx())
+    expect(gemini.runGeminiSpeech.mock.calls.at(-1)![1]).toEqual({
+      speakers: [{ speaker_id: "Speaker 1", voice_name: "Zephyr" }],
+      dialogue_turns: [{ speaker_id: "Speaker 1", text: "Solo." }],
+    })
+  })
+
+  it("a line left with nothing to say once its tags are taken out is not sent; a voice the model does not speak moves onto one it does", async () => {
+    config.KIE_API_KEY = "kie_test"
+    await handler(makeJob("text-to-dialogue", {
+      provider: "gemini-3-8-flash-tts",
+      dialogue: [{ text: "Hello.", voice: "Rachel" }, { text: "[excited]", voice: "Puck" }, { text: "Bye.", voice: "Puck" }],
+    }) as never, makeCtx())
+    expect(gemini.runGeminiSpeech.mock.calls.at(-1)![1]).toEqual({
+      speakers: [{ speaker_id: "Speaker 1", voice_name: "Fola" }, { speaker_id: "Speaker 2", voice_name: "Puck" }],
+      dialogue_turns: [{ speaker_id: "Speaker 1", text: "Hello." }, { speaker_id: "Speaker 2", text: "Bye." }],
+    })
+  })
+
+  it("under a voice lock it is refused whole, before any provider call (decided 2026-11-13)", async () => {
+    config.KIE_API_KEY = "kie_test"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male", "female", "neutral"] } })
+    __resetSurfaceProfileCacheForTests()
+    try {
+      const err = await handler(makeJob("text-to-dialogue", { provider: "gemini-3-8-flash-tts", dialogue: [{ text: "Hi", voice: "Fola" }] }) as never, makeCtx()).catch((e: unknown) => e)
+      expect((err as { code?: string }).code).toBe("voice_not_available")
+      expect(gemini.runGeminiSpeech).not.toHaveBeenCalled()
+    } finally {
+      delete process.env.NODARO_SURFACE_PROFILE
+      __resetSurfaceProfileCacheForTests()
+    }
+  })
+
+  it("with no KIE key and no connection, fails naming the KIE key — never an ElevenLabs dialogue in its place", async () => {
+    config.KIE_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(false)
+    const err = await handler(makeJob("text-to-dialogue", { provider: "gemini-3-1-flash-tts", dialogue: [{ text: "Hi", voice: "Kore" }] }) as never, makeCtx()).catch((e: unknown) => e)
+    expect(String(err)).toContain("KIE_API_KEY")
+    expect(mocks.mockDirectElevenLabsDialogue).not.toHaveBeenCalled()
+    expect(gemini.runGeminiSpeech).not.toHaveBeenCalled()
+  })
+
+  it("with no KIE key but a connection, relays the request as written — its own fields included — and bills the lines as the cloud sends them", async () => {
+    config.KIE_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+    const dialogue = [{ text: "Hi [laughs]", voice: "Fola", styleDirection: "warm" }, { text: "Hey", voice: "Puck" }]
+    await handler(makeJob("text-to-dialogue", { provider: "gemini-3-8-flash-tts", dialogue, fillerWords: true }) as never, makeCtx())
+    expect(mocks.mockDirectElevenLabsDialogue).not.toHaveBeenCalled()
+    expect(mocks.mockCreateCloudJob).toHaveBeenCalledWith("/v1/text-to-dialogue", expect.objectContaining({ dialogue, provider: "gemini-3-8-flash-tts", fillerWords: true }))
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({
+      result: expect.objectContaining({ providerUsed: "nodaro-cloud", cost: null }),
+      extraOutputData: expect.objectContaining({ billedCharacters: "Hi <laugh>".length + "Hey".length }),
+    }))
+  })
+})
+
+describe("text-to-dialogue on a Gemini model — the file (decided 2026-11-13)", () => {
+  const handler = audioAIHandlers["text-to-dialogue"]!
+  afterEach(() => {
+    config.KIE_API_KEY = ""
+  })
+
+  it("the WAV asked for is stored as rendered; an MP3 is encoded from it", async () => {
+    config.KIE_API_KEY = "kie_test"
+    gemini.wavToMp3.mockClear()
+    await handler(makeJob("text-to-dialogue", { provider: "gemini-3-8-flash-tts", dialogue: [{ text: "Hi", voice: "Fola" }], outputFormat: "wav_24000" }) as never, makeCtx())
+    expect(gemini.wavToMp3).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenLastCalledWith(expect.objectContaining({ extraOutputData: expect.objectContaining({ audioMimeType: "audio/wav" }) }))
+    await handler(makeJob("text-to-dialogue", { provider: "gemini-3-8-flash-tts", dialogue: [{ text: "Hi", voice: "Fola" }], outputFormat: "mp3_44100_192" }) as never, makeCtx())
+    expect(gemini.wavToMp3).toHaveBeenCalledWith(expect.any(Buffer), "mp3_44100_192")
+  })
+
+  it("the relay is asked for the format and the file it sends back is stored as what it is", async () => {
+    config.KIE_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+    const wav = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WAVEfmt ")])
+    mocks.mockWaitForCloudJob.mockResolvedValueOnce({ output_data: { audioUrl: "https://cloud.nodaro.ai/dlg.wav" } })
+    mocks.mockSafeFetch.mockResolvedValueOnce({ ok: true, arrayBuffer: async () => new Uint8Array(wav).buffer })
+    await handler(makeJob("text-to-dialogue", { provider: "gemini-3-1-flash-tts", dialogue: [{ text: "Hi", voice: "Kore" }], outputFormat: "wav_24000" }) as never, makeCtx())
+    expect(mocks.mockCreateCloudJob).toHaveBeenLastCalledWith("/v1/text-to-dialogue", expect.objectContaining({ outputFormat: "wav_24000" }))
+    expect(mocks.mockUploadBufferToR2).toHaveBeenLastCalledWith(expect.any(Buffer), expect.stringMatching(/\.wav$/), "audio/wav", expect.anything())
+  })
+})
+
+describe("a one-off clone on Gemini 3.8 Flash (replica, decided 2026-11-13)", () => {
+  const REPLICA = { sourceAudioUrl: "https://media.example/s.wav", consentAudioUrl: "https://media.example/c.wav", consent: true }
+  afterEach(() => {
+    config.KIE_API_KEY = ""
+  })
+
+  it("text to speech: the recordings are staged in the job's scratch and sent as `replica`, never with `voice_name`", async () => {
+    config.KIE_API_KEY = "kie_test"
+    replicaStage.stageReplica.mockClear()
+    await audioAIHandlers["text-to-speech"]!(makeJob("text-to-speech", { text: "Hi.", provider: "gemini-3-8-flash-tts", voice: "Fola", replica: REPLICA }) as never, makeCtx())
+    expect(replicaStage.stageReplica).toHaveBeenCalledWith({ sourceAudioUrl: REPLICA.sourceAudioUrl, consentAudioUrl: REPLICA.consentAudioUrl })
+    const input = gemini.runGeminiSpeech.mock.calls.at(-1)![1] as { speakers: Array<Record<string, unknown>> }
+    expect(input.speakers).toEqual([{ speaker_id: "Speaker 1", replica: { source_audio_url: expect.stringContaining("/tmp/provider-input/"), consent_audio_url: "https://r2.example/tmp/provider-input/job-1/replica-consent.wav" } }])
+  })
+
+  it("a dialogue: the cloned speaker beside a named one", async () => {
+    config.KIE_API_KEY = "kie_test"
+    await audioAIHandlers["text-to-dialogue"]!(makeJob("text-to-dialogue", {
+      provider: "gemini-3-8-flash-tts",
+      dialogue: [{ text: "It's me.", voice: "Me" }, { text: "Hey.", voice: "Puck" }],
+      speakers: [{ voice: "Me", replica: REPLICA }],
+    }) as never, makeCtx())
+    const input = gemini.runGeminiSpeech.mock.calls.at(-1)![1] as { speakers: Array<Record<string, unknown>> }
+    expect(input.speakers[0]).toEqual({ speaker_id: "Speaker 1", replica: expect.objectContaining({ consent_audio_url: expect.any(String) }) })
+    expect(input.speakers[1]).toEqual({ speaker_id: "Speaker 2", voice_name: "Puck" })
+  })
+
+  it("a clone KIE refuses fails with the platform's sentence, never KIE's text, and is not retried", async () => {
+    config.KIE_API_KEY = "kie_test"
+    const { KieError } = await import("../../../providers/kie/client.js")
+    gemini.runGeminiSpeech.mockRejectedValueOnce(new KieError("Speech generation failed", "task failed: [422] Invalid consent audio.", "Speech generation", true))
+    const err = await audioAIHandlers["text-to-speech"]!(makeJob("text-to-speech", { text: "Hi.", provider: "gemini-3-8-flash-tts", replica: REPLICA }) as never, makeCtx()).catch((e: unknown) => e)
+    expect(String(err)).toContain("The consent recording was not accepted")
+    expect(String(err)).not.toContain("Invalid consent audio")
+    expect((err as { deterministic?: boolean }).deterministic).toBe(true)
+  })
+
+  it("a clone without its consent is refused before any recording is read (the backstop); a speaker no line uses is not judged", async () => {
+    config.KIE_API_KEY = "kie_test"
+    gemini.runGeminiSpeech.mockClear()
+    replicaStage.stageReplica.mockClear()
+    const unconsented = { ...REPLICA, consent: undefined }
+    const tts = await audioAIHandlers["text-to-speech"]!(makeJob("text-to-speech", { text: "Hi.", provider: "gemini-3-8-flash-tts", replica: unconsented }) as never, makeCtx()).catch((e: unknown) => e)
+    expect(String(tts)).toContain("runs only with the consent of the person running it")
+    const dlg = await audioAIHandlers["text-to-dialogue"]!(makeJob("text-to-dialogue", {
+      provider: "gemini-3-8-flash-tts", dialogue: [{ text: "Hi.", voice: "Me" }], speakers: [{ voice: "Me", replica: unconsented }],
+    }) as never, makeCtx()).catch((e: unknown) => e)
+    expect(String(dlg)).toContain("runs only with the consent of the person running it")
+    expect(replicaStage.stageReplica).not.toHaveBeenCalled()
+    expect(gemini.runGeminiSpeech).not.toHaveBeenCalled()
+    // An unconsented clone no line speaks with is not sent, so it stops nothing.
+    await audioAIHandlers["text-to-dialogue"]!(makeJob("text-to-dialogue", {
+      provider: "gemini-3-8-flash-tts", dialogue: [{ text: "Hi.", voice: "Puck" }], speakers: [{ voice: "Me", replica: unconsented }],
+    }) as never, makeCtx())
+    expect(gemini.runGeminiSpeech).toHaveBeenCalledTimes(1)
+  })
+
+  it("a transient provider failure is not blamed on the recordings: it is left as it came, to be retried", async () => {
+    config.KIE_API_KEY = "kie_test"
+    const { KieError } = await import("../../../providers/kie/client.js")
+    const transient = new KieError("Speech generation failed", "task failed: [500] Internal error, please retry", "Speech generation", true)
+    gemini.runGeminiSpeech.mockRejectedValueOnce(transient)
+    const err = await audioAIHandlers["text-to-speech"]!(makeJob("text-to-speech", { text: "Hi.", provider: "gemini-3-8-flash-tts", replica: REPLICA }) as never, makeCtx()).catch((e: unknown) => e)
+    expect(err).toBe(transient)
+  })
+
+  it("the relay passes on the consent the job received", async () => {
+    config.KIE_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+    await audioAIHandlers["text-to-speech"]!(makeJob("text-to-speech", { text: "Hi.", provider: "gemini-3-8-flash-tts", replica: REPLICA }) as never, makeCtx())
+    expect(mocks.mockCloudTextToSpeech.mock.calls.at(-1)![3]).toMatchObject({ replica: REPLICA })
+  })
+
+  it("a clone on a model that does not clone is refused before any provider call — 3.8 Flash-Lite included", async () => {
+    config.KIE_API_KEY = "kie_test"
+    gemini.runGeminiSpeech.mockClear()
+    replicaStage.stageReplica.mockClear()
+    for (const provider of ["gemini-3-8-flash-lite-tts", "elevenlabs-v4"]) {
+      const err = await audioAIHandlers["text-to-speech"]!(makeJob("text-to-speech", { text: "Hi.", provider, replica: REPLICA }) as never, makeCtx()).catch((e: unknown) => e)
+      expect(String(err), provider).toContain("does not clone a voice")
+    }
+    const err = await audioAIHandlers["text-to-dialogue"]!(makeJob("text-to-dialogue", { provider: "gemini-3-1-flash-tts", dialogue: [{ text: "Hi", voice: "Kore" }], speakers: [{ voice: "Kore", replica: REPLICA }] }) as never, makeCtx()).catch((e: unknown) => e)
+    expect(String(err)).toContain("does not clone a voice")
+    expect(gemini.runGeminiSpeech).not.toHaveBeenCalled()
+    expect(replicaStage.stageReplica).not.toHaveBeenCalled()
+  })
+})
+
+describe("a one-off clone where the Voice Clone node is denied — the worker's backstop (decided 2026-11-13)", () => {
+  const REPLICA = { sourceAudioUrl: "https://media.example/s.wav", consentAudioUrl: "https://media.example/c.wav", consent: true }
+  afterEach(() => {
+    config.KIE_API_KEY = ""
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+  })
+
+  it("refuses with a clear sentence before any recording is read or KIE called, on both speech handlers", async () => {
+    config.KIE_API_KEY = "kie_test"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ nodes: { deny: ["voice-clone"] } })
+    __resetSurfaceProfileCacheForTests()
+    gemini.runGeminiSpeech.mockClear()
+    replicaStage.stageReplica.mockClear()
+    const tts = await audioAIHandlers["text-to-speech"]!(makeJob("text-to-speech", { text: "Hi.", provider: "gemini-3-8-flash-tts", replica: REPLICA }) as never, makeCtx()).catch((e: unknown) => e)
+    expect(String(tts)).toContain("Voice cloning is not available on this deployment")
+    const dlg = await audioAIHandlers["text-to-dialogue"]!(makeJob("text-to-dialogue", {
+      provider: "gemini-3-8-flash-tts", dialogue: [{ text: "Hi.", voice: "Me" }], speakers: [{ voice: "Me", replica: REPLICA }],
+    }) as never, makeCtx()).catch((e: unknown) => e)
+    expect(String(dlg)).toContain("Voice cloning is not available on this deployment")
+    expect(replicaStage.stageReplica).not.toHaveBeenCalled()
+    expect(gemini.runGeminiSpeech).not.toHaveBeenCalled()
+  })
+})
+

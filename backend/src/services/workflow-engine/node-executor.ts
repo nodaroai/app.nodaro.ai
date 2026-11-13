@@ -138,6 +138,7 @@ import { runStopSignal } from "./run-stop-signal.js"
 import { discardDeletedJobScratch } from "../../lib/job-scratch.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
+import { payloadReplicas, readReplica, ReplicaRecordingError, withoutReplicaLinks } from "../../lib/voice-replica.js"
 import { stampSeedanceReferenceTaskTypeForRun } from "../../lib/seedance-task-type-stamp.js"
 import { applyAudioSoundtrack } from "../../lib/audio-soundtrack.js"
 import { probeAndCheckRefAudio } from "../../lib/ref-audio-probe.js"
@@ -2342,6 +2343,8 @@ async function executeWorkerNode(
         nodeStates,
         authoredData,
         viewer,
+        // A one-off voice clone runs only on its runner's own consent (decided 2026-11-13).
+        ...(ctx.userId ? { runUserId: ctx.userId } : {}),
         listRow,
         editPlanPerMinute,
         ...(speakerViewTracks ? { speakerViewTracks } : {}),
@@ -2435,6 +2438,21 @@ async function executeWorkerNode(
     const err = new Error(refAudioCheck.message) as Error & { errorCode?: string }
     err.errorCode = refAudioCheck.code
     throw err
+  }
+  // Same gate for a one-off voice clone's recordings (Gemini 3.8 Flash, decided 2026-11-13): the routes judge
+  // them before their hold through the same reader (`lib/voice-replica.ts`), so a workflow or app run refuses a
+  // recording KIE would not take (not a WAV, over 10 MB, a reference outside 10–30 s, an unreachable link)
+  // before anything is reserved. The worker judges them again and sends its own scratch copies.
+  for (const replica of payloadReplicas(payload)) {
+    try {
+      await readReplica(replica)
+    } catch (err) {
+      if (!(err instanceof ReplicaRecordingError)) throw err
+      await supabase.from("jobs").delete().eq("id", jobId)
+      const refusal = new Error(err.message) as Error & { errorCode?: string }
+      refusal.errorCode = err.code
+      throw refusal
+    }
   }
   // Reused by the reservation below so a legal set is ffprobed ONCE per run (R15).
   // The gate probes only a provider with a DECLARED bound. A Seedance
@@ -2733,7 +2751,8 @@ async function executeWorkerNode(
   const resolvedModel = resolvedModelOfJob(jobName, payload)
   const inputData: Record<string, unknown> = {
     ...(resolvedModel ? { resolvedModel } : {}),
-    ...payload,
+    // A one-off clone's recording links never reach the job row (`withoutReplicaLinks`); the payload keeps them.
+    ...withoutReplicaLinks(payload),
     type: node.type,
     node_id: node.id,
     ...(iterationIndex !== undefined ? { iterationIndex } : {}),

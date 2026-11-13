@@ -101,6 +101,13 @@ describe("planVoicedDialogue", () => {
   })
 })
 
+describe("planVoicedDialogue — a voice that names a Gemini model (decided 2026-11-12)", () => {
+  it("renders, and is priced, as a voice with no model: Gemini is not offered on the voiced lane", () => {
+    const plan = planVoicedDialogue({ dialogue: [{ speaker: "A", line: "Hello there." }], characterVoices: [{ voiceId: "Rachel", ttsProvider: "gemini-3-8-flash-tts", speaker: "A" }] } as never)
+    expect(plan.synthModel).toBe("elevenlabs-turbo")
+  })
+})
+
 describe("voicedAddonBaseCredits", () => {
   beforeEach(() => { flag.on = true })
 

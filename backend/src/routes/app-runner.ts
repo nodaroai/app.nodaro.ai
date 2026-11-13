@@ -20,6 +20,7 @@ import { LISTING_ESTIMATE_FLAG_COLUMN, selectWithEstimateFlag } from "../lib/lis
 import { refuseIfRunUnpriced } from "../lib/llm-unpriced-refusal.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
+import { cloneRecordingsRefusal, cloneRunCheck, type CloneRunCheck } from "../lib/clone-app-run.js"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
@@ -514,6 +515,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       // If empty (stale routeId in snapshot), fall through → runs entire workflow
     }
 
+    let cloneCheck: CloneRunCheck = { recordings: [] }
     // A UGC Creator set to "My photo" that the run gives no photo: refused before anything is written,
     // priced or spent (the creator would stop the run after the script was paid for; lib/ugc-app-run.ts).
     // Read over every graph the run executes: a creator in a sub-workflow, and a creator whose photo
@@ -531,6 +533,19 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       ) {
         return reply.status(400).send({ error: { ...UGC_APP_PHOTO_REQUIRED } })
       }
+      // A one-off voice clone speaks only in the runner's own recordings, on the runner's own consent
+      // (decided 2026-11-13): the app's inputs give them, and a run without them is refused here,
+      // before anything is written, held or spent (lib/clone-app-run.ts). The recordings themselves
+      // are read only after the daily limit and the credit checks below, so a refused run downloads nothing.
+      cloneCheck = await cloneRunCheck(
+        appNodes,
+        (appRow.snapshot_edges ?? []) as ReadonlyArray<{ source?: string; target?: string; targetHandle?: string | null }>,
+        inputOverrides,
+        nodeIds,
+        appRow.creator_id as string,
+        req.userId,
+      )
+      if (cloneCheck.refusal) return reply.status(cloneCheck.refusal.status).send({ error: cloneCheck.refusal.error })
     }
 
     // Run rate limit (skip for headless/component calls) + app credits allowance checks in parallel
@@ -665,6 +680,12 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       }
     }
 
+
+    // The runner's clone recordings, read once the cheaper checks above passed (lib/clone-app-run.ts).
+    {
+      const refusal = await cloneRecordingsRefusal(cloneCheck.recordings)
+      if (refusal) return reply.status(refusal.status).send({ error: refusal.error })
+    }
 
     // P14 (C1): the refusal runs BEFORE any row is written — a refused
     // draft must not leave an orphaned pending execution that bricks the

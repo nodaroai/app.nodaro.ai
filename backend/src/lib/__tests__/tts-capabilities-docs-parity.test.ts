@@ -37,6 +37,10 @@ const DOC_NAMES: Record<string, { short: string; sdk: string }> = {
   "elevenlabs-v4-turbo": { short: "v4 Turbo", sdk: "v4 Turbo" },
   "elevenlabs-turbo": { short: "Turbo v2.5", sdk: "Turbo v2.5" },
   "elevenlabs-multilingual": { short: "Multilingual v2", sdk: "Multilingual v2" },
+  "gemini-3-8-flash-lite-tts": { short: "Gemini 3.8 Flash-Lite", sdk: "Gemini 3.8 Flash-Lite" },
+  "gemini-3-8-flash-tts": { short: "Gemini 3.8 Flash", sdk: "Gemini 3.8 Flash" },
+  "gemini-3-1-flash-tts": { short: "Gemini 3.1 Flash", sdk: "Gemini 3.1 Flash" },
+  "gemini-2-5-pro-tts": { short: "Gemini 2.5 Pro", sdk: "Gemini 2.5 Pro" },
 }
 const SHEET_IDS = TTS_PROVIDERS.filter((id) => MODEL_CATALOG[id]?.tts)
 const DOC_IDS = Object.keys(DOC_NAMES)
@@ -58,7 +62,8 @@ describe("text-to-speech.md Providers table reads each model's sheet", () => {
   it.each(DOC_IDS)("%s: audio tags, continuity, languages and cap are the sheet's", (id) => {
     const sheet = getTtsCapabilities(id)
     const [, , languages, audioTags, continuity, cap] = providersRow(id)
-    expect(languages, `${id} Languages`).toBe(String(sheet.languages.length))
+    // A model that takes no language (the text decides) has no picker list: the cell says so.
+    expect(languages, `${id} Languages`).toBe(sheet.languages.length ? String(sheet.languages.length) : "Follows the text")
     expect(audioTags, `${id} Audio Tags`).toBe(ttsSupportsAudioTags(id) ? "Yes" : "No (stripped)")
     expect(continuity, `${id} Continuity`).toBe(ttsSupportsStitching(id) ? "**Yes**" : "No")
     expect(cap, `${id} Per-request character cap`).toBe(sheet.maxChars.toLocaleString("en-US"))
@@ -92,6 +97,9 @@ describe("the timings sentence under Inputs & Outputs", () => {
       // Rewrite the sentence to name the models that return timings (and the
       // ones that do not), then pin the new wording here.
       expect(ttsDoc, `${untimed.join(", ")} say timestamps: false — the "every speech model" sentence must name only ${timed.join(", ")}`).not.toContain(sentence)
+      // The Gemini models (decided 2026-11-12) return none: the sentence names the ones that do, then those that do not.
+      expect(ttsDoc).toContain(`every ElevenLabs speech model (${joinList(timed.map((id) => DOC_NAMES[id]!.sdk), " and ")}) returns its timings`)
+      expect(ttsDoc).toContain(`The Gemini models (${joinList(untimed.map((id) => DOC_NAMES[id]!.sdk), " and ")}) return none`)
     }
   })
 })

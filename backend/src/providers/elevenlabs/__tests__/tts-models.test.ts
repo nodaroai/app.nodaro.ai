@@ -1,14 +1,28 @@
 import { describe, it, expect } from "vitest"
 import { MODEL_CATALOG, TTS_PROVIDER_ALIASES } from "@nodaro/shared/model-catalog"
 import { TTS_PROVIDERS } from "@nodaro/shared/models"
-import { ttsWireModel, ttsModelKey, TTS_WIRE_MODELS } from "../tts-models.js"
+import { ttsWireModel, ttsModelKey, isElevenLabsTtsModel, TTS_WIRE_MODELS } from "../tts-models.js"
+import { GEMINI_TTS_WIRE_MODELS } from "../../kie/gemini-tts-models.js"
 
 describe("tts-models — our provider id → ElevenLabs model id", () => {
-  it("every non-alias text-to-speech provider has its own wire-model row, so none silently runs as turbo", () => {
+  it("every non-alias text-to-speech provider has exactly one wire-model row (ElevenLabs or Gemini), so none silently runs as turbo", () => {
     for (const id of TTS_PROVIDERS) {
       if (id in TTS_PROVIDER_ALIASES) continue
-      expect(Object.hasOwn(TTS_WIRE_MODELS, id), `${id} has no row in TTS_WIRE_MODELS (tts-models.ts)`).toBe(true)
+      const rows = Number(Object.hasOwn(TTS_WIRE_MODELS, id)) + Number(Object.hasOwn(GEMINI_TTS_WIRE_MODELS, id))
+      expect(rows, `${id} needs one row in TTS_WIRE_MODELS (tts-models.ts) or GEMINI_TTS_WIRE_MODELS (kie/gemini-tts-models.ts)`).toBe(1)
     }
+  })
+
+  it("a Gemini speech model runs as itself — never as turbo — and is never sent to ElevenLabs", () => {
+    for (const id of Object.keys(GEMINI_TTS_WIRE_MODELS)) {
+      expect(TTS_PROVIDERS as readonly string[], `${id} is not a TTS_PROVIDERS member`).toContain(id)
+      expect(MODEL_CATALOG[id]?.tts, `${id} has no capability sheet`).toBeDefined()
+      expect(ttsModelKey(id)).toBe(id)
+      expect(isElevenLabsTtsModel(id)).toBe(false)
+      expect(() => ttsWireModel(id)).toThrow(/not an ElevenLabs speech model/)
+    }
+    expect(isElevenLabsTtsModel("elevenlabs-v4")).toBe(true)
+    expect(isElevenLabsTtsModel("elevenlabs")).toBe(true)
   })
 
   it("every legacy alias resolves to a model that has a row", () => {
@@ -33,8 +47,8 @@ describe("tts-models — our provider id → ElevenLabs model id", () => {
     }
   })
 
-  it("every non-alias provider maps to its own ElevenLabs model (no two share one)", () => {
-    const ids = TTS_PROVIDERS.filter((id) => !(id in TTS_PROVIDER_ALIASES))
+  it("every ElevenLabs provider maps to its own ElevenLabs model (no two share one)", () => {
+    const ids = TTS_PROVIDERS.filter((id) => !(id in TTS_PROVIDER_ALIASES) && !Object.hasOwn(GEMINI_TTS_WIRE_MODELS, id))
     const wire = ids.map((id) => ttsWireModel(id))
     expect(new Set(wire).size).toBe(ids.length)
     for (const w of wire) expect(w).toMatch(/^eleven_/)

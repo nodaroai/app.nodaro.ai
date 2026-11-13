@@ -6,9 +6,10 @@
  *
  * The count is the text the worker SENDS: clamped to the cap of the model the
  * request runs as (the route clamps first — routes/text-to-speech.ts), then
- * stripped of [audio tags] when that model does not perform them (the worker
- * strips after — workers/handlers/audio-ai.ts). UTF-16 code units, like every
- * cap check. Dialogue is the sum of its line texts, unstripped (v3 performs
+ * its tags as that model takes them — stripped when it performs none,
+ * rewritten to its own tags on an angle-tag model (`speakableText`; the worker
+ * does the same after — workers/handlers/audio-ai.ts). Style direction is
+ * never counted (decided 2026-11-12). UTF-16 code units, like every cap check. Dialogue is the sum of its line texts, unstripped (v3 performs
  * tags). Anything that is not text counts 0 → the floor.
  *
  * The amount of a unit is the `model_pricing` row (admin-editable), read
@@ -16,10 +17,10 @@
  * is `@nodaro/shared`'s `speechCredits`, so a client reading the same row
  * computes the same number.
  */
-import { getMaxTtsChars, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared/models"
-import { ttsSupportsAudioTags } from "@nodaro/shared/model-catalog"
-import { speechCredits, speechUnitCreditId, isSpeechLengthPriceId, speechLengthPriceModel, parseVoiceChangerProQuoteCreditId, VOICE_CHANGER_PRO_QUOTE_RATE_ID } from "@nodaro/shared/credits"
-import { stripAudioTags } from "../providers/elevenlabs/audio-tags.js"
+import { dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared/models"
+import { getTtsCapabilities } from "@nodaro/shared/model-catalog"
+import { speechCredits, speechCreditsFor, speechUnitCreditId, isSpeechLengthPriceId, speechLengthPriceModel, parseVoiceChangerProQuoteCreditId, VOICE_CHANGER_PRO_QUOTE_RATE_ID } from "@nodaro/shared/credits"
+import { sentDialogueChars, sentSpeechText } from "@nodaro/prompts/prompt-fields"
 import { ttsModelKey } from "../providers/elevenlabs/tts-models.js"
 import { speechLengthPricingEnabled } from "./config.js"
 import { parseRateQuoteCreditId } from "./unit-quote-rates.js"
@@ -68,23 +69,21 @@ export function priceMarginKey(identifier: string): string {
   return speechLengthPriceModel(rateId) ?? rateId
 }
 
-/** Characters of `text` the worker will send on `provider`: clamped to the model's cap, tags stripped when the model does not perform them. */
+/**
+ * Characters of `text` the worker will send on `provider` — `sentSpeechText`,
+ * the one rule the sender reads too: its tags as the model takes them (kept,
+ * rewritten or stripped) and the model's cap (on an angle-tag model applied
+ * AFTER the rewrite, which can lengthen the text).
+ */
 export function billableSpeechChars(provider: unknown, text: unknown): number {
   if (typeof text !== "string") return 0
-  const runsAs = speechRunsAs(provider)
-  const clamped = text.slice(0, getMaxTtsChars(runsAs))
-  return (ttsSupportsAudioTags(runsAs) ? clamped : stripAudioTags(clamped)).length
+  return sentSpeechText(text, getTtsCapabilities(speechRunsAs(provider))).length
 }
 
-/** Characters of a dialogue script: the sum of its lines' texts, at most the total cap of the dialogue model it runs as (its capability sheet). */
+/** Characters of a dialogue script: each line as it is sent, summed, at most the total cap of the dialogue model it runs as (`sentDialogueChars`). */
 export function billableDialogueChars(lines: unknown, provider?: unknown): number {
-  if (!Array.isArray(lines)) return 0
-  let total = 0
-  for (const line of lines) {
-    const text = (line as { text?: unknown } | null)?.text
-    if (typeof text === "string") total += text.length
-  }
-  return Math.min(total, getDialogueCapabilities(provider).maxChars)
+  // Each line as it is sent (on Gemini 3.8 its tags rewritten, then the cap), summed, at most the model's total cap.
+  return sentDialogueChars(lines, getDialogueCapabilities(provider))
 }
 
 /**
@@ -99,20 +98,21 @@ export async function speechUnitBaseCredits(provider: unknown): Promise<number> 
   return baseCreditCostFor(speechUnitRowId(provider))
 }
 
-/** The per-100-characters row id of the model `provider` runs as — the row `speechUnitBaseCredits` reads. */
+/** The rate row id of the model `provider` runs as (`:per-100-chars`, or `:per-1k-chars` for a model quoted per 1,000) — the row `speechUnitBaseCredits` reads. */
 export function speechUnitRowId(provider: unknown): string {
   return speechUnitCreditId(speechRunsAs(provider))
 }
 
-/** BASE (pre-markup) credits a text-to-speech request on `provider` reserves. */
+/** BASE (pre-markup) credits a text-to-speech request on `provider` reserves: its started hundreds at the model's rate row, rounded up once. */
 export async function speechBaseCredits(provider: unknown, text: unknown): Promise<number> {
-  const perUnit = await speechUnitBaseCredits(provider)
-  return speechCredits(billableSpeechChars(provider, text), perUnit)
+  const row = await speechUnitBaseCredits(provider)
+  return speechCreditsFor(speechRunsAs(provider), billableSpeechChars(provider, text), row)
 }
 
 /** BASE (pre-markup) credits a dialogue request on `provider` (a dialogue model id; default v3 dialogue) reserves. */
 export async function dialogueBaseCredits(lines: unknown, provider?: unknown): Promise<number> {
   const model = dialogueProviderOf(provider)
-  const perUnit = await baseCreditCostFor(speechUnitCreditId(model))
-  return speechCredits(billableDialogueChars(lines, model), perUnit)
+  const row = await baseCreditCostFor(speechUnitCreditId(model))
+  // Its rate row: per 100 characters, or per 1,000 on a model quoted so (Gemini) — the same row as one speaker.
+  return speechCreditsFor(model, billableDialogueChars(lines, model), row)
 }

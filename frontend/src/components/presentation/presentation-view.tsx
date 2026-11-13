@@ -89,6 +89,8 @@ import { RunTargetSelector } from "./run-target-selector"
 import { ViewModeSelector } from "./view-mode-selector"
 import { resolveAllowedModes, resolveViewMode } from "./resolve-view-mode"
 import { InputCard } from "./input-card"
+import { useAppCloneInputs } from "./use-app-clone-inputs"
+import { appCloneTargetId } from "@/lib/app-clone-inputs"
 import { OutputCard, type FieldBadgeEntry } from "./output-card"
 import { anyOutputIsPreview, outputIsPreview } from "./render-preview"
 import { useAppRunGatedIds } from "@/components/render/app-render-review"
@@ -369,6 +371,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const inputItems = useMemo(() => resolveInputItems(settings), [settings.inputItems, settings.inputOrder])
   const outputItems = useMemo(() => resolveOutputItems(settings), [settings.outputItems, settings.outputOrder])
 
+  // A clone node's "Your voice" card, appended to the runner's inputs whatever the
+  // author curated (decided 2026-11-13): the app ships its clones emptied, so the
+  // runner's own recordings and tick are inputs, and Run waits for them.
+  const appClones = useAppCloneInputs({
+    enabled: isFullscreen,
+    nodes,
+    inputValues: presInputValues,
+    orderedInputNodes,
+    inputItems,
+    userId: user?.id,
+    edges,
+    settings,
+  })
+
   // Estimate credit cost — mirrors workflow-editor-main.tsx logic:
   // uses composite model identifiers, dynamic DB costs, and fan-out multipliers.
   // In fullscreen/app mode, inputValues contains live loop rows that affect fan-out,
@@ -442,8 +458,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const rightsVersion = useVideoLinkRightsVersion()
   const allInputsFilled = useMemo(() => {
     if (!isFullscreen) return true
-    return areAllInputsFilled(orderedInputNodes, presInputValues, { nodes, edges })
-  }, [isFullscreen, orderedInputNodes, presInputValues, nodes, edges, rightsVersion])
+    return areAllInputsFilled(orderedInputNodes, presInputValues, { nodes, edges }) && appClones.ready
+  }, [isFullscreen, orderedInputNodes, presInputValues, nodes, edges, rightsVersion, appClones.ready])
+  // Why Run waits on a clone: said beside Run (the card says it too).
+  const cloneWarning = isFullscreen && !!user && !appClones.ready ? t(appClones.withheld ? "audiocfg.cloneUnavailable" : "appClone.runWaits") : ""
 
   const underMinTables = useMemo(() => {
     if (!isFullscreen) return []
@@ -472,6 +490,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     )
     return msgs.join("; ") + (underMinTables.length > 2 ? ` ${t("present.plusMore", { n: underMinTables.length - 2 })}` : "")
   }, [underMinTables, t])
+  // What Run waits for, said beside it: a table's rows, a clone's recordings and tick.
+  const runWarning = [underMinWarning, cloneWarning].filter(Boolean).join(" ")
 
   const handleRunClick = useCallback(() => {
     if (isFullscreen) {
@@ -974,7 +994,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // slice identity (updateInputValue copies per-node), so every other card's
   // slice map stays referentially equal and skips re-render.
   const inputSliceCache = useRef(new Map<string, { slice: unknown; map: Record<string, Record<string, unknown>> }>())
-  const getInputSliceMap = useCallback((nodeId: string): Record<string, Record<string, unknown>> => {
+  const getInputSliceMap = useCallback((cardId: string): Record<string, Record<string, unknown>> => {
+    // A "Your voice" card reads (and writes) its clone node's values.
+    const nodeId = appCloneTargetId(cardId) ?? cardId
     const slice = presInputValues[nodeId]
     const cached = inputSliceCache.current.get(nodeId)
     if (cached && cached.slice === slice) return cached.map
@@ -1337,7 +1359,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     (item: PresentationItem): React.ReactNode => {
       switch (item.type) {
         case "node": {
-          const node = nodeMap.get(item.nodeId)
+          const node = nodeMap.get(item.nodeId) ?? appClones.cloneNodeMap.get(item.nodeId)
           if (!node) return null
           return renderInputCard(node, undefined, item.maxLength)
         }
@@ -1437,7 +1459,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           return null
       }
     },
-    [nodeMap, renderInputCard, findFieldDef, isFullscreen, presInputValues, presUpdateInput, updateNodeData, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, isEditing, inputItems, settings, updatePresentationSettings, t],
+    [nodeMap, appClones.cloneNodeMap, renderInputCard, findFieldDef, isFullscreen, presInputValues, presUpdateInput, updateNodeData, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, isEditing, inputItems, settings, updatePresentationSettings, t],
   )
 
   // Render a single PresentationItem — dispatches by type for output side
@@ -1618,8 +1640,12 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     onOpenConfig: setConfigNode,
   }
 
+  // The views that take inputs (horizontal, vertical, the chat composer) get the
+  // runner's inputs with each clone node's "Your voice" card; the result views
+  // (gallery, compare, full screen) show what the inputs hold, which it is not.
   const editableProps = {
     ...viewProps,
+    orderedInputNodes: appClones.inputNodes,
     isEditing,
     sensors,
     handleInputDragEnd: handleInputItemsDragEnd,
@@ -1632,7 +1658,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     renderInputCard,
     renderOutputCard,
     getNodeColumns,
-    inputItems,
+    inputItems: appClones.inputItems,
     outputItems,
     renderInputItem,
     renderOutputItem,
@@ -1738,8 +1764,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   </button>
                 ) : (
                   <>
-                    {underMinWarning && (
-                      <p className="text-xs text-amber-400 mb-1">{underMinWarning}</p>
+                    {runWarning && (
+                      <p className="text-xs text-amber-400 mb-1" data-testid="run-warning">{runWarning}</p>
                     )}
                     <button
                       type="button"
@@ -1945,8 +1971,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               </button>
             ) : (
               <>
-                {underMinWarning && (
-                  <p className="text-xs text-amber-400 mb-1">{underMinWarning}</p>
+                {runWarning && (
+                  <p className="text-xs text-amber-400 mb-1" data-testid="run-warning">{runWarning}</p>
                 )}
                 <button
                   type="button"

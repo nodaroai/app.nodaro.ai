@@ -303,6 +303,7 @@ import { motionGraphicsAIRoutes } from "./routes/motion-graphics-ai.js"
 import { audioIsolationRoutes } from "./routes/audio-isolation.js"
 import { audioSeparationRoutes } from "./routes/audio-separation.js"
 import { textToDialogueRoutes } from "./routes/text-to-dialogue.js"
+import { voiceCloneConsentRoutes } from "./routes/voice-clone-consent.js"
 import { imageToTextRoutes } from "./routes/image-to-text.js"
 import { describeToPickerRoutes } from "./routes/describe-to-picker.js"
 import { textToPickerRoutes } from "./routes/text-to-picker.js"
@@ -931,6 +932,7 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   await app.register(audioIsolationRoutes)
   await app.register(audioSeparationRoutes)
   await app.register(textToDialogueRoutes)
+  await app.register(voiceCloneConsentRoutes)
   await app.register(imageToTextRoutes)
   await app.register(describeToPickerRoutes)
   await app.register(textToPickerRoutes)

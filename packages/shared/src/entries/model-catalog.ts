@@ -85,6 +85,7 @@ export {
   isModelMakerId,
   modelMakerOf,
   SPEECH_UNIT_PRICE_NOTE,
+  SPEECH_PER_1K_PRICE_NOTE,
   listModels,
   groupByFamily,
   groupByKindAndFamily,
@@ -152,8 +153,10 @@ export type {
   ModelInputContext,
   SourceImageSize,
   TtsCapabilities,
+  TtsDirectionSheet,
   TtsSettingLever,
 } from "../model-catalog.js"
+export type { TtsNamedVoice, GeminiTtsVoiceGroup } from "../gemini-tts.js"
 // Speech-model capability lookups (derive from `ModelCatalogEntry.tts` above).
 export {
   TTS_PROVIDER_ALIASES,
@@ -166,7 +169,21 @@ export {
   ttsHasLever,
   ttsLanguageCodes,
   ttsSupportsTimestamps,
+  ttsNamedVoices,
+  ttsAcceptsVoice,
+  ttsNamedVoiceFor,
+  ttsVoiceForModel,
+  ttsDirection,
+  ttsAngleTags,
+  ttsDirectionFor,
+  ttsDirectionProblem,
+  ttsTakesReplica,
+  replicaModels,
+  replicaOf,
+  ttsReplicaProblem,
+  replicaConsentProblem,
 } from "../tts-capabilities.js"
+export type { TtsDirectionValues } from "../tts-capabilities.js"
 // Per-model safety-filter retry/fallback policy (derives from
 // `ModelCatalogEntry.safetyFilter` above).
 export { safetyRetryPolicy } from "../safety-retry-policy.js"

@@ -34,7 +34,7 @@ import { voiceNotAvailableBody } from "../lib/voice-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderTakesLoneEndFrame, videoProviderRefsReplaceStartFrame, videoStartFrameOnlyProblem, videoProviderRefModeFrameSeats, resolveVideoProviderForMode } from "@nodaro/shared/models"
-import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable, hasFeature } from "@nodaro/shared/model-catalog"
+import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable, hasFeature, ttsNamedVoices } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, FRAME_FITS, FRAME_DELIVERIES } from "@nodaro/shared/video"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
@@ -66,6 +66,11 @@ const characterVoiceSpecSchema = z.object({
   voiceType: z.enum(["premade", "library", "custom"]).optional(),
   ttsProvider: z.enum(TTS_PROVIDERS).optional(),
   speaker: z.string().min(1).max(80).optional(),
+}).refine((v) => !v.ttsProvider || !ttsNamedVoices(v.ttsProvider), {
+  // A model that speaks only its own named voices (Gemini) is not offered for a voiced video: its track
+  // renders the cast's voices on the ElevenLabs models. Refused rather than swapped, so a caller is told.
+  path: ["ttsProvider"],
+  message: "ttsProvider must be an ElevenLabs speech model: the Gemini models are not offered for voiced video",
 })
 const dialogueLineSchema = z.object({
   speaker: z.string().min(1).max(80),

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { voicedDialogueProvider } from "../voiced-dialogue-model.js"
+import { voicedDialogueProvider, voicedSpeechProvider } from "../voiced-dialogue-model.js"
 
 describe("voicedDialogueProvider — the dialogue model a voiced cast runs on", () => {
   it("every voice on v4 → v4 dialogue", () => {
@@ -34,4 +34,20 @@ describe("voicedDialogueProvider — the dialogue model a voiced cast runs on", 
     expect(raw([{ ttsProvider: "elevenlabs-v4" }, undefined])).toBe("elevenlabs-dialogue")
     expect(raw([42])).toBe("elevenlabs-dialogue")
   })
+})
+
+describe("voicedSpeechProvider — the speech model a single-voice voiced track renders on (decided 2026-11-12)", () => {
+  it("is the voice's own model when it speaks ElevenLabs voices", () => {
+    expect(voicedSpeechProvider("elevenlabs-v4")).toBe("elevenlabs-v4")
+    expect(voicedSpeechProvider("elevenlabs")).toBe("elevenlabs")
+  })
+
+  it("is no model (the fallback) for a model that speaks only its own named voices, so the run and the price agree", () => {
+    for (const id of ["gemini-3-8-flash-lite-tts", "gemini-3-8-flash-tts", "gemini-3-1-flash-tts", "gemini-2-5-pro-tts"]) {
+      expect(voicedSpeechProvider(id), id).toBeUndefined()
+    }
+    expect(voicedSpeechProvider(undefined)).toBeUndefined()
+    expect(voicedSpeechProvider(3)).toBeUndefined()
+  })
+
 })

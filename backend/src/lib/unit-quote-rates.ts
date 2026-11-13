@@ -140,11 +140,14 @@ export function parseRateQuoteCreditId(id: string): UnitQuoteCreditIdParts | und
  * The (rate, units) of ANY whole-run quote id the price lookups answer — a
  * speech request (`<model>:per-100-chars:<N>u`, through its own reader) or a
  * per-unit rate — or undefined for every other id. The base of such an id is
- * the rate's base × the units, rounded up: the base its route reserves.
+ * the rate's base × the units ÷ `rowUnits` (absent: 1), rounded up
+ * (`quoteBaseCredits`): the base its route reserves. A speech model quoted per
+ * 1,000 characters names its `:per-1k-chars` row, with N still in started
+ * hundreds and `rowUnits` 10.
  */
-export function parseQuoteCreditId(id: string): UnitQuoteCreditIdParts | undefined {
+export function parseQuoteCreditId(id: string): (UnitQuoteCreditIdParts & { rowUnits?: number }) | undefined {
   const speech = parseSpeechQuoteCreditId(id)
-  if (speech) return { rateId: speech.unitId, units: speech.units }
+  if (speech) return { rateId: speech.unitId, units: speech.units, ...(speech.rowUnits !== 1 && { rowUnits: speech.rowUnits }) }
   return parseRateQuoteCreditId(id)
 }
 

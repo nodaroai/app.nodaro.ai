@@ -20,10 +20,12 @@ import {
 } from "@nodaro/shared/models"
 import {
   SPEECH_PRICE_UNIT_CHARS,
+  speechRowUnits,
   speechUnitCreditId,
   usdToCredits,
 } from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
+import { KIE_TTS_MODELS } from "../../../providers/kie/models.js"
 import { ELEVENLABS_SPEECH_USD_PER_1K_CHARS, elevenlabsSpeechCostUsd } from "../../../lib/pricing/elevenlabs-speech-cost.js"
 import { effectiveMarkupPercent, applyMarkupPercent } from "../service-margin.js"
 
@@ -35,17 +37,20 @@ import { effectiveMarkupPercent, applyMarkupPercent } from "../service-margin.js
 const SPEECH_MODELS = Object.values(MODEL_CATALOG)
   .filter((m) => (m.modes as readonly string[]).includes("tts") || (m.modes as readonly string[]).includes("dialogue"))
   .map((m) => m.id)
+/** The speech models quoted per 100 characters (ElevenLabs), and those quoted per 1,000 (Gemini on KIE, decided 2026-11-12). */
+const PER_100_MODELS = SPEECH_MODELS.filter((id) => speechRowUnits(id) === 1)
+const PER_1K_MODELS = SPEECH_MODELS.filter((id) => speechRowUnits(id) === 10)
 const DIALOGUE_ID = "elevenlabs-dialogue"
 const DIALOGUE_V4_ID = "elevenlabs-dialogue-v4"
 
 const MIGRATIONS_DIR = join(__dirname, "..", "..", "..", "..", "..", "supabase/migrations")
 
-/** `model_identifier → credit_cost` for every `:per-100-chars` row any migration seeds (last wins). */
+/** `model_identifier → credit_cost` for every `:per-100-chars` / `:per-1k-chars` row any migration seeds (last wins). */
 function seededUnitRows(): Map<string, number> {
   const out = new Map<string, number>()
   for (const file of readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort()) {
     const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8")
-    for (const m of sql.matchAll(/\(\s*'([^']+:per-100-chars)'\s*,\s*(\d+)/g)) out.set(m[1]!, Number(m[2]))
+    for (const m of sql.matchAll(/\(\s*'([^']+:per-(?:100|1k)-chars)'\s*,\s*(\d+)/g)) out.set(m[1]!, Number(m[2]))
   }
   return out
 }
@@ -58,14 +63,14 @@ describe("speech unit rows — coverage", () => {
     expect(SPEECH_MODELS).toContain(DIALOGUE_V4_ID)
   })
 
-  it("every speech model (text-to-speech and dialogue) has a static :per-100-chars row", () => {
+  it("every speech model (text-to-speech and dialogue) has a static rate row (:per-100-chars, or :per-1k-chars)", () => {
     const missing = SPEECH_MODELS.filter((id) => STATIC_CREDIT_COSTS[speechUnitCreditId(id)] === undefined)
-    expect(missing, `speech models with no :per-100-chars row in STATIC_CREDIT_COSTS: ${missing.join(", ")}`).toEqual([])
+    expect(missing, `speech models with no rate row in STATIC_CREDIT_COSTS: ${missing.join(", ")}`).toEqual([])
   })
 
-  it("every static :per-100-chars row is seeded by a migration with the same value, and no extra one is seeded", () => {
+  it("every static :per-100-chars / :per-1k-chars row is seeded by a migration with the same value, and no extra one is seeded", () => {
     const seeded = seededUnitRows()
-    const staticUnitKeys = Object.keys(STATIC_CREDIT_COSTS).filter((k) => k.endsWith(":per-100-chars")).sort()
+    const staticUnitKeys = Object.keys(STATIC_CREDIT_COSTS).filter((k) => k.endsWith(":per-100-chars") || k.endsWith(":per-1k-chars")).sort()
     expect(staticUnitKeys).toEqual([...seeded.keys()].sort())
     for (const key of staticUnitKeys) expect(seeded.get(key), key).toBe(STATIC_CREDIT_COSTS[key])
   })
@@ -79,16 +84,25 @@ describe("speech unit rows — coverage", () => {
 })
 
 describe("speech unit rows — re-derived from the rate table, never scaled", () => {
-  it("each unit row equals usdToCredits(rate × 100 / 1000) at the model's listed rate", () => {
-    for (const id of SPEECH_MODELS) {
+  it("each per-100 unit row equals usdToCredits(rate × 100 / 1000) at the model's listed rate", () => {
+    for (const id of PER_100_MODELS) {
       const rate = ELEVENLABS_SPEECH_USD_PER_1K_CHARS[id]
       expect(rate, `${id} has no rate`).toBeDefined()
       expect(STATIC_CREDIT_COSTS[speechUnitCreditId(id)], id).toBe(usdToCredits((rate! * SPEECH_PRICE_UNIT_CHARS) / 1000))
     }
   })
 
-  it("the rate table names exactly the speech models", () => {
-    expect(Object.keys(ELEVENLABS_SPEECH_USD_PER_1K_CHARS).sort()).toEqual([...SPEECH_MODELS].sort())
+  it("the rate table names exactly the speech models quoted per 100 characters (the ElevenLabs ones)", () => {
+    expect(Object.keys(ELEVENLABS_SPEECH_USD_PER_1K_CHARS).sort()).toEqual([...PER_100_MODELS].sort())
+  })
+
+  it("each per-1K row (Gemini) is KIE's measured credits per 1,000 characters × 2.5, rounded up, and its flat row is the price of 1,000 characters (decided 2026-11-12)", () => {
+    expect(PER_1K_MODELS.sort()).toEqual(["gemini-2-5-pro-tts", "gemini-3-1-flash-tts", "gemini-3-8-flash-lite-tts", "gemini-3-8-flash-tts"])
+    for (const id of PER_1K_MODELS) {
+      expect(STATIC_CREDIT_COSTS[speechUnitCreditId(id)], id).toBe(Math.ceil(KIE_TTS_MODELS[id]!.credits * 2.5))
+      expect(STATIC_CREDIT_COSTS[id], id).toBe(STATIC_CREDIT_COSTS[speechUnitCreditId(id)])
+    }
+    expect(PER_1K_MODELS.map((id) => STATIC_CREDIT_COSTS[speechUnitCreditId(id)])).toEqual(PER_1K_MODELS.map((id) => ({ "gemini-3-8-flash-lite-tts": 4, "gemini-3-8-flash-tts": 6, "gemini-3-1-flash-tts": 13, "gemini-2-5-pro-tts": 16 })[id]))
   })
 
   it("the recorded provider cost is characters × the rate", () => {

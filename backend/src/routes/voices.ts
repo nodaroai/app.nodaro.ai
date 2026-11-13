@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
 import type { TtsProvider } from "@nodaro/shared/models"
+import type { Voice } from "@nodaro/shared/pipeline"
+import { ttsNamedVoices } from "@nodaro/shared/model-catalog"
 import { config } from "../lib/config.js"
 import { describeLimitedVoices } from "../providers/provider-keys.js"
 import { providerFetch } from "../providers/egress.js"
@@ -137,6 +139,30 @@ function forThisSite<T extends { voice_id: string; preview_url: string }>(req: F
   return voicePreviewProxyOn() && !req.isInternalCall ? withSameSitePreviews(voices) : [...voices]
 }
 
+/**
+ * A named-voice model's voices (Gemini) in the shape of the premade list, so a
+ * client renders them with the code it already has: the wire name is both the
+ * id and the name, `use_case` is the model's own grouping (a stable id such as
+ * `commercial-voiceover`, empty when it groups none), and nothing else is
+ * known (no preview, no gender — so a deployment with a voice lock lists none
+ * of them, as its routes refuse them).
+ */
+function namedVoiceRows(model: string): Voice[] | undefined {
+  return ttsNamedVoices(model)?.map((v) => ({
+    voice_id: v.id,
+    name: v.id,
+    preview_url: "",
+    gender: "",
+    accent: "",
+    age: "",
+    description: "",
+    use_case: v.group ?? "",
+    category: "premade",
+  }))
+}
+
+const voicesQuery = z.object({ model: z.string().max(100).optional() }).passthrough()
+
 const previewParams = z.object({ voiceId: z.string().regex(PREVIEW_VOICE_ID) })
 const previewQuery = z.object({ src: z.string(), sig: z.string() })
 const PREVIEW_NOT_FOUND = { error: { code: "not_found", message: "Not found" } } as const
@@ -147,6 +173,15 @@ const PREVIEW_NOT_FOUND = { error: { code: "not_found", message: "Not found" } }
 
 export async function voicesRoutes(app: FastifyInstance) {
   app.get("/v1/voices", async (req, reply) => {
+    // `?model=<speech model>`: a model that speaks only its own named voices (Gemini) answers
+    // them instead (opt-in; with no model, or an ElevenLabs one, the answer is the premade
+    // catalog as before). Narrowed by the voice lock like every list.
+    const query = voicesQuery.safeParse(req.query ?? {})
+    const named = query.success && query.data.model ? namedVoiceRows(query.data.model) : undefined
+    if (named) {
+      reply.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
+      return reply.send({ voices: filterVoicesByAllowedGender(named) })
+    }
     // B4c: narrow the premade catalog to the deployment's allowed voice genders;
     // under a lock a voice with no known gender is not listed (inert when
     // voice.allowedGenders is [] — the default).

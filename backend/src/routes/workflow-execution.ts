@@ -96,6 +96,7 @@ import {
 } from "../lib/continue-from-failed-lineage.js"
 import { retryStampOf } from "../lib/schedule-retry.js"
 import { refuseIfRunUnpriced, replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
+import { unfillableCloneRefusal } from "../lib/clone-app-run.js"
 
 openApiRegistry.registerPath({
   method: "post",
@@ -950,6 +951,20 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         { runNodeIds: nodeIds, overrides: effectiveOverrides as Record<string, Record<string, unknown>> | undefined },
       )
     ) return reply
+
+    // A one-off voice clone inside a component the run executes is a published snapshot's, its recordings
+    // emptied: nothing can fill it, so the run would stop there after the nodes before it were paid for.
+    // Refused before any row exists (lib/clone-app-run.ts; decided 2026-11-13).
+    {
+      const cloneRefusal = await unfillableCloneRefusal(
+        (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }> | null) ?? [],
+        (workflow.edges as ReadonlyArray<{ source?: string; target?: string; targetHandle?: string | null }> | null) ?? [],
+        nodeIds,
+        (workflow.user_id as string | null) ?? "",
+        { published: false },
+      )
+      if (cloneRefusal) return reply.status(cloneRefusal.status).send({ error: cloneRefusal.error })
+    }
 
     // Check for an execution THIS CALLER already has running (best-effort fast
     // path; the DB UNIQUE constraint on (user_id, idempotency_key) is the

@@ -77,6 +77,13 @@ export class NodaroCloudAudioProvider implements TextToSpeechProvider {
       // The file asked for rides to the cloud as the same field; a cloud that predates it strips an
       // unknown key and answers in MP3 — which the worker then stores by its bytes, not by the request.
       ...(options?.outputFormat !== undefined ? { outputFormat: options.outputFormat } : {}),
+      // A named-voice model's direction (Gemini) rides as the same fields; the funnel kept only what the model takes.
+      ...(options?.styleDirection !== undefined ? { styleDirection: options.styleDirection } : {}),
+      ...(options?.pace !== undefined ? { pace: options.pace } : {}),
+      ...(options?.accent !== undefined ? { accent: options.accent } : {}),
+      ...(options?.audioProfile !== undefined ? { audioProfile: options.audioProfile } : {}),
+      // A one-off clone's recordings, as the caller gave them: the cloud fetches and judges them itself.
+      ...(options?.replica !== undefined ? { replica: options.replica } : {}),
     }
     const jobId = await createCloudJob("/v1/text-to-speech", body)
     return extractAudioResult(await waitForCloudJob(jobId, undefined, { queueAware: true }), jobId)

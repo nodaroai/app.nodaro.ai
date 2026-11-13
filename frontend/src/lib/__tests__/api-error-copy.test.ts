@@ -106,6 +106,48 @@ describe("apiErrorMessage", () => {
     }
   })
 
+  it("an app run refused for a cloned voice (decided 2026-11-13): the server's words in English, a translated reason elsewhere", () => {
+    // The server's English for the codes of a fixed sentence (backend lib/clone-app-run.ts).
+    const SERVER: Record<string, string> = {
+      clone_recordings_required: "This app speaks in your own voice: add your two recordings (a reference and the consent recording) and tick the consent box, then run it again.",
+      clone_consent_required: "Tick the consent box for your recordings yourself, then run it again: a cloned voice runs only on the consent of the person running the app.",
+      clone_not_fillable: "This app clones a voice inside a sub-workflow or a component, where your recordings can't reach it, so it can't be run.",
+    }
+    const KEYS = {
+      clone_recordings_required: "apiErr.reason.cloneRecordingsRequired",
+      clone_consent_required: "apiErr.reason.cloneConsentRequired",
+      clone_not_fillable: "apiErr.reason.cloneNotFillable",
+      // The model the run dispatches does not clone (an exposed Model card): the server's message names the model.
+      clone_model_unsupported: "apiErr.reason.cloneModelUnsupported",
+      // The recordings themselves: the server's message names the recording and the limit, the reason does not.
+      replica_unreachable: "apiErr.reason.replicaUnreachable",
+      replica_too_large: "apiErr.reason.replicaTooLarge",
+      replica_not_wav: "apiErr.reason.replicaNotWav",
+      replica_length: "apiErr.reason.replicaLength",
+      replica_link_refused: "apiErr.reason.replicaLinkRefused",
+    } as const
+    for (const [code, key] of Object.entries(KEYS)) expect(apiErrorReasonKey(code), code).toBe(key)
+    for (const [code, message] of Object.entries(SERVER)) {
+      expect(translate("en", KEYS[code as keyof typeof KEYS]), code).toBe(message)
+      expect(apiErrorMessage({ code, serverMessage: message, fallbackKey: "apiErr.runApp" })).toBe(message)
+    }
+    for (const locale of ["he", "ja", "ko", "pt-BR"] as const) {
+      useLocaleStore.setState({ locale })
+      for (const [code, key] of Object.entries(KEYS)) {
+        const reason = translate(locale, key)
+        expect(reason, `${locale} ${code}`).not.toBe(translate("en", key))
+        const serverMessage = SERVER[code] ?? "Consent recording must be a WAV file (24 kHz, mono, 16-bit is best)"
+        expect(apiErrorMessage({ code, serverMessage, fallbackKey: "apiErr.runApp" })).toBe(
+          translate(locale, "apiErr.withReason", { context: translate(locale, "apiErr.runApp"), reason }),
+        )
+        // A share link's viewer is refused with the same codes.
+        expect(apiErrorMessage({ code, serverMessage, fallbackKey: "apiErr.runSharedWorkflow" })).toBe(
+          translate(locale, "apiErr.withReason", { context: translate(locale, "apiErr.runSharedWorkflow"), reason }),
+        )
+      }
+    }
+  })
+
   it("hides raw internal text behind the server reason", () => {
     useLocaleStore.setState({ locale: "he" })
     const message = apiErrorMessage({ code: "delete_failed", serverMessage: 'duplicate key value violates unique constraint "x"', fallbackKey: "apiErr.deleteFolder" })

@@ -3,10 +3,19 @@ import {
   SPEECH_PRICE_UNIT_CHARS,
   SPEECH_FLOOR_UNITS,
   SPEECH_UNIT_CREDIT_SUFFIX,
+  SPEECH_PER_1K_CREDIT_SUFFIX,
   speechUnitCreditId,
   speechPriceUnits,
   speechCredits,
+  speechCreditsFor,
+  speechRowCredits,
+  speechRowUnits,
+  speechQuoteCreditId,
+  parseSpeechQuoteCreditId,
+  isSpeechLengthPriceId,
+  speechLengthPriceModel,
 } from "../credit-estimators/speech.js"
+import { getTtsCapabilities } from "../tts-capabilities.js"
 import { TTS_PROVIDERS, TTS_PROVIDER_ALIASES, canonicalTtsProvider } from "../index.js"
 
 describe("speech pricing — the unit", () => {
@@ -50,7 +59,7 @@ describe("speech pricing — the unit row id", () => {
     expect(SPEECH_UNIT_CREDIT_SUFFIX).toBe(":per-100-chars")
     for (const id of TTS_PROVIDERS) {
       if (id in TTS_PROVIDER_ALIASES) continue
-      expect(speechUnitCreditId(id)).toBe(`${id}:per-100-chars`)
+      expect(speechUnitCreditId(id)).toBe(getTtsCapabilities(id).ratePer1kChars ? `${id}:per-1k-chars` : `${id}:per-100-chars`)
     }
     expect(speechUnitCreditId("elevenlabs-dialogue")).toBe("elevenlabs-dialogue:per-100-chars")
   })
@@ -65,5 +74,57 @@ describe("speech pricing — the unit row id", () => {
   it("the suffix sits on a `:` boundary, so a per-service margin on the model id covers its unit id", () => {
     const id = speechUnitCreditId("elevenlabs-v4")
     expect(id.startsWith("elevenlabs-v4:")).toBe(true)
+  })
+})
+
+describe("speech pricing — a rate quoted per 1,000 characters (decided 2026-11-12)", () => {
+  it("names the per-1K row for a model whose sheet says so; the count stays started hundreds", () => {
+    expect(SPEECH_PER_1K_CREDIT_SUFFIX).toBe(":per-1k-chars")
+    expect(speechUnitCreditId("gemini-3-8-flash-lite-tts")).toBe("gemini-3-8-flash-lite-tts:per-1k-chars")
+    expect(speechRowUnits("gemini-2-5-pro-tts")).toBe(10)
+    expect(speechRowUnits("elevenlabs-v4")).toBe(1)
+    expect(speechRowUnits("elevenlabs")).toBe(1)
+    expect(speechRowUnits("not-a-model")).toBe(1)
+  })
+
+  // The worked examples in docs/nodes/ai-audio/text-to-speech.md (Gemini rows) are these — change both together.
+  it.each([
+    // [model, chars, row, base credits]
+    ["gemini-3-8-flash-lite-tts", 100, 4, 4], // 8 units × 4 ÷ 10 = 3.2 → 4
+    ["gemini-3-8-flash-lite-tts", 1000, 4, 4],
+    ["gemini-3-8-flash-tts", 800, 6, 5], // 4.8 → 5
+    ["gemini-3-8-flash-tts", 2050, 6, 13], // 21 × 6 ÷ 10 = 12.6 → 13
+    ["gemini-3-1-flash-tts", 1000, 13, 13],
+    ["gemini-3-1-flash-tts", 100, 13, 11], // 10.4 → 11
+    ["gemini-2-5-pro-tts", 10000, 16, 160],
+    ["gemini-2-5-pro-tts", 2050, 16, 34], // 33.6 → 34
+  ] as const)("%s, %i characters at %i per 1,000 → %i base credits", (model, chars, row, base) => {
+    expect(speechCreditsFor(model, chars, row)).toBe(base)
+  })
+
+  it("on a per-100 row it is exactly speechCredits", () => {
+    for (const chars of [0, 100, 801, 5000]) expect(speechCreditsFor("elevenlabs-v4", chars, 4)).toBe(speechCredits(chars, 4))
+    expect(speechRowCredits(9, 4)).toBe(36)
+    expect(speechRowCredits(9, 4, 10)).toBe(4)
+  })
+
+  it("the request quote keeps one id shape for every model, and reads back with its row and how many hundreds the row prices", () => {
+    expect(speechQuoteCreditId("gemini-3-1-flash-tts", 21)).toBe("gemini-3-1-flash-tts:per-100-chars:21u")
+    expect(parseSpeechQuoteCreditId("gemini-3-1-flash-tts:per-100-chars:21u")).toEqual({
+      model: "gemini-3-1-flash-tts",
+      unitId: "gemini-3-1-flash-tts:per-1k-chars",
+      units: 21,
+      rowUnits: 10,
+    })
+    expect(parseSpeechQuoteCreditId("elevenlabs-v4:per-100-chars:9u")).toMatchObject({ unitId: "elevenlabs-v4:per-100-chars", rowUnits: 1 })
+    // Its cap in started hundreds bounds N, as for every model.
+    expect(parseSpeechQuoteCreditId("gemini-3-1-flash-tts:per-100-chars:101u")).toBeUndefined()
+  })
+
+  it("a per-1K row is a length price, priced for its model", () => {
+    expect(isSpeechLengthPriceId("gemini-2-5-pro-tts:per-1k-chars")).toBe(true)
+    expect(speechLengthPriceModel("gemini-2-5-pro-tts:per-1k-chars")).toBe("gemini-2-5-pro-tts")
+    expect(isSpeechLengthPriceId("gemini-2-5-pro-tts:per-1k-chars:3u")).toBe(false)
+    expect(isSpeechLengthPriceId("gemini-2-5-pro-tts")).toBe(false)
   })
 })

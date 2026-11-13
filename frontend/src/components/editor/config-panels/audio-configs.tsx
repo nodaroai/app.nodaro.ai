@@ -12,10 +12,29 @@ import { TagTextarea } from "./tag-textarea"
 import { getLanguagesForModel, ALL_LANGUAGES } from "@/lib/audio-tags"
 import { TtsVoiceSettings } from "./tts-voice-settings"
 import { TtsContinuitySection } from "./tts-continuity-section"
+import { TtsNamedVoiceSelect } from "./tts-named-voice-select"
+import { TtsDirectionSection } from "./tts-direction-section"
+import { getTtsCapabilities, ttsLanguageCodes, ttsNamedVoices, ttsTakesReplica } from "@nodaro/shared/model-catalog"
+import { speechTextBeforeCap } from "@nodaro/prompts/prompt-fields"
 import { VcpVoiceSettings } from "./vcp-voice-settings"
 import { ttsModelSwitchPatch } from "@/lib/tts-model-switch"
 import { DialogueVoiceSettings } from "./dialogue-voice-settings"
 import { dialogueModelSwitchPatch } from "@/lib/dialogue-model-switch"
+import {
+  dialogueFillerWordsOffered,
+  dialogueLineStyleMax,
+  dialogueNewLineVoice,
+  dialogueSpeakerVoices,
+  dialogueTagProvider,
+  dialogueTakesElevenLabsOptions,
+  dialogueTakesSpeakerDirection,
+  withDialogueVoices,
+} from "@/lib/dialogue-direction"
+import { DialogueClonesSection, TtsCloneSection, useOneOffCloneWithheld } from "./voice-clone-fields"
+import { dialogueCloneLabels, panelDialogueVoices } from "@/lib/voice-clone"
+import { DialogueFileFormatSelect, DialogueFillerWordsSwitch, DialogueLineStyleInput, DialogueLineVoiceSelect, DialogueSpeakersSection } from "./dialogue-direction-fields"
+import { SpeechFileFormatSelect } from "./speech-file-format-select"
+import { ttsOutputFormatOf } from "@/lib/speech-output-format"
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { SUNO_SLIDER_META, SUNO_SLIDER_LABEL_KEYS, SUNO_SLIDER_DESC_KEYS } from "@/lib/suno-sliders"
 import { Button } from "@/components/ui/button"
@@ -67,10 +86,11 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, REPLICATE_LIP_SYNC_PROVIDERS, retiredLipSyncProviderName, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, lipSyncLeverClearPatch, lipSyncTakesLever, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, dialogueProviderOf, getDialogueCapabilities, SUNO_SEPARATE_TYPES, SUNO_STEM_NAMES, DEFAULT_SUNO_STEM_NAME, SUNO_SEPARATE_STEM_FIELDS, type SunoSeparateType, type SunoStemName } from "@nodaro/shared/models"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, REPLICATE_LIP_SYNC_PROVIDERS, retiredLipSyncProviderName, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, lipSyncLeverClearPatch, lipSyncTakesLever, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, TTS_OUTPUT_FORMATS, dialogueProviderOf, getDialogueCapabilities, dialogueMaxSpeakers, dialogueVoicesForModel, SUNO_SEPARATE_TYPES, SUNO_STEM_NAMES, DEFAULT_SUNO_STEM_NAME, SUNO_SEPARATE_STEM_FIELDS, type SunoSeparateType, type SunoStemName } from "@nodaro/shared/models"
 import { AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, type AudioFxPreset } from "@nodaro/shared/media"
 import { lipSyncFifteenSecondCreditId, sunoCreditType } from "@nodaro/shared/credits"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts/assembly"
+import { dialogueTextBeforeCap } from "@nodaro/prompts/prompt-fields"
 import { MappableField } from "./mappable-field"
 import { CompareModelsLink } from "@/components/editor/node-docs/compare-models-link"
 import { SunoField, isSunoFieldWired } from "./suno-field"
@@ -181,6 +201,10 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
   // — a known display mismatch, unchanged here (it has no entry in TTS_MODELS).
   const shownModel = data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || DEFAULT_TTS_PROVIDER)
   const offeredTtsModels = useOfferedModels(TTS_MODELS, { nodeType: "text-to-speech" }, shownModel)
+  // A one-off clone (decided 2026-11-13) on a model that clones speaks in place of the voice — unless the
+  // deployment withholds clones, where the clone section says so and the voice list stays.
+  const cloneWithheld = useOneOffCloneWithheld()
+  const cloneOn = data.replica != null && ttsTakesReplica(shownModel) && !cloneWithheld
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "directText")
   const finalPrompt = useFinalPromptSegments({
@@ -251,7 +275,9 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
                 displayMode={variableDisplayMode}
                 refMap={refMap}
               />
-              <PromptLengthCounter value={data.directText || ""} max={getMaxTtsChars(shownModel)} modelLabel={shownModel} noun={t("audiocfg.text")} />
+              {/* Counted as the model takes the text before its cap — on Gemini 3.8 its tags rewritten (`[pause]` → `<short
+                  pause>`) — the length a workflow run measures against the cap (decided 2026-11-13). */}
+              <PromptLengthCounter value={speechTextBeforeCap(data.directText || "", getTtsCapabilities(shownModel))} max={getMaxTtsChars(shownModel)} modelLabel={shownModel} noun={t("audiocfg.text")} />
               <p className="text-[11px] text-muted-foreground mt-1">{t("audiocfg.hintTypeTags")}</p>
             </>
           )}
@@ -260,6 +286,13 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
       <SpeechPriceLine price={price} />
       <div>
         <Label id={voiceLabelId}>{t("field.voice")}</Label>
+        {/* A one-off clone speaks in place of any listed voice; a model that speaks only its own named voices
+            (Gemini) lists those; the others browse the ElevenLabs voices. */}
+        {cloneOn ? (
+          <p className="text-xs text-muted-foreground" data-testid="tts-clone-speaks">{t("audiocfg.cloneSpeaksInstead")}</p>
+        ) : ttsNamedVoices(shownModel) ? (
+          <TtsNamedVoiceSelect provider={shownModel} voiceId={data.voiceId} labelledBy={voiceLabelId} onUpdate={onUpdate} />
+        ) : (
         <VoiceBrowser
           triggerLabelledBy={voiceLabelId}
           value={data.voiceId || (surfaceVoiceGenderAllowed("female") ? "Rachel" : "")}
@@ -287,7 +320,12 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           }}
           showCustomVoices
         />
+        )}
       </div>
+      {/* Only on a model that clones (Gemini 3.8 Flash), off by default. */}
+      <TtsCloneSection provider={shownModel} data={data} onUpdate={onUpdate} />
+      {/* No picker for a model offered in no language (Gemini: the language follows the text). */}
+      {ttsLanguageCodes(shownModel).length > 0 && (
       <div>
         <Label>{t("field.language")}</Label>
         <Select
@@ -303,9 +341,18 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           </SelectContent>
         </Select>
       </div>
+      )}
+      <TtsDirectionSection provider={shownModel} data={data} onUpdate={onUpdate} />
       <TtsVoiceSettings provider={data.provider} data={data} onUpdate={onUpdate} />
       {/* `shownModel`, not `data.provider`: a node storing no model runs on the default speech model, and the section shows for what the node shows and runs as. */}
       <TtsContinuitySection provider={shownModel} data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
+      {/* The file (decided 2026-11-13): every speech model delivers MP3 128 / 192 or WAV, as its API does. */}
+      <SpeechFileFormatSelect
+        formats={TTS_OUTPUT_FORMATS}
+        value={ttsOutputFormatOf(data.outputFormat)}
+        onChange={(outputFormat) => onUpdate({ outputFormat })}
+        testId="tts-file-format"
+      />
     </div>
   )
 }
@@ -2137,16 +2184,35 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const dialogue = data.dialogue ?? [{ id: "1", text: "", voice: DEFAULT_DIALOGUE_VOICE }]
-  const totalChars = dialogue.reduce((sum, l) => sum + l.text.length, 0)
   // The chosen model's cap, from its capability sheet — the same getter the
   // route's Zod refine and the MCP verb read, so the counter can't drift from
   // what the backend accepts (three copies drifted before). An unset provider
   // reads as v3 dialogue, which is what the node runs as.
   const shownModel = dialogueProviderOf(data.provider)
   const offeredDialogueModels = useOfferedModels(DIALOGUE_MODELS, { nodeType: "text-to-dialogue" }, shownModel)
-  const maxChars = getDialogueCapabilities(data.provider).maxChars
-  // Probed ElevenLabs hard limit: an 11th unique voice → 400 max_voices_exceeded.
-  const uniqueVoices = new Set(dialogue.filter((l) => l.voice).map((l) => l.voice)).size
+  const sheet = getDialogueCapabilities(shownModel)
+  const maxChars = sheet.maxChars
+  // Measured as the route measures it: each line as the model takes it before the cap (on Gemini 3.8 its
+  // tags rewritten), the lines' texts as written on any other model.
+  const totalChars = dialogueTextBeforeCap(dialogue, sheet)
+  // Every decision below is the sheet's, never a model id: named voices (Gemini) in place of the
+  // ElevenLabs voice browser, a style per line or a direction per speaker, filler words, the language.
+  const namedVoices = sheet.voices !== undefined
+  const lineStyleMax = dialogueLineStyleMax(shownModel)
+  const tagProvider = dialogueTagProvider(shownModel)
+  // The voice each line runs with (the model and the voices may have been chosen apart): what every
+  // voice control, the speaker count and the speakers' blocks show.
+  // A cloned speaker's label (`speakers[].replica`, Gemini 3.8 Flash) stays as it is: an edit must not move it.
+  // A clone being set up keeps its label as a ready one does (`panelDialogueVoices`), so a line given it is never moved.
+  const sentVoices = useMemo(() => panelDialogueVoices(shownModel, dialogue.map((l) => l.voice), data.speakers), [shownModel, dialogue, data.speakers])
+  // Clones are offered in the line pickers only where the deployment offers them.
+  const cloneWithheld = useOneOffCloneWithheld()
+  const cloneLabels = cloneWithheld ? [] : dialogueCloneLabels(shownModel, data.speakers)
+  const speakerVoices = dialogueSpeakerVoices(sentVoices)
+  const uniqueVoices = speakerVoices.length
+  const maxSpeakers = dialogueMaxSpeakers(shownModel)
+  // On a model with named voices every edit writes the voices the lines show, so an edit never moves another line's voice.
+  const lines = namedVoices ? withDialogueVoices(dialogue, sentVoices) : dialogue
   // The script is on the node (no graph context needed): exact for literal lines.
   const price = useSpeechPricing(undefined, "text-to-dialogue", data as unknown as Record<string, unknown>)
 
@@ -2173,18 +2239,20 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
 
   const fillFromScript = useCallback(() => {
     if (!scriptDialogue.length) return
-    const newDialogue: DialogueLine[] = scriptDialogue.map((d) => ({
+    const filled: DialogueLine[] = scriptDialogue.map((d) => ({
       id: crypto.randomUUID(),
       text: d.text,
       voice: DEFAULT_DIALOGUE_VOICE,
       voiceLabel: d.speaker,
     }))
+    // On a model with named voices the lines take the voice they run with (one speaker, the model's own).
+    const newDialogue = namedVoices ? withDialogueVoices(filled, dialogueVoicesForModel(shownModel, filled.map((l) => l.voice))) : filled
     onUpdate({ dialogue: newDialogue })
     toast.success(tx("audiocfg.toastFilledDialogueLines", { count: newDialogue.length }))
-  }, [scriptDialogue, onUpdate])
+  }, [scriptDialogue, onUpdate, namedVoices, shownModel])
 
   function updateLine(index: number, updates: Partial<DialogueLine>) {
-    const newDialogue = dialogue.map((line, i) =>
+    const newDialogue = lines.map((line, i) =>
       i === index ? { ...line, ...updates } : line
     )
     onUpdate({ dialogue: newDialogue })
@@ -2192,12 +2260,14 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
 
   function addLine() {
     const newId = String(Date.now())
-    onUpdate({ dialogue: [...dialogue, { id: newId, text: "", voice: DEFAULT_DIALOGUE_VOICE }] })
+    const voice = dialogueNewLineVoice(shownModel, sentVoices)
+    const line: DialogueLine = voice ? { id: newId, text: "", voice, voiceLabel: voice } : { id: newId, text: "", voice: DEFAULT_DIALOGUE_VOICE }
+    onUpdate({ dialogue: [...lines, line] })
   }
 
   function removeLine(index: number) {
     if (dialogue.length <= 1) return
-    onUpdate({ dialogue: dialogue.filter((_, i) => i !== index) })
+    onUpdate({ dialogue: lines.filter((_, i) => i !== index) })
   }
 
   return (
@@ -2223,15 +2293,22 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
       <div className="flex items-center justify-between">
         <Label>{t("audiocfg.dialogueLines")}</Label>
         <div className="flex items-center gap-2">
-          <span className={`text-xs ${uniqueVoices > 10 ? "text-red-500" : "text-muted-foreground"}`} title={t("audiocfg.hintDialogueVoiceCap")}>
-            {t("audiocfg.dialogueVoiceCount", { count: uniqueVoices })}
+          <span className={`text-xs ${uniqueVoices > maxSpeakers ? "text-red-500" : "text-muted-foreground"}`} title={t("audiocfg.hintDialogueVoiceCap", { max: maxSpeakers })}>
+            {t("audiocfg.dialogueVoiceCount", { count: uniqueVoices, max: maxSpeakers })}
           </span>
           <span className={`text-xs ${totalChars > maxChars ? "text-red-500" : "text-muted-foreground"}`}>
             {totalChars}/{maxChars}
           </span>
         </div>
       </div>
-      <p className="text-[11px] text-muted-foreground -mt-2">{t("audiocfg.hintDialogueRecommended")}</p>
+      {uniqueVoices > maxSpeakers && (
+        <p className="text-[11px] text-red-500 -mt-2" role="status" data-testid="dialogue-speaker-limit">
+          {t("audiocfg.dialogueTooManySpeakers", { max: maxSpeakers })}
+        </p>
+      )}
+      {dialogueTakesElevenLabsOptions(shownModel) && (
+        <p className="text-[11px] text-muted-foreground -mt-2">{t("audiocfg.hintDialogueRecommended")}</p>
+      )}
       <SpeechPriceLine price={price} />
 
       {scriptDialogue.length > 0 && (
@@ -2250,6 +2327,15 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
         {dialogue.map((line, i) => (
           <div key={line.id} className="flex flex-col gap-1 p-2 rounded-md border border-border bg-muted/20">
             <div className="flex items-center gap-2">
+              {namedVoices ? (
+                <DialogueLineVoiceSelect
+                  provider={shownModel}
+                  voice={sentVoices[i] ?? ""}
+                  n={i + 1}
+                  onPick={(voice) => updateLine(i, { voice, voiceLabel: voice })}
+                  cloneLabels={cloneLabels}
+                />
+              ) : (
               <VoiceBrowser
                 compact
                 showCustomVoices
@@ -2257,6 +2343,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
                 valueLabel={line.voiceLabel}
                 onSelect={(id, name) => updateLine(i, { voice: id, voiceLabel: name })}
               />
+              )}
               {dialogue.length > 1 && (
                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label={t("audiocfg.removeDialogueLine")} onClick={() => removeLine(i)}>
                   <Trash2 className="h-3 w-3" />
@@ -2270,10 +2357,19 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
               placeholder={t("audiocfg.phDialogueLine", { n: i + 1 })}
               className="text-sm"
               tagMode="audio"
+              provider={tagProvider}
               nodeRefs={nodeRefs}
               displayMode={variableDisplayMode}
               refMap={refMap}
             />
+            {lineStyleMax !== undefined && (
+              <DialogueLineStyleInput
+                max={lineStyleMax}
+                value={line.styleDirection ?? ""}
+                n={i + 1}
+                onChange={(v) => updateLine(i, { styleDirection: v || undefined })}
+              />
+            )}
           </div>
         ))}
       </div>
@@ -2282,8 +2378,21 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
         <Plus className="h-3 w-3 me-1" /> {t("audiocfg.addLine")}
       </Button>
 
+      {/* Only on a model that clones (Gemini 3.8 Flash): speakers in a person's own voice. */}
+      <DialogueClonesSection provider={shownModel} lines={lines} speakers={data.speakers} onUpdate={onUpdate} />
+
+      {dialogueFillerWordsOffered(shownModel, sentVoices) && (
+        <DialogueFillerWordsSwitch checked={data.fillerWords === true} onChange={(v) => onUpdate({ fillerWords: v })} />
+      )}
+
+      {dialogueTakesSpeakerDirection(shownModel) && (
+        <DialogueSpeakersSection provider={shownModel} voices={speakerVoices} speakers={data.speakers} onUpdate={onUpdate} />
+      )}
+
       <DialogueVoiceSettings provider={data.provider} data={data} onUpdate={onUpdate} />
 
+      {/* No picker for a model offered in no language (Gemini: the language follows the text). */}
+      {sheet.languageCode && (
       <div>
         <Label>{t("field.language")}</Label>
         <Select
@@ -2299,7 +2408,13 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
           </SelectContent>
         </Select>
       </div>
+      )}
 
+      {/* Only on a model that offers more than one file (Gemini); the default clears the field. */}
+      <DialogueFileFormatSelect provider={shownModel} value={data.outputFormat} onChange={(outputFormat) => onUpdate({ outputFormat })} />
+
+      {dialogueTakesElevenLabsOptions(shownModel) && (
+      <>
       <div>
         <Label htmlFor="dlg-seed">{t("field.seed")}</Label>
         <Input
@@ -2338,9 +2453,11 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
           {t("audiocfg.hintTextNormalization")}
         </p>
       </div>
+      </>
+      )}
 
       <p className="text-xs text-muted-foreground">
-        {t("audiocfg.descTextToDialogue")}
+        {namedVoices ? t("audiocfg.descTextToDialogueNamed", { max: maxSpeakers }) : t("audiocfg.descTextToDialogue")}
       </p>
     </div>
   )

@@ -32,9 +32,15 @@ export function costTierCuts(credits: readonly number[]): CostTierCuts {
   const sorted = [...credits].sort((a, b) => a - b)
   if (sorted.length === 0) return { everydayMax: 0, premiumMin: 0 }
   const last = sorted.length - 1
+  const median = sorted[Math.floor(last / 2)]!
+  const rankCut = sorted[Math.ceil((2 * last) / 3)]!
   return {
     everydayMax: sorted[Math.floor(last / 3)]!,
-    premiumMin: sorted[Math.ceil((2 * last) / 3)]!,
+    // Premium always starts above the median price: a block of equal prices that holds the
+    // median and the two-thirds rank would otherwise put most of the kind in Premium (equal
+    // prices share a tier) — audio's many 30-credit models once cheaper speech models joined
+    // (decided 2026-11-12). Where the rank cut is already above the median, it is the cut.
+    premiumMin: rankCut > median ? rankCut : (sorted.find((c) => c > median) ?? rankCut),
   }
 }
 

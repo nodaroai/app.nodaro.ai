@@ -232,7 +232,8 @@ export function FileDropZone({
   onFileChange: (file: File) => void
   label: string
   height?: string
-  onShowUrl: () => void
+  /** "Or paste a URL": none for an input that takes a file only (a cloned voice's recordings). */
+  onShowUrl?: () => void
 }) {
   const t = useT()
   return (
@@ -253,13 +254,15 @@ export function FileDropZone({
         <>
           <Upload className={height === "h-24" ? "w-6 h-6 text-muted-foreground mb-1" : "w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground mb-1 sm:mb-2"} />
           <span className="text-xs text-muted-foreground">{label}</span>
-          <button
-            type="button"
-            className="mt-2 py-1.5 px-2 text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors touch-manipulation"
-            onClick={(e) => { e.stopPropagation(); onShowUrl() }}
-          >
-            <Link className="w-3 h-3" /> {t("present.orPasteUrl")}
-          </button>
+          {onShowUrl && (
+            <button
+              type="button"
+              className="mt-2 py-1.5 px-2 text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors touch-manipulation"
+              onClick={(e) => { e.stopPropagation(); onShowUrl() }}
+            >
+              <Link className="w-3 h-3" /> {t("present.orPasteUrl")}
+            </button>
+          )}
         </>
       )}
       <input

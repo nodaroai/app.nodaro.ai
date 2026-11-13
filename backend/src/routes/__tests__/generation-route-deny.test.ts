@@ -64,6 +64,7 @@ const ROUTE_PATHS = [
   "/v1/text-to-video",
   "/v1/image-to-image",
   "/v1/text-to-speech",
+  "/v1/text-to-dialogue",
   "/v1/web-scrape",
 ] as const
 
@@ -240,3 +241,33 @@ describe("a capability hosted by another route follows the node that governs it"
     expect((await scrapeAs(USER, "instagram")).statusCode).toBe(200)
   })
 })
+
+// A one-off voice clone (Gemini 3.8 Flash) is voice cloning behind the speech routes' door (decided
+// 2026-11-13): a deployment that denies the Voice Clone node refuses it there, before anything is held or read.
+describe("a one-off voice clone follows the Voice Clone node", () => {
+  const REPLICA = { sourceAudioUrl: "https://media.example/s.wav", consentAudioUrl: "https://media.example/c.wav" }
+  const denyVoiceClone = () => setProfile(JSON.stringify({ nodes: { deny: ["voice-clone"] } }))
+
+  it("refuses Text to Speech and Text to Dialogue with a clone, naming it, where voice-clone is denied", async () => {
+    denyVoiceClone()
+    const tts = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { provider: "gemini-3-8-flash-tts", text: "Hi.", replica: REPLICA } })
+    expect(tts.statusCode).toBe(403)
+    expect(tts.json().error.code).toBe("node_not_available")
+    expect(tts.json().error.message).toContain("a one-off voice clone")
+    const dlg = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-dialogue",
+      payload: { provider: "gemini-3-8-flash-tts", dialogue: [{ text: "Hi.", voice: "Me" }], speakers: [{ voice: "Me", replica: REPLICA }] },
+    })
+    expect(dlg.statusCode).toBe(403)
+    expect(dlg.json().error.message).toContain("a one-off voice clone")
+  })
+
+  it("leaves speech without a clone alone there, and a clone alone where voice-clone is offered", async () => {
+    denyVoiceClone()
+    expect((await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { provider: "gemini-3-8-flash-tts", text: "Hi." } })).statusCode).toBe(200)
+    setProfile(null)
+    expect((await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { provider: "gemini-3-8-flash-tts", text: "Hi.", replica: REPLICA } })).statusCode).toBe(200)
+  })
+})
+

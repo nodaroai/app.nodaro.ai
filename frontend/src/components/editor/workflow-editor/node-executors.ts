@@ -538,14 +538,8 @@ export function runTextToSpeechGeneration(
   ctx: ExecutionContext,
   voice?: string,
   provider?: string,
-  options?: {
-    stability?: number;
-    similarityBoost?: number;
-    style?: number;
-    speed?: number;
-    languageCode?: string;
-    voiceType?: "premade" | "custom" | "library";
-  },
+  // The API client's own options (voice settings, neighbour text, style direction), so a field it sends is one this passes.
+  options?: Parameters<typeof textToSpeech>[4],
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,

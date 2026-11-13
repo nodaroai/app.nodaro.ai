@@ -173,3 +173,168 @@ describe("text-to-dialogue panel — a model the user picks", () => {
     expect(screen.getByText(/\/10000$/)).toBeTruthy() // the probe's number (DIALOGUE_V4_MAX_CHARS, measured 2026-10-06)
   })
 })
+
+describe("text-to-dialogue panel — the Gemini dialogue models (decided 2026-11-12)", () => {
+  const twoSpeakers = [
+    { id: "1", text: "Hi", voice: "Kore", voiceLabel: "Kore" },
+    { id: "2", text: "Hello", voice: "Puck", voiceLabel: "Puck" },
+  ]
+
+  it("3.1: each line picks from the model's own voices; the ElevenLabs settings are gone; one direction block per speaker", async () => {
+    useWorkflowStore.setState({
+      nodes: [dialogueNode("A", { provider: "gemini-3-1-flash-tts", dialogue: twoSpeakers, stability: 0.5, languageCode: "en" })],
+      edges: [], selectedNodeId: "A", isDirty: false, isReadOnly: false,
+    } as never)
+    mountPanel()
+    await tick()
+
+    expect(screen.queryByTestId("voice-browser")).toBeNull()
+    expect(screen.getAllByTestId("tts-named-voice").map((el) => el.textContent)).toEqual(["Kore", "Puck"])
+    expect(screen.queryByRole("combobox", { name: "Stability" })).toBeNull()
+    expect(screen.queryByLabelText(/Stability/)).toBeNull()
+    expect(screen.queryByRole("combobox", { name: "Language" })).toBeNull()
+    expect(screen.queryByLabelText("Seed")).toBeNull()
+    expect(screen.queryByRole("combobox", { name: "Text normalization" })).toBeNull()
+    const speakers = screen.getByTestId("dialogue-speakers")
+    expect(within(speakers).getByText("Speaker: Kore")).toBeTruthy()
+    expect(within(speakers).getByText("Speaker: Puck")).toBeTruthy()
+    expect(screen.queryAllByTestId("dialogue-line-style")).toHaveLength(0)
+    expect(screen.queryByTestId("dialogue-filler-words")).toBeNull()
+    expect(screen.getByText("2/2 voices")).toBeTruthy()
+    expect(useWorkflowStore.getState().isDirty).toBe(false)
+  })
+
+  it("3.8: a style per line, and filler words with exactly two speakers, written by the person's edits", async () => {
+    useWorkflowStore.setState({
+      nodes: [dialogueNode("A", { provider: "gemini-3-8-flash-tts", dialogue: twoSpeakers })],
+      edges: [], selectedNodeId: "A", isDirty: false, isReadOnly: false,
+    } as never)
+    mountPanel()
+    await tick()
+
+    expect(screen.queryByTestId("dialogue-speakers")).toBeNull()
+    const user = userEvent.setup()
+    await user.type(screen.getByRole("textbox", { name: "Speaking style of line 1" }), "Warm")
+    await tick()
+    expect((dataOf("A").dialogue as Array<Record<string, unknown>>)[0]!.styleDirection).toBe("Warm")
+
+    await user.click(within(screen.getByTestId("dialogue-filler-words")).getByRole("switch"))
+    await tick()
+    expect(dataOf("A").fillerWords).toBe(true)
+  })
+
+  it("3.8 with one speaker offers no filler words; three voices say the model speaks at most two", async () => {
+    useWorkflowStore.setState({
+      nodes: [
+        dialogueNode("A", { provider: "gemini-3-8-flash-tts", dialogue: [{ id: "1", text: "Hi", voice: "Kore" }] }),
+        dialogueNode("B", { provider: "gemini-3-8-flash-tts", dialogue: [...twoSpeakers, { id: "3", text: "Yo", voice: "Fola" }] }),
+      ],
+      edges: [], selectedNodeId: "A", isDirty: false, isReadOnly: false,
+    } as never)
+    mountPanel()
+    await tick()
+    expect(screen.queryByTestId("dialogue-filler-words")).toBeNull()
+    expect(screen.queryByTestId("dialogue-speaker-limit")).toBeNull()
+
+    await select("B")
+    await tick()
+    expect(screen.getByTestId("dialogue-speaker-limit").textContent).toMatch(/at most 2 voices/)
+    expect(screen.getByText("3/2 voices")).toBeTruthy()
+  })
+
+  it("a Gemini node whose lines still name ElevenLabs voices shows the voices it runs with, and selecting it rewrites nothing", async () => {
+    useWorkflowStore.setState({
+      nodes: [dialogueNode("A"), dialogueNode("B", { provider: "gemini-3-1-flash-tts", dialogue: [{ id: "1", text: "Hi", voice: "Sarah" }, { id: "2", text: "Yo", voice: "Rachel" }] })],
+      edges: [], selectedNodeId: "A", isDirty: false, isReadOnly: false,
+    } as never)
+    mountPanel()
+    await tick()
+    useWorkflowStore.setState({ isDirty: false } as never)
+
+    await select("B")
+    await tick()
+
+    expect(screen.getAllByTestId("tts-named-voice").map((el) => el.textContent)).toEqual(["Kore", "Achernar"])
+    expect((dataOf("B").dialogue as Array<Record<string, unknown>>).map((l) => l.voice)).toEqual(["Sarah", "Rachel"])
+    expect(useWorkflowStore.getState().isDirty).toBe(false)
+  })
+
+  it("v3 → Gemini 3.1 from the dropdown: the voices move onto the model's own (two stay two) and the language resets", async () => {
+    useWorkflowStore.setState({
+      nodes: [dialogueNode("A", { provider: "elevenlabs-dialogue", languageCode: "en", dialogue: [{ id: "1", text: "Hi", voice: "Sarah" }, { id: "2", text: "Yo", voice: "Rachel" }] })],
+      edges: [], selectedNodeId: "A", isDirty: false, isReadOnly: false,
+    } as never)
+    mountPanel()
+    await tick()
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole("combobox", { name: "Model" }))
+    await user.click(await within(await screen.findByRole("listbox")).findByRole("option", { name: /^Gemini 3\.1 Flash TTS/ }))
+    await tick()
+
+    const data = dataOf("A")
+    expect(data.provider).toBe("gemini-3-1-flash-tts")
+    expect(data.languageCode).toBe("")
+    expect(data.dialogue).toEqual([
+      { id: "1", text: "Hi", voice: "Kore", voiceLabel: "Kore" },
+      { id: "2", text: "Yo", voice: "Achernar", voiceLabel: "Achernar" },
+    ])
+  })
+
+  it("Add line on a Gemini model gives the new line the other speaker's voice", async () => {
+    useWorkflowStore.setState({
+      nodes: [dialogueNode("A", { provider: "gemini-3-1-flash-tts", dialogue: twoSpeakers })],
+      edges: [], selectedNodeId: "A", isDirty: false, isReadOnly: false,
+    } as never)
+    mountPanel()
+    await tick()
+    await userEvent.setup().click(screen.getByRole("button", { name: /Add Line/ }))
+    await tick()
+    expect((dataOf("A").dialogue as Array<Record<string, unknown>>).map((l) => l.voice)).toEqual(["Kore", "Puck", "Kore"])
+  })
+})
+
+describe("text-to-dialogue panel — the file format (decided 2026-11-13)", () => {
+  const lines = [{ id: "1", text: "Hi", voice: "Kore", voiceLabel: "Kore" }]
+
+  it("a Gemini model offers the three files, shows MP3 128 kbps for a node with none, and selecting the node writes nothing", async () => {
+    useWorkflowStore.setState({
+      nodes: [dialogueNode("A"), dialogueNode("B", { provider: "gemini-3-8-flash-tts", dialogue: lines })],
+      edges: [], selectedNodeId: "A", isDirty: false, isReadOnly: false,
+    } as never)
+    mountPanel()
+    await tick()
+    expect(screen.queryByTestId("dialogue-file-format")).toBeNull()
+    useWorkflowStore.setState({ isDirty: false } as never)
+
+    await select("B")
+    await tick()
+    const file = screen.getByRole("combobox", { name: "File" })
+    expect(file.textContent).toBe("MP3, 128 kbps")
+    expect(dataOf("B").outputFormat).toBeUndefined()
+    expect(useWorkflowStore.getState().isDirty).toBe(false)
+
+    const user = userEvent.setup()
+    await user.click(file)
+    const options = within(await screen.findByRole("listbox")).getAllByRole("option").map((o) => o.textContent)
+    expect(options).toEqual(["MP3, 128 kbps", "MP3, 192 kbps", "WAV, 24 kHz"])
+    await user.click(within(screen.getByRole("listbox")).getByRole("option", { name: "WAV, 24 kHz" }))
+    await tick()
+    expect(dataOf("B").outputFormat).toBe("wav_24000")
+
+    await user.click(screen.getByRole("combobox", { name: "File" }))
+    await user.click(within(await screen.findByRole("listbox")).getByRole("option", { name: "MP3, 128 kbps" }))
+    await tick()
+    expect(dataOf("B").outputFormat).toBeUndefined()
+  })
+
+  it("v4 dialogue (one file only) draws no file choice", async () => {
+    useWorkflowStore.setState({
+      nodes: [dialogueNode("A", { provider: "elevenlabs-dialogue-v4" })],
+      edges: [], selectedNodeId: "A", isDirty: false, isReadOnly: false,
+    } as never)
+    mountPanel()
+    await tick()
+    expect(screen.queryByTestId("dialogue-file-format")).toBeNull()
+  })
+})

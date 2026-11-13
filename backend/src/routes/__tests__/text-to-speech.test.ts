@@ -81,6 +81,19 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
+// A one-off clone's recordings (lib/voice-replica.ts has its own tests): judged here by a stand-in.
+const replicaJudge = vi.hoisted(() => ({ refuse: undefined as undefined | { code: string; message: string } }))
+vi.mock("@/lib/voice-replica.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../../lib/voice-replica.js")>()
+  return {
+    ...real,
+    readReplica: vi.fn(async () => {
+      if (replicaJudge.refuse) throw new real.ReplicaRecordingError(replicaJudge.refuse.code as never, "source", replicaJudge.refuse.message)
+      return { source: { bytes: Buffer.alloc(0), seconds: 15 }, consent: { bytes: Buffer.alloc(0), seconds: 6 } }
+    }),
+  }
+})
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -773,3 +786,183 @@ describe("POST /v1/text-to-speech", () => {
     expect(body.error.code).toBe("internal_error")
   })
 })
+
+describe("POST /v1/text-to-speech — Gemini models (decided 2026-11-12)", () => {
+  const USER = "00000000-0000-4000-8000-000000000001"
+  const post = (payload: Record<string, unknown>) => app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { userId: USER, ...payload } })
+
+  it("runs and bills as the Gemini model named, never as turbo", async () => {
+    mockJobInsert({ data: { id: "job-g1" }, error: null })
+    const res = await post({ text: "Hello there.", provider: "gemini-3-8-flash-lite-tts", voice: "Zephyr" })
+    expect(res.statusCode).toBe(200)
+    expect(vi.mocked(videoQueue.add)).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ provider: "gemini-3-8-flash-lite-tts", voice: "Zephyr" }))
+    expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-g1", "gemini-3-8-flash-lite-tts")
+    expect(guard.resolver!({ body: { provider: "gemini-3-8-flash-lite-tts", text: "x" } })).toBe("gemini-3-8-flash-lite-tts")
+  })
+
+  it("refuses a voice not on the model's own list with a 400 before any hold — an ElevenLabs voice, or a 3.8 voice on 3.1", async () => {
+    mockJobInsert({ data: { id: "job-g2" }, error: null })
+    for (const [provider, voice] of [["gemini-3-8-flash-tts", "Rachel"], ["gemini-3-1-flash-tts", "Fola"]] as const) {
+      const res = await post({ text: "Hi.", provider, voice })
+      expect(res.statusCode, `${provider} ${voice}`).toBe(400)
+      expect(res.body).toContain(`${voice} is not a voice of ${provider}`)
+    }
+    expect(vi.mocked(reserveCreditsForJob)).not.toHaveBeenCalled()
+    expect(vi.mocked(videoQueue.add)).not.toHaveBeenCalled()
+  })
+
+  it("no voice is no problem: the worker runs the model's default", async () => {
+    mockJobInsert({ data: { id: "job-g3" }, error: null })
+    const res = await post({ text: "Hi.", provider: "gemini-2-5-pro-tts" })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("3.8: a free-text style rides to the worker; pace, accent and audio profile are not the model's, so never sent", async () => {
+    mockJobInsert({ data: { id: "job-g4" }, error: null })
+    const res = await post({ text: "Hi.", provider: "gemini-3-8-flash-tts", styleDirection: " slow and dry ", pace: "Staccato", accent: "Australian" })
+    expect(res.statusCode).toBe(200)
+    const payload = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+    expect(payload.styleDirection).toBe("slow and dry")
+    expect(payload).not.toHaveProperty("pace")
+    expect(payload).not.toHaveProperty("accent")
+  })
+
+  it("3.1 / 2.5: the style must be one of the model's; pace, accent and audio profile ride along", async () => {
+    mockJobInsert({ data: { id: "job-g5" }, error: null })
+    const bad = await post({ text: "Hi.", provider: "gemini-3-1-flash-tts", styleDirection: "slow and dry" })
+    expect(bad.statusCode).toBe(400)
+    const badPace = await post({ text: "Hi.", provider: "gemini-2-5-pro-tts", pace: "Slow" })
+    expect(badPace.statusCode).toBe(400)
+    const ok = await post({ text: "Hi.", provider: "gemini-3-1-flash-tts", styleDirection: "Deadpan", pace: "Staccato", accent: "British (RP)", audioProfile: "A stern gatekeeper" })
+    expect(ok.statusCode).toBe(200)
+    expect(vi.mocked(videoQueue.add)).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({
+      styleDirection: "Deadpan", pace: "Staccato", accent: "British (RP)", audioProfile: "A stern gatekeeper",
+    }))
+  })
+
+  it("a free-text style over 1,000 characters is a 400", async () => {
+    mockJobInsert({ data: { id: "job-g6" }, error: null })
+    const res = await post({ text: "Hi.", provider: "gemini-3-8-flash-lite-tts", styleDirection: "x".repeat(1001) })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("an ElevenLabs model never sends the direction fields, whatever the body carries (its payload is as before)", async () => {
+    mockJobInsert({ data: { id: "job-g7" }, error: null })
+    const res = await post({ text: "Hi.", provider: "elevenlabs-v4", styleDirection: "anything", pace: "nonsense" })
+    expect(res.statusCode).toBe(200)
+    const payload = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+    for (const key of ["styleDirection", "pace", "accent", "audioProfile"]) expect(payload).not.toHaveProperty(key)
+  })
+
+  it("text over the 10,000 cap is clamped like every speech model's (3.1; 3.8 is cut after its rewrite, below)", async () => {
+    mockJobInsert({ data: { id: "job-g8" }, error: null })
+    const res = await post({ text: "a".repeat(12000), provider: "gemini-3-1-flash-tts" })
+    expect(res.statusCode).toBe(200)
+    const payload = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+    expect((payload.text as string).length).toBe(10000)
+  })
+})
+
+describe("POST /v1/text-to-speech — Gemini under a voice lock, and 3.8's cap after the rewrite (decided 2026-11-13)", () => {
+  const USER = "00000000-0000-4000-8000-000000000001"
+  const post = (payload: Record<string, unknown>) => app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { userId: USER, ...payload } })
+  afterEach(() => {
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+  })
+
+  it("under a voice lock a Gemini model is refused before any hold, with no voice named or with one of its own", async () => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male", "female", "neutral"] } })
+    __resetSurfaceProfileCacheForTests()
+    // The voice judge reads the caller's clones for a named voice: none here.
+    mockVoiceTables([])
+    for (const payload of [{ text: "Hi.", provider: "gemini-3-8-flash-lite-tts" }, { text: "Hi.", provider: "gemini-2-5-pro-tts", voice: "Kore" }]) {
+      const res = await post(payload)
+      expect(res.statusCode, payload.provider).toBe(400)
+      expect(res.json().error.code).toBe("voice_not_available")
+    }
+    expect(vi.mocked(reserveCreditsForJob)).not.toHaveBeenCalled()
+    expect(vi.mocked(videoQueue.add)).not.toHaveBeenCalled()
+  })
+
+  it("with no lock a Gemini model runs as before", async () => {
+    mockJobInsert({ data: { id: "job-l2" }, error: null })
+    expect((await post({ text: "Hi.", provider: "gemini-3-8-flash-lite-tts" })).statusCode).toBe(200)
+  })
+
+  it("3.8: the text is kept as given for the worker to rewrite and then cut — the guard prices the sent text, never past the cap", async () => {
+    mockJobInsert({ data: { id: "job-l3" }, error: null })
+    const text = " [pause]".repeat(1250) // 10,000 characters that rewrite to 17,499
+    const res = await post({ text, provider: "gemini-3-8-flash-tts" })
+    expect(res.statusCode).toBe(200)
+    const payload = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+    expect(payload.text).toBe(text)
+    const { billableSpeechChars } = await import("../../lib/speech-credits.js")
+    expect(billableSpeechChars("gemini-3-8-flash-tts", text)).toBeLessThanOrEqual(10000)
+    // Any other model is cut to its cap first, as before.
+    mockJobInsert({ data: { id: "job-l4" }, error: null })
+    await post({ text: "a".repeat(12000), provider: "gemini-3-1-flash-tts" })
+    expect((vi.mocked(videoQueue.add).mock.calls[1]![1] as { text: string }).text).toHaveLength(10000)
+  })
+})
+
+describe("POST /v1/text-to-speech — a one-off clone (replica, decided 2026-11-13)", () => {
+  const USER = "00000000-0000-4000-8000-000000000001"
+  const REPLICA = { sourceAudioUrl: "https://media.example/s.wav", consentAudioUrl: "https://media.example/c.wav", consent: true }
+  const post = (payload: Record<string, unknown>) => app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { userId: USER, ...payload } })
+  afterEach(() => {
+    replicaJudge.refuse = undefined
+  })
+
+  it("3.8 Flash: the recordings are judged before the hold, ride to the worker, and the job row keeps no link", async () => {
+    const { mockInsert } = mockJobInsert({ data: { id: "job-r1" }, error: null })
+    const res = await post({ text: "Hi.", provider: "gemini-3-8-flash-tts", replica: REPLICA })
+    expect(res.statusCode).toBe(200)
+    const { readReplica } = await import("../../lib/voice-replica.js")
+    expect(vi.mocked(readReplica)).toHaveBeenCalledWith(REPLICA)
+    expect(vi.mocked(videoQueue.add)).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ replica: REPLICA }))
+    const row = mockInsert.mock.calls.at(-1)![0] as { input_data: Record<string, unknown> }
+    expect(row.input_data.replica).toBeUndefined()
+    expect(row.input_data.oneOffClone).toBe(true)
+    expect(JSON.stringify(row.input_data)).not.toContain("media.example")
+  })
+
+  it("a model that does not clone refuses it before anything is read or held — 3.8 Flash-Lite included", async () => {
+    for (const provider of ["gemini-3-8-flash-lite-tts", "gemini-3-1-flash-tts", "elevenlabs-v4"]) {
+      const res = await post({ text: "Hi.", provider, replica: REPLICA })
+      expect(res.statusCode, provider).toBe(400)
+      expect(res.body).toContain("does not clone a voice; a one-off clone runs on gemini-3-8-flash-tts")
+    }
+    const { readReplica } = await import("../../lib/voice-replica.js")
+    expect(vi.mocked(readReplica)).not.toHaveBeenCalled()
+    expect(vi.mocked(reserveCreditsForJob)).not.toHaveBeenCalled()
+  })
+
+  it("a recording the platform cannot take is a 400 with its sentence, before any hold", async () => {
+    mockJobInsert({ data: { id: "job-r2" }, error: null })
+    replicaJudge.refuse = { code: "replica_length", message: "The reference recording must be 10–30 seconds of natural speech; this one is 4.0 seconds" }
+    const res = await post({ text: "Hi.", provider: "gemini-3-8-flash-tts", replica: REPLICA })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({ code: "replica_length", message: "The reference recording must be 10–30 seconds of natural speech; this one is 4.0 seconds" })
+    expect(vi.mocked(reserveCreditsForJob)).not.toHaveBeenCalled()
+    expect(vi.mocked(videoQueue.add)).not.toHaveBeenCalled()
+  })
+
+  it("a clone without the caller's consent (consent: true) is a 400 before anything is read or held", async () => {
+    for (const replica of [{ ...REPLICA, consent: undefined }, { ...REPLICA, consent: false }]) {
+      const res = await post({ text: "Hi.", provider: "gemini-3-8-flash-tts", replica })
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toContain("replica.consent must be true")
+    }
+    const { readReplica } = await import("../../lib/voice-replica.js")
+    expect(vi.mocked(readReplica)).not.toHaveBeenCalled()
+    expect(vi.mocked(reserveCreditsForJob)).not.toHaveBeenCalled()
+  })
+
+  it("a malformed replica (not two https links) is refused by the schema", async () => {
+    const res = await post({ text: "Hi.", provider: "gemini-3-8-flash-tts", replica: { sourceAudioUrl: "http://x/s.wav", consentAudioUrl: REPLICA.consentAudioUrl } })
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toContain("https link")
+  })
+})
+

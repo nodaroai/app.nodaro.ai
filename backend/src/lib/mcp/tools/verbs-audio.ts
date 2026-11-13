@@ -14,12 +14,12 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, TTS_OUTPUT_FORMATS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, SUNO_SEPARATE_TYPES, TRANSCRIBE_PROVIDERS, TRANSCRIBE_TARGET_LANGUAGES, type TranscribeProvider } from "@nodaro/shared/models"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, TTS_OUTPUT_FORMATS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, dialogueProblem, SUNO_SEPARATE_TYPES, TRANSCRIBE_PROVIDERS, TRANSCRIBE_TARGET_LANGUAGES, type TranscribeProvider, GEMINI_3_1_TTS_ACCENTS, GEMINI_3_1_TTS_PACES, GEMINI_3_1_TTS_STYLES, TTS_DIRECTION_MAX_CHARS, REPLICA_CONSENT_SENTENCE, REPLICA_CONSENT_ATTESTATION } from "@nodaro/shared/models"
 import { MCP_TRANSCRIBE_PROVIDER } from "./_transcribe-provider.js"
 import { AUDIO_FX_PRESETS } from "@nodaro/shared/media"
 import { PITCH_TEMPO_LIMITS } from "@nodaro/shared/credits"
 import { readPromptAffixes, transcribeTranslationRefusal } from "@nodaro/shared/nodes"
-import { MODEL_CATALOG, canonicalTtsProvider } from "@nodaro/shared/model-catalog"
+import { MODEL_CATALOG, canonicalTtsProvider, getTtsCapabilities, replicaConsentProblem, ttsReplicaProblem, ttsVoiceForModel } from "@nodaro/shared/model-catalog"
 
 // The engine the MCP `transcribe` tool runs on lives in _transcribe-provider.ts
 // (a leaf the UGC quote prices with, without loading the verbs); re-exported.
@@ -48,7 +48,7 @@ const DEFAULT_SUNO_CATALOG_ID = SUNO_CATALOG_ID_BY_VERSION.get(DEFAULT_SUNO_MODE
 /** Widget/model id for a Suno version — the catalog id, `suno` if unknown. */
 const sunoWidgetModel = (version: string | undefined): string => SUNO_CATALOG_ID_BY_VERSION.get(version ?? DEFAULT_SUNO_MODEL) ?? "suno"
 
-import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
+import { applyPromptAffixes, dialogueTextBeforeCap, speechTextBeforeCap } from "@nodaro/prompts/prompt-fields"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS, normalizeTtsNeighbourText } from "../../../providers/elevenlabs/neighbour-text.js"
@@ -375,7 +375,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Generate Speech",
       description:
-        "Generate speech from text using ElevenLabs. Returns a job_id.\n\n" +
+        "Generate speech from text using ElevenLabs or Google Gemini. Returns a job_id.\n\n" +
         "**Picking a model**: `elevenlabs-v4` (default) supports `[audio tags]` " +
         "like `[laughs]`, `[whispers]`, `[sighs]` for emotion / pacing — best " +
         "for expressive narration, and it is FULLY MULTILINGUAL: use it for " +
@@ -394,7 +394,11 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "`previous_text` / `next_text` so the intonation stays continuous across " +
         "clips (v4 uses them; other models ignore them). " +
         "Never switch away from v4 for " +
-        "language reasons alone. Call `list_models { kind: \"audio\", mode: \"tts\" }` " +
+        "language reasons alone. The `gemini-*-tts` models (cheaper) speak only their own named " +
+        "voices (list_voices { model }; default Fola on 3.8, Kore on 3.1 / 2.5), take tone tags " +
+        "(3.8: `[laughs]` becomes `<laugh>`, untaken tags are removed) and `style_direction`; " +
+        "no language_code (the text decides). " +
+        "Call `list_models { kind: \"audio\", mode: \"tts\" }` " +
         "for the full sheet. Where length pricing is on, the charge is per started 100 " +
         "characters of the text sent, at least 8 units; `list_models` shows the " +
         "per-100-characters row when it applies.\n\n" +
@@ -432,7 +436,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "If unsure pick by character: female warm = Rachel; female " +
             "young = Aria / Lily; male deep = Roger / Brian; male " +
             "neutral = George / Daniel; British = Charlie / Charlotte. " +
-            "Defaults to Rachel.",
+            "Defaults to Rachel. A gemini-*-tts model takes only its own voices.",
           ),
         model: z
           // `.optional()` (NOT `.default()`): the in-handler default below keeps
@@ -489,6 +493,29 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "The line spoken just AFTER this one (the next clip's text) — the start of a " +
             "longer passage; up to 1,000 characters. Same continuity rule as previous_text.",
           ),
+        style_direction: z
+          .string()
+          .max(TTS_DIRECTION_MAX_CHARS)
+          .optional()
+          .describe(
+            "Gemini only. 3.8: free text — tone, emotion, pace. 3.1 / 2.5: one of " +
+            `${GEMINI_3_1_TTS_STYLES.join(", ")}. Not spoken, not billed.`,
+          ),
+        pace: z.enum(GEMINI_3_1_TTS_PACES).optional().describe("Gemini 3.1 / 2.5 only."),
+        accent: z.enum(GEMINI_3_1_TTS_ACCENTS).optional().describe("Gemini 3.1 / 2.5 only."),
+        audio_profile: z
+          .string()
+          .max(TTS_DIRECTION_MAX_CHARS)
+          .optional()
+          .describe("Gemini 3.1 / 2.5 only: who is speaking, in words (\"a warm, unhurried narrator\")."),
+        replica: z
+          .object({
+            source_audio_url: z.string().url().describe("https link to a WAV: 10–30 s of the person speaking naturally, in a quiet room."),
+            consent_audio_url: z.string().url().describe(`https link to a WAV of the same person, same room and microphone, reading: "${REPLICA_CONSENT_SENTENCE}"`),
+            consent: z.boolean().describe(`Required true: the user confirms "${REPLICA_CONSENT_ATTESTATION}" Ask them; never assume it.`),
+          })
+          .optional()
+          .describe("gemini-3-8-flash-tts only: speak in a person's own voice, cloned for this request alone (not saved), from two real recordings of the same adult — never AI-generated. Replaces voice_id. No extra charge."),
       },
               outputSchema: {
           jobId: z.string(),
@@ -550,6 +577,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         // A preset is node data: its neighbour text was never held to the tool schema's cap above (the panel
         // has none), so it goes through the same rule the provider exits apply — trimmed, shortened to the cap
         // — rather than reaching the route over-length for a caller who passed nothing.
+        if (d.styleDirection !== undefined) presetParams.style_direction = d.styleDirection
+        if (d.pace !== undefined) presetParams.pace = d.pace
+        if (d.accent !== undefined) presetParams.accent = d.accent
+        if (d.audioProfile !== undefined) presetParams.audio_profile = d.audioProfile
         const presetNeighbours = normalizeTtsNeighbourText(d)
         if (presetNeighbours.previousText !== undefined) presetParams.previous_text = presetNeighbours.previousText
         if (presetNeighbours.nextText !== undefined) presetParams.next_text = presetNeighbours.nextText
@@ -579,15 +610,34 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       // `elevenlabs` id runs as turbo, and has no cap entry of its own.
       const runsAs = canonicalTtsProvider(modelId)
       const modelCap = getMaxTtsChars(runsAs)
-      if (typeof effective.text === "string" && effective.text.length > modelCap) {
+      // Measured as the model takes it before its cap: on an angle-tag model (Gemini 3.8) after its tags are
+      // rewritten, which can lengthen the text (decided 2026-11-13); on any other model the text as written.
+      const textLength = typeof effective.text === "string" ? speechTextBeforeCap(effective.text, getTtsCapabilities(runsAs)).length : 0
+      if (textLength > modelCap) {
         return {
           content: [
             {
               type: "text" as const,
-              text: `text is ${effective.text.length} characters; ${runsAs} takes at most ${modelCap} per request. Split the script into several calls, or pick a model with a larger cap.`,
+              text: `text is ${textLength} characters; ${runsAs} takes at most ${modelCap} per request. Split the script into several calls, or pick a model with a larger cap.`,
             },
           ],
           isError: true as const,
+        }
+      }
+      // A one-off clone on a model that does not clone: refused before the route (the route refuses it too).
+      const replica = args.replica
+        ? { sourceAudioUrl: args.replica.source_audio_url, consentAudioUrl: args.replica.consent_audio_url, consent: args.replica.consent }
+        : undefined
+      const replicaProblem = ttsReplicaProblem(runsAs, replica) ?? replicaConsentProblem(replica)
+      if (replicaProblem) return { content: [{ type: "text" as const, text: replicaProblem }], isError: true as const }
+      // A preset's voice with a model the caller named: moved onto one that model speaks, as the editor moves
+      // it on a model switch (decided 2026-11-13, `ttsVoiceForModel`). A voice the caller names stays theirs.
+      if (args.presetId && args.voice_id === undefined && typeof effective.voice_id === "string") {
+        const voice = ttsVoiceForModel(runsAs, effective.voice_id)
+        if (voice !== effective.voice_id) {
+          if (voice === undefined) delete effective.voice_id
+          else effective.voice_id = voice
+          effective.voice_type = "premade"
         }
       }
       const payload = {
@@ -603,6 +653,11 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         outputFormat: effective.output_format as string | undefined,
         previousText: effective.previous_text as string | undefined,
         nextText: effective.next_text as string | undefined,
+        styleDirection: effective.style_direction as string | undefined,
+        pace: effective.pace as string | undefined,
+        accent: effective.accent as string | undefined,
+        audioProfile: effective.audio_profile as string | undefined,
+        ...(replica ? { replica } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }
@@ -639,16 +694,20 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "Where length pricing is on, the charge is per started 100 characters of the " +
         "script, at least 8 units; `list_models` shows the per-100-characters row when it applies.\n\n" +
         "The finished job's output_data carries `audioUrl` and, on both " +
-        "models (timings cost no extra credits), `transcript`: per-word timings and one " +
+        "ElevenLabs models (timings cost no extra credits), `transcript`: per-word timings and one " +
         "segment per line with the line's voice as `speaker` — pass `words` as " +
-        "add_captions `captions` with `auto_transcribe: false`.",
+        "add_captions `captions` with `auto_transcribe: false`.\n\n" +
+        "Google's Gemini speech models voice one or two speakers (cheaper per character, no transcript): each " +
+        "line's voice_id is one of the model's own voices (`list_voices { model }`), 10,000 characters in total. " +
+        "3.8: a line's `style_direction`, and `filler_words` with two voices. 3.1 / 2.5: `speakers` gives each " +
+        "voice its style, pace, accent and audio profile. stability, similarity, language and seed are ElevenLabs'.",
       inputSchema: {
         model: z
           .enum(DIALOGUE_PROVIDERS)
           .optional()
           .describe(
             "Dialogue model. Default `elevenlabs-dialogue` (v3). `elevenlabs-dialogue-v4` is newer: " +
-            "the same [audio tags], any stability from 0 to 1, and a similarity setting.",
+            "the same [audio tags], any stability from 0 to 1, and a similarity setting. The `gemini-*` models: two named voices at most.",
           ),
         dialogue: z
           .array(
@@ -663,8 +722,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
                   "Sarah, Laura, Charlie, George, Callum, River, Liam, " +
                   "Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, " +
                   "Brian, Daniel, Lily, Bill) or an ElevenLabs UUID of a " +
-                  "voice the user has cloned/saved. DO NOT invent UUIDs.",
+                  "voice the user has cloned/saved. DO NOT invent UUIDs. On a Gemini model: one of its voices.",
                 ),
+              style_direction: z.string().max(TTS_DIRECTION_MAX_CHARS).optional().describe("Gemini 3.8: how this line is spoken, in words. Not spoken, not billed."),
             }),
           )
           .min(1)
@@ -688,6 +748,25 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .enum(["auto", "on", "off"])
           .optional()
           .describe("Spell out numbers/dates/abbreviations. Default auto."),
+        speakers: z
+          .array(
+            z.object({
+              voice_id: z.string().min(1).describe("A voice the script uses."),
+              style_direction: z.enum(GEMINI_3_1_TTS_STYLES).optional(),
+              pace: z.enum(GEMINI_3_1_TTS_PACES).optional(),
+              accent: z.enum(GEMINI_3_1_TTS_ACCENTS).optional(),
+              audio_profile: z.string().max(TTS_DIRECTION_MAX_CHARS).optional().describe("Who is speaking, in words."),
+              replica: z
+                .object({ source_audio_url: z.string().url(), consent_audio_url: z.string().url(), consent: z.boolean().describe("Required true, as generate_speech's replica.consent.") })
+                .optional()
+                .describe("gemini-3-8-flash-tts only: this voice_id is a label spoken in a person's voice cloned for this request (as generate_speech's replica)."),
+            }),
+          )
+          .max(2)
+          .optional()
+          .describe("Gemini: each voice's direction (3.1 / 2.5) or a one-off clone (3.8 Flash)."),
+        filler_words: z.boolean().optional().describe("Gemini 3.8, two voices: natural filler words between them."),
+        output_format: z.enum(TTS_OUTPUT_FORMATS).optional().describe("The file: mp3_44100_128 (default), mp3_44100_192 or wav_24000, same credits. ElevenLabs dialogue: the default MP3 only."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -709,15 +788,34 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           isError: true as const,
         }
       }
-      const total = args.dialogue.reduce((sum, l) => sum + l.text.length, 0)
+      // Measured as the model takes each line before its cap (on Gemini 3.8 its tags rewritten), as the route does.
+      const total = dialogueTextBeforeCap(args.dialogue, sheet)
       if (total > sheet.maxChars) {
         return {
           content: [{ type: "text" as const, text: `The script is ${total} characters in total; ${provider} takes at most ${sheet.maxChars}. Split it across several calls.` }],
           isError: true as const,
         }
       }
+      const dialogue = args.dialogue.map((l) => ({ text: l.text, voice: l.voice_id, ...(l.style_direction !== undefined ? { styleDirection: l.style_direction } : {}) }))
+      const speakers = args.speakers?.map((sp) => ({
+        voice: sp.voice_id,
+        ...(sp.style_direction !== undefined ? { styleDirection: sp.style_direction } : {}),
+        ...(sp.pace !== undefined ? { pace: sp.pace } : {}),
+        ...(sp.accent !== undefined ? { accent: sp.accent } : {}),
+        ...(sp.audio_profile !== undefined ? { audioProfile: sp.audio_profile } : {}),
+        ...(sp.replica ? { replica: { sourceAudioUrl: sp.replica.source_audio_url, consentAudioUrl: sp.replica.consent_audio_url, consent: sp.replica.consent } } : {}),
+      }))
+      // The route's own check (speaker limit, the model's voices, the direction it takes), answered with its sentence before the route.
+      const problem = dialogueProblem(provider, { dialogue, speakers, outputFormat: args.output_format })
+      if (problem) return { content: [{ type: "text" as const, text: problem.message }], isError: true as const }
+      // A cloned speaker must carry the user's consent (decided 2026-11-13), refused before the route.
+      const consentProblem = (speakers ?? []).map((sp) => replicaConsentProblem(sp.replica)).find((m) => m !== undefined)
+      if (consentProblem) return { content: [{ type: "text" as const, text: consentProblem }], isError: true as const }
       const payload = {
-        dialogue: args.dialogue.map((l) => ({ text: l.text, voice: l.voice_id })),
+        dialogue,
+        ...(speakers ? { speakers } : {}),
+        ...(args.filler_words !== undefined ? { fillerWords: args.filler_words } : {}),
+        ...(args.output_format !== undefined ? { outputFormat: args.output_format } : {}),
         provider,
         stability: args.stability,
         similarityBoost: args.similarity_boost,
@@ -907,14 +1005,18 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "List the available premade voices (id, name, and any gender / accent / " +
         "description metadata) so you can pick a voice_id for generate_speech, " +
         "voice_changer, or voice_changer_pro — all of which require a voice id. " +
+        "Pass `model` (a `gemini-*-tts` id) for that model's own voices instead " +
+        "(use_case = what each is meant for). " +
         "Returns the catalog as JSON; this is a read, not a job.",
-      inputSchema: {},
+      inputSchema: {
+        model: z.enum(TTS_PROVIDERS).optional(),
+      },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
-    async () => {
+    async (args) => {
       const res = await mcpInject(fastify, session, {
         method: "GET",
-        url: "/v1/voices",
+        url: args.model ? `/v1/voices?model=${encodeURIComponent(args.model)}` : "/v1/voices",
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const parsed = JSON.parse(res.body) as { voices?: unknown }

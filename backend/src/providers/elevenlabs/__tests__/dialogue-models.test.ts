@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest"
 import { DIALOGUE_PROVIDERS, DEFAULT_DIALOGUE_PROVIDER, TTS_PROVIDERS } from "@nodaro/shared/models"
-import { DIALOGUE_WIRE_MODELS, dialogueWireModel, dialogueModelKey, dialogueSpeechModel } from "../dialogue-models.js"
+import { DIALOGUE_WIRE_MODELS, dialogueWireModel, dialogueModelKey, dialogueSpeechModel, isElevenLabsDialogueModel } from "../dialogue-models.js"
 import { TTS_WIRE_MODELS } from "../tts-models.js"
 
 describe("dialogue wire models", () => {
-  it("has exactly one row per dialogue provider", () => {
-    expect(Object.keys(DIALOGUE_WIRE_MODELS).sort()).toEqual([...DIALOGUE_PROVIDERS].sort())
+  it("has exactly one row per ElevenLabs dialogue provider; the Gemini dialogue models run on KIE and have none", () => {
+    expect(Object.keys(DIALOGUE_WIRE_MODELS).sort()).toEqual(DIALOGUE_PROVIDERS.filter((d) => d.startsWith("elevenlabs-")).sort())
+    for (const id of DIALOGUE_PROVIDERS) expect(isElevenLabsDialogueModel(id), id).toBe(id.startsWith("elevenlabs-"))
   })
 
   it("each row's speech model is a live text-to-speech provider on the same ElevenLabs model", () => {
@@ -27,9 +28,10 @@ describe("dialogue wire models", () => {
     expect(dialogueSpeechModel("elevenlabs-dialogue-v4")).toBe("elevenlabs-v4")
   })
 
-  it("a missing, unknown, inherited-member, non-string or text-to-speech id runs as the default", () => {
-    for (const id of [undefined, "", "nope", "constructor", "__proto__", ["elevenlabs-dialogue"], "elevenlabs-v4"] as unknown[]) {
-      expect(dialogueWireModel(id), JSON.stringify(id)).toBe(DIALOGUE_WIRE_MODELS[DEFAULT_DIALOGUE_PROVIDER].wire)
+  it("a missing, unknown, inherited-member, non-string or text-to-speech id runs as the default — and so does a Gemini id on this funnel, which never renders another provider's model", () => {
+    for (const id of [undefined, "", "nope", "constructor", "__proto__", ["elevenlabs-dialogue"], "elevenlabs-v4", "gemini-3-8-flash-tts"] as unknown[]) {
+      expect(dialogueWireModel(id), JSON.stringify(id)).toBe(DIALOGUE_WIRE_MODELS["elevenlabs-dialogue"].wire)
+      expect(DEFAULT_DIALOGUE_PROVIDER).toBe("elevenlabs-dialogue")
       expect(dialogueModelKey(id), JSON.stringify(id)).toBe(DEFAULT_DIALOGUE_PROVIDER)
     }
   })

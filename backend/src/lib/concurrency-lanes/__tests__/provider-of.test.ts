@@ -39,6 +39,17 @@ describe("primaryProviderOfJob", () => {
     expect(primaryProviderOfJob("audio-isolation", { audioUrl: "https://x/a.mp3" })).toBe("kie")
   })
 
+  it("a speech job counts against the provider its model runs on: Gemini on KIE, any other on ElevenLabs", () => {
+    expect(primaryProviderOfJob("text-to-speech", { text: "hi", provider: "gemini-3-8-flash-lite-tts" })).toBe("kie")
+    expect(primaryProviderOfJob("text-to-speech", { text: "hi", provider: "gemini-2-5-pro-tts" })).toBe("kie")
+    expect(primaryProviderOfJob("text-to-speech", { text: "hi", provider: "elevenlabs-v4" })).toBe("elevenlabs")
+    expect(primaryProviderOfJob("text-to-speech", { text: "hi", provider: "elevenlabs" })).toBe("elevenlabs")
+    // A Gemini dialogue is a KIE task; an ElevenLabs one (or none named) is ElevenLabs.
+    expect(primaryProviderOfJob("text-to-dialogue", { dialogue: [], provider: "gemini-3-1-flash-tts" })).toBe("kie")
+    expect(primaryProviderOfJob("text-to-dialogue", { dialogue: [], provider: "elevenlabs-dialogue-v4" })).toBe("elevenlabs")
+    expect(primaryProviderOfJob("text-to-dialogue", { dialogue: [] })).toBe("elevenlabs")
+  })
+
   it("a local-lane job counts against local", () => {
     expect(primaryProviderOfJob("trim-video", {})).toBe("local")
     expect(primaryProviderOfJob("render-video", {})).toBe("local")

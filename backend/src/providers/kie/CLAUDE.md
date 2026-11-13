@@ -168,6 +168,10 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `elevenlabs-multilingual` | `elevenlabs/text-to-speech-multilingual-v2` | [11labs multilingual](https://docs.kie.ai/market/elevenlabs/text-to-speech-multilingual-v2.md) |
 | `elevenlabs-stt` | `elevenlabs/speech-to-text` | [11labs stt](https://docs.kie.ai/market/elevenlabs/speech-to-text.md) |
 | `nemotron-3-5-transcribe` (Transcribe) | `nvidia/nemotron-3-5-transcribe` (bespoke `runNemotronTranscribe`, `nemotron-transcribe.ts`) | [nemotron 3.5 transcribe](https://docs.kie.ai/market/nvidia/nemotron-3-5-transcribe.md) |
+| `gemini-3-8-flash-lite-tts` | `google/gemini-3-8-flash-lite-tts` | [gemini 3.8 flash-lite tts](https://docs.kie.ai/market/google/gemini-3-8-flash-lite-tts.md) |
+| `gemini-3-8-flash-tts` | `google/gemini-3-8-flash-tts` | [gemini 3.8 flash tts](https://docs.kie.ai/market/google/gemini-3-8-flash-tts.md) |
+| `gemini-3-1-flash-tts` | `google/gemini-3-1-flash-tts` | [gemini 3.1 flash tts](https://docs.kie.ai/market/google/gemini-3-1-flash-tts.md) |
+| `gemini-2-5-pro-tts` | `google/gemini-2-5-pro-tts` | [gemini 2.5 pro tts](https://docs.kie.ai/market/google/gemini-2-5-pro-tts.md) |
 
 ### Nemotron 3.5 Transcribe wire notes (`nemotron-3-5-transcribe`, bespoke `runNemotronTranscribe`)
 
@@ -177,6 +181,76 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 - **Add Captions on Nemotron (decided 2026-11-13):** one charge, the kinetic render plus the video's started minutes, held as `add-captions:kinetic:nemotron:<N>m` (`credit-estimators/add-captions-nemotron.ts`, priced in `rateCompositeBase` from the `add-captions:kinetic` and `:per-4m` rows, marked up once under Add Captions' margin), only when a transcription will run (`captionsNeedTranscription`). Measured before the hold by the route's preHandler and node-executor's stamp (`lib/add-captions-nemotron.ts`: `measureNemotronTranscribeInput` with `checkSize: false`). The video worker extracts the audio track, stores it in the job's scratch folder and sends KIE THAT (`lib/add-captions-nemotron-run.ts`), deleting the file once the transcription is back (`discardJobScratchFile`); the render worker settles at KIE's figures (`settleNemotronTranscribe`'s rule through `ADD_CAPTIONS_NEMOTRON_MINUTE_IDS`). A keyless install that relays the transcription holds the plain render (the cloud bills the minutes).
 - **Limits:** 60 minutes, 200 MB, a direct file link KIE fetches within ~3 minutes (no streaming). The route and the workflow run refuse anything but an https link to a public host, a longer or larger file and a social PAGE link before the hold. The `audio_url` sent is our own storage's public CDN address (an upload, a job output) or the direct file link the caller gave and we measured — never a short-lived signed URL of ours.
 - **Failures** (`failMsg`): "Audio fetch failed…" (URL 4xx), "…audio format is not supported…" (no decodable audio), "…exceeds the maximum allowed size of 200 MB", "…exceeds the maximum allowed duration of 60 minutes" — all terminal, refunded.
+
+### Gemini TTS wire notes (`gemini-*-tts`, bespoke `runGeminiSpeech`, `gemini-tts.ts`)
+
+Text to speech on the market endpoint, one task per request (decided 2026-11-12):
+one speaker for Text to Speech, one or two for Text to Dialogue (the same ids in
+`DIALOGUE_PROVIDERS`, the worker's `runGeminiDialogue`). A speaker's
+`voice_name` is where a one-off clone, `replica`, 3.8 only, would go.
+Our ids → KIE models in `gemini-tts-models.ts` (import-free, so the speech
+run-as seam in `elevenlabs/tts-models.ts` knows them: an id it does not know
+runs as turbo). Every lever is the model's capability sheet
+(`packages/shared/src/gemini-tts.ts`, `TtsCapabilities.voices` / `tagSyntax` /
+`direction`); `geminiSpeechInput` sends only what the sheet names:
+
+- **Body:** `speakers: [{ speaker_id: "Speaker 1", voice_name, …speaker fields }]`,
+  `dialogue_turns: [{ speaker_id, text, style? }]`, and on a 3.8 dialogue of
+  exactly two speakers `filler_words: true` when asked (the sheet's
+  `fillerWords`). No `temperature`, `scene` or `sample_context` (not offered).
+  A dialogue sends its speakers in the order they first speak, each line a
+  turn in order; KIE adds `dialogue_mode` itself. Probed 2026-11-13: two
+  speakers with a style per turn and filler words (3.8 Flash-Lite) and two
+  speakers with style / pace / accent / audio profile (3.1 Flash) ran, a 24 kHz
+  mono WAV each; 3.1 refuses a `style` outside its enum with 422 "The style
+  parameter is invalid".
+- **Two generations.** 3.8 (Flash-Lite, Flash): 70 voices (default `Fola`),
+  `<angle>` tone tags from a closed list of 40 (our `[square]` tags are rewritten
+  or removed by `toAngleTags`, `@nodaro/prompts`), a free-text `style` on each
+  TURN. 3.1 Flash / 2.5 Pro: 30 voices (default `Kore`; `Fola` → 422), `[square]`
+  tags sent as written, `style` / `pace` / `accent` / `audio_profile` on the
+  SPEAKER (enums except `audio_profile`). The schema marks `accent` required;
+  a request without it ran fine (probe 2026-11-12), so it is sent only when set.
+- **Text:** at most 10,000 characters per turn (schema `maxLength`; the sheet's
+  `maxChars`, which the platform holds as a dialogue's TOTAL across its lines:
+  `sentDialogueLines` cuts the script once at it, each line by the same rule). Every seam reads ONE rule, `sentSpeechText` (`@nodaro/prompts`):
+  on 3.8 the tags are rewritten FIRST and the cap applied after (a rewrite can
+  lengthen the text; a cut inside a tag drops the broken tag), so the route keeps
+  3.8 text uncut and the worker, the credit guard and both estimates cut it the
+  same way; the workflow run and MCP refuse a rewrite over the cap
+  (`speechTextBeforeCap`). No language field.
+- **Voice lock:** a deployment that limits voices by gender refuses the Gemini
+  models whole (no recorded genders; `judgeNamedVoiceModel`, route + workflow run
+  + worker backstop). A voice chosen apart from the model (app Model card, field
+  mapping, Character, a preset's voice) moves onto one the model speaks
+  (`ttsVoiceForModel`), never a refusal.
+- **One-off clone (`replica`, 3.8 Flash only, decided 2026-11-13):** a speaker's
+  `replica: { source_audio_url, consent_audio_url }` in place of `voice_name`
+  (never both). KIE's docs say "Gemini 3.8", but 3.8 Flash-LITE fails it with 422
+  "Inline voice sample replication is not supported … create a voice using
+  CreateVoice" (probe 2026-11-13), so only `gemini-3-8-flash-tts` carries the sheet's
+  `replica`. 3.8 Flash refused AI-made recordings with 422 "Invalid consent audio.".
+  A refused clone consumed 0 credits. The recordings are judged by
+  `lib/voice-replica.ts` (route, workflow gate, worker), and the worker sends KIE
+  its own scratch copies (`stageReplica`), deleted when the job ends.
+- **Result:** `resultJson.resultUrls[0]`, a WAV (24 kHz mono 16-bit). A dialogue
+  takes the same `outputFormat` as one speaker and completes as `generate-dialogue`; a task
+  whose worker died is delivered by the reconcile through the same path
+  (`recoverGeminiSpeechJob` reads a `text-to-dialogue` row's `dialogue`).
+  `lib/gemini-speech.ts` stores it as the format asked for (`wav_24000` as is,
+  an MP3 encoded with ffmpeg, `providers/audio/speech-mp3.ts`) and finalizes with
+  `billedCharacters` / `audioMimeType` — the SAME path for the worker and the
+  reconcile (`recoverGeminiSpeechJob`, `lib/reconcile/kie.ts`), since the task
+  is recorded on the job (`kie-standard`).
+- **Cost:** KIE bills tokens (input + audio output), so `jobs.provider_cost` is the
+  task's `creditsConsumed` × $0.005 (`costFromTaskRecord`); the `KIE_TTS_MODELS`
+  figures are the measured KIE credits per 1,000 characters, used only when a
+  record has none. Measured 2026-11-12 (287 characters, a calm narration): 3.8
+  Flash-Lite 1.46 / 3.8 Flash 2.13 / 3.1 Flash 5.05 / 2.5 Pro 6.27 KIE credits per
+  1,000 characters (≈25 audio tokens a second). A slow style lengthens the audio
+  and the cost; the charge is per character (`<id>:per-1k-chars`).
+- **Not measured yet** (staging): whether each tag is performed or read aloud, a
+  long text near the cap, a slow style.
 
 ### OmniHuman 2.0 wire notes (`omnihuman-2-0`, the generic `lipSync`)
 

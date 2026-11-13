@@ -103,7 +103,7 @@ export function wholeRequestQuoteOf(id: string): WholeRequestQuote | undefined {
       gateRow: rate.rateId,
       base: (rowOf) => {
         const unit = rowOf(rate.rateId)
-        return unit === undefined ? undefined : quoteBaseCredits(unit, rate.units)
+        return unit === undefined ? undefined : quoteBaseCredits(unit, rate.units, rate.rowUnits)
       },
     }
   }

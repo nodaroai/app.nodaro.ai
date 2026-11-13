@@ -68,7 +68,8 @@ const CATEGORY_PATTERNS: ReadonlyArray<readonly [DBCategory, ReadonlyArray<strin
   // "gemini-omni" (NOT bare "gemini") matches the video SKUs gemini-omni-video
   // and gemini-omni-flash while leaving the Gemini LLM ids alone.
   ["video", ["veo", "kling", "minimax", "wan", "grok-i2v", "runway", "pika", "hailuo", "topaz-video", "motion-transfer", "speech-to-video", "bytedance", "seedance", "gemini-omni", "happyhorse", "vidu", "pixverse"]],
-  ["audio", ["suno", "elevenlabs", "infinitalk", "tango", "musicgen", "audioldm", "bark"]],
+  // "-tts" claims the Gemini speech models (gemini-3-8-flash-tts:per-1k-chars …), before "gemini" could mean anything else.
+  ["audio", ["suno", "elevenlabs", "infinitalk", "tango", "musicgen", "audioldm", "bark", "-tts"]],
   ["processing", ["ffmpeg", "topaz"]],
 ]
 

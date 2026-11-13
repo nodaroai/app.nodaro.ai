@@ -2097,6 +2097,22 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "elevenlabs-v4-turbo:per-100-chars": 2,
   "elevenlabs-turbo:per-100-chars": 2,
   "elevenlabs-multilingual:per-100-chars": 4,
+  // Google's Gemini speech on KIE (decided 2026-11-12, provisional until
+  // re-measured on staging): base = KIE's measured cost per 1,000 characters
+  // × 2.5, rounded up (1.46 / 2.13 / 5.05 / 6.27 KIE credits). A whole-credit
+  // row cannot hold a rate under one credit per 100 characters, so these are
+  // quoted per 1,000 (`:per-1k-chars`, `TtsCapabilities.ratePer1kChars`): the
+  // same count (started 100s, at least 8), a request = its hundreds × the row
+  // ÷ 10, rounded up once. The flat row (length pricing off) is the price of
+  // 1,000 characters.
+  "gemini-3-8-flash-lite-tts": 4,
+  "gemini-3-8-flash-tts": 6,
+  "gemini-3-1-flash-tts": 13,
+  "gemini-2-5-pro-tts": 16,
+  "gemini-3-8-flash-lite-tts:per-1k-chars": 4,
+  "gemini-3-8-flash-tts:per-1k-chars": 6,
+  "gemini-3-1-flash-tts:per-1k-chars": 13,
+  "gemini-2-5-pro-tts:per-1k-chars": 16,
   // Sound effects are priced by the length asked for: one row per whole second
   // (`elevenlabs-sfx:1s` … `:30s`, ELEVENLABS_SFX_PER_SECOND_ROWS below), picked
   // by `textToAudioCreditId` on every path. The bare row is the no-duration

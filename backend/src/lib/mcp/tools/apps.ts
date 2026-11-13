@@ -316,9 +316,10 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           headers: idempotencyHeaders(args.client_request_id),
         })
         if (res.statusCode >= 400) {
+          const cloneNext = cloneRefusalNext(parseBody(res.body))
           return {
             content: [
-              { type: "text", text: `Error from Nodaro: ${res.statusCode} ${res.body}` },
+              { type: "text", text: cloneNext ? `Error from Nodaro: ${res.statusCode}. ${cloneNext}` : `Error from Nodaro: ${res.statusCode} ${res.body}` },
             ],
             isError: true,
           }
@@ -553,6 +554,26 @@ function retryRefused(slug: string, runId: string, statusCode: number, raw: stri
 }
 
 /**
+ * What an agent is told when an app that clones a voice is refused for want of the runner's own recordings
+ * or consent (decided 2026-11-13: recordings as app inputs), or `null` for any other answer. An agent has
+ * no consent box to tick: the runner gives both, on the app's page or over the API.
+ */
+export function cloneRefusalNext(body: Record<string, unknown>): string | null {
+  const code = (body.error as { code?: unknown } | undefined)?.code
+  if (code === "clone_recordings_required" || code === "clone_consent_required") {
+    return (
+      "This app speaks in a cloned voice: it needs the runner's own two WAV recordings (a reference and the consent recording) and the runner's own consent to clone that voice. " +
+      "Tell the user to run it from the app's page, where they add both and confirm the consent. Over the API, the runner passes them as nested inputOverrides on the voice node " +
+      "(`replica` with the two links, and `replicaConsent` as returned by POST /v1/voice-clone/consent called as the runner); never confirm a consent on the user's behalf."
+    )
+  }
+  if (code === "clone_not_fillable") {
+    return "This app clones a voice inside a sub-workflow or a component, where a runner's recordings can't reach it, so it can't be run."
+  }
+  return null
+}
+
+/**
  * What an agent does after a refused Retry, by the route's code (the answer's
  * own message already says why), or `null` when there is nothing to add.
  */
@@ -576,6 +597,10 @@ export function retryRefusalNext(slug: string, runId: string, body: Record<strin
   // Any of the preview refusal codes (a render held, a review-on use-case node, or both).
   if (code !== null && isPreviewRefusalCode(code)) {
     return "Retry it from the app page instead, where a person can review the Preview it stops at."
+  }
+  {
+    const clone = cloneRefusalNext(body)
+    if (clone) return clone
   }
   if (code === "insufficient_app_credits") {
     return "Tell the user: their app credits cannot cover this Retry; retry it once they have more."

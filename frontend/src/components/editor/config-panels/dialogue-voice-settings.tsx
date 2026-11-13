@@ -22,8 +22,9 @@ const DIALOGUE_STABILITY_DEFAULT = 0.5
 
 /**
  * Stability and similarity of a Text to Dialogue node — what the chosen model's
- * sheet offers: stepped stability as a dropdown (v3 dialogue: 0 / 0.5 / 1),
- * otherwise a 0–1 slider; similarity only when the model honours it. Which
+ * sheet offers: stability only when the model honours it (none on a model with
+ * no ElevenLabs levers, Gemini), stepped as a dropdown (v3 dialogue: 0 / 0.5 /
+ * 1), otherwise a 0–1 slider; similarity only when the model honours it. Which
  * model offers which is data on its sheet, never a comparison here.
  */
 export function DialogueVoiceSettings({ provider, data, onUpdate }: Props) {
@@ -32,9 +33,10 @@ export function DialogueVoiceSettings({ provider, data, onUpdate }: Props) {
   const stability = data.stability ?? DIALOGUE_STABILITY_DEFAULT
   const stepLabel = (s: number) =>
     s === 0 ? t("audiocfg.mostVariable") : s === 0.5 ? t("audiocfg.balanced05") : s === 1 ? t("audiocfg.mostStable") : String(s)
+  const stabilityShown = dialogueHasLever(provider, "stability")
   return (
     <>
-      {steps ? (
+      {!stabilityShown ? null : steps ? (
         <div>
           <Label>{t("field.stability")}</Label>
           <Select value={String(stability)} onValueChange={(v) => onUpdate({ stability: parseFloat(v) })}>

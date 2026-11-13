@@ -12,6 +12,8 @@ import {
   type SunoSeparateType,
   type SunoStemName,
   type DeclaredSeedanceTaskType,
+  type TtsOutputFormat,
+  type TtsReplica,
 } from "@nodaro/shared/models"
 import { isKineticCaptionStyle, KINETIC_ONLY_CAPTION_LEVER_KEYS } from "@nodaro/shared/captions"
 import { ugcFailure } from "@nodaro/shared/ugc"
@@ -3654,6 +3656,15 @@ export async function textToSpeech(
     /** Continuity across clips: the lines spoken just before / after this one (context, not spoken). */
     previousText?: string
     nextText?: string
+    /** Style direction, on a model whose sheet takes it (Gemini) — already filtered by `ttsDirectionFor`. */
+    styleDirection?: string
+    pace?: string
+    accent?: string
+    audioProfile?: string
+    /** A one-off clone of a person's voice, on a model that clones (`ttsTakesReplica`; decided 2026-11-13). */
+    replica?: TtsReplica & { readonly consent?: true }
+    /** The file (`TTS_OUTPUT_FORMATS`); absent ⇒ the default MP3. */
+    outputFormat?: TtsOutputFormat
   }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { text, voice, provider }
@@ -3666,6 +3677,12 @@ export async function textToSpeech(
   if (options?.voiceType) body.voiceType = options.voiceType
   if (options?.previousText) body.previousText = options.previousText
   if (options?.nextText) body.nextText = options.nextText
+  if (options?.styleDirection) body.styleDirection = options.styleDirection
+  if (options?.pace) body.pace = options.pace
+  if (options?.accent) body.accent = options.accent
+  if (options?.audioProfile) body.audioProfile = options.audioProfile
+  if (options?.replica) body.replica = options.replica
+  if (options?.outputFormat) body.outputFormat = options.outputFormat
   return apiJson("/v1/text-to-speech", {
     body,
     workflowId: true,
@@ -4734,6 +4751,33 @@ export async function uploadImage(file: File | Blob, userId?: string, filename?:
   return { url: result.url }
 }
 
+/** The deployment withholds one-off voice clones (`node_not_available` on the consent route). */
+export class VoiceCloneUnavailableError extends Error {}
+
+/**
+ * Record the session's user's consent to a one-off clone of the voice in these two recordings
+ * (`POST /v1/voice-clone/consent`; decided 2026-11-13). The server signs the record for that user over
+ * exactly these links; a workflow run accepts it only from them. Throws `VoiceCloneUnavailableError` where
+ * the deployment withholds clones, and the route's refusal otherwise.
+ */
+export async function voiceCloneConsentApi(replica: { readonly sourceAudioUrl: string; readonly consentAudioUrl: string }): Promise<{ userId: string; signature: string }> {
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/v1/voice-clone/consent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders },
+    body: JSON.stringify({ sourceAudioUrl: replica.sourceAudioUrl, consentAudioUrl: replica.consentAudioUrl }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    // `apiJson` keeps no error code; this one decides what the person is told.
+    if (err?.error?.code === "node_not_available") throw new VoiceCloneUnavailableError(tx("audiocfg.cloneUnavailable"))
+    throwApiError(err, "apiErr.voiceCloneConsent")
+  }
+  const json = (await res.json().catch(() => null)) as { userId?: unknown; signature?: unknown } | null
+  if (!json || typeof json.userId !== "string" || typeof json.signature !== "string") throw new Error(tx("apiErr.voiceCloneConsent"))
+  return { userId: json.userId, signature: json.signature }
+}
+
 export async function uploadAudio(file: File, userId?: string): Promise<{ url: string }> {
   const resolvedUserId = userId ?? await getCurrentUserId()
   const result = await uploadFile(file, resolvedUserId)
@@ -5019,8 +5063,30 @@ export async function audioIsolationApi(audioUrl: string, userId?: string): Prom
   })
 }
 
+/** One speaker's direction on a dialogue model that takes it per speaker (Gemini 3.1 / 2.5), keyed by its voice. */
+export interface DialogueSpeakerDirectionWire {
+  voice: string
+  styleDirection?: string
+  pace?: string
+  accent?: string
+  audioProfile?: string
+  /** This speaker in a person's own voice, cloned for the request (Gemini 3.8 Flash); `voice` is the label its lines use. */
+  replica?: TtsReplica & { readonly consent?: true }
+}
+
+/** The dialogue options a model with a direction of its own takes (Gemini, decided 2026-11-12). Each is sent only when given. */
+export interface TextToDialogueExtras {
+  /** Each speaker's style, pace, accent and audio profile (3.1 / 2.5). */
+  speakers?: DialogueSpeakerDirectionWire[]
+  /** Filler words between the two speakers (3.8). */
+  fillerWords?: boolean
+  /** The file to deliver, one the model offers (`dialogueOutputFormats`; decided 2026-11-13). None = MP3 128 kbps. */
+  outputFormat?: TtsOutputFormat
+}
+
 export async function textToDialogueApi(
-  dialogue: Array<{ text: string; voice: string }>,
+  /** Each line; `styleDirection` is the line's style on a model whose lines take one (Gemini 3.8). */
+  dialogue: Array<{ text: string; voice: string; styleDirection?: string }>,
   userId?: string,
   stability?: number,
   languageCode?: string,
@@ -5030,6 +5096,7 @@ export async function textToDialogueApi(
   provider?: string,
   /** 0–1; the funnel sends it only to a model that honours similarity (v4 dialogue). */
   similarityBoost?: number,
+  extras?: TextToDialogueExtras,
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { dialogue }
   if (provider) body.provider = provider
@@ -5039,6 +5106,9 @@ export async function textToDialogueApi(
   if (languageCode) body.languageCode = languageCode
   if (seed != null) body.seed = seed
   if (applyTextNormalization) body.applyTextNormalization = applyTextNormalization
+  if (extras?.speakers && extras.speakers.length > 0) body.speakers = extras.speakers
+  if (extras?.fillerWords !== undefined) body.fillerWords = extras.fillerWords
+  if (extras?.outputFormat !== undefined) body.outputFormat = extras.outputFormat
   return apiJson("/v1/text-to-dialogue", {
     body,
     workflowId: true,

@@ -21,6 +21,8 @@ import {
   videoToVideo,
   textToVideo,
   textToSpeech,
+  voiceCloneConsentApi,
+  VoiceCloneUnavailableError,
   generateMusicApi,
   combineVideos,
   mergeVideoAudioApi,
@@ -307,7 +309,48 @@ describe("textToVideo", () => {
 // textToSpeech
 // ---------------------------------------------------------------------------
 
+describe("voiceCloneConsentApi (decided 2026-11-13)", () => {
+  const replica = { sourceAudioUrl: "https://cdn.example/me.wav", consentAudioUrl: "https://cdn.example/consent.wav" }
+
+  it("POSTs exactly the two links and returns the record the server issued", async () => {
+    noSession()
+    const mock = mockFetchJson({ userId: "u1", signature: "sig" })
+    vi.stubGlobal("fetch", mock)
+    expect(await voiceCloneConsentApi(replica)).toEqual({ userId: "u1", signature: "sig" })
+    expect(mock.mock.calls[0][0]).toBe("/v1/voice-clone/consent")
+    expect(JSON.parse(mock.mock.calls[0][1].body as string)).toEqual(replica)
+  })
+
+  it("a deployment that withholds clones: VoiceCloneUnavailableError", async () => {
+    noSession()
+    vi.stubGlobal("fetch", mockFetchError(403, { error: { code: "node_not_available", message: "withheld" } }))
+    await expect(voiceCloneConsentApi(replica)).rejects.toBeInstanceOf(VoiceCloneUnavailableError)
+  })
+
+  it("any other refusal, or an answer that is not a record, throws", async () => {
+    noSession()
+    vi.stubGlobal("fetch", mockFetchError(400, { error: { code: "validation_error", message: "bad links" } }))
+    await expect(voiceCloneConsentApi(replica)).rejects.toThrow()
+    vi.stubGlobal("fetch", mockFetchJson({ userId: "u1" }))
+    await expect(voiceCloneConsentApi(replica)).rejects.toThrow()
+  })
+})
+
 describe("textToSpeech", () => {
+  it("sends a one-off clone when given, none otherwise (decided 2026-11-13)", async () => {
+    noSession()
+    const replica = { sourceAudioUrl: "https://cdn.example/me.wav", consentAudioUrl: "https://cdn.example/consent.wav" }
+    const mock = mockFetchJson({ jobId: "jr" })
+    vi.stubGlobal("fetch", mock)
+    await textToSpeech("Hi", "Kore", "gemini-3-8-flash-tts", undefined, { replica })
+    expect(JSON.parse(mock.mock.calls[0][1].body as string).replica).toEqual(replica)
+
+    const none = mockFetchJson({ jobId: "jn" })
+    vi.stubGlobal("fetch", none)
+    await textToSpeech("Hi", "Kore", "gemini-3-8-flash-tts", undefined, { stability: 0.5 })
+    expect(JSON.parse(none.mock.calls[0][1].body as string)).not.toHaveProperty("replica")
+  })
+
   it("sends correct URL and body with text", async () => {
     noSession()
     const mock = mockFetchJson({ jobId: "j1" })
@@ -365,6 +408,15 @@ describe("textToSpeech", () => {
     const body = JSON.parse(mock.mock.calls[0][1].body as string)
     expect(body.previousText).toBe("Before.")
     expect(body.nextText).toBe("After.")
+  })
+
+  it("sends the file asked for, and none when none is asked (decided 2026-11-13)", async () => {
+    const mock = mockFetchJson({ jobId: "j-fmt" })
+    vi.stubGlobal("fetch", mock)
+    await textToSpeech("Hi.", "Rachel", "elevenlabs-v4", undefined, { outputFormat: "wav_24000" })
+    expect(JSON.parse(mock.mock.calls[0][1].body as string).outputFormat).toBe("wav_24000")
+    await textToSpeech("Hi.", "Rachel", "elevenlabs-v4")
+    expect("outputFormat" in JSON.parse(mock.mock.calls[1][1].body as string)).toBe(false)
   })
 
   it("sends no neighbour key for an empty or missing value", async () => {

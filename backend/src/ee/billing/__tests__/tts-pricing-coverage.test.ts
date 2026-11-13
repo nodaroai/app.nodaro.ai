@@ -10,9 +10,9 @@
  * but in neither would pass both and fail only for a user.
  */
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG, TTS_PROVIDER_ALIASES, canonicalTtsProvider, SPEECH_UNIT_PRICE_NOTE } from "@nodaro/shared/model-catalog"
+import { MODEL_CATALOG, TTS_PROVIDER_ALIASES, canonicalTtsProvider, SPEECH_UNIT_PRICE_NOTE, SPEECH_PER_1K_PRICE_NOTE } from "@nodaro/shared/model-catalog"
 import { TTS_PROVIDERS } from "@nodaro/shared/models"
-import { speechUnitCreditId } from "@nodaro/shared/credits"
+import { speechRowUnits, speechUnitCreditId } from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 
 describe("text-to-speech pricing coverage", () => {
@@ -38,10 +38,11 @@ describe("text-to-speech pricing coverage", () => {
     for (const id of TTS_PROVIDERS) {
       if (id in TTS_PROVIDER_ALIASES) continue
       const rows = MODEL_CATALOG[id]!.pricing
-      expect(rows[0]?.note ?? "", id).not.toMatch(/per 1K/i)
+      expect(rows[0]?.note ?? "", id).not.toMatch(/per 1K|per 1,000/i)
       expect(rows[1]?.identifier, id).toBe(speechUnitCreditId(id))
       expect(rows[1]?.credits, id).toBe(STATIC_CREDIT_COSTS[speechUnitCreditId(id)])
-      expect(rows[1]?.note, id).toBe(SPEECH_UNIT_PRICE_NOTE)
+      // A model quoted per 1,000 characters (Gemini) carries the per-1K row's note.
+      expect(rows[1]?.note, id).toBe(speechRowUnits(id) === 10 ? SPEECH_PER_1K_PRICE_NOTE : SPEECH_UNIT_PRICE_NOTE)
       expect(rows, id).toHaveLength(2)
     }
   })

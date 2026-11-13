@@ -203,17 +203,20 @@ describe("node-registry credit bands are derived from the price table", () => {
     ).toEqual([])
   })
 
-  it("a per-unit RATE row never widens a band: text-to-speech states the flat per-request rows, not its :per-100-chars rows", () => {
+  it("a per-unit RATE row never widens a band: text-to-speech states the flat per-request rows, not its :per-100-chars / :per-1k-chars rows", () => {
     // `<model>:per-100-chars` (decided 2026-10-06) prices ONE started 100 characters
     // and is read only while SPEECH_LENGTH_PRICING_ENABLED is on; `familyIds` would
     // otherwise fold it in and advertise "2-30" for a run that is never below 16.
+    // A `<model>:per-1k-chars` row (Gemini, decided 2026-11-12) is a rate too.
     const ids = CREDIT_BAND_SOURCES["text-to-speech"]!.ids
     expect(ids.length).toBeGreaterThan(0)
-    expect(ids.some((id) => id.endsWith(":per-100-chars"))).toBe(false)
+    expect(ids.some((id) => id.endsWith(":per-100-chars") || id.endsWith(":per-1k-chars"))).toBe(false)
     expect(Object.keys(STATIC_CREDIT_COSTS).some((id) => id.endsWith(":per-100-chars"))).toBe(true)
     expect(NODE_REGISTRY.find((d) => d.type === "text-to-speech")!.creditCost).toBe(deriveBand("text-to-speech"))
-    expect(deriveBand("text-to-speech")).toBe("15-30")
-    expect(deriveBand("text-to-dialogue")).toBe(25)
+    // Gemini 3.8 Flash-Lite's flat row (4, the price of 1,000 characters) up to v3 / v4's 30.
+    expect(deriveBand("text-to-speech")).toBe("4-30")
+    // The Gemini models voice two speakers too (decided 2026-11-12): from Flash-Lite's 4 up to ElevenLabs dialogue's 25.
+    expect(deriveBand("text-to-dialogue")).toBe("4-25")
   })
 
   it("describe-to-picker advertises its whole ladder, premium-direct included", () => {
@@ -244,23 +247,27 @@ describe("with SPEECH_LENGTH_PRICING_ENABLED on, the speech bands state the leng
     vi.resetModules()
   })
 
-  it("text-to-speech reads from turbo's floor to turbo's cap; text-to-dialogue from the floor to the dialogue cap", async () => {
+  it("text-to-speech reads from the cheapest model's floor (Gemini 3.8 Flash-Lite) to turbo's cap; text-to-dialogue from the floor to the dialogue cap", async () => {
     const { NODE_REGISTRY: registry, CREDIT_BAND_SOURCES: sources } = await import("../node-registry.js")
     const { STATIC_CREDIT_COSTS: table } = await import("../../ee/billing/credits.js")
     const { getMaxTtsChars, getDialogueCapabilities, DIALOGUE_PROVIDERS } = await import("@nodaro/shared/models")
-    const { speechPriceUnits, speechUnitCreditId, SPEECH_FLOOR_UNITS } = await import("@nodaro/shared/credits")
+    const { speechPriceUnits, speechUnitCreditId, speechRowCredits, speechRowUnits, SPEECH_FLOOR_UNITS } = await import("@nodaro/shared/credits")
     const tts = registry.find((d) => d.type === "text-to-speech")!
     const dialogue = registry.find((d) => d.type === "text-to-dialogue")!
-    // 8 × 2 (turbo) … 400 units × 2 (turbo at 40,000 characters)
-    expect(tts.creditCost).toBe(`${SPEECH_FLOOR_UNITS * table["elevenlabs-turbo:per-100-chars"]!}-${speechPriceUnits(getMaxTtsChars("elevenlabs-turbo")) * table["elevenlabs-turbo:per-100-chars"]!}`)
-    expect(tts.creditCost).toBe("16-800")
-    const dialogueHigh = Math.max(...DIALOGUE_PROVIDERS.map((id) => speechPriceUnits(getDialogueCapabilities(id).maxChars) * table[speechUnitCreditId(id)]!))
-    expect(dialogue.creditCost).toBe(`${SPEECH_FLOOR_UNITS * 4}-${dialogueHigh}`)
-    expect(dialogue.creditCost).toBe("32-400") // 100 units × 4 at Dialogue v4's 10,000-character cap
+    // 8 units at Gemini 3.8 Flash-Lite's 4 per 1,000 (3.2 → 4) … 400 units × 2 (turbo at 40,000 characters)
+    expect(tts.creditCost).toBe(`${Math.ceil((SPEECH_FLOOR_UNITS * table["gemini-3-8-flash-lite-tts:per-1k-chars"]!) / 10)}-${speechPriceUnits(getMaxTtsChars("elevenlabs-turbo")) * table["elevenlabs-turbo:per-100-chars"]!}`)
+    expect(tts.creditCost).toBe("4-800")
+    // Each dialogue model on its own row (per 100 characters, or per 1,000 on a Gemini model — the one-speaker row).
+    const atCap = (id: string, units: number) => speechRowCredits(units, table[speechUnitCreditId(id)]!, speechRowUnits(id))
+    const dialogueLow = Math.min(...DIALOGUE_PROVIDERS.map((id) => atCap(id, SPEECH_FLOOR_UNITS)))
+    const dialogueHigh = Math.max(...DIALOGUE_PROVIDERS.map((id) => atCap(id, speechPriceUnits(getDialogueCapabilities(id).maxChars))))
+    expect(dialogue.creditCost).toBe(`${dialogueLow}-${dialogueHigh}`)
+    // 8 units at Gemini 3.8 Flash-Lite's 4 per 1,000 … 100 units × 4 at Dialogue v4's 10,000-character cap.
+    expect(dialogue.creditCost).toBe("4-400")
     // The flag-on computer is what `deriveBand` would read too — the sources agree with the registry.
     const lookup = (id: string, units = 1) => (typeof table[id] === "number" ? Math.ceil(table[id]! * units) : undefined)
-    expect(sources["text-to-speech"]!.band!(lookup)).toEqual([16, 800])
-    expect(sources["text-to-dialogue"]!.band!(lookup)).toEqual([32, 400])
+    expect(sources["text-to-speech"]!.band!(lookup)).toEqual([4, 800])
+    expect(sources["text-to-dialogue"]!.band!(lookup)).toEqual([4, 400])
   })
 
   it("the charged descriptor (GET /v1/nodes) states the same range at the charged prices", async () => {
@@ -272,7 +279,8 @@ describe("with SPEECH_LENGTH_PRICING_ENABLED on, the speech bands state the leng
       credits: (id: string, units = 1) => (typeof table[id] === "number" ? Math.ceil((Math.ceil(table[id]! * units) * 110) / 100) : undefined),
       rate: () => undefined,
     }
-    expect(chargedDescriptor(tts, prices).creditCost).toBe("18-880")
+    // Flash-Lite's floor charged: ceil(ceil(4 × 0.8) × 1.1) = 5.
+    expect(chargedDescriptor(tts, prices).creditCost).toBe("5-880")
   })
 })
 

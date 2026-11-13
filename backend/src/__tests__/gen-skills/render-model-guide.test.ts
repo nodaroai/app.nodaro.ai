@@ -115,6 +115,14 @@ describe("costTier", () => {
     expect(new Set(tiers.slice(0, 5)).size).toBe(1)
   })
 
+  it("a block of equal prices at the median is never Premium: Premium starts above it (decided 2026-11-12)", () => {
+    // Cheap models below a large tie push the one-third rank under the tie; without the median rule the tie,
+    // which also holds the two-thirds rank, went Premium whole.
+    const tiers = tiersOf([4, 5, 6, 13, 15, 15, 16, 22, 25, 25, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 40, 40, 40, 40, 50, 74, 1100])
+    expect(tiers.filter((t) => t === "Premium")).toHaveLength(7)
+    expect(tiers[10]).toBe("Standard")
+  })
+
   it("never labels most of a real kind Premium", () => {
     for (const kind of ["image", "video", "audio"] as const) {
       const credits = Object.values(MODEL_CATALOG)
