@@ -25,9 +25,9 @@ Seedance comes as two choices, one per model: **Seedance 2.5** (`seedance-2-5-ex
 | veo-extend | Model: fast (VEO 3.1 Fast) or quality (VEO 3.1 Quality) |
 | runway-extend | Quality: 720p or 1080p |
 | ltx-2.3-pro | Extend mode: `start` (prepend before clip) or `end` (append after clip, default); duration: 1–20s of new footage to add (default 6) |
-| seedance-2-5-extend | Duration: 4–30s of new footage to add (default 8); Resolution: 480p / 720p / 1080p, the resolution the new footage is generated at and priced by (default 720p; the delivered video keeps the source's size); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
-| seedance-2-0-extend | Duration: 4–15s of new footage to add (default 8); Resolution: 480p / 720p / 1080p, the resolution the new footage is generated at and priced by (default 720p; the delivered video keeps the source's size); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
-| kling-4-extend | Duration: 3–30s of new footage to add (default 5); Resolution: 720p / 1080p, the resolution the new footage is generated at and priced by (default 720p; the delivered video keeps the source's size). The new footage always has sound (there is no sound switch), and it takes no reference images |
+| seedance-2-5-extend | Duration: 4–30s of new footage to add (default 8); Resolution: 480p / 720p / 1080p, the resolution the new footage is generated at and priced by (default 720p; the delivered video keeps the source's size, rounded down to even); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
+| seedance-2-0-extend | Duration: 4–15s of new footage to add (default 8); Resolution: 480p / 720p / 1080p, the resolution the new footage is generated at and priced by (default 720p; the delivered video keeps the source's size, rounded down to even); Generate Audio: continue the soundtrack into the extension (default on); Reference images: up to 8 (API/MCP — see below) |
+| kling-4-extend | Duration: 3–30s of new footage to add (default 5); Resolution: 720p / 1080p, the resolution the new footage is generated at and priced by (default 720p; the delivered video keeps the source's size, rounded down to even). The new footage always has sound (there is no sound switch), and it takes no reference images |
 
 ## Inputs & Outputs
 
@@ -50,7 +50,7 @@ Seedance comes as two choices, one per model: **Seedance 2.5** (`seedance-2-5-ex
 
 LTX 2.3 Fast does **not** support extend mode — only Pro extends. The `extend_mode` field controls whether the new footage is prepended (`start`) or appended (`end`, default).
 
-For Seedance 2.5, Seedance 2.0 and Kling 4, the resolution is the one the new footage is generated at, and the one the run is priced by. Whichever you pick, the new footage is scaled to the source's frame, up from a lower resolution or down from a higher one. The video you get back keeps the source's size and frame rate, and is encoded once as an H.264 MP4 with AAC sound: an H.264 source at its own bitrate (or higher, when its own is very low for its size and frame rate), and a source in any other codec, or an H.264 source that reports no bitrate, at a high constant quality. A 10-bit, 4:2:2 or 4:4:4 source comes back as 8-bit 4:2:0, an HDR source in standard dynamic range (SDR), and a full-range source in standard range (a watermarked run is encoded once more; see [How Seedance and Kling 4 extend work](#how-seedance-and-kling-4-extend-work)).
+For Seedance 2.5, Seedance 2.0 and Kling 4, the resolution is the one the new footage is generated at, and the one the run is priced by. Whichever you pick, the new footage is scaled to the source's frame, up from a lower resolution or down from a higher one. The video you get back keeps the source's size and frame rate, and is encoded once as an H.264 MP4 with AAC sound: an H.264 source at its own bitrate (or higher, when its own is very low for its size and frame rate), and a source in any other codec, or an H.264 source that reports no bitrate, at a high constant quality. A 10-bit, 4:2:2 or 4:4:4 source comes back as 8-bit 4:2:0, an HDR source in standard dynamic range (SDR), and a full-range source in standard range (a watermarked run is encoded once more; see [How Seedance and Kling 4 extend work](#how-seedance-and-kling-4-extend-work)). A source with an odd width or height comes back at the even size just below it, its last column of pixels, last row, or both cropped (853×481 comes back 852×480), because the delivered video's 4:2:0 colour needs even sides.
 
 An extend that names the earlier single Seedance id, `seedance-2-extend` (from before Seedance 2.5 and Seedance 2.0 were separate choices), runs on **Seedance 2.5**. Saved workflows, apps and API or MCP calls on that id keep working, and now run, and are priced, as Seedance 2.5 (a length under 4 seconds, which the earlier id raised to 4, still runs as 4 seconds rather than being refused) — 8 seconds at 720p, for example, is 1045 credits<!-- credits: seedance-2-5-extend:8s:720p --> on Seedance 2.5 and 688 credits<!-- credits: seedance-2-0-extend:8s:720p --> on Seedance 2.0. Choose Seedance 2.0 to keep that model.
 
@@ -61,6 +61,8 @@ These are refused with HTTP 400 when the request arrives, before any credits are
 - **A length outside the provider's window** (`validation_error`): Seedance 2.5 adds 4–30 seconds, Seedance 2.0 4–15, Kling 4 3–30, LTX 2.3 Pro 1–20. VEO and Runway add a length of their own; a `duration` sent to them must be 1–20 and does not change it.
 - **A resolution the model does not render** (`validation_error`): Kling 4 renders 720p or 1080p, so a `resolution` of 480p sent to `kling-4-extend` is refused. (A saved node or workflow carrying 480p onto Kling 4 runs at 720p, the resolution it is priced at.)
 - **A source too short to continue** (`video_too_short`, Seedance and Kling 4): both continue from the last seconds of the source's picture. Seedance needs at least 1.8 seconds of it, Kling 4 at least 2 seconds. Kling 4 continues the source's last 3 seconds, or all of it when the source is shorter, at the same price.
+
+On Seedance 2.5, Seedance 2.0 and Kling 4, a run can also fail after the new footage is generated: when the model returns less than half the seconds the run is priced for (under 2.5 seconds of a 5-second extension, say), the run fails and every credit it reserved is refunded. You never get back the source alone, or the source with the short extension joined on; the job's error says how many seconds the model returned.
 
 ### LTX 2.3 Pro Extend credits
 
@@ -83,7 +85,7 @@ That amount is held when the job starts. The final charge follows the processing
 
 ### How Seedance and Kling 4 extend work
 
-Seedance 2.5, Seedance 2.0 and Kling 4 generate the continuation natively (the model watches the end of the source clip — its last 2 seconds on Seedance, its last 3 seconds on Kling 4, or all of a shorter source — and produces only what happens next, soundtrack included), then the platform **smart-stitches** source + extension into one seamless clip: it PSNR-matches the source's last 8 frames against the extension's first 8, ends the source **on** the most similar frame and starts the extension **right after** its near-identical twin — the duplicated boundary moment plays exactly once and motion continues through the cut. If no genuine match is found (below the 24dB threshold), the stitch falls back to fixed trims (source's last 4 frames + extension's first 3). The join is a hard cut with a short audio blend; the applied cut is reported in the job's `output_data.smartCuts` (frames dropped each side + match PSNR). The extension automatically matches the source's aspect ratio, and is scaled to cover the source's frame and centre-cropped to it. The video you get back keeps the source's size and frame rate, and is encoded once as an H.264 MP4 with AAC sound: an H.264 source at its own bitrate (or higher, when its own is very low for its size and frame rate), and a source in any other codec, or an H.264 source that reports no bitrate, at a high constant quality. A 10-bit, 4:2:2 or 4:4:4 source comes back as 8-bit 4:2:0, an HDR source in standard dynamic range (SDR), and a full-range source in standard range. A run that carries the free-tier watermark is encoded once more to add it: its size and frame rate stay the source's, its picture quality does not.
+Seedance 2.5, Seedance 2.0 and Kling 4 generate the continuation natively (the model watches the end of the source clip — its last 2 seconds on Seedance, its last 3 seconds on Kling 4, or all of a shorter source — and produces only what happens next, soundtrack included), then the platform **smart-stitches** source + extension into one seamless clip: it PSNR-matches the source's last 8 frames against the extension's first 8, ends the source **on** the most similar frame and starts the extension **right after** its near-identical twin — the duplicated boundary moment plays exactly once and motion continues through the cut. If no genuine match is found (below the 24dB threshold), the stitch falls back to fixed trims (source's last 4 frames + extension's first 3). The join is a hard cut with a short audio blend; the applied cut is reported in the job's `output_data.smartCuts` (frames dropped each side + match PSNR). The extension automatically matches the source's aspect ratio, and is scaled to cover the source's frame and centre-cropped to it. The video you get back keeps the source's size and frame rate, and is encoded once as an H.264 MP4 with AAC sound: an H.264 source at its own bitrate (or higher, when its own is very low for its size and frame rate), and a source in any other codec, or an H.264 source that reports no bitrate, at a high constant quality. A 10-bit, 4:2:2 or 4:4:4 source comes back as 8-bit 4:2:0, an HDR source in standard dynamic range (SDR), and a full-range source in standard range. A source with an odd width or height comes back at the even size just below it, its last column of pixels, last row, or both cropped (853×481 comes back 852×480), because the delivered video's 4:2:0 colour needs even sides. A run that carries the free-tier watermark is encoded once more to add it: its size (rounded down to even) and frame rate stay the source's, its picture quality does not.
 
 ### Reference images (Seedance only)
 
@@ -113,7 +115,7 @@ Kling 4 included, returns a 400 (they would otherwise be silently ignored). Refe
 
 ### Seedance 2.5 extend credits
 
-Priced by the exact number of seconds added — every whole second from 4 to 30 has its own price — and the resolution the new footage is generated at (the delivered video keeps the source's size). With no duration set the extend adds 8 seconds; with no resolution, the new footage is generated at 720p. Selected lengths:
+Priced by the exact number of seconds added — every whole second from 4 to 30 has its own price — and the resolution the new footage is generated at (the delivered video keeps the source's size, rounded down to even). With no duration set the extend adds 8 seconds; with no resolution, the new footage is generated at 720p. Selected lengths:
 
 | Seconds added | 480p | 720p | 1080p |
 |---|---|---|---|
@@ -130,7 +132,7 @@ The node's Run button, the workflow estimate and `GET /v1/credits/model-cost` (i
 
 ### Seedance 2.0 extend credits
 
-Priced by the exact number of seconds added — every whole second from 4 to 15 has its own price — and the resolution the new footage is generated at (the delivered video keeps the source's size). With no duration set the extend adds 8 seconds; with no resolution, the new footage is generated at 720p. Selected lengths:
+Priced by the exact number of seconds added — every whole second from 4 to 15 has its own price — and the resolution the new footage is generated at (the delivered video keeps the source's size, rounded down to even). With no duration set the extend adds 8 seconds; with no resolution, the new footage is generated at 720p. Selected lengths:
 
 | Seconds added | 480p | 720p | 1080p |
 |---|---|---|---|
@@ -145,7 +147,7 @@ The node's Run button, the workflow estimate and `GET /v1/credits/model-cost` (i
 
 ### Kling 4 extend credits
 
-Priced by the exact number of seconds added — every whole second from 3 to 30 has its own price — and the resolution the new footage is generated at (the delivered video keeps the source's size). With no duration set the extend adds 5 seconds; with no resolution, the new footage is generated at 720p. Selected lengths:
+Priced by the exact number of seconds added — every whole second from 3 to 30 has its own price — and the resolution the new footage is generated at (the delivered video keeps the source's size, rounded down to even). With no duration set the extend adds 5 seconds; with no resolution, the new footage is generated at 720p. Selected lengths:
 
 | Seconds added | 720p | 1080p |
 |---|---|---|

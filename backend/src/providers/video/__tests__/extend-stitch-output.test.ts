@@ -650,6 +650,48 @@ describe.skipIf(!ffmpegAvailable)("stitchExtension (real ffmpeg)", () => {
     expectLocked(probed)
   }, 60_000)
 
+  // H.264 4:2:0 needs even sides: an odd-size source is delivered at its size rounded down to
+  // even. `testsrc2` rounds an odd size itself, so the fixture is `testsrc` in 4:4:4 (which
+  // libx264 stores at any size), and it is checked to really be 853×481.
+  describe("an odd-size source", () => {
+    let odd: string
+
+    beforeAll(async () => {
+      odd = join(dir, "source-853x481.mp4")
+      await runFfmpeg([
+        "-y",
+        "-f", "lavfi", "-i", "testsrc=size=853x481:rate=24:duration=3",
+        "-f", "lavfi", "-i", "sine=frequency=440:duration=3:sample_rate=48000",
+        "-c:v", "libx264", "-pix_fmt", "yuv444p", "-b:v", "600k",
+        "-c:a", "aac", "-shortest",
+        odd,
+      ])
+    }, 60_000)
+
+    it("is delivered at 852×480, H.264 4:2:0, every frame the even source keeps", async () => {
+      const fixture = (await probe(odd)).video
+      expect([fixture.width, fixture.height]).toEqual([853, 481])
+      const { outputPath, probed } = await stitch(odd, extension)
+      expect(outputPath.endsWith(".mp4")).toBe(true)
+      expect(probed.video.codec_name).toBe("h264")
+      expect(probed.video.pix_fmt).toBe("yuv420p")
+      expect([probed.video.width, probed.video.height]).toEqual([852, 480])
+      expect(Number(probed.video.nb_read_frames)).toBe(72 - 4 + (48 - 3))
+      expect(await needsTranscode(outputPath)).toBe(false)
+      expectLocked(probed)
+    }, 60_000)
+
+    it("shown rotated 90°: delivered upright at 480×852", async () => {
+      const rotated = join(dir, "source-853x481-rot90.mp4")
+      await runFfmpeg(["-y", "-display_rotation:v:0", "90", "-i", odd, "-c", "copy", rotated])
+      const { probed } = await stitch(rotated, extension)
+      expect([probed.video.width, probed.video.height]).toEqual([480, 852])
+      expect(probed.video.side_data_list ?? []).toEqual([])
+      expect(Number(probed.video.nb_read_frames)).toBe(72 - 4 + (48 - 3))
+      expectLocked(probed)
+    }, 60_000)
+  })
+
   it("stitches onto a non-square-pixel source: its size and SAR", async () => {
     const anamorphic = join(dir, "source-sar.mp4")
     await runFfmpeg([

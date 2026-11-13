@@ -119,10 +119,12 @@ describe.skipIf(!isFfmpegAvailable())("the Seedance extend's deliverable (real f
       "-c:v", "libx264", "-pix_fmt", "yuv444p", "-b:v", "300k", "-c:a", "pcm_s16le", "-shortest",
       source,
     ])
+    // The run is billed for Seedance 2.0's default 8 s: an extension with less than half of
+    // that (4 s) of picture fails the run instead of being stitched.
     execFileSync("ffmpeg", [
       "-v", "error", "-y",
-      "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=2",
-      "-f", "lavfi", "-i", "sine=frequency=660:duration=2:sample_rate=48000",
+      "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=8",
+      "-f", "lavfi", "-i", "sine=frequency=660:duration=8:sample_rate=48000",
       "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
       extension,
     ])

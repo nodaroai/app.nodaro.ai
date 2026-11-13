@@ -1,7 +1,15 @@
 import { describe, it, expect } from "vitest"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { EXTEND_VIDEO_PROVIDERS, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, VIDEO_REF_VIDEO_DURATION_LIMITS, applyVideoNegativePrompt, getMaxVideoPromptChars, isTailExtendProvider } from "@nodaro/shared/models"
-import { extendSourceTooShortMessage, isTailRecipeProvider, tailCutSec, tailRecipeSeconds, TAIL_RECIPES } from "../extend-recipe.js"
+import {
+  extendSourceTooShortMessage,
+  extensionTooShort,
+  extensionTooShortMessage,
+  isTailRecipeProvider,
+  tailCutSec,
+  tailRecipeSeconds,
+  TAIL_RECIPES,
+} from "../extend-recipe.js"
 import { buildKling4Request } from "../../providers/kie/kling4.js"
 
 // The tail recipe is what a tail-recipe Extend Video run does: the window it
@@ -118,6 +126,41 @@ describe("TAIL_RECIPES", () => {
 
   it("has a recipe for exactly the tail-recipe providers the shared list names", () => {
     expect(Object.keys(TAIL_RECIPES)).toEqual(EXTEND_VIDEO_PROVIDERS.filter(isTailExtendProvider))
+  })
+})
+
+// An extension whose picture is shorter than half the seconds the run is
+// billed for fails the run with a full refund: neither the source alone nor
+// the source with the short extension is delivered.
+describe("extensionTooShort", () => {
+  it("is short below half the billed seconds; exactly half and above are not", () => {
+    expect(extensionTooShort(2, 5)).toBe(true)
+    expect(extensionTooShort(2.49, 5)).toBe(true)
+    expect(extensionTooShort(3.99, 8)).toBe(true)
+    expect(extensionTooShort(2.5, 5)).toBe(false)
+    expect(extensionTooShort(4, 8)).toBe(false)
+    expect(extensionTooShort(1.5, 3)).toBe(false)
+    expect(extensionTooShort(5, 5)).toBe(false)
+    expect(extensionTooShort(8.2, 5)).toBe(false)
+  })
+
+  it("is short when there is no picture: none, zero, or a length that does not read", () => {
+    expect(extensionTooShort(undefined, 5)).toBe(true)
+    expect(extensionTooShort(0, 5)).toBe(true)
+    expect(extensionTooShort(Number.NaN, 5)).toBe(true)
+  })
+
+  it("says what the model returned against what the run is billed for, and that nothing was charged", () => {
+    expect(extensionTooShortMessage(2, 5)).toBe(
+      "The model returned only 2.0s of the 5s extension, so nothing was charged. Try again.",
+    )
+    // Rounded down, so a refused length never reads as the half that passes.
+    expect(extensionTooShortMessage(2.46, 5)).toBe(
+      "The model returned only 2.4s of the 5s extension, so nothing was charged. Try again.",
+    )
+    expect(extensionTooShortMessage(undefined, 8)).toBe(
+      "The model returned only 0.0s of the 8s extension, so nothing was charged. Try again.",
+    )
   })
 })
 

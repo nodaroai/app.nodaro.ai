@@ -51,12 +51,20 @@ import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
 import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
-import { extendTailPicture, stitchExtension, type ExtendStitchResult } from "../../providers/video/extend-stitch.js"
+import { extendTailPicture, extensionPictureSeconds, stitchExtension, type ExtendStitchResult } from "../../providers/video/extend-stitch.js"
 import { probeMatched } from "../../providers/video/matched-encode.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
 import { extractFrame } from "../../providers/video/extract-frame.js"
 import { resolveSourceMatchedAspect } from "../../providers/video/source-matched-aspect.js"
-import { extendSourceTooShortMessage, isTailRecipeProvider, tailCutSec, tailRecipeSeconds, TAIL_RECIPES } from "../../lib/extend-recipe.js"
+import {
+  extendSourceTooShortMessage,
+  extensionTooShort,
+  extensionTooShortMessage,
+  isTailRecipeProvider,
+  tailCutSec,
+  tailRecipeSeconds,
+  TAIL_RECIPES,
+} from "../../lib/extend-recipe.js"
 import { cutChainedMovTail, findChainedMovReference, isMovUrl } from "../../lib/seedance-extend-mov-chain.js"
 import { rawExtensionObjectId, silentVideoKey } from "../../lib/job-output-keys.js"
 import { discardFailedRunCopies } from "../../lib/discard-job-copies.js"
@@ -1661,6 +1669,18 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       try {
         const extensionPath = join(stitchDir, isMovUrl(gen.url) ? "extension.mov" : "extension.mp4")
         await downloadFile(gen.url, extensionPath)
+        // An extension with less than half the seconds the run is billed for
+        // (`extensionTooShort`), no picture included, fails the run before
+        // anything is encoded: final on this attempt and refunded in full, so
+        // neither the source alone nor the source with the short extension is
+        // delivered, and no retry generates (and pays for) another
+        // (deterministic-job-error.ts). Only a file the probe READ is judged
+        // so: a probe that failed throws a plain error, which is retried
+        // (`extensionPictureSeconds`).
+        const extensionSec = await extensionPictureSeconds(extensionPath)
+        if (extensionTooShort(extensionSec, extSeconds)) {
+          throw new DeterministicJobError(extensionTooShortMessage(extensionSec, extSeconds))
+        }
         const stitched = await stitchExtension({
           sourcePath: srcLocal,
           extensionPath,

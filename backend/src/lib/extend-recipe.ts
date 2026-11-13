@@ -91,6 +91,33 @@ export function extendSourceTooShortMessage(provider: keyof typeof TAIL_RECIPES,
 }
 
 /**
+ * Whether an extension's picture is too short to deliver: shorter than half
+ * the seconds the run is billed for (`billedSec`). Exactly half is delivered.
+ * No picture (none, zero, or a length that does not read) is too short. Such a
+ * run fails with a full refund (`extensionTooShortMessage`), so neither the
+ * source alone nor the source with the short extension is ever delivered. For
+ * every extend that generates its extension: the tail recipes here, and the
+ * native extends.
+ */
+export function extensionTooShort(pictureSec: number | undefined, billedSec: number): boolean {
+  return !(pictureSec !== undefined && pictureSec > 0 && pictureSec >= billedSec / 2)
+}
+
+/** Seconds as the extend's messages write them: a whole number as it is, else to one decimal. */
+const secondsText = (sec: number): string => (Number.isInteger(sec) ? String(sec) : sec.toFixed(1))
+
+/**
+ * The failure an extension refused by `extensionTooShort` reports, word for
+ * word what the user sees. Its length is rounded down to one decimal, so a
+ * refused length never reads as the half that passes (2.46 s of 5 s: "2.4s");
+ * the 1e-9 keeps a tenth that floats a hair below itself (2.3 × 10) whole.
+ */
+export function extensionTooShortMessage(pictureSec: number | undefined, billedSec: number): string {
+  const got = Math.floor((pictureSec !== undefined && pictureSec > 0 ? pictureSec : 0) * 10 + 1e-9) / 10
+  return `The model returned only ${got.toFixed(1)}s of the ${secondsText(billedSec)}s extension, so nothing was charged. Try again.`
+}
+
+/**
  * The seconds of picture a run cuts as its tail from a source whose picture
  * lasts `pictureSec`: the recipe's `tailSec`, or all of a shorter picture (a
  * source between `minSourceSec` and `tailSec`), so the tail always ends on the

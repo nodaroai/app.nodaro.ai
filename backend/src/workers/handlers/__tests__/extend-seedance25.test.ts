@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => ({
   mockFrom: vi.fn(),
   mockDiscardFailedRunCopies: vi.fn(),
   mockProbeMatched: vi.fn(),
+  mockProbeMatchedOrThrow: vi.fn(),
 }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
@@ -92,6 +93,8 @@ vi.mock("@/providers/video/extend-stitch.js", async (importOriginal) => ({
 vi.mock("@/providers/video/matched-encode.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/providers/video/matched-encode.js")>()),
   probeMatched: mocks.mockProbeMatched,
+  // The extension's probe, which throws when ffprobe fails (`extensionPictureSeconds`).
+  probeMatchedOrThrow: mocks.mockProbeMatchedOrThrow,
 }))
 vi.mock("@/providers/video/merge-video-audio.js", () => ({ mergeVideoAudio: vi.fn() }))
 
@@ -135,8 +138,10 @@ vi.mock("../../../lib/job-finalize.js", () => ({ finalizeJobWithMedia: mocks.moc
 vi.mock("@/lib/discard-job-copies.js", () => ({ discardFailedRunCopies: mocks.mockDiscardFailedRunCopies }))
 
 import { videoAIHandlers } from "../video-ai.js"
-import { extendSourceTooShortMessage, tailRecipeSeconds } from "../../../lib/extend-recipe.js"
+import { extendSourceTooShortMessage, extensionTooShortMessage, tailRecipeSeconds } from "../../../lib/extend-recipe.js"
 import { extendTailPicture } from "@/providers/video/extend-stitch.js"
+import type { MatchedProbe } from "@/providers/video/matched-encode.js"
+import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 
 const SOURCE_URL = "https://r2.example.com/videos/prev-job.mp4"
 const KIE_MP4 = "https://kie.example.com/extension.mp4"
@@ -154,6 +159,11 @@ const STITCHED_PATH = `${STITCH_DIR}/stitched.mp4`
 const STITCHED_R2 = "https://r2.example.com/videos/job-1.mp4"
 /** A boundary where the matcher found no genuine match: the fixed trims, with the search's PSNR and windows. */
 const BOUNDARY = { matched: false, psnrDb: 19.4, trimEndFrames: 4, trimStartFrames: 3, searchedPrevFrames: 8, searchedNextFrames: 8 }
+
+/** What `probeMatched` reads of the source: its colour decides the tail's picture. */
+let sourceProbe: MatchedProbe
+/** What the extension's probe (`probeMatchedOrThrow`) reads: 30 s of picture, never short of half the longest run (30 s). */
+let extensionProbe: MatchedProbe
 
 /** What each scratch upload answers, by the name the worker gives it. */
 const SCRATCH_URLS: Record<string, string> = {
@@ -207,7 +217,10 @@ beforeEach(() => {
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/images/thumb.png")
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
   mocks.mockDiscardFailedRunCopies.mockResolvedValue(undefined)
-  mocks.mockProbeMatched.mockResolvedValue({ width: 1920, height: 1080, videoCodec: "h264" })
+  sourceProbe = { width: 1920, height: 1080, videoCodec: "h264" }
+  extensionProbe = { width: 1920, height: 1080, videoCodec: "h264", durationSec: 30, videoDurationSec: 30 }
+  mocks.mockProbeMatched.mockImplementation(async () => sourceProbe)
+  mocks.mockProbeMatchedOrThrow.mockImplementation(async () => extensionProbe)
 })
 
 afterEach(() => {
@@ -435,6 +448,105 @@ describe("the extend stitch, on every Seedance provider", () => {
   )
 })
 
+// An extension whose picture is shorter than half the seconds the run is billed for fails the
+// run, final on this attempt and refunded in full: neither the source alone nor the source with
+// the short extension is delivered. It is measured before the stitch encodes anything.
+describe("a short extension fails the run with a full refund", () => {
+  const TAIL_PROVIDERS = ["seedance-2-5-extend", "seedance-2-0-extend", "kling-4-extend"] as const
+  const withPicture = (seconds: number, containerSec = seconds): void => {
+    extensionProbe = { width: 1920, height: 1080, videoCodec: "h264", durationSec: containerSec, videoDurationSec: seconds }
+  }
+
+  it.each(TAIL_PROVIDERS)("%s: a 5 s run whose extension has 2.0 s of picture fails with the message; nothing is stitched or delivered", async (provider) => {
+    withPicture(2)
+    const failure = await run({ provider, duration: 5 }).then(() => undefined, (err: unknown) => err)
+
+    expect(failure).toBeInstanceOf(Error)
+    expect((failure as Error).message).toBe(extensionTooShortMessage(2, 5))
+    expect((failure as Error).message).toBe("The model returned only 2.0s of the 5s extension, so nothing was charged. Try again.")
+    // Final now (failed and refunded on this attempt), never retried into a second generation.
+    expect(isDeterministicJobError(failure)).toBe(true)
+    // Measured on the extension's own download, before the stitch.
+    expect(mocks.mockProbeMatchedOrThrow).toHaveBeenCalledWith(`${STITCH_DIR}/extension.mp4`)
+    expect(mocks.mockStitchExtension).not.toHaveBeenCalled()
+    expect(mocks.mockWatermarkLocalVideoAndUpload).not.toHaveBeenCalled()
+    expect(mocks.mockGenerateAndUploadThumbnail).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+    // Both folders are still removed.
+    const cleanups = mocks.mockCleanupWorkDir.mock.calls.map((c) => c[0])
+    expect(cleanups).toContain(PREP_DIR)
+    expect(cleanups).toContain(STITCH_DIR)
+  })
+
+  it.each(TAIL_PROVIDERS)("%s: a 5 s run whose extension has 2.5 s of picture (exactly half) is stitched and delivered", async (provider) => {
+    withPicture(2.5)
+    await run({ provider, duration: 5 })
+    expect(mocks.mockStitchExtension).toHaveBeenCalledTimes(1)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledTimes(1)
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].mediaUrl).toBe(STITCHED_R2)
+  })
+
+  it("reads the picture's length, not the container's (the sound may run past the last frame)", async () => {
+    withPicture(3, 8)
+    await expect(run({ duration: 8 })).rejects.toThrow(extensionTooShortMessage(3, 8))
+    expect(mocks.mockStitchExtension).not.toHaveBeenCalled()
+  })
+
+  it("a file that was read and has no video stream fails the same way, final", async () => {
+    extensionProbe = { audioCodec: "aac", durationSec: 8 }
+    const failure = await run({ duration: 8 }).then(() => undefined, (err: unknown) => err)
+    expect((failure as Error).message).toBe(extensionTooShortMessage(undefined, 8))
+    expect(isDeterministicJobError(failure)).toBe(true)
+    expect(mocks.mockStitchExtension).not.toHaveBeenCalled()
+  })
+
+  // A probe that failed says nothing about the extension's length: a plain error the queue
+  // retries, never the short-extension refusal (and never final on this attempt).
+  it.each([
+    ["timed out", () => Object.assign(new Error("ffprobe failed: killed"), { killed: true, timedOut: true })],
+    ["could not start", () => Object.assign(new Error("ffprobe failed: spawn ffprobe ENOENT"), { code: "ENOENT" })],
+    ["could not read the file", () => new Error("ffprobe failed: /tmp/extend-stitch-x/extension.mp4: Invalid data found when processing input")],
+  ])("a probe that %s fails the run as a plain, retryable error, not the short-extension message", async (_case, makeError) => {
+    mocks.mockProbeMatchedOrThrow.mockRejectedValue(makeError())
+    const failure = await run({ duration: 5 }).then(() => undefined, (err: unknown) => err)
+    expect(failure).toBeInstanceOf(Error)
+    expect(isDeterministicJobError(failure)).toBe(false)
+    expect((failure as Error).message).not.toMatch(/The model returned only/)
+    expect(mocks.mockStitchExtension).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+
+  // No duration in the job: the run is billed for the provider's default (Kling 4: 5 s,
+  // Seedance: 8 s), and the extension is held to half of that.
+  it("with no duration set, holds the extension to half the provider's default", async () => {
+    withPicture(2.4)
+    await expect(run({ provider: "kling-4-extend" })).rejects.toThrow(
+      "The model returned only 2.4s of the 5s extension, so nothing was charged. Try again.",
+    )
+    withPicture(3.9)
+    await expect(run({ provider: "seedance-2-0-extend" })).rejects.toThrow(
+      "The model returned only 3.9s of the 8s extension, so nothing was charged. Try again.",
+    )
+    expect(mocks.mockStitchExtension).not.toHaveBeenCalled()
+    // Half of each default passes.
+    withPicture(2.5)
+    await run({ provider: "kling-4-extend" })
+    withPicture(4)
+    await run({ provider: "seedance-2-0-extend" })
+    expect(mocks.mockStitchExtension).toHaveBeenCalledTimes(2)
+  })
+
+  it("a short mov extension's raw copy is discarded, the run still failing", async () => {
+    vi.stubEnv("KIE_SEEDANCE_25_OUTPUT_FORMAT", "mov")
+    mocks.mockImageToVideo.mockResolvedValue({ url: KIE_MOV, cost: 0.3 })
+    withPicture(1)
+    await expect(run({ duration: 5 })).rejects.toThrow(extensionTooShortMessage(1, 5))
+    expect(mocks.mockProbeMatchedOrThrow).toHaveBeenCalledWith(`${STITCH_DIR}/extension.mov`)
+    expect(mocks.mockDiscardFailedRunCopies).toHaveBeenCalledWith("job-1", "user-1", [R2_MOV])
+    expect(mocks.mockStitchExtension).not.toHaveBeenCalled()
+  })
+})
+
 // An HDR source (an iPhone's HLG, an HDR10 file's PQ) is delivered in SDR BT.709, so the
 // model is sent its tail, and the last frame taken from it, in that same SDR picture.
 describe("seedance extend — an HDR source's generation inputs", () => {
@@ -444,7 +556,7 @@ describe("seedance extend — an HDR source's generation inputs", () => {
   }
 
   it.each(["seedance-2-5-extend", "seedance-2-0-extend"])("%s: cuts the tail through the stitch's SDR conversion and takes the last frame from it", async (provider) => {
-    mocks.mockProbeMatched.mockResolvedValue(HLG)
+    sourceProbe = HLG
     await run({ provider })
 
     expect(mocks.mockProbeMatched).toHaveBeenCalledWith("/tmp/test-workdir/source.mp4")
@@ -463,7 +575,7 @@ describe("seedance extend — an HDR source's generation inputs", () => {
 
   it("cuts a chained 2.5 MOV reference exactly as before: Seedance made that clip in SDR", async () => {
     vi.stubEnv("KIE_SEEDANCE_25_OUTPUT_FORMAT", "mov")
-    mocks.mockProbeMatched.mockResolvedValue(HLG)
+    sourceProbe = HLG
     mocks.mockFindChainedMovReference.mockResolvedValue(CHAINED_MOV)
     await run()
 
@@ -475,7 +587,7 @@ describe("seedance extend — an HDR source's generation inputs", () => {
   it("cuts an SDR or untagged source's tail exactly as before", async () => {
     for (const probe of [{}, { width: 1920, height: 1080, videoCodec: "h264", colorPrimaries: "bt709", colorTransfer: "bt709", colorSpace: "bt709" }]) {
       mocks.mockExtractTailToFile.mockClear()
-      mocks.mockProbeMatched.mockResolvedValue(probe)
+      sourceProbe = probe
       await run()
       expect(mocks.mockExtractTailToFile.mock.calls).toEqual([["/tmp/test-workdir/source.mp4", 2, { measureFrom: "picture" }]])
     }

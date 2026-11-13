@@ -17,6 +17,7 @@ import {
   matchedPictureArgs,
   parseMatchedProbe,
   probeMatched,
+  probeMatchedOrThrow,
   type MatchedProbe,
 } from "../matched-encode.js"
 
@@ -249,5 +250,27 @@ describe("probeMatched", () => {
   it("never throws: an unreadable probe is an empty one", async () => {
     mocks.runFfprobe.mockRejectedValue(new Error("ffprobe failed"))
     await expect(probeMatched("/w/missing.mp4")).resolves.toEqual({})
+  })
+})
+
+// The same probe for a caller that must tell "ffprobe failed" from "the file has no picture".
+describe("probeMatchedOrThrow", () => {
+  it("reads what probeMatched reads, with the same arguments", async () => {
+    const out = JSON.stringify({
+      streams: [{ codec_type: "video", width: 1280, height: 720, duration: "4.96", r_frame_rate: "24/1", avg_frame_rate: "24/1" }],
+      format: { duration: "5.01" },
+    })
+    mocks.runFfprobe.mockResolvedValue(out)
+    const strict = await probeMatchedOrThrow("/w/extension.mp4")
+    const lenient = await probeMatched("/w/extension.mp4")
+    expect(strict).toEqual(lenient)
+    expect(strict).toMatchObject({ width: 1280, height: 720, videoDurationSec: 4.96, durationSec: 5.01 })
+    expect(mocks.runFfprobe.mock.calls[0]![0]).toEqual(mocks.runFfprobe.mock.calls[1]![0])
+  })
+
+  it("throws ffprobe's own failure, its flags kept (a timeout stays a timeout)", async () => {
+    const timedOut = Object.assign(new Error("ffprobe failed: killed"), { killed: true, timedOut: true })
+    mocks.runFfprobe.mockRejectedValue(timedOut)
+    await expect(probeMatchedOrThrow("/w/extension.mp4")).rejects.toBe(timedOut)
   })
 })

@@ -99,10 +99,12 @@ vi.mock("@/providers/video/extend-stitch.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/providers/video/extend-stitch.js")>()),
   stitchExtension: mocks.mockStitchExtension,
 }))
-// The source's colour probe: an SDR source, so its tail is cut exactly as it always was.
+// The source's colour probe: an SDR source, so its tail is cut exactly as it always was. The
+// extension's probe: 30 s of picture, never short of half the run.
 vi.mock("@/providers/video/matched-encode.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/providers/video/matched-encode.js")>()),
   probeMatched: vi.fn(async () => ({ width: 1920, height: 1080, videoCodec: "h264" })),
+  probeMatchedOrThrow: vi.fn(async () => ({ width: 1920, height: 1080, videoCodec: "h264", durationSec: 30, videoDurationSec: 30 })),
 }))
 
 vi.mock("@/providers/video/merge-video-audio.js", () => ({
