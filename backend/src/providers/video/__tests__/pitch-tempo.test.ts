@@ -22,9 +22,9 @@ describe("buildRubberbandFilter", () => {
 describe("buildPitchTempoArgs", () => {
   const filter = "rubberband=pitch=2:tempo=1:formant=preserved:pitchq=quality"
 
-  it("audio lane: drops any picture and encodes MP3", () => {
+  it("audio lane: drops any picture and encodes MP3 from 1152-sample frames, the last one unpadded", () => {
     expect(buildPitchTempoArgs({ inputPath: "/w/in.wav", outputPath: "/w/out.mp3", lane: "audio", filter })).toEqual([
-      "-y", "-i", "/w/in.wav", "-vn", "-af", filter, "-c:a", "libmp3lame", "-b:a", "192k", "/w/out.mp3",
+      "-y", "-i", "/w/in.wav", "-vn", "-af", `${filter},asetnsamples=n=1152:p=0`, "-c:a", "libmp3lame", "-b:a", "192k", "/w/out.mp3",
     ])
   })
 

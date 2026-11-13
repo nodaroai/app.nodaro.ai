@@ -29,8 +29,8 @@ beforeEach(() => {
   h.runs = []
 })
 
-/** The audio filter of each ffmpeg run. */
-const filters = () => h.runs.map((args) => args[args.indexOf("-af") + 1])
+/** The rubberband filter of each ffmpeg run: the first of its audio filter chain (the full argv is pinned in pitch-tempo.test.ts). */
+const filters = () => h.runs.map((args) => args[args.indexOf("-af") + 1]!.split(",")[0])
 const shift = (semitones: number, maxSemitones?: number) =>
   pitchTempo({ audioUrl: "https://cdn.example/a.mp3", semitones, tempo: 1, preserveFormants: true, ...(maxSemitones === undefined ? {} : { maxSemitones }) })
 
