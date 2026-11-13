@@ -48,7 +48,9 @@ import {
   REPLICATE_LIP_SYNC_PROVIDERS,
   SEEDANCE_LIP_SYNC_PROVIDERS,
   DEFAULT_TRANSCRIBE_PROVIDER,
+  retiredLipSyncProviderName,
   canonicalVideoProvider,
+  isPixverseExtendProvider,
 } from "@nodaro/shared/models"
 import { baseProviderChain } from "../../providers/base-chain.js"
 import type { ProviderCapability } from "../../providers/provider.interface.js"
@@ -157,7 +159,8 @@ function generateImageProvider(d: Data): string | null {
 
 function lipSyncProvider(d: Data): string | null {
   const model = str(d.provider) ?? LIP_SYNC_DEFAULT_PROVIDER
-  if (REPLICATE_LIP_SYNC_PROVIDERS.has(model as never)) return "replicate"
+  // A retired model ran on Replicate (a job queued before it was retired).
+  if (REPLICATE_LIP_SYNC_PROVIDERS.has(model as never) || retiredLipSyncProviderName(model) !== undefined) return "replicate"
   if (FAL_LIP_SYNC_PROVIDERS.has(model as never)) return "fal"
   if (SEEDANCE_LIP_SYNC_PROVIDERS.has(model as never)) return route("image-to-video", model)
   return route("lip-sync", model)
@@ -183,6 +186,8 @@ function extendVideoProvider(d: Data): string | null {
   if (model === "ltx-2.3-pro") return "replicate" // runLtxExtend
   // A tail recipe generates its continuation on its own model (extend-recipe.ts).
   if (typeof model === "string" && isTailRecipeProvider(model)) return route("image-to-video", TAIL_RECIPES[model].genModel)
+  // PixVerse V6 extends on KIE's own extend endpoint, called directly (runPixverseExtend).
+  if (isPixverseExtendProvider(model)) return "kie"
   return "kie" // veo-extend / runway-extend: KIE task extensions of a prior KIE generation
 }
 

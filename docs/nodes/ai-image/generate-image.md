@@ -14,10 +14,10 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 | Style | select | `""` | One of 16 presets (Photorealistic, Cinematic, Anime, Digital Art, Oil Painting, Watercolor, Children's Book, Comic Book, Pixel Art, 3D Render, Pencil Sketch, Pop Art, Minimalist, Retro/Vintage, Fantasy, Noir) or "Custom..." free text. Style text is appended to the prompt at execution time. |
 | Negative Prompt | text | `""` | Elements to exclude. Sent natively for imagen4, ideogram, qwen; appended as "Avoid:..." for other providers. |
 | Aspect Ratio | select | `"16:9"` | Provider-specific ratio sets (see table below), plus **Auto (match the photo)** on every model. With a photo wired in (the inpaint / refine base when set, else the first reference image), Auto keeps that photo's shape — on models without a native auto, and on GPT Image 2.6 (whose own auto renders a portrait square), the supported shape closest to it. With no photo wired, Auto gives the model's default shape: its own auto where it has one, else its first listed ratio. A node with no ratio set (one written by an agent, an import or a template) is Auto, on the panel and in the run. |
-| Resolution | select | varies | Available for nano-banana-pro, nano-banana-2, nano-banana-2-1, flux, flux-flex, gpt-image-2 and the GPT Image 2.5 and 2.6 models: 1K, 2K, 4K; minimax-h3-image: 1K, 2K (its default) or 4K, the same price at 1K and 2K; seedream-5-flash: 1K, 2K (same price at either); seedream-5-5: 1K, 1.5K, 2K (2K by default; 1K and 1.5K cost the same). GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only: at those ratios the panel offers 1K, and a 2K or 4K request runs, and is charged, at 1K and says so. GPT Image 2 renders every ratio it offers, `auto` and 1:1 included, at 1K, 2K and 4K, and is charged at the size asked. |
+| Resolution | select | varies | Available for nano-banana-pro, nano-banana-2, nano-banana-2-1, flux, flux-flex, gpt-image-2 and the GPT Image 2.5 and 2.6 models: 1K, 2K, 4K; minimax-h3-image: 1K, 2K (its default) or 4K, the same price at 1K and 2K; seedream-5-flash: 1K, 2K (same price at either); seedream-5-5: 1K, 1.5K, 2K (2K by default; 1K and 1.5K cost the same); flux-3-klein: 1K, 2K or 4K, 1K by default, priced by size. GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only: at those ratios the panel offers 1K, and a 2K or 4K request runs, and is charged, at 1K and says so. GPT Image 2 renders every ratio it offers, `auto` and 1:1 included, at 1K, 2K and 4K, and is charged at the size asked. |
 | Quality | select | varies | Available for gpt-image (medium/high), GPT Image 2.6 Flare and Sunburst (auto, low, medium, high, extra high, max; medium by default; at auto the model picks the level and the run costs what it really used, at most the max price), seedream/seedream-5-lite (basic 2K / high 4K), and seedream-5-pro (basic 1K / high 2K) |
 | Background | select | Auto | Available for GPT Image 2.5 and 2.6 and Seedream 5.5: auto, opaque or transparent. On GPT Image a transparent background renders at 1K: at a larger size the node moves to 1K and says so. Seedream 5.5 renders one at every size, in PNG. On GPT Image 2.5 the setting only applies at 1K; at a larger size the image uses the model's own background. A transparent background is kept only in PNG and WebP: with GIF or JPEG it becomes auto, and an SVG takes no background setting (see [Formats](#formats-png-jpeg-webp-gif-and-svg)). |
-| Format | select | PNG | GPT Image 2.6 Flare and Sunburst: PNG, JPEG, WebP, GIF (animated) or SVG (vector). See [Formats](#formats-png-jpeg-webp-gif-and-svg). MiniMax H3 Image: PNG or JPEG, the same price. Seedream 5.5: PNG or JPEG, the same price; a transparent background is kept in PNG and becomes auto in JPEG. |
+| Format | select | PNG | GPT Image 2.6 Flare and Sunburst: PNG, JPEG, WebP, GIF (animated) or SVG (vector). See [Formats](#formats-png-jpeg-webp-gif-and-svg). MiniMax H3 Image: PNG or JPEG, the same price. Seedream 5.5: PNG or JPEG, the same price; a transparent background is kept in PNG and becomes auto in JPEG. FLUX 3 Klein: PNG or JPEG, the same price. |
 | GIF frames | number | 9 | With Format GIF: 2 to 16 frames. The price is set by the band the count falls in (2–8, 9–12, 13–16). |
 | GIF speed | number | 200 | With Format GIF: how long each frame shows, 20 to 2000 ms in steps of 10. Does not change the price. |
 | SVG detail | select | SVG Standard | With Format SVG: SVG Standard, SVG Detailed or SVG Max, how much detail the drawing is written with. |
@@ -112,6 +112,7 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | wan-2.7 | Wan 2.7 | Text-to-image, 1K/2K/4K resolution, up to 9 optional reference images | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |
 | wan-2.7-pro | Wan 2.7 Pro | Higher quality text-to-image, 1K/2K/4K resolution | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |
 | flux-2-klein | Flux 2 Klein (Open) | BFL Flux 2 9B Klein via Replicate — fast. Resolution 0.5 / 1 / 2 / 4 MP (default 1 MP). **4 credits**<!-- credits: flux-2-klein:1MP:0ref --> **at 1 MP** (0 refs), scaling with resolution and reference count. | Same as Flux |
+| flux-3-klein | FLUX 3 Klein | **The light model of FLUX 3: fast and low cost.** A different model from Flux 2 Klein. Priced by size alone: **5 credits**<!-- credits: flux-3-klein:1K --> at 1K, the default, **8 credits**<!-- credits: flux-3-klein:2K --> at 2K, **19 credits**<!-- credits: flux-3-klein:4K --> at 4K. Attach reference images (or edit a base image), up to 10 with the base counted, and it runs as `flux-3-klein-i2i` at the same price: the images cost nothing extra. PNG or JPEG. Takes a seed, prompts up to 5,000 characters. See [FLUX 3 Klein](#flux-3-klein). | 1:1, 4:3, 3:4, 3:2, 2:3, 16:9, 9:16, 21:9, 9:21 |
 | flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate. Resolution 0.5 / 1 / 2 / 4 MP (**default 2 MP**). Per-megapixel pricing: **26 credits**<!-- credits: flux-2-pro:2MP:0ref --> **at 2 MP** (0 refs). | Same as Flux |
 | flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate, up to 8 reference images. Resolution 0.5 / 1 / 2 / 4 MP (**default 2 MP**). **Per-megapixel pricing**: **77 credits**<!-- credits: flux-2-max:2MP:0ref --> **at 2 MP** (0 refs), **154 credits**<!-- credits: flux-2-max:4MP:0ref --> **at 4 MP** (0 refs), scaling with resolution and refs. | Same as Flux |
 
@@ -158,6 +159,32 @@ auto, and the node says so).
   auto). With a photo, the run moves to the edit model, which is sent its own
   auto; whether that keeps the photo's shape has not been measured yet, so pick
   a ratio when the shape matters.
+
+### FLUX 3 Klein
+
+The light model of Black Forest Labs' FLUX 3, and a model of its own, not a
+newer Flux 2 Klein (both stay on offer). Pick it for fast, low-cost pictures
+and edits, from a first draft up to 4K.
+
+- Sizes **1K** (the default), **2K** and **4K**, in nine shapes, from 21:9 to
+  9:21. The price follows the size alone: **5 credits**<!-- credits: flux-3-klein:1K -->,
+  **8 credits**<!-- credits: flux-3-klein:2K --> or **19 credits**<!-- credits: flux-3-klein:4K -->.
+- With reference images or a base image it edits instead, from 1 to 10 images,
+  at the same price: the images cost nothing extra. A base image counts as one
+  of the 10. A run that would send more (your references and the base, or a
+  Scene's references) is refused before anything is charged, with a message
+  saying how many to remove, on the API and in a workflow run. As on every
+  model, wired references past the model's limit are not attached; and a
+  moodboard's images fill only the seats left after your references and the
+  base.
+- PNG (the default) or JPEG, the same price.
+- With no photo wired in, Auto is sent as 1:1 (the text-to-image model takes no
+  auto). With a photo, the run moves to the edit model, which is sent its own
+  auto, the first image's shape; that has not been measured on a real run yet,
+  so pick a ratio when the shape matters.
+- The model rewrites the prompt into a fuller description before drawing; that
+  is not a setting here yet. Neither is an exact width and height, WebP, nor
+  several pictures from one request.
 
 ### Formats: PNG, JPEG, WebP, GIF and SVG
 
@@ -227,7 +254,7 @@ When the node has a current result, open its config panel and scroll to the **In
 
 This works on **every image provider**, not just one model. A server-side **composite floor** restricts the change to the masked region (`out = base·(1−mask) + result·mask`), so even providers that have no native mask parameter produce a clean, localized edit.
 
-**Strong instruction-following editors** (`gpt-image`, `gpt-image-2`, `gpt-image-2-5-flare`, `gpt-image-2-5-sunburst`, `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-1`, `nano-banana-2-lite`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `seedream-5-flash`, `minimax-h3-image`, `seedream-5-5`, `qwen`, `flux-kontext`, `flux-kontext-max`) additionally get a natural-language **region hint** injected into the prompt (e.g. "Apply the following change only to the upper-left region…") for better in-region results. This is automatic — no user action required. Other providers rely on the composite floor alone, which still keeps the edit localized.
+**Strong instruction-following editors** (`gpt-image`, `gpt-image-2`, `gpt-image-2-5-flare`, `gpt-image-2-5-sunburst`, `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-1`, `nano-banana-2-lite`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `seedream-5-flash`, `minimax-h3-image`, `seedream-5-5`, `flux-3-klein`, `qwen`, `flux-kontext`, `flux-kontext-max`) additionally get a natural-language **region hint** injected into the prompt (e.g. "Apply the following change only to the upper-left region…") for better in-region results. This is automatic — no user action required. Other providers rely on the composite floor alone, which still keeps the edit localized.
 
 The mask comes from either:
 

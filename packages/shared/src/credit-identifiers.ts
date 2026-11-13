@@ -42,9 +42,20 @@ import {
   type VideoAudioRequest,
   canonicalVideoProvider,
   isTailExtendProvider,
+  isPixverseExtendProvider,
+  PIXVERSE_V6_EXTEND_PROVIDER,
+  type CatalogExtendProvider,
   type SeedanceExtendProvider,
   type TailExtendProvider,
 } from "./model-constants.js"
+import {
+  SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
+  SEEDANCE_EXTEND_RATE_CREDIT_IDS,
+  SEEDANCE_EXTEND_RATE_SECONDS,
+  SEEDANCE_EXTEND_SENT_PRICED_PROVIDER,
+  isSeedanceExtendPricedBySecondsSent,
+} from "./seedance-extend-rate.js"
+import { unitQuoteCreditId } from "./credit-estimators/unit-quote.js"
 import { isFlux2Model, FLUX2_RES_MP, type Flux2Model } from "./flux2-pricing.js"
 import {
   GPT_IMAGE_2_6_DEFAULT_QUALITY,
@@ -59,6 +70,7 @@ import {
   type ImageFormatLevers,
 } from "./gpt-image-2-6.js"
 import { isMinimaxH3Image, minimaxH3ImageCreditId } from "./minimax-h3-image.js"
+import { flux3KleinCreditId, isFlux3Klein } from "./flux-3-klein.js"
 import {
   SEEDREAM_5_5_I2I,
   SEEDREAM_5_5_MAX_INPUT_IMAGES,
@@ -209,6 +221,11 @@ export function buildCreditModelIdentifier(
   }
   if (isSeedream55(provider)) {
     return seedream55CreditId(provider, resolution, referenceImageCount)
+  }
+  // FLUX 3 Klein: by size alone, the same on both ids (`flux-3-klein:2K`,
+  // `flux-3-klein-i2i:4K`); images move a text-to-image id onto the edit id.
+  if (isFlux3Klein(provider)) {
+    return flux3KleinCreditId(provider, resolution, referenceImageCount)
   }
   if (HIGH_QUALITY_PROVIDERS.has(provider) && quality === "high") {
     return `${provider}:high`
@@ -532,9 +549,13 @@ export function buildVideoCreditModelIdentifier(
   // A retired model (RETIRED_VIDEO_PROVIDERS) is priced as the model it runs as.
   const provider = canonicalVideoProvider(rawProvider) as string
   // A tail-recipe Extend Video provider (Seedance 2.5 / 2.0, Kling 4) is
-  // priced on its own rows — the one builder every surface that prices an
-  // extend reads.
+  // priced through the one builder every surface that prices an extend reads
+  // (Seedance 2.5: the most a run of that length costs, the whole 10-second
+  // window sent — see tailExtendCreditId).
   if (isTailExtendProvider(provider)) return tailExtendCreditId(provider, duration, resolution)
+  // PixVerse V6 Extend on its own rows too, its sound read from the extend's
+  // own switch (`generateAudio`), else the request's `sound`.
+  if (isPixverseExtendProvider(provider)) return pixverseExtendCreditId(duration, resolution, audio.generateAudio ?? audio.sound)
   // T2V overrides: some providers have different base costs for text-to-video
   let effectiveProvider = provider
   if (nodeType === "text-to-video") {
@@ -787,27 +808,124 @@ export function tailExtendResolution(provider: TailExtendProvider, resolution?: 
 }
 
 /**
- * The credit identifier one tail-recipe Extend Video run is priced at — the
- * one builder every surface that prices it reads (the route's guard and
- * reservation, the workflow reservation and estimate, the editor), so none of
- * them can name a different row.
+ * The rate row a Seedance 2.5 Extend run at `resolution` is charged a multiple
+ * of: the row of the resolution the run is priced and rendered at
+ * ({@link tailExtendResolution}: one the model offers, else 720p).
+ */
+export function seedanceExtendRateCreditId(resolution: unknown): string {
+  const res = tailExtendResolution(SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, resolution) as keyof typeof SEEDANCE_EXTEND_RATE_CREDIT_IDS
+  return SEEDANCE_EXTEND_RATE_CREDIT_IDS[res] ?? SEEDANCE_EXTEND_RATE_CREDIT_IDS["720p"]
+}
+
+/**
+ * The most a Seedance 2.5 Extend run that adds `duration` seconds at
+ * `resolution` can cost, as ONE id: the whole-run quote
+ * (`<rate row>:<units>u`, {@link unitQuoteCreditId}) of a run that sends the
+ * whole {@link SEEDANCE_EXTEND_CONTEXT_MAX_SEC}-second window — the units are
+ * (10 + the seconds added) ÷ 2. A run sends at most that window, so this is
+ * never below what a run of that length is charged; the price lookups answer
+ * it at the rate row's current price.
+ *
+ * The seconds added snap into the catalog window exactly as
+ * {@link tailExtendCreditId} reads them for every tail-recipe provider.
+ */
+export function seedanceExtendFullWindowCreditId(duration?: number | string, resolution?: unknown): string {
+  const addedSec = pricedOutputDurationSec(SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, duration)
+  return unitQuoteCreditId(seedanceExtendRateCreditId(resolution), (SEEDANCE_EXTEND_CONTEXT_MAX_SEC + addedSec) / SEEDANCE_EXTEND_RATE_SECONDS)
+}
+
+/**
+ * The credit identifier a client prices one tail-recipe Extend Video run at —
+ * the one builder every surface that prices it reads (the route's guard and
+ * reservation, the workflow reservation and estimate, the editor, and every
+ * client of this package), so none of them can name a different row.
  *
  * The seconds added snap into the provider's catalog `durations` (its catalog
  * `defaultDuration` when unset, through {@link pricedOutputDurationSec}); the
- * resolution is {@link tailExtendResolution}'s. Each provider has its own
- * rows, one per second of its window and resolution: `<provider>:<N>s:<res>`
- * (`seedance-2-5-extend` 4–30 s, `seedance-2-0-extend` 4–15 s, both at
- * 480p / 720p / 1080p; `kling-4-extend` 3–30 s at 720p / 1080p).
+ * resolution is {@link tailExtendResolution}'s.
+ * - Seedance 2.0 Extend (4–15 s) and Kling 4 Extend (3–30 s): their own rows,
+ *   one per second of the window and resolution, `<provider>:<N>s:<res>`
+ *   (480p / 720p / 1080p; Kling 4 720p / 1080p) — the price a run is charged.
+ * - Seedance 2.5 Extend (4–30 s) is charged per second it sends and adds, and
+ *   how much it sends depends on the source: this names the most a run of
+ *   that length costs, the whole 10-second window sent
+ *   ({@link seedanceExtendFullWindowCreditId},
+ *   `seedance-2-5-extend:<res>:per-2s:<units>u`). A client that knows the
+ *   source prices the run itself (`@nodaro/render-rules` `seedanceExtendPrice`).
  *
  * A retired id (`seedance-2-extend`) is not a {@link TailExtendProvider}:
- * pass a stored or sent provider through `canonicalVideoProvider` first.
+ * pass a stored or sent provider through `canonicalVideoProvider` first
+ * ({@link buildVideoCreditModelIdentifier} does).
  */
 export function tailExtendCreditId(
   provider: TailExtendProvider,
   duration?: number | string,
   resolution?: string,
 ): string {
+  if (isSeedanceExtendPricedBySecondsSent(provider)) return seedanceExtendFullWindowCreditId(duration, resolution)
   return `${provider}:${pricedOutputDurationSec(provider, duration)}s:${tailExtendResolution(provider, resolution)}`
+}
+
+/** PixVerse V6 Extend's qualities, ascending: its catalog `resolutions`. */
+type PixverseExtendQuality = "360p" | "540p" | "720p" | "1080p"
+
+/** The quality a PixVerse V6 Extend that names none, or one it cannot map, is priced and run at. */
+const PIXVERSE_EXTEND_DEFAULT_QUALITY: PixverseExtendQuality = "720p"
+
+/**
+ * The quality a PixVerse V6 Extend run is priced at, and so the one it must
+ * render at: a quality it offers (360p / 540p / 720p / 1080p) as asked; 480p —
+ * the lowest the other extends render, which PixVerse does not — at the
+ * nearest it offers, 540p; anything else, or none, at 720p. The route refuses
+ * 480p and every other value it does not offer; a saved node, a quick-strip
+ * switch or a workflow written elsewhere carrying one runs, and is priced, at
+ * this quality instead.
+ */
+export function pixverseExtendQuality(resolution?: unknown): PixverseExtendQuality {
+  if (resolution === "480p") return "540p"
+  return typeof resolution === "string" && MODEL_CATALOG[PIXVERSE_V6_EXTEND_PROVIDER]?.resolutions?.includes(resolution)
+    ? (resolution as PixverseExtendQuality)
+    : PIXVERSE_EXTEND_DEFAULT_QUALITY
+}
+
+/**
+ * The credit identifier one PixVerse V6 Extend run is priced at:
+ * `pixverse-v6-extend:<N>s:<quality>`, `:audio` appended with sound. The
+ * seconds added snap into its catalog `durations` (1–15, its default 5 when
+ * unset, {@link pricedOutputDurationSec}); the quality is
+ * {@link pixverseExtendQuality}'s; the sound is on unless `generateAudio` is
+ * `false` (the editor's sound switch shows it on until it is turned off).
+ */
+export function pixverseExtendCreditId(duration?: number | string, resolution?: unknown, generateAudio?: boolean): string {
+  const seconds = pricedOutputDurationSec(PIXVERSE_V6_EXTEND_PROVIDER, duration)
+  return `${PIXVERSE_V6_EXTEND_PROVIDER}:${seconds}s:${pixverseExtendQuality(resolution)}${generateAudio === false ? "" : ":audio"}`
+}
+
+/**
+ * The resolution a catalog Extend Video run ({@link CatalogExtendProvider}) is
+ * priced at, and so renders at: a tail recipe's {@link tailExtendResolution},
+ * PixVerse V6's {@link pixverseExtendQuality}.
+ */
+export function catalogExtendResolution(provider: CatalogExtendProvider, resolution?: unknown): string {
+  return isPixverseExtendProvider(provider) ? pixverseExtendQuality(resolution) : tailExtendResolution(provider, resolution)
+}
+
+/**
+ * The credit identifier one catalog Extend Video run is priced at — the one
+ * builder every surface that prices one reads (the route's guard and
+ * reservation, the workflow reservation and estimate, the editor): a tail
+ * recipe's {@link tailExtendCreditId} (no sound switch is priced there), and
+ * PixVerse V6's {@link pixverseExtendCreditId}.
+ */
+export function catalogExtendCreditId(
+  provider: CatalogExtendProvider,
+  duration?: number | string,
+  resolution?: string,
+  generateAudio?: boolean,
+): string {
+  return isPixverseExtendProvider(provider)
+    ? pixverseExtendCreditId(duration, resolution, generateAudio)
+    : tailExtendCreditId(provider, duration, resolution)
 }
 
 /** @deprecated Use {@link tailExtendResolution}, which also answers for Kling 4 Extend. */
@@ -1108,8 +1226,8 @@ export function speakerViewCreditId(quality: unknown, tier?: unknown): SpeakerVi
  * satisfies the B3 egress invariant.
  *
  * The version → key map is {@link SUNO_VERSION_CREDIT_KEYS}; a version with no
- * entry (V4 / V4_5 / V4_5ALL / V4_5PLUS) falls back to the operation key, and a
- * non-version-priced operation is returned unchanged.
+ * entry (V4) falls back to the operation key, and a non-version-priced
+ * operation is returned unchanged.
  */
 export function sunoCreditType(model: string | undefined, operation: string): string {
   if (!(SUNO_VERSION_PRICED_OPERATIONS as readonly string[]).includes(operation)) {
@@ -1132,4 +1250,9 @@ export const SUNO_VERSION_CREDIT_KEYS: Readonly<Record<string, string>> = {
   V6_MINI: "suno-v6_mini",
   V5_5: "suno-v5_5",
   V5: "suno-v5",
+  // Their own rows since 2026-11-12, at the price their runs were charged
+  // under the operation's row before.
+  V4_5PLUS: "suno-v4_5plus",
+  V4_5ALL: "suno-v4_5all",
+  V4_5: "suno-v4_5",
 }

@@ -171,3 +171,27 @@ describe("styleReferences — fill the free seats, after the caller's own", () =
     expect(() => assembleImageInput({ userPrompt: "", provider: "nano-banana-pro", throwOnEmpty: true })).toThrow(/No prompt/)
   })
 })
+
+describe("styleReferences — a seat another image of the run takes (`reservedImageSeats`)", () => {
+  it("fills one seat fewer when a base image takes one, so the run never goes past the model's limit", () => {
+    const cap = imageReferenceLimit("flux-3-klein")
+    const reserved = assembleImageInput({
+      userPrompt: "a cat",
+      provider: "flux-3-klein",
+      extraReferenceImageUrls: flat(2),
+      styleReferences: style(cap),
+      reservedImageSeats: 1,
+    })
+    expect(reserved.referenceImageUrls).toHaveLength(cap - 1)
+    expect(reserved.styleReferencesSent).toBe(cap - 3)
+  })
+
+  it("never removes the caller's own references, and 0 changes nothing", () => {
+    const cap = imageReferenceLimit("flux-3-klein")
+    const full = assembleImageInput({ userPrompt: "a cat", provider: "flux-3-klein", extraReferenceImageUrls: flat(cap), styleReferences: style(3), reservedImageSeats: 1 })
+    expect(full.referenceImageUrls).toEqual(flat(cap))
+    expect(full.styleReferencesSent).toBe(0)
+    const input = { userPrompt: "a cat", provider: "nano-banana-pro", extraReferenceImageUrls: flat(2), styleReferences: style(3) }
+    expect(assembleImageInput({ ...input, reservedImageSeats: 0 })).toEqual(assembleImageInput(input))
+  })
+})

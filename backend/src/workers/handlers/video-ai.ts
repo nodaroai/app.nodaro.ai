@@ -37,26 +37,41 @@ import {
   canonicalVideoProvider,
   FAL_LIP_SYNC_PROVIDERS,
   REPLICATE_LIP_SYNC_PROVIDERS,
+  retiredLipSyncProviderName,
   SEEDANCE_2_EXTEND_STITCH,
   SEEDANCE_LIP_SYNC_PROVIDERS,
+  resolveSeedanceTaskType,
   getDialogueCapabilities,
   dialogueProviderOf,
   isVeoProvider,
   isSeedanceExtendProvider,
+  isPixverseExtendProvider,
   getVideoAudioCapability,
   type VideoUpscaleProvider
 } from "@nodaro/shared/models"
-import { ltxExtendDurationSec, ltxRetakeDurationSec, tailExtendResolution } from "@nodaro/shared/credits"
+import { ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendQuality, tailExtendResolution } from "@nodaro/shared/credits"
 import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
 import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
-import { extendTailPicture, stitchExtension, type ExtendStitchResult } from "../../providers/video/extend-stitch.js"
-import { probeMatched } from "../../providers/video/matched-encode.js"
+import { extendTailPicture, extensionPictureSeconds, pictureSecondsOf, stitchExtension, type ExtendStitchResult } from "../../providers/video/extend-stitch.js"
+import { cutNativeExtension, nativeExtensionCutStartSec, pictureStartOffsetSec } from "../../providers/video/native-extension-cut.js"
+import { runPixverseExtend } from "../../providers/kie/pixverse-extend.js"
+import { probeMatched, probeMatchedOrThrow } from "../../providers/video/matched-encode.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
 import { extractFrame } from "../../providers/video/extract-frame.js"
 import { resolveSourceMatchedAspect } from "../../providers/video/source-matched-aspect.js"
-import { extendSourceTooShortMessage, isTailRecipeProvider, tailCutSec, tailRecipeSeconds, TAIL_RECIPES } from "../../lib/extend-recipe.js"
+import {
+  extendSourceTooShortMessage,
+  extensionTooShort,
+  extensionTooShortMessage,
+  isTailRecipeProvider,
+  tailCutSec,
+  tailRecipeSeconds,
+  TAIL_RECIPES,
+} from "../../lib/extend-recipe.js"
+import { seedanceExtendBaseCredits, seedanceExtendHeldSourceSec } from "../../lib/seedance-extend-credits.js"
+import { pixverseExtendSeconds } from "../../lib/extend-native.js"
 import { cutChainedMovTail, findChainedMovReference, isMovUrl } from "../../lib/seedance-extend-mov-chain.js"
 import { rawExtensionObjectId, silentVideoKey } from "../../lib/job-output-keys.js"
 import { discardFailedRunCopies } from "../../lib/discard-job-copies.js"
@@ -75,7 +90,7 @@ import {
   stripAudio,
 } from "../../providers/video/ffmpeg-utils.js"
 import { unitRateBaseCredits } from "../../lib/credit-base-cost.js"
-import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { isSeedanceExtendPricedBySecondsSent, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import type { DeclaredSeedanceTaskType, TopazVideoResolution } from "@nodaro/shared/models"
 import { isKling4RunnerProvider, isNodaroVideoUpscaleTier, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { runHouseModelTask } from "../../lib/house-models.js"
@@ -953,8 +968,12 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   // Pick the right ProviderKind per branch. Replicate lip-sync runs on
   // Replicate predictions; Seedance routes through KIE's i2v provider;
   // KIE-native lip-sync (kling-avatar*, infinitalk) uses its own poll budget.
+  // A retired model (RETIRED_LIP_SYNC_PROVIDERS) ran on Replicate: the route
+  // and the workflow build refuse it, so only a job queued before it was
+  // retired reaches here, and it runs as it was paid for.
+  const onReplicate = REPLICATE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never) || retiredLipSyncProviderName(resolvedProvider) !== undefined
   let lipSyncKind: ProviderKind
-  if (REPLICATE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
+  if (onReplicate) {
     lipSyncKind = "replicate-prediction"
   } else if (FAL_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
     // fal queue jobs reconcile via the "fal-request" kind (tags the row so the
@@ -967,7 +986,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   }
   const lipSyncOnTaskCreated = makeOnTaskCreated(ctx.jobId, lipSyncKind)
 
-  if (REPLICATE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
+  if (onReplicate) {
     // Replicate path
     const faceUrl = videoUrl || imageUrl
     if (!faceUrl) throw new Error("No face input (imageUrl or videoUrl) provided")
@@ -1478,14 +1497,16 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     return
   }
 
-  // ─── Tail-recipe smart-stitch extend (Seedance 2.5 / 2.0, Kling 4) ─────
+  // ─── Tail-recipe stitch extend (Seedance 2.5 / 2.0, Kling 4) ───────────
   // Extends ANY video by URL: generate the continuation on the provider's own
-  // model (`TAIL_RECIPES`, lib/extend-recipe.ts) through the i2v transport —
-  // the source's LAST FRAME as the first-frame anchor + its last seconds as
-  // the @video_1 reference, with the recipe's prompt (Seedance: the
-  // spike-validated "extend @video_1 as follows:" template; Kling 4: its own)
-  // — then smart-stitch source+extension into one seamless clip (PSNR
-  // boundary matching; the fixed trim counts are the no-match fallback).
+  // model (`TAIL_RECIPES`, lib/extend-recipe.ts) from the source's last
+  // seconds as the @video_1 reference, then stitch source+extension into one
+  // clip. Seedance 2.5 (the provider guide's recipe): the last 10 s, declared
+  // as an extension, no start image, a hard cut at the source's end. Seedance
+  // 2.0 (the 2026-07-12 spike's recipe) and Kling 4: the source's LAST FRAME
+  // as the first-frame anchor through the i2v transport, with the recipe's
+  // prompt, then a smart stitch (PSNR boundary matching; the fixed trims are
+  // the no-match fallback).
   if (isTailRecipeProvider(provider)) {
     const recipe = TAIL_RECIPES[provider]
     const { video: sourceUrl, prompt: userPrompt, duration, resolution, generateAudio, referenceImageUrls } = job.data as {
@@ -1498,6 +1519,9 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       /** Route-assembled user refs (anchor-budgeted) — seats @image_1…N. */
       referenceImageUrls?: string[]
     }
+    // Seedance 2.5: the source length its hold was priced on, when the route
+    // or the workflow run measured it (`seedanceExtendHeldSourceSec`).
+    const heldSourceSec = isSeedanceExtendPricedBySecondsSent(provider) ? seedanceExtendHeldSourceSec(job.data as Record<string, unknown>) : undefined
     console.log(`[worker] extend-video ${ctx.jobId} (provider: ${provider})`)
 
     // The job's provider picks the model the continuation is generated on;
@@ -1520,24 +1544,27 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
 
     await setJobProgress(job, ctx.jobId, 5)
 
-    // Spike-validated generation inputs (2026-07-12): the @video_1 reference
-    // is the source's last moments only (`recipe.tailSec` — a short tail keeps
-    // the model continuing the boundary motion instead of re-staging the whole
-    // clip; a source with less picture sends all of it, `tailCutSec`, down to
-    // the model's shortest reference, `recipe.minSourceSec`), measured from
-    // the PICTURE's end (the sound may run past the last frame) — and the
-    // source's LAST FRAME anchors the extension as its first frame (i2v
+    // The @video_1 reference is the source's last `recipe.tailSec` seconds (a
+    // source with less picture sends all of it, `tailCutSec`, down to the
+    // model's shortest reference, `recipe.minSourceSec`), measured from the
+    // PICTURE's end (the sound may run past the last frame). Seedance 2.0
+    // (spike-validated 2026-07-12; Kling 4 alike, with a 3 s tail): a 2 s
+    // tail, and the source's LAST FRAME anchors the extension as its first frame (i2v
     // transport), so the continuation starts pixel-adjacent to the boundary
-    // and the smart-stitch reliably finds+drops the duplicate.
+    // and the smart-stitch reliably finds+drops the duplicate. Seedance 2.5
+    // (the provider guide's recipe, decided 2026-11-12): a 10 s tail declared
+    // as an extension, no start image — the model continues the clip it
+    // watched with new footage only.
     //
     // On 2.5, a source that is a previous 2.5 extension of ours, its raw mov
     // kept: the reference is that mov's last seconds instead
     // (`cutChainedMovTail`), in its own container, pixel format and PCM — the
     // tail cut here is re-encoded to 4:2:0, which throws away exactly the
     // colour fidelity `output_format: "mov"` was requested for. Nothing found
-    // (a foreign source, a first extension, an mp4 chain) or a failed cut (the
-    // source's clip already expired, say) falls back to the tail, the
-    // transport that works today.
+    // (a foreign source, a first extension, an mp4 chain), a mov shorter than
+    // the seconds sent (it cannot stand in for the source's last seconds) or a
+    // failed cut (the source's clip already expired, say) falls back to the
+    // tail, the transport that works today.
     //
     // The source's local copy is the stitch's source too, so the prep folder
     // stays until the stitch has read it, and is removed on every way out
@@ -1556,8 +1583,17 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // KIE will 400-reject after ~90s of queueing — fail fast with a clear
       // message.
       const srcProbe = await probeVideoSource(srcLocal)
-      const pictureSec = srcProbe.videoDurationSeconds ?? srcProbe.durationSeconds
+      // The source's length as this run reads it: its picture as downloaded —
+      // on Seedance 2.5, at most the length its hold was priced on, so a link
+      // that answered the hold's probe with a shorter file than it serves now
+      // is sent (and charged) only what was held. A held length is measured
+      // the same way (the picture's), so on a stable link the two agree.
+      const measuredSec = srcProbe.videoDurationSeconds ?? srcProbe.durationSeconds
+      const pictureSec = heldSourceSec === undefined ? measuredSec : Math.min(measuredSec, heldSourceSec)
       if (pictureSec < recipe.minSourceSec) throw new Error(extendSourceTooShortMessage(provider, pictureSec))
+      // The seconds of the source cut and sent: the recipe's tail, or all of a
+      // shorter picture (a Seedance 2.5 run is charged for them, settled below).
+      const sentSec = tailCutSec(provider, pictureSec)
       // An HDR or full-range source's tail, and so the last frame taken from
       // it below, goes through the stitch's own conversion
       // (`extendTailPicture`): the result shows the source in SDR, limited
@@ -1565,21 +1601,26 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // other source's tail is cut as it always was, and so is a chained MOV
       // reference (Seedance's own SDR clip).
       const tailPicture = extendTailPicture(await probeMatched(srcLocal))
-      const tailPath = await extractTailToFile(srcLocal, tailCutSec(provider, pictureSec), { measureFrom: "picture", ...tailPicture })
+      const tailPath = await extractTailToFile(srcLocal, sentSec, { measureFrom: "picture", ...tailPicture })
       // Generation inputs only, never the deliverable: the tail, the frame and
       // a chained cut go to the job's scratch folder (`lib/job-scratch.ts`),
       // emptied when the job ends, and count against no one's quota.
       const tailUrl = await uploadJobScratchFile(tailPath, "extend-tail", "mp4", "video/mp4", ctx.jobId)
-      // Last frame of the tail IS the source's last frame; the tail is
-      // already on R2, so the frame-exact extractor can read it directly.
-      const frame = await extractFrame({ videoUrl: tailUrl, mode: "last" })
-      const lastFrameUrl = await uploadJobScratchFile(frame.imagePath, "extend-last-frame", "png", "image/png", ctx.jobId)
-      await cleanupWorkDir(dirname(frame.imagePath))
+      // The opening image of an anchored recipe (Seedance 2.0, Kling 4): the
+      // last frame of the tail IS the source's last frame; the tail is already
+      // on R2, so the frame-exact extractor can read it directly. Seedance 2.5
+      // sends none.
+      let lastFrameUrl: string | undefined
+      if (recipe.startImage) {
+        const frame = await extractFrame({ videoUrl: tailUrl, mode: "last" })
+        lastFrameUrl = await uploadJobScratchFile(frame.imagePath, "extend-last-frame", "png", "image/png", ctx.jobId)
+        await cleanupWorkDir(dirname(frame.imagePath))
+      }
       let chainTailUrl: string | undefined
       const chainedMovUrl = genModel === "seedance-2-5" ? await findChainedMovReference(sourceUrl, ctx.jobUserId) : undefined
       if (chainedMovUrl) {
         try {
-          const cutPath = await cutChainedMovTail(chainedMovUrl, recipe.tailSec, prepDir)
+          const cutPath = await cutChainedMovTail(chainedMovUrl, sentSec, prepDir, { coverSec: sentSec })
           chainTailUrl = await uploadJobScratchFile(cutPath, "extend-chain-tail", "mov", "video/quicktime", ctx.jobId)
         } catch (err) {
           console.warn(`[worker] Job ${ctx.jobId}: chained mov cut failed, extending from the tail:`, err)
@@ -1587,11 +1628,15 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       }
       await setJobProgress(job, ctx.jobId, 10)
 
-      const kiePrompt = recipe.prompt(userPrompt)
+      const kiePrompt = recipe.prompt(userPrompt, extSeconds)
       const referenceVideoUrl = chainTailUrl ?? tailUrl
       // `mp4` is KIE's default and is sent as no field at all, so the mp4
       // payload stays byte-identical to today.
       const outputFormat = genModel === "seedance-2-5" ? seedance25OutputFormat() : "mp4"
+      // The resolution the run was priced at (`tailExtendResolution`, the
+      // credit id's own reading): one the model offers, else 720p — a job
+      // naming any other can never render above the row it reserved.
+      const genResolution = tailExtendResolution(provider, resolution)
 
       const seedanceRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 75 })
       let gen
@@ -1601,23 +1646,46 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         // reconcile cron finalize this extend-video job with the unstitched
         // extension (silent wrong output). If the worker dies mid-wait,
         // BullMQ's stalled-job recovery re-runs the whole handler instead.
-        gen = await imageToVideo(lastFrameUrl, genModel, kiePrompt, extSeconds, undefined, {
-          // The resolution the run was priced at (`tailExtendResolution`,
-          // the credit id's own reading): one the model offers, else 720p — a
-          // job naming any other can never render above the row it reserved.
-          resolution: tailExtendResolution(provider, resolution),
-          // Seedance's own levers: the sound switch and the user's references
-          // (route-assembled; the shared seedance resolver seats them as
-          // @image_1…N and appends the last-frame anchor after them, so their
-          // prompt ordinals hold). Kling 4.0's sound is always on and its
-          // extend takes no references of the user's (the route refuses them).
-          ...(isSeedanceExtendProvider(provider)
-            ? { generateAudio: generateAudio ?? true, ...(referenceImageUrls?.length ? { referenceImageUrls } : {}) }
-            : {}),
-          referenceVideoUrls: [referenceVideoUrl],
-          aspectRatio,
-          ...(outputFormat === "mov" ? { outputFormat } : {}),
-        })
+        if (lastFrameUrl !== undefined) {
+          gen = await imageToVideo(lastFrameUrl, genModel, kiePrompt, extSeconds, undefined, {
+            resolution: genResolution,
+            // Seedance's own levers: the sound switch and the user's references
+            // (route-assembled; the shared seedance resolver seats them as
+            // @image_1…N and appends the last-frame anchor after them, so their
+            // prompt ordinals hold). Kling 4.0's sound is always on and its
+            // extend takes no references of the user's (the route refuses them).
+            ...(isSeedanceExtendProvider(provider)
+              ? { generateAudio: generateAudio ?? true, ...(referenceImageUrls?.length ? { referenceImageUrls } : {}) }
+              : {}),
+            referenceVideoUrls: [referenceVideoUrl],
+            aspectRatio,
+            ...(outputFormat === "mov" ? { outputFormat } : {}),
+          })
+        } else {
+          // No start image: the reference task type the recipe declares, through
+          // the platform's one resolver — `extend` keeps the set length and
+          // runs at "adaptive" (the source's own shape), and is sent only when
+          // the request has the reference video it needs.
+          const task = resolveSeedanceTaskType({
+            provider: genModel,
+            requested: recipe.referenceTaskType,
+            referenceImageCount: referenceImageUrls?.length ?? 0,
+            referenceAudioCount: 0,
+            referenceVideoSec: [sentSec],
+            aspectRatio,
+            duration: extSeconds,
+          })
+          gen = await textToVideo(kiePrompt, genModel, task.duration, task.aspectRatio, {
+            resolution: genResolution,
+            generateAudio: generateAudio ?? true,
+            // User references (route-assembled) ride as @image_1…N.
+            ...(referenceImageUrls?.length ? { referenceImageUrls } : {}),
+            referenceVideoUrls: [referenceVideoUrl],
+            aspectRatio: task.aspectRatio,
+            ...(task.taskType ? { referenceTaskType: task.taskType } : {}),
+            ...(outputFormat === "mov" ? { outputFormat } : {}),
+          })
+        }
       } finally {
         seedanceRamp.stop()
       }
@@ -1643,34 +1711,43 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         }
       }
 
-      // Smart-stitch (`stitchExtension`): the extension was generated FROM
-      // the source's tail, so this is exactly the continuation case the smart
-      // cut solves — PSNR-match the source's last frames against the
-      // extension's first frames and cut at the closest pair (duplicate plays
-      // once, motion continues). The fixed SEEDANCE_2_EXTEND_STITCH trims
-      // remain the FALLBACK for boundaries where no genuine match is found
-      // (or the search fails). Hard cut + a sound crossfade at the join; the
-      // result has the source's size, frame rate and picture quality. It
-      // reads the source's prep copy and the extension, downloaded into the
-      // stitch's own folder, removed once the result is uploaded, on success
-      // and failure. A stitch failure fails the job (full refund) — never
-      // deliver the bare extension (or the bare source) as the result.
+      // The stitch (`stitchExtension`, the recipe's boundary options). Seedance
+      // 2.0's extension was generated FROM the source's last frame, so this is
+      // exactly the continuation case the smart cut solves — PSNR-match the
+      // source's last frames against the extension's first frames and cut at
+      // the closest pair (duplicate plays once, motion continues); the fixed
+      // SEEDANCE_2_EXTEND_STITCH trims remain the FALLBACK for boundaries where
+      // no genuine match is found (or the search fails). Seedance 2.5's
+      // declared extension is new footage only: no search, nothing trimmed.
+      // Hard cut + a sound crossfade at the join; the result has the source's
+      // size, frame rate and picture quality. It reads the source's prep copy
+      // and the extension, downloaded into the stitch's own folder, removed
+      // once the result is uploaded, on success and failure. A stitch failure
+      // fails the job (full refund) — never deliver the bare extension (or the
+      // bare source) as the result.
       const stitchDir = await createWorkDir("extend-stitch")
       let stitchedR2Url: string
       let stitchBoundary: ExtendStitchResult["boundary"]
       try {
         const extensionPath = join(stitchDir, isMovUrl(gen.url) ? "extension.mov" : "extension.mp4")
         await downloadFile(gen.url, extensionPath)
+        // An extension with less than half the seconds the run is billed for
+        // (`extensionTooShort`), no picture included, fails the run before
+        // anything is encoded: final on this attempt and refunded in full, so
+        // neither the source alone nor the source with the short extension is
+        // delivered, and no retry generates (and pays for) another
+        // (deterministic-job-error.ts). Only a file the probe READ is judged
+        // so: a probe that failed throws a plain error, which is retried
+        // (`extensionPictureSeconds`).
+        const extensionSec = await extensionPictureSeconds(extensionPath)
+        if (extensionTooShort(extensionSec, extSeconds)) {
+          throw new DeterministicJobError(extensionTooShortMessage(extensionSec, extSeconds))
+        }
         const stitched = await stitchExtension({
           sourcePath: srcLocal,
           extensionPath,
           workDir: stitchDir,
-          smartCut: { framesFromPrev: 8, framesFromNext: 8 },
-          fallbackTrims: {
-            trimEndFrames: SEEDANCE_2_EXTEND_STITCH.trimTailFrames,
-            trimStartFrames: SEEDANCE_2_EXTEND_STITCH.trimHeadFrames,
-          },
-          audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+          ...recipe.stitch,
         })
         stitchBoundary = stitched.boundary
         await setJobProgress(job, ctx.jobId, 85)
@@ -1687,9 +1764,24 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       await setJobProgress(job, ctx.jobId, 100)
 
       const stitchedThumbUrl = await generateAndUploadThumbnail(stitchedR2Url, ctx.jobId, ctx.jobUserId)
+      // Seedance 2.5 is charged per second sent and added, on the source
+      // measured here: a hold made without the source's length (the route's
+      // probe failed, so it held the whole 10 s window) settles down to it.
+      // Never above the hold. Seedance 2.0 commits its row. A price that cannot
+      // be read here (the price table unreachable) commits the hold as made,
+      // rather than failing a run whose deliverable is already stored.
+      let meteredBaseCredits: number | undefined
+      if (isSeedanceExtendPricedBySecondsSent(provider)) {
+        try {
+          meteredBaseCredits = await seedanceExtendBaseCredits({ duration: extSeconds, resolution: genResolution, sourcePictureSec: pictureSec })
+        } catch (err) {
+          console.warn(`[worker] Job ${ctx.jobId}: Seedance 2.5 extend price not read, committing the hold as made:`, err)
+        }
+      }
       const { ok: seedanceOk } = await finalizeJobWithMedia({
         jobId: ctx.jobId,
         jobType: "extend-video",
+        ...(meteredBaseCredits !== undefined ? { meteredBaseCredits } : {}),
         result: {
           url: stitchedR2Url,
           cost: gen.cost ?? null,
@@ -1732,6 +1824,139 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     } catch (err) {
       await discardFailedRunCopies(ctx.jobId, ctx.jobUserId, [rawCopyUrl])
       throw err
+    } finally {
+      await cleanupWorkDir(prepDir)
+    }
+  }
+
+  // ─── Native extend: PixVerse V6 ───────────────────────────────────────
+  // Extends ANY video by URL on PixVerse's own extend, which takes the whole
+  // source and returns the whole clip: the source, re-rendered at PixVerse's
+  // quality (and frame rate), then the new seconds. The deliverable keeps the
+  // user's ORIGINAL source: only PixVerse's new seconds are cut from its clip
+  // (by time, at the source's picture length — `cutNativeExtension`) and
+  // joined to it by the extend stitch, with no smart cut and no trims (the
+  // new seconds follow the source's last frame; no duplicate to drop).
+  if (isPixverseExtendProvider(provider)) {
+    const { video: sourceUrl, prompt: userPrompt, duration, resolution, generateAudio } = job.data as {
+      jobId: string
+      video: string
+      prompt: string
+      duration?: number
+      resolution?: string
+      generateAudio?: boolean
+    }
+    // The seconds, quality and sound the run is priced at (the route and the
+    // workflow run queue these readings; repeated here so a hand-queued job
+    // can never render above the row it reserved).
+    const extSeconds = pixverseExtendSeconds(duration)
+    const quality = pixverseExtendQuality(resolution)
+    const sound = generateAudio !== false
+    console.log(`[worker] extend-video ${ctx.jobId} (provider: ${provider}, ${extSeconds}s ${quality}${sound ? " with sound" : ""})`)
+    await setJobProgress(job, ctx.jobId, 5)
+
+    // The source's local copy is the stitch's source, and its picture length
+    // is where PixVerse's new seconds begin; the folder is removed on every
+    // way out (the `finally` below).
+    const prepDir = await createWorkDir("extend-prep")
+    try {
+      const srcLocal = join(prepDir, "source.mp4")
+      await downloadFile(sourceUrl, srcLocal)
+      // Measured as the stitch measures a picture (`pictureSecondsOf`). A
+      // probe that FAILED (timed out, could not start) says nothing about the
+      // source: its plain error is retried. One that read the file and found
+      // no picture fails the run now, final and refunded in full: the same
+      // file fails the same way on every attempt.
+      const sourceSec = pictureSecondsOf(await probeMatchedOrThrow(srcLocal))
+      if (!sourceSec) throw new DeterministicJobError("Extend: the source video has no picture to extend")
+      await setJobProgress(job, ctx.jobId, 10)
+
+      const pixverseRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 75 })
+      let gen
+      try {
+        // NO onTaskCreated on purpose (as the tail recipes): the KIE task's
+        // result is PixVerse's whole clip, NOT the deliverable. Persisting it
+        // would let the reconcile cron finalize this job with that clip. If the
+        // worker dies mid-wait, BullMQ's stalled-job recovery re-runs the handler.
+        gen = await runPixverseExtend({ videoUrl: sourceUrl, prompt: userPrompt, durationSec: extSeconds, quality, sound })
+      } finally {
+        pixverseRamp.stop()
+      }
+
+      const stitchDir = await createWorkDir("extend-stitch")
+      let stitchedR2Url: string
+      let stitchBoundary: ExtendStitchResult["boundary"]
+      try {
+        const pixversePath = join(stitchDir, "pixverse.mp4")
+        await downloadFile(gen.url, pixversePath)
+        // PixVerse's new seconds: its clip's picture less the source's. Less
+        // than half the seconds the run is billed for (`extensionTooShort`),
+        // none at all included, fails the run before anything is cut or
+        // encoded: final on this attempt and refunded in full, so neither the
+        // source alone nor the source with the short extension is delivered,
+        // and no retry generates (and pays for) another. A probe that FAILED
+        // throws a plain error, which is retried (`extensionPictureSeconds`).
+        const pixverseSec = await extensionPictureSeconds(pixversePath)
+        const newSec = pixverseSec === undefined ? undefined : pixverseSec - sourceSec
+        // Where the new seconds start on PixVerse's timeline, and whether its
+        // clip has sound — logged with the lengths before anything is refused
+        // or cut, so a run's log shows where PixVerse's new part began.
+        const pixverseProbe = await probeMatched(pixversePath)
+        const cutStartSec = nativeExtensionCutStartSec(pixverseProbe, sourceSec)
+        const secs = (n: number | undefined): string => (n === undefined ? "none" : `${n.toFixed(3)}s`)
+        console.log(
+          `[worker] extend-video ${ctx.jobId} PixVerse cut: source ${secs(sourceSec)}, PixVerse clip ${secs(pixverseSec)} ` +
+            `(sound: ${pixverseProbe.audioCodec ? "yes" : "no"}), new ${secs(newSec)}, cut from ${secs(cutStartSec)} ` +
+            `(picture offset ${secs(pictureStartOffsetSec(pixverseProbe))}), billed ${extSeconds}s`,
+        )
+        if (extensionTooShort(newSec, extSeconds)) {
+          throw new DeterministicJobError(extensionTooShortMessage(newSec, extSeconds))
+        }
+        // With the sound off the cut keeps no sound, whatever PixVerse returned,
+        // and the stitch pads the new seconds with silence.
+        const newPartPath = await cutNativeExtension(pixversePath, cutStartSec, stitchDir, { sound })
+        // The stitch keeps the source's size (rounded down to even), frame
+        // rate and picture quality, and covers and crops the new part to the
+        // source's frame; a hard cut and a short sound blend at the join.
+        const stitched = await stitchExtension({
+          sourcePath: srcLocal,
+          extensionPath: newPartPath,
+          workDir: stitchDir,
+          fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
+          audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+        })
+        stitchBoundary = stitched.boundary
+        await setJobProgress(job, ctx.jobId, 85)
+        stitchedR2Url = await watermarkLocalVideoAndUpload(stitched.outputPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+      } finally {
+        await cleanupWorkDir(stitchDir)
+      }
+      await setJobProgress(job, ctx.jobId, 100)
+
+      const stitchedThumbUrl = await generateAndUploadThumbnail(stitchedR2Url, ctx.jobId, ctx.jobUserId)
+      const { ok: pixverseOk } = await finalizeJobWithMedia({
+        jobId: ctx.jobId,
+        jobType: "extend-video",
+        result: { url: stitchedR2Url, cost: null, providerUsed: provider },
+        mediaUrl: stitchedR2Url,
+        extraOutputData: {
+          thumbnailUrl: stitchedThumbUrl,
+          // PixVerse's whole clip (KIE's own URL) — provenance/debug only.
+          rawExtensionUrl: gen.url,
+          // Where the stitch cut, in combineVideos' shape: no search ran.
+          smartCuts: [{
+            boundary: 0,
+            prevClipEndTrimFrames: stitchBoundary.trimEndFrames,
+            nextClipStartTrimFrames: stitchBoundary.trimStartFrames,
+            psnrDb: stitchBoundary.psnrDb,
+            matched: stitchBoundary.matched,
+            searchedPrevFrames: stitchBoundary.searchedPrevFrames,
+            searchedNextFrames: stitchBoundary.searchedNextFrames,
+          }],
+        },
+      })
+      if (pixverseOk) console.log(`[worker] Job ${ctx.jobId} completed: ${stitchedR2Url} (provider: ${provider})`)
+      return
     } finally {
       await cleanupWorkDir(prepDir)
     }

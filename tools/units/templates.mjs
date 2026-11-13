@@ -273,22 +273,30 @@ export function useCaseRowsSource(units, legacyTypes = []) {
  * outputs (handles.outputs[].list) as the run estimate counts them
  * (node-fan-out.ts): the field holding the list a run made, and — when
  * declared (listMax) — the field holding the most items a run makes, with its
- * default, counted before a first run.
+ * default, counted before a first run — and the unit's media take pip (`take`,
+ * its first output when that is not a list), whose Each wire lists the batch of
+ * a run once per upstream item.
  */
 export function listOutputsSource(units, legacyTypes = []) {
-  const rows = inPositionOrder(units, legacyTypes).flatMap((u) => (Array.isArray(u.manifest.handles?.outputs) ? u.manifest.handles.outputs : [])
-    .filter((h) => h?.list === true)
-    .map((h) => {
-      const max = typeof h.listMax === "string" ? `, max: { field: ${JSON.stringify(h.listMax)}, default: ${Number(u.manifest.defaultData?.[h.listMax])} }` : ""
-      return `  { type: ${JSON.stringify(u.type)}, pip: ${JSON.stringify(h.id)}, from: ${JSON.stringify(h.from)}${max} }, ${tag(u.type)}`
-    }))
+  const rows = inPositionOrder(units, legacyTypes).flatMap((u) => {
+    const outputs = Array.isArray(u.manifest.handles?.outputs) ? u.manifest.handles.outputs : []
+    const first = outputs[0]
+    const take = first && first.list !== true && typeof first.id === "string" ? `, take: ${JSON.stringify(first.id)}` : ""
+    return outputs
+      .filter((h) => h?.list === true)
+      .map((h) => {
+        const max = typeof h.listMax === "string" ? `, max: { field: ${JSON.stringify(h.listMax)}, default: ${Number(u.manifest.defaultData?.[h.listMax])} }` : ""
+        return `  { type: ${JSON.stringify(u.type)}, pip: ${JSON.stringify(h.id)}, from: ${JSON.stringify(h.from)}${max}${take} }, ${tag(u.type)}`
+      })
+  })
   return [
     GENERATED_HEADER,
     "// The node units' list outputs (handles.outputs[].list), in position order, as the run estimate",
-    "// counts an Each wire from one (node-fan-out.ts): the list a run made (`from`), and the most items",
-    "// a run makes (`max`, listMax), counted before a first run. render-rules is private (never published).",
+    "// counts an Each wire from one (node-fan-out.ts): the list a run made (`from`), the most items a run",
+    "// makes (`max`, listMax), counted before a first run, and the unit's media take pip (`take`), whose",
+    "// Each wire lists a run once per upstream item's batch. render-rules is private (never published).",
     "",
-    "export const UNIT_LIST_OUTPUTS: ReadonlyArray<{ readonly type: string; readonly pip: string; readonly from: string; readonly max?: { readonly field: string; readonly default: number } }> = [",
+    "export const UNIT_LIST_OUTPUTS: ReadonlyArray<{ readonly type: string; readonly pip: string; readonly from: string; readonly max?: { readonly field: string; readonly default: number }; readonly take?: string }> = [",
     ...rows,
     "]",
     "",

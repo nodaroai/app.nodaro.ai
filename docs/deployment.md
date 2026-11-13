@@ -836,15 +836,22 @@ optional; each array empty = "keep the default"):
   A model allow list withholds the models `GET /v1/models` lists (and the
   LLMs). A model it does not list is not withheld by omission: withhold its
   node with `nodes.allow` / `nodes.deny`. FLUX Fill Pro (`flux-fill`, a
-  Modify Image and Image to Image model) and Wan Animate Move and Replace
-  (`wan-animate-move`, `wan-animate-replace`, Motion Transfer models) are
+  Modify Image and Image to Image model), Wan Animate Move and Replace
+  (`wan-animate-move`, `wan-animate-replace`, Motion Transfer models),
+  LatentSync, HeyGen Lipsync Precision and Lipsync 2 Pro (`latentsync`,
+  `heygen-lipsync-precision`, `lipsync-2-pro`, Lip Sync models) and Suno
+  v4.5 Plus, v4.5 All and v4.5 (`suno-v4_5plus`, `suno-v4_5all`,
+  `suno-v4_5`, the Suno versions `V4_5PLUS`, `V4_5ALL` and `V4_5`) are
   listed, so an allow list that leaves one out refuses it on its route
-  (`/v1/image-to-image`, `/v1/motion-transfer`) and in workflow runs
-  (`403 model_not_available`), while the node's other models keep running.
+  (`/v1/image-to-image`, `/v1/motion-transfer`, `/v1/lip-sync`, the
+  `/v1/suno/*` routes) and in workflow runs (`403 model_not_available`),
+  while the node's other models keep running.
   A models override saved in Admin → Availability before a model was listed
   does not tick a model listed later, so it stays off there until an admin
   ticks it. The models listed later so far: `flux-fill`, `wan-animate-move`,
-  `wan-animate-replace` and `flux-lora-character`.
+  `wan-animate-replace`, `flux-lora-character`, `latentsync`,
+  `heygen-lipsync-precision`, `lipsync-2-pro`, `suno-v4_5plus`,
+  `suno-v4_5all` and `suno-v4_5`.
 
   A trained character's model (`flux-lora-character`, FLUX.1 [dev] with the
   character's own LoRA) is a model a restriction can name, though no menu,

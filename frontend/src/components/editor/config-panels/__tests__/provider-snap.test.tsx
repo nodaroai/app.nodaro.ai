@@ -1171,6 +1171,23 @@ describe("LipSyncConfig — provider-snap useEffect", () => {
     )
   })
 
+  // A saved node on a model retired from Lip Sync (decided 2026-11-12): the
+  // panel says so and offers the models that run; nothing is rewritten under
+  // it — not its model, not its other settings.
+  it.each(["wav2lip", "video-retalking", "sadtalker"])("a saved node on retired %s: shows it, offers the running models, rewrites nothing", (provider) => {
+    const onUpdate = vi.fn()
+    const data = baseLipSyncData({ provider, resolution: "1080p", pads: "0 10 0 0", enhancer: "gfpgan" })
+    const { container, getByRole } = render(<LipSyncConfig {...commonProps(onUpdate, data)} />)
+    expect(onUpdate).not.toHaveBeenCalled()
+    expect(getByRole("alert").textContent).toMatch(/is no longer available for Lip Sync\. Pick another Lip Sync model\./)
+    const offered = [...container.querySelectorAll("option")].map((o) => o.getAttribute("value"))
+    expect(offered).toContain("latentsync")
+    expect(offered).toContain("kling-avatar")
+    for (const retired of ["wav2lip", "video-retalking", "sadtalker"]) expect(offered).not.toContain(retired)
+    // The menu shows no running model as chosen.
+    expect(container.querySelector("[data-value]")?.getAttribute("data-value")).toBe("")
+  })
+
   it("snaps stale 1080p to 720p for seedance-2-fast (no fast 1080p SKU)", () => {
     // seedance-2-fast is 480p/720p only — a stale 1080p must snap to the default 720p.
     const onUpdate = vi.fn()

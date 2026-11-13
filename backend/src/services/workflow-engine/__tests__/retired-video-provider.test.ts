@@ -11,7 +11,6 @@
 import { describe, it, expect, afterEach } from "vitest"
 import Fastify from "fastify"
 import { RETIRED_VIDEO_PROVIDERS } from "@nodaro/shared/models"
-import { tailExtendCreditId } from "@nodaro/shared/credits"
 import { buildPayload } from "../payload-builder.js"
 import { migrateLegacyNodeType, withRunningVideoProvider } from "../normalize-node-types.js"
 import { getNodeModelIdentifier } from "../../../ee/billing/credits.js"
@@ -87,7 +86,8 @@ describe("a stored node on the retired Seedance Extend Video provider", () => {
     const run = built(stored, SOURCE)
     expect(run).toEqual(built(extendNode("seedance-2-5-extend"), SOURCE))
     expect(run.payload.provider).toBe("seedance-2-5-extend")
-    expect(run.modelIdentifier).toBe(tailExtendCreditId("seedance-2-5-extend", 12, "1080p"))
+    // Seedance 2.5 is charged per second sent and added: its resolution's two-second row.
+    expect(run.modelIdentifier).toBe("seedance-2-5-extend:1080p:per-2s")
 
     // Estimate: the quote is the reservation.
     expect(getNodeModelIdentifier(stored)).toBe(run.modelIdentifier)

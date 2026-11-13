@@ -186,16 +186,26 @@ export function parseMatchedProbe(json: string): MatchedProbe {
   }
 }
 
+/**
+ * Probe the local `file`, throwing ffprobe's own failure as it is (a timeout
+ * keeps its `timedOut` flag): for a caller that must tell a probe that failed
+ * from a file with no picture (`extensionPictureSeconds`). `probeMatched`
+ * reads the same.
+ */
+export async function probeMatchedOrThrow(file: string): Promise<MatchedProbe> {
+  return parseMatchedProbe(await runFfprobe([
+    "-v", "error",
+    "-show_entries",
+    "stream=codec_type,codec_name,width,height,pix_fmt,bit_rate,r_frame_rate,avg_frame_rate,duration,start_time,color_space,color_primaries,color_transfer,color_range:format=bit_rate,duration:format_tags=major_brand",
+    "-of", "json",
+    file,
+  ]))
+}
+
 /** Probe the local `file`. Never throws: an unreadable probe is an empty one (constant quality). */
 export async function probeMatched(file: string): Promise<MatchedProbe> {
   try {
-    return parseMatchedProbe(await runFfprobe([
-      "-v", "error",
-      "-show_entries",
-      "stream=codec_type,codec_name,width,height,pix_fmt,bit_rate,r_frame_rate,avg_frame_rate,duration,start_time,color_space,color_primaries,color_transfer,color_range:format=bit_rate,duration:format_tags=major_brand",
-      "-of", "json",
-      file,
-    ]))
+    return await probeMatchedOrThrow(file)
   } catch {
     return {}
   }

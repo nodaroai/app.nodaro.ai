@@ -2,15 +2,16 @@
 import type { NodeDocsSection } from "./node-docs"
 
 /** The date the docs site produced the snapshot. */
-export const NODE_DOCS_SNAPSHOT_DATE = "2026-11-09"
+export const NODE_DOCS_SNAPSHOT_DATE = "2026-11-13"
 
 /** The sections each node's page has, in page order. */
 export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSection[]>> = {
   "upload-image": ["when-to-use", "quick-start", "outputs", "settings", "tips", "faq"],
   "generate-image": ["when-to-use", "quick-start", "inputs", "settings", "models", "tips", "troubleshooting", "api", "faq"],
   "modify-image": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "faq"],
-  "upscale-image": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "faq"],
+  "upscale-image": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "troubleshooting", "tips", "api", "faq"],
   "remove-background": ["when-to-use", "quick-start", "inputs", "models", "tips", "faq"],
+  "split-into-layers": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
   "generate-mask": ["when-to-use", "quick-start", "inputs", "settings", "credits", "troubleshooting", "tips", "faq"],
   "paint-mask": ["when-to-use", "quick-start", "inputs", "settings", "faq"],
   "image-collage": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "api", "faq"],
@@ -55,6 +56,7 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "mask-composite": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "limits", "credits", "tips", "troubleshooting", "api", "faq"],
   "video-composer": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "faq"],
   "split-media": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "faq"],
+  "shot-cuts": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
   "manual-edit": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "faq"],
   "edit-plan": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "api", "faq"],
   "camera-switch": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
@@ -62,6 +64,10 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "speaker-view": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
   "reframe": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
   "tighten-episode": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
+  "episode-chapters": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
+  "episode-trailer": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
+  "clip-pack": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
+  "speaker-layout": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
   "video-sfx": ["when-to-use", "quick-start", "inputs", "settings", "credits", "limits", "tips", "faq"],
   "merge-video-audio": ["when-to-use", "quick-start", "inputs", "settings", "troubleshooting", "tips", "faq"],
   "extract-audio": ["when-to-use", "quick-start", "inputs", "settings", "troubleshooting", "tips", "faq"],
@@ -117,6 +123,7 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "suno-separate": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "api", "faq"],
   "silence-detect": ["when-to-use", "quick-start", "inputs", "settings", "credits", "tips", "api", "faq"],
   "audio-sync": ["when-to-use", "quick-start", "inputs", "settings", "credits", "limits", "tips", "api", "faq"],
+  "speaker-map": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
   "trim-audio": ["when-to-use", "quick-start", "inputs", "settings", "tips", "api", "faq"],
   "combine-audio": ["when-to-use", "quick-start", "inputs", "settings", "api", "faq"],
   "mix-audio": ["when-to-use", "quick-start", "inputs", "settings", "tips", "api", "faq"],

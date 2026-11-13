@@ -59,6 +59,25 @@ describe("every lane that lands a take lands its identity", () => {
     }
   })
 
+  it("every lane that lands a node unit's side outputs on the node also ends an earlier batch beside them (unitBatchClearFields)", () => {
+    // A single run ends a run once per upstream item's batch: the lane that lands
+    // its side fields on the node clears the batch fields there (never on a take).
+    for (const where of ["components/editor/workflow-editor/run-handlers.ts", "hooks/use-workflow-persistence.ts", "lib/reconcile-completed-jobs.ts"]) {
+      const text = code(join(SRC, where))
+      const sides = count(text, /\bunitSide(?:Run|Job)Fields\(/g)
+      expect(sides, where).toBeGreaterThan(0)
+      expect(count(text, /\bunitBatchClearFields\(/g), `${where}: a lane lands a single run without ending the batch`).toBe(sides)
+    }
+    // …and the canvas run: in the very write that lands its take (the poll's
+    // node-only fields), unless it is one item of a run once per upstream item.
+    const kit = code(join(SRC, "components/editor/workflow-editor/unit-exec-kit.ts"))
+    expect(kit).toMatch(/if \(deps\.listIteration\) \{/)
+    expect(kit).toMatch(/deps\.poll\(node\.id, start, resultField, jobLabel, ctx, sidePatch, \(\) => \{/)
+    expect(kit).toMatch(/unitBatchClearPatch\(unit, \{\}\)/)
+    const poll = code(join(SRC, "components/editor/workflow-editor/poll-job.ts"))
+    expect(poll).toMatch(/\.\.\.nodeOnly,/)
+  })
+
   it("the single-node run puts a render's identity on the result only, and the browser fan-out keeps what each iteration landed", () => {
     const executors = code(join(SRC, "components/editor/workflow-editor/node-executors.ts"))
     expect(executors).toMatch(/resultFields: \(od\) => runResultIdentity\("apply-edl", od\)/)

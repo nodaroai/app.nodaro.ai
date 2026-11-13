@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
-import { defaultImageModel, isPricedPerInputImage } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, priceReadsInputImages } from "@nodaro/shared/model-catalog"
 import { buildCreditModelIdentifier } from "@nodaro/shared/credits"
 
 export interface PipelineGenerateImageArgs {
@@ -76,9 +76,10 @@ export async function pipelineGenerateImage(
     args.modelIdentifier ?? args.userOverride ?? defaultImageModel("general", aspectRatio)
 
   // The id the run is priced on: a model priced per input image (GPT Image 2.6,
-  // MiniMax H3 Image, Seedream 5.5) pays for the references it is sent; every
+  // MiniMax H3 Image, Seedream 5.5) pays for the references it is sent, and
+  // FLUX 3 Klein is priced on the edit id it runs on when any is sent; every
   // other model is its own id.
-  const creditIdentifier = isPricedPerInputImage(modelIdentifier)
+  const creditIdentifier = priceReadsInputImages(modelIdentifier)
     ? buildCreditModelIdentifier(modelIdentifier, undefined, undefined, undefined, undefined, referenceImageUrls?.length ?? 0)
     : modelIdentifier
 

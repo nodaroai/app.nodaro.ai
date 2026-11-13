@@ -15,6 +15,8 @@ import type { WorkflowNode } from "@/types/nodes"
 import { EXTEND_VIDEO_MODELS } from "@nodaro/render-rules"
 
 const quoted = vi.hoisted(() => [] as { id: string | undefined; units: number }[])
+/** The canvas the store holds: what the card reads a wired source's length off. */
+const canvas = vi.hoisted(() => ({ nodes: [] as unknown[], edges: [] as unknown[] }))
 vi.mock("@/hooks/use-unit-quote-credits", () => ({
   useUnitQuoteCredits: (id: string | undefined, units: number) => {
     quoted.push({ id, units })
@@ -26,7 +28,7 @@ vi.mock("@xyflow/react", () => ({
 }))
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: (s: unknown) => unknown) =>
-    selector({ updateNodeData: () => {}, nodes: [], edges: [], videoAutoplay: false, openFreeCut: () => {}, runSingleNode: () => {}, selectNode: () => {}, selectedNodeId: null }),
+    selector({ updateNodeData: () => {}, nodes: canvas.nodes, edges: canvas.edges, videoAutoplay: false, openFreeCut: () => {}, runSingleNode: () => {}, selectNode: () => {}, selectedNodeId: null }),
 }))
 vi.mock("../base-node", () => ({ BaseNode: ({ children }: { children?: ReactNode }) => <div>{children}</div> }))
 vi.mock("../editable-node-label", () => ({ EditableNodeLabel: () => null }))
@@ -43,6 +45,8 @@ const { getModelIdentifier } = await import("@/components/editor/config-panels/h
 afterEach(() => {
   cleanup()
   quoted.length = 0
+  canvas.nodes = []
+  canvas.edges = []
 })
 
 function mount(data: Record<string, unknown>) {
@@ -52,11 +56,20 @@ function mount(data: Record<string, unknown>) {
 }
 
 describe("Extend Video card — the Run price", () => {
-  it("quotes each Seedance model on its own row for its seconds and resolution", () => {
-    expect(mount({ provider: "seedance-2-5-extend", duration: 12, resolution: "1080p" }).quote).toEqual({ id: "seedance-2-5-extend:12s:1080p", units: 1 })
+  it("quotes Seedance 2.5 per second sent and added, and Seedance 2.0 on its own row for its seconds and resolution", () => {
+    // No source on the canvas: the whole 10 s window + 12 s added, half a unit per second.
+    expect(mount({ provider: "seedance-2-5-extend", duration: 12, resolution: "1080p" }).quote).toEqual({ id: "seedance-2-5-extend:1080p:per-2s", units: 11 })
     expect(mount({ provider: "seedance-2-0-extend", duration: 12, resolution: "1080p" }).quote).toEqual({ id: "seedance-2-0-extend:12s:1080p", units: 1 })
     // Untouched: the model's default 8 s at 720p, as the run reserves.
-    expect(mount({ provider: "seedance-2-5-extend" }).quote).toEqual({ id: "seedance-2-5-extend:8s:720p", units: 1 })
+    expect(mount({ provider: "seedance-2-5-extend" }).quote).toEqual({ id: "seedance-2-5-extend:720p:per-2s", units: 9 })
+  })
+
+  it("Seedance 2.5 counts a wired upload's length, up to 10 s", () => {
+    canvas.nodes = [{ id: "u", type: "upload-video", position: { x: 0, y: 0 }, data: { url: "https://cdn.example.com/u.mp4", duration: 4, videoDurationSec: 4 } }]
+    canvas.edges = [{ id: "u-x1", source: "u", target: "x1", targetHandle: "video" }]
+    expect(mount({ provider: "seedance-2-5-extend", duration: 8 }).quote).toEqual({ id: "seedance-2-5-extend:720p:per-2s", units: 6 })
+    canvas.nodes = [{ id: "u", type: "upload-video", position: { x: 0, y: 0 }, data: { url: "https://cdn.example.com/u.mp4", duration: 25, videoDurationSec: 25 } }]
+    expect(mount({ provider: "seedance-2-5-extend", duration: 8 }).quote).toEqual({ id: "seedance-2-5-extend:720p:per-2s", units: 9 })
   })
 
   it("a node naming no provider quotes the VEO extend it runs, never the node-type row", () => {
@@ -65,7 +78,7 @@ describe("Extend Video card — the Run price", () => {
   })
 
   it("a node on the retired id quotes the Seedance 2.5 row it runs as", () => {
-    expect(mount({ provider: "seedance-2-extend", duration: 8 }).quote).toEqual({ id: "seedance-2-5-extend:8s:720p", units: 1 })
+    expect(mount({ provider: "seedance-2-extend", duration: 8 }).quote).toEqual({ id: "seedance-2-5-extend:720p:per-2s", units: 9 })
   })
 
   it("quotes the same row the panel and the pre-run estimate do, for every provider", () => {

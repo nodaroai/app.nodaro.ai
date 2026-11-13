@@ -108,6 +108,8 @@ describe("primaryProviderOfJob", () => {
     expect(primaryProviderOfJob("extend-video", { provider: "seedance-2-5-extend" })).toBe("kie")
     expect(primaryProviderOfJob("extend-video", { provider: "seedance-2-0-extend" })).toBe("kie")
     expect(primaryProviderOfJob("extend-video", { provider: "seedance-2-extend" })).toBe("kie")
+    // PixVerse V6 extends on KIE directly (runPixverseExtend), no capability router.
+    expect(primaryProviderOfJob("extend-video", { provider: "pixverse-v6-extend" })).toBe("kie")
     expect(primaryProviderOfJob("text-to-audio", {})).toBe("elevenlabs")
     expect(primaryProviderOfJob("text-to-audio", { provider: "tangoflux" })).toBe("replicate")
     expect(primaryProviderOfJob("transcribe", { provider: "elevenlabs-stt" })).toBe("elevenlabs")

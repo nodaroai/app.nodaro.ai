@@ -259,6 +259,13 @@ export interface NodeOutput {
    *  The output's own `unitLists` / `unitOutputs` / `unitListsNotSaved` then hold
    *  every row's, row-aligned (`unitBatchSideOutputs`, @nodaro/render-rules). */
   listResultSideOutputs?: ReadonlyArray<{ readonly unitLists?: Readonly<Record<string, readonly string[]>>; readonly unitOutputs?: Readonly<Record<string, string>>; readonly unitListsNotSaved?: Readonly<Record<string, number>> } | null>
+  /** Beside a batch (`listResults` of a node unit with side outputs): the side
+   *  outputs of the take a plain wire reads — the primary row's on a fan-out
+   *  output, the active take's on a saved one — present exactly while the node
+   *  holds a batch, `{}` when that take made none (`unitPipValue`, and
+   *  `unitPipJson` "take": a plain wire follows the active take). Each, Bundle,
+   *  item:N and the list operators read `unitLists` / `unitOutputs`: every row's. */
+  unitTakeSide?: { readonly unitLists?: Readonly<Record<string, readonly string[]>>; readonly unitOutputs?: Readonly<Record<string, string>>; readonly unitListsNotSaved?: Readonly<Record<string, number>> }
   /** A node unit's list outputs, by output id: how many items the run made on
    *  that pip but could not store (the job's `<id>NotSaved`; 0 when it stored
    *  every one) — so every lane can say "2 of 9 … could not be saved". */

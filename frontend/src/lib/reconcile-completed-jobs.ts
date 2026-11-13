@@ -55,7 +55,7 @@ import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-outp
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { usecaseRestoredResults, usecaseTextRunPatch } from "@/lib/use-case-run-result"
 import { runResultIdentity } from "@/lib/run-result-identity"
-import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitSideJobFields } from "@/lib/json-run-result"
+import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitBatchClearFields, unitSideJobFields } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, ugcJobMayLand, ugcJobResultPatch } from "@/lib/ugc-run-patch"
 import { ugcFinishNodeIds, usecaseResultIsText } from "@nodaro/render-rules"
 import { resultsRunMark } from "@/components/editor/workflow-editor/triggered-run-follow"
@@ -460,6 +460,8 @@ export function buildCompletedResultPatch(
     activeResultIndex: 0,
     ...(overlayRun ?? {}),
     ...(sideRun ?? {}),
+    // A single run ends a node unit's batch: on the node only.
+    ...unitBatchClearFields(nodeType, output),
   }
   if (videoUrl) patch.generatedVideoUrl = videoUrl
   else if (imageUrl) {

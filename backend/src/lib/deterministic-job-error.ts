@@ -19,10 +19,18 @@
  * that could succeed on a retry (network, provider, storage, a probe that
  * timed out) must NOT use it.
  *
- * One deliberate exception: a wait for a concurrency slot that ran past the
- * queue timeout (`LaneWaitTimeoutError`, lib/concurrency-lanes/errors.ts) is
- * a subclass. A retry would only stand in the same line for the whole timeout
- * again, so the job is failed and refunded on this attempt.
+ * Two deliberate exceptions:
+ * - A wait for a concurrency slot that ran past the queue timeout
+ *   (`LaneWaitTimeoutError`, lib/concurrency-lanes/errors.ts) is a subclass.
+ *   A retry would only stand in the same line for the whole timeout again, so
+ *   the job is failed and refunded on this attempt.
+ * - An extend whose generated extension is too short or has no picture
+ *   (`extensionTooShort`, lib/extend-recipe.ts) throws it, although a new
+ *   generation might come back longer. It is a product decision: the run is
+ *   final on its first attempt so no further paid generations run while the
+ *   user's credits are held, and the user can run it again. Do not turn it
+ *   back into a retry. A probe of the extension that FAILED is not this case:
+ *   it stays a plain, retryable error (`extensionPictureSeconds`).
  *
  * WHY A MARKER PROPERTY (not just `instanceof`): same reason as
  * `PostProcessingError` — a re-thrown or wrapped error can lose its prototype

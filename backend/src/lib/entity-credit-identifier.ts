@@ -1,6 +1,17 @@
 import { buildCreditModelIdentifier, resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { extractProvider } from "./request-helpers.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS, getModel, isPricedPerInputImage, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
+import { IMAGE_MODEL_ROLE_DEFAULTS, getModel, priceReadsInputImages, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
+
+/**
+ * A model an entity run is priced on by what it sends rather than by the
+ * node's own settings: one whose price reads the images a run sends
+ * (`priceReadsInputImages`: GPT Image 2.6 Flare and Sunburst, MiniMax H3
+ * Image, Seedream 5.5, and FLUX 3 Klein, which these runs send no size, so it
+ * renders its default, 1K, on its edit id when a source image goes).
+ */
+function pricedOnWhatEntitySends(provider: string): boolean {
+  return priceReadsInputImages(provider)
+}
 
 /** The quality a Reference Board runs at: dropped when its model does not offer it. */
 export function boardQuality(provider: unknown, quality: unknown): string | undefined {
@@ -91,10 +102,12 @@ export function resolveEntityImageCreditIdentifier(body: unknown, refCountOverri
  * per input image (GPT Image 2.6 Flare and Sunburst, MiniMax H3 Image, Seedream
  * 5.5) is priced on what such a run sends: no quality or size (the model's
  * default — medium 1K on GPT Image 2.6, 2K on MiniMax H3 Image and Seedream 5.5)
- * and `inputImages` pictures. Every other model keeps its plain id.
+ * and `inputImages` pictures. FLUX 3 Klein is priced the same way, at its
+ * default size, 1K, on the edit id when an image goes with it. Every other
+ * model keeps its plain id.
  */
 export function plainEntityCreditIdentifier(provider: string, inputImages: number): string {
-  if (!isPricedPerInputImage(provider)) return provider
+  if (!pricedOnWhatEntitySends(provider)) return provider
   return buildCreditModelIdentifier(provider, undefined, undefined, undefined, undefined, inputImages)
 }
 
@@ -109,13 +122,14 @@ export function plainEntityCheckIdentifier(body: unknown, defaultProvider: strin
 
 /**
  * The credit id of a workflow Character or Location node. The job it queues
- * carries no quality or size, so a model priced per input image is priced on
- * what it really sends: the model's default size (and quality) and its source
- * image. Every other model keeps the id built from the node's own settings.
+ * carries no quality or size, so a model priced per input image, or FLUX 3
+ * Klein, is priced on what it really sends: the model's default size (and
+ * quality) and its source image. Every other model keeps the id built from the
+ * node's own settings.
  */
 export function workflowEntityCreditIdentifier(data: unknown): string {
   const provider = extractProvider(data, IMAGE_MODEL_ROLE_DEFAULTS.character)
-  return isPricedPerInputImage(provider)
+  return pricedOnWhatEntitySends(provider)
     ? plainEntityCheckIdentifier(data, IMAGE_MODEL_ROLE_DEFAULTS.character)
     : resolveEntityImageCreditIdentifier(data)
 }

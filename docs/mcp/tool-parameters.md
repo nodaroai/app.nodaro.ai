@@ -857,15 +857,15 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | From 1 to 8000 characters. |
 | `task_id` | string |  | Task id of the prior generation, its output providerTaskId (veo-extend / runway-extend only). At least 1 character. |
 | `kie_task_id` | string |  | Use task_id. At least 1 character. |
-| `video_url` | string (URL) |  | Source video URL (seedance-2-5-extend / seedance-2-0-extend / kling-4-extend only) |
-| `video_asset_id` | string |  | Nodaro job/upload asset id whose output is a video (seedance-2-5-extend / seedance-2-0-extend / kling-4-extend only) |
-| `model` | string | yes | One of `veo-extend`, `runway-extend`, `seedance-2-5-extend`, `seedance-2-0-extend`, `kling-4-extend`. |
+| `video_url` | string (URL) |  | Source video URL (seedance-2-5-extend / seedance-2-0-extend / kling-4-extend / pixverse-v6-extend only) |
+| `video_asset_id` | string |  | Nodaro job/upload asset id whose output is a video (seedance-2-5-extend / seedance-2-0-extend / kling-4-extend / pixverse-v6-extend only) |
+| `model` | string | yes | One of `veo-extend`, `runway-extend`, `seedance-2-5-extend`, `seedance-2-0-extend`, `kling-4-extend`, `pixverse-v6-extend`. |
 | `veo_quality` | string |  | One of `fast`, `quality`. |
 | `runway_resolution` | string |  | One of `720p`, `1080p`. |
-| `duration` | integer |  | Seconds to add: seedance-2-5-extend 4–30 seconds (default 8), seedance-2-0-extend 4–15 seconds (default 8), kling-4-extend 3–30 seconds (default 5). Any other length is refused. From 3 to 30. |
-| `resolution` | string |  | Extension resolution (seedance-2-5-extend / seedance-2-0-extend: 480p, 720p or 1080p; kling-4-extend: 720p or 1080p; default 720p — match the source for the cleanest seam). Any other is refused. One of `480p`, `720p`, `1080p`. |
-| `generate_audio` | boolean |  | Continue the soundtrack into the extension (seedance-2-5-extend / seedance-2-0-extend only, default true) |
-| `reference_image_urls` | string (URL)[] |  | Reference images for the extension (seedance-2-5-extend / seedance-2-0-extend only, up to 8 — one seat is reserved for the continuation anchor). Mention them in the prompt as @image_1…@image_N in list order. At most 8 items. |
+| `duration` | integer |  | Seconds to add: seedance-2-5-extend 4–30 seconds (default 8), seedance-2-0-extend 4–15 seconds (default 8), kling-4-extend 3–30 seconds (default 5), pixverse-v6-extend 1–15 seconds (default 5). Any other length is refused. From 1 to 30. |
+| `resolution` | string |  | Extension resolution (seedance-2-5-extend / seedance-2-0-extend: 480p, 720p or 1080p; kling-4-extend: 720p or 1080p; pixverse-v6-extend: 360p, 540p, 720p or 1080p; default 720p — match the source for the cleanest seam). Any other is refused. One of `360p`, `480p`, `540p`, `720p`, `1080p`. |
+| `generate_audio` | boolean |  | Continue the soundtrack into the extension (seedance-2-5-extend / seedance-2-0-extend / pixverse-v6-extend only, default true) |
+| `reference_image_urls` | string (URL)[] |  | Reference images for the extension (seedance-2-5-extend / seedance-2-0-extend only, up to 8). Mention them in the prompt as @image_1…@image_N in list order. At most 8 items. |
 | `seed` | integer |  | From 10000 to 99999. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 | `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
@@ -1077,7 +1077,7 @@ Needs `workflows:execute`.
 | `prompt` | string |  | Free-text image prompt. From 1 to 4000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets, exactly as the editor does; explicit fields below override it, your prompt is wrapped in its pre/post text. From 1 to 200 characters. |
 | `variables` | object (map of string) |  | Values for a preset's placeholders that have no default, e.g. { BRAND: "Acme" }. |
-| `model` | string |  | Image model. Default gpt-image-2. Recommended: flux, flux-2-klein, flux-2-max, flux-2-pro, flux-flex, flux-kontext, flux-kontext-max, gpt-image, gpt-image-2, gpt-image-2-5-flare, gpt-image-2-5-sunburst, gpt-image-2-6-flare, gpt-image-2-6-sunburst, grok, grok-2, ideogram-v3, imagen4, imagen4-fast, imagen4-ultra, minimax-h3-image, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-pro, qwen, seedream, seedream-5-5, seedream-5-flash, seedream-5-lite, seedream-5-pro, wan-2.7, wan-2.7-pro, z-image. Unknown values silently fall back to the default. Call list_models for capability details. |
+| `model` | string |  | Image model. Default gpt-image-2. Recommended: flux, flux-2-klein, flux-2-max, flux-2-pro, flux-3-klein, flux-flex, flux-kontext, flux-kontext-max, gpt-image, gpt-image-2, gpt-image-2-5-flare, gpt-image-2-5-sunburst, gpt-image-2-6-flare, gpt-image-2-6-sunburst, grok, grok-2, ideogram-v3, imagen4, imagen4-fast, imagen4-ultra, minimax-h3-image, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-pro, qwen, seedream, seedream-5-5, seedream-5-flash, seedream-5-lite, seedream-5-pro, wan-2.7, wan-2.7-pro, z-image. Unknown values silently fall back to the default. Call list_models for capability details. |
 | `count` | integer |  | 1-4 images per model. |
 | `models` | string[] |  | 2-4 models instead of model. |
 | `resolution` | string |  | Resolution: 1K / 1.5K / 2K / 4K. Falls back to nearest supported value. |
@@ -1089,7 +1089,7 @@ Needs `workflows:execute`.
 | `svg_level` | string |  | standard, detailed or max. |
 | `aspect_ratio` | string |  | Aspect ratio (e.g. 16:9, 9:16, 1:1, 4:3, 3:4, 21:9). Default 16:9. 'auto' keeps the shape of base_image_url, else of the first reference image, on every model. Variations like 16x9 / 16-9 are accepted; unsupported values fall back. |
 | `negative_prompt` | string |  | At most 2000 characters. |
-| `reference_image_urls` | string[] or string |  | Reference images (URLs or Nodaro asset ids, up to 14; 16 on GPT Image 2.6 or MiniMax H3) for identity / style / composition guidance — use whenever the output must match a given person, character, or product. Accepts an array; a lone URL or a JSON-stringified array is tolerated and coerced. |
+| `reference_image_urls` | string[] or string |  | Reference images (URLs or Nodaro asset ids; up to 14, 16 on GPT Image 2.6 or MiniMax H3, 10 on Seedream 5.5 or FLUX 3 Klein with base_image_url) for identity / style / composition — use when the output must match a person, character or product. An array; a lone URL or JSON array is coerced. |
 | `base_image_url` | string (URL) |  | Image to edit; the masked region is regenerated and composited back over it. Enables inpaint. |
 | `mask_url` | string (URL) |  | Inpainting mask image URL (white=edit, black=keep). Requires base_image_url. |
 | `strength` | number |  | How much the prompt overrides the base image (0=subtle, 1=full repaint). Provider-dependent. From 0 to 1. |
@@ -1214,7 +1214,7 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `prompt` | string |  | From 1 to 2000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your prompt. From 1 to 200 characters. |
-| `model` | string |  | Music model. Default suno-v6; suno-v6_wild bolder, suno-v6_mini faster; suno-v5_5 (also as suno-v5-5) / suno-v5 / suno earlier; minimax needs a reference_audio_url. One of `suno`, `suno-v5`, `suno-v5_5`, `suno-v6`, `suno-v6_wild`, `suno-v6_mini`, `suno-v5-5`, `minimax`. |
+| `model` | string |  | Music model. Default suno-v6; suno-v6_wild bolder, suno-v6_mini faster; suno-v5_5 (also as suno-v5-5) / suno-v5 / suno-v4_5plus / suno-v4_5all / suno-v4_5 / suno earlier; minimax needs a reference_audio_url. One of `suno`, `suno-v4_5`, `suno-v4_5all`, `suno-v4_5plus`, `suno-v5`, `suno-v5_5`, `suno-v6`, `suno-v6_wild`, `suno-v6_mini`, `suno-v5-5`, `minimax`. |
 | `duration` | number |  | From 1 to 30. |
 | `instrumental` | boolean |  |  |
 | `lyrics` | string |  | The exact words to sing, with [Intro]/[Verse]/[Chorus] structure tags on their own lines. Supplying them switches Suno to custom mode, where they are sung as written (and `duration` starts working); without them the model invents its own words from the prompt. At most 2000 characters. |
@@ -1763,8 +1763,8 @@ Needs `workflows:execute`.
 | `image_url` | string (URL) |  | Source image URL. |
 | `image_asset_id` | string |  | Nodaro image job id. |
 | `prompt` | string | yes | Transformation description. From 1 to 2000 characters. |
-| `model` | string |  | img2img model. Default gpt-image-2-6-flare-i2i. Options: flux-2-max, flux-2-pro, flux-fill, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, minimax-h3-image-i2i, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-5-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. An unknown model is refused. |
-| `reference_image_urls` | string[] or string |  | Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6 or MiniMax H3, 9 on Seedream 5.5) for multi-ref models — asset ids are resolved server-side. Accepts an array; a lone URL or a JSON-stringified array is coerced. |
+| `model` | string |  | img2img model. Default gpt-image-2-6-flare-i2i. Options: flux-2-max, flux-2-pro, flux-3-klein-i2i, flux-fill, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, minimax-h3-image-i2i, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-5-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. An unknown model is refused. |
+| `reference_image_urls` | string[] or string |  | Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6 or MiniMax H3, 9 on Seedream 5.5 or FLUX 3 Klein) for multi-ref models — asset ids are resolved server-side. Accepts an array; a lone URL or a JSON-stringified array is coerced. |
 | `resolution` | string |  | One of `1K`, `1.5K`, `2K`, `4K`. |
 | `quality` | string |  | One of `auto`, `low`, `medium`, `high`, `xhigh`, `max`, `basic`. |
 | `strength` | number |  | How much the prompt overrides the source image (0=subtle, 1=full repaint). From 0 to 1. |
@@ -1830,13 +1830,13 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `image_url` | string (URL) |  | Portrait/face image. Use this for kling-avatar(-pro) and infinitalk. |
 | `image_asset_id` | string |  |  |
-| `video_url` | string (URL) |  | Face video (for video-input providers like latentsync / video-retalking). Most users want image_url. |
+| `video_url` | string (URL) |  | Face video (for video-input providers like latentsync / heygen-lipsync-precision). Most users want image_url. |
 | `video_asset_id` | string |  |  |
 | `audio_url` | string (URL) |  |  |
 | `audio_asset_id` | string |  |  |
 | `audio_duration_sec` | number |  | Length of the audio in seconds. Models billed by the second reserve and charge by this length; when it is left out, the audio is measured first. omnihuman-2-0 always measures the audio itself. From 0.1 to 600. |
 | `prompt` | string |  | Optional performance hint (e.g. 'a confident TED speaker'). Some models use it; others ignore. At most 500 characters. |
-| `model` | string |  | Lip-sync model. Default kling-avatar. Options (charged price where the model has one fixed price; per-second models show their 15 s bucket; duration-tiered models say so): kling-avatar (330<!-- credits: kling-avatar:15s --> cr/15s), kling-avatar-pro (660<!-- credits: kling-avatar-pro:15s --> cr/15s), infinitalk (462<!-- credits: infinitalk --> cr), omnihuman-1-5 (1122<!-- credits: omnihuman-1-5:15s --> cr/15s), omnihuman-2-0 (578<!-- credits: omnihuman-2-0:per-second@15 --> cr/15s, per second of audio, at least 154<!-- credits: omnihuman-2-0:per-second@4 --> cr), latentsync (8<!-- credits: latentsync --> cr), wav2lip (11<!-- credits: wav2lip --> cr), video-retalking (220<!-- credits: video-retalking --> cr), sadtalker (55<!-- credits: sadtalker --> cr), heygen-lipsync-precision (561<!-- credits: heygen-lipsync-precision:15s --> cr/15s), lipsync-2-pro (693<!-- credits: lipsync-2-pro:15s --> cr/15s), sync-lipsync-v3 (1100<!-- credits: sync-lipsync-v3:15s --> cr/15s), volcengine-lipsync (330<!-- credits: volcengine-lipsync:15s --> cr/15s), seedance-2 (duration-tiered), seedance-2-fast (duration-tiered), seedance-2-mini (duration-tiered), seedance-2-5 (duration-tiered), minimax-h3 (605<!-- credits: minimax-h3 --> cr). Input type (image vs video) and which model fits singing, dubbing, cinematic or the cheapest draft: get_node_skill("lip-sync"). An unknown model is refused. |
+| `model` | string |  | Lip-sync model. Default kling-avatar. Options (charged price where the model has one fixed price; per-second models show their 15 s bucket; duration-tiered models say so): kling-avatar (330<!-- credits: kling-avatar:15s --> cr/15s), kling-avatar-pro (660<!-- credits: kling-avatar-pro:15s --> cr/15s), infinitalk (462<!-- credits: infinitalk --> cr), omnihuman-1-5 (1122<!-- credits: omnihuman-1-5:15s --> cr/15s), omnihuman-2-0 (578<!-- credits: omnihuman-2-0:per-second@15 --> cr/15s, per second of audio, at least 154<!-- credits: omnihuman-2-0:per-second@4 --> cr), latentsync (8<!-- credits: latentsync --> cr), heygen-lipsync-precision (561<!-- credits: heygen-lipsync-precision:15s --> cr/15s), lipsync-2-pro (693<!-- credits: lipsync-2-pro:15s --> cr/15s), sync-lipsync-v3 (1100<!-- credits: sync-lipsync-v3:15s --> cr/15s), volcengine-lipsync (330<!-- credits: volcengine-lipsync:15s --> cr/15s), seedance-2 (duration-tiered), seedance-2-fast (duration-tiered), seedance-2-mini (duration-tiered), seedance-2-5 (duration-tiered), minimax-h3 (605<!-- credits: minimax-h3 --> cr). Input type (image vs video) and which model fits singing, dubbing, cinematic or the cheapest draft: get_node_skill("lip-sync"). An unknown model is refused. |
 | `resolution` | string |  | Resolution lever. infinitalk: 480p\|720p. seedance-2(-fast): 480p\|720p\|1080p. omnihuman-1-5: 720p\|1080p (default 1080p). omnihuman-2-0 is always 720p. Other models ignore this. One of `480p`, `720p`, `1080p`. |
 | `seed` | integer |  | Reproducibility seed (omnihuman-1-5). Same seed + inputs → near-identical result. From 0 to 2147483647. |
 | `fast_mode` | boolean |  | omnihuman-1-5 only — trade some quality for faster generation. |
@@ -2247,7 +2247,7 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | From 1 to 8000 characters. |
 | `image_url` | string (URL) |  |  |
 | `image_asset_id` | string |  |  |
-| `model` | string |  | I2I / edit model. Default gpt-image-2-6-flare-i2i. Recommended: flux-2-max, flux-2-pro, flux-fill, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, minimax-h3-image-i2i, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-5-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. For identity-preserving edits use gpt-image-2-i2i. Unknown values fall back. Call list_models for capability details. |
+| `model` | string |  | I2I / edit model. Default gpt-image-2-6-flare-i2i. Recommended: flux-2-max, flux-2-pro, flux-3-klein-i2i, flux-fill, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, minimax-h3-image-i2i, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-5-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. For identity-preserving edits use gpt-image-2-i2i. Unknown values fall back. Call list_models for capability details. |
 | `resolution` | string |  | Resolution: falls back to nearest supported. |
 | `quality` | string |  | Quality by model (list_models). Auto bills real cost, up to Max. |
 | `background` | string |  | Models that list it. Transparent: 1K on GPT Image. One of `auto`, `opaque`, `transparent`. |

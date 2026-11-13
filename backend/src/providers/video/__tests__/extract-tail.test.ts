@@ -252,6 +252,34 @@ describe.skipIf(!ffmpegAvailable)("extractTailToFile (real ffmpeg)", () => {
     expect(white).toBeLessThanOrEqual(240)
   }, 60_000)
 
+  // H.264 4:2:0 needs even sides, so an odd-size source's tail could not be encoded at all. Its
+  // tail is the picture the stitch delivers: rounded down to even, its last column and row
+  // cropped. (`testsrc2` rounds an odd size itself: the fixture is `testsrc` in 4:4:4, checked.)
+  it.each([
+    ["as stored", undefined, [852, 480]],
+    ["shown rotated 90°", "90", [480, 852]],
+  ] as const)("cuts an 853×481 source's tail (%s) at its size rounded down to even", async (_label, rotation, size) => {
+    const stored = join(dir, `${randomUUID()}.mp4`)
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc=size=853x481:rate=24:duration=3",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3",
+      "-c:v", "libx264", "-pix_fmt", "yuv444p", "-c:a", "aac",
+      stored,
+    ])
+    const src = rotation ? join(dir, `${randomUUID()}.mp4`) : stored
+    if (rotation) await runFfmpeg(["-y", "-display_rotation:v:0", rotation, "-i", stored, "-c", "copy", src])
+    const source = await probeMatched(src)
+    expect([source.width, source.height]).toEqual([853, 481])
+
+    const out = await extractTailToFile(src, 1, { measureFrom: "picture", ...extendTailPicture(source) })
+    const video = (JSON.parse(await runFfprobe([
+      "-v", "error", "-select_streams", "v:0", "-count_frames",
+      "-show_entries", "stream=codec_name,pix_fmt,width,height,nb_read_frames", "-of", "json", out,
+    ])) as { streams: Array<Record<string, unknown>> }).streams[0]!
+    expect(video).toMatchObject({ codec_name: "h264", pix_fmt: "yuv420p", width: size[0], height: size[1], nb_read_frames: "24" })
+  }, 60_000)
+
   it("measureFrom picture: the tail ends on the last frame when the sound runs past it", async () => {
     const src = join(dir, `${randomUUID()}.mp4`)
     // 4 s of picture, 4.5 s of sound.

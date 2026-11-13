@@ -26,11 +26,11 @@ export const EXPOSABLE_DECLARED_FIELDS: Readonly<Record<string, Readonly<Record<
     "provider": { kind: "select", values: ["seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5"] },
   },
   "extend-video": {
-    "provider": { kind: "select", values: ["seedance-2-5-extend","seedance-2-0-extend","kling-4-extend","veo-extend","runway-extend","ltx-2.3-pro"] },
+    "provider": { kind: "select", values: ["seedance-2-5-extend","seedance-2-0-extend","kling-4-extend","veo-extend","runway-extend","ltx-2.3-pro","pixverse-v6-extend"] },
   },
   "generate-image": {
     "aspectRatio": { kind: "select", values: ["1:1","16:9","9:16","4:3","3:4","3:2","2:3","5:4","4:5","21:9"] },
-    "provider": { kind: "select", values: ["flux","flux-flex","flux-kontext","flux-kontext-max","gpt-image","gpt-image-2","gpt-image-2-5-flare","gpt-image-2-5-sunburst","gpt-image-2-6-flare","gpt-image-2-6-sunburst","gpt-image-2-6-economy","grok","grok-2","ideogram-v3","imagen4","imagen4-fast","imagen4-ultra","nano-banana","nano-banana-2","nano-banana-2-1","nano-banana-2-lite","nano-banana-pro","qwen","seedream","seedream-5-lite","seedream-5-pro","seedream-5-flash","minimax-h3-image","seedream-5-5","z-image","wan-2.7","wan-2.7-pro","flux-2-klein","flux-2-pro","flux-2-max"] },
+    "provider": { kind: "select", values: ["flux","flux-flex","flux-kontext","flux-kontext-max","gpt-image","gpt-image-2","gpt-image-2-5-flare","gpt-image-2-5-sunburst","gpt-image-2-6-flare","gpt-image-2-6-sunburst","gpt-image-2-6-economy","grok","grok-2","ideogram-v3","imagen4","imagen4-fast","imagen4-ultra","nano-banana","nano-banana-2","nano-banana-2-1","nano-banana-2-lite","nano-banana-pro","qwen","seedream","seedream-5-lite","seedream-5-pro","seedream-5-flash","minimax-h3-image","seedream-5-5","z-image","wan-2.7","wan-2.7-pro","flux-2-klein","flux-3-klein","flux-2-pro","flux-2-max"] },
     "quality": { kind: "select", values: ["medium","high","basic"] },
     "style": { kind: "select", values: ["__none__","3d-render","anime","children-book","cinematic","comic-book","digital-art","fantasy","minimalist","noir","oil-painting","pencil-sketch","photorealistic","pixel-art","pop-art","retro-vintage","watercolor","concept-art","impressionism","surrealism","cyberpunk","steampunk","vaporwave","low-poly","ink-wash","isometric","flat-vector","ukiyo-e","graffiti","claymation","glitch-art","ascii-art","blueprint","stained-glass","chalkboard","paper-cutout","illuminated","pixar-3d","caricature","fresco","mosaic","woodcut","etching","lithograph","charcoal","pastel","acrylic-paint","mixed-media","manga","early-color-photo"] },
   },
@@ -51,11 +51,11 @@ export const EXPOSABLE_DECLARED_FIELDS: Readonly<Record<string, Readonly<Record<
     "provider": { kind: "select", values: ["bytedance-lite","bytedance-pro","bytedance-pro-fast","grok-i2v","hailuo-2.3","hailuo-2.3-pro","hailuo-standard","kling","kling-3.0","kling-master","kling-turbo","minimax","runway-kie","minimax-h3","seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5","veo3","veo3.1","veo3_lite","wan-i2v","wan-turbo","wan-2.7-i2v","happyhorse-i2v","happyhorse-ref2v","ltx-2.3-pro","ltx-2.3-fast","gemini-omni-video","grok-imagine-video-1.5","wan-3","wan-3-prime","vidu-q4","kling-4","kling-4-keyframes","kling-4-flash","gemini-omni-flash","gemini-omni-flash-1-2","pixverse-v6-max"] },
   },
   "lip-sync": {
-    "provider": { kind: "select", values: ["seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5","kling-avatar","kling-avatar-pro","infinitalk","omnihuman-1-5","omnihuman-2-0","latentsync","wav2lip","video-retalking","sadtalker","heygen-lipsync-precision","lipsync-2-pro","sync-lipsync-v3","volcengine-lipsync"] },
+    "provider": { kind: "select", values: ["seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5","kling-avatar","kling-avatar-pro","infinitalk","omnihuman-1-5","omnihuman-2-0","latentsync","heygen-lipsync-precision","lipsync-2-pro","sync-lipsync-v3","volcengine-lipsync"] },
     "resolution": { kind: "select", values: ["720p","1080p"] },
   },
   "modify-image": {
-    "provider": { kind: "select", values: ["flux-i2i","flux-pro-i2i","flux-kontext","flux-kontext-max","gpt-image-i2i","gpt-image-2-i2i","gpt-image-2-5-flare-i2i","gpt-image-2-5-sunburst-i2i","gpt-image-2-6-flare-i2i","gpt-image-2-6-sunburst-i2i","gpt-image-2-6-economy-i2i","grok-i2i","ideogram-edit","ideogram-remix","nano-banana","nano-banana-2","nano-banana-2-1","nano-banana-2-lite","nano-banana-pro","qwen-i2i","qwen-edit","seedream-5-lite-i2i","seedream-5-pro-i2i","seedream-5-flash-i2i","minimax-h3-image-i2i","seedream-5-5-i2i","seedream-edit","kontext-multi","flux-2-pro","flux-2-max","flux-fill","nano-banana-edit"] },
+    "provider": { kind: "select", values: ["flux-i2i","flux-pro-i2i","flux-kontext","flux-kontext-max","gpt-image-i2i","gpt-image-2-i2i","gpt-image-2-5-flare-i2i","gpt-image-2-5-sunburst-i2i","gpt-image-2-6-flare-i2i","gpt-image-2-6-sunburst-i2i","gpt-image-2-6-economy-i2i","grok-i2i","ideogram-edit","ideogram-remix","nano-banana","nano-banana-2","nano-banana-2-1","nano-banana-2-lite","nano-banana-pro","qwen-i2i","qwen-edit","seedream-5-lite-i2i","seedream-5-pro-i2i","seedream-5-flash-i2i","minimax-h3-image-i2i","seedream-5-5-i2i","seedream-edit","kontext-multi","flux-3-klein-i2i","flux-2-pro","flux-2-max","flux-fill","nano-banana-edit"] },
   },
   "speaker-view": {
     "layout": { kind: "select", values: ["auto","single","side-by-side","stacked","grid","pip"] },

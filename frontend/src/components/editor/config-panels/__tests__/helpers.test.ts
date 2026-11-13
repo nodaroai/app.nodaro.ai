@@ -347,14 +347,15 @@ describe("getModelIdentifier", () => {
 
   it("prices a Seedance extend on its own provider's row — the one builder the route and the run reserve on", () => {
     const extend = (data: Record<string, unknown>) => makeNode({ type: "extend-video", data: { label: "Extend", ...data } as any })
-    for (const provider of ["seedance-2-5-extend", "seedance-2-0-extend"] as const) {
-      expect(getModelIdentifier(extend({ provider, duration: 12, resolution: "1080p" }))).toBe(tailExtendCreditId(provider, 12, "1080p"))
-      expect(getModelIdentifier(extend({ provider }))).toBe(tailExtendCreditId(provider, undefined, undefined))
-    }
-    expect(getModelIdentifier(extend({ provider: "seedance-2-5-extend", duration: 22, resolution: "480p" }))).toBe("seedance-2-5-extend:22s:480p")
+    expect(getModelIdentifier(extend({ provider: "seedance-2-0-extend", duration: 12, resolution: "1080p" }))).toBe(tailExtendCreditId("seedance-2-0-extend", 12, "1080p"))
+    expect(getModelIdentifier(extend({ provider: "seedance-2-0-extend" }))).toBe(tailExtendCreditId("seedance-2-0-extend", undefined, undefined))
     expect(getModelIdentifier(extend({ provider: "seedance-2-0-extend", duration: 12, resolution: "1080p" }))).toBe("seedance-2-0-extend:12s:1080p")
+    // Seedance 2.5 is charged per second sent and added: its resolution's two-second row
+    // (the estimate multiplies by the run's units).
+    expect(getModelIdentifier(extend({ provider: "seedance-2-5-extend", duration: 22, resolution: "480p" }))).toBe("seedance-2-5-extend:480p:per-2s")
+    expect(getModelIdentifier(extend({ provider: "seedance-2-5-extend" }))).toBe("seedance-2-5-extend:720p:per-2s")
     // A node still naming the retired id is priced as the Seedance 2.5 extend it runs as.
-    expect(getModelIdentifier(extend({ provider: "seedance-2-extend", duration: 8 }))).toBe("seedance-2-5-extend:8s:720p")
+    expect(getModelIdentifier(extend({ provider: "seedance-2-extend", duration: 8 }))).toBe("seedance-2-5-extend:720p:per-2s")
   })
 
   it("prices a Kling 4 extend on its own rows, a resolution it does not render at 720p", () => {
@@ -362,6 +363,14 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(extend({ provider: "kling-4-extend" }))).toBe("kling-4-extend:5s:720p")
     expect(getModelIdentifier(extend({ provider: "kling-4-extend", duration: 22, resolution: "1080p" }))).toBe("kling-4-extend:22s:1080p")
     expect(getModelIdentifier(extend({ provider: "kling-4-extend", duration: 22, resolution: "480p" }))).toBe("kling-4-extend:22s:720p")
+  })
+
+  it("prices a PixVerse V6 extend on its own rows: :audio with the sound on (unless turned off), 480p at 540p", () => {
+    const extend = (data: Record<string, unknown>) => makeNode({ type: "extend-video", data: { label: "Extend", ...data } as any })
+    expect(getModelIdentifier(extend({ provider: "pixverse-v6-extend" }))).toBe("pixverse-v6-extend:5s:720p:audio")
+    expect(getModelIdentifier(extend({ provider: "pixverse-v6-extend", duration: 12, resolution: "1080p", generateAudio: false }))).toBe("pixverse-v6-extend:12s:1080p")
+    expect(getModelIdentifier(extend({ provider: "pixverse-v6-extend", duration: 12, resolution: "360p", generateAudio: true }))).toBe("pixverse-v6-extend:12s:360p:audio")
+    expect(getModelIdentifier(extend({ provider: "pixverse-v6-extend", duration: 30, resolution: "480p" }))).toBe("pixverse-v6-extend:15s:540p:audio")
   })
 
   it("prices an Extend node naming no provider as the VEO extend it runs (EXTEND_VIDEO_DEFAULT_PROVIDER), never the node-type row", () => {
@@ -817,6 +826,39 @@ describe("MiniMax H3 Image's estimate", () => {
   it("a stale ratio on its panel snaps to a real ratio, never to auto", () => {
     expect(getAspectRatiosForModel("minimax-h3-image")[0]?.value).toBe("1:1")
     expect(getAspectRatiosForModel("minimax-h3-image-i2i")[0]?.value).toBe("1:1")
+  })
+})
+
+describe("FLUX 3 Klein's estimate", () => {
+  it("is priced by its size alone, 1K when none is set, the same on the edit whatever the images", () => {
+    expect(buildCreditModelIdentifier("flux-3-klein", {})).toBe("flux-3-klein:1K")
+    expect(buildCreditModelIdentifier("flux-3-klein", { resolution: "2K" })).toBe("flux-3-klein:2K")
+    expect(buildCreditModelIdentifier("flux-3-klein", { resolution: "4K" })).toBe("flux-3-klein:4K")
+    // Any image the run will send (its own, wired, a base image) moves it to
+    // the edit id it runs on, at the same size's row; the count never shows.
+    expect(buildCreditModelIdentifier("flux-3-klein", { resolution: "4K" }, 3)).toBe("flux-3-klein-i2i:4K")
+    expect(buildCreditModelIdentifier("flux-3-klein", { referenceImageUrls: ["https://b.png"] })).toBe("flux-3-klein-i2i:1K")
+    expect(buildCreditModelIdentifier("flux-3-klein", { resolution: "2K", baseImageUrl: "https://a.png" })).toBe("flux-3-klein-i2i:2K")
+    expect(buildCreditModelIdentifier("flux-3-klein", { resolution: "2K" }, 0)).toBe("flux-3-klein:2K")
+    expect(buildCreditModelIdentifier("flux-3-klein-i2i", { resolution: "2K" }, 9)).toBe("flux-3-klein-i2i:2K")
+  })
+
+  it("an entity node is quoted at what its run sends: 1K, the edit id with a source image", () => {
+    const entity = (type: string, data: Record<string, unknown>) =>
+      ({ id: "e", type, position: { x: 0, y: 0 }, data: { label: type, provider: "flux-3-klein", ...data } }) as unknown as WorkflowNode
+    for (const type of ["character", "location", "face", "object"]) {
+      expect(getModelIdentifier(entity(type, { resolution: "4K" })), type).toBe("flux-3-klein:1K")
+      expect(getModelIdentifier(entity(type, { sourceImageUrl: "https://a.png" })), type).toBe("flux-3-klein-i2i:1K")
+    }
+    // Every other model keeps the quote from its own settings.
+    const gpt = { id: "e", type: "character", position: { x: 0, y: 0 }, data: { label: "c", provider: "gpt-image-2", resolution: "4K" } } as unknown as WorkflowNode
+    expect(getModelIdentifier(gpt)).toBe("gpt-image-2:4K")
+  })
+
+  it("a stale ratio on its panel snaps to 1:1, never to the edit's auto", () => {
+    expect(getAspectRatiosForModel("flux-3-klein")[0]?.value).toBe("1:1")
+    expect(getAspectRatiosForModel("flux-3-klein-i2i")[0]?.value).toBe("1:1")
+    expect(getAspectRatiosForModel("flux-3-klein-i2i").map((o) => o.value)).toContain("auto")
   })
 })
 

@@ -93,9 +93,9 @@ Make a face talk to an audio track (`lip_sync` over MCP): lip-sync, talking head
 - **`omnihuman-1-5`** — prompt-directed performance, 720p/1080p, premium.
 - **`omnihuman-2-0`** — a different model from 1.5 (not its replacement): one still image driven by the voice, with an optional prompt (≤ 300 characters) for the scene, motion and camera; 720p, 4 s to 5 minutes. Long monologues and explainers. No resolution, seed or fast mode.
 - **`latentsync`** — diffusion-based; best for singing or a strong vocal performance. Video input.
-- **`wav2lip`** — fastest and cheapest; image OR video. Quick drafts and many iterations.
-- **`video-retalking`** — built-in face enhancement, clean output. Video input; good when the source face is small or blurry.
-- **`sadtalker`** — talking avatar from a SINGLE image, when no video exists.
+- **`heygen-lipsync-precision`** — dubs an existing clip with precise lip sync to a new audio track; billed per second. Video input.
+- **`lipsync-2-pro`** — studio-grade dubbing of existing footage; billed per second. Video input.
+- Wav2Lip, VideoReTalking and SadTalker are retired from Lip Sync: a call naming `wav2lip`, `video-retalking` or `sadtalker` is refused with a message to pick another model.
 - **`volcengine-lipsync`** — KIE video-to-video AI dubbing: re-syncs an existing clip's lips to a new vocal track; `mode: basic` + `open_scenedet: true` for multi-speaker. The cheapest modern dubbing option. Video input.
 
 <!-- AUTO-GEN:START mcp-call -->
@@ -126,7 +126,7 @@ Make a face talk to an audio track (`lip_sync` over MCP): lip-sync, talking head
 
 ## Common gotchas
 
-- Input requirements by model: `seedance-2(-fast)`, `kling-avatar(-pro)`, `infinitalk`, `sadtalker`, `omnihuman-1-5`, `omnihuman-2-0` → image input only. `latentsync`, `video-retalking`, `volcengine-lipsync` → video input only. `wav2lip` → image OR video.
+- Input requirements by model: `seedance-2(-fast)`, `kling-avatar(-pro)`, `infinitalk`, `omnihuman-1-5`, `omnihuman-2-0` → image input only. `latentsync`, `heygen-lipsync-precision`, `lipsync-2-pro`, `sync-lipsync-v3`, `volcengine-lipsync` → video input only.
 - Per-second providers (`kling-avatar(-pro)`, `volcengine-lipsync`, `omnihuman-1-5`) are priced by audio-duration bucket (15/30/60/120/300 s); the tool's `model` parameter states the current list price.
 - `omnihuman-2-0` is charged per second of its audio — no buckets: the audio's length rounded up to a whole second, at least 4 s. The server downloads and decodes the audio to measure how long it plays (`audio_duration_sec` and the file's declared length are ignored). Audio under 4 s is padded with silence to 4 s (the avatar holds still for the rest); audio over 300 s, an audio file of 100 MB or more, a link that stalls, or an image outside 300–6,000 px a side / width ÷ height 0.4–2.5 / 30 MB is refused before anything is charged. Every audio file is converted to MP3 before it is sent (the model takes under 15 MB, held after conversion). A `lip_sync_audio_busy` refusal (429) means try again in a moment; `POST /v1/lip-sync` takes at most 30 `omnihuman-2-0` requests a minute per caller (429 `rate_limit_exceeded`); other models are not limited this way.
 

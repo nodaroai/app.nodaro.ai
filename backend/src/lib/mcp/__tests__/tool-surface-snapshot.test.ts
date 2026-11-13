@@ -1495,6 +1495,15 @@ const EXTEND_SEEDANCE_SPLIT_BYTES = 252
 // 3_209 → 3_398 B (total 528_925 → 529_114).
 const EXTEND_KLING_4_BYTES = 189
 
+// RAISED 2026-11-13 by PixVerse V6 joining Extend Video, and nothing else: `extend_video` offers
+// `pixverse-v6-extend` beside the other URL extends, its URL arguments name it, `duration` states its
+// 1–15 s window (default 5), `resolution` names its 360p / 540p / 720p / 1080p (the enum, now ascending,
+// gains 360p and 540p), and the sound switch names it beside the Seedance providers. The description says
+// the URL extends stitch what happens next onto the source. No tool was added, so the fixture does NOT
+// move. Measured by this suite on the same tree with and without it: extend_video 3_398 → 3_603 B
+// (total 530_437 → 530_642).
+const EXTEND_PIXVERSE_V6_BYTES = 205
+
 // RAISED 2026-11-11 by image_to_image's `mask_url` naming the models that take a mask
 // (`I2I_MASK_SUPPORT`, now with GPT Image 2.6 Flare's and Sunburst's edits), and that it is
 // refused with a GIF or an SVG, and nothing else. No tool was added, so the fixture does NOT move.
@@ -1593,6 +1602,15 @@ const LLM_PRICE_KEY_EFFORT_WORDING_BYTES = 62
 // NOT move. Measured by this suite: 528_052 total − 528_030 = 22 B.
 const FLUX_FILL_CATALOG_ENTRY_BYTES = 22
 
+// RAISED 2026-11-12 by FLUX 3 Klein (`flux-3-klein` t2i + `flux-3-klein-i2i`), and nothing else:
+// the two ids join the catalog-derived model lists generate_image, modify_image and image_to_image
+// already carry, and image_to_image's reference note names its 9 (with the source, 10) beside
+// Seedream 5.5's. No tool was added, so the fixture does NOT move. `generate_image` is the one tool
+// past the per-tool budget (9_940 → 9_954 B). Measured by this suite: 66 B (generate_image 14,
+// modify_image 18, image_to_image 34).
+const FLUX_3_KLEIN_PER_TOOL_BYTES = 14
+const FLUX_3_KLEIN_TOTAL_BYTES = 66
+
 // RAISED 2026-11-12 by Nemotron 3.5 Transcribe on `transcribe`, and nothing else: the tool gains
 // a `model` arg (the TRANSCRIBE_PROVIDERS enum, ElevenLabs STT still the default) and a
 // `target_language` arg (Nemotron's 32 translation targets), and its description and describes
@@ -1602,8 +1620,16 @@ const FLUX_FILL_CATALOG_ENTRY_BYTES = 22
 // (before FLUX Fill's entry): 529_585 total − 528_463 = 1_122 B, all on transcribe (1_851 → 2_973 B).
 const NEMOTRON_TRANSCRIBE_BYTES = 1_122
 
+// RAISED 2026-11-12 by the Suno v4.5 Plus, v4.5 All and v4.5 model-catalog entries (a deployment's
+// model allow list can now name them): their ids join generate_music's catalog-derived `model`
+// enum (43 B) and the two hand-written model lists in its description (92 B), and nothing else.
+// The Lip Sync entries move no tool (lip_sync's list is the route's own). No tool was added, so
+// the fixture does NOT move. Measured by this suite: 528_916 total − 528_781 = 135 B, all on
+// generate_music.
+const SUNO_V4_5_CATALOG_ENTRIES_BYTES = 135
+
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -1789,6 +1815,7 @@ export const TOOL_WIRE_BUDGET = {
     GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES +
     EXTEND_SEEDANCE_SPLIT_BYTES +
     EXTEND_KLING_4_BYTES +
+    EXTEND_PIXVERSE_V6_BYTES +
     I2I_MASK_MODELS_BYTES +
     MODIFY_IMAGE_MASK_BYTES +
     SEEDANCE_REFERENCE_TASK_TYPE_ARG_BYTES +
@@ -1803,7 +1830,9 @@ export const TOOL_WIRE_BUDGET = {
     LLM_REGISTRY_2026_11_IDS_BYTES +
     LLM_PRICE_KEY_EFFORT_WORDING_BYTES +
     FLUX_FILL_CATALOG_ENTRY_BYTES +
-    NEMOTRON_TRANSCRIBE_BYTES,
+    FLUX_3_KLEIN_TOTAL_BYTES +
+    NEMOTRON_TRANSCRIBE_BYTES +
+    SUNO_V4_5_CATALOG_ENTRIES_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

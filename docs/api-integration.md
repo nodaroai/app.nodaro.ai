@@ -1027,15 +1027,17 @@ changed:
   on a model without a native one gives its first listed ratio, as before, and
   GPT Image 2.6 receives its own `auto`.
 - **No `aspectRatio` on a GPT Image 2, 2.5 or 2.6 edit model, or on MiniMax
-  H3 Image's or Seedream 5.5's, is `auto`.** On `/v1/image-to-image`, a request to
+  H3 Image's, Seedream 5.5's or FLUX 3 Klein's, is `auto`.** On
+  `/v1/image-to-image`, a request to
   `gpt-image-2-6-flare-i2i` (the default), `gpt-image-2-6-sunburst-i2i`,
   `gpt-image-2-6-economy-i2i`, `gpt-image-2-5-flare-i2i`,
-  `gpt-image-2-5-sunburst-i2i`, `gpt-image-2-i2i`, `minimax-h3-image-i2i` or
-  `seedream-5-5-i2i` that names no ratio runs exactly as one that sends
-  `"auto"`, instead of the model's 16:9 default: GPT Image 2 and 2.5 receive
-  their own `auto`, which keeps the photo's shape, MiniMax H3 Image its own
-  `auto`, which follows the first image, Seedream 5.5 its own `auto` (KIE's
-  default there), and GPT Image 2.6 the ratio closest to the photo, as above.
+  `gpt-image-2-5-sunburst-i2i`, `gpt-image-2-i2i`, `minimax-h3-image-i2i`,
+  `seedream-5-5-i2i` or `flux-3-klein-i2i` that names no ratio runs exactly as
+  one that sends `"auto"`, instead of the model's 16:9 default: GPT Image 2 and
+  2.5 receive their own `auto`, which keeps the photo's shape, MiniMax H3 Image
+  its own `auto`, which follows the first image, Seedream 5.5 its own `auto`
+  (KIE's default there), FLUX 3 Klein its own `auto`, the first image's shape,
+  and GPT Image 2.6 the ratio closest to the photo, as above.
   The job records the ratio sent. It costs the same: these models price by
   quality, size and the number of input images, not by ratio, and render every
   size at `auto`. Every other model keeps its own default when no ratio is
@@ -3211,11 +3213,14 @@ orchestrator already use):
   (Seedance 2.5) or `seedance-2-0-extend` (Seedance 2.0) — the only extend
   transports with a reference path; any other extend provider refuses them with
   a 400 rather than silently dropping. The image budget, on both, is the
-  Seedance 2.0 cap **minus one** (up to **8** user references): the extension
-  pipeline itself occupies one reference seat with the source's last frame (the
+  Seedance 2.0 cap **minus one** (up to **8** user references): Seedance 2.0's
+  extension itself occupies one reference seat with the source's last frame (the
   continuation anchor), appended AFTER the user references so `@image_1…@image_8`
-  ordinals never shift. The source's 2-second tail rides as `@video_1`.
-  Reference images add no extra credits.
+  ordinals never shift; Seedance 2.5 sends no anchor and keeps the same budget.
+  The source's end rides as `@video_1`: its last 10 seconds on Seedance 2.5
+  (declared as an extension, priced per second sent and added — see
+  [Extend Video](nodes/ai-video/extend-video.md#seedance-25-extend-credits)),
+  its last 2 seconds on Seedance 2.0. Reference images add no extra credits.
 
 Each ref's `url` rides the same SSRF gate as the flat `referenceImageUrls`, so a
 ref pointing at a private address / non-http(s) scheme is rejected at the route

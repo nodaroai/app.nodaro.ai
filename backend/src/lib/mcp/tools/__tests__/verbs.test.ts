@@ -554,16 +554,16 @@ describe("extend_video verb", () => {
     const schema = tool.inputSchema as { required?: string[]; properties: Record<string, { enum?: unknown[]; minimum?: number; maximum?: number }> }
     const properties = schema.properties
     // Every Extend Video provider but LTX 2.3 Pro, which this tool does not offer; still a required argument.
-    expect(properties.model.enum).toEqual(["veo-extend", "runway-extend", "seedance-2-5-extend", "seedance-2-0-extend", "kling-4-extend"])
+    expect(properties.model.enum).toEqual(["veo-extend", "runway-extend", "seedance-2-5-extend", "seedance-2-0-extend", "kling-4-extend", "pixverse-v6-extend"])
     expect(schema.required).toEqual(expect.arrayContaining(["prompt", "model"]))
     // The retired id is accepted, never offered or named.
     expect(JSON.stringify(tool)).not.toContain("seedance-2-extend")
-    // Seconds to add: the URL models' windows, 4–30 on Seedance 2.5, 4–15 on Seedance 2.0, 3–30 on Kling 4.
-    expect([properties.duration.minimum, properties.duration.maximum]).toEqual([3, 30])
+    // Seconds to add: the URL models' windows, 4–30 on Seedance 2.5, 4–15 on Seedance 2.0, 3–30 on Kling 4, 1–15 on PixVerse V6.
+    expect([properties.duration.minimum, properties.duration.maximum]).toEqual([1, 30])
     expect(tool.description).toContain("seedance-2-5-extend")
     expect(tool.description).toContain("seedance-2-0-extend")
-    // The resolutions the route takes: no 4k.
-    expect(properties.resolution.enum).toEqual(["480p", "720p", "1080p"])
+    // The resolutions the route takes, ascending: no 4k.
+    expect(properties.resolution.enum).toEqual(["360p", "480p", "540p", "720p", "1080p"])
 
     for (const [model, provider] of [
       ["seedance-2-extend", "seedance-2-5-extend"],
@@ -592,12 +592,42 @@ describe("extend_video verb", () => {
     expect(seedance).toBe("seedance-2-5-extend / seedance-2-0-extend")
     expect(properties.reference_image_urls.description).toContain(`(${seedance} only`)
     expect(properties.reference_image_urls.description).not.toContain("kling-4-extend")
-    expect(properties.generate_audio.description).toContain(`(${seedance} only`)
+    expect(properties.generate_audio.description).toContain(`(${seedance} / pixverse-v6-extend only`)
     expect(properties.generate_audio.description).not.toContain("kling-4-extend")
     expect(properties.resolution.description).toContain("seedance-2-5-extend / seedance-2-0-extend: 480p, 720p or 1080p")
     expect(properties.resolution.description).toContain("kling-4-extend: 720p or 1080p")
     expect(properties.duration.description).toContain("kling-4-extend 3–30 seconds (default 5)")
     expect(properties.video_url.description).toContain("kling-4-extend")
+  })
+
+  // PixVerse V6: any video by URL, 1–15 s at 360p / 540p / 720p / 1080p, a
+  // sound switch, no reference images.
+  it("extend_video's levers name PixVerse V6 where they apply, and only there", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "extend_video")!
+    const properties = (tool.inputSchema as { properties: Record<string, { description?: string }> }).properties
+    expect(tool.description).toContain("pixverse-v6-extend")
+    expect(properties.video_url.description).toContain("pixverse-v6-extend")
+    expect(properties.video_asset_id.description).toContain("pixverse-v6-extend")
+    expect(properties.duration.description).toContain("pixverse-v6-extend 1–15 seconds (default 5)")
+    expect(properties.resolution.description).toContain("pixverse-v6-extend: 360p, 540p, 720p or 1080p")
+    expect(properties.generate_audio.description).toContain("pixverse-v6-extend")
+    expect(properties.reference_image_urls.description).not.toContain("pixverse-v6-extend")
+    expect(properties.task_id.description).not.toContain("pixverse-v6-extend")
+  })
+
+  it("extend_video runs PixVerse V6 on the video by URL, with its sound switch", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/extend-video", { jobId: "j-ex" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "extend_video", {
+      prompt: "the stall keeper waves", model: "pixverse-v6-extend", video_url: EXTEND_SOURCE, duration: 5, resolution: "540p", generate_audio: false,
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body).toMatchObject({
+      provider: "pixverse-v6-extend", videoUrl: EXTEND_SOURCE, duration: 5, resolution: "540p", generateAudio: false, prompt: "the stall keeper waves",
+    })
   })
 
   it("extend_video runs Kling 4 on the video by URL", async () => {

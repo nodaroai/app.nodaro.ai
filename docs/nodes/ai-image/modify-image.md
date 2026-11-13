@@ -13,7 +13,7 @@ For non-prompt utility operations (pure upscaling, background removal) use [Upsc
 - Connect a source image to the `image` input (from Upload Image, Generate Image, or any image-producing node).
 - Pick a provider and write a transformation prompt describing the change.
 - Optionally pick a style preset (or enter custom style text), add a negative prompt, set aspect ratio, seed, and a reference image — exactly which controls apply depends on the selected provider.
-- The aspect ratio control offers **Auto (match the photo)** on every model. Auto keeps your photo's shape; on models without a native auto, and on GPT Image 2.6 (the default, whose own auto renders a portrait square), it picks the closest supported shape. A node with no ratio set is Auto: the panel shows Auto, and the run asks for Auto (it used to send no ratio, and the model's own default — 16:9 on most models — reframed the photo). On GPT Image 2 (`gpt-image-2-i2i`) Auto is the model's own and keeps the shape at 1K, 2K or 4K, priced by the size. The API and the MCP `modify_image` and `image_to_image` tools run a GPT Image 2, 2.5 or 2.6 or a Seedream 5.5 edit that names no ratio at Auto too. Opening the panel keeps it; any other ratio a newly picked model does not list still switches to that model's first ratio.
+- The aspect ratio control offers **Auto (match the photo)** on every model. Auto keeps your photo's shape; on models without a native auto, and on GPT Image 2.6 (the default, whose own auto renders a portrait square), it picks the closest supported shape. A node with no ratio set is Auto: the panel shows Auto, and the run asks for Auto (it used to send no ratio, and the model's own default — 16:9 on most models — reframed the photo). On GPT Image 2 (`gpt-image-2-i2i`) Auto is the model's own and keeps the shape at 1K, 2K or 4K, priced by the size. The API and the MCP `modify_image` and `image_to_image` tools run a GPT Image 2, 2.5 or 2.6, a Seedream 5.5 or a FLUX 3 Klein edit that names no ratio at Auto too. Opening the panel keeps it; any other ratio a newly picked model does not list still switches to that model's first ratio.
 - On GPT Image 2.6 Flare and Sunburst (the default), **Format** writes the result as PNG (the default), JPEG, WebP, an animated GIF (2 to 16 square frames of 512×512, with their speed; the aspect ratio and resolution do not apply) or an SVG (SVG Standard, Detailed or Max). PNG, JPEG and WebP cost the same; prices for a GIF and an SVG are in [Generate Image › Formats](./generate-image.md#formats-png-jpeg-webp-gif-and-svg). A transparent background is kept only in PNG and WebP, and a mask cannot be used with a GIF or an SVG.
 - The node returns the transformed image on the `image` handle.
 - **An `{image:N}` token with no reference image at its position becomes its label** — `{image:1:person}` reads as `person`, a bare `{image:1}` is left out, and an image label is any text up to the closing brace (`{image:1:man's jacket}` reads as `man's jacket`). This holds on every model, Nano Banana Edit included, in the editor and in a workflow run alike.
@@ -50,13 +50,14 @@ Modify Image exposes the full image-to-image provider catalog plus Nano Banana E
 | Qwen / Qwen Edit | Versatile transformation and targeted editing |
 | Seedream 5 Pro / Seedream 5 Lite / Seedream 5 Flash / Seedream Edit | Seedream image-to-image — Pro for flagship instruction edits, Flash for fast low-cost edits (1K or 2K), Lite and Edit for lighter transforms |
 | MiniMax H3 Image | Change or combine up to 16 images in one edit, with readable text inside the picture, up to about 16 MP at 4K; priced by size and by each image |
+| FLUX 3 Klein | Fast, low-cost edits from the light model of FLUX 3, with up to 10 images, the source included (more is refused before anything is charged); priced by size alone, the images cost nothing extra; PNG or JPEG |
 | Kontext Multi (Open) | Multi-image Flux Kontext via Replicate (up to 2 reference images) |
 | Flux 2 Pro / Flux 2 Max (Safety Tolerance) | BFL Flux 2 via Replicate; Max supports up to 8 refs |
 | Nano Banana Edit | Context-aware editing from a text instruction (style presets, negative prompt, aspect ratio, seed, asset references) |
 
 ## Pricing
 
-Credits depend on the selected provider, and several providers cost more at higher quality/resolution settings. Typical costs range from **7 credits**<!-- credits: minimax-h3-image-i2i:2K:1ref --> (MiniMax H3 Image, one image at 1K or 2K) to **~682 credits** (Flux 2 Max at 4 MP with 8 references). Representative prices:
+Credits depend on the selected provider, and several providers cost more at higher quality/resolution settings. Typical costs range from **5 credits**<!-- credits: flux-3-klein-i2i:1K --> (FLUX 3 Klein at 1K) to **~682 credits** (Flux 2 Max at 4 MP with 8 references). Representative prices:
 
 | Provider | Credits |
 |----------|---------|
@@ -68,6 +69,7 @@ Credits depend on the selected provider, and several providers cost more at high
 | Seedream 5 Pro | 21<!-- credits: seedream-5-pro-i2i --> (basic / 1K) → 66<!-- credits: seedream-5-pro-i2i:high --> (high / 2K) |
 | Seedream 5 Flash | 11<!-- credits: seedream-5-flash-i2i --> (1K or 2K) |
 | MiniMax H3 Image | 7<!-- credits: minimax-h3-image-i2i:2K:1ref --> (1K or 2K, one image) → 17<!-- credits: minimax-h3-image-i2i:4K:1ref --> (4K, one image); 28<!-- credits: minimax-h3-image-i2i:2K:16ref --> at 2K with sixteen images |
+| FLUX 3 Klein | 5<!-- credits: flux-3-klein-i2i:1K --> (1K) → 8<!-- credits: flux-3-klein-i2i:2K --> (2K) → 19<!-- credits: flux-3-klein-i2i:4K --> (4K), whatever the number of images |
 | Seedream 5.5 | 15<!-- credits: seedream-5-5-i2i:1K:1ref --> (1K or 1.5K, the source only) → 22<!-- credits: seedream-5-5-i2i:2K:1ref --> (2K); each further input image adds to it, up to 58<!-- credits: seedream-5-5-i2i:2K:10ref --> (2K, ten images) |
 | Ideogram Edit / Remix | 50<!-- credits: ideogram-edit --> (Balanced) → 33<!-- credits: ideogram-edit:TURBO --> (Turbo) / 66<!-- credits: ideogram-edit:QUALITY --> (Quality) |
 | Nano Banana Pro | 50<!-- credits: nano-banana-pro --> (1K/2K) → 66<!-- credits: nano-banana-pro:4K --> (4K) |

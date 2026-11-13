@@ -226,13 +226,13 @@ describe("POST /v1/extend-video — Zod validation", () => {
     expect(payload.kieTaskId).toBeUndefined()
   })
 
-  it("reserves credits at each provider's duration×resolution row (default 8s/720p)", async () => {
+  it("reserves Seedance 2.5 on its resolution's two-second row (default 720p) and Seedance 2.0 on its duration×resolution row", async () => {
     await app.inject({ method: "POST", url: "/v1/extend-video", payload: seedanceBody })
-    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("seedance-2-5-extend:8s:720p")
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("seedance-2-5-extend:720p:per-2s")
 
     vi.mocked(reserveCreditsForJob).mockClear()
     await app.inject({ method: "POST", url: "/v1/extend-video", payload: { ...seedanceBody, duration: 12, resolution: "1080p" } })
-    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("seedance-2-5-extend:12s:1080p")
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("seedance-2-5-extend:1080p:per-2s")
 
     vi.mocked(reserveCreditsForJob).mockClear()
     await app.inject({ method: "POST", url: "/v1/extend-video", payload: { ...seedanceBody, provider: "seedance-2-0-extend", duration: 12, resolution: "1080p" } })

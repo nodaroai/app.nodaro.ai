@@ -130,3 +130,52 @@ export function unitBatchSideOutputs(
     ...(Object.keys(unitListsNotSaved).length > 0 ? { unitListsNotSaved } : {}),
   }
 }
+
+/**
+ * The batch a node holds from a run once per upstream item: its take pip's
+ * list (`__listResults`, the non-empty URLs), or none. A batch is over once a
+ * newer run lands: a single run clears `__listResults` on every lane, and a
+ * node saved before that (its newest take, `generatedResults[0]`, a URL the
+ * batch does not hold) is read as holding none too — so data written either
+ * way reads alike on both engines. A node with no takes, or whose newest take
+ * has no URL, holds what `__listResults` lists.
+ */
+export function unitHeldBatch(data: Readonly<Record<string, unknown>>): string[] {
+  const batch = listItems(data.__listResults)
+  if (batch.length === 0) return batch
+  const takes = data.generatedResults
+  const newest: unknown = Array.isArray(takes) ? takes[0] : undefined
+  const url = isRecord(newest) ? newest.url : undefined
+  return typeof url === "string" && url !== "" && !batch.includes(url) ? [] : batch
+}
+
+/**
+ * What a read of a unit's side output wants: a plain wire's value, and what
+ * the node shows beside its take (`"take"` — the ACTIVE take's own), or a
+ * list (`"list"` — what an Each wire fans out over, a Bundle hands on, item:N
+ * addresses and a list operator collects: while the node holds a batch, every
+ * row's).
+ */
+export type UnitSideRead = "list" | "take"
+
+/**
+ * The value of a side output (a list output, or a JSON output beside a media
+ * take) whose node-data field is `from`, as `read` reads it: a list read of a
+ * node holding a batch (`unitHeldBatch`) takes the node's field — after the
+ * batch it holds every row's, row-aligned (`unitBatchSideOutputs`); every
+ * other read takes the ACTIVE take's own field when that take carries the key
+ * (a take whose run made none carries it as null: no value, never the
+ * node's), else the node's field. The active take is
+ * `generatedResults[activeResultIndex ?? 0]`. One rule for the server's saved
+ * output (backend unitSavedOutput), the editor's reads (unitOutputField) and
+ * the run estimate's held count (node-fan-out.ts).
+ */
+export function unitSideFieldOf(data: Readonly<Record<string, unknown>>, from: string, read: UnitSideRead): unknown {
+  if (read === "list" && unitHeldBatch(data).length > 0) return data[from]
+  const takes = data.generatedResults
+  // Exactly the media read's active take (`activeResultIndex ?? 0`).
+  const active = (data.activeResultIndex as number | null | undefined) ?? 0
+  const take: unknown = Array.isArray(takes) ? (takes as unknown[])[active] : undefined
+  if (isRecord(take) && Object.hasOwn(take, from)) return take[from]
+  return data[from]
+}

@@ -54,6 +54,8 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | ⭐ Z-Image | Tongyi-MAI | Everyday | 3<!-- credits: z-image --> | t2i | Cheapest model in catalog. Fast, stylized output. Limited aspect ratios. |
 | Flux 2 Klein (Open) | Black Forest Labs | Everyday | 4<!-- credits: flux-2-klein --> | t2i | Open Flux 2 9B from BFL — fast. Runs direct on Replicate. |
 | Recraft Remove BG | Recraft | Everyday | 4<!-- credits: recraft-remove-bg --> | remove-bg | Remove image background. Cheap utility. |
+| FLUX 3 Klein | Black Forest Labs | Everyday | 5<!-- credits: flux-3-klein --> | t2i | FLUX 3 Klein - the light model of FLUX 3: fast and low cost, at 1K by default, 2K or 4K, in nine shapes, PNG or JPEG. Add images and it edits from up to 10 references, at the same price. |
+| FLUX 3 Klein (I2I) | Black Forest Labs | Everyday | 5<!-- credits: flux-3-klein-i2i --> | i2i | FLUX 3 Klein edits - fast, low-cost changes from 1 to 10 reference images, which cost nothing extra. 1K by default, 2K or 4K, PNG or JPEG; auto keeps the first image's shape. |
 | Nodaro Image Upscale | Nodaro Upscale | — | 5<!-- credits: nodaro-image-upscale:2K --> | upscale | Image upscale at 1x (enhance only), 2x, 4x or 8x. Restores detail and keeps lettering exactly as written; the output is the input times the factor, nothing cropped. Priced by the output's size. Offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it. |
 | MiniMax H3 Image | MiniMax | Everyday | 6<!-- credits: minimax-h3-image --> | t2i | MiniMax H3 Image: detailed pictures up to about 16 MP at 4K, with readable text inside the picture. Ten shapes plus auto, the same price at 1K and 2K (2K by default), PNG or JPEG. |
 | MiniMax H3 Image (I2I) | MiniMax | Everyday | 7<!-- credits: minimax-h3-image-i2i --> | i2i | MiniMax H3 Image edits: change or combine up to 16 reference images in one edit, with readable text, up to about 16 MP at 4K. Priced by size and by reference image; auto keeps the first image's shape. |
@@ -116,6 +118,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 <!-- AUTO-GEN:START model-table-video -->
 | Model | Family | Tier | Credits | Modes | Best for |
 | --- | --- | --- | --- | --- | --- |
+| LatentSync | LatentSync | Everyday | 8<!-- credits: latentsync --> | lip-sync | Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input. |
 | Nodaro Video Upscale | Nodaro Upscale | — | 17<!-- credits: nodaro-video-upscale:1080p:per-4s --> | video-upscale | Upscale any clip of up to 60 seconds and 50 MB into a 1080p, 2K or 4K frame. It keeps the clip's shape (nothing is cropped), frame rate, length and sound. Priced per second of the clip; the listed price is four seconds at 1080p. Offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it. |
 | VEO 1080p Upscale | Google | Everyday | 22<!-- credits: veo-1080p --> | video-upscale | Upscale VEO output to 1080p. |
 | Runway (via KIE) | Runway | Everyday | 33<!-- credits: runway-kie --> | i2v, t2v | Runway Gen-3 routed through KIE. 5/10s at 720p/1080p. |
@@ -129,6 +132,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Bytedance Pro Fast I2V | Bytedance | Everyday | 99<!-- credits: bytedance-pro-fast --> | i2v | Faster Bytedance Pro variant. |
 | Wan 2.2 Turbo | Alibaba | Everyday | 110<!-- credits: wan-turbo --> | i2v, t2v | Cheap, fast Wan turbo — 5s. Serves both i2v and t2v under one id. |
 | Wan Flash V2V | Alibaba | Everyday | 110<!-- credits: wan-flash --> | v2v | Faster Wan V2V variant. |
+| PixVerse V6 Extend | PixVerse | Everyday | 132<!-- credits: pixverse-v6-extend:5s:720p:audio --> | extend | Extend ANY video with PixVerse V6: 1–15s continuation at 360p to 1080p, with optional sound, joined onto your original clip. |
 | Kling 2.5 Turbo Pro | Kuaishou | Everyday | 138<!-- credits: kling-turbo --> | i2v, t2v | Faster Kling — good quality at lower cost. Supports end frame. |
 | Hailuo 02 I2V Pro | MiniMax | Everyday | 158<!-- credits: minimax --> | i2v, t2v | Hailuo 02 Pro — strong photoreal motion, fixed 5-second clips. Supports end frame. |
 | Grok Imagine (I2V) | xAI | Everyday | 165<!-- credits: grok-i2v --> | i2v | Grok image-to-video — stylized motion. Up to 15s. |
@@ -180,19 +184,21 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Kling Avatar Pro | Kuaishou | Premium | 616<!-- credits: kling-avatar-pro --> | lip-sync | Premium lip-sync — better mouth shape and timing. |
 | Seedance 2.0 Extend | Bytedance | Premium | 688<!-- credits: seedance-2-0-extend:8s:720p --> | extend | Extend ANY video with Seedance 2.0: 4–15s continuation (audio included), stitched into one seamless clip. |
 | Video Analysis (Fast) | Nodaro | Premium | 933<!-- credits: video-analysis:gemini-3-flash --> | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — fast, economy tier. Billed per duration bucket. |
-| Seedance 2.5 Extend | Bytedance | Premium | 1045<!-- credits: seedance-2-5-extend:8s:720p --> | extend | Extend ANY video with Seedance 2.5: 4–30s continuation (audio included), stitched into one seamless clip. |
 | Video Analysis (Fast — legacy) | Nodaro | Premium | 1092<!-- credits: video-analysis:gemini-3.6-flash --> | video-analysis | Legacy fast-tier analysis model (backed the fast tier from 2026-07 until 2026-07-29). Kept so stored raw-model configs keep running and keep pricing under their own identifier; new fast-tier runs use the current fast model. |
 | ⭐ VEO 3.1 Quality | Google | Premium | 1100<!-- credits: veo3 --> | i2v, t2v | Google VEO 3.1 Quality — premium cinematic video. 4/6/8s clips, optional end frame, native audio. No reference-to-video mode (Fast/Lite only). Flat per-generation pricing across durations. |
 | Video Analysis (Pro) | Nodaro | Premium | 1162<!-- credits: video-analysis:gemini-3.1-pro --> | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — higher-fidelity, default tier. Billed per duration bucket. |
 | AI Audit | Nodaro | Premium | 1181<!-- credits: video-audit --> | video-audit | Re-watches a clip against a wired analysis, applies video-verified corrections under guards, and returns a disclosed report of what changed. Billed per duration bucket. |
 | Video Analysis (Mixed) | Nodaro | Premium | 1295<!-- credits: video-analysis:mixed --> | video-analysis | Our most advanced analysis tier — multiple analysis engines combined into one result for maximum completeness and accuracy. Billed per duration bucket. |
 | Seedance 2.5 | Bytedance | Premium | 1386<!-- credits: seedance-2-5 --> | i2v, t2v, v2v | Seedance 2.5 — up to 30s in one shot, native audio, wide multimodal references. 480p/720p/1080p. |
+| Seedance 2.5 Extend | Bytedance | Premium | 1881<!-- credits: seedance-2-5-extend:720p:per-2s:9u --> | extend | Extend ANY video with Seedance 2.5: a 4–30s continuation (audio included) of the source's last 10 seconds, joined onto it. Charged per second of video sent and added; the figure is the default run, 8s added at 720p to a source of 10s or more. |
 | AI Audit (with analysis run) | Nodaro | Premium | 2114<!-- credits: video-audit:auto --> | video-audit | Same video-verified audit as AI Audit, but auto-runs a fast analysis first when none is wired in, then applies corrections under guards and returns a disclosed report. Billed per duration bucket. |
 | Video Analysis (Smart) | Nodaro | Premium | 2284<!-- credits: video-analysis:smart --> | video-analysis | Highest-accuracy analysis — a hybrid pass that blends a native skeleton read with several donor analysis rolls, then always refines the merged result to find shot boundaries and identify the cast by appearance. Best choice when the shot list will drive regeneration. Billed per duration bucket. |
 | Seedance 2.5 HD (from draft) | Bytedance | Premium | 3476<!-- credits: seedance-2-5-hd --> | video-upscale | Finalize a Seedance 2.5 draft: the same take, frame for frame, re-rendered at 1080p. |
 | OmniHuman 1.5 | Bytedance | Premium | 4455<!-- credits: omnihuman-1-5 --> | lip-sync | Premium prompt-directed talking avatar from a still image + audio. 720p / 1080p, up to 60s. People, pets, anime. |
 | Video Depth Anything | Depth Anything | Premium | 6600<!-- credits: video-depth-anything --> | video-depth | Temporally consistent depth video from any clip. Grayscale or colormapped, up to 2,400 frames or 300 seconds. |
 | Volcengine Lip Sync | Volcengine | Premium | 6600<!-- credits: volcengine-lipsync --> | lip-sync | Video-to-video AI dubbing — re-syncs lips to a new vocal track. Multi-speaker (scene detection + speaker ID) in basic mode. Video input, billed per second. |
+| HeyGen Lipsync Precision | HeyGen | Premium | 11011<!-- credits: heygen-lipsync-precision --> | lip-sync | Dub existing footage with precise lip sync to a new audio track. Video input, billed per second. |
+| Lipsync 2 Pro | Sync | Premium | 13739<!-- credits: lipsync-2-pro --> | lip-sync | Studio-grade lip sync on existing footage, re-synced to a new audio track. Video input, billed per second. |
 | Sync Lipsync v3 | Sync | Premium | 22000<!-- credits: sync-lipsync-v3 --> | lip-sync | Dub existing footage — re-syncs lips to a new audio track. Video input, billed per second. |
 <!-- AUTO-GEN:END model-table-video -->
 
@@ -215,6 +221,9 @@ Text-to-speech, voice design/changing, dubbing, sound effects, transcription, an
 | ElevenLabs v3 | ElevenLabs | Everyday | 33<!-- credits: elevenlabs-v3 --> | tts | Expressive ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API. |
 | ⭐ ElevenLabs v4 | ElevenLabs | Everyday | 33<!-- credits: elevenlabs-v4 --> | tts | Newest ElevenLabs TTS — [audio tags], stability and similarity control, up to 10,000 characters per request. Direct API. |
 | Suno v4 | Suno | Everyday | 33<!-- credits: suno --> | music | Suno v4 music generation — full songs with vocals, multiple genres. |
+| Suno v4.5 | Suno | Everyday | 33<!-- credits: suno-v4_5 --> | music | Suno v4.5 — improved quality and coherence over v4. |
+| Suno v4.5 All | Suno | Everyday | 33<!-- credits: suno-v4_5all --> | music | Suno v4.5 All — full instrument and vocal generation. |
+| Suno v4.5 Plus | Suno | Everyday | 33<!-- credits: suno-v4_5plus --> | music | Suno v4.5 Plus — richer production than v4.5. |
 | Suno v5 | Suno | Everyday | 33<!-- credits: suno-v5 --> | music | Suno v5 — better vocal quality than v4, more genres. Same price. |
 | Suno v5.5 | Suno | Everyday | 33<!-- credits: suno-v5_5 --> | music | Suno v5.5 — improved audio quality and expressiveness over v5. |
 | ⭐ Suno V6 | Suno | Everyday | 33<!-- credits: suno-v6 --> | music | Suno V6 — greater musical expression with more natural vocals and richer details. The flagship and the default. |

@@ -386,7 +386,7 @@ Generate an image from a text prompt.
 }
 ```
 
-**Providers:** `nano-banana`, `nano-banana-pro`, `grok`, `flux`, `flux-flex`, `gpt-image`, `imagen4`, `imagen4-fast`, `imagen4-ultra`, `ideogram-v3`, `qwen`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `seedream-5-flash`, `minimax-h3-image`, `seedream-5-5`, `nano-banana-2`, `nano-banana-2-1`, `nano-banana-2-lite`, `flux-kontext`, `flux-kontext-max`, `z-image`
+**Providers:** `nano-banana`, `nano-banana-pro`, `grok`, `flux`, `flux-flex`, `gpt-image`, `imagen4`, `imagen4-fast`, `imagen4-ultra`, `ideogram-v3`, `qwen`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `seedream-5-flash`, `minimax-h3-image`, `seedream-5-5`, `flux-3-klein`, `nano-banana-2`, `nano-banana-2-1`, `nano-banana-2-lite`, `flux-kontext`, `flux-kontext-max`, `z-image`
 
 **Aspect ratios by provider:**
 - Most: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`
@@ -395,9 +395,10 @@ Generate an image from a text prompt.
 - Nano Banana family: adds `5:4`, `4:5`, `21:9`
 - Seedream: adds `21:9`
 - MiniMax H3 Image: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`, `5:4`, `4:5`, `21:9`, `auto`
+- FLUX 3 Klein: `1:1`, `4:3`, `3:4`, `3:2`, `2:3`, `16:9`, `9:16`, `21:9`, `9:21`; its edit adds `auto`
 
 **Optional fields:**
-- `resolution`: `"1K"`, `"2K"`, `"4K"` (nano-banana-pro, nano-banana-2, nano-banana-2-1; minimax-h3-image, 2K by default, the same price at 1K and 2K); `"1K"`, `"2K"` (flux, flux-flex, seedream-5-flash — flat price at either); `"1K"`, `"1.5K"`, `"2K"` (seedream-5-5 — 2K by default, 1K and 1.5K the same price)
+- `resolution`: `"1K"`, `"2K"`, `"4K"` (nano-banana-pro, nano-banana-2, nano-banana-2-1; minimax-h3-image, 2K by default, the same price at 1K and 2K); `"1K"`, `"2K"` (flux, flux-flex, seedream-5-flash — flat price at either); `"1K"`, `"1.5K"`, `"2K"` (seedream-5-5 — 2K by default, 1K and 1.5K the same price); `"1K"`, `"2K"`, `"4K"` (flux-3-klein — 1K by default, priced by size)
 - `quality`: `"medium"`, `"high"` (gpt-image); `"basic"`, `"high"` (seedream)
 - `seed`: number (for reproducibility)
 
@@ -448,7 +449,7 @@ Transform an image with AI guided by a prompt.
 }
 ```
 
-**Providers:** `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-1`, `nano-banana-2-lite`, `grok-i2i`, `flux-i2i`, `flux-pro-i2i`, `gpt-image-i2i`, `ideogram-edit`, `ideogram-remix`, `ideogram-reframe`, `qwen-i2i`, `qwen-edit`, `seedream-edit`, `seedream-5-lite-i2i`, `seedream-5-pro-i2i`, `seedream-5-flash-i2i`, `minimax-h3-image-i2i`, `seedream-5-5-i2i`, `flux-kontext`, `flux-kontext-max`
+**Providers:** `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-1`, `nano-banana-2-lite`, `grok-i2i`, `flux-i2i`, `flux-pro-i2i`, `gpt-image-i2i`, `ideogram-edit`, `ideogram-remix`, `ideogram-reframe`, `qwen-i2i`, `qwen-edit`, `seedream-edit`, `seedream-5-lite-i2i`, `seedream-5-pro-i2i`, `seedream-5-flash-i2i`, `minimax-h3-image-i2i`, `seedream-5-5-i2i`, `flux-3-klein-i2i`, `flux-kontext`, `flux-kontext-max`
 
 **Optional fields:** `strength` (0-1), `aspectRatio`, `negativePrompt`, `seed`, `guidanceScale`
 

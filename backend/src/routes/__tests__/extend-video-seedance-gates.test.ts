@@ -237,6 +237,50 @@ describe("POST /v1/extend-video — Kling 4 (kling-4-extend)", () => {
   })
 })
 
+describe("POST /v1/extend-video — PixVerse V6 (pixverse-v6-extend)", () => {
+  const postPixverse = () =>
+    app.inject({
+      method: "POST",
+      url: "/v1/extend-video",
+      payload: { provider: "pixverse-v6-extend", videoUrl: "https://cdn.example.com/source.mp4", prompt: "she walks out of frame", duration: 5, resolution: "540p" },
+    })
+
+  it("refuses a never-paid account (no extension on free credits), like every other extend", async () => {
+    profile(false)
+    const res = await postPixverse()
+    expect(res.statusCode).toBe(402)
+    expect(res.json().error.code).toBe("free_video_limit")
+    expect(res.json().error.message).toMatch(/^Extending video is not available on free credits/)
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("refuses it even where the free length setting covers the seconds asked", async () => {
+    profile(false)
+    vi.mocked(getFreeVideoLimits).mockResolvedValue({ enabled: true, maxSeconds: 10 })
+    const res = await postPixverse()
+    expect(res.statusCode).toBe(402)
+    expect(res.json().error.message).toMatch(/^Extending video is not available on free credits/)
+  })
+
+  it("runs for a paying account", async () => {
+    profile(true)
+    const res = await postPixverse()
+    expect(res.statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenCalledTimes(1)
+  })
+
+  it("is its own catalog model: an override that withholds it refuses it, PixVerse V6 Max or not", async () => {
+    profile(true)
+    withhold("pixverse-v6-extend")
+    expect(GATEABLE_MODEL_IDS.has("pixverse-v6-extend")).toBe(true)
+    const refused = await postPixverse()
+    expect(refused.statusCode).toBe(403)
+    expect(refused.json().error.code).toBe("model_not_available")
+    expect(refused.json().error.message).toContain("pixverse-v6-extend")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+})
+
 describe("POST /v1/extend-video — availability", () => {
   it("an availability override withholding seedance-2-0-extend refuses it", async () => {
     profile(true)

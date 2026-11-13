@@ -60,14 +60,17 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   // The Run price is the row the run reserves on × the units it is charged —
   // the SAME mapping the config panel and the pre-run estimate use
   // (`getModelIdentifier`, `extendVideoPricingUnits`), so the node, the panel
-  // and the Execute total cannot quote different rows: a Seedance extend on
-  // its model's row for its seconds and resolution, LTX 2.3 Pro on its
-  // per-second row × the seconds, VEO Quality on its own row. The whole run's
-  // price is marked up once, as the run is charged (lib/unit-quote.ts).
+  // and the Execute total cannot quote different rows: Seedance 2.5 on its
+  // resolution's two-second row × (seconds sent + seconds added) ÷ 2, read off
+  // the canvas (the source's length when it is known, else the whole 10 s
+  // window), Seedance 2.0 on its row for its seconds and resolution, LTX 2.3
+  // Pro on its per-second row × the seconds, VEO Quality on its own row. The
+  // whole run's price is marked up once, as the run is charged (lib/unit-quote.ts).
   const priced = { id, type: "extend-video", position: { x: 0, y: 0 }, data: nodeData } as unknown as WorkflowNode
+  const units = useWorkflowStore((s) => extendVideoPricingUnits(priced, s.nodes, s.edges))
   const credits = useUnitQuoteCredits(
     getModelIdentifier(priced),
-    extendVideoPricingUnits(priced, [], []),
+    units,
     extendProvider === "runway-extend" ? 32 : 40,
   )
 

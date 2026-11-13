@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   probeVideoOverlayBase: vi.fn(),
   probeAudioSampleRate: vi.fn(),
   probeMatched: vi.fn(),
+  probeMatchedOrThrow: vi.fn(),
   getSmartCutMatcher: vi.fn(),
 }))
 
@@ -25,10 +26,12 @@ vi.mock("../ffmpeg-utils.js", async (importOriginal) => ({
 vi.mock("../matched-encode.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../matched-encode.js")>()),
   probeMatched: mocks.probeMatched,
+  probeMatchedOrThrow: mocks.probeMatchedOrThrow,
 }))
 vi.mock("../smart-cut.js", () => ({ getSmartCutMatcher: mocks.getSmartCutMatcher }))
 
-import { extendTailPicture, stitchExtension, type ExtendStitchArgs } from "../extend-stitch.js"
+import { extendTailPicture, extensionPictureSeconds, stitchExtension, type ExtendStitchArgs } from "../extend-stitch.js"
+import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 import { extendStitchArgs, stitchEncodesAtBitRate } from "../extend-stitch-args.js"
 import { matchedPictureArgs, parseMatchedProbe, type MatchedProbe } from "../matched-encode.js"
 import type { VideoOverlayBaseProbe } from "../ffmpeg-utils.js"
@@ -191,6 +194,59 @@ describe("extendStitchArgs", () => {
 
   it("leaves the arguments as they are for square, unrotated pixels", () => {
     expect(extendStitchArgs({ ...BASE, picture: { width: 854, height: 480 } })).toEqual(extendStitchArgs(BASE))
+  })
+
+  // H.264 4:2:0 needs even sides: an odd-size source is delivered at its size rounded down to
+  // even, its last column and/or row cropped (from the top left: `:0:0`), and the extension is
+  // covered and cropped to that size. The bitrate floor counts the delivered pixels.
+  it("delivers an 853×480 source at 852×480: its last column cropped, the extension covered to 852×480", () => {
+    const odd = { ...SOURCE, width: 853, height: 480 }
+    for (const args of [extendStitchArgs({ ...BASE, source: odd, picture: { width: 853, height: 480 } }), extendStitchArgs({ ...BASE, source: odd })]) {
+      const chains = chainsOf(args)
+      expect(chains["[sv]"]).toBe("[0:v:0]fps=24/1,tpad=stop_mode=clone:stop=-1,trim=end_frame=68,setpts=PTS-STARTPTS,crop=852:480:0:0[sv]")
+      expect(chains["[ev]"]).toBe(
+        "[1:v:0]fps=24/1,tpad=stop_mode=clone:stop=-1,trim=start_frame=3:end_frame=48,setpts=PTS-STARTPTS," +
+          "scale=852:480:force_original_aspect_ratio=increase,crop=852:480,setsar=1[ev]",
+      )
+    }
+  })
+
+  it("delivers an 853×481 source at 852×480, its last column and row cropped", () => {
+    const chains = chainsOf(extendStitchArgs({ ...BASE, source: { ...SOURCE, width: 853, height: 481 }, picture: { width: 853, height: 481 } }))
+    expect(chains["[sv]"]!.endsWith(",setpts=PTS-STARTPTS,crop=852:480:0:0[sv]")).toBe(true)
+    expect(chains["[ev]"]!.endsWith(",scale=852:480:force_original_aspect_ratio=increase,crop=852:480,setsar=1[ev]")).toBe(true)
+  })
+
+  it("rounds an odd source as the graph receives it: a rotated one upright, a non-square one at its SAR", () => {
+    // Stored 853×481 with a 90° display matrix: the graph receives it 481×853.
+    const rotated = chainsOf(extendStitchArgs({ ...BASE, source: { ...SOURCE, width: 853, height: 481 }, picture: { width: 481, height: 853 } }))
+    expect(rotated["[sv]"]!.endsWith(",crop=480:852:0:0[sv]")).toBe(true)
+    expect(rotated["[ev]"]!.endsWith(",scale=480:852:force_original_aspect_ratio=increase,crop=480:852,setsar=1[ev]")).toBe(true)
+    // 721×480 at SAR 32:27: delivered 720×480 at 32:27, the extension covered to its 853×480 display.
+    const anamorphic = chainsOf(extendStitchArgs({ ...BASE, source: { ...SOURCE, width: 721, height: 480 }, picture: { width: 721, height: 480, sarRatio: "32/27" } }))
+    expect(anamorphic["[sv]"]!.endsWith(",crop=720:480:0:0[sv]")).toBe(true)
+    expect(anamorphic["[ev]"]!.endsWith(",scale=853:480:force_original_aspect_ratio=increase,crop=853:480,scale=720:480,setsar=32/27[ev]")).toBe(true)
+  })
+
+  it("crops an odd source before its colour conversion, so the conversion's 4:2:0 sees even sides", () => {
+    const fullRange = { ...SOURCE, width: 853, height: 480, pixFmt: "yuvj420p", colorRange: "pc" }
+    expect(chainsOf(extendStitchArgs({ ...BASE, source: fullRange, picture: { width: 853, height: 480 } }))["[sv]"]).toBe(
+      `[0:v:0]fps=24/1,tpad=stop_mode=clone:stop=-1,trim=end_frame=68,setpts=PTS-STARTPTS,crop=852:480:0:0,${TO_LIMITED}[sv]`,
+    )
+  })
+
+  it("floors an odd source's bitrate at the delivered size's pixel count", () => {
+    // 852 × 480 at 24 fps × 0.1 = 981,504 bits per second (853 × 480 would be 982,656).
+    const low = { ...SOURCE, width: 853, height: 480, videoBitRate: 300_000 }
+    expect(valueOf(extendStitchArgs({ ...BASE, source: low, picture: { width: 853, height: 480 } }), "-b:v")).toBe("981504")
+  })
+
+  it("adds no crop for an even-size source", () => {
+    for (const picture of [{ width: 854, height: 480 }, { width: 480, height: 854 }, { width: 720, height: 480, sarRatio: "32/27" }]) {
+      const chains = chainsOf(extendStitchArgs({ ...BASE, picture }))
+      expect(chains["[sv]"]).toBe("[0:v:0]fps=24/1,tpad=stop_mode=clone:stop=-1,trim=end_frame=68,setpts=PTS-STARTPTS[sv]")
+      expect(chains["[sv]"]).not.toContain("crop")
+    }
   })
 
   it("encodes at the source's bitrate in two passes with no fixed CRF", () => {
@@ -702,6 +758,19 @@ describe("stitchExtension", () => {
     expect(mocks.probeVideoOverlayBase).toHaveBeenCalledWith(ARGS.sourcePath)
   })
 
+  it("makes an odd-size source's boundary proxies at the delivered even size, as the stitch reads it", async () => {
+    const matcher = vi.fn().mockResolvedValue(cut({}))
+    mocks.getSmartCutMatcher.mockReturnValue(matcher)
+    mocks.probeMatched.mockImplementation(async (p: string) => (p === ARGS.extensionPath ? EXTENSION : { ...SOURCE, width: 853, height: 481 }))
+    mocks.probeVideoOverlayBase.mockResolvedValue({ ...SHAPE, width: 853, height: 481 })
+    await stitchExtension(ARGS)
+    const [prevProxy, nextProxy] = ffmpegRuns()
+    expect(valueOf(prevProxy!, "-vf")).toBe("fps=24/1,tpad=stop_mode=clone:stop=-1,trim=start_frame=64:end_frame=72,setpts=PTS-STARTPTS,crop=852:480:0:0")
+    expect(valueOf(nextProxy!, "-vf")!.endsWith(",scale=852:480:force_original_aspect_ratio=increase,crop=852:480,setsar=1")).toBe(true)
+    expect(encodeChains()["[sv]"]).toContain(",crop=852:480:0:0[sv]")
+    expect(encodeChains()["[ev]"]).toContain(",crop=852:480,setsar=1[ev]")
+  })
+
   it("skips a trim that would leave a side with no picture, as trimEdgeFrames does", async () => {
     mocks.probeMatched.mockImplementation(async (p: string) =>
       p === ARGS.extensionPath
@@ -717,6 +786,49 @@ describe("stitchExtension", () => {
     mocks.probeMatched.mockImplementation(async (p: string) => (p === ARGS.extensionPath ? {} : SOURCE))
     await expect(stitchExtension(ARGS)).rejects.toThrow(/extension has no video stream/)
     expect(mocks.runFfmpeg).not.toHaveBeenCalled()
+  })
+})
+
+// What the extend measures an extension by before stitching it (`extensionTooShort`). A file
+// the probe read: its picture's length, none without a video stream. A probe that FAILED says
+// nothing about the length, so it throws a plain error, retried like any transient failure,
+// never final on this attempt.
+describe("extensionPictureSeconds", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("reads the picture's own length, else the container's, from a probe that read the file", async () => {
+    mocks.probeMatchedOrThrow.mockResolvedValue({ ...EXTENSION, durationSec: 5.2, videoDurationSec: 4.96 })
+    expect(await extensionPictureSeconds("/w/extension.mp4")).toBe(4.96)
+    mocks.probeMatchedOrThrow.mockResolvedValue({ ...EXTENSION, durationSec: 5.2, videoDurationSec: undefined })
+    expect(await extensionPictureSeconds("/w/extension.mp4")).toBe(5.2)
+    expect(mocks.probeMatchedOrThrow).toHaveBeenCalledWith("/w/extension.mp4")
+    // Never the probe that turns a failure into an empty reading.
+    expect(mocks.probeMatched).not.toHaveBeenCalled()
+  })
+
+  it("a file that was read and has no video stream has no picture length", async () => {
+    mocks.probeMatchedOrThrow.mockResolvedValue({ audioCodec: "aac", durationSec: 5 })
+    expect(await extensionPictureSeconds("/w/extension.mp4")).toBeUndefined()
+  })
+
+  it("a probe that timed out is rethrown as it is: plain, retryable", async () => {
+    const timedOut = Object.assign(new Error("ffprobe failed: killed"), { killed: true, timedOut: true })
+    mocks.probeMatchedOrThrow.mockRejectedValue(timedOut)
+    const failure = await extensionPictureSeconds("/w/extension.mp4").then(() => undefined, (err: unknown) => err)
+    expect(failure).toBe(timedOut)
+    expect(isDeterministicJobError(failure)).toBe(false)
+  })
+
+  it("a probe that failed otherwise is a plain error in the stitch's words, its cause kept", async () => {
+    const spawn = Object.assign(new Error("ffprobe failed: spawn ffprobe ENOENT"), { code: "ENOENT" })
+    mocks.probeMatchedOrThrow.mockRejectedValue(spawn)
+    const failure = await extensionPictureSeconds("/w/extension.mp4").then(() => undefined, (err: unknown) => err)
+    expect(failure).toBeInstanceOf(Error)
+    expect((failure as Error).message).toBe("Extend stitch: the extension's picture could not be read")
+    expect((failure as Error).cause).toBe(spawn)
+    expect(isDeterministicJobError(failure)).toBe(false)
   })
 })
 
@@ -757,6 +869,20 @@ describe("extendTailPicture", () => {
     const hdr = extendTailPicture({ ...HLG_SOURCE, ...uhd, pixFmt: "yuvj420p", colorRange: "pc" })
     expect(hdr.pictureFilter).toBe(toSdr("color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=pc"))
     expect(hdr.launch!.peakMemoryMiB - defaultLaunchPeakMiB()).toBe(Math.ceil(8.2944 * 72))
+  })
+
+  // The tail is the picture the stitch delivers: an odd-size source's is rounded down to even the
+  // same way (its last column and/or row cropped). The tail's `-vf` sees the picture upright, so
+  // the crop reads the sides it is given, whichever way the source is rotated.
+  it("cuts an odd-size source's tail at its size rounded down to even, before any colour conversion", () => {
+    const EVEN_CROP = "crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0"
+    for (const size of [{ width: 853, height: 480 }, { width: 854, height: 481 }, { width: 853, height: 481 }]) {
+      expect(extendTailPicture({ ...SOURCE, ...size })).toEqual({ pictureFilter: EVEN_CROP })
+    }
+    expect(extendTailPicture({ ...SOURCE, width: 853, height: 480, pixFmt: "yuvj420p" })).toEqual({ pictureFilter: `${EVEN_CROP},${TO_LIMITED}` })
+    const hdr = extendTailPicture({ ...HLG_SOURCE, width: 3839, height: 2160 })
+    expect(hdr.pictureFilter).toBe(`${EVEN_CROP},${toSdr("color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv")}`)
+    expect(hdr.launch!.peakMemoryMiB).toBeGreaterThan(defaultLaunchPeakMiB())
   })
 
   it("leaves a limited-range SDR or untagged source's tail as it always was: no filter, no estimate of its own", () => {

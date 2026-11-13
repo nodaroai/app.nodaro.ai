@@ -188,7 +188,9 @@ export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   //   docs.kie.ai/market/minimax-h3/text-to-image + image-edit),
   //   seedream-5-5, seedream-5-5-i2i (both "5–5000 characters"; the minimum is
   //   MIN_IMAGE_PROMPT_CHARS_BY_PROVIDER below;
-  //   docs.kie.ai/market/seedream/5-5-text-to-image + 5-5-image-to-image).
+  //   docs.kie.ai/market/seedream/5-5-text-to-image + 5-5-image-to-image),
+  //   flux-3-klein, flux-3-klein-i2i (both "1–5000 characters";
+  //   docs.kie.ai/market/flux3/klein-text-to-image + klein-edit-image).
   // grok-i2i: doc states 390000 (78× its t2i sibling) — treated as a KIE schema
   //   typo and left at the 5000 default per the sanity-cap decision.
   // UNVERIFIED (no limit stated in schema) → 5000 default: flux-kontext(-max)
@@ -370,6 +372,9 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // PixVerse V6 Max — 1-5000 chars on both endpoints
   // (docs.kie.ai/market/pixverse/v6-max-text-to-video and /v6-max-image-to-video).
   "pixverse-v6-max": 5000,
+  // PixVerse V6 Extend — 3-5000 chars (docs.kie.ai/market/pixverse/extend);
+  // its prompt is sent as written, so the whole cap is the user's.
+  "pixverse-v6-extend": 5000,
   "bytedance-lite": 10000,
   "bytedance-pro": 10000,
   "bytedance-pro-fast": 10000,
@@ -663,6 +668,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "seedream-5-5",
   "flux",
   "flux-flex",
+  "flux-3-klein",
   // Image editing / image-to-image (reference = source image)
   "nano-banana-edit",
   "gpt-image-i2i",
@@ -687,6 +693,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "seedream-5-flash-i2i",
   "minimax-h3-image-i2i",
   "seedream-5-5-i2i",
+  "flux-3-klein-i2i",
   "grok-i2i",
   // Upscale / background ops (source acts as the reference)
   "recraft-remove-bg",
@@ -734,6 +741,9 @@ export const T2I_TO_I2I_VARIANT: Record<string, string> = {
   "seedream-5-5": "seedream-5-5-i2i",
   "flux": "flux-pro-i2i",
   "flux-flex": "flux-i2i",
+  // FLUX 3 Klein's text-to-image endpoint takes no image at all: its edit
+  // endpoint reads them (the provider swaps too).
+  "flux-3-klein": "flux-3-klein-i2i",
 }
 
 /**
@@ -776,6 +786,8 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "minimax-h3-image-i2i": 16,
   // Seedream 5.5 takes 1–10 `image_urls` (docs.kie.ai/market/seedream/5-5-image-to-image).
   "seedream-5-5-i2i": 10,
+  // FLUX 3 Klein's edit takes 1–10 `image_urls` (docs.kie.ai/market/flux3/klein-edit-image).
+  "flux-3-klein-i2i": 10,
   // Single-source i2i (one input image)
   "flux-kontext": 1,
   "flux-kontext-max": 1,
@@ -839,8 +851,8 @@ export const DEFAULT_REQUEST_IMAGE_LIMIT = 14
  * {@link DEFAULT_REQUEST_IMAGE_LIMIT}. Separate from
  * {@link REF_IMAGE_MAX_LIMITS}, the cap the canvas and the assembler honour: the
  * routes have their own ceiling, and it moves per model only here. GPT Image
- * 2.6 takes more; a model priced per input image whose provider takes fewer
- * (Seedream 5.5: 10) is held to its own, so a request is refused before it is
+ * 2.6 takes more; a model whose provider takes fewer (Seedream 5.5 and FLUX 3
+ * Klein: 10) is held to its own, so a request is refused before it is
  * reserved instead of failing at the provider.
  */
 const REQUEST_IMAGE_LIMITS: Record<string, number> = {
@@ -848,6 +860,7 @@ const REQUEST_IMAGE_LIMITS: Record<string, number> = {
   "gpt-image-2-6-sunburst-i2i": 16,
   "minimax-h3-image-i2i": 16,
   "seedream-5-5-i2i": 10,
+  "flux-3-klein-i2i": 10,
 }
 
 /** The largest per-model limit: the outer bound of the routes' array schemas. */
@@ -896,6 +909,9 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | 
   // Also priced per reference image on an edit (`minimaxH3ImageCreditId`).
   "minimax-h3-image": "resolution",
   "minimax-h3-image-i2i": "resolution",
+  // By size alone, the same on both ids (`flux3KleinCreditId`).
+  "flux-3-klein": "resolution",
+  "flux-3-klein-i2i": "resolution",
 }
 
 
@@ -962,6 +978,7 @@ export const IMAGE_GEN_PROVIDERS = [
   "flux-flex",
   "flux-kontext",
   "flux-kontext-max",
+  "flux-3-klein",
   "z-image",
   "wan-2.7",
   "wan-2.7-pro",
@@ -1001,6 +1018,7 @@ export const IMAGE_I2I_PROVIDERS = [
   "seedream-5-5-i2i",
   "flux-kontext",
   "flux-kontext-max",
+  "flux-3-klein-i2i",
   // Replicate Open (uncensored) — multi-image Kontext via Replicate
   "kontext-multi",
   // BFL Flux 2 Pro — runs through Replicate
@@ -1529,6 +1547,10 @@ export const EXTEND_VIDEO_PROVIDERS = [
   // Kling 4 extends ANY video the same way (3–30 s added, 720p / 1080p, its
   // sound always on), generated on Kling 4.0 and priced on its own rows.
   "kling-4-extend",
+  // PixVerse V6 extends ANY video natively (1–15 s added, 360p–1080p, a sound
+  // switch): the whole source goes in and comes back with the new seconds
+  // joined on, of which only the new ones are kept. Priced on its own rows.
+  "pixverse-v6-extend",
 ] as const
 export type ExtendVideoProvider = typeof EXTEND_VIDEO_PROVIDERS[number]
 
@@ -1565,6 +1587,43 @@ export function isTailExtendProvider(p: unknown): p is TailExtendProvider {
   return typeof p === "string" && (TAIL_EXTEND_PROVIDERS as readonly string[]).includes(p)
 }
 
+/**
+ * PixVerse V6 Extend: a native extend, no tail recipe. The whole source goes
+ * to PixVerse's own extend, which returns it with the new seconds joined on;
+ * the run keeps the user's source and joins only the new seconds to it.
+ */
+export type PixverseExtendProvider = Extract<ExtendVideoProvider, "pixverse-v6-extend">
+export const PIXVERSE_V6_EXTEND_PROVIDER: PixverseExtendProvider = "pixverse-v6-extend"
+
+/** Whether a value is {@link PIXVERSE_V6_EXTEND_PROVIDER}. */
+export function isPixverseExtendProvider(p: unknown): p is PixverseExtendProvider {
+  return p === PIXVERSE_V6_EXTEND_PROVIDER
+}
+
+/**
+ * The Extend Video providers whose levers come from their own catalog entry —
+ * the seconds added (`durations`, `defaultDuration`) and the resolution
+ * (`resolutions`) — and which are priced one row per second added and
+ * resolution (`catalogExtendCreditId`): the tail recipes
+ * ({@link TailExtendProvider}) and PixVerse V6. Each extends any video by URL.
+ * A retired id answers false: pass it through {@link canonicalVideoProvider} first.
+ */
+export type CatalogExtendProvider = TailExtendProvider | PixverseExtendProvider
+
+/** Whether a value is a {@link CatalogExtendProvider}. */
+export function isCatalogExtendProvider(p: unknown): p is CatalogExtendProvider {
+  return isTailExtendProvider(p) || isPixverseExtendProvider(p)
+}
+
+/**
+ * Whether an Extend Video provider has a sound switch (`generateAudio`, on
+ * unless turned off): Seedance's, which continue the soundtrack, and PixVerse
+ * V6's, whose sound is priced on its own rows. Kling 4's sound is always on.
+ */
+export function extendHasSoundSwitch(p: unknown): boolean {
+  return isSeedanceExtendProvider(p) || isPixverseExtendProvider(p)
+}
+
 /** Lip sync providers */
 export const LIP_SYNC_PROVIDERS = [
   "kling-avatar",
@@ -1580,9 +1639,8 @@ export const LIP_SYNC_PROVIDERS = [
   // (LIP_SYNC_AUDIO_RATES), never by bucket.
   "omnihuman-2-0",
   "latentsync",
-  "wav2lip",
-  "video-retalking",
-  "sadtalker",
+  // (Wav2Lip, VideoReTalking and SadTalker were retired 2026-11-12:
+  // RETIRED_LIP_SYNC_PROVIDERS below.)
   // HeyGen Lipsync Precision + Sync Lipsync 2 Pro — Replicate-hosted, video-input
   // dubbing models billed per second of output. Routed through replicateLipSync;
   // priced per-second via buildLipSyncCreditId (see lip-sync-pricing.ts).
@@ -1614,6 +1672,34 @@ export const LIP_SYNC_PROVIDERS = [
 ] as const
 export type LipSyncProvider = typeof LIP_SYNC_PROVIDERS[number]
 
+/**
+ * Lip Sync models the platform no longer offers (retired 2026-11-12), with the
+ * name each is shown by. They left every menu, the route's accepted values and
+ * the MCP tool; a request, a saved or imported workflow node or an app run that
+ * still names one is refused before anything is reserved, with
+ * {@link retiredLipSyncProviderMessage} — never moved to another model, whose
+ * inputs and price differ. The editor shows a saved node on one as retired and
+ * leaves the choice of another model to the person.
+ */
+export const RETIRED_LIP_SYNC_PROVIDERS: Readonly<Record<string, string>> = {
+  wav2lip: "Wav2Lip",
+  "video-retalking": "VideoReTalking",
+  sadtalker: "SadTalker",
+}
+
+/** The name of a retired Lip Sync model, or undefined for any other value. Own keys only (the value is request input). */
+export function retiredLipSyncProviderName(provider: unknown): string | undefined {
+  return typeof provider === "string" && Object.hasOwn(RETIRED_LIP_SYNC_PROVIDERS, provider)
+    ? RETIRED_LIP_SYNC_PROVIDERS[provider]
+    : undefined
+}
+
+/** The refusal a run of a retired Lip Sync model gets, or undefined for any other value. */
+export function retiredLipSyncProviderMessage(provider: unknown): string | undefined {
+  const name = retiredLipSyncProviderName(provider)
+  return name === undefined ? undefined : `${name} is no longer available for Lip Sync. Pick another Lip Sync model.`
+}
+
 /** Multimodal video models exposed via the lip-sync surface (Seedance 2 family
  *  + MiniMax Hailuo 3). They go through the i2v provider with the audio
  *  plumbed as `reference_audio_urls` rather than a dedicated lip-sync flow.
@@ -1626,12 +1712,10 @@ export const SEEDANCE_LIP_SYNC_PROVIDERS = new Set<string>([
   "minimax-h3",
 ])
 
-/** Replicate-based lip-sync providers (video or image+audio via Replicate SDK) */
+/** Replicate-based lip-sync providers (video or image+audio via Replicate SDK).
+ *  The retired ones ran there too (`RETIRED_LIP_SYNC_PROVIDERS`). */
 export const REPLICATE_LIP_SYNC_PROVIDERS = new Set([
   "latentsync",
-  "wav2lip",
-  "video-retalking",
-  "sadtalker",
   "heygen-lipsync-precision",
   "lipsync-2-pro",
 ] as const)
@@ -1642,7 +1726,9 @@ export const FAL_LIP_SYNC_PROVIDERS = new Set([
   "sync-lipsync-v3",
 ] as const)
 
-/** Lip-sync providers that require video input (not image) */
+/** Lip-sync providers that require video input (not image). A retired id
+ *  stays in this set and the next: a saved node on it keeps the handles its
+ *  edges attach to until the person picks another model. */
 export const VIDEO_INPUT_LIP_SYNC_PROVIDERS = new Set([
   "latentsync",
   "video-retalking",
@@ -2083,6 +2169,7 @@ export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
   "seedream-5-flash": "prompt",
   "minimax-h3-image": "prompt",
   "seedream-5-5": "prompt",
+  "flux-3-klein": "prompt",
   "qwen": "prompt",
   "flux-kontext": "prompt",
   "flux-kontext-max": "prompt",
@@ -2115,6 +2202,7 @@ export const SEED_SUPPORT = new Set([
   "flux", "flux-flex", "flux-i2i", "flux-pro-i2i", "flux-kontext", "flux-kontext-max",
   "flux-2-klein", "kontext-multi",
   "minimax-h3-image", "minimax-h3-image-i2i",
+  "flux-3-klein", "flux-3-klein-i2i",
 ])
 
 /** Ideogram models that support rendering_speed selection (TURBO/BALANCED/QUALITY) */

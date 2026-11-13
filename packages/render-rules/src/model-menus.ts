@@ -58,6 +58,7 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "wan-2.7",     label: "Wan 2.7",     desc: "T2I, 1K/2K/4K, up to 9 ref images" },
   { value: "wan-2.7-pro", label: "Wan 2.7 Pro", desc: "Higher quality T2I, 1K/2K/4K" },
   { value: "flux-2-klein", label: "Flux 2 Klein (Open)", desc: "BFL Flux 2 9B via Replicate — fast" },
+  { value: "flux-3-klein", label: "FLUX 3 Klein", desc: "Light FLUX 3: fast, low cost, up to 4K, edits from up to 10 references" },
   { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)", desc: "BFL Flux 2 Pro via Replicate — flagship quality" },
   { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)", desc: "BFL Flux 2 Max via Replicate — even larger sibling, up to 8 refs (variable pricing: 2-62 cr)" },
 ]
@@ -91,6 +92,7 @@ export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string
   { value: "seedream-5-5-i2i", label: "Seedream 5.5", desc: "Edits that keep the rest of the picture, up to 10 input images" },
   { value: "seedream-edit", label: "Seedream Edit", desc: "Photorealistic image editing" },
   { value: "kontext-multi", label: "Kontext Multi (Open)", desc: "Multi-image Flux Kontext via Replicate — up to 4 refs" },
+  { value: "flux-3-klein-i2i", label: "FLUX 3 Klein", desc: "Fast, low-cost edits from up to 10 references, no extra cost per image" },
   { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)", desc: "BFL Flux 2 Pro via Replicate — flagship quality" },
   { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)", desc: "BFL Flux 2 Max via Replicate — up to 8 refs (variable pricing: 2-62 cr)" },
   { value: "flux-fill", label: "Flux Fill (Inpaint)", desc: "BFL FLUX Fill Pro via Replicate — dedicated masked inpainting (white = edit area)" },
@@ -258,7 +260,7 @@ export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoNodeProvider; label
   { value: "wan-flash", label: "Wan 2.6 Flash", desc: "Fast V2V with audio & multi-shot" },
 ]
 
-/** Seedance first, one row per model (decided 2026-11-11), then Kling 4; a new Extend node still starts on VEO (`EXTEND_VIDEO_DEFAULT_PROVIDER`). */
+/** Seedance first, one row per model (decided 2026-11-11), then Kling 4, then VEO, Runway and LTX 2.3 Pro, then PixVerse V6; a new Extend node still starts on VEO (`EXTEND_VIDEO_DEFAULT_PROVIDER`). */
 export const EXTEND_VIDEO_MODELS = [
   { value: "seedance-2-5-extend", label: "Seedance 2.5" },
   { value: "seedance-2-0-extend", label: "Seedance 2.0" },
@@ -266,6 +268,7 @@ export const EXTEND_VIDEO_MODELS = [
   { value: "veo-extend", label: "VEO Extend" },
   { value: "runway-extend", label: "Runway Extend" },
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro" },
+  { value: "pixverse-v6-extend", label: "PixVerse V6" },
 ] as const
 
 export const LIP_SYNC_MODELS: readonly { value: LipSyncProvider; label: string; desc: string }[] = [
@@ -279,9 +282,6 @@ export const LIP_SYNC_MODELS: readonly { value: LipSyncProvider; label: string; 
   { value: "omnihuman-1-5", label: "OmniHuman 1.5", desc: "Prompt-directed talking avatar, 720p\u20131080p, premium" },
   { value: "omnihuman-2-0", label: "OmniHuman 2.0", desc: "Voice-driven talking avatar, 720p, up to 5 min, billed per second" },
   { value: "latentsync", label: "LatentSync", desc: "Diffusion-based, best for singing" },
-  { value: "wav2lip", label: "Wav2Lip", desc: "Fastest and cheapest, image or video input" },
-  { value: "video-retalking", label: "Video-Retalking", desc: "Built-in face enhancement, clean output" },
-  { value: "sadtalker", label: "SadTalker", desc: "Talking avatar from single image" },
   { value: "heygen-lipsync-precision", label: "HeyGen Lipsync Precision", desc: "Avatar-inference dubbing on a video. Dynamic duration, premium." },
   { value: "lipsync-2-pro", label: "Lipsync 2 Pro", desc: "Studio-grade sync.so lip sync. Video input, expressive." },
   { value: "sync-lipsync-v3", label: "Sync Lipsync v3", desc: "fal.ai sync.so v3 dubbing. Video input, billed per second." },

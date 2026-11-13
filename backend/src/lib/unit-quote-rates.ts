@@ -17,8 +17,10 @@
  * may cover — `<row>:2.5u` is not a count a dub is charged at), Speaker
  * Frames' per-block row (whole started blocks of 1,000 sampled frames), each
  * per-second lip-sync rate (`LIP_SYNC_AUDIO_RATES`: whole seconds, from the
- * model's minimum to its maximum — OmniHuman 2.0's 4 to 300), and the Nodaro
- * Video Upscale tiers' four-second rows (a quarter-unit per billed second). A
+ * model's minimum to its maximum — OmniHuman 2.0's 4 to 300), the Nodaro
+ * Video Upscale tiers' four-second rows (a quarter-unit per billed second),
+ * and the Seedance 2.5 Extend two-second rows (half a unit per second sent and
+ * added). A
  * speech request's quote (`<model>:per-100-chars:<N>u`) is priced through its own,
  * stricter reader (`parseSpeechQuoteCreditId`), which bounds N by the model's
  * cap and follows the length-pricing flag.
@@ -41,8 +43,18 @@ import {
 import {
   RENDER_NODE_TYPES,
 } from "@nodaro/shared/nodes"
-import { NODARO_VIDEO_UPSCALE_CREDIT_IDS, NODARO_VIDEO_UPSCALE_RATE_SECONDS, SPEAKER_FRAMES_CREDIT_ID, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
-import { NODARO_VIDEO_UPSCALE_MAX_SEC } from "@nodaro/shared/models"
+import {
+  NODARO_VIDEO_UPSCALE_CREDIT_IDS,
+  NODARO_VIDEO_UPSCALE_RATE_SECONDS,
+  SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
+  SEEDANCE_EXTEND_RATE_CREDIT_IDS,
+  SEEDANCE_EXTEND_RATE_SECONDS,
+  SEEDANCE_EXTEND_SENT_PRICED_PROVIDER,
+  SPEAKER_FRAMES_CREDIT_ID,
+  TOPAZ_VIDEO_UNIT_CREDIT_ID,
+} from "@nodaro/render-rules"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { NODARO_VIDEO_UPSCALE_MAX_SEC, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC } from "@nodaro/shared/models"
 import { DUBBING_MAX_MINUTES, DUBBING_MODEL_IDENTIFIERS } from "./dubbing-model.js"
 import { VIDEO_UTILITY_JOB_NAMES } from "./video-utility-credits.js"
 
@@ -63,6 +75,19 @@ const ANY_UNITS: UnitQuoteRule = { maxUnits: UNIT_QUOTE_MAX_UNITS, wholeUnits: f
 const DUB_MINUTES: UnitQuoteRule = { maxUnits: DUBBING_MAX_MINUTES, wholeUnits: true }
 /** Speaker Frames: started blocks of 1,000 sampled frames — whole blocks only. */
 const FRAME_BLOCKS: UnitQuoteRule = { maxUnits: UNIT_QUOTE_MAX_UNITS, wholeUnits: true }
+/** The seconds a Seedance 2.5 Extend run can add: its catalog window. */
+const SEEDANCE_EXTEND_ADDED_SEC: readonly number[] = MODEL_CATALOG[SEEDANCE_EXTEND_SENT_PRICED_PROVIDER]?.durations ?? []
+/**
+ * Seedance 2.5 Extend: half a unit per second sent and added. The fewest a run
+ * has is the shortest source it takes (`SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC`, the
+ * floor the route and the worker refuse under) plus the fewest seconds it
+ * adds; the most, the whole 10-second window plus the most it adds.
+ */
+const SEEDANCE_EXTEND_UNITS: UnitQuoteRule = {
+  minUnits: (SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC + Math.min(...SEEDANCE_EXTEND_ADDED_SEC)) / SEEDANCE_EXTEND_RATE_SECONDS,
+  maxUnits: (SEEDANCE_EXTEND_CONTEXT_MAX_SEC + Math.max(...SEEDANCE_EXTEND_ADDED_SEC)) / SEEDANCE_EXTEND_RATE_SECONDS,
+  wholeUnits: false,
+}
 
 /** Every rate a whole-run quote may name, with the unit counts it accepts. */
 export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
@@ -82,6 +107,11 @@ export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
     id,
     { maxUnits: NODARO_VIDEO_UPSCALE_MAX_SEC / NODARO_VIDEO_UPSCALE_RATE_SECONDS, wholeUnits: false },
   ] as const),
+  // Seedance 2.5 Extend: each resolution's row prices two seconds, so a run is
+  // half a unit per second sent and added (any fraction: the source's seconds
+  // are measured), from the shortest source a run takes plus the fewest
+  // seconds it adds, up to the 10-second window plus the most it adds.
+  ...Object.values(SEEDANCE_EXTEND_RATE_CREDIT_IDS).map((id) => [id, SEEDANCE_EXTEND_UNITS] as const),
   ...DUBBING_MODEL_IDENTIFIERS.map((id) => [id, DUB_MINUTES] as const),
   [SPEAKER_FRAMES_CREDIT_ID, FRAME_BLOCKS] as const,
   // A per-second lip-sync rate: the whole seconds a run of it can be billed.

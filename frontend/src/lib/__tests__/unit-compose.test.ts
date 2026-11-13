@@ -9,7 +9,7 @@ import {
   composeFamilyTypes, composeNodeDefinitions, composeTabSuperset, composeNodeOptions, composeRecord, composeRecordAfter, composeSet, insertAtPositions,
   jsonListItems, toNodeTypeDefinition, unitJobLanding, unitJsonJobLanding, unitJsonProducers, unitJsonRunPatch, unitJsonWorkers, unitNoMediumResults, unitNodeLabels,
   unitOutputTypes, unitOutputValue, unitPipJson, unitPriceRows, unitProducers, unitRecord, unitsWith, unitTabSuperset, unitTextSources,
-  unitListItems, unitListNotSavedField, unitPipIsImage, unitPipList, unitSideBatchPatch, unitSideFields, unitSideJobPatch, unitSideLanding, unitSideOutputs, unitSideRunPatch,
+  UNIT_BATCH_FIELDS, unitBatchClearPatch, unitListItems, unitListNotSavedField, unitPipIsImage, unitPipList, unitSideBatchPatch, unitSideFields, unitSideJobPatch, unitSideLanding, unitSideOutputs, unitSideRunPatch,
 } from "../unit-compose"
 import { ACCEPTS_AUDIO, ACCEPTS_MEDIA, ACCEPTS_VIDEO, unitInputAccepts } from "../ffmpeg-handles"
 import { createUnitExecKit } from "@/components/editor/workflow-editor/unit-exec-kit"
@@ -401,7 +401,7 @@ describe("a media take's side outputs (a list, JSON beside it)", () => {
     expect(unitSideBatchPatch(LAYERS, [undefined, { url: "x" }])).toEqual({ generatedLayerUrls: null, layersNotSaved: null, generatedLayerData: null })
     expect(unitSideBatchPatch(FIXTURE, [takeA])).toBeUndefined()
   })
-  it("after a run once per upstream item a wire reads the node's fields (every row's) whichever take is active; the node shows the active take's own (read: take)", () => {
+  it("after a run once per upstream item a list read (Each, Bundle, a list operator) takes every row's whichever take is active; a plain wire and the node read the active take's own", () => {
     const batch = {
       generatedLayerUrls: ["a1", "a2", "c1"],
       generatedLayerData: [{ n: "a1", row: 0 }, { n: "a2", row: 0 }, { n: "c1", row: 2 }],
@@ -410,15 +410,32 @@ describe("a media take's side outputs (a list, JSON beside it)", () => {
       generatedResults: [takeA, takeB, takeC],
     }
     expect(unitPipList(LAYERS, batch, "layers")).toEqual({ items: ["a1", "a2", "c1"] })
-    expect(unitOutputValue(LAYERS, batch, "layers")).toBe("a1")
     expect(unitPipJson(LAYERS, batch, "layerData")?.value).toEqual(batch.generatedLayerData)
-    expect(unitOutputValue(LAYERS, batch)).toBe("c")
     expect(unitPipList(LAYERS, batch, "base")).toEqual({ items: ["a", "b", "c"] })
+    // A plain wire follows the active take (decided 2026-11-12), as the take pip's does.
+    expect(unitOutputValue(LAYERS, batch)).toBe("c")
+    expect(unitOutputValue(LAYERS, batch, "layers")).toBe("c1")
+    expect(unitOutputValue(LAYERS, batch, "layerData")).toBe('[{"n":"c1"}]')
+    expect(unitOutputValue(LAYERS, { ...batch, activeResultIndex: 1 }, "layers")).toBeUndefined()
+    expect(unitOutputValue(LAYERS, { ...batch, activeResultIndex: 1 }, "layerData")).toBe("[]")
     expect(unitPipList(LAYERS, batch, "layers", "take")).toEqual({ items: ["c1"] })
     expect(unitPipJson(LAYERS, batch, "layerData", "take")?.value).toEqual([{ n: "c1" }])
     // No batch held: the active take's own, as before.
     const { __listResults: _batch, ...single } = batch
     expect(unitPipList(LAYERS, single, "layers")).toEqual({ items: ["c1"] })
+    expect(unitPipList(LAYERS, single, "base")).toEqual({ items: [] })
+    // A newer single run's take first: the batch is over, whatever `__listResults` an older editor left.
+    const over = { ...batch, activeResultIndex: 3, generatedResults: [{ url: "q", generatedLayerUrls: ["q1"] }, takeA, takeB, takeC] }
+    expect(unitPipList(LAYERS, over, "base")).toEqual({ items: [] })
+    expect(unitPipList(LAYERS, over, "layers")).toEqual({ items: ["c1"] })
+  })
+
+  it("unitBatchClearPatch: a single run's output (or job row) empties every batch field; a batch's output, and a unit without side outputs, nothing", () => {
+    const clear = unitBatchClearPatch(LAYERS, { imageUrl: "q" })!
+    expect(Object.keys(clear).sort()).toEqual([...UNIT_BATCH_FIELDS].sort())
+    expect(Object.values(clear).every((v) => v === undefined)).toBe(true)
+    expect(unitBatchClearPatch(LAYERS, { imageUrl: "a", listResults: ["a"] })).toBeUndefined()
+    expect(unitBatchClearPatch(FIXTURE, { imageUrl: "q" })).toBeUndefined()
   })
 })
 

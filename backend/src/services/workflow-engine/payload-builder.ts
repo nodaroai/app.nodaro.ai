@@ -5,6 +5,7 @@ import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { DUBBING_VOICE_LOCK_MESSAGE, dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { retiredEditProviderReason } from "../../lib/retired-edit-providers.js"
 import { tailRecipeSeconds } from "../../lib/extend-recipe.js"
+import { pixverseExtendPromptProblem, pixverseExtendSeconds } from "../../lib/extend-native.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import { AUDIO_ISOLATION_CREDIT_ID, FORCED_ALIGNMENT_CREDIT_ID, REMOVE_BACKGROUND_CREDIT_ID } from "../../lib/fixed-row-credit-ids.js"
 import {
@@ -63,7 +64,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -126,6 +127,8 @@ import {
   seedanceVideoEditCreditId,
   tailExtendCreditId,
   tailExtendResolution,
+  pixverseExtendCreditId,
+  pixverseExtendQuality,
   resolveTopazUpscale,
   resolveUpscaleFactor,
   resolveNormalizedImageGen,
@@ -153,6 +156,7 @@ import {
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
   isTailExtendProvider,
+  isPixverseExtendProvider,
   canonicalVideoProvider,
   SEEDANCE_VIDEO_EDIT_SHAPE,
   SEEDANCE_VIDEO_EDIT_TASK_TYPE,
@@ -186,6 +190,7 @@ import {
   audioSoundtrackActive,
   withoutLipSyncLeversNotTaken,
   NODARO_VIDEO_UPSCALE_PROVIDER,
+  retiredLipSyncProviderMessage,
 } from "@nodaro/shared/models"
 import {
   isRenderNodeType,
@@ -298,6 +303,7 @@ import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { viduQ4InputProblem } from "../../lib/vidu-q4-inputs.js"
 import { imagePromptTooShort } from "../../lib/image-prompt-minimum.js"
+import { baseImageReservedSeats, imageInputLimitProblem } from "../../lib/image-input-limit.js"
 import { aspectRatioForStrictModel } from "../../lib/aspect-ratio.js"
 import { kieImageModelSent } from "../../providers/kie/image-edit-sibling.js"
 import { kling4InputProblem } from "../../lib/kling4-inputs.js"
@@ -3365,8 +3371,15 @@ function buildPayloadOf(
       // their clauses fold in their direction rows, the moodboard's images
       // fill only the reference seats the node's own references leave free.
       const generateUserDirection = buildCtx?.userDirection
+      // A base image FLUX 3 Klein counts against its limit takes a seat the
+      // moodboard would otherwise fill (`baseImageReservedSeats`, as on the route).
+      const generateReservedSeats = baseImageReservedSeats(effectiveProvider, resolvedInputs.baseImageUrl || data.baseImageUrl)
       const userDirectionLevers = generateUserDirection
-        ? { directionRefs: generateUserDirection.refs, styleReferences: generateUserDirection.styleReferences }
+        ? {
+            directionRefs: generateUserDirection.refs,
+            styleReferences: generateUserDirection.styleReferences,
+            ...(generateReservedSeats > 0 ? { reservedImageSeats: generateReservedSeats } : {}),
+          }
         : {}
       // Shared node-input assembly (WI-1a) — single source of truth with the
       // frontend execute-node + Studio. `rawPrompt` is already graph-composed
@@ -3452,6 +3465,13 @@ function buildPayloadOf(
       // sends, `imageJobPhotoUrl`, read by `buildPayloadWithSourceSize`) resolves
       // "auto" on a model without a native auto, as the route does; with no
       // photo, "auto" snaps exactly as it always has.
+      // Every image this job sends: its references and, on a model whose price
+      // reads them, a base image too (`pricedSentImages`, the route's count).
+      const generateSentImages = pricedSentImages(
+        provider,
+        result.referenceImageUrls ?? [],
+        resolvedInputs.baseImageUrl || data.baseImageUrl,
+      )
       const imageParams = resolveNormalizedImageGen({
         provider,
         // Unset = Auto, as the dropdown shows it (`nodeAspectRatio`).
@@ -3462,12 +3482,8 @@ function buildPayloadOf(
         background: data.background,
         // The file written, and a GIF's or an SVG's own levers (a GIF and an SVG price differently).
         ...imageFormatInputOf(data),
-        // On a model priced per input image the base of an edit is one more image sent.
-        refCount: pricedSentImages(
-          provider,
-          result.referenceImageUrls ?? [],
-          resolvedInputs.baseImageUrl || data.baseImageUrl,
-        ),
+        // On a model whose price reads the images the base of an edit is one more image sent.
+        refCount: generateSentImages,
         swapToI2i: !lora,
         sourceImage: buildCtx?.sourceImage,
       })
@@ -3487,6 +3503,9 @@ function buildPayloadOf(
       // A prompt shorter than the model takes: refused before any job row, as on the route.
       const generateTooShort = lora ? null : imagePromptTooShort(imageParams.modelId, result.prompt)
       if (generateTooShort) throw new Error(generateTooShort.message)
+      // More images than FLUX 3 Klein takes: refused before any job row, as on the route.
+      const generateTooMany = lora ? null : imageInputLimitProblem(provider, generateSentImages)
+      if (generateTooMany) throw new Error(generateTooMany.message)
 
       return {
         jobName: "generate-image",
@@ -3816,6 +3835,9 @@ function buildPayloadOf(
       // A prompt shorter than the model takes: refused before any job row, as on the route.
       const i2iTooShort = imagePromptTooShort(provider, i2iResult.prompt)
       if (i2iTooShort) throw new Error(i2iTooShort.message)
+      // The source and its references past what FLUX 3 Klein takes: refused, as on the route.
+      const i2iTooMany = imageInputLimitProblem(provider, 1 + (i2iResult.referenceImageUrls?.length ?? 0))
+      if (i2iTooMany) throw new Error(i2iTooMany.message)
 
       return {
         jobName: "image-to-image",
@@ -4016,6 +4038,9 @@ function buildPayloadOf(
       // A prompt shorter than the model takes: refused before any job row, as on the route.
       const modTooShort = imagePromptTooShort(provider, i2iResult.prompt)
       if (modTooShort) throw new Error(modTooShort.message)
+      // The source and its references past what FLUX 3 Klein takes: refused, as on the route.
+      const modTooMany = imageInputLimitProblem(provider, 1 + (i2iResult.referenceImageUrls?.length ?? 0))
+      if (modTooMany) throw new Error(modTooMany.message)
 
       return {
         jobName: "image-to-image",
@@ -5583,6 +5608,11 @@ function buildPayloadOf(
 
     case "lip-sync": {
       const provider = (data.provider as string) ?? "kling-avatar"
+      // A retired Lip Sync model on a saved or imported node: refused with the
+      // route's sentence before the credit id is built (the node keeps its
+      // model; another is the person's choice, never ours).
+      const retiredLipSync = retiredLipSyncProviderMessage(provider)
+      if (retiredLipSync) throw new Error(retiredLipSync)
       // A model charged per second of its audio at a rate (OmniHuman 2.0)
       // reserves on its one-second row; the run measures the audio before the
       // hold (`stampLipSyncInputs`) and multiplies it by the billed seconds
@@ -5986,10 +6016,11 @@ function buildPayloadOf(
       }
 
       // Shared by the prompt-consuming branches (seedance + KIE): manual
-      // prompt + cinematography hints + identity lock + "Avoid: …" negative
+      // prompt + cinematography hints + identity lock (`composeExtendPrompt`:
+      // the prompt the editor sends the route) + "Avoid: …" negative
       // injection (no extend provider accepts native negative_prompt).
       // Mirrors the /v1/extend-video route's behavior.
-      const buildExtendPrompt = (): string | undefined => {
+      const composeExtendPrompt = (): string | undefined => {
         let p: string | undefined = promptFor("extend-video")
         {
           const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { surface: "video" })
@@ -5999,16 +6030,23 @@ function buildPayloadOf(
         }
         const identityClause = collectIdentityLockClause(node.id, buildCtx)
         if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
+        return p
+      }
+      const buildExtendPrompt = (composed: string | undefined = composeExtendPrompt()): string | undefined => {
         const neg = (resolvedInputs.negativePrompt || (data.negativePrompt as string | undefined))
-        const { prompt: pWithNeg } = applyVideoNegativePrompt(p, neg, evProvider)
+        const { prompt: pWithNeg } = applyVideoNegativePrompt(composed, neg, evProvider)
         return pWithNeg
       }
 
-      // ─── Tail-recipe trim-stitch extend (Seedance 2.5 / 2.0, Kling 4) ────
+      // ─── Tail-recipe stitch extend (Seedance 2.5 / 2.0, Kling 4) ─────────
       // URL-based like LTX, but the continuation CONTENT is required — the
       // worker wraps it in the provider's own prompt (lib/extend-recipe.ts)
-      // and then stitches source+extension. Each provider is priced on its own
-      // rows (seconds added × resolution) through the one builder the HTTP
+      // and then stitches source+extension. Seedance 2.5 is charged per second
+      // sent and added: its resolution's two-second row, which node-executor
+      // multiplies by the run's units on the source it measured
+      // (`computeSeedanceExtendCreditOverride`, the route guard's twin). Every
+      // other provider (Seedance 2.0, Kling 4) is priced on its own rows
+      // (seconds added × resolution). All through the one builder the HTTP
       // route (`resolveExtendVideoIdentifier`) and the estimate use, so
       // orchestrator and single-node runs reserve identically — commit_credits
       // only ever refunds a surplus, so a lower reservation would be a
@@ -6024,7 +6062,9 @@ function buildPayloadOf(
         return {
           jobName: "extend-video",
           queueName: "video-generation",
-          modelIdentifier: tailExtendCreditId(tailProvider, duration, resolution),
+          modelIdentifier: isSeedanceExtendPricedBySecondsSent(tailProvider)
+            ? seedanceExtendRateCreditId(resolution)
+            : tailExtendCreditId(tailProvider, duration, resolution),
           payload: {
             jobId,
             provider: tailProvider,
@@ -6033,6 +6073,39 @@ function buildPayloadOf(
             duration: tailRecipeSeconds(tailProvider, duration),
             resolution: tailExtendResolution(tailProvider, resolution),
             generateAudio: data.generateAudio,
+            usageLogId,
+          },
+        }
+      }
+
+      // ─── PixVerse V6 extend (native) ─────────────────────────────────────
+      // URL-based too: the whole source goes to PixVerse, the worker keeps
+      // only its new seconds and stitches them to the source. Priced on its
+      // own rows (seconds added × quality, `:audio` with the sound on — on
+      // unless turned off) through the builder the route and the estimate
+      // use. The job carries the seconds, the quality and the sound the row is
+      // priced at, never the node's raw values (a stored 480p runs at 540p,
+      // `pixverseExtendQuality`). A prompt under 3 characters is refused here,
+      // before the reservation, in the route's words: PixVerse refuses it only
+      // after.
+      if (isPixverseExtendProvider(tailProvider)) {
+        const composed = composeExtendPrompt()
+        const promptProblem = pixverseExtendPromptProblem(composed)
+        if (promptProblem) throw new Error(promptProblem)
+        const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
+        const generateAudio = data.generateAudio !== false
+        return {
+          jobName: "extend-video",
+          queueName: "video-generation",
+          modelIdentifier: pixverseExtendCreditId(duration, data.resolution, generateAudio),
+          payload: {
+            jobId,
+            provider: tailProvider,
+            video: resolvedInputs.videoUrl || data.videoUrl,
+            prompt: buildExtendPrompt(composed),
+            duration: pixverseExtendSeconds(duration),
+            resolution: pixverseExtendQuality(data.resolution),
+            generateAudio,
             usageLogId,
           },
         }
@@ -8126,6 +8199,10 @@ function buildPayloadOf(
         scenePrompt = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || ""
       }
       assertImagePromptLongEnough(provider, scenePrompt)
+      // More references than FLUX 3 Klein takes (its wired ones and its assets'):
+      // refused before any job row, never left out by the provider.
+      const sceneTooMany = imageInputLimitProblem(provider, sceneRefUrls.length)
+      if (sceneTooMany) throw new Error(sceneTooMany.message)
 
       return {
         jobName: "generate-image",
@@ -8137,7 +8214,7 @@ function buildPayloadOf(
           provider,
           referenceImageUrls: sceneRefUrls.length > 0 ? sceneRefUrls : undefined,
           // Sent as stored, except on a model whose endpoint refuses a ratio it
-          // does not list (`strictAspectRatios`, Seedream 5.5 only): there a
+          // does not list (`strictAspectRatios`, Seedream 5.5 and FLUX 3 Klein): there a
           // stored "auto" or 4:5 goes as the nearest ratio it lists, never
           // refused by the provider after the reservation. Checked against the
           // model the request reaches (`kieImageModelSent`): with references,

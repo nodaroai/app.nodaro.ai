@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09",
+  "generatedAt": "2026-11-13",
   "howToLink": {
     "link": "https://nodaro.ai/docs/node/{type}",
     "withLanguage": "https://nodaro.ai/docs/node/{type}?lang={lang}",
@@ -122,13 +122,13 @@
       "family": "Edit & Retouch",
       "link": "https://nodaro.ai/docs/node/upscale-image",
       "page": "https://nodaro.ai/docs/nodes/image/upscale-image",
-      "summary": "Enlarge and sharpen an image without a prompt. Use Recraft Upscale for quick, low-cost results or Topaz Upscale at 1x, 2x or 4x for final files.",
+      "summary": "Enlarge and sharpen an image without a prompt, with Recraft Upscale, Topaz Upscale, or Nodaro Image Upscale, which goes up to 8x and keeps text as written.",
       "summaries": {
-        "en": "Enlarge and sharpen an image without a prompt. Use Recraft Upscale for quick, low-cost results or Topaz Upscale at 1x, 2x or 4x for final files.",
-        "ja": "プロンプトなしで画像を拡大し、鮮明にします。手早く低コストに仕上げるなら Recraft Upscale、最終ファイルには 1x、2x、4x の Topaz Upscale を使います。",
-        "ko": "프롬프트 없이 이미지를 확대하고 선명하게 만드세요. 빠르고 저렴한 결과에는 Recraft Upscale을, 최종 파일에는 1x, 2x, 4x의 Topaz Upscale을 사용하세요.",
-        "pt-BR": "Amplie e dê nitidez a uma imagem sem prompt: Recraft Upscale para resultados rápidos e baratos, ou Topaz Upscale em 1x, 2x ou 4x para arquivos finais.",
-        "he": "הגדילו וחדדו תמונה בלי פרומפט. השתמשו ב-Recraft Upscale לתוצאות מהירות וזולות, או ב-Topaz Upscale ב-1x, ב-2x או ב-4x לקבצים סופיים."
+        "en": "Enlarge and sharpen an image without a prompt, with Recraft Upscale, Topaz Upscale, or Nodaro Image Upscale, which goes up to 8x and keeps text as written.",
+        "ja": "プロンプトなしで画像を拡大し、鮮明にします。Recraft Upscale、Topaz Upscale のほか、最大 8x で文字をそのまま保つ Nodaro Image Upscale を使えます。",
+        "ko": "프롬프트 없이 이미지를 확대하고 선명하게 만드세요. Recraft Upscale, Topaz Upscale, 최대 8x로 글자를 그대로 지키는 Nodaro Image Upscale을 쓸 수 있습니다.",
+        "pt-BR": "Amplie e dê nitidez a uma imagem sem prompt, com Recraft Upscale, Topaz Upscale ou Nodaro Image Upscale, que vai até 8x e mantém o texto como foi escrito.",
+        "he": "הגדילו וחדדו תמונה בלי פרומפט, עם Recraft Upscale, עם Topaz Upscale או עם Nodaro Image Upscale, שמגדיל עד 8x ושומר על הטקסט כפי שנכתב."
       },
       "sections": [
         "when-to-use",
@@ -137,7 +137,9 @@
         "settings",
         "models",
         "credits",
+        "troubleshooting",
         "tips",
+        "api",
         "faq"
       ]
     },
@@ -162,6 +164,34 @@
         "inputs",
         "models",
         "tips",
+        "faq"
+      ]
+    },
+    {
+      "type": "split-into-layers",
+      "label": "Split into Layers",
+      "pickerTab": "Image",
+      "family": "Edit & Retouch",
+      "link": "https://nodaro.ai/docs/node/split-into-layers",
+      "page": "https://nodaro.ai/docs/nodes/image/split-into-layers",
+      "summary": "Split one image into a base picture and separate layers, each element on its own transparent PNG, with its name, position box and stacking order.",
+      "summaries": {
+        "en": "Split one image into a base picture and separate layers, each element on its own transparent PNG, with its name, position box and stacking order.",
+        "ja": "1 枚の画像を、ベース画像と個別のレイヤーに分割します。各要素はそれぞれ透過 PNG になり、名前、位置ボックス、重なり順も一緒に返ります。",
+        "ko": "이미지 한 장을 바탕 이미지와 여러 레이어로 나눕니다. 각 요소를 투명 PNG 한 장으로 받고, 이름, 위치 상자, 쌓는 순서도 함께 받습니다.",
+        "pt-BR": "Divida uma imagem em uma imagem base e camadas separadas, cada elemento em um PNG transparente, com nome, caixa de posição e ordem de empilhamento.",
+        "he": "רכיב פיצול לשכבות מפרק תמונה לתמונת בסיס ולשכבות נפרדות: כל אלמנט ב-PNG שקוף משלו, עם השם, תיבת המיקום וסדר השכבות שלו."
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
         "faq"
       ]
     },
@@ -834,13 +864,13 @@
       "family": "Continue & Restyle",
       "link": "https://nodaro.ai/docs/node/extend-video",
       "page": "https://nodaro.ai/docs/nodes/video/extend-video",
-      "summary": "Continue a video with new footage that follows your prompt, using Seedance 2 Extend, LTX 2.3 Pro, VEO Extend or Runway Extend, and chain runs for long shots.",
+      "summary": "Continue a video with new footage from your prompt, using Seedance 2.5, Seedance 2.0, Kling 4, LTX 2.3 Pro, VEO or Runway Extend. Chain runs for long shots.",
       "summaries": {
-        "en": "Continue a video with new footage that follows your prompt, using Seedance 2 Extend, LTX 2.3 Pro, VEO Extend or Runway Extend, and chain runs for long shots.",
-        "ja": "プロンプトに沿った新しい映像で、動画の続きを作ります。Seedance 2 Extend、LTX 2.3 Pro、VEO Extend、Runway Extend を使え、実行をつなげれば長いショットも作れます。",
-        "ko": "Seedance 2 Extend, LTX 2.3 Pro, VEO Extend, Runway Extend로 프롬프트를 따르는 새 영상을 이어 붙여 동영상을 연장하고, 실행을 연결해 긴 샷을 만드세요.",
-        "pt-BR": "Continue um vídeo com novas imagens que seguem o seu prompt, com Seedance 2 Extend, LTX 2.3 Pro, VEO Extend ou Runway Extend. Encadeie para tomadas longas.",
-        "he": "הרחיבו סרטון בקטע חדש לפי הפרומפט שלכם, עם Seedance 2 Extend, LTX 2.3 Pro, VEO Extend או Runway Extend, ושרשרו הרצות לשוטים ארוכים."
+        "en": "Continue a video with new footage from your prompt, using Seedance 2.5, Seedance 2.0, Kling 4, LTX 2.3 Pro, VEO or Runway Extend. Chain runs for long shots.",
+        "ja": "プロンプトに沿った新しい映像で、動画の続きを作ります。Seedance 2.5、Seedance 2.0、Kling 4、LTX 2.3 Pro、VEO、Runway を使えます。実行をつなげれば長いショットも作れます。",
+        "ko": "Seedance 2.5, Seedance 2.0, Kling 4, LTX 2.3 Pro, VEO, Runway로 프롬프트에 따라 새 영상을 이어 붙여 동영상을 연장하세요. 실행을 연결하면 긴 샷이 됩니다.",
+        "pt-BR": "Continue um vídeo com novas imagens a partir do prompt, com Seedance 2.5, Seedance 2.0, Kling 4, LTX 2.3 Pro, VEO ou Runway. Encadeie para tomadas longas.",
+        "he": "הרחיבו סרטון בקטע חדש לפי הפרומפט שלכם, עם Seedance 2.5, Seedance 2.0, Kling 4, LTX 2.3 Pro, VEO Extend או Runway Extend. שרשרו הרצות לשוטים ארוכים."
       },
       "sections": [
         "when-to-use",
@@ -1300,6 +1330,34 @@
       ]
     },
     {
+      "type": "shot-cuts",
+      "label": "Shot Cuts",
+      "pickerTab": "Video",
+      "family": "Cut & Assemble",
+      "link": "https://nodaro.ai/docs/node/shot-cuts",
+      "page": "https://nodaro.ai/docs/nodes/video/shot-cuts",
+      "summary": "Find where every shot of a video starts and ends, measured from the file itself, and optionally save each shot's first and last frame as images.",
+      "summaries": {
+        "en": "Find where every shot of a video starts and ends, measured from the file itself, and optionally save each shot's first and last frame as images.",
+        "ja": "動画のすべてのショットがどこで始まりどこで終わるかを、ファイルそのものから測定します。各ショットの最初と最後のフレームを画像として保存することもできます。",
+        "ko": "동영상의 모든 샷이 어디서 시작하고 끝나는지 파일 자체에서 측정합니다. 각 샷의 첫 프레임과 마지막 프레임을 이미지로 저장할 수도 있습니다.",
+        "pt-BR": "Encontre onde cada plano de um vídeo começa e termina, medido no próprio arquivo, e, se quiser, salve o primeiro e o último quadro de cada plano como imagens.",
+        "he": "רכיב חיתוכי שוטים מוצא היכן כל שוט בסרטון מתחיל ונגמר, לפי הקובץ עצמו, ויכול לשמור את הפריים הראשון והאחרון של כל שוט כתמונות."
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
       "type": "manual-edit",
       "label": "Manual Edit",
       "pickerTab": "Video",
@@ -1476,6 +1534,118 @@
         "ko": "노드 하나로 팟캐스트나 인터뷰를 다듬으세요. 녹화를 녹취하고 무음과 필러를 잘라 낸 뒤 에피소드를 렌더링하며, 자막과 음악도 추가할 수 있습니다.",
         "pt-BR": "Enxugue um podcast ou entrevista em um nó: ele transcreve, corta silêncios e vícios de linguagem, renderiza o episódio e pode adicionar legendas e música.",
         "he": "רכיב הידוק פרק מנקה פודקאסט או ראיון בשלב אחד: הוא מתמלל את ההקלטה, חותך שתיקות ומילות מילוי, מרנדר את הפרק ויכול להוסיף כתוביות ומוזיקה."
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "episode-chapters",
+      "label": "Chapters",
+      "pickerTab": "Video",
+      "family": "Podcast",
+      "link": "https://nodaro.ai/docs/node/episode-chapters",
+      "page": "https://nodaro.ai/docs/nodes/video/episode-chapters",
+      "summary": "The Chapters node lists a podcast or interview's chapters in one step, each with a title and a start time, ready to paste into show notes or a description.",
+      "summaries": {
+        "en": "The Chapters node lists a podcast or interview's chapters in one step, each with a title and a start time, ready to paste into show notes or a description.",
+        "ja": "チャプターノードは、ポッドキャストやインタビューのチャプターを、タイトルと開始時刻付きで 1 回で一覧にします。概要欄や動画の説明にそのまま貼り付けられます。",
+        "ko": "챕터 노드는 팟캐스트나 인터뷰의 챕터를 제목과 시작 시간과 함께 한 번에 나열합니다. 쇼 노트나 동영상 설명에 바로 붙여 넣을 수 있습니다.",
+        "pt-BR": "O nó Índice de capítulos lista os capítulos de um podcast ou de uma entrevista em uma etapa, cada um com título e tempo de início, prontos para as notas.",
+        "he": "רכיב חלוקה לפרקים מפרט את הפרקים של פודקאסט או של ראיון בשלב אחד, עם כותרת וזמן התחלה לכל פרק, מוכנים להדבקה בתיאור הפרק."
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "episode-trailer",
+      "label": "Trailer",
+      "pickerTab": "Video",
+      "family": "Podcast",
+      "link": "https://nodaro.ai/docs/node/episode-trailer",
+      "page": "https://nodaro.ai/docs/nodes/video/episode-trailer",
+      "summary": "The Trailer node cuts a 20 to 40 second trailer from a podcast or interview in one step, in each social format you choose, after an optional intro card.",
+      "summaries": {
+        "en": "The Trailer node cuts a 20 to 40 second trailer from a podcast or interview in one step, in each social format you choose, after an optional intro card.",
+        "ja": "トレーラーノードは、ポッドキャストやインタビューから 20〜40 秒のトレーラーを 1 回で切り出し、選んだ SNS フォーマットごとに書き出します。イントロカードも付けられます。",
+        "ko": "트레일러 노드는 팟캐스트나 인터뷰에서 20~40초 트레일러를 한 번에 잘라 내고, 선택한 SNS 형식마다 만들어 줍니다. 인트로 카드도 붙일 수 있습니다.",
+        "pt-BR": "O nó Trailer do episódio corta um trailer de 20 a 40 segundos de um podcast ou entrevista em uma etapa, em cada formato de rede social que você escolher.",
+        "he": "רכיב טריילר חותך טריילר של 20–40 שניות מפודקאסט או מראיון בשלב אחד, ומרנדר אותו בכל פורמט לרשתות חברתיות שתבחרו, אחרי כרטיס פתיחה."
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "clip-pack",
+      "label": "Clip Pack",
+      "pickerTab": "Video",
+      "family": "Podcast",
+      "link": "https://nodaro.ai/docs/node/clip-pack",
+      "page": "https://nodaro.ai/docs/nodes/video/clip-pack",
+      "summary": "The Clip Pack node cuts a podcast or interview into a pack of short clips in one step: it finds the best moments and renders each one framed and captioned.",
+      "summaries": {
+        "en": "The Clip Pack node cuts a podcast or interview into a pack of short clips in one step: it finds the best moments and renders each one framed and captioned.",
+        "ja": "クリップパックノードは、ポッドキャストやインタビューを 1 回で短いクリップのパックに切り分けます。最も良い場面を見つけ、SNS 向けにフレーミングして字幕を付けます。",
+        "ko": "클립 세트 노드는 팟캐스트나 인터뷰를 짧은 클립 묶음으로 한 번에 자릅니다. 가장 좋은 순간을 찾아 각각 SNS용으로 프레이밍하고 자막을 넣습니다.",
+        "pt-BR": "O nó Pacote de clipes corta um podcast ou uma entrevista em clipes curtos em uma etapa: acha os melhores momentos e os renderiza enquadrados e legendados.",
+        "he": "רכיב חבילת קליפים חותך פודקאסט או ראיון לחבילה של קליפים קצרים בשלב אחד: הוא מוצא את הרגעים הטובים ביותר ומרנדר כל אחד ממוסגר ועם כתוביות."
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "speaker-layout",
+      "label": "Speaker Layout",
+      "pickerTab": "Video",
+      "family": "Podcast",
+      "link": "https://nodaro.ai/docs/node/speaker-layout",
+      "page": "https://nodaro.ai/docs/nodes/video/speaker-layout",
+      "summary": "Frame a whole podcast or interview recording by speaker in one node, with nothing cut. With several cameras, each speaker is shown on their own camera.",
+      "summaries": {
+        "en": "Frame a whole podcast or interview recording by speaker in one node, with nothing cut. With several cameras, each speaker is shown on their own camera.",
+        "ja": "ポッドキャストやインタビューの収録全体を、何もカットせずに 1 つのノードで話者ごとにフレーミングします。複数のカメラでは、各話者をその人のカメラで映します。",
+        "ko": "팟캐스트나 인터뷰 녹화 전체를 아무것도 자르지 않고 노드 하나로 화자별로 프레이밍합니다. 카메라가 여러 대면 각 화자를 자신의 카메라로 보여 줍니다.",
+        "pt-BR": "Enquadre a gravação inteira de um podcast ou entrevista por falante em um nó, sem cortar nada. Com várias câmeras, cada falante aparece na própria câmera.",
+        "he": "רכיב פריסת דוברים ממסגר הקלטה שלמה של פודקאסט או ראיון לפי דובר, בלי לחתוך דבר. עם כמה מצלמות, כל דובר מוצג במצלמה שלו."
       },
       "sections": [
         "when-to-use",
@@ -1750,13 +1920,13 @@
       "family": "Titles, Graphics & Captions",
       "link": "https://nodaro.ai/docs/node/video-overlay",
       "page": "https://nodaro.ai/docs/nodes/video/video-overlay",
-      "summary": "Show up to 20 images over a video, each in its own time window, as a card, corner badge, full frame or custom box, with a live preview and the audio kept.",
+      "summary": "Show up to 20 timed image or video layers over a video, with layouts for stacked videos and picture in picture, a live preview and the audio kept.",
       "summaries": {
-        "en": "Show up to 20 images over a video, each in its own time window, as a card, corner badge, full frame or custom box, with a live preview and the audio kept.",
-        "ja": "最大 20 枚の画像を、それぞれ指定した時間だけ動画に重ねます。配置はカード、コーナーバッジ、全画面、カスタムから選べます。ライブプレビューで確認でき、オーディオはそのまま残ります。",
-        "ko": "동영상 위에 이미지를 최대 20개까지 각자의 시간대에 표시하세요. 카드, 코너 배지, 전체 화면, 사용자 지정 상자로 배치하고, 실시간 미리 보기와 원래 오디오가 유지됩니다.",
-        "pt-BR": "Mostre até 20 imagens em um vídeo, cada uma no seu intervalo: cartão, selo no canto, quadro inteiro ou caixa própria, com prévia ao vivo e áudio mantido.",
-        "he": "הציגו עד 20 תמונות מעל סרטון, כל אחת בחלון זמן משלה: ככרטיס, כתג פינה, במסך מלא או בתיבה מותאמת, עם תצוגה מקדימה חיה, והאודיו המקורי נשמר."
+        "en": "Show up to 20 timed image or video layers over a video, with layouts for stacked videos and picture in picture, a live preview and the audio kept.",
+        "ja": "最大 20 個の画像や動画のレイヤーを、それぞれ指定した時間だけ動画に重ねます。動画を縦に重ねるレイアウトやピクチャーインピクチャーも使えます。ライブプレビューで確認でき、オーディオはそのまま残ります。",
+        "ko": "동영상 위에 시간을 지정한 이미지나 동영상 레이어를 최대 20개 표시하세요. 위아래로 쌓기와 화면 속 화면 레이아웃, 실시간 미리 보기를 제공하며 원래 오디오가 유지됩니다.",
+        "pt-BR": "Mostre até 20 camadas de imagem ou vídeo com tempo marcado sobre um vídeo, com layouts empilhados e picture-in-picture, prévia ao vivo e áudio mantido.",
+        "he": "הציגו עד 20 שכבות תמונה או וידאו מתוזמנות מעל סרטון, עם פריסות לסרטונים בערימה ולתמונה בתוך תמונה, תצוגה מקדימה חיה, והאודיו נשמר."
       },
       "sections": [
         "when-to-use",
@@ -1905,13 +2075,13 @@
       "family": "Format & Export",
       "link": "https://nodaro.ai/docs/node/video-upscale",
       "page": "https://nodaro.ai/docs/nodes/video/upscale-video",
-      "summary": "Upscale a video to 720p, 1080p or 4K at the frame rate you choose with Topaz, re-render a VEO generation, or finalize a Seedance 2.5 draft at 1080p.",
+      "summary": "Upscale a video with Topaz or Nodaro Video Upscale, up to 4K, re-render a VEO generation, or finalize a Seedance 2.5 draft at 1080p.",
       "summaries": {
-        "en": "Upscale a video to 720p, 1080p or 4K at the frame rate you choose with Topaz, re-render a VEO generation, or finalize a Seedance 2.5 draft at 1080p.",
-        "ja": "Topaz で動画を 720p、1080p、4K に、好きなフレームレートでアップスケールします。VEO の生成のレンダリングし直しや、Seedance 2.5 のドラフトの 1080p への仕上げもできます。",
-        "ko": "Topaz로 동영상을 원하는 프레임 레이트의 720p, 1080p, 4K로 업스케일하거나, VEO 생성 결과를 다시 렌더링하거나, Seedance 2.5 초안을 1080p로 완성하세요.",
-        "pt-BR": "Faça upscale de vídeo para 720p, 1080p ou 4K com o Topaz, na taxa de quadros escolhida, renderize de novo um vídeo VEO ou finalize um rascunho do Seedance 2.5.",
-        "he": "הגדילו סרטון ל-720p, ל-1080p או ל-4K בקצב הפריימים שתבחרו עם Topaz, רנדרו מחדש יצירה של VEO, או השלימו טיוטה של Seedance 2.5 ב-1080p."
+        "en": "Upscale a video with Topaz or Nodaro Video Upscale, up to 4K, re-render a VEO generation, or finalize a Seedance 2.5 draft at 1080p.",
+        "ja": "Topaz や Nodaro Video Upscale で動画を最大 4K にアップスケールします。VEO の生成のレンダリングし直しや、Seedance 2.5 のドラフトの 1080p への仕上げもできます。",
+        "ko": "Topaz나 Nodaro Video Upscale로 동영상을 최대 4K로 업스케일하거나, VEO 생성 결과를 다시 렌더링하거나, Seedance 2.5 초안을 1080p로 완성하세요.",
+        "pt-BR": "Faça upscale de vídeo até 4K com o Topaz ou o Nodaro Video Upscale, renderize de novo um vídeo VEO ou finalize um rascunho do Seedance 2.5.",
+        "he": "הגדילו סרטון עד 4K עם Topaz או עם Nodaro Video Upscale, רנדרו מחדש יצירה של VEO, או השלימו טיוטה של Seedance 2.5 ב-1080p."
       },
       "sections": [
         "when-to-use",
@@ -2915,6 +3085,34 @@
       ]
     },
     {
+      "type": "speaker-map",
+      "label": "Speaker Map",
+      "pickerTab": "Audio",
+      "family": "Analyze",
+      "link": "https://nodaro.ai/docs/node/speaker-map",
+      "page": "https://nodaro.ai/docs/nodes/audio/speaker-map",
+      "summary": "Work out which camera each speaker is on, from the cameras' own microphones, so a multicam edit switches to the right person without a hand-filled table.",
+      "summaries": {
+        "en": "Work out which camera each speaker is on, from the cameras' own microphones, so a multicam edit switches to the right person without a hand-filled table.",
+        "ja": "カメラ自身のマイクから、各話者がどのカメラに映っているかを判定します。手作業で表を埋めなくても、マルチカメラの編集が正しい人に切り替わります。",
+        "ko": "카메라 자체 마이크로 각 화자가 어느 카메라에 잡히는지 알아냅니다. 표를 직접 채우지 않아도 멀티캠 편집이 알맞은 사람으로 전환됩니다.",
+        "pt-BR": "Descubra em qual câmera está cada falante, pelos microfones das câmeras, e faça uma edição multicâmera trocar para a pessoa certa sem preencher tabelas.",
+        "he": "רכיב מפת דוברים מזהה איזו מצלמה מצלמת כל דובר, לפי המיקרופונים של המצלמות, כך שעריכה עם כמה מצלמות עוברת לאדם הנכון בלי טבלה ידנית."
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
       "type": "trim-audio",
       "label": "Trim Audio",
       "pickerTab": "Audio",
@@ -3073,13 +3271,13 @@
       "family": "Transcribe",
       "link": "https://nodaro.ai/docs/node/transcribe",
       "page": "https://nodaro.ai/docs/nodes/audio/transcribe",
-      "summary": "Turn the speech in audio or video into text with ElevenLabs STT or Whisper. Get word timings for captions, speaker labels, and tags for music and laughter.",
+      "summary": "Turn speech in audio or video into text with ElevenLabs STT, Whisper or Nemotron 3.5 Transcribe. Get word timings for captions, speaker labels or a translation.",
       "summaries": {
-        "en": "Turn the speech in audio or video into text with ElevenLabs STT or Whisper. Get word timings for captions, speaker labels, and tags for music and laughter.",
-        "ja": "ElevenLabs STT または Whisper で、オーディオや動画の音声をテキストにします。字幕用の単語のタイミング、話者のラベル、音楽や笑い声のタグも取得できます。",
-        "ko": "ElevenLabs STT나 Whisper로 오디오와 동영상 속 음성을 텍스트로 바꾸세요. 자막용 단어 타이밍, 화자 레이블, 음악과 웃음소리 태그도 받을 수 있습니다.",
-        "pt-BR": "Transcreva a fala de um áudio ou vídeo com o ElevenLabs STT ou o Whisper: o tempo de cada palavra para legendas, os falantes e tags de música e risadas.",
-        "he": "רכיב תמלול הופך דיבור באודיו או בסרטון לטקסט עם ElevenLabs STT או Whisper. מקבלים תזמון מילים לכתוביות, תוויות דוברים ותגים למוזיקה ולצחוק."
+        "en": "Turn speech in audio or video into text with ElevenLabs STT, Whisper or Nemotron 3.5 Transcribe. Get word timings for captions, speaker labels or a translation.",
+        "ja": "ElevenLabs STT、Whisper、Nemotron 3.5 Transcribe で、オーディオや動画の音声をテキストにします。字幕用の単語のタイミング、話者のラベル、翻訳も取得できます。",
+        "ko": "ElevenLabs STT, Whisper, Nemotron 3.5 Transcribe로 오디오와 동영상 속 음성을 텍스트로 바꾸세요. 자막용 단어 타이밍, 화자 레이블, 번역도 받을 수 있습니다.",
+        "pt-BR": "Transcreva a fala de um áudio ou vídeo com o ElevenLabs STT, o Whisper ou o Nemotron 3.5 Transcribe: o tempo de cada palavra, os falantes ou uma tradução.",
+        "he": "רכיב תמלול הופך דיבור באודיו או בסרטון לטקסט עם ElevenLabs STT, Whisper או Nemotron 3.5 Transcribe. מקבלים תזמון מילים לכתוביות, תוויות דוברים או תרגום."
       },
       "sections": [
         "when-to-use",
@@ -5400,12 +5598,40 @@
   ],
   "typesWithoutAPage": [
     {
+      "type": "instagram-scrape",
+      "lands": "https://nodaro.ai/docs/nodes"
+    },
+    {
+      "type": "social-search",
+      "lands": "https://nodaro.ai/docs/nodes"
+    },
+    {
       "type": "image-to-video",
       "lands": "https://nodaro.ai/docs/node/generate-video"
     },
     {
       "type": "text-to-video",
       "lands": "https://nodaro.ai/docs/node/generate-video"
+    },
+    {
+      "type": "telegram-account-trigger",
+      "lands": "https://nodaro.ai/docs/nodes"
+    },
+    {
+      "type": "telegram-account-send",
+      "lands": "https://nodaro.ai/docs/nodes"
+    },
+    {
+      "type": "collection-read",
+      "lands": "https://nodaro.ai/docs/nodes"
+    },
+    {
+      "type": "inspiration-read",
+      "lands": "https://nodaro.ai/docs/nodes"
+    },
+    {
+      "type": "competitor-read",
+      "lands": "https://nodaro.ai/docs/nodes"
     }
   ]
 }

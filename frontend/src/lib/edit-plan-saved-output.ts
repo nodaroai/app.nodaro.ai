@@ -3,6 +3,7 @@ import { editPlanSavedOutput, resolveEditPlanOutput, type EditPlanEditStatus, ty
 import { isUseCaseNodeType, usecaseDescriptor, usecaseKindHasPlan, type UseCaseNodeType } from "@nodaro/render-rules"
 import { unitDefinitionOf } from "./unit-definitions"
 import { unitPipJson, unitPipList } from "./unit-compose"
+import type { UnitSideRead } from "@nodaro/render-rules"
 
 /**
  * An Edit Plan node's saved output with the person's review applied — the ONE
@@ -53,11 +54,17 @@ export function usecaseJsonOf(nodeType: string | null | undefined, data: Readonl
 /**
  * What a wire from a node unit's look pip hands a JSON consumer (`unitPipJson`):
  * wrapped, `value` undefined when the output holds none; undefined when the
- * wire does not leave a unit's look pip.
+ * wire does not leave a unit's look pip. `read` is how the consumer reads it:
+ * `"list"` (the default — an Each wire, a list operator: every row's while the
+ * node holds a batch) or `"take"` (a consumer of one value: the active take's own).
  */
-export function unitSourceJsonOf(src: { readonly type?: string; readonly data: unknown }, sourceHandle: string | null | undefined): { readonly value: unknown } | undefined {
+export function unitSourceJsonOf(
+  src: { readonly type?: string; readonly data: unknown },
+  sourceHandle: string | null | undefined,
+  read: UnitSideRead = "list",
+): { readonly value: unknown } | undefined {
   const unit = unitDefinitionOf(src.type)
-  return unit ? unitPipJson(unit, src.data as Readonly<Record<string, unknown>>, sourceHandle) : undefined
+  return unit ? unitPipJson(unit, src.data as Readonly<Record<string, unknown>>, sourceHandle, read) : undefined
 }
 
 /**
@@ -76,10 +83,11 @@ export function unitSourceListOf(src: { readonly type?: string; readonly data: u
  * Process) that reads its source's data directly, for the pip the wire leaves
  * from: an Edit Plan's plan as the person's review leaves it (the kept clips
  * only, edited hooks included), a use-case node's plan likewise
- * (`usecaseJsonOf`), a node unit's look pip its own output, any other node's
- * `generatedJson`. The server's consumers read the same value off
- * the source's state (`structuredJsonOf`: the plan's seeded `output.json`,
- * from `editPlanSavedOutput`; a unit's `unitOutputs`).
+ * (`usecaseJsonOf`), a node unit's look pip its own output as a plain wire
+ * reads it (the active take's own, also after a run once per upstream item),
+ * any other node's `generatedJson`. The server's consumers read the same value
+ * off the source's state (`structuredJsonOf`: the plan's seeded `output.json`,
+ * from `editPlanSavedOutput`; a unit's take read of `unitOutputs`).
  *
  * `edit-plan-saved-output-sites.test.ts` fails when an executor or resolver
  * reads a source's `generatedJson` without this.
@@ -88,7 +96,7 @@ export function sourceJsonOf(src: { readonly type?: string; readonly data: unkno
   const data = src.data as Readonly<Record<string, unknown>>
   if (src.type === "edit-plan") return editPlanOutputOf(data)?.json
   if (isUseCaseNodeType(src.type)) return usecaseJsonOf(src.type, data)
-  const unit = unitSourceJsonOf(src, sourceHandle)
+  const unit = unitSourceJsonOf(src, sourceHandle, "take")
   if (unit) return unit.value
   return data.generatedJson
 }

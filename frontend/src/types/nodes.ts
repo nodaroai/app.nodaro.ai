@@ -2831,12 +2831,13 @@ export type LipSyncData = PromptAffixFields & {
   seed?: number
   // OmniHuman 1.5 — pe_fast_mode (trade quality for speed)
   fastMode?: boolean
-  // Wav2Lip params
+  // Wav2Lip and SadTalker params. Both models were retired from Lip Sync
+  // (2026-11-12) and a run naming one is refused; a saved node may still carry
+  // these, and the build passes them on as before.
   pads?: string
   smooth?: boolean
   fps?: number
   resizeFactor?: number
-  // SadTalker params
   enhancer?: "gfpgan" | "RestoreFormer"
   preprocess?: "crop" | "resize" | "full"
   still?: boolean
@@ -3090,9 +3091,9 @@ export type ExtendVideoData = PromptAffixFields & {
   seeds?: number                   // VEO only
   quality?: "720p" | "1080p"      // Runway only
   extendMode?: "start" | "end"    // LTX 2.3 Pro only — default "end"
-  duration?: number                // Seconds to add — LTX 1-20; Seedance 2.5 4-30, Seedance 2.0 4-15, Kling 4 3-30 (their catalog `durations`)
-  resolution?: "480p" | "720p" | "1080p" // Tail-recipe providers only (Kling 4: 720p / 1080p) — default 720p
-  generateAudio?: boolean          // Seedance providers only — default true (Kling 4's sound is always on)
+  duration?: number                // Seconds to add — LTX 1-20; Seedance 2.5 4-30, Seedance 2.0 4-15, Kling 4 3-30, PixVerse V6 1-15 (their catalog `durations`)
+  resolution?: "360p" | "480p" | "540p" | "720p" | "1080p" // Catalog extend providers only (Seedance: 480p / 720p / 1080p; Kling 4: 720p / 1080p; PixVerse V6: 360p / 540p / 720p / 1080p) — default 720p
+  generateAudio?: boolean          // Seedance and PixVerse V6 only — default true (Kling 4's sound is always on)
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

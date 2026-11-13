@@ -62,7 +62,7 @@ Leave **What to separate** empty and the node finds the main elements itself, or
 Wire a list of pictures into **Image** (a List of image links, or a node that makes several images on an Each wire) and the node runs once per picture. Each run's result is its own take, with that picture's base, layers and layer data. Then:
 
 - **Base** lists one base picture per picture that produced a result, in the order the pictures came in. A picture whose run failed has no base, so it is left out of the list.
-- **Layers** hands on every picture's layers, picture by picture: an Each wire runs the next node once per layer of every picture (the first picture's layers, then the second's, and so on), Bundle hands them all at once, a plain wire reads the first one, and `item:N` picks from the whole list.
+- **Layers** hands on every picture's layers, picture by picture: an Each wire runs the next node once per layer of every picture (the first picture's layers, then the second's, and so on), Bundle hands them all at once, and `item:N` picks from the whole list. A list node (Filter List, Sort List and the like) collects every picture's layers too.
 - **Layer data** lines up with those layers one for one. Each entry also carries `row`: the number of the input picture it came from, counting from 0. A picture with no layers adds nothing to **Layers** or **Layer data**, and neither does a picture whose run failed, but each keeps its number, so `row` can skip a number.
 
 To pair a layer with its base, use its `baseUrl`, not `row`. **Base** lists only the pictures that produced a result, so once a picture fails, a later picture's `row` no longer matches its place in **Base**. In the example below, the second picture failed: the owl's base is the second item of **Base**, while its `row` is 2.
@@ -74,7 +74,13 @@ To pair a layer with its base, use its `baseUrl`, not `row`. **Base** lists only
 ]
 ```
 
-A run on one picture gives layer data without `row`, as above. The node shows the layers of the take you are looking at; pick another take to see its picture's layers. Wires from **Layers** and **Layer data** keep handing on every picture's, whichever take you pick, as an Each wire from **Base** keeps listing every picture's base. Before the first run, the run estimate counts an Each wire from **Layers** at Max layers for every picture.
+A run on one picture gives layer data without `row`, as above.
+
+**The take you pick.** The node shows the layers of the take you are looking at; pick another take to see its picture's layers. A plain wire (one with no Each, Bundle or `item:N` set) follows that take, from every output: **Base** hands on its base picture, **Layers** its first layer (nothing when that picture made none) and **Layer data** its own entries, without `row` (`[]` when it made none). So does a node that reads one JSON value, such as Extract Field or JSON Process: wire it from **Layer data** and it reads the picked take's entries. An Each wire, a Bundle, `item:N` and a list node still hand on every picture's, whichever take you pick.
+
+**A later run on one picture ends the batch.** Run the node again on a single picture and the batch is over: **Base** no longer lists the earlier pictures, and **Base**, **Layers** and **Layer data** all hand on the take you are looking at — the new one, or an older one you pick, each with its own layers and layer data. An Each wire from **Base** then fans out over nothing: the next node runs once, on that take. A run that fails, or that you discard or stop, keeps the batch as it was.
+
+Before the first run, the run estimate counts an Each wire from **Layers** at Max layers for every picture, and an Each wire from **Base** at one run per picture; after a run, it counts what each wire will hand on.
 
 ## Configuration
 

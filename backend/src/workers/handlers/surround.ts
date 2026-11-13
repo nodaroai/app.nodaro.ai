@@ -90,11 +90,11 @@ function makeHandler(engine: PluginSurroundEngine): HandlerFn {
 
     // 2. Paint the gray region (i2i off the composite). The ratio goes as it
     // came, except on a model whose endpoint refuses a ratio it does not list
-    // (`strictAspectRatios`, Seedream 5.5 only): there a ratio it does not list
-    // goes as the nearest one it does, never refused by the provider after the
-    // reservation. The composite always goes with the request, so the check is
-    // against the model it reaches (`kieImageModelSent`): Seedream 5.5 runs on
-    // its edit, which takes "auto".
+    // (`strictAspectRatios`, Seedream 5.5 and FLUX 3 Klein): there a ratio it
+    // does not list goes as the nearest one it does, never refused by the
+    // provider after the reservation. The composite always goes with the
+    // request, so the check is against the model it reaches
+    // (`kieImageModelSent`): both run on their edit, which takes "auto".
     const sentAspectRatio = aspectRatioForStrictModel(aspectRatio, kieImageModelSent(resolvedProvider, 1))
     const extraParams = sentAspectRatio ? { aspect_ratio: sentAspectRatio } : undefined
     const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForImageModel(resolvedProvider))

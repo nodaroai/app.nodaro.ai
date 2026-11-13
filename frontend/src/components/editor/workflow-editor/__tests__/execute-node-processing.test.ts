@@ -565,6 +565,27 @@ describe("extend-video: the seconds sent are the ones the estimate prices", () =
   it("a Seedance 480p carried onto Kling 4 is sent at the 720p it is priced at", async () => {
     expect(await sent({ provider: "kling-4-extend", duration: 2, resolution: "480p" })).toMatchObject({ provider: "kling-4-extend", duration: 3, resolution: "720p" })
   })
+
+  it("PixVerse V6 is sent as itself, at the seconds, quality and sound its estimate prices", async () => {
+    expect(await sent({ provider: "pixverse-v6-extend", duration: 12, resolution: "540p", generateAudio: false })).toMatchObject({
+      provider: "pixverse-v6-extend",
+      duration: 12,
+      resolution: "540p",
+      generateAudio: false,
+      videoUrl: "http://source.mp4",
+      prompt: "she turns",
+    })
+    vi.clearAllMocks()
+    // No length, quality or sound set: its 5 s default, at 720p (sound left to the route: on).
+    expect(await sent({ provider: "pixverse-v6-extend" })).toMatchObject({ duration: 5, resolution: "720p" })
+  })
+
+  // Seedance 2.5 at 480p (or 30 s), then PixVerse V6 picked on the quick strip:
+  // the run sends the quality it is priced at, the nearest PixVerse renders
+  // (540p), and its longest length, never the 480p the route refuses.
+  it("a Seedance 480p carried onto PixVerse V6 is sent at 540p, and 30 s at its longest, 15 s", async () => {
+    expect(await sent({ provider: "pixverse-v6-extend", duration: 30, resolution: "480p" })).toMatchObject({ provider: "pixverse-v6-extend", duration: 15, resolution: "540p" })
+  })
 })
 
 // ---------------------------------------------------------------------------

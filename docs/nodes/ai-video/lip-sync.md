@@ -109,6 +109,10 @@ Some damage cannot be told from a complete file. Such a file is priced on, and s
 | Reverse loop | Toggle | Off | **Lite mode only** — ping-pong the loop (requires looping to be on) |
 | Template start time | Number (s) | 0 | Where in the source video to start driving the lips (advanced) |
 
+### Retired models
+
+Wav2Lip, VideoReTalking and SadTalker are retired from Lip Sync. A saved node, an API or SDK request, or an MCP call that still names one (`wav2lip`, `video-retalking`, `sadtalker`) is refused before anything is charged, with a message to pick another Lip Sync model. The editor shows such a node as retired and keeps its settings until you pick another model; nothing switches it for you, because the models differ in their inputs and price.
+
 ## Inputs & Outputs
 
 **Inputs:**

@@ -1,7 +1,15 @@
 import { describe, it, expect } from "vitest"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
-import { EXTEND_VIDEO_PROVIDERS, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, VIDEO_REF_VIDEO_DURATION_LIMITS, applyVideoNegativePrompt, getMaxVideoPromptChars, isTailExtendProvider } from "@nodaro/shared/models"
-import { extendSourceTooShortMessage, isTailRecipeProvider, tailCutSec, tailRecipeSeconds, TAIL_RECIPES } from "../extend-recipe.js"
+import { EXTEND_VIDEO_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, VIDEO_REF_VIDEO_DURATION_LIMITS, applyVideoNegativePrompt, getMaxVideoPromptChars, isTailExtendProvider } from "@nodaro/shared/models"
+import {
+  extendSourceTooShortMessage,
+  extensionTooShort,
+  extensionTooShortMessage,
+  isTailRecipeProvider,
+  tailCutSec,
+  tailRecipeSeconds,
+  TAIL_RECIPES,
+} from "../extend-recipe.js"
 import { buildKling4Request } from "../../providers/kie/kling4.js"
 
 // The tail recipe is what a tail-recipe Extend Video run does: the window it
@@ -19,22 +27,50 @@ describe("TAIL_RECIPES", () => {
     },
   )
 
-  it("prompts Seedance with the extend template", () => {
-    expect(TAIL_RECIPES["seedance-2-5-extend"].prompt("x")).toBe("extend @video_1 as follows:\nx")
-    expect(TAIL_RECIPES["seedance-2-0-extend"].prompt("  x  ")).toBe("extend @video_1 as follows:\nx")
+  // Seedance 2.5 (decided 2026-11-12): the provider guide's extension trigger,
+  // naming the seconds added. Seedance 2.0 keeps the 2026-07-12 spike's template.
+  it("prompts Seedance 2.5 with the guide's extension trigger, and 2.0 with its template", () => {
+    expect(TAIL_RECIPES["seedance-2-5-extend"].prompt("x", 8)).toBe("Extend @video_1 forward by 8 seconds: x")
+    expect(TAIL_RECIPES["seedance-2-5-extend"].prompt("  x  ", 25)).toBe("Extend @video_1 forward by 25 seconds: x")
+    expect(TAIL_RECIPES["seedance-2-0-extend"].prompt("  x  ", 8)).toBe("extend @video_1 as follows:\nx")
   })
 
   it('the Kling prompt is "Continue @video_1 as one continuous shot, starting exactly where it ends: <prompt>"', () => {
-    expect(TAIL_RECIPES["kling-4-extend"].prompt("she opens the door")).toBe(
+    expect(TAIL_RECIPES["kling-4-extend"].prompt("she opens the door", 5)).toBe(
       "Continue @video_1 as one continuous shot, starting exactly where it ends: she opens the door",
     )
-    expect(TAIL_RECIPES["kling-4-extend"].prompt("  x  ")).toBe("Continue @video_1 as one continuous shot, starting exactly where it ends: x")
+    expect(TAIL_RECIPES["kling-4-extend"].prompt("  x  ", 5)).toBe("Continue @video_1 as one continuous shot, starting exactly where it ends: x")
   })
 
   it("a missing prompt in untyped job data never throws", () => {
-    expect(TAIL_RECIPES["seedance-2-5-extend"].prompt(undefined)).toBe("extend @video_1 as follows:\n")
-    expect(TAIL_RECIPES["seedance-2-0-extend"].prompt(null)).toBe("extend @video_1 as follows:\n")
-    expect(TAIL_RECIPES["kling-4-extend"].prompt(undefined)).toBe("Continue @video_1 as one continuous shot, starting exactly where it ends: ")
+    expect(TAIL_RECIPES["seedance-2-5-extend"].prompt(undefined, 8)).toBe("Extend @video_1 forward by 8 seconds: ")
+    expect(TAIL_RECIPES["seedance-2-0-extend"].prompt(null, 8)).toBe("extend @video_1 as follows:\n")
+    expect(TAIL_RECIPES["kling-4-extend"].prompt(undefined, 5)).toBe("Continue @video_1 as one continuous shot, starting exactly where it ends: ")
+  })
+
+  // Seedance 2.5 runs the provider guide's recipe: the source's last 10 s,
+  // declared as an extension, no start image — so nothing at the join is a
+  // duplicate, and the stitch neither searches nor trims (a hard cut, the
+  // sound crossfaded). Seedance 2.0 is exactly what it was.
+  it("Seedance 2.5: the last 10 s, declared as an extension, no start image, a hard cut", () => {
+    const r = TAIL_RECIPES["seedance-2-5-extend"]
+    expect(r.tailSec).toBe(10)
+    expect(r.startImage).toBe(false)
+    expect(r.referenceTaskType).toBe("extend")
+    expect(r.stitch).toEqual({ fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 }, audioFadeSec: 0.15 })
+  })
+
+  it("Seedance 2.0: the last 2 s, the last frame as the start image, undeclared, the smart stitch", () => {
+    const r = TAIL_RECIPES["seedance-2-0-extend"]
+    expect(r.tailSec).toBe(2)
+    expect(r.startImage).toBe(true)
+    expect(r.referenceTaskType).toBeUndefined()
+    expect(r.stitch).toEqual({
+      smartCut: { framesFromPrev: 8, framesFromNext: 8 },
+      fallbackTrims: { trimEndFrames: SEEDANCE_2_EXTEND_STITCH.trimTailFrames, trimStartFrames: SEEDANCE_2_EXTEND_STITCH.trimHeadFrames },
+      audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+    })
+    expect(r.stitch.fallbackTrims).toEqual({ trimEndFrames: 4, trimStartFrames: 3 })
   })
 
   it("Kling 4 generates on Kling 4.0", () => {
@@ -89,7 +125,9 @@ describe("TAIL_RECIPES", () => {
     expect(tailCutSec("kling-4-extend", 3)).toBe(3)
     expect(tailCutSec("kling-4-extend", 2.5)).toBe(2.5)
     expect(tailCutSec("kling-4-extend", 2)).toBe(2)
-    expect(tailCutSec("seedance-2-5-extend", 6)).toBe(2)
+    // Seedance 2.5 sends the source's last 10 s: a 6 s picture is sent whole.
+    expect(tailCutSec("seedance-2-5-extend", 6)).toBe(6)
+    expect(tailCutSec("seedance-2-5-extend", 25)).toBe(10)
     expect(tailCutSec("seedance-2-0-extend", 1.97)).toBe(1.97)
   })
 
@@ -121,6 +159,41 @@ describe("TAIL_RECIPES", () => {
   })
 })
 
+// An extension whose picture is shorter than half the seconds the run is
+// billed for fails the run with a full refund: neither the source alone nor
+// the source with the short extension is delivered.
+describe("extensionTooShort", () => {
+  it("is short below half the billed seconds; exactly half and above are not", () => {
+    expect(extensionTooShort(2, 5)).toBe(true)
+    expect(extensionTooShort(2.49, 5)).toBe(true)
+    expect(extensionTooShort(3.99, 8)).toBe(true)
+    expect(extensionTooShort(2.5, 5)).toBe(false)
+    expect(extensionTooShort(4, 8)).toBe(false)
+    expect(extensionTooShort(1.5, 3)).toBe(false)
+    expect(extensionTooShort(5, 5)).toBe(false)
+    expect(extensionTooShort(8.2, 5)).toBe(false)
+  })
+
+  it("is short when there is no picture: none, zero, or a length that does not read", () => {
+    expect(extensionTooShort(undefined, 5)).toBe(true)
+    expect(extensionTooShort(0, 5)).toBe(true)
+    expect(extensionTooShort(Number.NaN, 5)).toBe(true)
+  })
+
+  it("says what the model returned against what the run is billed for, and that nothing was charged", () => {
+    expect(extensionTooShortMessage(2, 5)).toBe(
+      "The model returned only 2.0s of the 5s extension, so nothing was charged. Try again.",
+    )
+    // Rounded down, so a refused length never reads as the half that passes.
+    expect(extensionTooShortMessage(2.46, 5)).toBe(
+      "The model returned only 2.4s of the 5s extension, so nothing was charged. Try again.",
+    )
+    expect(extensionTooShortMessage(undefined, 8)).toBe(
+      "The model returned only 0.0s of the 8s extension, so nothing was charged. Try again.",
+    )
+  })
+})
+
 // A Kling 4 Extend prompt reaches Kling 4.0 wrapped: the recipe's wrapper
 // before the user's prompt, and the opening-frame sentence the reference
 // endpoint adds after it. The cap the route and the editor hold the user's
@@ -133,7 +206,7 @@ describe("the Kling 4 Extend prompt cap", () => {
   const sentToKling = (userPrompt: string): string =>
     String(buildKling4Request({
       provider: "kling-4",
-      prompt: TAIL_RECIPES["kling-4-extend"].prompt(userPrompt),
+      prompt: TAIL_RECIPES["kling-4-extend"].prompt(userPrompt, 5),
       durationSec: 5,
       startFrameUrl: FRAME,
       referenceVideoUrls: [TAIL],

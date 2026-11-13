@@ -8,7 +8,7 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("@/lib/config.js")>()
   return { ...orig, speechLengthPricingEnabled: () => flag.on }
 })
-import { deploymentPriceDefinitions, resolveDeploymentPrices } from "../deployment-pricing.js"
+import { deploymentPriceDefinitions, pricingRowsOf, resolveDeploymentPrices } from "../deployment-pricing.js"
 import { PriceNotConfiguredError, chargedPriceTableFrom, meteredLlmQuote } from "../credits.js"
 import { setLlmMeteredSchemaReadyForTesting } from "../../../lib/llm-metered-schema-gate.js"
 
@@ -35,6 +35,22 @@ describe("deployment pricing identifiers", () => {
     const resolved = await resolveDeploymentPrices(["nano-banana-pro", "nano-banana-pro"], price)
     expect(price).toHaveBeenCalledTimes(resolved.identifiers.length)
     for (const row of resolved.prices.values()) expect(row).toEqual({ status: "fulfilled", value: 123 })
+  })
+  it("reads a whole-run quote id's rate row: Seedance 2.5 Extend's listed runs are priced through its two-second rows", async () => {
+    const definition = deploymentPriceDefinitions("seedance-2-5-extend")
+    expect(definition.variants.map((v) => v.identifier)).toEqual([
+      "seedance-2-5-extend:720p:per-2s:9u",
+      "seedance-2-5-extend:480p:per-2s:9u",
+      "seedance-2-5-extend:1080p:per-2s:9u",
+    ])
+    const rates = ["seedance-2-5-extend:720p:per-2s", "seedance-2-5-extend:480p:per-2s", "seedance-2-5-extend:1080p:per-2s"]
+    expect(pricingRowsOf(definition)).toEqual(expect.arrayContaining(rates))
+    const resolved = await resolveDeploymentPrices(["seedance-2-5-extend"], async () => 1)
+    expect(resolved.rowIdentifiers).toEqual(expect.arrayContaining(rates))
+    // A model priced on its own rows reads exactly those.
+    expect(pricingRowsOf(deploymentPriceDefinitions("nano-banana-pro")).sort()).toEqual(
+      [...new Set(["nano-banana-pro", ...deploymentPriceDefinitions("nano-banana-pro").variants.map((v) => v.identifier)])].sort(),
+    )
   })
   it("isolates a missing variant instead of substituting static catalog prices", async () => {
     const resolved = await resolveDeploymentPrices(["nano-banana-pro"], async () => { throw new Error("missing") })

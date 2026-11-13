@@ -124,6 +124,7 @@ import { stampVideoMaskLength, videoMaskReserveId } from "../../lib/video-mask-l
 import { maskCompositeBaseCredits, maskCompositeReserveUnits, stampMaskCompositeLength } from "../../lib/mask-composite-length.js"
 import { stampVideoOverlayLength, videoOverlayBaseCredits, videoOverlayReserveId, videoOverlayReserveUnits } from "../../lib/video-overlay-length.js"
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
+import { seedanceExtendStampedBaseCredits, stampSeedanceExtendSource } from "../../lib/seedance-extend-credits.js"
 import { lipSyncRateBaseCredits, stampLipSyncInputs, stampedLipSyncBilledSeconds } from "../../lib/lip-sync-inputs.js"
 import { stampTopazVideoUpscale, topazVideoStampedBaseCredits } from "../../lib/topaz-video-plan.js"
 import { isNodaroVideoUpscaleJob, nodaroVideoUpscaleReserveId, nodaroVideoUpscaleStampedBaseCredits, stampNodaroVideoUpscale } from "../../lib/nodaro-video-upscale-plan.js"
@@ -1694,6 +1695,25 @@ export async function computeLtxExtendCreditOverride(
 }
 
 /**
+ * Seedance 2.5 Extend is charged per second sent and added. The workflow run
+ * reserves what the route's guard charges for the same request — its
+ * resolution's two-second row × (seconds sent + seconds added) ÷ 2, on the
+ * source length `stampSeedanceExtendSource` measured (the whole 10-second
+ * window when it could not), marked up once at that row. Undefined for every
+ * other job.
+ */
+export async function computeSeedanceExtendCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  const base = await seedanceExtendStampedBaseCredits(jobName, payload)
+  if (base === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
+}
+
+/**
  * A lip-sync model charged per second of its audio at a rate (OmniHuman 2.0)
  * is priced at the rate's row × the seconds `stampLipSyncInputs` measured —
  * what the route's guard charges for the same audio (`lipSyncRateBaseCredits`)
@@ -2584,6 +2604,14 @@ async function executeWorkerNode(
     throw err
   }
   if (Object.keys(nodaroImageUpscaleStamp.patch).length > 0) payload = { ...payload, ...nodaroImageUpscaleStamp.patch }
+  // Seedance 2.5 Extend: charged per second of the source it sends, so the
+  // source's picture is measured (best effort, as the route measures it) and
+  // its length stamped before anything is held. Unmeasured: the whole
+  // 10-second window is held and the worker settles on the source it measures.
+  const seedanceExtendStamp = await stampSeedanceExtendSource(jobName, payload, (err) => {
+    console.warn(`[node-executor] extend-video ${jobId}: source ffprobe failed; holding the whole window, the worker measures it again:`, err)
+  })
+  if (Object.keys(seedanceExtendStamp).length > 0) payload = { ...payload, ...seedanceExtendStamp }
 
   const pitchTempoRefusal = await stampPitchTempoDuration(jobName, payload)
   if (pitchTempoRefusal) {
@@ -2795,6 +2823,7 @@ async function executeWorkerNode(
         (await computeMaskCompositeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeVideoOverlayCreditOverride(jobName, payload)) ??
         (await computeLtxExtendCreditOverride(jobName, payload, modelIdentifier)) ??
+        (await computeSeedanceExtendCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLipSyncRateCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeGenerateVideoProCreditOverride(payload, modelIdentifier))?.override ??

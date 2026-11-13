@@ -63,7 +63,7 @@ function jobIdFromDeliverableUrl(url: string): string | undefined {
  * The PREVIOUS extension's raw mov, when this extend is continuing a clip we
  * ourselves produced on the 2.5 mov path.
  *
- * Why it matters: the 2 s `@video_1` reference is normally cut out of the
+ * Why it matters: the `@video_1` reference is normally cut out of the
  * stitched deliverable with ffmpeg, which re-encodes it to 4:2:0 — throwing
  * away exactly the colour fidelity `output_format: "mov"` was requested for.
  * If the source IS a job of ours whose raw extension we kept as a `.mov`
@@ -101,12 +101,16 @@ export async function findChainedMovReference(
   }
 }
 
+/** How much shorter than `coverSec` a chained mov's picture may read and still cover it: a millisecond of rounding. */
+const CHAINED_MOV_COVER_TOLERANCE_SEC = 0.001
+
 /**
  * The last `seconds` of the PICTURE of the raw mov at `movUrl` (from
  * {@link findChainedMovReference}), as a local `.mov` in `workDir`: the
  * `@video_1` reference a chained extend sends in place of the tail it cuts
- * from the stitched deliverable. Sending the whole clip would have the model
- * re-stage all of it instead of continuing its last moments.
+ * from the stitched deliverable: the same last seconds of picture (the
+ * extension is joined at the deliverable's end untrimmed), in their own
+ * container.
  *
  * The cut keeps what the mov was requested for, by the same rules a reference
  * video's re-encode follows (`providers/kie/reference-video-reencode.ts`): the
@@ -118,14 +122,23 @@ export async function findChainedMovReference(
  * cut (`-copypriorss 0`): input seeking starts each stream at the keyframe
  * before the cut, and a copied stream would otherwise keep that pre-roll.
  *
- * Throws when the clip cannot be fetched or cut; the caller falls back to the tail.
+ * `coverSec`: the seconds the cut must hold — what the run sends (and is
+ * priced for), the source's last seconds. A mov whose picture is shorter (the
+ * previous extension added fewer seconds than are sent) cannot stand in for
+ * them, and is refused before anything is cut.
+ *
+ * Throws when the clip cannot be fetched or cut, or is shorter than
+ * `coverSec`; the caller falls back to the tail.
  */
-export async function cutChainedMovTail(movUrl: string, seconds: number, workDir: string): Promise<string> {
+export async function cutChainedMovTail(movUrl: string, seconds: number, workDir: string, opts: { coverSec?: number } = {}): Promise<string> {
   const input = join(workDir, "chain-source.mov")
   const output = join(workDir, "chain-tail.mov")
   await downloadFile(movUrl, input)
   const probe = await probeReferenceVideo(input)
   const pictureSec = await getVideoStreamDuration(input)
+  if (opts.coverSec !== undefined && pictureSec + CHAINED_MOV_COVER_TOLERANCE_SEC < opts.coverSec) {
+    throw new Error(`chained mov holds ${pictureSec.toFixed(3)}s of picture, less than the ${opts.coverSec.toFixed(3)}s the run sends`)
+  }
   const start = Math.max(0, pictureSec - seconds)
   // The cut's own length: its bitrate and size limit are the cut's, not the whole clip's.
   const cut: ReferenceVideoProbe = { ...probe, durationSec: Math.min(seconds, pictureSec) }

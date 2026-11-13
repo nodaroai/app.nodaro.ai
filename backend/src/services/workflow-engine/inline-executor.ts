@@ -10,7 +10,7 @@ import { LEGACY_SOURCE_HANDLE_ALIASES, listResultsServeHandle } from "@nodaro/sh
 // Re-export for tests and downstream consumers.
 export type { FilterListCondition }
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeOutput, NodeExecutionState, OrchestratorContext } from "./types.js"
-import { getPrimaryOutput, extractSourceNodeOutput, structuredJsonOf, unitListOf, unitLookPipJsonFor } from "./output-extractor.js"
+import { getPrimaryOutput, extractSourceNodeOutput, isUnitLookPip, structuredJsonOf, unitListOf, unitLookPipJsonFor } from "./output-extractor.js"
 import { getNodeOutput } from "./input-resolver.js"
 import { savedDataAllowed } from "./saved-data.js"
 import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
@@ -192,6 +192,11 @@ export function executeExtractField(
   const json = structuredJsonOf(state?.output, src.type, incoming.sourceHandle)
   if (json !== undefined) {
     value = json
+  } else if (isUnitLookPip(src.type, incoming.sourceHandle)) {
+    // A node unit's look pip is read as a plain wire reads it — the active
+    // take's own JSON — and nothing else: a take that holds none extracts
+    // nothing, never the batch's takes on `listResults` (the editor stops there too).
+    return { extractedText: "", text: "", listResults: [] }
   } else if (state?.output?.listResults && state.output.listResults.length > 0) {
     // Treat the list as a structured array input. Parse each item so object
     // paths like "url" or "authorMeta.name" resolve per-element; non-JSON

@@ -6708,7 +6708,7 @@ export async function extendVideo(params: {
   kieTaskId?: string
   prompt?: string
   negativePrompt?: string
-  // LTX 2.3 Pro + the tail-recipe providers (seedance-2-5-extend, seedance-2-0-extend, kling-4-extend) require videoUrl; extendMode is LTX-only
+  // LTX 2.3 Pro, the tail-recipe providers (seedance-2-5-extend, seedance-2-0-extend, kling-4-extend) and pixverse-v6-extend require videoUrl; extendMode is LTX-only
   videoUrl?: string
   extendMode?: "start" | "end"
   duration?: number
@@ -6716,8 +6716,8 @@ export async function extendVideo(params: {
   model?: string
   seeds?: number
   quality?: string
-  // Tail-recipe providers only (Kling 4: 720p / 1080p); generateAudio is Seedance's alone
-  resolution?: "480p" | "720p" | "1080p"
+  // Catalog extend providers only (Kling 4: 720p / 1080p; PixVerse V6: 360p / 540p / 720p / 1080p); generateAudio is Seedance's and PixVerse V6's
+  resolution?: "360p" | "480p" | "540p" | "720p" | "1080p"
   generateAudio?: boolean
   userId?: string
 }): Promise<{ jobId: string }> {

@@ -50,7 +50,7 @@ import {
   FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS,
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
-  isTailExtendProvider,
+  isCatalogExtendProvider,
   canonicalVideoProvider,
   pricedOutputDurationSec,
   SEEDANCE_VIDEO_EDIT_SHAPE,
@@ -271,7 +271,7 @@ import {
   CONTENT_IDEAS_MAX_RECIPE_INPUTS,
   resolveUpscaleFactor,
   ltxExtendDurationSec,
-  tailExtendResolution
+  catalogExtendResolution
 } from "@nodaro/shared/credits";
 import {
   ttsSupportsStitching,
@@ -491,7 +491,7 @@ import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings";
 import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, pollScrapeJobOutput, RUN_START_RESET, SCRAPE_POLL_BUDGET_MS } from "./poll-job";
-import type { OutputKeySpec } from "./poll-job";
+import type { OutputKeySpec, PollJobResultOptions } from "./poll-job";
 import { caughtErrorWords, failedJobError } from "@/lib/failed-job-error";
 import { ensureNodeSheetPanels, SHEET_STAGE_A_CANCELLED } from "../reference-sheet/node-sheet-stage-a";
 import { shouldAbandonNode } from "./abandon-guard";
@@ -619,8 +619,13 @@ function runProcessingNode(
   extraOutputFields?: (
     outputData: Record<string, unknown>,
   ) => Record<string, unknown>,
+  /** On the node only, in the write that lands the take (PollJobResultOptions.nodeFields). */
+  nodeFields?: PollJobResultOptions["nodeFields"],
 ): Promise<string> {
-  return pollJobWithNodeUpdate(nodeId, apiCall, outputKey, label, ctx, extraOutputFields);
+  // The legacy call shape exactly, unless a unit lands node-only fields with its take.
+  return nodeFields
+    ? pollJobWithNodeUpdate(nodeId, apiCall, outputKey, label, ctx, extraOutputFields, undefined, { nodeFields })
+    : pollJobWithNodeUpdate(nodeId, apiCall, outputKey, label, ctx, extraOutputFields);
 }
 
 /**
@@ -1516,6 +1521,8 @@ function executeNodeCore(
       ctx,
       inputs,
       overrideMediaUrl,
+      // One item of a run once per upstream item: the batch is executeNodeForList's to write.
+      ...(listIterationIndex !== undefined ? { listIteration: true } : {}),
       poll: runProcessingNode,
       pollJson: (id, start, landing, label, c) => pollJobWithNodeUpdate(id, start, [], label, c, undefined, undefined, { jsonLanding: landing }),
       setUserPromptTemplate,
@@ -6840,22 +6847,25 @@ function executeNodeCore(
       );
     }
 
-    // ─── Tail-recipe trim-stitch path (Seedance 2.5 / 2.0, Kling 4) ─────
+    // ─── Catalog extend path (Seedance 2.5 / 2.0, Kling 4, PixVerse V6) ──
     // URL-based like LTX, but the continuation CONTENT is required — the
-    // worker wraps it in the provider's own prompt, generates from the
-    // source's tail, and stitches source+extension.
-    // Mirrors payload-builder's tail branch: the provider is sent as the
-    // node names it, so the server runs and prices that model, and the
-    // seconds and resolution as that model's estimate prices them — snapped
-    // into its window (a length set on Seedance 2.5, up to 30 s, never reaches
-    // 2.0's 4–15 s as is), its catalog default when none; a resolution it
-    // does not render (480p set on Seedance, then Kling 4 picked on the quick
-    // strip) as the 720p it is priced at, which the route would otherwise refuse.
-    if (isTailExtendProvider(runsAs)) {
+    // worker wraps it in the provider's own prompt (PixVerse: as written),
+    // generates the continuation (from the source's tail; PixVerse: from the
+    // whole source), and stitches source+extension.
+    // Mirrors payload-builder's tail and PixVerse branches: the provider is
+    // sent as the node names it, so the server runs and prices that model, and
+    // the seconds and resolution as that model's estimate prices them —
+    // snapped into its window (a length set on Seedance 2.5, up to 30 s, never
+    // reaches 2.0's 4–15 s as is), its catalog default when none; a resolution
+    // it does not render (480p set on Seedance, then Kling 4 or PixVerse V6
+    // picked on the quick strip) as the one it is priced at (Kling 4: 720p;
+    // PixVerse V6: the nearest it renders, 540p), which the route would
+    // otherwise refuse.
+    if (isCatalogExtendProvider(runsAs)) {
       const videoUrl = inputs.videoUrl as string | undefined;
       if (!videoUrl) {
         toast.error(nodeRunError(evData.label, "nodeRun.noUpstreamVideoWireA"));
-        return Promise.reject(new Error("No videoUrl for tail-recipe extend"));
+        return Promise.reject(new Error("No videoUrl for catalog extend"));
       }
       let seedancePrompt: string | undefined = promptOf("extend-video");
       {
@@ -6870,7 +6880,7 @@ function executeNodeCore(
       }
       if (!seedancePrompt?.trim()) {
         toast.error(nodeRunError(evData.label, "nodeRun.describeWhatHappensNextIn"));
-        return Promise.reject(new Error("No prompt for tail-recipe extend"));
+        return Promise.reject(new Error("No prompt for catalog extend"));
       }
       setUserPromptTemplate(evData.prompt?.trim() || undefined);
       return runProcessingNode(
@@ -6882,7 +6892,7 @@ function executeNodeCore(
             negativePrompt: inputs.negativePrompt || evData.negativePrompt || undefined,
             provider: runsAs,
             duration: pricedOutputDurationSec(runsAs, evData.duration),
-            resolution: tailExtendResolution(runsAs, evData.resolution) as NonNullable<ExtendVideoData["resolution"]>,
+            resolution: catalogExtendResolution(runsAs, evData.resolution) as NonNullable<ExtendVideoData["resolution"]>,
             generateAudio: evData.generateAudio,
             userId: ctx.userId,
           }),
@@ -10336,6 +10346,15 @@ function executeNodeCore(
     // Prefer structured json from the source node's data (web-scrape's
     // generatedJson; an Edit Plan's plan as the person's review leaves it).
     let value: unknown = sourceJsonOf(src, inEdge.sourceHandle);
+
+    // A node unit's look pip is read as a plain wire reads it — the active
+    // take's own JSON — and nothing else: a take that holds none extracts
+    // nothing, never the pip's list nor another output (the server's
+    // executeExtractField stops there too).
+    if (value === undefined && unitSourceJsonOf(src, inEdge.sourceHandle, "take")) {
+      updateNodeData(node.id, { extractedText: "", executionStatus: "completed" });
+      return Promise.resolve("");
+    }
 
     // When upstream is a list-producing node (filter-list / deduplicate /
     // merge-lists / split-text), iterate over the FULL list so the path

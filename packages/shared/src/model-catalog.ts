@@ -34,6 +34,7 @@ import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, MINIMAX_H3_IMAGE_RESOLUTIONS } fro
 import { isAutoVideoDuration } from "./video-duration-auto.js"
 import type { DeclaredSeedanceTaskType } from "./seedance-task-type.js"
 import { SEEDREAM_5_5_DEFAULT_RESOLUTION, SEEDREAM_5_5_RESOLUTIONS } from "./seedream-5-5.js"
+import { FLUX_3_KLEIN_RESOLUTIONS } from "./flux-3-klein.js"
 
 export type ModelKind = "image" | "video" | "audio"
 
@@ -77,7 +78,14 @@ export type ModelMode =
   | "video-audit"
 
 export interface PriceVariant {
-  /** Composite identifier as it appears in `STATIC_CREDIT_COSTS`. */
+  /**
+   * Composite identifier as it appears in `STATIC_CREDIT_COSTS` — or, for a
+   * model a run is charged a multiple of a rate for, the whole-run quote id of
+   * one run (`<rateId>:<units>u`, `unitQuoteCreditId`): its rate's row × the
+   * units, rounded up once, as the price table and `GET
+   * /v1/credits/model-cost` price it (Seedance 2.5 Extend lists its default
+   * run this way). `credits` is then that run's list price.
+   */
   identifier: string
   /** The catalog's list price in credits. `GET /v1/models` and the MCP
    *  `list_models` tool serve the price a run is charged on the instance,
@@ -173,6 +181,7 @@ export const MODEL_MAKERS = {
   bytedance: { name: "ByteDance" },
   elevenlabs: { name: "ElevenLabs" },
   google: { name: "Google" },
+  heygen: { name: "HeyGen" },
   ideogram: { name: "Ideogram" },
   kuaishou: { name: "Kuaishou" },
   lightricks: { name: "Lightricks" },
@@ -339,7 +348,10 @@ export interface ModelCatalogEntryFields {
    * marked required, with a closed list (Seedream 5.5: text to image requires
    * one of its eight ratios and has no "auto"; its edit takes "auto" and the
    * same eight; docs.kie.ai/market/seedream/5-5-text-to-image.md and
-   * 5-5-image-to-image.md). The lanes that pass a stored ratio straight on (a
+   * 5-5-image-to-image.md). FLUX 3 Klein's schemas give the same evidence: a
+   * closed list of nine ratios on text to image, with no "auto", and the same
+   * nine plus "auto" on the edit (docs.kie.ai/market/flux3/klein-text-to-image.md
+   * and klein-edit-image.md). The lanes that pass a stored ratio straight on (a
    * Scene, a surround continuation) move a ratio such a model does not list to
    * the nearest one it does, checked against the model the request reaches
    * (`aspectRatioForStrictModel` in the backend), and send every other model's
@@ -711,6 +723,14 @@ const SEEDREAM_5_5_I2I_RATIOS = ["auto", ...SEEDREAM_RATIOS] as const
 // moves it to auto with JPEG), and PNG (its default) or JPEG.
 const SEEDREAM_5_5_BACKGROUNDS = ["auto", "opaque", "transparent"] as const
 const SEEDREAM_5_5_FORMATS = ["png", "jpeg"] as const
+// FLUX 3 Klein (docs.kie.ai/market/flux3/klein-text-to-image + klein-edit-image):
+// both endpoints list the same nine ratios, 1:1 first (the text-to-image
+// default). The edit adds "auto", its own default (the first image's shape),
+// listed LAST so a fallback that takes the first ratio lands on 1:1.
+const FLUX_3_KLEIN_RATIOS = ["1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16", "21:9", "9:21"] as const
+const FLUX_3_KLEIN_I2I_RATIOS = [...FLUX_3_KLEIN_RATIOS, "auto"] as const
+// Its files: PNG (its default) or JPEG, the same price (decided 2026-11-12).
+const FLUX_3_KLEIN_FORMATS = ["png", "jpeg"] as const
 const Z_IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 
 const VIDEO_RATIOS_HV = ["16:9", "9:16"] as const
@@ -962,6 +982,63 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: KONTEXT_RATIOS,
     pricing: [{ identifier: "flux-kontext-max", credits: 25 }],
+  },
+  // ── FLUX 3 Klein ──
+  // The light model of Black Forest Labs' FLUX 3 (KIE `flux-3/klein-text-to-image`
+  // and `flux-3/klein-edit-image`). A different model from FLUX 2 Klein
+  // (`flux-2-klein`, below). A prompt runs the text-to-image id; with reference
+  // images the run moves to the edit id (`T2I_TO_I2I_VARIANT`). Priced by size
+  // alone, the same on both ids: reference images cost nothing
+  // (`flux3KleinCreditId`). Both schemas list a closed set of ratios and text to
+  // image has no "auto", so both entries declare `strictAspectRatios`. PNG (the
+  // default) or JPEG, as its siblings write (decided 2026-11-12); KIE's WebP is
+  // not offered. KIE's prompt enhancement is left on (never sent), and its
+  // custom width/height and several pictures per request are not offered.
+  // See: docs.kie.ai/market/flux3/klein-text-to-image.md
+  //      docs.kie.ai/market/flux3/klein-edit-image.md
+  "flux-3-klein": {
+    id: "flux-3-klein",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "Black Forest Labs",
+    maker: "black-forest-labs",
+    label: "FLUX 3 Klein",
+    series: "Flux",
+    description: "FLUX 3 Klein - the light model of FLUX 3: fast and low cost, at 1K by default, 2K or 4K, in nine shapes, PNG or JPEG. Add images and it edits from up to 10 references, at the same price.",
+    useCases: ["fast", "drafts", "iteration", "realistic"],
+    features: ["reference-image"],
+    aspectRatios: FLUX_3_KLEIN_RATIOS,
+    strictAspectRatios: true,
+    resolutions: FLUX_3_KLEIN_RESOLUTIONS,
+    outputFormats: FLUX_3_KLEIN_FORMATS,
+    pricing: [
+      { identifier: "flux-3-klein", credits: 4, note: "1K default" },
+      { identifier: "flux-3-klein:1K", credits: 4, note: "1K" },
+      { identifier: "flux-3-klein:2K", credits: 7, note: "2K" },
+      { identifier: "flux-3-klein:4K", credits: 17, note: "4K" },
+    ],
+  },
+  "flux-3-klein-i2i": {
+    id: "flux-3-klein-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "Black Forest Labs",
+    maker: "black-forest-labs",
+    label: "FLUX 3 Klein (I2I)",
+    series: "Flux",
+    description: "FLUX 3 Klein edits - fast, low-cost changes from 1 to 10 reference images, which cost nothing extra. 1K by default, 2K or 4K, PNG or JPEG; auto keeps the first image's shape.",
+    useCases: ["edit", "iteration", "multi-reference", "fast"],
+    features: ["reference-image"],
+    aspectRatios: FLUX_3_KLEIN_I2I_RATIOS,
+    strictAspectRatios: true,
+    resolutions: FLUX_3_KLEIN_RESOLUTIONS,
+    outputFormats: FLUX_3_KLEIN_FORMATS,
+    pricing: [
+      { identifier: "flux-3-klein-i2i", credits: 4, note: "1K default" },
+      { identifier: "flux-3-klein-i2i:1K", credits: 4, note: "1K" },
+      { identifier: "flux-3-klein-i2i:2K", credits: 7, note: "2K" },
+      { identifier: "flux-3-klein-i2i:4K", credits: 17, note: "4K" },
+    ],
   },
   // ── Replicate "Open" (uncensored) — run direct via Replicate, not KIE ──
   "flux-2-klein": {
@@ -3428,8 +3505,11 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["extend"],
     pricing: [{ identifier: "runway-extend", credits: 320 }],
   },
-  // Seedance extends ANY video, one provider per model. Each is priced on its
-  // own rows (`tailExtendCreditId`), one per second added and resolution.
+  // Seedance extends ANY video, one provider per model. Seedance 2.5 is charged
+  // per second of video sent (the source's last 10 s, all of a shorter one)
+  // and added, at its resolution's row, the price of two seconds (decided
+  // 2026-11-12). Seedance 2.0 is priced on its own rows
+  // (`tailExtendCreditId`), one per second added and resolution.
   // The earlier single id `seedance-2-extend` is retired and runs as Seedance 2.5.
   "seedance-2-5-extend": {
     id: "seedance-2-5-extend",
@@ -3439,15 +3519,18 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "bytedance",
     label: "Seedance 2.5 Extend",
     series: "Seedance",
-    description: "Extend ANY video with Seedance 2.5: 4–30s continuation (audio included), stitched into one seamless clip.",
+    description: "Extend ANY video with Seedance 2.5: a 4–30s continuation (audio included) of the source's last 10 seconds, joined onto it. Charged per second of video sent and added; the figure is the default run, 8s added at 720p to a source of 10s or more.",
     useCases: ["extend"],
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
     defaultDuration: 8,
     resolutions: ["480p", "720p", "1080p"],
     pricing: [
-      { identifier: "seedance-2-5-extend:8s:720p", credits: 950, note: "default 8s 720p — see :Ns:res variants for exact" },
-      { identifier: "seedance-2-5-extend:8s:480p", credits: 425, note: "8s 480p" },
-      { identifier: "seedance-2-5-extend:8s:1080p", credits: 2375, note: "8s 1080p" },
+      // The default run (8 s added to a source of 10 s or more: 18 s sent and
+      // added, 9 units of the two-second row) at each resolution. A run is
+      // charged its own seconds: `seedance-2-5-extend:<res>:per-2s` × (sent + added) ÷ 2.
+      { identifier: "seedance-2-5-extend:720p:per-2s:9u", credits: 1710, note: "default run: 8s added at 720p to a source of 10s or more — priced per second sent and added" },
+      { identifier: "seedance-2-5-extend:480p:per-2s:9u", credits: 765, note: "8s added at 480p to a source of 10s or more" },
+      { identifier: "seedance-2-5-extend:1080p:per-2s:9u", credits: 4275, note: "8s added at 1080p to a source of 10s or more" },
     ],
   },
   "seedance-2-0-extend": {
@@ -3490,6 +3573,35 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     pricing: [
       { identifier: "kling-4-extend:5s:720p", credits: 425, note: "default 5s 720p — see :Ns:res variants for exact" },
       { identifier: "kling-4-extend:5s:1080p", credits: 638, note: "5s 1080p" },
+    ],
+  },
+  // PixVerse V6 extends ANY video natively (no tail recipe): the whole source
+  // goes to its extend, which returns it with the new seconds joined on; the
+  // run keeps the user's own source and joins only the new seconds to it. Its
+  // own entry, so a deployment can withhold it apart from PixVerse V6 Max, and
+  // its own rows (`pixverseExtendCreditId`): one per second added and quality,
+  // `:audio` with sound (on unless turned off). `resolutions` is ascending
+  // (repo convention); the default quality (720p) is the extend's own, as on
+  // the other extend entries (`pixverseExtendQuality`), never declared here.
+  "pixverse-v6-extend": {
+    id: "pixverse-v6-extend",
+    kind: "video",
+    modes: ["extend"] as const,
+    family: "PixVerse",
+    maker: "pixverse",
+    label: "PixVerse V6 Extend",
+    series: "PixVerse",
+    description: "Extend ANY video with PixVerse V6: 1–15s continuation at 360p to 1080p, with optional sound, joined onto your original clip.",
+    useCases: ["extend"],
+    durations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 5,
+    resolutions: ["360p", "540p", "720p", "1080p"],
+    pricing: [
+      { identifier: "pixverse-v6-extend:5s:720p:audio", credits: 120, note: "default 5s 720p with sound — see :Ns:quality and :Ns:quality:audio variants for exact" },
+      { identifier: "pixverse-v6-extend:5s:720p", credits: 90, note: "5s 720p, no sound" },
+      { identifier: "pixverse-v6-extend:5s:540p:audio", credits: 90, note: "5s 540p with sound" },
+      { identifier: "pixverse-v6-extend:1s:360p", credits: 10, note: "1s 360p, no sound (min)" },
+      { identifier: "pixverse-v6-extend:15s:1080p:audio", credits: 690, note: "15s 1080p with sound (max)" },
     ],
   },
   "veo-1080p": {
@@ -3796,6 +3908,61 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "volcengine-lipsync:60s", credits: 1200 },
       { identifier: "volcengine-lipsync:120s", credits: 2400 },
       { identifier: "volcengine-lipsync:300s", credits: 6000, note: "5-min ceiling" },
+    ],
+  },
+  // LatentSync, HeyGen Lipsync Precision and Lipsync 2 Pro run on Replicate
+  // (providers/replicate/lip-sync.ts). Listed so a deployment's model
+  // restriction can name them (decided 2026-11-12); what they are sent and
+  // charged did not change. They take no size: the result keeps the size of the
+  // video they are given.
+  "latentsync": {
+    id: "latentsync",
+    kind: "video",
+    modes: ["lip-sync"] as const,
+    family: "LatentSync",
+    maker: "bytedance",
+    label: "LatentSync",
+    series: "LatentSync",
+    description: "Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input.",
+    useCases: ["lip-sync", "dubbing", "video-to-video"],
+    pricing: [{ identifier: "latentsync", credits: 7 }],
+  },
+  "heygen-lipsync-precision": {
+    id: "heygen-lipsync-precision",
+    kind: "video",
+    modes: ["lip-sync"] as const,
+    family: "HeyGen",
+    maker: "heygen",
+    label: "HeyGen Lipsync Precision",
+    series: "HeyGen",
+    description: "Dub existing footage with precise lip sync to a new audio track. Video input, billed per second.",
+    useCases: ["lip-sync", "dubbing", "video-to-video"],
+    pricing: [
+      { identifier: "heygen-lipsync-precision", credits: 10010, note: "5-min ceiling (no duration given)" },
+      { identifier: "heygen-lipsync-precision:15s", credits: 510 },
+      { identifier: "heygen-lipsync-precision:30s", credits: 1010 },
+      { identifier: "heygen-lipsync-precision:60s", credits: 2010 },
+      { identifier: "heygen-lipsync-precision:120s", credits: 4010 },
+      { identifier: "heygen-lipsync-precision:300s", credits: 10010, note: "5-min ceiling" },
+    ],
+  },
+  "lipsync-2-pro": {
+    id: "lipsync-2-pro",
+    kind: "video",
+    modes: ["lip-sync"] as const,
+    family: "Sync",
+    maker: "sync-labs",
+    label: "Lipsync 2 Pro",
+    series: "Sync",
+    description: "Studio-grade lip sync on existing footage, re-synced to a new audio track. Video input, billed per second.",
+    useCases: ["lip-sync", "dubbing", "video-to-video", "premium"],
+    pricing: [
+      { identifier: "lipsync-2-pro", credits: 12490, note: "5-min ceiling (no duration given)" },
+      { identifier: "lipsync-2-pro:15s", credits: 630 },
+      { identifier: "lipsync-2-pro:30s", credits: 1250 },
+      { identifier: "lipsync-2-pro:60s", credits: 2500 },
+      { identifier: "lipsync-2-pro:120s", credits: 5000 },
+      { identifier: "lipsync-2-pro:300s", credits: 12490, note: "5-min ceiling" },
     ],
   },
   // ── Video Depth ── (video-depth node; priced by the input clip's length via
@@ -4414,6 +4581,48 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Suno v4 music generation — full songs with vocals, multiple genres.",
     useCases: ["music", "song", "vocals"],
     pricing: [{ identifier: "suno", credits: 30, note: "per generation" }],
+  },
+  // Suno v4.5, v4.5 All and v4.5+ (decided 2026-11-12): listed so a
+  // deployment's model restriction can name them, each with a price row of its
+  // own (SUNO_VERSION_CREDIT_KEYS) at the price those runs were charged before.
+  "suno-v4_5": {
+    id: "suno-v4_5",
+    kind: "audio",
+    modes: ["music"] as const,
+    family: "Suno",
+    maker: "suno",
+    label: "Suno v4.5",
+    series: "Suno",
+    dataValue: "V4_5",
+    description: "Suno v4.5 — improved quality and coherence over v4.",
+    useCases: ["music", "song", "vocals"],
+    pricing: [{ identifier: "suno-v4_5", credits: 30, note: "per generation" }],
+  },
+  "suno-v4_5all": {
+    id: "suno-v4_5all",
+    kind: "audio",
+    modes: ["music"] as const,
+    family: "Suno",
+    maker: "suno",
+    label: "Suno v4.5 All",
+    series: "Suno",
+    dataValue: "V4_5ALL",
+    description: "Suno v4.5 All — full instrument and vocal generation.",
+    useCases: ["music", "song", "vocals"],
+    pricing: [{ identifier: "suno-v4_5all", credits: 30, note: "per generation" }],
+  },
+  "suno-v4_5plus": {
+    id: "suno-v4_5plus",
+    kind: "audio",
+    modes: ["music"] as const,
+    family: "Suno",
+    maker: "suno",
+    label: "Suno v4.5 Plus",
+    series: "Suno",
+    dataValue: "V4_5PLUS",
+    description: "Suno v4.5 Plus — richer production than v4.5.",
+    useCases: ["music", "song", "vocals"],
+    pricing: [{ identifier: "suno-v4_5plus", credits: 30, note: "per generation" }],
   },
   "suno-v5": {
     id: "suno-v5",

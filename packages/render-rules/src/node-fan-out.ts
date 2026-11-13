@@ -47,6 +47,7 @@ import { editPlanClipFanOut, heldBatchFanOut, inheritedClipFanOut, selectedFanOu
 import { SPLIT_MEDIA_ASSUMED_SOURCE_SEC, SPLIT_SHOTS_ASSUMED_SHOT_SEC, splitMediaPartCount, splitMediaParts } from "./split-media-parts"
 import { runWireLengthSec } from "./utility-wire-length"
 import { UNIT_LIST_OUTPUTS } from "./unit-list-outputs.generated"
+import { unitHeldBatch, unitSideFieldOf } from "./unit-batch-side-outputs"
 
 /** Downstream runs one run of a producer makes the node after it run. */
 export type ProducerFanOut = (
@@ -210,8 +211,10 @@ function listFanOut(data: Record<string, unknown>, selector: SelectorFields | un
  * when the source re-runs, the most items a run makes (its `listMax` field,
  * else the field's default) times the runs the source itself makes
  * (`sourceRuns`: a source run once per upstream item hands on every run's
- * list, row by row — unit-batch-side-outputs.ts); after one, the list it holds
- * (after a run once per item, that whole list). 0 when it fans nothing out.
+ * list, row by row — unit-batch-side-outputs.ts); after one, the list an Each
+ * wire reads (`unitSideFieldOf` "list": while it holds the batch of a run once
+ * per item, that whole list; else its active take's own). 0 when it fans
+ * nothing out.
  * Rows from the manifests (unit-list-outputs.generated.ts), so no unit is
  * named here.
  */
@@ -225,13 +228,37 @@ function unitListFanOut(
   const row = UNIT_LIST_OUTPUTS.find((r) => r.type === source.type && r.pip === sourceHandle)
   if (!row) return undefined
   const data = dataOf(source)
-  const held = Array.isArray(data[row.from]) ? (data[row.from] as unknown[]).filter((v): v is string => typeof v === "string" && v !== "") : []
+  // The list an Each wire from the pip fans out over: every row's while the
+  // node holds a batch, else the active take's own (unitSideFieldOf "list").
+  const value = unitSideFieldOf(data, row.from, "list")
+  const held = Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v !== "") : []
   if (!rerun && held.length > 0) return fanOutCount(held, selector)
   if (!row.max) return fanOutCount(held, selector)
   const set = Number(data[row.max.field])
   const most = Number.isFinite(set) && set >= 1 ? Math.floor(set) : row.max.default
   const runs = Math.max(1, sourceRuns())
   return fanOutCount(Array.from({ length: most * runs }, (_, i) => String(i + 1)), selector)
+}
+
+/**
+ * The runs an Each wire from the media TAKE pip of a node unit whose take
+ * carries a list (`take` of its UNIT_LIST_OUTPUTS row; an edge naming no pip
+ * reads it) makes: the batch of a run once per upstream item — the one it
+ * holds (`unitHeldBatch`) when it is not re-run, else one take per run it
+ * makes (`sourceRuns`). 0 when it fans nothing out; undefined for any other
+ * pip or source.
+ */
+function unitTakeBatchFanOut(
+  source: EstimateGraphNode,
+  sourceHandle: string | null | undefined,
+  rerun: boolean,
+  selector: SelectorFields | undefined,
+  sourceRuns: () => number,
+): number | undefined {
+  const row = UNIT_LIST_OUTPUTS.find((r) => r.type === source.type && r.take !== undefined)
+  if (!row || (sourceHandle != null && sourceHandle !== row.take)) return undefined
+  if (!rerun) return fanOutCount(unitHeldBatch(dataOf(source)), selector)
+  return fanOutCount(Array.from({ length: Math.max(1, sourceRuns()) }, (_, i) => String(i + 1)), selector)
 }
 
 /** An Each wire whose producer emits nothing on it: 0 runs. */
@@ -297,6 +324,9 @@ export function baseFanOut(
     // run's, when the source itself runs once per upstream item — and its list after.
     const unitList = unitListFanOut(source, edge.sourceHandle, rerunIds.has(source.id), selector, () => runsOf(source, nodes, edges, rerunIds, planOutputOf))
     if (unitList !== undefined && unitList > 1) return unitList
+    // …and its media take pip: the batch of a run once per upstream item (one take per picture).
+    const takeBatch = unitTakeBatchFanOut(source, edge.sourceHandle, rerunIds.has(source.id), selector, () => runsOf(source, nodes, edges, rerunIds, planOutputOf))
+    if (takeBatch !== undefined && takeBatch > 1) return takeBatch
 
     // Transitive: a Text node fed by a List on an Each wire.
     if (source.type === "text-prompt") {

@@ -377,6 +377,14 @@ describe("POST /v1/image-to-image", () => {
       expect((await post("seedream-5-5-i2i", 10)).statusCode).toBe(400)
     })
 
+    it("FLUX 3 Klein takes 10: the image and 9 more", async () => {
+      mockJobInsert("job-flux-3-klein")
+      expect((await post("flux-3-klein-i2i", 9)).statusCode).toBe(200)
+      const res = await post("flux-3-klein-i2i", 10)
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    })
+
     it("Seedream 5.5 refuses a prompt shorter than 5 characters, before any job row", async () => {
       const res = await app.inject({
         method: "POST",

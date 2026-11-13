@@ -97,10 +97,16 @@ describe("ExtendVideoConfig — Seedance 2.5 and Seedance 2.0", () => {
   it("labels each resolution with its own provider's price id", () => {
     const asked = () => credits.getCachedCredits.mock.calls.map(([id]) => id)
     const prefetched = () => credits.prefetchModelCredits.mock.calls.flatMap(([ids]) => ids as string[])
+    // Seedance 2.5: each resolution's run — its two-second row × the run's units
+    // (no source known here: the whole 10 s window + the 8 s default, 9 units).
     const on25 = render(<ExtendVideoConfig data={data()} onUpdate={vi.fn()} {...EXTRA} />)
-    const ids25 = ["seedance-2-5-extend:8s:480p", "seedance-2-5-extend:8s:720p", "seedance-2-5-extend:8s:1080p"]
+    const ids25 = ["seedance-2-5-extend:480p:per-2s:9u", "seedance-2-5-extend:720p:per-2s:9u", "seedance-2-5-extend:1080p:per-2s:9u"]
     expect(asked()).toEqual(expect.arrayContaining(ids25))
-    expect(prefetched()).toEqual(ids25)
+    expect(prefetched()).toEqual([
+      "seedance-2-5-extend:480p:per-2s", "seedance-2-5-extend:480p:per-2s:9u",
+      "seedance-2-5-extend:720p:per-2s", "seedance-2-5-extend:720p:per-2s:9u",
+      "seedance-2-5-extend:1080p:per-2s", "seedance-2-5-extend:1080p:per-2s:9u",
+    ])
     on25.unmount()
     credits.getCachedCredits.mockClear()
     credits.prefetchModelCredits.mockClear()
@@ -112,11 +118,25 @@ describe("ExtendVideoConfig — Seedance 2.5 and Seedance 2.0", () => {
   })
 
   it("prices the seconds chosen on the row the run reserves", () => {
-    credits.getCachedCredits.mockImplementation((id: string) => (id === tailExtendCreditId("seedance-2-5-extend", 22, "1080p") ? 4321 : undefined))
-    const { container } = render(<ExtendVideoConfig data={data({ duration: 22 })} onUpdate={vi.fn()} {...EXTRA} />)
+    credits.getCachedCredits.mockImplementation((id: string) => (id === tailExtendCreditId("seedance-2-0-extend", 12, "1080p") ? 4321 : undefined))
+    const { container } = render(<ExtendVideoConfig data={data({ provider: "seedance-2-0-extend", duration: 12 })} onUpdate={vi.fn()} {...EXTRA} />)
     const res = container.querySelector('output[aria-label="Resolution"]')!.closest("[data-testid=select]") as HTMLElement
     expect(within(res).getByRole("button", { name: /1080p \(.+ credits\)/ })).toBeTruthy()
-    expect(credits.getCachedCredits).toHaveBeenCalledWith("seedance-2-5-extend:22s:1080p")
+    expect(credits.getCachedCredits).toHaveBeenCalledWith("seedance-2-0-extend:12s:1080p")
+    credits.getCachedCredits.mockImplementation(() => undefined)
+  })
+
+  it("Seedance 2.5: prices each resolution's run per second sent and added, the source read off the canvas", () => {
+    // A 4 s upload wired in, 22 s added: (4 + 22) ÷ 2 = 13 units of the two-second row.
+    const nodes = [{ id: "u", type: "upload-video", position: { x: 0, y: 0 }, data: { url: "https://cdn.example.com/u.mp4", duration: 4, videoDurationSec: 4 } }]
+    const edges = [{ id: "u-x", source: "u", target: "x", targetHandle: "video" }]
+    credits.getCachedCredits.mockImplementation((id: string) => (id === "seedance-2-5-extend:1080p:per-2s:13u" ? 4321 : undefined))
+    const { container } = render(
+      <ExtendVideoConfig data={data({ duration: 22 })} onUpdate={vi.fn()} {...EXTRA} nodes={nodes as never} edges={edges as never} nodeId="x" />,
+    )
+    const res = container.querySelector('output[aria-label="Resolution"]')!.closest("[data-testid=select]") as HTMLElement
+    expect(within(res).getByRole("button", { name: /1080p \(.+ credits\)/ })).toBeTruthy()
+    expect(credits.getCachedCredits).toHaveBeenCalledWith("seedance-2-5-extend:1080p:per-2s:13u")
     credits.getCachedCredits.mockImplementation(() => undefined)
   })
 
@@ -203,6 +223,78 @@ describe("ExtendVideoConfig — Kling 4", () => {
     const { rerender } = render(<ExtendVideoConfig data={kling({ duration: 3 })} onUpdate={onUpdate} {...EXTRA} />)
     rerender(<ExtendVideoConfig data={data({ provider: "seedance-2-0-extend", duration: 3 })} onUpdate={onUpdate} {...EXTRA} />)
     expect(onUpdate).toHaveBeenCalledWith({ duration: 4 })
+  })
+})
+
+describe("ExtendVideoConfig — PixVerse V6", () => {
+  const pixverse = (overrides: Partial<ExtendVideoData> = {}) => data({ provider: "pixverse-v6-extend", ...overrides })
+
+  it("offers 1–15 s and 360p / 540p / 720p / 1080p on PixVerse V6, its 5 s and 720p defaults shown", () => {
+    const { container } = render(<ExtendVideoConfig data={pixverse()} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(menuValues(container, "Seconds to add")).toEqual(seconds(1, 15))
+    expect(menuValues(container, "Resolution")).toEqual(["360p", "540p", "720p", "1080p"])
+    expect(container.querySelector('output[aria-label="Seconds to add"]')!.textContent).toBe("5")
+    expect(container.querySelector('output[aria-label="Resolution"]')!.textContent).toBe("720p")
+  })
+
+  it("labels each quality with PixVerse V6's own price rows, :audio while the sound is on", () => {
+    const asked = () => credits.getCachedCredits.mock.calls.map(([id]) => id)
+    const prefetched = () => credits.prefetchModelCredits.mock.calls.flatMap(([ids]) => ids as string[])
+    const on = render(<ExtendVideoConfig data={pixverse({ duration: 8 })} onUpdate={vi.fn()} {...EXTRA} />)
+    const withSound = ["pixverse-v6-extend:8s:360p:audio", "pixverse-v6-extend:8s:540p:audio", "pixverse-v6-extend:8s:720p:audio", "pixverse-v6-extend:8s:1080p:audio"]
+    expect(prefetched()).toEqual(withSound)
+    expect(asked()).toEqual(expect.arrayContaining(withSound))
+    on.unmount()
+    credits.getCachedCredits.mockClear()
+    credits.prefetchModelCredits.mockClear()
+    render(<ExtendVideoConfig data={pixverse({ duration: 8, generateAudio: false })} onUpdate={vi.fn()} {...EXTRA} />)
+    const silent = ["pixverse-v6-extend:8s:360p", "pixverse-v6-extend:8s:540p", "pixverse-v6-extend:8s:720p", "pixverse-v6-extend:8s:1080p"]
+    expect(prefetched()).toEqual(silent)
+    expect(asked()).toEqual(expect.arrayContaining(silent))
+    expect(asked().some((id) => id.endsWith(":audio"))).toBe(false)
+  })
+
+  it("has a sound switch, on until turned off", () => {
+    const onUpdate = vi.fn()
+    const { container } = render(<ExtendVideoConfig data={pixverse()} onUpdate={onUpdate} {...EXTRA} />)
+    const sound = container.querySelector("#extendGenerateAudio") as HTMLInputElement
+    expect(sound).not.toBeNull()
+    expect(sound.checked).toBe(true)
+  })
+
+  it("asks what happens next, and says PixVerse V6 joins only its new seconds to the original", () => {
+    const { container } = render(<ExtendVideoConfig data={pixverse()} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(container.textContent).toContain("What happens next")
+    expect(container.textContent).toContain("PixVerse V6 generates what happens next")
+    expect(container.textContent).not.toContain("Seedance 2 generates")
+  })
+
+  it("switching from Seedance at 480p and 25 s snaps to the nearest quality it renders, 540p, and its longest, 15 s; the sound switch stays", () => {
+    const onUpdate = vi.fn()
+    const { rerender } = render(<ExtendVideoConfig data={data({ duration: 25, resolution: "480p", generateAudio: false })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(onUpdate).not.toHaveBeenCalled()
+    rerender(<ExtendVideoConfig data={pixverse({ duration: 25, resolution: "480p", generateAudio: false })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(onUpdate).toHaveBeenCalledWith({ duration: 15, resolution: "540p" })
+  })
+
+  it("keeps a length, a quality and a sound setting PixVerse V6 offers", () => {
+    const onUpdate = vi.fn()
+    render(<ExtendVideoConfig data={pixverse({ duration: 15, resolution: "1080p", generateAudio: false })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(onUpdate).not.toHaveBeenCalled()
+  })
+
+  it("switching from PixVerse V6 at 2 s and 360p to Seedance snaps the length into its window and clears the quality it does not render", () => {
+    const onUpdate = vi.fn()
+    const { rerender } = render(<ExtendVideoConfig data={pixverse({ duration: 2, resolution: "360p" })} onUpdate={onUpdate} {...EXTRA} />)
+    rerender(<ExtendVideoConfig data={data({ provider: "seedance-2-0-extend", duration: 2, resolution: "360p" })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(onUpdate).toHaveBeenCalledWith({ duration: 4, resolution: undefined })
+  })
+
+  it("switching from PixVerse V6 to Kling 4 clears its sound switch and a quality Kling 4 does not render", () => {
+    const onUpdate = vi.fn()
+    const { rerender } = render(<ExtendVideoConfig data={pixverse({ duration: 5, resolution: "540p", generateAudio: false })} onUpdate={onUpdate} {...EXTRA} />)
+    rerender(<ExtendVideoConfig data={data({ provider: "kling-4-extend", duration: 5, resolution: "540p", generateAudio: false })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(onUpdate).toHaveBeenCalledWith({ resolution: undefined, generateAudio: undefined })
   })
 })
 

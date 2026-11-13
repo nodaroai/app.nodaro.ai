@@ -1,6 +1,7 @@
 /**
  * The extend stitch: the source, then the extension generated from its tail,
- * as one clip at the source's size, frame rate and picture quality.
+ * as one clip at the source's size (rounded down to even, `deliveredShape`),
+ * frame rate and picture quality.
  *
  * - The boundary is found on two small proxies (the source's last
  *   `framesFromPrev` frames and the extension's first `framesFromNext`, made
@@ -13,9 +14,10 @@
  */
 import { join } from "node:path"
 import { probeAudioSampleRate, probeVideoOverlayBase, runFfmpeg, type VideoOverlayBaseProbe } from "./ffmpeg-utils.js"
-import { probeMatched, type MatchedProbe } from "./matched-encode.js"
+import { probeMatched, probeMatchedOrThrow, type MatchedProbe } from "./matched-encode.js"
 import {
   deliveredPictureFilter,
+  deliveredShape,
   extendStitchArgs,
   extensionPicture,
   isHdr,
@@ -87,7 +89,7 @@ async function searchBoundary(
   const prev = join(args.workDir, "stitch-prev.mp4")
   const next = join(args.workDir, "stitch-next.mp4")
   try {
-    await runFfmpeg(stitchProxyArgs(args.sourcePath, sourcePicture(source, rate, Math.max(0, sourceFrames - framesFromPrev), sourceFrames), prev), undefined, launch)
+    await runFfmpeg(stitchProxyArgs(args.sourcePath, sourcePicture(source, shape, rate, Math.max(0, sourceFrames - framesFromPrev), sourceFrames), prev), undefined, launch)
     await runFfmpeg(stitchProxyArgs(args.extensionPath, extensionPicture(rate, shape, 0, Math.min(framesFromNext, extensionFrames)), next), undefined, launch)
     return await matcher(prev, next, framesFromPrev, framesFromNext, "best-pair")
   } catch (err) {
@@ -131,15 +133,16 @@ function extendPeakMemoryMiB(canvas: PictureShape, decoded: readonly PictureShap
 
 /**
  * How the extend's tail (its `@video_1` reference, and the last frame taken
- * from it) is cut from `source` (`extractTailToFile`'s options). An HDR or a
- * full-range source: its picture through the stitch's own conversion
- * (`deliveredPictureFilter`: to SDR, or to limited range), so the model
- * continues the very picture the result shows and the boundary match compares
- * like with like. An HDR source's cut is admitted at what a tail cut reserves
- * (the default launch, `defaultLaunchPeakMiB`) plus the tone-map's buffers at
- * the source's stored size (4K when it reports none); a full-range one's at
- * the default. Any other source: nothing, the tail cut exactly as it always
- * was.
+ * from it) is cut from `source` (`extractTailToFile`'s options). An HDR, a
+ * full-range or an odd-size source: its picture through the stitch's own
+ * conversion (`deliveredPictureFilter`: rounded down to even, to SDR, to
+ * limited range), so the model continues the very picture the result shows,
+ * the boundary match compares like with like, and an odd-size picture can be
+ * encoded at all (H.264 4:2:0 needs even sides). An HDR source's cut is
+ * admitted at what a tail cut reserves (the default launch,
+ * `defaultLaunchPeakMiB`) plus the tone-map's buffers at the source's stored
+ * size (4K when it reports none); any other one's at the default. Any other
+ * source: nothing, the tail cut exactly as it always was.
  */
 export function extendTailPicture(source: MatchedProbe): { pictureFilter?: string; launch?: { peakMemoryMiB: number } } {
   const pictureFilter = deliveredPictureFilter(source)
@@ -155,12 +158,42 @@ function soundOffsetOf(probe: MatchedProbe): number {
 }
 
 /**
- * A conformed picture's frame count at the output rate: its length (the
- * stream's own, else the container's) at that rate. A picture that reports no
- * length fails the stitch.
+ * A clip's picture length as the stitch counts it: the picture stream's own,
+ * else the container's; undefined when it has no picture (or reports no
+ * length). What the extend measures an extension by before stitching it
+ * (`extensionTooShort`).
+ */
+export function pictureSecondsOf(probe: MatchedProbe): number | undefined {
+  if (!probe.width || !probe.height) return undefined
+  return probe.videoDurationSec ?? probe.durationSec
+}
+
+/**
+ * The picture length of the extension at `path` (`pictureSecondsOf`), from a
+ * probe that read the file: undefined when it has no picture. A probe that
+ * FAILED (timed out, could not start, could not read the file) says nothing
+ * about the extension's length, so it throws a plain error, retried like any
+ * transient failure, and never the short-extension refusal: a timeout as it
+ * is, any other failure in the stitch's words with its cause kept.
+ */
+export async function extensionPictureSeconds(path: string): Promise<number | undefined> {
+  let probe: MatchedProbe
+  try {
+    probe = await probeMatchedOrThrow(path)
+  } catch (err) {
+    if ((err as { timedOut?: unknown }).timedOut === true) throw err
+    throw new Error("Extend stitch: the extension's picture could not be read", { cause: err })
+  }
+  return pictureSecondsOf(probe)
+}
+
+/**
+ * A conformed picture's frame count at the output rate: its length
+ * (`pictureSecondsOf`) at that rate. A picture that reports no length fails
+ * the stitch.
  */
 function conformedFrames(probe: MatchedProbe, which: "source" | "extension", rate: StitchRate): number {
-  const length = probe.videoDurationSec ?? probe.durationSec
+  const length = pictureSecondsOf(probe)
   if (!length) throw new Error(`Extend stitch: the ${which} reports no length`)
   return Math.round(length * rate.fps)
 }
@@ -193,14 +226,16 @@ export async function stitchExtension(args: ExtendStitchArgs): Promise<ExtendSti
     throw new Error("Extend stitch: the source's picture could not be read", { cause: err })
   }
   const shape: PictureShape = { width: seen.width, height: seen.height, ...(seen.sarRatio ? { sarRatio: seen.sarRatio } : {}) }
+  // What the result is encoded at: the source's size, rounded down to even.
+  const delivered = deliveredShape(shape)
 
-  const launch = { peakMemoryMiB: extendPeakMemoryMiB(shape, [shape, extensionSize], isHdr(source)) }
+  const launch = { peakMemoryMiB: extendPeakMemoryMiB(delivered, [shape, extensionSize], isHdr(source)) }
   const cut = await searchBoundary(args, { source, rate, shape, sourceFrames, extensionFrames }, launch)
   const boundary = boundaryOf(args.fallbackTrims, cut, { source: sourceFrames, extension: extensionFrames })
   console.log(
     `[extendStitch] ${boundary.matched ? "smart cut" : "fixed trims"}: end-trim ${boundary.trimEndFrames}, start-trim ${boundary.trimStartFrames}` +
-      `${boundary.psnrDb !== null ? ` (PSNR ${boundary.psnrDb} dB)` : ""}, ${shape.width}x${shape.height}` +
-      `${shape.sarRatio ? ` SAR ${shape.sarRatio}` : ""} @ ${rate.spelling}`,
+      `${boundary.psnrDb !== null ? ` (PSNR ${boundary.psnrDb} dB)` : ""}, ${delivered.width}x${delivered.height}` +
+      `${delivered === shape ? "" : ` (from ${shape.width}x${shape.height})`}${shape.sarRatio ? ` SAR ${shape.sarRatio}` : ""} @ ${rate.spelling}`,
   )
 
   const sourceHasAudio = Boolean(source.audioCodec)

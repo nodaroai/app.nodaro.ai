@@ -758,8 +758,11 @@ export {
 export {
   UNIT_BATCH_ROW_KEY,
   unitBatchSideOutputs,
+  unitHeldBatch,
+  unitSideFieldOf,
   type UnitBatchSideOutputs,
   type UnitSideOutputsRow,
+  type UnitSideRead,
 } from "./unit-batch-side-outputs"
 // What one Speaker Map run is sent, and why it is refused (both engines).
 export {
@@ -872,6 +875,24 @@ export {
   nodaroVideoUpscaleRefusesLength,
   nodaroVideoUpscaleTierOf,
 } from "./nodaro-video-upscale-pricing"
+// Seedance 2.5 Extend pricing: per second sent and added, each resolution's row the price of two seconds.
+export {
+  SEEDANCE_EXTEND_SENT_PRICED_PROVIDER,
+  SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
+  SEEDANCE_EXTEND_RATE_SECONDS,
+  SEEDANCE_EXTEND_RATE_CREDIT_IDS,
+  isSeedanceExtendPricedBySecondsSent,
+  isSeedanceExtendRateCreditId,
+  seedanceExtendRateCreditId,
+  seedanceExtendAddedSec,
+  seedanceExtendSentSec,
+  seedanceExtendSourceSec,
+  seedanceExtendUnits,
+  seedanceExtendPrice,
+  extendSourceEstimateSec,
+  type SentPricedSeedanceExtendProvider,
+  type SeedanceExtendPrice,
+} from "./seedance-extend-pricing"
 // Topaz upscale pricing: the video hold (output gigapixels) and the image size units.
 export {
   TOPAZ_VIDEO_UNIT_CREDIT_ID,

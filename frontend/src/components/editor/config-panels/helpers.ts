@@ -2,9 +2,9 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
 import { unitCreditIdOf } from "@/lib/unit-price-ids"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, isTailExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, isCatalogExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
-import { defaultImageModelForNode, imageFormatLeversOf, isPricedPerInputImage, maskedEditResolution, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { countImageInputEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
 import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
@@ -24,7 +24,7 @@ import {
   textToAudioCreditId,
   LTX_EXTEND_PER_SECOND_CREDIT_ID,
   LTX_RETAKE_PER_SECOND_CREDIT_ID,
-  tailExtendCreditId,
+  catalogExtendCreditId,
   pitchTempoQuoteCreditId,
   NEMOTRON_TRANSCRIBE_ID,
   nemotronTranscribeQuoteCreditId,
@@ -46,7 +46,7 @@ import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsReferenceVideo } from "@/lib/audio-reference-handles"
 import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
@@ -486,7 +486,20 @@ export function getModelIdentifier(
   // Entity nodes: use provider field (default nano-banana)
   if (nodeType === "character" || nodeType === "face" || nodeType === "object" || nodeType === "location") {
     const entityProvider = (data.provider as string) || IMAGE_MODEL_ROLE_DEFAULTS.character
+    // FLUX 3 Klein: the job sends no size and only the node's source image, so
+    // it is quoted at the size it renders, 1K, on the edit id with a source
+    // (the server's estimate and reservation, `plainEntityCreditIdentifier`).
+    if (isFlux3Klein(entityProvider)) {
+      const hasSource = typeof data.sourceImageUrl === "string" && data.sourceImageUrl.length > 0
+      return sharedBuildCreditModelIdentifier(entityProvider, undefined, undefined, undefined, undefined, hasSource ? 1 : 0)
+    }
     return buildCreditModelIdentifier(entityProvider, data)
+  }
+  // A Creature node on FLUX 3 Klein is priced like the entities above (the
+  // server's estimate includes it); every other Creature quote is unchanged.
+  if (nodeType === "creature" && isFlux3Klein(data.provider as string)) {
+    const hasSource = typeof data.sourceImageUrl === "string" && data.sourceImageUrl.length > 0
+    return sharedBuildCreditModelIdentifier(data.provider as string, undefined, undefined, undefined, undefined, hasSource ? 1 : 0)
   }
 
   if (nodeType === "web-scrape") {
@@ -812,14 +825,24 @@ export function getModelIdentifier(
   // which every estimate multiplies by the seconds (PRICING_UNIT_ESTIMATORS).
   if (nodeType === "extend-video" && provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
 
-  // Extend-video on a tail-recipe model (Seedance 2.5 / 2.0, Kling 4): each
-  // model on its own rows, by the seconds added and the resolution — the one
-  // builder the route's guard and the workflow run reserve on. A retired id
+  // Extend-video on a catalog extend model: Seedance 2.5 is charged per second
+  // sent and added — its resolution's two-second row, which every estimate
+  // multiplies by the run's units (PRICING_UNIT_ESTIMATORS →
+  // extendVideoPricingUnits); every other (Seedance 2.0, Kling 4, PixVerse V6)
+  // on its own rows, by the seconds added and the resolution (PixVerse's
+  // `:audio` with its sound on) — the one builder the
+  // route's guard and the workflow run reserve on. A retired id
   // (`seedance-2-extend`) is priced as the model it runs as.
   if (nodeType === "extend-video") {
     const runsAs = canonicalVideoProvider(provider)
-    if (isTailExtendProvider(runsAs)) {
-      return tailExtendCreditId(runsAs, data.duration as number | string | undefined, data.resolution as string | undefined)
+    if (isSeedanceExtendPricedBySecondsSent(runsAs)) return seedanceExtendRateCreditId(data.resolution)
+    if (isCatalogExtendProvider(runsAs)) {
+      return catalogExtendCreditId(
+        runsAs,
+        data.duration as number | string | undefined,
+        data.resolution as string | undefined,
+        typeof data.generateAudio === "boolean" ? data.generateAudio : undefined,
+      )
     }
   }
 
@@ -843,7 +866,7 @@ export function getModelIdentifier(
   return buildCreditModelIdentifier(
     provider,
     data,
-    edges && isPricedPerInputImage(provider) ? countImageInputEdges(edges, node.id) : 0,
+    edges && priceReadsInputImages(provider) ? countImageInputEdges(edges, node.id) : 0,
     // A masked edit on a model that follows its photo is priced at the size
     // nearest the photo, when the node it comes from records the photo's size.
     {
@@ -877,8 +900,9 @@ export function buildCreditModelIdentifier(
   // refs) so the displayed credit number matches what the route will charge.
   const refs = data.referenceImageUrls as string[] | undefined
   // A model priced per input image (GPT Image 2.6, MiniMax H3 Image, Seedream
-  // 5.5) counts every image the run will send.
-  const refCount = isPricedPerInputImage(provider) ? pricedEstimatedImages(provider, data, wiredImageRefs) : (refs?.length ?? 0)
+  // 5.5), or FLUX 3 Klein (priced on the edit id it runs on whenever an image
+  // goes), counts every image the run will send.
+  const refCount = priceReadsInputImages(provider) ? pricedEstimatedImages(provider, data, wiredImageRefs) : (refs?.length ?? 0)
   // Topaz bills on the upscale FACTOR. The legacy `targetResolution` still on
   // stored node data is mapped forward by resolveTopazUpscale — the same
   // authority the route, the estimator and the worker use — so the credit badge

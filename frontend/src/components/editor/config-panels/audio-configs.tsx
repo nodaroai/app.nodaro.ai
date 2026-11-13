@@ -67,7 +67,7 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, lipSyncLeverClearPatch, lipSyncTakesLever, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, dialogueProviderOf, getDialogueCapabilities, SUNO_SEPARATE_TYPES, SUNO_STEM_NAMES, DEFAULT_SUNO_STEM_NAME, SUNO_SEPARATE_STEM_FIELDS, type SunoSeparateType, type SunoStemName } from "@nodaro/shared/models"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, REPLICATE_LIP_SYNC_PROVIDERS, retiredLipSyncProviderName, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, lipSyncLeverClearPatch, lipSyncTakesLever, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, dialogueProviderOf, getDialogueCapabilities, SUNO_SEPARATE_TYPES, SUNO_STEM_NAMES, DEFAULT_SUNO_STEM_NAME, SUNO_SEPARATE_STEM_FIELDS, type SunoSeparateType, type SunoStemName } from "@nodaro/shared/models"
 import { AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, type AudioFxPreset } from "@nodaro/shared/media"
 import { lipSyncFifteenSecondCreditId, sunoCreditType } from "@nodaro/shared/credits"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts/assembly"
@@ -1750,6 +1750,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
     snippets: promptSnippets,
   })
   const provider = data.provider || "kling-avatar"
+  const retiredModel = retiredLipSyncProviderName(data.provider)
   // KIE providers (Kling Avatar / InfiniTalk / Seedance) expose the resolution
   // lever. Replicate AND fal providers do NOT — both must be excluded here so a
   // fal provider (sync-lipsync-v3) doesn't wrongly render the KIE resolution
@@ -1786,6 +1787,8 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   // A model that does not take a lever at all (OmniHuman 2.0: no resolution,
   // fast mode or seed) has every such value cleared, whichever model left it.
   useEffect(() => {
+    // A retired model is the person's to replace: nothing is rewritten under it.
+    if (retiredModel !== undefined) return
     const notTaken = lipSyncLeverClearPatch(provider, data)
     if (Object.keys(notTaken).length > 0) {
       onUpdate(notTaken as Partial<LipSyncData>)
@@ -1799,6 +1802,30 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       onUpdate({ resolution: resOpts.def as LipSyncData["resolution"] })
     }
   }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A saved node on a model retired from Lip Sync (decided 2026-11-12): it says
+  // so, and the menu offers the models that run. Nothing is switched for the
+  // person — the models' inputs and prices differ — and a run is refused with
+  // the same sentence until another model is picked.
+  if (retiredModel !== undefined) {
+    return (
+      <div className="flex flex-col gap-3">
+        <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Select value="" onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"], ...lipSyncLeverClearPatch(v, data) } as Partial<LipSyncData>)}>
+            <SelectTrigger aria-label={t("field.provider")}><SelectValue placeholder={retiredModel} /></SelectTrigger>
+            <SelectContent>
+              {offeredLipSyncModels.map((m) => (
+                <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} perSecondCreditId={lipSyncFifteenSecondCreditId(m.value)} />
+              ))}
+            </SelectContent>
+          </Select>
+        </MappableField>
+        <p role="alert" className="text-xs text-destructive">
+          {t("audiocfg.retiredLipSyncModel", { model: retiredModel })}
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -1933,72 +1960,6 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         </>
       )}
 
-      {/* Wav2Lip params */}
-      {provider === "wav2lip" && (
-        <>
-          <div>
-            <Label>{t("audiocfg.facePadding")}</Label>
-            <Input value={data.pads ?? "0 10 0 0"} onChange={(e) => onUpdate({ pads: e.target.value })} placeholder={t("audiocfg.phPadding")} />
-            <p className="text-xs text-muted-foreground mt-1">{t("audiocfg.hintFacePadding")}</p>
-          </div>
-          <div className="flex items-center justify-between">
-            <Label>{t("audiocfg.smooth")}</Label>
-            <Switch checked={data.smooth !== false} onCheckedChange={(v) => onUpdate({ smooth: v })} />
-          </div>
-          <div>
-            <Label>{t("field.fps")}</Label>
-            <Input type="number" value={data.fps ?? 25} onChange={(e) => onUpdate({ fps: parseInt(e.target.value) || 25 })} />
-            <p className="text-xs text-muted-foreground mt-1">{t("audiocfg.hintStaticImageOnly")}</p>
-          </div>
-          <div>
-            <Label>{t("audiocfg.resizeFactor")}</Label>
-            <Input type="number" min={1} max={4} value={data.resizeFactor ?? 1} onChange={(e) => onUpdate({ resizeFactor: parseInt(e.target.value) || 1 })} />
-            <p className="text-xs text-muted-foreground mt-1">{t("audiocfg.hintResizeFactor")}</p>
-          </div>
-        </>
-      )}
-
-      {/* SadTalker params */}
-      {provider === "sadtalker" && (
-        <>
-          <div>
-            <Label>{t("audiocfg.faceEnhancer")}</Label>
-            <Select value={data.enhancer ?? "gfpgan"} onValueChange={(v) => onUpdate({ enhancer: v as "gfpgan" | "RestoreFormer" })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gfpgan">GFPGAN</SelectItem>
-                <SelectItem value="RestoreFormer">RestoreFormer</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>{t("audiocfg.preprocess")}</Label>
-            <Select value={data.preprocess ?? "full"} onValueChange={(v) => onUpdate({ preprocess: v as "crop" | "resize" | "full" })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="crop">{t("audiocfg.crop")}</SelectItem>
-                <SelectItem value="resize">{t("audiocfg.resize")}</SelectItem>
-                <SelectItem value="full">{t("audiocfg.full")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center justify-between">
-            <Label>{t("audiocfg.stillMode")}</Label>
-            <Switch checked={data.still ?? false} onCheckedChange={(v) => onUpdate({ still: v })} />
-          </div>
-          <div>
-            <Label>{t("audiocfg.poseStyle")} ({data.poseStyle ?? 0})</Label>
-            <Slider min={0} max={45} step={1} value={[data.poseStyle ?? 0]} onValueChange={(vals) => onUpdate({ poseStyle: vals[0] })} />
-            <p className="text-xs text-muted-foreground mt-1">{t("audiocfg.hintHeadMovement")}</p>
-          </div>
-          <div>
-            <Label>{t("audiocfg.expressionScale")} ({data.expressionScale ?? 1})</Label>
-            <Slider min={0} max={3} step={0.1} value={[data.expressionScale ?? 1]} onValueChange={(vals) => onUpdate({ expressionScale: vals[0] })} />
-            <p className="text-xs text-muted-foreground mt-1">{t("audiocfg.hintExpressionStrength")}</p>
-          </div>
-        </>
-      )}
-
       {/* HeyGen Lipsync Precision params */}
       {provider === "heygen-lipsync-precision" && (
         <>
@@ -2061,13 +2022,6 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
           </div>
           <p className="text-xs text-muted-foreground -mt-1">{t("audiocfg.hintLipSyncSpeaker")}</p>
         </>
-      )}
-
-      {/* Video-Retalking has no configurable params */}
-      {provider === "video-retalking" && (
-        <p className="text-xs text-muted-foreground">
-          {t("audiocfg.descTalkingHeadFaceEnh")}
-        </p>
       )}
 
       {/* Volcengine video-to-video dubbing — mode-conditional controls. Lite =
@@ -2134,16 +2088,6 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       {provider === "latentsync" && (
         <p className="text-xs text-muted-foreground">
           {t("audiocfg.descSingingDiffusion")}
-        </p>
-      )}
-      {provider === "wav2lip" && (
-        <p className="text-xs text-muted-foreground">
-          {t("audiocfg.descFastCheapLipSync")}
-        </p>
-      )}
-      {provider === "sadtalker" && (
-        <p className="text-xs text-muted-foreground">
-          {t("audiocfg.descPortraitNaturalMotion")}
         </p>
       )}
       {provider === "heygen-lipsync-precision" && (

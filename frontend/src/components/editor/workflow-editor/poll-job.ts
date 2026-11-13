@@ -319,6 +319,7 @@ function handleJobCompleted(
   updateNodeData: ReturnType<typeof useWorkflowStore.getState>["updateNodeData"],
   resolve: (url: string) => void,
   resultFields?: PollJobResultOptions["resultFields"],
+  nodeFields?: PollJobResultOptions["nodeFields"],
 ): boolean {
   // Media-typed completion: the first listed key the job actually produced.
   const outputKey = outputKeyList(outputKeySpec).find(
@@ -348,6 +349,8 @@ function handleJobCompleted(
       : {};
   // On the result only (after the node fields, which also ride on the result).
   const resultOnly = resultFields && job.output_data ? resultFields(job.output_data as Record<string, unknown>) : {};
+  // On the node only, in the write that lands this take (never on the result).
+  const nodeOnly = nodeFields && job.output_data ? nodeFields(job.output_data as Record<string, unknown>) : {};
   const resultExtra = { ...extraFields, ...resultOnly };
 
   const urlsKey = OUTPUT_URLS_KEY[outputKey];
@@ -385,6 +388,7 @@ function handleJobCompleted(
     // path. Without it the overlay would paint over the delivered result.
     jobAwaitingReview: undefined,
     ...extraFields,
+    ...nodeOnly,
     ...ugcFinishStamp,
   });
   guardedToast.success(tx("nodeRun.complete", { label: localizeJobLabel(label) }));
@@ -398,6 +402,10 @@ export interface PollJobResultOptions {
    *  `quality`, `clipKey`, `planBasis` and `renderBasis`: the node's
    *  `quality` is its own setting). */
   readonly resultFields?: (outputData: Record<string, unknown>) => Readonly<Record<string, unknown>> | RunResultIdentity
+  /** Fields that go on the NODE only, in the same write that lands the take —
+   *  never on the result, and never when no take lands (an abort, a discard, a
+   *  failure): a node unit's batch-ending patch (unit-exec-kit.ts). */
+  readonly nodeFields?: (outputData: Record<string, unknown>) => Readonly<Record<string, unknown>>
   /** A job whose result is JSON (a worker node unit's look outputs): its
    *  fields are emptied at the start and its patch lands on completion, in
    *  place of the media take. */
@@ -432,7 +440,7 @@ export function pollJobWithNodeUpdate(
   const completed = (job: Awaited<ReturnType<typeof getJobStatusLean>>, jobId: string, resolve: (result: string) => void) =>
     opts.jsonLanding
       ? handleJsonJobCompleted(job.output_data as Record<string, unknown> | null | undefined, opts.jsonLanding, { nodeId, label, updateNodeData, resolve, success: (m) => guardedToast.success(m) })
-      : handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve, opts.resultFields);
+      : handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve, opts.resultFields, opts.nodeFields);
 
   /**
    * A failed job, read by the poll or by its last check after the status went quiet: the node

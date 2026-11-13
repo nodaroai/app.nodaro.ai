@@ -53,10 +53,23 @@ export {
   seedream55Resolution,
 } from "../seedream-5-5.js"
 export type { Seedream55Model, Seedream55Resolution } from "../seedream-5-5.js"
+export {
+  FLUX_3_KLEIN_DEFAULT_RESOLUTION,
+  FLUX_3_KLEIN_I2I,
+  FLUX_3_KLEIN_MAX_INPUT_IMAGES,
+  FLUX_3_KLEIN_RESOLUTIONS,
+  FLUX_3_KLEIN_T2I,
+  flux3KleinCreditId,
+  flux3KleinResolution,
+  isFlux3Klein,
+  isFlux3KleinI2i,
+} from "../flux-3-klein.js"
+export type { Flux3KleinModel, Flux3KleinResolution } from "../flux-3-klein.js"
 // The models priced by the input images a run sends, and how a run's images are counted.
 export {
   isPricedPerInputImage,
   isPricedPerInputImageEdit,
+  priceReadsInputImages,
   pricedEstimatedImages,
   pricedSentImages,
 } from "../input-image-pricing.js"

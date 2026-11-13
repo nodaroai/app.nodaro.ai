@@ -21,6 +21,24 @@ describe("sunoCreditType — the ONE implementation of the Suno route pricing co
     expect(sunoCreditType("V5_5", "suno-generate")).toBe("suno-v5_5")
     expect(sunoCreditType("V5", "suno-cover")).toBe("suno-v5")
     expect(sunoCreditType("V5_5", "suno-extend")).toBe("suno-v5_5")
+    // Their own rows since 2026-11-12 (they were charged under the operation's row, at the same price).
+    expect(sunoCreditType("V4_5PLUS", "suno-generate")).toBe("suno-v4_5plus")
+    expect(sunoCreditType("V4_5ALL", "suno-cover")).toBe("suno-v4_5all")
+    expect(sunoCreditType("V4_5", "suno-extend")).toBe("suno-v4_5")
+  })
+
+  // A version a deployment's model restriction can name is a catalog entry
+  // (its `dataValue`), and the row it is charged under is that entry's own.
+  it("gives every version but V4 its own credit key, the pricing row of its catalog entry", () => {
+    const sunoEntries = Object.values(MODEL_CATALOG).filter((m) => m.family === "Suno")
+    for (const model of SUNO_MODELS) {
+      const entry = sunoEntries.find((m) => m.dataValue === model)
+      expect(entry, `${model} has no MODEL_CATALOG entry with dataValue`).toBeTruthy()
+      if (model === "V4") continue
+      const key = SUNO_VERSION_CREDIT_KEYS[model]
+      expect(key, `${model} has no SUNO_VERSION_CREDIT_KEYS row`).toBe(entry!.id)
+      expect(entry!.pricing[0]!.identifier).toBe(key)
+    }
   })
 
   // A new active version with no key would silently bill at the operation
@@ -59,10 +77,11 @@ describe("sunoCreditType — the ONE implementation of the Suno route pricing co
     expect(sunoModelHonoursDuration(undefined)).toBe(false)
   })
 
-  it("falls back to the operation key for versions with no dedicated price", () => {
+  it("falls back to the operation key for a version with no dedicated price (V4) and for none", () => {
     expect(sunoCreditType("V4", "suno-generate")).toBe("suno-generate")
-    expect(sunoCreditType("V4_5ALL", "suno-cover")).toBe("suno-cover")
+    expect(sunoCreditType("V4", "suno-cover")).toBe("suno-cover")
     expect(sunoCreditType(undefined, "suno-extend")).toBe("suno-extend")
+    expect(sunoCreditType("V9", "suno-generate")).toBe("suno-generate")
   })
 
   // The reason this function is gated rather than a bare version map: these four

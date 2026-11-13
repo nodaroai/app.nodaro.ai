@@ -85,11 +85,9 @@ const DIRECT_API_EXEMPTIONS = new Set<string>([
   // ── Lip sync ───────────────────────────────────────────────────────────
   // Replicate-direct lip-sync providers — implemented in
   // backend/src/providers/replicate/lip-sync.ts and dispatched directly from
-  // the lip-sync worker, not via providerRegistry.
+  // the lip-sync worker, not via providerRegistry. (Wav2Lip, VideoReTalking and
+  // SadTalker were retired from Lip Sync 2026-11-12: no route accepts them.)
   "latentsync",
-  "wav2lip",
-  "video-retalking",
-  "sadtalker",
   // ── Transcription ──────────────────────────────────────────────────────
   // The two Whisper lanes run on Replicate straight from the transcribe
   // provider (backend/src/providers/audio/transcribe.ts — pinned model versions,

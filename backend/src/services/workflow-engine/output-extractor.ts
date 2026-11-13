@@ -735,13 +735,22 @@ export function fanOutIterationValue(output: NodeOutput, nodeType: string | unde
 /**
  * The structured JSON a consumer that reads JSON (Extract Field, JSON Process,
  * the list operators) takes off a source's output, for the pip its wire leaves
- * from: a node unit's look pip its own output (`unitPipJson`), any other
- * source `output.json`. Mirrors the editor's sourceJsonOf / extractNodeOutputAsList.
+ * from: a node unit's look pip its own output as a plain wire reads it — the
+ * active take's own, after a run once per upstream item too (`unitPipJson`
+ * "take"; a list operator reads a unit's look pip through unitLookPipJsonFor
+ * first) — any other source `output.json`. Mirrors the editor's sourceJsonOf.
  */
 export function structuredJsonOf(output: NodeOutput | undefined, sourceType: string | undefined, sourceHandle: string | null | undefined): unknown {
   const unit = output ? unitDescriptorOf(sourceType) : undefined
-  if (output && unit && unitLookPipOf(unit, sourceHandle)) return unitPipJson(unit, output, sourceHandle)
+  // A consumer of one JSON value reads a plain wire: the active take's own (unitPipJson "take").
+  if (output && unit && unitLookPipOf(unit, sourceHandle)) return unitPipJson(unit, output, sourceHandle, "take")
   return output?.json
+}
+
+/** Whether a wire from `sourceHandle` leaves a node unit's look (JSON) pip — the one it names, else the first output. */
+export function isUnitLookPip(sourceType: string | undefined, sourceHandle: string | null | undefined): boolean {
+  const unit = unitDescriptorOf(sourceType)
+  return unit !== undefined && unitLookPipOf(unit, sourceHandle) !== undefined
 }
 
 /**
@@ -771,7 +780,7 @@ export function unitLookPipJsonFor(
   const unit = unitDescriptorOf(node.type)
   if (!unit || !unitLookPipOf(unit, sourceHandle)) return undefined
   const output = unitPipOutputOf(node, state)
-  return { value: output ? unitPipJson(unit, output, sourceHandle) : undefined }
+  return { value: output ? unitPipJson(unit, output, sourceHandle, "list") : undefined }
 }
 
 /**

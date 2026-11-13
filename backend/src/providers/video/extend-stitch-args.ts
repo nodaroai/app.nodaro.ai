@@ -8,10 +8,13 @@
  *   rate or 30, held to 1–60 as combineVideos' `pickTargetFps` clamps) and
  *   trimmed at its end by frame index: an even-rate clip's frames pass through
  *   unchanged, a variable-rate one is put on the grid it was shot on, as
- *   combineVideos always normalized every clip. The extension is conformed to the
- *   source's rate, trimmed at its start by frame index at that rate, scaled to
- *   cover the source's picture as the graph receives it (upright after the
- *   CLI's autorotate, at its SAR) and centre-cropped to it. The picture is
+ *   combineVideos always normalized every clip. The picture is delivered at
+ *   the source's size as the graph receives it (upright after the CLI's
+ *   autorotate, at its SAR), rounded down to even (`deliveredShape`: an
+ *   odd-size source loses its last column and/or row). The extension is
+ *   conformed to the source's rate, trimmed at its start by frame index at
+ *   that rate, scaled to cover that delivered picture and centre-cropped to
+ *   it. The picture is
  *   encoded once at the source's quality (`matched-encode.ts`): an H.264
  *   source's picture bitrate (at least a floor) in two passes and its colour
  *   tags; CRF 14 for any other codec, or when the bitrate is unreadable
@@ -141,6 +144,35 @@ export function pictureSize(probe: MatchedProbe, which: "source" | "extension"):
   return { width: probe.width, height: probe.height }
 }
 
+const evenDown = (n: number): number => n - (n % 2)
+const hasOddSide = ({ width, height }: Size): boolean => width % 2 !== 0 || height % 2 !== 0
+
+/**
+ * The size the stitch delivers, decided here and nowhere else: the source's
+ * picture as the graph receives it (`shape`: upright, at its SAR), rounded
+ * down to even, as H.264 4:2:0 needs (853×480 → 852×480, 853×481 → 852×480).
+ * Its last column and/or row are cropped (`evenCrop`), its SAR kept; an
+ * even-size source is delivered at its own size. The extension is covered and
+ * cropped to it (`fitTo`), and the bitrate floor counts its pixels.
+ */
+export function deliveredShape<S extends Size>(shape: S): S {
+  return hasOddSide(shape) ? { ...shape, width: evenDown(shape.width), height: evenDown(shape.height) } : shape
+}
+
+/** An odd-size source's picture cropped to `deliveredShape` from its top left: nothing for an even one. */
+function evenCrop(shape: PictureShape): string[] {
+  if (!hasOddSide(shape)) return []
+  const { width, height } = deliveredShape(shape)
+  return [`crop=${width}:${height}:0:0`]
+}
+
+/**
+ * `evenCrop` for a picture whose sides the filter reads for itself (`iw`,
+ * `ih`): the tail's `-vf`, which sees the source upright whichever way it is
+ * rotated, while its probe reads the stored size.
+ */
+const EVEN_CROP_OF_ANY = "crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0"
+
 /** Frames [start, end) of a picture, its timestamps from zero. */
 const frameSpan = (start: number, end: number): string =>
   `trim=${start > 0 ? `start_frame=${start}:` : ""}end_frame=${end},setpts=PTS-STARTPTS`
@@ -207,37 +239,43 @@ const deliveredChain = (source: MatchedProbe): string[] => (isHdr(source) ? toSd
 /**
  * `deliveredChain` as one filter (`-vf`): what the source's picture goes
  * through wherever the extend reads it, so the extend's tail
- * (`extendTailPicture`) is the very picture the stitch delivers. Undefined
- * for a source delivered as it is.
+ * (`extendTailPicture`) is the very picture the stitch delivers. An odd-size
+ * source (its probe's stored size) is first rounded down to even
+ * (`deliveredShape`, read from the sides the filter is given). Undefined for a
+ * source delivered as it is.
  */
 export function deliveredPictureFilter(source: MatchedProbe): string | undefined {
-  const chain = deliveredChain(source)
+  const odd = hasOddSide({ width: source.width ?? 0, height: source.height ?? 0 })
+  const chain = [...(odd ? [EVEN_CROP_OF_ANY] : []), ...deliveredChain(source)]
   return chain.length > 0 ? chain.join(",") : undefined
 }
 
 /**
  * The source's picture over frames [start, end), conformed to the output rate
- * (its own), as the stitch delivers it (`deliveredChain`): the encode and the
- * boundary proxy read it alike.
+ * (its own), at the delivered size (`evenCrop` of `shape`, the picture as the
+ * graph receives it), as the stitch delivers it (`deliveredChain`): the encode
+ * and the boundary proxy read it alike. The crop comes before the colour
+ * conversion, whose 4:2:0 then sees even sides.
  */
-export function sourcePicture(source: MatchedProbe, rate: StitchRate, start: number, end: number): string {
-  return [conformTo(rate), frameSpan(start, end), ...deliveredChain(source)].join(",")
+export function sourcePicture(source: MatchedProbe, shape: PictureShape, rate: StitchRate, start: number, end: number): string {
+  return [conformTo(rate), frameSpan(start, end), ...evenCrop(shape), ...deliveredChain(source)].join(",")
 }
 
 /**
- * Cover the source's picture and centre-crop to it. Square pixels: at its
- * size. Non-square: at its displayed width (its width at its SAR), then stored
- * at its size and SAR, so the result keeps the source's size and shape.
+ * Cover the delivered picture (`deliveredShape`) and centre-crop to it. Square
+ * pixels: at its size. Non-square: at its displayed width (its width at its
+ * SAR), then stored at its size and SAR, so the result keeps the source's
+ * size (rounded down to even) and shape.
  */
 function fitTo(shape: PictureShape): string[] {
-  const { width: w, height: h, sarRatio } = shape
+  const { width: w, height: h, sarRatio } = deliveredShape(shape)
   if (!sarRatio) return [`scale=${w}:${h}:force_original_aspect_ratio=increase`, `crop=${w}:${h}`, "setsar=1"]
   const [num, den] = sarRatio.split("/").map(Number)
   const shown = Math.round((w * num!) / den!)
   return [`scale=${shown}:${h}:force_original_aspect_ratio=increase`, `crop=${shown}:${h}`, `scale=${w}:${h}`, `setsar=${sarRatio}`]
 }
 
-/** The extension's picture over frames [start, end) at the output rate, fitted to the source's picture. */
+/** The extension's picture over frames [start, end) at the output rate, fitted to the source's delivered picture. */
 export function extensionPicture(rate: StitchRate, shape: PictureShape, start: number, end: number): string {
   return [conformTo(rate), frameSpan(start, end), ...fitTo(shape)].join(",")
 }
@@ -307,11 +345,11 @@ const MIN_BITS_PER_PIXEL_PER_FRAME = 0.1
 
 /**
  * The bitrate an H.264 source is encoded at: its own, at least the floor
- * (`MIN_BITS_PER_PIXEL_PER_FRAME` at its size, which the result keeps, and
- * the output rate, `stitchRate`).
+ * (`MIN_BITS_PER_PIXEL_PER_FRAME` at the delivered size, `deliveredShape`,
+ * and the output rate, `stitchRate`).
  */
-function flooredBitRate(source: MatchedProbe, own: number): number {
-  const pixels = (source.width ?? 0) * (source.height ?? 0)
+function flooredBitRate(source: MatchedProbe, own: number, delivered: Size): number {
+  const pixels = delivered.width * delivered.height
   return Math.max(own, Math.round(pixels * stitchRate(source).fps * MIN_BITS_PER_PIXEL_PER_FRAME))
 }
 
@@ -338,11 +376,13 @@ function flooredBitRate(source: MatchedProbe, own: number): number {
  *
  * An HDR source's picture reaches the encoder in SDR BT.709, limited range
  * (`toSdr`), and is tagged so (`SDR_TAGS`).
+ *
+ * `delivered`: the delivered size (`deliveredShape`), the floor's pixel count.
  */
-function deliveryPicture(source: MatchedProbe): MatchedProbe {
+function deliveryPicture(source: MatchedProbe, delivered: Size): MatchedProbe {
   const { videoBitRate, ...rest } = source
   const quality = videoBitRate !== undefined && source.videoCodec === BITRATE_MATCHED_CODEC
-    ? { videoBitRate: flooredBitRate(source, videoBitRate) }
+    ? { videoBitRate: flooredBitRate(source, videoBitRate, delivered) }
     : {}
   if (isHdr(source)) return { ...rest, ...quality, pixFmt: DELIVERY_PIX_FMT, ...SDR_TAGS }
   const reported = source.colorRange && source.colorRange !== "unknown" ? source.colorRange : undefined
@@ -356,7 +396,7 @@ function deliveryPicture(source: MatchedProbe): MatchedProbe {
  * follows (`deliveryPicture`).
  */
 export function stitchEncodesAtBitRate(source: MatchedProbe): boolean {
-  return matchedHasBitRate(deliveryPicture(source))
+  return matchedHasBitRate(deliveryPicture(source, deliveredShape({ width: source.width ?? 0, height: source.height ?? 0 })))
 }
 
 /**
@@ -369,12 +409,12 @@ export function extendStitchArgs(p: ExtendStitchEncode): string[] {
   const shape = p.picture ?? pictureSize(p.source, "source")
   const kept = { source: p.sourceFrames - p.trimEndFrames, extension: p.extensionFrames - p.trimStartFrames }
   const picture = [
-    `[0:v:0]${sourcePicture(p.source, rate, 0, kept.source)}[sv]`,
+    `[0:v:0]${sourcePicture(p.source, shape, rate, 0, kept.source)}[sv]`,
     `[1:v:0]${extensionPicture(rate, shape, p.trimStartFrames, p.extensionFrames)}[ev]`,
     "[sv][ev]concat=n=2:v=1:a=0[v]",
   ].join(";")
   const inputs = ["-y", "-i", p.sourcePath, "-i", p.extensionPath]
-  const encode = matchedPictureArgs(deliveryPicture(p.source), { pass: p.pass })
+  const encode = matchedPictureArgs(deliveryPicture(p.source, deliveredShape(shape)), { pass: p.pass })
   if (p.pass?.n === 1) return [...inputs, "-filter_complex", picture, "-map", "[v]", "-an", ...encode, "-f", "null", "-"]
   const sound = p.sourceHasAudio || p.extensionHasAudio
   return [
