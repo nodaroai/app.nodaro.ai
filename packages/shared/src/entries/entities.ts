@@ -52,6 +52,7 @@ export {
   wiredCharacterBySlug,
   wiredCharacterSlug,
   wiredCharacterKey,
+  wiredCharacterVideoUrls,
   aliasRetiredCharacterMentions,
   RETIRED_CHARACTER_MENTION_SLUGS,
 } from "../wired-character-names.js"

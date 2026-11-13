@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useAuth } from "@/hooks/use-auth"
+import { uploadFile } from "@/lib/api"
 import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { AssetPickerConfigButton } from "@/components/editor/asset-picker/asset-picker-config-button"
@@ -139,6 +141,13 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
           )}
         </div>
 
+        {/* Video subject (Kling 4.0 / Kling 4.0 Flash): a short clip of this
+            character, sent as a subject made from the clip. */}
+        <CharacterVideoSubjectField
+          value={data.subjectVideoUrl}
+          onChange={(url) => onUpdate({ subjectVideoUrl: url })}
+        />
+
         {/* Field Mappings — keep the {} input-injection mapping for the Character Name,
             the one referenceable field that survives the move to the studio. */}
         <MappableField field="characterName" label={t("cfgext.entCharacterName")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -150,6 +159,77 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
           />
         </MappableField>
       </div>
+    </div>
+  )
+}
+
+/**
+ * The Character node's video subject: a 3-8 s single-shot clip of the
+ * character, uploaded or pasted as a URL. Kling 4.0 and Kling 4.0 Flash send
+ * the character as a subject made from it (`wiredCharacterVideoUrls`); the
+ * server measures the clip and refuses one of the wrong length before
+ * anything is charged. Every other model ignores the field.
+ */
+function CharacterVideoSubjectField({ value, onChange }: { value: string | undefined; onChange: (url: string) => void }) {
+  const t = useT()
+  const { user } = useAuth()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const clip = value?.trim() ?? ""
+
+  const onFile = async (file: File | undefined) => {
+    if (!file) return
+    setUploading(true)
+    setError(null)
+    try {
+      const result = await uploadFile(file, user?.id)
+      onChange(result.url)
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : t("cfgext.entVideoSubjectUploadFailed"))
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ""
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <Label htmlFor="char-subject-video">{t("cfgext.entVideoSubject")}</Label>
+      {clip ? <video src={clip} controls muted playsInline className="w-full max-h-40 rounded-md bg-black" /> : null}
+      <div className="flex gap-2">
+        <Input
+          id="char-subject-video"
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={t("cfgext.entVideoSubjectPlaceholder")}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={uploading}
+          onClick={() => fileRef.current?.click()}
+          aria-label={t("cfgext.entVideoSubjectUpload")}
+          title={t("cfgext.entVideoSubjectUpload")}
+        >
+          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+        </Button>
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={(e) => void onFile(e.target.files?.[0])}
+      />
+      {clip ? (
+        <button type="button" className="self-start text-[11px] text-muted-foreground underline" onClick={() => onChange("")}>
+          {t("cfgext.entVideoSubjectRemove")}
+        </button>
+      ) : null}
+      <p className="text-[11px] text-muted-foreground">{t("cfgext.entVideoSubjectHint")}</p>
+      {error ? <p className="text-[11px] text-red-500">{error}</p> : null}
     </div>
   )
 }

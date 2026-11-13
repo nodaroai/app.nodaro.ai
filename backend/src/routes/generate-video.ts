@@ -19,6 +19,7 @@ import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../lib/r
 import { probeAndCheckRefAudio } from "../lib/ref-audio-probe.js"
 import { viduQ4InputProblem } from "../lib/vidu-q4-inputs.js"
 import { kling4InputProblem } from "../lib/kling4-inputs.js"
+import { seatCharacterVideosPreHandler } from "../lib/character-video-seat.js"
 import { videoMaterialCounts } from "../lib/video-material-counts.js"
 import { applyAudioSoundtrack } from "../lib/audio-soundtrack.js"
 import { getModelCreditBaseCost } from "../ee/billing/credits.js"
@@ -794,7 +795,9 @@ export async function validateRefVideoDurationPreHandler(
   // that credit-guard-impl.ts promises is absent at runtime. The same helper
   // backs the DAG gate in node-executor.ts, so "which providers have a bound"
   // and "how many clips do we probe" are stated exactly once for all lanes.
-  const check = await probeAndCheckRefVideoDurations({ provider, referenceVideoUrls: body.referenceVideoUrls })
+  // A character's own clip is seated among the reference videos by now
+  // (seatCharacterVideosPreHandler) and is held to its own length bound too.
+  const check = await probeAndCheckRefVideoDurations({ provider, referenceVideoUrls: body.referenceVideoUrls, characterReferences: body.characterReferences })
   // Undefined when nothing was probed (no reference videos, or a provider with
   // no declared bound) — `computeCredits` then falls back to its own probe.
   req.refVideoDurationsSec = check.durationsSec
@@ -807,7 +810,7 @@ export async function validateRefVideoDurationPreHandler(
       "video: reference video outside the provider's duration bounds",
     )
     return reply.status(400).send({
-      error: { code: "video_too_long", message: check.message },
+      error: { code: check.code ?? "video_too_long", message: check.message },
     })
   }
 }
@@ -818,7 +821,7 @@ export async function validateRefVideoDurationPreHandler(
  * is what the run reserves).
  */
 export const generateVideoPricing: RoutePricing = {
-  prechecks: [imageToVideoModelPreHandler, applyAudioSoundtrackPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
+  prechecks: [imageToVideoModelPreHandler, seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
     const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
@@ -1313,12 +1316,12 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // already seated in the reference images is ONE material: the runner turns
     // that seat into the subject. Count the seat once — the shared rule both
     // video routes read (lib/video-material-counts.ts).
-    const materialCounts = videoMaterialCounts({ provider, characterReferences: parsed.data.characterReferences, referenceImageUrls })
+    const materialCounts = videoMaterialCounts({ provider, characterReferences: parsed.data.characterReferences, referenceImageUrls, referenceVideoUrls })
     const characterProblem = videoCharacterRefProblem({
       provider,
       characterReferences: parsed.data.characterReferences,
       imageCount: materialCounts.imageCountForCharacterRule,
-      videoCount: referenceVideoUrls?.length ?? 0,
+      videoCount: materialCounts.videoCountForCharacterRule,
       hasStartFrame: imageUrl !== undefined,
       hasEndFrame: endFrameUrl !== undefined,
       audioCount: referenceAudioUrls?.length ?? 0,
@@ -1402,7 +1405,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       hasStartFrame: imageUrl !== undefined,
       hasEndFrame: endFrameUrl !== undefined,
       referenceImageCount: referenceImageUrls?.length ?? 0,
-      referenceVideoCount: referenceVideoUrls?.length ?? 0,
+      // A video subject's clip seat is the subject, not one more video.
+      referenceVideoCount: materialCounts.videoCountForCharacterRule,
       referenceAudioCount: referenceAudioUrls?.length ?? 0,
       // A character whose portrait already sits in the reference images (the
       // editor seats it there; the runner turns that seat into the subject) is

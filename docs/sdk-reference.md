@@ -3191,8 +3191,8 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `referenceVideoUrls` ≤ 5 at 2–20 s together, `characterReferences` ≤ 7, or a
 > start frame beside them) runs in reference mode, 15 materials in all.
 > `referenceAudioUrls` clip N (≤ 7) becomes the voice of `characterReferences`
-> entry N; a character needs 2–4 images to carry a voice, otherwise its clip is
-> dropped, as is any clip past the last character. `duration` 3–20 (default 5), 720p only
+> entry N; a character needs 2–4 images, or a `videoUrl`, to carry a voice,
+> otherwise its clip is dropped, as is any clip past the last character. `duration` 3–20 (default 5), 720p only
 > (anything else → 720p), no end frame, no seed, no `audioSoundtrack`. See
 > [Kling 4.0 Flash](nodes/ai-video/generate-video.md#kling-40-flash).
 > **PixVerse V6 Max** (`pixverse-v6-max`) runs `run("generate-video")` with an
@@ -3472,7 +3472,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 
 > **Keeping a person's face (Gemini Omni).** `GenerateVideoParams` and
 > `TextToVideoParams` take `characterReferences` — up to 3
-> `VideoCharacterReference`s (`{ imageUrl, description, bodyImageUrl?, name?, voice? }`;
+> `VideoCharacterReference`s (`{ imageUrl, description, bodyImageUrl?, extraImageUrls?, name?, voice?, videoUrl? }`;
 > `voice` is `{ preset, description?, exampleLine? }` — `preset` is one of the
 > `GEMINI_OMNI_VOICE_PRESETS` ids exported by `@nodaro/shared`, and pins one voice
 > to that character across clips).
@@ -3484,7 +3484,12 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `imageUrl`, `bodyImageUrl` and up to 3 `extraImageUrls`, a start frame is
 > allowed, and `voice` is refused; `kling-4-flash` takes them the same way, with
 > `referenceAudioUrls` clip N as entry N's voice when that entry has 2–4 images
-> (otherwise the clip is dropped). They add no credit charge. Prefer them over
+> or a `videoUrl` (otherwise the clip is dropped). On both Kling 4.0 ids a
+> `videoUrl` — a 3–8 s single-shot clip of the character — makes the entry a
+> subject built from that video (at most 3 per request). The clip rides as one
+> of the 5 reference videos and is billed as one; any other model refuses it.
+> See [Video subjects](nodes/ai-video/generate-video.md#video-subjects-kling-40-and-kling-40-flash).
+> Characters themselves add no credit charge. Prefer them over
 > `referenceImageUrls` whenever the face must hold.
 
 > **Naming an image reference in the prompt.** On

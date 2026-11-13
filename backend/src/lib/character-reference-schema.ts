@@ -53,6 +53,13 @@ export const characterReferenceSchema = z.object({
   name: z.string().trim().min(1).max(VIDEO_CHARACTER_NAME_MAX).optional(),
   /** Pin a voice persona so the character keeps one voice across clips. */
   voice: characterVoiceSchema.optional(),
+  /**
+   * A 3-8 s single-shot clip of this character: on Kling 4.0 / Kling 4.0 Flash
+   * the character becomes a video subject. The route seats it among the
+   * reference videos before anything is measured or priced
+   * (`seatCharacterVideosPreHandler`); any other model refuses it.
+   */
+  videoUrl: safeUrlSchema.optional(),
 })
 
 export const characterReferencesSchema = z.array(characterReferenceSchema).max(VIDEO_CHARACTER_REFS_WIRE_MAX)

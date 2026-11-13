@@ -165,6 +165,8 @@ export {
   VIDEO_REF_LIMITS_BY_PROVIDER,
   VIDEO_REF_VIDEO_DURATION_LIMITS,
   checkRefVideoDurations,
+  VIDEO_CHARACTER_CLIP_DURATION_LIMITS,
+  checkCharacterClipDurations,
   VIDEO_PROVIDERS_REQUIRING_IMAGE,
   videoProviderRequiresImage,
   videoProviderFoldsLoneEndFrame,

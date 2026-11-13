@@ -48,6 +48,16 @@ export interface VideoCharacterReference {
    * positive `voices` cap take it.
    */
   voice?: VideoCharacterVoice
+  /**
+   * A short single-shot clip of this character (public URL). On a model with a
+   * positive `videoCharacters` cap (Kling 4.0, Kling 4.0 Flash) the character
+   * becomes a VIDEO subject made from this clip instead of an image subject.
+   * The clip rides as one more reference video ({@link seatCharacterVideos}),
+   * so it is measured, capped and priced exactly as a reference video is; its
+   * own length must fit `VIDEO_CHARACTER_CLIP_DURATION_LIMITS`. Any other model
+   * refuses it.
+   */
+  videoUrl?: string
 }
 
 /** Zod `.max()` ceiling for the wire field — the widest cap any provider declares. */
@@ -71,6 +81,113 @@ export const VIDEO_CHARACTER_VOICE_EXAMPLE_MAX = 120
 /** How many character references the provider takes; 0 = none (or unknown). */
 export function videoCharacterRefCap(provider: string | undefined): number {
   return provider ? (VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.characters ?? 0) : 0
+}
+
+/** How many characters may be VIDEO subjects (a `videoUrl` clip) on the provider; 0 = none. */
+export function videoCharacterVideoCap(provider: string | undefined): number {
+  return provider ? (VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.videoCharacters ?? 0) : 0
+}
+
+/** Every provider that takes video subjects, in declaration order. */
+export function videoCharacterVideoProviders(): string[] {
+  return Object.entries(VIDEO_REF_LIMITS_BY_PROVIDER)
+    .filter(([, l]) => (l?.videoCharacters ?? 0) > 0)
+    .map(([id]) => id)
+}
+
+/** The clips a set of character references carries (`videoUrl`, trimmed, non-empty), in order. */
+export function characterVideoUrls(
+  characterReferences: readonly unknown[] | undefined,
+): string[] {
+  const out: string[] = []
+  for (const c of characterReferences ?? []) {
+    const url = (c as { videoUrl?: unknown } | null | undefined)?.videoUrl
+    if (typeof url === "string" && url.trim()) out.push(url.trim())
+  }
+  return out
+}
+
+/** A refusal from {@link seatCharacterVideos}: a finished, user-facing sentence. */
+export interface CharacterVideoSeatProblem {
+  code: "character_video_unsupported" | "character_videos_over_limit" | "character_video_shared" | "reference_videos_over_limit"
+  message: string
+}
+
+/**
+ * The reference-video list a run sends once its characters' clips are seated
+ * in it — the ONE rule both video routes (a precheck, before the duration
+ * check, the quote and any reservation) and the workflow run (the payload
+ * builder) apply, so a video subject's clip is measured, capped, priced, held
+ * and settled exactly as a reference video is (KIE bills video subjects as
+ * reference-video seconds, summed). The provider runner then takes the seat
+ * back out of the reference videos and sends it as the character's subject.
+ *
+ * - No clip: the list as it came (the same value).
+ * - A clip already in the list (also wired as a plain reference video) keeps
+ *   its seat, and becomes the subject only; any other is appended, in
+ *   character order, after the reference videos.
+ * - Refused: a model that takes no video subjects; more clips than its
+ *   `videoCharacters` cap; two characters with the same clip; reference
+ *   videos plus clips over its `videos` cap (the provider counts both in one
+ *   cap, and a clip past it would be neither measured nor sent).
+ * - On a model that takes video subjects (one shared cap), plain reference
+ *   videos alone over that cap are refused too, instead of the extra ones
+ *   being left out without a word (decided 2026-11-13). Any other model's
+ *   list is not judged here.
+ */
+export function seatCharacterVideos(args: {
+  provider: string | undefined
+  referenceVideoUrls: readonly unknown[] | undefined
+  characterReferences: readonly unknown[] | undefined
+}):
+  | { ok: true; referenceVideoUrls: readonly unknown[] | undefined }
+  | ({ ok: false } & CharacterVideoSeatProblem) {
+  const clips = characterVideoUrls(args.characterReferences)
+  const provider = args.provider ?? "the selected model"
+  const cap = videoCharacterVideoCap(args.provider)
+  const videosCap = VIDEO_REF_LIMITS_BY_PROVIDER[args.provider as string]?.videos ?? 0
+  const overVideos = (count: number): { ok: false } & CharacterVideoSeatProblem => ({
+    ok: false,
+    code: "reference_videos_over_limit",
+    message:
+      `${provider} takes at most ${videosCap} videos in all — reference videos and characters made from a video together. ` +
+      `This run has ${count}. Remove a reference video${clips.length > 0 ? ", or the video from a character" : ""}.`,
+  })
+  if (clips.length === 0) {
+    const sent = (args.referenceVideoUrls ?? []).length
+    if (cap > 0 && sent > videosCap) return overVideos(sent)
+    return { ok: true, referenceVideoUrls: args.referenceVideoUrls }
+  }
+  if (cap === 0) {
+    const takers = videoCharacterVideoProviders()
+    return {
+      ok: false,
+      code: "character_video_unsupported",
+      message:
+        `A character video (characterReferences[].videoUrl) is not supported by ${provider}. ` +
+        `Models that take one: ${takers.join(", ")}. Otherwise drop the video and keep the character's images.`,
+    }
+  }
+  if (clips.length > cap) {
+    return {
+      ok: false,
+      code: "character_videos_over_limit",
+      message: `${provider} takes at most ${cap} characters made from a video; ${clips.length} characters carry one. Remove the video from some of them.`,
+    }
+  }
+  if (new Set(clips).size < clips.length) {
+    return {
+      ok: false,
+      code: "character_video_shared",
+      message: "Two characters carry the same video. Each character made from a video needs a clip of its own.",
+    }
+  }
+  // The list as sent stays as it is (an entry the route's schema would refuse
+  // is still there for it to refuse); the clips follow it.
+  const raw = args.referenceVideoUrls ?? []
+  const seated: unknown[] = [...raw, ...clips.filter((c) => !raw.includes(c))]
+  if (seated.length > videosCap) return overVideos(seated.length)
+  return { ok: true, referenceVideoUrls: seated }
 }
 
 /** How many DISTINCT voice personas the provider takes per request; 0 = none. */
@@ -278,13 +395,21 @@ export function videoCharacterRefProblem(args: {
  * image still yields a reference — the provider decides (Kling keeps it a
  * reference image).
  */
-export function characterReferencesFromWired(refs: readonly ConnectedReference[]): VideoCharacterReference[] {
-  const bySlug = new Map<string, { name: string; description?: string; urls: string[] }>()
+export function characterReferencesFromWired(
+  refs: readonly ConnectedReference[],
+  /**
+   * The clip each wired character carries, by its slug (`wiredCharacterVideoUrls`):
+   * pass it only for a model that takes video subjects. Absent = none.
+   */
+  videoBySlug?: ReadonlyMap<string, string>,
+): VideoCharacterReference[] {
+  const bySlug = new Map<string, { name: string; description?: string; urls: string[]; videoUrl?: string }>()
   for (const r of refs) {
     if (r.source !== "wired-character" || !r.characterSlug || !r.url) continue
     let entry = bySlug.get(r.characterSlug)
     if (!entry) {
-      entry = { name: r.defaultName.split(" / ")[0]!.trim() || r.characterSlug, urls: [] }
+      const videoUrl = videoBySlug?.get(r.characterSlug)
+      entry = { name: r.defaultName.split(" / ")[0]!.trim() || r.characterSlug, urls: [], ...(videoUrl ? { videoUrl } : {}) }
       bySlug.set(r.characterSlug, entry)
     }
     const description = (r.characterCanonicalDescription ?? r.description)?.trim()
@@ -299,5 +424,6 @@ export function characterReferencesFromWired(refs: readonly ConnectedReference[]
     ...(c.urls.length > 1 ? { extraImageUrls: c.urls.slice(1, 1 + VIDEO_CHARACTER_EXTRA_IMAGES_MAX) } : {}),
     description: (c.description ?? c.name).slice(0, VIDEO_CHARACTER_DESCRIPTION_MAX),
     name: c.name.slice(0, VIDEO_CHARACTER_NAME_MAX),
+    ...(c.videoUrl ? { videoUrl: c.videoUrl } : {}),
   }))
 }

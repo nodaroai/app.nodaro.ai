@@ -77,7 +77,9 @@ import {
   type FrameFit,
   type FrameDelivery,
   characterReferencesFromWired,
+  seatCharacterVideos,
   videoCharacterRefCap,
+  videoCharacterVideoCap,
 } from "@nodaro/shared/video"
 import {
   defaultImageModel,
@@ -252,6 +254,7 @@ import {
   characterMentionSlug,
   wiredCharacterNamesOf,
   wiredCharacterKey,
+  wiredCharacterVideoUrls,
   aliasRetiredCharacterMentions,
   entityImageUrl,
   expandExtraRefsToConnectedReferences,
@@ -4143,6 +4146,11 @@ function buildPayloadOf(
     case "image-to-video": {
       const provider = (data.provider as string) ?? LEGACY_VIDEO_NODE_DEFAULT_PROVIDER
       const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
+      // On a model whose reference videos and video subjects share one cap
+      // (Kling 4.0), videos past it are refused before any jobs row, never left
+      // out (decided 2026-11-13) — the rule the video routes apply.
+      const legacyVideoCap = seatCharacterVideos({ provider, referenceVideoUrls: resolvedInputs.referenceVideoUrls, characterReferences: undefined })
+      if (!legacyVideoCap.ok) throw new Error(legacyVideoCap.message)
       // Compose the prompt first so we can run @-mention resolution against
       // it before the worker sees the final string. The mention pass swaps
       // `@kira-smile` for "Kira" + prepends a "Use these characters:" block
@@ -4365,6 +4373,11 @@ function buildPayloadOf(
     case "text-to-video": {
       const provider = (data.provider as string) ?? LEGACY_VIDEO_NODE_DEFAULT_PROVIDER
       const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
+      // On a model whose reference videos and video subjects share one cap
+      // (Kling 4.0), videos past it are refused before any jobs row, never left
+      // out (decided 2026-11-13) — the rule the video routes apply.
+      const legacyVideoCap = seatCharacterVideos({ provider, referenceVideoUrls: resolvedInputs.referenceVideoUrls, characterReferences: undefined })
+      if (!legacyVideoCap.ok) throw new Error(legacyVideoCap.message)
       // Resolve @-mentions in the t2v prompt (see i2v case for the rationale).
       // t2v has no `imageUrl` slot — all resolved URLs become entries in
       // `referenceImageUrls`, merged with whatever upstream already provided.
@@ -4773,8 +4786,27 @@ function buildPayloadOf(
       // character's seat in the image list stays: the provider runner turns
       // that seat into the subject's name.
       const gvCharacterReferences = hasFeature(resolvedProvider, "character-subjects")
-        ? characterReferencesFromWired(expandWiredCharacterRefs(node.id, buildCtx)).slice(0, videoCharacterRefCap(resolvedProvider))
+        ? characterReferencesFromWired(
+            expandWiredCharacterRefs(node.id, buildCtx),
+            // A Character node's own clip makes it a video subject, on a model that takes one.
+            videoCharacterVideoCap(resolvedProvider) > 0 && buildCtx?.nodes && buildCtx.edges
+              ? wiredCharacterVideoUrls(node.id, buildCtx.nodes, buildCtx.edges)
+              : undefined,
+          ).slice(0, videoCharacterRefCap(resolvedProvider))
         : undefined
+      // Video subjects (decided 2026-11-13): each character's clip is seated
+      // among the reference videos — the rule /v1/generate-video's precheck
+      // applies — so the duration gate, the reservation and the settlement
+      // measure and price it as a reference video. Refused here, before any
+      // jobs row or reservation, exactly as the route refuses it.
+      const gvSeat = seatCharacterVideos({
+        provider: resolvedProvider,
+        referenceVideoUrls: resolvedInputs.referenceVideoUrls,
+        characterReferences: gvCharacterReferences,
+      })
+      if (!gvSeat.ok) throw new Error(gvSeat.message)
+      const gvReferenceVideoUrls = gvSeat.referenceVideoUrls as string[] | undefined
+      const gvVideoSubjectSeats = (gvCharacterReferences ?? []).filter((c) => !!c.videoUrl && (gvReferenceVideoUrls ?? []).includes(c.videoUrl)).length
 
       // R5: the identifier already used `resolvedProvider` while the ui-fills
       // used the stored `provider` — a pre-existing disagreement. Both now read
@@ -4802,7 +4834,9 @@ function buildPayloadOf(
         hasStartFrame: !!imageUrl,
         hasEndFrame: !!endFrameUrl,
         referenceImageCount: referenceImageUrls?.length ?? 0,
-        referenceVideoCount: resolvedInputs.referenceVideoUrls?.length ?? 0,
+        // A video subject's clip seat is the subject (its portrait's seat
+        // already counts it), not one more video.
+        referenceVideoCount: (gvReferenceVideoUrls?.length ?? 0) - gvVideoSubjectSeats,
         referenceAudioCount: resolvedInputs.referenceAudioUrls?.length ?? 0,
         characterCount: 0,
       })
@@ -4831,8 +4865,9 @@ function buildPayloadOf(
           sizeOrMode: (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
           resolution: gvNorm.resolution,
           // A soundtrack clip is a reference video by the time the run is
-          // dispatched (node-executor applies lib/audio-soundtrack.ts).
-          hasVideoRef: hasVideoRef || playsAudioSoundtrack(resolvedProvider, data, resolvedInputs.referenceAudioUrls),
+          // dispatched (node-executor applies lib/audio-soundtrack.ts); so is
+          // a video subject's clip, seated above.
+          hasVideoRef: hasVideoRef || (gvReferenceVideoUrls?.length ?? 0) > 0 || playsAudioSoundtrack(resolvedProvider, data, resolvedInputs.referenceAudioUrls),
         },
         {
           jobId,
@@ -4845,7 +4880,7 @@ function buildPayloadOf(
           imageUrl,            // swap-aware
           endFrameUrl,         // gated on having a startFrame to pair with
           referenceImageUrls,
-          referenceVideoUrls: resolvedInputs.referenceVideoUrls,
+          referenceVideoUrls: gvReferenceVideoUrls,
           videoTrimStart: data.videoTrimStart,
           videoTrimEnd: data.videoTrimEnd,
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,

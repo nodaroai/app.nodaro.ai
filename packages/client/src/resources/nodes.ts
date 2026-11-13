@@ -464,8 +464,12 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
    *   voice as `referenceAudioUrls`).
    * - Kling 4.0 Flash (`kling-4-flash`): the same named subjects, and
    *   `referenceAudioUrls` clip N becomes the voice of entry N. An entry needs
-   *   2–4 images to carry a voice; otherwise its clip is dropped, as is any
-   *   clip past the last entry.
+   *   2–4 images, or a `videoUrl`, to carry a voice; otherwise its clip is
+   *   dropped, as is any clip past the last entry.
+   * - Both Kling 4.0 ids: an entry's `videoUrl` (a 3–8 s single-shot clip of
+   *   the character) makes it a subject built from that video — at most 3 per
+   *   request. The clip rides as one of the 5 reference videos and is billed
+   *   as one; any other model answers `400`.
    */
   characterReferences?: VideoCharacterReference[]
   /** Kling 4.0 (`kling-4`, `kling-4-flash`): keep the reference videos' own

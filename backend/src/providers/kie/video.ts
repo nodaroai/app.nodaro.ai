@@ -1931,10 +1931,13 @@ async function runKling4(
   if (lastFrame) input.last_frame_url = lastFrame
   if (Array.isArray(input.elements)) {
     input.elements = await Promise.all(
-      (input.elements as Array<{ image_urls: string[] } & Record<string, unknown>>).map(async (el, e) => ({
-        ...el,
-        image_urls: await Promise.all(el.image_urls.map((u, i) => norm(u, `element ${e + 1} image #${i + 1}`))),
-      })),
+      (input.elements as Array<{ image_urls?: string[]; video_url?: string } & Record<string, unknown>>).map(async (el, e) =>
+        // A video subject's clip gets a reference video's size treatment; an
+        // image subject's images a reference image's.
+        typeof el.video_url === "string"
+          ? { ...el, video_url: await ensureVideoFitsSize(el.video_url, KLING_4_REF_VIDEO_LIMIT, "Video generation", logLabel, `element ${e + 1} video`) }
+          : { ...el, image_urls: await Promise.all((el.image_urls ?? []).map((u, i) => norm(u, `element ${e + 1} image #${i + 1}`))) },
+      ),
     )
   }
 
@@ -1946,7 +1949,8 @@ async function runKling4(
   const tierCostUsd = kling4CostUsd({
     provider: modelKey,
     resolution: input.resolution as string,
-    hasVideoRef: Array.isArray(input.video_urls),
+    // A video subject is video input too (KIE bills its seconds as a reference video's).
+    hasVideoRef: Array.isArray(input.video_urls) || (Array.isArray(input.elements) && (input.elements as Array<Record<string, unknown>>).some((el) => typeof el.video_url === "string")),
     outputSec: snapped,
     inputSec: 0,
   })

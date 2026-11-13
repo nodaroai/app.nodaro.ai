@@ -289,7 +289,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference audio, capped per model (seedance-2-5 10; seedance-2 family, minimax-h3 3; " +
-            "wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack; kling-4-flash 7, clip N = character N's voice if it has 2-4 images); else dropped.",
+            "wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack; kling-4-flash 7, clip N = character N's voice if it's a subject); else dropped.",
           ),
         character_references: z
           .array(z.object({
@@ -299,6 +299,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             description: z.string(),
             name: z.string().optional(),
             voice_preset: z.string().optional().describe("Gemini voice id (e.g. kore): pins this character's voice."),
+            video_url: z.string().optional().describe("kling-4(-flash): 3-8s clip; a video subject."),
           }))
           .max(VIDEO_CHARACTER_REFS_WIRE_MAX)
           .optional()
@@ -509,6 +510,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
                 // Preset only: the full voice object (description, example line) does
                 // not fit the per-tool wire budget — it is an SDK / REST lever.
                 ...(c.voice_preset ? { voice: { preset: c.voice_preset } } : {}),
+                // The route seats the clip among the reference videos and is the gate.
+                ...(c.video_url ? { videoUrl: c.video_url } : {}),
               })),
             }
           : {}),

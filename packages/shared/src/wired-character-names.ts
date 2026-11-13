@@ -293,3 +293,26 @@ export function wiredCharacterBySlug(
   for (const [key, named] of names) if (named.slug === slug) return { key, named }
   return undefined
 }
+
+/**
+ * The clip each Character node wired into `consumerId` carries as its VIDEO
+ * subject (its `subjectVideoUrl`, a short single-shot clip of the character),
+ * by the slug the node goes by ({@link wiredCharacterNamesOf}) — the key
+ * `characterReferencesFromWired` groups a character by. Two nodes that are one
+ * character (the same typed name) take the first node's clip, in wire order. A
+ * node wired only by its plain `image` pip is no character and gives none.
+ * Read it only for a model that takes video subjects.
+ */
+export function wiredCharacterVideoUrls(
+  consumerId: string,
+  nodes: ReadonlyArray<{ readonly id: string; readonly type?: string | null; readonly data?: unknown }>,
+  edges: ReadonlyArray<{ readonly source: string; readonly target: string; readonly sourceHandle?: string | null }>,
+): Map<string, string> {
+  const byId = new Map(nodes.map((n) => [n.id, n] as const))
+  const out = new Map<string, string>()
+  for (const [id, named] of wiredCharacterNamesOf(consumerId, nodes, edges)) {
+    const clip = (byId.get(id)?.data as { subjectVideoUrl?: unknown } | undefined)?.subjectVideoUrl
+    if (typeof clip === "string" && clip.trim() && !out.has(named.slug)) out.set(named.slug, clip.trim())
+  }
+  return out
+}

@@ -2,8 +2,10 @@ import {
   SEEDANCE_2_REF_LIMITS,
   VIDEO_REF_LIMITS_BY_PROVIDER,
   VIDEO_REF_VIDEO_DURATION_LIMITS,
+  checkCharacterClipDurations,
   checkRefVideoDurations,
 } from "@nodaro/shared/models"
+import { characterVideoUrls } from "@nodaro/shared/video"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { isOwnMediaUrl } from "./fetch-own-media.js"
 
@@ -219,8 +221,10 @@ export type RefVideoDurationCheck =
   /** In bounds, or nothing to check. `durationsSec` is present only when a
    *  probe actually ran, and carries RAW outcomes (a failed probe is NaN). */
   | { ok: true; durationsSec?: number[] }
-  /** Out of bounds — `message` is a finished, user-facing sentence. */
-  | { ok: false; durationsSec: number[]; message: string }
+  /** Out of bounds — `message` is a finished, user-facing sentence. `code`
+   *  is set only when it is not `video_too_long`: a character's clip the probe
+   *  could not read (`character_video_unreadable`). */
+  | { ok: false; durationsSec: number[]; message: string; code?: "character_video_unreadable" }
 
 /**
  * Probe the connected reference videos and check them against the provider's
@@ -242,10 +246,19 @@ export type RefVideoDurationCheck =
  * The raw durations are returned either way so the caller can price from them
  * instead of paying for a second ffprobe pass (R15) — the pricing side charges
  * a worst case for the NaN entry, which is why they are not filtered here.
+ *
+ * `characterReferences`: a character's own clip (`videoUrl`, a video subject)
+ * is seated among the reference videos (`seatCharacterVideos`), so it is
+ * measured in this same pass; its seat is also held to the clip bound
+ * (`checkCharacterClipDurations`, 3-8 s on Kling 4.0), checked first so a
+ * character's clip is named as one. Unlike a reference video, a character's
+ * clip the probe cannot read is REFUSED (decided 2026-11-13): it must be
+ * measured within its bounds to be accepted.
  */
 export async function probeAndCheckRefVideoDurations(args: {
   provider: string | undefined
   referenceVideoUrls: unknown
+  characterReferences?: unknown
 }): Promise<RefVideoDurationCheck> {
   const provider = args.provider ?? ""
   const urls = args.referenceVideoUrls
@@ -255,6 +268,14 @@ export async function probeAndCheckRefVideoDurations(args: {
   if (!VIDEO_REF_VIDEO_DURATION_LIMITS[provider]) return { ok: true }
 
   const durationsSec = await probeRefVideoDurations({ provider, referenceVideoUrls: urls })
+  const clips = new Set(characterVideoUrls(Array.isArray(args.characterReferences) ? args.characterReferences : undefined))
+  if (clips.size > 0) {
+    const candidates = refVideoProbeCandidates(provider, urls)
+    const clipCheck = checkCharacterClipDurations(provider, durationsSec.filter((_, i) => clips.has(candidates[i]!)))
+    if (!clipCheck.ok) {
+      return { ok: false, durationsSec, message: clipCheck.message, ...(clipCheck.code === "character_video_unreadable" ? { code: clipCheck.code } : {}) }
+    }
+  }
   const check = checkRefVideoDurations(provider, durationsSec)
   return check.ok ? { ok: true, durationsSec } : { ok: false, durationsSec, message: check.message }
 }

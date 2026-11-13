@@ -2969,7 +2969,8 @@ so a value the model doesn't support is ignored, never a 400:
   off (see the [Generate Video node](nodes/ai-video/generate-video.md)); the 4K
   tier is not available on the free tier.
 - **`kling-4`** (Kling 4.0) is text-to-video with no materials, or runs from
-  `referenceImageUrls` (≤ 10), `referenceVideoUrls` (≤ 5, each 2–30 s),
+  `referenceImageUrls` (≤ 10), `referenceVideoUrls` (≤ 5, each 2–30 s; a 6th
+  is a `400` `reference_videos_over_limit` before anything is reserved),
   `characterReferences` (≤ 7, as named subjects — see below) and
   `referenceAudioUrls` (≤ 3, as named voices `@Voice1` …), **at most 15
   materials in all** — more is a `400` before anything is reserved
@@ -3008,13 +3009,13 @@ so a value the model doesn't support is ignored, never a 400:
   characters, or a start frame beside them — runs in reference mode, where an
   `imageUrl` joins the reference images after your own, as on `kling-4`.
   Reference mode takes `referenceImageUrls` (≤ 10), `referenceVideoUrls` (≤ 5,
-  **2–20 s together** — a set outside that is a `400` before anything is
-  reserved) and `characterReferences` (≤ 7 named subjects, as on `kling-4`),
+  **2–20 s together** — a set outside that, or a 6th video, is a `400` before
+  anything is reserved) and `characterReferences` (≤ 7 named subjects, as on `kling-4`),
   **at most 15 materials in all**. There are no standalone voices:
   `referenceAudioUrls` clip N (≤ 7) becomes the voice of `characterReferences`
-  entry N, in order. A character needs 2–4 images to carry a voice: a clip
-  whose character has one image, and any clip past the last character, is
-  dropped (the run still starts). A clip takes no material seat, and an
+  entry N, in order. A character needs 2–4 images, or a `videoUrl`, to carry a
+  voice: a clip whose character has one image and no video, and any clip past
+  the last character, is dropped (the run still starts). A clip takes no material seat, and an
   `@audio_N` mention has its `@` removed. `keepOriginalSound` works as on
   `kling-4`; there is no `audioSoundtrack`. `duration` 3–20 (default 5);
   **720p only** — any `resolution` renders and bills 720p; `aspectRatio` as on
@@ -3357,7 +3358,7 @@ IS, for this run only:
   up to 3 on Gemini Omni, 7 on Kling 4.0 and Kling 4.0 Flash).** Identity inputs that keep a real person's face on models with a
   dedicated character channel — today `gemini-omni-video`,
   `gemini-omni-flash`, `kling-4` and `kling-4-flash`. Each entry is `{ imageUrl, description, bodyImageUrl?,
-  extraImageUrls?, name?, voice? }`: a portrait URL, a description of the person (appearance, clothing,
+  extraImageUrls?, name?, voice?, videoUrl? }`: a portrait URL, a description of the person (appearance, clothing,
   style; ≤ 2000 chars), an optional full-body image and an optional name (≤ 100
   chars). Unlike `referenceImageUrls`, which a multimodal model treats as loose
   context, this is the input that holds the face. Any other model answers `400`
@@ -3380,9 +3381,27 @@ IS, for this run only:
   (`400` `character_voice_unsupported`) — send voice clips as
   `referenceAudioUrls`. See [Kling 4.0](nodes/ai-video/generate-video.md#kling-40-references-characters-and-keyframes).
   `kling-4-flash` takes them the same way, and `referenceAudioUrls` clip N
-  becomes entry N's voice when that entry has 2–4 images (otherwise the clip is
-  dropped) — see
+  becomes entry N's voice when that entry has 2–4 images or a `videoUrl`
+  (otherwise the clip is dropped) — see
   [Kling 4.0 Flash](nodes/ai-video/generate-video.md#kling-40-flash).
+  **Video subjects (`kling-4`, `kling-4-flash`):** an entry's optional
+  `videoUrl` — a 3–8 s single-shot clip of the character — makes it a subject
+  built from that video instead of its images (`imageUrl` and `description`
+  are still required). The platform adds the clip to the run's reference
+  videos, so it is measured, limited and billed exactly as a reference video:
+  - at most 3 such entries;
+  - at most 5 videos with `referenceVideoUrls`;
+  - all videos together within 20 s on Flash and 30 s on Kling 4.0;
+  - no two entries on one clip;
+  - its seconds join the reference-video seconds of the price.
+
+  A clip already in `referenceVideoUrls` is the character only. Out of range is
+  a `400` before anything is reserved (`character_videos_over_limit`,
+  `reference_videos_over_limit`, `character_video_shared`, or `video_too_long`
+  for a clip outside 3–8 s). A clip the platform cannot read is a `400`
+  `character_video_unreadable`, since its length cannot be checked. Any other
+  model answers `400` `character_video_unsupported`. See [Video
+  subjects](nodes/ai-video/generate-video.md#video-subjects-kling-40-and-kling-40-flash).
 
 ### Naming an image reference in the prompt (`@<name-slug>:<index>[:<role>]`)
 

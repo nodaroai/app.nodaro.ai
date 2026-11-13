@@ -5534,6 +5534,14 @@ export type CharacterNodeData = {
   readonly loraReplicateVersion?: string | null
   readonly loraTriggerWord?: string | null
   readonly loraTrainingStatus?: "queued" | "training" | "succeeded" | "failed" | "cancelled" | null
+  /**
+   * A short single-shot clip of this character (3-8 s; public URL). On Kling
+   * 4.0 / Kling 4.0 Flash a node with one is sent as a VIDEO subject (made from
+   * this clip) instead of an image subject; every other model ignores it.
+   * Per canvas node, like `defaultAssetUrl` — not a property of the character
+   * row. See `wiredCharacterVideoUrls` (@nodaro/shared).
+   */
+  readonly subjectVideoUrl?: string
   // Per-CANVAS-NODE default asset selected from the Character Studio's grid
   // (expression / pose / angle / lighting / motion). Drives the canvas
   // thumbnail when set (falls back to `sourceImageUrl`). NOT a property of

@@ -16,6 +16,7 @@ import {
 import {
   withWiredSettings,
 } from "@nodaro/shared/nodes"
+import { wiredCharacterSubjectClips } from "@nodaro/shared/video"
 import { seedanceFinalizeDraftQuote, type SeedanceFinalizeDraftOptions } from "@nodaro/render-rules"
 import type { ChargedPriceTable, EstimateEdge, EstimateNode } from "./credits.js"
 import { plannedSeedanceDraftFinalizePlan, seedance2RefVideoQuote } from "./seedance2-ref-video-quote.js"
@@ -98,12 +99,16 @@ function refVideoEstimateRequest(
   const audioEdges = isGeneration && edges && node.id
     ? edges.filter((e) => e.target === node.id && referenceModalityForHandle(e.targetHandle) === "audio")
     : []
+  const selectedProvider = applyDefaultVideoSelection({ provider: data.provider as string | undefined, duration: data.duration as number | string | undefined }).provider
   const soundtrack = isGeneration && audioSoundtrackActive({
-    provider: applyDefaultVideoSelection({ provider: data.provider as string | undefined, duration: data.duration as number | string | undefined }).provider,
+    provider: selectedProvider,
     audioSoundtrack: typeof data.audioSoundtrack === "boolean" ? data.audioSoundtrack : undefined,
     audioRefCount: audioEdges.length,
   })
-  if (clipSourceIds.length === 0 && !soundtrack) return undefined
+  // Kling 4.0 video subjects: a wired Character's own clip rides as one more
+  // reference video (`seatCharacterVideos`), priced as one.
+  const subjectClips = node.type === "generate-video" ? characterSubjectClipSources(node, nodes, edges, selectedProvider, clipEdges.map((e) => e.source)) : []
+  if (clipSourceIds.length === 0 && !soundtrack && subjectClips.length === 0) return undefined
   let provider: string
   let resolution: string | undefined
   let duration: number | string | undefined
@@ -126,9 +131,53 @@ function refVideoEstimateRequest(
   return {
     provider, resolution, duration, draft: data.draft === true, referenceTaskType,
     videoTrim: { start: data.videoTrimStart, end: data.videoTrimEnd },
-    clipSources: clipSourceIds.map((id) => (id === undefined ? undefined : byId.get(id))),
+    clipSources: [...clipSourceIds.map((id) => (id === undefined ? undefined : byId.get(id))), ...subjectClips],
     ...(soundtrack ? { soundtrack: { source: byId.get(audioEdges[0]!.source) } } : {}),
   }
+}
+
+/**
+ * The clips a Generate Video run sends as its characters' video subjects on
+ * `provider` (`wiredCharacterSubjectClips`: Kling 4.0 / Flash only, a character
+ * that gives an image, the run's first `characters` of them), each as the
+ * upload it is — a file the run sends as it is, so the pre-pass probes it —
+ * keyed by its Character node (an app input the user replaces stays the worst
+ * case). A clip that is also one of the wired clips (an upload's file, or a
+ * generation's current result) is that seat, not one more, as the run seats it
+ * (`seatCharacterVideos`). Only Generate Video carries video subjects: the
+ * older Image to Video / Text to Video nodes never do (decided 2026-11-13).
+ */
+function characterSubjectClipSources(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  provider: string,
+  wiredSourceIds: ReadonlyArray<string | undefined>,
+): EstimateNode[] {
+  if (!node.id || !edges) return []
+  const graphNodes = nodes.flatMap((n) => (n.id === undefined ? [] : [{ ...n, id: n.id }]))
+  const graphEdges = edges.flatMap((e) => (e.source === undefined ? [] : [{ ...e, source: e.source }]))
+  const clips = wiredCharacterSubjectClips(node.id, graphNodes, graphEdges, provider)
+  if (clips.length === 0) return []
+  const byId = new Map(graphNodes.map((n) => [n.id, n]))
+  const wiredUrls = new Set(wiredSourceIds.flatMap((id) => {
+    const source = id === undefined ? undefined : byId.get(id)
+    const url = knownClipUrl(source) ?? activeResultUrl(source?.data)
+    return typeof url === "string" && url ? [url.trim()] : []
+  }))
+  const owner = (url: string) =>
+    graphNodes.find((n) => n.type === "character" && String((n.data as { subjectVideoUrl?: unknown } | undefined)?.subjectVideoUrl ?? "").trim() === url)?.id
+  return clips
+    .filter((url) => !wiredUrls.has(url))
+    .map((url) => ({ id: owner(url), type: "upload-video", data: { url } }))
+}
+
+/** A node's current result (its active one in `generatedResults`), when it has one. */
+function activeResultUrl(data: Record<string, unknown> | undefined): string | undefined {
+  const results = Array.isArray(data?.generatedResults) ? (data.generatedResults as unknown[]) : []
+  const index = typeof data?.activeResultIndex === "number" ? data.activeResultIndex : 0
+  const url = (results[index] as { url?: unknown } | null | undefined)?.url
+  return typeof url === "string" && url ? url : undefined
 }
 
 /**

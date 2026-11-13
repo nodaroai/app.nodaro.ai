@@ -1232,6 +1232,29 @@ describe("unnamed Character nodes — the editor's Run names them as the workflo
     expect(mockRunTextToVideoGeneration.mock.calls[0][1] as string).toContain("@character-asset:1")
   })
 
+  // Video subjects (decided 2026-11-13): the node's own clip rides its character
+  // reference on Kling 4.0 / Flash (the route seats it); elsewhere nothing changes.
+  it("Kling 4.0: a Character's own clip reaches its character reference as videoUrl", async () => {
+    const clipUrl = "http://u1/clip.mp4"
+    const { subjects } = await klingRun([character("u1", { subjectVideoUrl: clipUrl }), character("u2")])
+    expect(subjects.map((s) => [s.name, (s as { videoUrl?: string }).videoUrl])).toEqual([
+      ["Character 1", clipUrl],
+      ["Character 2", undefined],
+    ])
+  })
+
+  it("the older Text to Video node sends its characters' images only — never the clip", async () => {
+    const node = makeNode("text-to-video", { prompt: "they walk out into the rain", provider: "kling-4" })
+    mockNodes = [character("u1", { subjectVideoUrl: "http://u1/clip.mp4" }), node]
+    mockEdges = [wire("u1")]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToVideoGeneration.mockClear()
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(node as any, makeCtx())
+    const options = mockRunTextToVideoGeneration.mock.calls[0]?.[4] as { characterReferences?: Array<Record<string, unknown>> } | undefined
+    for (const ref of options?.characterReferences ?? []) expect(ref).not.toHaveProperty("videoUrl")
+  })
+
   it("non-Latin names (he / ja / ko) are characters, under their own names", async () => {
     for (const typed of ["מאיה", "マヤ", "마야"]) {
       mockRunTextToVideoGeneration.mockClear()

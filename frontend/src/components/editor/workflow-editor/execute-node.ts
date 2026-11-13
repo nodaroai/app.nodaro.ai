@@ -124,6 +124,7 @@ import {
   uiResolutionFill,
   characterReferencesFromWired,
   videoCharacterRefCap,
+  videoCharacterVideoCap,
 } from "@nodaro/shared/video";
 import { isSoundPageLink, videoLinkTrackInto } from "@/lib/sound-page-links";
 import {
@@ -305,6 +306,7 @@ import {
   aliasRetiredCharacterMentions,
   entityImageUrl,
   characterMentionableAssetArrays,
+  wiredCharacterVideoUrls,
   expandExtraRefsToConnectedReferences,
   type ExtraRefCharacterContext
 } from "@nodaro/shared/entities"
@@ -3239,8 +3241,10 @@ function executeNodeCore(
         ...(i2vTaskType ? { referenceTaskType: i2vTaskType } : {}),
         // Kling 4.0: wired characters as named subjects (the same shared
         // grouping payload-builder sends) and the keep-original-sound lever.
+        // A Character node's own clip makes it a video subject on a model that
+        // takes one; the route seats the clip among the reference videos.
         ...(nodeProvider && hasFeature(nodeProvider, "character-subjects")
-          ? { characterReferences: characterReferencesFromWired(expandWiredCharacterRefsForVideo(node.id, nodes, edges)).slice(0, videoCharacterRefCap(nodeProvider)) }
+          ? { characterReferences: wiredSubjectReferences(node, nodes, edges, nodeProvider) }
           : {}),
         keepOriginalSound: (i2vData as Record<string, unknown>).keepOriginalSound as boolean | undefined,
         audioSoundtrack: (i2vData as Record<string, unknown>).audioSoundtrack as boolean | undefined,
@@ -3642,7 +3646,7 @@ function executeNodeCore(
       // Kling 4.0: wired characters as named subjects (the same shared grouping
       // payload-builder sends) and the keep-original-sound lever.
       ...(t2vProvider && hasFeature(t2vProvider, "character-subjects")
-        ? { characterReferences: characterReferencesFromWired(expandWiredCharacterRefsForVideo(node.id, nodes, edges)).slice(0, videoCharacterRefCap(t2vProvider)) }
+        ? { characterReferences: wiredSubjectReferences(node, nodes, edges, t2vProvider) }
         : {}),
       keepOriginalSound: t2vRaw.keepOriginalSound as boolean | undefined,
       audioSoundtrack: t2vRaw.audioSoundtrack as boolean | undefined,
@@ -11101,4 +11105,28 @@ function executeNodeCore(
   }
 
   return Promise.resolve("");
+}
+
+/**
+ * The wired characters a `character-subjects` model (Kling 4.0) takes as named
+ * subjects — the grouping payload-builder sends — with each Character node's
+ * own clip (`subjectVideoUrl`) as its video subject on a model that takes one.
+ * Only Generate Video carries video subjects; the older Image to Video / Text
+ * to Video nodes send their characters' images only, as the workflow run does
+ * (decided 2026-11-13).
+ */
+function wiredSubjectReferences(
+  consumer: WorkflowNode,
+  nodes: readonly WorkflowNode[],
+  edges: readonly WorkflowEdge[],
+  provider: string,
+) {
+  // Generate Video reaches the i2v / t2v paths re-typed, marked `__appendWired`;
+  // a node that arrives here unmarked is an older Image / Text to Video node.
+  const fromGenerateVideo = consumer.type === "generate-video" || (consumer.data as Record<string, unknown> | undefined)?.__appendWired === true;
+  const clips = fromGenerateVideo && videoCharacterVideoCap(provider) > 0
+    ? wiredCharacterVideoUrls(consumer.id, nodes, edges)
+    : undefined;
+  return characterReferencesFromWired(expandWiredCharacterRefsForVideo(consumer.id, nodes, edges), clips)
+    .slice(0, videoCharacterRefCap(provider));
 }

@@ -1642,6 +1642,14 @@ const SUNO_V4_5_CATALOG_ENTRIES_BYTES = 135
 // fixture does not move. 12 B, all on add_captions.
 const ADD_CAPTIONS_NEMOTRON_BYTES = 12
 
+// RAISED 2026-11-13 by video subjects on Kling 4.0 / Kling 4.0 Flash, and nothing else:
+// generate_video's `character_references` items gain `video_url` (a 3-8 s clip of the
+// character, sent as a video subject), and the Flash voice note in `reference_audio_urls`
+// now says a clip binds to a character that is a subject (images or a clip). No tool was
+// added, so the fixture does NOT move. Measured by this suite: 530_952 total − 530_864 =
+// 88 B, all on generate_video (9_864 → 9_952 B, inside the per-tool budget).
+const KLING_4_VIDEO_SUBJECT_BYTES = 88
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES,
   totalBytes:
@@ -1848,7 +1856,8 @@ export const TOOL_WIRE_BUDGET = {
     FLUX_3_KLEIN_TOTAL_BYTES +
     NEMOTRON_TRANSCRIBE_BYTES +
     ADD_CAPTIONS_NEMOTRON_BYTES +
-    SUNO_V4_5_CATALOG_ENTRIES_BYTES,
+    SUNO_V4_5_CATALOG_ENTRIES_BYTES +
+    KLING_4_VIDEO_SUBJECT_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

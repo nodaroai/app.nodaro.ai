@@ -2412,11 +2412,14 @@ async function executeWorkerNode(
   const refVideoCheck = await probeAndCheckRefVideoDurations({
     provider: payload.provider as string | undefined,
     referenceVideoUrls: payload.referenceVideoUrls,
+    // A video subject's clip is seated among the reference videos (payload
+    // builder, seatCharacterVideos) and held to its own length bound too.
+    characterReferences: payload.characterReferences,
   })
   if (!refVideoCheck.ok) {
     await supabase.from("jobs").delete().eq("id", jobId)
     const err = new Error(refVideoCheck.message) as Error & { errorCode?: string }
-    err.errorCode = "video_too_long"
+    err.errorCode = refVideoCheck.code ?? "video_too_long"
     throw err
   }
   // Same gate for a provider's reference-AUDIO contract (format + length,
