@@ -1835,8 +1835,10 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
   // quality (and frame rate), then the new seconds. The deliverable keeps the
   // user's ORIGINAL source: only PixVerse's new seconds are cut from its clip
   // (by time, at the source's picture length — `cutNativeExtension`) and
-  // joined to it by the extend stitch, with no smart cut and no trims (the
-  // new seconds follow the source's last frame; no duplicate to drop).
+  // joined to it by the extend stitch, with the same smart cut as the other
+  // extends (no trims when it finds no match: the new seconds follow the
+  // source's last frame), then the new part's leading repeats dropped (it can
+  // open on a brief hold; `dropLeadingRepeats`).
   if (isPixverseExtendProvider(provider)) {
     const { video: sourceUrl, prompt: userPrompt, duration, resolution, generateAudio } = job.data as {
       jobId: string
@@ -1917,13 +1919,19 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         const newPartPath = await cutNativeExtension(pixversePath, cutStartSec, stitchDir, { sound })
         // The stitch keeps the source's size (rounded down to even), frame
         // rate and picture quality, and covers and crops the new part to the
-        // source's frame; a hard cut and a short sound blend at the join.
+        // source's frame. The join is matched as the other extends' are (8 × 8,
+        // no trims without a match), then the new part's leading repeats are
+        // dropped and counted in its start trim; a hard cut and a short sound
+        // blend at the join. The billed seconds and the short-extension rule
+        // above are what PixVerse returned, before any of this.
         const stitched = await stitchExtension({
           sourcePath: srcLocal,
           extensionPath: newPartPath,
           workDir: stitchDir,
+          smartCut: { framesFromPrev: 8, framesFromNext: 8 },
           fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
           audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+          dropLeadingRepeats: true,
         })
         stitchBoundary = stitched.boundary
         await setJobProgress(job, ctx.jobId, 85)
@@ -1943,7 +1951,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
           thumbnailUrl: stitchedThumbUrl,
           // PixVerse's whole clip (KIE's own URL) — provenance/debug only.
           rawExtensionUrl: gen.url,
-          // Where the stitch cut, in combineVideos' shape: no search ran.
+          // Where the stitch cut, in combineVideos' shape: its start trim counts
+          // the leading repeats dropped after the cut too.
           smartCuts: [{
             boundary: 0,
             prevClipEndTrimFrames: stitchBoundary.trimEndFrames,

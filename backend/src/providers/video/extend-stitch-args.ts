@@ -13,8 +13,8 @@
  *   autorotate, at its SAR), rounded down to even (`deliveredShape`: an
  *   odd-size source loses its last column and/or row). The extension is
  *   conformed to the source's rate, trimmed at its start by frame index at
- *   that rate, scaled to cover that delivered picture and centre-cropped to
- *   it. The picture is
+ *   that rate (less any leading repeats, `repeatFrames`), scaled to cover
+ *   that delivered picture and centre-cropped to it. The picture is
  *   encoded once at the source's quality (`matched-encode.ts`): an H.264
  *   source's picture bitrate (at least a floor) in two passes and its colour
  *   tags; CRF 14 for any other codec, or when the bitrate is unreadable
@@ -60,6 +60,18 @@ export interface ExtendStitchEncode {
   extensionFrames: number
   trimEndFrames: number
   trimStartFrames: number
+  /**
+   * The output frames that show the extension's leading repeats, dropped
+   * after its start trim (`extend-stitch-repeats.ts`: the repeats' own time
+   * at the output rate): frames [from, from + count), `from` at or after
+   * `trimStartFrames`. Right after the start trim they lengthen it; after
+   * frames the cut kept (its first frame's, with no start trim) they are
+   * skipped out of its picture. Either way its sound loses as many frames'
+   * time from its start: in step with the picture from the first frame after
+   * them, and in the skipped case that much ahead over the kept frames before
+   * them (the extension's first frame), inside the join's sound blend.
+   */
+  repeatFrames?: FrameSkip
   audioFadeSec: number
   sourceHasAudio: boolean
   extensionHasAudio: boolean
@@ -275,9 +287,41 @@ function fitTo(shape: PictureShape): string[] {
   return [`scale=${shown}:${h}:force_original_aspect_ratio=increase`, `crop=${shown}:${h}`, `scale=${w}:${h}`, `setsar=${sarRatio}`]
 }
 
-/** The extension's picture over frames [start, end) at the output rate, fitted to the source's delivered picture. */
-export function extensionPicture(rate: StitchRate, shape: PictureShape, start: number, end: number): string {
-  return [conformTo(rate), frameSpan(start, end), ...fitTo(shape)].join(",")
+/** Frames left out of a picture: [from, from + count), indices at the output rate. */
+export interface FrameSkip { from: number; count: number }
+
+/**
+ * Frames [from, from + count) of a span (counted from the span's start) left
+ * out, the rest restamped one frame apart at its rate so the picture plays on
+ * without a gap: nothing when there is nothing to leave out.
+ */
+function skipping(skip: FrameSkip | undefined): string[] {
+  if (!skip || skip.count < 1) return []
+  return [`select=not(between(n\\,${skip.from}\\,${skip.from + skip.count - 1}))`, "setpts=N/FRAME_RATE/TB"]
+}
+
+/**
+ * The extension's picture over frames [start, end) at the output rate, less
+ * the frames `skip` names (absolute indices, at or after `start`), fitted to
+ * the source's delivered picture.
+ */
+export function extensionPicture(rate: StitchRate, shape: PictureShape, start: number, end: number, skip?: FrameSkip): string {
+  const within = skip && skip.count > 0 ? { from: skip.from - start, count: skip.count } : undefined
+  return [conformTo(rate), frameSpan(start, end), ...skipping(within), ...fitTo(shape)].join(",")
+}
+
+/** The extension's frames dropped in all: its start trim and its leading repeats (`repeatFrames`). */
+const extensionDropped = (p: ExtendStitchEncode): number => p.trimStartFrames + Math.max(0, p.repeatFrames?.count ?? 0)
+
+/**
+ * The extension's picture as the encode reads it (`repeatFrames`): repeats
+ * right after the start trim lengthen it; repeats after a kept frame are
+ * skipped out of the picture.
+ */
+function encodedExtensionPicture(p: ExtendStitchEncode, rate: StitchRate, shape: PictureShape): string {
+  const repeats = p.repeatFrames && p.repeatFrames.count > 0 ? p.repeatFrames : undefined
+  if (!repeats || repeats.from === p.trimStartFrames) return extensionPicture(rate, shape, extensionDropped(p), p.extensionFrames)
+  return extensionPicture(rate, shape, p.trimStartFrames, p.extensionFrames, repeats)
 }
 
 /**
@@ -312,7 +356,7 @@ function soundGraph(p: ExtendStitchEncode, rate: StitchRate, kept: { source: num
   const extension = p.extensionHasAudio
     ? [
       `[1:a:0]${shape}`, ...lineUp(p.soundOffsetSec?.extension, sampleRate),
-      `atrim=start_sample=${samples(p.trimStartFrames)}`, "asetpts=PTS-STARTPTS", "apad",
+      `atrim=start_sample=${samples(extensionDropped(p))}`, "asetpts=PTS-STARTPTS", "apad",
     ].join(",")
     : silence
   return [
@@ -407,10 +451,10 @@ export function stitchEncodesAtBitRate(source: MatchedProbe): boolean {
 export function extendStitchArgs(p: ExtendStitchEncode): string[] {
   const rate = stitchRate(p.source)
   const shape = p.picture ?? pictureSize(p.source, "source")
-  const kept = { source: p.sourceFrames - p.trimEndFrames, extension: p.extensionFrames - p.trimStartFrames }
+  const kept = { source: p.sourceFrames - p.trimEndFrames, extension: p.extensionFrames - extensionDropped(p) }
   const picture = [
     `[0:v:0]${sourcePicture(p.source, shape, rate, 0, kept.source)}[sv]`,
-    `[1:v:0]${extensionPicture(rate, shape, p.trimStartFrames, p.extensionFrames)}[ev]`,
+    `[1:v:0]${encodedExtensionPicture(p, rate, shape)}[ev]`,
     "[sv][ev]concat=n=2:v=1:a=0[v]",
   ].join(";")
   const inputs = ["-y", "-i", p.sourcePath, "-i", p.extensionPath]
@@ -426,6 +470,39 @@ export function extendStitchArgs(p: ExtendStitchEncode): string[] {
     "-movflags", "+faststart",
     p.outputPath,
   ]
+}
+
+/**
+ * The frames each boundary proxy carries beyond its window. The matcher clamps
+ * each window to the clip it is given (`SmartCutBoundary`'s searched
+ * windows), so a proxy only as long as its window may be searched short of
+ * it; this margin keeps the whole window asked for searched. Combine Videos
+ * hands it whole clips, far longer than any window.
+ */
+export const PROXY_MARGIN_FRAMES = 2
+
+/** Frames [start, end) of a picture at the output rate. */
+export interface FrameSpan { start: number; end: number }
+
+/**
+ * The frames of the two boundary proxies for a search over `window` (pure):
+ * the source's last `framesFromPrev` and the extension's first
+ * `framesFromNext`, each with `PROXY_MARGIN_FRAMES` more so the whole window
+ * asked for is searched, and each bounded by its clip's frame count. The extra
+ * frames lie on the far side of each proxy, away from
+ * the join: the source's proxy still ends on its last frame and the
+ * extension's still starts on its first, the two edges the matcher's trims
+ * (`SmartCutBoundary`: frames dropped from the end, and from the start) are
+ * counted from, as Combine Videos applies them to whole clips.
+ */
+export function boundaryProxySpans(
+  window: { framesFromPrev: number; framesFromNext: number },
+  frames: { source: number; extension: number },
+): { prev: FrameSpan; next: FrameSpan } {
+  return {
+    prev: { start: Math.max(0, frames.source - (window.framesFromPrev + PROXY_MARGIN_FRAMES)), end: frames.source },
+    next: { start: 0, end: Math.min(window.framesFromNext + PROXY_MARGIN_FRAMES, frames.extension) },
+  }
 }
 
 /** A boundary proxy's encode: the shape combineVideos gives the matcher (H.264 4:2:0 at CRF 18), picture only. */

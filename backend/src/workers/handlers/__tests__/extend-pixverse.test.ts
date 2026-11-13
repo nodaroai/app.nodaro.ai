@@ -6,8 +6,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // The contract this file pins, in order of importance:
 //   1. The deliverable is the user's ORIGINAL source joined with only
 //      PixVerse's NEW seconds, through the extend stitch (`stitchExtension`,
-//      never combineVideos): no smart cut, fixed trims 0/0. The new seconds are
-//      cut from PixVerse's whole clip by time, at the source's picture length.
+//      never combineVideos): the same smart cut as the other extends (8 × 8,
+//      best-pair), fixed trims 0/0 when it finds no match (or there is no
+//      matcher), then the new part's leading repeats dropped. The new seconds
+//      are cut from PixVerse's whole clip by time, at the source's picture length.
 //   2. A new part under half the paid seconds — none at all included — fails
 //      the run, final on this attempt (a DeterministicJobError, refunded in
 //      full) before anything is cut, encoded or delivered. A probe that fails
@@ -232,18 +234,53 @@ describe("pixverse-v6-extend — the deliverable", () => {
     expect(mocks.mockDownloadFile).toHaveBeenCalledWith(SOURCE_URL, SOURCE_PATH)
     expect(mocks.mockDownloadFile).toHaveBeenCalledWith(PIXVERSE_URL, PIXVERSE_PATH)
     expect(mocks.mockCutNativeExtension).toHaveBeenCalledWith(PIXVERSE_PATH, 8.06, STITCH_DIR, { sound: true })
-    // The stitch gets the user's own source and that cut: no smart cut, fixed trims 0/0.
+    // The stitch gets the user's own source and that cut: the smart cut the other extends
+    // get (8 × 8), fixed trims 0/0 when it finds no match, and the leading repeats dropped.
     expect(mocks.mockCombineVideos).not.toHaveBeenCalled()
     expect(mocks.mockStitchExtension).toHaveBeenCalledTimes(1)
     expect(mocks.mockStitchExtension).toHaveBeenCalledWith({
       sourcePath: SOURCE_PATH,
       extensionPath: NEW_PART_PATH,
       workDir: STITCH_DIR,
+      smartCut: { framesFromPrev: 8, framesFromNext: 8 },
       fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
       audioFadeSec: 0.15,
+      dropLeadingRepeats: true,
     })
-    expect(mocks.mockStitchExtension.mock.calls[0]![0]).not.toHaveProperty("smartCut")
     expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalledWith(STITCHED_PATH, "job-1", "user-1", false)
+  })
+
+  // The stitch (mocked here) applies the cut and the repeat drop and reports the total in
+  // its start trim (`extend-stitch.test.ts` pins that arithmetic); the run reports it as given.
+  it("reports a matched cut with the leading repeats it dropped in nextClipStartTrimFrames", async () => {
+    // The matcher's twin (2 frames), then 4 repeats.
+    mocks.mockStitchExtension.mockResolvedValue({
+      outputPath: STITCHED_PATH,
+      boundary: { matched: true, psnrDb: 38.8, trimEndFrames: 1, trimStartFrames: 6, searchedPrevFrames: 8, searchedNextFrames: 8 },
+    })
+    await run()
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].extraOutputData.smartCuts).toEqual([
+      { boundary: 0, prevClipEndTrimFrames: 1, nextClipStartTrimFrames: 6, psnrDb: 38.8, matched: true, searchedPrevFrames: 8, searchedNextFrames: 8 },
+    ])
+  })
+
+  it("with no matcher, reports the fixed trims 0/0 plus the repeat drop", async () => {
+    // The new part's first frame kept, the 3 repeats after it dropped.
+    mocks.mockStitchExtension.mockResolvedValue({ outputPath: STITCHED_PATH, boundary: { ...BOUNDARY, trimStartFrames: 3 } })
+    await run()
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].extraOutputData.smartCuts).toEqual([
+      { boundary: 0, prevClipEndTrimFrames: 0, nextClipStartTrimFrames: 3, psnrDb: null, matched: false, searchedPrevFrames: null, searchedNextFrames: null },
+    ])
+  })
+
+  // The paid seconds are what PixVerse returned, before any trim: the short-extension
+  // rule never sees the frames the stitch drops, and the price is the row it reserved.
+  it("judges the new part's length on what PixVerse returned, before the stitch drops anything", async () => {
+    pixverseWith(8.06 + 2.5)
+    mocks.mockStitchExtension.mockResolvedValue({ outputPath: STITCHED_PATH, boundary: { ...BOUNDARY, trimStartFrames: 12 } })
+    await run({ duration: 5 })
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledTimes(1)
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].result).toMatchObject({ cost: null })
   })
 
   it("measures the source's picture as the stitch does: the picture stream's own length, not the container's", async () => {

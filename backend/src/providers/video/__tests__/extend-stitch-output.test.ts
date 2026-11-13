@@ -353,6 +353,214 @@ describe.skipIf(!ffmpegAvailable)("stitchExtension (real ffmpeg)", () => {
     }
   }, 60_000)
 
+  // Each proxy carries a margin of frames beyond its window (the matcher clamps a
+  // window to the clip it is given), so an 8 × 8 search gets proxies of 10 frames.
+  it("gives the matcher proxies of 10 frames each for an 8 × 8 search", async () => {
+    const calls: Array<{ prevFrames: number; nextFrames: number; framesFromPrev: number; framesFromNext: number; mode: string }> = []
+    const recording: SmartCutMatcher = async (prevPath, nextPath, framesFromPrev, framesFromNext, mode) => {
+      calls.push({ prevFrames: (await lumaPlanes(prevPath)).length, nextFrames: (await lumaPlanes(nextPath)).length, framesFromPrev, framesFromNext, mode })
+      // No genuine match: the fixed trims apply.
+      return { trimEndFrames: 0, trimStartFrames: 1, psnr: 10, matched: false, searchedPrevFrames: framesFromPrev, searchedNextFrames: framesFromNext }
+    }
+    const registered = getSmartCutMatcher()
+    registerSmartCutMatcher(recording)
+    try {
+      const { boundary } = await stitch(source, extension)
+      expect(calls).toEqual([{ prevFrames: 10, nextFrames: 10, framesFromPrev: 8, framesFromNext: 8, mode: "best-pair" }])
+      expect(boundary).toMatchObject({ matched: false, trimEndFrames: 4, trimStartFrames: 3 })
+    } finally {
+      registerSmartCutMatcher(registered as SmartCutMatcher)
+    }
+  }, 60_000)
+
+  // A native extension (PixVerse V6) that opens on a hold: its first 4 frames are one
+  // picture, byte-identical, then the picture moves on. Cut lossless, as the native cut
+  // is (`native-extension-cut.ts`), at the source's size and rate. The leading repeats
+  // are each new frame against the new frame before it.
+  describe("an extension that opens on a 4-frame hold", () => {
+    /** The hold is the source's last frame (decoded, bit for bit), with a tone: the matcher finds its twin there. */
+    let held: string
+    /** The hold is a picture unlike the source's last frame (as PixVerse's re-render can be), with a tone: no twin to find. */
+    let heldApart: string
+
+    beforeAll(async () => {
+      held = join(dir, "extension-held.mov")
+      heldApart = join(dir, "extension-held-apart.mov")
+      await runFfmpeg([
+        "-y",
+        "-i", source,
+        "-f", "lavfi", "-i", "testsrc2=size=854x480:rate=24:duration=5",
+        "-f", "lavfi", "-i", "sine=frequency=550:duration=2:sample_rate=48000",
+        "-filter_complex",
+        "[0:v:0]trim=start_frame=71:end_frame=72,setpts=PTS-STARTPTS,loop=loop=3:size=1:start=0,setpts=N/(24*TB)[h];" +
+          "[1:v:0]trim=start_frame=72:end_frame=116,setpts=PTS-STARTPTS[m];" +
+          "[h][m]concat=n=2:v=1:a=0,fps=24,format=yuv420p[v]",
+        "-map", "[v]", "-map", "2:a:0", "-c:v", "libx264", "-preset", "veryfast", "-qp", "0", "-c:a", "pcm_s24le",
+        held,
+      ])
+      await runFfmpeg([
+        "-y",
+        "-f", "lavfi", "-i", "testsrc2=size=854x480:rate=24:duration=7",
+        "-f", "lavfi", "-i", "sine=frequency=660:duration=2:sample_rate=48000",
+        "-filter_complex",
+        "[0:v:0]split[a][b];" +
+          "[a]trim=start_frame=100:end_frame=101,setpts=PTS-STARTPTS,loop=loop=3:size=1:start=0,setpts=N/(24*TB)[h];" +
+          "[b]trim=start_frame=101:end_frame=145,setpts=PTS-STARTPTS[m];" +
+          "[h][m]concat=n=2:v=1:a=0,fps=24,format=yuv420p[v]",
+        "-map", "[v]", "-map", "1:a:0", "-c:v", "libx264", "-preset", "veryfast", "-qp", "0", "-c:a", "pcm_s24le",
+        heldApart,
+      ])
+      for (const fixture of [await probe(held), await probe(heldApart)]) {
+        expect(Number(fixture.video.nb_read_frames)).toBe(48)
+        expect(fixture.video.r_frame_rate).toBe("24/1")
+      }
+    }, 60_000)
+
+    const stitchHeld = async (extensionPath: string) => {
+      const workDir = await fs.mkdtemp(join(dir, "w-"))
+      const result = await stitchExtension({
+        sourcePath: source,
+        extensionPath,
+        workDir,
+        smartCut: { framesFromPrev: 8, framesFromNext: 8 },
+        fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
+        audioFadeSec: 0.15,
+        dropLeadingRepeats: true,
+      })
+      return { ...result, probed: await probe(result.outputPath) }
+    }
+
+    /** Runs `fn` with `matcher` registered, then puts back whatever was. */
+    const withMatcher = async <T>(matcher: SmartCutMatcher, fn: () => Promise<T>): Promise<T> => {
+      const registered = getSmartCutMatcher()
+      registerSmartCutMatcher(matcher)
+      try {
+        return await fn()
+      } finally {
+        registerSmartCutMatcher(registered as SmartCutMatcher)
+      }
+    }
+
+    it("a hold whose first frame is the matched twin: the cut drops the twin, the repeat drop the rest of the hold", async () => {
+      const { outputPath, boundary, probed } = await withMatcher(standInMatcher, () => stitchHeld(held))
+      expect(boundary.matched, JSON.stringify(boundary)).toBe(true)
+      expect(boundary.trimEndFrames, JSON.stringify(boundary)).toBe(0)
+      // The twin and every repeat after it: the 4 held frames.
+      expect(boundary.trimStartFrames, JSON.stringify(boundary)).toBe(4)
+      expect(Number(probed.video.nb_read_frames)).toBe(72 + 48 - 4)
+      // The extension's sound loses the same time as its picture, from its start: the two end together.
+      expectLocked(probed)
+      // The source's last frame is followed by the moving picture, not by a hold.
+      const luma = await lumaPlanes(outputPath)
+      expect(lumaPsnr(luma[71]!, luma[72]!)).toBeLessThan(40)
+    }, 60_000)
+
+    it("no match: the fixed trims 0/0, the hold's first frame kept and its 3 repeats dropped, the sound with the picture", async () => {
+      const { outputPath, boundary, probed } = await withMatcher(standInMatcher, () => stitchHeld(heldApart))
+      expect(boundary).toMatchObject({ matched: false, trimEndFrames: 0, trimStartFrames: 3 })
+      expect(boundary.psnrDb).toBeLessThan(STAND_IN_MATCH_DB)
+      expect(Number(probed.video.nb_read_frames)).toBe(72 + 48 - 3)
+      expectLocked(probed)
+      // The source's last frame, the hold's one frame, then the moving picture.
+      const luma = await lumaPlanes(outputPath)
+      expect(lumaPsnr(luma[71]!, luma[72]!)).toBeLessThan(40)
+      expect(lumaPsnr(luma[72]!, luma[73]!)).toBeLessThan(40)
+    }, 60_000)
+
+    it("with no matcher: new[0] kept, new[1..3] dropped", async () => {
+      const { boundary, probed } = await stitchHeld(held)
+      expect(boundary).toEqual({ matched: false, psnrDb: null, trimEndFrames: 0, trimStartFrames: 3, searchedPrevFrames: null, searchedNextFrames: null })
+      expect(Number(probed.video.nb_read_frames)).toBe(72 + 48 - 3)
+      expectLocked(probed)
+    }, 60_000)
+
+    it("drops nothing without the flag (Seedance, Kling 4): the hold plays", async () => {
+      const workDir = await fs.mkdtemp(join(dir, "w-"))
+      const { boundary } = await stitchExtension({
+        sourcePath: source, extensionPath: held, workDir,
+        smartCut: { framesFromPrev: 8, framesFromNext: 8 },
+        fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
+        audioFadeSec: 0.15,
+      })
+      expect(boundary.trimStartFrames).toBe(0)
+    }, 60_000)
+  })
+
+  // PixVerse's frame rate is not the source's: a 24 fps new part on a 60 fps source shows
+  // each PixVerse frame on 2 or 3 output frames. Repeats are PixVerse's own frames repeating
+  // each other, never the conform's copies, and what is dropped is their time.
+  describe("a 24 fps new part on a 60 fps source", () => {
+    /** 640×360 @ 60, 3 s (180 frames), with a tone. */
+    let source60: string
+    /** 24 fps, 2 s (48 frames), every frame moving, a tone; cut lossless like the native cut. */
+    let moving24: string
+    /** The same, but PixVerse frames 1–4 repeat frame 0 (byte-identical) before it moves. */
+    let held24: string
+
+    beforeAll(async () => {
+      source60 = join(dir, "source-60.mp4")
+      moving24 = join(dir, "extension-24-moving.mov")
+      held24 = join(dir, "extension-24-held.mov")
+      await runFfmpeg([
+        "-y",
+        "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=60:duration=3",
+        "-f", "lavfi", "-i", "sine=frequency=440:duration=3:sample_rate=48000",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-b:v", "1500k", "-c:a", "aac", "-shortest",
+        source60,
+      ])
+      const tone = ["-f", "lavfi", "-i", "sine=frequency=660:duration=2:sample_rate=48000"]
+      const lossless = ["-c:v", "libx264", "-preset", "veryfast", "-qp", "0", "-c:a", "pcm_s24le"]
+      await runFfmpeg([
+        "-y", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=24:duration=2", ...tone,
+        "-map", "0:v:0", "-map", "1:a:0", "-vf", "format=yuv420p", ...lossless, moving24,
+      ])
+      await runFfmpeg([
+        "-y", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=24:duration=3", ...tone,
+        "-filter_complex",
+        "[0:v:0]split[a][b];" +
+          "[a]trim=end_frame=1,setpts=PTS-STARTPTS,loop=loop=4:size=1:start=0,setpts=N/(24*TB)[h];" +
+          "[b]trim=start_frame=1:end_frame=44,setpts=PTS-STARTPTS[m];" +
+          "[h][m]concat=n=2:v=1:a=0,fps=24,format=yuv420p[v]",
+        "-map", "[v]", "-map", "1:a:0", ...lossless, held24,
+      ])
+      for (const fixture of [await probe(moving24), await probe(held24)]) {
+        expect(Number(fixture.video.nb_read_frames)).toBe(48)
+        expect(fixture.video.r_frame_rate).toBe("24/1")
+      }
+    }, 60_000)
+
+    const stitch24 = async (extensionPath: string) => {
+      const workDir = await fs.mkdtemp(join(dir, "w-"))
+      const result = await stitchExtension({
+        sourcePath: source60,
+        extensionPath,
+        workDir,
+        smartCut: { framesFromPrev: 8, framesFromNext: 8 },
+        fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
+        audioFadeSec: 0.15,
+        dropLeadingRepeats: true,
+      })
+      return { ...result, probed: await probe(result.outputPath) }
+    }
+
+    it("drops nothing when every PixVerse frame moves, though the conform repeats each one", async () => {
+      const { boundary, probed } = await stitch24(moving24)
+      expect(boundary.trimStartFrames).toBe(0)
+      expect(Number(probed.video.nb_read_frames)).toBe(180 + 120)
+      expectLocked(probed)
+    }, 60_000)
+
+    it("drops a 4-frame repeat's time (4/24 s: 10 output frames) after frame 0's own", async () => {
+      const { outputPath, boundary, probed } = await stitch24(held24)
+      expect(boundary).toEqual({ matched: false, psnrDb: null, trimEndFrames: 0, trimStartFrames: 10, searchedPrevFrames: null, searchedNextFrames: null })
+      expect(Number(probed.video.nb_read_frames)).toBe(180 + 120 - 10)
+      expectLocked(probed)
+      // PixVerse frame 0 on output frames 180–182, then frame 5 on: no hold left.
+      const luma = await lumaPlanes(outputPath)
+      expect(lumaPsnr(luma[182]!, luma[183]!)).toBeLessThan(40)
+    }, 60_000)
+  })
+
   it("delivers a 4:4:4 PCM MOV source (a chained raw clip) as an H.264 4:2:0 MP4 with AAC, at its size", async () => {
     const mov = join(dir, "source-444.mov")
     await runFfmpeg([
