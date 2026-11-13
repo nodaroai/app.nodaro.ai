@@ -3,7 +3,7 @@ import { act, cleanup, render } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter, useLocation } from "react-router-dom"
 import { useLocaleStore } from "@/lib/locale-store"
-import { __resetSurfaceAvailabilityForTests } from "@/lib/surface-availability"
+import { __failSurfaceAvailabilityForTests, __resetSurfaceAvailabilityForTests } from "@/lib/surface-availability"
 import { WHITE_LABEL_WORLD_PATHS } from "../site"
 import type { SiteHeaderProps } from "../types"
 
@@ -145,6 +145,50 @@ describe("the header mount on a white-label deployment", () => {
       </QueryClientProvider>,
     )
     expect(seen.props?.worlds).toEqual(["video", "app"])
+  })
+
+  it("Video's menu opens Translate only once the viewer's answer offers dubbing", () => {
+    const { view, client } = mount()
+    const rerender = () =>
+      view.rerender(
+        <QueryClientProvider client={client}>
+          <MemoryRouter initialEntries={["/projects"]}>
+            <WhiteLabelHeader compact={false} onOpenMenu={vi.fn()} onHeaderOverlay={vi.fn()} drawerOpen={false} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      )
+    // Before the answer: no page below a world, so none is drawn and then taken away.
+    expect(seen.props?.worldMenus).toEqual({ video: { pages: [] } })
+    act(() => __resetSurfaceAvailabilityForTests({ nodes: [], models: [], worlds: ["video", "app"] }))
+    rerender()
+    expect(seen.props?.worldMenus).toEqual({ video: { pages: ["translate"] } })
+    act(() => __resetSurfaceAvailabilityForTests({ nodes: ["dubbing"], models: [], worlds: ["video", "app"] }))
+    rerender()
+    expect(seen.props?.worldMenus).toEqual({ video: { pages: [] } })
+  })
+
+  it("a read of the viewer's answer that failed falls back to the deployment's profile: Translate, where it does not deny dubbing", () => {
+    mount()
+    expect(seen.props?.worldMenus).toEqual({ video: { pages: [] } })
+    // The header follows the store on its own (no re-render from outside).
+    act(() => __failSurfaceAvailabilityForTests())
+    expect(seen.props?.worldMenus).toEqual({ video: { pages: ["translate"] } })
+    // An answer landing afterwards is the answer.
+    act(() => __resetSurfaceAvailabilityForTests({ nodes: ["dubbing"], models: [] }))
+    expect(seen.props?.worldMenus).toEqual({ video: { pages: [] } })
+  })
+
+  it("a read that failed on a deployment whose profile denies dubbing: no Translate", () => {
+    window.__NODARO_RUNTIME__ = { surface: { ...WHITE_LABEL_SURFACE, nodes: { deny: ["dubbing"], allow: [] } } } as unknown as typeof window.__NODARO_RUNTIME__
+    mount()
+    act(() => __failSurfaceAvailabilityForTests())
+    expect(seen.props?.worldMenus).toEqual({ video: { pages: [] } })
+    // Another node the profile denies does not touch it.
+    cleanup()
+    window.__NODARO_RUNTIME__ = { surface: { ...WHITE_LABEL_SURFACE, nodes: { deny: ["suno-generate"], allow: [] } } } as unknown as typeof window.__NODARO_RUNTIME__
+    mount()
+    act(() => __failSurfaceAvailabilityForTests())
+    expect(seen.props?.worldMenus).toEqual({ video: { pages: ["translate"] } })
   })
 
   it("the app's own pages go through the router; another app's page on the site is a full page load", () => {

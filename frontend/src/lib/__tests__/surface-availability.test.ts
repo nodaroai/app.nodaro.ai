@@ -7,6 +7,9 @@ import {
   isWebScrapeSourceHiddenFromUsers,
   loadSurfaceAvailability,
   resetSurfaceAvailability,
+  subscribeSurfaceAvailability,
+  surfaceAvailabilityFailed,
+  surfaceAvailabilityLoaded,
   __resetSurfaceAvailabilityForTests,
 } from "../surface-availability"
 
@@ -172,5 +175,111 @@ describe("surface-availability — Web Scrape sources that follow a withheld nod
     vi.stubGlobal("fetch", answering({ nodes: { denied: ["instagram-scrape"] }, models: { denied: [] } }))
     await loadSurfaceAvailability(headers, "user-1")
     expect(isWebScrapeSourceUnavailable("instagram")).toBe(false)
+  })
+})
+
+describe("surface-availability — a read that failed, told apart from one still awaited", () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  const ANSWER = { nodes: { denied: ["dubbing"] }, models: { denied: [] } }
+  const headers = async () => ({ Authorization: "Bearer t" })
+  const answering = (body: unknown, ok = true) => vi.fn(async () => ({ ok, json: async () => body }))
+
+  it("awaited: neither landed nor failed", async () => {
+    let release: (() => void) | undefined
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => {
+      release = () => resolve({ ok: true, json: async () => ANSWER })
+    })))
+    const load = loadSurfaceAvailability(headers, "viewer-1")
+    await vi.waitFor(() => expect(release).toBeDefined())
+    expect(surfaceAvailabilityLoaded()).toBe(false)
+    expect(surfaceAvailabilityFailed()).toBe(false)
+    release?.()
+    await load
+    expect(surfaceAvailabilityLoaded()).toBe(true)
+    expect(surfaceAvailabilityFailed()).toBe(false)
+  })
+
+  it("an error status, the network or a body it cannot read: failed, and readers are told", async () => {
+    for (const fetchMock of [
+      answering({}, false),
+      vi.fn(async () => {
+        throw new TypeError("network")
+      }),
+      vi.fn(async () => ({ ok: true, json: async () => JSON.parse("{") })),
+    ]) {
+      __resetSurfaceAvailabilityForTests(null)
+      vi.stubGlobal("fetch", fetchMock)
+      const told = vi.fn()
+      const unsubscribe = subscribeSurfaceAvailability(told)
+      await loadSurfaceAvailability(headers, "viewer-1")
+      unsubscribe()
+      expect(surfaceAvailabilityFailed()).toBe(true)
+      expect(surfaceAvailabilityLoaded()).toBe(false)
+      expect(told).toHaveBeenCalled()
+    }
+  })
+
+  it("every other reader sees a failed read exactly as an awaited one: the static profile's deny list", async () => {
+    window.__NODARO_RUNTIME__ = { surface: { nodes: { deny: ["suno-generate"], allow: [] } } }
+    vi.stubGlobal("fetch", answering({}, false))
+    await loadSurfaceAvailability(headers, "viewer-1")
+    expect(isNodeUnavailable("suno-generate")).toBe(true)
+    expect(isNodeUnavailable("dubbing")).toBe(false)
+  })
+
+  it("an answer landing afterwards clears it; a later failed re-read keeps the answer", async () => {
+    vi.stubGlobal("fetch", answering({}, false))
+    await loadSurfaceAvailability(headers, "viewer-1")
+    expect(surfaceAvailabilityFailed()).toBe(true)
+    vi.stubGlobal("fetch", answering(ANSWER))
+    await loadSurfaceAvailability(headers, "viewer-1")
+    expect(surfaceAvailabilityFailed()).toBe(false)
+    expect(isNodeUnavailable("dubbing")).toBe(true)
+    vi.stubGlobal("fetch", answering({}, false))
+    await loadSurfaceAvailability(headers, "viewer-1")
+    expect(surfaceAvailabilityFailed()).toBe(false)
+    expect(surfaceAvailabilityLoaded()).toBe(true)
+  })
+
+  it("sign-out and a change of account clear it", async () => {
+    vi.stubGlobal("fetch", answering({}, false))
+    await loadSurfaceAvailability(headers, "viewer-1")
+    resetSurfaceAvailability()
+    expect(surfaceAvailabilityFailed()).toBe(false)
+    await loadSurfaceAvailability(headers, "viewer-1")
+    expect(surfaceAvailabilityFailed()).toBe(true)
+    let release: (() => void) | undefined
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => {
+      release = () => resolve({ ok: false, json: async () => ({}) })
+    })))
+    const next = loadSurfaceAvailability(headers, "viewer-2")
+    // The next account's read is awaited, not failed.
+    expect(surfaceAvailabilityFailed()).toBe(false)
+    await vi.waitFor(() => expect(release).toBeDefined())
+    release?.()
+    await next
+    expect(surfaceAvailabilityFailed()).toBe(true)
+  })
+
+  it("a read that started under the previous account and fails is not this viewer's", async () => {
+    let release: (() => void) | undefined
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = () => resolve({ ok: false, json: async () => ({}) })
+          }),
+      )
+      .mockImplementationOnce(() => new Promise(() => {}))
+    vi.stubGlobal("fetch", fetchMock)
+    const first = loadSurfaceAvailability(headers, "viewer-1")
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    void loadSurfaceAvailability(headers, "viewer-2")
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    release?.()
+    await first
+    expect(surfaceAvailabilityFailed()).toBe(false)
   })
 })

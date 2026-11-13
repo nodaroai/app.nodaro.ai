@@ -5,10 +5,13 @@ import {
   headerBalance,
   imageOriginsFor,
   unitTranslator,
+  WHITE_LABEL_MENU_PAGES,
+  whiteLabelWorldMenus,
   whiteLabelWorlds,
   withHeaderBalance,
   type UnitWords,
 } from "../white-label"
+import { WHITE_LABEL_WORLD_PATHS } from "../site"
 
 /**
  * The pieces of the white-label header that are pure: which worlds it draws,
@@ -43,6 +46,30 @@ describe("whiteLabelWorlds", () => {
 
   it("an empty allowlist draws no world", () => {
     expect(whiteLabelWorlds({ allow: [] }, null)).toEqual([])
+  })
+})
+
+describe("whiteLabelWorldMenus", () => {
+  const withheld = (...types: string[]) => (type: string) => types.includes(type)
+
+  it("before the viewer's answer is in: no page below any world (nothing drawn and then taken away)", () => {
+    expect(whiteLabelWorldMenus(null)).toEqual({ video: { pages: [] } })
+  })
+
+  it("dubbing offered: Video's menu opens Translate", () => {
+    expect(whiteLabelWorldMenus(withheld())).toEqual({ video: { pages: ["translate"] } })
+    expect(whiteLabelWorldMenus(withheld("generate-image", "suno-generate"))).toEqual({ video: { pages: ["translate"] } })
+  })
+
+  it("dubbing withheld from the viewer: no Translate", () => {
+    expect(whiteLabelWorldMenus(withheld("dubbing"))).toEqual({ video: { pages: [] } })
+  })
+
+  it("names pages only below worlds this header draws, each at a page of the site", () => {
+    for (const world of Object.keys(WHITE_LABEL_MENU_PAGES)) {
+      expect(WHITE_LABEL_WORLD_PATHS[world as keyof typeof WHITE_LABEL_WORLD_PATHS]).toBeDefined()
+    }
+    expect(Object.keys(whiteLabelWorldMenus(withheld()))).toEqual(Object.keys(WHITE_LABEL_MENU_PAGES))
   })
 })
 
