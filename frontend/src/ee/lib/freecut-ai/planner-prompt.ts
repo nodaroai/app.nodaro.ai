@@ -15,7 +15,7 @@ export function plannerSystemPrompt(): string {
     "- pauses: cut the silent pauses between sentences, to tighten the video.",
     "- captions: add captions that follow the speech.",
     "- music: put background music under the voice.",
-    "If the request asks for a general improvement (\"make it better\", \"edit it for me\", \"turn it into a short\"), choose pauses, captions and music.",
+    "If the request asks for a general improvement (\"make it better\", \"edit it for me\", \"turn it into a short\"), choose fillers, pauses, captions and music.",
     "Choose only from the list. Things outside it (b-roll, color, reframing, effects) cannot be done yet: leave them out and mention it in the reply.",
     "When you choose music, describe it in English for a music generator: genre, mood, instruments and energy, always instrumental, at most 20 words. Follow what the person said about the music.",
     `Answer with ONE JSON object and nothing else: {"steps": [${EDIT_STEPS.map((s) => `"${s}"`).join(", ")} …], "musicStyle": string or null, "reply": string}.`,

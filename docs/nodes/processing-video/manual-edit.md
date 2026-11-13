@@ -22,7 +22,7 @@ No configurable parameters — click "Open Editor" on the node during workflow e
 
 ## Edit with AI
 
-On Nodaro Cloud the editor's header has an **Edit with AI** button. It opens a panel beside the editor where you write what you want in your own words, for example "cut the pauses, add captions and put upbeat music under it". A team of agents then edits the video on the editor's own timeline while you watch:
+On Nodaro Cloud the editor's header has an **Edit with AI** button. It opens a panel beside the editor where you write what you want in your own words, for example "cut the pauses and the ums, add captions and put upbeat music under it". The agents do the steps you name. A general request such as "edit it for me" gets all four. A team of agents then edits the video on the editor's own timeline while you watch, and the timeline scrolls to each change as it lands:
 
 - **Assistant** listens to the video and reads your request. It transcribes the speech with word timings and decides which steps you asked for.
 - **Cutter** removes filler sounds ("um", "uh") and cuts the silent pauses between sentences. It keeps a short breath at each cut, so speech never sounds clipped.

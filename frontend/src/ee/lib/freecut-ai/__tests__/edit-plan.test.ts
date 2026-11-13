@@ -14,6 +14,11 @@ import {
   wordsFromTranscript,
   type TimedWord,
 } from "../edit-plan"
+import { en } from "@/lib/i18n/en"
+import { he } from "@/lib/i18n/he"
+import { ja } from "@/lib/i18n/ja"
+import { ko } from "@/lib/i18n/ko"
+import { ptBR } from "@/lib/i18n/pt-br"
 
 const w = (text: string, start: number, end: number): TimedWord => ({ text, start, end })
 
@@ -33,6 +38,19 @@ describe("wordsFromTranscript", () => {
   it("answers no words for anything else", () => {
     expect(wordsFromTranscript(null)).toEqual([])
     expect(wordsFromTranscript({ text: "hi" })).toEqual([])
+  })
+
+  it("keeps a word timed with no length, and trims the space the transcriber puts before words", () => {
+    // As ElevenLabs answered for the staging test video: " I" said fast, at 9640 ms to 9640 ms.
+    const words = wordsFromTranscript({
+      version: 1,
+      words: [
+        { text: " moment", startMs: 9180, endMs: 9480 },
+        { text: " I", startMs: 9640, endMs: 9640 },
+        { text: " have", startMs: 9680, endMs: 9820 },
+      ],
+    })
+    expect(words).toEqual([w("moment", 9.18, 9.48), w("I", 9.64, 9.64), w("have", 9.68, 9.82)])
   })
 })
 
@@ -83,7 +101,7 @@ describe("fillerRanges", () => {
 describe("planFromRequest with accented words", () => {
   it("finds a filler word written with an accent, and only as a word", () => {
     expect(planFromRequest("tire o hã da fala").steps).toContain("fillers")
-    expect(planFromRequest("hãx").steps).not.toContain("fillers")
+    expect(planFromRequest("hãx e legendas").steps).toEqual(["captions"])
   })
 })
 
@@ -115,11 +133,17 @@ describe("planFromRequest", () => {
 
   it("takes the standard edit, and says so, when the request names nothing it can do", () => {
     expect(planFromRequest("make it great")).toEqual({
-      steps: ["pauses", "captions", "music"],
+      steps: ["fillers", "pauses", "captions", "music"],
       musicStyle: DEFAULT_MUSIC_STYLE,
       reply: null,
       understood: false,
     })
+  })
+
+  it("the panel's example request asks for all four steps, in every language", () => {
+    for (const [locale, example] of Object.entries({ en: en["freecutAi.example"], he: he["freecutAi.example"], ja: ja["freecutAi.example"], ko: ko["freecutAi.example"], "pt-br": ptBR["freecutAi.example"] })) {
+      expect(planFromRequest(example ?? "").steps, locale).toEqual(["fillers", "pauses", "captions", "music"])
+    }
   })
 })
 
