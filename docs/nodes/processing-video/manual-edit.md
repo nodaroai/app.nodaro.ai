@@ -19,6 +19,26 @@ No configurable parameters — click "Open Editor" on the node during workflow e
 
 **Inputs:** Video (required)
 **Outputs:** Edited video
+
+## Edit with AI
+
+On Nodaro Cloud the editor's header has an **Edit with AI** button. It opens a panel beside the editor where you write what you want in your own words, for example "cut the pauses, add captions and put upbeat music under it". A team of agents then edits the video on the editor's own timeline while you watch:
+
+- **Assistant** listens to the video and reads your request. It transcribes the speech with word timings and decides which steps you asked for.
+- **Cutter** removes filler sounds ("um", "uh") and cuts the silent pauses between sentences. It keeps a short breath at each cut, so speech never sounds clipped.
+- **Captions** writes captions along with the voice, a few words at a time, on a caption track. The captions use the editor's own caption style.
+- **Sound** composes instrumental background music for the video. It lays the music on its own track, lowered under the voice and faded out at the end.
+
+Each step is an ordinary edit. You can undo any one of them in the editor, or all of them from the panel with **Undo all**, which never undoes an edit you made yourself. **Stop** ends the run, and whatever the agents already did stays on the timeline.
+
+**Credits.** Edit with AI has no price of its own. You pay for the parts it runs, at their usual prices:
+
+- the transcription ([Transcribe](../ai-text/transcribe.md), ElevenLabs STT);
+- the planning (one short text call to Gemini 3.6 Flash, priced like any call to that model);
+- the music, when the request asks for it (one [Suno Create Music](../suno-music/suno-generate.md) track).
+
+**What it does not do yet:** b-roll, color grading, reframing to another aspect ratio, and zoom effects. If you ask for one of them, it is left out and the panel says so.
+
 ## Best Practices
 
 - Place Manual Edit nodes at points where human review is essential

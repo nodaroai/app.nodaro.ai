@@ -2,12 +2,13 @@
 
 import { useEffect, useCallback, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { X, Loader2, Check, FilePlus } from "lucide-react"
+import { X, Loader2, Check, FilePlus, Sparkles } from "lucide-react"
 import { NODARO_LOAD_VIDEO, NODARO_IMPORT_FILES, NODARO_RESET_PROJECT, FREECUT_READY, FREECUT_EXPORT_COMPLETE, FREECUT_REQUEST_IMPORT, type NodaroLoadVideoPayload } from "@nodaro/shared/media"
 import { runtimeFreecutOrigin, runtimeFreecutUrl } from "@/lib/runtime-config"
 import { useT } from "@/lib/i18n"
 import { useInertBehind } from "@/lib/use-inert-behind"
 import { isFromWindow } from "@/lib/popup-message"
+import { FreeCutAiSlot, aiEditAvailable } from "./freecut-ai-slot"
 
 /**
  * Read at RUNTIME, not inlined at build time (#767). The published community
@@ -58,6 +59,13 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
   const sentVideoRef = useRef(false)
   const [ready, setReady] = useState(false)
   const [unreachable, setUnreachable] = useState(false)
+  // What the editor said it can do in its handshake, and whether Edit with AI is open.
+  // Once opened, the panel stays mounted (only hidden) for as long as the editor
+  // is: closing it must not end a run the person is paying for, or forget its Undo all.
+  const [capabilities, setCapabilities] = useState<readonly string[]>([])
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiMounted, setAiMounted] = useState(false)
+  const editorWindow = useCallback(() => iframeRef.current?.contentWindow, [])
   const editorDisabled = freecutUrl() === ""
 
   const sendVideoToFreeCut = useCallback(
@@ -142,6 +150,8 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
 
       if (event.data?.type === FREECUT_READY) {
         setReady(true)
+        const offered: unknown = event.data?.capabilities
+        setCapabilities(Array.isArray(offered) ? offered.filter((c): c is string => typeof c === "string") : [])
         if (!sentVideoRef.current) {
           sentVideoRef.current = true
           const iframe = iframeRef.current
@@ -261,6 +271,20 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
             <FilePlus className="w-3.5 h-3.5" />
             {t("mediaed.newProject")}
           </button>
+          {aiEditAvailable(capabilities) && (
+            <button
+              type="button"
+              aria-pressed={aiOpen}
+              className="flex items-center gap-1.5 px-2 py-1 text-[11px] rounded-md text-white bg-cta hover:bg-cta-hover transition-colors"
+              onClick={() => {
+                setAiMounted(true)
+                setAiOpen((open) => !open)
+              }}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              {t("freecutAi.open")}
+            </button>
+          )}
         </div>
         <button
           type="button"
@@ -272,8 +296,9 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
         </button>
       </div>
 
-      {/* Iframe */}
-      <div className="flex-1 relative">
+      {/* Iframe, with Edit with AI beside it when open */}
+      <div className="flex-1 min-h-0 flex">
+      <div className="flex-1 relative min-w-0">
         {!iframeLoaded && !unreachable && (
           <div className="absolute inset-0 flex items-center justify-center bg-black">
             <Loader2 className="w-8 h-8 animate-spin text-white/50" />
@@ -297,6 +322,17 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
           title={t("mediaed.nodarcutFrameTitle")}
         />
         )}
+      </div>
+      {aiMounted && aiEditAvailable(capabilities) && (
+        <div className={aiOpen ? "flex" : "hidden"}>
+          <FreeCutAiSlot
+            editorWindow={editorWindow}
+            editorOrigin={freecutOrigin()}
+            videoUrl={videoUrl}
+            onClose={() => setAiOpen(false)}
+          />
+        </div>
+      )}
       </div>
 
       {/* Saving overlay */}

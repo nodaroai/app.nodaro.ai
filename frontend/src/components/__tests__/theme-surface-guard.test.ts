@@ -34,6 +34,8 @@ const DARK_BY_DESIGN: ReadonlySet<string> = new Set([
   "components/editor/mask-painter-modal.tsx",
   "components/editor/filerobot-editor-modal.tsx",
   "components/editor/freecut-editor-modal.tsx",
+  // The Edit with AI panel's loading frame, shown beside the editor inside that same dark modal.
+  "components/editor/freecut-ai-slot.tsx",
   "components/editor/freecut-import-picker.tsx",
 ])
 

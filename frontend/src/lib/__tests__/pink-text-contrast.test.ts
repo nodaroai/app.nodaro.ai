@@ -49,6 +49,7 @@ const ON_DARK: Readonly<Record<string, number>> = {
   "frontend/src/components/editor/media-editor/trim-panel.tsx": 4,
   "frontend/src/components/editor/audiomass-editor-modal.tsx": 1,
   "frontend/src/components/editor/freecut-import-picker.tsx": 2,
+  "frontend/src/ee/components/freecut-ai/ai-edit-panel.tsx": 1, // Edit with AI, beside the editor in the dark FreeCut modal
   "frontend/src/routes/pipeline-page.tsx": 1, // the clip header on the black player
 }
 
