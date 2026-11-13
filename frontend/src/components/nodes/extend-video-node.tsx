@@ -66,10 +66,13 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   // window), Seedance 2.0 on its row for its seconds and resolution, LTX 2.3
   // Pro on its per-second row × the seconds, VEO Quality on its own row. The
   // whole run's price is marked up once, as the run is charged (lib/unit-quote.ts).
+  // Read with the canvas, as the panel and the Execute total read it: Grok is
+  // priced at its wired source's resolution when the wiring says for sure.
   const priced = { id, type: "extend-video", position: { x: 0, y: 0 }, data: nodeData } as unknown as WorkflowNode
   const units = useWorkflowStore((s) => extendVideoPricingUnits(priced, s.nodes, s.edges))
+  const modelId = useWorkflowStore((s) => getModelIdentifier(priced, s.edges, s.nodes))
   const credits = useUnitQuoteCredits(
-    getModelIdentifier(priced),
+    modelId,
     units,
     extendProvider === "runway-extend" ? 32 : 40,
   )

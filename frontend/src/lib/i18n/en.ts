@@ -1787,6 +1787,7 @@ export const en = {
   "vidcfg.descSeedanceExtend": "Extends ANY connected video: Seedance 2 generates what happens next (sound included) and the result is stitched into one seamless clip.",
   "vidcfg.descKlingExtend": "Extends ANY connected video: Kling 4 generates what happens next (sound included) and the result is stitched into one seamless clip.",
   "vidcfg.descPixverseExtend": "Extends ANY connected video: PixVerse V6 generates what happens next (with sound, unless you turn it off), and only the new footage is joined onto your original video in one seamless clip.",
+  "vidcfg.descGrokExtend": "Extends a Grok Imagine video you made here (from text or an image): connect the Grok Imagine node that made it. Grok adds 6 or 10 seconds at that video's own resolution and returns the whole video with the new seconds joined on. It can't extend uploaded videos or videos from other models.",
   "vidcfg.descOtherExtend": "Extends a VEO, Runway, or LTX video with a new prompt. Connect the upstream Image to Video or Text to Video node whose video it continues.",
   "vidcfg.advancedSettings": "Advanced Settings",
   "vidcfg.showAdvancedSettings": "Show Advanced Settings",

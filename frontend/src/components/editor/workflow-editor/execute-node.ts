@@ -51,6 +51,7 @@ import {
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
   isCatalogExtendProvider,
+  isGrokExtendProvider,
   canonicalVideoProvider,
   pricedOutputDurationSec,
   SEEDANCE_VIDEO_EDIT_SHAPE,
@@ -108,7 +109,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { UNIT_EXECUTORS } from "@/nodes/_generated/executors";
 import { createUnitExecKit } from "./unit-exec-kit";
 import { runGraph } from "./run-graph";
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, nodaroVideoUpscaleTierOf, pickSunoSeparateSource } from "@nodaro/render-rules";
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, runOutputTaskFields } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -271,7 +272,8 @@ import {
   CONTENT_IDEAS_MAX_RECIPE_INPUTS,
   resolveUpscaleFactor,
   ltxExtendDurationSec,
-  catalogExtendResolution
+  catalogExtendResolution,
+  grokExtendSeconds
 } from "@nodaro/shared/credits";
 import {
   ttsSupportsStitching,
@@ -6902,6 +6904,49 @@ function executeNodeCore(
       );
     }
 
+    // ─── Grok path (its own clips only) ─────────────────────────────────
+    // Task-based like VEO: the upstream Grok node's task. Mirrors
+    // payload-builder's Grok branch: the seconds it adds as its estimate
+    // prices them (6 or 10; a stale length at the nearer), the prompt as
+    // composed. No resolution is sent — the server prices and runs the
+    // source's. A run with no upstream task is still sent: the server refuses
+    // it, before anything is reserved, with the message that says what Grok
+    // can extend.
+    if (isGrokExtendProvider(runsAs)) {
+      let grokPrompt: string | undefined = promptOf("extend-video");
+      {
+        const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { surface: "video" });
+        if (cinematographyHints.length > 0) {
+          grokPrompt = appendPromptHints(grokPrompt, cinematographyHints);
+        }
+      }
+      {
+        const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+        if (identityClause) grokPrompt = grokPrompt ? `${grokPrompt} ${identityClause}` : identityClause;
+      }
+      if (!grokPrompt?.trim()) {
+        toast.error(nodeRunError(evData.label, "nodeRun.describeWhatHappensNextIn"));
+        return Promise.reject(new Error("No prompt for Grok extend"));
+      }
+      const grokTaskId = resolveUpstreamKieTaskId(node.id, evData as unknown as Record<string, unknown>);
+      setUserPromptTemplate(evData.prompt?.trim() || undefined);
+      return runProcessingNode(
+        node.id,
+        () =>
+          extendVideo({
+            ...(grokTaskId ? { kieTaskId: grokTaskId } : {}),
+            prompt: grokPrompt,
+            negativePrompt: inputs.negativePrompt || evData.negativePrompt || undefined,
+            provider: runsAs,
+            duration: grokExtendSeconds(evData.duration),
+            userId: ctx.userId,
+          }),
+        "generatedVideoUrl",
+        "Extend Video",
+        ctx,
+      );
+    }
+
     // ─── KIE-based path (veo-extend, runway-extend) ───────────────────
     // Manual wins — see gen-image note above.
     let prompt: string | undefined = promptOf("extend-video");
@@ -6941,6 +6986,9 @@ function executeNodeCore(
       "generatedVideoUrl",
       "Extend Video",
       ctx,
+      // The extension's own task, for a VEO or Runway extend after it to continue
+      // (`outputKieTaskId`: this node's `kieTaskId` is the task it works on).
+      (outputData) => runOutputTaskFields("extend-video", outputData.kieTaskId),
     );
   }
 

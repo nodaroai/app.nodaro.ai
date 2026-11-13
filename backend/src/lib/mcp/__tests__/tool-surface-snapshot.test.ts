@@ -1504,6 +1504,13 @@ const EXTEND_KLING_4_BYTES = 189
 // (total 530_437 → 530_642).
 const EXTEND_PIXVERSE_V6_BYTES = 205
 
+// RAISED 2026-11-13 by Grok joining Extend Video, and nothing else: `extend_video` offers `grok-extend`,
+// the description says it continues only a Grok Imagine video made here, by its task id, adding 6 or 10 s
+// at that video's resolution, `task_id` names it beside VEO and Runway, and `duration` states its 6 or
+// 10 s (default 6). No tool was added, so the fixture does NOT move. Measured by this suite on the same
+// tree with and without it: total 530_595 → 530_864.
+const EXTEND_GROK_BYTES = 269
+
 // RAISED 2026-11-11 by image_to_image's `mask_url` naming the models that take a mask
 // (`I2I_MASK_SUPPORT`, now with GPT Image 2.6 Flare's and Sunburst's edits), and that it is
 // refused with a GIF or an SVG, and nothing else. No tool was added, so the fixture does NOT move.
@@ -1823,6 +1830,7 @@ export const TOOL_WIRE_BUDGET = {
     EXTEND_SEEDANCE_SPLIT_BYTES +
     EXTEND_KLING_4_BYTES +
     EXTEND_PIXVERSE_V6_BYTES +
+    EXTEND_GROK_BYTES +
     I2I_MASK_MODELS_BYTES +
     MODIFY_IMAGE_MASK_BYTES +
     SEEDANCE_REFERENCE_TASK_TYPE_ARG_BYTES +

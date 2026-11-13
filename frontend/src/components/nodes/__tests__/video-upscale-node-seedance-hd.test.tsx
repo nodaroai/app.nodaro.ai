@@ -34,7 +34,7 @@ vi.mock("@/hooks/use-model-credit-cost", async (importOriginal) => ({
 }))
 
 const store = vi.hoisted(() => ({
-  nodes: [] as Array<{ id: string; data: Record<string, unknown> }>,
+  nodes: [] as Array<{ id: string; type?: string; data: Record<string, unknown> }>,
   edges: [] as Array<{ source: string; target: string }>,
 }))
 vi.mock("@/hooks/use-workflow-store", () => ({
@@ -79,7 +79,7 @@ import { VideoUpscaleNode } from "../video-upscale-node"
 const RESULT = { url: "https://r2/out.mp4", jobId: "11111111-2222-4333-8444-555555555555", timestamp: "t" }
 
 function renderNode(data: Record<string, unknown>) {
-  store.nodes = [...store.nodes.filter((n) => n.id !== "up"), { id: "up", data }]
+  store.nodes = [...store.nodes.filter((n) => n.id !== "up"), { id: "up", type: "video-upscale", data }]
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
@@ -108,7 +108,8 @@ describe("Seedance 2.5 HD price on the node", () => {
   })
 
   it("a draft wired: the exact price for THAT draft, asked by the task id the run sends", async () => {
-    store.nodes = [{ id: "gv", data: { kieTaskId: "task-draft" } }]
+    // A Seedance 2.5 generation: the model whose draft the finalize works on.
+    store.nodes = [{ id: "gv", type: "generate-video", data: { provider: "seedance-2-5", draft: true, kieTaskId: "task-draft" } }]
     store.edges = [{ source: "gv", target: "up" }]
     api.estimate.mockImplementation(async (draft?: { taskId?: string }) =>
       draft?.taskId ? { credits: 1900, minimum: false } : { credits: 1425, minimum: true })
@@ -120,7 +121,7 @@ describe("Seedance 2.5 HD price on the node", () => {
   })
 
   it("a refused draft falls back to 'from N' instead of a wrong exact price", async () => {
-    store.nodes = [{ id: "gv", data: { kieTaskId: "task-not-a-draft" } }]
+    store.nodes = [{ id: "gv", type: "generate-video", data: { provider: "seedance-2-5", kieTaskId: "task-not-a-draft" } }]
     store.edges = [{ source: "gv", target: "up" }]
     api.estimate.mockImplementation(async (draft?: { taskId?: string }) => {
       if (draft?.taskId) throw new Error("not_a_draft")

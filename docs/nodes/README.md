@@ -336,7 +336,7 @@ Generate video from images, text, or other video using state-of-the-art models.
 | [Face Swap](./ai-video/face-swap.md) | Replace face in video with reference image | Character replacement and creative remixing |
 | [Speech to Video](./ai-video/speech-to-video.md) | Generate video from speech (Wan 2.2) | Create video driven by speech audio input |
 | [Motion Transfer](./ai-video/motion-transfer.md) | Apply video motion to static character | Transfer movement from reference video to character image |
-| [Extend Video](./ai-video/extend-video.md) | Continue video generation with new prompt | Extend VEO, Runway, or LTX 2.3 Pro video with new footage at the start or end; Seedance 2.5, Seedance 2.0, Kling 4 and PixVerse V6 continue ANY video by URL with seamless stitched audio+video |
+| [Extend Video](./ai-video/extend-video.md) | Continue video generation with new prompt | Extend VEO, Runway, or LTX 2.3 Pro video with new footage at the start or end; Seedance 2.5, Seedance 2.0, Kling 4 and PixVerse V6 continue ANY video by URL with seamless stitched audio+video; Grok continues a Grok Imagine video made here |
 | [Video Retake](./ai-video/video-retake.md) | Replace a time window of an existing video — audio, video, or both (LTX 2.3 Pro) | Surgically fix a few seconds of dialogue, repaint a botched shot, or re-score a specific beat |
 
 ### UGC Video

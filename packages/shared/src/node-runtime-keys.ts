@@ -55,6 +55,9 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   "generatedResults",
   "activeResultIndex",
   "sourceImageUrl",
+  // An Extend / Upscale Video node's own run's output task — what a VEO or
+  // Runway extend after it continues (its `kieTaskId` is the task it works on).
+  "outputKieTaskId",
   "__listTotal",
   "__listCompleted",
   "__listResults",

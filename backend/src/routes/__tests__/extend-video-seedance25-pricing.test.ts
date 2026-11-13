@@ -2,12 +2,15 @@ import { describe, it, expect } from "vitest"
 import { resolveExtendVideoIdentifier } from "@/routes/extend-video.js"
 import { buildPayload } from "@/services/workflow-engine/payload-builder.js"
 import { CreditsService, STATIC_CREDIT_COSTS, getNodeModelIdentifier } from "@/ee/billing/credits.js"
-import { pixverseExtendCreditId, tailExtendCreditId, tailExtendResolution } from "@nodaro/shared/credits"
+import { grokExtendCreditId, pixverseExtendCreditId, tailExtendCreditId, tailExtendResolution } from "@nodaro/shared/credits"
 import { EXTEND_VIDEO_PROVIDERS, RETIRED_VIDEO_PROVIDERS, canonicalVideoProvider, isTailExtendProvider } from "@nodaro/shared/models"
 import { isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId } from "@nodaro/render-rules"
 import { quoteBaseCredits } from "@/lib/credit-base-cost.js"
 import { tailRecipeSeconds } from "@/lib/extend-recipe.js"
-import type { SimpleNode } from "@/services/workflow-engine/types.js"
+import { resolveNodeInputs } from "@/services/workflow-engine/input-resolver.js"
+import { stampGrokExtendSource } from "@/lib/grok-extend-stamp.js"
+import { GROK_EXTEND_SOURCE_MESSAGE } from "@/lib/grok-extend-source.js"
+import type { NodeExecutionState, SimpleEdge, SimpleNode } from "@/services/workflow-engine/types.js"
 
 // ---------------------------------------------------------------------------
 // THREE places name the credit identifier an Extend Video run is priced at:
@@ -209,6 +212,172 @@ describe("workflow payload builder — PixVerse V6", () => {
     expect(() =>
       buildPayload(node({ provider: "pixverse-v6-extend", prompt, duration: 5 }), "job-1", { videoUrl: "https://cdn.example.com/source.mp4" }),
     ).toThrow("prompt (what happens next) must be at least 3 characters for pixverse-v6-extend")
+  })
+})
+
+// Grok extends only its own clips, by the upstream node's task, at the
+// SOURCE's resolution: the route holds the source check's row, the workflow
+// run the stamp's (node-executor). Before either answers, every producer names
+// the dearer 720p row — never a resolution the node or the body names.
+describe("route, payload builder and estimate name one id for Grok × duration, before its source is known", () => {
+  it("the dearer 720p row at the seconds added, whatever resolution the node names", () => {
+    for (const duration of [undefined, 6, 10, 8, 15, "10"] as const) {
+      for (const resolution of [undefined, "480p", "720p", "1080p"] as const) {
+        const label = `${String(duration)} ${String(resolution)}`
+        const want = grokExtendCreditId(duration)
+        expect(want, label).toMatch(/^grok-extend:(6|10)s:720p$/)
+        expect(producers({ provider: "grok-extend", duration, resolution }), label).toEqual({ route: want, run: want, estimate: want })
+        expect(STATIC_CREDIT_COSTS[want], label).toBeGreaterThan(0)
+      }
+    }
+  })
+})
+
+describe("workflow payload builder — Grok", () => {
+  it("a workflow wires the upstream Grok job's task id", () => {
+    // A Grok Imagine generation that ran in this workflow hands its task on, as it does to VEO's extend.
+    const gen: SimpleNode = { id: "g", type: "generate-video", data: { provider: "grok-i2v", resolution: "480p" } }
+    const ext: SimpleNode = { id: "x", type: "extend-video", data: { provider: "grok-extend", prompt: "the fox runs into the snow", duration: 10 } }
+    const states: Record<string, NodeExecutionState> = {
+      g: { status: "completed", output: { videoUrl: "https://cdn.example.com/grok.mp4", kieTaskId: "task-grok-src" } },
+    }
+    const inputs = resolveNodeInputs(ext, [{ id: "g->x", source: "g", target: "x", sourceHandle: "video", targetHandle: "video" }], states, [gen, ext])
+    expect(inputs.kieTaskId).toBe("task-grok-src")
+    const built = buildPayload(ext, "job-1", inputs)
+    expect(built.jobName).toBe("extend-video")
+    expect(built.payload).toEqual({
+      jobId: "job-1",
+      provider: "grok-extend",
+      kieTaskId: "task-grok-src",
+      prompt: "the fox runs into the snow",
+      duration: 10,
+      usageLogId: undefined,
+    })
+    // Recorded as a Grok Extend run, never as the Grok model it extends: an extension is no source to extend again.
+    expect(built.payload.provider).toBe("grok-extend")
+    // Held on the dearer row until the run's source check answers the source's (node-executor).
+    expect(built.modelIdentifier).toBe("grok-extend:10s:720p")
+  })
+
+  it("a skipped or frozen upstream Grok node hands on the task its data holds", () => {
+    const gen: SimpleNode = { id: "g", type: "generate-video", data: { provider: "grok", kieTaskId: "task-saved" } }
+    const ext: SimpleNode = { id: "x", type: "extend-video", data: { provider: "grok-extend", prompt: "keep going" } }
+    // Pre-completed from its saved result, which carries the video but not the task.
+    const states: Record<string, NodeExecutionState> = { g: { status: "completed", output: { videoUrl: "https://cdn.example.com/grok.mp4" } } }
+    const inputs = resolveNodeInputs(ext, [{ id: "g->x", source: "g", target: "x", sourceHandle: "video", targetHandle: "video" }], states, [gen, ext])
+    expect(buildPayload(ext, "job-1", inputs).payload.kieTaskId).toBe("task-saved")
+  })
+
+  it("an extension wired into a second Grok Extend hands it no task, so the run is refused in the approved words", async () => {
+    // An Extend Video node holds its SOURCE's task (as an MCP call writes it) — the task it works on, never its own.
+    const gen: SimpleNode = { id: "g", type: "generate-video", data: { provider: "grok-i2v", kieTaskId: "orig-grok-task" } }
+    const ext1: SimpleNode = { id: "x1", type: "extend-video", data: { provider: "grok-extend", prompt: "she runs", kieTaskId: "orig-grok-task" } }
+    const ext2: SimpleNode = { id: "x2", type: "extend-video", data: { provider: "grok-extend", prompt: "she stops" } }
+    const states: Record<string, NodeExecutionState> = {
+      g: { status: "completed", output: { videoUrl: "https://cdn.example.com/grok.mp4", kieTaskId: "orig-grok-task" } },
+      x1: { status: "completed", output: { videoUrl: "https://cdn.example.com/ext1.mp4" } },
+    }
+    const inputs = resolveNodeInputs(ext2, [{ id: "x1->x2", source: "x1", target: "x2", sourceHandle: "video", targetHandle: "video" }], states, [gen, ext1, ext2])
+    expect(inputs.kieTaskId).toBeUndefined()
+    const built = buildPayload(ext2, "job-2", inputs)
+    expect(built.payload.kieTaskId).toBeUndefined()
+    // The run's source check (node-executor) then refuses it before anything is reserved.
+    await expect(stampGrokExtendSource("extend-video", built.payload, "user-1")).resolves.toEqual({
+      ok: false,
+      refusal: { code: "grok_extend_source", message: GROK_EXTEND_SOURCE_MESSAGE },
+    })
+  })
+
+  it("queues the seconds it adds — 6 or 10, a length it does not add snapped to the nearer — and no resolution of the node's", () => {
+    for (const [duration, want] of [[undefined, 6], [6, 6], [10, 10], [8, 6], [9, 10], [15, 10], ["10", 10]] as const) {
+      const built = buildPayload(node({ provider: "grok-extend", prompt: "keep going", duration, resolution: "480p" }), "job-1", { kieTaskId: "t" })
+      expect(built.payload.duration, String(duration)).toBe(want)
+      expect(built.payload, String(duration)).not.toHaveProperty("resolution")
+    }
+  })
+
+  it("refuses a run with no prompt before anything is reserved", () => {
+    expect(() => buildPayload(node({ provider: "grok-extend", prompt: "  " }), "job-1", { kieTaskId: "t" })).toThrow(
+      "prompt (what happens next) is required for grok-extend",
+    )
+  })
+})
+
+// An upstream task goes only to a node that works on that model's task: a VEO
+// upscale wired to another model's clip gets none and keeps its build-time
+// refusal (nothing reserved); wired to a VEO clip it gets the clip's task.
+describe("workflow payload builder — VEO upscale's upstream task", () => {
+  const upscale: SimpleNode = { id: "u", type: "video-upscale", data: { provider: "veo-1080p", label: "Upscale Video" } }
+  const wire = [{ id: "g->u", source: "g", target: "u", sourceHandle: "video", targetHandle: "video" }]
+  const run = (provider: string) => {
+    const gen: SimpleNode = { id: "g", type: "generate-video", data: { provider } }
+    const states: Record<string, NodeExecutionState> = { g: { status: "completed", output: { videoUrl: "https://cdn.example.com/clip.mp4", kieTaskId: "task-clip" } } }
+    return buildPayload(upscale, "job-u", resolveNodeInputs(upscale, wire, states, [gen, upscale]))
+  }
+
+  it("wired to a Kling clip: refused at build, with the message that names the fix", () => {
+    expect(() => run("kling-3.0")).toThrow(/is set to VEO upscale, which only works on a video generated by VEO earlier in this workflow/)
+  })
+
+  it("wired to a VEO clip: the clip's task", () => {
+    expect(run("veo3.1").payload).toMatchObject({ provider: "veo-1080p", kieTaskId: "task-clip" })
+  })
+
+  it("wired to a VEO extension that ran: the extension's own output task, never the task it extended", () => {
+    const ext: SimpleNode = { id: "x", type: "extend-video", data: { provider: "veo-extend", kieTaskId: "orig-veo-task" } }
+    const states: Record<string, NodeExecutionState> = { x: { status: "completed", output: { videoUrl: "https://cdn.example.com/ext.mp4", kieTaskId: "task-ext1" } } }
+    const edges = [{ id: "x->u", source: "x", target: "u", sourceHandle: "video", targetHandle: "video" }]
+    expect(buildPayload(upscale, "job-u", resolveNodeInputs(upscale, edges, states, [ext, upscale])).payload).toMatchObject({ provider: "veo-1080p", kieTaskId: "task-ext1" })
+  })
+})
+
+// A VEO or Runway extend with no task is refused at build — before anything is
+// held — in the words the editor uses; and a node never runs against its own old
+// output: wired to a source that fits, it takes that source's task or none.
+describe("workflow payload builder — a VEO or Runway extend's task", () => {
+  const NO_SOURCE = /^video_required: Node "Extend Video": no source generation found upstream\. Connect a VEO or Runway video node\.$/
+  const ext = (data: Record<string, unknown>): SimpleNode => ({ id: "x", type: "extend-video", data: { label: "Extend Video", prompt: "keep going", ...data } })
+  const build = (target: SimpleNode, nodes: SimpleNode[], edges: SimpleEdge[], states: Record<string, NodeExecutionState> = {}) =>
+    buildPayload(target, "job-x", resolveNodeInputs(target, edges, states, nodes), undefined, { nodes, edges, nodeStates: states })
+
+  it.each(["veo-extend", "runway-extend"])("%s wired to another model's clip (a video, no task) is refused at build, nothing held", (provider) => {
+    const target = ext({ provider })
+    const kling: SimpleNode = { id: "k", type: "generate-video", data: { provider: "kling-3.0", kieTaskId: "task-kling" } }
+    const edges = [{ id: "k->x", source: "k", target: "x", sourceHandle: "video", targetHandle: "video" }]
+    expect(() => build(target, [kling, target], edges, { k: { status: "completed", output: { videoUrl: "https://k.mp4", kieTaskId: "task-kling" } } })).toThrow(NO_SOURCE)
+  })
+
+  it.each(["veo-extend", "runway-extend"])("%s with nothing wired and no task is refused at build too (no video and no task)", (provider) => {
+    const target = ext({ provider })
+    expect(() => build(target, [target], [])).toThrow(/^video_required: /)
+  })
+
+  it("wired to a VEO generation that recorded no task, it never runs against its own old output", () => {
+    // A saved node whose kieTaskId an old server run overwrote with its own output.
+    const target = ext({ provider: "veo-extend", kieTaskId: "task-own-old" })
+    const gen: SimpleNode = { id: "g", type: "generate-video", data: { provider: "veo3.1" } }
+    const edges = [{ id: "g->x", source: "g", target: "x", sourceHandle: "video", targetHandle: "video" }]
+    expect(() => build(target, [gen, target], edges, { g: { status: "completed", output: { videoUrl: "https://g.mp4" } } })).toThrow(NO_SOURCE)
+    // Wired to one that has its task: that task, not its own.
+    const withTask: SimpleNode = { id: "g", type: "generate-video", data: { provider: "veo3.1", kieTaskId: "task-gen" } }
+    expect(build(target, [withTask, target], edges, { g: { status: "completed", output: { videoUrl: "https://g.mp4" } } }).payload.kieTaskId).toBe("task-gen")
+  })
+
+  it("unwired, it runs on the task it holds (an MCP call's)", () => {
+    const target = ext({ provider: "veo-extend", kieTaskId: "task-mcp" })
+    expect(build(target, [target], []).payload.kieTaskId).toBe("task-mcp")
+  })
+
+  it("a saved chain: a VEO extend after an extension whose task an old server run overwrote continues that extension", () => {
+    const gen: SimpleNode = { id: "g", type: "generate-video", data: { provider: "veo3.1", kieTaskId: "task-gen" } }
+    const first = ext({ provider: "veo-extend", kieTaskId: "task-ext1-old" })
+    const second: SimpleNode = { id: "y", type: "extend-video", data: { label: "Extend Video", provider: "veo-extend", prompt: "and more" } }
+    const edges = [
+      { id: "g->x", source: "g", target: "x", sourceHandle: "video", targetHandle: "video" },
+      { id: "x->y", source: "x", target: "y", sourceHandle: "video", targetHandle: "video" },
+    ]
+    const states: Record<string, NodeExecutionState> = { x: { status: "completed", output: { videoUrl: "https://e.mp4" } } }
+    expect(build(second, [gen, first, second], edges, states).payload.kieTaskId).toBe("task-ext1-old")
   })
 })
 

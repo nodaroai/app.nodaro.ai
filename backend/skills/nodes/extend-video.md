@@ -1,7 +1,7 @@
 ---
 node_type: extend-video
-generated_at: 2026-11-13T01:55:31.224Z
-generated_from: c6563a3ded
+generated_at: 2026-11-13T13:09:37.882Z
+generated_from: 69fd86aa98
 ---
 
 # Extend Video
@@ -38,6 +38,7 @@ generated_from: c6563a3ded
 - `currentJobId?: string`
 - `currentJobProgress?: number`
 - `kieTaskId?: string`
+- `outputKieTaskId?: string`
 - `videoPlayState?: "loop" | "paused" | "stopped"`
 - `pausedAtTime?: number`
 

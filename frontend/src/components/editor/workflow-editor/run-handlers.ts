@@ -56,7 +56,7 @@ import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields, sunoSeparateRunOutputFields } from "@/lib/named-run-outputs"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
-import { usecaseResultIsText } from "@nodaro/render-rules"
+import { runOutputTaskFields, usecaseResultIsText } from "@nodaro/render-rules"
 import { usecaseFailedRunFields, usecaseRestoredResults, usecaseTextRunPatch } from "@/lib/use-case-run-result"
 import { carriesRowStamps, runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitBatchClearFields, unitSideJobFields, unitSideListRowFields, unitSideRunFields } from "@/lib/json-run-result"
@@ -2518,8 +2518,14 @@ function syncNodeStatesToStore(
           updates.sunoTrackId = state.output.sunoTrackId;
         if (state.output.sunoTaskId)
           updates.sunoTaskId = state.output.sunoTaskId;
-        if (state.output.kieTaskId)
-          updates.kieTaskId = state.output.kieTaskId;
+        // The run's own output task: a generation's on `kieTaskId`; an Extend
+        // or Upscale Video node's on `outputKieTaskId` — its `kieTaskId` is the
+        // task it works ON, never overwritten (render-rules upstream-task.ts).
+        if (state.output.kieTaskId) {
+          const ownTask = runOutputTaskFields(nodeType, state.output.kieTaskId);
+          if (Object.keys(ownTask).length > 0) Object.assign(updates, ownTask);
+          else updates.kieTaskId = state.output.kieTaskId;
+        }
         if (state.output.previewItems)
           updates.previewItems = state.output.previewItems;
         if (state.output.paramOutputs)

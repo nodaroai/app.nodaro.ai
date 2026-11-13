@@ -82,7 +82,7 @@ import {
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
 import { editPlanTranscriptOrigin } from "@nodaro/shared/edl"
-import { editPlanProducerKind, runForwardedVideoLengthSec, splitMediaPartAt } from "@nodaro/render-rules"
+import { editPlanProducerKind, handedOnTaskOf, runForwardedVideoLengthSec, splitMediaPartAt, type UpstreamTaskGraph } from "@nodaro/render-rules"
 import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES } from "@nodaro/shared/ugc"
 import { outputPipSourceType } from "@nodaro/shared/entities"
 import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
@@ -1644,6 +1644,38 @@ const IMAGE_SOURCE_NODE_TYPES = new Set([
   "upscale-image", "remove-background", "upload-image", "extract-frame",
 ])
 
+/**
+ * The upstream node's provider task, handed on to the nodes that work on a
+ * generation BY its task — Extend Video (VEO, Runway, Grok) and Upscale Video
+ * (VEO, Seedance HD) — beside its video, whichever pip the wire lands on (the
+ * canvas wires the `video` pip). Only the source's OWN run's output task —
+ * its output's in this run, else as its data records it (a skipped or frozen
+ * node: a generation's `kieTaskId`, an extension's `outputKieTaskId`, never
+ * the task an Extend or Upscale node works on) — and only when what made it
+ * fits the target (`handedOnTaskOf`, the editor's rule too): a mis-wired node
+ * gets none and keeps the refusal it gives without one.
+ */
+function passUpstreamKieTaskId(
+  inputs: ResolvedInputs,
+  src: SimpleNode,
+  target: SimpleNode,
+  allNodes: SimpleNode[],
+  allEdges: SimpleEdge[],
+  nodeStates: Record<string, NodeExecutionState>,
+): void {
+  const task = handedOnTaskOf(target, src, upstreamTaskGraph(allNodes, allEdges, nodeStates))
+  if (task) inputs.kieTaskId = task
+}
+
+/** The graph an upstream task is read in on a server run: a node that ran in it hands on its output's task. */
+export function upstreamTaskGraph(
+  nodes: readonly SimpleNode[],
+  edges: readonly SimpleEdge[],
+  nodeStates: Record<string, NodeExecutionState> | undefined,
+): UpstreamTaskGraph {
+  return { nodes, edges, runOutputTaskOf: (id) => nodeStates?.[id]?.output?.kieTaskId }
+}
+
 function isVideoSourceType(srcType: string): boolean {
   return VIDEO_OUTPUT_NODE_TYPES.has(srcType) || srcType === "upload-video" || srcType === "youtube-video"
 }
@@ -2372,6 +2404,8 @@ function routeOutput(
   // branch still does `inputs.videoUrl = output` for every other targetType.
   if (edge.targetHandle === "video") {
     routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
+    // The generation's task rides with its video, as on an unnamed wire below.
+    if (VIDEO_OUTPUT_NODE_TYPES.has(srcType)) passUpstreamKieTaskId(inputs, src, target, allNodes, allEdges, nodeStates)
     return
   }
   if (edge.targetHandle === "reference") {
@@ -2704,16 +2738,7 @@ function routeOutput(
   if (VIDEO_OUTPUT_NODE_TYPES.has(srcType)) {
     routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
 
-    // Pass through kieTaskId for VEO/Runway extend and upscale nodes
-    if (targetType === "extend-video" || targetType === "video-upscale") {
-      const state = nodeStates[src.id]
-      if (state?.output?.kieTaskId) {
-        inputs.kieTaskId = state.output.kieTaskId
-      } else if (src.data.kieTaskId) {
-        // Fallback to node data for skipped/frozen nodes (matches frontend)
-        inputs.kieTaskId = src.data.kieTaskId as string
-      }
-    }
+    passUpstreamKieTaskId(inputs, src, target, allNodes, allEdges, nodeStates)
     return
   }
 

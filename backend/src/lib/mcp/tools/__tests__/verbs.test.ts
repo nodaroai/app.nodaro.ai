@@ -554,7 +554,7 @@ describe("extend_video verb", () => {
     const schema = tool.inputSchema as { required?: string[]; properties: Record<string, { enum?: unknown[]; minimum?: number; maximum?: number }> }
     const properties = schema.properties
     // Every Extend Video provider but LTX 2.3 Pro, which this tool does not offer; still a required argument.
-    expect(properties.model.enum).toEqual(["veo-extend", "runway-extend", "seedance-2-5-extend", "seedance-2-0-extend", "kling-4-extend", "pixverse-v6-extend"])
+    expect(properties.model.enum).toEqual(["veo-extend", "runway-extend", "seedance-2-5-extend", "seedance-2-0-extend", "kling-4-extend", "pixverse-v6-extend", "grok-extend"])
     expect(schema.required).toEqual(expect.arrayContaining(["prompt", "model"]))
     // The retired id is accepted, never offered or named.
     expect(JSON.stringify(tool)).not.toContain("seedance-2-extend")
@@ -637,6 +637,52 @@ describe("extend_video verb", () => {
     const result = await callTool(server, "extend_video", { prompt: "the car drives off", model: "kling-4-extend", video_url: EXTEND_SOURCE, duration: 8, resolution: "1080p" })
     expect(result.isError).toBeUndefined()
     expect(received.body).toMatchObject({ provider: "kling-4-extend", videoUrl: EXTEND_SOURCE, duration: 8, resolution: "1080p", prompt: "the car drives off" })
+  })
+
+  // Grok: a Grok Imagine video made here, by its task id (as VEO's), 6 or 10 s,
+  // at that video's resolution (no resolution lever), no sound switch, no references.
+  it("extend_video's levers name Grok where they apply, and only there", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "extend_video")!
+    const properties = (tool.inputSchema as { properties: Record<string, { description?: string }> }).properties
+    expect(tool.description).toContain("grok-extend")
+    expect(properties.task_id.description).toContain("grok-extend")
+    expect(properties.duration.description).toContain("grok-extend 6 or 10 seconds (default 6)")
+    expect(properties.video_url.description).not.toContain("grok-extend")
+    expect(properties.video_asset_id.description).not.toContain("grok-extend")
+    expect(properties.resolution.description).not.toContain("grok-extend")
+    expect(properties.generate_audio.description).not.toContain("grok-extend")
+    expect(properties.reference_image_urls.description).not.toContain("grok-extend")
+  })
+
+  it("extend_video runs Grok on the prior Grok task, with the seconds it adds and never a resolution", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/extend-video", { jobId: "j-ex" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "extend_video", { prompt: "the fox runs on", model: "grok-extend", task_id: "grok-task-1", duration: 10, resolution: "480p" })
+    expect(result.isError).toBeUndefined()
+    expect(received.body).toMatchObject({ provider: "grok-extend", taskId: "grok-task-1", duration: 10, prompt: "the fox runs on" })
+    expect(received.body).not.toHaveProperty("resolution")
+    expect(received.body).not.toHaveProperty("videoUrl")
+  })
+
+  it("a Grok extend with no task names the task_id it needs, and sends nothing", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/extend-video", { jobId: "j-ex" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "extend_video", { prompt: "more", model: "grok-extend", video_url: EXTEND_SOURCE })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toBe("grok-extend requires task_id from the prior video generation job (its output providerTaskId)")
+    expect(received.body).toBeUndefined()
+  })
+
+  it("VEO and Runway are sent no length (they add their own)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/extend-video", { jobId: "j-ex" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "extend_video", { prompt: "more", model: "veo-extend", task_id: "k-1", duration: 10 })
+    expect(received.body).not.toHaveProperty("duration")
   })
 
   it("a Seedance extend with no source names the video it needs, and sends nothing", async () => {

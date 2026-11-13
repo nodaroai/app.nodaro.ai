@@ -25,7 +25,7 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { MODEL_CATALOG, modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable, VIDEO_UPSCALE_RESOLUTIONS } from "@nodaro/shared/model-catalog"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, isGrokExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
@@ -114,6 +114,8 @@ const EXTEND_SOURCE_INPUT: Readonly<Record<ExtendVideoProvider, "task" | "url" |
   "seedance-2-0-extend": "url",
   "kling-4-extend": "url",
   "pixverse-v6-extend": "url",
+  // Grok continues only a Grok Imagine video made here, by its task (as VEO's).
+  "grok-extend": "task",
 }
 
 /** The models `extend_video` offers, in the provider list's order. */
@@ -121,7 +123,14 @@ const EXTEND_MODELS = EXTEND_VIDEO_PROVIDERS.filter((p) => EXTEND_SOURCE_INPUT[p
 /** The offered models that continue any video by URL, with their length and resolution levers. */
 const URL_EXTEND_MODELS = EXTEND_MODELS.filter((p) => EXTEND_SOURCE_INPUT[p] === "url")
 const URL_EXTEND_LABEL = URL_EXTEND_MODELS.join(" / ")
-const URL_EXTEND_SECONDS = URL_EXTEND_MODELS.flatMap((p) => EXTEND_DURATION_SECONDS[p])
+/** The offered models that continue a prior generation by its task id. */
+const TASK_EXTEND_LABEL = EXTEND_MODELS.filter((p) => EXTEND_SOURCE_INPUT[p] === "task").join(" / ")
+/**
+ * The offered models the `duration` lever sets: every URL model, and Grok
+ * (6 or 10 s). VEO and Runway add a length of their own and are sent none.
+ */
+const LENGTH_EXTEND_MODELS = EXTEND_MODELS.filter((p) => EXTEND_SOURCE_INPUT[p] === "url" || isGrokExtendProvider(p))
+const LENGTH_EXTEND_SECONDS = LENGTH_EXTEND_MODELS.flatMap((p) => EXTEND_DURATION_SECONDS[p])
 /** The resolutions the URL models render, as their catalog entries declare them, ascending ("360p" < "1080p"). */
 const URL_EXTEND_RESOLUTIONS = [...new Set(URL_EXTEND_MODELS.flatMap((p) => MODEL_CATALOG[p]?.resolutions ?? []))]
   .sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
@@ -146,8 +155,8 @@ const URL_EXTEND_RESOLUTIONS_BY_MODEL = [
 const REFERENCE_EXTEND_LABEL = URL_EXTEND_MODELS.filter((p) => (EXTEND_REFERENCE_IMAGE_PROVIDERS as readonly string[]).includes(p)).join(" / ")
 /** The offered models with a sound switch: Seedance's and PixVerse V6's (Kling 4's sound is always on). */
 const SOUND_EXTEND_LABEL = URL_EXTEND_MODELS.filter(extendHasSoundSwitch).join(" / ")
-/** "seedance-2-5-extend 4–30 seconds (default 8)", one per URL model. */
-const URL_EXTEND_WINDOWS = URL_EXTEND_MODELS.map((p) => {
+/** "seedance-2-5-extend 4–30 seconds (default 8)", one per model the `duration` lever sets. */
+const LENGTH_EXTEND_WINDOWS = LENGTH_EXTEND_MODELS.map((p) => {
   const defaultSec = MODEL_CATALOG[p]?.defaultDuration
   return `${p} ${describeSeconds(EXTEND_DURATION_SECONDS[p])}${defaultSec !== undefined ? ` (default ${defaultSec})` : ""}`
 }).join(", ")
@@ -813,11 +822,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       title: "Extend Video",
       description:
         "Extend a video. veo-extend / runway-extend continue a previously-generated VEO or Runway video and require the task_id from that job (NOT the URL). " +
+        "grok-extend continues a Grok Imagine video you made here (from text or an image) by its task_id the same way, adding 6 or 10 s at that video's own resolution; any other video is refused before anything is charged. " +
         `${URL_EXTEND_LABEL} extend ANY video by URL (or asset id) — they generate what happens next and join it to the source (2.5: from its last 10 s, billed per second sent + added); ` +
         "describe only the continuation content in `prompt` (plain action description — no 'reference video' phrasing needed).",
       inputSchema: {
         prompt: z.string().min(1).max(8000),
-        task_id: z.string().min(1).optional().describe("Task id of the prior generation, its output providerTaskId (veo-extend / runway-extend only)"),
+        task_id: z.string().min(1).optional().describe(`Task id of the prior generation, its output providerTaskId (${TASK_EXTEND_LABEL} only)`),
         kie_task_id: z.string().min(1).optional().describe("Use task_id."),
         video_url: z.string().url().optional().describe(`Source video URL (${URL_EXTEND_LABEL} only)`),
         video_asset_id: z.string().optional().describe(`Nodaro job/upload asset id whose output is a video (${URL_EXTEND_LABEL} only)`),
@@ -827,10 +837,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         duration: z
           .number()
           .int()
-          .min(Math.min(...URL_EXTEND_SECONDS))
-          .max(Math.max(...URL_EXTEND_SECONDS))
+          .min(Math.min(...LENGTH_EXTEND_SECONDS))
+          .max(Math.max(...LENGTH_EXTEND_SECONDS))
           .optional()
-          .describe(`Seconds to add: ${URL_EXTEND_WINDOWS}. Any other length is refused.`),
+          .describe(`Seconds to add: ${LENGTH_EXTEND_WINDOWS}. Any other length is refused.`),
         resolution: z.enum(URL_EXTEND_RESOLUTIONS).optional().describe(`Extension resolution (${URL_EXTEND_RESOLUTIONS_BY_MODEL}; default 720p — match the source for the cleanest seam). Any other is refused.`),
         generate_audio: z.boolean().optional().describe(`Continue the soundtrack into the extension (${SOUND_EXTEND_LABEL} only, default true)`),
         reference_image_urls: z
@@ -921,6 +931,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         model: args.veo_quality,
         seeds: args.seed,
         quality: args.runway_resolution,
+        // Grok's seconds (6 or 10); VEO and Runway add a length of their own.
+        ...(isGrokExtendProvider(args.model) && args.duration !== undefined ? { duration: args.duration } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

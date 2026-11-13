@@ -6705,7 +6705,8 @@ export async function videoDepthApi(opts: {
 // --- Extend Video ---
 
 export async function extendVideo(params: {
-  // KIE-based providers (veo-extend, runway-extend) require kieTaskId + prompt
+  // KIE-based providers (veo-extend, runway-extend) require kieTaskId + prompt; grok-extend
+  // takes the upstream Grok task too (the server refuses a run without one) and its duration
   kieTaskId?: string
   prompt?: string
   negativePrompt?: string

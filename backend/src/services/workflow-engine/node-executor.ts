@@ -126,6 +126,7 @@ import { maskCompositeBaseCredits, maskCompositeReserveUnits, stampMaskComposite
 import { stampVideoOverlayLength, videoOverlayBaseCredits, videoOverlayReserveId, videoOverlayReserveUnits } from "../../lib/video-overlay-length.js"
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { seedanceExtendStampedBaseCredits, stampSeedanceExtendSource } from "../../lib/seedance-extend-credits.js"
+import { grokExtendReserveId, stampGrokExtendSource } from "../../lib/grok-extend-stamp.js"
 import { lipSyncRateBaseCredits, stampLipSyncInputs, stampedLipSyncBilledSeconds } from "../../lib/lip-sync-inputs.js"
 import { stampTopazVideoUpscale, topazVideoStampedBaseCredits } from "../../lib/topaz-video-plan.js"
 import { isNodaroVideoUpscaleJob, nodaroVideoUpscaleReserveId, nodaroVideoUpscaleStampedBaseCredits, stampNodaroVideoUpscale } from "../../lib/nodaro-video-upscale-plan.js"
@@ -2523,6 +2524,20 @@ async function executeWorkerNode(
   // job keeps the very object the stamps around it write into.
   if (Object.keys(draftFinalizeStamp.patch).length > 0) payload = { ...payload, ...draftFinalizeStamp.patch }
 
+  // 2b'++. Grok Extend: check the source the upstream task names by the
+  // route's own fail-closed rule (the caller's completed Grok Imagine text- or
+  // image-to-video run, on this install's KIE lane) and stamp what the run
+  // sends and holds — the matched task, the source's length and resolution,
+  // and the source's row. Every edition; a refused source leaves no jobs row.
+  const grokExtendStamp = await stampGrokExtendSource(jobName, payload, ctx.userId)
+  if (!grokExtendStamp.ok) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(grokExtendStamp.refusal.message) as Error & { errorCode?: string }
+    err.errorCode = grokExtendStamp.refusal.code
+    throw err
+  }
+  if (Object.keys(grokExtendStamp.patch).length > 0) payload = { ...payload, ...grokExtendStamp.patch }
+
   // 2b'++. Topaz video upscale: measure the source by the route's own rule
   // (lib/topaz-video-plan.ts), stamp the resolved target and the units it
   // holds. An unreadable source leaves no jobs row and charges nothing.
@@ -2817,6 +2832,8 @@ async function executeWorkerNode(
         nemotronTranscribeReserveId(jobName, payload) ??
         addCaptionsNemotronReserveId(jobName, payload) ??
         seedanceDraftFinalizeReserveId(jobName, payload) ??
+        // Grok Extend: its source's row, as the stamp above answered it.
+        grokExtendReserveId(jobName, payload) ??
         videoMaskReserveId(jobName, payload) ??
         nodaroVideoUpscaleReserveId(jobName, payload) ??
         videoOverlayReserveId(jobName, payload) ??

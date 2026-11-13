@@ -1823,6 +1823,7 @@ export const ja: ChromeDict = {
   "vidcfg.descSeedanceExtend": "接続したどの動画でも延長できます。Seedance 2 が続きを生成し（サウンドを含む）、その結果を 1 本のシームレスなクリップにつなぎ合わせます。",
   "vidcfg.descKlingExtend": "接続したどの動画でも延長できます。Kling 4 が続きを生成し（サウンドを含む）、その結果を 1 本のシームレスなクリップにつなぎ合わせます。",
   "vidcfg.descPixverseExtend": "接続したどの動画でも延長できます。PixVerse V6 が続きを生成し（オフにしない限りサウンド付き）、新しい部分だけを元の動画につなぎ合わせて 1 本のシームレスなクリップにします。",
+  "vidcfg.descGrokExtend": "ここで作成した Grok Imagine の動画（テキストまたは画像から生成）を延長します。その動画を作成した Grok Imagine ノードを接続してください。Grok は動画と同じ解像度で 6 秒または 10 秒を追加し、新しい部分をつなげた動画全体を返します。アップロードした動画や他のモデルの動画は延長できません。",
   "vidcfg.descOtherExtend": "VEO、Runway、LTX の動画を新しいプロンプトで延長します。延長する動画を生成した上流の「画像から動画」または「テキストから動画」ノードを接続してください。",
   "vidcfg.advancedSettings": "詳細設定",
   "vidcfg.showAdvancedSettings": "詳細設定を表示",

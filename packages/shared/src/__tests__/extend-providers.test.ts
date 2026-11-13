@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest"
 import {
   EXTEND_VIDEO_PROVIDERS,
+  GROK_EXTEND_PROVIDER,
   PIXVERSE_V6_EXTEND_PROVIDER,
   extendHasSoundSwitch,
   getMaxVideoPromptChars,
   isCatalogExtendProvider,
+  isGrokExtendProvider,
   isPixverseExtendProvider,
   isSeedanceExtendProvider,
   isTailExtendProvider,
@@ -14,6 +16,9 @@ import {
   buildVideoCreditModelIdentifier,
   catalogExtendCreditId,
   catalogExtendResolution,
+  grokExtendCreditId,
+  grokExtendSeconds,
+  grokExtendWiredSourceResolution,
   pixverseExtendCreditId,
   pixverseExtendQuality,
   seedanceExtendCreditId,
@@ -331,5 +336,99 @@ describe("PixVerse V6 Extend Video provider", () => {
           .toBe(pixverseExtendCreditId(duration, res, false))
       }
     }
+  })
+})
+
+/**
+ * Grok extends only its own clips (a Grok Imagine text-to-video or
+ * image-to-video run), by the source's task. It adds 6 or 10 seconds, at the
+ * source's resolution — never a resolution the request names — so it is no
+ * catalog extend (whose resolution is a lever).
+ */
+describe("Grok Extend Video provider", () => {
+  const ROWS = ["grok-extend:6s:480p", "grok-extend:6s:720p", "grok-extend:10s:480p", "grok-extend:10s:720p"]
+
+  it("is listed last, and is neither a tail recipe nor a catalog extend", () => {
+    expect(EXTEND_VIDEO_PROVIDERS[EXTEND_VIDEO_PROVIDERS.length - 1]).toBe("grok-extend")
+    expect(EXTEND_VIDEO_PROVIDERS[EXTEND_VIDEO_PROVIDERS.length - 2]).toBe("pixverse-v6-extend")
+    expect(GROK_EXTEND_PROVIDER).toBe("grok-extend")
+    expect(isGrokExtendProvider("grok-extend")).toBe(true)
+    for (const p of ["grok", "grok-i2v", "grok-imagine-video-1.5", "pixverse-v6-extend", "veo-extend", undefined]) {
+      expect(isGrokExtendProvider(p), String(p)).toBe(false)
+    }
+    expect(isTailExtendProvider("grok-extend")).toBe(false)
+    expect(isCatalogExtendProvider("grok-extend")).toBe(false)
+    expect(extendHasSoundSwitch("grok-extend")).toBe(false)
+  })
+
+  it("offers 6 or 10 s in a catalog entry of its own, with no resolution lever, its unknown-source row first", () => {
+    const entry = MODEL_CATALOG["grok-extend"]!
+    expect(entry.modes).toEqual(["extend"])
+    expect(entry.maker).toBe("xai")
+    expect(entry.durations).toEqual([6, 10])
+    expect(entry.defaultDuration).toBe(6)
+    // The source decides the resolution: none is offered as a choice.
+    expect(entry.resolutions).toBeUndefined()
+    expect(entry.pricing.map((p) => p.identifier).sort()).toEqual([...ROWS].sort())
+    // Led by the row a run is quoted at before its source is known: 6 s, the dearer 720p.
+    expect(entry.pricing[0]!.identifier).toBe(grokExtendCreditId())
+    expect(entry.pricing[0]!.identifier).toBe("grok-extend:6s:720p")
+  })
+
+  it("prices the seconds added at the source's resolution; an unknown source at 720p, never below", () => {
+    expect(grokExtendCreditId(6, "480p")).toBe("grok-extend:6s:480p")
+    expect(grokExtendCreditId(10, "480p")).toBe("grok-extend:10s:480p")
+    expect(grokExtendCreditId(6, "720p")).toBe("grok-extend:6s:720p")
+    expect(grokExtendCreditId(10, "720p")).toBe("grok-extend:10s:720p")
+    expect(grokExtendCreditId("10", "480p")).toBe("grok-extend:10s:480p")
+    // No length: its default, 6 s. A length it does not add snaps into 6 / 10.
+    expect(grokExtendCreditId(undefined, "480p")).toBe("grok-extend:6s:480p")
+    expect(grokExtendCreditId(8, "480p")).toBe("grok-extend:6s:480p")
+    expect(grokExtendCreditId(15, "720p")).toBe("grok-extend:10s:720p")
+    // A source whose resolution is not known is priced at the dearer row.
+    for (const res of [undefined, "", "720P", "1080p", "540p", 480]) {
+      expect(grokExtendCreditId(6, res), String(res)).toBe("grok-extend:6s:720p")
+    }
+    expect(grokExtendSeconds(undefined)).toBe(6)
+    expect(grokExtendSeconds(10)).toBe(10)
+    expect(grokExtendSeconds("10")).toBe(10)
+    expect(grokExtendSeconds(7)).toBe(6)
+    // Every id it can name is one of its four rows.
+    for (const duration of [undefined, "7", ...range(-1, 20)]) {
+      for (const res of [undefined, "480p", "720p", "1080p", "4k"]) {
+        expect(ROWS, `${duration}s ${res}`).toContain(grokExtendCreditId(duration, res))
+      }
+    }
+  })
+
+  it("the generic video builder never prices a Grok extend at a resolution it is handed", () => {
+    for (const res of [undefined, "480p", "720p"]) {
+      expect(buildVideoCreditModelIdentifier("grok-extend", 10, undefined, undefined, undefined, res), String(res)).toBe("grok-extend:10s:720p")
+    }
+  })
+
+  it("quotes 480p only for a wired Grok Imagine video node set to 480p; anything else at 720p", () => {
+    const video = (provider: unknown, resolution?: unknown, type = "generate-video") => ({ id: "src", type, data: { provider, ...(resolution !== undefined ? { resolution } : {}) } })
+    const ext = { id: "ext", type: "extend-video", data: { provider: "grok-extend" } }
+    const wire = (targetHandle: string | null = "video") => [{ source: "src", target: "ext", targetHandle }]
+    for (const type of ["generate-video", "text-to-video", "image-to-video"]) {
+      for (const provider of ["grok", "grok-i2v"]) {
+        expect(grokExtendWiredSourceResolution("ext", [ext, video(provider, "480p", type)], wire()), `${type} ${provider}`).toBe("480p")
+        expect(grokExtendWiredSourceResolution("ext", [ext, video(provider, " 480P ", type)], wire())).toBe("480p")
+        // Unset: Grok may render it at either, so the dearer.
+        for (const res of [undefined, "720p", "1080p", ""]) {
+          expect(grokExtendWiredSourceResolution("ext", [ext, video(provider, res, type)], wire()), `${type} ${provider} ${res}`).toBe("720p")
+        }
+      }
+    }
+    // A legacy wire with no handle reads the same.
+    expect(grokExtendWiredSourceResolution("ext", [ext, video("grok-i2v", "480p")], wire(null))).toBe("480p")
+    // Not a Grok Imagine video node: another model, Grok 1.5, an upload, a Grok image.
+    for (const src of [video("seedance-2-5", "480p"), video("grok-imagine-video-1.5", "480p"), video(undefined, "480p", "upload-video"), video("grok", "480p", "generate-image")]) {
+      expect(grokExtendWiredSourceResolution("ext", [ext, src], wire())).toBe("720p")
+    }
+    // Nothing wired, or a wire on another input.
+    expect(grokExtendWiredSourceResolution("ext", [ext], [])).toBe("720p")
+    expect(grokExtendWiredSourceResolution("ext", [ext, video("grok-i2v", "480p")], wire("prompt"))).toBe("720p")
   })
 })

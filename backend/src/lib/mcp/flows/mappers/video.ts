@@ -1,4 +1,4 @@
-import { canonicalVideoProvider, isCatalogExtendProvider, isSeedanceVideoEditProvider, SEEDANCE_REFERENCE_TASK_TYPES, type DeclaredSeedanceTaskType } from "@nodaro/shared/models"
+import { canonicalVideoProvider, isCatalogExtendProvider, isGrokExtendProvider, isSeedanceVideoEditProvider, SEEDANCE_REFERENCE_TASK_TYPES, type DeclaredSeedanceTaskType } from "@nodaro/shared/models"
 import { bool, defined, inputsOf, num, str, urls, type Body, type FlowNodeSpec, type RouteMapper, type RouteMappers } from "./kit.js"
 
 /** `loopTrim`: the route takes a Loop trim (the text-to-video route drops one, so its node must not keep it). */
@@ -87,8 +87,9 @@ function videoNode(type: string, handle: string, videoUrl: string, data: Record<
 
 /**
  * Extend Video. Seedance 2.5, Seedance 2.0, Kling 4 and PixVerse V6 extend the
- * video by URL (wired on `video`); VEO and Runway continue their own task, which the node holds as
- * `kieTaskId`. A retired provider id (the earlier `seedance-2-extend`) makes a
+ * video by URL (wired on `video`); VEO, Runway and Grok continue their own task, which the node holds as
+ * `kieTaskId` (Grok with the seconds it adds; its resolution is its source's,
+ * never the call's). A retired provider id (the earlier `seedance-2-extend`) makes a
  * node on the model it runs as. The verb's reference images have no place on
  * the node: such a call is no node.
  */
@@ -112,7 +113,7 @@ const extendVideo: RouteMapper = {
       }, prompt)
     }
     const taskId = str(body.taskId)
-    if ((provider !== "veo-extend" && provider !== "runway-extend") || !taskId || body.videoUrl !== undefined) return null
+    if ((provider !== "veo-extend" && provider !== "runway-extend" && !isGrokExtendProvider(provider)) || !taskId || body.videoUrl !== undefined) return null
     return {
       type: "extend-video",
       outputKey: "generatedVideoUrl",
@@ -121,6 +122,7 @@ const extendVideo: RouteMapper = {
       data: defined({
         ...base,
         kieTaskId: taskId,
+        duration: isGrokExtendProvider(provider) ? num(body.duration) : undefined,
         model: str(body.model),
         seeds: num(body.seeds),
         quality: str(body.quality),

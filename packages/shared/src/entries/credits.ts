@@ -32,6 +32,9 @@ export {
   pixverseExtendQuality,
   catalogExtendCreditId,
   catalogExtendResolution,
+  grokExtendCreditId,
+  grokExtendSeconds,
+  grokExtendWiredSourceResolution,
   seedanceExtendCreditId,
   seedanceExtendResolution,
   videoGenerationCreditId,
@@ -51,7 +54,7 @@ export {
   SUNO_VERSION_PRICED_OPERATIONS,
   SUNO_SELECT_OPERATIONS,
 } from "../credit-identifiers.js"
-export type { NormalizedImageGen, PricedVideoSelection } from "../credit-identifiers.js"
+export type { NormalizedImageGen, PricedVideoSelection, GrokExtendSourceResolution } from "../credit-identifiers.js"
 export {
   SEEDANCE_EXTEND_SENT_PRICED_PROVIDER,
   SEEDANCE_EXTEND_CONTEXT_MAX_SEC,

@@ -70,8 +70,8 @@ import { nodeStartFrameOnlyProblem, startFrameOnlyText } from "@/lib/video-start
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { gvpAnchorChoicesFor } from "@nodaro/render-rules"
-import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec, extendHasSoundSwitch, isCatalogExtendProvider, isPixverseExtendProvider, pricedOutputDurationSec, snapToNearestDuration, type CatalogExtendProvider } from "@nodaro/shared/models"
-import { VIDEO_AUDIT_BUCKET_CREDITS, catalogExtendCreditId, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
+import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec, extendHasSoundSwitch, isCatalogExtendProvider, isGrokExtendProvider, isPixverseExtendProvider, pricedOutputDurationSec, snapToNearestDuration, GROK_EXTEND_PROVIDER, type CatalogExtendProvider } from "@nodaro/shared/models"
+import { VIDEO_AUDIT_BUCKET_CREDITS, catalogExtendCreditId, grokExtendCreditId, grokExtendSeconds, grokExtendWiredSourceResolution, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, entityImageUrl, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { sourceCharacterNames, sourceOriginId } from "./source-character-names"
 import { DEFAULT_LABEL_BY_SOURCE, type ReferenceSource, type ConnectedReference } from "@nodaro/shared/types"
@@ -5270,6 +5270,20 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
     return { rateId: catalogProvider ? catalogExtendCreditId(catalogProvider, catalogDuration, r, catalogSound) : "", quoteId: undefined }
   }
 
+  // Grok extends only its own clips, by the upstream task: its one lever is
+  // the seconds it adds (6 or 10); the resolution is its SOURCE's, never a
+  // choice. Each length is labelled with its price at the wired source's
+  // resolution when the wiring says for sure (a Grok Imagine node set to
+  // 480p), else at the dearer 720p row — the rule every estimate reads.
+  const isGrok = isGrokExtendProvider(data.provider)
+  const grokDurations = isGrok ? MODEL_CATALOG[GROK_EXTEND_PROVIDER]?.durations ?? [] : []
+  const grokDuration = isGrok ? grokExtendSeconds(data.duration) : 0
+  const grokSourceResolution = grokExtendWiredSourceResolution(nodeId, nodes ?? [], edges)
+  useEffect(() => {
+    if (!isGrok) return
+    prefetchModelCredits(grokDurations.map((s) => grokExtendCreditId(s, grokSourceResolution)))
+  }, [isGrok, grokSourceResolution]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Credit labels name each resolution's price for the run chosen — re-prefetch when any of it changes.
   useEffect(() => {
     if (!catalogProvider) return
@@ -5301,6 +5315,17 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         patch.resolution = isPixverseExtendProvider(catalogProvider) ? pixverseExtendQuality(data.resolution) : undefined
       }
       if (!hasSoundSwitch && data.generateAudio !== undefined) patch.generateAudio = undefined
+    } else if (isGrokExtendProvider(data.provider)) {
+      // Grok: a stale length snaps to the nearer of 6 and 10 (the one its run
+      // adds and is priced at); it has no resolution or sound lever.
+      if (data.duration !== undefined) {
+        const snapped = grokExtendSeconds(data.duration)
+        if (snapped !== data.duration) patch.duration = snapped
+      }
+      if (data.resolution !== undefined || data.generateAudio !== undefined) {
+        patch.resolution = undefined
+        patch.generateAudio = undefined
+      }
     } else {
       if (data.resolution !== undefined || data.generateAudio !== undefined) {
         patch.resolution = undefined
@@ -5330,7 +5355,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </Select>
       </MappableField>
 
-      <MappableField field="prompt" label={isCatalogExtend ? t("vidcfg.whatHappensNext") : t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={isCatalogExtend || isGrok ? t("vidcfg.whatHappensNext") : t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
         <PromptHelperButton nodeType="extend-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
@@ -5347,7 +5372,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             <TagTextarea
               value={data.prompt || ""}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder={isCatalogExtend ? t("vidcfg.phWhatHappensNext") : t("vidcfg.phDescribeContinue")}
+              placeholder={isCatalogExtend || isGrok ? t("vidcfg.phWhatHappensNext") : t("vidcfg.phDescribeContinue")}
               rows={3}
               nodeRefs={nodeRefs}
               displayMode={variableDisplayMode}
@@ -5494,8 +5519,28 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </>
       )}
 
+      {isGrok && (
+        <MappableField field="duration" label={t("vidcfg.secondsToAdd")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Select
+            value={String(grokDuration)}
+            onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
+          >
+            <SelectTrigger aria-label={t("vidcfg.secondsToAdd")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {grokDurations.map((s) => {
+                const credits = unitQuoteCredits(grokExtendCreditId(s, grokSourceResolution), 1, getCachedCredits)
+                const label = t("vidcfg.nSeconds", { n: s })
+                return (
+                  <SelectItem key={s} value={String(s)}>{credits != null ? t("vidcfg.resWithCredits", { res: label, credits: creditUnits(credits) }) : label}</SelectItem>
+                )
+              })}
+            </SelectContent>
+          </Select>
+        </MappableField>
+      )}
+
       <p className="text-xs text-muted-foreground px-1">
-        {t(catalogProvider ? CATALOG_EXTEND_DESCRIPTION[catalogProvider] : "vidcfg.descOtherExtend")}
+        {t(catalogProvider ? CATALOG_EXTEND_DESCRIPTION[catalogProvider] : isGrok ? "vidcfg.descGrokExtend" : "vidcfg.descOtherExtend")}
       </p>
 
       <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
