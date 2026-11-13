@@ -295,13 +295,27 @@ test('nightly coverage can never mark main red (its checks land on main HEAD, wh
   assert.equal(nightly.match(/outcome === "skipped" \|\| !outcome \? "⚠️ no tests ran/g)?.length, 2)
 })
 
-test('Type Check runs its four checks concurrently, type checking on TypeScript 7', () => {
+// The type check runs alone first (decided 2026-11-13: beside the other
+// checks, its backend project was SIGKILLed on the 8 GB runner), then the
+// other four concurrently.
+test('Type Check runs the type check alone first, then its other four checks concurrently, type checking on TypeScript 7', () => {
   const job = jobs.typecheck
   assert.match(job, /^    name: Type Check$/m, 'the required check keeps its name')
-  for (const check of ['typecheck nice -n 19 env GOMEMLIMIT=4GiB npm run typecheck -- --serial', 'gen-skills nice -n 10 npm -w backend run gen:skills:check',
-    'parity cross_tree_parity', 'surfaces nice -n 10 timeout 300 npm -w backend run check:surfaces -- --all']) {
-    assert.match(job, new RegExp(`^          start ${check.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}`, 'm'), check)
+  const startOf = (check) => {
+    const at = job.search(new RegExp(`^          start ${check.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}$`, 'm'))
+    assert.ok(at > 0, check)
+    return at
   }
+  const typecheck = startOf('typecheck nice -n 19 env GOMEMLIMIT=4GiB npm run typecheck -- --serial')
+  const typecheckDone = job.search(/^          finish typecheck$/m)
+  assert.ok(typecheckDone > typecheck, 'the type check is waited on right after it starts')
+  for (const check of ['gen-skills nice -n 10 npm -w backend run gen:skills:check', 'parity cross_tree_parity',
+    'surfaces nice -n 10 timeout 300 npm -w backend run check:surfaces -- --all', 'gen-units nice -n 10 npm run gen:units -- --check']) {
+    assert.ok(startOf(check) > typecheckDone, `${check} starts only once the type check has finished`)
+  }
+  assert.match(job, /^          for name in gen-skills parity surfaces gen-units; do\n            finish "\$name"\n          done$/m,
+    'the other four are each waited on once, after all of them started')
+  assert.equal(job.match(/^ +finish /gm)?.length, 2, 'no check is waited on twice')
   assert.match(job, /npx vitest run --testTimeout=30000 "\$\{files\[@\]\}"/, 'parity tests get room next to the checker')
   assert.match(job, /wait "\$\{pid\[\$name\]\}"/, 'each check is waited on by PID for its own exit status')
   assert.match(job, /if \[ "\$name" = surfaces \]; then\n\s+echo "::warning::/, 'the surface report never fails the job')
