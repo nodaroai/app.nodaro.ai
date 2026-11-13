@@ -32,6 +32,8 @@ import {
   nemotronTranscribeQuoteCreditId,
   addCaptionsNemotronQuoteCreditId,
   videoGenerationCreditId,
+  buildLipSyncCreditId,
+  isPerSecondLipSyncProvider,
   lipSyncAudioRateOf,
   videoOverlayCreditId,
 } from "@nodaro/shared/credits"
@@ -49,7 +51,7 @@ import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, transcribeNodeReturnsWords, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsReferenceVideo } from "@/lib/audio-reference-handles"
 import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
@@ -59,7 +61,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { addCaptionsQuotedSec, isTopazVideoUpscaleProvider, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { addCaptionsQuotedSec, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
@@ -855,8 +857,10 @@ export function getModelIdentifier(
   // (`EXTEND_VIDEO_DEFAULT_PROVIDER`) and is quoted as that run, never the
   // node-type row (mirror of the backend estimator).
   const nodeDefault = data.provider ? undefined : defaultImageModelForNode(nodeType, data.aspectRatio as string | undefined)
+  // A Lip Sync naming no model runs the default one (`LIP_SYNC_DEFAULT_PROVIDER`), as the server estimate quotes it.
   const provider = (data.provider as string | undefined)
     ?? (nodeType === "extend-video" ? EXTEND_VIDEO_DEFAULT_PROVIDER : undefined)
+    ?? (nodeType === "lip-sync" ? LIP_SYNC_DEFAULT_PROVIDER : undefined)
     ?? (nodeDefault && isPricedPerInputImage(nodeDefault) ? nodeDefault : undefined)
   if (!provider) return nodeType
 
@@ -912,9 +916,18 @@ export function getModelIdentifier(
   // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): its
   // one-second row, which every estimate multiplies by the billed seconds
   // (PRICING_UNIT_ESTIMATORS → lipSyncPricingUnits). It has no bare row.
+  // A model priced by a length bucket (Kling AI Avatar, OmniHuman 1.5, the
+  // dubbing models; decided 2026-11-13): the bucket of the audio's length when
+  // the editor knows it (`lipSyncQuotedAudioSec`: the audio the editor's Run
+  // plays, as the measured walk reads it — never the node's own reading), else the model's largest
+  // bucket — the most a run can hold, so the estimate never quotes below the
+  // run (the server estimate's rule). The run measures the audio itself.
   if (nodeType === "lip-sync") {
     const rate = lipSyncAudioRateOf(provider)
     if (rate) return rate.rateId
+    if (isPerSecondLipSyncProvider(provider)) {
+      return buildLipSyncCreditId(provider, lipSyncQuotedAudioSec(node, nodes ?? [], edges ?? [], reruns))
+    }
   }
 
   // Motion transfer: duration-tiered pricing

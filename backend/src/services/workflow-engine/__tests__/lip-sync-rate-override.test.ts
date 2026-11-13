@@ -97,13 +97,13 @@ describe("the workflow payload for OmniHuman 2.0", () => {
     expect(built.payload.audioDurationSec).toBeUndefined()
   })
 
-  it("leaves 1.5 exactly as it was (its bucket id, its levers)", () => {
+  it("leaves 1.5's levers as they were; its build prices no length (the run measures its bucket, decided 2026-11-13)", () => {
     const built = buildPayload(
       { id: "n1", type: "lip-sync", data: { provider: "omnihuman-1-5", resolution: "1080p", seed: 42, audioDurationSec: 25 } },
       "job-1",
       { imageUrl: "https://cdn.example.com/i.png", audioUrl: "https://cdn.example.com/a.mp3" },
     )
-    expect(built.modelIdentifier).toBe("omnihuman-1-5:30s")
-    expect(built.payload).toMatchObject({ resolution: "1080p", seed: 42, audioDurationSec: 25 })
+    expect(built.modelIdentifier).toBe("omnihuman-1-5")
+    expect(built.payload).toMatchObject({ resolution: "1080p", seed: 42 })
   })
 })

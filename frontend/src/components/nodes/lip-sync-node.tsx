@@ -31,7 +31,7 @@ import { VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, reti
 import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { buildLipSyncCreditId, isPerSecondLipSyncProvider, lipSyncAudioRateOf } from "@nodaro/shared/credits"
 import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
-import { useLipSyncQuoteIsEstimate, useLipSyncQuotedSeconds } from "@/hooks/use-lip-sync-quote"
+import { useLipSyncQuoteIsEstimate, useLipSyncQuotedAudioSec, useLipSyncQuotedSeconds } from "@/hooks/use-lip-sync-quote"
 import { probeAudioDuration } from "@/lib/audio-duration"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 
@@ -149,22 +149,21 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   }, [id, updateNodeData])
 
   const lipSyncProvider = nodeData.provider ?? "kling-avatar"
+  const quotedAudioSec = useLipSyncQuotedAudioSec(id)
   const creditModelId = useMemo(() => {
     // A per-second-rate model has no row of its own id: its one-second row (priced below as the whole run).
     const rate = lipSyncAudioRateOf(lipSyncProvider)
     if (rate) return rate.rateId
     if (lipSyncProvider === "infinitalk") return `infinitalk:${nodeData.resolution ?? "720p"}`
     if (isPerSecondLipSyncProvider(lipSyncProvider)) {
-      // With a probed duration, show the accurate bucket. BEFORE audio is wired
-      // (duration unknown), show the 15s floor — NOT buildLipSyncCreditId's 5-min
-      // ceiling, which reads as an alarming run-button price. Display only; the
-      // real reservation is computed server-side from the actual audio length.
-      return nodeData.audioDurationSec
-        ? buildLipSyncCreditId(lipSyncProvider, nodeData.audioDurationSec)
-        : `${lipSyncProvider}:15s`
+      // The bucket of the audio's length once the editor knows it, else the
+      // model's largest bucket (decided 2026-11-13): never below what the run
+      // can hold — the Run button's rule (`getModelIdentifier`). The run
+      // itself measures the audio and holds its bucket.
+      return buildLipSyncCreditId(lipSyncProvider, quotedAudioSec)
     }
     return lipSyncProvider
-  }, [lipSyncProvider, nodeData.resolution, nodeData.audioDurationSec])
+  }, [lipSyncProvider, nodeData.resolution, quotedAudioSec])
   const bucketCredits = useModelCredits(creditModelId, lipSyncProvider === "kling-avatar" ? 28 : 42)
   // A model charged per second of its audio (OmniHuman 2.0): the whole run's
   // price for the billed seconds (`<rate>:<N>u`, marked up once, as the run is

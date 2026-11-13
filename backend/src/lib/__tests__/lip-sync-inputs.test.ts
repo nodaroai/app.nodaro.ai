@@ -55,9 +55,18 @@ vi.mock("../../providers/video/decoded-audio-length.js", async (importOriginal) 
   },
 }))
 
-import { LIP_SYNC_AUDIO_DOWNLOAD_LIMITS, audioReadStoppedMessage, checkLipSyncInputs, stampLipSyncInputs } from "../lip-sync-inputs.js"
+import {
+  LIP_SYNC_AUDIO_DOWNLOAD_LIMITS,
+  audioReadStoppedMessage,
+  checkLipSyncInputs,
+  lipSyncAudioPricingOf,
+  lipSyncBucketReserveId,
+  stampLipSyncInputs,
+} from "../lip-sync-inputs.js"
+import { getLipSyncMaxAudioSeconds, isPerSecondLipSyncProvider, pickLipSyncBucket } from "@nodaro/shared/credits"
+import { LIP_SYNC_PROVIDERS } from "@nodaro/shared/models"
 import { AudioReadStoppedError } from "../../providers/video/decoded-audio-length.js"
-import { LIP_SYNC_MEASURE_SLOT_WAIT_MS, lipSyncMeasureSlots } from "../lip-sync-download-slots.js"
+import { LIP_SYNC_MEASURE_SLOT_WAIT_MS, LIP_SYNC_RUN_MEASURE_SLOT_WAIT_MS, lipSyncMeasureSlots } from "../lip-sync-download-slots.js"
 
 const OK_IMAGE = { size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 }
 const AUDIO = "https://cdn.test/a.mp3"
@@ -175,6 +184,33 @@ describe("checkLipSyncInputs — OmniHuman 2.0", () => {
     }
   })
 
+  it("a workflow or app run waits up to two minutes for a slot, past a request's 30 s (decided 2026-11-13)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    try {
+      state.decoded = 12
+      let open!: () => void
+      state.gate = new Promise<void>((resolve) => { open = resolve })
+      const first = check({ provider: "kling-avatar", userId: "u1" })
+      const second = check({ provider: "kling-avatar", userId: "u1" })
+      await vi.advanceTimersByTimeAsync(0)
+      const payload: Record<string, unknown> = { provider: "kling-avatar", audioUrl: AUDIO }
+      const run = stampLipSyncInputs("lip-sync", payload, "u1")
+      const request = check({ provider: "kling-avatar", userId: "u1" })
+      await vi.advanceTimersByTimeAsync(LIP_SYNC_MEASURE_SLOT_WAIT_MS)
+      // The request gave up at 30 s; the run still waits.
+      expect(await request).toMatchObject({ ok: false, code: "lip_sync_audio_busy" })
+      await vi.advanceTimersByTimeAsync(LIP_SYNC_RUN_MEASURE_SLOT_WAIT_MS - LIP_SYNC_MEASURE_SLOT_WAIT_MS - 1_000)
+      open()
+      await Promise.all([first, second])
+      expect(await run).toBeUndefined()
+      expect(payload).toMatchObject({ audioDurationSec: 12, lipSyncBilledSeconds: 15 })
+      expect(LIP_SYNC_RUN_MEASURE_SLOT_WAIT_MS).toBe(120_000)
+      expect(lipSyncMeasureSlots.held()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("a waiting download takes the slot a finished one frees", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
     try {
@@ -237,11 +273,88 @@ describe("checkLipSyncInputs — OmniHuman 2.0", () => {
     expect(await check({ imageUrl: undefined, videoUrl: "https://cdn.test/v.mp4" })).toMatchObject({ ok: false, code: "lip_sync_image_required" })
   })
 
-  it("every other lip-sync model is never probed", async () => {
-    for (const provider of ["omnihuman-1-5", "kling-avatar", "infinitalk", "volcengine-lipsync", undefined]) {
+  it("a model whose price reads no length is never probed", async () => {
+    for (const provider of ["infinitalk", "seedance-2", "seedance-2-5", "minimax-h3", "latentsync", undefined]) {
       expect(await check({ provider }), String(provider)).toBeUndefined()
     }
     expect(state.imageCalls + state.downloads.length).toBe(0)
+  })
+})
+
+/**
+ * The models priced by a length BUCKET (decided 2026-11-13): the same
+ * measure, its audio only, the bucket of the measured length — never a length
+ * the request or the node carried.
+ */
+describe("checkLipSyncInputs — the bucketed models", () => {
+  const BUCKETED = ["kling-avatar", "kling-avatar-pro", "omnihuman-1-5", "heygen-lipsync-precision", "lipsync-2-pro", "sync-lipsync-v3", "volcengine-lipsync"]
+
+  it("is every model priced by a length bucket, and no other", () => {
+    expect(LIP_SYNC_PROVIDERS.filter((p) => lipSyncAudioPricingOf(p)?.kind === "bucket")).toEqual(BUCKETED)
+    expect(LIP_SYNC_PROVIDERS.filter((p) => lipSyncAudioPricingOf(p)?.kind === "rate")).toEqual(["omnihuman-2-0"])
+    for (const p of LIP_SYNC_PROVIDERS) expect(lipSyncAudioPricingOf(p)?.kind === "bucket", p).toBe(isPerSecondLipSyncProvider(p))
+  })
+
+  it.each(BUCKETED)("%s: the measured length's bucket, decoded under the model's maximum — the face input never probed", async (provider) => {
+    const max = getLipSyncMaxAudioSeconds(provider)
+    for (const [sec, bucket] of [[3.2, 15], [15, 15], [15.06, 30], [42, 60]] as const) {
+      if (sec > max) continue
+      state.decoded = sec
+      expect(await check({ provider, imageUrl: undefined }), `${provider} @ ${sec}`).toEqual({ ok: true, audioSec: sec, billedSeconds: bucket })
+    }
+    expect(state.measureCaps.every((c) => c === max)).toBe(true)
+    expect(state.imageCalls).toBe(0)
+  })
+
+  it.each(BUCKETED)("%s: audio past its maximum is priced at the maximum's bucket, not refused (it is trimmed to it, as before)", async (provider) => {
+    const max = getLipSyncMaxAudioSeconds(provider)
+    state.decoded = "over"
+    expect(await check({ provider })).toEqual({ ok: true, audioSec: max, billedSeconds: pickLipSyncBucket(max) })
+    state.decoded = max + 0.5
+    expect(await check({ provider })).toEqual({ ok: true, audioSec: max, billedSeconds: pickLipSyncBucket(max) })
+  })
+
+  it.each([
+    ["damaged or cut short", () => { state.decoded = new AudioReadStoppedError("decoded 4.000 s of the 12.000 s the flac file states") }, "audio_unreadable"],
+    ["not audio", () => { state.decoded = new Error("Invalid data found when processing input") }, "audio_unreadable"],
+    ["nothing decodes", () => { state.decoded = undefined }, "audio_unreadable"],
+    ["unreachable", () => { state.downloaded = undefined }, "audio_unreadable"],
+    ["100 MB or more", () => { state.downloaded = "over-cap" }, "audio_too_large"],
+  ] as const)("Kling AI Avatar audio that is %s is refused with the rate model's own words", async (_label, arrange, code) => {
+    arrange()
+    const kling = await check({ provider: "kling-avatar" })
+    expect(kling).toMatchObject({ ok: false, code })
+    // The same refusal OmniHuman 2.0 gives the same file, but for the model's name.
+    const omni = await check()
+    expect((kling as { message: string }).message.replace("Kling Avatar Standard", "X")).toBe((omni as { message: string }).message.replace("OmniHuman 2.0", "X"))
+  })
+
+  it.each(["kling-avatar", "omnihuman-2-0"])("%s: a decode stopped by its own time limit is OUR failure — a retryable refusal, never \"could not decode\"", async (provider) => {
+    state.decoded = Object.assign(new Error("Command failed: ffmpeg"), { killed: true, signal: "SIGKILL" })
+    const checked = await check({ provider })
+    expect(checked).toMatchObject({ ok: false, code: "lip_sync_audio_measure_stopped" })
+    expect((checked as { message: string }).message).toMatch(/try again/)
+    expect((checked as { message: string }).message).not.toMatch(/decode|re-export/i)
+  })
+
+  it("audio at most 50 ms past a bucket's length is held in that bucket (decoders disagree at a file's end); past that, the next", async () => {
+    for (const [sec, bucket] of [
+      [15.0187, 15], [15.05, 15], [15.051, 30], [30.04, 30], [60.03, 60], [120.049, 120], [120.06, 300], [300.03, 300],
+    ] as const) {
+      state.decoded = sec
+      expect(await check({ provider: "kling-avatar" }), String(sec)).toMatchObject({ ok: true, billedSeconds: bucket })
+    }
+    state.decoded = 30.03
+    expect(await check({ provider: "omnihuman-1-5" })).toMatchObject({ ok: true, billedSeconds: 30 })
+    // OmniHuman 2.0 keeps its whole-second rounding, without this edge.
+    state.decoded = 10.04
+    expect(await check()).toMatchObject({ ok: true, billedSeconds: 11 })
+  })
+
+  it("a link to a private host is refused before anything is fetched", async () => {
+    expect(await check({ provider: "kling-avatar", audioUrl: "http://127.0.0.1/a.mp3" })).toMatchObject({ ok: false, code: "validation_error" })
+    expect(await check({ provider: "kling-avatar", audioUrl: undefined })).toMatchObject({ ok: false, code: "audio_unreadable" })
+    expect(state.downloads).toEqual([])
   })
 })
 
@@ -261,12 +374,33 @@ describe("stampLipSyncInputs — the workflow run's twin", () => {
   })
 
   it("leaves every other job and model unprobed — and drops held seconds a lip-sync payload of any model carried", async () => {
-    const kling = { provider: "kling-avatar", audioUrl: AUDIO, imageUrl: IMAGE, audioDurationSec: 4, lipSyncBilledSeconds: 1 }
-    expect(await stampLipSyncInputs("lip-sync", kling)).toBeUndefined()
-    expect(kling).toEqual({ provider: "kling-avatar", audioUrl: AUDIO, imageUrl: IMAGE, audioDurationSec: 4 })
+    const infinitalk = { provider: "infinitalk", audioUrl: AUDIO, imageUrl: IMAGE, audioDurationSec: 4, lipSyncBilledSeconds: 1 }
+    expect(await stampLipSyncInputs("lip-sync", infinitalk)).toBeUndefined()
+    expect(infinitalk).toEqual({ provider: "infinitalk", audioUrl: AUDIO, imageUrl: IMAGE, audioDurationSec: 4 })
     const other = { provider: "omnihuman-2-0", lipSyncBilledSeconds: 1 }
     expect(await stampLipSyncInputs("image-to-video", other)).toBeUndefined()
     expect(other).toEqual({ provider: "omnihuman-2-0", lipSyncBilledSeconds: 1 })
     expect(state.imageCalls + state.downloads.length).toBe(0)
+  })
+
+  it("a bucketed model: stamps the length it measured over the node's (a shorter one is ignored) and the bucket it holds, which is the row it reserves", async () => {
+    state.decoded = 42
+    const kling: Record<string, unknown> = { provider: "kling-avatar", audioUrl: AUDIO, imageUrl: IMAGE, audioDurationSec: 4, lipSyncBilledSeconds: 15 }
+    expect(await stampLipSyncInputs("lip-sync", kling)).toBeUndefined()
+    expect(kling).toMatchObject({ audioDurationSec: 42, lipSyncBilledSeconds: 60 })
+    expect(lipSyncBucketReserveId("lip-sync", kling)).toBe("kling-avatar:60s")
+    expect(state.imageCalls).toBe(0)
+  })
+
+  it("a bucketed model's refusal leaves no held seconds, and an unstamped bucketed run is never reserved on a guess", async () => {
+    state.decoded = new AudioReadStoppedError("the file reports damage")
+    const kling: Record<string, unknown> = { provider: "kling-avatar", audioUrl: AUDIO, lipSyncBilledSeconds: 15 }
+    expect(await stampLipSyncInputs("lip-sync", kling)).toMatchObject({ code: "audio_unreadable", message: audioReadStoppedMessage("Kling Avatar Standard") })
+    expect(kling).not.toHaveProperty("lipSyncBilledSeconds")
+    expect(() => lipSyncBucketReserveId("lip-sync", kling)).toThrow(/without its measured audio/)
+    // Every other job and model: no row of its own here.
+    expect(lipSyncBucketReserveId("lip-sync", { provider: "omnihuman-2-0", lipSyncBilledSeconds: 11 })).toBeUndefined()
+    expect(lipSyncBucketReserveId("lip-sync", { provider: "infinitalk" })).toBeUndefined()
+    expect(lipSyncBucketReserveId("video-sfx", { provider: "kling-avatar" })).toBeUndefined()
   })
 })

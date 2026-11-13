@@ -15,7 +15,6 @@ import {
 import {
   VIDEO_ANALYSIS_DURATION_BUCKETS,
   buildVideoAnalysisCreditId,
-  buildLipSyncCreditId,
 } from "@nodaro/shared/credits"
 import { newSession } from "../../session.js"
 import { statedPrices } from "../../../../ee/billing/stated-prices.js"
@@ -27,16 +26,8 @@ import { editPlanModeRefusalMessage } from "../../../private-plugins/edit-plan-m
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../../../../providers/elevenlabs/neighbour-text.js"
 import { EXTEND_REFERENCE_IMAGE_PROVIDERS } from "../../../extend-recipe.js"
 
-const audio = vi.hoisted(() => ({ measured: vi.fn() }))
-vi.mock("../_audio-length.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../_audio-length.js")>()),
-  measuredAudioSeconds: audio.measured,
-}))
-
 beforeEach(() => {
   _resetRegistry()
-  // No test reaches the network: an unmeasured file reads as "could not be measured".
-  audio.measured.mockReset().mockResolvedValue(undefined)
 })
 
 /**
@@ -906,41 +897,20 @@ describe("lip_sync verb", () => {
     expect(received.body?.provider).toBe("kling-avatar")
   })
 
-  it("forwards audio_duration_sec as audioDurationSec and measures nothing", async () => {
+  // The route measures the audio of every model priced by its length (decided
+  // 2026-11-13): the tool never sends a length, even one it was given.
+  it.each([
+    ["heygen-lipsync-precision", { video_url: "https://a/clip.mp4" }],
+    ["kling-avatar", { image_url: "https://a/face.jpg" }],
+    ["omnihuman-2-0", { image_url: "https://a/face.jpg" }],
+    ["infinitalk", { image_url: "https://a/face.jpg" }],
+  ] as const)("%s: audio_duration_sec is accepted and never sent on", async (model, face) => {
     const { fastify, received } = stubRoute("POST", "/v1/lip-sync", { jobId: "j" })
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify })
-    await callTool(server, "lip_sync", { video_url: "https://a/clip.mp4", audio_url: "https://a/v.mp3", model: "heygen-lipsync-precision", audio_duration_sec: 8 })
-    expect(received.body?.audioDurationSec).toBe(8)
-    expect(audio.measured).not.toHaveBeenCalled()
-  })
-
-  it("a per-second model with no length measures the audio first, so a 10 s file reserves the 15 s bucket", async () => {
-    audio.measured.mockResolvedValue(10.1)
-    const { fastify, received } = stubRoute("POST", "/v1/lip-sync", { jobId: "j" })
-    const server = buildServer()
-    registerVerbs({ server, session: executeSession(), fastify })
-    await callTool(server, "lip_sync", { video_url: "https://a/clip.mp4", audio_url: "https://a/v.mp3", model: "heygen-lipsync-precision" })
-    expect(audio.measured).toHaveBeenCalledWith("https://a/v.mp3")
-    expect(received.body?.audioDurationSec).toBe(10.1)
-    expect(buildLipSyncCreditId("heygen-lipsync-precision", received.body?.audioDurationSec as number)).toBe("heygen-lipsync-precision:15s")
-  })
-
-  it("a failed measurement sends no length (the route keeps today's bucket)", async () => {
-    const { fastify, received } = stubRoute("POST", "/v1/lip-sync", { jobId: "j" })
-    const server = buildServer()
-    registerVerbs({ server, session: executeSession(), fastify })
-    await callTool(server, "lip_sync", { video_url: "https://a/clip.mp4", audio_url: "https://a/v.mp3", model: "heygen-lipsync-precision" })
-    expect(audio.measured).toHaveBeenCalled()
-    expect(received.body).not.toHaveProperty("audioDurationSec")
-  })
-
-  it("a model that is not billed by the second is never measured", async () => {
-    const { fastify, received } = stubRoute("POST", "/v1/lip-sync", { jobId: "j" })
-    const server = buildServer()
-    registerVerbs({ server, session: executeSession(), fastify })
-    await callTool(server, "lip_sync", { image_url: "https://a/face.jpg", audio_url: "https://a/v.mp3", model: "infinitalk" })
-    expect(audio.measured).not.toHaveBeenCalled()
+    const result = await callTool(server, "lip_sync", { ...face, audio_url: "https://a/v.mp3", model, audio_duration_sec: 1 })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.provider).toBe(model)
     expect(received.body).not.toHaveProperty("audioDurationSec")
   })
 

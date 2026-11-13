@@ -17,8 +17,17 @@
  *
  * Wav2Lip, VideoReTalking and SadTalker were retired from Lip Sync afterwards
  * (decided 2026-11-12): their cases are now refused before anything is checked,
- * reserved or queued, with one sentence, on both lanes. Every other case is
- * held byte for byte.
+ * reserved or queued, with one sentence, on both lanes.
+ *
+ * The models priced by a length bucket (Kling AI Avatar (Pro), OmniHuman 1.5,
+ * HeyGen, Lipsync 2 Pro, Sync v3, Volcengine) were then priced on the length
+ * the server measures (decided 2026-11-13), never the `audioDurationSec` a
+ * request or a node carries: their cases change in exactly that way
+ * (`measuredNow`) — the route checks and charges the measured length's bucket
+ * and records that length and the held seconds, the worker sends every lane
+ * our prepared copy of the audio, and a workflow build no longer prices a
+ * length at all (the run measures before it holds). Every other case is held
+ * byte for byte.
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -28,6 +37,33 @@ const h = vi.hoisted(() => ({
   kinds: [] as string[],
   guards: [] as Array<{ check: unknown; runModel: unknown }>,
   inserts: [] as Array<Record<string, unknown>>,
+  /** How long the audio really plays: what the price check decodes, whatever length a request names. */
+  measuredSec: 20.04,
+  /** Our copy of the audio the worker prepared, and the held seconds it was prepared under. */
+  prepared: [] as Array<{ provider: string; held: number | undefined }>,
+}))
+
+// The price check's download and decode: the audio plays `h.measuredSec`.
+vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../providers/video/ffmpeg-utils.js")>()),
+  downloadFile: async (_url: string, path: string) => {
+    const { writeFile } = await import("node:fs/promises")
+    await writeFile(path, "")
+  },
+}))
+vi.mock("@/providers/video/decoded-audio-length.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../providers/video/decoded-audio-length.js")>()),
+  measureDecodedAudio: async () => ({ overCap: false, samples: Math.round(h.measuredSec * 44_100), seconds: h.measuredSec }),
+}))
+// Nodaro Cloud: its storage is a public CDN, so the worker sends providers our copy.
+vi.mock("@/lib/own-media-reachability.js", () => ({ providersCanFetchOwnMedia: () => true }))
+// The worker's preparation of a bucketed model's audio (its own tests run it): our copy's URL.
+vi.mock("@/providers/kie/lip-sync-audio.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../providers/kie/lip-sync-audio.js")>()),
+  prepareLipSyncAudio: async (_url: string, pricing: { provider?: string }, _label: string, held: number | undefined) => {
+    h.prepared.push({ provider: String(pricing.provider), held })
+    return { url: "https://cdn.test/scratch/lip-sync-prepared.mp3", measuredSec: h.measuredSec, billedSeconds: held, padded: false, trimmed: false }
+  },
 }))
 
 vi.mock("@/lib/supabase.js", () => {
@@ -50,7 +86,13 @@ vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: vi.fn().mockResolvedValue(
 vi.mock("@/middleware/credit-guard.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../middleware/credit-guard.js")>()),
   // What the route's guard checks and judges, recorded per request.
-  creditGuard: (resolver: (req: unknown) => unknown, opts?: { runModel?: (req: unknown) => unknown }) => async (req: unknown) => {
+  // Its `beforePricing` step (Lip Sync's audio measurement) runs first, as the real guard runs it.
+  creditGuard: (
+    resolver: (req: unknown) => unknown,
+    opts?: { runModel?: (req: unknown) => unknown; beforePricing?: (req: unknown, reply: unknown) => Promise<unknown> },
+  ) => async (req: unknown, reply: { sent: boolean }) => {
+    await opts?.beforePricing?.(req, reply)
+    if (reply.sent) return
     h.guards.push({ check: resolver(req), runModel: opts?.runModel?.(req) })
   },
   reserveCreditsForJob: vi.fn().mockResolvedValue({ usageLogId: "usage-1", creditsReserved: 1, watermark: false }),
@@ -112,6 +154,7 @@ const USER = "00000000-0000-4000-8000-000000000001"
 const IMAGE = "https://cdn.example.com/face.png"
 const VIDEO = "https://cdn.example.com/face.mp4"
 const AUDIO = "https://cdn.example.com/line.mp3"
+const PREPARED_AUDIO = "https://cdn.test/scratch/lip-sync-prepared.mp3"
 
 type Json = Record<string, unknown>
 
@@ -127,6 +170,11 @@ const RETIRED = new Set<string>(["wav2lip", "video-retalking", "sadtalker"])
 const isRetiredCase = (name: string) => [...RETIRED].some((p) => name === p || name.startsWith(`${p} `))
 /** The options priced by the audio's length, in buckets. */
 const PER_SECOND = ["kling-avatar", "kling-avatar-pro", "omnihuman-1-5", "heygen-lipsync-precision", "lipsync-2-pro", "sync-lipsync-v3", "volcengine-lipsync"]
+/** A case on a bucketed option ("(no provider)" runs Kling AI Avatar): priced on the measured length since 2026-11-13. */
+const measuredProviderOf = (c: { name: string; provider: string | undefined }) => {
+  const provider = c.provider ?? "kling-avatar"
+  return PER_SECOND.includes(provider) ? provider : undefined
+}
 /** The options priced by size. */
 const BY_SIZE = ["infinitalk", "seedance-2", "seedance-2-fast", "seedance-2-mini", "seedance-2-5", "minimax-h3"]
 
@@ -237,6 +285,45 @@ async function workflowCase(c: Case) {
 
 type Recorded = { route: Record<string, Json>; workflow: Record<string, Json> }
 
+/** Every string in `value` with the caller's audio URL replaced by our prepared copy's. */
+function withPreparedAudio(value: unknown): unknown {
+  return JSON.parse(JSON.stringify(value).split(AUDIO).join(PREPARED_AUDIO))
+}
+
+/**
+ * A bucketed model's recorded case as it runs since 2026-11-13: what the
+ * fixture holds, with the length the price check measured in place of the one
+ * the request named (`h.measuredSec`, the 30 s bucket). The route checks and
+ * charges that bucket, records that length and the held seconds, and the
+ * worker sends our copy of the audio on every lane (the KIE lanes told it is
+ * prepared). A workflow BUILD prices no length any more (the run measures
+ * before it holds), and runs unstamped, so its worker runs as before.
+ */
+function measuredNow(lane: "route" | "workflow", run: Json, provider: string): Json {
+  const bucket = 30
+  if (lane === "workflow") return { ...run, modelIdentifier: provider }
+  const sent = withPreparedAudio(run.sent) as Json
+  const args = sent.args as unknown[] | undefined
+  if (sent.via === "lipSync" && args) {
+    args[5] = h.measuredSec
+    args[6] = { ...(args[6] as Json), billedSeconds: bucket, audioPrepared: true }
+  }
+  if (sent.via === "lipSyncVideo" && args) {
+    args[3] = { ...(args[3] as Json), audioPrepared: true }
+    args[4] = h.measuredSec
+  }
+  if (sent.via === "falLipSync" && args) args[3] = { ...(args[3] as Json), audioDurationSec: h.measuredSec }
+  const lengths = { audioDurationSec: h.measuredSec, lipSyncBilledSeconds: bucket }
+  return {
+    ...run,
+    check: `${provider}:${bucket}s`,
+    debit: `${provider}:${bucket}s`,
+    queued: { ...(run.queued as Json), ...lengths },
+    inputData: { ...(run.inputData as Json), ...lengths },
+    sent,
+  }
+}
+
 async function record(): Promise<Recorded> {
   const route: Record<string, Json> = {}
   for (const c of CASES) route[c.name] = JSON.parse(JSON.stringify(await routeCase(c))) as Json
@@ -260,16 +347,40 @@ describe("Lip Sync's requests are what they were before the LatentSync, HeyGen a
     expect(Object.keys(now.route)).toHaveLength(CASES.length)
   })
 
-  it("every case but the retired models' is byte for byte what it was, on both lanes", () => {
+  it("every case but the retired models' is byte for byte what it was, on both lanes — a bucketed model's but for its measured length", () => {
     let held = 0
+    let measured = 0
     for (const lane of ["route", "workflow"] as const) {
-      for (const [name, run] of Object.entries(now[lane])) {
-        if (isRetiredCase(name)) continue
-        expect(run, `${lane}: ${name}`).toEqual(before[lane][name])
+      for (const c of CASES) {
+        if (isRetiredCase(c.name)) continue
+        const provider = measuredProviderOf(c)
+        if (provider) {
+          expect(now[lane][c.name], `${lane}: ${c.name}`).toEqual(measuredNow(lane, before[lane][c.name]!, provider))
+          measured += 1
+        } else {
+          expect(now[lane][c.name], `${lane}: ${c.name}`).toEqual(before[lane][c.name])
+        }
         held += 1
       }
     }
     expect(held).toBe(2 * (CASES.length - 6))
+    // Every bucketed option's cases: plain, every lever, three named lengths — and "(no provider)".
+    expect(measured).toBe(2 * (PER_SECOND.length * 5 + 1))
+  })
+
+  it("a bucketed model is charged its measured length's bucket whatever length the request names, and every lane is sent our copy of the audio", () => {
+    // The audio plays 20.04 s: the 30 s bucket, for a request naming 7 s (under), 42 s or 400 s (over), or none.
+    for (const provider of PER_SECOND) {
+      for (const name of [provider, `${provider} @ 7s`, `${provider} @ 42s`, `${provider} @ 400s`, `${provider} + every lever`]) {
+        const run = now.route[name]!
+        expect([run.check, run.debit], name).toEqual([`${provider}:30s`, `${provider}:30s`])
+        expect((run.queued as Json).audioDurationSec, name).toBe(20.04)
+        expect((run.inputData as Json).lipSyncBilledSeconds, name).toBe(30)
+        expect(JSON.stringify(run.sent), name).not.toContain(AUDIO)
+        expect(JSON.stringify(run.sent), name).toContain(PREPARED_AUDIO)
+      }
+    }
+    expect(before.route["kling-avatar @ 7s"]!.check).toBe("kling-avatar:15s")
   })
 
   it("a retired model ran before, and is now refused with its sentence before anything is checked, reserved or queued", () => {
@@ -301,8 +412,10 @@ describe("Lip Sync's requests are what they were before the LatentSync, HeyGen a
         expect(route.status, name).toBe(200)
         expect((route.sent as Json).via, name).toBe("replicate")
         expect(route.runModel, name).toBe(provider)
-        expect(now.route[name], name).toEqual(route)
-        expect(now.workflow[name], name).toEqual(before.workflow[name])
+        // HeyGen and Lipsync 2 Pro are priced by a length bucket: their measured length since 2026-11-13.
+        const measured = measuredProviderOf({ name, provider })
+        expect(now.route[name], name).toEqual(measured ? measuredNow("route", route, measured) : route)
+        expect(now.workflow[name], name).toEqual(measured ? measuredNow("workflow", before.workflow[name]!, measured) : before.workflow[name])
       }
     }
     expect([before.route["latentsync"]!.check, before.route["latentsync"]!.debit]).toEqual(["latentsync", "latentsync"])

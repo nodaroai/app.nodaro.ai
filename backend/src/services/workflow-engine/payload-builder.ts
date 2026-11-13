@@ -120,8 +120,6 @@ import {
   buildVideoCreditModelIdentifier,
   buildMotionCreditModelIdentifier,
   motionTransferResolution,
-  buildLipSyncCreditId,
-  isPerSecondLipSyncProvider,
   lipSyncAudioRateOf,
   resolveAiAvatarCreditId,
   resolveSwitchXCreditId,
@@ -5713,21 +5711,17 @@ function buildPayloadOf(
           },
         }
       }
-      // infinitalk is tier-priced by resolution. Per-second providers
-      // (kling-avatar(-pro), heygen-lipsync-precision, lipsync-2-pro) bucket by
-      // the persisted audio duration when it's known — mirroring the route's
-      // resolveLipSyncIdentifier. When the duration is unknown (e.g. audio is
-      // produced by an upstream node at runtime), fall back to the bare provider
-      // id: for HeyGen/Sync that bare entry is the 5-min ceiling (billing-safe),
-      // and kling-avatar(-pro) keep their existing bare reservation unchanged.
+      // infinitalk is tier-priced by resolution. A model priced by a length
+      // BUCKET (kling-avatar(-pro), omnihuman-1-5, the dubbing models) reserves
+      // the bucket of the audio the run measures before the hold
+      // (`stampLipSyncInputs`, then `lipSyncBucketReserveId` — the route's own
+      // row for that audio), never a length the node carries (decided
+      // 2026-11-13: a browser's reading, or none — the bare row then held
+      // ~14 s of Kling AI Avatar whatever the audio's length). The node's
+      // length rides the payload as before, read for no price: the stamp
+      // replaces it with the measured one for a bucketed model.
       const lipSyncResolution = (data.resolution as string | undefined) ?? "720p"
-      const audioDurationSec = typeof data.audioDurationSec === "number" ? data.audioDurationSec : undefined
-      const lipSyncIdentifier =
-        provider === "infinitalk"
-          ? `infinitalk:${lipSyncResolution}`
-          : isPerSecondLipSyncProvider(provider) && audioDurationSec !== undefined
-            ? buildLipSyncCreditId(provider, audioDurationSec)
-            : provider
+      const lipSyncIdentifier = provider === "infinitalk" ? `infinitalk:${lipSyncResolution}` : provider
       return {
         jobName: "lip-sync",
         queueName: "video-generation",
@@ -5740,7 +5734,7 @@ function buildPayloadOf(
           prompt: applyPromptAffixes((resolvedInputs.prompt || data.prompt) as string | undefined, readPromptAffixes(data), refMap) || "A person talking naturally",
           provider,
           resolution: data.resolution,
-          audioDurationSec,
+          audioDurationSec: typeof data.audioDurationSec === "number" ? data.audioDurationSec : undefined,
           guidanceScale: data.guidanceScale,
           inferenceSteps: data.inferenceSteps,
           seed: data.seed,

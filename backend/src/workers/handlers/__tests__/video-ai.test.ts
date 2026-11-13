@@ -88,6 +88,28 @@ vi.mock("../../../providers/fal/lip-sync.js", () => ({
   falLipSync: mocks.mockFalLipSync,
 }))
 
+// The Replicate lip-sync lane (HeyGen Lipsync Precision, Sync Lipsync 2 Pro): what it is sent.
+const replicateLane = vi.hoisted(() => ({ lipSync: vi.fn(async () => ({ videoUrl: "https://replicate.test/out.mp4", cost: 0.02 })) }))
+vi.mock("../../../providers/replicate/lip-sync.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  replicateLipSync: replicateLane.lipSync,
+}))
+
+// Whether outside providers can fetch this install's storage (Cloud: yes).
+const mediaReach = vi.hoisted(() => ({ public: true }))
+vi.mock("../../../lib/own-media-reachability.js", () => ({ providersCanFetchOwnMedia: () => mediaReach.public }))
+
+// A bucketed lip-sync model's audio preparation (its own tests run it): our copy, or its refusal.
+const lipSyncPrep = vi.hoisted(() => ({
+  prepare: vi.fn(async (_url: string, _pricing: unknown, _label: string, held: number | undefined) => ({
+    url: "https://cdn.test/scratch/lip-sync-prepared.mp3", measuredSec: 42, billedSeconds: held, padded: false, trimmed: false,
+  })),
+}))
+vi.mock("../../../providers/kie/lip-sync-audio.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  prepareLipSyncAudio: lipSyncPrep.prepare,
+}))
+
 vi.mock("@/providers/video/merge-video-audio.js", () => ({
   mergeVideoAudio: mocks.mockMergeVideoAudio,
 }))
@@ -698,6 +720,81 @@ describe("lip-sync handler", () => {
     expect(mocks.mockLipSync).not.toHaveBeenCalled()
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
+  })
+
+  // --- a model priced by a length bucket, held on its measured audio (decided 2026-11-13) ---
+  const PREPARED = "https://cdn.test/scratch/lip-sync-prepared.mp3"
+
+  it("a bucketed job carrying its held seconds sends every lane OUR prepared copy — never the caller's URL — and commits its reservation (never metered)", async () => {
+    await handler(makeJob("lip-sync", { imageUrl: "https://face.png", audioUrl: "https://speech.mp3", provider: "kling-avatar", audioDurationSec: 42, lipSyncBilledSeconds: 60 }) as never, makeCtx())
+    expect(lipSyncPrep.prepare).toHaveBeenCalledWith("https://speech.mp3", expect.objectContaining({ kind: "bucket", provider: "kling-avatar", maxSeconds: 300 }), "Kling Avatar Standard", 60)
+    expect(mocks.mockLipSync).toHaveBeenCalledWith(
+      "https://face.png", PREPARED, "kling-avatar", undefined, undefined, 42,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+      { fastMode: undefined, seed: undefined, billedSeconds: 60, audioPrepared: true },
+    )
+    const { result, meteredBaseCredits } = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
+    expect(meteredBaseCredits).toBeUndefined()
+    expect(result).not.toHaveProperty("meteredCost")
+
+    await handler(makeJob("lip-sync", { videoUrl: "https://clip.mp4", audioUrl: "https://speech.mp3", provider: "volcengine-lipsync", audioDurationSec: 42, lipSyncBilledSeconds: 60 }) as never, makeCtx())
+    expect(mocks.mockLipSyncVideo).toHaveBeenCalledWith(
+      "https://clip.mp4", PREPARED, "volcengine-lipsync", expect.objectContaining({ audioPrepared: true }), 42,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+
+    await handler(makeJob("lip-sync", { videoUrl: "https://clip.mp4", audioUrl: "https://speech.mp3", provider: "sync-lipsync-v3", audioDurationSec: 42, lipSyncBilledSeconds: 60 }) as never, makeCtx())
+    expect(mocks.mockFalLipSync).toHaveBeenCalledWith(
+      "sync-lipsync-v3", "https://clip.mp4", PREPARED, { syncMode: undefined, audioDurationSec: 42 },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+  })
+
+  it.each(["heygen-lipsync-precision", "lipsync-2-pro"])("%s on the Replicate lane is sent OUR prepared copy, never the caller's URL", async (provider) => {
+    await handler(makeJob("lip-sync", { videoUrl: "https://clip.mp4", audioUrl: "https://speech.mp3", provider, audioDurationSec: 42, lipSyncBilledSeconds: 60 }) as never, makeCtx())
+    expect(lipSyncPrep.prepare).toHaveBeenCalledWith("https://speech.mp3", expect.objectContaining({ kind: "bucket", provider, maxSeconds: 300 }), expect.any(String), 60)
+    expect(replicateLane.lipSync).toHaveBeenCalledWith(provider, "https://clip.mp4", PREPARED, expect.any(Object), expect.objectContaining({ onTaskCreated: expect.any(Function) }))
+    const { meteredBaseCredits } = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
+    expect(meteredBaseCredits).toBeUndefined()
+  })
+
+  it("a bucketed job whose audio changed since its price check fails before any provider is called (the preparation's refusal)", async () => {
+    const changed = Object.assign(new Error("the audio changed between the price check and the run"), { deterministic: true })
+    lipSyncPrep.prepare.mockRejectedValueOnce(changed)
+    await expect(handler(makeJob("lip-sync", { imageUrl: "https://face.png", audioUrl: "https://speech.mp3", provider: "kling-avatar", lipSyncBilledSeconds: 15 }) as never, makeCtx())).rejects.toBe(changed)
+    expect(mocks.mockLipSync).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+
+  it("an install whose storage no outside provider can fetch (no public media host) sends every lane the caller's own link, as before — our copy would be unreachable", async () => {
+    mediaReach.public = false
+    try {
+      await handler(makeJob("lip-sync", { imageUrl: "https://face.png", audioUrl: "https://speech.mp3", provider: "kling-avatar", audioDurationSec: 42, lipSyncBilledSeconds: 60 }) as never, makeCtx())
+      // KIE: the caller's link, and its own trim past the cap as before (no `audioPrepared`).
+      expect(mocks.mockLipSync).toHaveBeenCalledWith(
+        "https://face.png", "https://speech.mp3", "kling-avatar", undefined, undefined, 42,
+        expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+        { fastMode: undefined, seed: undefined, billedSeconds: 60 },
+      )
+      await handler(makeJob("lip-sync", { videoUrl: "https://clip.mp4", audioUrl: "https://speech.mp3", provider: "sync-lipsync-v3", audioDurationSec: 42, lipSyncBilledSeconds: 60 }) as never, makeCtx())
+      expect(mocks.mockFalLipSync).toHaveBeenCalledWith(
+        "sync-lipsync-v3", "https://clip.mp4", "https://speech.mp3", { syncMode: undefined, audioDurationSec: 42 },
+        expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+      )
+      await handler(makeJob("lip-sync", { videoUrl: "https://clip.mp4", audioUrl: "https://speech.mp3", provider: "volcengine-lipsync", audioDurationSec: 42, lipSyncBilledSeconds: 60 }) as never, makeCtx())
+      expect(mocks.mockLipSyncVideo.mock.calls.at(-1)![1]).toBe("https://speech.mp3")
+      expect(mocks.mockLipSyncVideo.mock.calls.at(-1)![3]).not.toHaveProperty("audioPrepared")
+      expect(lipSyncPrep.prepare).not.toHaveBeenCalled()
+    } finally {
+      mediaReach.public = true
+    }
+  })
+
+  it("a job carrying no held seconds (queued before the measured price, a pipeline step) runs as it was priced; a model priced by no length is never prepared", async () => {
+    await handler(makeJob("lip-sync", { imageUrl: "https://face.png", audioUrl: "https://speech.mp3", provider: "kling-avatar" }) as never, makeCtx())
+    await handler(makeJob("lip-sync", { imageUrl: "https://face.png", audioUrl: "https://speech.mp3", provider: "infinitalk", lipSyncBilledSeconds: 15 }) as never, makeCtx())
+    expect(lipSyncPrep.prepare).not.toHaveBeenCalled()
+    for (const call of mocks.mockLipSync.mock.calls) expect(call[1]).toBe("https://speech.mp3")
   })
 
   it("volcengine-lipsync throws when no videoUrl is provided (no image fallback)", async () => {

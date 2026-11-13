@@ -5069,8 +5069,8 @@ const dub = await client.nodes.runAndWait("lip-sync", {
   provider: "volcengine-lipsync",
   mode: "basic",          // complex scenes
   openScenedet: true,     // multi-speaker: scene detection + speaker ID (basic mode)
-  audioDurationSec: 42,   // buckets per-second pricing; absent → 5-min ceiling, no refund
 })
+// No length to send: the server measures the audio and charges its length's tier.
 ```
 
 Binding a creature into a shot uses the shared reference contract:

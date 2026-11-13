@@ -62,11 +62,11 @@ vi.mock("../../../lib/job-scratch.js", async (importOriginal) => ({
 
 import { LIP_SYNC_AUDIO_RATES } from "@nodaro/shared/credits"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
-import { LIP_SYNC_INPUT_RULES, audioReadStoppedMessage, checkLipSyncInputs } from "../../../lib/lip-sync-inputs.js"
+import { LIP_SYNC_INPUT_RULES, audioReadStoppedMessage, checkLipSyncInputs, lipSyncAudioPricingOf } from "../../../lib/lip-sync-inputs.js"
 import { DECODED_AUDIO_RATE_HZ } from "../../video/decoded-audio-length.js"
 import { damageCluster, restateFlac } from "../../video/__tests__/fixtures/media-edits.js"
 import { probeMediaFormatAndDuration } from "../../video/ffmpeg-utils.js"
-import { LIP_SYNC_PAD_MARGIN_SEC, prepareRateLipSyncAudio, type PreparedLipSyncAudio } from "../lip-sync-audio.js"
+import { LIP_SYNC_PAD_MARGIN_SEC, LIP_SYNC_TRIM_MARGIN_SEC, prepareLipSyncAudio, prepareRateLipSyncAudio, type PreparedLipSyncAudio } from "../lip-sync-audio.js"
 
 const rate = LIP_SYNC_AUDIO_RATES["omnihuman-2-0"]!
 const rule = LIP_SYNC_INPUT_RULES["omnihuman-2-0"]!
@@ -409,3 +409,89 @@ describe.skipIf(!hasFfmpeg)("the hold equals what the encode bills — real file
     }, REAL_MEDIA_TIMEOUT_MS)
   })
 })
+
+/**
+ * The models priced by a length BUCKET (decided 2026-11-13) on the same real
+ * chain: the price check's bucket is the worker's, the worker sends an MP3 of
+ * exactly the samples counted, and a file that plays exactly a bucket's length
+ * lands in THAT bucket (a few samples more would double the price).
+ */
+describe.skipIf(!hasFfmpeg)("a bucketed model: the bucket held is the bucket sent — real files, real ffmpeg", () => {
+  let dir = ""
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), "lip-sync-bucket-parity-"))
+  })
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true })
+  })
+  beforeEach(() => {
+    world.uploads = 0
+  })
+
+  /** Price `url` for `provider` and run the worker on the same bytes; the two held to each other. */
+  async function priceThenRunBucketed(provider: string, url: string) {
+    const held = await checkLipSyncInputs({ provider, audioUrl: url, imageUrl: undefined })
+    expect(held).toMatchObject({ ok: true })
+    if (!held?.ok) throw new Error("not held")
+    const prepared = await prepareLipSyncAudio(url, lipSyncAudioPricingOf(provider)!, provider, held.billedSeconds)
+    expect(prepared.billedSeconds).toBe(held.billedSeconds)
+    expect(prepared.measuredSec).toBe(held.audioSec)
+    expect(world.uploads).toBe(1)
+    return { held, prepared }
+  }
+
+  const exact: Array<[string, string[], string]> = [
+    ["WAV", ["-c:a", "pcm_s16le"], "wav"],
+    ["MP3", ["-c:a", "libmp3lame", "-b:a", "128k"], "mp3"],
+  ]
+  it.each(exact)("an exact 15.000 s %s at 48 kHz is held in the 15 s bucket, and exactly its samples are sent", async (_label, codec, ext) => {
+    const f = join(dir, `exact-15.${ext}`)
+    ffmpeg("-f", "lavfi", "-i", "sine=f=440:r=48000", "-t", "15", "-ac", "2", ...codec, f)
+    const { held, prepared } = await priceThenRunBucketed("kling-avatar", serve(f))
+    expect(held).toEqual({ ok: true, audioSec: 15, billedSeconds: 15 })
+    expect(prepared).toMatchObject({ sentSamples: 15 * DECODED_AUDIO_RATE_HZ, padded: false, trimmed: false })
+  }, REAL_MEDIA_TIMEOUT_MS)
+
+  // An AAC file's decoded length depends on the build: the production-pinned
+  // ffmpeg (n8.1.2) decodes an exact 15.000 s M4A — whichever build wrote it —
+  // as 15.0187 s (part of the encoder's priming frame is kept), ffmpeg 9.0 as
+  // 15.000 s. Within 50 ms past a bucket's length the audio is held in that
+  // bucket (decided 2026-11-13) and the copy sent is cut to exactly it, so on
+  // either build the run is held at 15 s and sends exactly 15 s.
+  it("an exact 15.000 s M4A (AAC) at 48 kHz is held in the 15 s bucket on every build, and exactly 15 s is sent", async () => {
+    const f = join(dir, "exact-15.m4a")
+    ffmpeg("-f", "lavfi", "-i", "sine=f=440:r=48000", "-t", "15", "-ac", "2", "-c:a", "aac", f)
+    const { held, prepared } = await priceThenRunBucketed("kling-avatar", serve(f))
+    if (!held.ok) throw new Error("not held")
+    expect(held.audioSec).toBeGreaterThanOrEqual(15)
+    expect(held.audioSec).toBeLessThan(15 + 1024 / 48_000)
+    expect(held.billedSeconds).toBe(15)
+    expect(prepared).toMatchObject({ billedSeconds: 15, sentSamples: 15 * DECODED_AUDIO_RATE_HZ, trimmed: held.audioSec > 15 })
+  }, REAL_MEDIA_TIMEOUT_MS)
+
+  it("a clip under the smallest bucket is sent as it plays, never padded", async () => {
+    const f = join(dir, "short.wav")
+    ffmpeg("-f", "lavfi", "-i", "sine=f=440:r=44100", "-t", "3.2", "-ac", "1", f)
+    const { held, prepared } = await priceThenRunBucketed("heygen-lipsync-precision", serve(f))
+    expect(held).toEqual({ ok: true, audioSec: 3.2, billedSeconds: 15 })
+    expect(prepared).toMatchObject({ sentSamples: Math.round(3.2 * DECODED_AUDIO_RATE_HZ), padded: false })
+  }, REAL_MEDIA_TIMEOUT_MS)
+
+  it("OmniHuman 1.5 audio past its 60 s maximum is held at the 60 s bucket and sent cut to exactly 59.5 s", async () => {
+    const f = join(dir, "long.mp3")
+    ffmpeg("-f", "lavfi", "-i", "sine=f=330:r=44100", "-t", "75", "-ac", "1", "-c:a", "libmp3lame", "-b:a", "96k", f)
+    const { held, prepared } = await priceThenRunBucketed("omnihuman-1-5", serve(f))
+    expect(held).toEqual({ ok: true, audioSec: 60, billedSeconds: 60 })
+    expect(prepared).toMatchObject({ trimmed: true, sentSamples: (60 - LIP_SYNC_TRIM_MARGIN_SEC) * DECODED_AUDIO_RATE_HZ })
+  }, REAL_MEDIA_TIMEOUT_MS)
+
+  it("a crafted MP3 that declares 3.5 s and plays 21.6 s is held in the 30 s bucket, never the 15 s its header claims", async () => {
+    const { held, prepared } = await priceThenRunBucketed("kling-avatar", serve(fixture("declares-3.5s-plays-21.6s.mp3")))
+    expect(held).toMatchObject({ ok: true, billedSeconds: 30 })
+    expect(prepared.sentSamples).toBe(prepared.measuredSamples)
+    // A run held at the 15 s bucket (what a caller would have claimed) never reaches the model.
+    const err = await prepareLipSyncAudio(serve(fixture("declares-3.5s-plays-21.6s.mp3")), lipSyncAudioPricingOf("kling-avatar")!, "Kling", 15).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+  }, REAL_MEDIA_TIMEOUT_MS)
+})
+

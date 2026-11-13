@@ -1,5 +1,7 @@
 import {
   usdToCredits,
+  buildLipSyncCreditId,
+  isPerSecondLipSyncProvider,
   lipSyncAudioRateOf,
   lipSyncEstimateSeconds,
   TEXT_TO_AUDIO_SFX_CREDIT_IDS,
@@ -118,7 +120,7 @@ import { generateVideoProCapSec as generateVideoProCapSecOfEnv } from "../../lib
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, lipSyncAudioSourceId, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -6159,6 +6161,10 @@ function estimateNodeCredits(
     videoSfxSec: node.type === "video-sfx" ? videoSfxClipSecOf(node, edges, measuredFor("video-sfx")) : undefined,
     videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, nodes, edges, measuredFor("video-depth"), prices) : undefined,
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, measuredFor("pitch-tempo")) : undefined,
+    // Lip Sync on a model priced by a length bucket: its audio wire as OmniHuman 2.0's is read (graphPricingUnits).
+    lipSyncAudioSec: node.type === "lip-sync"
+      ? lipSyncAudioWireSecOf(node, nodes, edges, (sourceId) => wires.measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"], { voiceTakeAsMinimum: true }))
+      : undefined,
     // Transcribe on Nemotron 3.5: its audio wire as a run estimate reads it (not the measured walk: it was not moved onto it).
     transcribeSec: node.type === "transcribe" ? transcribeInputSecOf(node, edges, wireSec) : undefined,
     // Add Captions on Nemotron 3.5 Transcribe: its video wire as a run estimate reads it, as Transcribe's
@@ -6366,21 +6372,23 @@ function videoOverlayVideoCredits(
 }
 
 /**
- * The length of the audio a Lip Sync priced by its audio's seconds is driven
- * by when a run is estimated: its `audio` wire as the measured walk reads it
- * (`wireSec`, the editor's reading) — an upload at its recorded length, a node
- * outside the run at its take, a node that runs at the length it will produce
- * plus the container slack. The run measures the real audio before it holds.
- * Undefined when unknown.
+ * The length of the audio a Lip Sync priced by its audio's length is driven
+ * by when a run is estimated: the audio a SERVER run of it plays
+ * (`lipSyncAudioSourceId`, decided 2026-11-13: the last wired `audio`, else
+ * the dropdown-selected node), as the measured walk reads it (`wireSec`) — an
+ * upload at its recorded length, a node outside the run at its take, a node
+ * that runs at the length it will produce plus the container slack. The run
+ * measures the real audio before it holds. Undefined when unknown — never a
+ * length the Lip Sync node itself carries.
  */
 function lipSyncAudioWireSecOf(
   node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
   wireSec: WireSecOf,
 ): number | undefined {
-  if (node.id === undefined || !edges) return undefined
-  const wire = edges.find((e) => e.target === node.id && e.targetHandle === "audio")
-  return wire === undefined ? undefined : wireSec(wire.source ?? "")
+  const source = lipSyncAudioSourceId(node, nodes, edges, "server")
+  return source === undefined ? undefined : wireSec(source)
 }
 
 /**
@@ -7055,7 +7063,7 @@ export function graphPricingUnits(
   // The run measures the real audio before it reserves (lib/lip-sync-inputs.ts).
   if (node.type === "lip-sync") {
     const rate = lipSyncAudioRateOf(withWiredSettings(node, nodes, edges ?? []).data?.provider)
-    if (rate) return lipSyncEstimateSeconds(rate, lipSyncAudioWireSecOf(node, edges, (sourceId) => measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"], { voiceTakeAsMinimum: true })))
+    if (rate) return lipSyncEstimateSeconds(rate, lipSyncAudioWireSecOf(node, nodes, edges, (sourceId) => measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"], { voiceTakeAsMinimum: true })))
   }
   // Nodaro Video Upscale: its tier's four-second row × the billed seconds ÷ 4,
   // at the length its video wire gives as the measured walk reads it, with
@@ -7516,6 +7524,8 @@ export function getNodeModelIdentifier(
     editPlan?: { readonly sourceSec: number | undefined; readonly perMinute: boolean }
     /** Video SFX: the input clip's length a run estimate knows (undefined = an unmeasured clip). */
     videoSfxSec?: number
+    /** Lip Sync: the length of the audio its `audio` wire gives a run estimate (undefined = not known). */
+    lipSyncAudioSec?: number
     /** A render: the id its graph prices it on (`renderEstimateCreditId`). */
     renderCreditId?: string
     /** Video Depth: the input clip's length a run estimate knows (undefined = an unmeasured clip). */
@@ -7843,9 +7853,16 @@ export function getNodeModelIdentifier(
   // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): its
   // one-second row, which the estimate multiplies by the seconds
   // (graphPricingUnits). It has no bare row and no buckets.
+  // A model priced by a length bucket (Kling AI Avatar, OmniHuman 1.5, the
+  // dubbing models; decided 2026-11-13): the bucket of the audio its wire gives
+  // (`lipSyncAudioSec`, the length the run measures and holds), else the
+  // model's largest bucket — the most a run can hold, so an estimate never
+  // quotes below the run. A node naming no model runs the default one.
   if (nodeType === "lip-sync") {
     const rate = lipSyncAudioRateOf(data.provider)
     if (rate) return rate.rateId
+    const lipSyncModel = typeof data.provider === "string" && data.provider !== "" ? data.provider : LIP_SYNC_DEFAULT_PROVIDER
+    if (isPerSecondLipSyncProvider(lipSyncModel)) return buildLipSyncCreditId(lipSyncModel, graph.lipSyncAudioSec)
   }
 
   // A node naming no model whose default is priced per input image: the node-type

@@ -63,7 +63,7 @@ It has none of 1.5's other options: no resolution choice, no fast mode and no se
 
 Some damage cannot be told from a complete file. Such a file is priced on, and sent as, exactly the audio that decodes, with any gap filled: a file in a format that states no exact length (MP3, AAC, AC-3, DTS, MPEG-TS, MPG, AVI, FLV) that was cut off, or that joins two formats (an MP3 followed by AAC, for example); a cut-off WAV, Wave64 or CAF (their length is taken from the file's size, not stated) or Ogg (its stated length follows the cut); a WMA cut off well before its end (one cut off near its end is refused); damage that leaves only a gap in the timeline (a damaged TTA or FLAC frame), which is played as silence; and two WavPack or TTA files joined byte for byte (only the first is read).
 
-**Busy.** Only a few audio files are downloaded and measured at once. If they are all taken for a moment, the run is refused before anything is held (`429`, `lip_sync_audio_busy`) with a message to try again in a moment. `POST /v1/lip-sync` also takes at most 30 `omnihuman-2-0` requests a minute from one caller (one signed-in session, API key or MCP user); past that it answers `429` (`rate_limit_exceeded`). Requests for the other lip-sync models are not limited this way.
+**Busy.** Only a few audio files are downloaded and measured at once. If they are all taken, a request (the editor's Run, the API, the SDK, MCP) waits up to 30 seconds and is then refused before anything is held (`429`, `lip_sync_audio_busy`) with a message to try again in a moment; a workflow or app run waits up to 2 minutes before it is refused. `POST /v1/lip-sync` also takes at most 30 requests a minute from one caller (one signed-in session, API key or MCP user) for the models that measure their audio (`omnihuman-2-0`, `kling-avatar`, `kling-avatar-pro`, `omnihuman-1-5` and the dubbing models); past that it answers `429` (`rate_limit_exceeded`). Requests for the other lip-sync models are not limited this way. If measuring the audio takes too long on Nodaro's side and is stopped, the request is answered `503` (`lip_sync_audio_measure_stopped`): nothing is charged; try again.
 
 ### Seedance 2 (image + audio avatar)
 
@@ -139,13 +139,13 @@ Wav2Lip, VideoReTalking and SadTalker are retired from Lip Sync. A saved node, a
 | `sync-lipsync-v3` | 5 minutes* |
 | `volcengine-lipsync` | 5 minutes |
 
-For the KIE providers (`kling-avatar(-pro)`, `infinitalk`, `volcengine-lipsync`), audio longer than the cap is auto-trimmed before the upstream call. `omnihuman-2-0` is the exception: audio past its 5 minutes is refused before anything is held, not trimmed. Long-audio runs on `kling-avatar(-pro)` and `volcengine-lipsync` can take tens of minutes — the editor polls for up to ~1 hour before timing out.
+Audio longer than the cap is trimmed to half a second under it before it is sent, and a model priced by the length of its audio charges its top tier for it (see [How the audio's length is measured](#how-the-audios-length-is-measured)). `infinitalk` is trimmed the same way. `omnihuman-2-0` is the exception: audio past its 5 minutes is refused before anything is held, not trimmed. Long-audio runs on `kling-avatar(-pro)` and `volcengine-lipsync` can take tens of minutes — the editor polls for up to ~1 hour before timing out.
 
-\* For HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 the 5-minute figure is the **per-second credit-reservation ceiling**, not a hard trim — longer clips reserve at the 5-minute tier.
+\* For HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3, audio past 5 minutes is trimmed to the 5-minute tier it is charged.
 
 ## Credit Cost
 
-Kling AI Avatar and OmniHuman 1.5 bill per-second. Credit reservation buckets to the next supported tier; any reserved credits beyond the actual cost are refunded once the job completes.
+Kling AI Avatar and OmniHuman 1.5 are priced by the length of their audio, rounded up to the next tier. Nodaro measures the audio itself before it holds anything; the hold is the charge (see [How the audio's length is measured](#how-the-audios-length-is-measured)).
 
 | Provider | Per-second | 15s | 30s | 1min | 2min | 5min |
 |----------|-----------:|----:|----:|-----:|-----:|-----:|
@@ -186,9 +186,49 @@ HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 also bill per 
 | `lipsync-2-pro` | 693<!-- credits: lipsync-2-pro:15s --> | 1,375<!-- credits: lipsync-2-pro:30s --> | 2,750<!-- credits: lipsync-2-pro:60s --> | 5,500<!-- credits: lipsync-2-pro:120s --> | 13,739<!-- credits: lipsync-2-pro:300s --> |
 | `sync-lipsync-v3` | 1,100<!-- credits: sync-lipsync-v3:15s --> | 2,200<!-- credits: sync-lipsync-v3:30s --> | 4,400<!-- credits: sync-lipsync-v3:60s --> | 8,800<!-- credits: sync-lipsync-v3:120s --> | 22,000<!-- credits: sync-lipsync-v3:300s --> |
 
-The credit chip updates once the audio is wired (the node probes its duration). When the duration is unknown, the 5-minute tier is reserved.
+The node's credit chip and the Run button show an estimate: the tier of the audio's length once the editor knows it, and before then the model's top tier (5 minutes; 60 seconds for `omnihuman-1-5`), the most a run can be charged. The editor knows the length of the audio node the run plays: an uploaded audio at the length recorded for it, or audio a node made earlier. A length the Lip Sync node itself carries is never used. An app or a component whose user supplies the audio lists the top tier too.
 
-> **Supply `audioDurationSec` for accurate pricing.** When calling `sync-lipsync-v3` or `volcengine-lipsync` via API/SDK, pass the output duration in seconds so the reservation buckets to the correct tier. If it is absent, the request is billed at the **5-minute ceiling** (sync-lipsync-v3: 22,000 CR<!-- credits: sync-lipsync-v3:300s -->; volcengine-lipsync: 6,600 CR<!-- credits: volcengine-lipsync:300s -->) with **no refund** — these per-second models commit the reserved bucket verbatim. The editor probes the duration automatically once the audio is wired.
+The run itself is priced on the length Nodaro measures, which is not always the estimate's. A voice made again during the run (a Text to Speech or Text to Dialogue node that runs before the Lip Sync) is estimated at the length of its last take. If the new take comes out longer, the run is held and charged on its measured length, which can be a higher tier than the estimate.
+
+**Which audio is priced.** When several audio nodes reach a Lip Sync, the estimate reads the audio its run plays. A workflow, app or API run plays the last wired audio, or, with none wired, the audio picked in the node's settings. The editor's own Run of the node plays the picked audio first, else the last wired one.
+
+### How the audio's length is measured
+
+Every model priced by the length of its audio — `kling-avatar`, `kling-avatar-pro`, `omnihuman-1-5`, `heygen-lipsync-precision`, `lipsync-2-pro`, `sync-lipsync-v3`, `volcengine-lipsync` and `omnihuman-2-0` — is priced on the length Nodaro measures from the audio itself, on every path: the editor's Run, a workflow or app run, the API, the SDK and MCP. A length a request or a node carries (`audioDurationSec`, MCP's `audio_duration_sec`) is ignored. The run is held for the tier of the measured length (for `omnihuman-2-0`, its whole seconds), and the hold is the charge: nothing is refunded or added afterwards.
+
+| Audio plays | `kling-avatar` is charged |
+|-------------|---------------------------|
+| 12 s | the 15s tier: 330<!-- credits: kling-avatar:15s --> |
+| 15 s | the 15s tier: 330<!-- credits: kling-avatar:15s --> |
+| 15.03 s | the 15s tier: 330<!-- credits: kling-avatar:15s --> (sent cut to exactly 15 s) |
+| 15.1 s | the 30s tier: 660<!-- credits: kling-avatar:30s --> |
+| 42 s | the 1min tier: 1,320<!-- credits: kling-avatar:60s --> |
+| 6 min | the 5min tier: 6,600<!-- credits: kling-avatar:300s --> (trimmed to just under 5 min) |
+
+**A tier's edge.** Audio that plays at most 0.05 seconds past a tier's length is charged that tier, and the copy sent is cut to exactly the tier's length. Decoders disagree by a few hundredths of a second at the end of a file: an exactly 15-second M4A (AAC) file can measure 15.02 seconds. `omnihuman-2-0` keeps its own rounding (every started second).
+
+The measurement is the one described under [OmniHuman 2.0](#omnihuman-20): Nodaro downloads the audio (a file under **100 MB**, in one of the formats listed there) and decodes it to count how long it actually plays, never the length its file declares. Gaps in the timeline count as silence. Before anything is held, it refuses:
+
+- audio that does not decode to its end, as a damaged or cut-off file (`400`, `audio_unreadable`, with a message to re-export the audio as one complete, continuous file);
+- a file it cannot download or decode (`400`, `audio_unreadable`);
+- a file of 100 MB or more (`400`, `audio_too_large`);
+- a run that finds every measuring slot busy (`429`, `lip_sync_audio_busy`, see **Busy** above): try again in a moment.
+
+Some requests are refused before the audio is downloaded at all:
+
+- a model your deployment does not offer (`403`, `model_not_available`);
+- a request with no face input, an image or a video, or a `volcengine-lipsync` request with no video (`400`, `validation_error`);
+- a balance that cannot cover even the model's cheapest run (`402`).
+
+**The audio priced is the audio sent.** For the run, Nodaro downloads the audio again and decodes it the same way. If the file at the link changed in between and now falls in a higher tier than the run was held for, the run stops before the model is asked, and nothing is charged. Otherwise the model is sent an MP3 that Nodaro makes from exactly the audio it priced, never the link itself. Audio past the model's maximum is cut to half a second under it.
+
+On a self-hosted install whose storage the providers cannot reach (no publicly reachable media host, as the community edition's default setup), the model is sent the audio's own link instead, as before: a copy on this install's storage would be a link the provider cannot open.
+
+The other models differ from `omnihuman-2-0` in three ways:
+
+- short audio is not padded;
+- long audio is trimmed, not refused;
+- the image is not checked.
 
 InfiniTalk and Hailuo Avatar use flat per-call pricing (see admin → Models).
 
@@ -216,4 +256,4 @@ InfiniTalk and Hailuo Avatar use flat per-call pricing (see admin → Models).
 For Lipsync 2 Pro, the recorded provider-cost estimate uses the finished video's
 measured duration and the provider's output-second rate. It does not use GPU
 runtime. If the output duration cannot be read, provider cost remains unknown.
-Credits still use the duration tier displayed before generation.
+Credits use the duration tier of the audio measured before generation.

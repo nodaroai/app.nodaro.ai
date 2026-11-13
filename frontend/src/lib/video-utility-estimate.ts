@@ -25,7 +25,7 @@ import { maskCompositeUnits } from "@nodaro/shared/media"
 import { fanInClipCount, forwardedVideoLengthSec, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, loopVideoRunFields, runWireLengthSec, withoutRecordedVideoLength, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, maskCompositeLeadSec, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, measuredWireLengthSec, runWireFps, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, trimVideoRunFields, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, videoUtilityUnitsOf, type MeasuredInputStepType, type MeasuredWireLengthOptions } from "@nodaro/render-rules"
 import { clampTopazVideoFps, isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER, resolveTopazVideoTarget, type TopazVideoResolution, type TopazVideoSource } from "@nodaro/shared/models"
 import { withWiredSettings } from "@nodaro/shared/nodes"
-import { nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, resolveGraphOrigin, topazVideoEstimateUnits } from "@nodaro/render-rules"
+import { lipSyncAudioSourceId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, resolveGraphOrigin, topazVideoEstimateUnits } from "@nodaro/render-rules"
 import { readNodeOutput } from "@/lib/node-output-reader"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
@@ -640,13 +640,17 @@ export function videoUpscalePricingUnits(
 }
 
 /**
- * The length, in seconds, of the audio a Lip Sync priced by its audio's seconds
- * is QUOTED on, or `undefined` when it is not known yet: a wired `audio` as the
- * measured walk reads it ({@link measuredInputReader}, with the container
- * slack on audio a node makes in the run, and a voice made again in the run at
- * the take it holds — a minimum) — the server's reading; with no audio wired
- * (the node's own audio), the length the node measured of it at its last run
- * (`audioDurationSec`). The run measures the real audio before it holds.
+ * The length, in seconds, of the audio a Lip Sync priced by its audio's length
+ * is QUOTED on, or `undefined` when it is not known yet: the audio the
+ * editor's own Run of the node plays (`lipSyncAudioSourceId`, decided
+ * 2026-11-13: the dropdown-selected node, else the last wired `audio`) as the
+ * measured walk reads it ({@link measuredInputReader}: an upload at the length
+ * the platform recorded for it, the container slack on audio a node makes in
+ * the run, and a voice made again in the run at the take it holds — a
+ * minimum). Never a length the Lip Sync node itself carries
+ * (`audioDurationSec`, a browser's reading or a client's word): with no audio
+ * node to read it is unknown, and a model priced by a length tier is quoted at
+ * its top tier. The run measures the real audio before it holds.
  */
 export function lipSyncQuotedAudioSec(
   node: Pick<WorkflowNode, "id" | "data">,
@@ -654,8 +658,23 @@ export function lipSyncQuotedAudioSec(
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | undefined {
-  const wire = edges.find((e) => e.target === node.id && e.targetHandle === "audio")
-  if (wire) return measuredInputReader("lip-sync", nodes, edges, rerunIds, { voiceTakeAsMinimum: true })(wire.source)
+  const source = lipSyncAudioSourceId(node, nodes, edges, "editor")
+  return source === undefined ? undefined : measuredInputReader("lip-sync", nodes, edges, rerunIds, { voiceTakeAsMinimum: true })(source)
+}
+
+/**
+ * OmniHuman 2.0's quoted length (decided 2026-11-11, unchanged): the audio the
+ * editor's Run plays ({@link lipSyncQuotedAudioSec}), else, with none to read,
+ * the length the node measured at its last run (`audioDurationSec`) — its
+ * figure is then shown as an estimate only when neither is known.
+ */
+function rateModelQuotedAudioSec(
+  node: Pick<WorkflowNode, "id" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string>,
+): number | undefined {
+  if (lipSyncAudioSourceId(node, nodes, edges, "editor") !== undefined) return lipSyncQuotedAudioSec(node, nodes, edges, rerunIds)
   const own = (node.data as { audioDurationSec?: unknown } | undefined)?.audioDurationSec
   return typeof own === "number" && Number.isFinite(own) && own > 0 ? own : undefined
 }
@@ -663,7 +682,7 @@ export function lipSyncQuotedAudioSec(
 /**
  * The seconds a Lip Sync on a model charged per second of its audio
  * (OmniHuman 2.0) is QUOTED at — the billed seconds of the audio
- * ({@link lipSyncQuotedAudioSec}), or, while its length is not known, the
+ * ({@link rateModelQuotedAudioSec}), or, while its length is not known, the
  * 15 seconds every model priced by its audio shows (an estimate) — and 1 for
  * every other model, whose row is the whole price. The node's pill, its Run
  * button, the confirm and the workflow badge all read this.
@@ -676,7 +695,7 @@ export function lipSyncPricingUnits(
 ): number {
   const rate = lipSyncAudioRateOf((withWiredSettings(node, nodes, edges).data as { provider?: unknown } | undefined)?.provider)
   if (!rate) return 1
-  return lipSyncEstimateSeconds(rate, lipSyncQuotedAudioSec(node, nodes, edges, rerunIds), LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS)
+  return lipSyncEstimateSeconds(rate, rateModelQuotedAudioSec(node, nodes, edges, rerunIds), LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS)
 }
 
 /** Is this Lip Sync quoted on a length it does not know yet (a per-second-rate model with no audio length)? Its figure is then an estimate. */
@@ -687,5 +706,5 @@ export function lipSyncQuoteIsEstimate(
   rerunIds: ReadonlySet<string> = new Set(),
 ): boolean {
   const rate = lipSyncAudioRateOf((withWiredSettings(node, nodes, edges).data as { provider?: unknown } | undefined)?.provider)
-  return rate !== undefined && lipSyncQuotedAudioSec(node, nodes, edges, rerunIds) === undefined
+  return rate !== undefined && rateModelQuotedAudioSec(node, nodes, edges, rerunIds) === undefined
 }

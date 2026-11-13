@@ -128,7 +128,7 @@ import { stampVideoOverlayLength, videoOverlayBaseCredits, videoOverlayReserveId
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { seedanceExtendStampedBaseCredits, stampSeedanceExtendSource } from "../../lib/seedance-extend-credits.js"
 import { grokExtendReserveId, stampGrokExtendSource } from "../../lib/grok-extend-stamp.js"
-import { lipSyncRateBaseCredits, stampLipSyncInputs, stampedLipSyncBilledSeconds } from "../../lib/lip-sync-inputs.js"
+import { lipSyncBucketReserveId, lipSyncRateBaseCredits, stampLipSyncInputs, stampedLipSyncBilledSeconds } from "../../lib/lip-sync-inputs.js"
 import { stampTopazVideoUpscale, topazVideoStampedBaseCredits } from "../../lib/topaz-video-plan.js"
 import { isNodaroVideoUpscaleJob, nodaroVideoUpscaleReserveId, nodaroVideoUpscaleStampedBaseCredits, stampNodaroVideoUpscale } from "../../lib/nodaro-video-upscale-plan.js"
 import { stampTopazImageSize, topazImageStampedBaseCredits } from "../../lib/topaz-image-size.js"
@@ -2497,12 +2497,13 @@ async function executeWorkerNode(
     err.errorCode = sfxRefusal.code
     throw err
   }
-  // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): the
-  // route's own rule — measure the audio and the image, refuse what the model
-  // cannot take, stamp the measured length and the billed seconds — before
-  // input_data is written and before anything is reserved. Every edition: the
-  // length a node carried (a browser's reading, maybe of an older clip) is
-  // never what the run is priced on. A refusal leaves no jobs row.
+  // Lip Sync on a model priced by its audio's length (OmniHuman 2.0's rate,
+  // the bucketed models — Kling AI Avatar, OmniHuman 1.5, the dubbing models):
+  // the route's own rule — measure the audio (and a rate model's image),
+  // refuse what the model cannot take, stamp the measured length and the held
+  // seconds — before input_data is written and before anything is reserved.
+  // Every edition: the length a node carried (a browser's reading, maybe of an
+  // older clip) is never what the run is priced on. A refusal leaves no jobs row.
   const lipSyncRefusal = await stampLipSyncInputs(jobName, payload, ctx.userId)
   if (lipSyncRefusal) {
     await supabase.from("jobs").delete().eq("id", jobId)
@@ -2855,6 +2856,9 @@ async function executeWorkerNode(
         meteredHold?.chargeId ??
         (await computeEditPlanReserveId(jobName, payload, editPlanPerMinute)) ??
         videoSfxReserveId(jobName, payload) ??
+        // Lip Sync on a model priced by a length bucket: the bucket of the audio
+        // `stampLipSyncInputs` measured above — the route's own row for it.
+        lipSyncBucketReserveId(jobName, payload) ??
         // Nodaro Image Upscale: the tier stamped from its output's size, else the hold.
         nodaroImageUpscaleReserveId(jobName, payload) ??
         videoDepthReserveId(jobName, payload) ??
