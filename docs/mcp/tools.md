@@ -471,6 +471,15 @@ Nodes configured with multiple providers at once are left untouched — the vali
 set there is the intersection across every selected provider, and no single
 replacement is correct for all of them.
 
+A video node's Seedance reference task type (`referenceTaskType` on a
+`generate-video`, `image-to-video`, `text-to-video` or `video-to-video` node) is
+kept only while a model the node runs lists the value (`referenceTaskTypes` in
+`list_models`, Seedance 2.5 today; on a node with several providers, any one of
+them). Otherwise the key is removed and reported, so it cannot sit unused on
+another model and take effect when the node is later switched to Seedance 2.5.
+`auto`, and any value no model lists, is removed too: Auto is the key left unset.
+A node that names no model is judged on the model it runs by default.
+
 ---
 
 ### `export_workflow`

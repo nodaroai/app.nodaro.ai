@@ -15,6 +15,7 @@ import {
 } from "@nodaro/shared/workflow"
 import { stripStudioDraftWorkflow } from "@nodaro/shared/pipeline"
 import { normalizeVideoOverlayNodes } from "@nodaro/shared/video"
+import { withListedReferenceTaskTypes } from "@nodaro/shared/nodes"
 import { WORKFLOW_VISIBILITIES } from "@nodaro/shared/organizations"
 import { publicWorkflowProjection } from "../lib/public-workflow-projection.js"
 import { supabase } from "../lib/supabase.js"
@@ -912,7 +913,8 @@ export async function workflowRoutes(app: FastifyInstance) {
         // handle these edges wire keeps no stored `imageUrl` — this is the
         // create the SDK's `workflows.create` posts a full graph to.
         // A run's state is never saved (`TRANSIENT_RUNTIME_KEYS`), on a create as on every save.
-        nodes: stripTransientRuntimeData(normalizeVideoOverlayNodes(body.nodes ?? [], body.edges)),
+        // A stored reference task type no model the node runs lists is removed (withListedReferenceTaskTypes).
+        nodes: withListedReferenceTaskTypes(stripTransientRuntimeData(normalizeVideoOverlayNodes(body.nodes ?? [], body.edges))),
         edges: body.edges ?? [],
         settings: body.settings ?? {},
         source_prompt: body.sourcePrompt ?? null,
@@ -1174,7 +1176,8 @@ export async function workflowRoutes(app: FastifyInstance) {
         // Video Overlay (D10): presets expanded, and a layer whose `overlay<i>`
         // handle these edges wire keeps no stored `imageUrl`.
         // A run's state is never saved (`TRANSIENT_RUNTIME_KEYS`), on a create as on every save.
-        nodes: stripTransientRuntimeData(normalizeVideoOverlayNodes(body.nodes ?? [], body.edges)),
+        // A stored reference task type no model the node runs lists is removed (withListedReferenceTaskTypes).
+        nodes: withListedReferenceTaskTypes(stripTransientRuntimeData(normalizeVideoOverlayNodes(body.nodes ?? [], body.edges))),
         edges: body.edges ?? [],
         settings: body.settings ?? {},
         source_prompt: body.sourcePrompt ?? null,
@@ -1676,14 +1679,34 @@ export async function workflowRoutes(app: FastifyInstance) {
           mergeDeltaEdges(storedGraph?.edges, deltaUpsertEdges, body.delta.deleteEdgeIds),
         )
       }
+      // Server-side strip mirrors the full-body path: transient run-state
+      // never persists, whichever protocol carries the nodes.
+      const strippedUpserts = stripTransientRuntimeData(
+        deltaUpsertNodes as unknown as Array<{ data?: Record<string, unknown> }>,
+      )
+      // …and a stored reference task type no model the node runs lists is
+      // removed (withListedReferenceTaskTypes) — never on a codec-owned
+      // document, as the full-body path skips it: its write guard refuses any
+      // other writer's change. Only a delta the rule changes pays for the read.
+      let deltaNodesToWrite = withListedReferenceTaskTypes(strippedUpserts)
+      if (deltaNodesToWrite !== strippedUpserts) {
+        const { data: storedDoc } = await supabase
+          // tenant-scope-ignore: the RPC below authorizes this caller for this id; the read only decides how the delta's own node upserts are written and never reaches the response.
+          .from("workflows")
+          .select("nodes, settings")
+          .eq("id", params.id)
+          .maybeSingle()
+        const storedSettings = (storedDoc?.settings ?? {}) as Record<string, unknown>
+        // The settings the delta leaves: a per-key replace of the stored ones.
+        const settingsAfter = { ...storedSettings, ...((body.delta.set?.settings ?? {}) as Record<string, unknown>) }
+        if (isCodecOwnedDocument(storedDoc?.nodes, storedSettings) || isCodecOwnedDocument(strippedUpserts, settingsAfter)) {
+          deltaNodesToWrite = strippedUpserts
+        }
+      }
       const { data: rpcData, error: rpcError } = await supabase.rpc("apply_workflow_delta", {
         p_workflow_id: params.id,
         p_base_version: body.delta.baseVersion,
-        // Server-side strip mirrors the full-body path: transient run-state
-        // never persists, whichever protocol carries the nodes.
-        p_upsert_nodes: stripTransientRuntimeData(
-          deltaUpsertNodes as unknown as Array<{ data?: Record<string, unknown> }>,
-        ),
+        p_upsert_nodes: deltaNodesToWrite,
         p_delete_node_ids: body.delta.deleteNodeIds ?? [],
         p_upsert_edges: deltaUpsertEdges ?? [],
         p_delete_edge_ids: body.delta.deleteEdgeIds ?? [],
@@ -1796,10 +1819,14 @@ export async function workflowRoutes(app: FastifyInstance) {
       const savedNodes = codecOwned
         ? body.nodes
         : await resolveCanvasResultIds(body.nodes, loaded.row.user_id, { settings: settingsAfter })
-      updates.nodes = normalizeVideoOverlayNodes(
+      const overlaid = normalizeVideoOverlayNodes(
         stripTransientRuntimeData(savedNodes as Array<{ data?: Record<string, unknown> }>),
         (body.edges ?? loaded.row.edges) as ReadonlyArray<{ target?: unknown; targetHandle?: unknown }> | undefined,
       )
+      // A stored reference task type no model the node runs lists is removed
+      // (withListedReferenceTaskTypes) — never on a codec-owned document, for
+      // the reason its result ids are not renamed above.
+      updates.nodes = codecOwned ? overlaid : withListedReferenceTaskTypes(overlaid)
     } else if (body.edges !== undefined && Array.isArray(loaded.row.nodes)) {
       // Video Overlay (D10) on an edges-only save: new edges can wire a STORED
       // node's layer handle, so that node's stale `imageUrl` is cleared and the
@@ -1812,7 +1839,7 @@ export async function workflowRoutes(app: FastifyInstance) {
         body.edges as ReadonlyArray<{ target?: unknown; targetHandle?: unknown }>,
       )
       if (healed !== storedNodes) {
-        updates.nodes = healed
+        updates.nodes = withListedReferenceTaskTypes(healed)
         pinnedToLoadedVersion = typeof loaded.row.version === "number"
       }
     }
@@ -2286,7 +2313,8 @@ export async function workflowRoutes(app: FastifyInstance) {
         name: wf.name,
         // Video Overlay (D10): presets expanded; a wired layer keeps no `imageUrl`.
         // A run's state is never saved (`TRANSIENT_RUNTIME_KEYS`), on an import as on every save.
-        nodes: stripTransientRuntimeData(normalizeVideoOverlayNodes(remappedNodes, migratedEdges)),
+        // A stored reference task type no model the node runs lists is removed (withListedReferenceTaskTypes).
+        nodes: withListedReferenceTaskTypes(stripTransientRuntimeData(normalizeVideoOverlayNodes(remappedNodes, migratedEdges))),
         edges: migratedEdges,
         settings: remappedSettings,
         // Where this row came from. The importer is recorded as the original

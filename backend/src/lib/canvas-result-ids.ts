@@ -62,7 +62,7 @@
  */
 import { isRenderNodeType } from "@nodaro/shared/nodes"
 import { supabase } from "./supabase.js"
-import { needsPublicWorkflowProjection } from "./public-workflow-projection.js"
+import { isCodecOwnedDocument } from "@nodaro/shared/pipeline"
 import { TRASHED_JOB_COLUMN } from "./public-job-data.js"
 
 // ---------------------------------------------------------------------------
@@ -490,16 +490,9 @@ export async function withResolvedResultIds<R extends Record<string, unknown>>(
 }
 
 /** Whether a document is one a server codec owns (Studio): the TS mirror of
- *  `workflow_requires_compatible_writer` (migration 398). */
-export function isCodecOwnedDocument(nodes: unknown, settings: unknown): boolean {
-  return needsPublicWorkflowProjection({
-    id: "",
-    name: "",
-    nodes: Array.isArray(nodes) ? nodes : [],
-    edges: [],
-    settings: obj(settings),
-  })
-}
+ *  `workflow_requires_compatible_writer` (migration 398) — the one predicate
+ *  in `@nodaro/shared`, which the editor asks too. */
+export { isCodecOwnedDocument }
 
 // ---------------------------------------------------------------------------
 // An earlier run's node states, handed to a continued run as its seeds

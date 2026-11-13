@@ -1,4 +1,4 @@
-import { PREVIEW_RENDER_NESTED } from "@nodaro/shared/nodes"
+import { PREVIEW_RENDER_NESTED, withListedReferenceTaskTypes } from "@nodaro/shared/nodes"
 import { previewRendersIn } from "../services/workflow-engine/nested-preview-renders.js"
 import { previewRefusalMessage } from "../lib/preview-refusal-copy.js"
 import { previewHoldKindOf } from "@nodaro/render-rules"
@@ -674,7 +674,9 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to publish app")
     }
-    const snapshotNodes = published.nodes
+    // A stored reference task type no model the node runs lists never ships (withListedReferenceTaskTypes):
+    // an app that exposes the model could otherwise switch it back on.
+    const snapshotNodes = withListedReferenceTaskTypes(published.nodes)
     // A component's exposed setting on a node in that set defaults to what the node ships with, never
     // to a copy of the author's value.
     const shippedComponentMetadata = componentMetadata

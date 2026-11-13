@@ -50,6 +50,14 @@ let fetched: {
   worlds: readonly WorldId[] | null
 } | null = null
 let inflight: Promise<void> | null = null
+/**
+ * The viewer's read failed (an error status, the network, a body it could not
+ * read) and no answer of theirs stands. Kept until an answer lands or the
+ * viewer changes, so a retry does not flip it back to "awaited" in between.
+ * Only a reader that treats a failed read unlike one still awaited asks
+ * (`surfaceAvailabilityFailed`); every other reader sees both as "not landed".
+ */
+let failed = false
 /** Whose answer `fetched` is. The answer is per viewer, so it is only ever shown
  *  to the viewer it was fetched for (see `loadSurfaceAvailability`). */
 let fetchedFor: string | null = null
@@ -98,8 +106,9 @@ export function resetSurfaceAvailability(): void {
   viewerSeq += 1
   inflight = null
   fetchedFor = null
-  if (fetched) {
+  if (fetched || failed) {
     fetched = null
+    failed = false
     emit()
   }
 }
@@ -139,7 +148,11 @@ async function fetchAnswer(getAuthHeaders: () => Promise<Record<string, string>>
   try {
     const headers = await getAuthHeaders()
     const res = await fetch("/v1/surface/availability", { headers })
-    if (!res.ok || seq !== viewerSeq) return
+    if (seq !== viewerSeq) return
+    if (!res.ok) {
+      readFailed(seq)
+      return
+    }
     const json = (await res.json()) as {
       nodes?: { denied?: unknown; hiddenFromUsers?: unknown }
       models?: { denied?: unknown; restricted?: unknown }
@@ -161,11 +174,20 @@ async function fetchAnswer(getAuthHeaders: () => Promise<Record<string, string>>
       },
       worlds: offeredWorlds(json.worlds),
     }
+    failed = false
     emit()
   } catch {
     // Offline / pre-auth — the static-profile fallback stands; the backend
     // is the authority either way.
+    readFailed(seq)
   }
+}
+
+/** Note that the read started for viewer `seq` failed: only while they are still the viewer and no answer of theirs stands. */
+function readFailed(seq: number): void {
+  if (seq !== viewerSeq || fetched || failed) return
+  failed = true
+  emit()
 }
 
 /**
@@ -206,6 +228,7 @@ export function __resetSurfaceAvailabilityForTests(
         worlds: next.worlds ?? null,
       }
     : null
+  failed = false
   if (!next) {
     fetchedFor = null
     inflight = null
@@ -214,10 +237,31 @@ export function __resetSurfaceAvailabilityForTests(
   emit()
 }
 
+/** Test hook: the viewer's read failed, and no answer stands. */
+export function __failSurfaceAvailabilityForTests(): void {
+  fetched = null
+  failed = true
+  emit()
+}
+
 /** True once the viewer's availability answer has landed (false before it,
  *  after sign-out, and for the whole session when the fetch failed). */
 export function surfaceAvailabilityLoaded(): boolean {
   return fetched !== null
+}
+
+/**
+ * True when the viewer's read failed and no answer of theirs has landed:
+ * `surfaceAvailabilityLoaded()` is false both while the read is awaited and
+ * after it failed, and this tells the two apart. False while awaited, once an
+ * answer lands (a later failed re-read keeps it), and after sign-out or a
+ * change of account. For a reader whose rule for a failed read differs from
+ * its rule while awaiting (the white-label header's world menus: after a
+ * failed read they follow the static profile, as `isNodeUnavailable` does;
+ * while it is awaited they name nothing).
+ */
+export function surfaceAvailabilityFailed(): boolean {
+  return failed
 }
 
 /** True when this deployment does not offer this node type in the picker. */

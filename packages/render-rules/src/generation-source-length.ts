@@ -12,6 +12,7 @@ import {
   applyDefaultVideoSelection,
   DEFAULT_VIDEO_TO_VIDEO_PROVIDER,
   isSeedanceVideoEditProvider,
+  LEGACY_VIDEO_NODE_DEFAULT_PROVIDER,
   resolveVideoProviderForMode,
   SEEDANCE_VIDEO_EDIT_SHAPE,
 } from "@nodaro/shared/models"
@@ -21,8 +22,8 @@ import { LENGTH_RECORDING_VIDEO_NODE_TYPES, lengthFollowingBoundSec, withoutReco
 import { nodeProviders } from "./node-fan-out"
 import { seedanceTaskTypeAsRun, wiredReferenceVideoSec } from "./seedance-task-type-as-run"
 
-/** The model a legacy Image to Video / Text to Video node runs when it names none (the workflow run's own default). */
-export const LEGACY_VIDEO_NODE_DEFAULT_PROVIDER = "kling"
+/** The model a legacy Image to Video / Text to Video node runs when it names none (the workflow run's own default), one constant with the write boundary's (`@nodaro/shared`). */
+export { LEGACY_VIDEO_NODE_DEFAULT_PROVIDER }
 
 const positiveSec = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined)
 

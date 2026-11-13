@@ -238,6 +238,7 @@ const ALLOWED: ReadonlyMap<string, Allowed> = new Map<string, Allowed>([
   ["hooks/queries/use-competitors-queries.ts", { refs: 1, why: "Competitors: a page of its own, with no canvas" }],
   ["ee/hooks/queries/use-admin-queries.ts", { refs: 3, why: "Admin → Trends' test run, its face mask and its upscales to 720p / 1080p: an admin page of its own, with no canvas; the test run's job is read back into the trend's test-run list, the face mask's into the face masking section, an upscale's into its example card or the source clip section" }],
   ["ee/app/(admin)/admin/trends/components/SlotDefaultImages.tsx", { refs: 1, why: "Admin → Trends' default-image upscale: an admin page of its own, with no canvas; the upscaled picture replaces the slot's default image in the trend draft" }],
+  ["ee/lib/freecut-ai/run-ai-edit.ts", { refs: 3, why: "Edit with AI in the video editor: the transcription, the planner call and the music land in the editor's own timeline (the FreeCut modal), never on a canvas node, and the run is cancelled with its jobs when the editor closes" }],
   ["routes/video-director-page.tsx", { refs: 1, why: "the Video Director: a page of its own, with no canvas" }],
   ["components/editor/scene-editor-modal.tsx", { refs: 2, why: UNMOUNTED, check: importedOnlyBy(SCENE_EDITOR, []) }],
   ["components/editor/scene-config.tsx", { refs: 1, why: UNMOUNTED, check: importedOnlyBy("components/editor/scene-config", [`${SCENE_EDITOR}.tsx`]) }],

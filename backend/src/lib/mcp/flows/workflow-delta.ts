@@ -1,3 +1,4 @@
+import { withListedReferenceTaskTypes } from "@nodaro/shared/nodes"
 import { supabase } from "../../supabase.js"
 
 /** A stored workflow graph as the flow writers read it. */
@@ -56,7 +57,8 @@ export async function applyFlowDelta(
     const { data, error } = await supabase.rpc("apply_workflow_delta", {
       p_workflow_id: workflowId,
       p_base_version: flow.version,
-      p_upsert_nodes: delta.upsertNodes ?? [],
+      // A stored reference task type no model the node runs lists is removed (withListedReferenceTaskTypes).
+      p_upsert_nodes: withListedReferenceTaskTypes(delta.upsertNodes ?? []),
       p_delete_node_ids: [],
       p_upsert_edges: delta.upsertEdges ?? [],
       p_delete_edge_ids: [],

@@ -699,7 +699,8 @@ describe("POST /v1/credits/estimate-workflow", () => {
     expect(body.data).toEqual({ totalCredits: 14, nodeCount: 3, payer: "user" })
     // Edges are OPTIONAL: an older caller sends nodes alone and the estimator
     // is handed `undefined`, which is its "assume the pricier lane" signal.
-    expect(mockEstimateWorkflowCredits).toHaveBeenCalledWith(nodes, undefined)
+    // No viewer flag and no signed-in caller's drafts: the options are empty.
+    expect(mockEstimateWorkflowCredits).toHaveBeenCalledWith(nodes, undefined, {})
   })
 
   // ── the edge-aware half ────────────────────────────────────────────────
@@ -727,7 +728,7 @@ describe("POST /v1/credits/estimate-workflow", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toEqual({ totalCredits: 50, nodeCount: 2, payer: "user" })
-    expect(mockEstimateWorkflowCredits).toHaveBeenCalledWith(nodes, edges)
+    expect(mockEstimateWorkflowCredits).toHaveBeenCalledWith(nodes, edges, {})
   })
 
   it("a caller who may use Speaker Map: a use-case node is priced on every recording it reads (multicam)", async () => {
@@ -776,6 +777,7 @@ describe("POST /v1/credits/estimate-workflow", () => {
     expect(mockEstimateWorkflowCredits).toHaveBeenCalledWith(
       [{ id: "ac1", type: "add-captions", parentId: "grp" }],
       [{ source: "tr1", sourceHandle: "json", target: "ac1", targetHandle: "transcript", data: { outputMode: "each" } }],
+      {},
     )
   })
 

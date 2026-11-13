@@ -40,4 +40,4 @@ export {
   STUDIO_KEYFRAME_REVIEW_KEYS,
   STUDIO_KEYFRAME_ACCEPTANCE_PRIVATE_KEYS,
 } from "../studio-transient.js"
-export { STUDIO_DEPENDENT_FRAMES_CAPABILITY, SequenceExecutionRequiredError, requiresSequenceExecution, assertCanvasExecutionAllowed } from "../sequence-execution"
+export { STUDIO_DEPENDENT_FRAMES_CAPABILITY, SequenceExecutionRequiredError, requiresSequenceExecution, assertCanvasExecutionAllowed, isCodecOwnedDocument } from "../sequence-execution"

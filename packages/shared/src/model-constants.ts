@@ -4871,6 +4871,13 @@ export function preferredInputModeForModel(
 export const DEFAULT_VIDEO_PROVIDER = "seedance-2-fast"
 
 /**
+ * The model a legacy Image to Video / Text to Video node runs when it names
+ * none: the workflow run's own default for those two (Generate Video's is
+ * {@link DEFAULT_VIDEO_PROVIDER}, through {@link applyDefaultVideoSelection}).
+ */
+export const LEGACY_VIDEO_NODE_DEFAULT_PROVIDER = "kling"
+
+/**
  * Duration paired with the default provider when BOTH provider and duration
  * are omitted. Pins the nothing-specified request to the default model's
  * cheapest seeded tier (4s @ 480p — resolution omission already resolves to

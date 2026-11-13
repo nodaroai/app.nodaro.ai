@@ -27,6 +27,7 @@ import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { importViaOf } from "../lib/import-via.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { estimateWorkflowCreditsDetailed, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { existingDraftsFor } from "../ee/billing/existing-drafts-option.js"
 import { isLlmUnpricedError, llmUnpricedMessage, refuseIfRunUnpriced } from "../lib/llm-unpriced-refusal.js"
 import { usecaseViewerEstimateFor } from "../lib/use-case/inner-availability.js"
 import { exposedTextCaps, exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
@@ -246,6 +247,8 @@ export async function presentationRoutes(app: FastifyInstance) {
         speechTextCaps: exposedTextCaps(workflow.settings as Record<string, unknown> | null, shown),
         // A use-case node is priced on the recordings and framing source the viewer's run reads (decided 2026-10-19/20).
         ...(await usecaseViewerEstimateFor(shown, req.userId)),
+        // A finalize of a Seedance draft the viewer already has: its exact price; an anonymous viewer has none (decided 2026-11-13).
+        ...existingDraftsFor(req.userId),
       })
     } catch (err) {
       if (!isLlmUnpricedError(err)) throw err

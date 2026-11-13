@@ -106,10 +106,12 @@ jobs:
       # header's product side (its failure signal, its router helper, its
       # frozen fallback) behaves as the app assumes, and the real header draws
       # a white-label balance the way the app means it (the allowance's month
-      # meter). All skip without the package elsewhere; here the variable makes
-      # a missing package a failure.
+      # meter) and opens the pages below a world only where the app names them
+      # (every page the package lists for a world it draws is named by the
+      # app's rule). All skip without the package elsewhere; here the variable
+      # makes a missing package a failure.
       - name: What the app relies on goes through the package
         working-directory: frontend
         env:
           SHARED_HEADER_TESTS_REQUIRE_PACKAGE: "1"
-        run: npx vitest run src/ee/shell/__tests__/a11y-package.test.ts src/ee/shell/__tests__/hosted-header-package.test.tsx src/ee/shell/__tests__/white-label-balance-package.test.tsx
+        run: npx vitest run src/ee/shell/__tests__/a11y-package.test.ts src/ee/shell/__tests__/hosted-header-package.test.tsx src/ee/shell/__tests__/white-label-balance-package.test.tsx src/ee/shell/__tests__/white-label-menus-package.test.tsx

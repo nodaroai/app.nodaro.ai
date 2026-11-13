@@ -22,6 +22,7 @@ import {
   LEGACY_TARGET_HANDLE_ALIASES,
   classifyLegacyTargetHandle,
   renderedSourceHandle,
+  withListedReferenceTaskTypes,
   withRunOverrides,
 } from "@nodaro/shared/nodes"
 import { filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, isCollectInEdge, TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE, isExecutionDataKey } from "@nodaro/shared/workflow"
@@ -2310,7 +2311,12 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     // a run-only field saved before it was stripped on save (a use-case node's
     // continuation) is stale, so the editor's estimates and preview gate never
     // read one — as the server's engine drops it.
-    const nodes = withRunOverrides(loadedNodes, undefined)
+    // A stored reference task type no model its node runs lists (one stored
+    // before every write held the rule) is removed too — the rule every
+    // workflow write runs (`withListedReferenceTaskTypes`) — so it can never
+    // come back on a later switch to Seedance 2.5. In memory here; the load
+    // writes it back (use-workflow-persistence), never on a read-only document.
+    const nodes = withListedReferenceTaskTypes(withRunOverrides(loadedNodes, undefined))
     // What was set in an unsaved workflow's trigger panels never carries over.
     discardUnsavedAccountTriggerIntents()
     // Node ids name other nodes in another workflow.
@@ -2847,8 +2853,9 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     })),
 
   reconcileFromRemote: ({ nodes: remoteNodes, edges, updatedAt, version, settings }) => {
-    // The saved graph as a plain run reads it, as on a load (`loadWorkflow`).
-    const nodes = withRunOverrides(remoteNodes, undefined)
+    // The saved graph as a plain run reads it, as on a load (`loadWorkflow`),
+    // stored reference task types held to the node's models included.
+    const nodes = withListedReferenceTaskTypes(withRunOverrides(remoteNodes, undefined))
     // Never adopt a snapshot that is not newer than what this tab already
     // holds. A late realtime echo of this tab's OWN older save would
     // otherwise rewind the canvas and `loadedVersion` — the next save then

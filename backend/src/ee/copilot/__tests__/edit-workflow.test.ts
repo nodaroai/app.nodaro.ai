@@ -415,6 +415,23 @@ describe("edit_workflow — write pipeline", () => {
     expect(args.p_base_version).toBe(1)
   })
 
+  // Decided 2026-11-13: the same catalog normalizer as the MCP JSON writes.
+  it("removes a stored reference task type no model the node runs lists, keeps one Seedance 2.5 lists, and reports it", async () => {
+    const result = await runEditWorkflow(ctx, {
+      note: "two video nodes",
+      upsertNodes: [
+        { id: "kling", type: "generate-video", data: { provider: "kling-3.0", prompt: "a cat", referenceTaskType: "edit" } },
+        { id: "sd25", type: "generate-video", data: { provider: "seedance-2-5", prompt: "a cat", referenceTaskType: "edit" } },
+      ],
+    })
+    const args = rpcMock.mock.calls[0]![1] as { p_upsert_nodes: Array<{ id: string; data: Record<string, unknown> }> }
+    const byId = new Map(args.p_upsert_nodes.map((n) => [n.id, n.data]))
+    expect(byId.get("kling")).not.toHaveProperty("referenceTaskType")
+    expect(byId.get("sd25")).toMatchObject({ referenceTaskType: "edit" })
+    expect(result.adjustments.join("\n")).toContain('kling (kling-3.0): referenceTaskType "edit" → removed')
+    expect(result.adjustments.join("\n")).not.toContain("sd25")
+  })
+
   it("refuses to grow the graph past the node cap", async () => {
     graphState.nodes = Array.from({ length: 250 }, (_, i) => ({ id: `n${i}`, type: "text-prompt", data: {} }))
     await expect(

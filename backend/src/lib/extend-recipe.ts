@@ -34,7 +34,7 @@ import {
   type SeedanceExtendProvider,
   type TailExtendProvider,
 } from "@nodaro/shared/models"
-import { SEEDANCE_EXTEND_CONTEXT_MAX_SEC, seedanceExtendAddedSec } from "@nodaro/render-rules"
+import { SEEDANCE_EXTEND_CONTEXT_MAX_SEC, seedanceExtendAddedSec } from "@nodaro/shared/credits"
 
 /** How the extension is joined onto the source (`stitchExtension`'s boundary options). */
 export interface TailRecipeStitch {
@@ -206,7 +206,7 @@ export function isTailRecipeProvider(p: string): p is keyof typeof TAIL_RECIPES 
  * The seconds a tail-recipe run adds for a requested `duration`: the seconds
  * its price counts (`pricedOutputDurationSec` — the provider's catalog default
  * when unset or unreadable), rounded and held in the provider's window — the
- * shared reading (`seedanceExtendAddedSec`, @nodaro/render-rules) every quote
+ * shared reading (`seedanceExtendAddedSec`, @nodaro/shared) every quote
  * counts too. The route queues it, the worker generates it and the
  * output-length rule records it.
  */

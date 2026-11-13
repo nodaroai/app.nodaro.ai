@@ -5,6 +5,7 @@ import {
   PLANS_QUERY_KEY,
   shellTranslator,
   type NodaroShellProps,
+  type WorldMenuPage,
 } from "@nodaroai/shell"
 import * as sharedLocale from "@nodaroai/shell/locale"
 import type * as appLocale from "virtual:site-locale"
@@ -21,7 +22,7 @@ import { HEADER_BALANCE_KEY } from "../../lib/invalidate-balance"
 import { HEADER_QUERY_KEYS } from "../query-keys"
 import type { AccessibilityPreferences, ToggleKey } from "../../../lib/accessibility-preferences"
 import { ACCOUNT_CHANGED_EVENT } from "../../../lib/account-changed-event"
-import type { SiteHeaderProps, SiteHeaderTranslate } from "../types"
+import type { SiteHeaderProps, SiteHeaderTranslate, SiteWorldMenuPage } from "../types"
 import type * as appEditorTypes from "../media-editor-types"
 
 /**
@@ -49,6 +50,14 @@ export const propsFit: Fits<SiteHeaderProps, NodaroShellProps> = true
  */
 type UnknownProps = Exclude<keyof SiteHeaderProps, keyof NodaroShellProps>
 export const noUnknownProps: [UnknownProps] extends [never] ? true : false = true
+
+/**
+ * Each page below a world the app names (`worldMenus.<world>.pages`) is one of
+ * the package's (`WORLD_MENU_PAGES`): a page it renamed or dropped fails here.
+ * That every page the package lists for a world the white-label header draws
+ * is named is held at run time (`../__tests__/white-label-menus-package.test.tsx`).
+ */
+export const menuPagesFit: Fits<SiteWorldMenuPage, WorldMenuPage> = true
 
 /** The virtual module's translator is the package's. */
 export const translatorFits: (locale: string | undefined) => SiteHeaderTranslate = shellTranslator

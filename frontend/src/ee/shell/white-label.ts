@@ -3,7 +3,7 @@ import type { NodaroClient } from "@nodaro/sdk/client"
 import type { UserBalance } from "@nodaro/sdk/credits"
 import { spendableCredits, spendableDisplayFigure } from "@/lib/spendable-credits"
 import { WHITE_LABEL_WORLD_PATHS } from "./site"
-import type { SiteHeaderTranslate, SiteWorldId } from "./types"
+import type { SiteHeaderTranslate, SiteWorldId, SiteWorldMenu, SiteWorldMenuPage } from "./types"
 
 /**
  * The white-label header's pure parts (`white-label-header.tsx` mounts it): a
@@ -23,6 +23,51 @@ import type { SiteHeaderTranslate, SiteWorldId } from "./types"
 export function whiteLabelWorlds(profile: SurfaceWorlds | undefined, offered: readonly WorldId[] | null): SiteWorldId[] {
   const worlds = offered ?? orderWorlds(profile?.order).filter((id) => worldAllowed(profile, id))
   return worlds.filter((id) => WHITE_LABEL_WORLD_PATHS[id] !== undefined)
+}
+
+/**
+ * The pages below a world that the white-label header's world menu may open
+ * (the package's `WORLD_MENU_PAGES`, @nodaroai/shell ≥ 0.24.7), with the node
+ * types each one runs. Each is a page of the worlds app on this same site,
+ * below the world's address (`WHITE_LABEL_WORLD_PATHS`): Translate is
+ * `/video/translate`, the worlds app's Translate mode, which runs `dubbing`
+ * and which that app shows a viewer exactly when the platform withholds none
+ * of these node types from them. A white-label header draws such a page only
+ * where the host names it, so this app names it by the same rule once the
+ * viewer's answer is in, and both headers on the site (and the worlds app's
+ * tabs) agree. They differ in one case: after a read of that answer that
+ * failed, this header follows the deployment's static profile (no Translate
+ * where its `nodes.deny` names `dubbing`), while the worlds app withholds
+ * nothing and shows it.
+ *
+ * Every page the package lists for a world this header draws is here
+ * (`white-label-menus-package.test.tsx` fails one that is not); a world with
+ * none, or one this header does not draw (Speech), is left out.
+ */
+export const WHITE_LABEL_MENU_PAGES: Readonly<Partial<Record<SiteWorldId, Readonly<Partial<Record<SiteWorldMenuPage, readonly string[]>>>>>> =
+  Object.freeze({
+    video: Object.freeze({ translate: Object.freeze(["dubbing"]) }),
+  })
+
+/**
+ * The white-label header's `worldMenus`: for each world above, the pages the
+ * viewer is offered, those none of whose node types `unavailable` names (the
+ * server's per-viewer answer, `GET /v1/surface/availability` → `nodes.denied`;
+ * after a read that failed, the deployment's static profile). `null` while
+ * that answer is awaited names none, so a page the answer may withhold is
+ * never drawn and then taken away.
+ */
+export function whiteLabelWorldMenus(unavailable: ((nodeType: string) => boolean) | null): Partial<Record<SiteWorldId, SiteWorldMenu>> {
+  const menus: Partial<Record<SiteWorldId, SiteWorldMenu>> = {}
+  for (const [world, pages] of Object.entries(WHITE_LABEL_MENU_PAGES) as [SiteWorldId, Partial<Record<SiteWorldMenuPage, readonly string[]>>][]) {
+    const offered = unavailable
+      ? (Object.entries(pages) as [SiteWorldMenuPage, readonly string[]][])
+          .filter(([, nodes]) => !nodes.some(unavailable))
+          .map(([page]) => page)
+      : []
+    menus[world] = { pages: offered }
+  }
+  return menus
 }
 
 /**

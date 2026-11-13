@@ -2036,4 +2036,82 @@ describe("useWorkflowPersistence — save", () => {
     expect(mockSetSaveStatus).toHaveBeenCalledWith("error", "AbortError: timeout")
     expect(result.current.saving).toBe(false)
   })
+
+  // ── a stored reference task type (decided 2026-11-13) ──
+  // Every editor save stores the graph with a `referenceTaskType` no model the
+  // node runs lists removed — that one key, nothing else
+  // (`withListedReferenceTaskTypes`, the rule every workflow write runs). The
+  // editor's own state keeps what it holds; only what is stored changes.
+  describe("a stored reference task type on the editor's saves", () => {
+    const at = { x: 0, y: 0 }
+    const KLING = { id: "kling", type: "generate-video", position: at, data: { label: "Kling", provider: "kling-3.0", prompt: "a cat", aspectRatio: "21:9", referenceTaskType: "edit" } }
+    const SD25 = { id: "sd25", type: "generate-video", position: at, data: { label: "Seedance", provider: "seedance-2-5", prompt: "a cat", referenceTaskType: "edit" } }
+    const IMG = { id: "img", type: "generate-image", position: at, data: { label: "Image", provider: "gpt-image", aspectRatio: "16:9", resolution: "2K" } }
+    const KLING_STORED = { id: "kling", type: "generate-video", position: at, data: { label: "Kling", provider: "kling-3.0", prompt: "a cat", aspectRatio: "21:9" } }
+
+    it("a full save (UPDATE) stores the Kling node without that key and everything else as held", async () => {
+      const { update } = setupSupabaseUpdate()
+      resetStoreState({ workflowId: "w1", nodes: [KLING, SD25, IMG] })
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      await act(async () => {
+        expect((await result.current.save()).success).toBe(true)
+      })
+      expect(update.mock.calls[0]![0].nodes).toStrictEqual([KLING_STORED, SD25, IMG])
+      // The editor's own state is not rewritten.
+      expect((storeState.nodes as Array<{ data: Record<string, unknown> }>)[0]!.data.referenceTaskType).toBe("edit")
+    })
+
+    it("a full save of a graph without the field stores it byte for byte", async () => {
+      const { update } = setupSupabaseUpdate()
+      resetStoreState({ workflowId: "w1", nodes: [SD25, IMG] })
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      await act(async () => {
+        await result.current.save()
+      })
+      expect(JSON.stringify(update.mock.calls[0]![0].nodes)).toBe(JSON.stringify([SD25, IMG]))
+    })
+
+    it("a new workflow's first save (INSERT) does the same", async () => {
+      const single = vi.fn().mockResolvedValue({ data: { id: "new-wf", updated_at: "T1" }, error: null })
+      const select = vi.fn().mockReturnValue({ single })
+      const insert = vi.fn().mockReturnValue({ select, abortSignal: vi.fn().mockReturnValue({ select }) })
+      mockSupabaseFrom.mockReturnValue({ insert })
+      resetStoreState({ workflowId: null, nodes: [KLING, SD25, IMG] })
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      await act(async () => {
+        expect((await result.current.save()).success).toBe(true)
+      })
+      expect(insert.mock.calls[0]![0].nodes).toStrictEqual([KLING_STORED, SD25, IMG])
+    })
+
+    it("a delta save sends the changed Kling node without that key, the changed Seedance 2.5 node as held", async () => {
+      vi.stubEnv("VITE_DELTA_SAVES", "1")
+      try {
+        // Two of five nodes changed: under the delta's half-the-graph fallback.
+        const prompts = [1, 2].map((i) => ({ id: `p${i}`, type: "text-prompt", position: at, data: { label: "Prompt", text: "hi" } }))
+        const before = [{ ...KLING, data: { ...KLING.data, prompt: "old" } }, { ...SD25, data: { ...SD25.data, prompt: "old" } }, IMG, ...prompts]
+        resetStoreState({
+          workflowId: "w1",
+          nodes: [KLING, SD25, IMG, ...prompts],
+          edges: [],
+          loadedUpdatedAt: "2026-01-01T00:00:00Z",
+          loadedVersion: 41,
+          lastSavedSnapshot: {
+            nodes: before, edges: [], name: "Test Workflow", characterDefinitions: [], flowPromptTemplates: {},
+            presentationSettings: { runTarget: "workflow" }, savedViewport: null, storedSettings: {},
+          },
+        })
+        rpcResolves([{ ok: true, version: 42, updated_at: "2026-06-12T02:00:00Z" }])
+        const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+        await act(async () => {
+          expect((await result.current.save()).success).toBe(true)
+        })
+        const [fn, args] = mockSupabaseRpc.mock.calls[0]! as [string, Record<string, unknown>]
+        expect(fn).toBe("apply_workflow_delta")
+        expect(args.p_upsert_nodes).toStrictEqual([KLING_STORED, SD25])
+      } finally {
+        vi.unstubAllEnvs()
+      }
+    })
+  })
 })

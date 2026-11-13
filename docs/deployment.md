@@ -1765,6 +1765,14 @@ logo is dropped with a warning and the rest of `brand` is kept.
     (`/image`, `/video`, `/music`, `/trends`, `/video/nodaro-motion`,
     `/voice-changer`, and the editor at `/projects`). Explore and Studio are
     not drawn;
+  - in each world's menu, only what the deployment offers. Video's Translate
+    (its page at `/video/translate`) is listed for a viewer offered the
+    `dubbing` node once `GET /v1/surface/availability` has answered for them,
+    and not while that answer is awaited. When the request fails, the
+    profile's own `nodes.deny` decides: Translate is listed unless it names
+    `dubbing`. Image's Presets is listed only where the deployment has
+    presets, and the menu names the deployment (`brand.productName`) as the
+    maker of its own tools;
   - the deployment's name (`brand.productName`) and logo (`brand.logo`);
   - its billing: with `billing.selfServe: false` no plans, upgrade, billing or
     welcome credits. The credit figure is the one the sidebar card shows (the

@@ -18,7 +18,8 @@ import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData, JobErrorHint } from "@/types/nodes"
 import type { Json } from "@/types/database.types"
 import { filterCloneNodes, stripTransientRuntimeData } from "@nodaro/shared/workflow"
-import { type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes"
+import { type RenderQuality, type RunResultRowStamp, withListedReferenceTaskTypes } from "@nodaro/shared/nodes"
+import { isCodecOwnedDocument } from "@nodaro/shared/pipeline"
 import { ugcAwaitsPick } from "@nodaro/shared/ugc"
 import { buildWorkflowDelta, applyDeltaToGraph, findContestedNodes } from "@/lib/workflow-delta"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
@@ -1176,7 +1177,7 @@ export function useWorkflowPersistence(projectId?: string) {
             .rpc("apply_workflow_delta", {
               p_workflow_id: workflowId,
               p_base_version: baseVersion,
-              p_upsert_nodes: JSON.parse(JSON.stringify(stripTransientRuntimeData(delta.upsertNodes))) as never,
+              p_upsert_nodes: JSON.parse(JSON.stringify(withListedReferenceTaskTypes(stripTransientRuntimeData(delta.upsertNodes)))) as never,
               p_delete_node_ids: delta.deleteNodeIds,
               p_upsert_edges: JSON.parse(JSON.stringify(delta.upsertEdges)) as never,
               p_delete_edge_ids: delta.deleteEdgeIds,
@@ -1356,7 +1357,9 @@ export function useWorkflowPersistence(projectId?: string) {
           // persists: a mid-run save must not seed other tabs (or the next
           // reload) with phantom "running" state, and stripping it keeps the
           // payload from churning on every poll tick.
-          nodes: JSON.parse(JSON.stringify(stripTransientRuntimeData(nodes))),
+          // …and a stored reference task type no model the node runs lists is
+          // removed (withListedReferenceTaskTypes, the rule every workflow write runs).
+          nodes: JSON.parse(JSON.stringify(withListedReferenceTaskTypes(stripTransientRuntimeData(nodes)))),
           edges: JSON.parse(JSON.stringify(edges)),
           settings: settings as Json,
         }
@@ -1668,10 +1671,20 @@ export function useWorkflowPersistence(projectId?: string) {
           return withoutRunsInFlight(n)
         })
 
+        // A stored reference task type no model its node runs lists — one
+        // stored before every write held the rule — is removed on load
+        // (`withListedReferenceTaskTypes`, as the store's `loadWorkflow` does),
+        // and the cleaned graph is written back below. Never on a read-only
+        // (codec-owned) document: the write-back skips it, so it is cleaned in
+        // memory only.
+        const listedNodes = withListedReferenceTaskTypes(nodes)
+        const referenceTaskTypesRemoved = listedNodes !== nodes
+        nodes = listedNodes
+
         // Sync node results from jobs table via backend API
         // This handles the case where user left while jobs were running
         const syncResult = await syncNodeResultsFromDB(nodes)
-        let nodesChanged = JSON.stringify(syncResult.nodes) !== JSON.stringify(nodes)
+        let nodesChanged = referenceTaskTypesRemoved || JSON.stringify(syncResult.nodes) !== JSON.stringify(nodes)
         nodes = syncResult.nodes
 
         // Check for backend orchestrator executions:
@@ -1910,7 +1923,11 @@ export function useWorkflowPersistence(projectId?: string) {
         // Never write back to a read-only (Studio) workflow row. isReadOnly
         // was set from `settings` just above; the Studio app owns writes via
         // the same backend route, so even a benign node-heal must not persist.
-        if (nodesChanged && projectId && !useWorkflowStore.getState().isReadOnly) {
+        // Nor to a codec-owned document (`isCodecOwnedDocument`, the server's
+        // own predicate): its write guard refuses any other writer's change, so
+        // a document owned only through a node's keys — not read-only here — is
+        // healed (a stale reference task type removed) in memory only.
+        if (nodesChanged && projectId && !useWorkflowStore.getState().isReadOnly && !isCodecOwnedDocument(data.nodes, settings)) {
           // Strip transient run-state before persisting — same sanitizer the
           // main save (and delta save) use. Without this, a node carrying a
           // restored `currentJobId`/`executionStatus` (orchestrator restore or
@@ -1919,7 +1936,7 @@ export function useWorkflowPersistence(projectId?: string) {
           // (generatedResults, …) are NOT transient and still persist.
           let sideQuery = supabase
             .from("workflows")
-            .update({ nodes: JSON.parse(JSON.stringify(stripTransientRuntimeData(orderNodesParentFirst(nodes)))) })
+            .update({ nodes: JSON.parse(JSON.stringify(withListedReferenceTaskTypes(stripTransientRuntimeData(orderNodesParentFirst(nodes))))) })
             .eq("id", id)
           // Pinned to the row the load read, like every other write. Unpinned,
           // a step another writer landed in between (an assistant's, on a

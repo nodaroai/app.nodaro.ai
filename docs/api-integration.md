@@ -2658,6 +2658,16 @@ fractional where the run's units are; a dub is charged whole minutes, 1 to
 30, and Speaker Frames whole blocks) — which both endpoints answer. A row not charged per unit, or a unit
 count no run of it can have, lands in `missing`.
 
+A Seedance 2.5 Extend Video run is priced the same way, on its resolution's
+two-second row (`seedance-2-5-extend:<resolution>:per-2s`), at units =
+(seconds of the source sent + seconds added) ÷ 2. `@nodaro/shared`'s
+`seedanceExtendSourceCreditId(sourcePictureSec, duration, resolution)` builds
+that identifier for a source whose picture length you have measured, by the
+rule the charge reads; with no known length it names the whole 10-second
+window, the most a run of that length costs, and for a source shorter than
+the 1.8 seconds an extend needs it names none (the extend refuses it) (see
+[Extend Video](nodes/ai-video/extend-video.md#seedance-25-extend-credits)).
+
 So `GET /v1/credits/model-cost?model=speaker-frames` answers ONE block's
 price, 3<!-- credits: speaker-frames --> — the least a run is charged, never
 a run's price: a run of 11 blocks is charged 25<!-- credits: speaker-frames@11 -->,
@@ -3084,6 +3094,17 @@ for, instead of leaving the model to guess it from the prompt:
   when every clip, the source `videoUrl` and any `referenceVideoUrls`, is
   4–30 s long (a draft included); otherwise it goes out undeclared and the
   model reads the prompt.
+- **Stored on a workflow node, it is kept only where a model takes it.** Every
+  write that stores a workflow graph keeps a Generate Video, Image to Video,
+  Text to Video or Video to Video node's `referenceTaskType` only while a model
+  the node runs lists the value; otherwise that key is removed and nothing else
+  on the node changes. `auto` and any value no model lists are removed too.
+  That covers `POST /v1/workflows`, `PATCH /v1/workflows/:id` (with or without
+  `delta`), `POST /v1/workflows/import`, the editor's saves, copies, template
+  clones and the published snapshot of an app or a template; the editor also
+  removes such a value when it opens a workflow. The MCP writes
+  (`create_workflow`, `update_workflow_json`, `import_workflow`) and Copilot
+  edits also report the removal.
 
 MCP: `reference_task_type` on `generate_video`.
 
@@ -4736,7 +4757,7 @@ Name the draft the way the finalize does, by `sourceJobId` (its job id) or `task
 {"sourceJobId":"<the draft's job id>"}
 ```
 
-The response is `{ "data": { "credits": 1580, "minimum": false } }` for a 4 s draft without a reference video. Read the live response for current prices. `credits` is exactly what `POST /v1/video-upscale` reserves for the same draft — the same checks, the same billable length, the same pricing. The billable length is the draft's take, never more than the length the draft's own run reserved: a take that came back longer is billed at that length. A draft the finalize would refuse is refused here with the same status and code (`403 forbidden`, `404 draft_not_found`, `409 draft_not_ready` / `draft_not_finalizable`, `422 not_a_draft` / `not_a_seedance_draft` / `invalid_media_duration`), and nothing is charged.
+The response is `{ "data": { "credits": 1580, "minimum": false } }` for a 4 s draft without a reference video. Read the live response for current prices. `credits` is exactly what `POST /v1/video-upscale` reserves for the same draft — the same checks, the same billable length, the same pricing. The billable length is the draft's take, never more than the length the draft's own run reserved: a take that came back longer is billed at that length. A draft the finalize would refuse is refused here with the same status and code (`403 forbidden`, `404 draft_not_found`, `409 draft_not_ready` / `draft_not_finalizable`, `422 not_a_draft` / `not_a_seedance_draft` / `invalid_media_duration`), and nothing is charged. A workflow estimate made for you (`POST /v1/credits/estimate-workflow`, the `estimatedCredits` of `GET /v1/api/schema`) prices the finalize of a draft you already have at this same figure, when the draft's node does not run again in the estimated run (it is frozen) or the finalize names the draft itself; a draft that is not yours stays at the provider's 8-second row.
 
 With no draft named, send `plannedDraft` — the request of a draft that does not exist yet, in the fields of [Seedance reference-video estimates](#seedance-reference-video-estimates) — for the finalize of that draft at the length its run reserves for, plus its reference clips. A finalize is never charged for more output than its draft's run reserved, so this is the most a finalize of that draft can be charged, whatever take it delivers; it is what the workflow's cost estimate quotes for a run that makes the draft and finalizes it. A named draft wins: a request with `sourceJobId` or `taskId` is answered as above, whatever `plannedDraft` holds. Rate-limited to 60 requests a minute (only requests with a `plannedDraft` and no draft named).
 

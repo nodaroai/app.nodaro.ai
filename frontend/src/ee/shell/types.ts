@@ -14,6 +14,19 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 export type SiteWorldId = "explore" | "image" | "video" | "music" | "trends" | "motion" | "voice" | "ads" | "app" | "studio"
 
+/**
+ * A page of a world's menu that leads below the world's own page to another
+ * page of the site (the package's `WORLD_MENU_PAGES`, 0.24.7): Video's
+ * Translate, the worlds app's `/video/translate`. Only the ones this app's
+ * white-label header can name; the contract holds each to the package's ids.
+ */
+export type SiteWorldMenuPage = "translate"
+
+/** The app's part of a world's menu: the pages below it the viewer is offered (`white-label.ts`). */
+export interface SiteWorldMenu {
+  readonly pages?: readonly SiteWorldMenuPage[]
+}
+
 export interface SiteHeaderTheme {
   readonly value: "light" | "dark"
   readonly onToggle: () => void
@@ -93,6 +106,8 @@ export interface SiteHeaderProps {
   readonly whiteLabel?: boolean
   /** The worlds drawn, in their order (a world also needs its `worldHrefs` entry). */
   readonly worlds?: readonly SiteWorldId[]
+  /** The pages below a world its menu may open; a white-label header draws only those named, none for a world left out. */
+  readonly worldMenus?: Partial<Readonly<Record<SiteWorldId, SiteWorldMenu>>>
   /** The deployment's own mark, drawn instead of Nodaro's. */
   readonly logo?: SiteHeaderLogo
   /** The deployment's name, said where the header would say Nodaro (white-label mode only). */
