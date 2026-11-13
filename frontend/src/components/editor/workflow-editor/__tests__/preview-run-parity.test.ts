@@ -1239,4 +1239,36 @@ describe("unnamed Character nodes — the editor's Run names them as the workflo
       expect(subjects.map((s) => s.name)).toEqual(["Character 1", typed, "Leo"])
     }
   })
+
+  // Decided 2026-11-12: the same typed name is one character in every script.
+  it("two nodes with the same non-Latin name (he / ja / ko) are one subject, exactly as two 'Maya' nodes are", async () => {
+    const pair = (name: string) => [character("a", { characterName: name }), character("b", { characterName: name })]
+    const latin = await klingRun(pair("Maya"))
+    expect(latin.subjects.map((s) => s.name)).toEqual(["Maya"])
+    for (const typed of ["מאיה", "マヤ", "마야"]) {
+      mockRunTextToVideoGeneration.mockClear()
+      const script = await klingRun(pair(typed))
+      expect(script.subjects).toEqual(latin.subjects.map((s) => ({ ...s, name: typed })))
+      expect(script.prompt).toBe(latin.prompt.replaceAll("Maya", typed))
+      expect(assembleVideoPrompt("generate-video", assemblerArgs(script.node))).toBe(script.prompt)
+    }
+  })
+
+  // Decided 2026-11-13: the whole name decides, never its Latin remainder.
+  it("mixed-script names sharing a Latin remainder stay two subjects, as on the workflow run", async () => {
+    const digits = await klingRun([character("a", { characterName: "マヤ1" }), character("b", { characterName: "レオ1" })])
+    expect(digits.subjects.map((s) => s.name)).toEqual(["マヤ1", "レオ1"])
+    mockRunTextToVideoGeneration.mockClear()
+    const letter = await klingRun([character("a", { characterName: "マヤ A" }), character("b", { characterName: "A" })])
+    expect(letter.subjects.map((s) => s.name)).toEqual(["マヤ A", "A"])
+    expect(assembleVideoPrompt("generate-video", assemblerArgs(letter.node))).toBe(letter.prompt)
+  })
+
+  it("two different non-Latin names stay two subjects; an unnamed node between two same names takes the next number", async () => {
+    const two = await klingRun([character("a", { characterName: "マヤ" }), character("b", { characterName: "レオ" })])
+    expect(two.subjects.map((s) => s.name)).toEqual(["マヤ", "レオ"])
+    mockRunTextToVideoGeneration.mockClear()
+    const between = await klingRun([character("a", { characterName: "마야" }), character("u"), character("b", { characterName: "마야" })])
+    expect(between.subjects.map((s) => s.name)).toEqual(["마야", "Character 2"])
+  })
 })

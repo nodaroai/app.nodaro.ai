@@ -50,6 +50,7 @@ export {
   wiredCharacterNames,
   wiredCharacterNamesOf,
   wiredCharacterBySlug,
+  wiredCharacterSlug,
   wiredCharacterKey,
   aliasRetiredCharacterMentions,
   RETIRED_CHARACTER_MENTION_SLUGS,

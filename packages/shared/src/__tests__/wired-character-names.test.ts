@@ -7,6 +7,7 @@ import {
   wiredCharacterNamesOf,
   wiredCharacterBySlug,
   wiredCharacterKey,
+  wiredCharacterSlug,
   aliasRetiredCharacterMentions,
   entityImageUrl,
   type WiredCharacterSource,
@@ -129,6 +130,125 @@ describe("wiredCharacterNames — what each wired Character node is called by th
     ])
   })
 
+  // Decided 2026-11-12: the same-name rule holds in every script, as for Latin.
+  describe("the same typed name in any script is one character", () => {
+    for (const [locale, typed] of [["en", "Maya"], ["ja", "マヤ"], ["he", "מאיה"], ["ko", "마야"]] as const) {
+      it(`${locale}: two "${typed}" nodes share one key; the next unnamed node takes the next number`, () => {
+        const m = wiredCharacterNames([named("a", typed), unnamed("u"), named("b", typed)])
+        expect(m.get("a")?.slug).toBe(m.get("b")?.slug)
+        expect([m.get("a")?.name, m.get("b")?.name]).toEqual([typed, typed])
+        expect(new Set([...m.values()].map((n) => n.slug)).size).toBe(2)
+        expect(m.get("u")?.name).toBe(locale === "en" ? "Character 1" : "Character 2")
+      })
+    }
+
+    it("non-Latin: the duplicate takes no number of its own", () => {
+      expect(names([named("a", "マヤ"), unnamed("u"), named("b", "マヤ")])).toEqual([
+        ["a", "マヤ", "character-1"],
+        ["u", "Character 2", "character-2"],
+        ["b", "マヤ", "character-1"],
+      ])
+    })
+
+    it("Latin is unchanged: Maya / maya / MAYA and 'Maya Lee' / 'maya-lee' are one by their slug", () => {
+      expect(names([named("a", "Maya"), named("b", "maya"), named("c", "MAYA")])).toEqual([
+        ["a", "Maya", "maya"],
+        ["b", "maya", "maya"],
+        ["c", "MAYA", "maya"],
+      ])
+      expect(names([named("a", "Maya Lee"), named("b", "maya-lee")])).toEqual([
+        ["a", "Maya Lee", "maya-lee"],
+        ["b", "maya-lee", "maya-lee"],
+      ])
+    })
+
+    it("two different non-Latin names stay two (he / ja / ko)", () => {
+      for (const [x, y] of [["מאיה", "נועה"], ["マヤ", "レオ"], ["마야", "레오"]] as const) {
+        expect(names([named("a", x), named("b", y)])).toEqual([
+          ["a", x, "character-1"],
+          ["b", y, "character-2"],
+        ])
+      }
+    })
+
+    it("the same name as Unicode reads it: half-width katakana, decomposed Hangul, letter case, spacing", () => {
+      const same = (x: string, y: string) => {
+        const m = wiredCharacterNames([named("a", x), named("b", y)])
+        return m.get("a")?.slug === m.get("b")?.slug
+      }
+      expect(same("マヤ", "ﾏﾔ")).toBe(true)
+      expect(same("마야", "마야".normalize("NFD"))).toBe(true)
+      expect(same("Мая", "мая")).toBe(true)
+      expect(same("マヤ・リー", "マヤ リー")).toBe(true)
+      // A combining mark is part of the name: ガ (ga) is not カ (ka).
+      expect(same("ガク", "カク")).toBe(false)
+    })
+
+    // Decided 2026-11-13: a name with a letter of another script is the WHOLE
+    // name, never its Latin remainder.
+    it("mixed-script names that share a Latin remainder are different characters, on their own keys", () => {
+      expect(names([named("a", "マヤ1"), named("b", "レオ1")])).toEqual([
+        ["a", "マヤ1", "character-1"],
+        ["b", "レオ1", "character-2"],
+      ])
+      expect(names([named("a", "マヤ A"), named("b", "A")])).toEqual([
+        ["a", "マヤ A", "character-1"],
+        ["b", "A", "a"],
+      ])
+      expect(names([named("b", "A"), unnamed("u"), named("a", "マヤ A")])).toEqual([
+        ["b", "A", "a"],
+        ["u", "Character 1", "character-1"],
+        ["a", "マヤ A", "character-2"],
+      ])
+    })
+
+    it("the same mixed-script name twice is one character", () => {
+      expect(names([named("a", "マヤ1"), named("b", "マヤ1")])).toEqual([
+        ["a", "マヤ1", "1"],
+        ["b", "マヤ1", "1"],
+      ])
+      const m = wiredCharacterNames([named("a", "マヤ A"), named("b", "ﾏﾔ a"), named("c", "レオ1"), named("d", "レオ1"), named("e", "ハナ1")])
+      expect(m.get("a")?.slug).toBe(m.get("b")?.slug)
+      expect(m.get("c")?.slug).toBe(m.get("d")?.slug)
+      expect(new Set([...m.values()].map((n) => n.slug)).size).toBe(3)
+    })
+
+    it("a mixed-script name no other character claims keeps its old mention key", () => {
+      expect(names([named("a", "マヤ A"), named("b", "Leo"), unnamed("u")])).toEqual([
+        ["a", "マヤ A", "a"],
+        ["b", "Leo", "leo"],
+        ["u", "Character 1", "character-1"],
+      ])
+    })
+
+    it("a name whose letters are all Latin, accents included, keeps its slug as before", () => {
+      expect(names([named("a", "José"), named("b", "Ana-María")])).toEqual([
+        ["a", "José", "jos"],
+        ["b", "Ana-María", "ana-mar-a"],
+      ])
+    })
+
+    // An all-Latin name the slug cannot spell follows the same-name rule (decided 2026-11-13).
+    it("all-Latin names the slug cannot spell: the same one twice is one character, two different ones stay two", () => {
+      expect(names([named("a", "Ñ"), named("b", "Ñ")])).toEqual([
+        ["a", "Ñ", "character-1"],
+        ["b", "Ñ", "character-1"],
+      ])
+      expect(names([named("a", "Ñ"), named("b", "Ö")])).toEqual([
+        ["a", "Ñ", "character-1"],
+        ["b", "Ö", "character-2"],
+      ])
+      expect(names([named("a", "Ö"), named("b", "ö")]).map(([, , slug]) => slug)).toEqual(["character-1", "character-1"])
+    })
+
+    it("a name with no letter or digit never matches another", () => {
+      expect(names([named("a", "!!!"), named("b", "!!!")])).toEqual([
+        ["a", "!!!", "character-1"],
+        ["b", "!!!", "character-2"],
+      ])
+    })
+  })
+
   it("unnamed flags the nodes with no name of their own (a slug-less typed name is not one)", () => {
     const m = wiredCharacterNames([named("a", "Maya"), unnamed("b"), named("c", "マヤ")])
     expect(m.get("a")?.unnamed).toBe(false)
@@ -166,6 +286,28 @@ describe("wiredCharacterKey — where a Character node's own elements are filed"
   it("a node wired only as a plain image: its own name's slug, else a key of its own", () => {
     expect(wiredCharacterKey(m, "c", { characterName: "Maya" })).toBe("maya")
     expect(wiredCharacterKey(m, "d", { label: CHARACTER_NODE_DEFAULT_LABEL })).toBe("node:d")
+  })
+  it("a non-Latin name wired only as a plain image: the key of the wired character with the same name", () => {
+    const withMaya = wiredCharacterNames([unnamed("b"), named("a", "マヤ")])
+    expect(wiredCharacterKey(withMaya, "c", { characterName: "ﾏﾔ" })).toBe("character-2")
+    expect(wiredCharacterSlug(withMaya, "c", { characterName: "マヤ" })).toBe("character-2")
+    // No wired character has it: a key of its own, never an unnamed node's.
+    expect(wiredCharacterKey(withMaya, "d", { characterName: "レオ" })).toBe("node:d")
+    expect(wiredCharacterSlug(withMaya, "d", { characterName: "レオ" })).toBe("")
+  })
+  it("a mixed-script name wired only as a plain image is never filed under a Latin character sharing its remainder", () => {
+    const withA = wiredCharacterNames([named("b", "A"), named("m", "マヤ A")])
+    expect(wiredCharacterKey(withA, "c", { characterName: "マヤ A" })).toBe(withA.get("m")!.slug)
+    expect(wiredCharacterKey(withA, "c", { characterName: "レオ A" })).toBe("node:c")
+    expect(wiredCharacterKey(withA, "d", { characterName: "A" })).toBe("a")
+  })
+  it("a Latin name wired only as a plain image is never filed under a mixed-script character that goes by its slug", () => {
+    const onlyMaya = wiredCharacterNames([named("m", "マヤ A")])
+    expect(onlyMaya.get("m")?.slug).toBe("a")
+    expect(wiredCharacterKey(onlyMaya, "c", { characterName: "A" })).toBe("node:c")
+    expect(wiredCharacterSlug(onlyMaya, "c", { characterName: "A" })).toBe("")
+    // With no wired character on its slug, a Latin name keeps its own, as before.
+    expect(wiredCharacterKey(onlyMaya, "d", { characterName: "Leo" })).toBe("leo")
   })
 })
 

@@ -361,3 +361,102 @@ describe("non-Latin character names are included", () => {
     })
   }
 })
+
+/**
+ * The same typed name in any script is one character (decided 2026-11-12):
+ * two "マヤ" nodes merge exactly as two "Maya" nodes do — one subject carrying
+ * both nodes' images, one identity — and every field equals the Latin run's
+ * with the name swapped.
+ */
+describe("two nodes with the same non-Latin name are one character, as two 'Maya' nodes are", () => {
+  const pair = (name: string) => [character("a", { characterName: name }), character("b", { characterName: name })]
+  const withoutName = (subjects: VideoCharacterReference[] | undefined) => subjects?.map(({ name: _name, ...rest }) => rest)
+
+  for (const [locale, typed] of [["ja", "マヤ"], ["he", "מאיה"], ["ko", "마야"]] as const) {
+    it(`${locale}: "${typed}" twice — one Kling 4.0 subject, the same body as "Maya" twice`, () => {
+      const latin = run(video("kling-4"), pair("Maya"))
+      const script = run(video("kling-4"), pair(typed))
+      expect(latin.subjects?.map((s) => s.name)).toEqual(["Maya"])
+      expect(script.subjects?.map((s) => s.name)).toEqual([typed])
+      expect(withoutName(script.subjects)).toEqual(withoutName(latin.subjects))
+      expect(script.refs).toEqual(latin.refs)
+      expect(script.r.modelIdentifier).toBe(latin.r.modelIdentifier)
+      const body = (x: typeof latin) =>
+        buildKling4Request({ provider: "kling-4", prompt: x.prompt, durationSec: 5, referenceImageUrls: x.refs, characterReferences: x.subjects })
+      const elements = body(script).input.elements as Array<{ image_urls: string[] }>
+      expect(elements).toHaveLength(1)
+      expect(elements[0]!.image_urls).toEqual((body(latin).input.elements as Array<{ image_urls: string[] }>)[0]!.image_urls)
+    })
+
+    it(`${locale}: Generate Image reads "${typed}" twice as "Maya" twice`, () => {
+      const latin = run(image(), pair("Maya"))
+      const script = run(image(), pair(typed))
+      expect(script.refs).toEqual(latin.refs)
+      expect(script.prompt).toBe(latin.prompt.replaceAll("Maya", typed))
+    })
+  }
+
+  it("Kling 4.0 Flash: the merged character takes voice clip 1, and clip 2 has no character 2", () => {
+    const audio = ["https://cdn.example/a1.mp3", "https://cdn.example/a2.mp3"]
+    const { p, subjects } = run(video("kling-4-flash"), pair("マヤ"), { audio })
+    const req = buildKling4Request({
+      provider: "kling-4-flash",
+      prompt: p.prompt as string,
+      durationSec: 5,
+      referenceImageUrls: p.referenceImageUrls as string[],
+      referenceAudioUrls: audio,
+      characterReferences: subjects,
+    })
+    expect((req.input.elements as Array<{ voice_url?: string }>).map((e) => e.voice_url)).toEqual([audio[0]])
+    expect(req.notes).toContain("dropped reference audio clip 2: no character 2 is connected to carry it")
+  })
+
+  it("two different non-Latin names stay two characters (he / ja / ko)", () => {
+    for (const [x, y] of [["מאיה", "נועה"], ["マヤ", "レオ"], ["마야", "레오"]] as const) {
+      const { subjects } = run(video("kling-4"), [character("a", { characterName: x }), character("b", { characterName: y })])
+      expect(subjects?.map((s) => [s.name, s.imageUrl])).toEqual([
+        [x, portrait("a")],
+        [y, portrait("b")],
+      ])
+    }
+  })
+
+  // Decided 2026-11-13: the whole name decides, never its Latin remainder.
+  it("mixed-script names sharing a Latin remainder stay two characters: マヤ1 / レオ1, マヤ A / A", () => {
+    const digits = run(video("kling-4"), [character("a", { characterName: "マヤ1" }), character("b", { characterName: "レオ1" })])
+    expect(digits.subjects?.map((s) => [s.name, s.imageUrl])).toEqual([
+      ["マヤ1", portrait("a")],
+      ["レオ1", portrait("b")],
+    ])
+    const letter = run(video("kling-4"), [character("a", { characterName: "マヤ A" }), character("b", { characterName: "A" })])
+    expect(letter.subjects?.map((s) => [s.name, s.imageUrl])).toEqual([
+      ["マヤ A", portrait("a")],
+      ["A", portrait("b")],
+    ])
+    // The same mixed-script name twice is still one.
+    expect(run(video("kling-4"), [character("a", { characterName: "マヤ1" }), character("b", { characterName: "マヤ1" })]).subjects?.map((s) => s.name)).toEqual(["マヤ1"])
+  })
+
+  it("a unique mixed-script name keeps its old mention key (@a)", () => {
+    const { prompt, r } = run(video("seedance-2", { prompt: "@a:1:smile waves" }), [character("a", { characterName: "マヤ A" })])
+    expect(prompt).not.toContain("@a:1")
+    expect(r.payload.referenceImageUrls).toContain(smile("a"))
+  })
+
+  it("an unnamed node between the two takes the next number: the duplicate uses none", () => {
+    const { subjects } = run(video("kling-4"), [
+      character("a", { characterName: "マヤ" }),
+      character("u"),
+      character("b", { characterName: "マヤ" }),
+    ])
+    expect(subjects?.map((s) => s.name)).toEqual(["マヤ", "Character 2"])
+  })
+
+  it("the mention key both nodes share resolves as the Latin name's does", () => {
+    const latin = run(video("seedance-2", { prompt: "@maya:1:smile waves" }), pair("Maya"))
+    const script = run(video("seedance-2", { prompt: "@character-1:1:smile waves" }), pair("マヤ"))
+    expect(script.prompt).not.toContain("@character-1")
+    expect(script.r.payload.referenceImageUrls).toEqual(latin.r.payload.referenceImageUrls)
+    expect(script.prompt).toBe(latin.prompt.replaceAll("Maya", "マヤ"))
+  })
+})

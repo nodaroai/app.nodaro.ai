@@ -309,6 +309,7 @@ import {
   type ExtraRefCharacterContext
 } from "@nodaro/shared/entities"
 import { applyPromptAffixes, appendPromptHints, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts/prompt-fields"
+import { buildExtraRefCharacterContextLookup } from "@/lib/extra-ref-character-context";
 import { ownMotionHint, collectIdentityLockClause, characterLockToRefLock } from "@nodaro/prompts/doctrine"
 import { buildSeedanceVideoEditPrompt, assembleImageInput, composeVideoPromptText, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts/assembly"
 import { pickerFanoutTargets } from "@nodaro/prompts/picker-catalogs"
@@ -884,49 +885,6 @@ function expandLocationNodeIntoRefs(
     ])
   }
   return out
-}
-
-/**
- * Build a `slug → ExtraRefCharacterContext` lookup for the consumer node by
- * walking back through edges to wired Character upstreams. Used by the
- * extra-ref expansion (`expandExtraRefsToConnectedReferences`) so character-
- * sourced extras inherit `defaultUsageMode` + `canonicalDescription` from the
- * upstream Character node when the user-typed extra ref doesn't override.
- *
- * Returns a function that takes a slug and returns the upstream context, or
- * `undefined` if no character matching that slug is wired (e.g. the user
- * disconnected the character after attaching the extra — the extra still
- * carries the slug + URL, but inherits nothing).
- */
-function buildExtraRefCharacterContextLookup(
-  consumerNodeId: string,
-  nodes: readonly WorkflowNode[],
-  edges: readonly WorkflowEdge[],
-): (slug: string) => ExtraRefCharacterContext | undefined {
-  const bySlug = new Map<string, ExtraRefCharacterContext>();
-  const incoming = edges.filter((e) => e.target === consumerNodeId);
-  // Named as the workflow run names them (each unnamed node its own
-  // "Character N"); a node wired only by its image pip goes by its own name.
-  const names = wiredCharacterNamesOf(consumerNodeId, nodes, edges);
-  for (const e of incoming) {
-    const upstream = nodes.find((n) => n.id === e.source);
-    if (!upstream || upstream.type !== "character") continue;
-    const charData = upstream.data as CharacterNodeData;
-    const named = names.get(upstream.id);
-    const charName = named ? named.name : characterOwnName(charData);
-    const slug = named ? named.slug : characterMentionSlug(charName);
-    if (!slug) continue;
-    if (!bySlug.has(slug)) {
-      bySlug.set(slug, {
-        defaultUsageMode: charData.defaultUsageMode,
-        canonicalDescription: charData.canonicalDescription ?? null,
-        displayName: charName,
-        defaultRole: charData.defaultRole,
-        identityLock: characterLockToRefLock(charData.identityLock),
-      });
-    }
-  }
-  return (slug) => bySlug.get(slug);
 }
 
 const WIRED_SOURCE_TYPE_MAP: Record<string, ReferenceSource> = {
