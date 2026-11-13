@@ -185,7 +185,41 @@ export interface SurfaceProfile {
    * since no page reads it (the server decides what each response carries).
    */
   jobs?: SurfaceJobs
+  /**
+   * MCP by path: see SurfaceMcp. Absent unless configured. BACKEND-ONLY:
+   * surface-profile-runtime-config.ts strips it from /config.js — no page reads
+   * it, the server states every MCP address itself.
+   */
+  mcp?: SurfaceMcp
 }
+
+/**
+ * `mcp` (decided 2026-11-11): serve the MCP endpoint under a path on the
+ * deployment's own hosts instead of on a dedicated MCP host. `byPath: true`
+ * turns it on — absent, false or unparseable is off, exactly today's
+ * behaviour. `path` is where the endpoint answers (default
+ * MCP_PATH_DEFAULT); it must be `/v1/mcp` or a path under it. The one reader
+ * is `surfaceMcpPath`.
+ */
+export interface SurfaceMcp {
+  byPath: boolean
+  path: string
+}
+
+/** Where the MCP endpoint answers in path mode when the profile names no `mcp.path`. */
+export const MCP_PATH_DEFAULT = "/v1/mcp"
+
+/**
+ * A path the MCP endpoint may take: `/v1/mcp`, or lower-case segments under
+ * it — no trailing slash, no query, no dot segments — matched exactly, never
+ * as a prefix. `/v1/` keeps it on the lane every edge already forwards to the
+ * API (the bundled proxy answers `/mcp` itself on the app's hosts), and
+ * `/v1/mcp` is a namespace no other route uses: anywhere else under `/v1/` the
+ * endpoint could sit beneath a prefix the auth hook treats specially (the
+ * billing-key routes, a public prefix) or shadow a route's parameter.
+ */
+const MCP_PATH_SHAPE = /^\/v1\/mcp(?:\/[a-z0-9][a-z0-9-]*)*$/
+const MCP_PATH_MAX = 64
 
 /** Who may read a failed job's provider words. */
 export const JOB_ERROR_DETAIL_READERS = ["owner", "admin"] as const
@@ -334,6 +368,41 @@ const surfaceJobsSchema = z
     if ((JOB_ERROR_DETAIL_READERS as readonly unknown[]).includes(value)) return { errorDetail: value as JobErrorDetailReaders }
     console.warn(`[surface-profile] jobs.errorDetail ${JSON.stringify(value)} is not one of ${JOB_ERROR_DETAIL_READERS.join(" | ")} — using the restrictive "admin"`)
     return { errorDetail: "admin" }
+  })
+
+/**
+ * `mcp`, leniently. Absent stays absent (path mode off, today's behaviour). A
+ * `byPath` that is not a flag is off, warned: the endpoint then keeps the one
+ * address it has always had rather than appearing somewhere unannounced. A
+ * `path` that is not one MCP_PATH_SHAPE allows falls back to MCP_PATH_DEFAULT,
+ * warned, so a typo leaves the endpoint at its documented address. Degrades
+ * alone; never fails the profile.
+ */
+const surfaceMcpSchema = z
+  .unknown()
+  .optional()
+  .transform((raw): SurfaceMcp | undefined => {
+    if (raw === undefined) return undefined
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      console.warn("[surface-profile] mcp must be an object { byPath, path } — MCP stays off the path")
+      return undefined
+    }
+    const obj = raw as Record<string, unknown>
+    const flag = parseFlag(obj.byPath)
+    if (flag === undefined && obj.byPath !== undefined) {
+      console.warn(`[surface-profile] mcp.byPath unparseable (${JSON.stringify(obj.byPath)}) — MCP stays off the path`)
+    }
+    let path = MCP_PATH_DEFAULT
+    if (obj.path !== undefined) {
+      if (typeof obj.path === "string" && obj.path.length <= MCP_PATH_MAX && MCP_PATH_SHAPE.test(obj.path)) {
+        path = obj.path
+      } else {
+        console.warn(
+          `[surface-profile] mcp.path ${JSON.stringify(obj.path)} is not /v1/mcp or a lower-case path under it (no trailing slash, at most ${MCP_PATH_MAX} characters) — using ${MCP_PATH_DEFAULT}`,
+        )
+      }
+    }
+    return { byPath: flag === true, path }
   })
 
 /**
@@ -522,6 +591,7 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
   header: surfaceHeaderSchema.optional(),
   strings: z.unknown().optional(),
   jobs: surfaceJobsSchema.optional(),
+  mcp: surfaceMcpSchema.optional(),
 }) as z.ZodType<SurfaceProfile>
 
 /** One-level-deep merge: each override sub-object replaces the default's, keys
@@ -549,6 +619,7 @@ function mergeOverDefault(override: Partial<SurfaceProfile>): SurfaceProfile {
     ...(override.header ? { header: override.header } : {}),
     ...(override.strings !== undefined ? { strings: override.strings } : {}),
     ...(override.jobs ? { jobs: override.jobs } : {}),
+    ...(override.mcp ? { mcp: override.mcp } : {}),
   }
 }
 
@@ -685,6 +756,24 @@ export function surfaceCatalogImages(): SurfaceCatalogImages {
 export function surfaceJobErrorDetailReaders(): JobErrorDetailReaders {
   if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return "owner"
   return runtimeSurfaceProfile().jobs?.errorDetail ?? "owner"
+}
+
+/**
+ * Where this deployment asks to serve its MCP endpoint by path (`mcp.byPath`),
+ * or null when it does not — absent, `byPath` not true, or no profile at all,
+ * which is exactly today's behaviour: one dedicated MCP address
+ * (`MCP_PUBLIC_URL`). The one reader of the key. Whether the endpoint is
+ * actually served there is `mcpServedPath` (lib/mcp-lane-addresses.ts), which
+ * every route and address reads.
+ *
+ * The unset case returns before the profile is read, as `surfaceAllowsLinkImports`
+ * does: the auth hook asks on every request, and a route suite that mocks the
+ * config module partially cannot break on it.
+ */
+export function surfaceMcpPath(): string | null {
+  if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return null
+  const mcp = runtimeSurfaceProfile().mcp
+  return mcp?.byPath === true ? mcp.path : null
 }
 
 /**

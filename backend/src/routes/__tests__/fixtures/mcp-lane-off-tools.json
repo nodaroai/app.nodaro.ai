@@ -1,0 +1,478 @@
+{
+  "mcp.nodaro.ai tools/list": {
+    "status": 200,
+    "addresses": [
+      "http://json-schema.org/draft-07/schema#",
+      "https://app.nodaro.ai/archived-runs."
+    ]
+  },
+  "mcp.nodaro.ai tools/call prepare_image_upload": {
+    "status": 200,
+    "body": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Upload URL ready for image (image/png).\\n1. PUT the file to: https://mcp.nodaro.ai/v1/upload-proxy/<signed token>\\n2. Reference downstream as: https://cdn.example.com/uploads/image/<uuid>/<uuid>.png\\nValid for 60 minutes.\"}],\"structuredContent\":{\"upload_url\":\"https://mcp.nodaro.ai/v1/upload-proxy/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/image/<uuid>/<uuid>.png\",\"expires_in_seconds\":3600,\"mime_type\":\"image/png\"}},\"jsonrpc\":\"2.0\",\"id\":1}"
+  },
+  "mcp.nodaro.ai tools/call upload_image_widget": {
+    "status": 200,
+    "body": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Opened the upload widget for the user (up to 2 files).\\n\\nWhen they pick the file(s) the widget will upload them and post a follow-up chat message containing the resulting URL(s). The first eventual URL will be:\\n  https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\\n\\nWait for the announcement, then use the URL(s) as the image input(s) for the next step (modify_image / image_to_video / lip_sync).\"}],\"structuredContent\":{\"uploads\":[{\"upload_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\"},{\"upload_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\"}],\"upload_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\",\"expires_in_seconds\":3600}},\"jsonrpc\":\"2.0\",\"id\":1}"
+  },
+  "mcp.nodaro.ai tools/call request_image_upload": {
+    "status": 200,
+    "body": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Upload page ready for image.\\n\\nIn your reply to the user, present:\\n  1. A download link/button for the image they attached (so they can save it to disk).\\n  2. This upload page: https://app.nodaro.ai/v1/upload-page/<signed token>\\n\\nOnce they confirm the upload is done, call modify_image / image_to_video / lip_sync with this image_url:\\n  https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\\n\\nLink valid for 60 minutes.\"}],\"structuredContent\":{\"upload_page_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\",\"expires_in_seconds\":3600,\"kind\":\"image\"}},\"jsonrpc\":\"2.0\",\"id\":1}"
+  },
+  "mcp.nodaro.ai tools/call get_picker_catalog setting": {
+    "status": 200,
+    "sha256": "4f59b8a6c16a42a2536b11bd83908946da1dfb8fdf9721f887424571d8dc0148",
+    "addresses": []
+  },
+  "mcp.nodaro.ai resources/read ui://nodaro/widget/v4/job-image": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "fa4e2eadf15736df463e35f44d7867c19fca0e40a307dc016b53c7223ced6eb9",
+    "addresses": [
+      "https://app.nodaro.ai/gallery"
+    ]
+  },
+  "mcp.nodaro.ai resources/read ui://nodaro/widget/v4/job-auto": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "e35a477dfb2d019d0d9506d3322b14c53dec1920416bddd8ec3e505fc2e514e0",
+    "addresses": [
+      "https://*.",
+      "https://*.r2.cloudflarestorage.com",
+      "https://app.nodaro.ai/gallery",
+      "https://assets.nodaro.ai",
+      "https://cdn.example.com",
+      "https://cdn.nodaro.ai"
+    ]
+  },
+  "mcp.nodaro.ai resources/read ui://nodaro/widget/v4/workflow": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "9cc12352d6e03bbbe148f2c6b1ea1f4fd8e78730f6b0cef671c8350712e62100",
+    "addresses": [
+      "https://app.nodaro.ai/gallery"
+    ]
+  },
+  "mcp.nodaro.ai resources/read ui://nodaro/widget/v4/upload-image": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "4216169dea74c5c05f60b304f33fd39beabaf0d8c13b74ed7a13efafc55fda29",
+    "addresses": []
+  },
+  "app.nodaro.ai tools/list": {
+    "status": 200,
+    "addresses": [
+      "http://json-schema.org/draft-07/schema#",
+      "https://app.nodaro.ai/archived-runs."
+    ]
+  },
+  "app.nodaro.ai tools/call prepare_image_upload": {
+    "status": 200,
+    "body": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Upload URL ready for image (image/png).\\n1. PUT the file to: https://mcp.nodaro.ai/v1/upload-proxy/<signed token>\\n2. Reference downstream as: https://cdn.example.com/uploads/image/<uuid>/<uuid>.png\\nValid for 60 minutes.\"}],\"structuredContent\":{\"upload_url\":\"https://mcp.nodaro.ai/v1/upload-proxy/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/image/<uuid>/<uuid>.png\",\"expires_in_seconds\":3600,\"mime_type\":\"image/png\"}},\"jsonrpc\":\"2.0\",\"id\":1}"
+  },
+  "app.nodaro.ai tools/call upload_image_widget": {
+    "status": 200,
+    "body": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Opened the upload widget for the user (up to 2 files).\\n\\nWhen they pick the file(s) the widget will upload them and post a follow-up chat message containing the resulting URL(s). The first eventual URL will be:\\n  https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\\n\\nWait for the announcement, then use the URL(s) as the image input(s) for the next step (modify_image / image_to_video / lip_sync).\"}],\"structuredContent\":{\"uploads\":[{\"upload_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\"},{\"upload_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\"}],\"upload_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\",\"expires_in_seconds\":3600}},\"jsonrpc\":\"2.0\",\"id\":1}"
+  },
+  "app.nodaro.ai tools/call request_image_upload": {
+    "status": 200,
+    "body": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Upload page ready for image.\\n\\nIn your reply to the user, present:\\n  1. A download link/button for the image they attached (so they can save it to disk).\\n  2. This upload page: https://app.nodaro.ai/v1/upload-page/<signed token>\\n\\nOnce they confirm the upload is done, call modify_image / image_to_video / lip_sync with this image_url:\\n  https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\\n\\nLink valid for 60 minutes.\"}],\"structuredContent\":{\"upload_page_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\",\"expires_in_seconds\":3600,\"kind\":\"image\"}},\"jsonrpc\":\"2.0\",\"id\":1}"
+  },
+  "app.nodaro.ai tools/call get_picker_catalog setting": {
+    "status": 200,
+    "sha256": "4f59b8a6c16a42a2536b11bd83908946da1dfb8fdf9721f887424571d8dc0148",
+    "addresses": []
+  },
+  "app.nodaro.ai resources/read ui://nodaro/widget/v4/job-image": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "fa4e2eadf15736df463e35f44d7867c19fca0e40a307dc016b53c7223ced6eb9",
+    "addresses": [
+      "https://app.nodaro.ai/gallery"
+    ]
+  },
+  "app.nodaro.ai resources/read ui://nodaro/widget/v4/job-auto": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "e35a477dfb2d019d0d9506d3322b14c53dec1920416bddd8ec3e505fc2e514e0",
+    "addresses": [
+      "https://*.",
+      "https://*.r2.cloudflarestorage.com",
+      "https://app.nodaro.ai/gallery",
+      "https://assets.nodaro.ai",
+      "https://cdn.example.com",
+      "https://cdn.nodaro.ai"
+    ]
+  },
+  "app.nodaro.ai resources/read ui://nodaro/widget/v4/workflow": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "9cc12352d6e03bbbe148f2c6b1ea1f4fd8e78730f6b0cef671c8350712e62100",
+    "addresses": [
+      "https://app.nodaro.ai/gallery"
+    ]
+  },
+  "app.nodaro.ai resources/read ui://nodaro/widget/v4/upload-image": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "4216169dea74c5c05f60b304f33fd39beabaf0d8c13b74ed7a13efafc55fda29",
+    "addresses": []
+  },
+  "studio.example.com tools/list": {
+    "status": 200,
+    "addresses": [
+      "http://json-schema.org/draft-07/schema#",
+      "https://app.nodaro.ai/archived-runs."
+    ]
+  },
+  "studio.example.com tools/call prepare_image_upload": {
+    "status": 200,
+    "body": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Upload URL ready for image (image/png).\\n1. PUT the file to: https://mcp.nodaro.ai/v1/upload-proxy/<signed token>\\n2. Reference downstream as: https://cdn.example.com/uploads/image/<uuid>/<uuid>.png\\nValid for 60 minutes.\"}],\"structuredContent\":{\"upload_url\":\"https://mcp.nodaro.ai/v1/upload-proxy/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/image/<uuid>/<uuid>.png\",\"expires_in_seconds\":3600,\"mime_type\":\"image/png\"}},\"jsonrpc\":\"2.0\",\"id\":1}"
+  },
+  "studio.example.com tools/call upload_image_widget": {
+    "status": 200,
+    "body": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Opened the upload widget for the user (up to 2 files).\\n\\nWhen they pick the file(s) the widget will upload them and post a follow-up chat message containing the resulting URL(s). The first eventual URL will be:\\n  https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\\n\\nWait for the announcement, then use the URL(s) as the image input(s) for the next step (modify_image / image_to_video / lip_sync).\"}],\"structuredContent\":{\"uploads\":[{\"upload_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\"},{\"upload_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\"}],\"upload_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\",\"expires_in_seconds\":3600}},\"jsonrpc\":\"2.0\",\"id\":1}"
+  },
+  "studio.example.com tools/call request_image_upload": {
+    "status": 200,
+    "body": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Upload page ready for image.\\n\\nIn your reply to the user, present:\\n  1. A download link/button for the image they attached (so they can save it to disk).\\n  2. This upload page: https://app.nodaro.ai/v1/upload-page/<signed token>\\n\\nOnce they confirm the upload is done, call modify_image / image_to_video / lip_sync with this image_url:\\n  https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\\n\\nLink valid for 60 minutes.\"}],\"structuredContent\":{\"upload_page_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\",\"expires_in_seconds\":3600,\"kind\":\"image\"}},\"jsonrpc\":\"2.0\",\"id\":1}"
+  },
+  "studio.example.com tools/call get_picker_catalog setting": {
+    "status": 200,
+    "sha256": "4f59b8a6c16a42a2536b11bd83908946da1dfb8fdf9721f887424571d8dc0148",
+    "addresses": []
+  },
+  "studio.example.com resources/read ui://nodaro/widget/v4/job-image": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "fa4e2eadf15736df463e35f44d7867c19fca0e40a307dc016b53c7223ced6eb9",
+    "addresses": [
+      "https://app.nodaro.ai/gallery"
+    ]
+  },
+  "studio.example.com resources/read ui://nodaro/widget/v4/job-auto": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "e35a477dfb2d019d0d9506d3322b14c53dec1920416bddd8ec3e505fc2e514e0",
+    "addresses": [
+      "https://*.",
+      "https://*.r2.cloudflarestorage.com",
+      "https://app.nodaro.ai/gallery",
+      "https://assets.nodaro.ai",
+      "https://cdn.example.com",
+      "https://cdn.nodaro.ai"
+    ]
+  },
+  "studio.example.com resources/read ui://nodaro/widget/v4/workflow": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "9cc12352d6e03bbbe148f2c6b1ea1f4fd8e78730f6b0cef671c8350712e62100",
+    "addresses": [
+      "https://app.nodaro.ai/gallery"
+    ]
+  },
+  "studio.example.com resources/read ui://nodaro/widget/v4/upload-image": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "4216169dea74c5c05f60b304f33fd39beabaf0d8c13b74ed7a13efafc55fda29",
+    "addresses": []
+  },
+  "unlisted.example.net tools/list": {
+    "status": 200,
+    "addresses": [
+      "http://json-schema.org/draft-07/schema#",
+      "https://app.nodaro.ai/archived-runs."
+    ]
+  },
+  "unlisted.example.net tools/call prepare_image_upload": {
+    "status": 200,
+    "body": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Upload URL ready for image (image/png).\\n1. PUT the file to: https://mcp.nodaro.ai/v1/upload-proxy/<signed token>\\n2. Reference downstream as: https://cdn.example.com/uploads/image/<uuid>/<uuid>.png\\nValid for 60 minutes.\"}],\"structuredContent\":{\"upload_url\":\"https://mcp.nodaro.ai/v1/upload-proxy/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/image/<uuid>/<uuid>.png\",\"expires_in_seconds\":3600,\"mime_type\":\"image/png\"}},\"jsonrpc\":\"2.0\",\"id\":1}"
+  },
+  "unlisted.example.net tools/call upload_image_widget": {
+    "status": 200,
+    "body": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Opened the upload widget for the user (up to 2 files).\\n\\nWhen they pick the file(s) the widget will upload them and post a follow-up chat message containing the resulting URL(s). The first eventual URL will be:\\n  https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\\n\\nWait for the announcement, then use the URL(s) as the image input(s) for the next step (modify_image / image_to_video / lip_sync).\"}],\"structuredContent\":{\"uploads\":[{\"upload_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\"},{\"upload_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\"}],\"upload_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\",\"expires_in_seconds\":3600}},\"jsonrpc\":\"2.0\",\"id\":1}"
+  },
+  "unlisted.example.net tools/call request_image_upload": {
+    "status": 200,
+    "body": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Upload page ready for image.\\n\\nIn your reply to the user, present:\\n  1. A download link/button for the image they attached (so they can save it to disk).\\n  2. This upload page: https://app.nodaro.ai/v1/upload-page/<signed token>\\n\\nOnce they confirm the upload is done, call modify_image / image_to_video / lip_sync with this image_url:\\n  https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\\n\\nLink valid for 60 minutes.\"}],\"structuredContent\":{\"upload_page_url\":\"https://app.nodaro.ai/v1/upload-page/<signed token>\",\"public_url\":\"https://cdn.example.com/uploads/handoff/image/<uuid>/<uuid>\",\"expires_in_seconds\":3600,\"kind\":\"image\"}},\"jsonrpc\":\"2.0\",\"id\":1}"
+  },
+  "unlisted.example.net tools/call get_picker_catalog setting": {
+    "status": 200,
+    "sha256": "4f59b8a6c16a42a2536b11bd83908946da1dfb8fdf9721f887424571d8dc0148",
+    "addresses": []
+  },
+  "unlisted.example.net resources/read ui://nodaro/widget/v4/job-image": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "fa4e2eadf15736df463e35f44d7867c19fca0e40a307dc016b53c7223ced6eb9",
+    "addresses": [
+      "https://app.nodaro.ai/gallery"
+    ]
+  },
+  "unlisted.example.net resources/read ui://nodaro/widget/v4/job-auto": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "e35a477dfb2d019d0d9506d3322b14c53dec1920416bddd8ec3e505fc2e514e0",
+    "addresses": [
+      "https://*.",
+      "https://*.r2.cloudflarestorage.com",
+      "https://app.nodaro.ai/gallery",
+      "https://assets.nodaro.ai",
+      "https://cdn.example.com",
+      "https://cdn.nodaro.ai"
+    ]
+  },
+  "unlisted.example.net resources/read ui://nodaro/widget/v4/workflow": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "9cc12352d6e03bbbe148f2c6b1ea1f4fd8e78730f6b0cef671c8350712e62100",
+    "addresses": [
+      "https://app.nodaro.ai/gallery"
+    ]
+  },
+  "unlisted.example.net resources/read ui://nodaro/widget/v4/upload-image": {
+    "status": 200,
+    "meta": {
+      "ui": {
+        "csp": {
+          "resourceDomains": [
+            "https://cdn.nodaro.ai",
+            "https://assets.nodaro.ai",
+            "https://*.r2.cloudflarestorage.com",
+            "https://cdn.example.com"
+          ],
+          "connectDomains": [
+            "https://app.nodaro.ai"
+          ]
+        },
+        "prefersBorder": false
+      }
+    },
+    "sha256": "4216169dea74c5c05f60b304f33fd39beabaf0d8c13b74ed7a13efafc55fda29",
+    "addresses": []
+  }
+}

@@ -10,6 +10,7 @@ import {
   storedImageDimensions,
   forgetStoredImageDimensions,
   STORED_IMAGE_DIMENSIONS_MAX,
+  webpHeaderDimensions,
 } from "../image-dimensions.js"
 
 /**
@@ -52,6 +53,31 @@ describe("imageDimensionsOf", () => {
     const big = await sharp({ create: { width: 2048, height: 1152, channels: 3, background: "#808080" }, }).png({ compressionLevel: 0 }).toBuffer()
     expect(big.length).toBeGreaterThan(64 * 1024)
     expect(await imageDimensionsOf(big.subarray(0, 64 * 1024))).toEqual({ width: 2048, height: 1152 })
+  })
+
+  it("reads a WebP's size from its leading bytes alone: lossy, lossless and extended", async () => {
+    // A noisy picture so each file is far longer than the bytes read.
+    const noise = (w: number, h: number) => sharp({ create: { width: w, height: h, channels: 3, background: "#808080", noise: { type: "gaussian", mean: 128, sigma: 40 } } })
+    const lossy = await noise(1776, 592).webp({ quality: 90 }).toBuffer()
+    const lossless = await noise(600, 400).webp({ lossless: true }).toBuffer()
+    const alpha = await sharp({ create: { width: 2400, height: 1350, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0.5 } } }).webp().toBuffer()
+    for (const [file, size] of [[lossy, { width: 1776, height: 592 }], [lossless, { width: 600, height: 400 }], [alpha, { width: 2400, height: 1350 }]] as const) {
+      expect(await imageDimensionsOf(file)).toEqual(size)
+      expect(await imageDimensionsOf(file.subarray(0, 64 * 1024))).toEqual(size)
+      expect(await imageDimensionsOf(file.subarray(0, 30))).toEqual(size)
+    }
+    expect(lossy.toString("latin1", 12, 16)).toBe("VP8 ")
+    expect(lossless.toString("latin1", 12, 16)).toBe("VP8L")
+    expect(alpha.toString("latin1", 12, 16)).toBe("VP8X")
+    expect(lossy.length).toBeGreaterThan(64 * 1024)
+  }, 60_000)
+
+  it("leaves the leading bytes of an extended WebP that carries EXIF unread: it may be shown turned", async () => {
+    const turned = await sharp(canvas(1104, 1472)).webp().withMetadata({ orientation: 6 }).toBuffer()
+    expect(turned.toString("latin1", 12, 16)).toBe("VP8X")
+    expect(webpHeaderDimensions(turned.subarray(0, 30))).toBeUndefined()
+    expect(webpHeaderDimensions(Buffer.from("RIFF\0\0\0\0WEBPVP8 not a frame header"))).toBeUndefined()
+    expect(webpHeaderDimensions((await png(64, 64)).subarray(0, 64))).toBeUndefined()
   })
 
   it("reads a GIF as one frame and an SVG as its root's size, else its viewBox, from its leading bytes too", async () => {

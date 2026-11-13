@@ -13,7 +13,7 @@
  * `textContent` + `setAttribute` ONLY — never raw HTML assignment.
  */
 import { uiProtocolShim } from "./_common.js"
-import { flowBaseUrl } from "../../deployment-urls.js"
+import { mcpLaneAddresses } from "../../mcp-lane-addresses.js"
 
 const SHARED_CSS = `
   /* --fs-top-pad: top inset for fullscreen mode so the image clears the
@@ -197,10 +197,11 @@ const EDIT_ICON = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" s
 type MediaKind = "image" | "video" | "audio" | "generic"
 
 /**
- * Builds the static widget HTML for a given media kind. Called once per kind
- * at server startup by the resource registrar.
+ * Builds the static widget HTML for a given media kind. Called per session by
+ * the resource registrar, with the session's pages host (`pagesBase`, from
+ * lib/mcp-lane-addresses.ts); the library link opens there.
  */
-export function buildSingleJobWidget(mediaKind: MediaKind): string {
+export function buildSingleJobWidget(mediaKind: MediaKind, pagesBase: string = mcpLaneAddresses().pagesBase): string {
   return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8" />
@@ -426,7 +427,7 @@ ${uiProtocolShim()}
       libLink.textContent = 'Open Nodaro library';
       libLink.addEventListener('click', function () {
         if (window.NodaroMCP && window.NodaroMCP.openLink) {
-          window.NodaroMCP.openLink(${JSON.stringify(`${flowBaseUrl()}/gallery`)});
+          window.NodaroMCP.openLink(${JSON.stringify(`${pagesBase}/gallery`)});
         }
       });
       statusEl.appendChild(libLink);

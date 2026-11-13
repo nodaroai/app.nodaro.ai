@@ -15,6 +15,8 @@ import { isValidTranscribeConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useTranscribeInputSec } from "@/hooks/use-transcribe-input-sec"
+import { NEMOTRON_TRANSCRIBE_ID, nemotronTranscribeQuoteCreditId } from "@nodaro/shared/credits"
 import { NodeJobProgress } from "./node-job-progress"
 import type { TranscribeData } from "@/types/nodes"
 
@@ -82,7 +84,13 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
   const activeText = activeResult?.text ?? nodeData.generatedText
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits(nodeData.provider ?? "whisper", 4)
+  // Nemotron 3.5 Transcribe is priced per started minute of the file: its
+  // per-minute quote id (unknown length → 60 minutes), as the estimates price it.
+  const inputSec = useTranscribeInputSec(id)
+  const credits = useModelCredits(
+    nodeData.provider === NEMOTRON_TRANSCRIBE_ID ? nemotronTranscribeQuoteCreditId(inputSec) : (nodeData.provider ?? "whisper"),
+    4,
+  )
 
   function handleDeleteResult(indexToDelete: number) {
     const updates = computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedText", "text")

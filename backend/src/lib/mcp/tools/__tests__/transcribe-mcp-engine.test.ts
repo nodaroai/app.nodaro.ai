@@ -47,16 +47,19 @@ describe("MCP transcribe engine", () => {
     expect(TRANSCRIBE_PROVIDER_CAPABILITIES[declared as keyof typeof TRANSCRIBE_PROVIDER_CAPABILITIES].wordTimestamps).toBe(true)
   })
 
-  it("sends that engine in the dispatched payload (never relies on the route fallback)", () => {
+  // Since Nemotron 3.5 Transcribe (2026-11-12) the caller may name the engine
+  // (`model`); the tool still always SENDS one — the caller's, else the pinned
+  // default — and never leaves it to the route's fallback lane.
+  it("sends an engine in the dispatched payload: the caller's model, else the pinned default", () => {
     const block = transcribeToolBlock()
-    // A LIVE statement, not the words appearing anywhere in the block: the
-    // payload line must survive with its own line in the stripped source.
-    expect(block).toMatch(/^\s*provider:\s*MCP_TRANSCRIBE_PROVIDER,/m)
+    // LIVE statements, not the words appearing anywhere in the block.
+    expect(block).toMatch(/^\s*const engine: TranscribeProvider = args\.model \?\? MCP_TRANSCRIBE_PROVIDER$/m)
+    expect(block).toMatch(/^\s*provider:\s*engine,/m)
     expect(block).toContain('url: "/v1/transcribe"')
   })
 
   it("names the same engine in the job widget", () => {
-    expect(transcribeToolBlock()).toMatch(/model:\s*MCP_TRANSCRIBE_PROVIDER/)
+    expect(transcribeToolBlock()).toMatch(/model:\s*engine\b/)
   })
 
   it("the guard itself FAILS when the payload line is commented out", () => {
@@ -65,10 +68,10 @@ describe("MCP transcribe engine", () => {
     const commented = stripComments(`
       const payload = {
         audioUrl,
-        // provider: MCP_TRANSCRIBE_PROVIDER,
+        // provider: engine,
       }
     `)
-    expect(commented).not.toMatch(/^\s*provider:\s*MCP_TRANSCRIBE_PROVIDER,/m)
+    expect(commented).not.toMatch(/^\s*provider:\s*engine,/m)
   })
 
   it("does not strip a URL inside a description string", () => {

@@ -124,8 +124,8 @@ import {
   validateCinematicAvatarPayload,
   speedRampCreditId,
   seedanceVideoEditCreditId,
-  seedanceExtendCreditId,
-  seedanceExtendResolution,
+  tailExtendCreditId,
+  tailExtendResolution,
   resolveTopazUpscale,
   resolveUpscaleFactor,
   resolveNormalizedImageGen,
@@ -152,7 +152,7 @@ import {
   isVeoProvider,
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
-  isSeedanceExtendProvider,
+  isTailExtendProvider,
   canonicalVideoProvider,
   SEEDANCE_VIDEO_EDIT_SHAPE,
   SEEDANCE_VIDEO_EDIT_TASK_TYPE,
@@ -170,6 +170,7 @@ import {
   extractCharacterLoraFields,
   resolveGvpAnchorWire,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
+  CAPTION_TRANSCRIBE_LANES,
   transcribeLaneSupportsWordTimestamps,
   resolveMusicProvider,
   MUSIC_CREDIT_ID,
@@ -200,6 +201,8 @@ import {
   PROMPT_PREFIX_KEY,
   PROMPT_SUFFIX_KEY,
   transcribeWordTimestampsRefusal,
+  transcribeTranslationRefusal,
+  transcribeTargetLanguageOf,
   isSettingsHintEdge,
   nodeAspectRatio,
 } from "@nodaro/shared/nodes"
@@ -284,6 +287,7 @@ import { config, llmMeteredPricing } from "../../lib/config.js"
 import { resolveScriptModelId, type ScriptProvider } from "../../providers/script/script-generator.js"
 import { isNodeDenied, nodeNotAvailableError, isModelDenied, modelNotAvailableError, modelRestrictionConfigured, namesHouseModel, unservedHouseModelsOf, USER_VIEWER, type AvailabilityViewer } from "../../lib/surface-deny.js"
 import { jobRunModelOfBuild } from "../../lib/run-model.js"
+import { trainedCharacterModelWithheld } from "../../lib/trained-character-model.js"
 import { servesEveryHouseModel } from "../../lib/house-models-served.js"
 import { providerIsItsModel } from "../../lib/provider-model.js"
 import { VIDEO_RETAKE_MODEL } from "../../workers/handlers/default-models.js"
@@ -3023,10 +3027,11 @@ function refuseWithheldDefaultModel(
 ): void {
   const node = nodeAsBuilt(rawNode, buildCtx?.edges ?? [])
   const named = effectiveDispatchProvider(node.type, node.data, handed)
-  // Judged at the top of the build: a provider that IS the model it runs. An
-  // engine name (lib/provider-model.ts) is not, and its model is judged here.
-  if (named && providerIsItsModel([node.type], named, node.data ?? {})) return
   const runsOn = jobRunModelOfBuild(built.jobName, built.payload, built.modelIdentifier)
+  // Judged at the top of the build: a provider that IS the model it runs. An
+  // engine name (lib/provider-model.ts) is not, and its model is judged here;
+  // so is a model the build switched to (a trained character's model).
+  if (named && providerIsItsModel([node.type], named, node.data ?? {}) && (runsOn === undefined || runsOn === named)) return
   if (runsOn && isModelDenied(runsOn)) throw modelNotAvailableError([runsOn])
 }
 
@@ -3327,7 +3332,10 @@ function buildPayloadOf(
       // Gated by CHARACTER_LORA_ROUTING_ENABLED (default true) — operators
       // can flip the env to "false" to disable the swap org-wide without
       // a deploy if inference quality regresses.
-      const lora = config.CHARACTER_LORA_ROUTING_ENABLED
+      // A deployment that withholds the trained model does not switch to it:
+      // the node runs the model it names, with the character's pictures
+      // (decided 2026-11-12, lib/trained-character-model.ts).
+      const lora = config.CHARACTER_LORA_ROUTING_ENABLED && !trainedCharacterModelWithheld()
         ? selectLoraRoutingForMentions(wiredCharRefs)
         : null
       const effectiveProvider = lora ? "replicate" : provider
@@ -5996,10 +6004,10 @@ function buildPayloadOf(
         return pWithNeg
       }
 
-      // ─── Seedance trim-stitch extend (Seedance 2.5, Seedance 2.0) ────────
+      // ─── Tail-recipe trim-stitch extend (Seedance 2.5 / 2.0, Kling 4) ────
       // URL-based like LTX, but the continuation CONTENT is required — the
-      // worker wraps it in the spike-proven bare temporal template and then
-      // trim-stitches source+extension. Each provider is priced on its own
+      // worker wraps it in the provider's own prompt (lib/extend-recipe.ts)
+      // and then stitches source+extension. Each provider is priced on its own
       // rows (seconds added × resolution) through the one builder the HTTP
       // route (`resolveExtendVideoIdentifier`) and the estimate use, so
       // orchestrator and single-node runs reserve identically — commit_credits
@@ -6009,21 +6017,21 @@ function buildPayloadOf(
       // resolution the row is priced at, never the node's raw values: a stored
       // length or resolution the model does not offer (a graph written by MCP,
       // an import, an API save) would otherwise render above what it reserved.
-      const seedanceProvider = canonicalVideoProvider(evProvider)
-      if (isSeedanceExtendProvider(seedanceProvider)) {
+      const tailProvider = canonicalVideoProvider(evProvider)
+      if (isTailExtendProvider(tailProvider)) {
         const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
         const resolution = typeof data.resolution === "string" ? data.resolution : undefined
         return {
           jobName: "extend-video",
           queueName: "video-generation",
-          modelIdentifier: seedanceExtendCreditId(seedanceProvider, duration, resolution),
+          modelIdentifier: tailExtendCreditId(tailProvider, duration, resolution),
           payload: {
             jobId,
-            provider: seedanceProvider,
+            provider: tailProvider,
             video: resolvedInputs.videoUrl || data.videoUrl,
             prompt: buildExtendPrompt(),
-            duration: tailRecipeSeconds(seedanceProvider, duration),
-            resolution: seedanceExtendResolution(seedanceProvider, resolution),
+            duration: tailRecipeSeconds(tailProvider, duration),
+            resolution: tailExtendResolution(tailProvider, resolution),
             generateAudio: data.generateAudio,
             usageLogId,
           },
@@ -6886,6 +6894,13 @@ function buildPayloadOf(
       // empty word list: the user paid for an answer that could not contain what
       // they asked for. Same refusal text as `/v1/transcribe` and
       // `transcribe()`, from the one shared helper.
+      // A translation (Nemotron 3.5 Transcribe only) is refused here too, for
+      // the same reason: an engine that cannot translate, a language it does
+      // not translate into, or an explicit word-timings request beside it —
+      // never coerced, never after the reserve.
+      const targetLanguage = transcribeTargetLanguageOf(data.targetLanguage)
+      const translationRefusal = transcribeTranslationRefusal(provider, targetLanguage, data.wordTimestamps === true)
+      if (translationRefusal) throw new Error(`transcribe: ${translationRefusal}`)
       if (data.wordTimestamps === true) {
         const refusal = transcribeWordTimestampsRefusal(provider)
         if (refusal) throw new Error(`transcribe: ${refusal}`)
@@ -6895,10 +6910,13 @@ function buildPayloadOf(
       // user, so an incapable lane must degrade to a segments-only transcript —
       // exactly what this node did before word timings existed — not turn a
       // working run into a `transcribe()` refusal thrown AFTER the credits
-      // reserve.
+      // reserve. A translation is the same: it carries no word timings, and KIE
+      // refuses the pair, so the inferred flag is off while translating (a
+      // translation feeding captions is refused before the run, as wordless).
       const wordTimestamps =
         (jsonWired || Boolean(data.wordTimestamps)) &&
-        transcribeLaneSupportsWordTimestamps(provider)
+        transcribeLaneSupportsWordTimestamps(provider) &&
+        targetLanguage === undefined
       return {
         jobName: "transcribe",
         queueName: "video-generation",
@@ -6911,6 +6929,7 @@ function buildPayloadOf(
           diarize: data.diarize,
           tagAudioEvents: data.tagAudioEvents,
           wordTimestamps,
+          ...(targetLanguage ? { targetLanguage } : {}),
           usageLogId,
         },
       }
@@ -7639,6 +7658,17 @@ function buildPayloadOf(
           throw new Error("add-captions: transcript has no words to caption")
         }
       }
+      // Add Captions transcribes only on its own lanes (`CAPTION_TRANSCRIBE_LANES`,
+      // the route's enum): its flat render price covers that transcription, so a
+      // lane priced by the file's length (Nemotron 3.5 Transcribe) authored into
+      // node data is refused here, before the reserve, instead of running unpriced.
+      const acTranscribeProvider = (data.transcribeProvider ?? data.transcribe_provider) as string | undefined
+      if (acTranscribeProvider && !(CAPTION_TRANSCRIBE_LANES as readonly string[]).includes(acTranscribeProvider)) {
+        throw new Error(
+          `add-captions: "${acTranscribeProvider}" is not an engine Add Captions transcribes on — pick ${CAPTION_TRANSCRIBE_LANES.join(", ")}, ` +
+            "or transcribe on a Transcribe node and wire its transcript in",
+        )
+      }
       const acText = !isCaptionArray ? (resolvedInputs.prompt || resolveRefs(data.text as string | undefined, refMap)) : undefined
       const acCaptions = isCaptionArray ? captionsValue : (resolvedInputs.captions ?? undefined)
       // Price follows the renderer (same predicate as the route's credit id and
@@ -7683,7 +7713,7 @@ function buildPayloadOf(
         // always undefined → an explicit autoTranscribe:false and any transcribeProvider
         // choice were silently dropped in workflow runs. Snake fallback kept for safety.
         auto_transcribe: (data.autoTranscribe ?? data.auto_transcribe) as boolean | undefined,
-        transcribe_provider: (data.transcribeProvider ?? data.transcribe_provider) as string | undefined,
+        transcribe_provider: acTranscribeProvider,
         style: data.captionStyle ?? data.style,
         position: data.captionPosition ?? data.position,
         fontSize: cap.fontSize,

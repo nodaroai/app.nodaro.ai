@@ -27,8 +27,13 @@ vi.mock("@/lib/queue.js", () => ({
   redis: {},
 }))
 
+// The ids the credit guard is asked to check, in order — the guard itself is a
+// no-op here; recording its resolver's answer pins WHAT a request is priced on.
+const guardIds = vi.hoisted(() => [] as string[])
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: () => async () => {},
+  creditGuard: (resolve: (req: unknown) => string) => async (req: unknown) => {
+    guardIds.push(resolve(req))
+  },
   reserveCreditsForJob: vi.fn().mockResolvedValue({
     usageLogId: "usage-1",
     creditsReserved: 1,
@@ -61,6 +66,13 @@ vi.mock("@/lib/url-validator.js", async (importOriginal) => {
   return { safeUrlSchema: z.string().url(), isAllowedSocialVideoUrl }
 })
 
+// Nemotron's file is measured before the guard (lib/nemotron-transcribe-input.ts).
+const probe = vi.hoisted(() => ({ probeMediaDurationAndSize: vi.fn() }))
+vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
+  assertSafeProbeSource: vi.fn(async () => {}),
+  probeMediaDurationAndSize: probe.probeMediaDurationAndSize,
+}))
+
 const gate = vi.hoisted(() => ({ requireImportAllowed: vi.fn() }))
 vi.mock("@/lib/import-gate.js", () => ({
   isImportRefusal: (e: unknown) => e instanceof Error && "code" in e,
@@ -87,6 +99,7 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  guardIds.length = 0
 
   app = Fastify({ logger: false })
 
@@ -542,5 +555,160 @@ describe("POST /v1/transcribe on a deployment that turned link imports off", () 
     const res = await app.inject({ method: "POST", url: "/v1/transcribe", payload: { userId: VALID_UUID, audioUrl: OWN_MEDIA_URL } })
     expect(res.statusCode).toBe(200)
     expect(videoQueue.add).toHaveBeenCalledWith("transcribe", expect.objectContaining({ audioUrl: OWN_MEDIA_URL }))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Nemotron 3.5 Transcribe (2026-11-12): priced per started minute of the file,
+// measured BEFORE the guard; the one engine that translates.
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/transcribe — Nemotron 3.5 Transcribe", () => {
+  const NEMOTRON = "nemotron-3-5-transcribe"
+  const FILE = "https://example.com/talk.mp3"
+
+  it("a forged measurement in the body is overwritten by the real one", async () => {
+    probe.probeMediaDurationAndSize.mockResolvedValue({ durationSec: 3000 })
+    mockJobInsert("job-n5")
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/transcribe",
+      payload: { audioUrl: FILE, provider: NEMOTRON, userId: VALID_UUID, __nemotronMeasured: { creditId: "nemotron-3-5-transcribe:1m", durationSec: 1 } },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(guardIds).toEqual(["nemotron-3-5-transcribe:50m"])
+  })
+
+  it("measures the file first, then checks and reserves its per-minute id", async () => {
+    probe.probeMediaDurationAndSize.mockResolvedValue({ durationSec: 125, sizeBytes: 2_000_000 })
+    const { mockInsert } = mockJobInsert("job-n1")
+
+    const res = await app.inject({ method: "POST", url: "/v1/transcribe", payload: { audioUrl: FILE, provider: NEMOTRON, userId: VALID_UUID } })
+
+    expect(res.statusCode).toBe(200)
+    expect(probe.probeMediaDurationAndSize).toHaveBeenCalledWith(FILE)
+    expect(guardIds).toEqual(["nemotron-3-5-transcribe:3m"])
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-n1", "nemotron-3-5-transcribe:3m")
+    expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({
+      input_data: expect.objectContaining({ provider: NEMOTRON, duration_seconds: 125, bucketKey: "nemotron-3-5-transcribe:3m" }),
+    }))
+    // The worker settles at KIE's length against the hold it is handed.
+    expect(videoQueue.add).toHaveBeenCalledWith("transcribe", expect.objectContaining({ provider: NEMOTRON, duration_seconds: 125, bucketKey: "nemotron-3-5-transcribe:3m" }))
+    // The stash never reaches the job or the queue.
+    expect(JSON.stringify(vi.mocked(videoQueue.add).mock.calls[0])).not.toContain("__nemotronMeasured")
+  })
+
+  it.each([
+    [{ durationSec: 3601, sizeBytes: 1_000 }, "media_duration_exceeds_limit"],
+    [{ durationSec: 600, sizeBytes: 201 * 1024 * 1024 }, "media_size_exceeds_limit"],
+  ])("refuses a file KIE would refuse (%o) before anything is held", async (probed, code) => {
+    probe.probeMediaDurationAndSize.mockResolvedValue(probed)
+    const { mockFrom } = mockJobInsert()
+
+    const res = await app.inject({ method: "POST", url: "/v1/transcribe", payload: { audioUrl: FILE, provider: NEMOTRON, userId: VALID_UUID } })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe(code)
+    expect(guardIds).toEqual([])
+    expect(mockFrom).not.toHaveBeenCalled()
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("holds the 60-minute price for a file whose length cannot be read, and the worker settles at KIE's length", async () => {
+    probe.probeMediaDurationAndSize.mockResolvedValue({ sizeBytes: 4_000_000 })
+    const { mockInsert } = mockJobInsert("job-n4")
+    const res = await app.inject({ method: "POST", url: "/v1/transcribe", payload: { audioUrl: FILE, provider: NEMOTRON, userId: VALID_UUID } })
+    expect(res.statusCode).toBe(200)
+    expect(guardIds).toEqual(["nemotron-3-5-transcribe:60m"])
+    expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({
+      input_data: expect.objectContaining({ bucketKey: "nemotron-3-5-transcribe:60m" }),
+    }))
+    const queued = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+    expect(queued).toMatchObject({ bucketKey: "nemotron-3-5-transcribe:60m" })
+    expect(queued).not.toHaveProperty("duration_seconds")
+  })
+
+  // (A private host is refused too: this file mocks `safeUrlSchema` as a plain
+  // URL check, so that case is held in lib/__tests__/nemotron-transcribe-input.test.ts.)
+  it("refuses anything but an https link, before probing it", async () => {
+    for (const audioUrl of ["http://example.com/talk.mp3"]) {
+      const { mockFrom } = mockJobInsert()
+      const res = await app.inject({ method: "POST", url: "/v1/transcribe", payload: { audioUrl, provider: NEMOTRON, userId: VALID_UUID } })
+      expect(res.statusCode, audioUrl).toBe(400)
+      expect(res.json().error.code, audioUrl).toBe("invalid_media_url")
+      expect(mockFrom).not.toHaveBeenCalled()
+    }
+    expect(probe.probeMediaDurationAndSize).not.toHaveBeenCalled()
+    expect(guardIds).toEqual([])
+  })
+
+  it("refuses a link to a video's page (its sound would only exist after the hold), without probing it", async () => {
+    mockJobInsert()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/transcribe",
+      payload: { audioUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", provider: NEMOTRON, userId: VALID_UUID },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("media_page_link_unsupported")
+    expect(probe.probeMediaDurationAndSize).not.toHaveBeenCalled()
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+  })
+
+  it("translates: targetLanguage reaches the worker, and costs the same minutes", async () => {
+    probe.probeMediaDurationAndSize.mockResolvedValue({ durationSec: 30 })
+    mockJobInsert("job-n2")
+    const res = await app.inject({ method: "POST", url: "/v1/transcribe", payload: { audioUrl: FILE, provider: NEMOTRON, targetLanguage: "en", userId: VALID_UUID } })
+    expect(res.statusCode).toBe(200)
+    expect(guardIds).toEqual(["nemotron-3-5-transcribe:1m"])
+    expect(videoQueue.add).toHaveBeenCalledWith("transcribe", expect.objectContaining({ targetLanguage: "en" }))
+  })
+
+  it("refuses a translation together with word timings, before probing the file", async () => {
+    mockJobInsert()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/transcribe",
+      payload: { audioUrl: FILE, provider: NEMOTRON, targetLanguage: "en", wordTimestamps: true, userId: VALID_UUID },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(JSON.stringify(res.json())).toContain("word timings")
+    expect(probe.probeMediaDurationAndSize).not.toHaveBeenCalled()
+    expect(guardIds).toEqual([])
+  })
+
+  it.each(["elevenlabs-stt", "whisper", "incredibly-fast-whisper", undefined])(
+    "refuses a translation on %s (only Nemotron translates)",
+    async (provider) => {
+      const { mockFrom } = mockJobInsert()
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/transcribe",
+        payload: { audioUrl: FILE, ...(provider ? { provider } : {}), targetLanguage: "en", userId: VALID_UUID },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+      expect(JSON.stringify(res.json())).toContain(NEMOTRON)
+      expect(mockFrom).not.toHaveBeenCalled()
+    },
+  )
+
+  it("refuses a target language KIE does not translate into", async () => {
+    mockJobInsert()
+    const res = await app.inject({ method: "POST", url: "/v1/transcribe", payload: { audioUrl: FILE, provider: NEMOTRON, targetLanguage: "vi", userId: VALID_UUID } })
+    expect(res.statusCode).toBe(400)
+    expect(probe.probeMediaDurationAndSize).not.toHaveBeenCalled()
+  })
+
+  it("leaves every other engine as it was: priced on its own id, nothing probed", async () => {
+    mockJobInsert("job-n3")
+    const res = await app.inject({ method: "POST", url: "/v1/transcribe", payload: { audioUrl: FILE, provider: "elevenlabs-stt", userId: VALID_UUID } })
+    expect(res.statusCode).toBe(200)
+    expect(guardIds).toEqual(["elevenlabs-stt"])
+    expect(probe.probeMediaDurationAndSize).not.toHaveBeenCalled()
+    const queued = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+    expect(queued).not.toHaveProperty("targetLanguage")
+    expect(queued).not.toHaveProperty("duration_seconds")
   })
 })

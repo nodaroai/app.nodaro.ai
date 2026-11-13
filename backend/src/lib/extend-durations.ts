@@ -33,6 +33,7 @@ export const EXTEND_DURATION_SECONDS: Readonly<Record<ExtendVideoProvider, reado
   "ltx-2.3-pro": secondsFrom(LTX_EXTEND_DURATION.MIN_SEC, LTX_EXTEND_DURATION.MAX_SEC),
   "seedance-2-5-extend": catalogDurations("seedance-2-5-extend"),
   "seedance-2-0-extend": catalogDurations("seedance-2-0-extend"),
+  "kling-4-extend": catalogDurations("kling-4-extend"),
 }
 
 /** The longest any provider adds: the request schema's ceiling (each provider's own list is checked after it). */

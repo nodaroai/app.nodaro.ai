@@ -1487,6 +1487,14 @@ const GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES = 1_014
 // and without it: extend_video 2_722 → 2_974 B.
 const EXTEND_SEEDANCE_SPLIT_BYTES = 252
 
+// RAISED 2026-11-12 by Kling 4 joining Extend Video, and nothing else: `extend_video` offers
+// `kling-4-extend` beside the Seedance providers, its URL arguments name it, `duration` states its
+// 3–30 s window (default 5), `resolution` names each model's own resolutions, and the sound switch and
+// reference images name the Seedance providers the route takes them on. No tool was added, so the
+// fixture does NOT move. Measured by this suite on the same tree with and without it: extend_video
+// 3_209 → 3_398 B (total 528_925 → 529_114).
+const EXTEND_KLING_4_BYTES = 189
+
 // RAISED 2026-11-11 by image_to_image's `mask_url` naming the models that take a mask
 // (`I2I_MASK_SUPPORT`, now with GPT Image 2.6 Flare's and Sunburst's edits), and that it is
 // refused with a GIF or an SVG, and nothing else. No tool was added, so the fixture does NOT move.
@@ -1584,6 +1592,15 @@ const LLM_PRICE_KEY_EFFORT_WORDING_BYTES = 62
 // modify_image ("flux-fill, " in each), and nothing else. No tool was added, so the fixture does
 // NOT move. Measured by this suite: 528_052 total − 528_030 = 22 B.
 const FLUX_FILL_CATALOG_ENTRY_BYTES = 22
+
+// RAISED 2026-11-12 by Nemotron 3.5 Transcribe on `transcribe`, and nothing else: the tool gains
+// a `model` arg (the TRANSCRIBE_PROVIDERS enum, ElevenLabs STT still the default) and a
+// `target_language` arg (Nemotron's 32 translation targets), and its description and describes
+// say which engine returns word timings, that Nemotron translates and how it is priced.
+// `add_captions` does not move: its `transcribe_provider` enum is CAPTION_TRANSCRIBE_LANES, the
+// three lanes it took before. No tool added, so the fixture does not move. Measured by this suite
+// (before FLUX Fill's entry): 529_585 total − 528_463 = 1_122 B, all on transcribe (1_851 → 2_973 B).
+const NEMOTRON_TRANSCRIBE_BYTES = 1_122
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES,
@@ -1771,6 +1788,7 @@ export const TOOL_WIRE_BUDGET = {
     SPEAKER_VIEW_REGION_LIMITS_BYTES +
     GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES +
     EXTEND_SEEDANCE_SPLIT_BYTES +
+    EXTEND_KLING_4_BYTES +
     I2I_MASK_MODELS_BYTES +
     MODIFY_IMAGE_MASK_BYTES +
     SEEDANCE_REFERENCE_TASK_TYPE_ARG_BYTES +
@@ -1784,7 +1802,8 @@ export const TOOL_WIRE_BUDGET = {
     NODARO_IMAGE_UPSCALE_BYTES +
     LLM_REGISTRY_2026_11_IDS_BYTES +
     LLM_PRICE_KEY_EFFORT_WORDING_BYTES +
-    FLUX_FILL_CATALOG_ENTRY_BYTES,
+    FLUX_FILL_CATALOG_ENTRY_BYTES +
+    NEMOTRON_TRANSCRIBE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

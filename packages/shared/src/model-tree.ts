@@ -74,7 +74,8 @@ const MODE_TO_NODE: Readonly<Partial<Record<ModelMode, string>>> = {
 
 export function modelToNodeTarget(modelId: string): ModelNodeTarget | null {
   const entry = MODEL_CATALOG[modelId]
-  if (!entry) return null
+  // A model the platform runs on its own creates no node (`pickerHidden`).
+  if (!entry || entry.pickerHidden === true) return null
   // Resolve the target node: a valid provider-enum value wins, else the catalog's modes.
   const enumMatch = ENUM_TARGETS.find(([providers]) => providers.includes(modelId))
   const nodeType = enumMatch?.[1] ?? entry.modes.map((m) => MODE_TO_NODE[m]).find(Boolean)

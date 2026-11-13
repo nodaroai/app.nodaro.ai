@@ -162,3 +162,52 @@ export function isAllowedRequestHost(req: HostRequestLike): boolean {
   const host = requestHost(req)
   return host !== null && allowedHosts().has(host)
 }
+
+/**
+ * The origins this deployment DECLARES as its own: `PUBLIC_URL` and every
+ * `CORS_ORIGIN` entry — the same declaration the allowlist above is built
+ * from, without the two localhost development origins the allowlist always
+ * adds (no deployment declared those; one that serves on localhost names it in
+ * `PUBLIC_URL` or `CORS_ORIGIN` like any other host). Keyed by URL `host`
+ * (hostname plus a non-default port, lower-cased); when one host is declared
+ * under both schemes, the https entry wins. An entry that is not an http(s)
+ * URL names no host and is skipped.
+ */
+let cachedDeclared: { from: string; byHost: Map<string, string> } | null = null
+function declaredOriginsByHost(): Map<string, string> {
+  const publicUrl = config.PUBLIC_URL ?? ""
+  const corsOrigin = config.CORS_ORIGIN ?? ""
+  const from = `${publicUrl}\n${corsOrigin}`
+  if (!cachedDeclared || cachedDeclared.from !== from) {
+    const byHost = new Map<string, string>()
+    const entries = [publicUrl, ...corsOrigin.split(",")].map((e) => e.trim()).filter(Boolean)
+    for (const entry of entries) {
+      let url: URL
+      try {
+        url = new URL(entry)
+      } catch {
+        continue
+      }
+      if (url.protocol !== "https:" && url.protocol !== "http:") continue
+      const host = url.host.toLowerCase()
+      const existing = byHost.get(host)
+      if (existing === undefined || (existing.startsWith("http:") && url.protocol === "https:")) byHost.set(host, url.origin)
+    }
+    cachedDeclared = { from, byHost }
+  }
+  return cachedDeclared.byHost
+}
+
+/**
+ * The declared origin (scheme + host) of the host this request arrived on, or
+ * null when the deployment has not declared that host as its own. Matched
+ * exactly on `requestHost` (port kept), so a declared host on another port, a
+ * host spelled with a path or credentials, or any host the deployment never
+ * named is null. The scheme always comes from the declaration, never from the
+ * request: nothing a caller sends can turn an https address into an http one.
+ */
+export function declaredOriginOfRequest(req: HostRequestLike): string | null {
+  const host = requestHost(req)
+  if (!host) return null
+  return declaredOriginsByHost().get(host) ?? null
+}

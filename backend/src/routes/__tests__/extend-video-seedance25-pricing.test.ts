@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest"
 import { resolveExtendVideoIdentifier } from "@/routes/extend-video.js"
 import { buildPayload } from "@/services/workflow-engine/payload-builder.js"
 import { CreditsService, STATIC_CREDIT_COSTS, getNodeModelIdentifier } from "@/ee/billing/credits.js"
-import { seedanceExtendCreditId } from "@nodaro/shared/credits"
-import { EXTEND_VIDEO_PROVIDERS, RETIRED_VIDEO_PROVIDERS, canonicalVideoProvider, isSeedanceExtendProvider } from "@nodaro/shared/models"
+import { tailExtendCreditId } from "@nodaro/shared/credits"
+import { EXTEND_VIDEO_PROVIDERS, RETIRED_VIDEO_PROVIDERS, canonicalVideoProvider, isTailExtendProvider } from "@nodaro/shared/models"
 import type { SimpleNode } from "@/services/workflow-engine/types.js"
 
 // ---------------------------------------------------------------------------
@@ -12,8 +12,9 @@ import type { SimpleNode } from "@/services/workflow-engine/types.js"
 // (orchestrator reservation), and the workflow estimate. If they disagree, a
 // run reserves one price against a generation that costs another — and
 // commit_credits only ever refunds a surplus, it never collects an upward
-// delta, so a shortfall is permanent. Each Seedance provider is priced on its
-// own rows (`seedanceExtendCreditId`); the retired `seedance-2-extend` runs as
+// delta, so a shortfall is permanent. Each tail-recipe provider (Seedance 2.5,
+// Seedance 2.0, Kling 4) is priced on its own rows (`tailExtendCreditId`); the
+// retired `seedance-2-extend` runs as
 // Seedance 2.5 and is priced on its rows. Agreement alone is not enough: three
 // producers naming the same UNPRICED id agree too, so every id must be a row.
 // ---------------------------------------------------------------------------
@@ -37,26 +38,26 @@ function producers(data: Record<string, unknown>) {
 // Seedance 2.5's, and a string.
 const DURATIONS = [undefined, 1, 4, 6, 8, 12, 15, 16, 25, 30, 45, "12"] as const
 const RESOLUTIONS = [undefined, "480p", "720p", "1080p", "4k"] as const
-// Both Seedance providers and every retired id that runs as one of them.
-const SEEDANCE_PROVIDERS = [
-  "seedance-2-5-extend",
-  "seedance-2-0-extend",
-  ...Object.keys(RETIRED_VIDEO_PROVIDERS).filter((id) => isSeedanceExtendProvider(RETIRED_VIDEO_PROVIDERS[id])),
+// Every tail-recipe provider and every retired id that runs as one of them.
+const TAIL_PROVIDERS = [
+  ...EXTEND_VIDEO_PROVIDERS.filter(isTailExtendProvider),
+  ...Object.keys(RETIRED_VIDEO_PROVIDERS).filter((id) => isTailExtendProvider(RETIRED_VIDEO_PROVIDERS[id])),
 ]
 
-describe("route, payload builder and estimate name one id for every Seedance extend provider × duration × resolution", () => {
-  it("the retired seedance-2-extend is among the providers checked", () => {
-    expect(SEEDANCE_PROVIDERS).toContain("seedance-2-extend")
+describe("route, payload builder and estimate name one id for every tail-recipe extend provider × duration × resolution", () => {
+  it("Kling 4 and the retired seedance-2-extend are among the providers checked", () => {
+    expect(TAIL_PROVIDERS).toContain("kling-4-extend")
+    expect(TAIL_PROVIDERS).toContain("seedance-2-extend")
   })
 
-  it.each(SEEDANCE_PROVIDERS)("%s: one priced row, the own row of the provider it runs as", (provider) => {
+  it.each(TAIL_PROVIDERS)("%s: one priced row, the own row of the provider it runs as", (provider) => {
     const runsAs = canonicalVideoProvider(provider)
-    if (!isSeedanceExtendProvider(runsAs)) throw new Error(`${provider} runs as no Seedance extend provider`)
+    if (!isTailExtendProvider(runsAs)) throw new Error(`${provider} runs as no tail-recipe extend provider`)
     for (const duration of DURATIONS) {
       for (const resolution of RESOLUTIONS) {
         const label = `${provider} ${String(duration)} ${String(resolution)}`
         const ids = producers({ provider, duration, resolution })
-        const want = seedanceExtendCreditId(runsAs, duration, resolution)
+        const want = tailExtendCreditId(runsAs, duration, resolution)
         expect(ids, label).toEqual({ route: want, run: want, estimate: want })
         expect(STATIC_CREDIT_COSTS[want], label).toBeGreaterThan(0)
         // The workflow run queues exactly the length and resolution it reserved:
@@ -79,6 +80,15 @@ describe("route, payload builder and estimate name one id for every Seedance ext
   it("Seedance 2.0 is priced per second added, on its own rows", () => {
     expect(producers({ provider: "seedance-2-0-extend", duration: 6, resolution: "480p" }).run).toBe("seedance-2-0-extend:6s:480p")
     expect(producers({ provider: "seedance-2-0-extend" }).run).toBe("seedance-2-0-extend:8s:720p")
+  })
+
+  it("Kling 4 is priced per second added, on its own rows, its 5 s 720p by default", () => {
+    expect(producers({ provider: "kling-4-extend" })).toEqual({
+      route: "kling-4-extend:5s:720p",
+      run: "kling-4-extend:5s:720p",
+      estimate: "kling-4-extend:5s:720p",
+    })
+    expect(producers({ provider: "kling-4-extend", duration: 22, resolution: "1080p" }).run).toBe("kling-4-extend:22s:1080p")
   })
 })
 

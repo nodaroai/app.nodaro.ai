@@ -2,7 +2,8 @@
 import { dirname } from "node:path"
 import { safeFetch } from "../../lib/safe-fetch.js"
 import { config } from "../../lib/config.js"
-import { transcribeLaneKey } from "../../lib/transcribe-lane-key.js"
+import { transcribeLaneKey, transcribeTaskKind } from "../../lib/transcribe-lane-key.js"
+import { settleNemotronTranscribe } from "../../lib/nemotron-transcribe-settle.js"
 import { isNodaroConnected } from "../../lib/nodaro-connect.js"
 import { requireProviderKey } from "../../providers/provider-keys.js"
 import type { TextToSpeechOptions } from "../../providers/provider.interface.js"
@@ -404,7 +405,7 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
 }
 
 const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
-  const { audioUrl: rawAudioUrl, provider, language, diarize, tagAudioEvents, wordTimestamps } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string; diarize?: boolean; tagAudioEvents?: boolean; wordTimestamps?: boolean }
+  const { audioUrl: rawAudioUrl, provider, language, diarize, tagAudioEvents, wordTimestamps, targetLanguage, duration_seconds: durationSec, bucketKey } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string; diarize?: boolean; tagAudioEvents?: boolean; wordTimestamps?: boolean; targetLanguage?: string; duration_seconds?: number; bucketKey?: string }
   console.log(`[worker] transcribe ${ctx.jobId} (provider: ${provider ?? "whisper"}, language: ${language ?? "auto"})`)
 
   // The deployment's switch for links to outside content, a post or a direct
@@ -434,7 +435,8 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   // reaches the capability router, so a keyless-but-connected install could
   // not be rescued by any capability declaration (#761 — the sibling of the
   // 2026-08-14 TTS incident). Key resolution is per-PROVIDER: elevenlabs-stt
-  // needs ELEVENLABS_API_KEY, the two whisper lanes need REPLICATE_API_TOKEN.
+  // needs ELEVENLABS_API_KEY, Nemotron KIE_API_KEY, the two whisper lanes
+  // REPLICATE_API_TOKEN.
   //   1. local key for the chosen provider -> local transcribe(), byte-identical
   //   2. no key, connected -> replay the payload on the cloud (which holds
   //      keys for BOTH lanes) and take its output verbatim — same code runs
@@ -444,6 +446,9 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
   let outputData: Record<string, unknown>
   let actualCost: number | undefined
+  /** Nemotron: the audio's length KIE decoded and billed, and its billed credits — what the run is charged for. */
+  let billedDurationSec: number | undefined
+  let billedKieCredits: number | undefined
   if (await shouldRunOnCloud(localKey)) {
     const cloud = await runJobOnCloud("transcribe", { ...(job.data as Record<string, unknown>), audioUrl }, async (p) => {
       await setJobProgress(job, ctx.jobId, Math.min(90, Math.max(25, Math.round(p))))
@@ -464,16 +469,24 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
           diarize,
           tagAudioEvents,
           wordTimestamps,
-          // Persist the Replicate prediction id (whisper paths) so a BullMQ
-          // stall-retry recovers via the replicate reconcile handler instead of
+          targetLanguage,
+          durationSec,
+          // Persist the provider's task id (the Replicate prediction on the
+          // whisper paths, the KIE task on Nemotron) so a BullMQ stall-retry
+          // recovers via that provider's reconcile handler instead of
           // re-billing the transcribe call.
-          onTaskCreated: makeOnTaskCreated(ctx.jobId, "replicate-prediction"),
+          onTaskCreated: makeOnTaskCreated(ctx.jobId, transcribeTaskKind(provider)),
         }),
     )
     actualCost = result.cost
+    billedDurationSec = result.billedDurationSec
+    billedKieCredits = result.billedKieCredits
     outputData = { text: result.text, language: result.language, segments: result.segments }
     if (result.words) outputData.words = result.words
     if (result.json) outputData.json = result.json
+    // Nemotron: KIE flags an output that hit its length limit for the audio
+    // (it usually repeats itself). Kept on the result, never dropped silently.
+    if (result.truncated) outputData.truncated = true
   }
   // The `json` output handle is a `Transcript`. Both local paths set it; the
   // cloud relay returns whatever the connected install produced — defensively
@@ -488,9 +501,28 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   }
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: outputData })
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: outputData,
+    // What KIE billed for a Nemotron run (its own `creditsConsumed`, else its
+    // rate × the length it decoded), recorded only: the charge is the settle
+    // below, on KIE's length.
+    ...(provider === "nemotron-3-5-transcribe" && actualCost !== undefined ? { provider_cost: actualCost } : {}),
+  })
   if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, actualCost)
+  if (provider === "nemotron-3-5-transcribe") {
+    // Held at the measured minutes, charged for the minutes KIE decoded — up
+    // or down, in one commit (lib/nemotron-transcribe-settle.ts).
+    await settleNemotronTranscribe({
+      usageLogId: ctx.usageLogId,
+      jobId: ctx.jobId,
+      heldId: bucketKey,
+      measuredSec: durationSec,
+      kieSec: billedDurationSec,
+      kieCredits: billedKieCredits,
+    })
+  } else {
+    await commitJobCredits(ctx.usageLogId, ctx.jobId, actualCost)
+  }
   console.log(`[worker] Job ${ctx.jobId} completed: transcribed ${(outputData.text as string).length} chars (language: ${String(outputData.language ?? "auto")})`)
 }
 

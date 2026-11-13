@@ -34,6 +34,7 @@ const LATIN_OK: ReadonlySet<string> = new Set<string>([
   "audiocfg.idPrefix",
   "audiocfg.providerElevenLabsStt",
   "audiocfg.providerIncrediblyFastWhisper",
+  "audiocfg.providerNemotron",
   "audiocfg.providerWhisper",
   "cfgext.igTitle",
   "cfgext.slideKenBurns",

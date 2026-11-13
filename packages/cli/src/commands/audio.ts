@@ -5,10 +5,13 @@ import { collectVariadic, reportQueuedJob } from "../util.js"
 import type { AudioFxPreset } from "@nodaro/sdk/voices"
 import {
   TRANSCRIBE_PROVIDERS,
+  TRANSCRIBE_TARGET_LANGUAGES,
   DEFAULT_TRANSCRIBE_PROVIDER,
   transcribeLaneSupportsWordTimestamps,
   type TranscribeProvider,
+  type TranscribeTargetLanguage,
 } from "@nodaro/shared/models"
+import { transcribeTranslationRefusal } from "@nodaro/shared/nodes"
 
 // The providers this command ACCEPTS that can also honour word timestamps —
 // the capability table intersected with the accepted enum, exactly as
@@ -310,6 +313,10 @@ Example:
     .option("--diarize", "label which speaker said each word (elevenlabs-stt)")
     .option("--tag-audio-events", "tag laughter / applause / other non-speech events (elevenlabs-stt)")
     .option("--word-timestamps", "ask for per-word timings — rejected up front on a lane that cannot produce them")
+    .option(
+      "--target-language <code>",
+      `translate the speech into this language instead (nemotron-3-5-transcribe only, to or from English; never with --word-timestamps): ${TRANSCRIBE_TARGET_LANGUAGES.join(" | ")}`,
+    )
     .option("--watch", "poll until the job completes")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
     .option("--profile <name>")
@@ -327,7 +334,10 @@ Feed the words straight into a kinetic caption render:
       --style word-highlight --no-auto-transcribe --watch
 
 Example:
-  $ nodaro audio transcribe --audio https://.../interview.mp3 --provider elevenlabs-stt --diarize --watch`)
+  $ nodaro audio transcribe --audio https://.../interview.mp3 --provider elevenlabs-stt --diarize --watch
+
+Translate Spanish speech into English (Nemotron 3.5 Transcribe, priced per started minute):
+  $ nodaro audio transcribe --audio https://.../entrevista.mp3 --provider nemotron-3-5-transcribe --target-language en --watch`)
     .action(
       async (
         opts: {
@@ -337,6 +347,7 @@ Example:
           diarize?: boolean
           tagAudioEvents?: boolean
           wordTimestamps?: boolean
+          targetLanguage?: string
         } & WatchOpts,
       ) => {
         try {
@@ -355,10 +366,18 @@ Example:
             )
             process.exit(1)
           }
+          // A translation is one engine's, into the languages it lists, never
+          // beside word timings: the route's own refusal, said before the call.
+          const translationRefusal = transcribeTranslationRefusal(resolvedLane, opts.targetLanguage, opts.wordTimestamps === true)
+          if (translationRefusal) {
+            warn(`--target-language: ${translationRefusal}`)
+            process.exit(1)
+          }
           const client = buildClient(opts.profile)
           const result = await client.audio.transcribe({
             audioUrl: opts.audio,
             ...(opts.provider ? { provider: opts.provider as TranscribeProvider } : {}),
+            ...(opts.targetLanguage ? { targetLanguage: opts.targetLanguage as TranscribeTargetLanguage } : {}),
             ...(opts.language ? { language: opts.language } : {}),
             ...(opts.diarize ? { diarize: true } : {}),
             ...(opts.tagAudioEvents ? { tagAudioEvents: true } : {}),

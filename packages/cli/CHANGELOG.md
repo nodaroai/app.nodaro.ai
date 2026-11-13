@@ -1,5 +1,41 @@
 # @nodaro/cli
 
+## 1.50.0
+
+### Minor Changes
+
+- daf4108: `nodaro audio transcribe` accepts `--provider nemotron-3-5-transcribe` (NVIDIA Nemotron 3.5 Transcribe, priced per started minute of the file) and a new `--target-language <code>` that translates the speech instead, to or from English, on that engine only and never with `--word-timestamps` (both refused before the call). `nodaro media add-captions --transcribe-provider` keeps its three engines.
+- 7daa028: `nodaro media split-layers` takes `--session <id>` (file the job in one of your generation sessions) and `--idempotency-key <key>` (a retry with the same key answers the job the first request started instead of starting a second one).
+
+### Patch Changes
+
+- 12870e5: The metered LLM price key named in `credits.modelCosts` (sdk) and `nodaro models cost` (cli) can also carry the effort a call sends — `<feature>:<model>[:direct | :effort-<level>]` — on a model whose price depends on it.
+- Updated dependencies [d789b04]
+- Updated dependencies [a809415]
+- Updated dependencies [d8d8088]
+- Updated dependencies [3d9832f]
+- Updated dependencies [12870e5]
+- Updated dependencies [12870e5]
+- Updated dependencies [daf4108]
+- Updated dependencies [daf4108]
+- Updated dependencies [61e4620]
+- Updated dependencies [61e4620]
+- Updated dependencies [65da2da]
+- Updated dependencies [9b7d47a]
+- Updated dependencies [9b7d47a]
+- Updated dependencies [9b7d47a]
+- Updated dependencies [2f72f88]
+- Updated dependencies [2f72f88]
+- Updated dependencies [958abf7]
+- Updated dependencies [958abf7]
+- Updated dependencies [7daa028]
+- Updated dependencies [cee0b5a]
+- Updated dependencies [ab47f4c]
+- Updated dependencies [2a6d905]
+  - @nodaro/shared@3.63.0
+  - @nodaro/sdk@2.70.0
+  - @nodaro/prompts@1.55.0
+
 ## 1.49.0
 
 ### Minor Changes

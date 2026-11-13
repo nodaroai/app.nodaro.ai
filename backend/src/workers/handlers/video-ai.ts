@@ -42,10 +42,11 @@ import {
   getDialogueCapabilities,
   dialogueProviderOf,
   isVeoProvider,
+  isSeedanceExtendProvider,
   getVideoAudioCapability,
   type VideoUpscaleProvider
 } from "@nodaro/shared/models"
-import { ltxExtendDurationSec, ltxRetakeDurationSec, seedanceExtendResolution } from "@nodaro/shared/credits"
+import { ltxExtendDurationSec, ltxRetakeDurationSec, tailExtendResolution } from "@nodaro/shared/credits"
 import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
 import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
@@ -55,7 +56,7 @@ import { probeMatched } from "../../providers/video/matched-encode.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
 import { extractFrame } from "../../providers/video/extract-frame.js"
 import { resolveSourceMatchedAspect } from "../../providers/video/source-matched-aspect.js"
-import { extendSourceTooShortMessage, isTailRecipeProvider, tailRecipeSeconds, TAIL_RECIPES } from "../../lib/extend-recipe.js"
+import { extendSourceTooShortMessage, isTailRecipeProvider, tailCutSec, tailRecipeSeconds, TAIL_RECIPES } from "../../lib/extend-recipe.js"
 import { cutChainedMovTail, findChainedMovReference, isMovUrl } from "../../lib/seedance-extend-mov-chain.js"
 import { rawExtensionObjectId, silentVideoKey } from "../../lib/job-output-keys.js"
 import { discardFailedRunCopies } from "../../lib/discard-job-copies.js"
@@ -1477,14 +1478,14 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     return
   }
 
-  // ─── Tail-recipe smart-stitch extend (Seedance 2.5 / Seedance 2.0) ─────
+  // ─── Tail-recipe smart-stitch extend (Seedance 2.5 / 2.0, Kling 4) ─────
   // Extends ANY video by URL: generate the continuation on the provider's own
   // model (`TAIL_RECIPES`, lib/extend-recipe.ts) through the i2v transport —
   // the source's LAST FRAME as the first-frame anchor + its last seconds as
   // the @video_1 reference, with the recipe's prompt (Seedance: the
-  // spike-validated "extend @video_1 as follows:" template) — then
-  // smart-stitch source+extension into one seamless clip (PSNR boundary
-  // matching; the fixed trim counts are the no-match fallback).
+  // spike-validated "extend @video_1 as follows:" template; Kling 4: its own)
+  // — then smart-stitch source+extension into one seamless clip (PSNR
+  // boundary matching; the fixed trim counts are the no-match fallback).
   if (isTailRecipeProvider(provider)) {
     const recipe = TAIL_RECIPES[provider]
     const { video: sourceUrl, prompt: userPrompt, duration, resolution, generateAudio, referenceImageUrls } = job.data as {
@@ -1500,12 +1501,13 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     console.log(`[worker] extend-video ${ctx.jobId} (provider: ${provider})`)
 
     // The job's provider picks the model the continuation is generated on;
-    // the credit id is the provider's own row (`seedanceExtendCreditId`), so
+    // the credit id is the provider's own row (`tailExtendCreditId`), so
     // reserve and generation can't diverge.
     const genModel = recipe.genModel
     // The seconds the run is priced for — the funnel the credit id reads
     // (the provider's catalog default when unset) — held in the recipe's
-    // window (2.0: 4–15s, 2.5: 4–30s): what the route queued.
+    // window (Seedance 2.0: 4–15s, Seedance 2.5: 4–30s, Kling 4: 3–30s): what
+    // the route queued.
     const extSeconds = tailRecipeSeconds(provider, duration)
 
     // The extension must match the SOURCE's shape or the stitch crops it
@@ -1521,7 +1523,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     // Spike-validated generation inputs (2026-07-12): the @video_1 reference
     // is the source's last moments only (`recipe.tailSec` — a short tail keeps
     // the model continuing the boundary motion instead of re-staging the whole
-    // clip, floored by KIE's r2v ≥1.8s reference-video minimum), measured from
+    // clip; a source with less picture sends all of it, `tailCutSec`, down to
+    // the model's shortest reference, `recipe.minSourceSec`), measured from
     // the PICTURE's end (the sound may run past the last frame) — and the
     // source's LAST FRAME anchors the extension as its first frame (i2v
     // transport), so the continuation starts pixel-adjacent to the boundary
@@ -1562,7 +1565,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // other source's tail is cut as it always was, and so is a chained MOV
       // reference (Seedance's own SDR clip).
       const tailPicture = extendTailPicture(await probeMatched(srcLocal))
-      const tailPath = await extractTailToFile(srcLocal, recipe.tailSec, { measureFrom: "picture", ...tailPicture })
+      const tailPath = await extractTailToFile(srcLocal, tailCutSec(provider, pictureSec), { measureFrom: "picture", ...tailPicture })
       // Generation inputs only, never the deliverable: the tail, the frame and
       // a chained cut go to the job's scratch folder (`lib/job-scratch.ts`),
       // emptied when the job ends, and count against no one's quota.
@@ -1599,15 +1602,18 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         // extension (silent wrong output). If the worker dies mid-wait,
         // BullMQ's stalled-job recovery re-runs the whole handler instead.
         gen = await imageToVideo(lastFrameUrl, genModel, kiePrompt, extSeconds, undefined, {
-          // The resolution the run was priced at (`seedanceExtendResolution`,
+          // The resolution the run was priced at (`tailExtendResolution`,
           // the credit id's own reading): one the model offers, else 720p — a
           // job naming any other can never render above the row it reserved.
-          resolution: seedanceExtendResolution(provider, resolution),
-          generateAudio: generateAudio ?? true,
-          // User references (route-assembled) ride alongside the tail; the
-          // shared seedance resolver seats them as @image_1…N and appends the
-          // last-frame anchor after them, so their prompt ordinals hold.
-          ...(referenceImageUrls?.length ? { referenceImageUrls } : {}),
+          resolution: tailExtendResolution(provider, resolution),
+          // Seedance's own levers: the sound switch and the user's references
+          // (route-assembled; the shared seedance resolver seats them as
+          // @image_1…N and appends the last-frame anchor after them, so their
+          // prompt ordinals hold). Kling 4.0's sound is always on and its
+          // extend takes no references of the user's (the route refuses them).
+          ...(isSeedanceExtendProvider(provider)
+            ? { generateAudio: generateAudio ?? true, ...(referenceImageUrls?.length ? { referenceImageUrls } : {}) }
+            : {}),
           referenceVideoUrls: [referenceVideoUrl],
           aspectRatio,
           ...(outputFormat === "mov" ? { outputFormat } : {}),

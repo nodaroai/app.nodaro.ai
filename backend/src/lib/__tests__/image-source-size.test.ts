@@ -79,6 +79,13 @@ describe("probeImageDisplaySize", () => {
     expect(await probeImageDisplaySize("https://cdn.example.com/a.png")).toEqual({ width: 1104, height: 1472 })
   })
 
+  it("reads a large WebP's size from the first read, stored under a .png name as our storage serves it", async () => {
+    const webp = await sharp({ create: { width: 1776, height: 2368, channels: 3, background: "#808080", noise: { type: "gaussian", mean: 128, sigma: 40 } } }).webp({ quality: 90 }).toBuffer()
+    expect(webp.length).toBeGreaterThan(SOURCE_SIZE_MAX_READ_BYTES)
+    fetchMock.mockResolvedValue(streamed(webp).response)
+    expect(await probeImageDisplaySize("https://cdn.example.com/portrait.png")).toEqual({ width: 1776, height: 2368 })
+  }, 60_000)
+
   it("reports a rotated phone photo as it is displayed", async () => {
     // Stored 1104x1472 with EXIF orientation 6 (a quarter turn) — shown landscape.
     fetchMock.mockResolvedValue(streamed(await jpeg(1104, 1472, { orientation: 6 })).response)

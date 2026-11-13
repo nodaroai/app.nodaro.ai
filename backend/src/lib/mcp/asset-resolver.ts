@@ -160,6 +160,7 @@ export async function resolveAssetId(opts: ResolveOpts): Promise<string | null> 
   // restricted-read: the column is read and a restricted file resolves as one that does not exist, below
   const assetResult = await supabase
     .from("assets")
+    // fileless-read: a lookup by id; a row with no address is an error, below
     .select(`id, user_id, type, r2_url, ${RESTRICTED_ASSET_COLUMN}`)
     .eq("id", assetId)
     .maybeSingle()

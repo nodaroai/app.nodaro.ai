@@ -6,7 +6,8 @@ import { config } from "../lib/config.js"
 import { warmAdminCache } from "../lib/admin-check.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
 import { resolveApiToken } from "../lib/api-token-resolver.js"
-import { surfaceSsoOnly } from "../lib/surface-profile.js"
+import { MCP_PATH_DEFAULT, surfaceSsoOnly } from "../lib/surface-profile.js"
+import { mcpServedPath } from "../lib/mcp-lane-addresses.js"
 import { deploymentPayerActive, deploymentPayerId } from "../lib/deployment-payer.js"
 import {
   BILLING_KEY_PREFIX,
@@ -412,7 +413,36 @@ function matchPublicRoute(method: string, url: string): (typeof PUBLIC_ROUTES)[n
       return route
     }
   }
-  return undefined
+  return mcpPathRoute(method, path)
+}
+
+/**
+ * The MCP endpoint served by path (`mcp.byPath` in the surface profile,
+ * routes/mcp.ts) and its two metadata documents (routes/well-known.ts):
+ * public on exactly the terms `/mcp` and its `/.well-known/…/mcp` variants are
+ * above — the endpoint POST and GET with the bearer checked by the route
+ * itself, so a missing token gets the MCP challenge; the documents GET, no
+ * credential — and only while the endpoint is served there
+ * (`mcpServedPath`: the profile asks, MCP is on, PUBLIC_URL is set), at their
+ * exact paths (never a prefix). Otherwise these are no rows at all, so every
+ * other install's public set is the list above unchanged.
+ */
+function mcpPathRoute(method: string, path: string): (typeof PUBLIC_ROUTES)[number] | undefined {
+  if (method !== "POST" && method !== "GET") return undefined
+  if (!path.startsWith("/v1/") && !path.startsWith("/.well-known/")) return undefined
+  const mcpPath = mcpServedPath()
+  if (mcpPath === null) return undefined
+  return mcpPathRows(mcpPath).find((row) => row.method === method && row.path === path)
+}
+
+/** The public rows path mode adds, for the path the deployment configured. */
+function mcpPathRows(mcpPath: string): (typeof PUBLIC_ROUTES)[number][] {
+  return [
+    { method: "POST", path: mcpPath, bearer: true },
+    { method: "GET", path: mcpPath, bearer: true },
+    { method: "GET", path: `/.well-known/oauth-protected-resource${mcpPath}` },
+    { method: "GET", path: `/.well-known/oauth-authorization-server${mcpPath}` },
+  ]
 }
 
 function isPublicRoute(method: string, url: string): boolean {
@@ -435,7 +465,9 @@ export function __isPublicRouteForTest(method: string, url: string): boolean {
 /** Test-only copy of every public-route row, for the guard that classifies
  *  what each one serves (`lib/__tests__/public-outputs-reads-totality.test.ts`). */
 export function __publicRoutesForTest(): ReadonlyArray<{ method?: string; path: string; prefix?: boolean; pattern?: string; bearer?: true }> {
-  return PUBLIC_ROUTES.map(({ pattern, ...row }) => ({ ...row, ...(pattern ? { pattern: pattern.source } : {}) }))
+  // With the rows MCP by path adds (at its default path), so the guard
+  // classifies them too, whether or not this process has the mode on.
+  return [...PUBLIC_ROUTES, ...mcpPathRows(MCP_PATH_DEFAULT)].map(({ pattern, ...row }) => ({ ...row, ...(pattern ? { pattern: pattern.source } : {}) }))
 }
 
 // ---------------------------------------------------------------------------

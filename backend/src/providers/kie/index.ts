@@ -22,6 +22,7 @@ import {
   KIE_TTS_MODELS,
   KIE_AUDIO_ISOLATION_MODELS,
   KIE_STT_MODELS,
+  KIE_STT_BESPOKE_RUNNER_KEYS,
 } from "./models.js"
 
 /**
@@ -73,7 +74,9 @@ const kieInfo: ProviderInfo = {
     "sound-effect": [],
     "audio-isolation": Object.keys(KIE_AUDIO_ISOLATION_MODELS),
     "audio-separation": [], // KIE has no Demucs; Replicate-only capability
-    "transcription": Object.keys(KIE_STT_MODELS),
+    // Scribe only: `speechToText` runs Scribe, so an STT model with its own
+    // runner (Nemotron 3.5 Transcribe) is never offered here.
+    "transcription": Object.keys(KIE_STT_MODELS).filter((k) => !KIE_STT_BESPOKE_RUNNER_KEYS.has(k)),
     // Dialogue left KIE for the direct ElevenLabs API (the last proxy to go);
     // the capability key stays — the Record is exhaustive over ProviderCapability.
     "dialogue": [],

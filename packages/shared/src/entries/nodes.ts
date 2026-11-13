@@ -191,6 +191,8 @@ export {
 export * from "../node-pass-through.js"
 export {
   transcribeWordTimestampsRefusal,
+  transcribeTranslationRefusal,
+  transcribeTargetLanguageOf,
   findWordlessTranscriptFeeds,
 } from "../transcribe-preflight.js"
 export type { PreflightGraphNode, PreflightGraphEdge, WordlessTranscriptFeed } from "../transcribe-preflight.js"

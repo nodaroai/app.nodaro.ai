@@ -1,5 +1,6 @@
 import type { Scope } from "../scopes.js"
 import type { McpConversationIdentity } from "./flows/conversation-key.js"
+import { mcpLaneAddresses, type McpLaneAddresses } from "../mcp-lane-addresses.js"
 
 /**
  * Per-request MCP session state.
@@ -82,6 +83,16 @@ export interface McpSession {
   currentTool?: string
   /** The call's `flow_id`: "new", or the conversation to continue (same wrapper). */
   flowRequest?: string
+  /**
+   * Every absolute address this session's tools hand out — upload links, the
+   * upload widget's connect-src, editor / gallery / archive links, picker
+   * pictures — read from here and nowhere else (lib/mcp-lane-addresses.ts).
+   * Set by the `/mcp` route from the request the client sent, so on a
+   * deployment that serves MCP by path they follow the host the client
+   * connected through; an in-process session gets the install's primary
+   * addresses.
+   */
+  readonly addresses: McpLaneAddresses
 }
 
 export function newSession(opts: {
@@ -94,6 +105,13 @@ export function newSession(opts: {
   firstParty?: boolean
   /** See {@link McpSession.conversation} — the public `/mcp` route only. */
   conversation?: McpConversationIdentity
+  /** See {@link McpSession.addresses} — the install's primary addresses when omitted. */
+  addresses?: McpLaneAddresses
 }): McpSession {
-  return { ...opts, firstParty: opts.firstParty ?? false, progressTokens: new Map() }
+  return {
+    ...opts,
+    firstParty: opts.firstParty ?? false,
+    addresses: opts.addresses ?? mcpLaneAddresses(),
+    progressTokens: new Map(),
+  }
 }

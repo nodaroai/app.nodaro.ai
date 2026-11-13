@@ -31,6 +31,10 @@ import {
   speechUnitCreditId,
   VIDEO_OVERLAY_PRICING,
   videoOverlayVideoUnits,
+  NEMOTRON_TRANSCRIBE_ID,
+  NEMOTRON_TRANSCRIBE_PRICING,
+  nemotronTranscribeBaseCredits,
+  nemotronTranscribeCreditId,
 } from "@nodaro/shared/credits"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared/nodes"
@@ -250,7 +254,8 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   },
   "transcribe": {
     ids: familyIds(...TRANSCRIBE_PROVIDERS),
-    note: "Reserves on the ENGINE id (guard and reservation both resolve `provider ?? default`), never the node-type fallback key.",
+    band: transcribeBand,
+    note: "Reserves on the ENGINE id (guard and reservation both resolve `provider ?? default`), never the node-type fallback key — except Nemotron 3.5 Transcribe, per started minute of the file (1–60): a run reserves `nemotron-3-5-transcribe:<N>m`, priced as its four-minute rate row × N ÷ 4, rounded up once.",
   },
   "video-analysis": { ids: familyIds("video-analysis") },
   "video-audit": { ids: familyIds("video-audit") },
@@ -428,6 +433,26 @@ function editPlanBand(credit: (id: string, units?: number) => number | undefined
   const low = at(1)
   const high = at(EDIT_PLAN_MAX_MINUTES)
   return low.length && high.length ? [Math.min(...low), Math.max(...high)] : undefined
+}
+
+/**
+ * Transcribe's band: every engine priced per request on its own row, and
+ * Nemotron 3.5 Transcribe from one started minute to its 60 (its `:<N>m` id
+ * where the lookup prices one, else the rate row × N ÷ 4, rounded up once).
+ */
+function transcribeBand(credit: (id: string, units?: number) => number | undefined): [number, number] | undefined {
+  const prices: number[] = []
+  for (const engine of TRANSCRIBE_PROVIDERS) {
+    if (engine === NEMOTRON_TRANSCRIBE_ID) continue
+    const price = credit(engine)
+    if (price !== undefined) prices.push(price)
+  }
+  const rate = credit(NEMOTRON_TRANSCRIBE_PRICING.RATE_CREDIT_ID)
+  for (const minutes of [1, NEMOTRON_TRANSCRIBE_PRICING.MAX_MINUTES]) {
+    const price = credit(nemotronTranscribeCreditId(minutes * 60)) ?? (rate === undefined ? undefined : nemotronTranscribeBaseCredits(rate, minutes))
+    if (price !== undefined) prices.push(price)
+  }
+  return prices.length ? [Math.min(...prices), Math.max(...prices)] : undefined
 }
 
 function formatBand(min: number, max: number): number | string {
@@ -1441,7 +1466,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // `{Label}` refs resolve the plain transcript). A second `json` handle emits
     // the normalized Transcript (word/segment timings); the descriptor carries a
     // single primary type, same as video-analysis (json+text) declaring "data".
-    description: "Convert spoken audio to text (plain transcript on `text`, a normalized Transcript with word/segment timings on `json`), with optional speaker diarization and audio event tagging. Three engines: `elevenlabs-stt` (Scribe — always word-level, the only lane that diarizes or tags audio events), `incredibly-fast-whisper` (word timings on request) and `whisper` (no word timings at all).",
+    description: "Convert spoken audio to text (plain transcript on `text`, a normalized Transcript with word/segment timings on `json`), with optional speaker diarization and audio event tagging, or translate it. Four engines: `elevenlabs-stt` (Scribe — always word-level, the one lane that tags audio events), `incredibly-fast-whisper` (word timings on request), `whisper` (no word timings at all) and `nemotron-3-5-transcribe` (NVIDIA, 40 languages detected automatically; word timings with a speaker per word on request, or a translation to or from English with `targetLanguage` — never both; priced per started minute of the file, up to 60 minutes and 200 MB).",
     outputType: "text",
     creditCost: creditBandFor("transcribe"),
     providers: [...TRANSCRIBE_PROVIDERS],

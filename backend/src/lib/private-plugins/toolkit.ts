@@ -1331,6 +1331,7 @@ async function getPipelineSnapshot(
     // restricted-read: the column is read and a restricted output answers no address, below
     const { data: asset, error: assetError } = await supabase
       .from("assets")
+      // fileless-read: the pipeline's final output by id; a row with no address answers no finalOutputUrl, below
       .select(`r2_url, ${RESTRICTED_ASSET_COLUMN}`)
       .eq("id", pipeline.final_output_asset_id)
       .maybeSingle()

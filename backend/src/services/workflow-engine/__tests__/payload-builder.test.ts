@@ -2105,3 +2105,65 @@ describe("buildPayload — transcribe word timestamps", () => {
     expect(payload.wordTimestamps).toBe(true)
   })
 })
+
+// Nemotron 3.5 Transcribe (2026-11-12): word-capable, and the one engine that
+// translates — never together with word timings, inferred or explicit.
+describe("buildPayload — transcribe on Nemotron 3.5 Transcribe (translation)", () => {
+  const jobId = "job-1"
+  const NEMOTRON = "nemotron-3-5-transcribe"
+  const transcribeNode = (data: Record<string, unknown> = {}) =>
+    node("t", "transcribe", { label: "Transcribe", audioUrl: "https://a.mp3", provider: NEMOTRON, ...data })
+  const jsonWiredCtx = (n: SimpleNode) => ({
+    nodes: [n, node("e", "edit-plan", {})],
+    edges: [edge("t", "e", "json", "transcript")],
+    nodeStates: {},
+  })
+
+  it("reserves on the engine id (node-executor swaps in the measured minutes) and asks for word timings when json is wired", () => {
+    const n = transcribeNode()
+    const result = buildPayload(n, jobId, {}, undefined, jsonWiredCtx(n))
+    expect(result.modelIdentifier).toBe(NEMOTRON)
+    expect(result.payload.wordTimestamps).toBe(true)
+    expect(result.payload).not.toHaveProperty("targetLanguage")
+  })
+
+  it("sends the translation and turns the INFERRED word timings off (KIE refuses the pair)", () => {
+    const n = transcribeNode({ targetLanguage: "en" })
+    const payload = buildPayload(n, jobId, {}, undefined, jsonWiredCtx(n)).payload
+    expect(payload.targetLanguage).toBe("en")
+    expect(payload.wordTimestamps).toBe(false)
+  })
+
+  it("REFUSES an explicit word-timings request beside a translation, before any credit is reserved", () => {
+    expect(() => buildPayload(transcribeNode({ targetLanguage: "en", wordTimestamps: true }), jobId, {})).toThrow(/word timings and a translation/)
+  })
+
+  it("REFUSES a translation on an engine that cannot translate", () => {
+    expect(() => buildPayload(transcribeNode({ provider: "elevenlabs-stt", targetLanguage: "en" }), jobId, {})).toThrow(/does not translate/)
+    // An absent provider is the node default, which does not translate either.
+    expect(() =>
+      buildPayload(node("t", "transcribe", { label: "T", audioUrl: "https://a.mp3", targetLanguage: "en" }), jobId, {}),
+    ).toThrow(/does not translate/)
+  })
+
+  it("REFUSES a language it does not translate into", () => {
+    expect(() => buildPayload(transcribeNode({ targetLanguage: "vi" }), jobId, {})).toThrow(/is not a language/)
+  })
+
+  it("an empty target language is no translation", () => {
+    const payload = buildPayload(transcribeNode({ targetLanguage: "" }), jobId, {}).payload
+    expect(payload).not.toHaveProperty("targetLanguage")
+  })
+})
+
+describe("buildPayload — add-captions never transcribes on a length-priced engine", () => {
+  it("refuses Nemotron 3.5 Transcribe as its auto-transcribe engine, before any credit is reserved", () => {
+    const n = node("c", "add-captions", { videoUrl: "https://v.mp4", style: "word-highlight", transcribeProvider: "nemotron-3-5-transcribe" })
+    expect(() => buildPayload(n, "job-1", {})).toThrow(/not an engine Add Captions transcribes on/)
+  })
+
+  it("passes its own lanes through as before", () => {
+    const n = node("c", "add-captions", { videoUrl: "https://v.mp4", style: "word-highlight", transcribeProvider: "elevenlabs-stt" })
+    expect(buildPayload(n, "job-1", {}).payload.transcribe_provider).toBe("elevenlabs-stt")
+  })
+})

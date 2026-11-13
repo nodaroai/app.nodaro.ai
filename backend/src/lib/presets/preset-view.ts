@@ -49,8 +49,14 @@ export interface CatalogEntry {
   readonly previewUrl?: string
 }
 
-/** A factory preset as the API serves it (`GET /v1/node-presets/factory`). */
-export function factoryPresetView(nodeType: string, preset: CatalogEntry) {
+/**
+ * A factory preset as the API serves it (`GET /v1/node-presets/factory`).
+ * `baseUrl`: where the bundled example pictures are served — the install's
+ * public origin, or, for the MCP tools, their session's pictures host
+ * (lib/mcp-lane-addresses.ts: on a deployment that serves MCP by path, the
+ * host the client connected through).
+ */
+export function factoryPresetView(nodeType: string, preset: CatalogEntry, baseUrl: string = appBaseUrl()) {
   return {
     id: preset.id,
     name: preset.name,
@@ -63,8 +69,8 @@ export function factoryPresetView(nodeType: string, preset: CatalogEntry) {
     ...referenceFields(nodeType, preset.data, preset.minReferences),
     // A deployment preset names its own picture, at one size; a bundled one is
     // looked up among the committed files (null until one is committed).
-    previewUrl: preset.previewUrl ?? factoryPresetPreviewUrl(preset.id, appBaseUrl()),
-    ...(preset.previewUrl === undefined ? previewSrcSetField(preset.id) : {}),
+    previewUrl: preset.previewUrl ?? factoryPresetPreviewUrl(preset.id, baseUrl),
+    ...(preset.previewUrl === undefined ? previewSrcSetField(preset.id, baseUrl) : {}),
     ...(preset.previewUrl === undefined ? previewSizeFields(preset.id) : {}),
   }
 }
@@ -85,7 +91,7 @@ function previewSizeFields(presetId: string): { previewWidth?: number; previewHe
  * the MCP listing picks its own fields and leaves it out (dead weight to an
  * agent, as with the picker catalogs' `imageSrcSet`).
  */
-function previewSrcSetField(presetId: string): { previewSrcSet?: string } {
-  const srcSet = factoryPresetPreviewSrcSet(presetId, appBaseUrl())
+function previewSrcSetField(presetId: string, baseUrl: string): { previewSrcSet?: string } {
+  const srcSet = factoryPresetPreviewSrcSet(presetId, baseUrl)
   return srcSet ? { previewSrcSet: srcSet } : {}
 }

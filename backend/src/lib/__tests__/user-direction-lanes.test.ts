@@ -48,9 +48,10 @@ describe("the route lane", () => {
   const planner = read("routes/generate-image-plan.ts")
 
   it("resolves the caller's palette / moodboard on the body that runs, before the credit guard prices it", () => {
-    // (`replayImageBatch` first: a keyed batch repeated is answered from its jobs.)
+    // (`replayImageBatch` first among them: a keyed batch repeated is answered
+    // from its jobs; only the trained-character hint drop runs before it.)
     expect(route).toMatch(
-      /preHandler:\s*\[\s*replayImageBatch\s*,\s*applyGenerateImagePreset\s*,\s*userDirectionPreHandler\s*,\s*creditGuard\(resolveImageCreditIdentifier, \{ batchIdentifiers: resolveImageBatchCreditIdentifiers, runModel: resolveImageRunModel \}\)\s*,?\s*\]/,
+      /preHandler:\s*\[\s*(?:ignoreWithheldTrainedCharacterHint\s*,\s*)?replayImageBatch\s*,\s*applyGenerateImagePreset\s*,\s*userDirectionPreHandler\s*,\s*creditGuard\(resolveImageCreditIdentifier, \{ batchIdentifiers: resolveImageBatchCreditIdentifiers, runModel: resolveImageRunModel \}\)\s*,?\s*\]/,
     )
   })
 

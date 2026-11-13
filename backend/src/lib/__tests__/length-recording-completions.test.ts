@@ -101,9 +101,16 @@ describe("a length-recording job type completes only through the recording funne
     }
     // The direct completion writes in the reconcile lanes, none of which can
     // complete a video generation row: an execution's own status, a LoRA
-    // training (a model, its own job), and a transcription.
+    // training (a model, its own job), and a transcription (Replicate's whisper
+    // lanes; KIE's Nemotron 3.5 Transcribe, since 2026-11-12).
     const direct = reconcileFiles.filter((f) => DIRECT_COMPLETION.test(code(`lib/reconcile/${f}`)))
-    expect(direct.sort()).toEqual(["replicate.ts", "workflow-executions-cron.ts"])
+    expect(direct.sort()).toEqual(["kie.ts", "replicate.ts", "workflow-executions-cron.ts"])
+    // KIE's one direct write is its transcription recovery, reached only for a
+    // `transcribe` row (a text result: there is no media to finalize).
+    const kie = code("lib/reconcile/kie.ts")
+    expect([...kie.matchAll(new RegExp(DIRECT_COMPLETION, "g"))]).toHaveLength(1)
+    expect(topLevelFunction(kie, "async function reconcileKieTranscribeJob(")).toMatch(DIRECT_COMPLETION)
+    expect(kie).toMatch(/if \(row\.job_type === "transcribe"\) return reconcileKieTranscribeJob\(row, opts\)/)
     const executions = code("lib/reconcile/workflow-executions-cron.ts")
     const executionWrite = executions.search(DIRECT_COMPLETION)
     expect(executions.slice(executionWrite), "an execution's status, never a job's").toMatch(/^[\s\S]{0,800}tryTerminalWrite\(row\.id, updates, "flip to completed"/)

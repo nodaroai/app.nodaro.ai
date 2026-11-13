@@ -3,6 +3,7 @@ import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { RESTRICTED_ASSET_COLUMN } from "../lib/content-restrictions-column.js"
+import { onlyAssetFiles } from "../lib/asset-file-column.js"
 import { isCloud } from "../lib/config.js"
 import { permanentlyDeleteAsset } from "../lib/asset-delete.js"
 import { judgeUrlForRecording } from "../lib/key-ownership.js"
@@ -103,7 +104,9 @@ export async function libraryRoutes(app: FastifyInstance) {
     const { type, q, search, limit, cursor, owned, source } = parsed.data
     // One set of filters for the page AND its count, so `totalCount` describes
     // the same list. One `or=` per word, ANDed with each other, the library
-    // rule and the cursor's.
+    // rule and the cursor's. Both keep only the rows that are files
+    // (`onlyAssetFiles`, decided 2026-11-12): a row a retention reaper left
+    // without an address is neither listed nor counted.
     const searchFilters = textSearchFilters(ASSET_SEARCH_COLUMNS, q ?? search)
 
     // Count query (only on first page — when no cursor). Built here but NOT
@@ -112,10 +115,12 @@ export async function libraryRoutes(app: FastifyInstance) {
     // preview-nav bounds, so it must stay `count: "exact"`.
     let countPromise: PromiseLike<{ count: number | null }> | null = null
     if (!cursor) {
-      let cq = supabase
-        .from("assets")
-        .select("id", { count: "exact", head: true })
-        .is(RESTRICTED_ASSET_COLUMN, null)
+      let cq = onlyAssetFiles(
+        supabase
+          .from("assets")
+          .select("id", { count: "exact", head: true })
+          .is(RESTRICTED_ASSET_COLUMN, null),
+      )
 
       if (owned) {
         cq = cq.eq("user_id", userId)
@@ -138,16 +143,18 @@ export async function libraryRoutes(app: FastifyInstance) {
       countPromise = cq
     }
 
-    let query = supabase
-      .from("assets")
-      // `job`: the file's job, for the name its owner gave it (`title`, migration
-      // 609) — a to-one embed on `assets.job_id`, once this database has the
-      // column (lib/jobs-title-column.ts); null for an upload, or once that
-      // job's history is deleted.
-      // trash-read: a file kept in the library outlives its deleted job by design
-      // (like its render label), and so does the name its owner gave that job.
-      .select("id, user_id, type, filename, mime_type, size_bytes, r2_key, r2_url, metadata, is_library_item, upload_source, source, source_detail" + titleEmbedSelect() + ", created_at, job_id")
-      .is(RESTRICTED_ASSET_COLUMN, null)
+    let query = onlyAssetFiles(
+      supabase
+        .from("assets")
+        // `job`: the file's job, for the name its owner gave it (`title`, migration
+        // 609) — a to-one embed on `assets.job_id`, once this database has the
+        // column (lib/jobs-title-column.ts); null for an upload, or once that
+        // job's history is deleted.
+        // trash-read: a file kept in the library outlives its deleted job by design
+        // (like its render label), and so does the name its owner gave that job.
+        .select("id, user_id, type, filename, mime_type, size_bytes, r2_key, r2_url, metadata, is_library_item, upload_source, source, source_detail" + titleEmbedSelect() + ", created_at, job_id")
+        .is(RESTRICTED_ASSET_COLUMN, null),
+    )
 
     if (owned) {
       // Storage page: show ALL user assets (regardless of in_library flag)
@@ -193,6 +200,10 @@ export async function libraryRoutes(app: FastifyInstance) {
       // Both interpolated values are trusted: `cursor` is `z.string().uuid()`
       // at the schema, and `createdAt` is read back OUT of the database rather
       // than taken from the request.
+      //
+      // Any row's timestamp, a row without a file included: a page served
+      // before the files-only rule could end on one, and its cursor still
+      // resolves to the rows after it.
       // restricted-read: the cursor's own timestamp, never answered
       const { data: cursorRow } = await supabase
         .from("assets")

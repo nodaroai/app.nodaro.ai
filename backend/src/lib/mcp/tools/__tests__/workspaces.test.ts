@@ -20,6 +20,7 @@ vi.mock("@/lib/mcp/workspace-session.js", () => ({ storeSessionWorkspace: h.stor
 
 import { registerWorkspaces } from "@/lib/mcp/tools/workspaces.js"
 import type { McpSession } from "@/lib/mcp/session.js"
+import { mcpLaneAddresses } from "@/lib/mcp-lane-addresses.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const WS = "20000000-0000-4000-8000-000000000001"
@@ -44,7 +45,7 @@ function fakeServer() {
 }
 
 function session(scopes: Scope[], workspaceId?: string): McpSession {
-  return { userId: USER, scopes, clientName: "test", workspaceId, firstParty: false }
+  return { userId: USER, scopes, clientName: "test", workspaceId, firstParty: false, addresses: mcpLaneAddresses() }
 }
 
 const ME = {

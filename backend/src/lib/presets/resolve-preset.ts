@@ -39,13 +39,15 @@ export async function resolvePreset(args: {
   nodeType: string
   presetId: string
   userId?: string
+  /** Where a factory preset's example picture is served (see `factoryPresetView`); the install's public origin when omitted. */
+  picturesBase?: string
 }): Promise<ResolvedPreset | null> {
   const { nodeType, presetId, userId } = args
 
   // Factory first (ids are "<nodeType>/<slug>").
   const factory = presetCatalog(nodeType).find((p) => p.id === presetId)
   if (factory) {
-    const view = factoryPresetView(nodeType, factory)
+    const view = factoryPresetView(nodeType, factory, args.picturesBase)
     return {
       id: factory.id,
       name: factory.name,

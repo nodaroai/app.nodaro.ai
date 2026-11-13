@@ -96,6 +96,7 @@ const notFound = (what: string) => new RequestRefusal(404, "not_found", `${what}
 async function editedImageUrl(userId: string, assetId: string): Promise<{ url: string; thumbnailUrl: string | null }> {
   const { data, error } = await supabase
     .from("assets")
+    // fileless-read: a lookup by id; a row with no address is a 404, below
     .select("id, type, mime_type, r2_url, metadata")
     .eq("id", assetId)
     .eq("user_id", userId)
@@ -153,6 +154,7 @@ async function sourceFields(userId: string, body: JobFromUploadBody, allowChildS
   if (body.sourceAssetId) {
     const { data, error } = await supabase
       .from("assets")
+      // fileless-read: a lookup by id; a row with no address is a 404, below
       .select("id, r2_url")
       .eq("id", body.sourceAssetId)
       .eq("user_id", userId)

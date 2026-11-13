@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { trainedCharacterModelWithheld } from "../lib/trained-character-model.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { withAdjustments } from "../lib/image-gen-normalize.js"
@@ -188,6 +189,21 @@ async function resolveTrainedCharacter(
   return { ok: true, lora: { version: char.lora_replicate_version, trigger: char.lora_trigger_word } }
 }
 
+/**
+ * Where the deployment withholds the trained-character model, the editor's
+ * trained-character hint (`_internalLora`) is ignored (decided 2026-11-12):
+ * dropped from the body before anything prices, judges or runs it, so the
+ * request runs, and is charged as, the model it names, and nothing about the
+ * trained model is looked up. A request that names the trained model itself is
+ * then refused at the credit guard's door, like any named withheld model.
+ */
+async function ignoreWithheldTrainedCharacterHint(req: FastifyRequest): Promise<void> {
+  const body = req.body
+  if (body !== null && typeof body === "object" && "_internalLora" in body && trainedCharacterModelWithheld()) {
+    delete (body as Record<string, unknown>)._internalLora
+  }
+}
+
 export async function generateImageRoutes(app: FastifyInstance) {
   app.post("/v1/generate-image", {
     // `replayImageBatch` first: a repeat of a keyed batch is answered from its
@@ -200,7 +216,11 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // references, which a moodboard adds to. `batchIdentifiers`: with `count` /
     // `models`, the guard checks the WHOLE batch — every job's price summed —
     // before anything is created.
+    // `ignoreWithheldTrainedCharacterHint` before all of them: where the
+    // deployment withholds the trained-character model, the editor's hint is
+    // dropped before anything prices, judges or runs the request.
     preHandler: [
+      ignoreWithheldTrainedCharacterHint,
       replayImageBatch,
       applyGenerateImagePreset,
       userDirectionPreHandler,

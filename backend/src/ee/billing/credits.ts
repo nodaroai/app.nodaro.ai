@@ -16,7 +16,7 @@ import {
   buildCreditModelIdentifier,
   buildVideoCreditModelIdentifier,
   seedanceVideoEditCreditId,
-  seedanceExtendCreditId,
+  tailExtendCreditId,
   buildMotionCreditModelIdentifier,
   AI_AVATAR_DURATION_BUCKETS,
   resolveAiAvatarCreditId,
@@ -44,6 +44,11 @@ import {
   parsePitchTempoCreditId,
   pitchTempoBaseCredits,
   pitchTempoQuoteCreditId,
+  NEMOTRON_TRANSCRIBE_ID,
+  NEMOTRON_TRANSCRIBE_PRICING,
+  parseNemotronTranscribeCreditId,
+  nemotronTranscribeBaseCredits,
+  nemotronTranscribeQuoteCreditId,
   videoGenerationCreditId,
   parseUnitQuoteCreditId,
   VIDEO_OVERLAY_PRICING,
@@ -67,7 +72,7 @@ import {
   dialogueProviderOf,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
   isSeedanceVideoEditProvider,
-  isSeedanceExtendProvider,
+  isTailExtendProvider,
   canonicalVideoProvider,
   sunoSeparateCreditId,
   audioSoundtrackActive,
@@ -400,13 +405,31 @@ function pitchTempoMinutesBase(identifier: string, rowOf: (id: string) => number
 }
 
 /**
+ * The base price of a `nemotron-3-5-transcribe:<N>m` id (Nemotron 3.5
+ * Transcribe, per started minute of the file — decided 2026-11-12): the
+ * four-minute rate row × N ÷ 4, rounded up once, read through `rowOf`, or
+ * `undefined` when `identifier` is not such an id or the rate row is priced
+ * nowhere. Never a row of its own, like the Pitch & Tempo minutes ids.
+ */
+function nemotronTranscribeMinutesBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
+  const parsed = parseNemotronTranscribeCreditId(identifier)
+  if (!parsed) return undefined
+  const rate = rowOf(NEMOTRON_TRANSCRIBE_PRICING.RATE_CREDIT_ID)
+  return rate === undefined ? undefined : nemotronTranscribeBaseCredits(rate, parsed.minutes)
+}
+
+/**
  * Every id priced from rate rows rather than a row of its own: Edit Plan,
- * Pitch & Tempo, and a whole-request quote (`./whole-request-quotes.ts` — N
- * units of a per-unit rate, a speech request, a whole Voice Changer Pro
- * convert), each read through `rowOf` with the request's own pricing rule.
+ * Pitch & Tempo, Nemotron 3.5 Transcribe, and a whole-request quote
+ * (`./whole-request-quotes.ts` — N units of a per-unit rate, a speech request,
+ * a whole Voice Changer Pro convert), each read through `rowOf` with the
+ * request's own pricing rule.
  */
 function rateCompositeBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
-  return editPlanMinutesBase(identifier, rowOf) ?? pitchTempoMinutesBase(identifier, rowOf) ?? wholeRequestQuoteOf(identifier)?.base(rowOf)
+  return editPlanMinutesBase(identifier, rowOf) ??
+    pitchTempoMinutesBase(identifier, rowOf) ??
+    nemotronTranscribeMinutesBase(identifier, rowOf) ??
+    wholeRequestQuoteOf(identifier)?.base(rowOf)
 }
 
 // ============================================================
@@ -1736,6 +1759,66 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "seedance-2-0-extend:13s:1080p": 2325,
   "seedance-2-0-extend:14s:1080p": 2480,
   "seedance-2-0-extend:15s:1080p": 2635,
+  // ── Kling 4 Extend — one row per second added (3–30s) × resolution,
+  //    held to the kling-4 reference-video price the same way (the 3 s tail
+  //    it sends never bills: Kling bills the seconds added plus the longer of
+  //    those and its reference). ──
+  "kling-4-extend:3s:720p": 255,
+  "kling-4-extend:4s:720p": 340,
+  "kling-4-extend:5s:720p": 425,
+  "kling-4-extend:6s:720p": 510,
+  "kling-4-extend:7s:720p": 595,
+  "kling-4-extend:8s:720p": 680,
+  "kling-4-extend:9s:720p": 765,
+  "kling-4-extend:10s:720p": 850,
+  "kling-4-extend:11s:720p": 935,
+  "kling-4-extend:12s:720p": 1020,
+  "kling-4-extend:13s:720p": 1105,
+  "kling-4-extend:14s:720p": 1190,
+  "kling-4-extend:15s:720p": 1275,
+  "kling-4-extend:16s:720p": 1360,
+  "kling-4-extend:17s:720p": 1445,
+  "kling-4-extend:18s:720p": 1530,
+  "kling-4-extend:19s:720p": 1615,
+  "kling-4-extend:20s:720p": 1700,
+  "kling-4-extend:21s:720p": 1785,
+  "kling-4-extend:22s:720p": 1870,
+  "kling-4-extend:23s:720p": 1955,
+  "kling-4-extend:24s:720p": 2040,
+  "kling-4-extend:25s:720p": 2125,
+  "kling-4-extend:26s:720p": 2210,
+  "kling-4-extend:27s:720p": 2295,
+  "kling-4-extend:28s:720p": 2380,
+  "kling-4-extend:29s:720p": 2465,
+  "kling-4-extend:30s:720p": 2550,
+  "kling-4-extend:3s:1080p": 383,
+  "kling-4-extend:4s:1080p": 510,
+  "kling-4-extend:5s:1080p": 638,
+  "kling-4-extend:6s:1080p": 765,
+  "kling-4-extend:7s:1080p": 893,
+  "kling-4-extend:8s:1080p": 1020,
+  "kling-4-extend:9s:1080p": 1148,
+  "kling-4-extend:10s:1080p": 1275,
+  "kling-4-extend:11s:1080p": 1403,
+  "kling-4-extend:12s:1080p": 1530,
+  "kling-4-extend:13s:1080p": 1658,
+  "kling-4-extend:14s:1080p": 1785,
+  "kling-4-extend:15s:1080p": 1913,
+  "kling-4-extend:16s:1080p": 2040,
+  "kling-4-extend:17s:1080p": 2168,
+  "kling-4-extend:18s:1080p": 2295,
+  "kling-4-extend:19s:1080p": 2423,
+  "kling-4-extend:20s:1080p": 2550,
+  "kling-4-extend:21s:1080p": 2678,
+  "kling-4-extend:22s:1080p": 2805,
+  "kling-4-extend:23s:1080p": 2933,
+  "kling-4-extend:24s:1080p": 3060,
+  "kling-4-extend:25s:1080p": 3188,
+  "kling-4-extend:26s:1080p": 3315,
+  "kling-4-extend:27s:1080p": 3443,
+  "kling-4-extend:28s:1080p": 3570,
+  "kling-4-extend:29s:1080p": 3698,
+  "kling-4-extend:30s:1080p": 3825,
   "ltx-2.3-pro-retake:per-second": 40,
   "runway-kie": 30,               // (5s, 720p)
   // ── Video Extend ──
@@ -2033,6 +2116,16 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "whisper": 40,                  // Replicate openai/whisper — no word timings (BASE price, = migration 288; the service markup is applied on top at read time)
   "incredibly-fast-whisper": 40,  // Replicate fast whisper — word timings on request (BASE price, = migration 288)
   "elevenlabs-stt": 22,           // avg (from audit)
+  // Nemotron 3.5 Transcribe (KIE) — per STARTED minute of the file, any
+  // option (decided 2026-11-12). The RATE row prices FOUR minutes (0.75 a
+  // minute fits no whole-credit row); a run reserves
+  // `nemotron-3-5-transcribe:<N>m` (N = 1..60), priced as this row × N ÷ 4
+  // rounded up once (`nemotronTranscribeMinutesBase`), never stored. The bare
+  // engine id is the 60-minute maximum (45 = 3 × 60 ÷ 4): never what a run
+  // reserves (the route and the workflow run measure the file first), it bounds
+  // any path that would name the engine alone. Migration 636.
+  "nemotron-3-5-transcribe:per-4m": 3,
+  "nemotron-3-5-transcribe": 45,
   "elevenlabs-dialogue": 25,     // direct ElevenLabs API; flat per request, whatever the length (the price with length pricing off)
   "elevenlabs-dialogue:per-100-chars": 4, // one started 100 characters across lines (decided 2026-10-06)
   "elevenlabs-dialogue-v4": 25,  // direct ElevenLabs API; the same flat price as v3 dialogue, per request
@@ -3269,6 +3362,17 @@ export async function getModelCreditBaseCost(modelIdentifier: string): Promise<M
   if (pitchTempo) {
     const rate = await getModelCreditBaseCost(PITCH_TEMPO_PRICING.RATE_CREDIT_ID)
     const priced: ModelPricing = { ...rate, creditCost: pitchTempoBaseCredits(rate.creditCost, pitchTempo.minutes) }
+    modelPricingCache.set(modelIdentifier, priced)
+    return priced
+  }
+
+  // Nemotron 3.5 Transcribe `:<N>m` ids are priced from the four-minute rate
+  // row × N ÷ 4, rounded up once (decided 2026-11-12); the rate row carries the
+  // admin switch.
+  const nemotron = parseNemotronTranscribeCreditId(modelIdentifier)
+  if (nemotron) {
+    const rate = await getModelCreditBaseCost(NEMOTRON_TRANSCRIBE_PRICING.RATE_CREDIT_ID)
+    const priced: ModelPricing = { ...rate, creditCost: nemotronTranscribeBaseCredits(rate.creditCost, nemotron.minutes) }
     modelPricingCache.set(modelIdentifier, priced)
     return priced
   }
@@ -5914,6 +6018,7 @@ function estimateNodeCredits(
     videoSfxSec: node.type === "video-sfx" ? videoSfxClipSecOf(node, edges, wireSec) : undefined,
     videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, nodes, edges, wireSec, prices) : undefined,
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, wireSec) : undefined,
+    transcribeSec: node.type === "transcribe" ? transcribeInputSecOf(node, edges, wireSec) : undefined,
     videoMaskSec: node.type === "video-mask" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
     // Video Face Mesh (the Cast Swap engine's quote graph): its `video` wire, priced as Video Mask's (the 30 fps basis).
     videoFaceMeshSec: node.type === "video-face-mesh" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
@@ -6002,6 +6107,24 @@ function pitchTempoInputSecOf(
   if (node.id === undefined || !edges) return undefined
   const sec = edges.filter((e) => e.target === node.id).map((e) => wireSec(e.source)).find((v) => v !== undefined)
   return sec === undefined ? undefined : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC)
+}
+
+/**
+ * The file length a Transcribe on a length-priced engine (Nemotron 3.5
+ * Transcribe, per started minute) is priced at when a run is estimated: its
+ * audio wire's length where a run estimate knows it, at most the 60 minutes a
+ * run accepts. Undefined when unknown: the 60-minute id stands in
+ * (`nemotronTranscribeQuoteCreditId`) — a run measures the real file before it
+ * reserves, so no run is charged more.
+ */
+function transcribeInputSecOf(
+  node: EstimateNode,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+): number | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const sec = edges.filter((e) => e.target === node.id).map((e) => wireSec(e.source)).find((v) => v !== undefined)
+  return sec === undefined ? undefined : Math.min(sec, NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC)
 }
 
 /**
@@ -7093,6 +7216,8 @@ export function getNodeModelIdentifier(
     videoDepthSec?: number
     /** Pitch & Tempo: the input's length a run estimate knows (undefined = the one-minute id). */
     pitchTempoSec?: number
+    /** Transcribe on Nemotron 3.5 Transcribe: the file's length a run estimate knows (undefined = the 60-minute id). */
+    transcribeSec?: number
     /** Video Mask: the input clip's length a run estimate knows (undefined = not known yet). */
     videoMaskSec?: number
     /** Video Face Mesh: the input clip's PRICED length a run estimate knows (the 30 fps basis; undefined = not known yet). */
@@ -7303,7 +7428,12 @@ export function getNodeModelIdentifier(
   // provider-less node at the generic `transcribe` row while the run reserved the
   // engine's. An estimate may over-quote, never under-quote.
   if (nodeType === "transcribe") {
-    return (typeof data.provider === "string" && data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
+    const engine = (typeof data.provider === "string" && data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
+    // Nemotron 3.5 Transcribe is priced per started minute of the file: the
+    // `:<N>m` id its run reserves from the measured file, quoted at the length
+    // the graph tells, else at 60 minutes (the most a run is charged).
+    if (engine === NEMOTRON_TRANSCRIBE_ID) return nemotronTranscribeQuoteCreditId(graph.transcribeSec)
+    return engine
   }
 
   // Video Retake: priced per second of the replaced window — the per-second
@@ -7399,16 +7529,16 @@ export function getNodeModelIdentifier(
   // which sumWorkflowEstimate multiplies by the seconds (estimatePricingUnits).
   if (nodeType === "extend-video" && provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
 
-  // Extend-video: each Seedance provider (2.5, 2.0) is priced on its own rows
-  // (seconds added × resolution) through the one builder the route and the
-  // workflow run reserve with — the estimate must follow the reservation or
-  // the quote lies. A retired id (`seedance-2-extend`) is quoted as the
-  // provider it runs as.
-  const seedanceExtend = nodeType === "extend-video" ? canonicalVideoProvider(provider) : undefined
-  if (isSeedanceExtendProvider(seedanceExtend)) {
+  // Extend-video: each tail-recipe provider (Seedance 2.5 / 2.0, Kling 4) is
+  // priced on its own rows (seconds added × resolution) through the one
+  // builder the route and the workflow run reserve with — the estimate must
+  // follow the reservation or the quote lies. A retired id
+  // (`seedance-2-extend`) is quoted as the provider it runs as.
+  const tailExtend = nodeType === "extend-video" ? canonicalVideoProvider(provider) : undefined
+  if (isTailExtendProvider(tailExtend)) {
     const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
     const resolution = typeof data.resolution === "string" ? data.resolution : undefined
-    return seedanceExtendCreditId(seedanceExtend, duration, resolution)
+    return tailExtendCreditId(tailExtend, duration, resolution)
   }
 
   // Motion transfer: duration-tiered pricing

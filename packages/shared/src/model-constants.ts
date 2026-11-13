@@ -304,6 +304,19 @@ export const LLM_TEXT_INPUT_MAX = 100_000
  */
 export const LLM_STRUCTURED_SYSTEM_MAX = 200_000
 
+/** Kling 4.0's prompt limit, 8000 chars on both endpoints
+ *  (docs.kie.ai/market/kling/v4-reference-to-video and /v4-keyframe-to-video). */
+const KLING_4_PROMPT_MAX = 8000
+
+/**
+ * The characters a Kling 4 Extend run puts around the user's prompt on its
+ * way to Kling 4.0: the continuation wrapper before it, and the opening-frame
+ * sentence (after a blank line) that the reference endpoint adds for the
+ * source's last frame. Held to the text the run really sends by
+ * `backend/src/lib/__tests__/extend-recipe.test.ts`.
+ */
+const KLING_4_EXTEND_PROMPT_OVERHEAD = 131
+
 /**
  * Per-provider maximum VIDEO prompt length (chars), VERIFIED against each model's
  * official docs.kie.ai schema (2026-06). Absent → {@link VIDEO_PROMPT_MAX} (8000)
@@ -345,8 +358,12 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   "vidu-q4": 20000,
   // Kling 4.0 — 8000 chars on both endpoints
   // (docs.kie.ai/market/kling/v4-reference-to-video and /v4-keyframe-to-video).
-  "kling-4": 8000,
-  "kling-4-keyframes": 8000,
+  "kling-4": KLING_4_PROMPT_MAX,
+  "kling-4-keyframes": KLING_4_PROMPT_MAX,
+  // Kling 4 Extend generates on Kling 4.0's reference endpoint, its user's
+  // prompt wrapped: the room the wrapping takes is left out, so a prompt at
+  // the cap (its "Avoid: …" clause last) reaches Kling 4.0 whole.
+  "kling-4-extend": KLING_4_PROMPT_MAX - KLING_4_EXTEND_PROMPT_OVERHEAD,
   // Kling 4.0 Flash — 8000 chars on both endpoints
   // (docs.kie.ai/market/kling/v4-flash-reference-to-video and /v4-flash-keyframe-to-video).
   "kling-4-flash": 8000,
@@ -1505,10 +1522,13 @@ export const EXTEND_VIDEO_PROVIDERS = [
   "ltx-2.3-pro",
   // Seedance extends ANY video, one provider per model: Seedance 2.5 (4–30 s
   // added) and Seedance 2.0 (4–15 s), each priced on its own rows
-  // (`seedanceExtendCreditId`). The earlier single id `seedance-2-extend` is
+  // (`tailExtendCreditId`). The earlier single id `seedance-2-extend` is
   // retired (RETIRED_VIDEO_PROVIDERS) and runs as Seedance 2.5.
   "seedance-2-5-extend",
   "seedance-2-0-extend",
+  // Kling 4 extends ANY video the same way (3–30 s added, 720p / 1080p, its
+  // sound always on), generated on Kling 4.0 and priced on its own rows.
+  "kling-4-extend",
 ] as const
 export type ExtendVideoProvider = typeof EXTEND_VIDEO_PROVIDERS[number]
 
@@ -1518,10 +1538,31 @@ const SEEDANCE_EXTEND_PROVIDERS: readonly SeedanceExtendProvider[] = ["seedance-
 
 /**
  * Whether a value is one of the Seedance Extend Video providers. A retired id
- * answers false: pass it through {@link canonicalVideoProvider} first.
+ * answers false: pass it through {@link canonicalVideoProvider} first. It
+ * decides the levers only Seedance has (reference images, the sound switch);
+ * the length, the resolution and the price follow {@link isTailExtendProvider}.
  */
 export function isSeedanceExtendProvider(p: unknown): p is SeedanceExtendProvider {
   return typeof p === "string" && (SEEDANCE_EXTEND_PROVIDERS as readonly string[]).includes(p)
+}
+
+/**
+ * The Extend Video providers that continue a video from its tail: the
+ * source's last frame opens the new footage and its last seconds ride as the
+ * `@video_1` reference, then the two are stitched into one clip. Each has its
+ * own catalog entry (its seconds added and resolutions) and price rows, one
+ * per second and resolution (`tailExtendCreditId`).
+ */
+export type TailExtendProvider = SeedanceExtendProvider | Extract<ExtendVideoProvider, "kling-4-extend">
+const TAIL_EXTEND_PROVIDERS: readonly TailExtendProvider[] = [...SEEDANCE_EXTEND_PROVIDERS, "kling-4-extend"]
+
+/**
+ * Whether a value is one of the tail-recipe Extend Video providers
+ * ({@link TailExtendProvider}). A retired id answers false: pass it through
+ * {@link canonicalVideoProvider} first.
+ */
+export function isTailExtendProvider(p: unknown): p is TailExtendProvider {
+  return typeof p === "string" && (TAIL_EXTEND_PROVIDERS as readonly string[]).includes(p)
 }
 
 /** Lip sync providers */
@@ -1760,12 +1801,14 @@ export function resolveMusicProvider(value: unknown): MusicProvider {
  * (the canvas picker re-offered the two Replicate lanes in #768 while this enum
  * still hid them, so a single-node Run on Whisper 400'd where the same node in a
  * workflow Run worked). `elevenlabs-stt` stays FIRST: several call sites take
- * "the first enabled word-capable provider" from this order.
+ * "the first enabled word-capable provider" from this order. A new engine goes
+ * at the END (Nemotron 3.5 Transcribe, 2026-11-12), so that answer never moves.
  */
 export const TRANSCRIBE_PROVIDERS = [
   "elevenlabs-stt",
   "whisper",
   "incredibly-fast-whisper",
+  "nemotron-3-5-transcribe",
 ] as const
 export type TranscribeProvider = typeof TRANSCRIBE_PROVIDERS[number]
 
@@ -1781,6 +1824,7 @@ export const TRANSCRIBE_LANES = [
   "whisper",
   "incredibly-fast-whisper",
   "elevenlabs-stt",
+  "nemotron-3-5-transcribe",
 ] as const
 export type TranscribeLane = typeof TRANSCRIBE_LANES[number]
 
@@ -1788,6 +1832,22 @@ export type TranscribeLane = typeof TRANSCRIBE_LANES[number]
 // provider a caller can name has a capability row below.
 const _TRANSCRIBE_PROVIDERS_ARE_LANES: readonly TranscribeLane[] = TRANSCRIBE_PROVIDERS
 void _TRANSCRIBE_PROVIDERS_ARE_LANES
+
+/**
+ * The lanes Add Captions may transcribe on (its `transcribe_provider`, on the
+ * route, MCP `add_captions` and the SDK's `media.addCaptions`). Add Captions
+ * charges its own flat render price (`add-captions`, `add-captions:kinetic`)
+ * and reserves nothing for the transcription it runs inside, so a lane priced
+ * by the file's length (Nemotron 3.5 Transcribe, per minute) is not one of
+ * them: it would run unpriced inside the render. Kept to the lanes it offered
+ * before Nemotron (2026-11-12); widening it is a pricing decision, not a sync.
+ */
+export const CAPTION_TRANSCRIBE_LANES = [
+  "whisper",
+  "incredibly-fast-whisper",
+  "elevenlabs-stt",
+] as const satisfies readonly TranscribeLane[]
+export type CaptionTranscribeLane = typeof CAPTION_TRANSCRIBE_LANES[number]
 
 /**
  * What each transcription lane can actually DO. Single source of truth — never
@@ -1800,11 +1860,44 @@ void _TRANSCRIBE_PROVIDERS_ARE_LANES
  *    for word timings yields an empty array, never an error.
  *  - `incredibly-fast-whisper` — yes, via `timestamp: "word"`.
  *  - `elevenlabs-stt` (direct Scribe) — always word-level, flag or not.
+ *  - `nemotron-3-5-transcribe` (KIE) — yes, with a speaker per word, via
+ *    `timestamps: true` (transcription only: never with a translation).
+ *
+ * `translation`: can the lane translate the speech instead of transcribing it
+ * (`targetLanguage`)? Only Nemotron 3.5 Transcribe, to or from English, and
+ * never together with word timings (KIE refuses the pair).
  */
-export const TRANSCRIBE_PROVIDER_CAPABILITIES: Record<TranscribeLane, { wordTimestamps: boolean }> = {
-  "whisper": { wordTimestamps: false },
-  "incredibly-fast-whisper": { wordTimestamps: true },
-  "elevenlabs-stt": { wordTimestamps: true },
+export const TRANSCRIBE_PROVIDER_CAPABILITIES: Record<TranscribeLane, { wordTimestamps: boolean; translation: boolean }> = {
+  "whisper": { wordTimestamps: false, translation: false },
+  "incredibly-fast-whisper": { wordTimestamps: true, translation: false },
+  "elevenlabs-stt": { wordTimestamps: true, translation: false },
+  "nemotron-3-5-transcribe": { wordTimestamps: true, translation: true },
+}
+
+/**
+ * The languages Nemotron 3.5 Transcribe translates INTO (KIE's
+ * `target_language` enum, ISO 639-1). Translation is supported to or from
+ * English: other speech into `en`, or English speech into any other listed
+ * language. Fewer than the 40 it transcribes.
+ */
+export const TRANSCRIBE_TARGET_LANGUAGES = [
+  "en", "zh", "ja", "ko", "fr", "de", "es", "pt", "it", "ru", "nl", "pl", "cs", "sk", "hi", "bg",
+  "hr", "da", "et", "fi", "hu", "lv", "lt", "ro", "sl", "sv", "th", "uk", "ar", "el", "he", "mt",
+] as const
+export type TranscribeTargetLanguage = typeof TRANSCRIBE_TARGET_LANGUAGES[number]
+
+/** The lanes that can translate, in declaration order. */
+export function transcribeProvidersWithTranslation(): TranscribeLane[] {
+  return TRANSCRIBE_LANES.filter((p) => TRANSCRIBE_PROVIDER_CAPABILITIES[p].translation)
+}
+
+/**
+ * Capability question for a lane id from UNTRUSTED data (node data, an
+ * imported workflow, a wire body): an unknown lane answers `false`.
+ */
+export function transcribeLaneSupportsTranslation(lane: string | null | undefined): boolean {
+  if (!lane) return false
+  return TRANSCRIBE_PROVIDER_CAPABILITIES[lane as TranscribeLane]?.translation === true
 }
 
 /** The lanes that can honour a word-timestamps request, in declaration order. */
@@ -4276,7 +4369,7 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
   ],
   // The length tiers of the earlier Seedance Extend rows
   // (`seedance-2-extend:<tier>:<res>`). No extend is priced on them any more —
-  // each Seedance extend provider has a row per second (`seedanceExtendCreditId`)
+  // each Seedance extend provider has a row per second (`tailExtendCreditId`)
   // — but the rows stay, and so do their tiers.
   "seedance-2-extend": [
     { maxSeconds: 4, suffix: "4s" },

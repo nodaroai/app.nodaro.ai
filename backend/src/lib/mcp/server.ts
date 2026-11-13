@@ -55,6 +55,7 @@ import { hasCredits } from "../config.js"
 import type { Scope } from "../scopes.js"
 import { supabase } from "../supabase.js"
 import { resolveSessionWorkspace } from "./workspace-session.js"
+import type { McpLaneAddresses } from "../mcp-lane-addresses.js"
 
 interface BuildOpts {
   userId: string
@@ -88,6 +89,12 @@ interface BuildOpts {
    * Omitted ⇒ false ⇒ treated as programmatic.
    */
   firstParty?: boolean
+  /**
+   * The addresses this session's tools hand out (lib/mcp-lane-addresses.ts),
+   * from the request the client sent. Omitted (an in-process session) ⇒ the
+   * install's primary addresses.
+   */
+  addresses?: McpLaneAddresses
 }
 
 /**
@@ -190,7 +197,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   // references resolve cleanly when the host calls resources/read.
   if (opts.conversation) attachUserRequest(server, session)
 
-  registerWidgetResources(server)
+  registerWidgetResources(server, session.addresses)
 
   registerPing(server, session)
   registerVerbs({ server, session, fastify: opts.fastify })

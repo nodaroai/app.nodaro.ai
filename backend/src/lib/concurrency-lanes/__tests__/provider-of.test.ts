@@ -112,6 +112,7 @@ describe("primaryProviderOfJob", () => {
     expect(primaryProviderOfJob("text-to-audio", { provider: "tangoflux" })).toBe("replicate")
     expect(primaryProviderOfJob("transcribe", { provider: "elevenlabs-stt" })).toBe("elevenlabs")
     expect(primaryProviderOfJob("transcribe", {})).toBe("replicate")
+    expect(primaryProviderOfJob("transcribe", { provider: "nemotron-3-5-transcribe" })).toBe("kie")
     expect(primaryProviderOfJob("video-depth", {})).not.toBeNull()
     expect(primaryProviderOfJob("video-depth", { provider: "no-such-depth" })).toBeNull()
     expect(primaryProviderOfJob("voiced-video", {})).toBe("kie")

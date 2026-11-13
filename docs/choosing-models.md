@@ -38,7 +38,7 @@ Don't know where to start? Find your goal here, then jump to the model in the ta
 | music / song generation | Suno V6, Suno V6 Wild, Suno V6 Mini, Suno v5.5 | V6 is the default flagship; V6 Wild for bolder, less predictable results; V6 Mini when speed matters; v5.5 / v5 / v4 keep their own character. Same price. |
 | voice over / narration | ElevenLabs v4, ElevenLabs v3, ElevenLabs v4 Turbo, ElevenLabs Turbo v2.5 | v4 is the default: [audio tags] for emotion and up to 10,000 characters per request. v3 is the previous expressive model, still selectable. v4 Turbo keeps v4's tags at Turbo's credit price; Turbo v2.5 is the cheapest for plain narration without tags. |
 | lip-sync a portrait to audio | Kling Avatar Pro, Kling Avatar Standard, InfiniTalk | Pro for best mouth shape; InfiniTalk for resolution control. |
-| transcription / captions | ElevenLabs STT, Incredibly Fast Whisper, Whisper | Captions need WORD timestamps: ElevenLabs STT (always) or Incredibly Fast Whisper. Plain Whisper returns phrase segments only. |
+| transcription / captions | ElevenLabs STT, Incredibly Fast Whisper, Whisper, Nemotron 3.5 Transcribe | Captions need WORD timestamps: ElevenLabs STT (always), Incredibly Fast Whisper or Nemotron 3.5 Transcribe (on request, with a speaker per word). Plain Whisper returns phrase segments only. To translate the speech (to or from English) instead of transcribing it, use Nemotron 3.5 Transcribe with a target language; a translation carries no word timings. |
 | motion transfer (drive a subject by another video) | Kling 2.6 Motion Transfer, Kling 3.0 Motion Transfer | Kling 2.6 base is cheap; Kling 3.0 is premium. |
 <!-- AUTO-GEN:END model-recommendations -->
 
@@ -166,14 +166,15 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Runway Extend | Runway | Standard | 352<!-- credits: runway-extend --> | extend | Extend a Runway video by another clip. |
 | Wan 2.7 VideoEdit | Alibaba | Standard | 352<!-- credits: wan-videoedit --> | v2v | Guided video editing with optional reference image, audio control, and prompt expansion. |
 | Wan 3.0 Prime | Alibaba | Standard | 352<!-- credits: wan-3-prime --> | i2v, t2v | Wan 3.0 Prime — Alibaba's high-speed Wan 3.0 tier: same multimodal surface and 2-30s range, faster turnaround at a higher per-second rate. |
-| HappyHorse Edit | HappyHorse | Premium | 385<!-- credits: happyhorse-edit --> | v2v | HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output. |
-| Runway Aleph V2V | Runway | Premium | 385<!-- credits: runway-aleph --> | v2v | Runway Aleph — video-to-video conversion. |
+| HappyHorse Edit | HappyHorse | Standard | 385<!-- credits: happyhorse-edit --> | v2v | HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output. |
+| Runway Aleph V2V | Runway | Standard | 385<!-- credits: runway-aleph --> | v2v | Runway Aleph — video-to-video conversion. |
 | Kling 4.0 | Kuaishou | Premium | 396<!-- credits: kling-4 --> | i2v, t2v | Kling 4.0 — up to 30s with native audio and lip-sync; reference images, videos, characters and voices, or plain text. |
 | Kling 4.0 Keyframes | Kuaishou | Premium | 396<!-- credits: kling-4-keyframes --> | i2v, t2v | Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; up to 30s with native audio. |
 | Seedance 2 | Bytedance | Premium | 418<!-- credits: seedance-2 --> | i2v, t2v | Seedance 2 — premium tier with native audio. Per-second pricing by resolution. |
 | VEO 4K Upscale | Google | Premium | 418<!-- credits: veo-4k --> | video-upscale | Upscale VEO output to 4K. |
 | Kling 2.1 Master | Kuaishou | Premium | 440<!-- credits: kling-master --> | i2v | Master tier I2V — strong cinematic quality. |
 | InfiniTalk | InfiniTalk | Premium | 462<!-- credits: infinitalk --> | lip-sync | Audio-driven talking-head from a still image. 480p / 720p. |
+| Kling 4 Extend | Kuaishou | Premium | 468<!-- credits: kling-4-extend:5s:720p --> | extend | Extend ANY video with Kling 4: 3–30s continuation (audio included), stitched into one seamless clip. |
 | ⭐ Kling 3.0 | Kuaishou | Premium | 550<!-- credits: kling-3.0 --> | i2v, t2v | Premium Kling 3.0 — variable 3-15s duration, native audio, 720P/1080P. |
 | minimax-h3 | MiniMax | Premium | 605<!-- credits: minimax-h3 --> | i2v, t2v | MiniMax H3 — premium multimodal tier: first/last frame + image/video/audio references, native audio, 2K (default) or 768P output, 4-15s per-second pricing. |
 | Kling Avatar Pro | Kuaishou | Premium | 616<!-- credits: kling-avatar-pro --> | lip-sync | Premium lip-sync — better mouth shape and timing. |
@@ -202,6 +203,7 @@ Text-to-speech, voice design/changing, dubbing, sound effects, transcription, an
 <!-- AUTO-GEN:START model-table-audio -->
 | Model | Family | Tier | Credits | Modes | Best for |
 | --- | --- | --- | --- | --- | --- |
+| Nemotron 3.5 Transcribe | NVIDIA | Everyday | 4<!-- credits: nemotron-3-5-transcribe:per-4m --> | stt | NVIDIA speech-to-text in 40 languages, detected automatically, with a low word error rate. On request it returns WORD-level timestamps with a speaker label per word, so its transcript can feed captions; or it translates the speech instead (to or from English: other speech into English, or English speech into one of 31 languages), with no word timings. Files up to 60 minutes and 200 MB. Priced per started minute of the file, whatever the options; the listed price is four minutes. |
 | ElevenLabs Sound Effects | ElevenLabs | Everyday | 6<!-- credits: elevenlabs-sfx:5s --> | sfx | Generate short sound effects from a text prompt. |
 | ElevenLabs Turbo v2.5 | ElevenLabs | Everyday | 17<!-- credits: elevenlabs-turbo --> | tts | Fast, cheap ElevenLabs TTS via the direct ElevenLabs API. Good for narration. |
 | ElevenLabs v4 Turbo | ElevenLabs | Everyday | 17<!-- credits: elevenlabs-v4-turbo --> | tts | Faster, cheaper ElevenLabs v4 at lower fidelity — [audio tags], stability and similarity control, at Turbo's credit price. Prefer v4 when quality matters. Direct API. |

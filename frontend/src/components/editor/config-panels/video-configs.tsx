@@ -67,8 +67,8 @@ import { nodeStartFrameOnlyProblem, startFrameOnlyText } from "@/lib/video-start
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { gvpAnchorChoicesFor } from "@nodaro/render-rules"
-import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec, isSeedanceExtendProvider, pricedOutputDurationSec, snapToNearestDuration, type SeedanceExtendProvider } from "@nodaro/shared/models"
-import { VIDEO_AUDIT_BUCKET_CREDITS, ltxExtendDurationSec, seedanceExtendCreditId } from "@nodaro/shared/credits"
+import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec, isSeedanceExtendProvider, isTailExtendProvider, pricedOutputDurationSec, snapToNearestDuration, type TailExtendProvider } from "@nodaro/shared/models"
+import { VIDEO_AUDIT_BUCKET_CREDITS, ltxExtendDurationSec, tailExtendCreditId } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, entityImageUrl, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { sourceCharacterNames, sourceOriginId } from "./source-character-names"
 import { DEFAULT_LABEL_BY_SOURCE, type ReferenceSource, type ConnectedReference } from "@nodaro/shared/types"
@@ -118,7 +118,7 @@ import { SeedanceReferenceTip } from "./seedance-reference-tip"
 import { FramesAndReferencesTip } from "./frames-references-tip"
 import { FrameFitFields, previewFrameDelivery, supportsReferenceDelivery, isFrameFit, isFrameDelivery } from "./frame-fit-fields"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
-import { useT, tx } from "@/lib/i18n"
+import { useT, tx, type MessageKey } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
 import { useFinalPromptSegments, negativeRoutingCaption } from "./use-final-prompt-segments"
@@ -5200,6 +5200,13 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 
 export const EditVideoProConfig = memo(EditVideoProConfigImpl)
 
+/** What each tail-recipe Extend Video provider says it does — one per provider, so a new one names its own. */
+const TAIL_EXTEND_DESCRIPTION: Readonly<Record<TailExtendProvider, MessageKey>> = {
+  "seedance-2-5-extend": "vidcfg.descSeedanceExtend",
+  "seedance-2-0-extend": "vidcfg.descSeedanceExtend",
+  "kling-4-extend": "vidcfg.descKlingExtend",
+}
+
 export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ExtendVideoData> & { nodeId?: string }) {
   // Extending video is not on free credits: the models stay listed, locked, with why.
   const freeVideoLimits = useFreeVideoLimits()
@@ -5222,38 +5229,45 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
     // prompt as `Avoid: …` (matches the /v1/extend-video route + payload-builder).
     videoProvider: data.provider || "veo-extend",
   })
-  // Seedance extends on two providers, one per model (Seedance 2.5, Seedance 2.0).
-  const seedanceProvider: SeedanceExtendProvider | null = isSeedanceExtendProvider(data.provider) ? data.provider : null
-  const isSeedanceExtend = seedanceProvider !== null
+  // The tail-recipe providers continue ANY video, one per model: Seedance
+  // 2.5, Seedance 2.0 and Kling 4. The sound switch is Seedance's alone
+  // (Kling 4.0's sound is always on).
+  const tailProvider: TailExtendProvider | null = isTailExtendProvider(data.provider) ? data.provider : null
+  const isTailExtend = tailProvider !== null
+  const hasSoundSwitch = isSeedanceExtendProvider(data.provider)
   // Levers are catalog-driven, per model (single source of truth shared with
-  // the backend route/worker): Seedance 2.5 adds 4–30 s, Seedance 2.0 4–15 s.
-  const seedanceCatalog = seedanceProvider ? MODEL_CATALOG[seedanceProvider] : undefined
-  const seedanceDurations = seedanceCatalog?.durations ?? []
-  const seedanceResolutions = seedanceCatalog?.resolutions ?? []
+  // the backend route/worker): Seedance 2.5 adds 4–30 s, Seedance 2.0 4–15 s,
+  // Kling 4 3–30 s, each at its own resolutions.
+  const tailCatalog = tailProvider ? MODEL_CATALOG[tailProvider] : undefined
+  const tailDurations = tailCatalog?.durations ?? []
+  const tailResolutions = tailCatalog?.resolutions ?? []
   // The length the run is priced and sent at: the stored seconds in the
   // model's window, else its catalog default.
-  const seedanceDuration = seedanceProvider ? pricedOutputDurationSec(seedanceProvider, data.duration) : 0
+  const tailDuration = tailProvider ? pricedOutputDurationSec(tailProvider, data.duration) : 0
 
   // Credit labels name the model's own row for the length chosen — re-prefetch when either changes.
   useEffect(() => {
-    if (!seedanceProvider) return
-    prefetchModelCredits(seedanceResolutions.map((r) => seedanceExtendCreditId(seedanceProvider, seedanceDuration, r)))
-  }, [seedanceProvider, seedanceDuration]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!tailProvider) return
+    prefetchModelCredits(tailResolutions.map((r) => tailExtendCreditId(tailProvider, tailDuration, r)))
+  }, [tailProvider, tailDuration]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fail-safe (Provider Enum Sync step 12b): when the provider changes, snap
-  // a stale length into the new provider's window (a Seedance model's catalog
-  // lengths; LTX's 1–20 s) and clear the Seedance-only levers on a provider
-  // that has none — the dropdowns hide but the stale values would still be
-  // forwarded, and the route refuses a length outside the provider's window.
+  // a stale length into the new provider's window (a tail-recipe model's
+  // catalog lengths; LTX's 1–20 s) and clear the levers the provider lacks (a
+  // resolution it does not render, the sound switch off Seedance, both off a
+  // provider with no tail recipe) — the dropdowns hide but the stale values
+  // would still be forwarded, and the route refuses a length or resolution
+  // the provider does not offer.
   useEffect(() => {
     const patch: Partial<ExtendVideoData> = {}
-    if (seedanceProvider) {
-      const entry = MODEL_CATALOG[seedanceProvider]
+    if (tailProvider) {
+      const entry = MODEL_CATALOG[tailProvider]
       if (data.duration !== undefined) {
         const snapped = snapToNearestDuration(data.duration, entry?.durations)
         if (snapped !== data.duration) patch.duration = snapped
       }
       if (data.resolution !== undefined && entry?.resolutions && !entry.resolutions.includes(data.resolution)) patch.resolution = undefined
+      if (!hasSoundSwitch && data.generateAudio !== undefined) patch.generateAudio = undefined
     } else {
       if (data.resolution !== undefined || data.generateAudio !== undefined) {
         patch.resolution = undefined
@@ -5283,7 +5297,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </Select>
       </MappableField>
 
-      <MappableField field="prompt" label={isSeedanceExtend ? t("vidcfg.whatHappensNext") : t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={isTailExtend ? t("vidcfg.whatHappensNext") : t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
         <PromptHelperButton nodeType="extend-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
@@ -5300,7 +5314,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             <TagTextarea
               value={data.prompt || ""}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder={isSeedanceExtend ? t("vidcfg.phWhatHappensNext") : t("vidcfg.phDescribeContinue")}
+              placeholder={isTailExtend ? t("vidcfg.phWhatHappensNext") : t("vidcfg.phDescribeContinue")}
               rows={3}
               nodeRefs={nodeRefs}
               displayMode={variableDisplayMode}
@@ -5397,16 +5411,16 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </>
       )}
 
-      {seedanceProvider && (
+      {tailProvider && (
         <>
           <MappableField field="duration" label={t("vidcfg.secondsToAdd")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
-              value={String(seedanceDuration)}
+              value={String(tailDuration)}
               onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
             >
               <SelectTrigger aria-label={t("vidcfg.secondsToAdd")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                {seedanceDurations.map((s) => (
+                {tailDurations.map((s) => (
                   <SelectItem key={s} value={String(s)}>{t("vidcfg.nSeconds", { n: s })}</SelectItem>
                 ))}
               </SelectContent>
@@ -5421,8 +5435,8 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             >
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                {seedanceResolutions.map((r) => {
-                  const credits = getCachedCredits(seedanceExtendCreditId(seedanceProvider, seedanceDuration, r))
+                {tailResolutions.map((r) => {
+                  const credits = getCachedCredits(tailExtendCreditId(tailProvider, tailDuration, r))
                   return (
                     <SelectItem key={r} value={r}>{credits != null ? t("vidcfg.resWithCredits", { res: r, credits: creditUnits(credits) }) : r}</SelectItem>
                   )
@@ -5432,23 +5446,23 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             <p className="text-[11px] text-muted-foreground mt-1">{t("vidcfg.matchResSeam")}</p>
           </div>
 
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="extendGenerateAudio"
-              checked={data.generateAudio !== false}
-              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
-              className="rounded border-muted-foreground/40"
-            />
-            <label htmlFor="extendGenerateAudio" className="text-xs">{t("vidcfg.generateAudio")}</label>
-          </div>
+          {hasSoundSwitch && (
+            <div className="flex items-center gap-2 px-1">
+              <input
+                type="checkbox"
+                id="extendGenerateAudio"
+                checked={data.generateAudio !== false}
+                onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+                className="rounded border-muted-foreground/40"
+              />
+              <label htmlFor="extendGenerateAudio" className="text-xs">{t("vidcfg.generateAudio")}</label>
+            </div>
+          )}
         </>
       )}
 
       <p className="text-xs text-muted-foreground px-1">
-        {isSeedanceExtend
-          ? t("vidcfg.descSeedanceExtend")
-          : t("vidcfg.descOtherExtend")}
+        {t(tailProvider ? TAIL_EXTEND_DESCRIPTION[tailProvider] : "vidcfg.descOtherExtend")}
       </p>
 
       <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />

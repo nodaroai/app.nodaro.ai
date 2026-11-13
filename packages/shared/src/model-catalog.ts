@@ -180,6 +180,7 @@ export const MODEL_MAKERS = {
   meituan: { name: "Meituan" },
   minimax: { name: "MiniMax" },
   nodaro: { name: "Nodaro" },
+  nvidia: { name: "NVIDIA" },
   openai: { name: "OpenAI" },
   pixverse: { name: "PixVerse" },
   recraft: { name: "Recraft" },
@@ -522,6 +523,18 @@ export interface ModelCatalogEntryFields {
    */
   docsHidden?: boolean
   /**
+   * Never picked: the platform runs this model on its own, never because a
+   * person or a client chose it (a trained character's model, which a Generate
+   * Image run switches to when its one character has one). It is listed
+   * nowhere a model is offered — `listModels` (so `GET /v1/models` and MCP
+   * `list_models`), the editor's Models tab and add-node search
+   * (`buildModelTree`), the MCP tool model enums (`modelIdsByKindMode`), the
+   * docs' model tables and the recommendations — and is still a model a
+   * deployment's restriction can name: it counts in the gateable model ids and
+   * Admin → Availability shows it.
+   */
+  pickerHidden?: true
+  /**
    * The provider's safety filter is known to be non-deterministic on this
    * model — the platform retries a blocked request once; `fallback` names
    * the catalog model to offer when it blocks again.
@@ -581,7 +594,7 @@ export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
   { intent: "music / song generation", modelIds: ["suno-v6", "suno-v6_wild", "suno-v6_mini", "suno-v5_5"], note: "V6 is the default flagship; V6 Wild for bolder, less predictable results; V6 Mini when speed matters; v5.5 / v5 / v4 keep their own character. Same price." },
   { intent: "voice over / narration", modelIds: ["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-v4-turbo", "elevenlabs-turbo"], note: "v4 is the default: [audio tags] for emotion and up to 10,000 characters per request. v3 is the previous expressive model, still selectable. v4 Turbo keeps v4's tags at Turbo's credit price; Turbo v2.5 is the cheapest for plain narration without tags." },
   { intent: "lip-sync a portrait to audio", modelIds: ["kling-avatar-pro", "kling-avatar", "infinitalk"], note: "Pro for best mouth shape; InfiniTalk for resolution control." },
-  { intent: "transcription / captions", modelIds: ["elevenlabs-stt", "incredibly-fast-whisper", "whisper"], note: "Captions need WORD timestamps: ElevenLabs STT (always) or Incredibly Fast Whisper. Plain Whisper returns phrase segments only." },
+  { intent: "transcription / captions", modelIds: ["elevenlabs-stt", "incredibly-fast-whisper", "whisper", "nemotron-3-5-transcribe"], note: "Captions need WORD timestamps: ElevenLabs STT (always), Incredibly Fast Whisper or Nemotron 3.5 Transcribe (on request, with a speaker per word). Plain Whisper returns phrase segments only. To translate the speech (to or from English) instead of transcribing it, use Nemotron 3.5 Transcribe with a target language; a translation carries no word timings." },
   { intent: "motion transfer (drive a subject by another video)", modelIds: ["motion-transfer", "kling-3.0-motion"], note: "Kling 2.6 base is cheap; Kling 3.0 is premium." },
 ] as const
 
@@ -1043,6 +1056,26 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["edit", "inpaint"],
     features: ["mask"],
     pricing: [{ identifier: "flux-fill", credits: 30 }],
+  },
+  // A trained character's model (decided 2026-11-12): FLUX.1 [dev] with the
+  // character's own LoRA, which a Generate Image run switches to when the one
+  // character it names has a succeeded trained model. Never picked
+  // (`pickerHidden`): listed here so a deployment's restriction can name it.
+  // Where a deployment withholds it, a run does not switch and uses the
+  // character's reference pictures, as for a character with no trained model.
+  // Its levers are not listed: nothing snaps a request against this entry.
+  "flux-lora-character": {
+    id: "flux-lora-character",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "Black Forest Labs",
+    maker: "black-forest-labs",
+    label: "Trained character (FLUX LoRA)",
+    series: "Flux",
+    description: "A trained character's own model (FLUX.1 [dev] with its LoRA), run when a prompt names that one character.",
+    useCases: ["character"],
+    pricing: [{ identifier: "flux-lora-character", credits: 20 }],
+    pickerHidden: true,
   },
 
   // ── OpenAI (GPT Image) ──
@@ -3396,7 +3429,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     pricing: [{ identifier: "runway-extend", credits: 320 }],
   },
   // Seedance extends ANY video, one provider per model. Each is priced on its
-  // own rows (`seedanceExtendCreditId`), one per second added and resolution.
+  // own rows (`tailExtendCreditId`), one per second added and resolution.
   // The earlier single id `seedance-2-extend` is retired and runs as Seedance 2.5.
   "seedance-2-5-extend": {
     id: "seedance-2-5-extend",
@@ -3434,6 +3467,29 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedance-2-0-extend:8s:720p", credits: 625, note: "default 8s 720p — see :Ns:res variants for exact" },
       { identifier: "seedance-2-0-extend:8s:480p", credits: 288, note: "8s 480p" },
       { identifier: "seedance-2-0-extend:8s:1080p", credits: 1550, note: "8s 1080p" },
+    ],
+  },
+  // Kling 4 extends ANY video with the same tail recipe, generated on Kling
+  // 4.0 (`kling-4`, reference-to-video): its own entry, so a deployment can
+  // withhold or release it apart from Kling 4.0 generation, and its own rows
+  // (`tailExtendCreditId`), one per second added and resolution. Its sound is
+  // always on (Kling 4.0 has no switch).
+  "kling-4-extend": {
+    id: "kling-4-extend",
+    kind: "video",
+    modes: ["extend"] as const,
+    family: "Kuaishou",
+    maker: "kuaishou",
+    label: "Kling 4 Extend",
+    series: "Kling",
+    description: "Extend ANY video with Kling 4: 3–30s continuation (audio included), stitched into one seamless clip.",
+    useCases: ["extend"],
+    durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 5,
+    resolutions: ["720p", "1080p"],
+    pricing: [
+      { identifier: "kling-4-extend:5s:720p", credits: 425, note: "default 5s 720p — see :Ns:res variants for exact" },
+      { identifier: "kling-4-extend:5s:1080p", credits: 638, note: "5s 1080p" },
     ],
   },
   "veo-1080p": {
@@ -4257,6 +4313,23 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["transcription", "stt"],
     pricing: [{ identifier: "whisper", credits: 40 }],
   },
+  // NVIDIA's speech-to-text on KIE, priced per started minute of the file. Its
+  // per-minute base fits no whole-credit row, so the row prices FOUR
+  // minutes and a run is charged row × minutes ÷ 4, rounded up once
+  // (`@nodaro/shared` credit-estimators/nemotron-transcribe.ts).
+  "nemotron-3-5-transcribe": {
+    id: "nemotron-3-5-transcribe",
+    kind: "audio",
+    modes: ["stt"] as const,
+    family: "NVIDIA",
+    maker: "nvidia",
+    label: "Nemotron 3.5 Transcribe",
+    series: "Nemotron",
+    description: "NVIDIA speech-to-text in 40 languages, detected automatically, with a low word error rate. On request it returns WORD-level timestamps with a speaker label per word, so its transcript can feed captions; or it translates the speech instead (to or from English: other speech into English, or English speech into one of 31 languages), with no word timings. Files up to 60 minutes and 200 MB. Priced per started minute of the file, whatever the options; the listed price is four minutes.",
+    useCases: ["transcription", "stt", "captions", "translation"],
+    features: ["word-timestamps", "diarization", "translation"],
+    pricing: [{ identifier: "nemotron-3-5-transcribe:per-4m", credits: 3, note: "per 4 minutes of the file; charged per started minute, the whole run rounded up" }],
+  },
   "elevenlabs-isolation": {
     id: "elevenlabs-isolation",
     kind: "audio",
@@ -4427,7 +4500,8 @@ export function listModels(filter?: {
   mode?: ModelMode
   family?: string
 }): ModelCatalogEntry[] {
-  const all = Object.values(MODEL_CATALOG)
+  // A model the platform runs on its own is offered nowhere (`pickerHidden`).
+  const all = Object.values(MODEL_CATALOG).filter((m) => m.pickerHidden !== true)
   if (!filter) return all
   return all.filter((m) => {
     if (filter.kind && m.kind !== filter.kind) return false
@@ -5772,7 +5846,7 @@ export function modelIdsByKindMode(
     .filter((m) => (kind === null ? true : m.kind === kind))
     .filter((m) => m.modes.some((md) => modes.includes(md)))
     .filter((m) => includeHidden || !m.mcpHidden)
-    .filter((m) => !m.docsHidden)
+    .filter((m) => !m.docsHidden && m.pickerHidden !== true)
     .map((m) => m.id)
     .sort()
   if (ids.length === 0) {

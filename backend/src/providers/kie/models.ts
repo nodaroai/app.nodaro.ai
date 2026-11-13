@@ -2319,7 +2319,26 @@ export const KIE_STT_MODELS: Record<string, KieModelConfig> = {
     credits: 8.58,
     cost: 0.0429,  // avg (actual from audit), variable by audio length
   },
+  // NVIDIA Nemotron 3.5 Transcribe — bespoke runner (`nemotron-transcribe.ts`):
+  // its answer is a resultObject plus a JSON result file, not resultUrls.
+  // Per MINUTE of the decoded audio, billed by the second, any option
+  // (transcript, word timings, translation): 0.3 KIE credits = $0.0015 a
+  // minute. The job's provider_cost is that rate × the audio's length.
+  "nemotron-3-5-transcribe": {
+    model: "nvidia/nemotron-3-5-transcribe",
+    credits: 0.3,
+    cost: 0.0015,  // per minute of the file
+  },
 }
+
+/**
+ * The KIE_STT_MODELS that run on their own runner, NOT through
+ * `KieAudioProvider.speechToText` (which always runs Scribe): Nemotron 3.5
+ * Transcribe runs from `transcribe()` through `nemotron-transcribe.ts`. They
+ * are kept off the provider's `transcription` capability (`index.ts`), so no
+ * capability lookup can ever run Scribe while the job bills Nemotron.
+ */
+export const KIE_STT_BESPOKE_RUNNER_KEYS: ReadonlySet<string> = new Set(["nemotron-3-5-transcribe"])
 
 // =============================================================================
 // SPEECH-TO-VIDEO MODELS

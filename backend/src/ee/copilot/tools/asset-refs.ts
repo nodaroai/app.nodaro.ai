@@ -125,6 +125,7 @@ export async function resolveCopilotAssetRefs(
   // any user could make their asset readable by every model in the system.
   const assets = await supabase
     .from("assets")
+    // fileless-read: a lookup by id; a row with no address resolves to nothing, below
     .select("id, type, r2_url, filename, mime_type, size_bytes, metadata")
     .in("id", remaining)
     .is(RESTRICTED_ASSET_COLUMN, null)

@@ -28,7 +28,6 @@ import { randomUUID } from "node:crypto"
 import sharp from "sharp"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { s3 } from "../../storage.js"
-import { mcpBaseUrl } from "../../deployment-urls.js"
 import { config } from "../../config.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { McpSession } from "../session.js"
@@ -253,7 +252,9 @@ function registerWidgetUpload(
         MAX_FILES_HARD_CAP,
       )
       const uploads: Array<{ upload_url: string; public_url: string }> = []
-      const publicBase = config.PUBLIC_URL.replace(/\/+$/, "")
+      // The session's upload-page host (lib/mcp-lane-addresses.ts) — also the
+      // widget iframe's connect-src (widgets/registrar.ts), so the two agree.
+      const publicBase = session.addresses.uploadPageBase
       for (let i = 0; i < count; i++) {
         const key = `uploads/handoff/${meta.kind}/${session.userId}/${randomUUID()}`
         const token = signUploadToken({
@@ -386,7 +387,7 @@ function registerHandoffUpload(
         purpose: "handoff",
         kind: meta.kind,
       })
-      const uploadPageUrl = `${config.PUBLIC_URL}/v1/upload-page/${token}`
+      const uploadPageUrl = `${session.addresses.handoffPageBase}/v1/upload-page/${token}`
       const publicUrl = `${config.R2_PUBLIC_URL}/${key}`
       return {
         content: [
@@ -476,14 +477,14 @@ function registerPresignedUrl(
         mime: args.mime_type,
         exp: Date.now() + expiresIn * 1000,
       })
-      // Upload via the MCP host specifically. LLM code-interpreter
+      // Upload via the MCP resource host specifically. LLM code-interpreter
       // sandboxes (Claude.ai) only allowlist the MCP resource server
       // domain (which they discover via /.well-known/oauth-protected-
-      // resource), NOT the OAuth auth server — config.PUBLIC_URL points
-      // to the auth server and is also blocked. On Nodaro Cloud the MCP
-      // host is mcp.nodaro.ai (same Fastify instance via Caddy host
-      // routing); self-hosters override via MCP_PUBLIC_URL.
-      const uploadUrl = `${mcpBaseUrl()}/v1/upload-proxy/${token}`
+      // resource), NOT the OAuth auth server. On the dedicated lane that is
+      // the MCP host (MCP_PUBLIC_URL); on a deployment that serves MCP by
+      // path it is the host the client connected through. Both come from
+      // the session's addresses (lib/mcp-lane-addresses.ts).
+      const uploadUrl = `${session.addresses.uploadProxyBase}/v1/upload-proxy/${token}`
       const publicUrl = `${config.R2_PUBLIC_URL}/${key}`
       return {
         content: [

@@ -98,12 +98,14 @@ describe("the backend's surface projection reaches a reader whole", () => {
       header: "white-label",
       strings: { flow: { he: { "credits.allowanceExceeded": "נגמרה לכם המכסה." }, en: { "credits.allowanceExceeded": "Your allowance is used up." } } },
       jobs: { errorDetail: "admin" },
+      mcp: { byPath: true, path: "/v1/mcp" },
     })
     expect(rendered.strings).toEqual({ flow: { he: { "credits.allowanceExceeded": "נגמרה לכם המכסה." }, en: { "credits.allowanceExceeded": "Your allowance is used up." } } })
     expect(read).toEqual(rendered)
-    // The server-only keys (the payer's billing keys, `jobs`) were stripped before either side saw them.
+    // The server-only keys (the payer's billing keys, `jobs`, `mcp`) were stripped before either side saw them.
     expect(JSON.stringify(read)).not.toMatch(/payerAccount|defaultAllowanceUnits|allowances|billing@acme/)
     expect(rendered).not.toHaveProperty("jobs")
+    expect(rendered).not.toHaveProperty("mcp")
   })
 
   it("the media origin the backend prints is what a reader keeps", () => {

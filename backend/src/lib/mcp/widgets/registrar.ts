@@ -19,7 +19,7 @@ import { buildUploadWidget } from "./upload.js"
 import { buildJobAutoWidget } from "./job-auto.js"
 import { buildRecastWidgetTemplate } from "./recast.js"
 import { WIDGET_MEDIA_ORIGINS } from "./csp-origins.js"
-import { config } from "../../config.js"
+import type { McpLaneAddresses } from "../../mcp-lane-addresses.js"
 
 export const WIDGET_URI = {
   jobImage: "ui://nodaro/widget/v4/job-image",
@@ -40,43 +40,43 @@ const WIDGETS: Array<{
   name: string
   uri: string
   description: string
-  build: () => string
+  build: (addresses: McpLaneAddresses) => string
 }> = [
   {
     name: "widget-job-image",
     uri: WIDGET_URI.jobImage,
     description: "Inline preview for image generation jobs (progress + result)",
-    build: () => buildSingleJobWidget("image"),
+    build: (a) => buildSingleJobWidget("image", a.pagesBase),
   },
   {
     name: "widget-job-video",
     uri: WIDGET_URI.jobVideo,
     description: "Inline preview for video generation jobs (progress + result)",
-    build: () => buildSingleJobWidget("video"),
+    build: (a) => buildSingleJobWidget("video", a.pagesBase),
   },
   {
     name: "widget-job-audio",
     uri: WIDGET_URI.jobAudio,
     description: "Inline preview for audio generation jobs (progress + result)",
-    build: () => buildSingleJobWidget("audio"),
+    build: (a) => buildSingleJobWidget("audio", a.pagesBase),
   },
   {
     name: "widget-job-generic",
     uri: WIDGET_URI.jobGeneric,
     description: "Inline status card for generic jobs without media preview",
-    build: () => buildSingleJobWidget("generic"),
+    build: (a) => buildSingleJobWidget("generic", a.pagesBase),
   },
   {
     name: "widget-job-auto",
     uri: WIDGET_URI.jobAuto,
     description: "Universal job card: progress + auto-detected result (media, text, or component outputs)",
-    build: () => buildJobAutoWidget(),
+    build: (a) => buildJobAutoWidget(a.pagesBase),
   },
   {
     name: "widget-workflow",
     uri: WIDGET_URI.workflow,
     description: "Workflow run status: per-node pills + outputs gallery",
-    build: () => buildWorkflowWidgetTemplate(),
+    build: (a) => buildWorkflowWidgetTemplate(a.pagesBase),
   },
   {
     name: "widget-gallery",
@@ -126,15 +126,19 @@ const WIDGETS: Array<{
  * `assets.nodaro.ai`. Getting that domain wrong here causes Claude.ai to
  * block image rendering with "Refused to load — violates img-src directive."
  */
-// PUBLIC_URL is the host the upload widget POSTs the picked file to
-// (`/v1/upload-page/:token`). connectDomains feeds the iframe's
-// connect-src CSP — without it the host blocks the fetch with a CSP
-// violation. Other widgets don't use connect, so the extra entry is
-// harmless for them. Stripping the trailing slash so the entry parses
-// cleanly into a CSP source.
-const WIDGET_CSP = {
-  resourceDomains: [...WIDGET_MEDIA_ORIGINS],
-  connectDomains: [config.PUBLIC_URL.replace(/\/+$/, "")],
+// The upload widget POSTs the picked file to its `upload_url`
+// (`<uploadPageBase>/v1/upload-page/:token`, tools/upload.ts), so that base is
+// the iframe's one connect-src entry — without it the host blocks the fetch
+// with a CSP violation. Other widgets don't use connect, so the extra entry is
+// harmless for them. Built per session, never once per install: on a
+// deployment that serves MCP by path the upload links follow the host the
+// client connected through (lib/mcp-lane-addresses.ts), and a connect-src
+// naming another host would block every upload made through it.
+function widgetCsp(addresses: McpLaneAddresses) {
+  return {
+    resourceDomains: [...WIDGET_MEDIA_ORIGINS],
+    connectDomains: [addresses.uploadPageBase],
+  }
 }
 
 /**
@@ -171,7 +175,8 @@ const KIND_OF = {
   appRun: "app-run",
 } as const
 
-export function registerWidgetResources(server: McpServer): void {
+export function registerWidgetResources(server: McpServer, addresses: McpLaneAddresses): void {
+  const csp = widgetCsp(addresses)
   for (const w of WIDGETS) {
     // Derive the kind suffix from the current URI so we can mirror it on each
     // legacy prefix.
@@ -193,7 +198,7 @@ export function registerWidgetResources(server: McpServer): void {
           description: w.description,
           mimeType: "text/html;profile=mcp-app",
           _meta: {
-            ui: { csp: WIDGET_CSP, prefersBorder: false },
+            ui: { csp, prefersBorder: false },
           },
         },
         async (resolvedUri) => {
@@ -202,9 +207,9 @@ export function registerWidgetResources(server: McpServer): void {
               {
                 uri: resolvedUri.href,
                 mimeType: "text/html;profile=mcp-app",
-                text: w.build(),
+                text: w.build(addresses),
                 _meta: {
-                  ui: { csp: WIDGET_CSP, prefersBorder: false },
+                  ui: { csp, prefersBorder: false },
                 },
               },
             ],

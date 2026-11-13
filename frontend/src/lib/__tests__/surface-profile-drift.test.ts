@@ -84,10 +84,20 @@ function profileShape(file: string): string[] {
 
 /**
  * Keys only the backend holds: surface-profile-runtime-config.ts strips them
- * from /config.js — the payer's billing keys, and `jobs` (who reads a failed
- * job's provider words, decided by the server on every response).
+ * from /config.js — the payer's billing keys, `jobs` (who reads a failed
+ * job's provider words, decided by the server on every response) and `mcp`
+ * (MCP by path: the server states every MCP address itself).
  */
-const BACKEND_ONLY = ["billing.allowances?", "billing.defaultAllowanceUnits?", "billing.payerAccount?", "jobs?", "jobs?.errorDetail"]
+const BACKEND_ONLY = [
+  "billing.allowances?",
+  "billing.defaultAllowanceUnits?",
+  "billing.payerAccount?",
+  "jobs?",
+  "jobs?.errorDetail",
+  "mcp?",
+  "mcp?.byPath",
+  "mcp?.path",
+]
 
 describe("surface-profile shape drift (nested members)", () => {
   it("frontend and backend SurfaceProfile declare the same members, nested and optional ones included", () => {

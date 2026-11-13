@@ -1,5 +1,43 @@
 # @nodaro/sdk
 
+## 2.70.0
+
+### Minor Changes
+
+- daf4108: `audio.transcribe` takes `provider: "nemotron-3-5-transcribe"` (NVIDIA Nemotron 3.5 Transcribe: 40 languages detected automatically, word timings with a speaker per word when `wordTimestamps: true`) and a new `targetLanguage` (a `TranscribeTargetLanguage`, exported beside `TranscribeProvider`): on that engine only, it translates the speech instead, to or from English, with no word timings. A translation on another engine, or beside `wordTimestamps: true`, is a `400 validation_error`. The engine is priced per started minute of the audio: the file is measured before anything is held, and the run is charged for the length the model decoded (up or down; a file whose length cannot be read up front holds 60 minutes). Anything but an https link to a public host, a file over 60 minutes or 200 MB, or a link to a video's page is a `400` before anything is charged. `media.addCaptions`'s `transcribeProvider` is typed `CaptionTranscribeLane` (exported from `@nodaro/sdk/media`), the three lanes it takes, as before.
+- 61e4620: `VideoUpscaleParams` takes `provider: "nodaro-video-upscale"` and `targetResolution: "2k"`: Nodaro Video Upscale upscales a clip of up to 60 seconds and 50 MB into a 1080p, 2K or 4K frame, priced per second of the clip (`"2k"` is its target only: every other provider still refuses it with a 400). It is offered only where `models.list` lists it; elsewhere the request is refused with `403 model_not_available`. Its other refusals: `400` for a clip past a limit or one that cannot be read, `403 link_imports_disabled` for a link to another site where the deployment turned such links off, `422 upload_blocked` where its upload policy refuses the clip, and `429 input_busy` or `503 input_timed_out` / `input_failed` when the clip could not be fetched just now. Every refusal comes before anything is charged.
+- 9b7d47a: `PickerOption.imageLargeUrl` (`client.pickerCatalogs.get()`) and `ProjectedCatalogOption.imageLargeUrl` (`client.catalogs.list()`): the absolute URL of an option's enlarged picture, present only on a deployment that shows its own picker pictures (`catalogs.images: "own"`) and gave one for that option. `client.catalogs.list()` also returns `data` with `curated: false` on such a deployment: the catalogs are the bundled ones, with the deployment's pictures in them.
+- 958abf7: `FactoryPresetEntry.previewWidth` / `previewHeight` (`presets.listFactory`, `GET /v1/node-presets/factory`): a built-in preset's tile picture's real width and height, so a client boxes the picture at its own shape before it loads. A preset's `data.aspectRatio` is what it generates, which is not always its picture's shape.
+- 7daa028: `client.media.splitIntoLayers(input, options?)` takes per-call options: `idempotencyKey` (sent as the `Idempotency-Key` header, so a retry of the same request answers the job it already started, `deduped: true`, instead of starting and charging a second one), `signal` and `timeoutMs`. Its body, `SplitIntoLayersInput`, now takes `sessionId` (file the job in one of your sessions) and `origin` (your app's slug), as every job-creating request does. It resolves `MediaJobStarted` (`{ jobId, deduped? }`); the new `MediaRunOptions` and `MediaJobStarted` types are exported from `@nodaro/sdk` and `@nodaro/sdk/media`.
+
+  `client.nodes.quote` is typed for `"edit-image"` (`EditImageParams`), and the platform now quotes it for every edit model: Nodaro Image Upscale is quoted at the exact price of the picture it is sent, measured as the run measures it with nothing stored. `"split-into-layers"` is quotable with the same body as `splitIntoLayers`: its `reserve` is the hold, the most the run can cost. A `settles_to_actual` warning marks a `reserve` that is such a maximum; the new codes `output_size`, `max_images` and `image_size_unmeasured` are documented on `QuoteAdjustment` and `QuoteWarning`.
+
+### Patch Changes
+
+- 12870e5: The metered LLM price key named in `credits.modelCosts` (sdk) and `nodaro models cost` (cli) can also carry the effort a call sends — `<feature>:<model>[:direct | :effort-<level>]` — on a model whose price depends on it.
+- cee0b5a: A Seedance 2.5 draft now declares its reference task type. `resolveSeedanceTaskType` (`@nodaro/shared/models`) no longer drops a declaration on a draft: a `draft: true` request declares `reference`, `edit` or `extend`, and is forced to the same aspect ratio and length, exactly as the same request without Draft. The `draft` field of `SeedanceTaskTypeFacts` is now optional and deprecated: it is not read, and a caller that still passes it compiles unchanged.
+
+  `@nodaro/sdk`: the `referenceTaskType` comments on `GenerateVideoParams` and `VideoToVideoParams` say that a draft takes the setting like any other run (at 480p). No type changes.
+
+- Updated dependencies [d789b04]
+- Updated dependencies [a809415]
+- Updated dependencies [d8d8088]
+- Updated dependencies [3d9832f]
+- Updated dependencies [12870e5]
+- Updated dependencies [daf4108]
+- Updated dependencies [61e4620]
+- Updated dependencies [65da2da]
+- Updated dependencies [9b7d47a]
+- Updated dependencies [9b7d47a]
+- Updated dependencies [2f72f88]
+- Updated dependencies [2f72f88]
+- Updated dependencies [958abf7]
+- Updated dependencies [cee0b5a]
+- Updated dependencies [ab47f4c]
+- Updated dependencies [2a6d905]
+  - @nodaro/shared@3.63.0
+  - @nodaro/prompts@1.55.0
+
 ## 2.69.0
 
 ### Minor Changes

@@ -44,3 +44,18 @@ describe("Seedance extend shared wiring", () => {
     expect(extend["seedance-2-extend"]).toBeUndefined()
   })
 })
+
+describe("Kling 4 extend shared wiring", () => {
+  it("is a registered extend provider with its own window and resolutions", () => {
+    expect(EXTEND_VIDEO_PROVIDERS).toContain("kling-4-extend")
+    const m = MODEL_CATALOG["kling-4-extend"]!
+    expect(m.modes).toEqual(["extend"])
+    expect(m.family).toBe("Kuaishou")
+    expect(m.durations).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30])
+    expect(m.resolutions).toEqual(["720p", "1080p"])
+  })
+
+  it("is advertised to the wizard's extend-video capabilities", () => {
+    expect(PROVIDER_CAPABILITIES["extend-video"]!["kling-4-extend"]).toMatch(/ANY video.*Kling 4/i)
+  })
+})

@@ -13,10 +13,13 @@ import {
   readPromptAffixes,
   PROMPT_PREFIX_KEY,
   PROMPT_SUFFIX_KEY,
-  transcribeWordTimestampsRefusal
+  transcribeWordTimestampsRefusal,
+  transcribeTranslationRefusal,
+  transcribeTargetLanguageOf,
 } from "@nodaro/shared/nodes";
 import { toast } from "sonner";
 import { namesUserDirectionRef } from "@/lib/user-direction-refs";
+import { trainedCharacterModelWithheld } from "@/lib/trained-character-model";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
 import {
   styleCaptionPlan,
@@ -47,7 +50,7 @@ import {
   FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS,
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
-  isSeedanceExtendProvider,
+  isTailExtendProvider,
   canonicalVideoProvider,
   pricedOutputDurationSec,
   SEEDANCE_VIDEO_EDIT_SHAPE,
@@ -267,7 +270,8 @@ import {
   clampContentIdeasCount,
   CONTENT_IDEAS_MAX_RECIPE_INPUTS,
   resolveUpscaleFactor,
-  ltxExtendDurationSec
+  ltxExtendDurationSec,
+  tailExtendResolution
 } from "@nodaro/shared/credits";
 import {
   ttsSupportsStitching,
@@ -1880,7 +1884,9 @@ function executeNodeCore(
     // version/trigger) so a stolen JWT can't spoof another user's LoRA. The
     // route looks up `lora_replicate_version` + `lora_trigger_word` scoped
     // by `req.userId`.
-    const loraRouting = selectLoraRoutingForMentions(connectedReferences);
+    // A deployment that withholds the trained model is not switched to it: the
+    // node's own model runs with the character's pictures (decided 2026-11-12).
+    const loraRouting = trainedCharacterModelWithheld() ? null : selectLoraRoutingForMentions(connectedReferences);
     let internalLora: { characterId: string } | undefined;
     if (loraRouting) {
       // The routed character by the slug its refs carry: a wired node this
@@ -5398,6 +5404,17 @@ function executeNodeCore(
         return Promise.reject(new Error("Word timings unavailable"));
       }
     }
+    // A translation is Nemotron 3.5 Transcribe's alone, into the languages it
+    // lists, and never beside an explicit word-timings request: refused here,
+    // before anything starts, with the same sentence the route gives.
+    {
+      const refusal = transcribeTranslationRefusal(d.provider || DEFAULT_TRANSCRIBE_NODE_PROVIDER, d.targetLanguage, d.wordTimestamps === true);
+      if (refusal) {
+        toast.error(nodeRunText(d.label, refusal));
+        return Promise.reject(new Error("Translation unavailable"));
+      }
+    }
+    const transcribeTarget = transcribeTargetLanguageOf(d.targetLanguage);
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
       ...RUN_START_RESET,
@@ -5435,9 +5452,13 @@ function executeNodeCore(
             // INFERRED, not asked for: gate it on what the lane can actually do.
             // On an incapable lane the run degrades to a segments-only
             // transcript (what this node did before word timings existed) rather
-            // than being refused by transcribe() after credits reserve.
+            // than being refused by transcribe() after credits reserve. A
+            // translation carries none either (and KIE refuses the pair): off
+            // while translating, as payload-builder does.
             (jsonWired || d.wordTimestamps) &&
-              transcribeLaneSupportsWordTimestamps(transcribeProvider),
+              transcribeLaneSupportsWordTimestamps(transcribeProvider) &&
+              transcribeTarget === undefined,
+            transcribeTarget,
           );
         })
         .then(({ jobId }) => {
@@ -6819,20 +6840,22 @@ function executeNodeCore(
       );
     }
 
-    // ─── Seedance 2 trim-stitch path ────────────────────────────────────
+    // ─── Tail-recipe trim-stitch path (Seedance 2.5 / 2.0, Kling 4) ─────
     // URL-based like LTX, but the continuation CONTENT is required — the
-    // worker wraps it in the bare temporal template, generates via the
-    // seedance-2 ref-video transport, and trim-stitches source+extension.
-    // Mirrors payload-builder's seedance branch: the provider is sent as the
+    // worker wraps it in the provider's own prompt, generates from the
+    // source's tail, and stitches source+extension.
+    // Mirrors payload-builder's tail branch: the provider is sent as the
     // node names it, so the server runs and prices that model, and the
-    // seconds as that model's estimate prices them — snapped into its window
-    // (a length set on Seedance 2.5, up to 30 s, never reaches 2.0's 4–15 s
-    // as is), its catalog default when none.
-    if (isSeedanceExtendProvider(runsAs)) {
+    // seconds and resolution as that model's estimate prices them — snapped
+    // into its window (a length set on Seedance 2.5, up to 30 s, never reaches
+    // 2.0's 4–15 s as is), its catalog default when none; a resolution it
+    // does not render (480p set on Seedance, then Kling 4 picked on the quick
+    // strip) as the 720p it is priced at, which the route would otherwise refuse.
+    if (isTailExtendProvider(runsAs)) {
       const videoUrl = inputs.videoUrl as string | undefined;
       if (!videoUrl) {
         toast.error(nodeRunError(evData.label, "nodeRun.noUpstreamVideoWireA"));
-        return Promise.reject(new Error("No videoUrl for Seedance extend"));
+        return Promise.reject(new Error("No videoUrl for tail-recipe extend"));
       }
       let seedancePrompt: string | undefined = promptOf("extend-video");
       {
@@ -6847,7 +6870,7 @@ function executeNodeCore(
       }
       if (!seedancePrompt?.trim()) {
         toast.error(nodeRunError(evData.label, "nodeRun.describeWhatHappensNextIn"));
-        return Promise.reject(new Error("No prompt for Seedance extend"));
+        return Promise.reject(new Error("No prompt for tail-recipe extend"));
       }
       setUserPromptTemplate(evData.prompt?.trim() || undefined);
       return runProcessingNode(
@@ -6859,7 +6882,7 @@ function executeNodeCore(
             negativePrompt: inputs.negativePrompt || evData.negativePrompt || undefined,
             provider: runsAs,
             duration: pricedOutputDurationSec(runsAs, evData.duration),
-            resolution: evData.resolution,
+            resolution: tailExtendResolution(runsAs, evData.resolution) as NonNullable<ExtendVideoData["resolution"]>,
             generateAudio: evData.generateAudio,
             userId: ctx.userId,
           }),

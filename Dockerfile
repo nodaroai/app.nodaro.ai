@@ -819,11 +819,12 @@ done
 #   mediaOrigin     <- the https origin of R2_PUBLIC_URL on a white-label
 #                      surface, as the backend prints it below; absent on any
 #                      other surface, whose config.js is unchanged
-#   flowUiOrigin    <- FLOW_UI_ORIGIN, legacyUiHosts <- LEGACY_UI_HOSTS and
-#   linkOrigin      <- PUBLIC_URL (a deployment that moved its pages to their own
-#                      host): all three, read as the Caddy block reads them, only
-#                      when the move is on and PUBLIC_URL is another https
-#                      origin; else none, with the reason on stderr
+#   flowUiOrigin    <- FLOW_UI_ORIGIN and linkOrigin <- PUBLIC_URL (a deployment
+#                      whose pages have a host of their own), read as the Caddy
+#                      block reads them, when FLOW_UI_ORIGIN and PUBLIC_URL are
+#                      two different https origins; legacyUiHosts <- LEGACY_UI_HOSTS
+#                      as well once the pages have moved there (a legacy host that
+#                      is not the Flow host); else none, with the reason on stderr
 # ALWAYS written — a missing file would fall through try_files to index.html
 # served as JavaScript.
 FRONTEND_SUPABASE_URL_EFFECTIVE="$FRONTEND_SUPABASE_URL"

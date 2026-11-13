@@ -164,7 +164,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "provider": { valueType: "string", fixed: true, values: ["elevenlabs-dialogue","elevenlabs-dialogue-v4"] },
   },
   "transcribe": {
-    "provider": { valueType: "string", fixed: true, values: ["elevenlabs-stt"] },
+    "provider": { valueType: "string", fixed: true, values: ["elevenlabs-stt","nemotron-3-5-transcribe"] },
   },
   "video-analysis": {
     "llmModel": { valueType: "string", fixed: true, values: ["fast","mixed","mixed-fast","pro","smart"] },

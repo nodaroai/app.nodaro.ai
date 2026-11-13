@@ -132,7 +132,7 @@ here for each one anyway.
 | `FLOW_UI_ORIGIN` | `""` (unset = `FLOW_PUBLIC_URL`; both unset = the feature is off) | The https origin of the app's pages' own host, e.g. `https://flow.example.com` (a trailing slash is allowed, no path): see [Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host). On its own, every host keeps serving every page: a browser's saved settings carry over to the new host once, and public pages name their home with a canonical link. With `LEGACY_UI_HOSTS` too, the pages move there. `FLOW_PUBLIC_URL` is its other name; set either. Set to anything but an https origin, to a different origin than `FLOW_PUBLIC_URL`, or with `PUBLIC_URL` not another https origin, the server refuses to start |
 | `LEGACY_UI_REDIRECT_STATUS` | `302` | `302` (never cached) or `301` (cached by the browser only, for an hour). Any other value is `302` |
 | `FLOW_PUBLIC_URL` | `""` (unset = `FLOW_UI_ORIGIN`; both unset = the app's pages live on `PUBLIC_URL`) | The other name of `FLOW_UI_ORIGIN`: the origin the app's own pages live on when a deployment has moved them off `PUBLIC_URL`. Set either one and the other follows; both set to different origins, and the server refuses to start. Once the move is on (`LEGACY_UI_HOSTS`), links that open one of those pages — the editor, the gallery, the archive, billing — and the social-connect pop-ups use it. The API, the OAuth issuer and every machine-facing address stay on `PUBLIC_URL`. Restart to apply |
-| `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed). These are also the hosts the SSO landing redirect is emitted **relative** on — same-origin by construction — where a request arriving on any other host gets the absolute `PUBLIC_URL` form |
+| `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed). These are also the hosts the SSO landing redirect is emitted **relative** on — same-origin by construction — where a request arriving on any other host gets the absolute `PUBLIC_URL` form. With [MCP by path](#mcp-by-path-no-dedicated-mcp-host) on, `PUBLIC_URL` and every entry here are the hosts the MCP lane answers for by name |
 | `RESEND_API_KEY` | `""` | Cloud, organizations: API key for sending invitation emails through Resend. Unset = invitations are not emailed; the API returns a copy-and-paste link instead |
 | `EMAIL_FROM` | `""` | Cloud, organizations: the From address for invitation emails (a verified sender on the Resend account) |
 | `CLOUDFLARE_API_TOKEN` | `""` | Cloud, trends: a Cloudflare API token allowed to purge the zone's cache. With `CLOUDFLARE_ZONE_ID`, every change to the published trend catalog drops Cloudflare's copies of the guest catalog (by the `Cache-Tag: trends-catalog`), and a guest answer that names its language (`?locale=`) then says `s-maxage=86400`, so the edge may keep it a day. The process that made the change purges, and so does every API process within 10 s of seeing the catalog move (a change made from somewhere without these keys, such as another environment on the same database or a script, is purged too). Unset = no purge and no `s-maxage`: nothing promises the edge a copy it cannot drop. Cloudflare caches `/v1/trends*` only with a Cache Rule that makes it eligible, and that rule **must bypass the cache for requests that carry `Authorization`**: Cloudflare does not honour `Vary`, so without it a signed-in caller could be served a guest's copy (no favorites). Read at call time |
@@ -215,7 +215,7 @@ here for each one anyway.
 | `FFMPEG_MEMORY_LEDGER` | `redis` | Where the ffmpeg memory budget is spent. `redis`: ONE budget shared by every backend process of the container through the Redis the queues already use (keys `ffmpeg:mem:{<container id>}:…`; the container id is `RAILWAY_REPLICA_ID`, else the hostname, so other replicas and containers never share it). Each reservation is a lease that its process renews while ffmpeg runs and that expires within 30 s if the process dies. `local`: this process spends the whole budget alone — for a deployment that runs one backend process per container |
 | `FFMPEG_MEMORY_LOCAL_SHARE` | `0.5` | Share, in (0, 1], of the ffmpeg memory budget ONE process may spend while the shared ledger is unreachable (Redis down or not answering within 2 s). The process logs once per outage and keeps working inside that share; it never waits on a dead Redis. Half, because the heavy renders run in two of a container's processes (the video worker and the render worker), so half each never sums past the whole; the API process's lighter in-process launches are the residual |
 | `DOWNLOAD_SLOT_LEDGER` | `redis` | Where the per-account cap on running video downloads (4 at once) is counted. `redis`: ONE count shared by every backend process and replica through the Redis the queues already use (keys `download:slots:{<account id>}`), so a download started from the editor or an app's page and one a run starts on the server count against each other. Each running download holds a lease that its process renews while it runs and that expires within 30 s if the process dies. If Redis is unreachable the cap is counted per process until it answers. `local`: this process counts its own downloads only — for a deployment that runs one backend process |
-| `MCP_PUBLIC_URL` | `""` = the Nodaro Cloud host | Public base of the MCP host when it differs from `PUBLIC_URL`; self-hosters serving MCP on their main host set it equal to `PUBLIC_URL` |
+| `MCP_PUBLIC_URL` | `""` = the Nodaro Cloud host | Public base of the MCP host when it differs from `PUBLIC_URL`; self-hosters serving MCP on their main host set it equal to `PUBLIC_URL`. A Business/Cloud deployment with no host to spare for MCP can serve it by path instead: see [MCP by path](#mcp-by-path-no-dedicated-mcp-host) |
 | `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | `allowlist` · 14 known clients (Claude, Claude Code, Cursor, Cline, Continue, Goose, ChatGPT, OpenAI, Lovable, Gemini, Gemini CLI, Codex, MCP Inspector, mcp-inspector) | RFC 7591 dynamic client registration for MCP clients (`allowlist` · `open` · `off`), and the `client_name` allowlist consulted in `allowlist` mode — see §10 |
 | `FIGMA_PLUGIN_OAUTH_CLIENT_ID` | `""` = plugin connect off | client_id of the developer app the Figma plugin connects through; the app must list `<PUBLIC_URL>/v1/oauth/plugin/callback` in its redirect URIs and request `jobs:read`, `assets:read`, `assets:write`, `credits:read` — see the [plugin connect handshake](./oauth-flow.md#plugin-connect-handshake-figma) |
 | `COMMUNITY_CONNECT_ENABLED` | off | **Cloud side only** — accept community-instance connections |
@@ -843,8 +843,21 @@ optional; each array empty = "keep the default"):
   (`403 model_not_available`), while the node's other models keep running.
   A models override saved in Admin → Availability before a model was listed
   does not tick a model listed later, so it stays off there until an admin
-  ticks it. The models listed later so far: `flux-fill`, `wan-animate-move`
-  and `wan-animate-replace`.
+  ticks it. The models listed later so far: `flux-fill`, `wan-animate-move`,
+  `wan-animate-replace` and `flux-lora-character`.
+
+  A trained character's model (`flux-lora-character`, FLUX.1 [dev] with the
+  character's own LoRA) is a model a restriction can name, though no menu,
+  `GET /v1/models` or MCP `list_models` offers it: a Generate Image run
+  switches to it on its own when the one character it names has a trained
+  model. Admin → Availability lists it as "Trained character (FLUX LoRA)".
+  Where a restriction withholds it, a run does not switch: it runs the model
+  the node (or the request) names, at that model's price, and uses the
+  character through its reference pictures, exactly as for a character with no
+  trained model. This holds in the editor, on `/v1/generate-image` and in
+  workflow runs. A request that names `flux-lora-character` itself as its model
+  is refused (`403 model_not_available`). A deployment with no model
+  restriction runs trained characters as before.
 
   A model restriction holds on the model a request RUNS on, not only on the
   one it names. A request that names no model is judged as the default its
@@ -1184,6 +1197,17 @@ optional; each array empty = "keep the default"):
   workflow's nodes, before the key was set or on an administrator's own
   canvas, stay in that workflow and are read with it by anyone who can open
   it; a published app's copy of the workflow leaves them out.
+- `mcp.byPath` / `mcp.path`: serve the MCP endpoint under a path on this
+  deployment's own hosts instead of on a dedicated MCP host —
+  `{"mcp":{"byPath":true}}`. Off unless `byPath` is `true` (or `"true"` /
+  `"1"`); absent, `false` or any other value leaves every MCP answer exactly
+  as it is without the key. `path` is where the endpoint answers, default
+  `/v1/mcp`: `/v1/mcp` or a lower-case path under it (no trailing slash, at
+  most 64 characters), which every proxy in front of the app already forwards
+  to the API. Any other `path` falls back to `/v1/mcp`, with a warning. Needs
+  `MCP_ENABLED=true` and `PUBLIC_URL` set to the deployment's http(s) address.
+  See [MCP by path](#mcp-by-path-no-dedicated-mcp-host) for what a client
+  sees. Backend-only: stripped from `/config.js`.
 - `features` — whole features this deployment switches off:
   `{"features":{"hide":["copilot","presentation"]}}`. `copilot` removes the
   Workflow Copilot everywhere — the canvas rail and its collapsed tab, the
@@ -2381,6 +2405,71 @@ a user's behalf via OAuth. It is gated behind `MCP_ENABLED` (default
 
 4. **Add the connector** in your MCP client. In Claude.ai: Settings →
    Connectors → Add custom connector → URL `https://mcp.your-domain.com/mcp`.
+
+### MCP by path (no dedicated MCP host)
+
+**Business and Cloud editions only** (it is a [surface profile](#surface-profile-nodaro_surface_profile)
+key, which Community ignores). A deployment that has no hostname to spare for
+`mcp.<your-domain>` — or whose network allows only its own listed hosts — can
+serve the same MCP endpoint under a path on the hosts it already has:
+
+```json
+{ "mcp": { "byPath": true } }
+```
+
+The endpoint then answers at `https://<host>/v1/mcp` (or the `mcp.path` you
+set) on each host the deployment **declares as its own**: `PUBLIC_URL` and
+every `CORS_ORIGIN` entry. It needs `MCP_ENABLED=true` and `PUBLIC_URL` set to
+the deployment's own http(s) address; without `PUBLIC_URL` the server logs a
+warning and keeps MCP on `/mcp`. Clients connect to the path address; nothing
+else needs configuring. The bundled proxy already forwards `/v1/*` and
+`/.well-known/oauth-*` to the backend, so no proxy change is needed, and no
+`MCP_PUBLIC_URL` either.
+
+Every address the MCP lane states follows the declared host the client
+connected through, with that declaration's scheme and port:
+
+- the endpoint's 401 challenge:
+  `Bearer realm="<host>", resource="https://<host>/v1/mcp", resource_metadata="https://<host>/.well-known/oauth-protected-resource/v1/mcp"`;
+- the protected-resource document, at
+  `/.well-known/oauth-protected-resource/v1/mcp` and at
+  `/.well-known/oauth-protected-resource`: `resource` is
+  `https://<host>/v1/mcp` and `authorization_servers` is `["https://<host>"]`;
+- the authorization-server document, at
+  `/.well-known/oauth-authorization-server` and
+  `/.well-known/oauth-authorization-server/v1/mcp`: the issuer is
+  `https://<host>`, and the authorization, token, registration and revocation
+  endpoints are under it;
+- the consent redirect (`GET /v1/oauth/authorize` → `https://<host>/oauth/authorize`),
+  so people sign in on the site they are on;
+- the links the MCP tools hand out: upload links, the upload widget's
+  allowed connection, editor, gallery and archive links, picker pictures.
+  When the app's pages have [their own host](#moving-the-apps-pages-to-their-own-host),
+  editor and gallery links stay on it.
+
+A request on any other host — one the deployment did not declare, a declared
+name on another port, a malformed `Host` — gets the primary addresses, on
+`PUBLIC_URL`'s origin. `X-Forwarded-Host` is read the way the rest of the
+server reads it (it wins over `Host`), and the same rule applies to it: only a
+declared host is ever stated. Because those documents differ by host, they
+are sent `Cache-Control: private` with `Vary: Host, X-Forwarded-Host`, so no
+shared cache can serve one host's addresses on another.
+
+Things to know:
+
+- **Every `CORS_ORIGIN` entry counts as one of this install's own hosts** while
+  the mode is on. List only origins this deployment serves. The two
+  `localhost` development origins the API always allows are not declared hosts.
+- **One sign-in works on every host.** An access token is not tied to the host
+  it was issued through, exactly as before: a client signed in through one of
+  the deployment's hosts may use the same token on another.
+- **The path replaces `/mcp`.** `/mcp` and its `/.well-known/…/mcp` documents
+  are not served while the mode is on: they could only name a dedicated MCP
+  host, which such a deployment does not have. A client set up with an
+  earlier `/mcp` address reconnects at the path. The root `/.well-known`
+  documents describe the path endpoint of the host asked.
+- Off (the default), every MCP answer on every host is exactly what it was
+  before the key existed.
 
 The MCP server is fully shipped with 123+ tools across ~20 tool files,
 covering all generation verbs (image, video, audio, character, location,

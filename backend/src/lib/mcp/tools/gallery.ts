@@ -6,6 +6,7 @@ import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { RESTRICTED_ASSET_COLUMN } from "../../content-restrictions-column.js"
+import { onlyAssetFiles } from "../../asset-file-column.js"
 import { type GalleryItem } from "../widgets/gallery.js"
 import { JOB_AUTO_TEXT_OUTPUT_KEYS } from "../widgets/job-auto.js"
 import { isUuid } from "./_id-guard.js"
@@ -574,13 +575,18 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           cursorTimestamp = (cursorRow?.created_at as string | undefined) ?? null
         }
 
-        let query = supabase
-          .from("assets")
-          .select(
-            "id, type, filename, mime_type, size_bytes, r2_url, metadata, created_at, job_id",
-          )
-          .eq("user_id", session.userId)
-          .is(RESTRICTED_ASSET_COLUMN, null)
+        // Files only, page and count alike (`onlyAssetFiles`, decided
+        // 2026-11-12): a row a retention reaper left without an address is
+        // neither listed nor counted — the rule GET /v1/library applies.
+        let query = onlyAssetFiles(
+          supabase
+            .from("assets")
+            .select(
+              "id, type, filename, mime_type, size_bytes, r2_url, metadata, created_at, job_id",
+            )
+            .eq("user_id", session.userId)
+            .is(RESTRICTED_ASSET_COLUMN, null),
+        )
           .order("created_at", { ascending: false })
           .limit(limit + 1) // +1 to detect hasMore
 
@@ -607,11 +613,13 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         // Total count on first page only (matches /v1/library's behaviour).
         let totalCount: number | null = null
         if (!args.cursor) {
-          let countQuery = supabase
-            .from("assets")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", session.userId)
-            .is(RESTRICTED_ASSET_COLUMN, null)
+          let countQuery = onlyAssetFiles(
+            supabase
+              .from("assets")
+              .select("id", { count: "exact", head: true })
+              .eq("user_id", session.userId)
+              .is(RESTRICTED_ASSET_COLUMN, null),
+          )
           if (args.kind) countQuery = countQuery.eq("type", args.kind)
           for (const filter of filenameFilters) countQuery = countQuery.or(filter)
           const { count } = await countQuery

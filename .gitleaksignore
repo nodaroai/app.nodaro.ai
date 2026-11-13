@@ -72,3 +72,10 @@ ffd6dc89479c59b6ab90ec2eadb945a14d34f2a6:frontend/src/ee/app/billing-admin/__tes
 # secret. This pins the PR-branch commit that introduced it; the line now uses a plain-word
 # key, so no later commit or squash repeats the match.
 4a2f6ee907114f6111a81a92a07cae1263429eaf:backend/src/middleware/__tests__/credit-guard-before-pricing.test.ts:generic-api-key:79
+
+# Nemotron 3.5 Transcribe (PR #3078): `modelKey: "<the engine id>"` — our public model id
+# beside the word "modelKey" — read as a credential by generic-api-key. It is no secret. These
+# pin the PR-branch commits that introduced it; the lines now name the shared constant
+# (NEMOTRON_TRANSCRIBE_ID), so no later commit or the squash merge repeats the match.
+e096ef9ea8139389270ac71e6e368f15e781f20b:backend/src/providers/kie/nemotron-transcribe.ts:generic-api-key:114
+a9cc2b67ce2c71ad05a6c28810ed46f5268c74d2:backend/src/providers/kie/__tests__/nemotron-transcribe.test.ts:generic-api-key:93

@@ -7,6 +7,9 @@
  *     `is` and `not(…, "is", null)` are how NULL is asked for;
  *   - `not` supports "is" and "in" only, and throws on anything else rather
  *     than letting every row through;
+ *   - `or` runs a PostgREST logic tree of eq, neq, lt, lte, gt, gte and is
+ *     terms, nested `and(…)` / `or(…)` included, and throws on any other
+ *     operator;
  *   - `overlaps` takes a Postgres array literal ("{\"a,b\",c}"), or an array,
  *     sent as postgrest-js sends one: joined with commas, unquoted, so an
  *     element holding a comma splits in two;
@@ -94,6 +97,74 @@ function arrayValue(value: unknown): unknown[] {
   }
   if (body.length > 0 || wasQuoted) out.push(current)
   return out
+}
+
+/**
+ * A PostgREST logic tree, as postgrest-js's `or(filters)` sends one: terms
+ * joined by commas, each `column.op.value` or a nested `and(…)` / `or(…)`.
+ * The operators are eq, neq, lt, lte, gt, gte (NULL matches nothing) and is
+ * (null, true, false); a value may be double-quoted (`"a,b"`, `\"` escapes).
+ * Anything else throws rather than letting every row through.
+ */
+function logicTree(text: string, any: boolean): Filter {
+  const terms = splitTopLevel(text).map((term): Filter => {
+    const nested = term.match(/^(and|or)\((.*)\)$/s)
+    if (nested) return logicTree(nested[2]!, nested[1] === "or")
+    const first = term.indexOf(".")
+    const second = term.indexOf(".", first + 1)
+    if (first <= 0 || second <= first) throw new Error(`memory-tables: not a filter: ${term}`)
+    const column = term.slice(0, first)
+    const op = term.slice(first + 1, second)
+    const raw = term.slice(second + 1)
+    const value = raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1).replace(/\\(.)/g, "$1") : raw
+    // The value arrives as text; against a number column it is read as the number it spells, as Postgres casts it.
+    const against = (holds: (order: number) => boolean): Filter => (row) => {
+      const numeric = typeof row[column] === "number" && value.trim() !== "" && !Number.isNaN(Number(value))
+      return comparing(column, numeric ? Number(value) : value, holds)(row)
+    }
+    switch (op) {
+      case "eq": return against((o) => o === 0)
+      case "neq": return against((o) => o !== 0)
+      case "lt": return against((o) => o < 0)
+      case "lte": return against((o) => o <= 0)
+      case "gt": return against((o) => o > 0)
+      case "gte": return against((o) => o >= 0)
+      case "is":
+        if (value === "null") return (row) => isNull(row[column])
+        if (value === "true" || value === "false") return (row) => row[column] === (value === "true")
+        throw new Error(`memory-tables: is.${value} is not supported`)
+      default:
+        throw new Error(`memory-tables: ${op} in or() is not supported`)
+    }
+  })
+  return any ? (row) => terms.some((f) => f(row)) : (row) => terms.every((f) => f(row))
+}
+
+/** `text` split on the commas outside parentheses and double quotes. */
+function splitTopLevel(text: string): string[] {
+  const out: string[] = []
+  let current = ""
+  let depth = 0
+  let quoted = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!
+    if (quoted) {
+      current += ch
+      if (ch === "\\") current += text[++i] ?? ""
+      else if (ch === '"') quoted = false
+    } else if (ch === '"') {
+      quoted = true
+      current += ch
+    } else if (ch === "(" || ch === ")") {
+      depth += ch === "(" ? 1 : -1
+      current += ch
+    } else if (ch === "," && depth === 0) {
+      out.push(current)
+      current = ""
+    } else current += ch
+  }
+  out.push(current)
+  return out.map((t) => t.trim()).filter((t) => t.length > 0)
 }
 
 /** A PostgREST list, "(a,b)", as its elements. */
@@ -213,6 +284,7 @@ function chain(db: MemoryDb, name: string) {
       return q
     },
     in: (c: string, vs: readonly unknown[]) => (filters.push((r) => !isNull(r[c]) && vs.includes(r[c])), q),
+    or: (text: string) => (filters.push(logicTree(text, true)), q),
     overlaps: (c: string, vs: unknown) => {
       // As postgrest-js sends an array: its elements joined with commas, unquoted.
       const list = arrayValue(Array.isArray(vs) ? `{${vs.join(",")}}` : vs)

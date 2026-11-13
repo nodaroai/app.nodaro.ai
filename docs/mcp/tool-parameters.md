@@ -857,14 +857,14 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | From 1 to 8000 characters. |
 | `task_id` | string |  | Task id of the prior generation, its output providerTaskId (veo-extend / runway-extend only). At least 1 character. |
 | `kie_task_id` | string |  | Use task_id. At least 1 character. |
-| `video_url` | string (URL) |  | Source video URL (seedance-2-5-extend / seedance-2-0-extend only) |
-| `video_asset_id` | string |  | Nodaro job/upload asset id whose output is a video (seedance-2-5-extend / seedance-2-0-extend only) |
-| `model` | string | yes | One of `veo-extend`, `runway-extend`, `seedance-2-5-extend`, `seedance-2-0-extend`. |
+| `video_url` | string (URL) |  | Source video URL (seedance-2-5-extend / seedance-2-0-extend / kling-4-extend only) |
+| `video_asset_id` | string |  | Nodaro job/upload asset id whose output is a video (seedance-2-5-extend / seedance-2-0-extend / kling-4-extend only) |
+| `model` | string | yes | One of `veo-extend`, `runway-extend`, `seedance-2-5-extend`, `seedance-2-0-extend`, `kling-4-extend`. |
 | `veo_quality` | string |  | One of `fast`, `quality`. |
 | `runway_resolution` | string |  | One of `720p`, `1080p`. |
-| `duration` | integer |  | Seconds to add: seedance-2-5-extend 4–30 seconds (default 8), seedance-2-0-extend 4–15 seconds (default 8). Any other length is refused. From 4 to 30. |
-| `resolution` | string |  | Extension resolution (seedance-2-5-extend / seedance-2-0-extend, default 720p — match the source for the cleanest seam). One of `480p`, `720p`, `1080p`. |
-| `generate_audio` | boolean |  | Continue the soundtrack into the extension (seedance-2-5-extend / seedance-2-0-extend, default true) |
+| `duration` | integer |  | Seconds to add: seedance-2-5-extend 4–30 seconds (default 8), seedance-2-0-extend 4–15 seconds (default 8), kling-4-extend 3–30 seconds (default 5). Any other length is refused. From 3 to 30. |
+| `resolution` | string |  | Extension resolution (seedance-2-5-extend / seedance-2-0-extend: 480p, 720p or 1080p; kling-4-extend: 720p or 1080p; default 720p — match the source for the cleanest seam). Any other is refused. One of `480p`, `720p`, `1080p`. |
+| `generate_audio` | boolean |  | Continue the soundtrack into the extension (seedance-2-5-extend / seedance-2-0-extend only, default true) |
 | `reference_image_urls` | string (URL)[] |  | Reference images for the extension (seedance-2-5-extend / seedance-2-0-extend only, up to 8 — one seat is reserved for the continuation anchor). Mention them in the prompt as @image_1…@image_N in list order. At most 8 items. |
 | `seed` | integer |  | From 10000 to 99999. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
@@ -3357,10 +3357,12 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `audio_url` | string (URL) |  |  |
 | `audio_asset_id` | string |  | Nodaro audio or video job id. |
-| `language` | string |  | BCP-47 language code (e.g. 'en', 'es', 'fr'). Auto-detected when omitted. At most 10 characters. |
-| `diarize` | boolean |  | Label each speaker (speaker 1, speaker 2, …). Default false. |
-| `tag_audio_events` | boolean |  | Annotate non-speech events like [laughter], [music]. Default false. |
-| `word_timestamps` | boolean |  | Kept for compatibility — this engine is word-level, so word timings are returned either way. |
+| `model` | string |  | Engine. Default elevenlabs-stt. whisper returns no word timings; nemotron-3-5-transcribe detects the language itself and is the one that translates. One of `elevenlabs-stt`, `whisper`, `incredibly-fast-whisper`, `nemotron-3-5-transcribe`. |
+| `language` | string |  | BCP-47 language code (e.g. 'en', 'es', 'fr'). Auto-detected when omitted; Nemotron always detects it. At most 10 characters. |
+| `diarize` | boolean |  | ElevenLabs STT: label each speaker (speaker 1, speaker 2, …). Default false. (Nemotron labels speakers with word_timestamps.) |
+| `tag_audio_events` | boolean |  | ElevenLabs STT: annotate non-speech events like [laughter], [music]. Default false. |
+| `word_timestamps` | boolean |  | Per-word timings. ElevenLabs STT returns them either way; never with target_language. |
+| `target_language` | string |  | nemotron-3-5-transcribe only: translate the speech into this language instead (to or from English). No word timings. One of `en`, `zh`, `ja`, `ko`, `fr`, `de`, `es`, `pt`, `it`, `ru`, `nl`, `pl`, `cs`, `sk`, `hi`, `bg`, `hr`, `da`, `et`, `fi`, `hu`, `lv`, `lt`, `ro`, `sl`, `sv`, `th`, `uk`, `ar`, `el`, `he`, `mt`. |
 
 ## `trim_audio`
 

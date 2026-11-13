@@ -313,8 +313,9 @@ describe("picker pictures have one decider on the server", () => {
     const calls = [...scans].flatMap(([file, s]) => s.projectionCalls.map((c) => `${file} ${c.fn}: ${c.images}`)).sort()
     expect(calls).toEqual(
       [
-        `src/lib/mcp/tools/picker-catalogs.ts projectPickerCatalog: ${GATE}()`,
-        `src/lib/mcp/tools/picker-catalogs.ts summarizePickerCatalogs: ${GATE}()`,
+        // The MCP tool names its session's pictures host (lib/mcp-lane-addresses.ts).
+        `src/lib/mcp/tools/picker-catalogs.ts projectPickerCatalog: ${GATE}({ baseUrl: session.addresses.picturesBase })`,
+        `src/lib/mcp/tools/picker-catalogs.ts summarizePickerCatalogs: ${GATE}({ baseUrl: session.addresses.picturesBase })`,
         // The unknown-type error lists the valid types: no pictures asked for.
         "src/lib/mcp/tools/picker-catalogs.ts summarizePickerCatalogs: no options",
         `src/routes/catalogs.ts projectAllCatalogs: ${GATE}({ srcSet: true })`,

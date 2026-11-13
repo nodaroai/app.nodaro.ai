@@ -546,6 +546,25 @@ describe("extend-video: the seconds sent are the ones the estimate prices", () =
   it("a node on the retired id runs, and is sent, as Seedance 2.5", async () => {
     expect(await sent({ provider: "seedance-2-extend", duration: 12 })).toMatchObject({ provider: "seedance-2-5-extend", duration: 12 })
   })
+
+  it("Kling 4 is sent as itself, at the seconds and resolution its estimate prices", async () => {
+    expect(await sent({ provider: "kling-4-extend", duration: 22, resolution: "1080p" })).toMatchObject({
+      provider: "kling-4-extend",
+      duration: 22,
+      resolution: "1080p",
+      videoUrl: "http://source.mp4",
+    })
+    vi.clearAllMocks()
+    // No length: Kling 4's 5 s default.
+    expect(await sent({ provider: "kling-4-extend" })).toMatchObject({ duration: 5, resolution: "720p" })
+  })
+
+  // Seedance 2.5 at 480p, then Kling 4 picked on the quick strip: the run sends
+  // the 720p it is priced at (`tailExtendCreditId`), not the 480p the route
+  // refuses on Kling 4.
+  it("a Seedance 480p carried onto Kling 4 is sent at the 720p it is priced at", async () => {
+    expect(await sent({ provider: "kling-4-extend", duration: 2, resolution: "480p" })).toMatchObject({ provider: "kling-4-extend", duration: 3, resolution: "720p" })
+  })
 })
 
 // ---------------------------------------------------------------------------

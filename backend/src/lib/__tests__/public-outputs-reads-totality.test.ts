@@ -175,6 +175,11 @@ const PUBLIC_ROUTE_READS: Readonly<Record<string, Read>> = {
   "GET /.well-known/oauth-authorization-server/mcp": DISCOVERY,
   "POST /mcp": none("the MCP transport (bearer checked by the route); its tools' public scopes are classified in MCP_PUBLIC_SCOPES"),
   "GET /mcp": none("the MCP transport (bearer checked by the route); its tools' public scopes are classified in MCP_PUBLIC_SCOPES"),
+  // MCP by path (`mcp.byPath`, at its default path): public only while a deployment turns the mode on.
+  "POST /v1/mcp": none("the MCP transport served by path (bearer checked by the route); its tools' public scopes are classified in MCP_PUBLIC_SCOPES"),
+  "GET /v1/mcp": none("the MCP transport served by path (bearer checked by the route); its tools' public scopes are classified in MCP_PUBLIC_SCOPES"),
+  "GET /.well-known/oauth-protected-resource/v1/mcp": DISCOVERY,
+  "GET /.well-known/oauth-authorization-server/v1/mcp": DISCOVERY,
   "PUT /v1/upload-proxy/*": none("receives an upload by its signed token; serves no work"),
   "GET /v1/upload-page/*": none("the upload page for a signed token; serves no work"),
   "POST /v1/upload-page/*": none("receives an upload by its signed token; serves no work"),

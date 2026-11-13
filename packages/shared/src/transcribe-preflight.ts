@@ -1,6 +1,9 @@
 import {
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
+  TRANSCRIBE_TARGET_LANGUAGES,
+  transcribeLaneSupportsTranslation,
   transcribeLaneSupportsWordTimestamps,
+  transcribeProvidersWithTranslation,
   transcribeProvidersWithWordTimestamps,
 } from "./model-constants.js"
 import { renderTranscriptOutputOf } from "./render-nodes.js"
@@ -16,12 +19,57 @@ import { renderTranscriptOutputOf } from "./render-nodes.js"
  * Pure: no I/O, no framework types — callers pass plain nodes/edges.
  */
 
-/** The refusal for a lane that can't return word timings; `null` when it can.
- *  An absent provider resolves to the transcribe NODE default. */
-export function transcribeWordTimestampsRefusal(provider: string | null | undefined): string | null {
+/** A transcription's target language as data carries it: a non-empty string, else `undefined` (no translation). */
+export function transcribeTargetLanguageOf(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined
+}
+
+/** The refusal for a request that can't return word timings; `null` when it can.
+ *  An absent provider resolves to the transcribe NODE default. A translation
+ *  (`targetLanguage`) never carries word timings, whatever the engine: KIE
+ *  refuses Nemotron's `target_language` together with `timestamps`. */
+export function transcribeWordTimestampsRefusal(
+  provider: string | null | undefined,
+  targetLanguage?: unknown,
+): string | null {
   const lane = provider || DEFAULT_TRANSCRIBE_NODE_PROVIDER
-  if (transcribeLaneSupportsWordTimestamps(lane)) return null
-  return `the "${lane}" engine does not return word timings — pick ${transcribeProvidersWithWordTimestamps().join(" or ")}`
+  if (!transcribeLaneSupportsWordTimestamps(lane)) {
+    return `the "${lane}" engine does not return word timings — pick ${transcribeProvidersWithWordTimestamps().join(" or ")}`
+  }
+  if (transcribeTargetLanguageOf(targetLanguage) !== undefined) {
+    return "a translation carries no word timings — clear the target language to get a transcript with word timings"
+  }
+  return null
+}
+
+/**
+ * The refusal for a translation request (`targetLanguage`) that cannot run;
+ * `null` when there is none to refuse (no target language, or a valid one on
+ * an engine that translates, without word timings). One message for every run
+ * surface: the route, the workflow run, the editor's Run and MCP.
+ *  - only Nemotron 3.5 Transcribe translates;
+ *  - only into a language KIE lists (`TRANSCRIBE_TARGET_LANGUAGES`);
+ *  - never together with word timings (KIE refuses the pair).
+ * An absent provider resolves to the transcribe NODE default.
+ */
+export function transcribeTranslationRefusal(
+  provider: string | null | undefined,
+  targetLanguage: unknown,
+  wordTimestamps?: boolean,
+): string | null {
+  const target = transcribeTargetLanguageOf(targetLanguage)
+  if (target === undefined) return null
+  const lane = provider || DEFAULT_TRANSCRIBE_NODE_PROVIDER
+  if (!transcribeLaneSupportsTranslation(lane)) {
+    return `the "${lane}" engine does not translate — pick ${transcribeProvidersWithTranslation().join(" or ")} to translate, or clear the target language`
+  }
+  if (!(TRANSCRIBE_TARGET_LANGUAGES as readonly string[]).includes(target)) {
+    return `"${target}" is not a language the "${lane}" engine translates into — pick one of ${TRANSCRIBE_TARGET_LANGUAGES.join(", ")}`
+  }
+  if (wordTimestamps === true) {
+    return "word timings and a translation cannot be asked for together — turn word timings off, or clear the target language"
+  }
+  return null
 }
 
 export interface PreflightGraphNode {
@@ -49,7 +97,8 @@ const TRANSCRIBE_JSON_OUT = "json"
 const TRANSCRIPT_IN = "transcript"
 
 /**
- * Every transcribe node on a word-INCAPABLE lane whose `json` output reaches an
+ * Every transcribe node on a word-INCAPABLE lane (or one set to translate, whose
+ * transcript is a translation with no word timings) whose `json` output reaches an
  * add-captions `transcript` input — directly, or through apply-edl, which remaps
  * the transcript and re-emits it on its own `json` handle (or any render, by
  * its registry `transcriptOutput`: Speaker View's `transcript`). add-captions rejects a
@@ -72,7 +121,9 @@ export function findWordlessTranscriptFeeds(
   for (const node of nodes) {
     if (node.type !== "transcribe" || isSkipped(node)) continue
     const provider = (typeof node.data?.provider === "string" && node.data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
-    const refusal = transcribeWordTimestampsRefusal(provider)
+    // A translating node is as wordless as an incapable lane: its transcript is
+    // the translation, with no word timings.
+    const refusal = transcribeWordTimestampsRefusal(provider, node.data?.targetLanguage)
     if (!refusal) continue
 
     // Walk the transcript's path: transcribe.json → [render.transcript → its transcript output]* → add-captions.transcript,

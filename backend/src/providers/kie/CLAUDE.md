@@ -163,6 +163,15 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `elevenlabs-turbo` | `elevenlabs/text-to-speech-turbo-2-5` | [11labs turbo](https://docs.kie.ai/market/elevenlabs/text-to-speech-turbo-2-5.md) |
 | `elevenlabs-multilingual` | `elevenlabs/text-to-speech-multilingual-v2` | [11labs multilingual](https://docs.kie.ai/market/elevenlabs/text-to-speech-multilingual-v2.md) |
 | `elevenlabs-stt` | `elevenlabs/speech-to-text` | [11labs stt](https://docs.kie.ai/market/elevenlabs/speech-to-text.md) |
+| `nemotron-3-5-transcribe` (Transcribe) | `nvidia/nemotron-3-5-transcribe` (bespoke `runNemotronTranscribe`, `nemotron-transcribe.ts`) | [nemotron 3.5 transcribe](https://docs.kie.ai/market/nvidia/nemotron-3-5-transcribe.md) |
+
+### Nemotron 3.5 Transcribe wire notes (`nemotron-3-5-transcribe`, bespoke `runNemotronTranscribe`)
+
+- **Body (allow-listed; the schema is `additionalProperties: false`):** `{ audio_url, timestamps?: true, target_language? }`. `timestamps` only when word timings are asked; `target_language` only for a translation; NEVER both (KIE refuses the pair — every run surface refuses it first via `transcribeTranslationRefusal`, and `buildNemotronTranscribeInput` throws as the last stop). No `language`: the model detects it (40 languages) and has no such input. `target_language` is KIE's 32-code enum (`TRANSCRIBE_TARGET_LANGUAGES`): to or from English.
+- **Answer (probed 2026-11-12, four real tasks):** `resultJson = { resultObject: { text, duration, url, expires_at, usage, target_language? (a translation), status, bytes, … } }` — NOT `resultUrls`, so the generic reconcile's `singlePoll` cannot read it (the KIE reconcile routes `job_type: "transcribe"` to `reconcileKieTranscribeJob`). No detected-language field anywhere. The words and speakers are only in the result FILE at `resultObject.url` (JSON, kept ~14 days): `{ task: "transcribe"|"translate", duration, text, text_with_speakers?, words?: [{ word, start, end, speaker: "0" }] (SECONDS), diarization?, silent?, truncated? }`. Mapped by `providers/audio/nemotron-output.ts` (speaker `"0"` → `speaker_0`, Scribe's form; words to ms captions with the leading-space delimiter).
+- **Billing:** 0.3 KIE credits per minute of the DECODED audio, billed by the second (`creditsConsumed` 0.24 for a 47 s clip), the same for every option. `jobs.provider_cost` = KIE's `duration` at that rate (`nemotronProviderCostUsd`, our probe's length when KIE does not say). The user is HELD per started minute of the file, measured before the hold (`lib/nemotron-transcribe-input.ts`; an unreadable length holds 60 minutes), and CHARGED per started minute of KIE's own `duration` (`lib/nemotron-transcribe-settle.ts`, decided 2026-11-12): up or down, an overrun collected through `commit_credits_metered`. With no `duration`, the length its `creditsConsumed` stands for (0.3 a minute, by the second), then the measured length, then the hold. A KIE length at most 1 s past the held minutes is charged the held minutes (upward only). A disagreement is an `[ALERT]` (`console.error`) only when held and charged minutes differ. `nemotron-3-5-transcribe:<N>m` from the `:per-4m` rate row. `provider_cost` is KIE's `creditsConsumed` (else its rate × `duration`).
+- **Limits:** 60 minutes, 200 MB, a direct file link KIE fetches within ~3 minutes (no streaming). The route and the workflow run refuse anything but an https link to a public host, a longer or larger file and a social PAGE link before the hold. The `audio_url` sent is our own storage's public CDN address (an upload, a job output) or the direct file link the caller gave and we measured — never a short-lived signed URL of ours.
+- **Failures** (`failMsg`): "Audio fetch failed…" (URL 4xx), "…audio format is not supported…" (no decodable audio), "…exceeds the maximum allowed size of 200 MB", "…exceeds the maximum allowed duration of 60 minutes" — all terminal, refunded.
 
 ### OmniHuman 2.0 wire notes (`omnihuman-2-0`, the generic `lipSync`)
 
@@ -288,20 +297,21 @@ generic `lipSync()` / `buildLipSyncInput`, shaped by its config:
   refunded now, KIE never called) one that bills more than the job's
   `lipSyncBilledSeconds` (passed as `LipSyncOptions.billedSeconds`) or runs
   past 300 s. Then it encodes that PCM to MP3 — audio under 4 s padded with
-  silence to 4.1 s ON THE PCM (`apad=whole_dur` in a graph that never rebuilds,
+  silence to exactly 4.000 s ON THE PCM (`apad=whole_dur` in a graph that never rebuilds,
   so it pads once; it never measures under 4 s upstream) and billed 4 s —
   measures THE ENCODE (read as MP3 only), and refuses (deterministic) one that
-  plays past the held seconds (or the padded 4.1 s) by more than
+  plays past the held seconds (or the padded 4 s) by more than
   `LIP_SYNC_ENCODE_TOLERANCE_SEC`, or that is 15 MB or more. The MP3 of the PCM
   decodes back to exactly its sample count; `lip-sync-audio-parity.test.ts`
   holds the price check's count EQUAL to the samples sent, on files that change
   format mid-stream too. Only the encode, stored in the job's scratch folder
   (`lip-sync-prepared`), is sent. Never trimmed.
-- **Staging check (open):** what KIE bills for a padded 4.1 s clip (4 s, or 5),
-  and for an MP3 whose decoded length sits just under a whole second (a
-  decoder that does not drop the encoder's ~25 ms of priming reads it a
-  frame longer). `provider_cost` assumes the billed seconds; confirm on one
-  staging run of each before relying on it.
+- **Staging check (2026-11-12):** KIE bills the audio it is sent in whole
+  seconds, rounded up, and its output runs that long. A clip padded to 4.1 s
+  was billed 5 s (70 credits) while we billed 4, so padding is now to exactly
+  4.000 s: an exact 4.000 s WAV and our 4.000 s MP3 (LAME's gapless tag) were
+  both accepted and billed 4 s (56 credits). 8.08 s billed 9 and 5.04 s billed
+  6, as we bill. `provider_cost` = the billed seconds holds.
 - **Billing:** KIE bills 14 credits per second of output (`kieCreditsPerAudioSecond`),
   so `provider_cost` = 14 × the billed seconds × `KIE_CREDIT_USD`
   (`lipSyncKieCostUsd`), not the flat `cost` anchor. The run is charged the
@@ -1157,6 +1167,7 @@ Do not declare it per family — the Imagen 4 tiers disagree. A SKU whose schema
 | `image.ts` | `ImageGenerationProvider` + `ImageEditingProvider` implementations. Handles param name conversion per model, native `negative_prompt` for supported models (`NATIVE_NEGATIVE_PROMPT_MODELS`), Ideogram `reference_image_urls` for character refs. |
 | `video.ts` | `ImageToVideoProvider` + `TextToVideoProvider` + `VideoToVideoProvider` + `MotionTransferProvider` + `VideoUpscaleProvider` + `LipSyncProvider` |
 | `audio.ts` | `MusicGenerationProvider` + `TextToSpeechProvider` + `speechToText()` + `generateDialogue()` |
+| `nemotron-transcribe.ts` | Nemotron 3.5 Transcribe: the allow-listed body, the run, the result-file read (`nemotronOutputFromResult`, shared with the KIE reconcile) |
 | `index.ts` | `registerKieProviders()` function + `kieInfo` object. Auto-derives `supportedModels` from model config keys. |
 | `kling3-client.ts` | Kling 3.0 specific client (different polling endpoint: `getTaskDetail`) |
 | `suno-client.ts` | Suno music API client (multiple endpoints for generate, extend, stems, cover) |

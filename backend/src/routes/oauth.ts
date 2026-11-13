@@ -3,7 +3,7 @@ import { z } from "zod"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { createHash, timingSafeEqual } from "node:crypto"
 import { supabase } from "../lib/supabase.js"
-import { appBaseUrl } from "../lib/deployment-urls.js"
+import { mcpLaneAddresses, metadataLane } from "../lib/mcp-lane-addresses.js"
 import { findAppByClientId, verifyClientSecret } from "./developer-apps.js"
 import { issueCode, redeemCode } from "../lib/oauth-codes.js"
 import { hashToken, mintAppAccessToken } from "../lib/oauth-tokens.js"
@@ -112,11 +112,16 @@ export async function oauthRoutes(app: FastifyInstance) {
   // GET /v1/oauth/authorize?... — entry point for OAuth-spec-compliant clients
   // (Claude.ai, etc). Per RFC 6749 §3.1, the authorization endpoint must render
   // an HTML consent UI in the user-agent. We delegate that to the frontend
-  // SPA at /oauth/authorize, preserving the query string verbatim.
+  // SPA at /oauth/authorize, preserving the query string verbatim — on the
+  // issuer the metadata named (lib/mcp-lane-addresses.ts): the install's
+  // PUBLIC_URL, or, on a deployment that serves MCP by path, the declared host
+  // the client came through, so the user signs in on the site they are on.
+  // Never a host the deployment did not declare: an unknown `Host` gets the
+  // primary address, so this is no open redirect.
   app.get("/v1/oauth/authorize", async (req, reply) => {
     const idx = req.url.indexOf("?")
     const queryString = idx >= 0 ? req.url.slice(idx) : ""
-    return reply.redirect(`${appBaseUrl()}/oauth/authorize${queryString}`, 302)
+    return reply.redirect(`${mcpLaneAddresses(req, metadataLane()).issuer}/oauth/authorize${queryString}`, 302)
   })
 
   // POST /v1/oauth/authorize — frontend sends here AFTER user clicks "Allow"

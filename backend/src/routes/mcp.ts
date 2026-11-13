@@ -1,13 +1,16 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { buildMcpServer } from "../lib/mcp/server.js"
 import { handleMcpRequest } from "../lib/mcp/fastify-adapter.js"
 import { conversationIdentityFromHeaders } from "../lib/mcp/flows/conversation-key.js"
 import { config } from "../lib/config.js"
-import { mcpBaseUrl } from "../lib/deployment-urls.js"
+import { mcpLaneAddresses, mcpServedPath, type McpLane, type McpLaneAddresses } from "../lib/mcp-lane-addresses.js"
+import { surfaceMcpPath } from "../lib/surface-profile.js"
 import type { Scope } from "../lib/scopes.js"
 
 /**
- * Mount the MCP server at `POST/GET /mcp` behind the `MCP_ENABLED` flag.
+ * Mount the MCP server at `POST/GET /mcp` behind the `MCP_ENABLED` flag — or,
+ * on a deployment that serves MCP by path (`mcp.byPath` in its surface
+ * profile, lib/mcp-lane-addresses.ts), at that path instead.
  *
  * The route is the public surface that Claude.ai (and other MCP clients) hit
  * with a Bearer token issued by our OAuth server. The auth middleware
@@ -35,33 +38,72 @@ export async function registerMcpRoute(app: FastifyInstance): Promise<void> {
     return
   }
 
+  // MCP by path (decided 2026-11-11): a deployment with no host to spare for
+  // MCP serves the endpoint under a path on its own hosts (default `/v1/mcp`,
+  // which every edge already forwards to the API) INSTEAD of `/mcp`. Same
+  // options and handler; only the addresses it states differ — they follow
+  // the declared host the client connected through. `/mcp` is not served
+  // then: it could only state the dedicated MCP host, which such a deployment
+  // does not have. Every other install registers exactly the route it always
+  // had.
+  //
   // `app.all()` covers POST (JSON-RPC requests) and GET (SSE upgrade for
   // server-initiated notifications). The SDK transport handles both shapes.
-  //
-  // bodyLimit: the inline-base64 upload tools were removed (uploads now go
-  // through presigned/handoff/widget paths), so the old 32 MB ceiling is
-  // obsolete. 8 MB comfortably covers the largest remaining payloads
-  // (import_workflow / update_workflow_json JSON) while shrinking the
-  // amplification surface of every other JSON-RPC call ~4×.
-  //
-  // rateLimit: the limiter is registered global:false, so opt the route in
-  // here. The keyGenerator hashes the Authorization header (per-token), and
-  // 600/min comfortably absorbs legitimate widget polling (get_asset every
-  // 2s ≈ 30/min per active widget) while capping runaway/abusive clients.
-  app.all(
-    "/mcp",
-    {
-      bodyLimit: 8 * 1024 * 1024,
-      config: { rateLimit: { max: 600, timeWindow: "1 minute" } },
-    },
-    async (req, reply) => {
+  const path = mcpServedPath()
+  if (path) {
+    app.all(path, mcpRouteOptions(), mcpHandler(app, "path"))
+    return
+  }
+  if (surfaceMcpPath() !== null) {
+    app.log.warn("[mcp] the surface profile sets mcp.byPath, but PUBLIC_URL is not an http(s) URL: MCP stays on /mcp (MCP by path states every undeclared host as PUBLIC_URL's origin)")
+  }
+  app.all("/mcp", mcpRouteOptions(), mcpHandler(app, "dedicated"))
+}
+
+/**
+ * The route options every MCP endpoint shares — one factory so the dedicated
+ * and the path endpoint cannot drift apart, and a fresh object per route
+ * because Fastify keeps per-route state on what it is handed.
+ *
+ * bodyLimit: the inline-base64 upload tools were removed (uploads now go
+ * through presigned/handoff/widget paths), so the old 32 MB ceiling is
+ * obsolete. 8 MB comfortably covers the largest remaining payloads
+ * (import_workflow / update_workflow_json JSON) while shrinking the
+ * amplification surface of every other JSON-RPC call ~4×.
+ *
+ * rateLimit: the limiter is registered global:false, so opt the route in
+ * here. The keyGenerator hashes the Authorization header (per-token), and
+ * 600/min comfortably absorbs legitimate widget polling (get_asset every
+ * 2s ≈ 30/min per active widget) while capping runaway/abusive clients.
+ */
+function mcpRouteOptions() {
+  return {
+    bodyLimit: 8 * 1024 * 1024,
+    // mcpTransport: the concurrency lanes bound this endpoint's live waits by
+    // the `mcp` ceiling (lib/concurrency-lanes/request-scope.ts).
+    config: { rateLimit: { max: 600, timeWindow: "1 minute" }, mcpTransport: true as const },
+  }
+}
+
+/**
+ * The challenge a client without a valid token gets (RFC 6750 §3, RFC 9728
+ * §5.1). On the dedicated lane it is exactly what it has always been; on the
+ * path lane it also names the endpoint's metadata document
+ * (`resource_metadata`), so a client finds the sign-in for the host it
+ * connected through without guessing.
+ */
+function bearerChallenge(addresses: McpLaneAddresses): string {
+  const base = `Bearer realm="${addresses.realm}", resource="${addresses.mcpUrl}"`
+  return addresses.resourceMetadataUrl ? `${base}, resource_metadata="${addresses.resourceMetadataUrl}"` : base
+}
+
+function mcpHandler(app: FastifyInstance, lane: McpLane) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const addresses = mcpLaneAddresses(req, lane)
     if (!req.userId) {
       return reply
         .status(401)
-        .header(
-          "WWW-Authenticate",
-          `Bearer realm="${mcpBaseUrl().replace(/^https?:\/\//, "")}", resource="${mcpBaseUrl()}/mcp"`,
-        )
+        .header("WWW-Authenticate", bearerChallenge(addresses))
         .send({
           error: {
             code: "unauthorized",
@@ -90,9 +132,13 @@ export async function registerMcpRoute(app: FastifyInstance): Promise<void> {
       fastify: app,
       // Which chat this call belongs to, so it lands in that conversation's flow.
       conversation: conversationIdentityFromHeaders(req.headers, clientName),
+      // Every address the session's tools hand out (upload links, the upload
+      // widget's connect-src, editor / gallery links), for the host this
+      // request came in on.
+      addresses,
     })
     await handleMcpRequest(server, req, reply)
-  })
+  }
 }
 
 /**

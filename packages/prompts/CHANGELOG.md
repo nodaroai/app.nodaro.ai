@@ -1,5 +1,30 @@
 # @nodaro/prompts
 
+## 1.55.0
+
+### Minor Changes
+
+- 9b7d47a: `PickerImageOptions.own` (`@nodaro/prompts/picker-art`): a deployment's own picker pictures, in place of the platform's. When set, the catalog projections picture an option by what it returns for that option (`PickerOwnPicture`: `url`, and an optional `largeUrl`) and by nothing else, so an option it has nothing for has no picture and no Person / Styling topic has one. The enlarged picture rides as `imageLargeUrl` (and `PickerOptionImage.largeUrl`) when `srcSet` is asked for. Without `own`, every projection is unchanged.
+- 958abf7: `FACTORY_PRESET_PREVIEW_SIZES` and `factoryPresetPreviewSize(id)`: each committed tile picture's real width and height, recorded by `tools/preset-previews/build.mts` beside the file maps.
+
+### Patch Changes
+
+- 2f72f88: PixVerse V6 Max (`pixverse-v6-max`): prompt-wizard capability lines for text-to-video and image-to-video.
+- Updated dependencies [d789b04]
+- Updated dependencies [a809415]
+- Updated dependencies [d8d8088]
+- Updated dependencies [3d9832f]
+- Updated dependencies [12870e5]
+- Updated dependencies [daf4108]
+- Updated dependencies [61e4620]
+- Updated dependencies [65da2da]
+- Updated dependencies [9b7d47a]
+- Updated dependencies [2f72f88]
+- Updated dependencies [cee0b5a]
+- Updated dependencies [ab47f4c]
+- Updated dependencies [2a6d905]
+  - @nodaro/shared@3.63.0
+
 ## 1.54.0
 
 ### Minor Changes

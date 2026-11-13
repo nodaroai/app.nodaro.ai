@@ -2,7 +2,7 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
 import { unitCreditIdOf } from "@/lib/unit-price-ids"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, isSeedanceExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, isTailExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
 import { defaultImageModelForNode, imageFormatLeversOf, isPricedPerInputImage, maskedEditResolution, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { countImageInputEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
@@ -24,8 +24,10 @@ import {
   textToAudioCreditId,
   LTX_EXTEND_PER_SECOND_CREDIT_ID,
   LTX_RETAKE_PER_SECOND_CREDIT_ID,
-  seedanceExtendCreditId,
+  tailExtendCreditId,
   pitchTempoQuoteCreditId,
+  NEMOTRON_TRANSCRIBE_ID,
+  nemotronTranscribeQuoteCreditId,
   videoGenerationCreditId,
   lipSyncAudioRateOf,
   videoOverlayCreditId,
@@ -54,7 +56,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { isTopazVideoUpscaleProvider, pitchTempoQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { isTopazVideoUpscaleProvider, pitchTempoQuotedSec, transcribeQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
@@ -675,7 +677,15 @@ export function getModelIdentifier(
   // `transcribe` row. ABOVE the `!provider` bail for exactly that reason. Mirror
   // of the backend estimator's transcribe branch (ee/billing/credits.ts).
   if (nodeType === "transcribe") {
-    return (typeof data.provider === "string" && data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
+    const engine = (typeof data.provider === "string" && data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
+    // Nemotron 3.5 Transcribe: per started minute of the file — the
+    // `:<N>m` id the route and the workflow run reserve from the measured file,
+    // quoted at the length the graph or the upstream node tells; unknown → 60
+    // minutes, the most a run is charged (it refuses a file it cannot measure).
+    if (engine === NEMOTRON_TRANSCRIBE_ID) {
+      return nemotronTranscribeQuoteCreditId(transcribeQuotedSec(node, nodes ?? [], edges ?? [], reruns))
+    }
+    return engine
   }
 
   // Adjust Speed: the smooth tier is its own, dearer id (route + orchestrator
@@ -802,14 +812,14 @@ export function getModelIdentifier(
   // which every estimate multiplies by the seconds (PRICING_UNIT_ESTIMATORS).
   if (nodeType === "extend-video" && provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
 
-  // Extend-video on Seedance: each model on its own rows, by the seconds added
-  // and the resolution — the one builder the route's guard and the workflow
-  // run reserve on. A retired id (`seedance-2-extend`) is priced as the model
-  // it runs as.
+  // Extend-video on a tail-recipe model (Seedance 2.5 / 2.0, Kling 4): each
+  // model on its own rows, by the seconds added and the resolution — the one
+  // builder the route's guard and the workflow run reserve on. A retired id
+  // (`seedance-2-extend`) is priced as the model it runs as.
   if (nodeType === "extend-video") {
     const runsAs = canonicalVideoProvider(provider)
-    if (isSeedanceExtendProvider(runsAs)) {
-      return seedanceExtendCreditId(runsAs, data.duration as number | string | undefined, data.resolution as string | undefined)
+    if (isTailExtendProvider(runsAs)) {
+      return tailExtendCreditId(runsAs, data.duration as number | string | undefined, data.resolution as string | undefined)
     }
   }
 

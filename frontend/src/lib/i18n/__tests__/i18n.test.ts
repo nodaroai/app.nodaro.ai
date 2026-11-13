@@ -32,6 +32,7 @@ const LEGIT_LATIN_HE: readonly string[] = [
   "audiocfg.providerElevenLabsStt",
   "audiocfg.providerWhisper",
   "audiocfg.providerIncrediblyFastWhisper",
+  "audiocfg.providerNemotron",
   // Punctuation only: closes the "(Or forward … to @getidsbot" sentence after
   // the code token. Japanese needs a verb there, so it is a key, not code.
   "cfgext.socialHelpOrForwardPost",

@@ -1265,6 +1265,8 @@ describe("transcribe", () => {
       undefined,
       // wordTimestamps: the json handle is not wired here, so it stays off.
       undefined,
+      // targetLanguage: no translation.
+      undefined,
     )
 
     // Advance timer to trigger the poll interval
@@ -1308,7 +1310,7 @@ describe("transcribe", () => {
     const promise = executeNode(transcribeNode, makeCtx())
     await vi.advanceTimersByTimeAsync(0)
     expect(vi.mocked(downloadYouTubeAudio)).not.toHaveBeenCalled()
-    expect(mockTranscribeApi).toHaveBeenCalledWith("https://cdn.example.com/track.mp3", "whisper", undefined, "u1", undefined, undefined, undefined)
+    expect(mockTranscribeApi).toHaveBeenCalledWith("https://cdn.example.com/track.mp3", "whisper", undefined, "u1", undefined, undefined, undefined, undefined)
     await vi.advanceTimersByTimeAsync(2000)
     await promise
     vi.useRealTimers()
@@ -1324,7 +1326,7 @@ describe("transcribe", () => {
     const promise = executeNode(transcribeNode, makeCtx())
     await vi.advanceTimersByTimeAsync(0)
     expect(vi.mocked(downloadYouTubeAudio)).not.toHaveBeenCalled()
-    expect(mockTranscribeApi).toHaveBeenCalledWith("https://dropbox.com/s/abc/talk.mp3", "whisper", undefined, "u1", undefined, undefined, undefined)
+    expect(mockTranscribeApi).toHaveBeenCalledWith("https://dropbox.com/s/abc/talk.mp3", "whisper", undefined, "u1", undefined, undefined, undefined, undefined)
     await vi.advanceTimersByTimeAsync(2000)
     await promise
     vi.useRealTimers()
@@ -1351,7 +1353,7 @@ describe("transcribe", () => {
     // 7th arg (wordTimestamps) is true because the json handle is consumed AND
     // this lane can deliver word timings.
     expect(mockTranscribeApi).toHaveBeenCalledWith(
-      "http://speech.mp3", "elevenlabs-stt", "en", "u1", undefined, undefined, true,
+      "http://speech.mp3", "elevenlabs-stt", "en", "u1", undefined, undefined, true, undefined,
     )
 
     await vi.advanceTimersByTimeAsync(2000)
@@ -1387,7 +1389,7 @@ describe("transcribe", () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(mockTranscribeApi).toHaveBeenCalledWith(
-      "http://speech.mp3", "whisper", "en", "u1", undefined, undefined, false,
+      "http://speech.mp3", "whisper", "en", "u1", undefined, undefined, false, undefined,
     )
 
     await vi.advanceTimersByTimeAsync(2000)
@@ -1395,6 +1397,40 @@ describe("transcribe", () => {
 
     mockEdges = []
     vi.useRealTimers()
+  })
+
+  it("Nemotron: sends the translation and turns the INFERRED word timings off while translating", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://speech.mp3" })
+    mockTranscribeApi.mockResolvedValue({ jobId: "tr-n1" })
+    mockGetJobStatus.mockResolvedValue({ status: "completed", output_data: { text: "Hello", language: "en" } })
+    vi.useFakeTimers()
+
+    const transcribeNode = makeNode("transcribe", { provider: "nemotron-3-5-transcribe", language: "auto", targetLanguage: "en" })
+    mockNodes = [transcribeNode]
+    mockEdges = [{ id: "je", source: "n1", sourceHandle: "json", target: "consumer", targetHandle: "in" }]
+
+    const promise = executeNode(transcribeNode, makeCtx())
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(mockTranscribeApi).toHaveBeenCalledWith(
+      "http://speech.mp3", "nemotron-3-5-transcribe", "auto", "u1", undefined, undefined, false, "en",
+    )
+
+    await vi.advanceTimersByTimeAsync(2000)
+    await promise
+    mockEdges = []
+    vi.useRealTimers()
+  })
+
+  it("refuses a translation on an engine that cannot translate, and beside explicit word timings, before anything starts", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://speech.mp3" })
+    const onStt = makeNode("transcribe", { provider: "elevenlabs-stt", targetLanguage: "en" })
+    mockNodes = [onStt]
+    await expect(executeNode(onStt, makeCtx())).rejects.toThrow("Translation unavailable")
+    const withWords = makeNode("transcribe", { provider: "nemotron-3-5-transcribe", targetLanguage: "en", wordTimestamps: true })
+    mockNodes = [withWords]
+    await expect(executeNode(withWords, makeCtx())).rejects.toThrow("Translation unavailable")
+    expect(mockTranscribeApi).not.toHaveBeenCalled()
   })
 
   it("sends the shared transcribe-NODE default when the node carries no provider", async () => {
@@ -1424,6 +1460,7 @@ describe("transcribe", () => {
       undefined,
       undefined,
       // json handle not wired → still no word-timings request.
+      undefined,
       undefined,
     )
 

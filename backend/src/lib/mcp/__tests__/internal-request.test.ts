@@ -10,12 +10,13 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
 
 import { mcpInject } from "@/lib/mcp/internal-request.js"
 import type { McpSession } from "@/lib/mcp/session.js"
+import { mcpLaneAddresses } from "@/lib/mcp-lane-addresses.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const WS = "20000000-0000-4000-8000-000000000001"
 
 function session(workspaceId?: string): McpSession {
-  return { userId: USER, scopes: [], clientName: "test", workspaceId, firstParty: false }
+  return { userId: USER, scopes: [], clientName: "test", workspaceId, firstParty: false, addresses: mcpLaneAddresses() }
 }
 
 /** Records what would have been injected, without a real Fastify instance. */

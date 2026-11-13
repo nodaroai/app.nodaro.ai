@@ -24,6 +24,8 @@ export {
   imageGenAutoAspectNeedsSourceImage,
   buildVideoCreditModelIdentifier,
   seedanceVideoEditCreditId,
+  tailExtendCreditId,
+  tailExtendResolution,
   seedanceExtendCreditId,
   seedanceExtendResolution,
   videoGenerationCreditId,

@@ -1,7 +1,7 @@
 import type { AudioFxPreset } from "@nodaro/shared/media"
-import type { TranscribeProvider } from "@nodaro/shared/models"
+import type { TranscribeProvider, TranscribeTargetLanguage } from "@nodaro/shared/models"
 import type { Transcript } from "@nodaro/shared/edl"
-export type { TranscribeProvider } from "@nodaro/shared/models"
+export type { TranscribeProvider, TranscribeTargetLanguage } from "@nodaro/shared/models"
 import type { NodaroClientCore } from "../core.js"
 
 /**
@@ -156,14 +156,25 @@ export class AudioResource {
   /**
    * Transcribe an audio (or video) track to text (`POST /v1/transcribe`).
    *
-   * Three engines are accepted. `elevenlabs-stt` (Scribe) is always word-level,
+   * Four engines are accepted. `elevenlabs-stt` (Scribe) is always word-level,
    * flag or not, and is the only lane that honours `diarize` (who spoke) and
    * `tagAudioEvents` (laughter, applause, …); `incredibly-fast-whisper` returns
    * word timings when you ask for them. `whisper` returns NO word timings at
    * all — named explicitly or reached by OMITTING `provider`, which still falls
    * back to it — so asking it for them (`wordTimestamps: true`) is rejected with
    * a `400 validation_error` at ingress, before any credit is spent. A kinetic
-   * caption render therefore has to name one of the other two.
+   * caption render therefore has to name one of the others.
+   *
+   * `nemotron-3-5-transcribe` (NVIDIA) detects the language itself (40 of them;
+   * `language` is not used) and returns word timings with a speaker per word
+   * when you ask for them. It is also the one engine that translates:
+   * `targetLanguage` turns the transcript into a translation, to or from
+   * English, with no word timings — asked together with `wordTimestamps`, or of
+   * another engine, it is a `400 validation_error`. It is priced per started
+   * minute of the audio: the file is measured before anything is held and the
+   * run is charged for the length the model decoded (up or down). It takes a
+   * direct https file link of up to 60 minutes and 200 MB (not a link to a
+   * video's page).
    *
    * Poll `jobs.get(jobId)`; the finished job's `output_data` is a
    * {@link TranscribeJobOutput}: `text` (the whole transcript), `words`
@@ -191,6 +202,8 @@ export class AudioResource {
     diarize?: boolean
     tagAudioEvents?: boolean
     wordTimestamps?: boolean
+    /** Translate the speech into this language instead (`nemotron-3-5-transcribe` only; never with `wordTimestamps`). */
+    targetLanguage?: TranscribeTargetLanguage
     /** The content rights confirmation for `audioUrl` when it is a social link (`contentRights.confirm`). */
     confirmationId?: string
   }): Promise<{ jobId: string }> {

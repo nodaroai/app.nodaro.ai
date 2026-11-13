@@ -83,6 +83,16 @@ export {
 } from "./pitch-tempo.js"
 
 export {
+  NEMOTRON_TRANSCRIBE_ID,
+  NEMOTRON_TRANSCRIBE_PRICING,
+  nemotronTranscribeStartedMinutes,
+  nemotronTranscribeCreditId,
+  nemotronTranscribeQuoteCreditId,
+  parseNemotronTranscribeCreditId,
+  nemotronTranscribeBaseCredits,
+} from "./nemotron-transcribe.js"
+
+export {
   VIDEO_OVERLAY_PRICING,
   VIDEO_OVERLAY_REMEASURE_SLACK_SEC,
   videoOverlayCreditId,

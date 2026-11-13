@@ -10,5 +10,6 @@ export { MediaResource } from "../resources/media.js"
 export type { VideoMetadata, DownloadVideoProgress, MediaProcessInput, MediaProcessResult, MediaDiscardResult, SplitMediaInput, SplitMediaByDurationInput, SplitMediaByShotsInput, SplitMediaShot, SplitMediaOutput, ShotCutsInput, ShotCutsShot, ShotCutsResult, ShotCutsOutput, SplitIntoLayersInput, SplitIntoLayersSize, SplitIntoLayersOutput, SplitLayer, SplitLayerBox, MediaRunOptions, MediaJobStarted, OverlayPlacement, AddCaptionsInput, CaptionLookInput, CaptionSegmentInput, CaptionEntry } from "../resources/media.js"
 
 // The engine union `media.addCaptions({ transcribeProvider })` takes — re-exported so a
-// consumer can name it without depending on @nodaro/shared directly.
-export type { TranscribeLane } from "@nodaro/shared/models"
+// consumer can name it without depending on @nodaro/shared directly. (`TranscribeLane`,
+// every lane the platform runs, stays exported for existing importers.)
+export type { CaptionTranscribeLane, TranscribeLane } from "@nodaro/shared/models"
