@@ -1,13 +1,14 @@
 import { z } from "zod"
 import { safeUrlSchema } from "../../lib/url-validator.js"
 import { insertJob } from "../../lib/insert-job.js"
-import { videoQueue } from "../../lib/queue.js"
+import { enqueueUnitJob } from "../../lib/enqueue-route-job.js"
 import { creditGuard, reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../../lib/request-helpers.js"
 import { buildJobInputData } from "../../lib/job-input-data.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import type { UnitRoute } from "../kit.js"
+import { descriptor } from "./descriptor.generated.js"
 
 const removeAudioBody = z.object({
   videoUrl: safeUrlSchema,
@@ -52,7 +53,9 @@ export const route: UnitRoute = async function removeAudioRoutes(app) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("remove-audio", { jobId: job.id, ...restData, usageLogId })
+    // A queue that refuses the job fails it, refunds it and frees its key at once (500).
+    await enqueueUnitJob(req, reply, descriptor, { jobId: job.id, ...restData, usageLogId })
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }

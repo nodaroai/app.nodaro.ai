@@ -6,7 +6,9 @@
  * video queue under the node's type, with the provider model named for the
  * pickup's safety check. A retry with the Idempotency-Key of a run already
  * started gets that run back at any age, before the price is resolved or any
- * credit check runs (quote.ts, the guard's `beforePricing` step).
+ * credit check runs (quote.ts, the guard's `beforePricing` step). A queue
+ * that refuses the job fails it, refunds it and frees its key at once
+ * (lib/enqueue-route-job.ts), so a retry with that key starts a new run.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify"
@@ -21,6 +23,8 @@ const m = vi.hoisted(() => ({
   /** The jobs table the key lookup reads: it applies every `.eq` it is given. */
   jobs: [] as Array<Record<string, unknown>>,
   jobReads: 0,
+  markJobFailedDetailed: vi.fn(),
+  refund: vi.fn(),
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -44,6 +48,9 @@ vi.mock("@/lib/url-validator.js", async () => {
 })
 vi.mock("@/lib/insert-job.js", () => ({ insertJobIdempotent: m.insertJob }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: m.queueAdd }, redis: {} }))
+vi.mock("@/lib/job-failure.js", () => ({ markJobFailedDetailed: m.markJobFailedDetailed }))
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundJobHoldsConfirmed: m.refund }))
+vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn().mockResolvedValue(true) }))
 vi.mock("@/middleware/credit-guard.js", async () => ({
   // In the real guard's order: it keeps the request's Idempotency-Key, runs the
   // route's `beforePricing` step (which may answer the request: the guard then
@@ -111,6 +118,8 @@ beforeEach(() => {
   m.jobReads = 0
   m.insertJob.mockReset().mockResolvedValue({ row: { id: "job-1" }, created: true })
   m.queueAdd.mockReset().mockResolvedValue({ id: "q-1" })
+  m.markJobFailedDetailed.mockReset().mockResolvedValue("flipped")
+  m.refund.mockReset().mockResolvedValue(true)
 })
 
 describe("POST /v1/split-into-layers", () => {
@@ -284,5 +293,71 @@ describe("POST /v1/split-into-layers: a retry with the key of a run already star
     await quote.pricing.opts!.beforePricing!(quoteReq, reply as unknown as FastifyReply)
     expect(sent).toEqual([])
     expect(m.jobReads).toBe(0)
+  })
+})
+
+describe("POST /v1/split-into-layers: a queue that refuses the job", () => {
+  const post = (app: FastifyInstance) =>
+    app.inject({ method: "POST", url: URL, payload: { imageUrl: IMAGE }, headers: { "idempotency-key": KEY } })
+
+  /** The jobs table as the insert and the failure write leave it: each run's row carries its key until a failure frees it. */
+  function trackRows(): void {
+    let n = 0
+    m.insertJob.mockImplementation(async (_req: unknown, row: Record<string, unknown>, key: string | undefined) => {
+      const id = `job-${++n}`
+      m.jobs.push({ ...row, id, idempotency_key: key, job_type: null, run_type: "split-into-layers", provider: null })
+      return { row: { id }, created: true }
+    })
+    m.markJobFailedDetailed.mockImplementation(async (id: string, input: { from?: string[]; extra?: Record<string, unknown> }) => {
+      const row = m.jobs.find((r) => r.id === id && (input.from ?? ["pending"]).includes(r.status as string))
+      if (!row) return "missed"
+      Object.assign(row, { status: "failed", ...input.extra })
+      return "flipped"
+    })
+  }
+
+  it("fails the job from pending, frees its key, refunds its hold and answers 500 internal_error", async () => {
+    trackRows()
+    m.queueAdd.mockRejectedValueOnce(new Error("OOM command not allowed when used memory > 'maxmemory'."))
+    const app = await makeApp()
+    const res = await post(app)
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    expect(m.markJobFailedDetailed).toHaveBeenCalledWith("job-1", expect.objectContaining({ from: ["pending"], extra: { idempotency_key: null } }))
+    expect(m.refund).toHaveBeenCalledWith("job-1")
+    expect(m.jobs[0]).toMatchObject({ id: "job-1", status: "failed", idempotency_key: null })
+  })
+
+  it("a retry with the same key starts a new run (the failed one holds no key), checked and held like any run", async () => {
+    trackRows()
+    m.queueAdd.mockRejectedValueOnce(new Error("OOM command not allowed when used memory > 'maxmemory'."))
+    const app = await makeApp()
+    expect((await post(app)).statusCode).toBe(500)
+
+    const retry = await post(app)
+    expect(retry.statusCode).toBe(200)
+    expect(retry.json()).toEqual({ jobId: "job-2" })
+    expect(retry.headers["x-dedup-hit"]).toBeUndefined()
+    expect(m.insertJob).toHaveBeenCalledTimes(2)
+    expect(m.insertJob.mock.calls[1]![2]).toBe(KEY)
+    expect(m.reserveIds).toEqual(["split-into-layers:1k:10", "split-into-layers:1k:10"])
+    expect(m.queueAdd).toHaveBeenCalledTimes(2)
+  })
+
+  it("a job the queue took after all (no longer pending) is answered as started, keeps its key and is not refunded", async () => {
+    trackRows()
+    m.queueAdd.mockImplementationOnce(async () => {
+      // The worker claimed the row before the queue's answer was lost.
+      m.jobs[0]!.status = "processing"
+      throw new Error("Connection is closed.")
+    })
+    const app = await makeApp()
+    const res = await post(app)
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ jobId: "job-1" })
+    expect(m.refund).not.toHaveBeenCalled()
+    expect(m.jobs[0]).toMatchObject({ status: "processing", idempotency_key: KEY })
+    // So a retry gets that run back.
+    expect((await post(app)).json()).toEqual({ jobId: "job-1", deduped: true })
   })
 })

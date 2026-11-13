@@ -7,7 +7,7 @@ import { buildJobInputData } from "../../lib/job-input-data.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { insertJobIdempotent } from "../../lib/insert-job.js"
-import { videoQueue } from "../../lib/queue.js"
+import { enqueueUnitJob } from "../../lib/enqueue-route-job.js"
 import { LAYER_DECOMPOSITION_MODEL_KEY } from "../../providers/kie/models.js"
 import { descriptor } from "./descriptor.generated.js"
 import { quote, splitIntoLayersBody } from "./quote.js"
@@ -66,7 +66,9 @@ export const route: UnitRoute = async function splitIntoLayersRoutes(app) {
 
     // The BullMQ job name is the node type: the video worker dispatches it to ./worker.ts.
     // `model` names the provider model to the pickup's safety check (a loosened filter keeps the run private).
-    await videoQueue.add(descriptor.type, { jobId: job.id, ...run, model: LAYER_DECOMPOSITION_MODEL_KEY, usageLogId })
+    // A queue that refuses the job fails it, refunds it and frees its key at once (500).
+    await enqueueUnitJob(req, reply, descriptor, { jobId: job.id, ...run, model: LAYER_DECOMPOSITION_MODEL_KEY, usageLogId })
+    if (reply.sent) return
     return { jobId: job.id }
   })
 }
