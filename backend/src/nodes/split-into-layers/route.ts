@@ -38,8 +38,9 @@ export const route: UnitRoute = async function splitIntoLayersRoutes(app) {
     const mcpClient = extractMcpClient(req.body)
 
     // The row carries the request's Idempotency-Key (the credit guard keeps it on
-    // `req.idempotencyKey`), so a retry with the same key — found by the guard,
-    // or losing the insert race here — answers the job the first request started.
+    // `req.idempotencyKey`), so a retry with the same key answers the job the
+    // first request started: found by the guard's `beforePricing` step at any age,
+    // before any credit check (quote.ts), or losing the insert race here.
     let inserted: { row: { id: string }; created: boolean }
     try {
       inserted = await insertJobIdempotent<{ id: string }>(req, {

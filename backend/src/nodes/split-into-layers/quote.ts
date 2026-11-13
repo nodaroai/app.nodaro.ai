@@ -7,6 +7,7 @@ import type { FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { LAYER_SPLIT_MAX_LAYERS, LAYER_SPLIT_PROMPT_MAX, layerSplitHoldCreditId, layerSplitImagesHeld, layerSplitMaxLayers, layerSplitTier } from "@nodaro/render-rules"
 import type { UnitQuote } from "../kit.js"
+import { findJobByIdempotencyKey } from "../../lib/dedup-fingerprint.js"
 import { safeUrlSchema } from "../../lib/url-validator.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { isQuoting, noteAdjustment, noteWarning } from "../../lib/price-notes.js"
@@ -66,11 +67,37 @@ async function validateSplitIntoLayers(req: FastifyRequest, reply: FastifyReply)
   return undefined
 }
 
+/**
+ * A retry with the Idempotency-Key of a run already started gets that run back
+ * (200 `{ jobId, deduped: true }`, the answer the insert gives a repeated key),
+ * however long after the first request. A run outlives the guard's own lookup
+ * (`DEDUP_TTL_MS`, 10 s), and past it the retry would be judged again by the
+ * balance, the spending cap, the allowance and the request policies, which the
+ * first run's own hold can make refuse it — and a client that reads that
+ * refusal as final starts and pays for a second run.
+ *
+ * The credit guard runs this as its `beforePricing` step: after the model and
+ * node doors, the app-token scope gate and its own short lookup (which keeps
+ * the trimmed key on `req.idempotencyKey`), and before the price and every
+ * credit check. A quote never carries that key, so it is never answered with a
+ * job. Only a Split into Layers run answers here: anything else filed under the
+ * key goes on to the insert, as before.
+ */
+async function answerKeyedRetry(req: FastifyRequest, reply: FastifyReply): Promise<unknown> {
+  const key = req.idempotencyKey
+  if (!key || !req.userId) return undefined
+  const existing = await findJobByIdempotencyKey(req.userId, key)
+  if (!existing || existing.jobType !== descriptor.type) return undefined
+  reply.header("X-Dedup-Hit", "1")
+  return reply.code(200).send({ jobId: existing.id, deduped: true })
+}
+
 export const quote: UnitQuote = {
   body: splitIntoLayersBody,
   pricing: {
     prechecks: [validateSplitIntoLayers],
     // The row a run holds, from its settings — the route, the workflow payload and the estimates read the same rule.
     modelResolver: (req) => layerSplitHoldCreditId(descriptor.type, req.body as Record<string, unknown> | undefined),
+    opts: { beforePricing: answerKeyedRetry },
   },
 }
