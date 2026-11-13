@@ -1,5 +1,33 @@
 # @nodaro/sdk
 
+## 2.71.0
+
+### Minor Changes
+
+- b46bdac: `media.addCaptions` takes `transcribeProvider: "nemotron-3-5-transcribe"` (NVIDIA Nemotron 3.5 Transcribe, always with word timings). A render that transcribes on it is one charge, the render plus the video's started minutes: the video (an https link to a public host, up to 60 minutes) is measured before anything is held, and the run is charged for the length the model decoded (up or down; a video whose length cannot be read holds 60 minutes). Anything but an https link to a public host, or a video over 60 minutes, is a `400` before anything is charged. Nemotron's own file-size limit does not apply to the video: only its audio track is sent for transcription.
+
+### Patch Changes
+
+- e29fbbb: `ImageToImageParams.referenceImageUrls` names FLUX 3 Klein's limit beside Seedream 5.5's: 9 reference images beside the source (10 in all).
+- Updated dependencies [b46bdac]
+- Updated dependencies [68f8354]
+- Updated dependencies [68f8354]
+- Updated dependencies [a4d8274]
+- Updated dependencies [a4d8274]
+- Updated dependencies [725cad1]
+- Updated dependencies [725cad1]
+- Updated dependencies [e29fbbb]
+- Updated dependencies [9ed060b]
+- Updated dependencies [d07e7f3]
+- Updated dependencies [62f0aaf]
+- Updated dependencies [13f8275]
+- Updated dependencies [f6944b4]
+- Updated dependencies [62f0aaf]
+- Updated dependencies [bcf7072]
+- Updated dependencies [9ed060b]
+  - @nodaro/shared@3.64.0
+  - @nodaro/prompts@1.56.0
+
 ## 2.70.0
 
 ### Minor Changes
