@@ -2099,6 +2099,8 @@ export const he: ChromeDict = {
   "proccfg.look_clean": "נקי",
   "proccfg.lookPlain": "ללא (רגיל)",
   "proccfg.lookHint": "חבילת מראה מוגדרת מראש: גופן, מתאר, אותיות רישיות וצבע המילה הנאמרת. הפקדים למטה דורסים חלקים ממנה.",
+  "proccfg.captionEngine": "מנוע תמלול",
+  "proccfg.captionEngineNemotronNote": "מחויב לפי כל דקה שהתחילה בסרטון, נוסף על עיבוד הכתוביות.",
   "proccfg.font": "גופן",
   "proccfg.fontAuto": "אוטומטי (לפי המראה)",
   "proccfg.uppercase": "אותיות רישיות",

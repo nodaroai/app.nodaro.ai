@@ -23,6 +23,7 @@ import {
 } from "../billing/provision-credits.js"
 import { handleOrgPackCompleted, routeClawback } from "../billing/org-customer.js"
 import { invoicePriceLines } from "../billing/plan-change-credits.js"
+import { reportStripePurchase } from "../billing/analytics/report-purchase.js"
 import { config } from "../../lib/config.js"
 import type Stripe from "stripe"
 
@@ -295,6 +296,15 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
       }
     } catch (err) {
       console.error(`[stripe-webhook] Error processing ${event.type}:`, (err as Error).message)
+    }
+
+    // The payment, when this event is one, for the site analytics — after the
+    // grants and whatever they did, since the person paid either way. Never
+    // awaited: the acknowledgement below does not wait on it or depend on it.
+    try {
+      reportStripePurchase(event, req.log)
+    } catch {
+      // Analytics never reaches the acknowledgement.
     }
 
     // Always return 200 to acknowledge receipt (Stripe retries on non-2xx)

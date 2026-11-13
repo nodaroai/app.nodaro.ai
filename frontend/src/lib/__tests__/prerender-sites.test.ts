@@ -27,10 +27,17 @@ const AUDITED: ReadonlyArray<readonly [file: string, why: string, call: RegExp]>
   ["src/ee/app/(dashboard)/billing/page.tsx", "the checkout-success toast", /whenActivated\(\(\) => \{[\s\S]{0,80}toast\.success\(/],
   ["src/app/(dashboard)/library/use-library-deep-link.ts", "the deep link is spent and may toast", /whenActivated\(\(\) => \{[\s\S]{0,400}withoutDeepLinkParams/],
   ["src/components/competitors/tried-cards.tsx", "marks a card seen on the server", /whenActivated\(\(\) => \{[\s\S]{0,120}askSeen\(action\)/],
+  ["src/lib/analytics/site-analytics.ts", "the app's own events reach the site analytics", /export function trackEvent\([^)]*\): void \{\s*whenActivated\(/],
+  ["src/lib/analytics/site-analytics.ts", "who is signed in reaches the site analytics", /export function syncAnalyticsIdentity\([^)]*\): void \{\s*whenActivated\(/],
 ]
 
-/** Calls that count a visit by nature (analytics, beacons), optional-call forms (`gtag?.(`) included. */
-const VISIT_COUNTING = /navigator\.sendBeacon\??\.?\(|\bgtag\??\.?\(|\bclarity\??\.?\(|window\.dataLayer\b/g
+/**
+ * Calls that count a visit by nature (analytics, beacons), optional-call forms
+ * (`gtag?.(`) included — and the app's own analytics transport
+ * (lib/analytics/site-analytics.ts), whose helpers reach the data layer and
+ * Clarity: a call of one (not its definition) must be held too.
+ */
+const VISIT_COUNTING = /navigator\.sendBeacon\??\.?\(|\bgtag\??\.?\(|\bclarity\??\.?\(|window\.dataLayer\b|(?<!function )\bpushCommand\(|(?<!function )\bcallClarity\(/g
 
 /** The [open, close) span of each `whenActivated(…)` call's arguments, by bracket walk. */
 function heldSpans(source: string): readonly (readonly [number, number])[] {
@@ -95,6 +102,9 @@ describe("one-shot actions wait for activation", () => {
     expect(unwrappedVisitCalls(`whenActivated(() => { gtag?.("event") })`)).toEqual([])
     // A call AFTER a closed whenActivated(...) is not held by it.
     expect(unwrappedVisitCalls(`whenActivated(() => { start() })\nnavigator.sendBeacon("/v1/seen")`)).toEqual(["navigator.sendBeacon("])
+    // The analytics transport's helpers: a call counts, its definition does not.
+    expect(unwrappedVisitCalls(`function pushCommand(...c) {}\nexport function trackNow() { pushCommand("event", "x") }`)).toEqual(["pushCommand("])
+    expect(unwrappedVisitCalls(`function callClarity(...c) {}\nwhenActivated(() => { callClarity("event", "x") })`)).toEqual([])
   })
 
   it("the analytics snippet (index.html) starts only once the page is shown", () => {

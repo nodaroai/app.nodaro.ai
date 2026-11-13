@@ -1,5 +1,6 @@
 import { createCheckoutSession, createLoadSession } from "@/lib/api"
 import { isEmbedded } from "@/hooks/use-embed-session-handoff"
+import { checkoutAnalyticsIds, trackEvent } from "@/lib/analytics/site-analytics"
 
 /**
  * Guard the Checkout redirect target before it reaches a navigation sink.
@@ -44,7 +45,13 @@ export async function startCheckout(params: {
   mode?: "subscription" | "payment"
 }): Promise<void> {
   const embedded = isEmbedded()
-  const url = assertTrustedCheckoutUrl(await createCheckoutSession({ ...params, embedded }))
+  // The visit's analytics ids ride along so the payment, once Stripe confirms
+  // it, is reported against this visit (empty when analytics is not loaded).
+  const url = assertTrustedCheckoutUrl(await createCheckoutSession({ ...params, embedded, ...checkoutAnalyticsIds() }))
+  trackEvent("begin_checkout", {
+    ...(params.mode ? { checkout_type: params.mode === "subscription" ? "plan" : "credit_pack" } : {}),
+    items: [{ item_id: params.priceId }],
+  })
   if (embedded) {
     window.open(url, "_blank", "noopener,noreferrer")
   } else {
@@ -72,8 +79,14 @@ export function openStripePage(url: string): void {
  */
 export async function startLoadCheckout(amountUsd: number): Promise<void> {
   const embedded = isEmbedded()
-  const { url } = await createLoadSession({ amountUsd, embedded })
+  const { url } = await createLoadSession({ amountUsd, embedded, ...checkoutAnalyticsIds() })
   const trusted = assertTrustedCheckoutUrl(url)
+  trackEvent("begin_checkout", {
+    checkout_type: "credit_load",
+    currency: "USD",
+    value: amountUsd,
+    items: [{ item_id: "credit-load", price: amountUsd, quantity: 1 }],
+  })
   if (embedded) {
     window.open(trusted, "_blank", "noopener,noreferrer")
   } else {

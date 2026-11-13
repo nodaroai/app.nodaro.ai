@@ -35,6 +35,7 @@ import { deploymentPayerId, payerCoverage } from "../../lib/deployment-payer.js"
 import { byNewest, invoiceDocument, paymentMethodView, receiptDocument, type PurchaseRow } from "../billing/billing-documents.js"
 import { stripeCustomerIdOf } from "../billing/stripe-customer.js"
 import { grantPaidPlanChange, invoicePriceLines, notePlanCreditPeak } from "../billing/plan-change-credits.js"
+import { gaClientIdField, gaSessionIdField, gaVisitMetadata } from "../billing/analytics/visit-ids.js"
 
 /** Extract origin from request headers for redirect URLs. */
 function getOrigin(req: { headers: Record<string, string | string[] | undefined> }): string {
@@ -75,6 +76,11 @@ const checkoutSessionSchema = z.object({
   // bounce that tab to login, since its session lives in the parent app.
   embedded: z.boolean().optional(),
   returnPath: returnPathSchema,
+  // The visit's Google Analytics ids, kept on the payment so its completion
+  // is reported against this visit (billing/analytics/). A malformed value is
+  // dropped, never refused.
+  gaClientId: gaClientIdField,
+  gaSessionId: gaSessionIdField,
 })
 
 const changePlanSchema = z.object({
@@ -298,8 +304,9 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: onReturnPath ? RETURN_PATH_MESSAGE : "priceId is required" })
     }
 
-    const { priceId, mode, embedded, returnPath } = parsed.data
+    const { priceId, mode, embedded, returnPath, gaClientId, gaSessionId } = parsed.data
     const checkoutMode = mode ?? (ON_SALE_PRICE_TO_PLAN[priceId] ? "subscription" : "payment")
+    const visit = gaVisitMetadata({ gaClientId, gaSessionId })
 
     // Validate price ID
     if (checkoutMode === "subscription" && !ON_SALE_PRICE_TO_PLAN[priceId]) {
@@ -383,8 +390,10 @@ export async function billingRoutes(app: FastifyInstance) {
         // Seed the top-up priceId so the webhook can resolve credits from event
         // metadata if the secondary listLineItems API call fails (it swallows
         // errors → [] → 0 credits granted on a paid top-up, with no retry).
-        metadata: checkoutMode === "payment" ? { userId, topupPriceId: priceId } : { userId },
-        subscription_data: checkoutMode === "subscription" ? { metadata: { userId } } : undefined,
+        // The visit ids go on the subscription too: its invoices (the first
+        // payment, renewals, plan changes) are what report its payments.
+        metadata: checkoutMode === "payment" ? { userId, topupPriceId: priceId, ...visit } : { userId, ...visit },
+        subscription_data: checkoutMode === "subscription" ? { metadata: { userId, ...visit } } : undefined,
         // Promotion codes apply to plans only. A credit pack is sold at its
         // price: its credits are fixed by the price, so a discount would buy
         // the same credits for less (and a 100%-off one for nothing).
@@ -419,6 +428,8 @@ export async function billingRoutes(app: FastifyInstance) {
         amountUsd: z.number().int().min(MIN_LOAD_USD).max(MAX_LOAD_USD),
         embedded: z.boolean().optional(),
         returnPath: returnPathSchema,
+        gaClientId: gaClientIdField,
+        gaSessionId: gaSessionIdField,
       })
       .safeParse(req.body)
     if (!parsed.success) {
@@ -427,7 +438,7 @@ export async function billingRoutes(app: FastifyInstance) {
         error: onReturnPath ? RETURN_PATH_MESSAGE : `amountUsd must be a whole dollar amount between ${MIN_LOAD_USD} and ${MAX_LOAD_USD}`,
       })
     }
-    const { amountUsd, embedded, returnPath } = parsed.data
+    const { amountUsd, embedded, returnPath, gaClientId, gaSessionId } = parsed.data
     const credits = creditsForLoadUsd(amountUsd)
 
     try {
@@ -491,7 +502,7 @@ export async function billingRoutes(app: FastifyInstance) {
             quantity: 1,
           },
         ],
-        metadata: { userId, kind: "load", loadUsd: String(amountUsd) },
+        metadata: { userId, kind: "load", loadUsd: String(amountUsd), ...gaVisitMetadata({ gaClientId, gaSessionId }) },
         // Save the card for off-session auto-recharge (design §5.1), and
         // have Stripe email the charge receipt (Billing-UX, 2026-08-12);
         // grant sizing never reads PI metadata from here.

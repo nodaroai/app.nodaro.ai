@@ -71,9 +71,11 @@ describe("transcribe lane capabilities", () => {
     expect(TRANSCRIBE_PROVIDERS[TRANSCRIBE_PROVIDERS.length - 1]).toBe("nemotron-3-5-transcribe")
   })
 
-  it("Add Captions keeps its three lanes: no length-priced engine runs inside its flat price", () => {
-    expect([...CAPTION_TRANSCRIBE_LANES].sort()).toEqual(["elevenlabs-stt", "incredibly-fast-whisper", "whisper"])
+  it("Add Captions offers Nemotron at the END of its lanes (priced per minute there too, decided 2026-11-13)", () => {
+    expect([...CAPTION_TRANSCRIBE_LANES]).toEqual(["whisper", "incredibly-fast-whisper", "elevenlabs-stt", "nemotron-3-5-transcribe"])
     for (const lane of CAPTION_TRANSCRIBE_LANES) expect(TRANSCRIBE_LANES).toContain(lane)
+    // Captions need word timings: every lane but whisper gives them, Nemotron included.
+    expect(TRANSCRIBE_PROVIDER_CAPABILITIES["nemotron-3-5-transcribe"].wordTimestamps).toBe(true)
   })
 
   it("the defaults do not move", () => {

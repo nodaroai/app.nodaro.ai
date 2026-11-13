@@ -257,6 +257,10 @@ async function fixedLines(durations: readonly number[], hasCards: boolean): Prom
   const alignment = started(rowCredits("elevenlabs-forced-alignment", "word timings"))
   const speechCheck = started(rowCredits(DEFAULT_TRANSCRIBE_NODE_PROVIDER, "the speech check"))
   const cards = hasCards ? started(rowCredits("video-overlay", "the screenshot cards")) : null
+  // The video's captions are an Add Captions node fed its caption plan (`captionIds`: wired on
+  // `captionPlan`), and a plan's render carries no transcription engine of its own (payload-builder's
+  // plan branch sends none), so it is the Remotion render's row whatever engine the node names —
+  // never the per-minute Nemotron charge.
   const captions = started(rowCredits("add-captions:kinetic", "the captions"))
   const lines: PartLine[] = []
   if (join) lines.push({ label: "Join the clips", key: "join", credits: await join, part: "join" })

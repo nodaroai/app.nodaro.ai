@@ -124,66 +124,10 @@ export function dropNullCaptionLevers<T extends Record<string, unknown>>(input: 
   return out as T
 }
 
-/**
- * Is this render's caption source a STATIC TEXT BLOCK — the caller's `text`,
- * burned once for the whole clip — rather than timed words?
- *
- * On `subtitle`, `text` IS the caption: one block, `\n` a forced line break,
- * never transcribed over, whichever renderer draws it (the cheap FFmpeg drawtext
- * burn with no styling lever, the Remotion SubtitleOverlay with one). On a
- * KINETIC style the same `text` stays what it always was — a FALLBACK, spread
- * evenly across the clip as synthetic word timings when transcription returns
- * nothing.
- *
- * Source precedence is unchanged: `captions[]` > wired transcript > (`text` on
- * subtitle) > auto-transcription. `auto_transcribe` is deliberately NOT read: on
- * a subtitle the caller's text wins either way.
- *
- * Shared by the WORKER (which must not pay for a transcription it then discards)
- * and the ROUTE/DAG ingress, so the two cannot disagree about where the words
- * come from.
- */
-export function isStaticTextCaptionSource(input: {
-  style?: string | null
-  text?: string | null
-  captions?: readonly unknown[] | null
-  transcript?: unknown
-  segments?: readonly unknown[] | null
-}): boolean {
-  if (input.segments && input.segments.length > 0) return false
-  if (isKineticCaptionStyle(input.style)) return false
-  if (input.captions && input.captions.length > 0) return false
-  if (input.transcript !== undefined && input.transcript !== null) return false
-  return typeof input.text === "string" && /\S/.test(input.text)
-}
-
-/**
- * Whether an Add Captions render transcribes its audio: it carries no caption
- * source of its own — no captions, no wired transcript, no static text block —
- * auto-transcribe is not turned off, and its segments (when it has any) do not
- * all carry their own text or captions. The worker decides with it; the route's
- * credit guard asks it so a request is judged on its transcription model only
- * when one will run.
- */
-export function captionsNeedTranscription(input: {
-  style?: string | null
-  text?: string | null
-  captions?: readonly unknown[] | null
-  transcript?: unknown
-  segments?: ReadonlyArray<{ readonly text?: unknown; readonly captions?: readonly unknown[] | null }> | null
-  auto_transcribe?: boolean | null
-}): boolean {
-  const hasSegments = !!(input.segments && input.segments.length > 0)
-  const hasTranscript = input.transcript !== undefined && input.transcript !== null
-  const someSegmentNeedsShared = hasSegments && input.segments!.some((s) => !(s.text || (s.captions && s.captions.length > 0)))
-  return (
-    !isStaticTextCaptionSource(input) &&
-    !input.captions?.length &&
-    !hasTranscript &&
-    input.auto_transcribe !== false &&
-    (!hasSegments || someSegmentNeedsShared)
-  )
-}
+// Where a render's words come from (a static text block, or a transcription):
+// shared with the editor and the run estimate, which price a Nemotron caption
+// run only when it transcribes (`@nodaro/shared/captions`).
+export { isStaticTextCaptionSource, captionsNeedTranscription } from "@nodaro/shared/captions"
 
 /** Shown for this long when the source clip's duration could not be probed. */
 const STATIC_TEXT_FALLBACK_MS = 5000

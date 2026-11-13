@@ -13,6 +13,7 @@ import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode,
 import { applyVideoWatermark } from "../utils/watermark.js"
 import { commitJobCredits, refundJobCredits, shouldSaveJobResult, markJobCompletedDetailed, generateAndUploadThumbnail, createAssetFromJob, isFinalJobAttempt, type MarkJobCompletedOutcome } from "./shared.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { addCaptionsRenderChargeId, addCaptionsRenderChargeOf, commitAddCaptionsRender } from "../lib/add-captions-nemotron-run.js"
 import { JobCancelledError } from "../lib/job-cancellation.js"
 import { DrainAbortError, isWorkerDraining } from "../lib/worker-drain.js"
 import { withRenderCancellation } from "./render-cancellation.js"
@@ -46,6 +47,55 @@ import type { ReleaseOutcome } from "../lib/concurrency-lanes/gate.js"
  */
 export function releasesReservationOnIncompleteRender(outcome: MarkJobCompletedOutcome): boolean {
   return outcome === "lost_race"
+}
+
+/**
+ * Mark a finished render completed and make the job's ONE commit — or, on an
+ * incomplete outcome, release the hold when that outcome calls for it.
+ *
+ * An Add Captions render that transcribed on Nemotron 3.5 Transcribe (decided
+ * 2026-11-13) carries its charge on the render job (`captionsCharge`): its hold
+ * was the render plus the video's minutes, charged here at the minutes KIE
+ * decoded (or down to the render alone when no Nemotron transcription ran on
+ * that hold), with KIE's figure recorded as `provider_cost`. Every other
+ * render: no charge, the hold committed as before.
+ *
+ * A render cannot be held for review: it completes through the DIRECT funnel,
+ * which no hold is eligible on (`computeHoldEligible`, job-policy-gate.ts), so
+ * a hold verdict blocks it and the gate refunds it in full. The charge is
+ * therefore decided only once the job has completed. Moving this worker onto
+ * the finalize funnel would need the decided charge carried as the hold's
+ * replay (`meteredBaseCredits`), or approve would commit the whole hold.
+ */
+export async function completeRenderedJob(
+  jobId: string,
+  usageLogId: string | undefined,
+  data: unknown,
+  fields: Record<string, unknown>,
+): Promise<MarkJobCompletedOutcome> {
+  const captionsCharge = addCaptionsRenderChargeOf(data)
+  // Mark job completed atomically (skips if the user cancelled mid-update,
+  // and — since the result gate moved inside this call — if a policy
+  // blocked the output).
+  const outcome = await markJobCompletedDetailed(jobId, {
+    ...fields,
+    // What KIE billed for the caption run's transcription, recorded only.
+    ...(captionsCharge?.kind === "nemotron" && captionsCharge.providerCost !== undefined
+      ? { provider_cost: captionsCharge.providerCost }
+      : {}),
+  })
+  if (outcome !== "completed") {
+    if (releasesReservationOnIncompleteRender(outcome)) {
+      await refundJobCredits(usageLogId, jobId, "cancelled")
+    }
+    return outcome
+  }
+  if (captionsCharge) {
+    await commitAddCaptionsRender(usageLogId, jobId, captionsCharge, addCaptionsRenderChargeId(jobId, captionsCharge))
+  } else {
+    await commitJobCredits(usageLogId, jobId)
+  }
+  return outcome
 }
 import { createServer } from "node:http"
 import { createReadStream, statSync } from "node:fs"
@@ -1219,22 +1269,16 @@ export function createRenderWorker() {
         // Generate thumbnail
         const thumbnailUrl = await generateAndUploadThumbnail(videoUrl, jobId, jobUserId)
 
-        // Mark job completed atomically (skips if the user cancelled mid-update,
-        // and — since the result gate moved inside this call — if a policy
-        // blocked or held the output).
-        const outcome = await markJobCompletedDetailed(jobId, {
+        // Completed and committed once — an Add Captions render on Nemotron
+        // settles its per-minute hold here (completeRenderedJob).
+        const outcome = await completeRenderedJob(jobId, effectiveUsageLogId, data, {
           output_data: { videoUrl, thumbnailUrl, ...renderProvenance(data) },
           is_public: isPublic,
         })
         if (outcome !== "completed") {
-          if (releasesReservationOnIncompleteRender(outcome)) {
-            await refundJobCredits(effectiveUsageLogId, jobId, "cancelled")
-          }
           lane.outcome = "cancelled"
           return
         }
-
-        await commitJobCredits(effectiveUsageLogId, jobId)
 
         // Create asset records so rendered media appears in /library
         await createAssetFromJob(jobId, jobUserId)

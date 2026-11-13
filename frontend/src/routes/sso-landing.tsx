@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { createClient } from "@/lib/supabase"
 import { useT } from "@/lib/i18n"
 import { DEFAULT_SIGN_IN_PATH, followSignInRedirect, sameSitePath, takeSignInRedirect } from "@/lib/sign-in-redirect"
+import { reportSignIn } from "@/lib/analytics/sign-in-events"
 
 /**
  * Where an SSO sign-in goes once its session exists. The identity provider
@@ -46,11 +47,13 @@ export default function SsoLandingPage() {
     // magic-link hashed_token. Do not "fix" this to "magiclink".
     supabase.auth
       .verifyOtp({ token_hash: stashed.token, type: "email" })
-      .then(({ error }) => {
+      .then(({ data, error }) => {
         if (error) {
           navigate("/login", { replace: true })
           return
         }
+        // The sign-in (or sign-up) for the site analytics, where it completes.
+        if (data?.user) reportSignIn(data.user, "sso")
         // Same-origin path guard, again (defence in depth vs. the inline
         // script), the way the browser would follow it.
         followSignInRedirect(navigate, ssoDestination(stashed.next))

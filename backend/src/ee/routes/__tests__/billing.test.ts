@@ -681,6 +681,63 @@ describe("POST /v1/billing/create-checkout-session — one subscription per acco
   })
 })
 
+// The visit's Google Analytics ids ride from the checkout request onto the
+// payment, so the payment is reported against the visit that started it
+// (billing/analytics/). Optional, and never a reason to refuse a purchase.
+describe("checkout and load keep the visit's analytics ids on the payment", () => {
+  const visit = { gaClientId: "1234567890.1700000000", gaSessionId: "1700000500" }
+  const visitMetadata = { ga_client_id: visit.gaClientId, ga_session_id: visit.gaSessionId }
+  const lastCheckout = () => vi.mocked(stripe.checkout.sessions.create).mock.calls.at(-1)?.[0] as Record<string, unknown> & {
+    metadata: Record<string, string>
+    subscription_data?: { metadata: Record<string, string> }
+  }
+
+  it("a plan's Checkout carries them on the session and on the subscription, whose invoices report its payments", async () => {
+    mockTables({ subscriptions: { list: [] }, stripe_customers: { single: { stripe_customer_id: "cus_123" } } })
+    vi.mocked(stripe.checkout.sessions.create).mockResolvedValue({ url: "https://checkout.stripe.com/c/sub" } as never)
+
+    const res = await app.inject({ method: "POST", url: "/v1/billing/create-checkout-session", payload: { userId: "user-123", priceId: "pri_pro", ...visit } })
+
+    expect(res.statusCode).toBe(200)
+    expect(lastCheckout().metadata).toEqual({ userId: "user-123", ...visitMetadata })
+    expect(lastCheckout().subscription_data?.metadata).toEqual({ userId: "user-123", ...visitMetadata })
+  })
+
+  it("a credit pack and a credit load carry them on the session", async () => {
+    mockTables({ subscriptions: { list: [] }, stripe_customers: { single: { stripe_customer_id: "cus_123" } }, profiles: { single: { email: null } } })
+    vi.mocked(stripe.checkout.sessions.create).mockResolvedValue({ url: "https://checkout.stripe.com/c/1" } as never)
+
+    const pack = await app.inject({ method: "POST", url: "/v1/billing/create-checkout-session", payload: { userId: "user-123", priceId: "pri_pack", ...visit } })
+    expect(pack.statusCode).toBe(200)
+    expect(lastCheckout().metadata).toEqual({ userId: "user-123", topupPriceId: "pri_pack", ...visitMetadata })
+
+    const load = await app.inject({ method: "POST", url: "/v1/billing/create-load-session", payload: { userId: "user-123", amountUsd: 20, ...visit } })
+    expect(load.statusCode).toBe(200)
+    expect(lastCheckout().metadata).toEqual({ userId: "user-123", kind: "load", loadUsd: "20", ...visitMetadata })
+  })
+
+  it("malformed ids are dropped, never refused, and absent ones add nothing", async () => {
+    mockTables({ subscriptions: { list: [] }, stripe_customers: { single: { stripe_customer_id: "cus_123" } }, profiles: { single: { email: null } } })
+    vi.mocked(stripe.checkout.sessions.create).mockResolvedValue({ url: "https://checkout.stripe.com/c/1" } as never)
+
+    const malformed = await app.inject({
+      method: "POST",
+      url: "/v1/billing/create-checkout-session",
+      payload: { userId: "user-123", priceId: "pri_pack", gaClientId: "GA1.1.123.456", gaSessionId: "<s>" },
+    })
+    expect(malformed.statusCode).toBe(200)
+    expect(lastCheckout().metadata).toEqual({ userId: "user-123", topupPriceId: "pri_pack" })
+
+    const load = await app.inject({ method: "POST", url: "/v1/billing/create-load-session", payload: { userId: "user-123", amountUsd: 20, gaClientId: 42 } })
+    expect(load.statusCode).toBe(200)
+    expect(lastCheckout().metadata).toEqual({ userId: "user-123", kind: "load", loadUsd: "20" })
+
+    const none = await app.inject({ method: "POST", url: "/v1/billing/create-checkout-session", payload: { userId: "user-123", priceId: "pri_pro" } })
+    expect(none.statusCode).toBe(200)
+    expect(lastCheckout().subscription_data?.metadata).toEqual({ userId: "user-123" })
+  })
+})
+
 // Billing is a first-party UI action — an OAuth app token must never change the
 // owner's Stripe subscription (real money) regardless of granted scope.
 describe("billing routes reject OAuth app tokens", () => {

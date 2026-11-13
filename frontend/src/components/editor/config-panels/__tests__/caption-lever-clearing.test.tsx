@@ -93,3 +93,45 @@ describe("the font size field", () => {
     expect(onUpdate).toHaveBeenCalledWith({ fontSize: 200 })
   })
 })
+
+/**
+ * The panel's engine control (decided 2026-11-13): Add Captions' own engines,
+ * Nemotron 3.5 Transcribe among them with its per-minute price said, shown only
+ * while the node may auto-transcribe.
+ */
+describe("the transcription engine", () => {
+  it("is offered while the node may auto-transcribe, and hidden when it may not", () => {
+    renderConfig({})
+    expect(screen.getByLabelText(/transcription engine/i)).toBeInTheDocument()
+  })
+
+  it("is hidden when auto-transcription is off", () => {
+    renderConfig({ autoTranscribe: false })
+    expect(screen.queryByLabelText(/transcription engine/i)).toBeNull()
+  })
+
+  it("is hidden on a subtitle that burns its own text (it never transcribes)", () => {
+    renderConfig({ style: "subtitle", text: "Hello there" })
+    expect(screen.queryByLabelText(/transcription engine/i)).toBeNull()
+  })
+
+  it("stays on a kinetic style with text (the text is only its fallback)", () => {
+    renderConfig({ style: "word-highlight", text: "Hello there" })
+    expect(screen.getByLabelText(/transcription engine/i)).toBeInTheDocument()
+  })
+
+  it("stays on a subtitle whose text is a {Label} reference, which may resolve to nothing", () => {
+    renderConfig({ style: "subtitle", text: "{Script}" })
+    expect(screen.getByLabelText(/transcription engine/i)).toBeInTheDocument()
+  })
+
+  it("says Nemotron is priced per started minute of the video, on top of the render", () => {
+    renderConfig({ transcribeProvider: "nemotron-3-5-transcribe" })
+    expect(screen.getByText(/per started minute of the video/i)).toBeInTheDocument()
+  })
+
+  it("says nothing of the minutes on another engine", () => {
+    renderConfig({ transcribeProvider: "elevenlabs-stt" })
+    expect(screen.queryByText(/per started minute of the video/i)).toBeNull()
+  })
+})

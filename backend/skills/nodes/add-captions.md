@@ -1,7 +1,7 @@
 ---
 node_type: add-captions
-generated_at: 2026-10-24T23:37:39.072Z
-generated_from: db68a9ee4
+generated_at: 2026-11-13T09:16:15.463Z
+generated_from: 182c94d1a2
 ---
 
 # Add Captions
@@ -9,7 +9,7 @@ generated_from: db68a9ee4
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `add-captions`
 **Category:** processing
-**Credit cost:** `33-55` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `33-105` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`, `transcript`, `captionPlan`
 **Outputs (source handles):** `video-out`
 
@@ -30,7 +30,7 @@ generated_from: db68a9ee4
 - `generatedResults?: readonly GeneratedResult[]`
 - `activeResultIndex?: number`
 - `autoTranscribe?: boolean`
-- `transcribeProvider?: "whisper" | "incredibly-fast-whisper" | "elevenlabs-stt"`
+- `transcribeProvider?: "whisper" | "incredibly-fast-whisper" | "elevenlabs-stt" | "nemotron-3-5-transcribe"`
 - `wordLevel?: boolean`
 - `look?: CaptionLookId`
 - `fontWeight?: number`
@@ -96,7 +96,7 @@ It applies wherever words are grouped — `word-highlight`, `karaoke`, `bouncy`,
 When a call carries more than one, the precedence is fixed: `captions[]` > a wired Transcript > `text` on `subtitle` > auto-transcription.
 
 1. **`captions[]` — you own the text.** One entry per WORD. Use it whenever the text MUST be right: brand and product names, scripted ads, anything a client signs off. Supplying it means this node runs no speech-to-text of its own. Take the timings from `transcribe` and correct the words (recipe below).
-2. **Auto-transcribe** (`auto_transcribe`, on by default whenever the call names no other source — a kinetic render with no `captions[]`, or a `subtitle` with no `text`) — one call, but the text is whatever the engine heard. Fine for casual speech, wrong for names. The engine is `incredibly-fast-whisper` unless `transcribe_provider` names another. `auto_transcribe: false` with no source at all is a 400.
+2. **Auto-transcribe** (`auto_transcribe`, on by default whenever the call names no other source — a kinetic render with no `captions[]`, or a `subtitle` with no `text`) — one call, but the text is whatever the engine heard. Fine for casual speech, wrong for names. The engine is `incredibly-fast-whisper` unless `transcribe_provider` names another. On `nemotron-3-5-transcribe` the run is ONE charge, the render plus the video's started minutes: the video (an https link to a public host, up to 60 minutes) is measured before anything is held, a longer one is a 400, one whose length cannot be read holds 60 minutes, and the run is charged for the minutes the model decoded. It always transcribes with word timings (it never translates here). `auto_transcribe: false` with no source at all is a 400.
 3. **`text`** — what it is depends on the style. On a top-level `subtitle` (no `segments[]`) it IS the caption: burned as-is as ONE static block shown for the whole video, never transcribed over — with or without styling levers, whichever renderer draws it; `\n` forces a line break. Omit `text` to caption the speech instead. On a kinetic style it is only a FALLBACK: it is used when transcription returns nothing or `auto_transcribe` is `false`, and its words are then spread evenly across the clip as synthetic timings, not synced to the speech. With `segments[]` a top-level `text` is a fallback too: a segment with no words of its own takes the shared source (`captions[]` > transcript > transcription) and falls to `text` only when the transcription is empty.
 4. **A wired Transcript** — canvas / REST only: the `transcript` input handle (REST field `transcript`, plus `wordLevel`), fed from the `json` output of a `transcribe` or `apply-edl` node. Valid on `subtitle` too (it then renders as timed phrase lines through Remotion, and it outranks `text`). The MCP tool has no such argument — pass `captions[]`.
 

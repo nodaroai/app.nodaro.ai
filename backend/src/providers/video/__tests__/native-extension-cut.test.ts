@@ -209,16 +209,18 @@ describe.skipIf(!ffmpegAvailable)("cutNativeExtension (real ffmpeg)", () => {
     expect(cutProbe.videoCodec).toBe("h264")
     expect(cutProbe.audioCodec).toBeUndefined()
 
-    // The stitch as the worker runs it (no smart cut, trims 0/0, the 0.15 s blend): it pads the
-    // new seconds with silence of their own length.
+    // The stitch as the worker runs it (the 8 × 8 smart cut, trims 0/0 without a match, the
+    // leading repeats dropped, the 0.15 s blend): it pads the new seconds with silence of their own length.
     const stitchWork = join(dir, "sound-off-stitch")
     await fs.mkdir(stitchWork)
     const { outputPath } = await stitchExtension({
       sourcePath: source,
       extensionPath: cut,
       workDir: stitchWork,
+      smartCut: { framesFromPrev: 8, framesFromNext: 8 },
       fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
       audioFadeSec: 0.15,
+      dropLeadingRepeats: true,
     })
     // The source's part keeps its tone; past the join and its blend, nothing.
     expect(await maxVolumeDb(outputPath, 0.2)).toBeGreaterThan(-30)

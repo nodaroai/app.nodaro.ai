@@ -22,7 +22,7 @@ Needs `workflows:execute`.
 | `captions[].timestampMs` | number or null |  | At least 0. Default `null`. |
 | `captions[].confidence` | number or null |  | From 0 to 1. Default `null`. |
 | `auto_transcribe` | boolean |  |  |
-| `transcribe_provider` | string |  | Auto-transcribe engine. `whisper` returns NO word timings: refused only when a KINETIC render's sole caption source is transcription; fine on `subtitle`. One of `whisper`, `incredibly-fast-whisper`, `elevenlabs-stt`. |
+| `transcribe_provider` | string |  | Auto-transcribe engine. `whisper` has NO word timings: refused only if a KINETIC render's only source is transcription; fine on `subtitle`. One of `whisper`, `incredibly-fast-whisper`, `elevenlabs-stt`, `nemotron-3-5-transcribe`. |
 | `video_url` | string (URL) |  |  |
 | `video_asset_id` | string |  |  |
 | `style` | string |  | One of `subtitle`, `word-highlight`, `karaoke`, `tiktok-words`, `word-pop`, `bouncy`. |

@@ -175,6 +175,16 @@ describe("GET /v1/nodes — the charged price", () => {
     expect("estimate" in chat).toBe(false)
   })
 
+  it("Add Captions' band reaches the Nemotron caption charge (the render plus the video's minutes), not the kinetic row alone", async () => {
+    // The stand-in prices static rows only, so the band takes its composite from
+    // the kinetic row plus Nemotron's own minutes — the same lookup, charged.
+    const lookup = (id: string, units = 1) => (STATIC_CREDIT_COSTS[id] === undefined ? undefined : charged(id, units))
+    const [low, high] = CREDIT_BAND_SOURCES["add-captions"]!.band!(lookup)!
+    expect(low).toBe(charged("add-captions"))
+    expect(high).toBeGreaterThan(charged("add-captions:kinetic"))
+    expect(await listed("add-captions")).toBe(`${low}-${high}`)
+  })
+
   it("/v1/nodes/:type quotes the same charged price as the list", async () => {
     const detail = (await app.inject({ method: "GET", url: "/v1/nodes/extract-audio" })).json() as {
       data: { creditCost?: number }

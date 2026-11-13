@@ -42,6 +42,7 @@ import { USE_CASE_NODE_TYPES } from "@nodaro/shared/nodes"
 import { NODE_REGISTRY, CREDIT_BAND_SOURCES } from "../node-registry.js"
 import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
 import { FIXED_ROW_CREDIT_IDS } from "../fixed-row-credit-ids.js"
+import { NEMOTRON_TRANSCRIBE_PRICING, nemotronTranscribeBaseCredits } from "@nodaro/shared/credits"
 import { buildPayload } from "../../services/workflow-engine/payload-builder.js"
 import type { SimpleNode } from "../../services/workflow-engine/types.js"
 
@@ -307,3 +308,27 @@ describe("a single-row node advertises the row its run reserves", () => {
   })
 })
 
+
+/**
+ * Add Captions on Nemotron 3.5 Transcribe is one charge, the Remotion render
+ * plus the video's started minutes (decided 2026-11-13). Its renderer rows alone
+ * advertised a band that topped out at the kinetic row, below every Nemotron
+ * caption run; the band now reaches the 60-minute charge.
+ */
+describe("Add Captions' band reaches a Nemotron caption run", () => {
+  it("states the FFmpeg row up to the render plus 60 minutes", () => {
+    const kinetic = STATIC_CREDIT_COSTS["add-captions:kinetic"]!
+    const rate = STATIC_CREDIT_COSTS[NEMOTRON_TRANSCRIBE_PRICING.RATE_CREDIT_ID]!
+    const cost = NODE_REGISTRY.find((d) => d.type === "add-captions")!.creditCost
+    expect(cost).toBe(`${STATIC_CREDIT_COSTS["add-captions"]}-${kinetic + nemotronTranscribeBaseCredits(rate, 60)}`)
+    expect(cost).toBe("30-95")
+  })
+
+  it("prices the composite where the lookup does (the charged table), else the kinetic row plus the minutes", () => {
+    const band = CREDIT_BAND_SOURCES["add-captions"]!.band!
+    // A lookup that prices the composite ids itself (as the charged table does).
+    const priced = (id: string) =>
+      id === "add-captions:kinetic:nemotron:60m" ? 105 : id === "add-captions:kinetic:nemotron:1m" ? 57 : ({ "add-captions": 33, "add-captions:kinetic": 55 } as Record<string, number>)[id]
+    expect(band(priced)).toEqual([33, 105])
+  })
+})

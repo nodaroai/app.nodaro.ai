@@ -147,6 +147,7 @@
         "backend/src/providers/video/edl-picture.ts",
         "backend/src/providers/video/edl-timeline.ts",
         "backend/src/providers/video/extend-stitch-args.ts",
+        "backend/src/providers/video/extend-stitch-repeats.ts",
         "backend/src/providers/video/extend-stitch.ts",
         "backend/src/providers/video/extract-audio-track.ts",
         "backend/src/providers/video/extract-audio.ts",

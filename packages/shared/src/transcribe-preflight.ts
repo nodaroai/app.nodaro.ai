@@ -92,6 +92,29 @@ export interface WordlessTranscriptFeed {
   readonly message: string
 }
 
+/** Lanes that return word timings whatever the flag (ElevenLabs Scribe is word-level). */
+const ALWAYS_WORD_LEVEL_LANES: ReadonlySet<string> = new Set(["elevenlabs-stt"])
+
+/**
+ * Whether a Transcribe node's run returns WORD timings, as its data and the
+ * graph say — what a caption render downstream can take as its words (the run's
+ * resolver hands an Add Captions node a Transcribe node's words only when there
+ * are some). Never while it translates, never on a lane that cannot give them;
+ * a word-level lane always; any other capable lane only when they are asked
+ * for: `wordTimestamps: true`, or its `json` output wired (`jsonWired`: the
+ * workflow run turns the flag on then). A price that reads this errs high when
+ * it is wrong: an unknown lane answers false.
+ */
+export function transcribeNodeReturnsWords(
+  data: { readonly provider?: unknown; readonly wordTimestamps?: unknown; readonly targetLanguage?: unknown } | null | undefined,
+  jsonWired: boolean,
+): boolean {
+  const provider = (typeof data?.provider === "string" && data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
+  if (transcribeTargetLanguageOf(data?.targetLanguage) !== undefined) return false
+  if (!transcribeLaneSupportsWordTimestamps(provider)) return false
+  return ALWAYS_WORD_LEVEL_LANES.has(provider) || data?.wordTimestamps === true || jsonWired
+}
+
 // Handle ids (generated map: backend/src/lib/mcp/generated/node-handles.ts).
 const TRANSCRIBE_JSON_OUT = "json"
 const TRANSCRIPT_IN = "transcript"

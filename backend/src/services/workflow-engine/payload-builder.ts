@@ -7732,9 +7732,10 @@ function buildPayloadOf(
         }
       }
       // Add Captions transcribes only on its own lanes (`CAPTION_TRANSCRIBE_LANES`,
-      // the route's enum): its flat render price covers that transcription, so a
-      // lane priced by the file's length (Nemotron 3.5 Transcribe) authored into
-      // node data is refused here, before the reserve, instead of running unpriced.
+      // the route's enum): an engine authored into node data that is not one of
+      // them is refused here, before the reserve. Nemotron 3.5 Transcribe is one,
+      // priced by the video's length: node-executor measures the video and holds
+      // the render plus its minutes (`stampAddCaptionsNemotronInput`).
       const acTranscribeProvider = (data.transcribeProvider ?? data.transcribe_provider) as string | undefined
       if (acTranscribeProvider && !(CAPTION_TRANSCRIBE_LANES as readonly string[]).includes(acTranscribeProvider)) {
         throw new Error(

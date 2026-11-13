@@ -2148,6 +2148,8 @@ export const ja: ChromeDict = {
   "proccfg.look_clean": "クリーン",
   "proccfg.lookPlain": "なし（プレーン）",
   "proccfg.lookHint": "フォント、縁取り、大文字／小文字、発話中の単語の色をまとめたプリセットです。下のコントロールで個別の要素を上書きできます。",
+  "proccfg.captionEngine": "文字起こしエンジン",
+  "proccfg.captionEngineNemotronNote": "字幕のレンダリングに加えて、動画の開始した1分ごとに課金されます。",
   "proccfg.font": "フォント",
   "proccfg.fontAuto": "自動（ルックに従う）",
   "proccfg.uppercase": "すべて大文字",

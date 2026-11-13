@@ -1921,17 +1921,19 @@ void _TRANSCRIBE_PROVIDERS_ARE_LANES
 
 /**
  * The lanes Add Captions may transcribe on (its `transcribe_provider`, on the
- * route, MCP `add_captions` and the SDK's `media.addCaptions`). Add Captions
- * charges its own flat render price (`add-captions`, `add-captions:kinetic`)
- * and reserves nothing for the transcription it runs inside, so a lane priced
- * by the file's length (Nemotron 3.5 Transcribe, per minute) is not one of
- * them: it would run unpriced inside the render. Kept to the lanes it offered
- * before Nemotron (2026-11-12); widening it is a pricing decision, not a sync.
+ * route, MCP `add_captions` and the SDK's `media.addCaptions`). Its flat render
+ * price (`add-captions:kinetic`) covers the transcription on every lane but
+ * Nemotron 3.5 Transcribe, which is priced by the video's length: a caption
+ * run on it holds the render plus Nemotron's per-minute price as ONE charge
+ * (`add-captions:kinetic:nemotron:<N>m`, decided 2026-11-13), always with word
+ * timings and never a translation. A new lane here is a pricing decision, not
+ * a sync.
  */
 export const CAPTION_TRANSCRIBE_LANES = [
   "whisper",
   "incredibly-fast-whisper",
   "elevenlabs-stt",
+  "nemotron-3-5-transcribe",
 ] as const satisfies readonly TranscribeLane[]
 export type CaptionTranscribeLane = typeof CAPTION_TRANSCRIBE_LANES[number]
 

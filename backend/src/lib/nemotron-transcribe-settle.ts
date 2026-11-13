@@ -1,4 +1,11 @@
-import { nemotronTranscribeCreditId, nemotronTranscribeStartedMinutes, parseNemotronTranscribeCreditId, NEMOTRON_TRANSCRIBE_PRICING } from "@nodaro/shared/credits"
+import {
+  addCaptionsNemotronMinutesId,
+  nemotronTranscribeStartedMinutes,
+  parseAddCaptionsNemotronCreditId,
+  parseNemotronTranscribeCreditId,
+  NEMOTRON_TRANSCRIBE_ID,
+  NEMOTRON_TRANSCRIBE_PRICING,
+} from "@nodaro/shared/credits"
 import { nemotronSecondsFromKieCredits } from "../providers/audio/nemotron-output.js"
 import { commitJobCredits, commitJobCreditsAtActualPrice } from "../workers/shared.js"
 
@@ -11,8 +18,10 @@ import { commitJobCredits, commitJobCreditsAtActualPrice } from "../workers/shar
  * a host can serve ffprobe and KIE different files; KIE's length is what KIE
  * bills us and what the run costs.
  *
- * One function for the worker (`handleTranscribe`) and the KIE reconcile, and
- * exactly ONE commit either way:
+ * One rule for the Transcribe node (its worker, `handleTranscribe`, and the KIE
+ * reconcile) and for Add Captions transcribing on Nemotron (its render worker,
+ * decided 2026-11-13), each through its own family of per-minute ids
+ * ({@link NemotronMinuteIds}), and exactly ONE commit either way:
  *  - the charged minutes are the held minutes → the reserved tier
  *    (`commitJobCredits`), byte for byte the plain path;
  *  - fewer → the lower price is committed and the rest released;
@@ -33,6 +42,33 @@ import { commitJobCredits, commitJobCreditsAtActualPrice } from "../workers/shar
 /** How far past the held minutes' boundary a KIE length may run and still be charged the held minutes. */
 export const NEMOTRON_UPWARD_GRACE_SEC = 1
 
+/**
+ * A family of per-started-minute ids a Nemotron run is held and charged on:
+ * how one is built from minutes and read back, and the tag its logs carry.
+ */
+export interface NemotronMinuteIds {
+  /** The id for N started minutes (1..60). */
+  readonly idOf: (minutes: number) => string
+  /** The minutes of one of this family's ids, or undefined for any other id. */
+  readonly parse: (id: string) => { minutes: number } | undefined
+  /** The tag on this family's log lines. */
+  readonly label: string
+}
+
+/** The Transcribe node's ids: `nemotron-3-5-transcribe:<N>m`. */
+export const NEMOTRON_TRANSCRIBE_MINUTE_IDS: NemotronMinuteIds = {
+  idOf: (minutes) => `${NEMOTRON_TRANSCRIBE_ID}:${minutes}m`,
+  parse: parseNemotronTranscribeCreditId,
+  label: "transcribe",
+}
+
+/** Add Captions transcribing on Nemotron: `add-captions:kinetic:nemotron:<N>m` (the render plus the minutes). */
+export const ADD_CAPTIONS_NEMOTRON_MINUTE_IDS: NemotronMinuteIds = {
+  idOf: addCaptionsNemotronMinutesId,
+  parse: parseAddCaptionsNemotronCreditId,
+  label: "add-captions",
+}
+
 function positiveSeconds(v: number | undefined): number | undefined {
   return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined
 }
@@ -51,14 +87,18 @@ export function nemotronLengthsDisagree(measuredSec: number | undefined, kieSec:
 }
 
 /** The id a run is charged at: KIE's started minutes, or the held minutes when KIE ran past them by at most the grace. */
-export function nemotronChargeId(heldId: string | undefined, kieSec: number): string {
-  const held = heldId === undefined ? undefined : parseNemotronTranscribeCreditId(heldId)
+export function nemotronChargeId(
+  heldId: string | undefined,
+  kieSec: number,
+  ids: NemotronMinuteIds = NEMOTRON_TRANSCRIBE_MINUTE_IDS,
+): string {
+  const held = heldId === undefined ? undefined : ids.parse(heldId)
   if (held && kieSec > held.minutes * 60 && kieSec <= held.minutes * 60 + NEMOTRON_UPWARD_GRACE_SEC) return heldId!
-  return nemotronTranscribeCreditId(kieSec)
+  return ids.idOf(nemotronTranscribeStartedMinutes(kieSec))
 }
 
-export interface NemotronSettle {
-  readonly usageLogId: string | null | undefined
+/** What a Nemotron run's charge is decided from. */
+export interface NemotronChargeFacts {
   readonly jobId: string
   /** The id the run held (`bucketKey`: the measured minutes, or the 60-minute id). */
   readonly heldId?: string
@@ -70,40 +110,73 @@ export interface NemotronSettle {
   readonly kieCredits?: number
 }
 
-export async function settleNemotronTranscribe(s: NemotronSettle): Promise<void> {
+export interface NemotronSettle extends NemotronChargeFacts {
+  readonly usageLogId: string | null | undefined
+}
+
+/**
+ * The id a finished Nemotron run is charged at, by the rule above — or
+ * `undefined` when there is no length to charge on (the hold is committed as
+ * it is). Logs the warnings and `[ALERT]`s; commits nothing, so a caller that
+ * must know the charge before the job completes (a render held for review)
+ * can decide first and commit after.
+ */
+export function nemotronChargeDecision(
+  s: NemotronChargeFacts,
+  ids: NemotronMinuteIds = NEMOTRON_TRANSCRIBE_MINUTE_IDS,
+): string | undefined {
   const reported = positiveSeconds(s.kieSec)
   const fromCredits = nemotronSecondsFromKieCredits(s.kieCredits)
   const measured = positiveSeconds(s.measuredSec)
   const chargeSec = reported ?? fromCredits ?? measured
   if (chargeSec === undefined) {
-    const unmeasuredFullHold = s.heldId === nemotronTranscribeCreditId(NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC)
+    const unmeasuredFullHold = s.heldId === ids.idOf(NEMOTRON_TRANSCRIBE_PRICING.MAX_MINUTES)
     if (unmeasuredFullHold) {
       console.error(
-        `[ALERT] [transcribe] job ${s.jobId}: an unmeasured file and no length from KIE (no duration, no credits) — ` +
+        `[ALERT] [${ids.label}] job ${s.jobId}: an unmeasured file and no length from KIE (no duration, no credits) — ` +
           `committing the whole 60-minute hold`,
       )
     } else {
-      console.warn(`[transcribe] job ${s.jobId}: no length from KIE or the measurement — committing the held price`)
+      console.warn(`[${ids.label}] job ${s.jobId}: no length from KIE or the measurement — committing the held price`)
     }
-    await commitJobCredits(s.usageLogId, s.jobId)
-    return
+    return undefined
   }
   if (reported === undefined) {
     console.warn(
-      `[transcribe] job ${s.jobId}: KIE reported no duration — charging ${Math.round(chargeSec)} s ` +
+      `[${ids.label}] job ${s.jobId}: KIE reported no duration — charging ${Math.round(chargeSec)} s ` +
         `(${fromCredits !== undefined ? "from its billed credits" : "the measured length"})`,
     )
   }
-  const chargeId = nemotronChargeId(s.heldId, chargeSec)
+  const chargeId = nemotronChargeId(s.heldId, chargeSec, ids)
   if (s.heldId !== chargeId && nemotronLengthsDisagree(measured, chargeSec)) {
     console.error(
-      `[ALERT] [transcribe] job ${s.jobId}: the file measured ${Math.round(measured!)} s but KIE decoded ` +
+      `[ALERT] [${ids.label}] job ${s.jobId}: the file measured ${Math.round(measured!)} s but KIE decoded ` +
         `${Math.round(chargeSec)} s — held ${s.heldId ?? "unknown"}, charged ${chargeId}`,
     )
   }
-  if (s.heldId === chargeId) {
-    await commitJobCredits(s.usageLogId, s.jobId)
+  return chargeId
+}
+
+/**
+ * The ONE commit of a decided charge: the hold as it is when the charge is the
+ * held id (or there is none), else the charged price — up or down.
+ */
+export async function commitNemotronCharge(
+  usageLogId: string | null | undefined,
+  jobId: string,
+  heldId: string | undefined,
+  chargeId: string | undefined,
+): Promise<void> {
+  if (chargeId === undefined || chargeId === heldId) {
+    await commitJobCredits(usageLogId, jobId)
     return
   }
-  await commitJobCreditsAtActualPrice(s.usageLogId, s.jobId, chargeId)
+  await commitJobCreditsAtActualPrice(usageLogId, jobId, chargeId)
+}
+
+export async function settleNemotronTranscribe(
+  s: NemotronSettle,
+  ids: NemotronMinuteIds = NEMOTRON_TRANSCRIBE_MINUTE_IDS,
+): Promise<void> {
+  await commitNemotronCharge(s.usageLogId, s.jobId, s.heldId, nemotronChargeDecision(s, ids))
 }

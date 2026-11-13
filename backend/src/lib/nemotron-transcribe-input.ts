@@ -61,9 +61,20 @@ export function isNemotronMediaUrl(url: string): boolean {
   }
 }
 
+export interface NemotronMeasureOptions {
+  /**
+   * Refuse a file over KIE's 200 MB (default true). Add Captions passes false:
+   * its worker sends KIE the video's audio track, extracted and stored first
+   * (decided 2026-11-13), never the video itself, so only the length limit
+   * applies to the video it measures.
+   */
+  readonly checkSize?: boolean
+}
+
 export async function measureNemotronTranscribeInput(
   mediaUrl: string,
   onProbeFailure: (err: unknown) => void = () => {},
+  opts: NemotronMeasureOptions = {},
 ): Promise<NemotronTranscribeInput> {
   if (!isNemotronMediaUrl(mediaUrl)) {
     return {
@@ -106,7 +117,7 @@ export async function measureNemotronTranscribeInput(
         `${NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC} seconds (60 minutes): split it and transcribe the parts.`,
     }
   }
-  if (probed.sizeBytes !== undefined && probed.sizeBytes > NEMOTRON_TRANSCRIBE_PRICING.MAX_BYTES) {
+  if (opts.checkSize !== false && probed.sizeBytes !== undefined && probed.sizeBytes > NEMOTRON_TRANSCRIBE_PRICING.MAX_BYTES) {
     return {
       ok: false,
       code: "media_size_exceeds_limit",

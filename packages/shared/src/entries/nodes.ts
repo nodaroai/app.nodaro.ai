@@ -194,6 +194,7 @@ export {
   transcribeTranslationRefusal,
   transcribeTargetLanguageOf,
   findWordlessTranscriptFeeds,
+  transcribeNodeReturnsWords,
 } from "../transcribe-preflight.js"
 export type { PreflightGraphNode, PreflightGraphEdge, WordlessTranscriptFeed } from "../transcribe-preflight.js"
 export {

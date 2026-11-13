@@ -57,6 +57,7 @@ import { apiErrorMessage, refusalMessage } from "@/lib/api-error-copy"
 import { continuationRefusalOf } from "@/lib/run-workflow-errors"
 import { dispatchConsentRequired } from "@/lib/consent-required-event"
 import { dispatchAccessBlocked } from "@/lib/access-blocked-event"
+import { trackEvent } from "@/lib/analytics/site-analytics"
 
 export const API_BASE_URL = ''
 
@@ -7876,6 +7877,9 @@ export async function createCheckoutSession(params: {
   mode?: "subscription" | "payment"
   /** Opened from an embedded iframe → return to the no-auth /checkout-complete page. */
   embedded?: boolean
+  /** The visit's Google Analytics ids (lib/analytics), kept on the payment so its completion is reported against this visit. */
+  gaClientId?: string
+  gaSessionId?: string
 }): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/v1/billing/create-checkout-session`, {
     method: "POST",
@@ -7896,6 +7900,9 @@ export async function createLoadSession(params: {
   amountUsd: number
   /** Opened from an embedded iframe → return to the no-auth /checkout-complete page. */
   embedded?: boolean
+  /** The visit's Google Analytics ids, as createCheckoutSession. */
+  gaClientId?: string
+  gaSessionId?: string
 }): Promise<{ url: string; credits: number }> {
   const res = await fetch(`${API_BASE_URL}/v1/billing/create-load-session`, {
     method: "POST",
@@ -8483,6 +8490,13 @@ export async function runWorkflow(
     if (refusal) throw refusal
     throwApiError(err, "apiErr.runWorkflow")
   }
+  // Every run the editor starts on the server passes here (Run, Run from
+  // here / up to here / selected, Render final, Continue): one per click.
+  trackEvent("workflow_run", {
+    run_scope: opts?.continueFromExecutionId
+      ? opts.continueMode === "from-failed" ? "continue_failed" : "continue"
+      : nodeIds ? "nodes" : "all",
+  })
   return res.json() as Promise<{ executionId: string; continuedFrom?: string }>
 }
 

@@ -35,6 +35,8 @@ import {
   NEMOTRON_TRANSCRIBE_PRICING,
   nemotronTranscribeBaseCredits,
   nemotronTranscribeCreditId,
+  ADD_CAPTIONS_KINETIC_CREDIT_ID,
+  addCaptionsNemotronMinutesId,
 } from "@nodaro/shared/credits"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared/nodes"
@@ -289,7 +291,8 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   // ── Processing / composition ──
   "add-captions": {
     ids: familyIds("add-captions"),
-    note: "Prices by RENDERER, not by node: the cheap FFmpeg drawtext burn vs the Remotion render anything styled / timed / transcribed / segmented needs.",
+    band: addCaptionsBand,
+    note: "Prices by RENDERER, not by node: the cheap FFmpeg drawtext burn vs the Remotion render anything styled / timed / transcribed / segmented needs — except a render that transcribes on Nemotron 3.5 Transcribe, one charge of the Remotion render plus the video's started minutes (1–60): a run reserves `add-captions:kinetic:nemotron:<N>m`.",
   },
   "image-collage": { ids: familyIds("image-collage") },
   // Every run bills its source's row (web-scrape:<source>); the bare row is
@@ -450,6 +453,29 @@ function transcribeBand(credit: (id: string, units?: number) => number | undefin
   const rate = credit(NEMOTRON_TRANSCRIBE_PRICING.RATE_CREDIT_ID)
   for (const minutes of [1, NEMOTRON_TRANSCRIBE_PRICING.MAX_MINUTES]) {
     const price = credit(nemotronTranscribeCreditId(minutes * 60)) ?? (rate === undefined ? undefined : nemotronTranscribeBaseCredits(rate, minutes))
+    if (price !== undefined) prices.push(price)
+  }
+  return prices.length ? [Math.min(...prices), Math.max(...prices)] : undefined
+}
+
+/**
+ * Add Captions' band: its two renderer rows, and a render that transcribes on
+ * Nemotron 3.5 Transcribe from one started minute of the video to its 60 — one
+ * charge, the Remotion render plus the video's minutes (decided 2026-11-13; its
+ * `add-captions:kinetic:nemotron:<N>m` id where the lookup prices one, else the
+ * kinetic row plus Nemotron's own minutes, as `transcribeBand` reads them).
+ */
+function addCaptionsBand(credit: (id: string, units?: number) => number | undefined): [number, number] | undefined {
+  const prices: number[] = []
+  for (const id of familyIds("add-captions")) {
+    const price = credit(id)
+    if (price !== undefined) prices.push(price)
+  }
+  const kinetic = credit(ADD_CAPTIONS_KINETIC_CREDIT_ID)
+  const rate = credit(NEMOTRON_TRANSCRIBE_PRICING.RATE_CREDIT_ID)
+  for (const minutes of [1, NEMOTRON_TRANSCRIBE_PRICING.MAX_MINUTES]) {
+    const minutesPrice = credit(nemotronTranscribeCreditId(minutes * 60)) ?? (rate === undefined ? undefined : nemotronTranscribeBaseCredits(rate, minutes))
+    const price = credit(addCaptionsNemotronMinutesId(minutes)) ?? (kinetic === undefined || minutesPrice === undefined ? undefined : kinetic + minutesPrice)
     if (price !== undefined) prices.push(price)
   }
   return prices.length ? [Math.min(...prices), Math.max(...prices)] : undefined

@@ -582,7 +582,10 @@ Examples:
       "freeze per-word motion on the kinetic styles — keeps grouping, line-holding and the spoken-word highlight (kinetic styles only)",
     )
     .option("--no-auto-transcribe", "do NOT transcribe the video's audio when no --text / --captions-file is given")
-    .option("--transcribe-provider <name>", `engine for the auto-transcription: ${CAPTION_TRANSCRIBE_LANES.join(" | ")}`)
+    .option(
+      "--transcribe-provider <name>",
+      `engine for the auto-transcription: ${CAPTION_TRANSCRIBE_LANES.join(" | ")} (nemotron-3-5-transcribe adds the video's started minutes to the price)`,
+    )
     .option(
       "--segments-file <path>",
       "JSON array of caption SEGMENTS — non-overlapping { startMs, endMs } ranges, each with its own style/look/position overrides and optional own words",

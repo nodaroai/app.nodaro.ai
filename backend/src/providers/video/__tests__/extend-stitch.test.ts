@@ -32,7 +32,7 @@ vi.mock("../smart-cut.js", () => ({ getSmartCutMatcher: mocks.getSmartCutMatcher
 
 import { extendTailPicture, extensionPictureSeconds, stitchExtension, type ExtendStitchArgs } from "../extend-stitch.js"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
-import { extendStitchArgs, stitchEncodesAtBitRate } from "../extend-stitch-args.js"
+import { boundaryProxySpans, extendStitchArgs, PROXY_MARGIN_FRAMES, stitchEncodesAtBitRate } from "../extend-stitch-args.js"
 import { matchedPictureArgs, parseMatchedProbe, type MatchedProbe } from "../matched-encode.js"
 import type { VideoOverlayBaseProbe } from "../ffmpeg-utils.js"
 import type { SmartCutBoundary } from "../smart-cut.js"
@@ -548,6 +548,36 @@ describe("extendStitchArgs", () => {
   })
 })
 
+// The matcher clamps each window to the clip it is given, so each proxy carries a
+// margin of frames beyond the window asked for, on its far side: the source's proxy
+// still ends on its last frame and the extension's still starts on its first, the
+// edges the matcher's drop counts are measured from.
+describe("boundaryProxySpans", () => {
+  const window = { framesFromPrev: 8, framesFromNext: 8 }
+
+  it("covers 10 frames each side for an 8 × 8 search, ending on the source's last frame and starting on the extension's first", () => {
+    expect(PROXY_MARGIN_FRAMES).toBe(2)
+    expect(boundaryProxySpans(window, { source: 72, extension: 48 })).toEqual({
+      prev: { start: 62, end: 72 },
+      next: { start: 0, end: 10 },
+    })
+  })
+
+  it("is bounded by a short clip: the whole clip, still anchored at the join", () => {
+    expect(boundaryProxySpans(window, { source: 6, extension: 48 }).prev).toEqual({ start: 0, end: 6 })
+    expect(boundaryProxySpans(window, { source: 10, extension: 10 })).toEqual({ prev: { start: 0, end: 10 }, next: { start: 0, end: 10 } })
+    // A 5-frame extension: its 5 frames, searched as far as the matcher's clamp allows.
+    expect(boundaryProxySpans(window, { source: 72, extension: 5 }).next).toEqual({ start: 0, end: 5 })
+  })
+
+  it("follows the window asked for", () => {
+    expect(boundaryProxySpans({ framesFromPrev: 4, framesFromNext: 6 }, { source: 72, extension: 48 })).toEqual({
+      prev: { start: 66, end: 72 },
+      next: { start: 0, end: 8 },
+    })
+  })
+})
+
 describe("stitchExtension", () => {
   const ARGS: ExtendStitchArgs = {
     sourcePath: "/w/source.mp4",
@@ -584,13 +614,14 @@ describe("stitchExtension", () => {
     expect(matched.outputPath).toBe("/w/stitched.mp4")
     expect(encodeChains()["[sv]"]).toContain("trim=end_frame=70,")
     expect(encodeChains()["[ev]"]).toContain("trim=start_frame=5:end_frame=48,")
-    // The matcher searched two small proxies: the source's last 8 frames and the
-    // extension's first 8, both at the source's size and rate, as the stitch reads them.
+    // The matcher searched 8 × 8 over two small proxies of 10 frames each (the window
+    // and its margin): the source's last 10 frames and the extension's first 10, both
+    // at the source's size and rate, as the stitch reads them.
     expect(matcher).toHaveBeenCalledWith("/w/stitch-prev.mp4", "/w/stitch-next.mp4", 8, 8, "best-pair")
     const [prevProxy, nextProxy] = ffmpegRuns()
-    expect(valueOf(prevProxy!, "-vf")).toBe("fps=24/1,tpad=stop_mode=clone:stop=-1,trim=start_frame=64:end_frame=72,setpts=PTS-STARTPTS")
+    expect(valueOf(prevProxy!, "-vf")).toBe("fps=24/1,tpad=stop_mode=clone:stop=-1,trim=start_frame=62:end_frame=72,setpts=PTS-STARTPTS")
     expect(valueOf(nextProxy!, "-vf")).toBe(
-      "fps=24/1,tpad=stop_mode=clone:stop=-1,trim=end_frame=8,setpts=PTS-STARTPTS,scale=854:480:force_original_aspect_ratio=increase,crop=854:480,setsar=1",
+      "fps=24/1,tpad=stop_mode=clone:stop=-1,trim=end_frame=10,setpts=PTS-STARTPTS,scale=854:480:force_original_aspect_ratio=increase,crop=854:480,setsar=1",
     )
     expect(prevProxy!.at(-1)).toBe("/w/stitch-prev.mp4")
     expect(nextProxy!.at(-1)).toBe("/w/stitch-next.mp4")
@@ -670,7 +701,7 @@ describe("stitchExtension", () => {
     await stitchExtension(ARGS)
     const sdr = toSdr("color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv")
     const [prevProxy, nextProxy] = ffmpegRuns()
-    expect(valueOf(prevProxy!, "-vf")).toBe(`fps=24/1,tpad=stop_mode=clone:stop=-1,trim=start_frame=64:end_frame=72,setpts=PTS-STARTPTS,${sdr}`)
+    expect(valueOf(prevProxy!, "-vf")).toBe(`fps=24/1,tpad=stop_mode=clone:stop=-1,trim=start_frame=62:end_frame=72,setpts=PTS-STARTPTS,${sdr}`)
     expect(valueOf(nextProxy!, "-vf")).not.toMatch(/zscale|tonemap|setparams/)
     expect(encodeChains()["[sv]"]).toContain(`,${sdr}[sv]`)
     // An HEVC source: the one constant-quality encode after the two proxies.
@@ -685,7 +716,7 @@ describe("stitchExtension", () => {
     mocks.probeMatched.mockImplementation(async (p: string) => (p === ARGS.extensionPath ? EXTENSION : { ...SOURCE, pixFmt: "yuvj420p", colorRange: "pc" }))
     await stitchExtension(ARGS)
     const [prevProxy, nextProxy] = ffmpegRuns()
-    expect(valueOf(prevProxy!, "-vf")).toBe(`fps=24/1,tpad=stop_mode=clone:stop=-1,trim=start_frame=64:end_frame=72,setpts=PTS-STARTPTS,${TO_LIMITED}`)
+    expect(valueOf(prevProxy!, "-vf")).toBe(`fps=24/1,tpad=stop_mode=clone:stop=-1,trim=start_frame=62:end_frame=72,setpts=PTS-STARTPTS,${TO_LIMITED}`)
     expect(valueOf(nextProxy!, "-vf")).not.toMatch(/setparams|out_range/)
     expect(encodeChains()["[sv]"]).toContain(`,${TO_LIMITED}[sv]`)
   })
@@ -765,7 +796,7 @@ describe("stitchExtension", () => {
     mocks.probeVideoOverlayBase.mockResolvedValue({ ...SHAPE, width: 853, height: 481 })
     await stitchExtension(ARGS)
     const [prevProxy, nextProxy] = ffmpegRuns()
-    expect(valueOf(prevProxy!, "-vf")).toBe("fps=24/1,tpad=stop_mode=clone:stop=-1,trim=start_frame=64:end_frame=72,setpts=PTS-STARTPTS,crop=852:480:0:0")
+    expect(valueOf(prevProxy!, "-vf")).toBe("fps=24/1,tpad=stop_mode=clone:stop=-1,trim=start_frame=62:end_frame=72,setpts=PTS-STARTPTS,crop=852:480:0:0")
     expect(valueOf(nextProxy!, "-vf")!.endsWith(",scale=852:480:force_original_aspect_ratio=increase,crop=852:480,setsar=1")).toBe(true)
     expect(encodeChains()["[sv]"]).toContain(",crop=852:480:0:0[sv]")
     expect(encodeChains()["[ev]"]).toContain(",crop=852:480,setsar=1[ev]")
@@ -780,6 +811,158 @@ describe("stitchExtension", () => {
     expect(boundary).toMatchObject({ trimEndFrames: 0, trimStartFrames: 0 })
     expect(encodeChains()["[sv]"]).toContain("trim=end_frame=4,")
     expect(encodeChains()["[ev]"]).toContain("trim=end_frame=3,")
+  })
+
+  it("still searches a 5-frame extension: its whole picture as the proxy, the window asked for", async () => {
+    const matcher = vi.fn().mockResolvedValue(cut({ trimStartFrames: 2 }))
+    mocks.getSmartCutMatcher.mockReturnValue(matcher)
+    mocks.probeMatched.mockImplementation(async (p: string) => (p === ARGS.extensionPath ? { ...EXTENSION, videoDurationSec: 5 / 24 } : SOURCE))
+    const { boundary } = await stitchExtension(ARGS)
+    expect(matcher).toHaveBeenCalledWith("/w/stitch-prev.mp4", "/w/stitch-next.mp4", 8, 8, "best-pair")
+    expect(valueOf(ffmpegRuns()[1]!, "-vf")).toContain(",trim=end_frame=5,")
+    expect(boundary).toMatchObject({ matched: true, trimStartFrames: 2 })
+    expect(encodeChains()["[ev]"]).toContain("trim=start_frame=2:end_frame=5,")
+  })
+
+  describe("leading repeats (dropLeadingRepeats)", () => {
+    /** ffmpeg's psnr stats for these pair PSNRs, in order (`inf`: identical frames). */
+    const psnrStats = (values: number[]): string =>
+      values.map((v, i) => `n:${i + 1} mse_avg:0.00 mse_y:0.00 psnr_avg:${v === Infinity ? "inf" : v.toFixed(2)} psnr_y:0.00 `).join("\n") + "\n"
+    const graphOf = (args: readonly string[]): string => valueOf(args, "-filter_complex") ?? ""
+    const isRepeatProbe = (args: readonly string[]): boolean => graphOf(args).includes("psnr=")
+    const repeatProbes = (): string[][] => ffmpegRuns().filter(isRepeatProbe)
+    /** The repeat probe answers with `values`; every other run with nothing. */
+    const probeAnswers = (values: number[]) =>
+      mocks.runFfmpeg.mockImplementation(async (args: string[]) => (isRepeatProbe(args) ? psnrStats(values) : ""))
+    const PIXVERSE: ExtendStitchArgs = { ...ARGS, fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 }, dropLeadingRepeats: true }
+
+    /** The extension's picture chain up to its fit, as the encode reads it: frames [start, 48), and the frames it skips. */
+    const extensionChain = (start: number, skip?: string): string =>
+      `[1:v:0]fps=24/1,tpad=stop_mode=clone:stop=-1,trim=${start > 0 ? `start_frame=${start}:` : ""}end_frame=48,setpts=PTS-STARTPTS,` +
+      `${skip ? `${skip},` : ""}scale=854:480:force_original_aspect_ratio=increase,`
+
+    it("after a matched cut, drops the kept new part's leading repeats, each against the new frame before it, as more start trim", async () => {
+      mocks.getSmartCutMatcher.mockReturnValue(vi.fn().mockResolvedValue(cut({ trimEndFrames: 2, trimStartFrames: 5 })))
+      mocks.probeMatched.mockImplementation(async (p: string) => (p === ARGS.extensionPath ? { ...EXTENSION, audioCodec: "aac" } : SOURCE))
+      // New frames 5, 6, 7 repeat the frame before them (5 against the matcher's twin, 4); 8 moves.
+      probeAnswers([70, 66, 72, 30, 70, 70, 70, 70, 70, 70, 70, 70])
+      const { boundary } = await stitchExtension(PIXVERSE)
+      expect(boundary).toEqual({ matched: true, psnrDb: 41.23, trimEndFrames: 2, trimStartFrames: 8, searchedPrevFrames: 8, searchedNextFrames: 8 })
+      // Measured on the new part alone, at its own rate: frame 4 (the twin) then the 12 candidates 5–16.
+      const [probe] = repeatProbes()
+      expect(probe!.filter((a) => a === "-i")).toHaveLength(1)
+      expect(valueOf(probe!, "-i")).toBe(ARGS.extensionPath)
+      expect(graphOf(probe!).startsWith("[0:v:0]trim=start_frame=4:end_frame=17,setpts=PTS-STARTPTS,")).toBe(true)
+      // After the search, before the encode, which drops them with the twin: one start trim.
+      expect(ffmpegRuns().findIndex(isRepeatProbe)).toBe(2)
+      expect(encodeChains()["[sv]"]).toContain("trim=end_frame=70,")
+      expect(encodeChains()["[ev]"].startsWith(extensionChain(8))).toBe(true)
+      // The sound starts with the picture: 8 frames' time later (16000 samples at 48 kHz), the 40 frames kept long.
+      expect(encodeChains()["[ea]"]).toContain(",atrim=start_sample=16000,asetpts=PTS-STARTPTS,apad,atrim=end_sample=80000[ea]")
+    })
+
+    it("a hold whose first frame is the matched twin: the cut drops new[0], its repeats new[1..3] go too", async () => {
+      mocks.getSmartCutMatcher.mockReturnValue(vi.fn().mockResolvedValue(cut({ trimEndFrames: 0, trimStartFrames: 1 })))
+      probeAnswers([Infinity, Infinity, Infinity, 25, 26, 24, 27, 25, 26, 24, 27, 25])
+      const { boundary } = await stitchExtension(PIXVERSE)
+      expect(boundary).toMatchObject({ matched: true, trimEndFrames: 0, trimStartFrames: 4 })
+      expect(graphOf(repeatProbes()[0]!).startsWith("[0:v:0]trim=end_frame=13,setpts=PTS-STARTPTS,")).toBe(true)
+      expect(encodeChains()["[ev]"].startsWith(extensionChain(4))).toBe(true)
+    })
+
+    it("the staging clip: the matcher dropped the whole hold, the first kept frame moves, nothing more goes", async () => {
+      mocks.getSmartCutMatcher.mockReturnValue(vi.fn().mockResolvedValue(cut({ trimEndFrames: 0, trimStartFrames: 4 })))
+      probeAnswers([25, 26, 24, 27, 25, 26, 24, 27, 25, 26, 24, 27])
+      const { boundary } = await stitchExtension(PIXVERSE)
+      expect(boundary.trimStartFrames).toBe(4)
+      expect(encodeChains()["[ev]"].startsWith(extensionChain(4))).toBe(true)
+    })
+
+    it("with no matcher: the fixed trims (0/0), new[0] kept, the repeats after it skipped, the sound cut by as many frames from its start", async () => {
+      mocks.probeMatched.mockImplementation(async (p: string) => (p === ARGS.extensionPath ? { ...EXTENSION, audioCodec: "aac" } : SOURCE))
+      // new[1..3] repeat new[0]; new[4] moves.
+      probeAnswers([Infinity, Infinity, Infinity, 25, 26, 24, 27, 25, 26, 24, 27, 25])
+      const { boundary } = await stitchExtension(PIXVERSE)
+      // The total dropped, as reported.
+      expect(boundary).toEqual({ matched: false, psnrDb: null, trimEndFrames: 0, trimStartFrames: 3, searchedPrevFrames: null, searchedNextFrames: null })
+      // Measured on new frames 0–12: 12 pairs, new[1] against new[0] first.
+      expect(graphOf(repeatProbes()[0]!).startsWith("[0:v:0]trim=end_frame=13,setpts=PTS-STARTPTS,")).toBe(true)
+      // The picture keeps new[0], skips new[1..3] and goes on from new[4], restamped frame by frame.
+      expect(encodeChains()["[ev]"].startsWith(extensionChain(0, "select=not(between(n\\,1\\,3)),setpts=N/FRAME_RATE/TB"))).toBe(true)
+      // The sound loses those 3 frames' time from its start (6000 samples at 48 kHz), and is as long as the 45 frames kept.
+      expect(encodeChains()["[ea]"]).toContain(",atrim=start_sample=6000,asetpts=PTS-STARTPTS,apad,atrim=end_sample=90000[ea]")
+    })
+
+    it("drops nothing when the first candidate does not repeat the new frame before it", async () => {
+      probeAnswers([38.8, Infinity, Infinity, Infinity, 30, 30, 30, 30, 30, 30, 30, 30])
+      const { boundary } = await stitchExtension(PIXVERSE)
+      expect(boundary.trimStartFrames).toBe(0)
+      expect(encodeChains()["[ev]"].startsWith(extensionChain(0))).toBe(true)
+    })
+
+    it("is never measured without the flag (Seedance, Kling 4)", async () => {
+      mocks.getSmartCutMatcher.mockReturnValue(vi.fn().mockResolvedValue(cut({})))
+      probeAnswers([Infinity, Infinity])
+      const { boundary } = await stitchExtension(ARGS)
+      expect(repeatProbes()).toHaveLength(0)
+      expect(boundary.trimStartFrames).toBe(5)
+    })
+
+    it("a probe that fails drops nothing and the stitch goes on", async () => {
+      mocks.runFfmpeg.mockImplementation(async (args: string[]) => {
+        if (isRepeatProbe(args)) throw new Error("ffmpeg failed")
+        return ""
+      })
+      const { boundary } = await stitchExtension(PIXVERSE)
+      expect(boundary.trimStartFrames).toBe(0)
+      expect(encodeChains()["[ev]"].startsWith(extensionChain(0))).toBe(true)
+    })
+
+    it("never drops the new part's last frame: a short new part is measured up to its last frame but one", async () => {
+      mocks.probeMatched.mockImplementation(async (p: string) => (p === ARGS.extensionPath ? { ...EXTENSION, videoDurationSec: 5 / 24 } : SOURCE))
+      probeAnswers([Infinity, Infinity, Infinity, Infinity])
+      const { boundary } = await stitchExtension(PIXVERSE)
+      // new[0] and new[1..3] (the candidates) measured; new[4], the last, never is.
+      expect(graphOf(repeatProbes()[0]!).startsWith("[0:v:0]trim=end_frame=4,setpts=PTS-STARTPTS,")).toBe(true)
+      expect(boundary.trimStartFrames).toBe(3)
+      expect(encodeChains()["[ev]"]).toContain("trim=end_frame=5,setpts=PTS-STARTPTS,select=not(between(n\\,1\\,3)),")
+
+      // A two-frame new part: nothing to measure (new[0] is kept, new[1] is the last).
+      mocks.runFfmpeg.mockClear()
+      mocks.probeMatched.mockImplementation(async (p: string) => (p === ARGS.extensionPath ? { ...EXTENSION, videoDurationSec: 2 / 24 } : SOURCE))
+      expect((await stitchExtension(PIXVERSE)).boundary.trimStartFrames).toBe(0)
+      expect(repeatProbes()).toHaveLength(0)
+    })
+
+    // A 24 fps new part on a 60 fps source: the encode shows each PixVerse frame on 2 or 3
+    // output frames. The repeats are measured on PixVerse's own frames, then taken out by time.
+    describe("a 24 fps new part on a 60 fps source", () => {
+      const SOURCE_60: MatchedProbe = { ...SOURCE, fpsRational: "60/1", nominalFpsRational: "60/1" }
+      beforeEach(() => {
+        mocks.probeMatched.mockImplementation(async (p: string) => (p === ARGS.extensionPath ? { ...EXTENSION, audioCodec: "aac" } : SOURCE_60))
+      })
+
+      it("drops nothing when PixVerse's frames all move, though the conform repeats each of them", async () => {
+        probeAnswers([25, 26, 24, 27, 25, 26, 24, 27, 25, 26, 24, 27])
+        const { boundary } = await stitchExtension(PIXVERSE)
+        expect(boundary.trimStartFrames).toBe(0)
+        // PixVerse frames 0–12, at 24 fps: no conform in the measure.
+        expect(graphOf(repeatProbes()[0]!).startsWith("[0:v:0]trim=end_frame=13,setpts=PTS-STARTPTS,")).toBe(true)
+        expect(encodeChains()["[ev]"]).toContain("[1:v:0]fps=60/1,tpad=stop_mode=clone:stop=-1,trim=end_frame=120,setpts=PTS-STARTPTS,scale=")
+      })
+
+      it("drops a 4-frame repeat's time, 4/24 s (10 output frames), after frame 0's own time", async () => {
+        // PixVerse frames 1–4 repeat frame 0; frame 5 moves.
+        probeAnswers([Infinity, Infinity, Infinity, Infinity, 25, 26, 24, 27, 25, 26, 24, 27])
+        const { boundary } = await stitchExtension(PIXVERSE)
+        // Reported in output frames: the 10 that showed PixVerse frames 1–4.
+        expect(boundary).toEqual({ matched: false, psnrDb: null, trimEndFrames: 0, trimStartFrames: 10, searchedPrevFrames: null, searchedNextFrames: null })
+        // Frame 0 shows on output frames 0–2; frames 1–4 on 3–12, skipped; frame 5 from 13 on.
+        expect(encodeChains()["[ev]"]).toContain("trim=end_frame=120,setpts=PTS-STARTPTS,select=not(between(n\\,3\\,12)),setpts=N/FRAME_RATE/TB,")
+        // The sound loses those 10 frames' time (8000 samples), and is as long as the 110 kept.
+        expect(encodeChains()["[ea]"]).toContain(",atrim=start_sample=8000,asetpts=PTS-STARTPTS,apad,atrim=end_sample=88000[ea]")
+      })
+    })
   })
 
   it("fails on an extension with no video stream, before encoding", async () => {

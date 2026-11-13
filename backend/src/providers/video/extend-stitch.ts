@@ -4,10 +4,15 @@
  * frame rate and picture quality.
  *
  * - The boundary is found on two small proxies (the source's last
- *   `framesFromPrev` frames and the extension's first `framesFromNext`, made
+ *   `framesFromPrev` frames and the extension's first `framesFromNext`, each
+ *   with a margin of frames beyond its window, `boundaryProxySpans`, made
  *   exactly as the stitch reads each picture) by the smart-cut matcher when
  *   one is registered (`smart-cut.ts`). With no matcher, no match or a failed
  *   search, the caller's fixed trims apply: combineVideos' semantics.
+ * - When the caller asks (`dropLeadingRepeats`: PixVerse V6), the frames at
+ *   the start of the kept extension that repeat the extension's frame before
+ *   them, measured on its own frames at its own rate, are dropped after the
+ *   cut by their time and counted in its start trim (`extend-stitch-repeats.ts`).
  * - The picture, the sound and the encode are built by `extend-stitch-args.ts`
  *   (pure), as its header sets out; here both clips are probed, each picture's
  *   frames counted at the output rate, the boundary found, and ffmpeg run.
@@ -16,6 +21,7 @@ import { join } from "node:path"
 import { probeAudioSampleRate, probeVideoOverlayBase, runFfmpeg, type VideoOverlayBaseProbe } from "./ffmpeg-utils.js"
 import { probeMatched, probeMatchedOrThrow, type MatchedProbe } from "./matched-encode.js"
 import {
+  boundaryProxySpans,
   deliveredPictureFilter,
   deliveredShape,
   extendStitchArgs,
@@ -31,6 +37,7 @@ import {
   type StitchRate,
 } from "./extend-stitch-args.js"
 import { getSmartCutMatcher, type SmartCutBoundary } from "./smart-cut.js"
+import { measureLeadingRepeats, type LeadingRepeats } from "./extend-stitch-repeats.js"
 import { cameraMegapixelsOf, canvasPeakMemoryMiB, toneMapPeakMemoryMiB, UHD_CANVAS } from "./ffmpeg-memory-model.js"
 import { defaultLaunchPeakMiB } from "./ffmpeg-admission-instance.js"
 import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
@@ -46,6 +53,14 @@ export interface ExtendStitchArgs {
   fallbackTrims: { trimEndFrames: number; trimStartFrames: number }
   /** The sound's crossfade at the join, in seconds. */
   audioFadeSec: number
+  /**
+   * After the cut, also drop the frames at the start of the kept extension
+   * that repeat the extension's frame before them (`extend-stitch-repeats.ts`):
+   * PixVerse V6's native extension, whose new part can open on a brief hold.
+   * Their count is added to the reported start trim. Absent: nothing more is
+   * dropped.
+   */
+  dropLeadingRepeats?: boolean
 }
 
 export interface ExtendStitchResult {
@@ -58,7 +73,13 @@ export interface ExtendStitchResult {
     psnrDb: number | null
     /** Frames dropped from the source's end, as applied. */
     trimEndFrames: number
-    /** Frames dropped from the extension's start (at the source's rate), as applied. */
+    /**
+     * Frames dropped from the extension's start (at the source's rate), as
+     * applied: the cut's, plus the output frames that showed its leading
+     * repeats (`dropLeadingRepeats`: measured on its own frames, dropped by
+     * their time). With no cut those repeats follow its first frame, which is
+     * kept.
+     */
     trimStartFrames: number
     /** The windows the matcher searched (its clamp); null when no search ran or it failed. */
     searchedPrevFrames: number | null
@@ -66,7 +87,14 @@ export interface ExtendStitchResult {
   }
 }
 
-interface StitchLayout { source: MatchedProbe; rate: StitchRate; shape: PictureShape; sourceFrames: number; extensionFrames: number }
+interface StitchLayout {
+  source: MatchedProbe
+  extension: MatchedProbe
+  rate: StitchRate
+  shape: PictureShape
+  sourceFrames: number
+  extensionFrames: number
+}
 
 /**
  * The matcher's verdict on the boundary, or null when there is none to have:
@@ -86,15 +114,49 @@ async function searchBoundary(
   }
   const { framesFromPrev, framesFromNext } = args.smartCut
   const { source, rate, shape, sourceFrames, extensionFrames } = layout
+  const spans = boundaryProxySpans(args.smartCut, { source: sourceFrames, extension: extensionFrames })
   const prev = join(args.workDir, "stitch-prev.mp4")
   const next = join(args.workDir, "stitch-next.mp4")
   try {
-    await runFfmpeg(stitchProxyArgs(args.sourcePath, sourcePicture(source, shape, rate, Math.max(0, sourceFrames - framesFromPrev), sourceFrames), prev), undefined, launch)
-    await runFfmpeg(stitchProxyArgs(args.extensionPath, extensionPicture(rate, shape, 0, Math.min(framesFromNext, extensionFrames)), next), undefined, launch)
+    await runFfmpeg(stitchProxyArgs(args.sourcePath, sourcePicture(source, shape, rate, spans.prev.start, spans.prev.end), prev), undefined, launch)
+    await runFfmpeg(stitchProxyArgs(args.extensionPath, extensionPicture(rate, shape, spans.next.start, spans.next.end), next), undefined, launch)
     return await matcher(prev, next, framesFromPrev, framesFromNext, "best-pair")
   } catch (err) {
     console.log(`[extendStitch] smart cut failed, keeping the fixed trims: ${err instanceof Error ? err.message : String(err)}`)
     return null
+  }
+}
+
+/**
+ * The frames at the start of the kept extension that repeat the extension's
+ * frame before them (`measureLeadingRepeats`), counted after the cut
+ * `applied` on the extension's own frames, at its own rate, and the output
+ * frames that show them, when the caller asked for the drop: at most
+ * `MAX_LEADING_REPEATS` of its own frames, never its last frame. None when
+ * not asked for, when nothing repeats, or when the measure fails: a failure
+ * never fails the stitch.
+ */
+async function leadingRepeatsAfter(
+  args: ExtendStitchArgs,
+  layout: StitchLayout,
+  applied: ExtendStitchResult["boundary"],
+  launch: { peakMemoryMiB: number },
+): Promise<LeadingRepeats | undefined> {
+  if (!args.dropLeadingRepeats) return undefined
+  try {
+    // The extension's own rate, read as the stitch reads a source's, and its own frame count at it.
+    const native = stitchRate(layout.extension).fps
+    const repeats = await measureLeadingRepeats({
+      extensionPath: args.extensionPath,
+      rates: { native, output: layout.rate.fps },
+      keptStart: applied.trimStartFrames,
+      nativeFrames: Math.round((pictureSecondsOf(layout.extension) ?? 0) * native),
+      outputFrames: layout.extensionFrames,
+    }, launch)
+    return repeats.output.count > 0 ? repeats : undefined
+  } catch (err) {
+    console.log(`[extendStitch] leading-repeat measure failed, dropping none: ${err instanceof Error ? err.message : String(err)}`)
+    return undefined
   }
 }
 
@@ -230,10 +292,19 @@ export async function stitchExtension(args: ExtendStitchArgs): Promise<ExtendSti
   const delivered = deliveredShape(shape)
 
   const launch = { peakMemoryMiB: extendPeakMemoryMiB(delivered, [shape, extensionSize], isHdr(source)) }
-  const cut = await searchBoundary(args, { source, rate, shape, sourceFrames, extensionFrames }, launch)
-  const boundary = boundaryOf(args.fallbackTrims, cut, { source: sourceFrames, extension: extensionFrames })
+  const layout: StitchLayout = { source, extension, rate, shape, sourceFrames, extensionFrames }
+  const cut = await searchBoundary(args, layout, launch)
+  const applied = boundaryOf(args.fallbackTrims, cut, { source: sourceFrames, extension: extensionFrames })
+  // The new part's leading repeats, after the cut: the output frames that show them,
+  // counted in its reported start trim.
+  const repeats = await leadingRepeatsAfter(args, layout, applied, launch)
+  const boundary = repeats ? { ...applied, trimStartFrames: applied.trimStartFrames + repeats.output.count } : applied
+  const repeatsSaid = repeats
+    ? `${repeats.output.count} of them leading repeats (its own frames ${repeats.native.from}–${repeats.native.from + repeats.native.count - 1})`
+    : "none of them leading repeats"
   console.log(
     `[extendStitch] ${boundary.matched ? "smart cut" : "fixed trims"}: end-trim ${boundary.trimEndFrames}, start-trim ${boundary.trimStartFrames}` +
+      `${args.dropLeadingRepeats ? ` (${repeatsSaid})` : ""}` +
       `${boundary.psnrDb !== null ? ` (PSNR ${boundary.psnrDb} dB)` : ""}, ${delivered.width}x${delivered.height}` +
       `${delivered === shape ? "" : ` (from ${shape.width}x${shape.height})`}${shape.sarRatio ? ` SAR ${shape.sarRatio}` : ""} @ ${rate.spelling}`,
   )
@@ -250,8 +321,9 @@ export async function stitchExtension(args: ExtendStitchArgs): Promise<ExtendSti
     picture: shape,
     sourceFrames,
     extensionFrames,
-    trimEndFrames: boundary.trimEndFrames,
-    trimStartFrames: boundary.trimStartFrames,
+    trimEndFrames: applied.trimEndFrames,
+    trimStartFrames: applied.trimStartFrames,
+    ...(repeats ? { repeatFrames: repeats.output } : {}),
     audioFadeSec: args.audioFadeSec,
     sourceHasAudio,
     extensionHasAudio: Boolean(extension.audioCodec),

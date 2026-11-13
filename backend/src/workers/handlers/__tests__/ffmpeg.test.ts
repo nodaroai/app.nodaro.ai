@@ -230,11 +230,21 @@ vi.mock("../../shared.js", () => ({
   setJobProgress: vi.fn(async () => {}),
 }))
 
+// Nemotron 3.5 Transcribe on a caption render (decided 2026-11-13): the audio
+// track's extraction, storage and KIE call are the run module's own tests; here
+// only what the handler hands it and what it hands the render worker.
+const nemotronRun = vi.hoisted(() => ({ fn: vi.fn() }))
+vi.mock("@/lib/add-captions-nemotron-run.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/add-captions-nemotron-run.js")>()),
+  transcribeCaptionVideoOnNemotron: nemotronRun.fn,
+}))
+
 // ---------------------------------------------------------------------------
 // Import module under test
 // ---------------------------------------------------------------------------
 
 import { ffmpegHandlers } from "../ffmpeg.js"
+import { addCaptionsNemotronMinutesId } from "@nodaro/shared/credits"
 import { applyEdlRenderBudgetMs } from "@/providers/video/apply-edl.js"
 import { BUDGETED_JOB_NAMES, declaredJobBudgetMs } from "@/lib/job-budget.js"
 import { unitDescriptorOf } from "@/lib/unit-descriptors.js"
@@ -1713,5 +1723,88 @@ describe("video-overlay handler", () => {
     mocks.mockCompleteFfmpegVideoJob.mockRejectedValueOnce(new Error("R2 put failed"))
     await expect(handler(makeJob("video-overlay", data) as never, makeCtx())).rejects.toThrow("R2 put failed")
     expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/video-overlay-work")
+  })
+})
+
+describe("add-captions handler — Nemotron 3.5 Transcribe (one charge: the render plus the video's minutes)", () => {
+  const handler = ffmpegHandlers["add-captions"]
+  const HELD = addCaptionsNemotronMinutesId(10)
+  const nemotronJob = (extra: Record<string, unknown> = {}) =>
+    makeJob("add-captions", {
+      videoUrl: "https://v.mp4",
+      style: "karaoke",
+      transcribe_provider: "nemotron-3-5-transcribe",
+      bucketKey: HELD,
+      duration_seconds: 600,
+      ...extra,
+    })
+  const renderData = () => mocks.mockRenderQueueAdd.mock.calls[0]![1] as Record<string, unknown>
+
+  beforeEach(() => {
+    nemotronRun.fn.mockReset()
+    mocks.mockShouldRunOnCloud.mockResolvedValue(false)
+  })
+
+  it("transcribes the video's audio here and hands the render KIE's figures to settle the per-minute hold on", async () => {
+    nemotronRun.fn.mockResolvedValue({
+      words: [{ text: "hi", startMs: 0, endMs: 900 }],
+      ranLocally: true,
+      kieSec: 610,
+      kieCredits: 3.05,
+      providerCost: 0.01525,
+    })
+    await handler(nemotronJob() as never, makeCtx())
+    expect(nemotronRun.fn).toHaveBeenCalledTimes(1)
+    const args = nemotronRun.fn.mock.calls[0]![0] as Record<string, unknown>
+    expect(args).toMatchObject({ jobId: "job-1", videoUrl: "https://v.mp4", measuredSec: 600 })
+    expect(args.relay).toBeUndefined()
+    expect(mocks.mockTranscribe).not.toHaveBeenCalled()
+    expect(renderData().captionsCharge).toEqual({
+      kind: "nemotron",
+      heldId: HELD,
+      measuredSec: 600,
+      kieSec: 610,
+      kieCredits: 3.05,
+      providerCost: 0.01525,
+    })
+    // The render worker owns the one commit.
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("relayed (a keyless install): the cloud gets the stored audio on Nemotron with word timings, and a per-minute hold settles down to the render", async () => {
+    mocks.mockShouldRunOnCloud.mockResolvedValue(true)
+    mocks.mockRunJobOnCloud.mockResolvedValueOnce({ text: "hi", words: [{ text: "hi", startMs: 0, endMs: 900 }] })
+    nemotronRun.fn.mockImplementation(async (a: { relay?: (url: string) => Promise<Record<string, unknown>> }) => ({
+      ...(await a.relay!("https://media.example/captions-audio.mp3")),
+      ranLocally: false,
+    }))
+    await handler(nemotronJob() as never, makeCtx())
+    expect(mocks.mockRunJobOnCloud.mock.calls[0]![1]).toMatchObject({
+      audioUrl: "https://media.example/captions-audio.mp3",
+      provider: "nemotron-3-5-transcribe",
+      wordTimestamps: true,
+    })
+    expect(mocks.mockRunJobOnCloud.mock.calls[0]![1]).not.toHaveProperty("targetLanguage")
+    expect(renderData().captionsCharge).toEqual({ kind: "at", heldId: HELD, creditId: "add-captions:kinetic" })
+  })
+
+  it("a video with no audio track and a text fallback renders the text, the hold settling down to the render", async () => {
+    nemotronRun.fn.mockResolvedValue(null)
+    await handler(nemotronJob({ text: "Hello there" }) as never, makeCtx())
+    expect(mocks.mockRenderQueueAdd).toHaveBeenCalledTimes(1)
+    expect(renderData().captionsCharge).toEqual({ kind: "at", heldId: HELD, creditId: "add-captions:kinetic" })
+  })
+
+  it("a video with no audio track and nothing else to caption fails with a message about the audio", async () => {
+    nemotronRun.fn.mockResolvedValue(null)
+    await expect(handler(nemotronJob() as never, makeCtx())).rejects.toThrow(/no audio track/)
+    expect(mocks.mockRenderQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it("another engine's render carries no charge: the hold committed as before", async () => {
+    mocks.mockTranscribe.mockResolvedValueOnce({ text: "hi", words: [{ text: "hi", startMs: 0, endMs: 900 }] })
+    await handler(makeJob("add-captions", { videoUrl: "https://v.mp4", style: "karaoke", transcribe_provider: "elevenlabs-stt" }) as never, makeCtx())
+    expect(nemotronRun.fn).not.toHaveBeenCalled()
+    expect(renderData()).not.toHaveProperty("captionsCharge")
   })
 })

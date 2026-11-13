@@ -83,6 +83,56 @@ describe("useAddCaptionsCreditId", () => {
 })
 
 /**
+ * Nemotron 3.5 Transcribe (decided 2026-11-13): a node that transcribes on it is
+ * ONE charge, the render plus the video's started minutes — the badge and the
+ * panel quote the per-minute id its run holds, at the length the graph knows,
+ * else at 60 minutes; a node that transcribes nothing stays on the render's row.
+ */
+describe("useAddCaptionsCreditId — Nemotron 3.5 Transcribe", () => {
+  const nemotron = (data: Record<string, unknown> = {}) =>
+    node("ac", "add-captions", { style: "word-highlight", transcribeProvider: "nemotron-3-5-transcribe", ...data })
+
+  beforeEach(() => {
+    storeState = { nodes: [], edges: [] }
+  })
+
+  it("an unknown video length quotes the 60-minute id, never the render's row alone", () => {
+    expect(idFor(nemotron())).toBe("add-captions:kinetic:nemotron:60m")
+  })
+
+  it("an uploaded video quotes its own started minutes (4:50 → 5)", () => {
+    const video = node("v1", "upload-video", { url: "https://cdn.example/v.mp4", duration: 290 })
+    expect(idFor(nemotron(), [edge("v1", "ac", "in")], [video])).toBe("add-captions:kinetic:nemotron:5m")
+  })
+
+  it("a node that transcribes nothing — its own captions, auto-transcribe off, a subtitle's text — is the render's row", () => {
+    expect(idFor(nemotron({ captions: [{ text: "hi", startMs: 0, endMs: 1 }] }))).toBe("add-captions:kinetic")
+    expect(idFor(nemotron({ autoTranscribe: false, text: "Hello" }))).toBe("add-captions:kinetic")
+    expect(idFor(nemotron({ style: "subtitle", text: "Hello" }))).toBe("add-captions")
+  })
+
+  it("a Transcript or a transcribe node that returns words wired in replaces the transcription: the render's row", () => {
+    expect(idFor(nemotron(), [edge("t1", "ac", "transcript")], [node("t1", "apply-edl")])).toBe("add-captions:kinetic")
+    expect(idFor(nemotron(), [edge("t1", "ac", "in")], [node("t1", "transcribe")])).toBe("add-captions:kinetic")
+    expect(idFor(nemotron(), [edge("t1", "ac", "in")], [node("t1", "transcribe", { provider: "incredibly-fast-whisper", wordTimestamps: true })])).toBe(
+      "add-captions:kinetic",
+    )
+  })
+
+  // The run hands the node a Transcribe node's words only when there are some: a wordless one leaves it
+  // transcribing (its text is only a kinetic style's fallback), so the quote stays the dearer one.
+  it("a transcribe node that returns no words does not: the per-minute id still", () => {
+    expect(idFor(nemotron(), [edge("t1", "ac", "in")], [node("t1", "transcribe", { provider: "whisper" })])).toBe("add-captions:kinetic:nemotron:60m")
+    expect(idFor(nemotron(), [edge("t1", "ac", "in")], [node("t1", "transcribe", { provider: "nemotron-3-5-transcribe", targetLanguage: "es" })])).toBe(
+      "add-captions:kinetic:nemotron:60m",
+    )
+    // A lane that gives words only when asked: its text pip wired in, its json pip nowhere, not asked.
+    const textPip = { ...edge("t1", "ac", "in"), sourceHandle: "text" } as WorkflowEdge
+    expect(idFor(nemotron(), [textPip], [node("t1", "transcribe", { provider: "incredibly-fast-whisper" })])).toBe("add-captions:kinetic:nemotron:60m")
+  })
+})
+
+/**
  * Structural: the card must ASK for that id. The defect was a hardcoded model id
  * in the card itself, which no behavioural test of the hook can see.
  */
