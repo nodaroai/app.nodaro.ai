@@ -1,5 +1,32 @@
 # @nodaro/cli
 
+## 1.50.1
+
+### Patch Changes
+
+- b46bdac: `nodaro media add-captions --transcribe-provider nemotron-3-5-transcribe` transcribes the video on Nemotron 3.5 Transcribe, priced as the render plus the video's started minutes.
+- Updated dependencies [b46bdac]
+- Updated dependencies [b46bdac]
+- Updated dependencies [68f8354]
+- Updated dependencies [68f8354]
+- Updated dependencies [a4d8274]
+- Updated dependencies [a4d8274]
+- Updated dependencies [725cad1]
+- Updated dependencies [725cad1]
+- Updated dependencies [e29fbbb]
+- Updated dependencies [e29fbbb]
+- Updated dependencies [9ed060b]
+- Updated dependencies [d07e7f3]
+- Updated dependencies [62f0aaf]
+- Updated dependencies [13f8275]
+- Updated dependencies [f6944b4]
+- Updated dependencies [62f0aaf]
+- Updated dependencies [bcf7072]
+- Updated dependencies [9ed060b]
+  - @nodaro/sdk@2.71.0
+  - @nodaro/shared@3.64.0
+  - @nodaro/prompts@1.56.0
+
 ## 1.50.0
 
 ### Minor Changes
