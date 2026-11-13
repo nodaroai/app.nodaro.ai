@@ -36,7 +36,7 @@ import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { usecaseFailedRunFields, usecaseRefusedBeforeWorkPatch, usecaseRestoredResults } from "@/lib/use-case-run-result"
 import { carriesRowStamps, runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
-import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitSideJobFields, unitSideListRowFields, unitSideRunFields } from "@/lib/json-run-result"
+import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitBatchClearFields, unitSideJobFields, unitSideListRowFields, unitSideRunFields } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, UGC_NEWER_RUN_WINS_TYPES, UGC_NEWER_TAKE_WINS_TYPE, UGC_PATCH_REPLACES_GENERIC, holdsUgcRunResult, ugcCreatorShowsRun, ugcEndedRunMayLand, ugcFinishEndedRunMayLand, ugcFinishShowsThisOrNewer, ugcRunIsNewer, ugcRunPatch, ugcRunShowsThisOrNewer, ugcStopPatch } from "@/lib/ugc-run-patch"
 import { ugcFinishNodeIds } from "@nodaro/render-rules"
 import { isSeededState } from "@/lib/seeded-node-state"
@@ -198,7 +198,7 @@ export const SAVE_QUEUE_WAIT_MS = SAVE_TIMEOUT_MS + 5_000
  * This function checks for any nodes with "running" status and updates them
  * with the actual job results from the database.
  */
-async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: WorkflowNode[]; stillRunningJobs: StillRunningJob[] }> {
+export async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: WorkflowNode[]; stillRunningJobs: StillRunningJob[] }> {
   // Find all nodes that might need syncing:
   // 1. Nodes with executionStatus === "running" or "pending"
   // 2. Nodes with generatedResults that have jobIds we can check
@@ -348,6 +348,8 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
         currentJobProgress: undefined,
         ...(overlayRun ?? {}),
         ...(sideRun ?? {}),
+        // A single run ends a node unit's batch: on the node only.
+        ...unitBatchClearFields(node.type, job.output_data),
       }
 
       // Set the appropriate URL field based on output type
@@ -598,6 +600,8 @@ export function applyBackendExecutionState(
         // A node unit's side outputs (a list, JSON beside the take): on the node and the take — the live lane's mapping.
         const sideRun = unitSideRunFields(nodeType, state.output)
         if (sideRun) Object.assign(data, sideRun)
+        // …and a single run ends its batch (an output with no listResults): on the node only.
+        Object.assign(data, unitBatchClearFields(nodeType, state.output))
         // Choose Best (reduce): the winner + the strategy's meta — the live lane's mapping.
         Object.assign(data, reduceRunOutputFields(nodeType, state.output))
         Object.assign(data, splitMediaRunOutputFields(nodeType, state.output))
@@ -872,6 +876,8 @@ export function applyCompletedExecutionResults(
     // A node unit's side outputs (a list, JSON beside the take): on the node and the take — the live lane's mapping.
     const sideRun = unitSideRunFields(nodeType, state.output)
     if (sideRun) Object.assign(newData, sideRun)
+    // …and a single run ends its batch (an output with no listResults): on the node only.
+    Object.assign(newData, unitBatchClearFields(nodeType, state.output))
     // Choose Best (reduce): winner + the judge's reasoning — the live lane's mapping.
     Object.assign(newData, reduceRunOutputFields(nodeType, state.output))
     Object.assign(newData, splitMediaRunOutputFields(nodeType, state.output))

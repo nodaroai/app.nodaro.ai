@@ -38,7 +38,10 @@ describe("a canvas run of Split into Layers lands its layers beside the base", (
 
     await expect(executor.execute(node, kit)).resolves.toBe(BASE)
     expect(updateNodeData).toHaveBeenCalledWith("n1", { generatedLayerUrls: undefined, layersNotSaved: undefined, generatedLayerData: undefined })
-    expect(poll).toHaveBeenCalledWith("n1", expect.any(Function), "generatedImageUrl", definition.label, ctx, expect.any(Function))
+    // …and the node-only fields its take lands with: nothing, since no earlier batch is held.
+    expect(poll).toHaveBeenCalledWith("n1", expect.any(Function), "generatedImageUrl", definition.label, ctx, expect.any(Function), expect.any(Function))
+    const nodeFields = (poll.mock.calls[0] as unknown as unknown[])[6] as UnitExtraOutputFields
+    expect(nodeFields({ imageUrl: BASE })).toEqual({})
 
     // The job row: the base on imageUrl, each side output under its output's id,
     // and how many layers could not be stored under layersNotSaved.

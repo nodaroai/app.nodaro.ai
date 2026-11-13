@@ -259,7 +259,7 @@ seams: a capability, an input kind (`ACCEPTS_KINDS`) or a category
 | the kept-length sets (`LENGTH_KEEPING_VIDEO_TYPES` / `EXACT_LENGTH_VIDEO_TYPES`, the `length:*` capabilities — the run estimates, the run's charge and, through them, the listing's `VIDEO_OUTPUT_LENGTH_RULES`) | `packages/render-rules/src/kept-length.ts` ∪ `unit-kept-lengths.generated.ts` |
 | the image typing sets (the server's `IMAGE_SOURCE_TYPES`; the editor's `IMAGE_SOURCE_TYPES` and `IMAGE_RESULT_TYPES`: every unit whose `contract.producer` is `image`) and the routing of a unit's image pip (as an Upload Image, both engines' `routedAs`) | `workflow-engine/execution-graph.ts` and `input-resolver.ts` (through `unit-descriptors.ts`); `lib/preview-node-types.ts`, `config-panels/results-gallery-media.ts` and `workflow-editor/node-input-resolver.ts` (through `unit-definitions.ts`) |
 | the list pips (`LIST_OUTPUT_HANDLES` / `isListOutputHandle`, read by `defaultEdgeOutputMode`: a wire leaving a list pip runs the next node once per item by default) | `packages/shared/src/producer-types.ts` ∪ `generated/unit-contracts.ts` `UNIT_LIST_PIPS` (each unit's `handles.outputs[].list`) |
-| the run estimate's count of an Each wire from a list pip (`baseFanOut`: the list the source holds when it is not re-run — after a run once per upstream item, every row's; before a first run, or when it re-runs, the most items a run makes — the `defaultData` field named by the output's `listMax`, as saved on the node, else its default — times the runs the source itself makes; with no `listMax`, the list held) | `packages/render-rules/src/node-fan-out.ts` reads the `list-outputs` data file `unit-list-outputs.generated.ts` (`UNIT_LIST_OUTPUTS`: type, pip, `from`, `max`) |
+| the run estimate's count of an Each wire from a list pip (`baseFanOut`: the list the source holds when it is not re-run — after a run once per upstream item, every row's; before a first run, or when it re-runs, the most items a run makes — the `defaultData` field named by the output's `listMax`, as saved on the node, else its default — times the runs the source itself makes; with no `listMax`, the list held; and from the unit's media take pip, the batch it holds, or one run per run the source makes when it re-runs) | `packages/render-rules/src/node-fan-out.ts` reads the `list-outputs` data file `unit-list-outputs.generated.ts` (`UNIT_LIST_OUTPUTS`: type, pip, `from`, `max`, `take`) |
 | the editor's credit id of a unit priced by its settings (`UNIT_PRICE_IDS`, each unit's `price-id.ts`) | `frontend/src/lib/unit-price-ids.ts` (`unitCreditIdOf(type, data)`), read by `getModelIdentifier` (`config-panels/helpers.ts`) and `estimateNodeCredits` (`workflow-editor/types.ts`) |
 | a provider-lane worker's provider (its `provider:*` capability) | `backend/src/lib/concurrency-lanes/provider-of.ts`, through `providerOf` (`lib/unit-descriptors.ts`) |
 | a unit's `/v1/nodes` category (`registry.category`, projected as `registryCategory`) | `backend/src/lib/node-registry.ts` (`registryCategoryOf`, `lib/unit-compose.ts`) |
@@ -380,7 +380,7 @@ URLs) beside the media keys every media node writes; both engines are held to
   every run's, row by row — below). The server's node output carries them
   on `unitLists` (by output id; non-empty strings only, an empty list is no
   value), the node holds them on the output's `from` field. A plain (Selected)
-  wire carries the first item; an Each wire — the default, `LIST_OUTPUT_HANDLES`
+  wire carries the first item (of the active take's own list — below); an Each wire — the default, `LIST_OUTPUT_HANDLES`
   in `@nodaro/shared` (`defaultEdgeOutputMode`), which the canvas edge also
   reads (`sourceListPip`: list-like, "Selected" hidden) — runs the next node
   once per item; item / item:N pick one; a Bundle hands every item, each
@@ -440,14 +440,36 @@ URLs) beside the media keys every media node writes; both engines are held to
   carries the whole on `unitLists` / `unitOutputs` / `unitListsNotSaved`; the
   editor's server-run lanes land it on the node like any run's, and its canvas
   run once per item (`executeNodeForList`) lands the same from the batch's
-  takes (`unitSideBatchFields`). While the node holds a batch
-  (`__listResults`), a wire from a side pip reads the node's fields —
-  whichever take is active, as the take pip lists the batch whichever take is
-  active (`unitSavedOutput`; the editor's `unitOutputField`): an Each wire
-  runs once per item of every row, a Bundle hands them all, a plain wire the
-  first, and item:N addresses the whole list. A single run's side outputs are
-  as they were: no `row`. The node itself shows its active take's own
-  (`read: "take"`), so switching takes shows that row's.
+  takes (`unitSideBatchFields`). Which value a read of a side pip takes is
+  one rule, `unitSideFieldOf` (`@nodaro/render-rules`; the server's
+  `unitSavedOutput`, the editor's `unitOutputField` and the run estimate's
+  held count all read through it). A LIST read (an Each wire, a Bundle,
+  item:N, a list operator) of a node holding a batch (`unitHeldBatch`) takes
+  the node's fields: every row's, whichever take is active, as the take pip
+  lists the batch whichever take is active. A PLAIN wire, a consumer of one
+  JSON value (Extract Field, JSON Process) and the node itself take the
+  ACTIVE take's own (decided 2026-11-12) — on the server's node output, the
+  take's own ride on `unitTakeSide` beside the batch's whole (the primary
+  row's on a fan-out output, the active take's on a saved one;
+  `unitPipValue`, `unitPipJson` "take"). A single run's side outputs are as
+  they were: no `row`.
+- **A single run ends the batch** (decided 2026-11-12). Every lane that lands
+  a single run of such a unit (an output with no `listResults`, or a job row)
+  empties the node's batch fields, `UNIT_BATCH_FIELDS` (`__listResults` and
+  what rides with it), on the node only, never on a take
+  (`unitBatchClearFields` beside `unitSideRunFields` / `unitSideJobFields`,
+  held by `run-result-identity-sites.test.ts`). The canvas run lands it in
+  the very write that lands its take (`pollJobWithNodeUpdate`'s
+  `opts.nodeFields`, node only), only when a batch field is set, never inside
+  a run once per item; while the node holds a batch it does not empty the
+  side fields at its start (they ARE the batch) — so a run that fails, is
+  discarded or is stopped keeps the batch whole, and no run writes an
+  invisible undo step. A node saved before this rule reads alike:
+  `unitHeldBatch` holds a batch only while its newest take
+  (`generatedResults[0]`) is one of it. The server never writes node data;
+  its single run's output carries no batch. The run estimate counts an Each
+  wire from the media take pip at the batch it holds, or one run per run the
+  source makes when it re-runs (`take` of the `UNIT_LIST_OUTPUTS` row).
 - **Storing extra images.** A worker stores its list's files through
   `finalizeJobWithMedia`'s `extraImageSets` (`lib/job-finalize.ts`): each set
   is uploaded with the result's own uploader (the job's watermark rule and the

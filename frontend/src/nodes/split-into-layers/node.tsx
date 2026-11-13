@@ -40,10 +40,10 @@ interface ShownLayer {
 
 /**
  * The layers the node shows: the active take's own when the take carries them,
- * else the node's (unit-compose.ts, `read: "take"`). After a run once per
- * picture a wire from the Layers and Layer data pips hands on every picture's;
- * the node shows the picture it shows — switching takes shows that picture's
- * layers. Each layer is named from its entry in the layer data, matched by its
+ * else the node's (unit-compose.ts, `read: "take"` — what a plain wire from
+ * the Layers and Layer data pips reads too). After a run once per picture an
+ * Each wire, a Bundle and item:N hand on every picture's; the node shows the
+ * picture it shows — switching takes shows that picture's layers. Each layer is named from its entry in the layer data, matched by its
  * URL, else by its place in the list.
  */
 function shownLayers(data: Readonly<Record<string, unknown>>): ShownLayer[] {

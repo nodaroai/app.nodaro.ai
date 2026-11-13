@@ -758,8 +758,11 @@ export {
 export {
   UNIT_BATCH_ROW_KEY,
   unitBatchSideOutputs,
+  unitHeldBatch,
+  unitSideFieldOf,
   type UnitBatchSideOutputs,
   type UnitSideOutputsRow,
+  type UnitSideRead,
 } from "./unit-batch-side-outputs"
 // What one Speaker Map run is sent, and why it is refused (both engines).
 export {

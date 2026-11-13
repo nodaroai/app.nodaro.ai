@@ -40,8 +40,11 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   }),
 }))
 
-import { applyBackendExecutionState, applyCompletedExecutionResults } from "../use-workflow-persistence"
+import { applyBackendExecutionState, applyCompletedExecutionResults, syncNodeResultsFromDB } from "../use-workflow-persistence"
+import { buildCompletedResultPatch } from "@/lib/reconcile-completed-jobs"
+import { getBatchJobStatus } from "@/lib/api"
 import { BATCH_SIDE, FANNED_OUT_OUTPUT, FIXTURE_LAYERS_UNIT, ROW_A, ROW_B } from "@/components/editor/workflow-editor/__tests__/unit-side-list-rows.fixture"
+import { UNIT_BATCH_FIELDS } from "@/lib/unit-compose"
 
 const nodes = () =>
   [{ id: "split", type: FIXTURE_LAYERS_UNIT.type, position: { x: 0, y: 0 }, data: { label: "Fixture Layers" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
@@ -64,5 +67,81 @@ describe("a unit with side outputs run once per upstream item — both load-time
   it("applyBackendExecutionState (a reload while the run is still active)", () => {
     const [out] = applyBackendExecutionState(nodes(), { split: state } as never)
     expectRows(out!.data as Record<string, unknown>)
+  })
+})
+
+/**
+ * A single run that lands after the batch (decided 2026-11-12) ends it on both
+ * load-time lanes: every batch field emptied on the node (never on a take), and
+ * the single run's take first, carrying its own side outputs.
+ */
+describe("a single run after a run once per upstream item — both load-time lanes end the batch", () => {
+  const Q = "https://r2/q-base.png"
+  const single = { imageUrl: Q, unitLists: { layers: ["https://r2/q-l1.png"] }, unitOutputs: { layerData: '[{"name":"Cat","zIndex":1}]' }, unitListsNotSaved: { layers: 0 } }
+  const batchHolding = (extra: Record<string, unknown>) =>
+    [{
+      id: "split", type: FIXTURE_LAYERS_UNIT.type, position: { x: 0, y: 0 },
+      data: {
+        label: "Fixture Layers", __listResults: [ROW_A.url, ROW_B.url], __listTotal: 2, __listCompleted: 2, __listInputs: ["a", "b"],
+        generatedResults: [{ url: ROW_A.url, jobId: "job-a" }, { url: ROW_B.url, jobId: "job-b" }], ...extra,
+      },
+    }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+  const singleState = { status: "completed" as const, startedAt: "2026-11-12T10:00:00.000Z", jobId: "job-q", output: single }
+
+  function expectEnded(data: Record<string, unknown>) {
+    for (const f of UNIT_BATCH_FIELDS) expect(data[f], f).toBeUndefined()
+    expect(data).toMatchObject({ generatedLayerUrls: ["https://r2/q-l1.png"], generatedLayerData: [{ name: "Cat", zIndex: 1 }], layersNotSaved: 0 })
+    const takes = data.generatedResults as Array<Record<string, unknown>>
+    expect(takes[0]).toMatchObject({ url: Q, generatedLayerUrls: ["https://r2/q-l1.png"] })
+    for (const f of UNIT_BATCH_FIELDS) expect(Object.hasOwn(takes[0]!, f), `take: ${f}`).toBe(false)
+  }
+
+  it("applyBackendExecutionState (a reload while the run is still active)", () => {
+    const [out] = applyBackendExecutionState(batchHolding({ generatedImageUrl: ROW_A.url }), { split: singleState } as never)
+    expectEnded(out!.data as Record<string, unknown>)
+  })
+
+  it("applyCompletedExecutionResults (a run that finished while the editor was closed, on a node it lands on)", () => {
+    const [out] = applyCompletedExecutionResults(batchHolding({ executionStatus: "running" }), { split: singleState } as never, null)
+    expectEnded(out!.data as Record<string, unknown>)
+  })
+})
+
+/**
+ * The two job lanes a reload lands a single run's job by (decided 2026-11-12):
+ * the persisted-run-state sync of a node still running (syncNodeResultsFromDB)
+ * and the recovery of a single-node job that ended while the editor was closed
+ * (buildCompletedResultPatch) — each ends the batch, on the node only.
+ */
+describe("a single run's job after a run once per upstream item — both job lanes end the batch", () => {
+  const JOB = "11111111-1111-4111-8111-111111111111"
+  const Q = "https://r2/q-base.png"
+  const outputData = { imageUrl: Q, layers: ["https://r2/q-l1.png"], layerData: [{ name: "Cat", zIndex: 1 }], layersNotSaved: 0 }
+  const batchFields = { __listResults: [ROW_A.url, ROW_B.url], __listTotal: 2, __listCompleted: 2, __listInputs: ["a", "b"] }
+
+  it("syncNodeResultsFromDB (a node a reload finds running, its job done)", async () => {
+    vi.mocked(getBatchJobStatus).mockResolvedValueOnce([{ id: JOB, status: "completed", output_data: outputData }] as never)
+    const nodes = [{
+      id: "split", type: FIXTURE_LAYERS_UNIT.type, position: { x: 0, y: 0 },
+      data: { label: "Fixture Layers", executionStatus: "running", currentJobId: JOB, ...batchFields, generatedResults: [{ url: ROW_A.url, jobId: "job-a" }, { url: ROW_B.url, jobId: "job-b" }] },
+    }] as unknown as Parameters<typeof syncNodeResultsFromDB>[0]
+    const { nodes: [out] } = await syncNodeResultsFromDB(nodes)
+    const data = out!.data as Record<string, unknown>
+    for (const f of UNIT_BATCH_FIELDS) expect(data[f], f).toBeUndefined()
+    expect(data).toMatchObject({ generatedLayerUrls: ["https://r2/q-l1.png"], generatedLayerData: [{ name: "Cat", zIndex: 1 }], layersNotSaved: 0 })
+    const take = (data.generatedResults as Array<Record<string, unknown>>)[0]!
+    expect(take).toMatchObject({ url: Q, jobId: JOB, generatedLayerUrls: ["https://r2/q-l1.png"] })
+    for (const f of UNIT_BATCH_FIELDS) expect(Object.hasOwn(take, f), `take: ${f}`).toBe(false)
+  })
+
+  it("buildCompletedResultPatch (a single-node job that ended while the editor was closed)", () => {
+    const patch = buildCompletedResultPatch(FIXTURE_LAYERS_UNIT.type, outputData, JOB, "2026-11-12T10:00:00.000Z", { ...batchFields })!
+    expect(patch).not.toBeNull()
+    for (const f of UNIT_BATCH_FIELDS) {
+      expect(Object.hasOwn(patch, f), f).toBe(true)
+      expect(patch[f], f).toBeUndefined()
+    }
+    expect(patch).toMatchObject({ generatedLayerUrls: ["https://r2/q-l1.png"], generatedImageUrl: Q })
+    for (const f of UNIT_BATCH_FIELDS) expect(Object.hasOwn((patch.generatedResults as Array<Record<string, unknown>>)[0]!, f), `take: ${f}`).toBe(false)
   })
 })

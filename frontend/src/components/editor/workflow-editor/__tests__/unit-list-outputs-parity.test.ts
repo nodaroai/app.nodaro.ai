@@ -93,9 +93,10 @@ import { applyRestoredJobCompletion, paintRunStates } from "../run-handlers"
 import { detectPreviewItemType, extractNodeOutput } from "../execution-graph"
 import { executeNode } from "../execute-node"
 import { executeNodeForList } from "../list-execution"
+import { getFanOutMultiplier } from "../types"
 import { extractNodeOutputAsList, getListFanOutForNode, resolveNodeInputs, type FrontendResolvedInputs } from "../node-input-resolver"
-import { isJsonRunResultType, unitSideJobFields, unitSideRunFields } from "@/lib/json-run-result"
-import { unitPipJson, unitPipList } from "@/lib/unit-compose"
+import { isJsonRunResultType, unitBatchClearFields, unitSideJobFields, unitSideRunFields } from "@/lib/json-run-result"
+import { UNIT_BATCH_FIELDS, unitPipJson, unitPipList } from "@/lib/unit-compose"
 import { unitDefinitionOf } from "@/lib/unit-definitions"
 import { IMAGE_SOURCE_TYPES } from "@/lib/preview-node-types"
 import { IMAGE_RESULT_TYPES, resultsGalleryDeclaresMedium, resultsGalleryMediaType } from "@/components/editor/config-panels/results-gallery-media"
@@ -124,6 +125,8 @@ interface RouteCase {
   readonly target: string
   readonly targetHandle: string
   readonly asUploads: readonly string[]
+  /** What an Each wire (`iteration`) fans out over: the source's layers when absent. */
+  readonly fanOut?: readonly string[]
 }
 interface BundleBranchCase {
   readonly name: string
@@ -134,23 +137,33 @@ interface BundleBranchCase {
   readonly targetHandle: string
   readonly inputs: Json
 }
-/** What a node shows, and each pip hands on, in one state of a batch. */
-interface BatchReads {
+/** A node holding a batch (or after one) with a take made active: what each pip hands on, and what the node shows. */
+interface BatchState {
+  readonly name: string
+  readonly activeResultIndex: number
   readonly pips: Readonly<Record<string, string | null>>
   readonly lists: Readonly<Record<string, readonly string[] | null>>
   readonly collected: Readonly<Record<string, readonly string[]>>
   /** What the node shows beside its active take (`read: "take"`): its own row's. */
   readonly shown: { readonly layers: readonly string[]; readonly layerData: unknown }
+  readonly routes?: ReadonlyArray<RouteCase>
 }
-/** A run once per upstream item: its items, each row's job (or its failure), the server's fan-out output and the node every lane leaves. */
-interface BatchCase extends BatchReads {
+/** A run once per upstream item: its items, each row's job (or its failure), the server's fan-out output, the node every lane leaves, and a single run after it. */
+interface BatchCase {
   readonly name: string
   readonly items: readonly string[]
   readonly rows: ReadonlyArray<{ readonly outputData: Json } | { readonly failed: string }>
   readonly nodeOutput: Json
   readonly data: Json
-  readonly routes: ReadonlyArray<RouteCase>
-  readonly selected: BatchReads & { readonly name: string; readonly activeResultIndex: number }
+  readonly states: readonly [BatchState, ...BatchState[]]
+  readonly rerun?: {
+    readonly name: string
+    readonly outputData: Json
+    readonly nodeOutput: Json
+    readonly data: Json
+    readonly states: readonly [BatchState, ...BatchState[]]
+    readonly staleFields: Json
+  }
 }
 const FIXTURE = JSON.parse(readFileSync(path.resolve(__dirname, "../../../../../../tools/units/__fixtures__/unit-list-outputs.json"), "utf8")) as {
   readonly unit: { readonly type: string; readonly outputs: ReadonlyArray<{ readonly id: string; readonly from: string; readonly kind: string; readonly list?: boolean }> }
@@ -177,6 +190,15 @@ const node = (id: string, type: string, data: Json): WorkflowNode => ({ id, type
 const stored = (id: string): Json => useWorkflowStore.getState().nodes.find((n) => n.id === id)!.data as Json
 /** Earlier side outputs the lanes must replace or empty — never leave beside the new take. */
 const STALE = { generatedLayerUrls: ["https://r2/stale.png"], generatedLayerData: [{ stale: true }] }
+/** An earlier run once per upstream item's batch, which a single run's landing ends (unitBatchClearFields) — every batch field. */
+const STALE_BATCH = {
+  __listResults: ["https://r2/stale-0.png", "https://r2/stale-1.png"], __alignedListResults: ["a", "b"], __listResultStamps: [{}, {}], __listResultMeta: [null, null],
+  __listInputs: ["x", "y"], __listTotal: 2, __listCompleted: 2,
+}
+/** Every batch field a single run's landing leaves: none. */
+const expectBatchEnded = (data: Json, where: string) => {
+  for (const f of UNIT_BATCH_FIELDS) expect(data[f], `${where}: ${f}`).toBeUndefined()
+}
 /** The run context the canvas's executors take (a list operator runs inline: none of it is called). */
 const RUN_CTX = {
   userId: "u1", projectId: "p1", trackInterval: (i: unknown) => i, untrackInterval: vi.fn(), save: vi.fn(), setIsRunning: vi.fn(),
@@ -210,6 +232,11 @@ describe("jobs — every editor lane lands the same side fields", () => {
       const start = async () => ({ jobId: "j1" })
       await kit.runProcessingNode(start, "generatedImageUrl", "Fixture Layers")
       expect(updateNodeData).toHaveBeenCalledWith("L", Object.fromEntries(SIDE_FIELDS.map((f) => [f, undefined])))
+      // The batch clear is no write of its own: it rides on the poll as node-only
+      // fields of the take's own landing, and it is empty when no batch field is set.
+      expect(updateNodeData).toHaveBeenCalledTimes(1)
+      const nodeFields = (poll.mock.calls[0] as unknown as unknown[])[6] as (od: Json) => Json
+      expect(nodeFields(c.outputData)).toEqual({})
       const call = poll.mock.calls[0] as unknown as [string, unknown, unknown, string, unknown, (od: Json) => Json]
       expect(call.slice(0, 5)).toEqual(["L", start, "generatedImageUrl", "Fixture Layers", ctx])
       expectSide(call[5](c.outputData), c, "extraOutputFields")
@@ -221,11 +248,12 @@ describe("jobs — every editor lane lands the same side fields", () => {
     })
 
     it(`${c.name}: the live server run paints them on the node and on the take; each pip hands on its value`, () => {
-      act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, { executionStatus: "running", ...STALE })], edges: [] }))
+      act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, { executionStatus: "running", ...STALE, ...STALE_BATCH })], edges: [] }))
       act(() => paintRunStates({ L: { status: "completed", startedAt: "2026-11-11T10:00:00.000Z", completedAt: "2026-11-11T10:01:00.000Z", jobId: "j1", output: c.nodeOutput } } as never))
       const data = stored("L")
       expect(data.generatedImageUrl).toBe(c.nodeOutput.imageUrl)
       expectSide(data, c, "node")
+      expectBatchEnded(data, "node")
       const take = (data.generatedResults as Json[])[0]!
       expect(take.url).toBe(c.nodeOutput.imageUrl)
       expectSide(take, c, "take")
@@ -235,12 +263,14 @@ describe("jobs — every editor lane lands the same side fields", () => {
     })
 
     it(`${c.name}: a restored poll lands them on the node and on the take; each pip hands on its value`, () => {
-      act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, { executionStatus: "running", currentJobId: "j1", ...STALE })], edges: [] }))
+      act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, { executionStatus: "running", currentJobId: "j1", ...STALE, ...STALE_BATCH })], edges: [] }))
       act(() => applyRestoredJobCompletion("L", TYPE, { output_data: c.outputData }, "j1"))
       const data = stored("L")
       expect(data.generatedImageUrl).toBe(c.outputData.imageUrl)
       expectSide(data, c, "node")
+      expectBatchEnded(data, "node")
       expectSide((data.generatedResults as Json[])[0], c, "take")
+      for (const f of UNIT_BATCH_FIELDS) expect(Object.hasOwn((data.generatedResults as Json[])[0]!, f), `take: ${f}`).toBe(false)
       for (const [pip, value] of Object.entries(c.pips)) {
         expect(extractNodeOutput(node("L", TYPE, data), pipOf(pip)), `pip "${pip}"`).toBe(value ?? undefined)
       }
@@ -281,54 +311,102 @@ describe("saved — a node's data: each pip, and what an Each wire fans out over
 })
 
 /** The side fields and `__listResults` a lane lands on the node, and each take's side fields by its URL — the batch's `data`. */
-function expectBatchLanded(data: Json, c: BatchCase, where: string): void {
-  const nodeSide = (d: Json) => Object.fromEntries([...SIDE_FIELDS, "__listResults"].map((f) => [f, d[f] ?? null]))
-  expect(nodeSide(data), `${where}: the node`).toEqual(nodeSide(c.data))
+/**
+ * The side fields a lane lands on the node, `batchFields` beside them, and
+ * each take's side fields by its URL — `want`'s. A batch lane is held on its
+ * take pip's list; a single run's on every batch field (all gone).
+ */
+function expectLanded(data: Json, want: Json, where: string, batchFields: readonly string[] = ["__listResults"]): void {
+  const nodeSide = (d: Json) => Object.fromEntries([...SIDE_FIELDS, ...batchFields].map((f) => [f, d[f] ?? null]))
+  expect(nodeSide(data), `${where}: the node`).toEqual(nodeSide(want))
   const takes = (d: Json) => Object.fromEntries(((d.generatedResults ?? []) as Json[]).map((t) => [t.url, Object.fromEntries(SIDE_FIELDS.map((f) => [f, t[f] ?? null]))]))
-  expect(takes(data), `${where}: each take`).toEqual(takes(c.data))
+  expect(takes(data), `${where}: each take`).toEqual(takes(want))
   expect(data.activeResultIndex ?? 0, `${where}: the active take`).toBe(0)
 }
 
 /** What the node shows beside its active take: that take's own row's layers and layer data, never the batch's. */
-function expectShown(data: Json, shown: BatchReads["shown"]): void {
+function expectShown(data: Json, shown: BatchState["shown"]): void {
   const unit = unitDefinitionOf(TYPE)!
   expect(unitPipList(unit, data, "layers", "take")?.items).toEqual(shown.layers)
   expect(unitPipJson(unit, data, "layerData", "take")?.value).toEqual(shown.layerData)
 }
 
-describe("batches — a run once per upstream item: every lane lands the same node, and each pip hands on every row's", () => {
+/** Every read of a node holding `data` with `s`'s take made active: each pip, each Each wire, what the node shows, each list operator, each route. */
+function expectState(c: { readonly name: string }, data: Json, s: BatchState, label = ""): void {
+  const picked = { ...data, activeResultIndex: s.activeResultIndex }
+  const at = `${c.name}, ${s.name}${label}`
+  it(`${at}: each pip, what an Each wire fans out over, and what the node shows`, () => {
+    expectPipsAndLists(picked, s.pips, s.lists)
+    expectShown(picked, s.shown)
+  })
+  it(`${at}: what a list operator collects`, () => expectCollected(picked, s.collected))
+  for (const r of s.routes ?? []) it(`${at}: ${r.name}`, () => expectRoute(picked, r))
+}
+
+/** A job that never lands a take: a Discard or a Run-instead abandons it, or the run's signal aborts it — the poll resolves "" (poll-job.ts). */
+const ABANDONED = Symbol("abandoned")
+
+/**
+ * The canvas's poll for a run of the fixture unit (pollJobWithNodeUpdate's
+ * arguments, as runProcessingNode passes them): lands `outputData` as poll-job
+ * lands a finished job (handleJobCompleted) — in ONE write, the take, the side
+ * fields on the node and on the take (`extraOutputFields`), and the node-only
+ * fields (`opts.nodeFields`). A failed job rejects; an abandoned one lands
+ * nothing and resolves "".
+ */
+function landedPoll(outputOf: (jobId: string) => Json | Error | typeof ABANDONED) {
+  return async (...args: unknown[]) => {
+    const [nodeId, start, outputKey, , , extra, , opts] = args as [string, () => Promise<{ jobId: string }>, string, string, unknown, ((od: Json) => Json) | undefined, unknown, { nodeFields?: (od: Json) => Json } | undefined]
+    const { jobId } = await start()
+    const outputData = outputOf(jobId)
+    if (outputData === ABANDONED) return ""
+    if (outputData instanceof Error) throw outputData
+    const fields = extra?.(outputData) ?? {}
+    const nodeOnly = opts?.nodeFields?.(outputData) ?? {}
+    const url = outputData.imageUrl as string
+    const prev = (stored(nodeId).generatedResults as Json[] | undefined) ?? []
+    useWorkflowStore.getState().updateNodeData(nodeId, {
+      executionStatus: "completed", [outputKey]: url, activeResultIndex: 0, ...fields, ...nodeOnly,
+      generatedResults: [{ url, jobId, timestamp: "2026-11-11T10:00:00.000Z", ...fields }, ...prev],
+    })
+    return url
+  }
+}
+
+/**
+ * What the run estimate counts for an Each wire from the Layers pip into an
+ * Upscale, the source not re-run. The estimate reads the generated list-output
+ * table (@nodaro/render-rules UNIT_LIST_OUTPUTS), which holds the real units
+ * only, so the node is read as the real unit whose list output this fixture
+ * mirrors — the same pip and field names (`layers`, `generatedLayerUrls`).
+ */
+function layersEstimate(data: Json): number {
+  const src = node("L", "split-into-layers", data)
+  const up = node("U", "upscale-image", {})
+  const edge = { id: "e", source: "L", target: "U", sourceHandle: "layers", targetHandle: "image" } as unknown as WorkflowEdge
+  return getFanOutMultiplier(up, [src, up], [edge], new Set(["U"]))
+}
+
+describe("batches — a run once per upstream item: every lane lands the same node; a plain wire reads the active take, a list every row's", () => {
   for (const c of FIXTURE.batches) {
+    const [first] = c.states
     it(`${c.name}: the server-run lane (its fan-out output) lands the node and each row's take`, () => {
       act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, { executionStatus: "running", ...STALE })], edges: [] }))
       act(() => paintRunStates({ L: { status: "completed", startedAt: "2026-11-11T10:00:00.000Z", completedAt: "2026-11-11T10:01:00.000Z", jobId: "j2", output: c.nodeOutput } } as never))
-      expectBatchLanded(stored("L"), c, "server run")
-      expectPipsAndLists(stored("L"), c.pips, c.lists, "server run: ")
-      expectShown(stored("L"), c.shown)
+      expectLanded(stored("L"), c.data, "server run")
+      expectPipsAndLists(stored("L"), first.pips, first.lists, "server run: ")
+      expectShown(stored("L"), first.shown)
     })
 
     it(`${c.name}: the canvas run once per item (executeNodeForList) lands the same node`, async () => {
       act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, { ...STALE })], edges: [] }))
       // One finished job per item: the real executeNode runs the unit's own run
-      // (runProcessingNode, which empties the side fields at its start), and its
-      // poll lands the job as poll-job lands a finished one (handleJobCompleted):
-      // the take, and the side fields on the node and on the take.
-      canvas.poll = async (...args: unknown[]) => {
-        const [nodeId, start, outputKey, , , extra] = args as [string, () => Promise<{ jobId: string }>, string, string, unknown, ((od: Json) => Json) | undefined]
-        const { jobId } = await start()
-        const row = c.items.indexOf(jobId.slice("job:".length))
-        const r = c.rows[row]!
-        // A failed row's job fails (the batch completes with the others).
-        if ("failed" in r) throw new Error(r.failed)
-        const outputData = r.outputData
-        const fields = extra?.(outputData) ?? {}
-        const url = outputData.imageUrl as string
-        const prev = (stored(nodeId).generatedResults as Json[] | undefined) ?? []
-        useWorkflowStore.getState().updateNodeData(nodeId, {
-          executionStatus: "completed", [outputKey]: url, activeResultIndex: 0, ...fields,
-          generatedResults: [{ url, jobId, timestamp: "2026-11-11T10:00:00.000Z", ...fields }, ...prev],
-        })
-        return url
-      }
+      // (runProcessingNode, which empties the side fields at its start). A failed
+      // row's job fails (the batch completes with the others).
+      canvas.poll = landedPoll((jobId) => {
+        const r = c.rows[c.items.indexOf(jobId.slice("job:".length))]!
+        return "failed" in r ? new Error(r.failed) : r.outputData
+      })
       try {
         await executeNodeForList(node("L", TYPE, {}), [...c.items], RUN_CTX)
       } finally {
@@ -337,34 +415,130 @@ describe("batches — a run once per upstream item: every lane lands the same no
       const failed = c.rows.filter((r) => "failed" in r).length
       if (failed === 0) expect(stored("L").errorMessage, "every item ran").toBeUndefined()
       else expect(stored("L").errorMessage, "the failed items are named").toMatch(new RegExp(`^${c.items.length - failed}/${c.items.length} succeeded, ${failed} failed`))
-      expectBatchLanded(stored("L"), c, "canvas run")
+      const landedData = stored("L")
+      expectLanded(landedData, c.data, "canvas run")
       // Each layer-data entry's row is its picture's place among the items, and
       // its baseUrl that picture's own base (a failed picture's row has none).
-      const landedData = stored("L")
       const takes = landedData.__listResults as string[]
       for (const e of landedData.generatedLayerData as Array<{ row: number; baseUrl?: string }>) {
         expect(takes[e.row], `row ${e.row} made a take`).toBeTruthy()
         expect(e.baseUrl, `row ${e.row}`).toBe(takes[e.row])
       }
-      expectPipsAndLists(stored("L"), c.pips, c.lists, "canvas run: ")
-      expectShown(stored("L"), c.shown)
+      expectPipsAndLists(landedData, first.pips, first.lists, "canvas run: ")
+      expectShown(landedData, first.shown)
     })
 
-    it(`${c.name}: the node it leaves (saved, reloaded): each pip, and what an Each wire fans out over`, () => {
-      expectPipsAndLists(c.data, c.pips, c.lists)
-      expectShown(c.data, c.shown)
-    })
-    it(`${c.name}: what a list operator (filter-list) collects from each pip`, () => expectCollected(c.data, c.collected))
-    for (const r of c.routes) it(`${c.name}: ${r.name}`, () => expectRoute(c.data, r))
+    for (const s of c.states) expectState(c, c.data, s)
 
-    const sel = c.selected
-    const picked = { ...c.data, activeResultIndex: sel.activeResultIndex }
-    it(`${c.name}, ${sel.name}: each pip, what an Each wire fans out over, and what the node shows`, () => {
-      expectPipsAndLists(picked, sel.pips, sel.lists)
-      expectShown(picked, sel.shown)
+    // A single run after the batch: every lane ends the batch.
+    const rerun = c.rerun
+    if (!rerun) continue
+    const [now] = rerun.states
+    it(`${c.name}, ${rerun.name}: the canvas run (one item, no list) lands its take and ends the batch`, async () => {
+      act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, c.data)], edges: [] }))
+      canvas.poll = landedPoll(() => rerun.outputData)
+      try {
+        await executeNode(node("L", TYPE, c.data), RUN_CTX, undefined, "https://r2/in-q.png")
+      } finally {
+        canvas.poll = undefined
+      }
+      expectLanded(stored("L"), rerun.data, "canvas run", UNIT_BATCH_FIELDS)
+      expectPipsAndLists(stored("L"), now.pips, now.lists, "canvas run: ")
     })
-    it(`${c.name}, ${sel.name}: what a list operator collects`, () => expectCollected(picked, sel.collected))
+    // A run that lands no take keeps the batch whole: its take batch, every
+    // row's Layers and Layer data on the node's own fields, what each wire
+    // reads and what the estimate counts.
+    for (const [how, outcome] of [["fails", new Error("provider down")], ["is discarded (its poll lands nothing)", ABANDONED]] as const) {
+      it(`${c.name}, ${rerun.name}: a canvas run that ${how} keeps the batch`, async () => {
+        act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, c.data)], edges: [] }))
+        canvas.poll = landedPoll(() => outcome)
+        try {
+          const run = executeNode(node("L", TYPE, c.data), RUN_CTX, undefined, "https://r2/in-q.png")
+          if (outcome instanceof Error) await expect(run).rejects.toThrow(outcome.message)
+          else expect(await run).toBe("")
+        } finally {
+          canvas.poll = undefined
+        }
+        const data = stored("L")
+        for (const f of [...SIDE_FIELDS, ...UNIT_BATCH_FIELDS]) expect(data[f], f).toEqual(c.data[f])
+        expectPipsAndLists(data, first.pips, first.lists, `after a run that ${how}: `)
+        expect(layersEstimate(data)).toBe((c.data.generatedLayerUrls as string[]).length)
+      })
+    }
+
+    // Undo: a single canvas run never writes an invisible step. The batch fields
+    // change only in the write that lands the take; with no batch, never.
+    for (const [held, start] of [["holding the batch", c.data], ["holding no batch", rerun.data]] as const) {
+      it(`${c.name}, ${rerun.name}: a canvas run on a node ${held} changes the batch fields only with its take`, async () => {
+        act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, start)], edges: [] }))
+        const writes: Array<{ readonly batch: boolean; readonly take: boolean }> = []
+        const unsubscribe = useWorkflowStore.subscribe((next, prev) => {
+          const a = prev.nodes.find((n) => n.id === "L")?.data as Json | undefined
+          const b = next.nodes.find((n) => n.id === "L")?.data as Json | undefined
+          if (!a || !b || a === b) return
+          writes.push({ batch: UNIT_BATCH_FIELDS.some((f) => a[f] !== b[f]), take: a.generatedResults !== b.generatedResults })
+        })
+        canvas.poll = landedPoll(() => rerun.outputData)
+        try {
+          await executeNode(node("L", TYPE, start), RUN_CTX, undefined, "https://r2/in-q.png")
+        } finally {
+          canvas.poll = undefined
+          unsubscribe()
+        }
+        expect(writes.filter((w) => w.batch && !w.take), "a write that changes only invisible batch fields").toEqual([])
+        expect(writes.some((w) => w.batch)).toBe(held === "holding the batch")
+        for (const f of UNIT_BATCH_FIELDS) expect(stored("L")[f], f).toBeUndefined()
+      })
+    }
+    it(`${c.name}, ${rerun.name}: the live server run lands its take and ends the batch`, () => {
+      act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, { ...c.data, executionStatus: "running" })], edges: [] }))
+      act(() => paintRunStates({ L: { status: "completed", startedAt: "2026-11-12T10:00:00.000Z", completedAt: "2026-11-12T10:01:00.000Z", jobId: "jq", output: rerun.nodeOutput } } as never))
+      expectLanded(stored("L"), rerun.data, "server run", UNIT_BATCH_FIELDS)
+    })
+    it(`${c.name}, ${rerun.name}: a restored poll lands its take and ends the batch`, () => {
+      act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, { ...c.data, executionStatus: "running", currentJobId: "jq" })], edges: [] }))
+      act(() => applyRestoredJobCompletion("L", TYPE, { output_data: rerun.outputData }, "jq"))
+      expectLanded(stored("L"), rerun.data, "restored poll", UNIT_BATCH_FIELDS)
+    })
+    it(`${c.name}, ${rerun.name}: the batch-clear patch of every lane — a single run's output and a job row clear the batch; a batch's output clears nothing`, () => {
+      // Every batch field, as a key holding undefined (a toEqual would pass an empty patch).
+      for (const patch of [unitBatchClearFields(TYPE, rerun.nodeOutput), unitBatchClearFields(TYPE, rerun.outputData)]) {
+        expect(Object.keys(patch ?? {}).sort()).toEqual([...UNIT_BATCH_FIELDS].sort())
+        expect(Object.values(patch ?? {}).every((v) => v === undefined)).toBe(true)
+      }
+      expect(unitBatchClearFields(TYPE, c.nodeOutput)).toBeUndefined()
+      expect(unitBatchClearFields("upscale-image", rerun.nodeOutput)).toBeUndefined()
+    })
+    for (const s of rerun.states) {
+      expectState(c, rerun.data, s, ` (${rerun.name})`)
+      // A node an editor before this rule saved with the batch fields still beside it reads alike.
+      expectState(c, { ...rerun.data, ...rerun.staleFields }, s, ` (${rerun.name}, saved with the old batch fields)`)
+    }
   }
+})
+
+/**
+ * Extract Field wired from Layer data reads it as a plain wire does — the
+ * picked take's own JSON — and stops there: a take that holds none extracts
+ * nothing, never the pip's list of every picture's entries. The server's half
+ * asserts the same off the same node.
+ */
+describe("Extract Field from a look pip whose picked take holds none", () => {
+  const [batch] = FIXTURE.batches
+  const takes = (batch.data.generatedResults as Json[]).map((t, i) => (i === 1 ? { ...t, generatedLayerData: null } : t))
+  const run = async (data: Json, field: string) => {
+    const ef = node("E", "extract-field", { field, outputType: "text" })
+    const edges = [{ id: "e", source: "L", target: "E", sourceHandle: "layerData", targetHandle: "in" }] as unknown as WorkflowEdge[]
+    act(() => useWorkflowStore.setState({ nodes: [node("L", TYPE, data), ef], edges }))
+    await executeNode(ef, RUN_CTX)
+    return stored("E").extractedText
+  }
+  it("extracts nothing", async () => {
+    expect(await run({ ...batch.data, generatedResults: takes, activeResultIndex: 1 }, "")).toBe("")
+  })
+  it("…while the picked take that holds entries extracts them", async () => {
+    expect(await run({ ...batch.data, activeResultIndex: 2 }, "name")).toBe("Owl\nMoon\nCaption")
+  })
 })
 
 describe("defaults — an edge with no mode: an Each wire on the list pip only", () => {
@@ -399,7 +573,7 @@ function expectRoute(data: Json, c: RouteCase): void {
     ...(c.mode ? { data: { outputMode: c.mode } } : {}),
   } as unknown as WorkflowEdge
   if (c.iteration !== undefined) {
-    expect(getListFanOutForNode(target, [src, target], [edge])?.items).toEqual(data.generatedLayerUrls)
+    expect(getListFanOutForNode(target, [src, target], [edge])?.items).toEqual(c.fanOut ?? data.generatedLayerUrls)
   }
   const got = resolveNodeInputs(target, [src, target], [edge], c.iteration)
 

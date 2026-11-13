@@ -1,9 +1,9 @@
 // @registry-enumerates JSON_RUN_RESULT_TYPES carries every worker node unit whose outputs are JSON (look)
-// (unitSideRunFields / unitSideJobFields / unitSideBatchFields land the side outputs of the one node unit a lane writes — unitDefinitionOf(nodeType))
+// (unitSideRunFields / unitSideJobFields / unitSideBatchFields / unitBatchClearFields land the side outputs of the one node unit a lane writes — unitDefinitionOf(nodeType))
 import { editPlanResultPatch, unwrapEditPlanOutput } from "@nodaro/shared/edl"
 import { telegramPostsFrom } from "@nodaro/shared/social"
 import { UNIT_NODE_DEFINITIONS, unitDefinitionOf } from "./unit-definitions"
-import { composeSet, unitJsonRunPatch, unitJsonWorkers, unitSideBatchPatch, unitSideJobPatch, unitSideRunPatch } from "./unit-compose"
+import { composeSet, unitBatchClearPatch, unitJsonRunPatch, unitJsonWorkers, unitSideBatchPatch, unitSideJobPatch, unitSideRunPatch } from "./unit-compose"
 
 /**
  * A finished node's JSON result, under the fields its card and its output
@@ -351,6 +351,21 @@ export function unitSideRunFields(
 ): Record<string, unknown> | undefined {
   const unit = typeof nodeType === "string" ? unitDefinitionOf(nodeType) : undefined
   return unit ? unitSideRunPatch(unit, output as { readonly unitOutputs?: unknown; readonly unitLists?: unknown; readonly unitListsNotSaved?: unknown } | null | undefined) : undefined
+}
+
+/**
+ * The node-only patch a lane lands beside a SINGLE run of a node unit whose
+ * take carries side outputs (`unitBatchClearPatch`): the batch of an earlier
+ * run once per upstream item is over — its fields emptied, never left for the
+ * take pip and the side pips' lists to read. `output` is the run's node output
+ * or job row; one carrying `listResults` is a batch and clears nothing.
+ * Undefined for every other node type and for a batch. Every lane that lands
+ * `unitSideRunFields` / `unitSideJobFields` on the node lands this beside it
+ * (run-result-identity-sites.test.ts).
+ */
+export function unitBatchClearFields(nodeType: string | null | undefined, output: unknown): Record<string, undefined> | undefined {
+  const unit = typeof nodeType === "string" ? unitDefinitionOf(nodeType) : undefined
+  return unit ? unitBatchClearPatch(unit, output) : undefined
 }
 
 /** `unitSideRunFields` from a job row's `output_data` (each side output's value under its id): a restored poll, a reconciled job. */

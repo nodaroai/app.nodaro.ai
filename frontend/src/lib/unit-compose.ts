@@ -5,7 +5,7 @@
 // and the unit collection in — so frontend/src/lib/__tests__/unit-compose.test.ts
 // proves every seam on an in-memory fixture unit, and an EMPTY unit
 // collection returns every legacy table unchanged.
-import { unitBatchSideOutputs, type UnitSideOutputsRow } from "@nodaro/render-rules"
+import { unitBatchSideOutputs, unitHeldBatch, unitSideFieldOf, type UnitSideOutputsRow, type UnitSideRead } from "@nodaro/render-rules"
 import type { NodeOption } from "@/lib/node-compatibility"
 import type { NodeTypeDefinition, SceneNodeData, SceneNodeType } from "@/types/nodes"
 import type { UnitDefinition, UnitHandleKind, UnitLabels, UnitOutputHandle, UnitProducerKind } from "@/nodes/kit"
@@ -317,35 +317,22 @@ export function unitSideOutputs(u: UnitDefinition): UnitOutputHandle[] {
 const isSideOutput = (u: UnitDefinition, h: UnitOutputHandle): boolean => unitSideOutputs(u).some((s) => s.id === h.id)
 
 /**
- * Whose side outputs a read takes: a wire's (`"wire"`, the default) — after a
- * run once per upstream item, the batch's, every row's — or the active take's
- * (`"take"`: what the node shows beside the take it shows, its own row's).
+ * The value of output `h` in node data, as `read` reads it: a side output by
+ * `unitSideFieldOf` (@nodaro/render-rules — the rule the server's saved output
+ * and the run estimate take too): a `"take"` read (a plain wire, and what the
+ * node shows) the ACTIVE take's own field when that take carries the key (a
+ * take whose run made none carries it as null, which is no value and survives
+ * a save), else the node's field; a `"list"` read (an Each wire, a Bundle,
+ * item:N, a list operator) the same, except that while the node holds the
+ * batch of a run once per upstream item (`unitHeldBatch`) it takes the node's
+ * field: every row's, row-aligned (unitBatchSideOutputs). Every other output
+ * reads the node's field. The server's twin is backend/src/lib/unit-compose.ts
+ * `unitSavedOutput`.
  */
-export type UnitSideRead = "wire" | "take"
-
-/** Whether the node holds the batch of a run once per upstream item: its take pip's list (`__listResults`). */
-const holdsBatch = (data: Readonly<Record<string, unknown>>): boolean => unitListItems(data.__listResults).length > 0
-
-/**
- * The value of output `h` in node data: a side output reads the ACTIVE take's
- * own field when that take carries the key (`Object.hasOwn` — a take whose run
- * made none carries it as null, which is no value and survives a save), else the node's
- * field; every other output reads the node's field. The active take is
- * `generatedResults[activeResultIndex ?? 0]`, as the media read takes it. A
- * wire's read of a node holding a batch (`holdsBatch`) takes the node's field:
- * after a run once per upstream item it holds every row's, row-aligned
- * (unitBatchSideOutputs, decided 2026-11-11), whichever take is active — as
- * the take pip lists the batch whichever take is active. The server's twin is
- * backend/src/lib/unit-compose.ts `unitSavedOutput`.
- */
-function unitOutputField(u: UnitDefinition, data: Readonly<Record<string, unknown>>, h: UnitOutputHandle, read: UnitSideRead = "wire"): unknown {
+function unitOutputField(u: UnitDefinition, data: Readonly<Record<string, unknown>>, h: UnitOutputHandle, read: UnitSideRead): unknown {
   if (!h.from) return undefined
   if (!isSideOutput(u, h)) return data[h.from]
-  if (read === "wire" && holdsBatch(data)) return data[h.from]
-  const results = data.generatedResults
-  const take = Array.isArray(results) ? (results as unknown[])[(data.activeResultIndex as number | undefined) ?? 0] : undefined
-  if (typeof take === "object" && take !== null && Object.hasOwn(take, h.from)) return (take as Record<string, unknown>)[h.from]
-  return data[h.from]
+  return unitSideFieldOf(data, h.from, read)
 }
 
 /** A list output's items: the array's non-empty strings, in order; nothing for any other value. */
@@ -360,14 +347,16 @@ export function unitListItems(v: unknown): string[] {
  * shows), as the legacy video nodes do; a list output (`list: true`) its first
  * item — never the take's own url; a JSON (look) output the field as the JSON
  * string a wire carries (`unitJsonString`). A side output (`unitSideOutputs`)
- * reads the active take's own field when the take carries it. Undefined when
- * it has no such output.
+ * reads the active take's own field when the take carries it — a plain wire
+ * follows the active take, also after a run once per upstream item (decided
+ * 2026-11-12, as the take pip's plain wire does). Undefined when it has no
+ * such output.
  */
 export function unitOutputValue(u: UnitDefinition, data: Readonly<Record<string, unknown>>, sourceHandle?: string): string | undefined {
   const h = unitOutputPip(u, sourceHandle)
   if (!h?.from) return undefined
-  if (h.list === true) return unitListItems(unitOutputField(u, data, h))[0]
-  const field = unitOutputField(u, data, h)
+  if (h.list === true) return unitListItems(unitOutputField(u, data, h, "take"))[0]
+  const field = unitOutputField(u, data, h, "take")
   if (h.kind === "video" || h.kind === "image" || h.kind === "audio") {
     // Exactly the legacy media read (execution-graph.ts extractNodeOutput):
     // `activeResultIndex ?? 0`, the active result's url when it is not nullish
@@ -409,12 +398,13 @@ const lookOutputs = (u: UnitDefinition) => u.handles.outputs.filter((h) => h.kin
  * — its field, a JSON string parsed — wrapped, `value` undefined when it holds
  * none. Undefined when the pip the wire reads (the one named, else the first)
  * is not a look output, or the unit is a use case. A look output beside a
- * media take reads the active take's own field when the take carries it — on
- * a wire's read of a node holding a batch, the node's (every row's entries,
- * each with its row); `read: "take"` always the active take's. The server's
- * twin is backend/src/lib/unit-compose.ts `unitPipJson`.
+ * media take is read by `read`: `"list"` (the default — an Each wire, a list
+ * operator) every row's entries, each with its row, while the node holds a
+ * batch; `"take"` (a consumer of one value — Extract Field, JSON Process — and
+ * what the node shows) the active take's own. The server's twin is
+ * backend/src/lib/unit-compose.ts `unitPipJson`.
  */
-export function unitPipJson(u: UnitDefinition, data: Readonly<Record<string, unknown>>, sourceHandle: string | null | undefined, read: UnitSideRead = "wire"): { readonly value: unknown } | undefined {
+export function unitPipJson(u: UnitDefinition, data: Readonly<Record<string, unknown>>, sourceHandle: string | null | undefined, read: UnitSideRead = "list"): { readonly value: unknown } | undefined {
   if (u.execution.kind === "use-case") return undefined
   const h = unitOutputPip(u, sourceHandle)
   if (h?.kind !== "look") return undefined
@@ -425,20 +415,21 @@ export function unitPipJson(u: UnitDefinition, data: Readonly<Record<string, unk
 /**
  * What an Each wire from a unit's media pip fans out over, for a unit whose
  * media take carries side outputs (`unitSideOutputs`): its list pip's items
- * (the active take's list when the take carries one, else the node's — on a
- * wire's read of a node holding a batch, the node's: every row's, row by row;
- * `read: "take"` always the active take's), and on its media take's pip the
- * last batch of a run once per upstream item, never its take history.
- * Undefined for every other pip and unit (a JSON pip is read by `unitPipJson`;
- * a unit without side outputs keeps the generic list read).
+ * (the active take's list when the take carries one, else the node's — while
+ * the node holds a batch, the node's: every row's, row by row; `read: "take"`
+ * always the active take's), and on its media take's pip the batch the node
+ * holds (`unitHeldBatch`), never its take history. Undefined for every other
+ * pip and unit (a JSON pip is read by `unitPipJson`; a unit without side
+ * outputs keeps the generic list read).
  */
-export function unitPipList(u: UnitDefinition, data: Readonly<Record<string, unknown>>, sourceHandle: string | null | undefined, read: UnitSideRead = "wire"): { readonly items: readonly string[] } | undefined {
+export function unitPipList(u: UnitDefinition, data: Readonly<Record<string, unknown>>, sourceHandle: string | null | undefined, read: UnitSideRead = "list"): { readonly items: readonly string[] } | undefined {
   if (unitSideOutputs(u).length === 0) return undefined
   const h = unitOutputPip(u, sourceHandle)
   if (h?.list === true) return { items: unitListItems(unitOutputField(u, data, h, read)) }
-  // The media take's pip lists the last batch of a run once per upstream item
-  // (`__listResults`, as a per-item node's each pip does) — never the take history.
-  return isPlainMedia(h) ? { items: unitListItems(data.__listResults) } : undefined
+  // The media take's pip lists the batch of a run once per upstream item
+  // (`__listResults`, as a per-item node's each pip does) while the node holds
+  // it — never the take history, nor a batch a newer run ended.
+  return isPlainMedia(h) ? { items: unitHeldBatch(data) } : undefined
 }
 
 /** Whether a wire leaving pip `sourceHandle` (none = the first output) of unit `u` carries an image — routed as one by every input it reaches. */
@@ -607,6 +598,40 @@ export function unitSideJobPatch(u: UnitDefinition, outputData: unknown): Record
 /** The node fields a canvas run of a unit with side outputs empties at its start: each side output's field, and each list output's not-saved count. */
 export const unitSideFields = (u: UnitDefinition): string[] =>
   unitSideOutputs(u).flatMap((h) => (h.from ? (h.list === true ? [h.from, unitListNotSavedField(h)] : [h.from]) : []))
+
+/**
+ * The node fields a run once per upstream item leaves (on any node; on a unit
+ * whose take carries side outputs, beside every row's side outputs on its own
+ * side fields): its batch of takes (`__listResults`) and what rides with it —
+ * the row-aligned twin, each row's stamps and notes, the inputs it ran over
+ * and its progress. A single run of such a unit ends the batch: every lane
+ * that lands one clears these (`unitBatchClearPatch`), and the side fields
+ * take the single run's. The one list: run-handlers.ts' LIST_STATE_FIELDS
+ * (what a run start clears) starts from it.
+ */
+export const UNIT_BATCH_FIELDS: readonly string[] = [
+  "__listResults",
+  "__alignedListResults",
+  "__listResultStamps",
+  "__listResultMeta",
+  "__listInputs",
+  "__listTotal",
+  "__listCompleted",
+]
+
+/**
+ * The node-only patch that ends a batch when a lane lands a SINGLE run of a
+ * unit whose take carries side outputs (decided 2026-11-12): every batch field
+ * (`UNIT_BATCH_FIELDS`) emptied, so the take pip lists no batch and every side
+ * pip reads the active take's own. A run once per upstream item — an output
+ * carrying `listResults`, even one row — writes its batch instead: undefined.
+ * Undefined too for a unit without side outputs. Never spread on a take.
+ */
+export function unitBatchClearPatch(u: UnitDefinition, output: unknown): Record<string, undefined> | undefined {
+  if (unitSideOutputs(u).length === 0) return undefined
+  if (typeof output === "object" && output !== null && Array.isArray((output as { listResults?: unknown }).listResults)) return undefined
+  return Object.fromEntries(UNIT_BATCH_FIELDS.map((f) => [f, undefined]))
+}
 
 /** A take's side fields (the side outputs one run made, as every lane lands them) in the carrier a server node output uses, by output id. */
 function unitSideRowOf(side: ReadonlyArray<UnitOutputHandle>, row: object): UnitSideOutputsRow {

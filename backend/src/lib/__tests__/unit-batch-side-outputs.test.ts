@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { UNIT_BATCH_ROW_KEY, unitBatchSideOutputs } from "@nodaro/render-rules"
+import { UNIT_BATCH_ROW_KEY, unitBatchSideOutputs, unitHeldBatch, unitSideFieldOf } from "@nodaro/render-rules"
 
 /**
  * What a node unit's side outputs hand on after it ran once per upstream item
@@ -65,5 +65,45 @@ describe("unitBatchSideOutputs", () => {
     const outputs = [{ id: "base", kind: "image" }, { id: "summary", kind: "look" }, { id: "odd", kind: "look", alignedWith: "nope" }] as const
     expect(unitBatchSideOutputs(outputs, [null, { unitOutputs: { summary: '{"k":1}', odd: [1] } }, { unitOutputs: { summary: '{"k":2}' } }]))
       .toEqual({ unitOutputs: { summary: '{"k":1}', odd: "[1]" } })
+  })
+})
+
+/**
+ * Whether a node still holds the batch of a run once per upstream item
+ * (decided 2026-11-12): a single run ends it — every lane clears its fields,
+ * and a node saved before that is read alike: a batch its newest take is not in.
+ */
+describe("unitHeldBatch", () => {
+  const takes = (...urls: string[]) => urls.map((url) => ({ url }))
+  it("the batch's URLs (failed rows dropped) while its newest take is one of them", () => {
+    expect(unitHeldBatch({ __listResults: ["a", "", "c"], generatedResults: takes("a", "c", "old") })).toEqual(["a", "c"])
+  })
+  it("none once a newer run's take comes first, whatever `__listResults` still says", () => {
+    expect(unitHeldBatch({ __listResults: ["a", "c"], generatedResults: takes("q", "a", "c") })).toEqual([])
+  })
+  it("none without a batch; with no takes, or a newest take with no URL, what `__listResults` lists", () => {
+    expect(unitHeldBatch({ generatedResults: takes("a") })).toEqual([])
+    expect(unitHeldBatch({ __listResults: [] })).toEqual([])
+    expect(unitHeldBatch({ __listResults: ["a", "b"] })).toEqual(["a", "b"])
+    expect(unitHeldBatch({ __listResults: ["a", "b"], generatedResults: [{ text: "t" }] })).toEqual(["a", "b"])
+  })
+})
+
+describe("unitSideFieldOf", () => {
+  const data = {
+    generatedLayerUrls: ["a1", "c1"],
+    __listResults: ["a", "c"],
+    activeResultIndex: 1,
+    generatedResults: [{ url: "a", generatedLayerUrls: ["a1"] }, { url: "c", generatedLayerUrls: ["c1"] }],
+  }
+  it("a list read of a node holding a batch: the node's field (every row's); a take read: the active take's own", () => {
+    expect(unitSideFieldOf(data, "generatedLayerUrls", "list")).toEqual(["a1", "c1"])
+    expect(unitSideFieldOf(data, "generatedLayerUrls", "take")).toEqual(["c1"])
+  })
+  it("no batch: both reads take the active take's own; a take without the key, the node's field; null on the take is no value", () => {
+    const { __listResults: _b, ...single } = data
+    expect(unitSideFieldOf(single, "generatedLayerUrls", "list")).toEqual(["c1"])
+    expect(unitSideFieldOf({ ...single, generatedResults: [{ url: "a" }, { url: "c" }] }, "generatedLayerUrls", "take")).toEqual(["a1", "c1"])
+    expect(unitSideFieldOf({ ...single, generatedResults: [{ url: "a" }, { url: "c", generatedLayerUrls: null }] }, "generatedLayerUrls", "take")).toBeNull()
   })
 })

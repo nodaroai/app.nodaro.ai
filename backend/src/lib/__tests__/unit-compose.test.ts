@@ -172,9 +172,10 @@ describe("a worker unit's JSON (look) outputs", () => {
   })
   it("unitPipJson: the wired look pip's JSON value; undefined when it holds none or is not a look pip", () => {
     const output = { unitOutputs: { json: '{"a":1}', edl: '{"b":2}' } }
-    expect(unitPipJson(MAP, output, "edl")).toEqual({ b: 2 })
-    expect(unitPipJson(MAP, { unitOutputs: { edl: '{"b":2}' } }, "json")).toBeUndefined()
-    expect(unitPipJson(FIXTURE, output, "video-out")).toBeUndefined()
+    expect(unitPipJson(MAP, output, "edl", "list")).toEqual({ b: 2 })
+    expect(unitPipJson(MAP, output, "edl", "take")).toEqual({ b: 2 })
+    expect(unitPipJson(MAP, { unitOutputs: { edl: '{"b":2}' } }, "json", "list")).toBeUndefined()
+    expect(unitPipJson(FIXTURE, output, "video-out", "list")).toBeUndefined()
   })
 })
 
@@ -269,7 +270,23 @@ describe("a media unit's side outputs (list and JSON beside the take)", () => {
     expect(unitPipValue(LAYERS, output, "base")).toBeUndefined()
     expect(unitPipValue(LAYERS, output, null)).toBeUndefined()
     // A JSON consumer never reads a list pip as JSON.
-    expect(unitPipJson(LAYERS, output, "layers")).toBeUndefined()
+    expect(unitPipJson(LAYERS, output, "layers", "take")).toBeUndefined()
+  })
+  it("beside a batch (`unitTakeSide`): a plain wire and a consumer of one JSON value read the active take's own; a list read every row's", () => {
+    const batch = {
+      unitLists: { layers: ["a1", "a2", "c1"] },
+      unitOutputs: { layerData: '[{"n":"a1","row":0},{"n":"a2","row":0},{"n":"c1","row":2}]' },
+      unitTakeSide: { unitLists: { layers: ["c1"] }, unitOutputs: { layerData: '[{"n":"c1"}]' } },
+    }
+    expect(unitPipValue(LAYERS, batch, "layers")).toBe("c1")
+    expect(unitPipValue(LAYERS, batch, "layerData")).toBe('[{"n":"c1"}]')
+    expect(unitPipJson(LAYERS, batch, "layerData", "take")).toEqual([{ n: "c1" }])
+    expect(unitPipJson(LAYERS, batch, "layerData", "list")).toEqual([{ n: "a1", row: 0 }, { n: "a2", row: 0 }, { n: "c1", row: 2 }])
+    expect(unitListPipItems(LAYERS, batch, "layers")).toEqual(["a1", "a2", "c1"])
+    // A take that made none hands on none — never the batch's in its place.
+    const none = { ...batch, unitTakeSide: {} }
+    expect(unitPipValue(LAYERS, none, "layers")).toBeUndefined()
+    expect(unitPipValue(LAYERS, none, "layerData")).toBeUndefined()
   })
   it("unitTakePipOf: the media take of a unit with side outputs (named, unnamed or unknown) — never a side pip, never another unit's take", () => {
     expect(unitTakePipOf(LAYERS, "base")).toBe(true)

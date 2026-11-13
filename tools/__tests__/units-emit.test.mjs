@@ -357,7 +357,7 @@ test("inPositionOrder: units by position.after over the (alphabetical) legacy li
   assert.match(contractsSource(units, new Set(["legacy-a", "legacy-b"])), /UNIT_USE_CASE_TYPES = \[\n {2}"z-tighten", \/\/ unit:z-tighten\n {2}"a-chapters", \/\/ unit:a-chapters\n\] as const/)
 })
 
-test("listOutputsSource: one row per list output, in position order, with its listMax field and default", () => {
+test("listOutputsSource: one row per list output, in position order, with its listMax field and default, and the media take pip", () => {
   const u = (type, after, outputs, defaultData = {}) => ({ type, manifest: { type, label: type, position: { after }, execution: { kind: "worker" }, defaultData, handles: { inputs: [], outputs } } })
   const units = [
     u("b-split", "a-plain", [
@@ -368,8 +368,9 @@ test("listOutputsSource: one row per list output, in position order, with its li
     u("c-frames", "b-split", [{ id: "frames", kind: "image", from: "generatedFrameUrls", list: true }]),
   ]
   const src = listOutputsSource(units, new Set(["legacy-a"]))
-  assert.match(src, /UNIT_LIST_OUTPUTS: ReadonlyArray<\{ readonly type: string; readonly pip: string; readonly from: string; readonly max\?: \{ readonly field: string; readonly default: number \} \}> = \[\n/)
-  assert.match(src, /= \[\n {2}\{ type: "b-split", pip: "layers", from: "generatedLayerUrls", max: \{ field: "maxLayers", default: 9 \} \}, \/\/ unit:b-split\n {2}\{ type: "c-frames", pip: "frames", from: "generatedFrameUrls" \}, \/\/ unit:c-frames\n\]\n$/)
+  assert.match(src, /UNIT_LIST_OUTPUTS: ReadonlyArray<\{ readonly type: string; readonly pip: string; readonly from: string; readonly max\?: \{ readonly field: string; readonly default: number \}; readonly take\?: string \}> = \[\n/)
+  // The media take is the first output; a unit whose first output is the list has none.
+  assert.match(src, /= \[\n {2}\{ type: "b-split", pip: "layers", from: "generatedLayerUrls", max: \{ field: "maxLayers", default: 9 \}, take: "base" \}, \/\/ unit:b-split\n {2}\{ type: "c-frames", pip: "frames", from: "generatedFrameUrls" \}, \/\/ unit:c-frames\n\]\n$/)
   assert.doesNotMatch(src, /a-plain/)
 })
 

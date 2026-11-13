@@ -530,4 +530,37 @@ describe("a node unit's list output on an Each wire", () => {
     expect(getFanOutMultiplier(up, [pictures, s, up], [intoSplit, wire("layers", "selected")], ids(pictures, s, up))).toBe(1)
     expect(getFanOutMultiplier(up, [pictures, s, up], [intoSplit, wire("base")], ids(pictures, s, up))).toBe(1)
   })
+  // A single run after the batch ends it (decided 2026-11-12): an Each wire then
+  // fans out over the ACTIVE take's own layers — what the run will read.
+  const takeOf = (url: string, layers: string[]) => ({ url, jobId: url, generatedLayerUrls: layers })
+  const single = takeOf("q", ["q1", "q2"])
+  const batchTakes = [takeOf("a", ["a1", "a2"]), takeOf("b", []), takeOf("c", ["c1", "c2", "c3"])]
+
+  it("batch, then a single run: the single run's layers; an older take selected: that take's own, never the batch's", () => {
+    const after = { maxLayers: 4, generatedLayerUrls: single.generatedLayerUrls, generatedResults: [single, ...batchTakes] }
+    expect(getFanOutMultiplier(up, [pictures, split(after), up], [intoSplit, wire("layers")], ids(up))).toBe(2)
+    expect(getFanOutMultiplier(up, [pictures, split({ ...after, activeResultIndex: 3 }), up], [intoSplit, wire("layers")], ids(up))).toBe(3)
+    // A node saved with the old batch's fields still beside it reads alike: its newest take is not in that batch.
+    const stale = { ...after, generatedLayerUrls: single.generatedLayerUrls, __listResults: ["a", "b", "c"] }
+    expect(getFanOutMultiplier(up, [pictures, split({ ...stale, activeResultIndex: 3 }), up], [intoSplit, wire("layers")], ids(up))).toBe(3)
+  })
+
+  // The Base (take) pip on an Each wire lists the batch of a run once per picture: one run per picture.
+  it("an Each wire from Base: the batch it holds; on a re-run once per picture, one per picture; with no batch, one run", () => {
+    const held = split({ maxLayers: 4, __listResults: ["a", "b", "c"], generatedResults: batchTakes })
+    expect(getFanOutMultiplier(up, [pictures, held, up], [intoSplit, wire("base", "each")], ids(up))).toBe(3)
+    // An edge naming no pip reads the take too.
+    const noPip = { ...wire("base", "each"), sourceHandle: null } as unknown as WorkflowEdge
+    expect(getFanOutMultiplier(up, [pictures, held, up], [intoSplit, noPip], ids(up))).toBe(3)
+    expect(getFanOutMultiplier(up, [pictures, held, up], [intoSplit, wire("base", "each")], ids(pictures, held, up))).toBe(3)
+    // A newer single run's take first: the batch is over — one run.
+    const over = split({ maxLayers: 4, __listResults: ["a", "b", "c"], generatedResults: [single, ...batchTakes] })
+    expect(getFanOutMultiplier(up, [pictures, over, up], [intoSplit, wire("base", "each")], ids(up))).toBe(1)
+    expect(getFanOutMultiplier(up, [split(), up], [wire("base", "each")], ids(up))).toBe(1)
+  })
+
+  it("while it holds the batch, whichever take is selected: every picture's layers", () => {
+    const ran = split({ maxLayers: 4, generatedLayerUrls: ["a1", "a2", "c1", "c2", "c3"], __listResults: ["a", "b", "c"], generatedResults: batchTakes, activeResultIndex: 2 })
+    expect(getFanOutMultiplier(up, [pictures, ran, up], [intoSplit, wire("layers")], ids(up))).toBe(5)
+  })
 })

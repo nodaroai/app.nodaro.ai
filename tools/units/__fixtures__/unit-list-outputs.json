@@ -1,5 +1,5 @@
 {
-  "$comment": "A worker unit whose media take carries SIDE outputs: a LIST of files on one pip (handles.outputs[].list) and a JSON (look) output beside the media (decided 2026-11-11). `unit` is derived from the fixture unit fixture-echo: its manifest with these outputs, this contract and this registry.outputType (units-manifest.test.mjs validates exactly that), its type and label renamed. Its first output `base` is the media take (an image); `layers` lists one run's images; `layerData` is JSON, one entry per layer in the same order. Both engines are held to every section. `jobs`: one finished job each — `outputData` is the job row's output_data; `nodeOutput` what the server's buildNodeOutputFromJobData makes of it (the media keys as for any media node, the list on the per-pip carrier `unitLists`, the JSON on `unitOutputs`; no `json`, which is a JSON-only unit's first output); `pips` what a plain (Selected) wire from each pip carries (the key \"\" is an edge naming no pip); `landing` the side fields every editor lane writes beside the media take, on the node and on the take (the canvas run's runProcessingNode over the job row, the server-run lanes over nodeOutput), `cleared` the side fields that patch empties — written as null, no value to every reader, so a saved take still says its run made none. A list output's `<id>NotSaved` (how many items its run made but could not store; 0 when it stored every one) rides beside it: on the node output as `unitListsNotSaved`, landed as `<id>NotSaved`. `saved`: a node's data — the editor's own reads of it and the server's seeded output (extractSavedNodeOutput) — where the media take's pip lists only the last batch of a run once per upstream item (`__listResults`), never the take history, and a side output reads the ACTIVE take's own field (a take carries the side fields it was made with; null is no value, never the node's) and the node's field when the take carries none. `lists`: what an Each wire from each pip fans out over (null: no fan-out), on both states. `collected` (where given): what a list operator (Filter List, no conditions) wired from each pip collects — a look pip its own JSON entries, never the take batch on `__listResults`. `defaults`: the mode an edge with no outputMode has, per pip (defaultEdgeOutputMode). `routes`: a wire from a pip into a legacy target lands EXACTLY what wires from Upload Image nodes holding `asUploads` would land there, in order (an image pip routes as an image source; a Bundle hands every item, each as its own image) — `iteration` is a fan-out row on an Each wire. `routes.bundleBranches`: a Bundle wire into a target that keeps its own Bundle branch ahead of the per-item routing (a carousel post: every item one media item; a fan-in input such as UGC Finish's clips: the whole list folded; a UGC node's handle: each item on that handle, as the editor's per-item wires land it) lands exactly `inputs` on both engines — never one image wire per item into the media routes. `batches`: the unit run once per upstream item (decided 2026-11-11, row-aligned) — `items` the upstream pictures, `rows` each run's job output_data in row order. `nodeOutput` is what the server's fan-out output (assembleFanOutResult) carries under those keys: the take pip's batch on `listResults`, each row's own side outputs on `listResultSideOutputs`, and on `unitLists` / `unitOutputs` / `unitListsNotSaved` EVERY row's — each list output's files row by row, the look output declared `alignedWith` that list its entries row by row, each entry carrying the row it came from (`row`, 0-based: its take's index in `listResults` / `__listResults`; a row that made none adds nothing, so it is a row index, never a position), the not-stored counts summed (@nodaro/render-rules unitBatchSideOutputs). Each layer-data entry also names the base its own run stored (`baseUrl`, that row's `imageUrl`): a layer is paired with its base by it, never by `row`, because a row whose run failed (`{ \"failed\": <error> }` in `rows`) leaves an empty take (\"\" on the live `listResults`, none on the saved one) and a wire from Base lists only the bases that were made — the third picture's base is Base's second item. In that case `collected` names the side pips only: a list operator on the server's LIVE lane collects the failed row's \"\" from the take pip, where the editor and the saved lanes skip it (a known difference; `selected.collected` holds the take pip on the lanes that agree). `data` is the node after the run as every editor lane lands it (the live server run, the load-time lanes, the canvas run once per item): its side fields hold every row's, each take its own row's untagged (a single run's layer data carries no `row`); it is also the saved state, read by `savedOutput` (extractSavedNodeOutput), `pips`, `lists`, `collected` and `routes` — the same on the live fan-out output. `shown` is what the node shows beside its active take (its own row's). `selected`: the same node with another take made active — Base reads that take, while Layers and Layer data still hand on every row's, as the take pip's Each wire lists the batch whichever take is active.",
+  "$comment": "A worker unit whose media take carries SIDE outputs: a LIST of files on one pip (handles.outputs[].list) and a JSON (look) output beside the media (decided 2026-11-11). `unit` is derived from the fixture unit fixture-echo: its manifest with these outputs, this contract and this registry.outputType (units-manifest.test.mjs validates exactly that), its type and label renamed. Its first output `base` is the media take (an image); `layers` lists one run's images; `layerData` is JSON, one entry per layer in the same order. Both engines are held to every section. `jobs`: one finished job each — `outputData` is the job row's output_data; `nodeOutput` what the server's buildNodeOutputFromJobData makes of it (the media keys as for any media node, the list on the per-pip carrier `unitLists`, the JSON on `unitOutputs`; no `json`, which is a JSON-only unit's first output); `pips` what a plain (Selected) wire from each pip carries (the key \"\" is an edge naming no pip); `landing` the side fields every editor lane writes beside the media take, on the node and on the take (the canvas run's runProcessingNode over the job row, the server-run lanes over nodeOutput), `cleared` the side fields that patch empties — written as null, no value to every reader, so a saved take still says its run made none. A list output's `<id>NotSaved` (how many items its run made but could not store; 0 when it stored every one) rides beside it: on the node output as `unitListsNotSaved`, landed as `<id>NotSaved`. `saved`: a node's data — the editor's own reads of it and the server's seeded output (extractSavedNodeOutput) — where the media take's pip lists only the last batch of a run once per upstream item (`__listResults`), never the take history, and a side output reads the ACTIVE take's own field (a take carries the side fields it was made with; null is no value, never the node's) and the node's field when the take carries none. `lists`: what an Each wire from each pip fans out over (null: no fan-out), on both states. `collected` (where given): what a list operator (Filter List, no conditions) wired from each pip collects — a look pip its own JSON entries, never the take batch on `__listResults`. `defaults`: the mode an edge with no outputMode has, per pip (defaultEdgeOutputMode). `routes`: a wire from a pip into a legacy target lands EXACTLY what wires from Upload Image nodes holding `asUploads` would land there, in order (an image pip routes as an image source; a Bundle hands every item, each as its own image) — `iteration` is a fan-out row on an Each wire. `routes.bundleBranches`: a Bundle wire into a target that keeps its own Bundle branch ahead of the per-item routing (a carousel post: every item one media item; a fan-in input such as UGC Finish's clips: the whole list folded; a UGC node's handle: each item on that handle, as the editor's per-item wires land it) lands exactly `inputs` on both engines — never one image wire per item into the media routes. `batches`: the unit run once per upstream item (decided 2026-11-11, row-aligned; 2026-11-12: a plain wire follows the active take, a single run ends the batch) — `items` the upstream pictures, `rows` each run's job output_data in row order. `nodeOutput` is what the server's fan-out output (assembleFanOutResult) carries under those keys: the take pip's batch on `listResults`, each row's own side outputs on `listResultSideOutputs`, on `unitLists` / `unitOutputs` / `unitListsNotSaved` EVERY row's — each list output's files row by row, the look output declared `alignedWith` that list its entries row by row, each entry carrying the row it came from (`row`, 0-based: its take's index in `listResults` / `__listResults`; a row that made none adds nothing, so it is a row index, never a position), the not-stored counts summed (@nodaro/render-rules unitBatchSideOutputs) — and on `unitTakeSide` the side outputs of the take a plain wire reads (the primary row's: the take the editor makes active; `{}`-like when it made none, never the batch's in its place). Each layer-data entry also names the base its own run stored (`baseUrl`, that row's `imageUrl`): a layer is paired with its base by it, never by `row`, because a row whose run failed (`{ \"failed\": <error> }` in `rows`) leaves an empty take (\"\" on the live `listResults`, none on the saved one) and a wire from Base lists only the bases that were made. In that case the first state's `collected` names the side pips only: a list operator on the server's LIVE lane collects the failed row's \"\" from the take pip, where the editor and the saved lanes skip it (a known difference; the other states hold the take pip on the lanes that agree). `data` is the node after the run as every editor lane lands it (the live server run, the load-time lanes, the canvas run once per item): its side fields hold every row's, each take its own row's untagged (a single run's layer data carries no `row`). `states`: that node with a take made active (`activeResultIndex`; the first state is the run's own, also read off the live fan-out output): `savedOutput` (extractSavedNodeOutput: the batch's on `unitLists` / `unitOutputs`, the active take's own on `unitTakeSide`), `pips` (a plain wire reads the ACTIVE take's own, as Base does), `lists` (an Each wire: every row's), `collected` (a list operator: every row's), `routes` (a `fanOut` names what an Each wire fans out over) and `shown` (what the node shows: the active take's own). `rerun`: a single run landed on that node afterwards — `outputData` its job, `nodeOutput` buildNodeOutputFromJobData of it, `data` the node every lane leaves (the batch fields gone, the single run's side fields, its take first), `states` read off it (no wire hands on the batch: Base, Layers and Layer data read the active take's own), and `staleFields` the batch fields an editor before this rule left beside such a node: read alike with them (`unitHeldBatch`: a batch the newest take is not in is over).",
   "unit": {
     "type": "fixture-layers",
     "label": "Fixture Layers",
@@ -140,7 +140,8 @@
       "nodeOutput": {
         "imageUrl": "https://r2/b2.png",
         "unitLists": { "layers": ["https://r2/b2-1.png", "https://r2/b2-2.png"] },
-        "listResults": ["https://r2/b1.png", "https://r2/b2.png"]
+        "listResults": ["https://r2/b1.png", "https://r2/b2.png"],
+        "unitTakeSide": { "unitLists": { "layers": ["https://r2/b2-1.png", "https://r2/b2-2.png"] } }
       },
       "pips": { "": "https://r2/b2.png", "base": "https://r2/b2.png", "layers": "https://r2/b2-1.png", "layerData": null },
       "lists": { "base": ["https://r2/b1.png", "https://r2/b2.png"], "layers": ["https://r2/b2-1.png", "https://r2/b2-2.png"], "layerData": null },
@@ -162,7 +163,8 @@
         "imageUrl": "https://r2/b2.png",
         "unitLists": { "layers": ["https://r2/b2-1.png", "https://r2/b2-2.png"] },
         "unitOutputs": { "layerData": "[{\"name\":\"Fox\"},{\"name\":\"Title\"}]" },
-        "listResults": ["https://r2/b1.png", "https://r2/b2.png"]
+        "listResults": ["https://r2/b1.png", "https://r2/b2.png"],
+        "unitTakeSide": { "unitLists": { "layers": ["https://r2/b2-1.png", "https://r2/b2-2.png"] }, "unitOutputs": { "layerData": "[{\"name\":\"Fox\"},{\"name\":\"Title\"}]" } }
       },
       "pips": { "": "https://r2/b2.png", "base": "https://r2/b2.png", "layers": "https://r2/b2-1.png", "layerData": "[{\"name\":\"Fox\"},{\"name\":\"Title\"}]" },
       "lists": { "base": ["https://r2/b1.png", "https://r2/b2.png"], "layers": ["https://r2/b2-1.png", "https://r2/b2-2.png"], "layerData": ["{\"name\":\"Fox\"}", "{\"name\":\"Title\"}"] },
@@ -190,7 +192,10 @@
           "outputData": {
             "imageUrl": "https://r2/p0.png",
             "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png"],
-            "layerData": [{ "name": "Fox", "zIndex": 1, "url": "https://r2/p0-l1.png", "baseUrl": "https://r2/p0.png" }, { "name": "Title", "zIndex": 2, "url": "https://r2/p0-l2.png", "baseUrl": "https://r2/p0.png" }],
+            "layerData": [
+              { "name": "Fox", "zIndex": 1, "url": "https://r2/p0-l1.png", "baseUrl": "https://r2/p0.png" },
+              { "name": "Title", "zIndex": 2, "url": "https://r2/p0-l2.png", "baseUrl": "https://r2/p0.png" }
+            ],
             "layersNotSaved": 0
           }
         },
@@ -219,7 +224,9 @@
         "listResultSideOutputs": [
           {
             "unitLists": { "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png"] },
-            "unitOutputs": { "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\"},{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\"}]" },
+            "unitOutputs": {
+              "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\"},{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\"}]"
+            },
             "unitListsNotSaved": { "layers": 0 }
           },
           { "unitOutputs": { "layerData": "[]" }, "unitListsNotSaved": { "layers": 0 } },
@@ -230,7 +237,14 @@
             },
             "unitListsNotSaved": { "layers": 1 }
           }
-        ]
+        ],
+        "unitTakeSide": {
+          "unitLists": { "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png"] },
+          "unitOutputs": {
+            "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\"},{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\"}]"
+          },
+          "unitListsNotSaved": { "layers": 0 }
+        }
       },
       "data": {
         "generatedImageUrl": "https://r2/p0.png",
@@ -250,7 +264,10 @@
             "url": "https://r2/p0.png",
             "jobId": "j0",
             "generatedLayerUrls": ["https://r2/p0-l1.png", "https://r2/p0-l2.png"],
-            "generatedLayerData": [{ "name": "Fox", "zIndex": 1, "url": "https://r2/p0-l1.png", "baseUrl": "https://r2/p0.png" }, { "name": "Title", "zIndex": 2, "url": "https://r2/p0-l2.png", "baseUrl": "https://r2/p0.png" }],
+            "generatedLayerData": [
+              { "name": "Fox", "zIndex": 1, "url": "https://r2/p0-l1.png", "baseUrl": "https://r2/p0.png" },
+              { "name": "Title", "zIndex": 2, "url": "https://r2/p0-l2.png", "baseUrl": "https://r2/p0.png" }
+            ],
             "layersNotSaved": 0
           },
           { "url": "https://r2/p1.png", "jobId": "j1", "generatedLayerUrls": null, "generatedLayerData": [], "layersNotSaved": 0 },
@@ -267,153 +284,488 @@
           }
         ]
       },
-      "savedOutput": {
-        "imageUrl": "https://r2/p0.png",
-        "unitLists": { "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"] },
-        "unitOutputs": {
-          "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}]"
-        },
-        "listResults": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"]
-      },
-      "pips": {
-        "": "https://r2/p0.png",
-        "base": "https://r2/p0.png",
-        "layers": "https://r2/p0-l1.png",
-        "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}]"
-      },
-      "lists": {
-        "base": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
-        "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
-        "layerData": [
-          "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
-          "{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
-          "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
-          "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
-          "{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}"
-        ]
-      },
-      "collected": {
-        "": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
-        "base": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
-        "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
-        "layerData": [
-          "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
-          "{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
-          "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
-          "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
-          "{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}"
-        ]
-      },
-      "routes": [
+      "states": [
         {
-          "name": "an Each wire from Layers runs the next node once per layer of every picture: row 0 is the first picture's first layer",
-          "pip": "layers",
-          "mode": "each",
-          "iteration": 0,
-          "target": "upscale-image",
-          "targetHandle": "image",
-          "asUploads": ["https://r2/p0-l1.png"]
+          "name": "after the run: the first take is active — every plain wire reads it",
+          "activeResultIndex": 0,
+          "savedOutput": {
+            "imageUrl": "https://r2/p0.png",
+            "unitLists": { "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"] },
+            "unitOutputs": {
+              "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}]"
+            },
+            "listResults": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
+            "unitTakeSide": {
+              "unitLists": { "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png"] },
+              "unitOutputs": {
+                "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\"},{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\"}]"
+              }
+            }
+          },
+          "pips": {
+            "": "https://r2/p0.png",
+            "base": "https://r2/p0.png",
+            "layers": "https://r2/p0-l1.png",
+            "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\"},{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\"}]"
+          },
+          "lists": {
+            "base": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
+            "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
+            "layerData": [
+              "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
+              "{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
+              "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
+              "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
+              "{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}"
+            ]
+          },
+          "collected": {
+            "": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
+            "base": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
+            "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
+            "layerData": [
+              "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
+              "{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
+              "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
+              "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
+              "{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}"
+            ]
+          },
+          "shown": {
+            "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png"],
+            "layerData": [
+              { "name": "Fox", "zIndex": 1, "url": "https://r2/p0-l1.png", "baseUrl": "https://r2/p0.png" },
+              { "name": "Title", "zIndex": 2, "url": "https://r2/p0-l2.png", "baseUrl": "https://r2/p0.png" }
+            ]
+          },
+          "routes": [
+            {
+              "name": "an Each wire from Layers runs the next node once per layer of every picture: row 0 is the first picture's first layer",
+              "pip": "layers",
+              "mode": "each",
+              "iteration": 0,
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/p0-l1.png"],
+              "fanOut": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"]
+            },
+            {
+              "name": "row 2 is the third picture's first layer — the second picture made none, so it adds no row",
+              "pip": "layers",
+              "mode": "each",
+              "iteration": 2,
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/p2-l1.png"],
+              "fanOut": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"]
+            },
+            {
+              "name": "a wire from Layers with no mode is an Each wire over every picture's layers (row 4, the last)",
+              "pip": "layers",
+              "iteration": 4,
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/p2-l3.png"],
+              "fanOut": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"]
+            },
+            {
+              "name": "a Selected wire from Layers reads the active take's first layer — the first picture's",
+              "pip": "layers",
+              "mode": "last",
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/p0-l1.png"]
+            },
+            {
+              "name": "item:3 addresses the whole list: the third picture's second layer",
+              "pip": "layers",
+              "mode": "item:3",
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/p2-l2.png"]
+            },
+            {
+              "name": "a Bundle into Generate Image's references hands every picture's layers, in picture order",
+              "pip": "layers",
+              "mode": "all",
+              "target": "generate-image",
+              "targetHandle": "references",
+              "asUploads": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"]
+            },
+            {
+              "name": "a wire from Base reads the active take, the first picture's",
+              "pip": "base",
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/p0.png"]
+            }
+          ]
         },
         {
-          "name": "row 2 is the third picture's first layer — the second picture made none, so it adds no row",
-          "pip": "layers",
-          "mode": "each",
-          "iteration": 2,
-          "target": "upscale-image",
-          "targetHandle": "image",
-          "asUploads": ["https://r2/p2-l1.png"]
+          "name": "the person then selects the third picture's take: a plain wire from Base, Layers and Layer data reads it; Each, Bundle, item:N and a list operator still hand on every picture's",
+          "activeResultIndex": 2,
+          "savedOutput": {
+            "imageUrl": "https://r2/p2.png",
+            "unitLists": { "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"] },
+            "unitOutputs": {
+              "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}]"
+            },
+            "listResults": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
+            "unitTakeSide": {
+              "unitLists": { "layers": ["https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"] },
+              "unitOutputs": {
+                "layerData": "[{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\"},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\"},{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\"}]"
+              }
+            }
+          },
+          "pips": {
+            "": "https://r2/p2.png",
+            "base": "https://r2/p2.png",
+            "layers": "https://r2/p2-l1.png",
+            "layerData": "[{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\"},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\"},{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\"}]"
+          },
+          "lists": {
+            "base": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
+            "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
+            "layerData": [
+              "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
+              "{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
+              "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
+              "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
+              "{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}"
+            ]
+          },
+          "collected": {
+            "": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
+            "base": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
+            "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
+            "layerData": [
+              "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
+              "{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
+              "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
+              "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
+              "{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}"
+            ]
+          },
+          "shown": {
+            "layers": ["https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
+            "layerData": [
+              { "name": "Owl", "zIndex": 1, "url": "https://r2/p2-l1.png", "baseUrl": "https://r2/p2.png" },
+              { "name": "Moon", "zIndex": 2, "url": "https://r2/p2-l2.png", "baseUrl": "https://r2/p2.png" },
+              { "name": "Caption", "zIndex": 3, "url": "https://r2/p2-l3.png", "baseUrl": "https://r2/p2.png" }
+            ]
+          },
+          "routes": [
+            {
+              "name": "a Selected wire from Layers reads the selected take's first layer",
+              "pip": "layers",
+              "mode": "last",
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/p2-l1.png"]
+            },
+            {
+              "name": "an Each wire from Layers still runs once per layer of every picture (row 0)",
+              "pip": "layers",
+              "mode": "each",
+              "iteration": 0,
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/p0-l1.png"],
+              "fanOut": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"]
+            },
+            {
+              "name": "item:0 still addresses every picture's layers: the first picture's first",
+              "pip": "layers",
+              "mode": "item:0",
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/p0-l1.png"]
+            },
+            {
+              "name": "a Bundle still hands every picture's layers",
+              "pip": "layers",
+              "mode": "all",
+              "target": "generate-image",
+              "targetHandle": "references",
+              "asUploads": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"]
+            },
+            { "name": "a wire from Base reads the selected take", "pip": "base", "target": "upscale-image", "targetHandle": "image", "asUploads": ["https://r2/p2.png"] }
+          ]
         },
         {
-          "name": "a wire from Layers with no mode is an Each wire over every picture's layers (row 4, the last)",
-          "pip": "layers",
-          "iteration": 4,
-          "target": "upscale-image",
-          "targetHandle": "image",
-          "asUploads": ["https://r2/p2-l3.png"]
-        },
-        {
-          "name": "a Selected wire from Layers reads the first picture's first layer",
-          "pip": "layers",
-          "mode": "last",
-          "target": "upscale-image",
-          "targetHandle": "image",
-          "asUploads": ["https://r2/p0-l1.png"]
-        },
-        {
-          "name": "item:3 addresses the whole list: the third picture's second layer",
-          "pip": "layers",
-          "mode": "item:3",
-          "target": "upscale-image",
-          "targetHandle": "image",
-          "asUploads": ["https://r2/p2-l2.png"]
-        },
-        {
-          "name": "a Bundle into Generate Image's references hands every picture's layers, in picture order",
-          "pip": "layers",
-          "mode": "all",
-          "target": "generate-image",
-          "targetHandle": "references",
-          "asUploads": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"]
-        },
-        {
-          "name": "a wire from Base reads the active take, the first picture's",
-          "pip": "base",
-          "target": "upscale-image",
-          "targetHandle": "image",
-          "asUploads": ["https://r2/p0.png"]
+          "name": "the second picture's take selected (it made no layers): a plain wire from Layers carries nothing and one from Layer data an empty list; Each, Bundle and item:N still hand on every picture's",
+          "activeResultIndex": 1,
+          "savedOutput": {
+            "imageUrl": "https://r2/p1.png",
+            "unitLists": { "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"] },
+            "unitOutputs": {
+              "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}]"
+            },
+            "listResults": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
+            "unitTakeSide": { "unitOutputs": { "layerData": "[]" } }
+          },
+          "pips": { "": "https://r2/p1.png", "base": "https://r2/p1.png", "layers": null, "layerData": "[]" },
+          "lists": {
+            "base": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
+            "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
+            "layerData": [
+              "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
+              "{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
+              "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
+              "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
+              "{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}"
+            ]
+          },
+          "collected": {
+            "": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
+            "base": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
+            "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
+            "layerData": [
+              "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
+              "{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
+              "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
+              "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
+              "{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}"
+            ]
+          },
+          "shown": { "layers": [], "layerData": [] },
+          "routes": [
+            {
+              "name": "an Each wire from Layers still runs once per layer of every picture (row 3)",
+              "pip": "layers",
+              "mode": "each",
+              "iteration": 3,
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/p2-l2.png"],
+              "fanOut": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"]
+            },
+            {
+              "name": "a Bundle still hands every picture's layers",
+              "pip": "layers",
+              "mode": "all",
+              "target": "generate-image",
+              "targetHandle": "references",
+              "asUploads": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"]
+            },
+            { "name": "a wire from Base reads the selected take", "pip": "base", "target": "upscale-image", "targetHandle": "image", "asUploads": ["https://r2/p1.png"] }
+          ]
         }
       ],
-      "shown": {
-        "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png"],
-        "layerData": [{ "name": "Fox", "zIndex": 1, "url": "https://r2/p0-l1.png", "baseUrl": "https://r2/p0.png" }, { "name": "Title", "zIndex": 2, "url": "https://r2/p0-l2.png", "baseUrl": "https://r2/p0.png" }]
-      },
-      "selected": {
-        "name": "the person then selects the third picture's take: Base reads it; Layers and Layer data still hand on every picture's, as Base's Each wire lists the batch",
-        "activeResultIndex": 2,
-        "savedOutput": {
-          "imageUrl": "https://r2/p2.png",
-          "unitLists": { "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"] },
+      "rerun": {
+        "name": "then one run on a single picture: the batch is over",
+        "outputData": {
+          "imageUrl": "https://r2/q.png",
+          "layers": ["https://r2/q-l1.png", "https://r2/q-l2.png"],
+          "layerData": [
+            { "name": "Cat", "zIndex": 1, "url": "https://r2/q-l1.png", "baseUrl": "https://r2/q.png" },
+            { "name": "Hat", "zIndex": 2, "url": "https://r2/q-l2.png", "baseUrl": "https://r2/q.png" }
+          ],
+          "layersNotSaved": 0
+        },
+        "nodeOutput": {
+          "imageUrl": "https://r2/q.png",
+          "unitLists": { "layers": ["https://r2/q-l1.png", "https://r2/q-l2.png"] },
+          "unitListsNotSaved": { "layers": 0 },
           "unitOutputs": {
-            "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}]"
+            "layerData": "[{\"name\":\"Cat\",\"zIndex\":1,\"url\":\"https://r2/q-l1.png\",\"baseUrl\":\"https://r2/q.png\"},{\"name\":\"Hat\",\"zIndex\":2,\"url\":\"https://r2/q-l2.png\",\"baseUrl\":\"https://r2/q.png\"}]"
+          }
+        },
+        "data": {
+          "generatedImageUrl": "https://r2/q.png",
+          "generatedLayerUrls": ["https://r2/q-l1.png", "https://r2/q-l2.png"],
+          "generatedLayerData": [
+            { "name": "Cat", "zIndex": 1, "url": "https://r2/q-l1.png", "baseUrl": "https://r2/q.png" },
+            { "name": "Hat", "zIndex": 2, "url": "https://r2/q-l2.png", "baseUrl": "https://r2/q.png" }
+          ],
+          "layersNotSaved": 0,
+          "activeResultIndex": 0,
+          "generatedResults": [
+            {
+              "url": "https://r2/q.png",
+              "jobId": "jq",
+              "generatedLayerUrls": ["https://r2/q-l1.png", "https://r2/q-l2.png"],
+              "generatedLayerData": [
+                { "name": "Cat", "zIndex": 1, "url": "https://r2/q-l1.png", "baseUrl": "https://r2/q.png" },
+                { "name": "Hat", "zIndex": 2, "url": "https://r2/q-l2.png", "baseUrl": "https://r2/q.png" }
+              ],
+              "layersNotSaved": 0
+            },
+            {
+              "url": "https://r2/p0.png",
+              "jobId": "j0",
+              "generatedLayerUrls": ["https://r2/p0-l1.png", "https://r2/p0-l2.png"],
+              "generatedLayerData": [
+                { "name": "Fox", "zIndex": 1, "url": "https://r2/p0-l1.png", "baseUrl": "https://r2/p0.png" },
+                { "name": "Title", "zIndex": 2, "url": "https://r2/p0-l2.png", "baseUrl": "https://r2/p0.png" }
+              ],
+              "layersNotSaved": 0
+            },
+            { "url": "https://r2/p1.png", "jobId": "j1", "generatedLayerUrls": null, "generatedLayerData": [], "layersNotSaved": 0 },
+            {
+              "url": "https://r2/p2.png",
+              "jobId": "j2",
+              "generatedLayerUrls": ["https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
+              "generatedLayerData": [
+                { "name": "Owl", "zIndex": 1, "url": "https://r2/p2-l1.png", "baseUrl": "https://r2/p2.png" },
+                { "name": "Moon", "zIndex": 2, "url": "https://r2/p2-l2.png", "baseUrl": "https://r2/p2.png" },
+                { "name": "Caption", "zIndex": 3, "url": "https://r2/p2-l3.png", "baseUrl": "https://r2/p2.png" }
+              ],
+              "layersNotSaved": 1
+            }
+          ]
+        },
+        "states": [
+          {
+            "name": "after the single run: every pip reads its take",
+            "activeResultIndex": 0,
+            "savedOutput": {
+              "imageUrl": "https://r2/q.png",
+              "unitLists": { "layers": ["https://r2/q-l1.png", "https://r2/q-l2.png"] },
+              "unitOutputs": {
+                "layerData": "[{\"name\":\"Cat\",\"zIndex\":1,\"url\":\"https://r2/q-l1.png\",\"baseUrl\":\"https://r2/q.png\"},{\"name\":\"Hat\",\"zIndex\":2,\"url\":\"https://r2/q-l2.png\",\"baseUrl\":\"https://r2/q.png\"}]"
+              }
+            },
+            "pips": {
+              "": "https://r2/q.png",
+              "base": "https://r2/q.png",
+              "layers": "https://r2/q-l1.png",
+              "layerData": "[{\"name\":\"Cat\",\"zIndex\":1,\"url\":\"https://r2/q-l1.png\",\"baseUrl\":\"https://r2/q.png\"},{\"name\":\"Hat\",\"zIndex\":2,\"url\":\"https://r2/q-l2.png\",\"baseUrl\":\"https://r2/q.png\"}]"
+            },
+            "lists": {
+              "base": null,
+              "layers": ["https://r2/q-l1.png", "https://r2/q-l2.png"],
+              "layerData": [
+                "{\"name\":\"Cat\",\"zIndex\":1,\"url\":\"https://r2/q-l1.png\",\"baseUrl\":\"https://r2/q.png\"}",
+                "{\"name\":\"Hat\",\"zIndex\":2,\"url\":\"https://r2/q-l2.png\",\"baseUrl\":\"https://r2/q.png\"}"
+              ]
+            },
+            "collected": {
+              "": ["https://r2/q.png"],
+              "base": ["https://r2/q.png"],
+              "layers": ["https://r2/q-l1.png", "https://r2/q-l2.png"],
+              "layerData": [
+                "{\"name\":\"Cat\",\"zIndex\":1,\"url\":\"https://r2/q-l1.png\",\"baseUrl\":\"https://r2/q.png\"}",
+                "{\"name\":\"Hat\",\"zIndex\":2,\"url\":\"https://r2/q-l2.png\",\"baseUrl\":\"https://r2/q.png\"}"
+              ]
+            },
+            "shown": {
+              "layers": ["https://r2/q-l1.png", "https://r2/q-l2.png"],
+              "layerData": [
+                { "name": "Cat", "zIndex": 1, "url": "https://r2/q-l1.png", "baseUrl": "https://r2/q.png" },
+                { "name": "Hat", "zIndex": 2, "url": "https://r2/q-l2.png", "baseUrl": "https://r2/q.png" }
+              ]
+            },
+            "routes": [
+              {
+                "name": "an Each wire from Layers runs once per layer of the single run",
+                "pip": "layers",
+                "mode": "each",
+                "iteration": 1,
+                "target": "upscale-image",
+                "targetHandle": "image",
+                "asUploads": ["https://r2/q-l2.png"],
+                "fanOut": ["https://r2/q-l1.png", "https://r2/q-l2.png"]
+              },
+              { "name": "a wire from Base reads the single run's take", "pip": "base", "target": "upscale-image", "targetHandle": "image", "asUploads": ["https://r2/q.png"] }
+            ]
           },
-          "listResults": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"]
-        },
-        "pips": {
-          "": "https://r2/p2.png",
-          "base": "https://r2/p2.png",
-          "layers": "https://r2/p0-l1.png",
-          "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0},{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2},{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}]"
-        },
-        "lists": {
-          "base": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
-          "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
-          "layerData": [
-            "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
-            "{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
-            "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
-            "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
-            "{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}"
-          ]
-        },
-        "collected": {
-          "": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
-          "base": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
-          "layers": ["https://r2/p0-l1.png", "https://r2/p0-l2.png", "https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
-          "layerData": [
-            "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/p0-l1.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
-            "{\"name\":\"Title\",\"zIndex\":2,\"url\":\"https://r2/p0-l2.png\",\"baseUrl\":\"https://r2/p0.png\",\"row\":0}",
-            "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
-            "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}",
-            "{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\",\"row\":2}"
-          ]
-        },
-        "shown": {
-          "layers": ["https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
-          "layerData": [
-            { "name": "Owl", "zIndex": 1, "url": "https://r2/p2-l1.png", "baseUrl": "https://r2/p2.png" },
-            { "name": "Moon", "zIndex": 2, "url": "https://r2/p2-l2.png", "baseUrl": "https://r2/p2.png" },
-            { "name": "Caption", "zIndex": 3, "url": "https://r2/p2-l3.png", "baseUrl": "https://r2/p2.png" }
-          ]
+          {
+            "name": "an older take selected — the third picture's from the batch: Base, Layers and Layer data read that take's own; no wire hands on the batch",
+            "activeResultIndex": 3,
+            "savedOutput": {
+              "imageUrl": "https://r2/p2.png",
+              "unitLists": { "layers": ["https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"] },
+              "unitOutputs": {
+                "layerData": "[{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\"},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\"},{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\"}]"
+              }
+            },
+            "pips": {
+              "": "https://r2/p2.png",
+              "base": "https://r2/p2.png",
+              "layers": "https://r2/p2-l1.png",
+              "layerData": "[{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\"},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\"},{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\"}]"
+            },
+            "lists": {
+              "base": null,
+              "layers": ["https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
+              "layerData": [
+                "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\"}",
+                "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\"}",
+                "{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\"}"
+              ]
+            },
+            "collected": {
+              "": ["https://r2/p2.png"],
+              "base": ["https://r2/p2.png"],
+              "layers": ["https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
+              "layerData": [
+                "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/p2-l1.png\",\"baseUrl\":\"https://r2/p2.png\"}",
+                "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/p2-l2.png\",\"baseUrl\":\"https://r2/p2.png\"}",
+                "{\"name\":\"Caption\",\"zIndex\":3,\"url\":\"https://r2/p2-l3.png\",\"baseUrl\":\"https://r2/p2.png\"}"
+              ]
+            },
+            "shown": {
+              "layers": ["https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"],
+              "layerData": [
+                { "name": "Owl", "zIndex": 1, "url": "https://r2/p2-l1.png", "baseUrl": "https://r2/p2.png" },
+                { "name": "Moon", "zIndex": 2, "url": "https://r2/p2-l2.png", "baseUrl": "https://r2/p2.png" },
+                { "name": "Caption", "zIndex": 3, "url": "https://r2/p2-l3.png", "baseUrl": "https://r2/p2.png" }
+              ]
+            },
+            "routes": [
+              {
+                "name": "a Selected wire from Layers reads the selected take's first layer",
+                "pip": "layers",
+                "mode": "last",
+                "target": "upscale-image",
+                "targetHandle": "image",
+                "asUploads": ["https://r2/p2-l1.png"]
+              },
+              {
+                "name": "an Each wire from Layers runs once per layer of the selected take (row 2)",
+                "pip": "layers",
+                "mode": "each",
+                "iteration": 2,
+                "target": "upscale-image",
+                "targetHandle": "image",
+                "asUploads": ["https://r2/p2-l3.png"],
+                "fanOut": ["https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"]
+              },
+              {
+                "name": "item:1 addresses the selected take's layers",
+                "pip": "layers",
+                "mode": "item:1",
+                "target": "upscale-image",
+                "targetHandle": "image",
+                "asUploads": ["https://r2/p2-l2.png"]
+              },
+              {
+                "name": "a Bundle hands the selected take's layers",
+                "pip": "layers",
+                "mode": "all",
+                "target": "generate-image",
+                "targetHandle": "references",
+                "asUploads": ["https://r2/p2-l1.png", "https://r2/p2-l2.png", "https://r2/p2-l3.png"]
+              },
+              { "name": "a wire from Base reads the selected take", "pip": "base", "target": "upscale-image", "targetHandle": "image", "asUploads": ["https://r2/p2.png"] },
+              {
+                "name": "an Each wire from Base fans out over nothing: the next node runs once, on the selected take",
+                "pip": "base",
+                "mode": "each",
+                "target": "upscale-image",
+                "targetHandle": "image",
+                "asUploads": ["https://r2/p2.png"]
+              }
+            ]
+          }
+        ],
+        "staleFields": {
+          "__listResults": ["https://r2/p0.png", "https://r2/p1.png", "https://r2/p2.png"],
+          "__listTotal": 3,
+          "__listCompleted": 3,
+          "__listInputs": ["https://r2/in-0.png", "https://r2/in-1.png", "https://r2/in-2.png"]
         }
       }
     },
@@ -464,7 +816,12 @@
             },
             "unitListsNotSaved": { "layers": 0 }
           }
-        ]
+        ],
+        "unitTakeSide": {
+          "unitLists": { "layers": ["https://r2/q0-l1.png"] },
+          "unitOutputs": { "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\"}]" },
+          "unitListsNotSaved": { "layers": 0 }
+        }
       },
       "data": {
         "generatedImageUrl": "https://r2/q0.png",
@@ -497,93 +854,295 @@
           }
         ]
       },
-      "savedOutput": {
-        "imageUrl": "https://r2/q0.png",
-        "unitLists": { "layers": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"] },
-        "unitOutputs": {
-          "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0},{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}]"
-        },
-        "listResults": ["https://r2/q0.png", "https://r2/q2.png"]
-      },
-      "pips": {
-        "": "https://r2/q0.png",
-        "base": "https://r2/q0.png",
-        "layers": "https://r2/q0-l1.png",
-        "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0},{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}]"
-      },
-      "lists": {
-        "base": ["https://r2/q0.png", "https://r2/q2.png"],
-        "layers": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"],
-        "layerData": [
-          "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0}",
-          "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}",
-          "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}"
-        ]
-      },
-      "collected": {
-        "layers": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"],
-        "layerData": [
-          "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0}",
-          "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}",
-          "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}"
-        ]
-      },
-      "routes": [
+      "states": [
         {
-          "name": "an Each wire from Layers runs once per layer of every picture: its second run is the third picture's first layer (the failed picture added none), and that layer's baseUrl names its base",
-          "pip": "layers",
-          "mode": "each",
-          "iteration": 1,
-          "target": "upscale-image",
-          "targetHandle": "image",
-          "asUploads": ["https://r2/q2-l1.png"]
+          "name": "after the run: the first take is active — every plain wire reads it",
+          "activeResultIndex": 0,
+          "savedOutput": {
+            "imageUrl": "https://r2/q0.png",
+            "unitLists": { "layers": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"] },
+            "unitOutputs": {
+              "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0},{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}]"
+            },
+            "listResults": ["https://r2/q0.png", "https://r2/q2.png"],
+            "unitTakeSide": {
+              "unitLists": { "layers": ["https://r2/q0-l1.png"] },
+              "unitOutputs": { "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\"}]" }
+            }
+          },
+          "pips": {
+            "": "https://r2/q0.png",
+            "base": "https://r2/q0.png",
+            "layers": "https://r2/q0-l1.png",
+            "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\"}]"
+          },
+          "lists": {
+            "base": ["https://r2/q0.png", "https://r2/q2.png"],
+            "layers": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"],
+            "layerData": [
+              "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0}",
+              "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}",
+              "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}"
+            ]
+          },
+          "collected": {
+            "layers": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"],
+            "layerData": [
+              "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0}",
+              "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}",
+              "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}"
+            ]
+          },
+          "shown": { "layers": ["https://r2/q0-l1.png"], "layerData": [{ "name": "Fox", "zIndex": 1, "url": "https://r2/q0-l1.png", "baseUrl": "https://r2/q0.png" }] },
+          "routes": [
+            {
+              "name": "an Each wire from Layers runs once per layer of every picture: its second run is the third picture's first layer (the failed picture added none), and that layer's baseUrl names its base",
+              "pip": "layers",
+              "mode": "each",
+              "iteration": 1,
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/q2-l1.png"],
+              "fanOut": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"]
+            }
+          ]
+        },
+        {
+          "name": "the person then selects the second take, the third picture's (the second made none): a plain wire from Base, Layers and Layer data reads it; Each, Bundle, item:N and a list operator still hand on every picture's",
+          "activeResultIndex": 1,
+          "savedOutput": {
+            "imageUrl": "https://r2/q2.png",
+            "unitLists": { "layers": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"] },
+            "unitOutputs": {
+              "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0},{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}]"
+            },
+            "listResults": ["https://r2/q0.png", "https://r2/q2.png"],
+            "unitTakeSide": {
+              "unitLists": { "layers": ["https://r2/q2-l1.png", "https://r2/q2-l2.png"] },
+              "unitOutputs": {
+                "layerData": "[{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\"},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\"}]"
+              }
+            }
+          },
+          "pips": {
+            "": "https://r2/q2.png",
+            "base": "https://r2/q2.png",
+            "layers": "https://r2/q2-l1.png",
+            "layerData": "[{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\"},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\"}]"
+          },
+          "lists": {
+            "base": ["https://r2/q0.png", "https://r2/q2.png"],
+            "layers": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"],
+            "layerData": [
+              "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0}",
+              "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}",
+              "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}"
+            ]
+          },
+          "collected": {
+            "": ["https://r2/q0.png", "https://r2/q2.png"],
+            "base": ["https://r2/q0.png", "https://r2/q2.png"],
+            "layers": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"],
+            "layerData": [
+              "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0}",
+              "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}",
+              "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}"
+            ]
+          },
+          "shown": {
+            "layers": ["https://r2/q2-l1.png", "https://r2/q2-l2.png"],
+            "layerData": [
+              { "name": "Owl", "zIndex": 1, "url": "https://r2/q2-l1.png", "baseUrl": "https://r2/q2.png" },
+              { "name": "Moon", "zIndex": 2, "url": "https://r2/q2-l2.png", "baseUrl": "https://r2/q2.png" }
+            ]
+          },
+          "routes": [
+            {
+              "name": "a Selected wire from Layers reads the selected take's first layer, the third picture's",
+              "pip": "layers",
+              "mode": "last",
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/q2-l1.png"]
+            },
+            {
+              "name": "an Each wire from Layers still runs once per layer of every picture (row 0)",
+              "pip": "layers",
+              "mode": "each",
+              "iteration": 0,
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/q0-l1.png"],
+              "fanOut": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "two pictures where the first made no layers: a plain wire from Layers carries nothing — never the second picture's first layer",
+      "items": ["https://r2/in-a.png", "https://r2/in-b.png"],
+      "rows": [
+        { "outputData": { "imageUrl": "https://r2/n0.png", "layers": [], "layerData": [], "layersNotSaved": 0 } },
+        {
+          "outputData": {
+            "imageUrl": "https://r2/n1.png",
+            "layers": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"],
+            "layerData": [
+              { "name": "Tree", "zIndex": 1, "url": "https://r2/n1-l1.png", "baseUrl": "https://r2/n1.png" },
+              { "name": "Sun", "zIndex": 2, "url": "https://r2/n1-l2.png", "baseUrl": "https://r2/n1.png" }
+            ],
+            "layersNotSaved": 0
+          }
         }
       ],
-      "shown": { "layers": ["https://r2/q0-l1.png"], "layerData": [{ "name": "Fox", "zIndex": 1, "url": "https://r2/q0-l1.png", "baseUrl": "https://r2/q0.png" }] },
-      "selected": {
-        "name": "the person then selects the second take, the third picture's (the second made none): Base reads it; Layers and Layer data still hand on every picture's",
-        "activeResultIndex": 1,
-        "savedOutput": {
-          "imageUrl": "https://r2/q2.png",
-          "unitLists": { "layers": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"] },
-          "unitOutputs": {
-            "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0},{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}]"
+      "nodeOutput": {
+        "imageUrl": "https://r2/n0.png",
+        "listResults": ["https://r2/n0.png", "https://r2/n1.png"],
+        "unitLists": { "layers": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"] },
+        "unitOutputs": {
+          "layerData": "[{\"name\":\"Tree\",\"zIndex\":1,\"url\":\"https://r2/n1-l1.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1},{\"name\":\"Sun\",\"zIndex\":2,\"url\":\"https://r2/n1-l2.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1}]"
+        },
+        "unitListsNotSaved": { "layers": 0 },
+        "listResultSideOutputs": [
+          { "unitOutputs": { "layerData": "[]" }, "unitListsNotSaved": { "layers": 0 } },
+          {
+            "unitLists": { "layers": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"] },
+            "unitOutputs": {
+              "layerData": "[{\"name\":\"Tree\",\"zIndex\":1,\"url\":\"https://r2/n1-l1.png\",\"baseUrl\":\"https://r2/n1.png\"},{\"name\":\"Sun\",\"zIndex\":2,\"url\":\"https://r2/n1-l2.png\",\"baseUrl\":\"https://r2/n1.png\"}]"
+            },
+            "unitListsNotSaved": { "layers": 0 }
+          }
+        ],
+        "unitTakeSide": { "unitOutputs": { "layerData": "[]" }, "unitListsNotSaved": { "layers": 0 } }
+      },
+      "data": {
+        "generatedImageUrl": "https://r2/n0.png",
+        "generatedLayerUrls": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"],
+        "generatedLayerData": [
+          { "name": "Tree", "zIndex": 1, "url": "https://r2/n1-l1.png", "baseUrl": "https://r2/n1.png", "row": 1 },
+          { "name": "Sun", "zIndex": 2, "url": "https://r2/n1-l2.png", "baseUrl": "https://r2/n1.png", "row": 1 }
+        ],
+        "layersNotSaved": 0,
+        "__listResults": ["https://r2/n0.png", "https://r2/n1.png"],
+        "activeResultIndex": 0,
+        "generatedResults": [
+          { "url": "https://r2/n0.png", "jobId": "j0", "generatedLayerUrls": null, "generatedLayerData": [], "layersNotSaved": 0 },
+          {
+            "url": "https://r2/n1.png",
+            "jobId": "j1",
+            "generatedLayerUrls": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"],
+            "generatedLayerData": [
+              { "name": "Tree", "zIndex": 1, "url": "https://r2/n1-l1.png", "baseUrl": "https://r2/n1.png" },
+              { "name": "Sun", "zIndex": 2, "url": "https://r2/n1-l2.png", "baseUrl": "https://r2/n1.png" }
+            ],
+            "layersNotSaved": 0
+          }
+        ]
+      },
+      "states": [
+        {
+          "name": "after the run: the first take is active and made no layers",
+          "activeResultIndex": 0,
+          "savedOutput": {
+            "imageUrl": "https://r2/n0.png",
+            "unitLists": { "layers": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"] },
+            "unitOutputs": {
+              "layerData": "[{\"name\":\"Tree\",\"zIndex\":1,\"url\":\"https://r2/n1-l1.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1},{\"name\":\"Sun\",\"zIndex\":2,\"url\":\"https://r2/n1-l2.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1}]"
+            },
+            "listResults": ["https://r2/n0.png", "https://r2/n1.png"],
+            "unitTakeSide": { "unitOutputs": { "layerData": "[]" } }
           },
-          "listResults": ["https://r2/q0.png", "https://r2/q2.png"]
-        },
-        "pips": {
-          "": "https://r2/q2.png",
-          "base": "https://r2/q2.png",
-          "layers": "https://r2/q0-l1.png",
-          "layerData": "[{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0},{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2},{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}]"
-        },
-        "lists": {
-          "base": ["https://r2/q0.png", "https://r2/q2.png"],
-          "layers": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"],
-          "layerData": [
-            "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0}",
-            "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}",
-            "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}"
+          "pips": { "": "https://r2/n0.png", "base": "https://r2/n0.png", "layers": null, "layerData": "[]" },
+          "lists": {
+            "base": ["https://r2/n0.png", "https://r2/n1.png"],
+            "layers": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"],
+            "layerData": [
+              "{\"name\":\"Tree\",\"zIndex\":1,\"url\":\"https://r2/n1-l1.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1}",
+              "{\"name\":\"Sun\",\"zIndex\":2,\"url\":\"https://r2/n1-l2.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1}"
+            ]
+          },
+          "collected": {
+            "": ["https://r2/n0.png", "https://r2/n1.png"],
+            "base": ["https://r2/n0.png", "https://r2/n1.png"],
+            "layers": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"],
+            "layerData": [
+              "{\"name\":\"Tree\",\"zIndex\":1,\"url\":\"https://r2/n1-l1.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1}",
+              "{\"name\":\"Sun\",\"zIndex\":2,\"url\":\"https://r2/n1-l2.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1}"
+            ]
+          },
+          "shown": { "layers": [], "layerData": [] },
+          "routes": [
+            {
+              "name": "an Each wire from Layers runs once per layer of every picture: row 0 is the second picture's first",
+              "pip": "layers",
+              "mode": "each",
+              "iteration": 0,
+              "target": "upscale-image",
+              "targetHandle": "image",
+              "asUploads": ["https://r2/n1-l1.png"],
+              "fanOut": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"]
+            },
+            {
+              "name": "a Bundle hands every picture's layers",
+              "pip": "layers",
+              "mode": "all",
+              "target": "generate-image",
+              "targetHandle": "references",
+              "asUploads": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"]
+            },
+            { "name": "a wire from Base reads the active take", "pip": "base", "target": "upscale-image", "targetHandle": "image", "asUploads": ["https://r2/n0.png"] }
           ]
         },
-        "collected": {
-          "": ["https://r2/q0.png", "https://r2/q2.png"],
-          "base": ["https://r2/q0.png", "https://r2/q2.png"],
-          "layers": ["https://r2/q0-l1.png", "https://r2/q2-l1.png", "https://r2/q2-l2.png"],
-          "layerData": [
-            "{\"name\":\"Fox\",\"zIndex\":1,\"url\":\"https://r2/q0-l1.png\",\"baseUrl\":\"https://r2/q0.png\",\"row\":0}",
-            "{\"name\":\"Owl\",\"zIndex\":1,\"url\":\"https://r2/q2-l1.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}",
-            "{\"name\":\"Moon\",\"zIndex\":2,\"url\":\"https://r2/q2-l2.png\",\"baseUrl\":\"https://r2/q2.png\",\"row\":2}"
-          ]
-        },
-        "shown": {
-          "layers": ["https://r2/q2-l1.png", "https://r2/q2-l2.png"],
-          "layerData": [
-            { "name": "Owl", "zIndex": 1, "url": "https://r2/q2-l1.png", "baseUrl": "https://r2/q2.png" },
-            { "name": "Moon", "zIndex": 2, "url": "https://r2/q2-l2.png", "baseUrl": "https://r2/q2.png" }
-          ]
+        {
+          "name": "the second take selected: a plain wire reads its layers",
+          "activeResultIndex": 1,
+          "savedOutput": {
+            "imageUrl": "https://r2/n1.png",
+            "unitLists": { "layers": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"] },
+            "unitOutputs": {
+              "layerData": "[{\"name\":\"Tree\",\"zIndex\":1,\"url\":\"https://r2/n1-l1.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1},{\"name\":\"Sun\",\"zIndex\":2,\"url\":\"https://r2/n1-l2.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1}]"
+            },
+            "listResults": ["https://r2/n0.png", "https://r2/n1.png"],
+            "unitTakeSide": {
+              "unitLists": { "layers": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"] },
+              "unitOutputs": {
+                "layerData": "[{\"name\":\"Tree\",\"zIndex\":1,\"url\":\"https://r2/n1-l1.png\",\"baseUrl\":\"https://r2/n1.png\"},{\"name\":\"Sun\",\"zIndex\":2,\"url\":\"https://r2/n1-l2.png\",\"baseUrl\":\"https://r2/n1.png\"}]"
+              }
+            }
+          },
+          "pips": {
+            "": "https://r2/n1.png",
+            "base": "https://r2/n1.png",
+            "layers": "https://r2/n1-l1.png",
+            "layerData": "[{\"name\":\"Tree\",\"zIndex\":1,\"url\":\"https://r2/n1-l1.png\",\"baseUrl\":\"https://r2/n1.png\"},{\"name\":\"Sun\",\"zIndex\":2,\"url\":\"https://r2/n1-l2.png\",\"baseUrl\":\"https://r2/n1.png\"}]"
+          },
+          "lists": {
+            "base": ["https://r2/n0.png", "https://r2/n1.png"],
+            "layers": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"],
+            "layerData": [
+              "{\"name\":\"Tree\",\"zIndex\":1,\"url\":\"https://r2/n1-l1.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1}",
+              "{\"name\":\"Sun\",\"zIndex\":2,\"url\":\"https://r2/n1-l2.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1}"
+            ]
+          },
+          "collected": {
+            "": ["https://r2/n0.png", "https://r2/n1.png"],
+            "base": ["https://r2/n0.png", "https://r2/n1.png"],
+            "layers": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"],
+            "layerData": [
+              "{\"name\":\"Tree\",\"zIndex\":1,\"url\":\"https://r2/n1-l1.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1}",
+              "{\"name\":\"Sun\",\"zIndex\":2,\"url\":\"https://r2/n1-l2.png\",\"baseUrl\":\"https://r2/n1.png\",\"row\":1}"
+            ]
+          },
+          "shown": {
+            "layers": ["https://r2/n1-l1.png", "https://r2/n1-l2.png"],
+            "layerData": [
+              { "name": "Tree", "zIndex": 1, "url": "https://r2/n1-l1.png", "baseUrl": "https://r2/n1.png" },
+              { "name": "Sun", "zIndex": 2, "url": "https://r2/n1-l2.png", "baseUrl": "https://r2/n1.png" }
+            ]
+          }
         }
-      }
+      ]
     }
   ],
   "defaults": { "": "last", "base": "last", "layers": "each", "layerData": "last" },

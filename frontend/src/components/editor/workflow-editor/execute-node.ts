@@ -491,7 +491,7 @@ import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings";
 import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, pollScrapeJobOutput, RUN_START_RESET, SCRAPE_POLL_BUDGET_MS } from "./poll-job";
-import type { OutputKeySpec } from "./poll-job";
+import type { OutputKeySpec, PollJobResultOptions } from "./poll-job";
 import { caughtErrorWords, failedJobError } from "@/lib/failed-job-error";
 import { ensureNodeSheetPanels, SHEET_STAGE_A_CANCELLED } from "../reference-sheet/node-sheet-stage-a";
 import { shouldAbandonNode } from "./abandon-guard";
@@ -619,8 +619,13 @@ function runProcessingNode(
   extraOutputFields?: (
     outputData: Record<string, unknown>,
   ) => Record<string, unknown>,
+  /** On the node only, in the write that lands the take (PollJobResultOptions.nodeFields). */
+  nodeFields?: PollJobResultOptions["nodeFields"],
 ): Promise<string> {
-  return pollJobWithNodeUpdate(nodeId, apiCall, outputKey, label, ctx, extraOutputFields);
+  // The legacy call shape exactly, unless a unit lands node-only fields with its take.
+  return nodeFields
+    ? pollJobWithNodeUpdate(nodeId, apiCall, outputKey, label, ctx, extraOutputFields, undefined, { nodeFields })
+    : pollJobWithNodeUpdate(nodeId, apiCall, outputKey, label, ctx, extraOutputFields);
 }
 
 /**
@@ -1516,6 +1521,8 @@ function executeNodeCore(
       ctx,
       inputs,
       overrideMediaUrl,
+      // One item of a run once per upstream item: the batch is executeNodeForList's to write.
+      ...(listIterationIndex !== undefined ? { listIteration: true } : {}),
       poll: runProcessingNode,
       pollJson: (id, start, landing, label, c) => pollJobWithNodeUpdate(id, start, [], label, c, undefined, undefined, { jsonLanding: landing }),
       setUserPromptTemplate,
@@ -10336,6 +10343,15 @@ function executeNodeCore(
     // Prefer structured json from the source node's data (web-scrape's
     // generatedJson; an Edit Plan's plan as the person's review leaves it).
     let value: unknown = sourceJsonOf(src, inEdge.sourceHandle);
+
+    // A node unit's look pip is read as a plain wire reads it — the active
+    // take's own JSON — and nothing else: a take that holds none extracts
+    // nothing, never the pip's list nor another output (the server's
+    // executeExtractField stops there too).
+    if (value === undefined && unitSourceJsonOf(src, inEdge.sourceHandle, "take")) {
+      updateNodeData(node.id, { extractedText: "", executionStatus: "completed" });
+      return Promise.resolve("");
+    }
 
     // When upstream is a list-producing node (filter-list / deduplicate /
     // merge-lists / split-text), iterate over the FULL list so the path

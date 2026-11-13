@@ -54,8 +54,9 @@ function sideOutputsOf(o: NodeOutput): NodeOutputSide | null {
  * each list output's files row by row, a JSON output aligned with a list each
  * row's entries tagged with their row, the not-stored counts summed
  * (`unitBatchSideOutputs`, @nodaro/render-rules — the rule the editor's canvas
- * run applies too). Undefined for every other node type, whose primary output
- * stays iteration 0's.
+ * run applies too) — what an Each wire, a Bundle, item:N and a list operator
+ * read. Undefined for every other node type, whose primary output stays
+ * iteration 0's.
  */
 function batchSideOutputsOf(nodeType: string | undefined, rows: ReadonlyArray<NodeOutputSide | null>): NodeOutputSide | undefined {
   const unit = unitDescriptorOf(nodeType)
@@ -218,13 +219,16 @@ export function assembleFanOutResult(
   // Prefer iteration 0's output as primary; fall back to the first successful
   // iteration so a failed/cancelled index 0 doesn't blank the primary output.
   const primaryOutput = firstOutput ?? firstSuccessfulOutput
-  // A node unit with side outputs: its side pips hand on every row's (row-aligned
-  // with listResults), never the primary's alone; each row keeps its own below.
+  // A node unit with side outputs: its side pips' lists hand on every row's
+  // (row-aligned with listResults); a plain wire reads the primary row's own —
+  // the take the editor makes active (`unitTakeSide`, `{}` when it made none,
+  // never the batch's in its place); each row keeps its own below.
   const batchSide = batchSideOutputsOf(nodeType, allSideOutputs)
 
   const output: NodeOutput = {
     ...(primaryOutput ? (batchSide ? withoutSideOutputs(primaryOutput) : primaryOutput) : {}),
     ...batchSide,
+    ...(batchSide ? { unitTakeSide: (primaryOutput && sideOutputsOf(primaryOutput)) || {} } : {}),
     listResults: allResults,
     // The primary's `resultCompositionKey` is iteration 0's; the rows carry their own.
     ...(anyCompositionKey ? { listResultCompositionKeys: allCompositionKeys } : {}),

@@ -9,7 +9,8 @@
 import type { UnitExecKit } from "@/nodes/exec-kit"
 import type { MessageKey } from "@/lib/i18n"
 import { unitDefinitionOf } from "@/lib/unit-definitions"
-import { unitJsonJobLanding, unitJsonWorkers, unitSideFields, unitSideJobPatch, type UnitJsonLanding } from "@/lib/unit-compose"
+import { unitHeldBatch } from "@nodaro/render-rules"
+import { UNIT_BATCH_FIELDS, unitBatchClearPatch, unitJsonJobLanding, unitJsonWorkers, unitSideFields, unitSideJobPatch, type UnitJsonLanding } from "@/lib/unit-compose"
 import type { WorkflowNode } from "@/types/nodes"
 import type { FrontendResolvedInputs } from "./node-input-resolver"
 import type { OutputKeySpec } from "./poll-job"
@@ -25,8 +26,17 @@ export interface UnitExecKitDeps {
   readonly ctx: ExecutionContext
   readonly inputs: FrontendResolvedInputs
   readonly overrideMediaUrl: string | undefined
-  /** poll-job's pollJobWithNodeUpdate (the legacy runProcessingNode's body); `extraOutputFields` lands a unit's side outputs. */
-  readonly poll: (nodeId: string, start: () => Promise<{ jobId: string }>, outputKey: OutputKeySpec, label: string, ctx: ExecutionContext, extraOutputFields?: UnitExtraOutputFields) => Promise<string>
+  /** The run is one item of a run once per upstream item (executeNodeForList, which writes the batch when every item settled); absent = a single run. */
+  readonly listIteration?: boolean
+  /**
+   * poll-job's pollJobWithNodeUpdate (the legacy runProcessingNode's body);
+   * `extraOutputFields` lands a unit's side outputs on the node and the take,
+   * `nodeFields` on the node only, in the same write — only when a take lands.
+   */
+  readonly poll: (
+    nodeId: string, start: () => Promise<{ jobId: string }>, outputKey: OutputKeySpec, label: string, ctx: ExecutionContext,
+    extraOutputFields?: UnitExtraOutputFields, nodeFields?: UnitExtraOutputFields,
+  ) => Promise<string>
   /** The same poll landing a JSON result (pollJobWithNodeUpdate's `jsonLanding`). */
   readonly pollJson: (nodeId: string, start: () => Promise<{ jobId: string }>, landing: UnitJsonLanding, label: string, ctx: ExecutionContext) => Promise<string>
   readonly setUserPromptTemplate: (template: string | undefined) => void
@@ -50,8 +60,26 @@ export function createUnitExecKit(deps: UnitExecKitDeps): UnitExecKit {
       const unit = unitDefinitionOf(node.type)
       const fields = unit ? unitSideFields(unit) : []
       if (!unit || fields.length === 0) return deps.poll(node.id, start, resultField, jobLabel, ctx)
-      deps.updateNodeData(node.id, Object.fromEntries(fields.map((f) => [f, undefined])))
-      return deps.poll(node.id, start, resultField, jobLabel, ctx, (outputData) => unitSideJobPatch(unit, outputData) ?? {})
+      const sidePatch = (outputData: Record<string, unknown>) => unitSideJobPatch(unit, outputData) ?? {}
+      // One item of a run once per upstream item: executeNodeForList writes the batch when every item settled.
+      if (deps.listIteration) {
+        deps.updateNodeData(node.id, Object.fromEntries(fields.map((f) => [f, undefined])))
+        return deps.poll(node.id, start, resultField, jobLabel, ctx, sidePatch)
+      }
+      // A single run. While the node holds an earlier run once per upstream
+      // item's batch, its side fields ARE that batch (every row's, what a list
+      // read takes): they stay until this run's take lands, so a run that fails
+      // or is discarded keeps the batch whole.
+      if (unitHeldBatch(deps.getNodeData(node.id) ?? {}).length === 0) {
+        deps.updateNodeData(node.id, Object.fromEntries(fields.map((f) => [f, undefined])))
+      }
+      // The take landing ends the batch (unitBatchClearPatch), as every
+      // server-run lane does — in that same write, on the node only, and only
+      // when a batch field is set, so no run writes an invisible undo step.
+      return deps.poll(node.id, start, resultField, jobLabel, ctx, sidePatch, () => {
+        const data = deps.getNodeData(node.id) ?? {}
+        return UNIT_BATCH_FIELDS.some((f) => data[f] !== undefined) ? unitBatchClearPatch(unit, {}) ?? {} : {}
+      })
     },
     runJsonNode: (start, jobLabel) => {
       const unit = unitDefinitionOf(node.type)

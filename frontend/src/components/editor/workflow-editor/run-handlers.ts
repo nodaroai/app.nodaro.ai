@@ -58,7 +58,8 @@ import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-e
 import { usecaseResultIsText } from "@nodaro/render-rules"
 import { usecaseFailedRunFields, usecaseRestoredResults, usecaseTextRunPatch } from "@/lib/use-case-run-result"
 import { carriesRowStamps, runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
-import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitSideJobFields, unitSideListRowFields, unitSideRunFields } from "@/lib/json-run-result"
+import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch, unitBatchClearFields, unitSideJobFields, unitSideListRowFields, unitSideRunFields } from "@/lib/json-run-result"
+import { UNIT_BATCH_FIELDS } from "@/lib/unit-compose"
 import { UGC_JOB_RESULT_TYPES, UGC_PATCH_REPLACES_GENERIC, isUgcFinishNode, ugcCreatorShowsRun, ugcJobMayLand, ugcJobNoOutputMessage, ugcJobResultPatch, ugcRunPatch, ugcStopPatch } from "@/lib/ugc-run-patch"
 import { serverNowIso } from "@/lib/server-clock"
 import { promptUgcCredits, ugcCreditStopOf } from "@/lib/ugc-creator-run"
@@ -247,15 +248,11 @@ const HISTORY_FIELDS: ReadonlyArray<string> = [
 ]
 
 const LIST_STATE_FIELDS: ReadonlyArray<string> = [
-  "__listResults",
-  "__alignedListResults",
-  // A render's row stamps (the clip each row was sent for): the batch's own.
-  "__listResultStamps",
-  "__listTotal",
-  "__listCompleted",
-  "__listInputs",
-  // UGC Clip's per-row notes: a later single run must not read a fan-out run's rows.
-  "__listResultMeta",
+  // A run once per upstream item's batch: the take batch and what rides with
+  // it (the row-aligned twin, a render's row stamps, UGC Clip's per-row notes,
+  // the inputs and the progress) — one list with the batch a single run of a
+  // node unit ends (unit-compose.ts).
+  ...UNIT_BATCH_FIELDS,
   "listResults",
   // Selector dual-channel outputs — clear pre-run so stale picked/rest from a
   // previous run don't survive upstream-input changes or run-from-here. The
@@ -1709,6 +1706,8 @@ export function applyRestoredJobCompletion(
     jobAwaitingReview: undefined,
     ...(overlayRun ?? {}),
     ...(sideRun ?? {}),
+    // A single run ends a node unit's batch (its take pip's list and what rides with it): on the node only.
+    ...unitBatchClearFields(nodeType, job.output_data),
   };
 
   if (job.output_data?.imageUrl) {
@@ -2475,6 +2474,8 @@ function syncNodeStatesToStore(
         // and on the take, as the canvas run lands them (lib/json-run-result.ts).
         const sideRun = unitSideRunFields(nodeType, state.output);
         if (sideRun) Object.assign(updates, sideRun);
+        // …and a single run ends its batch (an output with no listResults): on the node only.
+        Object.assign(updates, unitBatchClearFields(nodeType, state.output));
         // Not on a trigger node: its "text" is the incoming message or payload,
         // which stays in the run history (the editor reads a trigger's values
         // from the transient __triggerData, never from a saved result).
