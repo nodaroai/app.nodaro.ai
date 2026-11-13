@@ -39,6 +39,9 @@ import { transcribe, type TranscribeProvider } from "../../providers/audio/trans
 import { detectSilence } from "../../providers/audio/silence-detect.js"
 import { audioSync } from "../../providers/audio/audio-sync.js"
 import { ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER, transcribeLaneKey } from "../../lib/transcribe-lane-key.js"
+import { NEMOTRON_TRANSCRIBE_ID } from "@nodaro/shared/credits"
+import { heldAddCaptionsNemotronId } from "../../lib/add-captions-nemotron.js"
+import { captionsChargeAfterTranscription, transcribeCaptionVideoOnNemotron, type NemotronCaptionTranscription } from "../../lib/add-captions-nemotron-run.js"
 import { syntheticCaptionsFromText, transcribeSegmentsToCaptions, transcriptToCaptions } from "../../providers/audio/captions-mappers.js"
 import {
   captionRenderFps,
@@ -615,6 +618,9 @@ const handleAddCaptions: HandlerFn = async function handleAddCaptions(job, ctx) 
     animate?: boolean
     maxWordsPerLine?: number
     segments?: CaptionSegmentInput[]
+    /** Nemotron: the per-minute id the run holds (route / workflow run), and the video's measured length. */
+    bucketKey?: string
+    duration_seconds?: number
   }
   const style = data.style ?? "subtitle"
   const hasSegments = !!(data.segments && data.segments.length > 0)
@@ -684,6 +690,8 @@ async function dispatchKineticCaptions(
     maxWordsPerLine?: number
     look?: CaptionLookId
     segments?: CaptionSegmentInput[]
+    bucketKey?: string
+    duration_seconds?: number
   },
 ): Promise<void> {
   // Rendering re-encodes the video, so the plan's fps must be the SOURCE clip's
@@ -754,6 +762,36 @@ async function dispatchKineticCaptions(
   const transcribeProvider = data.transcribe_provider ?? ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER
   const localTranscribeKey = transcribeLaneKey(transcribeProvider)
   const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
+  // The relay leg (a keyless, connected install): the cloud's `/v1/transcribe`
+  // on `provider`, its answer validated rather than trusted — a version-skewed
+  // far end returning nothing usable would otherwise fall through to the
+  // synthetic-text branch or die with a misleading "no words" message (the
+  // suno-lyrics rule, and the same check handleTranscribe makes on its own cloud
+  // result). What counts as usable follows the ask: words for a word-timed
+  // render, words OR phrase segments for a line-based one. `audioUrl` matches
+  // run-on-cloud's URL_FIELD, so a local-MinIO link is re-hosted before the POST.
+  const relayTranscription = async (audioUrl: string, provider: string): Promise<TranscribedCaptionSource> => {
+    const cloud = await runJobOnCloud("transcribe", {
+      jobId: ctx.jobId,
+      audioUrl,
+      // The flag rides only when the RELAY lane can honour it — sending it to
+      // one that cannot is what makes the cloud's `/v1/transcribe` refuse a
+      // render it could otherwise serve with phrase segments.
+      ...(transcribeLaneSupportsWordTimestamps(provider) ? { wordTimestamps: true } : {}),
+      provider,
+    })
+    const relayed = cloud as TranscribedCaptionSource
+    const usable = Array.isArray(relayed.words) || (!needsWordTimings && Array.isArray(relayed.segments))
+    if (!usable) {
+      throw new Error("nodaro.ai returned no transcription")
+    }
+    return relayed
+  }
+  // Nemotron 3.5 Transcribe (decided 2026-11-13): what it handed the render and
+  // what KIE billed, for the render worker's settle; `noAudio` when the video had
+  // no audio track to send.
+  let nemotronRun: NemotronCaptionTranscription | undefined
+  let nemotronNoAudio = false
   const runTranscription = async (): Promise<TranscribedCaptionSource | null> => {
     if (!needTranscribe) return null
     // The chosen lane cannot produce word timings, and this render IS word-timed
@@ -772,6 +810,25 @@ async function dispatchKineticCaptions(
         `[add-captions kinetic] transcription SKIPPED: provider "${transcribeProvider}" cannot return word timestamps, which this render needs — falling back to the text / no-caption-source path.`,
       )
       return null
+    }
+    if (transcribeProvider === NEMOTRON_TRANSCRIBE_ID) {
+      // Its audio track, extracted and stored, is what KIE gets (never the
+      // video: KIE takes 200 MB), always with word timings, never a
+      // translation; on this install's KIE key, or relayed to the cloud, which
+      // then bills it per minute itself (the local job held the render alone).
+      const relays = await shouldRunOnCloud(localTranscribeKey)
+      const run = await transcribeCaptionVideoOnNemotron({
+        jobId: ctx.jobId,
+        videoUrl: data.videoUrl,
+        ...(typeof data.duration_seconds === "number" ? { measuredSec: data.duration_seconds } : {}),
+        ...(relays ? { relay: (audioUrl: string) => relayTranscription(audioUrl, NEMOTRON_TRANSCRIBE_ID) } : {}),
+      })
+      if (run === null) {
+        nemotronNoAudio = true
+        return null
+      }
+      nemotronRun = run
+      return run
     }
     if (!(await shouldRunOnCloud(localTranscribeKey))) {
       // Ask for word timings whenever the lane CAN give them, whatever the
@@ -797,28 +854,7 @@ async function dispatchKineticCaptions(
         "nodaro.ai: no enabled transcription provider can return word timestamps — cannot relay this render's transcription",
       )
     }
-    const cloud = await runJobOnCloud("transcribe", {
-      jobId: ctx.jobId,
-      audioUrl: data.videoUrl,
-      // Same rule as the local leg, asked of the RELAY lane (which is not always
-      // the local one): the flag rides only when that lane can honour it —
-      // sending it to one that cannot is what makes the cloud's `/v1/transcribe`
-      // refuse a render it could otherwise serve with phrase segments.
-      ...(transcribeLaneSupportsWordTimestamps(relayProvider) ? { wordTimestamps: true } : {}),
-      provider: relayProvider,
-    })
-    // Validate rather than trust — a version-skewed far end returning nothing
-    // usable would otherwise fall through to the synthetic-text branch or die
-    // with a misleading "no words" message (the suno-lyrics rule, and the same
-    // check handleTranscribe makes on its own cloud result). What counts as
-    // usable follows the ask: words for a word-timed render, words OR phrase
-    // segments for a line-based one.
-    const relayed = cloud as TranscribedCaptionSource
-    const usable = Array.isArray(relayed.words) || (!needsWordTimings && Array.isArray(relayed.segments))
-    if (!usable) {
-      throw new Error("nodaro.ai returned no transcription")
-    }
-    return relayed
+    return relayTranscription(data.videoUrl, relayProvider)
   }
 
   const [probeResult, transcribeResult] = await Promise.allSettled([
@@ -881,6 +917,9 @@ async function dispatchKineticCaptions(
           ? transcribeSegmentsToCaptions(result.segments)
           : []
     if (transcribed.length === 0) {
+      if (!data.text && nemotronNoAudio) {
+        throw new Error("This video has no audio track to transcribe: give the captions as text, captions or a wired transcript instead")
+      }
       if (!data.text) {
         throw new Error(
           needsWordTimings
@@ -964,6 +1003,8 @@ async function dispatchKineticCaptions(
   fps = captionRenderFpsWithinFrameCap(fps, targetDurationSeconds)
   const durationInFrames = Math.max(30, Math.ceil(targetDurationSeconds * fps))
 
+  const captionsCharge = captionsChargeAfterTranscription(ctx.jobId, heldAddCaptionsNemotronId(data.bucketKey), nemotronRun, data.duration_seconds)
+
   // Clear the video-worker's `pre-task` reconcile sentinel before handing this
   // job to the render queue. The reconcile cron treats a `pre-task` row whose
   // provider_call_started_at is older than 30 min as a crashed sync job and
@@ -1030,6 +1071,10 @@ async function dispatchKineticCaptions(
         durationInFrames,
       },
       usageLogId: ctx.usageLogId,
+      // How the render worker settles this job's hold: a Nemotron caption run's
+      // per-minute charge at KIE's own figures, or the plain render when the
+      // hold was per-minute and no Nemotron transcription ran here.
+      ...(captionsCharge ? { captionsCharge } : {}),
     },
     { jobId: `render-${ctx.jobId}` },
   )

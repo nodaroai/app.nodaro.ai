@@ -32,7 +32,7 @@
  * a reason — and no reason may describe a staging copy.
  */
 import { supabase } from "./supabase.js"
-import { isStorageConfigured, listObjectsByPrefixWithMeta, uploadBufferToR2, uploadFileWithKeyToR2 } from "./storage.js"
+import { isStorageConfigured, listObjectsByPrefixWithMeta, r2KeyFromOurUrl, uploadBufferToR2, uploadFileWithKeyToR2 } from "./storage.js"
 import { deleteKeysRecordingFailures } from "./storage-delete.js"
 import { getJobId } from "./job-cancellation.js"
 import { isParkedJobStatus, TERMINAL_JOB_STATUSES } from "./job-status.js"
@@ -82,6 +82,27 @@ function hasEnded(status: string): boolean {
  */
 export async function discardJobScratch(jobId: string): Promise<void> {
   await discardScratchIf(jobId, (status) => status !== undefined && hasEnded(status))
+}
+
+/**
+ * Delete ONE scratch file of `jobId` as soon as nothing reads it, while the job
+ * goes on: Add Captions' audio track, stored only for the transcription that
+ * runs before its render (decided 2026-11-13). That job is still processing
+ * when the render worker takes it over, so `discardJobScratch` keeps its folder
+ * (the render may still read an outside-input copy of the video there), and
+ * only the 7-day sweep would reach the file. Only a key inside the job's own
+ * folder is deleted, through the storage-delete funnel. Never throws.
+ */
+export async function discardJobScratchFile(url: string, jobId: string): Promise<void> {
+  try {
+    if (!isStorageConfigured() || !isScratchJobId(jobId)) return
+    const key = r2KeyFromOurUrl(url)
+    if (!key || !key.startsWith(jobScratchPrefix(jobId))) return
+    const { failed } = await deleteKeysRecordingFailures([key], "job-scratch", { jobIdOf: () => jobId })
+    if (failed.length > 0) console.warn(`[job-scratch] Job ${jobId}: a scratch file was not deleted, recorded for retry`)
+  } catch (err) {
+    console.error(`[job-scratch] Deleting one of job ${jobId}'s scratch files failed:`, err)
+  }
 }
 
 /**

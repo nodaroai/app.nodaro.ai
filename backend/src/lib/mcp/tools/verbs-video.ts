@@ -1166,7 +1166,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ),
         auto_transcribe: z.boolean().optional(),
         transcribe_provider: z.enum(CAPTION_TRANSCRIBE_LANES).optional().describe(
-          "Auto-transcribe engine. `whisper` returns NO word timings: refused only when a KINETIC render's sole caption source is transcription; fine on `subtitle`.",
+          "Auto-transcribe engine. `whisper` has NO word timings: refused only if a KINETIC render's only source is transcription; fine on `subtitle`.",
         ),
         video_url: z.string().url().optional(),
         video_asset_id: z.string().optional(),

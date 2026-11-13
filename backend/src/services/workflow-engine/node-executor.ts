@@ -115,6 +115,7 @@ import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-du
 import { stampVideoDepthInput, videoDepthReserveId } from "../../lib/video-depth-input.js"
 import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
 import { stampNemotronTranscribeInput, nemotronTranscribeReserveId } from "../../lib/nemotron-transcribe-input.js"
+import { stampAddCaptionsNemotronInput, addCaptionsNemotronReserveId } from "../../lib/add-captions-nemotron.js"
 import {
   seedanceDraftFinalizeStamp,
   seedanceDraftFinalizeReserveId,
@@ -2633,6 +2634,19 @@ async function executeWorkerNode(
     throw err
   }
 
+  // Add Captions transcribing on Nemotron 3.5 Transcribe: the route's rule —
+  // one charge, the render plus the video's minutes (decided 2026-11-13),
+  // measured before anything is held (a video over 60 minutes refused, one
+  // whose length cannot be read held at 60 minutes; an install that relays the
+  // transcription holds the render alone). Stamps the hold before input_data.
+  const captionsNemotronRefusal = await stampAddCaptionsNemotronInput(jobName, payload)
+  if (captionsNemotronRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(captionsNemotronRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = captionsNemotronRefusal.code
+    throw err
+  }
+
   // 2b' (cont.). Video Depth: the same shape. Measure the clip by the route's own
   // rule, refuse one the provider cannot take (over its frame/seconds cap, or
   // unreadable — including a videoUrl that is not an http(s) link), and stamp
@@ -2801,6 +2815,7 @@ async function executeWorkerNode(
         videoDepthReserveId(jobName, payload) ??
         pitchTempoReserveId(jobName, payload) ??
         nemotronTranscribeReserveId(jobName, payload) ??
+        addCaptionsNemotronReserveId(jobName, payload) ??
         seedanceDraftFinalizeReserveId(jobName, payload) ??
         videoMaskReserveId(jobName, payload) ??
         nodaroVideoUpscaleReserveId(jobName, payload) ??

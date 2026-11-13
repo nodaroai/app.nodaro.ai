@@ -93,6 +93,16 @@ export {
 } from "./nemotron-transcribe.js"
 
 export {
+  ADD_CAPTIONS_KINETIC_CREDIT_ID,
+  ADD_CAPTIONS_NEMOTRON_ID_PREFIX,
+  addCaptionsNemotronMinutesId,
+  addCaptionsNemotronCreditId,
+  addCaptionsNemotronQuoteCreditId,
+  parseAddCaptionsNemotronCreditId,
+  addCaptionsNemotronBaseCredits,
+} from "./add-captions-nemotron.js"
+
+export {
   VIDEO_OVERLAY_PRICING,
   VIDEO_OVERLAY_REMEASURE_SLACK_SEC,
   videoOverlayCreditId,

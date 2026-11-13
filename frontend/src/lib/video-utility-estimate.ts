@@ -163,6 +163,28 @@ export function transcribeQuotedSec(
 }
 
 /**
+ * The video length, in seconds, an Add Captions transcribing on Nemotron 3.5
+ * Transcribe (one charge: the render plus the video's started minutes) is
+ * QUOTED at, or `null` when unknown (the 60-minute price): the length the graph
+ * gives its video wire (`in`), else what the upstream node itself reports.
+ * Capped at the 60 minutes a run accepts. The run itself measures the video.
+ */
+export function addCaptionsQuotedSec(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | null {
+  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
+  const fromGraph = edges
+    .filter((e) => e.target === node.id && (e.targetHandle === "in" || e.targetHandle == null))
+    .map((e) => lengthOf(e.source))
+    .find((v) => v !== undefined)
+  const sec = fromGraph ?? upstreamVideoDurationSec(node.id, "in", nodes, edges)
+  return sec === null || sec === undefined ? null : Math.min(sec, NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC)
+}
+
+/**
  * The source length, in seconds, a Dubbing is QUOTED at, or `undefined` when
  * it is unknown: its source wire's (`video` wins over `audio`, as the node
  * dubs; a `sourceUrl` replaces both and is measured by the run) — the length

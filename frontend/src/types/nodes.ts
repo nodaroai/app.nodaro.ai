@@ -4378,8 +4378,9 @@ export type AddCaptionsData = {
   // NEW
   autoTranscribe?: boolean
   // Add Captions' own lanes — exactly `CaptionTranscribeLane` (@nodaro/shared), spelled
-  // out so its generated skill names them (a length-priced engine is not one of them).
-  transcribeProvider?: "whisper" | "incredibly-fast-whisper" | "elevenlabs-stt"
+  // out so its generated skill names them. Nemotron 3.5 Transcribe is priced by the
+  // video's started minutes on top of the render, as one charge.
+  transcribeProvider?: "whisper" | "incredibly-fast-whisper" | "elevenlabs-stt" | "nemotron-3-5-transcribe"
   // A Transcript wired into the `transcript` json handle is the caption source
   // (from transcribe or apply-edl's remapped json). wordLevel picks word-level
   // captions (one per word — karaoke/word-highlight) vs grouped lines; only

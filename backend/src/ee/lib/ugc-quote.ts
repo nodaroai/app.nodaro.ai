@@ -3,9 +3,12 @@ import {
 } from "@nodaro/shared/models"
 import {
   buildVideoCreditModelIdentifier,
+  NEMOTRON_TRANSCRIBE_ID,
+  addCaptionsNemotronQuoteCreditId,
 } from "@nodaro/shared/credits"
 import {
   captionRoutesToRemotion,
+  captionsNeedTranscription,
 } from "@nodaro/shared/captions"
 import {
   LLM_FEATURE_DEFAULTS,
@@ -259,8 +262,27 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
   transcribe: () => ({ id: MCP_TRANSCRIBE_PROVIDER }),
   // overlay_images → POST /v1/video-overlay: one flat id.
   overlay_images: () => ({ id: "video-overlay" }),
-  // add_captions → POST /v1/add-captions: the price follows the renderer.
-  add_captions: (args) => ({
+  // add_captions → POST /v1/add-captions: the price follows the renderer — and the engine: a render
+  // that transcribes on Nemotron 3.5 Transcribe is ONE charge, the render plus the video's minutes
+  // (decided 2026-11-13), quoted at 60 minutes, since a quote cannot know the length (the route
+  // measures the video and holds its own minutes, never more).
+  add_captions: (args) =>
+    args.transcribe_provider === NEMOTRON_TRANSCRIBE_ID &&
+    captionsNeedTranscription({
+      style: str(args.style),
+      text: str(args.text),
+      captions: Array.isArray(args.captions) ? args.captions : undefined,
+      transcript: args.transcript,
+      segments: Array.isArray(args.segments) ? (args.segments as Array<{ text?: unknown; captions?: unknown[] }>) : undefined,
+      auto_transcribe: typeof args.auto_transcribe === "boolean" ? args.auto_transcribe : undefined,
+    })
+      ? { id: addCaptionsNemotronQuoteCreditId(undefined) }
+      : addCaptionsRendererPricing(args),
+}
+
+/** add_captions' renderer row: the cheap FFmpeg burn, or the Remotion render (`captionRoutesToRemotion`). */
+function addCaptionsRendererPricing(args: Readonly<Record<string, unknown>>): UgcPricing {
+  return {
     id: captionRoutesToRemotion({
       style: str(args.style),
       text: str(args.text),
@@ -277,7 +299,7 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
     })
       ? "add-captions:kinetic"
       : "add-captions",
-  }),
+  }
 }
 
 /** The credit decision for one quote item, or null when it cannot be priced. Exported for the parity test. */

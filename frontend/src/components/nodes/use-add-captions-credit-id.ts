@@ -1,5 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { addCaptionsCreditId, addCaptionsTimedSourceWired } from "@/components/editor/config-panels/helpers"
+import { addCaptionsCreditId, addCaptionsSourceKnownWired, addCaptionsTimedSourceWired } from "@/components/editor/config-panels/helpers"
+import { addCaptionsQuotedSec } from "@/lib/video-utility-estimate"
 
 /**
  * The credit row an Add Captions node's own badge / Run pill must quote — the
@@ -19,5 +20,10 @@ import { addCaptionsCreditId, addCaptionsTimedSourceWired } from "@/components/e
  */
 export function useAddCaptionsCreditId(nodeId: string, data: Record<string, unknown>): string {
   const wiredTimedSource = useWorkflowStore((s) => addCaptionsTimedSourceWired(nodeId, s.edges, s.nodes))
-  return addCaptionsCreditId(data, wiredTimedSource)
+  // Nemotron 3.5 Transcribe: priced by the video's started minutes — the two
+  // graph facts that quote it, each a primitive, so the node re-renders only
+  // when one changes.
+  const sourceKnownWired = useWorkflowStore((s) => addCaptionsSourceKnownWired(nodeId, s.edges, s.nodes))
+  const videoSec = useWorkflowStore((s) => addCaptionsQuotedSec({ id: nodeId }, s.nodes, s.edges))
+  return addCaptionsCreditId(data, wiredTimedSource, { sourceKnownWired, videoSec })
 }

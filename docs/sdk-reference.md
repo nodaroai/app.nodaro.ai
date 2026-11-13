@@ -6661,9 +6661,10 @@ addCaptions(input: {
   captions?: Array<{ text: string; startMs: number; endMs: number; timestampMs?: number | null; confidence?: number | null }>
                                       // timestampMs / confidence are accepted but nothing in the render reads them
   autoTranscribe?: boolean            // transcribe the audio when nothing else supplies the words (default true)
-  transcribeProvider?: "whisper" | "incredibly-fast-whisper" | "elevenlabs-stt"
+  transcribeProvider?: "whisper" | "incredibly-fast-whisper" | "elevenlabs-stt" | "nemotron-3-5-transcribe"
                                       // "whisper" has no word timestamps — fine for "subtitle" (phrase timing is enough); on a kinetic
-                                      // style it is rejected only when transcription is the render's only caption source
+                                      // style it is rejected only when transcription is the render's only caption source.
+                                      // "nemotron-3-5-transcribe": one charge, the render plus the video's started minutes
   style?: CaptionStyle                // "subtitle" (static) | "word-highlight" | "karaoke" | "tiktok-words" | "word-pop" | "bouncy"
   position?: "bottom" | "top" | "center"
   fontSize?: number
@@ -6745,7 +6746,9 @@ await client.media.addCaptions({
 
 A kinetic style is word-timed, so when the call auto-transcribes,
 `transcribeProvider` must be an engine that returns word timestamps —
-`incredibly-fast-whisper` (the default here) or `elevenlabs-stt`.
+`incredibly-fast-whisper` (the default here), `elevenlabs-stt` or
+`nemotron-3-5-transcribe` (priced by the video's started minutes on top of the
+render: see [Add Captions](./nodes/processing-video/add-captions.md#nemotron-35-transcribe)).
 Naming `"whisper"` is rejected with `400 validation_error` on
 `transcribeProvider` only when transcription is the render's ONLY possible
 caption source; with `text`, `captions[]`, a `transcript`, `autoTranscribe:

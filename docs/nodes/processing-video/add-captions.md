@@ -162,7 +162,21 @@ Instead of `auto_transcribe`, you can pass a `captions[]` array. For the **kinet
 
 ### The auto-transcribe engine (`transcribe_provider`)
 
-The node transcribes the video's audio itself unless something else already supplies the words: `captions[]`, a wired `transcript`, `text` on a `subtitle`, `auto_transcribe: false`, or — for a `segments[]` render — every segment carrying its own `text`/`captions`. When a call carries more than one source, the precedence is `captions[]` > wired `transcript` > `text` on `subtitle` > auto-transcription. `transcribe_provider` chooses the engine: `incredibly-fast-whisper` (the default), `elevenlabs-stt`, or `whisper`. Nemotron 3.5 Transcribe is not one of them: it is priced by the file's length, which Add Captions' own price does not cover — transcribe on a [Transcribe](../ai-text/transcribe.md) node with it and wire the `json` output into `transcript` instead (naming it here is a `400 validation_error`, and a refusal before a workflow runs).
+The node transcribes the video's audio itself unless something else already supplies the words: `captions[]`, a wired `transcript`, `text` on a `subtitle`, `auto_transcribe: false`, or — for a `segments[]` render — every segment carrying its own `text`/`captions`. When a call carries more than one source, the precedence is `captions[]` > wired `transcript` > `text` on `subtitle` > auto-transcription. `transcribe_provider` chooses the engine: `incredibly-fast-whisper` (the default), `elevenlabs-stt`, `whisper`, or `nemotron-3-5-transcribe`. In the editor it is the panel's **Transcription engine**, shown while the node may auto-transcribe.
+
+#### Nemotron 3.5 Transcribe
+
+On `nemotron-3-5-transcribe` a render that transcribes is **one charge: the caption render plus the video's started minutes**, up to 60 minutes. The words always come with word timings (Nemotron never translates here). The video is measured before anything is held, and the price of that length is held; when the run is done it is charged for the length the model actually decoded, so a shorter decoded length releases the difference and a longer one takes it from your balance. A video whose length cannot be read up front holds the 60-minute price and is charged the same way. Only the video's audio track is sent for transcription, so Nemotron's own file-size limit does not apply to the video; it must be an https link to a public host and at most 60 minutes long, or the call is a `400` with nothing reserved (`invalid_media_url`, `media_duration_exceeds_limit`). A Nemotron node that brings its own `captions[]`, a wired `transcript` or a `subtitle`'s `text` transcribes nothing and costs the render alone.
+
+| Video length | Credits |
+|--------------|---------|
+| 0:45 | **57**<!-- credits: add-captions:kinetic:nemotron:1m --> |
+| 1:01 | **58**<!-- credits: add-captions:kinetic:nemotron:2m --> |
+| 10:00 | **64**<!-- credits: add-captions:kinetic:nemotron:10m --> |
+| 30:00 | **81**<!-- credits: add-captions:kinetic:nemotron:30m --> |
+| 60:00 | **105**<!-- credits: add-captions:kinetic:nemotron:60m --> |
+
+Before a run, the price shown is the length the graph knows (an upload's length, for one); when no length is known yet it is the 60-minute price. The exact figure for your account is `GET /v1/credits/model-cost?model=add-captions:kinetic:nemotron:<minutes>m`.
 
 **What `text` does depends on the style.**
 

@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -35,6 +35,7 @@ import {
 const CAPTION_WORD_TIMED_LANES = CAPTION_TRANSCRIBE_LANES.filter((p) => TRANSCRIBE_PROVIDER_CAPABILITIES[p].wordTimestamps)
 import { captionsNeedTranscription, captionsNeedWordTimings, isStaticTextCaptionSource } from "../providers/video/caption-segments.js"
 import { ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER } from "../lib/transcribe-lane-key.js"
+import { addCaptionsTranscribesOnNemotron, measureAddCaptionsNemotronHold, type AddCaptionsNemotronHold } from "../lib/add-captions-nemotron.js"
 import { rawBodyRecord, textField } from "../lib/run-model.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -122,10 +123,10 @@ export const addCaptionsBody = z.object({
   // Only meaningful with a wired `transcript`; defaults to word-level.
   wordLevel: z.boolean().optional(),
   auto_transcribe: z.boolean().optional(),
-  // Add Captions' own lanes (`CAPTION_TRANSCRIBE_LANES`): its flat render price
-  // covers the transcription it runs, so a lane priced by the file's length
-  // (Nemotron 3.5 Transcribe) is not offered here — transcribe with it on a
-  // Transcribe node and wire the transcript in.
+  // Add Captions' own lanes (`CAPTION_TRANSCRIBE_LANES`). Its flat render price
+  // covers the transcription on every lane but Nemotron 3.5 Transcribe, priced
+  // by the video's length: a request that transcribes on it holds the render
+  // plus the video's minutes as one charge (`measureNemotronCaptionsFirst`).
   transcribe_provider: z.enum(CAPTION_TRANSCRIBE_LANES).optional(),
   style: z.enum(ALL_CAPTION_STYLES).optional().default("subtitle"),
   position: z.enum(["bottom", "top", "center"]).optional().default("bottom"),
@@ -248,8 +249,53 @@ export const addCaptionsBody = z.object({
   }
 })
 
+/**
+ * What `measureNemotronCaptionsFirst` decided for a request that transcribes on
+ * Nemotron 3.5 Transcribe: the per-minute hold, or none (the render's own
+ * price: the transcription is relayed to the cloud, which bills it itself).
+ * Kept beside the request, never on its body, so no caller can name a hold.
+ */
+const nemotronHolds = new WeakMap<FastifyRequest, { readonly hold?: AddCaptionsNemotronHold }>()
+
+/**
+ * Add Captions on Nemotron 3.5 Transcribe is ONE charge, the render plus the
+ * video's minutes (decided 2026-11-13), so a request that will transcribe on it
+ * has its video measured BEFORE the credit guard, by the Transcribe node's
+ * rule (an https link to a public host, the SSRF guard first, a video over 60
+ * minutes refused; its size is not judged, as the worker sends only the audio
+ * track): refused with nothing held, or held at
+ * `add-captions:kinetic:nemotron:<N>m` (60 minutes when its length cannot be
+ * read), which the render worker settles at the minutes KIE decoded. Every
+ * other request passes through untouched (validated in the handler, as before).
+ */
+async function measureNemotronCaptionsFirst(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  // The body's `userId` says nothing about the engine or the video (the handler
+  // ignores it for the authenticated user, and refuses a malformed one itself),
+  // so it never decides whether the video is measured.
+  const { userId: _bodyUserId, ...body } = (req.body ?? {}) as Record<string, unknown>
+  const parsed = addCaptionsBody.safeParse(body)
+  if (!parsed.success || !addCaptionsTranscribesOnNemotron(parsed.data)) return
+  const measured = await measureAddCaptionsNemotronHold(parsed.data, (err) => {
+    req.log.warn({ err }, "add-captions (nemotron): ffprobe could not read the length; holding 60 minutes")
+  })
+  if (!measured.ok) {
+    return void reply.status(400).send({ error: { code: measured.code, message: measured.message } })
+  }
+  nemotronHolds.set(req, measured.hold ? { hold: measured.hold } : {})
+}
+
+/** The id a request is checked and held on: a Nemotron run's per-minute hold, else the renderer's row. One for the guard and the reservation. */
+function addCaptionsCreditIdOf(req: FastifyRequest, body: unknown): string {
+  return nemotronHolds.get(req)?.hold?.creditId ?? buildAddCaptionsCreditId(body)
+}
+
 export async function addCaptionsRoutes(app: FastifyInstance) {
-  app.post("/v1/add-captions", { preHandler: creditGuard((req) => buildAddCaptionsCreditId(req.body), { runModel: resolveAddCaptionsRunModel }) }, async (req, reply) => {
+  app.post("/v1/add-captions", {
+    preHandler: [
+      measureNemotronCaptionsFirst,
+      creditGuard((req) => addCaptionsCreditIdOf(req, req.body), { runModel: resolveAddCaptionsRunModel }),
+    ],
+  }, async (req, reply) => {
     const parsed = addCaptionsBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -285,7 +331,20 @@ export async function addCaptionsRoutes(app: FastifyInstance) {
       }
     }
 
-    const modelIdentifier = buildAddCaptionsCreditId(parsed.data)
+    // Never unmeasured past the preHandler; refused rather than held at the plain render if it ever were.
+    const nemotron = nemotronHolds.get(req)
+    if (addCaptionsTranscribesOnNemotron(parsed.data) && nemotron === undefined) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "The video's length was not measured" } })
+    }
+    const modelIdentifier = addCaptionsCreditIdOf(req, parsed.data)
+    // Nemotron: the per-minute id the run holds and the measured length (when
+    // read), on the job and for the worker, whose render settles against them.
+    const measured = nemotron?.hold
+      ? {
+          bucketKey: nemotron.hold.creditId,
+          ...(nemotron.hold.durationSec !== undefined ? { duration_seconds: nemotron.hold.durationSec } : {}),
+        }
+      : {}
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await insertJob(req, {
@@ -294,7 +353,7 @@ export async function addCaptionsRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: buildJobInputData(parsed.data, "add-captions"),
+        input_data: { ...buildJobInputData(parsed.data, "add-captions"), ...measured },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -307,7 +366,7 @@ export async function addCaptionsRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("add-captions", { jobId: job.id, ...restData, usageLogId })
+    await videoQueue.add("add-captions", { jobId: job.id, ...restData, ...measured, usageLogId })
     return { jobId: job.id }
   })
 }

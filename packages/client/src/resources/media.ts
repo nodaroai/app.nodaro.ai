@@ -67,7 +67,13 @@ export interface AddCaptionsInput extends CaptionLookInput {
   captions?: CaptionEntry[]
   /** Transcribe the video's audio when no text/captions are given (default true). */
   autoTranscribe?: boolean
-  /** The engine the render transcribes on — Add Captions' own lanes (a length-priced engine such as Nemotron 3.5 Transcribe is not one: transcribe with `audio.transcribe` and pass its `words` as `captions`). */
+  /**
+   * The engine the render transcribes on — Add Captions' own lanes. On
+   * `nemotron-3-5-transcribe` the run is one charge, the render plus the video's
+   * started minutes: the video (an https link, up to 60 minutes) is measured
+   * before anything is held, and the run is charged for the length the model
+   * decoded.
+   */
   transcribeProvider?: CaptionTranscribeLane
   style?: CaptionStyle
   position?: "bottom" | "top" | "center"

@@ -2044,6 +2044,8 @@ export const ko: ChromeDict = {
   "proccfg.look_clean": "클린",
   "proccfg.lookPlain": "없음(기본)",
   "proccfg.lookHint": "글꼴, 외곽선, 대소문자, 말하는 단어의 색상을 묶은 프리셋입니다. 아래 컨트롤로 개별 요소를 덮어쓸 수 있습니다.",
+  "proccfg.captionEngine": "전사 엔진",
+  "proccfg.captionEngineNemotronNote": "자막 렌더링에 더해 영상의 시작된 1분마다 요금이 부과됩니다.",
   "proccfg.font": "글꼴",
   "proccfg.fontAuto": "자동(룩 기준)",
   "proccfg.uppercase": "모두 대문자",

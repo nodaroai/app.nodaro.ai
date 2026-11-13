@@ -28,6 +28,7 @@ import {
   pitchTempoQuoteCreditId,
   NEMOTRON_TRANSCRIBE_ID,
   nemotronTranscribeQuoteCreditId,
+  addCaptionsNemotronQuoteCreditId,
   videoGenerationCreditId,
   lipSyncAudioRateOf,
   videoOverlayCreditId,
@@ -41,10 +42,10 @@ import {
   type LlmFeature,
 } from "@nodaro/shared/llm-models"
 import { buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, socialSearchCreditIdFromNode } from "@nodaro/shared/social"
-import { captionRoutesToRemotion } from "@nodaro/shared/captions"
+import { captionRoutesToRemotion, captionsNeedTranscription } from "@nodaro/shared/captions"
 import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
-import { isRenderNodeType, withWiredSettings } from "@nodaro/shared/nodes"
+import { isRenderNodeType, transcribeNodeReturnsWords, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsReferenceVideo } from "@/lib/audio-reference-handles"
@@ -56,7 +57,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { isTopazVideoUpscaleProvider, pitchTempoQuotedSec, transcribeQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { addCaptionsQuotedSec, isTopazVideoUpscaleProvider, pitchTempoQuotedSec, transcribeQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
@@ -329,23 +330,78 @@ export function addCaptionsTimedSourceWired(
 }
 
 /**
+ * Does the graph KNOW a wire replaces this Add Captions node's own
+ * transcription — a Transcript on `transcript`, a transcribe node wired in that
+ * returns word timings, or a caption plan on `captionPlan` (whose run carries no
+ * engine of its own)?
+ * UNKNOWN (no edges, no id) answers FALSE, unlike `addCaptionsTimedSourceWired`:
+ * for a Nemotron node the unknown side is the dearer one (it transcribes).
+ * Mirror of the backend estimator's `addCaptionsSourceKnownWired`.
+ */
+export function addCaptionsSourceKnownWired(
+  nodeId: string | undefined,
+  edges?: ReadonlyArray<WorkflowEdge>,
+  nodes?: ReadonlyArray<WorkflowNode>,
+): boolean {
+  if (!edges || !nodeId) return false
+  return edges.some((e) => {
+    if (e.target !== nodeId) return false
+    if (e.targetHandle === "transcript" || e.targetHandle === "captionPlan") return true
+    // A Transcribe node wired in replaces the transcription only when its run
+    // returns word timings — the run hands the node those words, and only when
+    // there are some; a wordless one hands it text, which a kinetic style only
+    // falls back on.
+    const source = nodes?.find((n) => n.id === e.source)
+    if (source?.type !== "transcribe") return false
+    const jsonWired = edges.some((x) => x.source === source.id && x.sourceHandle === "json")
+    return transcribeNodeReturnsWords(source.data as Record<string, unknown>, jsonWired)
+  })
+}
+
+/** What the graph tells about an Add Captions node on Nemotron: a wire known to replace its transcription, and its video's length. */
+export interface AddCaptionsNemotronGraph {
+  readonly sourceKnownWired: boolean
+  /** The video's quoted length (null: unknown → the 60-minute price). */
+  readonly videoSec: number | null
+}
+
+/**
  * The credit row an Add Captions node is priced against — the ONE place the
  * canvas badge, the panel's Generate button and every run-level estimate read,
  * so they cannot quote different prices for the same node.
  *
  * The price follows the RENDERER, via the same predicate the route's credit id,
  * payload-builder's reservation and the worker's dispatch use. `wiredTimedSource`
- * is the graph fact the node's own data cannot show (see above).
+ * is the graph fact the node's own data cannot show (see above). On Nemotron
+ * 3.5 Transcribe a node that transcribes is ONE charge, the render plus the
+ * video's started minutes (decided 2026-11-13): the `:<N>m` id its run holds,
+ * at the length `nemotron` knows, else 60 minutes. Mirror of the backend
+ * estimator's add-captions branch (ee/billing/credits.ts).
  */
 export function addCaptionsCreditId(
   data: Record<string, unknown>,
   wiredTimedSource: boolean,
-): "add-captions" | "add-captions:kinetic" {
+  nemotron: AddCaptionsNemotronGraph = { sourceKnownWired: false, videoSec: null },
+): string {
   // `text` proves the cheap FFmpeg burn only when it is LITERAL: a `{Label}`
   // reference can resolve to nothing at run time, which leaves transcription as
   // the only source — timed captions, Remotion, the kinetic row.
   const rawText = typeof data.text === "string" ? data.text : undefined
   const literalText = rawText && !/\{[^{}]+\}/.test(rawText) ? rawText : undefined
+  if (
+    (data.transcribeProvider ?? data.transcribe_provider) === NEMOTRON_TRANSCRIBE_ID &&
+    !nemotron.sourceKnownWired &&
+    captionsNeedTranscription({
+      style: data.style as string | undefined,
+      text: literalText,
+      captions: Array.isArray(data.captions) ? (data.captions as unknown[]) : undefined,
+      transcript: data.transcript,
+      segments: Array.isArray(data.segments) ? (data.segments as Array<{ text?: unknown; captions?: unknown[] }>) : undefined,
+      auto_transcribe: (data.autoTranscribe ?? data.auto_transcribe) as boolean | undefined,
+    })
+  ) {
+    return addCaptionsNemotronQuoteCreditId(nemotron.videoSec)
+  }
   return captionRoutesToRemotion({
     style: data.style as string | undefined,
     text: literalText,
@@ -536,7 +592,10 @@ export function getModelIdentifier(
   // addCaptionsCreditId, which the node's own badge reads too (through
   // use-add-captions-credit-id) so the pill and the panel cannot disagree.
   if (nodeType === "add-captions") {
-    return addCaptionsCreditId(data, addCaptionsTimedSourceWired(node.id, edges, nodes))
+    return addCaptionsCreditId(data, addCaptionsTimedSourceWired(node.id, edges, nodes), {
+      sourceKnownWired: addCaptionsSourceKnownWired(node.id, edges, nodes),
+      videoSec: node.id ? addCaptionsQuotedSec({ id: node.id }, nodes ?? [], edges ?? [], reruns) : null,
+    })
   }
 
   // Video-analysis: tier+duration composite — the SAME id the node badge

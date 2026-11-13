@@ -1628,6 +1628,13 @@ const NEMOTRON_TRANSCRIBE_BYTES = 1_122
 // generate_music.
 const SUNO_V4_5_CATALOG_ENTRIES_BYTES = 135
 
+// RAISED 2026-11-13 by Nemotron 3.5 Transcribe joining Add Captions' engines, and nothing else:
+// `add_captions`'s `transcribe_provider` enum (CAPTION_TRANSCRIBE_LANES) gains its id (26 B); its
+// describe was tightened (−14 B) to keep add_captions inside its own headroom
+// (add-captions-max-words-per-line.test.ts), the price living in its skill. No tool added, so the
+// fixture does not move. 12 B, all on add_captions.
+const ADD_CAPTIONS_NEMOTRON_BYTES = 12
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES,
   totalBytes:
@@ -1832,6 +1839,7 @@ export const TOOL_WIRE_BUDGET = {
     FLUX_FILL_CATALOG_ENTRY_BYTES +
     FLUX_3_KLEIN_TOTAL_BYTES +
     NEMOTRON_TRANSCRIBE_BYTES +
+    ADD_CAPTIONS_NEMOTRON_BYTES +
     SUNO_V4_5_CATALOG_ENTRIES_BYTES,
 }
 

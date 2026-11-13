@@ -489,7 +489,8 @@ nodaro media add-captions <videoUrl> [--text <text>] [--captions-file <file.json
                                                          # fits the width; inert on word-pop. word-highlight,
                                                          # karaoke and bouncy all show ONE held line at a time. --transcribe-provider picks the
                                                          # auto-transcribe engine: a kinetic style needs word timings (incredibly-fast-whisper,
-                                                         # the default, or elevenlabs-stt); `subtitle` needs phrase timing only, so whisper is fine
+                                                         # the default, elevenlabs-stt or nemotron-3-5-transcribe, which adds the video's started
+                                                         # minutes to the price); `subtitle` needs phrase timing only, so whisper is fine
                                                          # there. A Remotion render keeps the source frame rate (whole number, 15-60 fps; a
                                                          # variable-frame-rate or very long source renders at 30 fps).
                                                          # --captions-file is a JSON array of word-timed entries [{ text, startMs, endMs }] — one

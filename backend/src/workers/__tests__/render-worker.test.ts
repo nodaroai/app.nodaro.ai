@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterAll } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
+  const mockCommitJobCreditsAtActualPrice = vi.fn().mockResolvedValue(undefined)
   const mockMarkJobCompletedDetailed = vi.fn().mockResolvedValue("completed")
   const mockIsFinalJobAttempt = vi.fn().mockReturnValue(true)
   const mockRefundJobCredits = vi.fn().mockResolvedValue(undefined)
@@ -34,6 +35,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     mockCommitJobCredits,
+    mockCommitJobCreditsAtActualPrice,
     mockMarkJobCompletedDetailed,
     mockIsFinalJobAttempt,
     mockRefundJobCredits,
@@ -89,6 +91,7 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
 
 vi.mock("../shared.js", () => ({
   commitJobCredits: mocks.mockCommitJobCredits,
+  commitJobCreditsAtActualPrice: mocks.mockCommitJobCreditsAtActualPrice,
   refundJobCredits: mocks.mockRefundJobCredits,
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
   generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
@@ -117,6 +120,7 @@ vi.mock("@remotion/renderer", () => ({
 // ---------------------------------------------------------------------------
 
 import {
+  completeRenderedJob,
   releasesReservationOnIncompleteRender,
   isPlanJob,
   isSceneGraphJob,
@@ -771,5 +775,73 @@ describe("releasesReservationOnIncompleteRender", () => {
 
   it("completed is not an incomplete outcome at all", () => {
     expect(releasesReservationOnIncompleteRender("completed")).toBe(false)
+  })
+})
+
+/**
+ * The render's ONE commit (completeRenderedJob). An Add Captions render that
+ * transcribed on Nemotron 3.5 Transcribe (decided 2026-11-13) carries its charge
+ * on the render job: settled here at KIE's minutes, up or down, never the whole
+ * hold; every other render commits its hold as before. A render completes
+ * through the direct funnel, which cannot hold for review: an outcome other than
+ * completed commits nothing here.
+ */
+describe("completeRenderedJob", () => {
+  const fields = { output_data: { videoUrl: "https://r2.example.com/videos/out.mp4" }, is_public: false }
+  const HELD = "add-captions:kinetic:nemotron:10m"
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.mockMarkJobCompletedDetailed.mockResolvedValue("completed")
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+
+  it("a plain render: completed with its own fields, through the direct funnel, the hold committed whole, once", async () => {
+    expect(await completeRenderedJob("job-1", "ul-1", { jobId: "job-1", planType: "burn-captions", plan: {} }, fields)).toBe("completed")
+    expect(mocks.mockMarkJobCompletedDetailed).toHaveBeenCalledWith("job-1", fields)
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("ul-1", "job-1")
+    expect(mocks.mockCommitJobCreditsAtActualPrice).not.toHaveBeenCalled()
+  })
+
+  it("a Nemotron caption render: KIE's figure recorded, settled at KIE's minutes once, never the whole hold", async () => {
+    const data = { jobId: "job-1", planType: "burn-captions", plan: {}, captionsCharge: { kind: "nemotron", heldId: HELD, measuredSec: 600, kieSec: 650, providerCost: 0.01625 } }
+    await completeRenderedJob("job-1", "ul-1", data, fields)
+    expect(mocks.mockMarkJobCompletedDetailed).toHaveBeenCalledWith("job-1", { ...fields, provider_cost: 0.01625 })
+    expect(mocks.mockCommitJobCreditsAtActualPrice).toHaveBeenCalledTimes(1)
+    expect(mocks.mockCommitJobCreditsAtActualPrice).toHaveBeenCalledWith("ul-1", "job-1", "add-captions:kinetic:nemotron:11m")
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("KIE's minutes are the held minutes: the hold committed as it is", async () => {
+    const data = { jobId: "job-1", planType: "burn-captions", plan: {}, captionsCharge: { kind: "nemotron", heldId: HELD, measuredSec: 590, kieSec: 595 } }
+    await completeRenderedJob("job-1", "ul-1", data, fields)
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("ul-1", "job-1")
+    expect(mocks.mockCommitJobCreditsAtActualPrice).not.toHaveBeenCalled()
+  })
+
+  it("a per-minute hold whose transcription was relayed settles DOWN to the render, once", async () => {
+    const data = { jobId: "job-1", planType: "burn-captions", plan: {}, captionsCharge: { kind: "at", heldId: HELD, creditId: "add-captions:kinetic" } }
+    await completeRenderedJob("job-1", "ul-1", data, fields)
+    expect(mocks.mockCommitJobCreditsAtActualPrice).toHaveBeenCalledTimes(1)
+    expect(mocks.mockCommitJobCreditsAtActualPrice).toHaveBeenCalledWith("ul-1", "job-1", "add-captions:kinetic")
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("a blocked render commits and refunds nothing here (the result gate refunded it in full)", async () => {
+    mocks.mockMarkJobCompletedDetailed.mockResolvedValue("blocked")
+    const data = { jobId: "job-1", planType: "burn-captions", plan: {}, captionsCharge: { kind: "nemotron", heldId: HELD, kieSec: 650 } }
+    expect(await completeRenderedJob("job-1", "ul-1", data, fields)).toBe("blocked")
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockCommitJobCreditsAtActualPrice).not.toHaveBeenCalled()
+    expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("a cancelled render (lost race) refunds the whole hold, whatever the charge", async () => {
+    mocks.mockMarkJobCompletedDetailed.mockResolvedValue("lost_race")
+    const data = { jobId: "job-1", planType: "burn-captions", plan: {}, captionsCharge: { kind: "nemotron", heldId: HELD, kieSec: 650 } }
+    expect(await completeRenderedJob("job-1", "ul-1", data, fields)).toBe("lost_race")
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("ul-1", "job-1", "cancelled")
+    expect(mocks.mockCommitJobCreditsAtActualPrice).not.toHaveBeenCalled()
   })
 })

@@ -16,6 +16,8 @@ export {
   DEFAULT_SUBTITLE_LOOK,
   KINETIC_ONLY_CAPTION_LEVER_KEYS,
   captionRoutesToRemotion,
+  isStaticTextCaptionSource,
+  captionsNeedTranscription,
   CAPTION_MAX_WORDS_PER_LINE_MIN,
   CAPTION_MAX_WORDS_PER_LINE_MAX,
   CAPTION_LEVER_BOUNDS,

@@ -35,9 +35,11 @@ import {
   type CaptionLookLevers,
   type SupportedFontName,
   ALL_CAPTION_STYLES,
+  captionsNeedTranscription,
 } from "@nodaro/shared/captions"
 import { speedRampCreditId, PITCH_TEMPO_LIMITS } from "@nodaro/shared/credits"
 import { VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { CAPTION_TRANSCRIBE_LANES, type CaptionTranscribeLane } from "@nodaro/shared/models"
 import { CAPTION_STYLE_LABEL_KEYS } from "./caption-style-labels"
 import { splitMediaMinPartSec } from "@nodaro/render-rules"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
@@ -455,6 +457,17 @@ export const CAPTION_STROKE_WIDTH_MAX = 40
 // no onValueChange, so without this the user couldn't switch back to plain).
 const LOOK_NONE = "__none"
 
+/** The engine a caption run transcribes on when the node names none (the worker's default lane). */
+const CAPTION_ENGINE_DEFAULT: CaptionTranscribeLane = "incredibly-fast-whisper"
+
+/** Each Add Captions engine's name (whisper's says it gives no word timings, which the kinetic styles need). */
+const CAPTION_ENGINE_LABEL_KEYS: Readonly<Record<CaptionTranscribeLane, MessageKey>> = {
+  whisper: "audiocfg.providerWhisper",
+  "incredibly-fast-whisper": "audiocfg.providerIncrediblyFastWhisper",
+  "elevenlabs-stt": "audiocfg.providerElevenLabsStt",
+  "nemotron-3-5-transcribe": "audiocfg.providerNemotron",
+}
+
 export function AddCaptionsConfig({ data, onUpdate, nodeId }: ConfigProps<AddCaptionsData> & { readonly nodeId?: string }) {
   const t = useT()
   // A wired caption plan styles the opening line with Hook Plate and the rest with this node's style.
@@ -496,6 +509,18 @@ export function AddCaptionsConfig({ data, onUpdate, nodeId }: ConfigProps<AddCap
   // A free vertical position wins over the named Position slot at render, so the
   // slot is shown muted while one is set (see the Position select below).
   const positionYSet = data.positionY !== undefined
+  // Whether this node may transcribe the video's speech (the run's own rule): a
+  // `{Label}` reference in the text may resolve to nothing, so only a literal
+  // text proves a subtitle's static block.
+  const rawText = typeof data.text === "string" ? data.text : undefined
+  const mayTranscribe = captionsNeedTranscription({
+    style: data.style,
+    text: rawText && !/\{[^{}]+\}/.test(rawText) ? rawText : undefined,
+    captions: Array.isArray(data.captions) ? data.captions : undefined,
+    transcript: data.transcript,
+    segments: Array.isArray(data.segments) ? (data.segments as Array<{ text?: unknown; captions?: unknown[] }>) : undefined,
+    auto_transcribe: data.autoTranscribe,
+  })
 
   return (
     <div className="flex flex-col gap-3">
@@ -512,6 +537,33 @@ export function AddCaptionsConfig({ data, onUpdate, nodeId }: ConfigProps<AddCap
           </SelectContent>
         </Select>
       </div>
+
+      {/* The engine the node transcribes the video's speech on, while it may
+          auto-transcribe: never on a node whose own data supplies the words
+          (a subtitle's text, its own captions or transcript). Nemotron 3.5
+          Transcribe is priced by the video's started minutes on top of the
+          render (decided 2026-11-13). */}
+      {mayTranscribe && (
+        <div>
+          <Label>{t("proccfg.captionEngine")}</Label>
+          <Select
+            value={data.transcribeProvider ?? CAPTION_ENGINE_DEFAULT}
+            onValueChange={(v) => onUpdate({ transcribeProvider: v as CaptionTranscribeLane })}
+          >
+            <SelectTrigger aria-label={t("proccfg.captionEngine")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {CAPTION_TRANSCRIBE_LANES.map((lane) => (
+                <SelectItem key={lane} value={lane}>
+                  {t(CAPTION_ENGINE_LABEL_KEYS[lane])}{lane === "whisper" ? ` — ${t("audiocfg.noWordTimings")}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {data.transcribeProvider === "nemotron-3-5-transcribe" && (
+            <p className="mt-1 text-xs text-muted-foreground">{t("proccfg.captionEngineNemotronNote")}</p>
+          )}
+        </div>
+      )}
 
       {takesStylingLevers && (
         <div>

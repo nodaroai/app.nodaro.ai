@@ -49,6 +49,10 @@ import {
   parseNemotronTranscribeCreditId,
   nemotronTranscribeBaseCredits,
   nemotronTranscribeQuoteCreditId,
+  ADD_CAPTIONS_KINETIC_CREDIT_ID,
+  parseAddCaptionsNemotronCreditId,
+  addCaptionsNemotronBaseCredits,
+  addCaptionsNemotronQuoteCreditId,
   videoGenerationCreditId,
   parseUnitQuoteCreditId,
   VIDEO_OVERLAY_PRICING,
@@ -64,7 +68,7 @@ import {
   VIDEO_DEPTH_LIMITS,
 } from "@nodaro/shared/media"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
-import { withWiredSettings, renderNodeOf, isRenderNodeType, withRunOverrides } from "@nodaro/shared/nodes"
+import { withWiredSettings, renderNodeOf, isRenderNodeType, withRunOverrides, transcribeNodeReturnsWords } from "@nodaro/shared/nodes"
 import {
   MUSIC_CREDIT_ID,
   clampTopazVideoFps,
@@ -142,7 +146,7 @@ import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/speaker-view-p
 import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 import { PIPELINE_ACCEPTED_SCRIPT_LLMS } from "@nodaro/shared/pipeline"
-import { captionRoutesToRemotion } from "@nodaro/shared/captions"
+import { captionRoutesToRemotion, captionsNeedTranscription } from "@nodaro/shared/captions"
 import { getLlmModel, getLlmTier, defaultReasoningEffort, llmDefaultsFeature, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, llmPriceKey, motionGraphicsFeature, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, type LlmFeature } from "@nodaro/shared/llm-models"
 import { FLUX2_RES_MP, MODEL_CATALOG, type Flux2Model } from "@nodaro/shared/model-catalog"
 import { renderVideoCreditId, scene3DRenderTierCredits } from "@nodaro/shared/scene3d"
@@ -421,16 +425,34 @@ function nemotronTranscribeMinutesBase(identifier: string, rowOf: (id: string) =
 }
 
 /**
+ * The base price of an `add-captions:kinetic:nemotron:<N>m` id (Add Captions
+ * transcribing on Nemotron 3.5 Transcribe — decided 2026-11-13): the kinetic
+ * row plus Nemotron's per-minute base for N minutes (its four-minute rate row
+ * × N ÷ 4, rounded up once), one base marked up once; `undefined` when
+ * `identifier` is not such an id or either row is priced nowhere. Never a row
+ * of its own.
+ */
+function addCaptionsNemotronMinutesBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
+  const parsed = parseAddCaptionsNemotronCreditId(identifier)
+  if (!parsed) return undefined
+  const kinetic = rowOf(ADD_CAPTIONS_KINETIC_CREDIT_ID)
+  const rate = rowOf(NEMOTRON_TRANSCRIBE_PRICING.RATE_CREDIT_ID)
+  if (kinetic === undefined || rate === undefined) return undefined
+  return addCaptionsNemotronBaseCredits(kinetic, rate, parsed.minutes)
+}
+
+/**
  * Every id priced from rate rows rather than a row of its own: Edit Plan,
- * Pitch & Tempo, Nemotron 3.5 Transcribe, and a whole-request quote
- * (`./whole-request-quotes.ts` — N units of a per-unit rate, a speech request,
- * a whole Voice Changer Pro convert), each read through `rowOf` with the
- * request's own pricing rule.
+ * Pitch & Tempo, Nemotron 3.5 Transcribe (and Add Captions on it), and a
+ * whole-request quote (`./whole-request-quotes.ts` — N units of a per-unit
+ * rate, a speech request, a whole Voice Changer Pro convert), each read
+ * through `rowOf` with the request's own pricing rule.
  */
 function rateCompositeBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
   return editPlanMinutesBase(identifier, rowOf) ??
     pitchTempoMinutesBase(identifier, rowOf) ??
     nemotronTranscribeMinutesBase(identifier, rowOf) ??
+    addCaptionsNemotronMinutesBase(identifier, rowOf) ??
     wholeRequestQuoteOf(identifier)?.base(rowOf)
 }
 
@@ -3374,6 +3396,23 @@ export async function getModelCreditBaseCost(modelIdentifier: string): Promise<M
     return priced
   }
 
+  // Add Captions on Nemotron 3.5 Transcribe (`add-captions:kinetic:nemotron:<N>m`,
+  // decided 2026-11-13): the kinetic row plus Nemotron's per-minute base, one
+  // charge. Off when either row is off (an admin who disables Nemotron, or the
+  // Remotion render, disables this); Nemotron's tier restriction first.
+  const captionsNemotron = parseAddCaptionsNemotronCreditId(modelIdentifier)
+  if (captionsNemotron) {
+    const kinetic = await getModelCreditBaseCost(ADD_CAPTIONS_KINETIC_CREDIT_ID)
+    const rate = await getModelCreditBaseCost(NEMOTRON_TRANSCRIBE_PRICING.RATE_CREDIT_ID)
+    const priced: ModelPricing = {
+      creditCost: addCaptionsNemotronBaseCredits(kinetic.creditCost, rate.creditCost, captionsNemotron.minutes),
+      isEnabled: kinetic.isEnabled && rate.isEnabled,
+      tierRestriction: rate.tierRestriction ?? kinetic.tierRestriction,
+    }
+    modelPricingCache.set(modelIdentifier, priced)
+    return priced
+  }
+
   // A whole-request quote — a speech request of N units
   // (`<model>:per-100-chars:<N>u`), N units of a per-unit rate (`<rateId>:<N>u`)
   // or a whole Voice Changer Pro convert (`voice-changer-pro:<slots>`) — is
@@ -6016,6 +6055,8 @@ function estimateNodeCredits(
     videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, nodes, edges, wireSec, prices) : undefined,
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, wireSec) : undefined,
     transcribeSec: node.type === "transcribe" ? transcribeInputSecOf(node, edges, wireSec) : undefined,
+    addCaptionsVideoSec: node.type === "add-captions" ? addCaptionsVideoSecOf(node, edges, wireSec) : undefined,
+    addCaptionsSourceWired: node.type === "add-captions" ? addCaptionsSourceKnownWired(node, nodes, edges) : undefined,
     videoMaskSec: node.type === "video-mask" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
     // Video Face Mesh (the Cast Swap engine's quote graph): its `video` wire, priced as Video Mask's (the 30 fps basis).
     videoFaceMeshSec: node.type === "video-face-mesh" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
@@ -6122,6 +6163,53 @@ function transcribeInputSecOf(
   if (node.id === undefined || !edges) return undefined
   const sec = edges.filter((e) => e.target === node.id).map((e) => wireSec(e.source)).find((v) => v !== undefined)
   return sec === undefined ? undefined : Math.min(sec, NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC)
+}
+
+/**
+ * The video length an Add Captions on Nemotron 3.5 Transcribe (priced per
+ * started minute of the video) is quoted at: its video wire's length where a
+ * run estimate knows it, at most the 60 minutes a run accepts. Undefined when
+ * unknown: the 60-minute id stands in — a run measures the real video first.
+ */
+function addCaptionsVideoSecOf(
+  node: EstimateNode,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+): number | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const lengths = edges
+    .filter((e) => e.target === node.id && (e.targetHandle === "in" || e.targetHandle == null))
+    .map((e) => wireSec(e.source))
+    .filter((v): v is number => v !== undefined)
+  return lengths.length === 0 ? undefined : Math.min(Math.max(...lengths), NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC)
+}
+
+/**
+ * Does the graph KNOW a wire replaces this Add Captions node's own
+ * transcription — a Transcript on `transcript` (one with no words is refused
+ * before the run), a caption plan on `captionPlan` (whose run carries no engine
+ * of its own), or a Transcribe node wired in whose run returns WORD timings
+ * (the run's resolver hands the node those words, and only when there are
+ * some: `transcribeNodeReturnsWords`)? A wordless Transcribe hands it text,
+ * which a kinetic style only falls back on, so it still transcribes. Unknown
+ * (no edges, no id) answers FALSE, unlike `timedCaptionSourceWired`: here the
+ * unknown side is the dearer one (the node transcribes).
+ */
+function addCaptionsSourceKnownWired(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+): boolean {
+  if (!edges || !node.id) return false
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  return edges.some((e) => {
+    if (e.target !== node.id) return false
+    if (e.targetHandle === "transcript" || e.targetHandle === "captionPlan") return true
+    const source = byId.get(e.source ?? "")
+    if (source?.type !== "transcribe") return false
+    const jsonWired = edges.some((x) => x.source === source.id && x.sourceHandle === "json")
+    return transcribeNodeReturnsWords(source.data, jsonWired)
+  })
 }
 
 /**
@@ -7229,6 +7317,12 @@ export function getNodeModelIdentifier(
     pitchTempoSec?: number
     /** Transcribe on Nemotron 3.5 Transcribe: the file's length a run estimate knows (undefined = the 60-minute id). */
     transcribeSec?: number
+    /** Add Captions on Nemotron 3.5 Transcribe: its video's length a run estimate knows (undefined = the 60-minute id). */
+    addCaptionsVideoSec?: number
+    /** Add Captions: the graph KNOWS a wire replaces its own transcription (a transcript, a caption plan, or a
+     *  Transcribe node that returns word timings wired in). Undefined or false = the node's own data decides (an
+     *  unknown graph transcribes). */
+    addCaptionsSourceWired?: boolean
     /** Video Mask: the input clip's length a run estimate knows (undefined = not known yet). */
     videoMaskSec?: number
     /** Video Face Mesh: the input clip's PRICED length a run estimate knows (the 30 fps basis; undefined = not known yet). */
@@ -7415,6 +7509,29 @@ export function getNodeModelIdentifier(
     // node-only view gets from `graph`) always means Remotion.
     const rawText = typeof data.text === "string" ? data.text : undefined
     const literalText = rawText && !/\{[^{}]+\}/.test(rawText) ? rawText : undefined
+    // On Nemotron 3.5 Transcribe a render that transcribes is ONE charge, the
+    // Remotion render plus the video's minutes (decided 2026-11-13): the
+    // `:<N>m` id its run holds from the measured video, quoted at the length
+    // the graph knows, else at 60 minutes. Only when the run would transcribe
+    // (the shared predicate the route, the DAG and the worker ask) — a node
+    // that brings its own captions, transcript or static text, or one the
+    // graph KNOWS is fed a transcript or a caption plan, is the plain render.
+    // An unknown graph transcribes: an estimate may over-quote, never under.
+    const engine = data.transcribeProvider ?? data.transcribe_provider
+    if (
+      engine === NEMOTRON_TRANSCRIBE_ID &&
+      graph.addCaptionsSourceWired !== true &&
+      captionsNeedTranscription({
+        style: (data.captionStyle ?? data.style) as string | undefined,
+        text: literalText,
+        captions: Array.isArray(data.captions) ? (data.captions as unknown[]) : undefined,
+        transcript: data.transcript,
+        segments: Array.isArray(data.segments) ? (data.segments as Array<{ text?: unknown; captions?: unknown[] }>) : undefined,
+        auto_transcribe: (data.autoTranscribe ?? data.auto_transcribe) as boolean | undefined,
+      })
+    ) {
+      return addCaptionsNemotronQuoteCreditId(graph.addCaptionsVideoSec)
+    }
     return captionRoutesToRemotion({
       style: (data.captionStyle ?? data.style) as string | undefined,
       text: literalText,

@@ -19,6 +19,18 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
   return { ...orig, speechLengthPricingEnabled: () => flag.on }
 })
 
+// Add Captions on Nemotron 3.5 Transcribe measures the video before its guard. The quote cannot know
+// the length and names the 60-minute hold; a video whose length cannot be read is held at exactly that
+// (no network here: the SSRF guard passes and the probe reads nothing), so the two must agree.
+vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/providers/video/ffmpeg-utils.js")>()),
+  assertSafeProbeSource: async () => {},
+  probeMediaDurationAndSize: async () => {
+    throw new Error("no probe in the parity test")
+  },
+}))
+vi.mock("@/providers/nodaro/run-on-cloud.js", () => ({ shouldRunOnCloud: async () => false }))
+
 vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard:
     (resolve: (req: unknown) => string, opts?: { computeCredits?: (body: unknown, req: unknown) => number | Promise<number> }) =>
@@ -112,6 +124,10 @@ const CASES: Array<{ tool: string; quoted: Record<string, unknown>; added: Recor
   { tool: "transcribe", quoted: {}, added: { audio_url: VIDEO } },
   { tool: "overlay_images", quoted: {}, added: { video_url: VIDEO, layers: [{ url: IMAGE, start: 1, end: 2, preset: "card" }] } },
   { tool: "add_captions", quoted: { segments: [{ style: "subtitle" }, { style: "word-highlight" }] }, added: { video_url: VIDEO } },
+  // Nemotron 3.5 Transcribe (decided 2026-11-13): one charge, the render plus the video's minutes.
+  { tool: "add_captions", quoted: { style: "word-highlight", transcribe_provider: "nemotron-3-5-transcribe" }, added: { video_url: VIDEO } },
+  // The same engine with its own captions transcribes nothing: the render's row.
+  { tool: "add_captions", quoted: { style: "word-highlight", transcribe_provider: "nemotron-3-5-transcribe", captions: [{ text: "hi", startMs: 0, endMs: 400 }] }, added: { video_url: VIDEO } },
   { tool: "generate_speech", quoted: { text: "hello there", model: "elevenlabs-v3" }, added: { voice_id: "Rachel" } },
   { tool: "silence_detect", quoted: {}, added: { audio_url: VIDEO } },
   // The creator image and the realism pass: the quote rule maps the call with ugcCallToRouteBody and asks the route's own id function.
@@ -126,7 +142,7 @@ const CASES: Array<{ tool: string; quoted: Record<string, unknown>; added: Recor
 
 /** The verb receives `segments` WITH times (the real call's); the quote item carries them without. */
 function verbArgs(c: (typeof CASES)[number]): Record<string, unknown> {
-  if (c.tool !== "add_captions") return { ...c.quoted, ...c.added }
+  if (c.tool !== "add_captions" || !Array.isArray(c.quoted.segments)) return { ...c.quoted, ...c.added }
   const segments = (c.quoted.segments as Array<Record<string, unknown>>).map((s, i) => ({ ...s, start_ms: i * 1000, end_ms: i * 1000 + 1000 }))
   return { ...c.quoted, ...c.added, segments }
 }
@@ -386,5 +402,19 @@ describe("round 5 — an MCP frame-check reading is quoted as the describe route
     } finally {
       setLlmMeteredSchemaReadyForTesting(undefined)
     }
+  })
+})
+
+describe("add_captions on Nemotron — the quote names the 60-minute charge, the most a run can hold", () => {
+  it("quotes the render plus 60 minutes for a call that transcribes on Nemotron", async () => {
+    expect(await pricingFor("add_captions", { style: "karaoke", transcribe_provider: "nemotron-3-5-transcribe" }, { clipCount: 1 })).toEqual({
+      id: "add-captions:kinetic:nemotron:60m",
+    })
+  })
+
+  it("quotes the render's own row when it transcribes nothing, or on another engine", async () => {
+    expect((await pricingFor("add_captions", { style: "karaoke", transcribe_provider: "nemotron-3-5-transcribe", auto_transcribe: false, text: "Hi" }, { clipCount: 1 }))?.id).toBe("add-captions:kinetic")
+    expect((await pricingFor("add_captions", { style: "subtitle", transcribe_provider: "nemotron-3-5-transcribe", text: "Hi" }, { clipCount: 1 }))?.id).toBe("add-captions")
+    expect((await pricingFor("add_captions", { style: "karaoke", transcribe_provider: "elevenlabs-stt" }, { clipCount: 1 }))?.id).toBe("add-captions:kinetic")
   })
 })

@@ -2157,9 +2157,17 @@ describe("buildPayload — transcribe on Nemotron 3.5 Transcribe (translation)",
   })
 })
 
-describe("buildPayload — add-captions never transcribes on a length-priced engine", () => {
-  it("refuses Nemotron 3.5 Transcribe as its auto-transcribe engine, before any credit is reserved", () => {
+describe("buildPayload — add-captions transcribes only on its own engines", () => {
+  it("passes Nemotron 3.5 Transcribe through (decided 2026-11-13): node-executor measures the video and holds the render plus its minutes", () => {
     const n = node("c", "add-captions", { videoUrl: "https://v.mp4", style: "word-highlight", transcribeProvider: "nemotron-3-5-transcribe" })
+    const built = buildPayload(n, "job-1", {})
+    expect(built.payload.transcribe_provider).toBe("nemotron-3-5-transcribe")
+    // The render's own row here; node-executor's stamp turns it into the per-minute hold.
+    expect(built.modelIdentifier).toBe("add-captions:kinetic")
+  })
+
+  it("refuses an engine that is not one of its own, before any credit is reserved", () => {
+    const n = node("c", "add-captions", { videoUrl: "https://v.mp4", style: "word-highlight", transcribeProvider: "deepgram-nova" })
     expect(() => buildPayload(n, "job-1", {})).toThrow(/not an engine Add Captions transcribes on/)
   })
 
