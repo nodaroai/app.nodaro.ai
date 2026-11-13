@@ -1,5 +1,0 @@
----
-"@nodaro/shared": minor
----
-
-Add Captions transcribes on Nemotron 3.5 Transcribe: `nemotron-3-5-transcribe` joins `CAPTION_TRANSCRIBE_LANES` (at the end) and so `CaptionTranscribeLane`. A caption render that transcribes on it is one charge, the Remotion render plus the video's started minutes, held as `add-captions:kinetic:nemotron:<N>m` (N = 1..60). New from `@nodaro/shared/credits`: `ADD_CAPTIONS_KINETIC_CREDIT_ID`, `ADD_CAPTIONS_NEMOTRON_ID_PREFIX`, `addCaptionsNemotronMinutesId`, `addCaptionsNemotronCreditId`, `addCaptionsNemotronQuoteCreditId` (an unknown length quotes 60 minutes), `parseAddCaptionsNemotronCreditId` and `addCaptionsNemotronBaseCredits`. New from `@nodaro/shared/captions`: `captionsNeedTranscription` (whether a caption render transcribes its audio) and `isStaticTextCaptionSource`, moved from the platform so every price of a caption run asks the same question. From `@nodaro/shared/nodes`: `transcribeNodeReturnsWords` (whether a Transcribe node's run returns word timings, as its data and the graph say: what a caption render downstream can take as its words).

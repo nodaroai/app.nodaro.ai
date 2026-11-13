@@ -43,7 +43,7 @@ The model is chosen from the shared LLM model selector — a searchable picker g
 |-------|------|--------------------------|
 | Gemini 3 Flash | Economy | image + video + audio |
 | Gemini 3.6 Flash | Economy | image + video + audio |
-| Gemini 3.8 Flash | Economy | image only |
+| Gemini 3.8 Flash | Economy | image + video + audio |
 | Claude Haiku 4.5 | Economy | image only |
 | Claude Haiku 5.5 | Economy | image only |
 | GPT-5.6 Luna | Economy | image only |
@@ -78,7 +78,7 @@ The model is chosen from the shared LLM model selector — a searchable picker g
 
 The default model is Gemini 3.6 Flash (economy tier). Most models expose reasoning levels and show an **Effort** selector next to the model picker (the exceptions: Gemini 3 Flash, Claude Haiku 4.5, GPT-5.2, and Gemini 3.1 Pro have no effort lever — though the two Gemini models gain one under **Advanced mode**, which reaches the provider's fuller range) — see [Reasoning effort](#reasoning-effort).
 
-Gemini 3.8 Flash, Gemini 4 Argon and Gemini 4 Carbon currently accept **image references only** — video/audio references for them are not yet enabled (use Gemini 3.6 Flash or Gemini 3.1 Pro for those).
+Gemini 4 Argon and Gemini 4 Carbon currently accept **image references only** — video/audio references for them are not yet enabled (use Gemini 3.8 Flash, Gemini 3.6 Flash or Gemini 3.1 Pro for those).
 
 ## Canvas controls
 
@@ -107,7 +107,7 @@ Drag the **magnifier handle** at the bottom-left corner to zoom the node up to 2
 ### Multimodal inputs
 
 - **Image reference** — supported by every model. Useful for "describe this image", "write a caption", or generating prompts from a connected image.
-- **Video / audio reference** — supported **only by the video-capable Gemini models** (Gemini 3 Flash, Gemini 3.6 Flash, or Gemini 3.1 Pro — Gemini 3.8 Flash, Gemini 4 Argon and Gemini 4 Carbon are image-only for now). If a video or audio reference is connected, select one of those models or the reference is ignored.
+- **Video / audio reference** — supported **only by the video-capable Gemini models** (Gemini 3 Flash, Gemini 3.6 Flash, Gemini 3.8 Flash, or Gemini 3.1 Pro — Gemini 4 Argon and Gemini 4 Carbon are image-only for now). If a video or audio reference is connected, select one of those models or the reference is ignored.
 
 ## Presets
 
@@ -204,7 +204,7 @@ own API, at that lane's rate (see [Credit pricing](#credit-pricing)).
 - If a run fails with *Content policy violation*, the provider's safety or recitation filter withheld the answer (on a Gemini model running on Google's own API this includes a reply stopped for reciting existing text). Nothing is saved, the run is charged only for what the provider billed for the refused request (nothing when it billed nothing), and it is not retried on another model — rephrase the request, or ask for an original answer rather than reproduced text.
 - For image-prompt fan-out (Photo Shoot Planner / Product Catalog Writer / Storyboard Writer), connect a reference image upstream — running these templates is blocked without one. The Custom template does not require one.
 - Pick the cheapest model that meets your quality bar — an economy model (Gemini 3.6 Flash, ≈3 cr<!-- credits: llm-chat:gemini-3.6-flash -->) is plenty for rewriting and captioning; reserve a premium one (Claude Opus 5.5, ≈6 cr<!-- credits: llm-chat:claude-opus-5.5 -->) for complex reasoning. A long prompt or a long answer costs more on any model.
-- To process a video or audio reference, select a video-capable Gemini model (see the model table — Gemini 3.8 Flash, Gemini 4 Argon and Gemini 4 Carbon are image-only for now).
+- To process a video or audio reference, select a video-capable Gemini model (see the model table — Gemini 4 Argon and Gemini 4 Carbon are image-only for now).
 
 ## Common Use Cases
 
