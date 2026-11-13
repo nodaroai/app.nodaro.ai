@@ -1,9 +1,11 @@
 import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import type { Session } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase"
 import { DEFAULT_SIGN_IN_PATH, followSignInRedirect, takeSignInRedirect } from "@/lib/sign-in-redirect"
 import { isBlockedCallback } from "@/lib/sign-in-error"
 import { LOGIN_POPUP_MESSAGE_TYPE } from "@/lib/popup-message"
+import { reportSignIn } from "@/lib/analytics/sign-in-events"
 
 export default function AuthCallback() {
   const navigate = useNavigate()
@@ -33,7 +35,7 @@ export default function AuthCallback() {
     let timeout: ReturnType<typeof setTimeout> | undefined
     let wentOn = false
 
-    function onAuthSuccess() {
+    function onAuthSuccess(session: Session) {
       if (isPopup) {
         // Send session tokens to opener (iframe) via postMessage.
         // Cross-origin iframes have partitioned localStorage, so the
@@ -58,6 +60,10 @@ export default function AuthCallback() {
       if (wentOn) return
       wentOn = true
       clearTimeout(timeout)
+      // The sign-in (or sign-up) for the site analytics: here, where it
+      // completes, once — never from the session listener, which also fires
+      // on token refreshes and tab focus.
+      reportSignIn(session.user)
       followSignInRedirect(navigate, redirectUrl)
     }
 
@@ -65,7 +71,7 @@ export default function AuthCallback() {
     // We just need to listen for the session to appear.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
-        onAuthSuccess()
+        onAuthSuccess(session)
       }
     })
 
@@ -73,7 +79,7 @@ export default function AuthCallback() {
     // or if the code exchange already happened before this listener attached
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        onAuthSuccess()
+        onAuthSuccess(session)
       }
     })
 

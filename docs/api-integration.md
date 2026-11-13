@@ -4305,8 +4305,8 @@ that calls these through the SDK (`client.billing`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack: `{ priceId, mode?, embedded?, returnPath? }` → `{ data: { url } }`. A plan's Checkout accepts promotion codes; a credit pack's does not, and a pack purchase that settles for nothing grants no credits. `409` for a plan while the account already has a subscription (active or past due): change it with `change-plan` instead. |
-| `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits: `{ amountUsd, embedded?, returnPath? }` → `{ data: { url, credits } }`. |
+| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack: `{ priceId, mode?, embedded?, returnPath?, gaClientId?, gaSessionId? }` → `{ data: { url } }`. A plan's Checkout accepts promotion codes; a credit pack's does not, and a pack purchase that settles for nothing grants no credits. `409` for a plan while the account already has a subscription (active or past due): change it with `change-plan` instead. |
+| `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits: `{ amountUsd, embedded?, returnPath?, gaClientId?, gaSessionId? }` → `{ data: { url, credits } }`. |
 | `POST` | `/v1/billing/change-plan` | Moves an active subscription to another plan: `{ newPriceId }` → `{ data: { subscriptionId, tier } }`. **Upgrade:** the price difference for the rest of the billing period is charged at once, and the new plan applies only when that payment succeeds; the credits added are the difference between the two plans' monthly credits, once per billing period — moving down and back up within one period adds nothing more. An upgrade invoice settled for 0 (a 100%-off coupon, or a balance that covered it) adds no credits. If the payment does not go through, the plan is unchanged and the answer is `409` with `{ error: { code: "plan_change_payment_required", message, invoiceUrl } }` — `invoiceUrl` is Stripe's page for paying that invoice, and the change applies if it is paid before it expires; the same answer comes back while an earlier change is still waiting for its payment. **Downgrade:** the unused time is credited on the next invoice and the current credits stay until the period ends. **Monthly ↔ yearly:** switching restarts the billing period but adds no credits; the next monthly credits come a month after the switch. `409` when the subscription is not active (for example a failed renewal payment); `404` with no subscription; `429` after 5 plan-change requests from one account in 24 hours (refused ones count). |
 | `POST` | `/v1/billing/manage-subscription` | A link to the Stripe Customer Portal: `{ returnPath? }` → `{ data: { url } }`. `404` before a first purchase (Stripe does not know the account yet). |
 | `GET` | `/v1/billing/auto-recharge` | The automatic top-up setting: `{ data: { enabled, thresholdCredits, amountUsd, failureCount, lastAttemptAt, hasSavedCard } }`. |
@@ -4322,6 +4322,12 @@ to, so a first-party app on its own origin lands on its own screen: one leading
 (`400`). Checkout and load add `checkout=success` or `checkout=cancelled` to
 its query; it wins over `embedded`. Without it the app's own `/billing` and
 `/pricing` pages are used.
+
+`gaClientId` / `gaSessionId` (checkout, load) are optional: the visitor's
+Google Analytics client and session ids (read from the `_ga` cookies). They are
+kept on the payment so that, once it settles, it is reported to the site's
+analytics against the visit that started it (see `GA4_MEASUREMENT_ID` in the
+deployment guide). A malformed value is ignored, never refused.
 
 On a deployment-payer instance the billing account manages the
 deployment's pool and per-user allowances through

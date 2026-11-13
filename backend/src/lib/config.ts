@@ -408,6 +408,17 @@ export const envSchema = z.object({
   SITE_ANALYTICS_GA4_PROPERTY_ID: z.string().default(""),
   SITE_ANALYTICS_SEARCH_CONSOLE_SITE: z.string().default(""),
   /**
+   * Purchases in the site's Google Analytics (Cloud): every settled Stripe
+   * payment is sent to GA4 through its Measurement Protocol, joined to the
+   * visit that started the checkout. The GA4 measurement id (`G-…`) and a
+   * Measurement Protocol API secret of that stream (GA Admin → Data streams →
+   * the stream → Measurement Protocol API secrets). Both are needed; either
+   * empty (or a malformed id) = nothing is sent. Read in
+   * `ee/billing/analytics/`, never here, so a bad value cannot stop the server.
+   */
+  GA4_MEASUREMENT_ID: z.string().default(""),
+  GA4_API_SECRET: z.string().default(""),
+  /**
    * Header versions (admin panel, Cloud): the products to show, a JSON array
    * of `{ id, label, repo, production, staging, source }` (parsed on first use
    * in `ee/lib/header-versions/products.ts` — never here, so a bad value cannot

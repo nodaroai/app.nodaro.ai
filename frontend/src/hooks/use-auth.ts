@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase"
 import { hasCredits } from "@/lib/edition"
 import { whenActivated } from "@/lib/prerender"
 import { hydrateWorkspaces, resetWorkspaceState } from "@/lib/workspace-context"
+import { syncAnalyticsIdentity } from "@/lib/analytics/site-analytics"
 
 export type UserRole = "user" | "admin" | "super_admin"
 
@@ -48,6 +49,7 @@ async function loadRoleAndTier(user: User | null): Promise<void> {
     // the next person to sign in here would inherit the selection, and the
     // switcher would offer them a school they have never been in.
     resetWorkspaceState()
+    syncAnalyticsIdentity(null)
     return
   }
   // Which organizations and workspaces this session belongs to, loaded
@@ -71,6 +73,12 @@ async function loadRoleAndTier(user: User | null): Promise<void> {
         lifetime_topup_credits: (profile.lifetime_topup_credits as number) ?? 0,
       })
     : "free"
+  // Who is signed in, for the site analytics (inert unless its loader ran;
+  // it waits for a prerendered page to be shown): only from a profile
+  // actually read, so a failed read never unmarks a staff browser.
+  if (profile) {
+    syncAnalyticsIdentity({ userId: user.id, staff: cachedRole === "admin" || cachedRole === "super_admin", plan: cachedTier })
+  }
   maybeClaimSignupGrant(user.id)
 }
 

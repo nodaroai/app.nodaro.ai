@@ -197,7 +197,10 @@ ARG VITE_VOICE_URL
 ARG VITE_PERSON_URL
 # Optional analytics + owner gate (empty = disabled; self-host default).
 # VITE_GTM_ID is a Google Tag Manager container (GA4 is a tag inside it).
+# VITE_GA_ID is that GA4 tag's measurement id (G-…): it loads nothing, the app
+# only addresses its own events to the tag with it (frontend/index.html).
 ARG VITE_GTM_ID
+ARG VITE_GA_ID
 ARG VITE_CLARITY_ID
 ARG VITE_PLATFORM_OWNER_EMAIL
 # Delta-save protocol rollout flag (P3): "1" enables; empty = full saves.
@@ -233,6 +236,7 @@ ENV VITE_STUDIO_URL=$VITE_STUDIO_URL
 ENV VITE_VOICE_URL=$VITE_VOICE_URL
 ENV VITE_PERSON_URL=$VITE_PERSON_URL
 ENV VITE_GTM_ID=$VITE_GTM_ID
+ENV VITE_GA_ID=$VITE_GA_ID
 ENV VITE_DELTA_SAVES=$VITE_DELTA_SAVES
 ENV VITE_CLARITY_ID=$VITE_CLARITY_ID
 ENV VITE_PLATFORM_OWNER_EMAIL=$VITE_PLATFORM_OWNER_EMAIL

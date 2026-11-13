@@ -85,13 +85,17 @@
       })();
     </script>
     <!-- Analytics (Microsoft Clarity + Google Tag Manager) — opt-in via
-         build-time env (VITE_CLARITY_ID / VITE_GTM_ID); empty/unset (the
-         self-hosted Community/Business default) is a no-op and nothing leaves
-         the deployment. The container is the SAME one nodaro.ai, studio,
-         person and tools load (GA4 is a tag INSIDE it; no gtag snippet and no
-         second measurement id here on purpose, so every Google tag stays
-         managed in one place and the GA cookie stays shared across the
-         subdomains). Clarity is loaded here, not from the container, on every
+         build-time env (VITE_CLARITY_ID / VITE_GTM_ID / VITE_GA_ID);
+         empty/unset (the self-hosted Community/Business default) is a no-op
+         and nothing leaves the deployment. The container is the SAME one
+         nodaro.ai, studio, person and tools load (GA4 is a tag INSIDE it; no
+         gtag snippet and no second tag here on purpose, so every Google tag
+         stays managed in one place and the GA cookie stays shared across the
+         subdomains). VITE_GA_ID is that tag's own measurement id: it loads
+         nothing, it only lets the app address its own events (sign-up, runs,
+         checkout) to the tag — src/lib/analytics/site-analytics.ts, which
+         stays silent unless this loader exposed the id, so every gate below
+         gates those events too. Clarity is loaded here, not from the container, on every
          Nodaro surface alike — one project, so the recordings read as one
          application. Loaded on the first-party dashboard ONLY: skipped inside
          iframes and on public app/present/embed/share/profile surfaces so that
@@ -146,6 +150,25 @@
           // that pushes to it always has somewhere to go.
           window.dataLayer = window.dataLayer || [];
           if (!unset(gtmId) && isProdHost) {
+            // The app's own GA4 identity and events (sign-in, runs, checkout)
+            // need the tag's measurement id; without it this sends none of them.
+            var gaId = "%VITE_GA_ID%";
+            if (!unset(gaId)) {
+              // A browser a staff account signed in on marks its traffic
+              // internal BEFORE the container loads, so the visit's first page
+              // view is marked too (the role is known only once the app has
+              // read the profile). The key is STAFF_BROWSER_KEY in
+              // src/lib/analytics/site-analytics.ts, the one place that writes
+              // it; `internal` tells that module what this page already carries.
+              var markedInternal = false;
+              try {
+                if (window.localStorage.getItem("nodaro.analytics.staff") === "1") {
+                  (function () { window.dataLayer.push(arguments); })("set", { traffic_type: "internal" });
+                  markedInternal = true;
+                }
+              } catch (e) {}
+              window.__NODARO_GA__ = { measurementId: gaId, internal: markedInternal };
+            }
             (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
             new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
             j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=

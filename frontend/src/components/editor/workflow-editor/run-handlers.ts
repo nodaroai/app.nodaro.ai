@@ -20,6 +20,7 @@ import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-outp
 import { registerNodeRunAbort, clearNodeRunAbort } from "@/lib/node-run-abort";
 import { isNotFound } from "@/lib/api-errors";
 import { hasCredits } from "@/lib/edition";
+import { watchNodeRunAcceptance } from "./run-analytics";
 import { getCachedUserId } from "@/hooks/use-auth";
 import { setSkipUndoCapture } from "@/hooks/undo-flags";
 import { queryClient } from "@/lib/query-client";
@@ -1045,6 +1046,9 @@ export async function handleRunSingleNode(
   // run* wrapper down the tree reads ctx.idempotencyKey.
   ctx.idempotencyKey = generateIdempotencyKey();
 
+  // The site analytics counts this click's run once the server accepted it.
+  const reportRun = watchNodeRunAcceptance(nodeId);
+
   // A Continue is one run of the node, the run it names: never fanned out (the
   // executor refuses it on a list-driven node, before anything is sent).
   const execution = opts?.usecaseContinue
@@ -1052,6 +1056,7 @@ export async function handleRunSingleNode(
     : expanded
       ? executeNodeForList(node, expanded.items, ctx, expanded)
       : executeNode(node, ctx);
+  reportRun(execution);
 
   execution
     .then(() => {
