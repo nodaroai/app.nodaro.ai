@@ -127,3 +127,22 @@ describe("Video Upscale's strip and Nodaro Video Upscale (a house model, offered
     }
   })
 })
+
+describe("the Lip Sync quick strip and the models retired from Lip Sync (decided 2026-11-12)", () => {
+  const RETIRED = ["wav2lip", "video-retalking", "sadtalker"]
+
+  it("never offers them", () => {
+    const offered = resolveQuickConfigOptions(providerControlOf("lip-sync"), {}).map((o) => o.value)
+    for (const id of RETIRED) expect(offered).not.toContain(id)
+    expect(offered).toContain("latentsync")
+  })
+
+  it("a saved node on one keeps it: named on the trigger, never snapped to another model", () => {
+    const control = providerControlOf("lip-sync")
+    for (const id of RETIRED) {
+      const data = { provider: id }
+      expect(quickConfigSnapPatch(control, id, resolveQuickConfigOptions(control, data), data), id).toBeUndefined()
+      expect(control.retainedOptions?.find((o) => o.value === id)?.label, id).toBeTruthy()
+    }
+  })
+})

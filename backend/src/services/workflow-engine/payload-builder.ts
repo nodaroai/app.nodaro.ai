@@ -186,6 +186,7 @@ import {
   audioSoundtrackActive,
   withoutLipSyncLeversNotTaken,
   NODARO_VIDEO_UPSCALE_PROVIDER,
+  retiredLipSyncProviderMessage,
 } from "@nodaro/shared/models"
 import {
   isRenderNodeType,
@@ -5603,6 +5604,11 @@ function buildPayloadOf(
 
     case "lip-sync": {
       const provider = (data.provider as string) ?? "kling-avatar"
+      // A retired Lip Sync model on a saved or imported node: refused with the
+      // route's sentence before the credit id is built (the node keeps its
+      // model; another is the person's choice, never ours).
+      const retiredLipSync = retiredLipSyncProviderMessage(provider)
+      if (retiredLipSync) throw new Error(retiredLipSync)
       // A model charged per second of its audio at a rate (OmniHuman 2.0)
       // reserves on its one-second row; the run measures the audio before the
       // hold (`stampLipSyncInputs`) and multiplies it by the billed seconds

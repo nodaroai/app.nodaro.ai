@@ -10,10 +10,10 @@ export interface PipelineLipSyncArgs {
   pipelineEntityId?: string
   userId: string
   /** Source video URL — the shot's already-animated clip. Most providers
-   *  (LatentSync / Video-Retalking / Seedance 2) prefer video input. */
+   *  (LatentSync / the dubbing models / Seedance 2) prefer video input. */
   videoUrl?: string
   /** Source image URL — alternative to videoUrl for portrait-style providers
-   *  like Kling Avatar / SadTalker. */
+   *  like Kling Avatar / OmniHuman. */
   imageUrl?: string
   /** Dialogue audio URL — output of pipelineGenerateSpeech. */
   audioUrl: string

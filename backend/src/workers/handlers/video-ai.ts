@@ -37,6 +37,7 @@ import {
   canonicalVideoProvider,
   FAL_LIP_SYNC_PROVIDERS,
   REPLICATE_LIP_SYNC_PROVIDERS,
+  retiredLipSyncProviderName,
   SEEDANCE_2_EXTEND_STITCH,
   SEEDANCE_LIP_SYNC_PROVIDERS,
   getDialogueCapabilities,
@@ -961,8 +962,12 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   // Pick the right ProviderKind per branch. Replicate lip-sync runs on
   // Replicate predictions; Seedance routes through KIE's i2v provider;
   // KIE-native lip-sync (kling-avatar*, infinitalk) uses its own poll budget.
+  // A retired model (RETIRED_LIP_SYNC_PROVIDERS) ran on Replicate: the route
+  // and the workflow build refuse it, so only a job queued before it was
+  // retired reaches here, and it runs as it was paid for.
+  const onReplicate = REPLICATE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never) || retiredLipSyncProviderName(resolvedProvider) !== undefined
   let lipSyncKind: ProviderKind
-  if (REPLICATE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
+  if (onReplicate) {
     lipSyncKind = "replicate-prediction"
   } else if (FAL_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
     // fal queue jobs reconcile via the "fal-request" kind (tags the row so the
@@ -975,7 +980,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   }
   const lipSyncOnTaskCreated = makeOnTaskCreated(ctx.jobId, lipSyncKind)
 
-  if (REPLICATE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
+  if (onReplicate) {
     // Replicate path
     const faceUrl = videoUrl || imageUrl
     if (!faceUrl) throw new Error("No face input (imageUrl or videoUrl) provided")

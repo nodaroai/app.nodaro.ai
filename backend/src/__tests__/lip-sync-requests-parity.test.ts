@@ -14,6 +14,11 @@
  * mocked, and to the router call of the KIE, fal and multimodal options. Held:
  * what the provider receives, the credit id the run is checked and charged
  * under, the model it is judged on, and the job.
+ *
+ * Wav2Lip, VideoReTalking and SadTalker were retired from Lip Sync afterwards
+ * (decided 2026-11-12): their cases are now refused before anything is checked,
+ * reserved or queued, with one sentence, on both lanes. Every other case is
+ * held byte for byte.
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -101,6 +106,7 @@ import { buildPayload } from "../services/workflow-engine/payload-builder.js"
 import type { ResolvedInputs, SimpleNode } from "../services/workflow-engine/types.js"
 import { videoAIHandlers } from "../workers/handlers/video-ai.js"
 import { LIP_SYNC_REQUESTS_BEFORE_CATALOG_ENTRIES } from "./fixtures/lip-sync-requests.js"
+import { retiredLipSyncProviderMessage } from "@nodaro/shared/models"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const IMAGE = "https://cdn.example.com/face.png"
@@ -116,6 +122,9 @@ const PROVIDERS = [
   "heygen-lipsync-precision", "lipsync-2-pro", "sync-lipsync-v3", "volcengine-lipsync",
   "seedance-2", "seedance-2-fast", "seedance-2-mini", "seedance-2-5", "minimax-h3",
 ] as const
+/** The options retired from Lip Sync since the fixture was recorded (decided 2026-11-12). */
+const RETIRED = new Set<string>(["wav2lip", "video-retalking", "sadtalker"])
+const isRetiredCase = (name: string) => [...RETIRED].some((p) => name === p || name.startsWith(`${p} `))
 /** The options priced by the audio's length, in buckets. */
 const PER_SECOND = ["kling-avatar", "kling-avatar-pro", "omnihuman-1-5", "heygen-lipsync-precision", "lipsync-2-pro", "sync-lipsync-v3", "volcengine-lipsync"]
 /** The options priced by size. */
@@ -212,11 +221,16 @@ async function routeCase(c: Case) {
 async function workflowCase(c: Case) {
   const data: Json = { label: "Lip Sync", prompt: "make them talk", ...(c.provider ? { provider: c.provider } : {}), ...c.levers }
   const node = { id: "lip-sync-1", type: "lip-sync", data } as SimpleNode
-  const built = buildPayload(node, "job-1", { imageUrl: IMAGE, videoUrl: VIDEO, audioUrl: AUDIO } as ResolvedInputs, "usage-1", {
-    nodes: [node],
-    edges: [],
-    nodeStates: {},
-  } as never)
+  let built: ReturnType<typeof buildPayload>
+  try {
+    built = buildPayload(node, "job-1", { imageUrl: IMAGE, videoUrl: VIDEO, audioUrl: AUDIO } as ResolvedInputs, "usage-1", {
+      nodes: [node],
+      edges: [],
+      nodeStates: {},
+    } as never)
+  } catch (err) {
+    return { refused: (err as Error).message }
+  }
   const worker = await sentBy(built.payload as Json)
   return { jobName: built.jobName, modelIdentifier: built.modelIdentifier, payload: built.payload, ...worker }
 }
@@ -234,7 +248,7 @@ async function record(): Promise<Recorded> {
 let before: Recorded
 let now: Recorded
 
-describe("Lip Sync's requests are what they were before the LatentSync, HeyGen and Lipsync 2 Pro catalog entries", () => {
+describe("Lip Sync's requests are what they were before the LatentSync, HeyGen and Lipsync 2 Pro catalog entries, but for the retired models", () => {
   beforeAll(async () => {
     before = JSON.parse(JSON.stringify(LIP_SYNC_REQUESTS_BEFORE_CATALOG_ENTRIES)) as Recorded
     now = await record()
@@ -246,12 +260,38 @@ describe("Lip Sync's requests are what they were before the LatentSync, HeyGen a
     expect(Object.keys(now.route)).toHaveLength(CASES.length)
   })
 
-  it("every case is byte for byte what it was, on both lanes", () => {
+  it("every case but the retired models' is byte for byte what it was, on both lanes", () => {
+    let held = 0
     for (const lane of ["route", "workflow"] as const) {
       for (const [name, run] of Object.entries(now[lane])) {
+        if (isRetiredCase(name)) continue
         expect(run, `${lane}: ${name}`).toEqual(before[lane][name])
+        held += 1
       }
     }
+    expect(held).toBe(2 * (CASES.length - 6))
+  })
+
+  it("a retired model ran before, and is now refused with its sentence before anything is checked, reserved or queued", () => {
+    const retiredCases = CASES.filter((c) => isRetiredCase(c.name))
+    expect(retiredCases.map((c) => c.name).sort()).toEqual([
+      "sadtalker", "sadtalker + every lever", "video-retalking", "video-retalking + every lever", "wav2lip", "wav2lip + every lever",
+    ])
+    for (const c of retiredCases) {
+      const message = retiredLipSyncProviderMessage(c.provider)!
+      // Before: it ran on Replicate, checked and charged under its own row.
+      expect(before.route[c.name]!.status, c.name).toBe(200)
+      expect((before.route[c.name]!.sent as Json).via, c.name).toBe("replicate")
+      expect(before.workflow[c.name]!.modelIdentifier, c.name).toBe(c.provider)
+      // Now: refused on the route before the credit guard, the job row and the queue…
+      expect(now.route[c.name], c.name).toEqual({
+        status: 400,
+        response: { error: { code: "validation_error", message } },
+      })
+      // …and in a workflow before the job is built.
+      expect(now.workflow[c.name], c.name).toEqual({ refused: message })
+    }
+    expect(retiredLipSyncProviderMessage("wav2lip")).toBe("Wav2Lip is no longer available for Lip Sync. Pick another Lip Sync model.")
   })
 
   it("the three newly listed models are sent, checked and charged as before (and the fixture saw them run)", () => {

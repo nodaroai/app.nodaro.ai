@@ -649,10 +649,7 @@ function optionCensusOf(name: string, url: string, site: string, model: CreditGu
  * with what deciding it needs. Only shrinks: an entry here is a model a
  * deployment's allow list cannot withhold on a route it cannot withhold either.
  */
-const LIP_SYNC_AWAITING = "Wav2Lip, VideoReTalking and SadTalker run beside its catalog models and have no catalog entry. They are being retired from Lip Sync (decided 2026-11-12), which removes them from the route"
-const MIXED_AWAITING_DECISION: Readonly<Record<string, string>> = {
-  "POST /v1/lip-sync": LIP_SYNC_AWAITING,
-}
+const MIXED_AWAITING_DECISION: Readonly<Record<string, string>> = {}
 
 /**
  * The image ids the image router can run that the catalog does not list. A
@@ -717,11 +714,12 @@ describe("every option a credit-guarded route accepts runs a model a restriction
     const image = byName("POST /v1/generate-image")!
     expect([...image.gateable]).toContain("flux-lora-character")
     expect(image.outside.size).toBe(0)
-    // LatentSync, HeyGen Lipsync Precision and Lipsync 2 Pro on /v1/lip-sync (decided 2026-11-12).
+    // LatentSync, HeyGen Lipsync Precision and Lipsync 2 Pro on /v1/lip-sync, listed; Wav2Lip,
+    // VideoReTalking and SadTalker retired from it (both decided 2026-11-12): every option it
+    // accepts runs a model a restriction names.
     const lipSync = byName("POST /v1/lip-sync")!
     expect([...lipSync.gateable]).toEqual(expect.arrayContaining(["latentsync", "heygen-lipsync-precision", "lipsync-2-pro", "kling-avatar"]))
-    // A mixed route is visible to it: the Lip Sync options being retired.
-    expect([...lipSync.outside.keys()].sort()).toEqual(["sadtalker", "video-retalking", "wav2lip"])
+    expect(lipSync.outside.size).toBe(0)
     // Suno V4_5PLUS, V4_5ALL and V4_5 on every Suno route that runs a version (decided 2026-11-12).
     for (const op of ["generate", "cover", "extend", "mashup", "upload-extend"]) {
       const suno = byName(`POST /v1/suno/${op}`)!

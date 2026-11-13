@@ -64,7 +64,7 @@ const LABEL_IS_LOOKUP_KEY = new Set(["HandleWithPopover", "BaseNode", "EditableN
 const ALLOWED_LITERALS: ReadonlySet<string> = new Set<string>([
   // Brand, product, model and provider names — Latin in every language.
   "ElevenLabs", "ElevenLabs Multilingual v2", "ElevenLabs SFX v2", "Multilingual v2", "Turbo v2.5", "Flash v2.5",
-  "Fish", "S2 Pro", "GFPGAN", "RestoreFormer", "MMAudio", "YouTube", "Suno", "SwitchX", "RemX",
+  "Fish", "S2 Pro", "MMAudio", "YouTube", "Suno", "SwitchX", "RemX",
   "VEO 1080p", "VEO 4K", // model ids shown as the node's model
   "Std", "Pro", // Kling 3 tiers
   "YT", // YouTube, on the reference-audio source chip

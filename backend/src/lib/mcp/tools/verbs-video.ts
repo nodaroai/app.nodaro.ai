@@ -1419,7 +1419,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .url()
           .optional()
-          .describe("Face video (for video-input providers like latentsync / video-retalking). Most users want image_url."),
+          .describe("Face video (for video-input providers like latentsync / heygen-lipsync-precision). Most users want image_url."),
         video_asset_id: z.string().optional(),
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional(),

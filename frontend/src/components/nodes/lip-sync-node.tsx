@@ -27,7 +27,7 @@ import { NodeJobProgress } from "./node-job-progress"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { LipSyncData, GeneratedResult } from "@/types/nodes"
-import { VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS } from "@nodaro/shared/models"
+import { VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, retiredLipSyncProviderName } from "@nodaro/shared/models"
 import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { buildLipSyncCreditId, isPerSecondLipSyncProvider, lipSyncAudioRateOf } from "@nodaro/shared/credits"
 import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
@@ -174,6 +174,15 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const rateCredits = useUnitQuoteCredits(audioRate?.rateId, useLipSyncQuotedSeconds(id), 35)
   const quoteIsEstimate = useLipSyncQuoteIsEstimate(id)
   const credits = audioRate ? rateCredits : bucketCredits
+  // A saved node on a model retired from Lip Sync: no price (it does not run),
+  // and the node says so until the person picks another model.
+  const retiredModel = retiredLipSyncProviderName(nodeData.provider)
+  const shownCredits = retiredModel === undefined ? credits : undefined
+  const retiredNotice = retiredModel === undefined ? null : (
+    <p role="alert" className="px-3 pt-2 text-[11px] text-center text-red-400">
+      {t("audiocfg.retiredLipSyncModel", { model: retiredModel })}
+    </p>
+  )
 
   // Get all connected nodes to this node (deduplicated by node ID). Reads
   // live arrays from getState(); memoized on the connected-source fingerprint.
@@ -358,7 +367,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Users className="h-4 w-4" />}
       category="ai"
-      credits={credits}
+      credits={shownCredits}
       creditsEstimate={quoteIsEstimate}
       selected={selected}
       isRunning={status === "running"}
@@ -403,7 +412,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       topToolbarContent={
-                  <NodeQuickStrip nodeId={id} credits={credits} creditsEstimate={quoteIsEstimate} isRunning={status === "running"} />
+                  <NodeQuickStrip nodeId={id} credits={shownCredits} creditsEstimate={quoteIsEstimate} isRunning={status === "running"} />
       }
       handles={[
         { id: "audio", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
@@ -415,6 +424,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
       {/* When result exists, show video fullscreen in node */}
       {status !== "running" && activeUrl ? (
       <div className="relative w-full h-full group/video">
+        {retiredNotice && <div className="absolute top-2 inset-x-2 z-10 rounded-md bg-black/70">{retiredNotice}</div>}
         <video
           ref={videoRef}
           src={activeUrl}
@@ -490,6 +500,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
       </div>
       ) : (
       <div className="flex flex-col gap-2 h-full">
+        {retiredNotice}
         {/* Input Selection Dropdowns */}
         {hasConnections && (
           <div className="flex flex-col gap-1.5 px-3 pt-2">

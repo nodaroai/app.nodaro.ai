@@ -396,3 +396,19 @@ describe("SunoSeparateNode — mode pips, lane hint, Demucs note", () => {
     expect(screen.getByText(/Bass/)).toBeInTheDocument()
   })
 })
+
+describe("LipSyncNode on a model retired from Lip Sync (decided 2026-11-12)", () => {
+  it.each(["wav2lip", "video-retalking", "sadtalker"])("a saved node on %s says so and shows no price; a running model shows its price and no notice", (provider) => {
+    const { unmount } = renderNode(LipSyncNode, { label: "Lip Sync", provider, executionStatus: "idle" })
+    expect(screen.getByRole("alert").textContent).toMatch(/is no longer available for Lip Sync\. Pick another Lip Sync model\./)
+    expect(screen.getByTestId("base-node").getAttribute("data-credits")).toBeNull()
+    unmount()
+    renderNode(LipSyncNode, { label: "Lip Sync", provider: "latentsync", executionStatus: "idle" })
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it("keeps the notice over a result the node made before the model was retired", () => {
+    renderNode(LipSyncNode, { label: "Lip Sync", provider: "sadtalker", executionStatus: "completed", generatedVideoUrl: "https://cdn.test/old.mp4" })
+    expect(screen.getByRole("alert").textContent).toMatch(/SadTalker is no longer available/)
+  })
+})

@@ -220,12 +220,8 @@ describe("every dispatchable node type that names no model resolves a default a 
  */
 const PROBE = "zz-not-a-model"
 
-const LIP_SYNC_AWAITING = "Wav2Lip, VideoReTalking and SadTalker run beside its catalog models and have no catalog entry. They are being retired from Lip Sync (decided 2026-11-12), which removes them from the node"
-
 /** Node types that run catalog models AND accept options with no catalog entry, each with what deciding it needs. Only shrinks. */
-const MIXED_AWAITING_DECISION: Readonly<Record<string, string>> = {
-  "lip-sync": LIP_SYNC_AWAITING,
-}
+const MIXED_AWAITING_DECISION: Readonly<Record<string, string>> = {}
 
 interface NodeOptionCensus {
   readonly type: string
@@ -295,11 +291,12 @@ describe("every option a workflow node accepts runs a model a restriction can na
     // Wan Animate on Motion Transfer, beside the Kling motion models (decided 2026-11-12).
     expect([...byType("motion-transfer")!.gateable]).toEqual(expect.arrayContaining(["wan-animate-move", "wan-animate-replace", "motion-transfer", "kling-3.0-motion"]))
     expect(byType("motion-transfer")!.outside.size).toBe(0)
-    // LatentSync, HeyGen Lipsync Precision and Lipsync 2 Pro on Lip Sync (decided 2026-11-12).
+    // LatentSync, HeyGen Lipsync Precision and Lipsync 2 Pro on Lip Sync, listed; Wav2Lip,
+    // VideoReTalking and SadTalker retired from it (both decided 2026-11-12): every option it
+    // accepts runs a model a restriction names.
     const lipSync = byType("lip-sync")!
     expect([...lipSync.gateable]).toEqual(expect.arrayContaining(["latentsync", "heygen-lipsync-precision", "lipsync-2-pro", "kling-avatar"]))
-    // A mixed node is visible to it: the Lip Sync options being retired.
-    expect([...lipSync.outside.keys()].sort()).toEqual(["provider=sadtalker", "provider=video-retalking", "provider=wav2lip"])
+    expect(lipSync.outside.size).toBe(0)
     // Suno V4_5PLUS, V4_5ALL and V4_5 on every Suno node that runs a version (decided 2026-11-12).
     for (const type of ["suno-generate", "suno-cover", "suno-extend", "suno-mashup", "suno-upload-extend", "suno-add-instrumental", "suno-add-vocals"]) {
       expect([...byType(type)!.gateable], type).toEqual(expect.arrayContaining(["suno-v4_5plus", "suno-v6"]))

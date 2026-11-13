@@ -1595,9 +1595,8 @@ export const LIP_SYNC_PROVIDERS = [
   // (LIP_SYNC_AUDIO_RATES), never by bucket.
   "omnihuman-2-0",
   "latentsync",
-  "wav2lip",
-  "video-retalking",
-  "sadtalker",
+  // (Wav2Lip, VideoReTalking and SadTalker were retired 2026-11-12:
+  // RETIRED_LIP_SYNC_PROVIDERS below.)
   // HeyGen Lipsync Precision + Sync Lipsync 2 Pro — Replicate-hosted, video-input
   // dubbing models billed per second of output. Routed through replicateLipSync;
   // priced per-second via buildLipSyncCreditId (see lip-sync-pricing.ts).
@@ -1629,6 +1628,34 @@ export const LIP_SYNC_PROVIDERS = [
 ] as const
 export type LipSyncProvider = typeof LIP_SYNC_PROVIDERS[number]
 
+/**
+ * Lip Sync models the platform no longer offers (retired 2026-11-12), with the
+ * name each is shown by. They left every menu, the route's accepted values and
+ * the MCP tool; a request, a saved or imported workflow node or an app run that
+ * still names one is refused before anything is reserved, with
+ * {@link retiredLipSyncProviderMessage} — never moved to another model, whose
+ * inputs and price differ. The editor shows a saved node on one as retired and
+ * leaves the choice of another model to the person.
+ */
+export const RETIRED_LIP_SYNC_PROVIDERS: Readonly<Record<string, string>> = {
+  wav2lip: "Wav2Lip",
+  "video-retalking": "VideoReTalking",
+  sadtalker: "SadTalker",
+}
+
+/** The name of a retired Lip Sync model, or undefined for any other value. Own keys only (the value is request input). */
+export function retiredLipSyncProviderName(provider: unknown): string | undefined {
+  return typeof provider === "string" && Object.hasOwn(RETIRED_LIP_SYNC_PROVIDERS, provider)
+    ? RETIRED_LIP_SYNC_PROVIDERS[provider]
+    : undefined
+}
+
+/** The refusal a run of a retired Lip Sync model gets, or undefined for any other value. */
+export function retiredLipSyncProviderMessage(provider: unknown): string | undefined {
+  const name = retiredLipSyncProviderName(provider)
+  return name === undefined ? undefined : `${name} is no longer available for Lip Sync. Pick another Lip Sync model.`
+}
+
 /** Multimodal video models exposed via the lip-sync surface (Seedance 2 family
  *  + MiniMax Hailuo 3). They go through the i2v provider with the audio
  *  plumbed as `reference_audio_urls` rather than a dedicated lip-sync flow.
@@ -1641,12 +1668,10 @@ export const SEEDANCE_LIP_SYNC_PROVIDERS = new Set<string>([
   "minimax-h3",
 ])
 
-/** Replicate-based lip-sync providers (video or image+audio via Replicate SDK) */
+/** Replicate-based lip-sync providers (video or image+audio via Replicate SDK).
+ *  The retired ones ran there too (`RETIRED_LIP_SYNC_PROVIDERS`). */
 export const REPLICATE_LIP_SYNC_PROVIDERS = new Set([
   "latentsync",
-  "wav2lip",
-  "video-retalking",
-  "sadtalker",
   "heygen-lipsync-precision",
   "lipsync-2-pro",
 ] as const)
@@ -1657,7 +1682,9 @@ export const FAL_LIP_SYNC_PROVIDERS = new Set([
   "sync-lipsync-v3",
 ] as const)
 
-/** Lip-sync providers that require video input (not image) */
+/** Lip-sync providers that require video input (not image). A retired id
+ *  stays in this set and the next: a saved node on it keeps the handles its
+ *  edges attach to until the person picks another model. */
 export const VIDEO_INPUT_LIP_SYNC_PROVIDERS = new Set([
   "latentsync",
   "video-retalking",

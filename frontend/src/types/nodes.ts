@@ -2831,12 +2831,13 @@ export type LipSyncData = PromptAffixFields & {
   seed?: number
   // OmniHuman 1.5 — pe_fast_mode (trade quality for speed)
   fastMode?: boolean
-  // Wav2Lip params
+  // Wav2Lip and SadTalker params. Both models were retired from Lip Sync
+  // (2026-11-12) and a run naming one is refused; a saved node may still carry
+  // these, and the build passes them on as before.
   pads?: string
   smooth?: boolean
   fps?: number
   resizeFactor?: number
-  // SadTalker params
   enhancer?: "gfpgan" | "RestoreFormer"
   preprocess?: "crop" | "resize" | "full"
   still?: boolean

@@ -74,6 +74,7 @@ import {
   TOPAZ_VIDEO_RESOLUTIONS,
   lipSyncLeverClearPatch,
   NODARO_VIDEO_UPSCALE_PROVIDER,
+  RETIRED_LIP_SYNC_PROVIDERS,
 } from "@nodaro/shared/models"
 import { nodaroVideoUpscaleTierOf } from "@nodaro/render-rules"
 import { TOPAZ_VIDEO_RESOLUTION_LABELS, VIDEO_UPSCALE_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
@@ -167,10 +168,13 @@ export interface QuickConfigControl {
    *  options function a {@link QuickConfigContext}; without it the strip does
    *  not subscribe to the graph at all. */
   readonly needsGraph?: boolean
-  /** Values a stored node may carry that the menu no longer OFFERS but that
-   *  still run (a retired LLM model): never snapped away, labelled on the
-   *  trigger, accepted on an app run, and never listed. Static on purpose, so a
-   *  static `options` list stays one an app publisher can restrict. */
+  /** Values a stored node may carry that the menu no longer OFFERS: a retired
+   *  LLM model, which still runs, or a model retired from Lip Sync, whose run
+   *  the server refuses with its own sentence. Never snapped away (the person
+   *  picks what replaces it), labelled on the trigger, accepted on an app run
+   *  (to be run, or refused with that sentence), and never listed. Static on
+   *  purpose, so a static `options` list stays one an app publisher can
+   *  restrict. */
   readonly retainedOptions?: ReadonlyArray<QuickConfigOption>
   /** Which option a stale stored value snaps to. Default: the first option. A
    *  control whose valid set has a better answer than "first" (Speaker View's
@@ -505,6 +509,9 @@ const sunoVocalControl = (): QuickConfigControl => ({
 /** LLM model dropdown (writes `data.llmModel`), shared by the LLM-backed nodes.
  *  Vendor-clustered + tier-ordered via the shared ordering (the strip's compact
  *  Select can't render group headers, but the clustering still scans). */
+/** Models retired from Lip Sync: a saved node keeps one (its run is refused), the strip never offers it. */
+const RETIRED_LIP_SYNC_OPTIONS: ReadonlyArray<QuickConfigOption> = Object.entries(RETIRED_LIP_SYNC_PROVIDERS).map(([value, label]) => ({ value, label }))
+
 /** Retired LLM models: a saved node keeps (and runs) one, the strip never offers it. */
 const retiredLlmOptions = (models: readonly LlmModelDef[]): ReadonlyArray<QuickConfigOption> =>
   models.filter((m) => m.retired).map((m) => ({ value: m.id, label: m.displayName }))
@@ -1295,7 +1302,10 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     },
   ],
   "extend-video": [extendVideoProviderControl()],
-  "lip-sync": [lipSyncProviderControl()],
+  // A saved node on a model retired from Lip Sync keeps it (named on the
+  // trigger, never offered, never snapped to another model and price); its run
+  // is refused with the retirement's sentence until the person picks another.
+  "lip-sync": [{ ...lipSyncProviderControl(), retainedOptions: RETIRED_LIP_SYNC_OPTIONS }],
   "text-to-speech": [ttsProviderControl()],
   "motion-transfer": [providerControl(MOTION_TRANSFER_MODELS)],
   // ── Suno (model: SunoModel) ──

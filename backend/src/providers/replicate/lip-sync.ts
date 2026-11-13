@@ -2,8 +2,10 @@ import { replicateOutputCost } from "./output-cost.js"
 /**
  * Replicate Lip-Sync Provider
  *
- * Supports six models: LatentSync, Wav2Lip, Video-Retalking, SadTalker,
- * HeyGen Lipsync Precision, and Sync Lipsync 2 Pro.
+ * Runs LatentSync, HeyGen Lipsync Precision and Sync Lipsync 2 Pro. Wav2Lip,
+ * Video-Retalking and SadTalker are retired from Lip Sync (2026-11-12): no new
+ * job names them (the route and the workflow build refuse them), and their
+ * configs stay for a job queued before they were retired.
  * Follows the VIDEO_MODEL_CONFIGS pattern from replicate/video.ts.
  */
 

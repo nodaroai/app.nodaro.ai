@@ -11,7 +11,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { LIP_SYNC_DEFAULT_PROVIDER } from "../workers/handlers/default-models.js"
-import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, isMinimaxH3Provider, lipSyncLeverClearPatch } from "@nodaro/shared/models"
+import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, isMinimaxH3Provider, lipSyncLeverClearPatch, retiredLipSyncProviderMessage } from "@nodaro/shared/models"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { buildLipSyncCreditId, isPerSecondLipSyncProvider, lipSyncAudioRateOf } from "@nodaro/shared/credits"
 import { checkLipSyncInputs, lipSyncRateBaseCredits } from "../lib/lip-sync-inputs.js"
@@ -20,8 +20,8 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
 
 const lipSyncBody = z.object({
-  imageUrl: safeUrlSchema.optional(),     // Portrait/face image (required for KIE/SadTalker)
-  videoUrl: safeUrlSchema.optional(),     // Video input (required for LatentSync/Video-Retalking)
+  imageUrl: safeUrlSchema.optional(),     // Portrait/face image (required for the KIE avatars)
+  videoUrl: safeUrlSchema.optional(),     // Video input (required for LatentSync and the dubbing models)
   audioUrl: safeUrlSchema,                // Audio to sync
   prompt: z.string().max(500).optional(),
   userPrompt: z.string().max(8000).optional(),
@@ -37,12 +37,13 @@ const lipSyncBody = z.object({
   inferenceSteps: z.number().int().min(20).max(50).optional(),
   seed: z.number().int().optional(),
   fastMode: z.boolean().optional(),        // OmniHuman 1.5 — pe_fast_mode (trade quality for speed)
-  // Wav2Lip params
+  // Wav2Lip and SadTalker params: those models are retired (refused before
+  // this schema), and the fields stay accepted and passed on so every other
+  // model's job is what it was.
   pads: z.string().max(50).optional(),
   smooth: z.boolean().optional(),
   fps: z.number().min(1).max(60).optional(),
   resizeFactor: z.number().int().min(1).max(4).optional(),
-  // SadTalker params
   enhancer: z.enum(["gfpgan", "RestoreFormer"]).optional(),
   preprocess: z.enum(["crop", "resize", "full"]).optional(),
   still: z.boolean().optional(),
@@ -115,6 +116,21 @@ export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefin
     return buildLipSyncCreditId(provider, dur)
   }
   return provider
+}
+
+/**
+ * A retired Lip Sync model (`RETIRED_LIP_SYNC_PROVIDERS`, retired 2026-11-12)
+ * is answered BEFORE the credit guard, with its own sentence: its price row is
+ * kept for history, so the guard would otherwise check credits for a model
+ * that no longer runs, and the schema's enum would answer with a generic
+ * error. The workflow build refuses it with the same sentence
+ * (`payload-builder.ts`), and the MCP `lip_sync` tool reaches this route.
+ */
+async function retiredLipSyncProviderPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const message = retiredLipSyncProviderMessage((req.body as Record<string, unknown> | null)?.provider)
+  if (message) {
+    return reply.status(400).send({ error: { code: "validation_error", message } })
+  }
 }
 
 /** The body keys the preHandler stashes the measured audio under (the credit guard sees only the body). */
@@ -209,6 +225,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       },
     },
     preHandler: [
+      retiredLipSyncProviderPreHandler,
       lipSyncInputPreHandler,
       creditGuard((req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined), {
         runModel: jobRunModel("lip-sync"),

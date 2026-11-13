@@ -51,7 +51,7 @@ export const EXPOSABLE_DECLARED_FIELDS: Readonly<Record<string, Readonly<Record<
     "provider": { kind: "select", values: ["bytedance-lite","bytedance-pro","bytedance-pro-fast","grok-i2v","hailuo-2.3","hailuo-2.3-pro","hailuo-standard","kling","kling-3.0","kling-master","kling-turbo","minimax","runway-kie","minimax-h3","seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5","veo3","veo3.1","veo3_lite","wan-i2v","wan-turbo","wan-2.7-i2v","happyhorse-i2v","happyhorse-ref2v","ltx-2.3-pro","ltx-2.3-fast","gemini-omni-video","grok-imagine-video-1.5","wan-3","wan-3-prime","vidu-q4","kling-4","kling-4-keyframes","kling-4-flash","gemini-omni-flash","gemini-omni-flash-1-2","pixverse-v6-max"] },
   },
   "lip-sync": {
-    "provider": { kind: "select", values: ["seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5","kling-avatar","kling-avatar-pro","infinitalk","omnihuman-1-5","omnihuman-2-0","latentsync","wav2lip","video-retalking","sadtalker","heygen-lipsync-precision","lipsync-2-pro","sync-lipsync-v3","volcengine-lipsync"] },
+    "provider": { kind: "select", values: ["seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5","kling-avatar","kling-avatar-pro","infinitalk","omnihuman-1-5","omnihuman-2-0","latentsync","heygen-lipsync-precision","lipsync-2-pro","sync-lipsync-v3","volcengine-lipsync"] },
     "resolution": { kind: "select", values: ["720p","1080p"] },
   },
   "modify-image": {
