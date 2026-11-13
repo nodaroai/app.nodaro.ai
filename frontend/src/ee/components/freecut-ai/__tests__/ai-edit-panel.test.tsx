@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { fireEvent, render, screen } from "@testing-library/react"
 
-const run = vi.hoisted(() => ({ fails: false, undone: null as number | null }))
+const run = vi.hoisted(() => ({ fails: false, musicFails: false, undone: null as number | null }))
 
 vi.mock("@/ee/lib/freecut-ai/editor-link", () => ({
   createEditorLink: () => ({
@@ -26,6 +26,7 @@ vi.mock("@/ee/lib/freecut-ai/run-ai-edit", async (importOriginal) => {
       opts.onEvent({ type: "feed", agent: "cutter", key: "freecutAi.cutFiller", vars: { word: "um" } })
       opts.onEvent({ type: "recorded", label: "Cut the pauses" })
       opts.onEvent({ type: "recorded", label: "Add music" })
+      if (run.musicFails) opts.onEvent({ type: "agent", agent: "sound", state: "failed", key: "freecutAi.musicFailed", detail: "Suno refused the prompt" })
       if (run.fails) throw new real.RunFailed("freecutAi.listenFailed", undefined, "Audio file contains no audible speech")
       const summary = { fromSeconds: 26.3, toSeconds: 12.4, pausesCut: 7, fillersCut: 1, captions: 19, music: true }
       opts.onEvent({ type: "done", summary })
@@ -44,6 +45,7 @@ const renderPanel = () =>
 beforeEach(() => {
   vi.clearAllMocks()
   run.fails = false
+  run.musicFails = false
   run.undone = null
 })
 
@@ -77,6 +79,16 @@ describe("Edit with AI panel", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Undo all" }))
 
     expect(await screen.findByText("1 of 2 steps undone: the newest edit on the timeline is yours, so the rest stays.")).toBeTruthy()
+  })
+
+  it("shows the provider's words under an agent whose step failed", async () => {
+    run.musicFails = true
+    renderPanel()
+    fireEvent.click(screen.getByRole("button", { name: "Start editing" }))
+
+    expect(await screen.findByText("Your edit is ready")).toBeTruthy()
+    expect(screen.getByText("The music could not be made; the rest of the edit is done.")).toBeTruthy()
+    expect(screen.getByText("Suno refused the prompt")).toBeTruthy()
   })
 
   it("shows why a failed run stopped, with the provider's own words under it", async () => {

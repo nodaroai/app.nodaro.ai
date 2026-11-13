@@ -36,6 +36,7 @@ import {
   readTimelineView,
   timelineFrameOf,
   timelineSeconds,
+  transcriptLanguage,
   wordsFromTranscript,
   type CaptionCue,
   type EditPlan,
@@ -62,7 +63,8 @@ type Vars = Record<string, string | number>
 
 export type RunEvent =
   | { readonly type: "plan"; readonly plan: EditPlan }
-  | { readonly type: "agent"; readonly agent: AgentId; readonly state: AgentState; readonly key: MessageKey; readonly vars?: Vars; readonly progress?: number }
+  /** An agent's state; `detail` is the provider's own words about a step that failed. */
+  | { readonly type: "agent"; readonly agent: AgentId; readonly state: AgentState; readonly key: MessageKey; readonly vars?: Vars; readonly progress?: number; readonly detail?: string }
   | { readonly type: "feed"; readonly agent: AgentId; readonly key: MessageKey; readonly vars?: Vars }
   /** One undo entry this run made in the editor, with its label, in the order made. */
   | { readonly type: "recorded"; readonly label: string }
@@ -129,6 +131,14 @@ class JobFailed extends Error {
 /** A word as the feed names it: "um" for the transcript's "um,". */
 const bareWord = (text: string) => text.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "") || text
 
+/** A job whose status cannot be read (signed out): it may still run, so it stays open to be cancelled. */
+class JobUnreadable extends Error {
+  constructor() {
+    super("unreadable")
+    this.name = "JobUnreadable"
+  }
+}
+
 /** The provider's words a failed step carries, for the panel to show under its sentence. */
 const wordsOf = (error: unknown): string | undefined =>
   error instanceof JobFailed && error.errorDetail ? error.errorDetail : undefined
@@ -141,8 +151,6 @@ export const MAX_VIDEO_MINUTES = 20
 /** At most this many cut steps and caption steps, whatever the length: more ranges share a step. */
 const MAX_CUT_STEPS = 12
 const MAX_CAPTION_STEPS = 10
-/** A status read that keeps failing this many times in a row ends the wait. */
-const MAX_STATUS_ERRORS = 8
 
 function checkStop(signal: AbortSignal) {
   if (signal.aborted) throw new RunStopped()
@@ -168,21 +176,20 @@ const statusOf = (error: unknown) => (error as { status?: unknown } | null)?.sta
 /** A job's output once it completes. Throws when it fails, is gone, or takes too long. */
 async function waitForJob(jobId: string, signal: AbortSignal, timeoutMs: number): Promise<Record<string, unknown>> {
   const end = Date.now() + timeoutMs
-  let errors = 0
   for (;;) {
     checkStop(signal)
     try {
       const job = await getJobStatusLean(jobId)
-      errors = 0
       if (job.status === "completed") return (job.output_data ?? {}) as Record<string, unknown>
       if (job.status === "failed" || job.status === "cancelled") throw new JobFailed(job.error_message ?? "failed", job.error_detail ?? undefined)
     } catch (error) {
       if (error instanceof JobFailed) throw error
       const status = statusOf(error)
       // A job this person cannot see, or one that is gone, will not come back.
-      if (status === 401 || status === 403 || status === 404 || status === 410) throw new JobFailed(String(status))
-      errors += 1
-      if (errors >= MAX_STATUS_ERRORS) throw new JobFailed("status unavailable")
+      if (status === 403 || status === 404 || status === 410) throw new JobFailed(String(status))
+      // Signed out: the job may still be running, so it stays open to be cancelled.
+      if (status === 401) throw new JobUnreadable()
+      // Anything else (the API restarting, the network) is waited out, up to the job's own deadline.
     }
     if (Date.now() > end) throw new JobTimedOut()
     await pause(JOB_POLL_MS, signal)
@@ -195,6 +202,7 @@ function keyOf(error: unknown): MessageKey {
   if (error instanceof InsufficientCreditsError) return "freecutAi.noCredits"
   if (error instanceof JobTimedOut) return "freecutAi.tooSlow"
   if (error instanceof JobFailed) return "freecutAi.jobFailed"
+  if (error instanceof JobUnreadable) return "freecutAi.signedOut"
   if (error instanceof EditorLinkError) return "freecutAi.editorNoAnswer"
   return "freecutAi.unexpected"
 }
@@ -250,12 +258,28 @@ const AUDIO_TYPES: Readonly<Record<string, string>> = {
   webm: "audio/webm",
 }
 
+/** The audio container the first bytes name, or null. */
+function sniffAudio(bytes: Uint8Array): string | null {
+  const ascii = (from: number, to: number) => (bytes.length >= to ? String.fromCharCode(...bytes.subarray(from, to)) : "")
+  if (ascii(0, 4) === "RIFF" && ascii(8, 12) === "WAVE") return "wav"
+  if (ascii(0, 3) === "ID3") return "mp3"
+  if (ascii(0, 4) === "OggS") return "ogg"
+  if (ascii(0, 4) === "fLaC") return "flac"
+  if (ascii(4, 8) === "ftyp") return "m4a"
+  if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) return "webm"
+  // A frame sync: layer bits 00 are AAC in ADTS, anything else an MPEG audio layer.
+  if (bytes[0] === 0xff && bytes.length > 1 && (bytes[1]! & 0xe0) === 0xe0) return (bytes[1]! & 0x06) === 0 ? "aac" : "mp3"
+  return null
+}
+
 /**
- * The name and type the music is imported under, as its bytes are: from the
- * file's address (Suno tracks arrive as WAV), else from the response's type.
+ * The name and type the music is imported under, as its bytes are. The bytes
+ * decide first: a Suno track's address says ".wav" and its response says
+ * audio/wav while the file is an MP3. Then the address, then the response's type.
  */
-export function musicFileOf(url: string, contentType: string | null): { readonly name: string; readonly type: string } {
-  const ext = /\.([a-z0-9]{2,5})$/i.exec(fileNameOfUrl(url))?.[1]?.toLowerCase()
+export function musicFileOf(buffer: ArrayBuffer, url: string, contentType: string | null): { readonly name: string; readonly type: string } {
+  const sniffed = sniffAudio(new Uint8Array(buffer, 0, Math.min(12, buffer.byteLength)))
+  const ext = sniffed ?? /\.([a-z0-9]{2,5})$/i.exec(fileNameOfUrl(url))?.[1]?.toLowerCase()
   if (ext && AUDIO_TYPES[ext]) return { name: `ai-music.${ext}`, type: AUDIO_TYPES[ext] }
   const type = contentType?.split(";")[0]?.trim().toLowerCase() ?? ""
   if (/^audio\/(x-)?wave?$/.test(type)) return { name: "ai-music.wav", type: "audio/wav" }
@@ -310,14 +334,20 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
   const cursor = (agent: AgentId, place: Omit<PresenceCursor, "id" | "name" | "color">) => {
     cursors.set(agent, { id: agent, name: names[agent], color: AGENT_COLORS[agent], ...place })
   }
-  const agent = (id: AgentId, state: AgentState, key: MessageKey, vars?: Vars, progress?: number) =>
-    onEvent({ type: "agent", agent: id, state, key, vars, progress })
+  const agent = (id: AgentId, state: AgentState, key: MessageKey, vars?: Vars, progress?: number, detail?: string) =>
+    onEvent({ type: "agent", agent: id, state, key, vars, progress, ...(detail ? { detail } : {}) })
   const feed = (id: AgentId, key: MessageKey, vars?: Vars) => onEvent({ type: "feed", agent: id, key, vars })
 
   // Jobs this run started that are still open: cancelled if the run ends early.
   const openJobs = new Set<string>()
+  // Set once the run is over: a job whose id arrives later is cancelled at once.
+  let ended = false
   const startJob = async (start: () => Promise<{ jobId: string }>) => {
     const { jobId } = await start()
+    if (ended) {
+      void cancelJob(jobId).catch(() => undefined)
+      throw new RunStopped()
+    }
     openJobs.add(jobId)
     return jobId
   }
@@ -380,11 +410,15 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
     for (const id of ["cutter", "captions", "sound"] as const) agent(id, "waiting", "freecutAi.waiting")
 
     let words: TimedWord[]
+    let language: string | null
     try {
-      words = wordsFromTranscript((await finishJob(await transcription, TRANSCRIBE_TIMEOUT_MS)).json)
+      const transcript = (await finishJob(await transcription, TRANSCRIBE_TIMEOUT_MS)).json
+      words = wordsFromTranscript(transcript)
+      language = transcriptLanguage(transcript)
     } catch (error) {
       if (error instanceof RunStopped || signal.aborted) throw new RunStopped()
-      throw new RunFailed(error instanceof InsufficientCreditsError ? "freecutAi.noCredits" : "freecutAi.listenFailed", undefined, wordsOf(error))
+      const key: MessageKey = error instanceof InsufficientCreditsError ? "freecutAi.noCredits" : error instanceof JobUnreadable ? "freecutAi.signedOut" : "freecutAi.listenFailed"
+      throw new RunFailed(key, undefined, wordsOf(error))
     }
     feed("lead", words.length > 0 ? "freecutAi.heardWords" : "freecutAi.noSpeech", { n: words.length })
 
@@ -401,8 +435,9 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
     // ── the Cutter: filler words, and the pauses around them ──
     const cutFillers = plan.steps.includes("fillers")
     const cutPauses = plan.steps.includes("pauses")
-    const spoken = cutFillers ? words.filter((w) => !isFillerWord(w)) : words
-    const fillers = cutFillers ? fillerRanges(words) : []
+    // Filler sounds are the video's own language's: "um" is a word in Portuguese.
+    const spoken = cutFillers ? words.filter((w) => !isFillerWord(w, language)) : words
+    const fillers = cutFillers ? fillerRanges(words, language) : []
     // With the fillers gone, the silence around each one is one pause.
     const ranges = mergeRanges([...fillers, ...(cutPauses ? pauseRanges(spoken, mediaSeconds) : [])])
     const fillerIn = (r: SecondsRange) => fillers.filter((f) => f.start >= r.start - 0.05 && f.end <= r.end + 0.05)
@@ -501,7 +536,8 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
         const buffer = await response.arrayBuffer()
         checkStop(signal)
         const ref = `ai-music-${Date.now().toString(36)}`
-        const file = musicFileOf(url, response.headers.get("content-type"))
+        // Read before the import: the buffer is handed over to the editor.
+        const file = musicFileOf(buffer, url, response.headers.get("content-type"))
         link.importFile(ref, file.name, file.type, buffer)
         const placed = await apply(
           stepLabels.music,
@@ -521,7 +557,7 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
       } catch (error) {
         if (error instanceof RunStopped || signal.aborted) throw new RunStopped()
         console.warn("[Edit with AI] music", error)
-        agent("sound", "failed", error instanceof InsufficientCreditsError ? "freecutAi.musicNoCredits" : "freecutAi.musicFailed")
+        agent("sound", "failed", error instanceof InsufficientCreditsError ? "freecutAi.musicNoCredits" : "freecutAi.musicFailed", undefined, undefined, wordsOf(error))
       }
     }
 
@@ -537,6 +573,7 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
     throw error instanceof RunFailed ? error : new RunFailed(keyOf(error), undefined, wordsOf(error))
   } finally {
     // Paid work nobody will use is cancelled; nothing of the show stays drawn.
+    ended = true
     for (const jobId of openJobs) void cancelJob(jobId).catch(() => undefined)
     try {
       link.presence([], [])
