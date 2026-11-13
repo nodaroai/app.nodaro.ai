@@ -16,7 +16,7 @@ import {
   buildCreditModelIdentifier,
   buildVideoCreditModelIdentifier,
   seedanceVideoEditCreditId,
-  tailExtendCreditId,
+  catalogExtendCreditId,
   buildMotionCreditModelIdentifier,
   AI_AVATAR_DURATION_BUCKETS,
   resolveAiAvatarCreditId,
@@ -72,7 +72,7 @@ import {
   dialogueProviderOf,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
   isSeedanceVideoEditProvider,
-  isTailExtendProvider,
+  isCatalogExtendProvider,
   canonicalVideoProvider,
   sunoSeparateCreditId,
   audioSoundtrackActive,
@@ -1823,6 +1823,37 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "kling-4-extend:28s:1080p": 3570,
   "kling-4-extend:29s:1080p": 3698,
   "kling-4-extend:30s:1080p": 3825,
+  // ── PixVerse V6 Extend (KIE pixverse-v6/extend) — one row per second added
+  //    (1–15 s) at each quality (360p / 540p / 720p / 1080p), each with a
+  //    `:audio` twin (the sound switch changes the price); no bare id. Each
+  //    row is the seconds added × the quality's per-second base, rounded up to
+  //    the next 10 (the per-second ladder rule). Machine-generated with its
+  //    seed migration (`642_extend_pixverse_v6_pricing.sql`) — never edit one
+  //    value by hand; pixverse-v6-extend-pricing.test.ts holds the ladder. ──
+  "pixverse-v6-extend:1s:360p": 10, "pixverse-v6-extend:2s:360p": 20, "pixverse-v6-extend:3s:360p": 30, "pixverse-v6-extend:4s:360p": 40, "pixverse-v6-extend:5s:360p": 50,
+  "pixverse-v6-extend:6s:360p": 60, "pixverse-v6-extend:7s:360p": 70, "pixverse-v6-extend:8s:360p": 80, "pixverse-v6-extend:9s:360p": 90, "pixverse-v6-extend:10s:360p": 100,
+  "pixverse-v6-extend:11s:360p": 110, "pixverse-v6-extend:12s:360p": 120, "pixverse-v6-extend:13s:360p": 130, "pixverse-v6-extend:14s:360p": 140, "pixverse-v6-extend:15s:360p": 150,
+  "pixverse-v6-extend:1s:540p": 20, "pixverse-v6-extend:2s:540p": 30, "pixverse-v6-extend:3s:540p": 50, "pixverse-v6-extend:4s:540p": 60, "pixverse-v6-extend:5s:540p": 70,
+  "pixverse-v6-extend:6s:540p": 90, "pixverse-v6-extend:7s:540p": 100, "pixverse-v6-extend:8s:540p": 120, "pixverse-v6-extend:9s:540p": 130, "pixverse-v6-extend:10s:540p": 140,
+  "pixverse-v6-extend:11s:540p": 160, "pixverse-v6-extend:12s:540p": 170, "pixverse-v6-extend:13s:540p": 190, "pixverse-v6-extend:14s:540p": 200, "pixverse-v6-extend:15s:540p": 210,
+  "pixverse-v6-extend:1s:720p": 20, "pixverse-v6-extend:2s:720p": 40, "pixverse-v6-extend:3s:720p": 60, "pixverse-v6-extend:4s:720p": 80, "pixverse-v6-extend:5s:720p": 90,
+  "pixverse-v6-extend:6s:720p": 110, "pixverse-v6-extend:7s:720p": 130, "pixverse-v6-extend:8s:720p": 150, "pixverse-v6-extend:9s:720p": 170, "pixverse-v6-extend:10s:720p": 180,
+  "pixverse-v6-extend:11s:720p": 200, "pixverse-v6-extend:12s:720p": 220, "pixverse-v6-extend:13s:720p": 240, "pixverse-v6-extend:14s:720p": 260, "pixverse-v6-extend:15s:720p": 270,
+  "pixverse-v6-extend:1s:1080p": 40, "pixverse-v6-extend:2s:1080p": 80, "pixverse-v6-extend:3s:1080p": 110, "pixverse-v6-extend:4s:1080p": 150, "pixverse-v6-extend:5s:1080p": 180,
+  "pixverse-v6-extend:6s:1080p": 220, "pixverse-v6-extend:7s:1080p": 260, "pixverse-v6-extend:8s:1080p": 290, "pixverse-v6-extend:9s:1080p": 330, "pixverse-v6-extend:10s:1080p": 360,
+  "pixverse-v6-extend:11s:1080p": 400, "pixverse-v6-extend:12s:1080p": 440, "pixverse-v6-extend:13s:1080p": 470, "pixverse-v6-extend:14s:1080p": 510, "pixverse-v6-extend:15s:1080p": 540,
+  "pixverse-v6-extend:1s:360p:audio": 20, "pixverse-v6-extend:2s:360p:audio": 30, "pixverse-v6-extend:3s:360p:audio": 50, "pixverse-v6-extend:4s:360p:audio": 60, "pixverse-v6-extend:5s:360p:audio": 70,
+  "pixverse-v6-extend:6s:360p:audio": 90, "pixverse-v6-extend:7s:360p:audio": 100, "pixverse-v6-extend:8s:360p:audio": 120, "pixverse-v6-extend:9s:360p:audio": 130, "pixverse-v6-extend:10s:360p:audio": 140,
+  "pixverse-v6-extend:11s:360p:audio": 160, "pixverse-v6-extend:12s:360p:audio": 170, "pixverse-v6-extend:13s:360p:audio": 190, "pixverse-v6-extend:14s:360p:audio": 200, "pixverse-v6-extend:15s:360p:audio": 210,
+  "pixverse-v6-extend:1s:540p:audio": 20, "pixverse-v6-extend:2s:540p:audio": 40, "pixverse-v6-extend:3s:540p:audio": 60, "pixverse-v6-extend:4s:540p:audio": 80, "pixverse-v6-extend:5s:540p:audio": 90,
+  "pixverse-v6-extend:6s:540p:audio": 110, "pixverse-v6-extend:7s:540p:audio": 130, "pixverse-v6-extend:8s:540p:audio": 150, "pixverse-v6-extend:9s:540p:audio": 170, "pixverse-v6-extend:10s:540p:audio": 180,
+  "pixverse-v6-extend:11s:540p:audio": 200, "pixverse-v6-extend:12s:540p:audio": 220, "pixverse-v6-extend:13s:540p:audio": 240, "pixverse-v6-extend:14s:540p:audio": 260, "pixverse-v6-extend:15s:540p:audio": 270,
+  "pixverse-v6-extend:1s:720p:audio": 30, "pixverse-v6-extend:2s:720p:audio": 50, "pixverse-v6-extend:3s:720p:audio": 80, "pixverse-v6-extend:4s:720p:audio": 100, "pixverse-v6-extend:5s:720p:audio": 120,
+  "pixverse-v6-extend:6s:720p:audio": 150, "pixverse-v6-extend:7s:720p:audio": 170, "pixverse-v6-extend:8s:720p:audio": 200, "pixverse-v6-extend:9s:720p:audio": 220, "pixverse-v6-extend:10s:720p:audio": 240,
+  "pixverse-v6-extend:11s:720p:audio": 270, "pixverse-v6-extend:12s:720p:audio": 290, "pixverse-v6-extend:13s:720p:audio": 320, "pixverse-v6-extend:14s:720p:audio": 340, "pixverse-v6-extend:15s:720p:audio": 360,
+  "pixverse-v6-extend:1s:1080p:audio": 50, "pixverse-v6-extend:2s:1080p:audio": 100, "pixverse-v6-extend:3s:1080p:audio": 140, "pixverse-v6-extend:4s:1080p:audio": 190, "pixverse-v6-extend:5s:1080p:audio": 230,
+  "pixverse-v6-extend:6s:1080p:audio": 280, "pixverse-v6-extend:7s:1080p:audio": 330, "pixverse-v6-extend:8s:1080p:audio": 370, "pixverse-v6-extend:9s:1080p:audio": 420, "pixverse-v6-extend:10s:1080p:audio": 460,
+  "pixverse-v6-extend:11s:1080p:audio": 510, "pixverse-v6-extend:12s:1080p:audio": 560, "pixverse-v6-extend:13s:1080p:audio": 600, "pixverse-v6-extend:14s:1080p:audio": 650, "pixverse-v6-extend:15s:1080p:audio": 690,
   "ltx-2.3-pro-retake:per-second": 40,
   "runway-kie": 30,               // (5s, 720p)
   // ── Video Extend ──
@@ -7548,16 +7579,18 @@ export function getNodeModelIdentifier(
   // which sumWorkflowEstimate multiplies by the seconds (estimatePricingUnits).
   if (nodeType === "extend-video" && provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
 
-  // Extend-video: each tail-recipe provider (Seedance 2.5 / 2.0, Kling 4) is
-  // priced on its own rows (seconds added × resolution) through the one
-  // builder the route and the workflow run reserve with — the estimate must
-  // follow the reservation or the quote lies. A retired id
-  // (`seedance-2-extend`) is quoted as the provider it runs as.
-  const tailExtend = nodeType === "extend-video" ? canonicalVideoProvider(provider) : undefined
-  if (isTailExtendProvider(tailExtend)) {
+  // Extend-video: each catalog extend provider (Seedance 2.5 / 2.0, Kling 4,
+  // PixVerse V6) is priced on its own rows (seconds added × resolution;
+  // PixVerse's `:audio` with its sound on) through the one builder the route
+  // and the workflow run reserve with — the estimate must follow the
+  // reservation or the quote lies. A retired id (`seedance-2-extend`) is
+  // quoted as the provider it runs as.
+  const catalogExtend = nodeType === "extend-video" ? canonicalVideoProvider(provider) : undefined
+  if (isCatalogExtendProvider(catalogExtend)) {
     const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
     const resolution = typeof data.resolution === "string" ? data.resolution : undefined
-    return tailExtendCreditId(tailExtend, duration, resolution)
+    const generateAudio = typeof data.generateAudio === "boolean" ? data.generateAudio : undefined
+    return catalogExtendCreditId(catalogExtend, duration, resolution, generateAudio)
   }
 
   // Motion transfer: duration-tiered pricing

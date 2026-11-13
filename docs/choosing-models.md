@@ -132,6 +132,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Bytedance Pro Fast I2V | Bytedance | Everyday | 99<!-- credits: bytedance-pro-fast --> | i2v | Faster Bytedance Pro variant. |
 | Wan 2.2 Turbo | Alibaba | Everyday | 110<!-- credits: wan-turbo --> | i2v, t2v | Cheap, fast Wan turbo — 5s. Serves both i2v and t2v under one id. |
 | Wan Flash V2V | Alibaba | Everyday | 110<!-- credits: wan-flash --> | v2v | Faster Wan V2V variant. |
+| PixVerse V6 Extend | PixVerse | Everyday | 132<!-- credits: pixverse-v6-extend:5s:720p:audio --> | extend | Extend ANY video with PixVerse V6: 1–15s continuation at 360p to 1080p, with optional sound, joined onto your original clip. |
 | Kling 2.5 Turbo Pro | Kuaishou | Everyday | 138<!-- credits: kling-turbo --> | i2v, t2v | Faster Kling — good quality at lower cost. Supports end frame. |
 | Hailuo 02 I2V Pro | MiniMax | Everyday | 158<!-- credits: minimax --> | i2v, t2v | Hailuo 02 Pro — strong photoreal motion, fixed 5-second clips. Supports end frame. |
 | Grok Imagine (I2V) | xAI | Everyday | 165<!-- credits: grok-i2v --> | i2v | Grok image-to-video — stylized motion. Up to 15s. |

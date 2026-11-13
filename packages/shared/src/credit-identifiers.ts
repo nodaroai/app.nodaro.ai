@@ -42,6 +42,9 @@ import {
   type VideoAudioRequest,
   canonicalVideoProvider,
   isTailExtendProvider,
+  isPixverseExtendProvider,
+  PIXVERSE_V6_EXTEND_PROVIDER,
+  type CatalogExtendProvider,
   type SeedanceExtendProvider,
   type TailExtendProvider,
 } from "./model-constants.js"
@@ -541,6 +544,9 @@ export function buildVideoCreditModelIdentifier(
   // priced on its own rows — the one builder every surface that prices an
   // extend reads.
   if (isTailExtendProvider(provider)) return tailExtendCreditId(provider, duration, resolution)
+  // PixVerse V6 Extend on its own rows too, its sound read from the extend's
+  // own switch (`generateAudio`), else the request's `sound`.
+  if (isPixverseExtendProvider(provider)) return pixverseExtendCreditId(duration, resolution, audio.generateAudio ?? audio.sound)
   // T2V overrides: some providers have different base costs for text-to-video
   let effectiveProvider = provider
   if (nodeType === "text-to-video") {
@@ -814,6 +820,68 @@ export function tailExtendCreditId(
   resolution?: string,
 ): string {
   return `${provider}:${pricedOutputDurationSec(provider, duration)}s:${tailExtendResolution(provider, resolution)}`
+}
+
+/** PixVerse V6 Extend's qualities, ascending: its catalog `resolutions`. */
+type PixverseExtendQuality = "360p" | "540p" | "720p" | "1080p"
+
+/** The quality a PixVerse V6 Extend that names none, or one it cannot map, is priced and run at. */
+const PIXVERSE_EXTEND_DEFAULT_QUALITY: PixverseExtendQuality = "720p"
+
+/**
+ * The quality a PixVerse V6 Extend run is priced at, and so the one it must
+ * render at: a quality it offers (360p / 540p / 720p / 1080p) as asked; 480p —
+ * the lowest the other extends render, which PixVerse does not — at the
+ * nearest it offers, 540p; anything else, or none, at 720p. The route refuses
+ * 480p and every other value it does not offer; a saved node, a quick-strip
+ * switch or a workflow written elsewhere carrying one runs, and is priced, at
+ * this quality instead.
+ */
+export function pixverseExtendQuality(resolution?: unknown): PixverseExtendQuality {
+  if (resolution === "480p") return "540p"
+  return typeof resolution === "string" && MODEL_CATALOG[PIXVERSE_V6_EXTEND_PROVIDER]?.resolutions?.includes(resolution)
+    ? (resolution as PixverseExtendQuality)
+    : PIXVERSE_EXTEND_DEFAULT_QUALITY
+}
+
+/**
+ * The credit identifier one PixVerse V6 Extend run is priced at:
+ * `pixverse-v6-extend:<N>s:<quality>`, `:audio` appended with sound. The
+ * seconds added snap into its catalog `durations` (1–15, its default 5 when
+ * unset, {@link pricedOutputDurationSec}); the quality is
+ * {@link pixverseExtendQuality}'s; the sound is on unless `generateAudio` is
+ * `false` (the editor's sound switch shows it on until it is turned off).
+ */
+export function pixverseExtendCreditId(duration?: number | string, resolution?: unknown, generateAudio?: boolean): string {
+  const seconds = pricedOutputDurationSec(PIXVERSE_V6_EXTEND_PROVIDER, duration)
+  return `${PIXVERSE_V6_EXTEND_PROVIDER}:${seconds}s:${pixverseExtendQuality(resolution)}${generateAudio === false ? "" : ":audio"}`
+}
+
+/**
+ * The resolution a catalog Extend Video run ({@link CatalogExtendProvider}) is
+ * priced at, and so renders at: a tail recipe's {@link tailExtendResolution},
+ * PixVerse V6's {@link pixverseExtendQuality}.
+ */
+export function catalogExtendResolution(provider: CatalogExtendProvider, resolution?: unknown): string {
+  return isPixverseExtendProvider(provider) ? pixverseExtendQuality(resolution) : tailExtendResolution(provider, resolution)
+}
+
+/**
+ * The credit identifier one catalog Extend Video run is priced at — the one
+ * builder every surface that prices one reads (the route's guard and
+ * reservation, the workflow reservation and estimate, the editor): a tail
+ * recipe's {@link tailExtendCreditId} (no sound switch is priced there), and
+ * PixVerse V6's {@link pixverseExtendCreditId}.
+ */
+export function catalogExtendCreditId(
+  provider: CatalogExtendProvider,
+  duration?: number | string,
+  resolution?: string,
+  generateAudio?: boolean,
+): string {
+  return isPixverseExtendProvider(provider)
+    ? pixverseExtendCreditId(duration, resolution, generateAudio)
+    : tailExtendCreditId(provider, duration, resolution)
 }
 
 /** @deprecated Use {@link tailExtendResolution}, which also answers for Kling 4 Extend. */

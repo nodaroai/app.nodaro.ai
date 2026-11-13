@@ -1718,6 +1718,7 @@ export const ko: ChromeDict = {
   "vidcfg.resWithCredits": "{res}({credits}크레딧)",
   "vidcfg.descSeedanceExtend": "연결된 동영상이면 무엇이든 연장합니다. Seedance 2가 이어지는 장면을 생성하고(사운드 포함), 결과를 하나의 매끄러운 클립으로 이어 붙입니다.",
   "vidcfg.descKlingExtend": "연결된 동영상이면 무엇이든 연장합니다. Kling 4가 이어지는 장면을 생성하고(사운드 포함), 결과를 하나의 매끄러운 클립으로 이어 붙입니다.",
+  "vidcfg.descPixverseExtend": "연결된 동영상이면 무엇이든 연장합니다. PixVerse V6가 이어지는 장면을 생성하고(끄지 않으면 사운드 포함), 새로 생성된 부분만 원본 동영상에 이어 붙여 하나의 매끄러운 클립으로 만듭니다.",
   "vidcfg.descOtherExtend": "VEO, Runway, LTX 동영상을 새 프롬프트로 연장합니다. 연장할 동영상을 생성한 업스트림 “이미지로 동영상 만들기” 또는 “텍스트로 동영상 만들기” 노드를 연결하세요.",
   "vidcfg.advancedSettings": "고급 설정",
   "vidcfg.showAdvancedSettings": "고급 설정 표시",

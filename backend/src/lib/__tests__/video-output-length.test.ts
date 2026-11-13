@@ -70,6 +70,7 @@ import {
 import { USE_CASE_SPECS, editPlanRenderEstimateLength, renderLengthSec, TRAILER_MAX_SEC, usecaseTypeOfBuilder } from "@nodaro/render-rules"
 import { generateVideoProClampedSec, generateVideoProLengthSec } from "../generate-video-pro-length.js"
 import { tailRecipeSeconds } from "../extend-recipe.js"
+import { pixverseExtendSeconds } from "../extend-native.js"
 import { computeGenerateVideoProPricing } from "../../ee/billing/generate-video-pro-credits.js"
 
 const fixed = (sec: number): InputLength => ({ fixedSec: sec, perEpisodeSec: 0 })
@@ -341,6 +342,16 @@ describe("Extend Video: the input and what the extension adds", () => {
       }
     },
   )
+  it("PixVerse V6 extend adds its duration to the source, 5 s when unset, in its 1–15 s (pixverseExtendSeconds)", () => {
+    expect(run("extend-video", [video(fixed(8))], { provider: "pixverse-v6-extend", duration: 5 })).toEqual(fixed(13))
+    expect(run("extend-video", [video(fixed(30))], { provider: "pixverse-v6-extend" })).toEqual(fixed(35))
+    expect(run("extend-video", [video(fixed(30))], { provider: "pixverse-v6-extend", duration: 1 })).toEqual(fixed(31))
+    expect(run("extend-video", [video(fixed(30))], { provider: "pixverse-v6-extend", duration: 40 })).toEqual(fixed(45))
+    expect(run("extend-video", [video(episode)], { provider: "pixverse-v6-extend", duration: 4 })).toEqual({ fixedSec: 4, perEpisodeSec: 60 })
+    for (const duration of [undefined, 1, 2.4, "9", 15, 16]) {
+      expect(run("extend-video", [video(fixed(30))], { provider: "pixverse-v6-extend", duration }), String(duration)).toEqual(fixed(30 + pixverseExtendSeconds(duration)))
+    }
+  })
   it("VEO and Runway extend add a length the catalog does not declare: unknown", () => {
     expect(run("extend-video", [video(fixed(8))], { provider: "veo-extend" })).toBe("unknown")
     expect(run("extend-video", [video(fixed(8))], { provider: "runway-extend" })).toBe("unknown")

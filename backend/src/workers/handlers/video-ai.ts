@@ -44,16 +44,19 @@ import {
   dialogueProviderOf,
   isVeoProvider,
   isSeedanceExtendProvider,
+  isPixverseExtendProvider,
   getVideoAudioCapability,
   type VideoUpscaleProvider
 } from "@nodaro/shared/models"
-import { ltxExtendDurationSec, ltxRetakeDurationSec, tailExtendResolution } from "@nodaro/shared/credits"
+import { ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendQuality, tailExtendResolution } from "@nodaro/shared/credits"
 import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
 import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
-import { extendTailPicture, extensionPictureSeconds, stitchExtension, type ExtendStitchResult } from "../../providers/video/extend-stitch.js"
-import { probeMatched } from "../../providers/video/matched-encode.js"
+import { extendTailPicture, extensionPictureSeconds, pictureSecondsOf, stitchExtension, type ExtendStitchResult } from "../../providers/video/extend-stitch.js"
+import { cutNativeExtension, nativeExtensionCutStartSec, pictureStartOffsetSec } from "../../providers/video/native-extension-cut.js"
+import { runPixverseExtend } from "../../providers/kie/pixverse-extend.js"
+import { probeMatched, probeMatchedOrThrow } from "../../providers/video/matched-encode.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
 import { extractFrame } from "../../providers/video/extract-frame.js"
 import { resolveSourceMatchedAspect } from "../../providers/video/source-matched-aspect.js"
@@ -66,6 +69,7 @@ import {
   tailRecipeSeconds,
   TAIL_RECIPES,
 } from "../../lib/extend-recipe.js"
+import { pixverseExtendSeconds } from "../../lib/extend-native.js"
 import { cutChainedMovTail, findChainedMovReference, isMovUrl } from "../../lib/seedance-extend-mov-chain.js"
 import { rawExtensionObjectId, silentVideoKey } from "../../lib/job-output-keys.js"
 import { discardFailedRunCopies } from "../../lib/discard-job-copies.js"
@@ -1757,6 +1761,139 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     } catch (err) {
       await discardFailedRunCopies(ctx.jobId, ctx.jobUserId, [rawCopyUrl])
       throw err
+    } finally {
+      await cleanupWorkDir(prepDir)
+    }
+  }
+
+  // ─── Native extend: PixVerse V6 ───────────────────────────────────────
+  // Extends ANY video by URL on PixVerse's own extend, which takes the whole
+  // source and returns the whole clip: the source, re-rendered at PixVerse's
+  // quality (and frame rate), then the new seconds. The deliverable keeps the
+  // user's ORIGINAL source: only PixVerse's new seconds are cut from its clip
+  // (by time, at the source's picture length — `cutNativeExtension`) and
+  // joined to it by the extend stitch, with no smart cut and no trims (the
+  // new seconds follow the source's last frame; no duplicate to drop).
+  if (isPixverseExtendProvider(provider)) {
+    const { video: sourceUrl, prompt: userPrompt, duration, resolution, generateAudio } = job.data as {
+      jobId: string
+      video: string
+      prompt: string
+      duration?: number
+      resolution?: string
+      generateAudio?: boolean
+    }
+    // The seconds, quality and sound the run is priced at (the route and the
+    // workflow run queue these readings; repeated here so a hand-queued job
+    // can never render above the row it reserved).
+    const extSeconds = pixverseExtendSeconds(duration)
+    const quality = pixverseExtendQuality(resolution)
+    const sound = generateAudio !== false
+    console.log(`[worker] extend-video ${ctx.jobId} (provider: ${provider}, ${extSeconds}s ${quality}${sound ? " with sound" : ""})`)
+    await setJobProgress(job, ctx.jobId, 5)
+
+    // The source's local copy is the stitch's source, and its picture length
+    // is where PixVerse's new seconds begin; the folder is removed on every
+    // way out (the `finally` below).
+    const prepDir = await createWorkDir("extend-prep")
+    try {
+      const srcLocal = join(prepDir, "source.mp4")
+      await downloadFile(sourceUrl, srcLocal)
+      // Measured as the stitch measures a picture (`pictureSecondsOf`). A
+      // probe that FAILED (timed out, could not start) says nothing about the
+      // source: its plain error is retried. One that read the file and found
+      // no picture fails the run now, final and refunded in full: the same
+      // file fails the same way on every attempt.
+      const sourceSec = pictureSecondsOf(await probeMatchedOrThrow(srcLocal))
+      if (!sourceSec) throw new DeterministicJobError("Extend: the source video has no picture to extend")
+      await setJobProgress(job, ctx.jobId, 10)
+
+      const pixverseRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 75 })
+      let gen
+      try {
+        // NO onTaskCreated on purpose (as the tail recipes): the KIE task's
+        // result is PixVerse's whole clip, NOT the deliverable. Persisting it
+        // would let the reconcile cron finalize this job with that clip. If the
+        // worker dies mid-wait, BullMQ's stalled-job recovery re-runs the handler.
+        gen = await runPixverseExtend({ videoUrl: sourceUrl, prompt: userPrompt, durationSec: extSeconds, quality, sound })
+      } finally {
+        pixverseRamp.stop()
+      }
+
+      const stitchDir = await createWorkDir("extend-stitch")
+      let stitchedR2Url: string
+      let stitchBoundary: ExtendStitchResult["boundary"]
+      try {
+        const pixversePath = join(stitchDir, "pixverse.mp4")
+        await downloadFile(gen.url, pixversePath)
+        // PixVerse's new seconds: its clip's picture less the source's. Less
+        // than half the seconds the run is billed for (`extensionTooShort`),
+        // none at all included, fails the run before anything is cut or
+        // encoded: final on this attempt and refunded in full, so neither the
+        // source alone nor the source with the short extension is delivered,
+        // and no retry generates (and pays for) another. A probe that FAILED
+        // throws a plain error, which is retried (`extensionPictureSeconds`).
+        const pixverseSec = await extensionPictureSeconds(pixversePath)
+        const newSec = pixverseSec === undefined ? undefined : pixverseSec - sourceSec
+        // Where the new seconds start on PixVerse's timeline, and whether its
+        // clip has sound — logged with the lengths before anything is refused
+        // or cut, so a run's log shows where PixVerse's new part began.
+        const pixverseProbe = await probeMatched(pixversePath)
+        const cutStartSec = nativeExtensionCutStartSec(pixverseProbe, sourceSec)
+        const secs = (n: number | undefined): string => (n === undefined ? "none" : `${n.toFixed(3)}s`)
+        console.log(
+          `[worker] extend-video ${ctx.jobId} PixVerse cut: source ${secs(sourceSec)}, PixVerse clip ${secs(pixverseSec)} ` +
+            `(sound: ${pixverseProbe.audioCodec ? "yes" : "no"}), new ${secs(newSec)}, cut from ${secs(cutStartSec)} ` +
+            `(picture offset ${secs(pictureStartOffsetSec(pixverseProbe))}), billed ${extSeconds}s`,
+        )
+        if (extensionTooShort(newSec, extSeconds)) {
+          throw new DeterministicJobError(extensionTooShortMessage(newSec, extSeconds))
+        }
+        // With the sound off the cut keeps no sound, whatever PixVerse returned,
+        // and the stitch pads the new seconds with silence.
+        const newPartPath = await cutNativeExtension(pixversePath, cutStartSec, stitchDir, { sound })
+        // The stitch keeps the source's size (rounded down to even), frame
+        // rate and picture quality, and covers and crops the new part to the
+        // source's frame; a hard cut and a short sound blend at the join.
+        const stitched = await stitchExtension({
+          sourcePath: srcLocal,
+          extensionPath: newPartPath,
+          workDir: stitchDir,
+          fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
+          audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+        })
+        stitchBoundary = stitched.boundary
+        await setJobProgress(job, ctx.jobId, 85)
+        stitchedR2Url = await watermarkLocalVideoAndUpload(stitched.outputPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+      } finally {
+        await cleanupWorkDir(stitchDir)
+      }
+      await setJobProgress(job, ctx.jobId, 100)
+
+      const stitchedThumbUrl = await generateAndUploadThumbnail(stitchedR2Url, ctx.jobId, ctx.jobUserId)
+      const { ok: pixverseOk } = await finalizeJobWithMedia({
+        jobId: ctx.jobId,
+        jobType: "extend-video",
+        result: { url: stitchedR2Url, cost: null, providerUsed: provider },
+        mediaUrl: stitchedR2Url,
+        extraOutputData: {
+          thumbnailUrl: stitchedThumbUrl,
+          // PixVerse's whole clip (KIE's own URL) — provenance/debug only.
+          rawExtensionUrl: gen.url,
+          // Where the stitch cut, in combineVideos' shape: no search ran.
+          smartCuts: [{
+            boundary: 0,
+            prevClipEndTrimFrames: stitchBoundary.trimEndFrames,
+            nextClipStartTrimFrames: stitchBoundary.trimStartFrames,
+            psnrDb: stitchBoundary.psnrDb,
+            matched: stitchBoundary.matched,
+            searchedPrevFrames: stitchBoundary.searchedPrevFrames,
+            searchedNextFrames: stitchBoundary.searchedNextFrames,
+          }],
+        },
+      })
+      if (pixverseOk) console.log(`[worker] Job ${ctx.jobId} completed: ${stitchedR2Url} (provider: ${provider})`)
+      return
     } finally {
       await cleanupWorkDir(prepDir)
     }

@@ -25,7 +25,7 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { MODEL_CATALOG, modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable, VIDEO_UPSCALE_RESOLUTIONS } from "@nodaro/shared/model-catalog"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, isSeedanceExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
@@ -113,6 +113,7 @@ const EXTEND_SOURCE_INPUT: Readonly<Record<ExtendVideoProvider, "task" | "url" |
   "seedance-2-5-extend": "url",
   "seedance-2-0-extend": "url",
   "kling-4-extend": "url",
+  "pixverse-v6-extend": "url",
 }
 
 /** The models `extend_video` offers, in the provider list's order. */
@@ -121,8 +122,9 @@ const EXTEND_MODELS = EXTEND_VIDEO_PROVIDERS.filter((p) => EXTEND_SOURCE_INPUT[p
 const URL_EXTEND_MODELS = EXTEND_MODELS.filter((p) => EXTEND_SOURCE_INPUT[p] === "url")
 const URL_EXTEND_LABEL = URL_EXTEND_MODELS.join(" / ")
 const URL_EXTEND_SECONDS = URL_EXTEND_MODELS.flatMap((p) => EXTEND_DURATION_SECONDS[p])
-/** The resolutions the URL models render, as their catalog entries declare them. */
+/** The resolutions the URL models render, as their catalog entries declare them, ascending ("360p" < "1080p"). */
 const URL_EXTEND_RESOLUTIONS = [...new Set(URL_EXTEND_MODELS.flatMap((p) => MODEL_CATALOG[p]?.resolutions ?? []))]
+  .sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
 /** "a or b", "a, b or c". */
 const orList = (items: readonly string[]): string =>
   items.length > 1 ? `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}` : (items[0] ?? "")
@@ -142,8 +144,8 @@ const URL_EXTEND_RESOLUTIONS_BY_MODEL = [
  * list (`EXTEND_REFERENCE_IMAGE_PROVIDERS`), which refuses them on any other.
  */
 const REFERENCE_EXTEND_LABEL = URL_EXTEND_MODELS.filter((p) => (EXTEND_REFERENCE_IMAGE_PROVIDERS as readonly string[]).includes(p)).join(" / ")
-/** The offered models with a sound switch: Seedance's (Kling 4's sound is always on). */
-const SOUND_EXTEND_LABEL = URL_EXTEND_MODELS.filter(isSeedanceExtendProvider).join(" / ")
+/** The offered models with a sound switch: Seedance's and PixVerse V6's (Kling 4's sound is always on). */
+const SOUND_EXTEND_LABEL = URL_EXTEND_MODELS.filter(extendHasSoundSwitch).join(" / ")
 /** "seedance-2-5-extend 4–30 seconds (default 8)", one per URL model. */
 const URL_EXTEND_WINDOWS = URL_EXTEND_MODELS.map((p) => {
   const defaultSec = MODEL_CATALOG[p]?.defaultDuration
@@ -811,7 +813,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       title: "Extend Video",
       description:
         "Extend a video. veo-extend / runway-extend continue a previously-generated VEO or Runway video and require the task_id from that job (NOT the URL). " +
-        `${URL_EXTEND_LABEL} extend ANY video by URL (or asset id) — they generate what happens next (audio included) and trim-stitch it into one seamless clip; ` +
+        `${URL_EXTEND_LABEL} extend ANY video by URL (or asset id) — they generate what happens next and stitch it onto the source into one seamless clip; ` +
         "describe only the continuation content in `prompt` (plain action description — no 'reference video' phrasing needed).",
       inputSchema: {
         prompt: z.string().min(1).max(8000),

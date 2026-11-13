@@ -52,8 +52,9 @@ import {
 } from "@nodaro/shared/video"
 import { maskCompositeLeadHandle } from "@nodaro/shared/media"
 import { LENGTH_KEEPING_VIDEO_TYPES, lengthFollowingBoundSec, USE_CASE_NODE_TYPES, usecaseDescriptor, utilityOutputLength, type UseCaseOutputLength } from "@nodaro/render-rules"
-import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE } from "@nodaro/shared/models"
+import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, isPixverseExtendProvider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE } from "@nodaro/shared/models"
 import { isTailRecipeProvider, tailRecipeSeconds } from "./extend-recipe.js"
+import { pixverseExtendSeconds } from "./extend-native.js"
 import { generatedVideoLengthSec } from "./generated-video-length.js"
 import { generateVideoProLengthSec } from "./generate-video-pro-length.js"
 // @registry-enumerates VIDEO_OUTPUT_LENGTH_RULES and UNBOUNDED_LENGTH_REASONS carry every node unit with the "length:unknown" capability, and the rules every use-case node whose spec declares an outputLength
@@ -207,7 +208,7 @@ export const UNBOUNDED_LENGTH_REASONS: Readonly<Record<string, string>> = compos
 
 // ── The rules ──────────────────────────────────────────────────────────────
 
-/** The extension Extend Video adds, by provider: `ltxExtendDurationSec`, and a tail recipe's seconds (`tailRecipeSeconds`: the priced seconds in the recipe's window, extend-recipe.ts). */
+/** The extension Extend Video adds, by provider: `ltxExtendDurationSec`, a tail recipe's seconds (`tailRecipeSeconds`: the priced seconds in the recipe's window, extend-recipe.ts), and PixVerse V6's (`pixverseExtendSeconds`: its priced 1–15 s, joined onto the source). */
 function extendLength(node: LengthNode, inputs: readonly WireInput[]): WireLength {
   const data = dataOf(node)
   const provider = canonicalVideoProvider((data.provider as string | undefined) ?? "veo-extend")
@@ -216,6 +217,7 @@ function extendLength(node: LengthNode, inputs: readonly WireInput[]): WireLengt
   if (provider === "ltx-2.3-pro") return addSec(input, ltxExtendDurationSec(data.duration))
   // What the worker generates (video-ai.ts) and the route queues: the same seconds.
   if (isTailRecipeProvider(provider)) return addSec(input, tailRecipeSeconds(provider, data.duration))
+  if (isPixverseExtendProvider(provider)) return addSec(input, pixverseExtendSeconds(data.duration))
   return "unknown"
 }
 

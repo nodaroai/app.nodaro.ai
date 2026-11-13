@@ -14,6 +14,9 @@
  *   reference, then a stitch. The earlier id `seedance-2-extend` is retired:
  *   the app-wide hook (middleware/retired-video-provider.ts) runs it as
  *   `seedance-2-5-extend`.
+ * - pixverse-v6-extend: PixVerse V6, from a video URL — a native extend
+ *   (lib/extend-native.ts): the whole source in, the source with the new
+ *   seconds joined on back, of which only the new seconds are stitched to it.
  */
 
 import type { FastifyInstance } from "fastify"
@@ -36,14 +39,16 @@ import {
   SEEDANCE_2_5_REF_LIMITS,
   applyVideoNegativePrompt,
   canonicalVideoProvider,
-  isTailExtendProvider,
+  isCatalogExtendProvider,
+  isPixverseExtendProvider,
 } from "@nodaro/shared/models"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
-import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, tailExtendCreditId } from "@nodaro/shared/credits"
+import { LTX_EXTEND_PER_SECOND_CREDIT_ID, catalogExtendCreditId, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { EXTEND_REFERENCE_IMAGE_PROVIDERS, extendSourceTooShortMessage, isTailRecipeProvider, tailRecipeSeconds, TAIL_RECIPES } from "../lib/extend-recipe.js"
 import { EXTEND_DURATION_MAX_SEC, EXTEND_DURATION_SECONDS, describeSeconds } from "../lib/extend-durations.js"
+import { pixverseExtendPromptProblem, pixverseExtendSeconds } from "../lib/extend-native.js"
 import { ltxExtendBaseCredits } from "../lib/ltx-extend-credits.js"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 import { assembleVideoConnectedReferences } from "./generate-video.js"
@@ -58,7 +63,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 export const extendVideoBody = z.object({
   taskId: z.string().min(1).optional(),    // Required for veo-extend / runway-extend (the job output's providerTaskId)
   kieTaskId: z.string().min(1).optional(), // Deprecated alias of taskId, still accepted
-  videoUrl: safeUrlSchema.optional(),       // Required for ltx-2.3-pro and the tail-recipe providers (Seedance, Kling 4)
+  videoUrl: safeUrlSchema.optional(),       // Required for ltx-2.3-pro, the tail-recipe providers (Seedance, Kling 4) and PixVerse V6
   prompt: z.string().min(1).max(PROMPT_HARD_CEILING).optional(),    // Required for every provider but LTX
   negativePrompt: z.string().max(PROMPT_HARD_CEILING).optional(), // Always optional — injected into prompt as "Avoid: …" for non-native providers
   userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
@@ -68,11 +73,14 @@ export const extendVideoBody = z.object({
   quality: z.enum(["720p", "1080p"]).optional(), // Runway only
   extendMode: z.enum(["start", "end"]).optional(), // LTX 2.3 Pro only
   // Seconds to add, one of the provider's own (`EXTEND_DURATION_SECONDS`):
-  // Seedance 2.5 4–30, Seedance 2.0 4–15, Kling 4 3–30, LTX / VEO / Runway 1–20.
+  // Seedance 2.5 4–30, Seedance 2.0 4–15, Kling 4 3–30, PixVerse V6 1–15,
+  // LTX / VEO / Runway 1–20.
   duration: z.number().int().min(1).max(EXTEND_DURATION_MAX_SEC).optional(),
-  // Tail-recipe providers only, one their catalog entry offers (Kling 4: 720p / 1080p).
-  resolution: z.enum(["480p", "720p", "1080p"]).optional(),
-  generateAudio: z.boolean().optional(), // Seedance only (default true); Kling 4's sound is always on
+  // Catalog extend providers only, one their catalog entry offers (Seedance:
+  // 480p / 720p / 1080p; Kling 4: 720p / 1080p; PixVerse V6: 360p / 540p /
+  // 720p / 1080p), checked per provider by `extendRequestProblem`.
+  resolution: z.enum(["360p", "480p", "540p", "720p", "1080p"]).optional(),
+  generateAudio: z.boolean().optional(), // Seedance and PixVerse V6 only (default true); Kling 4's sound is always on
   // Reference images for the extension (Seedance only — the other extend
   // transports have no reference path, and a ref they'd silently drop is
   // refused with a 400 instead). Wire ceiling mirrors generate-video (the
@@ -155,13 +163,14 @@ export function resolveExtendVideoIdentifier(body: Record<string, unknown> | und
   // the guard and the workflow run multiply by the seconds
   // (ltxExtendBaseCredits).
   if (provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
-  // Each tail-recipe provider (Seedance 2.5 / 2.0, Kling 4) on its own rows
-  // (per second added × resolution) — the one builder every surface prices
-  // such an extend with.
-  if (isTailExtendProvider(provider)) {
+  // Each catalog extend provider (Seedance 2.5 / 2.0, Kling 4, PixVerse V6)
+  // on its own rows (per second added × resolution; PixVerse's `:audio` with
+  // its sound on) — the one builder every surface prices such an extend with.
+  if (isCatalogExtendProvider(provider)) {
     const duration = typeof body?.duration === "number" || typeof body?.duration === "string" ? body.duration : undefined
     const resolution = typeof body?.resolution === "string" ? body.resolution : undefined
-    return tailExtendCreditId(provider, duration, resolution)
+    const generateAudio = typeof body?.generateAudio === "boolean" ? body.generateAudio : undefined
+    return catalogExtendCreditId(provider, duration, resolution, generateAudio)
   }
   return provider
 }
@@ -183,6 +192,12 @@ function extendRequestProblem(data: ExtendVideoBody): string | null {
     // empty continuation has nothing to say.
     if (!videoUrl) return `videoUrl is required for ${provider}`
     if (!prompt) return `prompt (what happens next) is required for ${provider}`
+  } else if (isPixverseExtendProvider(provider)) {
+    // URL-based too; the prompt is sent as written, and PixVerse refuses one
+    // under 3 characters — after the reservation, so it is refused here.
+    if (!videoUrl) return `videoUrl is required for ${provider}`
+    const promptProblem = pixverseExtendPromptProblem(prompt)
+    if (promptProblem) return promptProblem
   } else {
     // veo-extend, runway-extend — KIE-based, require the task id from
     // upstream + a prompt.
@@ -193,10 +208,11 @@ function extendRequestProblem(data: ExtendVideoBody): string | null {
   if (duration !== undefined && !offered.includes(duration)) {
     return `duration must be ${describeSeconds(offered)} for ${provider}`
   }
-  // A tail-recipe provider renders only the resolutions its catalog entry
-  // offers (Kling 4: no 480p). Refused here rather than run, and priced, at
-  // another the caller did not ask for.
-  const resolutions = isTailRecipeProvider(provider) ? MODEL_CATALOG[provider]?.resolutions ?? [] : []
+  // A catalog extend provider renders only the resolutions its catalog entry
+  // offers (Kling 4: no 480p; PixVerse V6: 360p / 540p / 720p / 1080p, no
+  // 480p). Refused here rather than run, and priced, at another the caller did
+  // not ask for.
+  const resolutions = isCatalogExtendProvider(provider) ? MODEL_CATALOG[provider]?.resolutions ?? [] : []
   if (data.resolution !== undefined && resolutions.length > 0 && !resolutions.includes(data.resolution)) {
     return `resolution must be ${describeChoices(resolutions)} for ${provider}`
   }
@@ -446,6 +462,21 @@ export async function extendVideoRoutes(app: FastifyInstance) {
             ...(assembled?.referenceImageUrls?.length
               ? { referenceImageUrls: assembled.referenceImageUrls }
               : {}),
+            usageLogId,
+          }
+        : isPixverseExtendProvider(provider)
+        ? {
+            jobId: job.id,
+            provider,
+            video: videoUrl,
+            // The user's prompt as written (any negative as in-prompt
+            // "Avoid: …": PixVerse takes no negative of its own).
+            prompt: effectivePrompt,
+            // The seconds, the quality and the sound the guard priced (5 s,
+            // 720p, sound on when none was given): what the worker generates.
+            duration: pixverseExtendSeconds(duration),
+            resolution: pixverseExtendQuality(parsed.data.resolution),
+            generateAudio: parsed.data.generateAudio !== false,
             usageLogId,
           }
         : {

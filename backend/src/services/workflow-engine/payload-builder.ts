@@ -5,6 +5,7 @@ import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { DUBBING_VOICE_LOCK_MESSAGE, dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { retiredEditProviderReason } from "../../lib/retired-edit-providers.js"
 import { tailRecipeSeconds } from "../../lib/extend-recipe.js"
+import { pixverseExtendPromptProblem, pixverseExtendSeconds } from "../../lib/extend-native.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import { AUDIO_ISOLATION_CREDIT_ID, FORCED_ALIGNMENT_CREDIT_ID, REMOVE_BACKGROUND_CREDIT_ID } from "../../lib/fixed-row-credit-ids.js"
 import {
@@ -126,6 +127,8 @@ import {
   seedanceVideoEditCreditId,
   tailExtendCreditId,
   tailExtendResolution,
+  pixverseExtendCreditId,
+  pixverseExtendQuality,
   resolveTopazUpscale,
   resolveUpscaleFactor,
   resolveNormalizedImageGen,
@@ -153,6 +156,7 @@ import {
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
   isTailExtendProvider,
+  isPixverseExtendProvider,
   canonicalVideoProvider,
   SEEDANCE_VIDEO_EDIT_SHAPE,
   SEEDANCE_VIDEO_EDIT_TASK_TYPE,
@@ -6012,10 +6016,11 @@ function buildPayloadOf(
       }
 
       // Shared by the prompt-consuming branches (seedance + KIE): manual
-      // prompt + cinematography hints + identity lock + "Avoid: …" negative
+      // prompt + cinematography hints + identity lock (`composeExtendPrompt`:
+      // the prompt the editor sends the route) + "Avoid: …" negative
       // injection (no extend provider accepts native negative_prompt).
       // Mirrors the /v1/extend-video route's behavior.
-      const buildExtendPrompt = (): string | undefined => {
+      const composeExtendPrompt = (): string | undefined => {
         let p: string | undefined = promptFor("extend-video")
         {
           const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { surface: "video" })
@@ -6025,8 +6030,11 @@ function buildPayloadOf(
         }
         const identityClause = collectIdentityLockClause(node.id, buildCtx)
         if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
+        return p
+      }
+      const buildExtendPrompt = (composed: string | undefined = composeExtendPrompt()): string | undefined => {
         const neg = (resolvedInputs.negativePrompt || (data.negativePrompt as string | undefined))
-        const { prompt: pWithNeg } = applyVideoNegativePrompt(p, neg, evProvider)
+        const { prompt: pWithNeg } = applyVideoNegativePrompt(composed, neg, evProvider)
         return pWithNeg
       }
 
@@ -6059,6 +6067,39 @@ function buildPayloadOf(
             duration: tailRecipeSeconds(tailProvider, duration),
             resolution: tailExtendResolution(tailProvider, resolution),
             generateAudio: data.generateAudio,
+            usageLogId,
+          },
+        }
+      }
+
+      // ─── PixVerse V6 extend (native) ─────────────────────────────────────
+      // URL-based too: the whole source goes to PixVerse, the worker keeps
+      // only its new seconds and stitches them to the source. Priced on its
+      // own rows (seconds added × quality, `:audio` with the sound on — on
+      // unless turned off) through the builder the route and the estimate
+      // use. The job carries the seconds, the quality and the sound the row is
+      // priced at, never the node's raw values (a stored 480p runs at 540p,
+      // `pixverseExtendQuality`). A prompt under 3 characters is refused here,
+      // before the reservation, in the route's words: PixVerse refuses it only
+      // after.
+      if (isPixverseExtendProvider(tailProvider)) {
+        const composed = composeExtendPrompt()
+        const promptProblem = pixverseExtendPromptProblem(composed)
+        if (promptProblem) throw new Error(promptProblem)
+        const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
+        const generateAudio = data.generateAudio !== false
+        return {
+          jobName: "extend-video",
+          queueName: "video-generation",
+          modelIdentifier: pixverseExtendCreditId(duration, data.resolution, generateAudio),
+          payload: {
+            jobId,
+            provider: tailProvider,
+            video: resolvedInputs.videoUrl || data.videoUrl,
+            prompt: buildExtendPrompt(composed),
+            duration: pixverseExtendSeconds(duration),
+            resolution: pixverseExtendQuality(data.resolution),
+            generateAudio,
             usageLogId,
           },
         }

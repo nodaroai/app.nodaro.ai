@@ -857,14 +857,14 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | From 1 to 8000 characters. |
 | `task_id` | string |  | Task id of the prior generation, its output providerTaskId (veo-extend / runway-extend only). At least 1 character. |
 | `kie_task_id` | string |  | Use task_id. At least 1 character. |
-| `video_url` | string (URL) |  | Source video URL (seedance-2-5-extend / seedance-2-0-extend / kling-4-extend only) |
-| `video_asset_id` | string |  | Nodaro job/upload asset id whose output is a video (seedance-2-5-extend / seedance-2-0-extend / kling-4-extend only) |
-| `model` | string | yes | One of `veo-extend`, `runway-extend`, `seedance-2-5-extend`, `seedance-2-0-extend`, `kling-4-extend`. |
+| `video_url` | string (URL) |  | Source video URL (seedance-2-5-extend / seedance-2-0-extend / kling-4-extend / pixverse-v6-extend only) |
+| `video_asset_id` | string |  | Nodaro job/upload asset id whose output is a video (seedance-2-5-extend / seedance-2-0-extend / kling-4-extend / pixverse-v6-extend only) |
+| `model` | string | yes | One of `veo-extend`, `runway-extend`, `seedance-2-5-extend`, `seedance-2-0-extend`, `kling-4-extend`, `pixverse-v6-extend`. |
 | `veo_quality` | string |  | One of `fast`, `quality`. |
 | `runway_resolution` | string |  | One of `720p`, `1080p`. |
-| `duration` | integer |  | Seconds to add: seedance-2-5-extend 4–30 seconds (default 8), seedance-2-0-extend 4–15 seconds (default 8), kling-4-extend 3–30 seconds (default 5). Any other length is refused. From 3 to 30. |
-| `resolution` | string |  | Extension resolution (seedance-2-5-extend / seedance-2-0-extend: 480p, 720p or 1080p; kling-4-extend: 720p or 1080p; default 720p — match the source for the cleanest seam). Any other is refused. One of `480p`, `720p`, `1080p`. |
-| `generate_audio` | boolean |  | Continue the soundtrack into the extension (seedance-2-5-extend / seedance-2-0-extend only, default true) |
+| `duration` | integer |  | Seconds to add: seedance-2-5-extend 4–30 seconds (default 8), seedance-2-0-extend 4–15 seconds (default 8), kling-4-extend 3–30 seconds (default 5), pixverse-v6-extend 1–15 seconds (default 5). Any other length is refused. From 1 to 30. |
+| `resolution` | string |  | Extension resolution (seedance-2-5-extend / seedance-2-0-extend: 480p, 720p or 1080p; kling-4-extend: 720p or 1080p; pixverse-v6-extend: 360p, 540p, 720p or 1080p; default 720p — match the source for the cleanest seam). Any other is refused. One of `360p`, `480p`, `540p`, `720p`, `1080p`. |
+| `generate_audio` | boolean |  | Continue the soundtrack into the extension (seedance-2-5-extend / seedance-2-0-extend / pixverse-v6-extend only, default true) |
 | `reference_image_urls` | string (URL)[] |  | Reference images for the extension (seedance-2-5-extend / seedance-2-0-extend only, up to 8 — one seat is reserved for the continuation anchor). Mention them in the prompt as @image_1…@image_N in list order. At most 8 items. |
 | `seed` | integer |  | From 10000 to 99999. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |

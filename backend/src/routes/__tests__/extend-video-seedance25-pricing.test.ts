@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { resolveExtendVideoIdentifier } from "@/routes/extend-video.js"
 import { buildPayload } from "@/services/workflow-engine/payload-builder.js"
 import { CreditsService, STATIC_CREDIT_COSTS, getNodeModelIdentifier } from "@/ee/billing/credits.js"
-import { tailExtendCreditId } from "@nodaro/shared/credits"
+import { pixverseExtendCreditId, tailExtendCreditId } from "@nodaro/shared/credits"
 import { EXTEND_VIDEO_PROVIDERS, RETIRED_VIDEO_PROVIDERS, canonicalVideoProvider, isTailExtendProvider } from "@nodaro/shared/models"
 import type { SimpleNode } from "@/services/workflow-engine/types.js"
 
@@ -92,6 +92,48 @@ describe("route, payload builder and estimate name one id for every tail-recipe 
   })
 })
 
+// PixVerse V6 is no tail recipe, but its price has the same three producers:
+// its own rows (`pixverseExtendCreditId`), one per second added and quality,
+// `:audio` with the sound on — on unless turned off.
+describe("route, payload builder and estimate name one id for PixVerse V6 × duration × quality × sound", () => {
+  const PIXVERSE_DURATIONS = [undefined, 1, 5, 7, 15, 16, 30, "12"] as const
+  const PIXVERSE_QUALITIES = [undefined, "360p", "480p", "540p", "720p", "1080p", "4k"] as const
+  const SOUNDS = [undefined, true, false] as const
+
+  it("one priced row each, and the run queues exactly what it reserved", () => {
+    for (const duration of PIXVERSE_DURATIONS) {
+      for (const resolution of PIXVERSE_QUALITIES) {
+        for (const generateAudio of SOUNDS) {
+          const label = `${String(duration)} ${String(resolution)} ${String(generateAudio)}`
+          const data = { provider: "pixverse-v6-extend", duration, resolution, generateAudio }
+          const want = pixverseExtendCreditId(duration, resolution, generateAudio)
+          expect(producers(data), label).toEqual({ route: want, run: want, estimate: want })
+          expect(STATIC_CREDIT_COSTS[want], label).toBeGreaterThan(0)
+          const queued = buildPayload(node({ prompt: "keep going", ...data }), "job-1", { videoUrl: "https://cdn.example.com/source.mp4" }).payload
+          const sound = queued.generateAudio === false ? "" : ":audio"
+          expect(`pixverse-v6-extend:${String(queued.duration)}s:${String(queued.resolution)}${sound}`, label).toBe(want)
+        }
+      }
+    }
+  })
+
+  it("480p, which PixVerse V6 does not render, is priced and run at the nearest it does, 540p", () => {
+    expect(producers({ provider: "pixverse-v6-extend", duration: 5, resolution: "480p", generateAudio: false })).toEqual({
+      route: "pixverse-v6-extend:5s:540p",
+      run: "pixverse-v6-extend:5s:540p",
+      estimate: "pixverse-v6-extend:5s:540p",
+    })
+  })
+
+  it("a node that says nothing is priced at 5 s, 720p, with sound", () => {
+    expect(producers({ provider: "pixverse-v6-extend" })).toEqual({
+      route: "pixverse-v6-extend:5s:720p:audio",
+      run: "pixverse-v6-extend:5s:720p:audio",
+      estimate: "pixverse-v6-extend:5s:720p:audio",
+    })
+  })
+})
+
 describe("every Extend Video provider is priced on a row, by all three producers alike", () => {
   // The generic video builder names a bare, unpriced id for a provider whose
   // rows it does not know. An Extend Video run priced through it would have no
@@ -129,6 +171,34 @@ describe("workflow payload builder — the dispatched payload", () => {
       duration: 12,
       resolution: "1080p",
     })
+  })
+})
+
+describe("workflow payload builder — PixVerse V6", () => {
+  it("queues the source, the prompt, the seconds, the quality and the sound it reserved", () => {
+    const result = buildPayload(
+      node({ provider: "pixverse-v6-extend", prompt: "keep going", duration: 9, resolution: "360p", generateAudio: false }),
+      "job-1",
+      { videoUrl: "https://cdn.example.com/source.mp4" },
+    )
+    expect(result.jobName).toBe("extend-video")
+    expect(result.modelIdentifier).toBe("pixverse-v6-extend:9s:360p")
+    expect(result.payload).toEqual({
+      jobId: "job-1",
+      provider: "pixverse-v6-extend",
+      video: "https://cdn.example.com/source.mp4",
+      prompt: "keep going",
+      duration: 9,
+      resolution: "360p",
+      generateAudio: false,
+      usageLogId: undefined,
+    })
+  })
+
+  it.each(["", "ab", "  a  "])("refuses a prompt under 3 characters before anything is reserved (%j)", (prompt) => {
+    expect(() =>
+      buildPayload(node({ provider: "pixverse-v6-extend", prompt, duration: 5 }), "job-1", { videoUrl: "https://cdn.example.com/source.mp4" }),
+    ).toThrow("prompt (what happens next) must be at least 3 characters for pixverse-v6-extend")
   })
 })
 

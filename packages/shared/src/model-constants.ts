@@ -372,6 +372,9 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // PixVerse V6 Max — 1-5000 chars on both endpoints
   // (docs.kie.ai/market/pixverse/v6-max-text-to-video and /v6-max-image-to-video).
   "pixverse-v6-max": 5000,
+  // PixVerse V6 Extend — 3-5000 chars (docs.kie.ai/market/pixverse/extend);
+  // its prompt is sent as written, so the whole cap is the user's.
+  "pixverse-v6-extend": 5000,
   "bytedance-lite": 10000,
   "bytedance-pro": 10000,
   "bytedance-pro-fast": 10000,
@@ -1544,6 +1547,10 @@ export const EXTEND_VIDEO_PROVIDERS = [
   // Kling 4 extends ANY video the same way (3–30 s added, 720p / 1080p, its
   // sound always on), generated on Kling 4.0 and priced on its own rows.
   "kling-4-extend",
+  // PixVerse V6 extends ANY video natively (1–15 s added, 360p–1080p, a sound
+  // switch): the whole source goes in and comes back with the new seconds
+  // joined on, of which only the new ones are kept. Priced on its own rows.
+  "pixverse-v6-extend",
 ] as const
 export type ExtendVideoProvider = typeof EXTEND_VIDEO_PROVIDERS[number]
 
@@ -1578,6 +1585,43 @@ const TAIL_EXTEND_PROVIDERS: readonly TailExtendProvider[] = [...SEEDANCE_EXTEND
  */
 export function isTailExtendProvider(p: unknown): p is TailExtendProvider {
   return typeof p === "string" && (TAIL_EXTEND_PROVIDERS as readonly string[]).includes(p)
+}
+
+/**
+ * PixVerse V6 Extend: a native extend, no tail recipe. The whole source goes
+ * to PixVerse's own extend, which returns it with the new seconds joined on;
+ * the run keeps the user's source and joins only the new seconds to it.
+ */
+export type PixverseExtendProvider = Extract<ExtendVideoProvider, "pixverse-v6-extend">
+export const PIXVERSE_V6_EXTEND_PROVIDER: PixverseExtendProvider = "pixverse-v6-extend"
+
+/** Whether a value is {@link PIXVERSE_V6_EXTEND_PROVIDER}. */
+export function isPixverseExtendProvider(p: unknown): p is PixverseExtendProvider {
+  return p === PIXVERSE_V6_EXTEND_PROVIDER
+}
+
+/**
+ * The Extend Video providers whose levers come from their own catalog entry —
+ * the seconds added (`durations`, `defaultDuration`) and the resolution
+ * (`resolutions`) — and which are priced one row per second added and
+ * resolution (`catalogExtendCreditId`): the tail recipes
+ * ({@link TailExtendProvider}) and PixVerse V6. Each extends any video by URL.
+ * A retired id answers false: pass it through {@link canonicalVideoProvider} first.
+ */
+export type CatalogExtendProvider = TailExtendProvider | PixverseExtendProvider
+
+/** Whether a value is a {@link CatalogExtendProvider}. */
+export function isCatalogExtendProvider(p: unknown): p is CatalogExtendProvider {
+  return isTailExtendProvider(p) || isPixverseExtendProvider(p)
+}
+
+/**
+ * Whether an Extend Video provider has a sound switch (`generateAudio`, on
+ * unless turned off): Seedance's, which continue the soundtrack, and PixVerse
+ * V6's, whose sound is priced on its own rows. Kling 4's sound is always on.
+ */
+export function extendHasSoundSwitch(p: unknown): boolean {
+  return isSeedanceExtendProvider(p) || isPixverseExtendProvider(p)
 }
 
 /** Lip sync providers */

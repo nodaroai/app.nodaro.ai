@@ -1,7 +1,26 @@
 import { describe, expect, it } from "vitest"
-import { EXTEND_VIDEO_PROVIDERS, isSeedanceExtendProvider, isTailExtendProvider } from "../model-constants.js"
+import {
+  EXTEND_VIDEO_PROVIDERS,
+  PIXVERSE_V6_EXTEND_PROVIDER,
+  extendHasSoundSwitch,
+  getMaxVideoPromptChars,
+  isCatalogExtendProvider,
+  isPixverseExtendProvider,
+  isSeedanceExtendProvider,
+  isTailExtendProvider,
+} from "../model-constants.js"
 import { MODEL_CATALOG } from "../model-catalog.js"
-import { buildVideoCreditModelIdentifier, seedanceExtendCreditId, seedanceExtendResolution, tailExtendCreditId, tailExtendResolution } from "../credit-identifiers.js"
+import {
+  buildVideoCreditModelIdentifier,
+  catalogExtendCreditId,
+  catalogExtendResolution,
+  pixverseExtendCreditId,
+  pixverseExtendQuality,
+  seedanceExtendCreditId,
+  seedanceExtendResolution,
+  tailExtendCreditId,
+  tailExtendResolution,
+} from "../credit-identifiers.js"
 
 const range = (from: number, to: number): number[] => Array.from({ length: to - from + 1 }, (_, i) => from + i)
 const RESOLUTIONS = ["480p", "720p", "1080p"] as const
@@ -188,6 +207,112 @@ describe("the tail-recipe extend providers", () => {
       for (const res of [undefined, "480p", "1080p", "4k"]) {
         expect(seedanceExtendCreditId(provider, 12, res)).toBe(tailExtendCreditId(provider, 12, res))
         expect(seedanceExtendResolution(provider, res)).toBe(tailExtendResolution(provider, res))
+      }
+    }
+  })
+})
+
+/**
+ * PixVerse V6 extends any video natively: the whole source goes in, and the
+ * same clip comes back with the new seconds joined on (the worker keeps only
+ * those). `pixverse-v6-extend`: 1–15 s added at 360p / 540p / 720p / 1080p,
+ * with a sound switch, priced on its own rows (`:audio` with sound).
+ */
+describe("PixVerse V6 Extend Video provider", () => {
+  const QUALITIES = ["360p", "540p", "720p", "1080p"] as const
+
+  it("is listed after Kling 4, and is no tail recipe", () => {
+    const at = EXTEND_VIDEO_PROVIDERS.indexOf("pixverse-v6-extend")
+    expect(at).toBeGreaterThan(-1)
+    expect(EXTEND_VIDEO_PROVIDERS[at - 1]).toBe("kling-4-extend")
+    expect(PIXVERSE_V6_EXTEND_PROVIDER).toBe("pixverse-v6-extend")
+    expect(isPixverseExtendProvider("pixverse-v6-extend")).toBe(true)
+    expect(isPixverseExtendProvider("pixverse-v6-max")).toBe(false)
+    expect(isPixverseExtendProvider(undefined)).toBe(false)
+    expect(isTailExtendProvider("pixverse-v6-extend")).toBe(false)
+    expect(isSeedanceExtendProvider("pixverse-v6-extend")).toBe(false)
+  })
+
+  it("is a catalog extend provider, as the tail recipes are; VEO, Runway and LTX are not", () => {
+    expect(EXTEND_VIDEO_PROVIDERS.filter(isCatalogExtendProvider)).toEqual([
+      "seedance-2-5-extend", "seedance-2-0-extend", "kling-4-extend", "pixverse-v6-extend",
+    ])
+    for (const p of ["veo-extend", "runway-extend", "ltx-2.3-pro", "seedance-2-extend", "toString", undefined]) {
+      expect(isCatalogExtendProvider(p), String(p)).toBe(false)
+    }
+  })
+
+  it("has a sound switch, as Seedance does; Kling 4 has none", () => {
+    expect(EXTEND_VIDEO_PROVIDERS.filter(extendHasSoundSwitch)).toEqual(["seedance-2-5-extend", "seedance-2-0-extend", "pixverse-v6-extend"])
+  })
+
+  it("offers 1–15 s and 360p–1080p in a catalog entry of its own, its default row first", () => {
+    const entry = MODEL_CATALOG["pixverse-v6-extend"]!
+    expect(entry.modes).toEqual(["extend"])
+    expect(entry.maker).toBe("pixverse")
+    expect(entry.durations).toEqual(range(1, 15))
+    expect(entry.defaultDuration).toBe(5)
+    expect(entry.resolutions).toEqual([...QUALITIES])
+    expect(entry.pricing[0]!.identifier).toBe(pixverseExtendCreditId())
+    expect(entry.pricing[0]!.identifier).toBe("pixverse-v6-extend:5s:720p:audio")
+  })
+
+  it("takes PixVerse's prompt limit, 5000 characters", () => {
+    expect(getMaxVideoPromptChars("pixverse-v6-extend")).toBe(5000)
+  })
+
+  it("renders a quality it offers as asked; 480p at the nearest it offers, 540p; anything else at 720p", () => {
+    for (const q of QUALITIES) expect(pixverseExtendQuality(q)).toBe(q)
+    expect(pixverseExtendQuality("480p")).toBe("540p")
+    for (const other of [undefined, "", "4k", "2160p", "1080P", 720, null]) {
+      expect(pixverseExtendQuality(other), String(other)).toBe("720p")
+    }
+  })
+
+  it("prices the seconds added, the quality and the sound on its own rows, sound on unless turned off", () => {
+    expect(pixverseExtendCreditId(5, "540p", true)).toBe("pixverse-v6-extend:5s:540p:audio")
+    expect(pixverseExtendCreditId(5, "540p", false)).toBe("pixverse-v6-extend:5s:540p")
+    expect(pixverseExtendCreditId(5, "540p")).toBe("pixverse-v6-extend:5s:540p:audio")
+    expect(pixverseExtendCreditId(15, "1080p", false)).toBe("pixverse-v6-extend:15s:1080p")
+    expect(pixverseExtendCreditId(1, "360p", false)).toBe("pixverse-v6-extend:1s:360p")
+    expect(pixverseExtendCreditId(undefined, undefined, undefined)).toBe("pixverse-v6-extend:5s:720p:audio")
+    expect(pixverseExtendCreditId(8, "480p", false)).toBe("pixverse-v6-extend:8s:540p")
+    expect(pixverseExtendCreditId(40, "4k", false)).toBe("pixverse-v6-extend:15s:720p")
+    // Every id it can name is one of its 120 rows.
+    const rows = new Set(range(1, 15).flatMap((n) => QUALITIES.flatMap((q) => [`pixverse-v6-extend:${n}s:${q}`, `pixverse-v6-extend:${n}s:${q}:audio`])))
+    expect(rows.size).toBe(120)
+    for (const res of [...QUALITIES, undefined, "480p", "4k"]) {
+      for (const duration of [undefined, "7", ...range(-1, 20)]) {
+        for (const sound of [true, false, undefined]) {
+          expect(rows.has(pixverseExtendCreditId(duration, res, sound)), `${duration}s ${res} ${sound}`).toBe(true)
+        }
+      }
+    }
+  })
+
+  it("the catalog-extend builders answer for PixVerse and for every tail recipe alike", () => {
+    expect(catalogExtendCreditId("pixverse-v6-extend", 5, "540p", false)).toBe(pixverseExtendCreditId(5, "540p", false))
+    expect(catalogExtendResolution("pixverse-v6-extend", "480p")).toBe("540p")
+    for (const provider of ["seedance-2-5-extend", "seedance-2-0-extend", "kling-4-extend"] as const) {
+      for (const res of [undefined, "480p", "540p", "1080p", "4k"]) {
+        // A tail recipe has no priced sound switch: its row ignores it.
+        for (const sound of [true, false, undefined]) {
+          expect(catalogExtendCreditId(provider, 12, res, sound)).toBe(tailExtendCreditId(provider, 12, res))
+        }
+        expect(catalogExtendResolution(provider, res)).toBe(tailExtendResolution(provider, res))
+      }
+    }
+  })
+
+  it("the generic video builder prices a PixVerse extend on its own rows, reading generateAudio then sound", () => {
+    for (const duration of [undefined, 1, 5, 12, 15, 30, "12"]) {
+      for (const res of [undefined, "480p", "540p", "1080p"]) {
+        expect(buildVideoCreditModelIdentifier("pixverse-v6-extend", duration, undefined, undefined, undefined, res), `${duration} ${res}`)
+          .toBe(pixverseExtendCreditId(duration, res, true))
+        expect(buildVideoCreditModelIdentifier("pixverse-v6-extend", duration, { generateAudio: false }, undefined, undefined, res))
+          .toBe(pixverseExtendCreditId(duration, res, false))
+        expect(buildVideoCreditModelIdentifier("pixverse-v6-extend", duration, false, undefined, undefined, res))
+          .toBe(pixverseExtendCreditId(duration, res, false))
       }
     }
   })

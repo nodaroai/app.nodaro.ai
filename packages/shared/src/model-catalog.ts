@@ -3562,6 +3562,35 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "kling-4-extend:5s:1080p", credits: 638, note: "5s 1080p" },
     ],
   },
+  // PixVerse V6 extends ANY video natively (no tail recipe): the whole source
+  // goes to its extend, which returns it with the new seconds joined on; the
+  // run keeps the user's own source and joins only the new seconds to it. Its
+  // own entry, so a deployment can withhold it apart from PixVerse V6 Max, and
+  // its own rows (`pixverseExtendCreditId`): one per second added and quality,
+  // `:audio` with sound (on unless turned off). `resolutions` is ascending
+  // (repo convention); the default quality (720p) is the extend's own, as on
+  // the other extend entries (`pixverseExtendQuality`), never declared here.
+  "pixverse-v6-extend": {
+    id: "pixverse-v6-extend",
+    kind: "video",
+    modes: ["extend"] as const,
+    family: "PixVerse",
+    maker: "pixverse",
+    label: "PixVerse V6 Extend",
+    series: "PixVerse",
+    description: "Extend ANY video with PixVerse V6: 1–15s continuation at 360p to 1080p, with optional sound, joined onto your original clip.",
+    useCases: ["extend"],
+    durations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 5,
+    resolutions: ["360p", "540p", "720p", "1080p"],
+    pricing: [
+      { identifier: "pixverse-v6-extend:5s:720p:audio", credits: 120, note: "default 5s 720p with sound — see :Ns:quality and :Ns:quality:audio variants for exact" },
+      { identifier: "pixverse-v6-extend:5s:720p", credits: 90, note: "5s 720p, no sound" },
+      { identifier: "pixverse-v6-extend:5s:540p:audio", credits: 90, note: "5s 540p with sound" },
+      { identifier: "pixverse-v6-extend:1s:360p", credits: 10, note: "1s 360p, no sound (min)" },
+      { identifier: "pixverse-v6-extend:15s:1080p:audio", credits: 690, note: "15s 1080p with sound (max)" },
+    ],
+  },
   "veo-1080p": {
     id: "veo-1080p",
     kind: "video",

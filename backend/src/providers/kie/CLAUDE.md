@@ -152,6 +152,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 |-----------|-------------|---------|
 | `wan` (v2v) | `wan/2-6-video-to-video` | [wan 2.6 v2v](https://docs.kie.ai/market/wan/2-6-video-to-video.md) |
 | `kling` (motion) | `kling-2.6/motion-control` | [kling motion](https://docs.kie.ai/market/kling/motion-control.md) |
+| `pixverse-v6-extend` (Extend Video) | `pixverse-v6/extend` (bespoke `runPixverseExtend`, `pixverse-extend.ts`: the `video_url` form only — never `taskId`, which takes only a PixVerse task of the same account; allow-listed body `prompt` as written, integer `duration` 1-15, `quality` 360p-1080p, `generate_audio_switch` always sent, `seed` required, random when not given). Returns the WHOLE source with the extension joined, not the new seconds alone. Prices: `pixverse-v6-extend:<N>s:<quality>[:audio]` | [pixverse v6 extend](https://docs.kie.ai/market/pixverse/extend.md) |
 | ~~`topaz` (upscale)~~ | ~~`topaz/video-upscale`~~ | **RETIRED 2026-10-25** — runs on Replicate (`providers/replicate/topaz.ts`); config kept for the credit audit |
 | `kling-avatar` | `kling/ai-avatar-standard` | [kling avatar std](https://docs.kie.ai/market/kling/ai-avatar-standard.md) |
 | `kling-avatar-pro` | `kling/ai-avatar-pro` | [kling avatar pro](https://docs.kie.ai/market/kling/ai-avatar-pro.md) |

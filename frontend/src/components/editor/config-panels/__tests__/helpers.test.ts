@@ -364,6 +364,14 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(extend({ provider: "kling-4-extend", duration: 22, resolution: "480p" }))).toBe("kling-4-extend:22s:720p")
   })
 
+  it("prices a PixVerse V6 extend on its own rows: :audio with the sound on (unless turned off), 480p at 540p", () => {
+    const extend = (data: Record<string, unknown>) => makeNode({ type: "extend-video", data: { label: "Extend", ...data } as any })
+    expect(getModelIdentifier(extend({ provider: "pixverse-v6-extend" }))).toBe("pixverse-v6-extend:5s:720p:audio")
+    expect(getModelIdentifier(extend({ provider: "pixverse-v6-extend", duration: 12, resolution: "1080p", generateAudio: false }))).toBe("pixverse-v6-extend:12s:1080p")
+    expect(getModelIdentifier(extend({ provider: "pixverse-v6-extend", duration: 12, resolution: "360p", generateAudio: true }))).toBe("pixverse-v6-extend:12s:360p:audio")
+    expect(getModelIdentifier(extend({ provider: "pixverse-v6-extend", duration: 30, resolution: "480p" }))).toBe("pixverse-v6-extend:15s:540p:audio")
+  })
+
   it("prices an Extend node naming no provider as the VEO extend it runs (EXTEND_VIDEO_DEFAULT_PROVIDER), never the node-type row", () => {
     const extend = (data: Record<string, unknown>) => makeNode({ type: "extend-video", data: { label: "Extend", ...data } as any })
     expect(getModelIdentifier(extend({}))).toBe("veo-extend")

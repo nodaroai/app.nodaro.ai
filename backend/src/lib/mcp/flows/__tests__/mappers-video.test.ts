@@ -74,6 +74,15 @@ describe("a mapped video node re-runs the call it was made from", () => {
     expect(run("/v1/extend-video", body, { videoUrl: VIDEO })).toMatchObject({ provider: "kling-4-extend", video: VIDEO, duration: 12, resolution: "1080p" })
   })
 
+  it("extend_video, pixverse-v6-extend: the video by URL, its quality and sound on the node", () => {
+    const body = { videoUrl: VIDEO, prompt: "the stall keeper waves", provider: "pixverse-v6-extend", duration: 7, resolution: "540p", generateAudio: false }
+    expect(wires("/v1/extend-video", body)).toEqual([[VIDEO, "video", "video"]])
+    expect(nodeFor("/v1/extend-video", body)?.data).toMatchObject({ provider: "pixverse-v6-extend", duration: 7, resolution: "540p", generateAudio: false })
+    expect(run("/v1/extend-video", body, { videoUrl: VIDEO })).toMatchObject({
+      provider: "pixverse-v6-extend", video: VIDEO, duration: 7, resolution: "540p", generateAudio: false,
+    })
+  })
+
   it("extend_video on the retired seedance-2-extend: the node is a Seedance 2.5 extend", () => {
     const body = { videoUrl: VIDEO, prompt: "the car drives off", provider: "seedance-2-extend", duration: 8, resolution: "720p" }
     expect(wires("/v1/extend-video", body)).toEqual([[VIDEO, "video", "video"]])

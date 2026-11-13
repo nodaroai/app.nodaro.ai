@@ -37,10 +37,11 @@ describe("EXTEND_DURATION_SECONDS", () => {
     }
   })
 
-  it("Seedance 2.5 adds 4–30 s, Seedance 2.0 4–15 s, Kling 4 3–30 s", () => {
+  it("Seedance 2.5 adds 4–30 s, Seedance 2.0 4–15 s, Kling 4 3–30 s, PixVerse V6 1–15 s", () => {
     expect(EXTEND_DURATION_SECONDS["seedance-2-5-extend"]).toEqual(range(4, 30))
     expect(EXTEND_DURATION_SECONDS["seedance-2-0-extend"]).toEqual(range(4, 15))
     expect(EXTEND_DURATION_SECONDS["kling-4-extend"]).toEqual(range(3, 30))
+    expect(EXTEND_DURATION_SECONDS["pixverse-v6-extend"]).toEqual(range(1, 15))
   })
 
   it("LTX 2.3 Pro takes its own 1–20 s, never its generation model's 6/8/10", () => {

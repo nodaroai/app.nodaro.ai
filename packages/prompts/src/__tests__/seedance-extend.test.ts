@@ -59,3 +59,18 @@ describe("Kling 4 extend shared wiring", () => {
     expect(PROVIDER_CAPABILITIES["extend-video"]!["kling-4-extend"]).toMatch(/ANY video.*Kling 4/i)
   })
 })
+
+describe("PixVerse V6 extend shared wiring", () => {
+  it("is a registered extend provider with its own window and qualities", () => {
+    expect(EXTEND_VIDEO_PROVIDERS).toContain("pixverse-v6-extend")
+    const m = MODEL_CATALOG["pixverse-v6-extend"]!
+    expect(m.modes).toEqual(["extend"])
+    expect(m.family).toBe("PixVerse")
+    expect(m.durations).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+    expect(m.resolutions).toEqual(["360p", "540p", "720p", "1080p"])
+  })
+
+  it("is advertised to the wizard's extend-video capabilities", () => {
+    expect(PROVIDER_CAPABILITIES["extend-video"]!["pixverse-v6-extend"]).toMatch(/ANY video.*PixVerse V6/i)
+  })
+})

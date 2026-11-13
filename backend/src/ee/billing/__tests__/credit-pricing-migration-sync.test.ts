@@ -201,8 +201,10 @@ const INSERTED_VALUES = extractInsertedValues()
 // (repriced 600 → 160 by 595's guarded UPDATE).
 // `cast-swap` / `cast-swap-full-quality`: Nodaro Motion's two per-second fee
 // rates (migration 591), which the plugin reads through `tk.http.unitRatePrice`.
-const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash", "apply-edl", "elevenlabs-sfx", "speaker-view", "speaker-frames", "vidu-q4", "video-depth-anything", "depth-anything-frames", "cast-swap", "cast-swap-full-quality"] as const
-const VALUE_SYNCED_ROW_COUNT = 682 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash + 2 apply-edl + 31 elevenlabs-sfx + 4 speaker-view + 1 speaker-frames + 71 vidu-q4 + 301 video-depth-anything + 83 depth-anything-frames + 1 cast-swap + 1 cast-swap-full-quality
+// `pixverse-v6-extend`: Extend Video's PixVerse V6 rows (migration 642), 1-15 s
+// × 360p/540p/720p/1080p, each with an `:audio` twin; no bare id.
+const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash", "apply-edl", "elevenlabs-sfx", "speaker-view", "speaker-frames", "vidu-q4", "video-depth-anything", "depth-anything-frames", "cast-swap", "cast-swap-full-quality", "pixverse-v6-extend"] as const
+const VALUE_SYNCED_ROW_COUNT = 802 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash + 2 apply-edl + 31 elevenlabs-sfx + 4 speaker-view + 1 speaker-frames + 71 vidu-q4 + 301 video-depth-anything + 83 depth-anything-frames + 1 cast-swap + 1 cast-swap-full-quality + 120 pixverse-v6-extend
 
 function familyOf(key: string): string | undefined {
   return VALUE_SYNCED_FAMILIES.find((f) => key === f || key.startsWith(`${f}:`))

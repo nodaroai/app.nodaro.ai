@@ -1773,6 +1773,7 @@ export const he: ChromeDict = {
   "vidcfg.resWithCredits": "{res} ({credits} קרדיטים)",
   "vidcfg.descSeedanceExtend": "מאריך כל וידאו מחובר: Seedance 2 יוצר את מה שקורה אחר כך (כולל קול) והתוצאה נתפרת לקליפ אחד רציף.",
   "vidcfg.descKlingExtend": "מאריך כל וידאו מחובר: Kling 4 יוצר את מה שקורה אחר כך (כולל קול) והתוצאה נתפרת לקליפ אחד רציף.",
+  "vidcfg.descPixverseExtend": "מאריך כל וידאו מחובר: PixVerse V6 יוצר את מה שקורה אחר כך (עם קול, אלא אם תכבו אותו), ורק הקטע החדש מצורף לווידאו המקורי שלכם בקליפ אחד רציף.",
   "vidcfg.descOtherExtend": "מאריך וידאו VEO, Runway או LTX עם פרומפט חדש. חברו במעלה הזרם את רכיב התמונה-לווידאו או הטקסט-לווידאו שאת הווידאו שלו מאריכים.",
   "vidcfg.advancedSettings": "הגדרות מתקדמות",
   "vidcfg.showAdvancedSettings": "הצגת הגדרות מתקדמות",

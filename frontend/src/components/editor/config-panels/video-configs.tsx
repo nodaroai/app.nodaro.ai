@@ -67,8 +67,8 @@ import { nodeStartFrameOnlyProblem, startFrameOnlyText } from "@/lib/video-start
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { gvpAnchorChoicesFor } from "@nodaro/render-rules"
-import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec, isSeedanceExtendProvider, isTailExtendProvider, pricedOutputDurationSec, snapToNearestDuration, type TailExtendProvider } from "@nodaro/shared/models"
-import { VIDEO_AUDIT_BUCKET_CREDITS, ltxExtendDurationSec, tailExtendCreditId } from "@nodaro/shared/credits"
+import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec, extendHasSoundSwitch, isCatalogExtendProvider, isPixverseExtendProvider, pricedOutputDurationSec, snapToNearestDuration, type CatalogExtendProvider } from "@nodaro/shared/models"
+import { VIDEO_AUDIT_BUCKET_CREDITS, catalogExtendCreditId, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, entityImageUrl, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { sourceCharacterNames, sourceOriginId } from "./source-character-names"
 import { DEFAULT_LABEL_BY_SOURCE, type ReferenceSource, type ConnectedReference } from "@nodaro/shared/types"
@@ -5200,11 +5200,12 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 
 export const EditVideoProConfig = memo(EditVideoProConfigImpl)
 
-/** What each tail-recipe Extend Video provider says it does — one per provider, so a new one names its own. */
-const TAIL_EXTEND_DESCRIPTION: Readonly<Record<TailExtendProvider, MessageKey>> = {
+/** What each catalog Extend Video provider says it does — one per provider, so a new one names its own. */
+const CATALOG_EXTEND_DESCRIPTION: Readonly<Record<CatalogExtendProvider, MessageKey>> = {
   "seedance-2-5-extend": "vidcfg.descSeedanceExtend",
   "seedance-2-0-extend": "vidcfg.descSeedanceExtend",
   "kling-4-extend": "vidcfg.descKlingExtend",
+  "pixverse-v6-extend": "vidcfg.descPixverseExtend",
 }
 
 export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ExtendVideoData> & { nodeId?: string }) {
@@ -5229,44 +5230,53 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
     // prompt as `Avoid: …` (matches the /v1/extend-video route + payload-builder).
     videoProvider: data.provider || "veo-extend",
   })
-  // The tail-recipe providers continue ANY video, one per model: Seedance
-  // 2.5, Seedance 2.0 and Kling 4. The sound switch is Seedance's alone
-  // (Kling 4.0's sound is always on).
-  const tailProvider: TailExtendProvider | null = isTailExtendProvider(data.provider) ? data.provider : null
-  const isTailExtend = tailProvider !== null
-  const hasSoundSwitch = isSeedanceExtendProvider(data.provider)
+  // The catalog extend providers continue ANY video, one per model: Seedance
+  // 2.5, Seedance 2.0 and Kling 4 (from the source's tail) and PixVerse V6
+  // (natively). The sound switch is Seedance's and PixVerse V6's (Kling 4.0's
+  // sound is always on).
+  const catalogProvider: CatalogExtendProvider | null = isCatalogExtendProvider(data.provider) ? data.provider : null
+  const isCatalogExtend = catalogProvider !== null
+  const hasSoundSwitch = extendHasSoundSwitch(data.provider)
   // Levers are catalog-driven, per model (single source of truth shared with
   // the backend route/worker): Seedance 2.5 adds 4–30 s, Seedance 2.0 4–15 s,
-  // Kling 4 3–30 s, each at its own resolutions.
-  const tailCatalog = tailProvider ? MODEL_CATALOG[tailProvider] : undefined
-  const tailDurations = tailCatalog?.durations ?? []
-  const tailResolutions = tailCatalog?.resolutions ?? []
+  // Kling 4 3–30 s, PixVerse V6 1–15 s, each at its own resolutions.
+  const catalogEntry = catalogProvider ? MODEL_CATALOG[catalogProvider] : undefined
+  const catalogDurations = catalogEntry?.durations ?? []
+  const catalogResolutions = catalogEntry?.resolutions ?? []
   // The length the run is priced and sent at: the stored seconds in the
   // model's window, else its catalog default.
-  const tailDuration = tailProvider ? pricedOutputDurationSec(tailProvider, data.duration) : 0
+  const catalogDuration = catalogProvider ? pricedOutputDurationSec(catalogProvider, data.duration) : 0
+  // The sound the run is priced with where it is priced (PixVerse V6's
+  // `:audio` rows): on until it is turned off.
+  const catalogSound = data.generateAudio !== false
 
-  // Credit labels name the model's own row for the length chosen — re-prefetch when either changes.
+  // Credit labels name the model's own row for the length (and sound) chosen — re-prefetch when one changes.
   useEffect(() => {
-    if (!tailProvider) return
-    prefetchModelCredits(tailResolutions.map((r) => tailExtendCreditId(tailProvider, tailDuration, r)))
-  }, [tailProvider, tailDuration]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!catalogProvider) return
+    prefetchModelCredits(catalogResolutions.map((r) => catalogExtendCreditId(catalogProvider, catalogDuration, r, catalogSound)))
+  }, [catalogProvider, catalogDuration, catalogSound]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fail-safe (Provider Enum Sync step 12b): when the provider changes, snap
-  // a stale length into the new provider's window (a tail-recipe model's
-  // catalog lengths; LTX's 1–20 s) and clear the levers the provider lacks (a
-  // resolution it does not render, the sound switch off Seedance, both off a
-  // provider with no tail recipe) — the dropdowns hide but the stale values
-  // would still be forwarded, and the route refuses a length or resolution
-  // the provider does not offer.
+  // a stale length into the new provider's window (a catalog model's lengths;
+  // LTX's 1–20 s) and handle the levers the provider lacks: a resolution it
+  // does not render is cleared (the 720p a run with none is priced at) — on
+  // PixVerse V6 snapped to the quality its run is priced at instead
+  // (`pixverseExtendQuality`: 480p → 540p), the one a quick-strip switch or a
+  // workflow written elsewhere runs at too; the sound switch is cleared off
+  // Seedance and PixVerse V6, and both off a provider with no catalog levers —
+  // the dropdowns hide but the stale values would still be forwarded, and the
+  // route refuses a length or resolution the provider does not offer.
   useEffect(() => {
     const patch: Partial<ExtendVideoData> = {}
-    if (tailProvider) {
-      const entry = MODEL_CATALOG[tailProvider]
+    if (catalogProvider) {
+      const entry = MODEL_CATALOG[catalogProvider]
       if (data.duration !== undefined) {
         const snapped = snapToNearestDuration(data.duration, entry?.durations)
         if (snapped !== data.duration) patch.duration = snapped
       }
-      if (data.resolution !== undefined && entry?.resolutions && !entry.resolutions.includes(data.resolution)) patch.resolution = undefined
+      if (data.resolution !== undefined && entry?.resolutions && !entry.resolutions.includes(data.resolution)) {
+        patch.resolution = isPixverseExtendProvider(catalogProvider) ? pixverseExtendQuality(data.resolution) : undefined
+      }
       if (!hasSoundSwitch && data.generateAudio !== undefined) patch.generateAudio = undefined
     } else {
       if (data.resolution !== undefined || data.generateAudio !== undefined) {
@@ -5297,7 +5307,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </Select>
       </MappableField>
 
-      <MappableField field="prompt" label={isTailExtend ? t("vidcfg.whatHappensNext") : t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={isCatalogExtend ? t("vidcfg.whatHappensNext") : t("node.prompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
         <PromptHelperButton nodeType="extend-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
@@ -5314,7 +5324,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             <TagTextarea
               value={data.prompt || ""}
               onChange={(v) => onUpdate({ prompt: v })}
-              placeholder={isTailExtend ? t("vidcfg.phWhatHappensNext") : t("vidcfg.phDescribeContinue")}
+              placeholder={isCatalogExtend ? t("vidcfg.phWhatHappensNext") : t("vidcfg.phDescribeContinue")}
               rows={3}
               nodeRefs={nodeRefs}
               displayMode={variableDisplayMode}
@@ -5411,16 +5421,16 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </>
       )}
 
-      {tailProvider && (
+      {catalogProvider && (
         <>
           <MappableField field="duration" label={t("vidcfg.secondsToAdd")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
-              value={String(tailDuration)}
+              value={String(catalogDuration)}
               onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
             >
               <SelectTrigger aria-label={t("vidcfg.secondsToAdd")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                {tailDurations.map((s) => (
+                {catalogDurations.map((s) => (
                   <SelectItem key={s} value={String(s)}>{t("vidcfg.nSeconds", { n: s })}</SelectItem>
                 ))}
               </SelectContent>
@@ -5435,8 +5445,8 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             >
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                {tailResolutions.map((r) => {
-                  const credits = getCachedCredits(tailExtendCreditId(tailProvider, tailDuration, r))
+                {catalogResolutions.map((r) => {
+                  const credits = getCachedCredits(catalogExtendCreditId(catalogProvider, catalogDuration, r, catalogSound))
                   return (
                     <SelectItem key={r} value={r}>{credits != null ? t("vidcfg.resWithCredits", { res: r, credits: creditUnits(credits) }) : r}</SelectItem>
                   )
@@ -5462,7 +5472,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
       )}
 
       <p className="text-xs text-muted-foreground px-1">
-        {t(tailProvider ? TAIL_EXTEND_DESCRIPTION[tailProvider] : "vidcfg.descOtherExtend")}
+        {t(catalogProvider ? CATALOG_EXTEND_DESCRIPTION[catalogProvider] : "vidcfg.descOtherExtend")}
       </p>
 
       <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />

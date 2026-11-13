@@ -260,7 +260,7 @@ export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoNodeProvider; label
   { value: "wan-flash", label: "Wan 2.6 Flash", desc: "Fast V2V with audio & multi-shot" },
 ]
 
-/** Seedance first, one row per model (decided 2026-11-11), then Kling 4; a new Extend node still starts on VEO (`EXTEND_VIDEO_DEFAULT_PROVIDER`). */
+/** Seedance first, one row per model (decided 2026-11-11), then Kling 4, then VEO, Runway and LTX 2.3 Pro, then PixVerse V6; a new Extend node still starts on VEO (`EXTEND_VIDEO_DEFAULT_PROVIDER`). */
 export const EXTEND_VIDEO_MODELS = [
   { value: "seedance-2-5-extend", label: "Seedance 2.5" },
   { value: "seedance-2-0-extend", label: "Seedance 2.0" },
@@ -268,6 +268,7 @@ export const EXTEND_VIDEO_MODELS = [
   { value: "veo-extend", label: "VEO Extend" },
   { value: "runway-extend", label: "Runway Extend" },
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro" },
+  { value: "pixverse-v6-extend", label: "PixVerse V6" },
 ] as const
 
 export const LIP_SYNC_MODELS: readonly { value: LipSyncProvider; label: string; desc: string }[] = [

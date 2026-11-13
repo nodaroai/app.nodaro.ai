@@ -14,7 +14,7 @@
  * the migration is complete.
  */
 
-import { MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, requestImageLimit } from "@nodaro/shared/models"
+import { MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, PIXVERSE_V6_EXTEND_PROVIDER, requestImageLimit } from "@nodaro/shared/models"
 import { FLUX_3_KLEIN_DEFAULT_RESOLUTION, SEEDREAM_5_5_DEFAULT_RESOLUTION, type Flux3KleinResolution, type Seedream55Resolution } from "@nodaro/shared/model-catalog"
 import { confirmedByRun, ENABLE_SAFETY_CHECKER_LEVER, NSFW_CHECKER_LEVER, NSFW_CHECKER_SENT_FALSE_LEVER, type SafetyLever, MODERATION_LEVER } from "../safety-levers.js"
 
@@ -103,6 +103,15 @@ export const KLING_4_FLASH_KEYFRAME_MODEL = "kling-4.0/flash-keyframe-to-video"
  *  resolves both back to `pixverse-v6-max`. */
 export const PIXVERSE_V6_MAX_IMAGE_TO_VIDEO_MODEL = "pixverse-v6-max/image-to-video"
 export const PIXVERSE_V6_MAX_TEXT_TO_VIDEO_MODEL = "pixverse-v6-max/text-to-video"
+
+/** PixVerse V6's extend endpoint: any clip by `video_url`, returned whole with
+ *  the new seconds joined on. No routing config of its own — pixverse-extend.ts
+ *  sends it directly — so no generation menu offers it (its KIE_SPECIAL_MODELS
+ *  entry is the credit audit's). Its model key (the Extend Video provider id)
+ *  names it to the egress seam and a job's `model`.
+ *  Doc: https://docs.kie.ai/market/pixverse/extend (read 2026-11-13). */
+export const PIXVERSE_V6_EXTEND_WIRE_MODEL = "pixverse-v6/extend"
+export const PIXVERSE_V6_EXTEND_MODEL_KEY = PIXVERSE_V6_EXTEND_PROVIDER
 
 export interface KieModelConfig {
   model: string           // KIE.ai model identifier
@@ -2438,6 +2447,18 @@ export const KIE_SPECIAL_MODELS: Record<string, KieModelConfig> = {
     model: "infinitalk/image-to-video",
     credits: 168,
     cost: 0.84,  // 12 cr/sec * ~14s (720p)
+  },
+
+  // PixVerse V6 Extend: any clip by `video_url`, returned whole with the new
+  // seconds joined on. Never routed through this table (pixverse-extend.ts
+  // sends it directly); listed so the admin credit audit maps KIE's
+  // `pixverse-v6/extend` records to `pixverse-v6-extend`. `credits`/`cost` are
+  // its default run (5 s @720p with sound), for audit logging only; a run is
+  // priced on its own rows (`pixverseExtendCreditId`).
+  "pixverse-v6-extend": {
+    model: PIXVERSE_V6_EXTEND_WIRE_MODEL,
+    credits: 48,
+    cost: 0.24,
   },
 
 }
