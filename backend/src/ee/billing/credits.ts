@@ -5365,8 +5365,9 @@ export class CreditsService {
     onNode?: ListingTally,
   ): AppListingEstimate {
     const graph = asSavedGraph(nodes)
-    const split = listingEstimate(graph, edges ?? [], prices, publishType, undefined, options?.speechTextCaps, options?.replaceableMediaNodeIds, listingOpenValues(options, graph), options?.exposedListNodeIds, undefined, undefined, onNode)
-    return listingHoldsMeteredEstimate(graph, edges, undefined, undefined) ? { ...split, estimate: true } : split
+    const flags = usecaseExpandFlags(options)
+    const split = listingEstimate(graph, edges ?? [], prices, publishType, undefined, options?.speechTextCaps, options?.replaceableMediaNodeIds, listingOpenValues(options, graph), options?.exposedListNodeIds, flags, undefined, onNode)
+    return listingHoldsMeteredEstimate(graph, edges, flags, undefined) ? { ...split, estimate: true } : split
   }
 
   /**
@@ -5413,6 +5414,13 @@ type BaseListingOptions = {
   readonly openValueNodeIds?: ReadonlySet<string>
   readonly exposedListNodeIds?: ReadonlySet<string>
   readonly speechTextCaps?: ExposedTextCaps
+  /** A general user may use Speaker Map (`ListingEstimateOptions.multicam`):
+   *  a use-case node lists on every recording it reads and its Master audio.
+   *  Absent: its first recording only. */
+  readonly multicam?: boolean
+  /** A general user's Speaker Frames answer (`ListingEstimateOptions.framesWithheld`):
+   *  an `auto` framing source lists as the even split. Absent: following faces. */
+  readonly framesWithheld?: boolean
 }
 
 /**

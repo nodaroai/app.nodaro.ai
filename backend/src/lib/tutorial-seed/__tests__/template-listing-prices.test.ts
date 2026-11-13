@@ -19,7 +19,7 @@ import { renderFinalRunSet, renderRunOverrides, ugcChains } from "@nodaro/render
 import { PREVIEW_RENDER_NODE_TYPES, REVIEW_HOLDING_USE_CASE_TYPES, rendersAsPreview, withRunOverrides } from "@nodaro/shared/nodes"
 import { CreditsService, STATIC_CREDIT_COSTS, chargedCredits, chargedPriceTableFrom, type AppListingEstimate } from "../../../ee/billing/credits.js"
 import { loadDocsPriceSettings } from "../../../ee/billing/docs-pricing.js"
-import { cardPriceOf, pricedByTheUgcEstimate as holdsUgcVideoDoc, templateCardPrice, templateCardPrices, wholeCreditsUp } from "../../../ee/billing/template-card-prices.js"
+import { TEMPLATE_CARD_VIEWER, cardPriceOf, pricedByTheUgcEstimate as holdsUgcVideoDoc, templateCardPrice, templateCardPrices, wholeCreditsUp } from "../../../ee/billing/template-card-prices.js"
 import { statedPriceTable } from "../../../ee/billing/stated-prices.js"
 import { templateForPreviewStopRule } from "../preview-gate.js"
 import type { TutorialTemplateDoc } from "../types.js"
@@ -57,6 +57,14 @@ import rollbackFixture from "./fixtures/template-listing-prices-rollback.json"
  * rule (decided 2026-10-08, `templateForPreviewStopRule`): a render set to
  * Preview is written at Final where the rule is off, with the listing of that
  * graph. Each state's stored figure is checked against its own graph.
+ *
+ * A listing is a GENERAL user's run (decided 2026-10-20): a use-case node on
+ * several recordings lists on all of them only while Speaker Map is available
+ * to users (`usecaseMulticamForEveryone`), else on its first recording. Speaker
+ * Map is available to users, so the stored figure is that user's
+ * (`TEMPLATE_CARD_VIEWER`: `multicam`), and every check below prices the run
+ * that user gets; the one template whose figure that answer moves is named
+ * below, with its figure in each case.
  *
  * Metered LLM pricing (Task 12, R30) is the default (D6), so the stored figure
  * prices each LLM node at its model's typical-usage estimate — checked here
@@ -193,7 +201,7 @@ describe("built-in template listing prices", () => {
   it.each(priced.flatMap((f) => [[f, "on"], [f, "off"]] as const))("%s, preview stop rule %s: the card is never below the price-table rows of the same listing", (file, rule) => {
     // The charged price marks every row up (or leaves it): a card below its rows lists less than a run costs.
     const t = templateForPreviewStopRule(load(file), rule === "on")
-    const rows = CreditsService.estimateWorkflowBaseListing(t.nodes as Node[], t.edges as Edge[], "template")
+    const rows = CreditsService.estimateWorkflowBaseListing(t.nodes as Node[], t.edges as Edge[], "template", TEMPLATE_CARD_VIEWER)
     const stored = storedCard(file, rule)
     expect(stored.fixed).toBeGreaterThanOrEqual(rows.preview + rows.final)
     expect(stored.perMinute).toBeGreaterThanOrEqual(rows.previewPerMinute + rows.finalPerMinute)
@@ -215,6 +223,28 @@ describe("built-in template listing prices", () => {
       expect(priced, file).toContain(file)
       expect(ROLLBACK_FIGURES[file]!.estimatedCredits, file).not.toBe(load(file).estimatedCredits)
     }
+  })
+
+  it("only the one-node Multicam Cut lists differently while Speaker Map is withheld from users (it reads its first recording only then)", () => {
+    const moves = priced.filter((file) => {
+      const t = load(file)
+      const withheld = CreditsService.estimateWorkflowBaseListing(t.nodes as Node[], t.edges as Edge[], "template")
+      const available = CreditsService.estimateWorkflowBaseListing(t.nodes as Node[], t.edges as Edge[], "template", { multicam: true })
+      return JSON.stringify(withheld) !== JSON.stringify(available)
+    })
+    expect(moves).toEqual(["podcast-multicam-cut-one-node.json"])
+  })
+
+  // Its card in each answer, both pinned: the stored one is for a user who may use Speaker Map
+  // (three cameras and the master), the other is what it would list were Speaker Map withheld
+  // from users again (Camera 1 alone, the one-node Tighten Episode's run without captions).
+  it("the one-node Multicam Cut stores 113 + 18 a minute (Speaker Map available to users); withheld it would list 47 + 18 a minute", () => {
+    const t = load("podcast-multicam-cut-one-node.json")
+    const card = (viewer: { multicam?: boolean }) => cardPriceOf(CreditsService.estimateWorkflowListingAt(statedPriceTable(), t.nodes as Node[], t.edges as Edge[], "template", viewer))
+    expect(TEMPLATE_CARD_VIEWER).toEqual({ multicam: true })
+    expect(card(TEMPLATE_CARD_VIEWER)).toEqual({ estimatedCredits: 113, estimatedPerMinuteCredits: 18, estimate: false })
+    expect(card({})).toEqual({ estimatedCredits: 47, estimatedPerMinuteCredits: 18, estimate: false })
+    expect({ fixed: t.estimatedCredits, perMinute: t.estimatedPerMinuteCredits }).toEqual({ fixed: 113, perMinute: 18 })
   })
 
   it("a template with no length-dependent part stores no per-minute figure", () => {
@@ -293,26 +323,27 @@ describe("a card is never below what a run of its graph is charged, at any recor
       const metadata = { ...((n.data?.metadata as Record<string, unknown> | undefined) ?? {}), durationSeconds: minutes * 60 }
       return { ...n, data: { ...n.data, duration: minutes * 60, metadata } }
     })
-  /** What each step of a run of `nodes` is charged, by node id: the run, then each Render final. */
+  /** What each step of a run of `nodes` is charged, by node id: the run, then each Render final,
+   *  for the user the card is priced for (`TEMPLATE_CARD_VIEWER`: a use-case node on every recording). */
   const runCharges = (nodes: Node[], edges: Edge[]): Map<string, number> => {
     const prices = { ...statedPriceTable(), editPlanPerMinute: true }
     const charged = new Map<string, number>()
     const onNode = (id: string, credits: number) => charged.set(id, (charged.get(id) ?? 0) + credits)
-    CreditsService.estimateWorkflowCreditsAt(prices, nodes, edges, undefined, onNode)
+    CreditsService.estimateWorkflowCreditsAt(prices, nodes, edges, { ...TEMPLATE_CARD_VIEWER }, onNode)
     for (const render of nodes.filter((n) => PREVIEW_RENDER_NODE_TYPES.has(n.type) && rendersAsPreview(n))) {
       const set = renderFinalRunSet(render.id, nodes, edges)
-      CreditsService.estimateWorkflowCreditsAt(prices, withRunOverrides(nodes, renderRunOverrides(render.id, "final", set)), edges, { runNodeIds: set }, onNode)
+      CreditsService.estimateWorkflowCreditsAt(prices, withRunOverrides(nodes, renderRunOverrides(render.id, "final", set)), edges, { ...TEMPLATE_CARD_VIEWER, runNodeIds: set }, onNode)
     }
     for (const node of nodes.filter((n) => REVIEW_HOLDING_USE_CASE_TYPES.has(n.type) && n.data?.reviewBeforeRender === true)) {
       const finalOf = nodes.map((n) => (n.id === node.id ? { ...n, data: { ...n.data, useCaseContinue: { mode: "render-final", jobId: "job-1" } } } : n))
-      CreditsService.estimateWorkflowCreditsAt(prices, finalOf, edges, { runNodeIds: new Set([node.id]) }, onNode)
+      CreditsService.estimateWorkflowCreditsAt(prices, finalOf, edges, { ...TEMPLATE_CARD_VIEWER, runNodeIds: new Set([node.id]) }, onNode)
     }
     return charged
   }
   const perMinuteCards = priced.filter((f) => load(f).estimatedPerMinuteCredits !== undefined)
 
   it("covers every card with a per-minute part, the podcast cards among them", () => {
-    expect(perMinuteCards).toEqual(expect.arrayContaining(["podcast-vertical-speaker-clip.json", "podcast-tighten-episode.json", "podcast-tighten-episode-one-node.json", "podcast-multicam-cut.json"]))
+    expect(perMinuteCards).toEqual(expect.arrayContaining(["podcast-vertical-speaker-clip.json", "podcast-tighten-episode.json", "podcast-tighten-episode-one-node.json", "podcast-multicam-cut.json", "podcast-multicam-cut-one-node.json"]))
   })
 
   it.each(perMinuteCards.flatMap((f) => [[f, "on"], [f, "off"]] as const))("%s, preview stop rule %s", (file, rule) => {
@@ -324,7 +355,7 @@ describe("a card is never below what a run of its graph is charged, at any recor
       const card = templateCardPrice(nodes, edges)
       // The steps the card lists per minute, and what each lists as fixed beside its rate.
       const listed = new Map<string, { fixed: number; perMinute: number }>()
-      CreditsService.estimateWorkflowListingAt(statedPriceTable(), nodes, edges, "template", undefined, (id, _part, fixed, perMinute) => {
+      CreditsService.estimateWorkflowListingAt(statedPriceTable(), nodes, edges, "template", TEMPLATE_CARD_VIEWER, (id, _part, fixed, perMinute) => {
         const was = listed.get(id) ?? { fixed: 0, perMinute: 0 }
         listed.set(id, { fixed: was.fixed + fixed, perMinute: was.perMinute + perMinute })
       })

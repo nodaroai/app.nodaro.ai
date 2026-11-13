@@ -68,7 +68,20 @@ export function cardPriceOf(listing: AppListingEstimate): TemplateCardPrice {
   }
 }
 
-/** The card price of one template graph at `prices` (the hosted deployment's charged prices by default). */
+/**
+ * The user a card is priced for: a general user of the hosted deployment (a
+ * listing is a general user's run, decided 2026-10-20: `usecaseViewerForEveryone`).
+ * The card is written by `template-prices.ts --fix`, which reads no
+ * deployment, so that user's answers are stated here, as `docs-price-settings.json`
+ * states the charges. Speaker Map is available to users, so a use-case node
+ * lists on every recording it reads and its Master audio (the one-node
+ * Multicam Cut on its three cameras); Speaker Frames is too, so an `auto`
+ * framing source lists following faces (no `framesWithheld`). A release that
+ * withholds either from users changes this and re-runs `--fix`.
+ */
+export const TEMPLATE_CARD_VIEWER = { multicam: true } as const
+
+/** The card price of one template graph at `prices` (the hosted deployment's charged prices by default), for a general user (`TEMPLATE_CARD_VIEWER`). */
 export function templateCardPrice(
   nodes: ReadonlyArray<unknown>,
   edges: ReadonlyArray<unknown>,
@@ -77,7 +90,7 @@ export function templateCardPrice(
   // Speech is priced by length where the card is charged (on at the hosted deployment since
   // 2026-10-08, docs/deployment.md): a figure priced at the flat rows would be another price.
   if (!speechLengthPricingEnabled()) throw new Error("a template's card is priced as the hosted deployment charges, with SPEECH_LENGTH_PRICING_ENABLED on")
-  return cardPriceOf(CreditsService.estimateWorkflowListingAt(prices, nodes as ReadonlyArray<EstimateNode>, edges as ReadonlyArray<EstimateEdge>, "template"))
+  return cardPriceOf(CreditsService.estimateWorkflowListingAt(prices, nodes as ReadonlyArray<EstimateNode>, edges as ReadonlyArray<EstimateEdge>, "template", TEMPLATE_CARD_VIEWER))
 }
 
 /**

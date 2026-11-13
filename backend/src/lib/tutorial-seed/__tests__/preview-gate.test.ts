@@ -76,6 +76,7 @@ describe("the one-node podcast templates", () => {
     ["podcast-tighten-episode-one-node.json", "tighten-episode"],
     ["podcast-clip-pack-one-node.json", "clip-pack"],
     ["podcast-trailer-formats-one-node.json", "episode-trailer"],
+    ["podcast-multicam-cut-one-node.json", "tighten-episode"],
   ])("%s reviews through its node, which the gate does not flip", (file, type) => {
     const doc = load(file)
     const node = (doc.nodes as Node[]).find((n) => n.type === type)
