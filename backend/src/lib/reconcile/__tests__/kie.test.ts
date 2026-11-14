@@ -310,6 +310,7 @@ describe("reconcileKieJob", () => {
       outputUrl: "https://kie.example/out.mp4",
       referenceVideoUrls: ["https://r2.example.com/videos/ref.mp4"],
       refVideoDurationsSec: [5],
+      characterReferences: undefined,
       duration: -1,
       referenceTaskType: "reference",
       jobId: "j-ref",

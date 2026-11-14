@@ -13,6 +13,8 @@ export {
   characterReferencesFromWired,
   characterVideoUrls,
   seatCharacterVideos,
+  pricedReferenceVideoUrls,
+  videoCharacterClipsBilledAsReferenceVideo,
   videoCharacterVideoCap,
   videoCharacterVideoProviders,
   videoCharacterRefCap,

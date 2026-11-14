@@ -60,15 +60,32 @@ beforeEach(() => {
 })
 
 describe("workflow estimate — a Character's clip on Kling 4.0", () => {
-  for (const provider of ["kling-4", "kling-4-flash"]) {
-    it(`${provider}: priced as the same clip wired as a reference video`, async () => {
-      const withSubject = (await estimate([maya({ subjectVideoUrl: CLIP }), video(provider)], [characterWire])) - (await estimate([maya({ subjectVideoUrl: CLIP })], []))
-      const withClip = (await estimate([maya(), upload, video(provider)], [characterWire, videoWire])) - (await estimate([maya(), upload], []))
-      expect(withSubject).toBe(withClip)
-      const plain = (await estimate([maya(), video(provider)], [characterWire])) - (await estimate([maya()], []))
-      expect(withSubject).not.toBe(plain)
-    })
-  }
+  it("kling-4: priced as the same clip wired as a reference video", async () => {
+    const withSubject = (await estimate([maya({ subjectVideoUrl: CLIP }), video("kling-4")], [characterWire])) - (await estimate([maya({ subjectVideoUrl: CLIP })], []))
+    const withClip = (await estimate([maya(), upload, video("kling-4")], [characterWire, videoWire])) - (await estimate([maya(), upload], []))
+    expect(withSubject).toBe(withClip)
+    const plain = (await estimate([maya(), video("kling-4")], [characterWire])) - (await estimate([maya()], []))
+    expect(withSubject).not.toBe(plain)
+  })
+
+  // Decided 2026-11-14, measured: Flash bills a video subject like an image subject.
+  it("kling-4-flash: priced as the same character without the clip", async () => {
+    const withSubject = (await estimate([maya({ subjectVideoUrl: CLIP }), video("kling-4-flash")], [characterWire])) - (await estimate([maya({ subjectVideoUrl: CLIP })], []))
+    const plain = (await estimate([maya(), video("kling-4-flash")], [characterWire])) - (await estimate([maya()], []))
+    expect(withSubject).toBe(plain)
+    const withClip = (await estimate([maya(), upload, video("kling-4-flash")], [characterWire, videoWire])) - (await estimate([maya(), upload], []))
+    expect(withSubject).not.toBe(withClip)
+  })
+
+  it("kling-4-flash: a wired upload that is also the character's clip is priced as the character only (plain)", async () => {
+    const withBoth = (await estimate([maya({ subjectVideoUrl: CLIP }), upload, video("kling-4-flash")], [characterWire, videoWire])) - (await estimate([maya({ subjectVideoUrl: CLIP }), upload], []))
+    const plain = (await estimate([maya(), video("kling-4-flash")], [characterWire])) - (await estimate([maya()], []))
+    expect(withBoth).toBe(plain)
+    // On Kling 4.0 it stays one reference video: the same as the clip wired alone.
+    const k4Both = (await estimate([maya({ subjectVideoUrl: CLIP }), upload, video("kling-4")], [characterWire, videoWire])) - (await estimate([maya({ subjectVideoUrl: CLIP }), upload], []))
+    const k4Clip = (await estimate([maya(), upload, video("kling-4")], [characterWire, videoWire])) - (await estimate([maya(), upload], []))
+    expect(k4Both).toBe(k4Clip)
+  })
 
   it("a model that takes no video subjects prices the node as without the clip", async () => {
     const withClip = await estimate([maya({ subjectVideoUrl: CLIP }), video("seedance-2")], [characterWire])
@@ -118,14 +135,24 @@ describe("workflow estimate — the character clips are the run's", () => {
     probe.durations = new Map([1, 2, 3, 4, 5, 6, 7, 8].map((n) => [clipOf(n), 4 + (n % 3)]))
   })
 
-  it("a portrait and a clip: the run seats it, the estimate names it and prices it as the run's upload", async () => {
+  it("a portrait and a clip on Kling 4.0: the run seats it, the estimate names it and prices it as the run's upload", async () => {
+    const chars = [characterNode(1, { subjectVideoUrl: clipOf(1) }), characterNode(2)]
+    const edges = [wireOf(1), wireOf(2)]
+    const nodes = [...chars, video("kling-4")]
+    expect(runSubjectClips(nodes, edges)).toEqual([clipOf(1)])
+    expect(estimateSubjectClips(nodes, edges)).toEqual([clipOf(1)])
+    const withSubject = (await estimate(nodes, edges)) - (await estimate(chars, []))
+    expect(withSubject).toBe(await asUploads("kling-4", [clipOf(1)], chars, edges))
+  })
+
+  it("a portrait and a clip on Flash: the run seats it, but it is not priced — and the estimate names none", async () => {
     const chars = [characterNode(1, { subjectVideoUrl: clipOf(1) }), characterNode(2)]
     const edges = [wireOf(1), wireOf(2)]
     const nodes = [...chars, video("kling-4-flash")]
     expect(runSubjectClips(nodes, edges)).toEqual([clipOf(1)])
-    expect(estimateSubjectClips(nodes, edges)).toEqual([clipOf(1)])
+    expect(estimateSubjectClips(nodes, edges)).toEqual([])
     const withSubject = (await estimate(nodes, edges)) - (await estimate(chars, []))
-    expect(withSubject).toBe(await asUploads("kling-4-flash", [clipOf(1)], chars, edges))
+    expect(withSubject).toBe(await asUploads("kling-4-flash", [], chars, edges))
   })
 
   it("a clip on a Character with no image at all: the run makes no character of it, the estimate names no clip", async () => {

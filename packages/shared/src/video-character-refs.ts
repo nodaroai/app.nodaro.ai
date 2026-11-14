@@ -107,6 +107,37 @@ export function characterVideoUrls(
   return out
 }
 
+/**
+ * Whether the provider bills a character's video subject as reference-video
+ * seconds (`videoCharactersBillAsReferenceVideo`: Kling 4.0). On any other
+ * model that takes video subjects (Kling 4.0 Flash, measured, decided
+ * 2026-11-14) the subject is priced like an image subject.
+ */
+export function videoCharacterClipsBilledAsReferenceVideo(provider: string | undefined): boolean {
+  return provider ? VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.videoCharactersBillAsReferenceVideo === true : false
+}
+
+/**
+ * The reference videos a run is PRICED on: `referenceVideoUrls` as sent, less
+ * — on a model that does not bill video subjects as reference video
+ * ({@link videoCharacterClipsBilledAsReferenceVideo}) — the seats that are a
+ * character's clip. Those seats still count toward the model's video cap and
+ * the reference videos' total length (`seatCharacterVideos`, the duration
+ * check); they only leave the price. The same value when nothing leaves it.
+ * Every price path reads it: the routes' credit guard and `POST /v1/quote`,
+ * the workflow reservation, the estimates and the completion settlement.
+ */
+export function pricedReferenceVideoUrls(args: {
+  provider: string | undefined
+  referenceVideoUrls: readonly unknown[] | undefined
+  characterReferences: readonly unknown[] | undefined
+}): readonly unknown[] | undefined {
+  if (videoCharacterClipsBilledAsReferenceVideo(args.provider)) return args.referenceVideoUrls
+  const clips = new Set(characterVideoUrls(args.characterReferences))
+  if (clips.size === 0 || !args.referenceVideoUrls?.some((u) => typeof u === "string" && clips.has(u))) return args.referenceVideoUrls
+  return args.referenceVideoUrls.filter((u) => !(typeof u === "string" && clips.has(u)))
+}
+
 /** A refusal from {@link seatCharacterVideos}: a finished, user-facing sentence. */
 export interface CharacterVideoSeatProblem {
   code: "character_video_unsupported" | "character_videos_over_limit" | "character_video_shared" | "reference_videos_over_limit"

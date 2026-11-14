@@ -642,6 +642,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
         outputUrl: result.url,
         referenceVideoUrls: input.referenceVideoUrls,
         refVideoDurationsSec: input.refVideoDurationsSec,
+        characterReferences: input.characterReferences,
         duration: input.duration,
         // Recorded only when a type was declared: the hold the reservation sized.
         referenceTaskType: input.referenceTaskType,

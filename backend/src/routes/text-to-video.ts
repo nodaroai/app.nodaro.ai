@@ -32,7 +32,7 @@ import { userDirectionNotSupported } from "../lib/user-direction.js"
 import { characterReferencesSchema } from "../lib/character-reference-schema.js"
 import { applyPromptPoliciesToCharacterReferences } from "../lib/character-reference-policy.js"
 import { subjectSchema } from "../lib/subject-schema.js"
-import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler, validateSeedance2AudioPreHandler, applyAudioSoundtrackPreHandler } from "./generate-video.js"
+import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler, validateSeedance2AudioPreHandler, applyAudioSoundtrackPreHandler, pricedReferenceVideoCount, pricedRefVideoDurations } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { videoRunModel } from "../lib/run-model.js"
 import { seedance25OutputFormatFor } from "../lib/seedance25-output-format.js"
@@ -139,8 +139,10 @@ export const textToVideoPricing: RoutePricing = {
   prechecks: [seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
-    const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
     const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
+    // The reference videos the provider bills: a character's video subject on
+    // Kling 4.0 Flash is not one (decided 2026-11-14).
+    const hasVideoRef = pricedReferenceVideoCount(sel.provider, body ?? {}) > 0
     // Placement rule: the CHECK identifier, `computeCredits` and the
     // reservation must all be computed from the SAME normalized values.
     // Stash them so the two later sites cannot re-derive them differently.
@@ -175,7 +177,7 @@ export const textToVideoPricing: RoutePricing = {
       // and length replace the requested ones (the same object otherwise), so
       // every read below prices the run that is sent.
       const b = videoRequestAsRun(rawBody as Record<string, unknown>, req.videoNorm)
-      const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0
+      const hasVideoRef = pricedReferenceVideoCount(b?.provider as string | undefined, b ?? {}) > 0
       // R14: read the resolution the CHECK identifier was built from, never
       // the raw body — normalizing in the preHandler but not here would make
       // the reserved AMOUNT disagree with the checked IDENTIFIER, which is
@@ -206,10 +208,13 @@ export const textToVideoPricing: RoutePricing = {
         // A provider without a declared bound was not pre-probed: probe here
         // and STASH it the same way, so the handler carries the probe onto
         // the job for the settlement (which prices the input from it).
-        const durationsSec =
+        const sentDurationsSec =
           req.refVideoDurationsSec ??
           (await probeRefVideoDurations({ provider: priceArgs.provider, referenceVideoUrls: b.referenceVideoUrls as unknown[] }))
-        req.refVideoDurationsSec = durationsSec
+        req.refVideoDurationsSec = sentDurationsSec
+        // Priced on the clips the provider bills as reference video: on Kling
+        // 4.0 Flash a character's video subject is not one (decided 2026-11-14).
+        const durationsSec = await pricedRefVideoDurations(priceArgs.provider, b, sentDurationsSec)
         await noteRefVideoPricing(req, { ...priceArgs, rawDuration: b.duration, durationsSec, settlesToActual: true })
         return seedance2RefVideoBaseCreditsFromDurations({
           ...priceArgs,
@@ -542,7 +547,7 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
     "text-to-video",
     mode,
     normResolution,
-    (referenceVideoUrls?.length ?? 0) > 0,
+    pricedReferenceVideoCount(provider, parsed.data) > 0,
   )
 
   const mcpClient = extractMcpClient(req.body)

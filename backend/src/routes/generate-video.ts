@@ -15,7 +15,7 @@ import { noteAddon, noteAutoDurationSettles, noteExtraReferenceImages, noteRefVi
 import { noteExpectedBase } from "../lib/price-notes.js"
 import { resolveVideoRequestNorm, videoRequestAsRun, videoRequestReferenceMedia } from "../lib/video-request-norm.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
-import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../lib/ref-video-probe.js"
+import { pricedRefVideoInput, probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../lib/ref-video-probe.js"
 import { probeAndCheckRefAudio } from "../lib/ref-audio-probe.js"
 import { viduQ4InputProblem } from "../lib/vidu-q4-inputs.js"
 import { kling4InputProblem } from "../lib/kling4-inputs.js"
@@ -782,6 +782,34 @@ export async function validateSeedance2AudioPreHandler(
  * clip whether or not credits exist), which is why the probe it calls lives in
  * core rather than ee/billing.
  */
+/**
+ * How many reference videos a request is PRICED on: those the provider bills
+ * as reference video (`pricedRefVideoInput`), so a character's video subject
+ * on Kling 4.0 Flash, priced like an image subject (decided 2026-11-14), never
+ * moves the run onto the reference-video rate. Both video routes' identifier,
+ * credit guard and handler read it.
+ */
+export function pricedReferenceVideoCount(provider: string | undefined, body: { referenceVideoUrls?: unknown; characterReferences?: unknown }): number {
+  const priced = pricedRefVideoInput({ provider, referenceVideoUrls: body.referenceVideoUrls, characterReferences: body.characterReferences }).referenceVideoUrls
+  return Array.isArray(priced) ? priced.length : 0
+}
+
+/**
+ * The probe of the clips a request is priced on: `sentDurationsSec` (the probe
+ * of every sent clip) less a character's unbilled video subject, else — a
+ * probe that cannot be aligned — a probe of the priced clips themselves.
+ */
+export async function pricedRefVideoDurations(
+  provider: string,
+  body: { referenceVideoUrls?: unknown; characterReferences?: unknown },
+  sentDurationsSec: number[],
+): Promise<number[]> {
+  const priced = pricedRefVideoInput({ provider, referenceVideoUrls: body.referenceVideoUrls, characterReferences: body.characterReferences, durationsSec: sentDurationsSec })
+  return priced.durationsSec
+    ? [...priced.durationsSec]
+    : probeRefVideoDurations({ provider, referenceVideoUrls: (priced.referenceVideoUrls as unknown[] | undefined) ?? [] })
+}
+
 export async function validateRefVideoDurationPreHandler(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -829,8 +857,10 @@ export const generateVideoPricing: RoutePricing = {
   prechecks: [imageToVideoModelPreHandler, seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
-    const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
     const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
+    // The reference videos the provider bills (`pricedRefVideoInput`): a
+    // character's video subject on Kling 4.0 Flash is not one.
+    const hasVideoRef = pricedReferenceVideoCount(sel.provider, body ?? {}) > 0
     // Placement rule: the CHECK identifier, `computeCredits` and the
     // reservation must all be computed from the SAME normalized values.
     // Stash them so the two later sites cannot re-derive them differently.
@@ -866,7 +896,7 @@ export const generateVideoPricing: RoutePricing = {
       // every read below — the reference-video base, the add-ons — prices the
       // run that is sent.
       const b = videoRequestAsRun(rawBody as Record<string, unknown>, req.videoNorm)
-      const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0
+      const hasVideoRef = pricedReferenceVideoCount(b?.provider as string | undefined, b ?? {}) > 0
       // R14: read the resolution the CHECK identifier was built from, never
       // the raw body — normalizing in the preHandler but not here would make
       // the reserved AMOUNT disagree with the checked IDENTIFIER, which is
@@ -906,10 +936,13 @@ export const generateVideoPricing: RoutePricing = {
         // A provider without a declared bound was not pre-probed: probe here
         // and STASH it the same way, so the handler carries the probe onto
         // the job for the settlement (which prices the input from it).
-        const durationsSec =
+        const sentDurationsSec =
           req.refVideoDurationsSec ??
           (await probeRefVideoDurations({ provider: priceArgs.provider, referenceVideoUrls: b.referenceVideoUrls as unknown[] }))
-        req.refVideoDurationsSec = durationsSec
+        req.refVideoDurationsSec = sentDurationsSec
+        // Priced on the clips the provider bills as reference video: on Kling
+        // 4.0 Flash a character's video subject is not one (decided 2026-11-14).
+        const durationsSec = await pricedRefVideoDurations(priceArgs.provider, b, sentDurationsSec)
         const videoTrim = { start: b.videoTrimStart, end: b.videoTrimEnd }
         await noteRefVideoPricing(req, {
           ...priceArgs,
@@ -1445,7 +1478,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       "image-to-video",
       videoSize,
       normResolution,
-      (referenceVideoUrls?.length ?? 0) > 0,
+      pricedReferenceVideoCount(provider, parsed.data) > 0,
     )
 
     // B4c: a voiced run speaks in its cast's voices, so under a voice lock each

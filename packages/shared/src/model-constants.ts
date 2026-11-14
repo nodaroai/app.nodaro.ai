@@ -3209,6 +3209,16 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
      * `VIDEO_CHARACTER_CLIP_DURATION_LIMITS`.
      */
     videoCharacters?: number
+    /**
+     * The provider bills a video subject's clip as reference-video seconds
+     * (its with-video rate on output + input), so the run is priced as a
+     * reference-video run with the clip among its input seconds. Absent ⇒ a
+     * video subject is priced like an image subject: it adds no input seconds
+     * and does not move the run onto the reference-video rate (its clip still
+     * counts toward the `videos` cap and the reference videos' total length).
+     * Read through `videoCharacterClipsBilledAsReferenceVideo`.
+     */
+    videoCharactersBillAsReferenceVideo?: true
   } | undefined
 > = {
   // Seedance 2 — full multimodal caps.
@@ -3254,8 +3264,11 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // one of the 10 image slots. No `voices` key: that names Gemini Omni's
   // preset personas, which Kling does not take.
   // Of the 7 subjects, at most 3 may be video subjects (a 3-8 s clip each), and
-  // reference videos plus video subjects are at most 5.
-  "kling-4": { images: 10, videos: 5, audio: 3, characters: 7, materials: 15, videoCharacters: 3 },
+  // reference videos plus video subjects are at most 5. A video subject is
+  // priced as a reference video here until a measured run confirms how Kling
+  // 4.0 bills one (decided 2026-11-14): Flash, measured, bills it as an image
+  // subject (no flag below).
+  "kling-4": { images: 10, videos: 5, audio: 3, characters: 7, materials: 15, videoCharacters: 3, videoCharactersBillAsReferenceVideo: true },
   // Kling 4.0 Keyframes — the Image References are the in-between frames
   // (`keyframe_urls`, max 8; the clip's duration lowers the cap, see
   // kling4KeyframeFrameCap). No reference videos or audio.
@@ -3265,7 +3278,9 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // standalone voices: reference audio clip N becomes wired character N's voice
   // (`voice_url`) when that character is a subject (2-4 images), so at most one
   // per character (7) and none takes a material seat. A wired start frame takes one of the 10 image slots when it
-  // runs on this endpoint.
+  // runs on this endpoint. A video subject is billed like an image subject
+  // (measured on a staging run, decided 2026-11-14): no
+  // `videoCharactersBillAsReferenceVideo`.
   "kling-4-flash": { images: 10, videos: 5, audio: 7, characters: 7, materials: 15, audioBindsToCharacters: true, videoCharacters: 3 },
   "grok-i2v": { images: 7 },         // backend kie/models.ts maxRefImages: 7
   "happyhorse-ref2v": { images: 9 }, // backend kie/models.ts maxRefImages: 9

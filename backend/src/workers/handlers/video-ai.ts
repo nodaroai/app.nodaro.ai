@@ -505,6 +505,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     outputUrl: result.url,
     referenceVideoUrls,
     refVideoDurationsSec,
+    characterReferences,
     duration,
     // The type the route declared (the hold it sized): absent = none.
     referenceTaskType,
@@ -843,6 +844,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     outputUrl: result.url,
     referenceVideoUrls,
     refVideoDurationsSec,
+    characterReferences,
     duration,
     referenceTaskType,
     jobId: ctx.jobId,
@@ -2569,6 +2571,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     outputUrl: result.url,
     referenceVideoUrls: d.referenceVideoUrls,
     refVideoDurationsSec: d.refVideoDurationsSec,
+    characterReferences: (d as { characterReferences?: unknown }).characterReferences,
     duration: d.duration,
     referenceTaskType: d.referenceTaskType,
     jobId: ctx.jobId,

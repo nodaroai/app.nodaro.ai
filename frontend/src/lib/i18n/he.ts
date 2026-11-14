@@ -3801,7 +3801,7 @@ export const he: ChromeDict = {
   "cfgext.entVideoSubjectUpload": "העלאת קליפ",
   "cfgext.entVideoSubjectRemove": "הסרת הקליפ",
   "cfgext.entVideoSubjectUploadFailed": "לא ניתן היה להעלות את הקליפ.",
-  "cfgext.entVideoSubjectHint": "ב-Kling 4.0 וב-Kling 4.0 Flash בלבד: קליפ רציף של 3–8 שניות של הדמות. הדמות נשלחת כדמות שנבנתה מהקליפ, ושניות הקליפ מחויבות כשניות של וידאו ייחוס. מודלים אחרים מתעלמים ממנו.",
+  "cfgext.entVideoSubjectHint": "ב-Kling 4.0 וב-Kling 4.0 Flash בלבד: קליפ רציף של 3–8 שניות של הדמות. הדמות נשלחת כדמות שנבנתה מהקליפ. ב-Kling 4.0 שניות הקליפ מחויבות כשניות של וידאו ייחוס; ב-Kling 4.0 Flash הוא לא מוסיף למחיר. מודלים אחרים מתעלמים ממנו.",
   "cfgext.entNoCanonicalDescription": "אין עדיין תיאור קנוני — צרו תחילה פורטרט באולפן.",
   "cfgext.entCharacterName": "שם הדמות",
   "cfgext.entCharacterNamePlaceholder": "לדוגמה: Sir Aldric (השתמשו ב־{} כדי להזריק קלט)",

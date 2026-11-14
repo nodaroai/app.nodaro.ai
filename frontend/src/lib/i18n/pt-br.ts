@@ -3696,7 +3696,7 @@ export const ptBR: ChromeDict = {
   "cfgext.entVideoSubjectUpload": "Enviar um clipe",
   "cfgext.entVideoSubjectRemove": "Remover o clipe",
   "cfgext.entVideoSubjectUploadFailed": "Não foi possível enviar o clipe.",
-  "cfgext.entVideoSubjectHint": "Só no Kling 4.0 e no Kling 4.0 Flash: um clipe de 3 a 8 s, em uma única tomada, deste personagem. O personagem é enviado como um personagem feito a partir do clipe, e os segundos do clipe são cobrados como segundos de vídeo de referência. Os outros modelos o ignoram.",
+  "cfgext.entVideoSubjectHint": "Só no Kling 4.0 e no Kling 4.0 Flash: um clipe de 3 a 8 s, em uma única tomada, deste personagem. O personagem é enviado como um personagem feito a partir do clipe. No Kling 4.0, os segundos do clipe são cobrados como segundos de vídeo de referência; no Kling 4.0 Flash, ele não aumenta o preço. Os outros modelos o ignoram.",
   "cfgext.entNoCanonicalDescription": "Ainda não há descrição canônica — gere primeiro um retrato no estúdio.",
   "cfgext.entCharacterName": "Nome do personagem",
   "cfgext.entCharacterNamePlaceholder": "ex.: Sir Aldric (use {} para inserir uma entrada)",

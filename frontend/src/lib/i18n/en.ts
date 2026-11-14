@@ -3827,7 +3827,7 @@ export const en = {
   "cfgext.entVideoSubjectUpload": "Upload a clip",
   "cfgext.entVideoSubjectRemove": "Remove the clip",
   "cfgext.entVideoSubjectUploadFailed": "The clip could not be uploaded.",
-  "cfgext.entVideoSubjectHint": "Kling 4.0 and Kling 4.0 Flash only: a 3–8 s single-shot clip of this character. The character is sent as a subject made from the clip, and the clip's seconds are billed as reference-video seconds. Other models ignore it.",
+  "cfgext.entVideoSubjectHint": "Kling 4.0 and Kling 4.0 Flash only: a 3–8 s single-shot clip of this character. The character is sent as a subject made from the clip. On Kling 4.0 the clip's seconds are billed as reference-video seconds; on Kling 4.0 Flash it adds nothing to the price. Other models ignore it.",
   "cfgext.entNoCanonicalDescription": "No canonical description yet — generate a portrait in the studio first.",
   "cfgext.entCharacterName": "Character Name",
   "cfgext.entCharacterNamePlaceholder": "e.g. Sir Aldric (use {} to inject input)",

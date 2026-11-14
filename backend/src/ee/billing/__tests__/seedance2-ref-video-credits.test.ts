@@ -596,7 +596,7 @@ describe("measureSeedance2Settle over the real settlement", () => {
 
   it("probes the delivered clip once and returns the settlement's credits with its seconds", async () => {
     probe.durations.set(OUT, 12)
-    const args = { provider: "seedance-2-5", resolution: "1080p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [30], duration: 12, referenceTaskType: undefined, jobId: "job-1" }
+    const args = { provider: "seedance-2-5", resolution: "1080p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [30], duration: 12, referenceTaskType: undefined, characterReferences: undefined, jobId: "job-1" }
     const baseCredits = Math.ceil(S25_1080P_PER_SEC * 42)
     await expect(measureSeedance2Settle(args)).resolves.toEqual({ baseCredits, seconds: { outputSec: 12, inputSec: 30 }, deliveredSec: 12 })
     expect(probe.probeMediaDuration.mock.calls.map((c) => c[0])).toEqual([OUT])
@@ -608,7 +608,7 @@ describe("measureSeedance2Settle over the real settlement", () => {
     const alert = vi.spyOn(console, "error").mockImplementation(() => {})
     try {
       probe.durations.set(OUT, 9.5)
-      const args = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [4.1], duration: VIDEO_DURATION_AUTO, referenceTaskType: undefined, jobId: "job-evidence" }
+      const args = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [4.1], duration: VIDEO_DURATION_AUTO, referenceTaskType: undefined, characterReferences: undefined, jobId: "job-evidence" }
       await expect(measureSeedance2Settle(args)).resolves.toEqual({ baseCredits: 960, seconds: { outputSec: 9.5, inputSec: 4.1 }, deliveredSec: 9.5 })
       expect(probe.probeMediaDuration).toHaveBeenCalledTimes(1)
       expect(alert).toHaveBeenCalledTimes(1)
@@ -764,7 +764,7 @@ describe("a declared reference with an automatic length", () => {
 
     it("the core shim reads the job's recorded type: the settle lanes charge the delivered 30 s", async () => {
       probe.durations.set(OUT, 30)
-      const lane = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [5], duration: AUTO, referenceTaskType: "reference", jobId: "job-ref" }
+      const lane = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [5], duration: AUTO, referenceTaskType: "reference", characterReferences: undefined, jobId: "job-ref" }
       await expect(measureSeedance2Settle(lane)).resolves.toStrictEqual({ baseCredits: worst([5]), seconds: { outputSec: 30, inputSec: 5 }, deliveredSec: 30 })
       // Without the recorded type (undeclared), the same delivery is charged at the edit hold, as before.
       await expect(measureSeedance2Settle({ ...lane, referenceTaskType: undefined })).resolves.toStrictEqual({ baseCredits: 1045, seconds: { outputSec: 30, inputSec: 5 }, deliveredSec: 30 })

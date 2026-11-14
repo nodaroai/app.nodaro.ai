@@ -158,7 +158,7 @@ import { getLlmModel, getLlmTier, defaultReasoningEffort, llmDefaultsFeature, LL
 import { FLUX2_RES_MP, MODEL_CATALOG, type Flux2Model } from "@nodaro/shared/model-catalog"
 import { renderVideoCreditId, scene3DRenderTierCredits } from "@nodaro/shared/scene3d"
 import { META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SCRAPE_ANALYSIS_FEATURE, scrapeAnalysisPriceParts, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS } from "@nodaro/shared/social"
-import { countImageInputEdges, countRefModalityEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
+import { countImageInputEdges, countRefModalityEdges, nodeIsMasked, referenceModalityForHandle, wiredImageSize } from "@nodaro/shared/workflow"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
@@ -172,7 +172,7 @@ import { applyServiceMarkup } from "./service-margin.js"
 import { MEASURED_VIDEO_UTILITY_JOBS, videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
 import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
-import { refVideoClipSources, seedanceDraftFinalizeEstimateCredits, seedanceFinalizeDraftQuoteOf, seedanceRefVideoEstimateCredits } from "./seedance-ref-video-estimate.js"
+import { refVideoClipSources, seedanceDraftFinalizeEstimateCredits, seedanceFinalizeDraftQuoteOf, seedanceRefVideoEstimateCredits, unpricedWiredClip } from "./seedance-ref-video-estimate.js"
 import { uploadClipSec, withUploadClipLengths } from "./upload-clip-lengths.js"
 import { listingCeiling, listingFieldDomains, listingOpenValueNodeIds } from "./listing-range.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
@@ -6160,7 +6160,7 @@ function estimateNodeCredits(
     // Video Face Mesh (the Cast Swap engine's quote graph): its `video` wire as a run estimate reads it (not the
     // measured walk: it is not one of the steps moved onto it), priced as Video Mask's (the 30 fps basis).
     videoFaceMeshSec: node.type === "video-face-mesh" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
-    videoRefWired: videoRefWired(node, edges),
+    videoRefWired: videoRefWired(node, edges, nodes),
     imageRefsWired: edges && node.id ? countImageInputEdges(edges, node.id) : undefined,
     // A masked edit on a model that follows its photo is priced at the photo's size, when its source records it.
     sourceImage: edges && node.id ? wiredImageSize(node.id, nodes, edges) : undefined,
@@ -7488,9 +7488,13 @@ function audioSyncWiredSourceCount(node: EstimateNode, edges?: ReadonlyArray<Est
  * `-ref` ladder, so UNKNOWN (no edges, a node without an id) answers false:
  * the estimate may over-quote, it must never under-quote.
  */
-function videoRefWired(node: EstimateNode, edges?: ReadonlyArray<EstimateEdge>): boolean {
+function videoRefWired(node: EstimateNode, edges?: ReadonlyArray<EstimateEdge>, nodes: ReadonlyArray<EstimateNode> = []): boolean {
   if (!edges || !node.id) return false
-  if (countRefModalityEdges(edges, node.id, "video") > 0) return true
+  // A wired clip that is also a Kling 4.0 Flash character's clip goes as the
+  // character only, and is no reference video to the price (decided 2026-11-14).
+  // (the same edges `countRefModalityEdges` counts).
+  const videoWires = edges.filter((e) => e.target === node.id && referenceModalityForHandle(e.targetHandle) === "video")
+  if (videoWires.some((e) => !unpricedWiredClip(node, nodes, edges, e.source))) return true
   // A Kling 4.0 audio soundtrack is sent as a reference video (audio-soundtrack.ts).
   const data = node.data ?? {}
   return audioSoundtrackActive({
