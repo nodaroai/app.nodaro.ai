@@ -1,5 +1,34 @@
 # @nodaro/sdk
 
+## 2.72.0
+
+### Minor Changes
+
+- 564ee46: `voices.textToDialogue` takes Google's Gemini speech models as `provider` (`gemini-3-8-flash-lite-tts`, `gemini-3-8-flash-tts`, `gemini-3-1-flash-tts`, `gemini-2-5-pro-tts`) for a dialogue of one or two speakers, each line's `voice` one of the model's own named voices (a `400` otherwise, before anything is charged). New optional fields: a line's `styleDirection` (3.8: how that line is spoken), `speakers` (3.1 / 2.5: each voice's style, pace, accent and audio profile) and `fillerWords` (3.8, two speakers). ElevenLabs Dialogue v3 stays the default. `outputFormat` picks the file on a Gemini model, as on `textToSpeech`: `mp3_44100_128` (the default), `mp3_44100_192` or `wav_24000`, at the same credits; the ElevenLabs dialogue models deliver the default MP3 only. For ElevenLabs dialogue callers: a non-default `outputFormat`, or a malformed or duplicated `speakers` entry, is now a `400` naming the field, where it was dropped before.
+- 564ee46: `TextToSpeechParams.replica` and a dialogue speaker's `replica` (`voices.textToDialogue`): on `gemini-3-8-flash-tts`, speak in a person's own voice cloned for this request alone and not saved, from two real WAV recordings of the same adult given as https links — a 10–30 s reference and a consent recording of the same person reading the consent sentence (`REPLICA_CONSENT_SENTENCE`). No extra charge. A recording the platform cannot take, or a model that does not clone, is a `400` before anything is charged. A clone must carry `consent: true` (`TtsReplicaRequest`): the caller's confirmation of `REPLICA_CONSENT_ATTESTATION`, the sentence the editor's consent checkbox shows; without it the request is a `400` before anything is read or charged.
+- 564ee46: `TextToSpeechParams` takes Google's Gemini speech models as `provider` (`gemini-3-8-flash-lite-tts`, `gemini-3-8-flash-tts`, `gemini-3-1-flash-tts`, `gemini-2-5-pro-tts`) and their style direction: `styleDirection` (free text on 3.8; one of the model's styles on 3.1 / 2.5), `pace`, `accent` and `audioProfile` (3.1 / 2.5). A Gemini model speaks only its own named voices: `voice` must be one of them (a `400` otherwise, before anything is charged), and none runs the model's default. `voices.list({ model })` answers a Gemini model's voices (the premade list as before without `model`, or with an ElevenLabs one).
+- e53282b: `nodes.run("llm-chat", params)` is typed: `LlmChatParams` (from `@nodaro/sdk/nodes`), including `referenceFileUrls` — up to 5 public links to PDF documents a model that reads files (GPT-6.1 Terra) reads with the prompt. A file on another model, or one that is not a PDF, cannot be read or is past a limit, answers `400` before any credits are held.
+
+### Patch Changes
+
+- af8d59a: `GenerateVideoParams.characterReferences` documents `videoUrl` on Kling 4.0 and Kling 4.0 Flash: a 3–8 s single-shot clip of the character makes the entry a subject built from that video (at most 3 per request), billed as one of the run's reference videos. The field itself comes from `@nodaro/shared`'s `VideoCharacterReference`.
+- 70a48ec: `GenerateVideoParams.characterReferences` documents how a character's `videoUrl` is priced on each model. Kling 4.0 bills it as a reference video. Kling 4.0 Flash prices it like an image subject, so it adds nothing.
+- Updated dependencies [564ee46]
+- Updated dependencies [564ee46]
+- Updated dependencies [564ee46]
+- Updated dependencies [564ee46]
+- Updated dependencies [564ee46]
+- Updated dependencies [b26c865]
+- Updated dependencies [af8d59a]
+- Updated dependencies [70a48ec]
+- Updated dependencies [e53282b]
+- Updated dependencies [d8f8e4a]
+- Updated dependencies [e53282b]
+- Updated dependencies [60b1f87]
+- Updated dependencies [8903a09]
+  - @nodaro/prompts@1.57.0
+  - @nodaro/shared@3.65.0
+
 ## 2.71.0
 
 ### Minor Changes
