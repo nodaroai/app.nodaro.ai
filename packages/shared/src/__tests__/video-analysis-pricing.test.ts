@@ -60,7 +60,7 @@ describe("video-analysis-pricing", () => {
   })
 
   it("model SSOT is capability-derived and Gemini-only today", () => {
-    expect(VIDEO_ANALYSIS_LLM_MODELS).toEqual(["gemini-3-flash", "gemini-3.6-flash", "gemini-3.8-flash", "gemini-3.1-pro"])
+    expect(VIDEO_ANALYSIS_LLM_MODELS).toEqual(["gemini-3-flash", "gemini-3.6-flash", "gemini-3.8-flash", "gemini-3.1-pro", "gemini-4-carbon"])
   })
 
   it("tier layer: every model-backed tier maps to a real model AND every model is tier-reachable or explicitly legacy (no vendor leak)", () => {
@@ -107,6 +107,8 @@ describe("video-analysis-pricing", () => {
     // channel (2026-11-13); gemini-3-flash is now a legacy fast backing.
     expect(resolveVideoAnalysisModel("fast")).toBe("gemini-3.8-flash")
     expect(VIDEO_ANALYSIS_LEGACY_MODELS["gemini-3-flash"]).toBe("fast")
+    // `ultra` (2026-11-13) is model-backed like fast and pro.
+    expect(resolveVideoAnalysisModel("ultra")).toBe("gemini-4-carbon")
     expect(resolveVideoAnalysisModel("mixed")).toBe("mixed") // roll-plan sentinel passthrough
     expect(resolveVideoAnalysisModel("mixed-fast")).toBe("mixed-fast")
     // `smart` is a sentinel too — it names an engine plan, never a model id, so the
@@ -119,6 +121,16 @@ describe("video-analysis-pricing", () => {
     expect(resolveVideoAnalysisModel(undefined)).toBe("gemini-3.1-pro") // default → pro
     expect(resolveVideoAnalysisModel("")).toBe("gemini-3.1-pro")
     expect(resolveVideoAnalysisModel("nonsense")).toBe("gemini-3.1-pro") // unknown → default, never throws
+  })
+
+  it("ultra prices under its own model's family, above mixed and below smart in every bucket", () => {
+    for (const bucketSec of VIDEO_ANALYSIS_DURATION_BUCKETS) {
+      const id = buildVideoAnalysisCreditId(resolveVideoAnalysisModel("ultra"), bucketSec)
+      expect(id).toBe(`video-analysis:gemini-4-carbon:${bucketSec}s`)
+      const ultra = VIDEO_ANALYSIS_BUCKET_CREDITS[id]!
+      expect(ultra, `ultra <= mixed at ${bucketSec}s`).toBeGreaterThan(VIDEO_ANALYSIS_BUCKET_CREDITS[`video-analysis:mixed:${bucketSec}s`]!)
+      expect(ultra, `ultra >= smart at ${bucketSec}s`).toBeLessThan(VIDEO_ANALYSIS_BUCKET_CREDITS[`video-analysis:smart:${bucketSec}s`]!)
+    }
   })
 
   it("mixed tiers price under ONE shared credit family (video-analysis:mixed:*)", () => {

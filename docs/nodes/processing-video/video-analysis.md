@@ -83,7 +83,7 @@ Any source is capped at **10 minutes (600s)**.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Analysis Quality (`llmModel`) | Select | `pro` | `smart` (highest accuracy — a hybrid pass that blends a native skeleton read with several donor analysis rolls, then always refines the merged result; pick this when the shot list will drive regeneration), `fast` (economy), `pro` (default), or `mixed` / `mixed-fast` (several economy passes combined for completeness). See [Credit Cost](#credit-cost) |
+| Analysis Quality (`llmModel`) | Select | `pro` | `smart` (highest accuracy — a hybrid pass that blends a native skeleton read with several donor analysis rolls, then always refines the merged result; pick this when the shot list will drive regeneration), `ultra` (the deepest-reasoning analysis model reads every window — it holds up on fast cutting and on scenes with many people, and does not invent cuts that are not there; it samples the video at the same one frame per second as `pro`), `fast` (economy), `pro` (default), or `mixed` / `mixed-fast` (several economy passes combined for completeness). See [Credit Cost](#credit-cost) |
 | Result Selection (`selectionMode`) | Select | `choose` | `choose` — the standard result. `combine` — an enhanced result with additional verification for maximum captured detail (slightly slower, recommended). **Does not apply to `smart`** — that tier always refines regardless of this setting |
 | Cast variations (`variations`) | Checkbox | off | On — the analysis also detects per-entity appearance **looks** — a plain wardrobe change between scenes (a different outfit at the café, on the boat, at the wedding) counts exactly as much as a dream, flashback, disguise, transformation, or era look — and binds each look to the scenes where it is active (`slots[].variations` + `scenes[].slotVariations`). Off — the result keeps the pre-variations shape. Look extraction runs as its own dedicated pass after the main analysis, so turning it on does not reduce how many entities are extracted |
 | Music video (`musicVideo`) | API / MCP only | off | On — the clip is declared a **music video**: the song IS the piece, so all sung lyrics are transcribed verbatim as per-scene `speech` layers (the instrumental bed stays its own `music` layer). Off — the default classification: soundtrack vocals nobody on screen performs are folded into the `music` layer's description, and `speech` carries only words uttered inside the story world. No canvas control yet — pass it in the request body (`musicVideo: true`) or the MCP tool's `music_video` flag |
@@ -93,8 +93,9 @@ Any source is capped at **10 minutes (600s)**.
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 **Quality tiers, no model to pick.** You choose a *tier* — `fast` for an
-economy analysis, `pro` for higher fidelity, or the `mixed` tiers for our most
-advanced, most complete analysis — not a specific model. The underlying
+economy analysis, `pro` for higher fidelity, the `mixed` tiers for our most
+advanced, most complete analysis, `ultra` for the deepest read of every window,
+or `smart` for the highest accuracy — not a specific model. The underlying
 analysis model is selected for you (Video Analysis requires native video *and*
 audio understanding, which only a subset of models provide) and is intentionally
 not surfaced, so a tier's backing model can improve over time without changing
@@ -394,6 +395,7 @@ charged on Nodaro Cloud.
 | `fast` (economy) | 205<!-- credits: video-analysis:gemini-3.8-flash:60s --> | 213<!-- credits: video-analysis:gemini-3.8-flash:180s --> | 588<!-- credits: video-analysis:gemini-3.8-flash:360s --> | 968<!-- credits: video-analysis:gemini-3.8-flash:600s --> |
 | `pro` (default) | 238<!-- credits: video-analysis:gemini-3.1-pro:60s --> | 256<!-- credits: video-analysis:gemini-3.1-pro:180s --> | 704<!-- credits: video-analysis:gemini-3.1-pro:360s --> | 1162<!-- credits: video-analysis:gemini-3.1-pro:600s --> |
 | `mixed` / `mixed-fast` | 303<!-- credits: video-analysis:mixed:60s --> | 328<!-- credits: video-analysis:mixed:180s --> | 823<!-- credits: video-analysis:mixed:360s --> | 1330<!-- credits: video-analysis:mixed:600s --> |
+| `ultra` (deepest reasoning) | 384<!-- credits: video-analysis:gemini-4-carbon:60s --> | 413<!-- credits: video-analysis:gemini-4-carbon:180s --> | 1160<!-- credits: video-analysis:gemini-4-carbon:360s --> | 1920<!-- credits: video-analysis:gemini-4-carbon:600s --> |
 | `smart` (highest accuracy) | 458<!-- credits: video-analysis:smart:60s --> | 559<!-- credits: video-analysis:smart:180s --> | 1408<!-- credits: video-analysis:smart:360s --> | 2307<!-- credits: video-analysis:smart:600s --> |
 
 The two mixed tiers are variants of the same advanced analysis and share one
@@ -407,6 +409,13 @@ disappears from later scenes). Every correction and watch flag is disclosed in
 the result's `warnings`.
 
 > These values are the internal pricing formula's current outputs.
+
+> **New `ultra` tier, 2026-11-13.** `ultra` reads every window with the
+> deepest-reasoning analysis model, at the same one frame per second as `pro`.
+> Pick it for footage that trips the other tiers: fast cutting, and scenes with
+> many people. It keeps up with rapid cuts without inventing cuts that are not
+> there. It is priced between the mixed tiers and `smart`; no other tier's
+> price changed.
 
 > **Fast tier on a newer model, 2026-11-13.** The `fast` tier now runs on a
 > newer flash model: its previous model stopped being served. The `fast` row
@@ -462,7 +471,9 @@ mixed tiers (three of each model, so their readings can be compared and
 combined). `smart` runs its own hybrid roll plan — a native skeleton pass plus
 several economy-tier donor rolls — and always refines the merged result. That
 repetition is the main reason a tier costs what it does, and it is why the
-mixed and smart tiers sit well above a single-model tier.
+mixed and smart tiers sit well above a single-model tier. `ultra` is the
+exception among the single-model tiers: the deepest-reasoning model reads every
+window, which is why it sits above the mixed tiers.
 
 **Duration tolerance.** Credits are reserved up front from the bucket that fits
 the probed (metadata) duration, grace included. After download, the worker
@@ -515,6 +526,9 @@ refunded.
 - The default `pro` tier suits most breakdowns — higher-fidelity scene and entity
   detail. Drop to the `fast` tier for a cheaper, quicker pass when you can trade
   some fidelity.
+- Step up to `ultra` when the video cuts fast or crowds many people into a
+  scene — music videos, trailers, ensemble scenes. It keeps up with rapid cuts
+  without inventing extra ones, and tells more people apart.
 - Set **Analysis Focus** to bias the model toward what matters for your
   re-creation (product shots, on-screen text, a specific character) — but don't
   expect it to change the JSON shape.

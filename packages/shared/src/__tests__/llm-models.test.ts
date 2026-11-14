@@ -15,6 +15,7 @@ import {
   getLlmModalityCaps,
   VIDEO_ANALYSIS_LLM_MODELS,
   VIDEO_ANALYSIS_TIERS,
+  resolveVideoAnalysisModel,
   buildLlmCreditIdentifier,
   resolveLlmCreditId,
   motionGraphicsFeature,
@@ -1125,9 +1126,13 @@ describe("gemini-4-carbon exposure", () => {
     expect(Object.values(LLM_FEATURE_DEFAULTS)).not.toContain("gemini-4-carbon")
   })
 
-  it("stays OUT of video-analysis — image-only caps until its video + audio change", () => {
-    expect(getLlmModalityCaps("gemini-4-carbon")).toEqual({ image: true, video: false, audio: false })
-    expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gemini-4-carbon")
+  it("reads video + audio and backs the video-analysis `ultra` tier (decided 2026-11-13)", () => {
+    // Full caps are what enrol it in VIDEO_ANALYSIS_LLM_MODELS; the `ultra`
+    // tier is the decision that comes with them.
+    expect(getLlmModalityCaps("gemini-4-carbon")).toEqual({ image: true, video: true, audio: true })
+    expect(VIDEO_ANALYSIS_LLM_MODELS).toContain("gemini-4-carbon")
+    expect(VIDEO_ANALYSIS_TIERS.ultra).toBe("gemini-4-carbon")
+    expect(resolveVideoAnalysisModel("ultra")).toBe("gemini-4-carbon")
   })
 })
 

@@ -937,7 +937,7 @@ are rejected.
 highest-accuracy tier, which always refines its merged result. It takes no
 quality or result-strategy argument; a client that still sends `llm_model` or
 `selection_mode` from an older tool list gets Smart, and those keys are
-ignored. The other tiers (`pro`, `fast`, `mixed`, `mixed-fast`) and the
+ignored. The other tiers (`ultra`, `pro`, `fast`, `mixed`, `mixed-fast`) and the
 `choose` / `combine` strategy stay available outside this tool: on the
 [Video Analysis node](../nodes/processing-video/video-analysis.md) — in the
 editor and in workflows, including workflows run over MCP — and on

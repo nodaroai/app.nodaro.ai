@@ -35,6 +35,15 @@ describe("localizeOptionLabel", () => {
     expect(localizeOptionLabel("WebP", "he")).toBe("WebP")
     expect(localizeOptionLabel("GIF (animated)", "en")).toBe("GIF (animated)")
   })
+  it("reads the Video Analysis Ultra tier as a tier name, and the (Ultra) qualifier as a picture-quality grade", () => {
+    expect(localizeOptionLabel("Ultra", "he")).toBe("אולטרה")
+    expect(localizeOptionLabel("Ultra", "ja")).toBe("ウルトラ")
+    expect(localizeOptionLabel("Ultra", "ko")).toBe("울트라")
+    expect(localizeOptionLabel("Ultra", "pt-BR")).toBe("Ultra")
+    expect(localizeOptionLabel("Ultra", "en")).toBe("Ultra")
+    expect(localizeOptionLabel("4K (Ultra)", "ja")).toBe("4K（超高画質）")
+    expect(localizeOptionLabel("4K (Ultra)", "ko")).toBe("4K(초고화질)")
+  })
   it("passes tokens, brand names and unknown copy through", () => {
     expect(localizeOptionLabel("1080p", "he")).toBe("1080p")
     expect(localizeOptionLabel("Nano Banana Pro", "he")).toBe("Nano Banana Pro")

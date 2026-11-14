@@ -4207,6 +4207,27 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "video-analysis:gemini-3.1-pro:600s", credits: 1056, note: "10-min ceiling" },
     ],
   },
+  // ULTRA (since 2026-11-13) — the deepest-reasoning analysis model reading
+  // every window, at the same frame sampling as the other single-model tiers.
+  // Priced between the mixed tiers and smart.
+  "gemini-4-carbon-video-analysis": {
+    id: "gemini-4-carbon-video-analysis",
+    kind: "video",
+    modes: ["video-analysis"] as const,
+    family: "Nodaro",
+    maker: "nodaro",
+    label: "Video Analysis (Ultra)",
+    series: "Video Analysis",
+    description: "Deep-reasoning analysis — the most thorough model reads every window of the video. Better on fast cuts and on scenes with many people, and it does not invent cuts. Billed per duration bucket.",
+    useCases: ["video-analysis", "shot-list", "premium", "most-accurate"],
+    pricing: [
+      { identifier: "video-analysis:gemini-4-carbon", credits: 1745, note: "10-min ceiling (no duration given)" },
+      { identifier: "video-analysis:gemini-4-carbon:60s", credits: 349 },
+      { identifier: "video-analysis:gemini-4-carbon:180s", credits: 375 },
+      { identifier: "video-analysis:gemini-4-carbon:360s", credits: 1054 },
+      { identifier: "video-analysis:gemini-4-carbon:600s", credits: 1745, note: "10-min ceiling" },
+    ],
+  },
   // Both mixed tiers are variants of the same advanced multi-engine analysis
   // and share this ONE credit family (videoAnalysisCreditSegment maps both;
   // plan internals live in the private analysis plugin).
