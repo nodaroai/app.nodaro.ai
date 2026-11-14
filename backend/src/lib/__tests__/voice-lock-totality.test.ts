@@ -65,7 +65,7 @@ const files = tsFiles(SRC).map((abs) => ({ rel: relative(SRC, abs).split("\\").j
 const srcOf = (rel: string) => files.find((f) => f.rel === rel)?.src ?? ""
 
 /** The speech provider functions: each sends a voice (or a dub) to the provider. */
-const SPEECH_CALL = /\b(directElevenLabsTTS|directElevenLabsTTSWithTimestamps|directElevenLabsDialogue|directVoiceChanger|voiceChangerFromUrl|startDubbing)\s*\(/
+const SPEECH_CALL = /\b(directElevenLabsTTS|directElevenLabsTTSWithTimestamps|directElevenLabsDialogue|directVoiceChanger|voiceChangerFromUrl|startDubbing|addDubbingProjectLanguage)\s*\(/
 const SPEECH_CALL_G = new RegExp(SPEECH_CALL.source, "g")
 
 /** The worker backstop: the job's voices judged (or, for a dub, refused) under a lock. */
@@ -85,6 +85,7 @@ const SPEECH_LANES: Readonly<Record<string, SpeechLane>> = {
   "providers/elevenlabs/direct-dialogue.ts": { kind: "funnel", why: "the provider funnel itself (definitions)" },
   "providers/elevenlabs/voice-changer.ts": { kind: "funnel", why: "the provider funnel itself (definitions)" },
   "providers/elevenlabs/dubbing.ts": { kind: "funnel", why: "the dubbing service's funnel itself (definitions); a dub names no voice" },
+  "providers/elevenlabs/dubbing-project.ts": { kind: "funnel", why: "the dubbing service's funnel for one more language of a dub it already holds (definition); a dub names no voice" },
   "workers/handlers/audio-ai.ts": {
     kind: "worker",
     why: "the speech worker: its text-to-speech, text-to-dialogue, voice-changer and dubbing jobs are judged where they are created (d) and again by each handler's backstop (c)",
@@ -126,6 +127,8 @@ const JOB_CREATORS: Readonly<Record<string, { readonly judges: RegExp; readonly 
   },
   // A preHandler, the route's first: it runs before the handler that writes the row.
   "routes/dubbing.ts": { judges: /preHandler: \[\s*refuseDubbingUnderVoiceLock,/ },
+  // A language added to a dub: the same lock, before the dub is read or anything is priced.
+  "routes/dubbing-languages.ts": { judges: /preHandler: \[\s*requireAppScope\("assets:write"\),\s*refuseDubbingUnderVoiceLock,/ },
   // The self-hosted relay: every job it creates goes through one funnel, which
   // judges a conversion under the install's own lock right before the row.
   "routes/nodaro-exclusive.ts": {

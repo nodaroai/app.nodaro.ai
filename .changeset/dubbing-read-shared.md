@@ -1,0 +1,5 @@
+---
+"@nodaro/shared": minor
+---
+
+The wire contract of a dub that is already made, through the `media` entry. `DubbingStructure` is what `GET /v1/dubbing/:jobId` answers: the original lines (`DubbingSourceSegment`), every language with its lines (`DubbingLanguage`, `DubbingLanguageStatus`, `DubbingSegment`), the speakers (`DubbingSpeaker`, `DubbingSpeakerVoice`), what can be done to the dub now (`DubbingCapabilities`) and what adding a language is charged (`DubbingAddLanguagePrice`). For the captions export (`GET /v1/dubbing/:jobId/captions`): `DubbingCaptionFormat` with `DUBBING_CAPTION_FORMATS` (`srt`, `vtt`) and `DUBBING_SOURCE_LANGUAGE` (`"source"`, the original speech). For adding a language (`POST /v1/dubbing/:jobId/languages`): `DubbingAddLanguageInput` (`targetLanguage`, and `confirmationId` for a dub made from a link) and `DubbingAddLanguageResult` (the `jobId` that delivers the language). `DubbingErrorCode` with `DUBBING_ERROR_CODES` lists the codes these calls refuse with, and `DUBBING_LANGUAGE_STATUSES` the states a language can be in.

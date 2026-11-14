@@ -37,6 +37,7 @@ import { registerPromptHelper } from "./tools/prompt-helper.js"
 import { registerPickerCatalogs } from "./tools/picker-catalogs.js"
 import { registerPresets } from "./tools/node-presets.js"
 import { registerVoiceFavorites } from "./tools/voice-favorites.js"
+import { registerDubbingTools } from "./tools/dubbing.js"
 import { registerCollectionTools } from "./tools/collections.js"
 import { registerSessionTools } from "./tools/sessions.js"
 import { registerTrashTools } from "./tools/trash.js"
@@ -266,6 +267,9 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   // `/v1/voices/favorites` routes are core; gated by assets:read / assets:write
   // like the gallery's favorites.
   registerVoiceFavorites({ server, session, fastify: opts.fastify })
+  // A dub after it is made (its structure, its captions): every edition, since
+  // the `/v1/dubbing/:jobId` reads are core; gated by assets:read.
+  registerDubbingTools({ server, session, fastify: opts.fastify })
   // Collections (list / read / add a record): every edition — the
   // `/v1/collections*` routes are core and the caps come from the plan on
   // Nodaro Cloud; gated by assets:read / assets:write like the saved posts.

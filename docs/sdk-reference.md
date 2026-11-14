@@ -38,6 +38,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.oauth`](#clientoauth)
   - [`client.webhooks`](#clientwebhooks)
   - [`client.voices`](#clientvoices)
+  - [`client.dubbing`](#clientdubbing)
   - [`client.media`](#clientmedia)
   - [`client.contentRights`](#clientcontentrights)
   - [`client.audio`](#clientaudio)
@@ -71,7 +72,7 @@ The root `@nodaro/sdk` exports everything on this page. Each resource is also
 published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
 resource's module and the types it takes and returns:
 
-`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/content-rights`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/surface`, `/templates`, `/trash`, `/trend-radar`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/content-rights`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/dubbing`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/surface`, `/templates`, `/trash`, `/trend-radar`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 `/client` holds `createClient`, `NodaroClient` and the auth providers;
 `/core` holds `NodaroClientCore` (see below) and the same auth providers;
@@ -147,10 +148,10 @@ const client = createClient({
 | `workspaceId` | `string` | no | The workspace every request acts in, sent as `X-Nodaro-Workspace`. See [`client.withWorkspace`](#clientwithworkspaceworkspaceid). Omit for the caller's personal space. |
 | `clientLabel` | `string` | no | Value sent as the `X-Nodaro-Client` header. Default `sdk/<version>`. The backend records it as the job's origin, so an operator can tell SDK traffic from CLI traffic from browser sessions. `@nodaro/cli` overrides it with `cli/<version>`; set it yourself only if you are building another wrapper. The DEFAULT label is not sent from a browser (the `Origin` header already identifies the app, and Nodaro prefers it) — an explicit `clientLabel` is always sent. |
 
-The instance exposes 37 resource objects: `workflows`, `projects`, `jobs`,
+The instance exposes 38 resource objects: `workflows`, `projects`, `jobs`,
 `videoPro`, `executions`, `nodes`, `characters`, `locations`, `objects`,
 `creatures`, `pipelines`, `reduce`, `promptHelper`, `apps`, `developerApps`,
-`oauth`, `voices`, `llm`, `media`, `audio`, `credits`, `uploads`, `library`,
+`oauth`, `voices`, `dubbing`, `llm`, `media`, `audio`, `credits`, `uploads`, `library`,
 `presets`, `pickerCatalogs`, `catalogs`, `models`, `shots`, `recast`, `castSwap`,
 `trends`, `studio`, `community`, `templates`, `tutorials`, `organizations`, `workspaces`. It also exposes a low-level
 `request<T>(method, path, options)` method for endpoints not yet wrapped by a
@@ -6572,6 +6573,10 @@ requires a confirmation refuses the dub with `403` before the job is created,
 unless the request comes through a key or an agent whose account holds a
 standing authorization (`contentRights.authorize()`).
 
+`client.dubbing.create()` is the same call. Once the dub completes, read it
+back with `client.dubbing.get()` (its lines, languages and speakers) and
+`client.dubbing.captions()` (a caption file per language).
+
 #### `textToDialogue(input)`
 
 ```ts
@@ -6617,6 +6622,149 @@ caption the dialogue without a second transcription.
 > per-character rate for one speaker, over every line; no `transcript`.
 > `outputFormat` picks the file as on `textToSpeech` (the WAV as rendered, or MP3
 > encoded from it); the ElevenLabs dialogue models deliver the default MP3 only.
+
+---
+
+### `client.dubbing`
+
+Make a dub, then read what it holds: the lines of the original speech, every
+language the dub speaks with its lines, the speakers, and the captions of
+each language; and add a language to it (`/v1/dubbing/*`; see
+[A dub after it is made](./api-integration.md#a-dub-after-it-is-made)). Only
+the account that made a dub reads it: anyone else's job id is a
+`NotFoundError`. The reads are free; an OAuth app needs `assets:read` for
+them, and `assets:write` to add a language, which is charged. A
+refusal is a `NodaroError` whose `code` is a `DubbingErrorCode`, with the
+HTTP status in `status`. Also importable as `@nodaro/sdk/dubbing`.
+
+#### `create(input)`
+
+```ts
+create(input: DubbingCreateInput): Promise<{ jobId: string }>
+```
+
+Starts a dub of an audio or video file, or of a link, into `targetLanguage`
+(`POST /v1/dubbing`): the same call as `voices.dub()`, with the same input
+(`DubbingCreateInput` is `DubbingInput`) and the same price. It runs as a
+job: poll `jobs.get(jobId)` until it completes, then read the dub by that id.
+
+#### `get(jobId)`
+
+```ts
+get(jobId: string): Promise<DubbingStructure>
+
+interface DubbingStructure {
+  jobId: string                     // the job the dub was created by
+  durationSec: number | null        // seconds of media the dub covers
+  source: {                         // the original speech; null when its lines cannot be read
+    language: string | null
+    segments: DubbingSourceSegment[] // { id, speakerId, start, end, text }
+  } | null
+  languages: DubbingLanguage[]      // one per language the dub speaks
+  speakers: DubbingSpeaker[]        // { id, name, voice, segmentCount }
+  capabilities: DubbingCapabilities
+  addLanguage: DubbingAddLanguagePrice // { billableMinutes, creditId, creditIdByLanguage }
+}
+
+interface DubbingLanguage {
+  code: string                      // "es", "pt-BR"
+  jobId: string | null              // the job whose result is this language's dubbed media
+  status: "processing" | "completed" | "stale" | "failed"
+  segments: DubbingSegment[]        // empty unless completed or stale, and where the dubbing service does not give the language's lines
+}
+
+interface DubbingSegment {
+  id: string
+  speakerId: string | null
+  start: number                     // seconds from the start of the media
+  end: number
+  sourceSegmentId: string | null    // the id of the source line this one translates; null where the dub's lines carry no link to the source lines
+  sourceText: string | null         // the original text this line translates; null where the dub keeps none (it can be told where sourceSegmentId is null)
+  text: string
+}
+
+interface DubbingCapabilities {
+  editSegments: boolean
+  regenerate: boolean
+  setSpeakerVoice: boolean
+  render: boolean
+  addLanguage: boolean
+  captions: boolean
+}
+```
+
+The dub's structure (`GET /v1/dubbing/:jobId`). `jobId` is the job the dub
+was created by, or the job of a language added to it later: both read the
+same dub. Offer an action only when its flag in `capabilities` is `true`;
+`editSegments`, `regenerate`, `setSpeakerVoice` and `render` are `false`
+today. A speaker's `name` and `voice` are `null` when they cannot be read.
+Refuses with `dubbing_not_ready` (409) until the dub completes,
+`dubbing_failed` (422) when it was not made, `not_a_dubbing_job` (422) for
+another kind of job, and `dubbing_unavailable` (410) once the dubbing
+service no longer holds it.
+
+#### `captions(jobId, options)`
+
+```ts
+captions(jobId: string, options: { language: string; format?: "srt" | "vtt" }): Promise<string>
+```
+
+The captions of one language of the dub, or of its original speech
+(`language: "source"`), as the text of a SubRip (`"srt"`, the default) or
+WebVTT (`"vtt"`) file (`GET /v1/dubbing/:jobId/captions`). `language` is a
+`code` the structure lists, matched whatever its case. A language is
+exported once its `status` is `completed` or `stale`, as long as the
+dubbing service gives its captions. Refuses with
+`dubbing_language_not_found` (404) for a language the dub does not list,
+`dubbing_language_processing` (409) while that language is still being
+made, and `dubbing_captions_unavailable` (422) when it has no captions to
+export: it failed, or the dubbing service does not give them.
+
+```ts
+const { jobId } = await client.dubbing.create({ videoUrl, targetLanguage: "es" })
+// … poll client.jobs.get(jobId) until the job completes, then:
+const dub = await client.dubbing.get(jobId)
+for (const language of dub.languages) {
+  if (language.status !== "completed") continue
+  const srt = await client.dubbing.captions(jobId, { language: language.code })
+  const vtt = await client.dubbing.captions(jobId, { language: language.code, format: "vtt" })
+}
+const original = await client.dubbing.captions(jobId, { language: "source" })
+```
+
+#### `addLanguage(jobId, input)`
+
+```ts
+addLanguage(jobId: string, input: DubbingAddLanguageInput): Promise<DubbingAddLanguageResult>
+
+interface DubbingAddLanguageInput {
+  targetLanguage: string    // the language to add, e.g. "de", "pt-BR"
+  confirmationId?: string   // for a dub made from a link someone else holds, as create() takes it
+}
+interface DubbingAddLanguageResult {
+  jobId: string             // the job that delivers the language
+}
+```
+
+Adds a language to a dub that is already made
+(`POST /v1/dubbing/:jobId/languages`) and answers the job that delivers it:
+poll `jobs.get(jobId)` until it completes, then `get()` lists the language.
+`jobId` names the dub as in `get()`. Offer it only where
+`get(jobId).capabilities.addLanguage` is true. It is charged per started
+minute of the dub, at the price `get(jobId).addLanguage` names. A Hebrew dub
+takes the language into the same project, so nothing is uploaded again; any
+other dub takes it as a new dub of the same source, with the same settings.
+Refuses with `dubbing_language_exists` (409) for a language the dub already
+has, `unreadable_dubbing_source` (422) when the dub's source or length can no
+longer be read, and with the refusals of `get()`.
+
+```ts
+const dub = await client.dubbing.get(jobId)
+if (dub.capabilities.addLanguage) {
+  const added = await client.dubbing.addLanguage(jobId, { targetLanguage: "de" })
+  // … poll client.jobs.get(added.jobId) until it completes; get(jobId) then lists "de".
+}
+```
 
 ---
 
@@ -10329,6 +10477,11 @@ not two.
 - `VcpAnalysis` / `VcpAnalysisSpeaker` — an analyze result, reshaped for `recast({ analysis })`
 - `VcpExportInput` / `VcpExportTrack` — `exportMix()` input / one mix lane
 - `VoiceDesignInput`, `VoiceRemixInput`, `DubbingInput` — inputs for `design()` / `remix()` / `dub()`
+- `DubbingCreateInput` — `dubbing.create()` input (the same type as `DubbingInput`)
+- `DubbingStructure`, `DubbingLanguage`, `DubbingLanguageStatus`, `DubbingSegment`, `DubbingSourceSegment`, `DubbingSpeaker`, `DubbingSpeakerVoice`, `DubbingCapabilities`, `DubbingAddLanguagePrice` — what `dubbing.get()` answers, re-exported from `@nodaro/shared`
+- `DubbingCaptionsOptions`, `DubbingCaptionFormat` — `dubbing.captions()` options
+- `DubbingAddLanguageInput`, `DubbingAddLanguageResult` — `dubbing.addLanguage()` input and result
+- `DubbingErrorCode` — the refusal codes of the dubbing reads and of `dubbing.addLanguage()`
 - `AudioFxPreset` — the fx preset union used by `voiceFx.preset` and `audio.applyFx`, re-exported from `@nodaro/shared`
 
 ### Media & audio

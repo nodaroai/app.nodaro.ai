@@ -9,6 +9,7 @@ import { routeNodeGate } from "../../lib/route-node-gate.js"
 import { EMPTY_PRICE_NOTES, type PriceNotes } from "../../lib/price-notes.js"
 import { unitQuotableTypes, unitQuoteOf } from "../../lib/unit-quotes.js"
 import { deniedRunModels, runNodeRefusal, type RoutePricing } from "../../middleware/credit-guard.js"
+import { callerBodyOf } from "../../middleware/server-only-body-keys.js"
 import { handlePriceNotConfigured, markedUpCredits, reservedCreditsFor } from "../lib/credit-guard-impl.js"
 import { textToVideoBody, textToVideoPricing } from "../../routes/text-to-video.js"
 import { generateVideoBody, generateVideoPricing } from "../../routes/generate-video.js"
@@ -109,7 +110,10 @@ export function registerNodeQuote(app: FastifyInstance): void {
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }
-    const { type, params } = parsed.data
+    const { type } = parsed.data
+    // The run's body, less the keys the server keeps its own measurements
+    // under, exactly as the run's route reads it.
+    const params = callerBodyOf(req, parsed.data.params)
     const entry = quotableNodeOf(type)
     if (!entry) {
       const supported = quotableNodeTypes()

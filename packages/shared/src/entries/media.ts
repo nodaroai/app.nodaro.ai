@@ -1,5 +1,5 @@
 /**
- * `@nodaro/shared/media` — Media-editing contracts: image overlays, masks, Lottie slots, depth, inpaint regions, audio FX presets, the FreeCut protocol.
+ * `@nodaro/shared/media` — Media-editing contracts: image overlays, masks, Lottie slots, depth, inpaint regions, audio FX presets, the FreeCut protocol, the dubbing structure.
  *
  * One of the package's subpath entries (see `src/index.ts`). The root
  * re-exports every entry, so each name here is also importable from
@@ -37,3 +37,5 @@ export * from "../generate-mask.js"
 export * from "../mask-composite.js"
 export * from "../image-overlay-shapes.js"
 export * from "../image-overlay-platforms.js"
+// --- A dub read back by job id: its lines per language, its captions formats ---
+export * from "../dubbing-structure.js"

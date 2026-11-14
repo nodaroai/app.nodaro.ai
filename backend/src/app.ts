@@ -325,6 +325,8 @@ import { heygenCatalogRoutes } from "./routes/heygen-catalog.js"
 import { voiceCloneRoutes } from "./routes/voice-clones.js"
 import { voiceChangerRoutes } from "./routes/voice-changer.js"
 import { dubbingRoutes } from "./routes/dubbing.js"
+import { dubbingReadRoutes } from "./routes/dubbing-read.js"
+import { dubbingLanguageRoutes } from "./routes/dubbing-languages.js"
 import { voiceRemixRoutes } from "./routes/voice-remix.js"
 import { voiceDesignRoutes } from "./routes/voice-design.js"
 import { forcedAlignmentRoutes } from "./routes/forced-alignment.js"
@@ -401,6 +403,7 @@ import { registerPluginRouteScopeHook } from "./lib/plugin-route-scopes.js"
 import { registerTokenWorkflowScopeGuard } from "./middleware/token-workflow-scope.js"
 import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-guard.js"
 import { registerRetiredVideoProviderHook } from "./middleware/retired-video-provider.js"
+import { registerServerOnlyBodyKeysHook } from "./middleware/server-only-body-keys.js"
 import { registerNodaroMotionEngineHook } from "./middleware/nodaro-motion-engine.js"
 import { registerNodaroMotionPulseAudioHook } from "./middleware/nodaro-motion-pulse-audio.js"
 import { registerNodaroMotionPrismReferenceAudioHook } from "./middleware/nodaro-motion-prism-reference-audio.js"
@@ -622,6 +625,9 @@ export async function buildApp() {
   })
 
   registerAuthHook(app)
+  // The keys a route keeps the server's own measurements under are never a
+  // caller's: dropped from every body from outside before any route reads it.
+  registerServerOnlyBodyKeysHook(app)
   // Admin network blocks: browser sessions from a blocked network (after auth,
   // so an admin is recognised and never refused). Inert without an admin panel.
   registerNetworkBlockHook(app)
@@ -963,6 +969,8 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   await app.register(voiceCloneRoutes)
   await app.register(voiceChangerRoutes)
   await app.register(dubbingRoutes)
+  await app.register(dubbingReadRoutes)
+  await app.register(dubbingLanguageRoutes)
   await app.register(voiceRemixRoutes)
   await app.register(voiceDesignRoutes)
   await app.register(forcedAlignmentRoutes)

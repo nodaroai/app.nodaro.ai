@@ -3,6 +3,7 @@ import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
 import { config } from "../config.js"
 import { IMPORT_VIA_HEADER } from "../import-via.js"
 import { withJobSubmissionContext } from "../job-submission-context.js"
+import { withoutServerOnlyKeys } from "../server-only-keys.js"
 import type { McpSession } from "./session.js"
 
 /**
@@ -130,6 +131,9 @@ function inject(fastify: FastifyInstance, session: McpSession, opts: McpInjectOp
       // An object body is always read as JSON, whatever content type a caller passed.
       ...(isObjectBody(opts.payload) ? { "content-type": "application/json" } : {}),
     },
-    ...(opts.payload !== undefined ? { payload: opts.payload } : {}),
+    // A caller's arguments travel under the internal secret, which keeps a body
+    // as sent: the keys the server keeps its own measurements under are dropped
+    // here, as they are from any other caller's body.
+    ...(opts.payload !== undefined ? { payload: withoutServerOnlyKeys(opts.payload) } : {}),
   })
 }

@@ -106,6 +106,16 @@ Needs `assets:write` · Nodaro Cloud only.
 | `is_own` | boolean |  | The user's own brand. |
 | `schedule` | string |  | Default weekly. One of `off`, `weekly`, `daily`. |
 
+## `add_dubbing_language`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | yes | The dub's job id, or the job id of a language added to it. At least 1 character. |
+| `target_language` | string | yes | The language to add (es, pt-BR, ...). From 2 to 10 characters. |
+| `confirmation_id` | string |  | The content rights confirmation, for a dub made from a link someone else holds. |
+
 ## `analyze_prompt`
 
 Needs `workflows:execute`.
@@ -1519,6 +1529,27 @@ Needs `assets:read`.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | yes | The creature's UUID (from list_creatures). |
+
+## `get_dubbing`
+
+Needs `assets:read`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | yes | The dub's job id, or the job id of a language added to it. At least 1 character. |
+| `language` | string |  | Read the segments of this language: a code the dub lists, or "source" for the original speech. From 2 to 10 characters. |
+| `offset` | integer |  | The first segment of the page, counted from 0. Default 0. At least 0. |
+| `limit` | integer |  | How many segments the page holds. Default 50. From 1 to 200. |
+
+## `get_dubbing_captions`
+
+Needs `assets:read`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | yes | The dub's job id, or the job id of a language added to it. At least 1 character. |
+| `language` | string | yes | A language code the dub lists, or "source" for the original speech. From 2 to 10 characters. |
+| `format` | string |  | The file format. Default srt. One of `srt`, `vtt`. |
 
 ## `get_job`
 

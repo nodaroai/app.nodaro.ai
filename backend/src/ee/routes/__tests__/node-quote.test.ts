@@ -13,6 +13,11 @@ vi.mock("../../../lib/config.js", async () => {
   return { ...actual, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, isCloud: () => true, hasAdmin: () => true }
 })
 vi.mock("../../../lib/admin-check.js", () => ({ warmAdminCache: vi.fn() }))
+// The quote reads its run body through the app's own rule for a caller's body (spied, not changed).
+vi.mock("../../../middleware/server-only-body-keys.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../middleware/server-only-body-keys.js")>()
+  return { ...actual, callerBodyOf: vi.fn(actual.callerBodyOf) }
+})
 vi.mock("../../../lib/app-settings.js", () => ({
   // A real markup, so the quote has to mark up exactly as the reservation does.
   getAppSettings: vi.fn(() => Promise.resolve({ cost_markup_percent: 10 })),
@@ -622,5 +627,15 @@ describe("a declared reference with an automatic length", () => {
     } finally {
       probe.probeMediaDuration.mockImplementation(async () => 10)
     }
+  })
+})
+
+describe("POST /v1/quote reads the run body as the run's route does", () => {
+  it("drops the keys the server keeps its own measurements under before anything reads the body", async () => {
+    const { callerBodyOf } = await import("../../../middleware/server-only-body-keys.js")
+    const { quote, reserved } = await quoteThenRun("text-to-video", { prompt: "a quiet street at dawn", __probedDurationSec: 1 })
+    expect(quote.reserve).toBe(reserved)
+    expect(callerBodyOf).toHaveBeenCalledOnce()
+    expect(vi.mocked(callerBodyOf).mock.results[0]?.value).toEqual({ prompt: "a quiet street at dawn" })
   })
 })

@@ -222,6 +222,20 @@ describe("payload-builder-ai-avatar.test.ts", () => {
       expect(result.modelIdentifier).toBe("heygen-avatar-v:1080p:120s")
     })
 
+    it("never prices audio mode by a length the node's data states", () => {
+      const n = node("n1", {
+        engine: "avatar-v",
+        avatarId: "avatar-abc",
+        speechMode: "audio",
+        resolution: "1080p",
+        aspectRatio: "16:9",
+        __probedDurationSec: 1,
+      })
+      const inputs: ResolvedInputs = { audioUrl: "https://r2.example.com/audio/clip.mp3" }
+      const result = buildPayload(n, jobId, inputs, usageLogId)
+      expect(result.modelIdentifier).toBe("heygen-avatar-v:1080p:120s")
+    })
+
     it("pins the credit engine to avatar-iv in image-source mode (regardless of stored engine)", () => {
       // Image-source mode is IV-class — billing must NOT use avatar-v even if the
       // stale stored engine says so. resolveAiAvatarCreditId enforces this.

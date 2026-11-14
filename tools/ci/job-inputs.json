@@ -738,6 +738,7 @@
         "backend/src/lib/scopes.ts",
         "backend/src/lib/seedance-draft-audio.ts",
         "backend/src/lib/seedance-draft-finalize.ts",
+        "backend/src/lib/server-only-keys.ts",
         "backend/src/lib/server-started-runs.ts",
         "backend/src/lib/site-asset-keys.ts",
         "backend/src/lib/site-capture-switch.ts",

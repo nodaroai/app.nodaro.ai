@@ -1,0 +1,5 @@
+---
+"@nodaro/sdk": minor
+---
+
+A `dubbing` resource (also `@nodaro/sdk/dubbing`) for a dub after it is made. `dubbing.get(jobId)` (`GET /v1/dubbing/:jobId`) answers its `DubbingStructure`: the original lines, every language with its lines and status, the speakers, what can be done to it now (`capabilities`) and what adding a language is charged. `dubbing.captions(jobId, { language, format })` (`GET /v1/dubbing/:jobId/captions`) answers the text of an SRT or WebVTT file for one language, or for the original speech with `language: "source"`. Both are free, and only the account that made the dub reads it. `dubbing.addLanguage(jobId, { targetLanguage, confirmationId? })` (`POST /v1/dubbing/:jobId/languages`) adds a language to the dub and answers the job that delivers it; it is charged per started minute of the dub, at the price `get()` names. `dubbing.create(input)` starts a dub: the same call as `voices.dub(input)`, which stays. A refusal is a `NodaroError` whose `code` is a `DubbingErrorCode` (`dubbing_not_ready`, `dubbing_language_not_found`, …). The dubbing types are exported from the SDK, so typing a dub needs no second dependency.

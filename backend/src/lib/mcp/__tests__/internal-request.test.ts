@@ -70,6 +70,14 @@ describe("mcpInject", () => {
     expect(headers["x-route-own"]).toBe("kept")
   })
 
+  it("drops the keys the server keeps its own measurements under from an object body, and nothing else", async () => {
+    const r = recorder()
+    const payload = { a: 1, __probedDurationSec: 1, nested: { __kept: 1 } }
+    await mcpInject(r.fastify, session(WS), { method: "POST", url: "/v1/thing", payload })
+    expect(r.calls[0].payload).toEqual({ a: 1, nested: { __kept: 1 } })
+    expect(payload).toEqual({ a: 1, __probedDurationSec: 1, nested: { __kept: 1 } })
+  })
+
   it("names the session's user on every request, a POST that passed no header included (#1888)", async () => {
     // The rate limiter keys an internal request on this header; without it
     // every MCP user on an instance shared one bucket (the loopback address).

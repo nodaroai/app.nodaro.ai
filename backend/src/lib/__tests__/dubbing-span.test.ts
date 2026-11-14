@@ -4,7 +4,7 @@ vi.mock("../credit-base-cost.js", () => ({
   baseCreditCostFor: vi.fn(async (id: string) => (id === "elevenlabs-dubbing" ? 40 : 999)),
 }))
 
-import { dubbingBaseCredits, dubbingMinutes, dubbingReservePlan, effectiveDubbedSeconds } from "../dubbing-span.js"
+import { dubbingBaseCredits, dubbingBaseCreditsFor, dubbingMinutes, dubbingReservePlan, effectiveDubbedSeconds } from "../dubbing-span.js"
 
 // The worked examples in docs/nodes/ai-audio/dubbing.md are these minutes, charged
 // at the deployment settings (docs-charged-prices.test.ts holds the figures).
@@ -44,5 +44,17 @@ describe("dubbing span rules", () => {
 
   it("a known span is reserved as is, not as a ceiling", () => {
     expect(dubbingReservePlan(95)).toEqual({ seconds: 95, ceiling: false })
+  })
+})
+
+describe("a dub whose row is already known", () => {
+  it("is priced on that row, whatever language it speaks", async () => {
+    expect(await dubbingBaseCreditsFor("elevenlabs-dubbing-v2", 61)).toBe(2 * 999)
+    expect(await dubbingBaseCreditsFor("elevenlabs-dubbing", 61)).toBe(80)
+  })
+
+  it("is what a language-priced dub resolves to", async () => {
+    expect(await dubbingBaseCredits("he", 125)).toBe(await dubbingBaseCreditsFor("elevenlabs-dubbing-v2", 125))
+    expect(await dubbingBaseCredits("fr", 125)).toBe(await dubbingBaseCreditsFor("elevenlabs-dubbing", 125))
   })
 })

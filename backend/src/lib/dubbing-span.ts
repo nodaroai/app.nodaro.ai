@@ -42,5 +42,13 @@ export function dubbingReservePlan(spanSec: number | undefined): DubbingReserveP
  * 0 when credits are off.
  */
 export async function dubbingBaseCredits(targetLanguage: unknown, seconds: number): Promise<number> {
-  return (await baseCreditCostFor(dubbingModelIdentifier(targetLanguage))) * dubbingMinutes(seconds)
+  return dubbingBaseCreditsFor(dubbingModelIdentifier(targetLanguage), seconds)
+}
+
+/**
+ * The same price for a dub whose row is already known: a language added to a
+ * project dub is charged on the project's row, whatever language it speaks.
+ */
+export async function dubbingBaseCreditsFor(modelId: string, seconds: number): Promise<number> {
+  return (await baseCreditCostFor(modelId)) * dubbingMinutes(seconds)
 }

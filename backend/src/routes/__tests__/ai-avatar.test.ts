@@ -72,6 +72,7 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
 // ---------------------------------------------------------------------------
 
 import { aiAvatarRoutes, probeAudioDurationPreHandler } from "../ai-avatar.js"
+import { registerServerOnlyBodyKeysHook } from "../../middleware/server-only-body-keys.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { resolveAiAvatarCreditId } from "@nodaro/shared/credits"
 import { supabase } from "../../lib/supabase.js"
@@ -99,6 +100,8 @@ beforeEach(async () => {
     }
   })
 
+  // As the app drops them: a body's server-only keys never reach the route.
+  registerServerOnlyBodyKeysHook(app)
   await app.register(async (instance) => {
     await aiAvatarRoutes(instance)
   })
@@ -397,6 +400,29 @@ describe("ai-avatar audio-mode reserve bucketing", () => {
     const modelId = vi.mocked(reserveCreditsForJob).mock.calls[0]?.[3]
     expect(modelId).toBe("heygen-avatar-iv:720p:120s")
     expect(modelId).not.toBe("heygen-avatar-iv:720p:900s")
+  })
+
+  it("never prices a length the request states: a failed probe still falls back to the 120s bucket", async () => {
+    mockProbeMediaDuration.mockRejectedValueOnce(new Error("ffprobe failed"))
+    mockJobInsert({ data: { id: "job-audio-stated" }, error: null })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/ai-avatar",
+      payload: {
+        avatarId: "avatar-123",
+        engine: "avatar-iv",
+        speechMode: "audio",
+        audioUrl: VALID_AUDIO_URL,
+        resolution: "720p",
+        userId: VALID_USER_ID,
+        __probedDurationSec: 1,
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const modelId = vi.mocked(reserveCreditsForJob).mock.calls[0]?.[3]
+    expect(modelId).toBe("heygen-avatar-iv:720p:120s")
   })
 })
 

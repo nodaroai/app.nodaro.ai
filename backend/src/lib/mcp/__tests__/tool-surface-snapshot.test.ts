@@ -1674,6 +1674,15 @@ const ADD_CAPTIONS_NEMOTRON_BYTES = 12
 // 88 B, all on generate_video (9_864 → 9_952 B, inside the per-tool budget).
 const KLING_4_VIDEO_SUBJECT_BYTES = 88
 
+// RAISED 2026-11-12 by a dub's tools after it is made, and nothing else: three tools are
+// ADDED — `get_dubbing` (a dub's languages, speakers and original speech, or one language's
+// segments a page at a time: 1_454 B), `get_dubbing_captions` (its captions as the text of an
+// SRT or WebVTT file: 946 B) and `add_dubbing_language` (a language added to the dub, answered
+// as the job that delivers it: 1_303 B) — so the membership fixture moves too (both `all` sets;
+// they register in every edition). Measured by this suite: 539_375 total − 535_672 = 3_703 B,
+// the three definitions together (each far under the per-tool budget).
+const DUBBING_TOOLS_BYTES = 3_703
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES,
   totalBytes:
@@ -1884,7 +1893,8 @@ export const TOOL_WIRE_BUDGET = {
     GEMINI_TTS_BYTES +
     GEMINI_DIALOGUE_BYTES +
     GEMINI_REPLICA_BYTES +
-    KLING_4_VIDEO_SUBJECT_BYTES,
+    KLING_4_VIDEO_SUBJECT_BYTES +
+    DUBBING_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }
