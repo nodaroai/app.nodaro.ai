@@ -171,12 +171,22 @@ and edits, from a first draft up to 4K.
   **8 credits**<!-- credits: flux-3-klein:2K --> or **19 credits**<!-- credits: flux-3-klein:4K -->.
 - With reference images or a base image it edits instead, from 1 to 10 images,
   at the same price: the images cost nothing extra. A base image counts as one
-  of the 10. A run that would send more (your references and the base, or a
-  Scene's references) is refused before anything is charged, with a message
-  saying how many to remove, on the API and in a workflow run. As on every
-  model, wired references past the model's limit are not attached; and a
+  of the 10. A run that would send more is refused before anything is charged,
+  with a message saying how many to remove ("FLUX 3 Klein takes at most 10
+  input images, the source or base image included, and this run would send 11:
+  remove 1."), on the API, in the editor and in a workflow run. Every image the
+  run would send counts: references, images mentioned in the prompt
+  (`connectedReferences`), images attached to the node, a Scene's references
+  and the base. None is left out to make the run fit, so a mention never stays
+  in the prompt as plain text for an image that was not sent. A wired
+  character's looks that the prompt does not mention are not sent, so they do
+  not count. On the API, a request past the lists' own limits (14
+  `connectedReferences`, 16 `referenceImageUrls`) that would send more than 10
+  images gets the same message, rather than a bare limit on the list. A
   moodboard's images fill only the seats left after your references and the
-  base.
+  base, and never make a run refused.
+- Other models still leave out wired and mentioned references past their
+  reference limit, as before.
 - PNG (the default) or JPEG, the same price.
 - With no photo wired in, Auto is sent as 1:1 (the text-to-image model takes no
   auto). With a photo, the run moves to the edit model, which is sent its own

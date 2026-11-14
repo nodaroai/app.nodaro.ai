@@ -34,7 +34,7 @@ import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, MINIMAX_H3_IMAGE_RESOLUTIONS } fro
 import { isAutoVideoDuration } from "./video-duration-auto.js"
 import type { DeclaredSeedanceTaskType } from "./seedance-task-type.js"
 import { SEEDREAM_5_5_DEFAULT_RESOLUTION, SEEDREAM_5_5_RESOLUTIONS } from "./seedream-5-5.js"
-import { FLUX_3_KLEIN_RESOLUTIONS } from "./flux-3-klein.js"
+import { FLUX_3_KLEIN_DEFAULT_RESOLUTION, FLUX_3_KLEIN_RESOLUTIONS } from "./flux-3-klein.js"
 import {
   GEMINI_3_1_DEFAULT_VOICE,
   GEMINI_3_1_TTS_ACCENTS,
@@ -416,6 +416,18 @@ export interface ModelCatalogEntryFields {
    * `audio_to_video` task). The node's Audio Refs input then takes one clip.
    */
   features?: readonly string[]
+  /**
+   * A run that would send this image model more input images than
+   * `requestImageLimit` allows, the source or base image counted, is refused
+   * before anything is reserved, with a message saying how many to remove
+   * (`refusesImagesOverLimit`). Nothing trims it first: the prompt assembler
+   * sends every image a run attaches, so the count refused is the count the
+   * run would send. Set on FLUX 3 Klein, text to image and edit alike
+   * (decided 2026-11-12: an 11th image is refused, never left out). Without
+   * it, the assembler trims structured references past the model's reference
+   * limit, as it always has.
+   */
+  refusesImagesOverLimit?: true
   /**
    * How this video model's provider addresses its images in the prompt, by
    * array order — the syntax its frame / identity binding sentences are written
@@ -1104,9 +1116,11 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     description: "FLUX 3 Klein - the light model of FLUX 3: fast and low cost, at 1K by default, 2K or 4K, in nine shapes, PNG or JPEG. Add images and it edits from up to 10 references, at the same price.",
     useCases: ["fast", "drafts", "iteration", "realistic"],
     features: ["reference-image"],
+    refusesImagesOverLimit: true,
     aspectRatios: FLUX_3_KLEIN_RATIOS,
     strictAspectRatios: true,
     resolutions: FLUX_3_KLEIN_RESOLUTIONS,
+    defaultResolution: FLUX_3_KLEIN_DEFAULT_RESOLUTION,
     outputFormats: FLUX_3_KLEIN_FORMATS,
     pricing: [
       { identifier: "flux-3-klein", credits: 4, note: "1K default" },
@@ -1126,9 +1140,11 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     description: "FLUX 3 Klein edits - fast, low-cost changes from 1 to 10 reference images, which cost nothing extra. 1K by default, 2K or 4K, PNG or JPEG; auto keeps the first image's shape.",
     useCases: ["edit", "iteration", "multi-reference", "fast"],
     features: ["reference-image"],
+    refusesImagesOverLimit: true,
     aspectRatios: FLUX_3_KLEIN_I2I_RATIOS,
     strictAspectRatios: true,
     resolutions: FLUX_3_KLEIN_RESOLUTIONS,
+    defaultResolution: FLUX_3_KLEIN_DEFAULT_RESOLUTION,
     outputFormats: FLUX_3_KLEIN_FORMATS,
     pricing: [
       { identifier: "flux-3-klein-i2i", credits: 4, note: "1K default" },

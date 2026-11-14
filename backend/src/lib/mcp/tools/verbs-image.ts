@@ -32,7 +32,7 @@ import {
 import { imageFormatArgs, imageFormatBody } from "./_image-format-args.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodaro/shared/model-catalog"
-import { I2I_MASK_SUPPORT, IMAGE_BACKGROUND_VALUES, IMAGE_K_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, requestImageLimit } from "@nodaro/shared/models"
+import { I2I_MASK_SUPPORT, IMAGE_BACKGROUND_VALUES, IMAGE_K_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, refusesImagesOverLimit, requestImageLimit } from "@nodaro/shared/models"
 import { UPSCALE_FACTORS } from "@nodaro/shared/credits"
 import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
 import { getUserMcpPreferences } from "../user-preferences.js"
@@ -356,7 +356,17 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         )
         // Tolerant: array | JSON-string | lone URL; asset ids resolved to URLs.
         // The route's referenceImageUrls schema is URL-only (and capped per model).
-        const refUrls = await resolveRefArray(effective.reference_image_urls, session.userId, "image", requestImageLimit(fanOut ? undefined : ((effective.model as string | undefined) ?? model)))
+        // A model that refuses images over its limit (`refusesImagesOverLimit`:
+        // FLUX 3 Klein) gets every reference, so the route's refusal says how
+        // many to remove instead of the extra ones being left out here.
+        const refUrls = await resolveRefArray(
+          effective.reference_image_urls,
+          session.userId,
+          "image",
+          (fanOut ? fanModels : [model]).some((m) => refusesImagesOverLimit(m))
+            ? Number.POSITIVE_INFINITY
+            : requestImageLimit(fanOut ? undefined : ((effective.model as string | undefined) ?? model)),
+        )
         // "auto" keeps the shape of the photo the call sends (the base image,
         // else the first reference): /v1/generate-image resolves it against
         // that photo — natively, or to the model's nearest listed ratio — so a
@@ -751,7 +761,15 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       const { provider } = levers
       // Resolve asset ids → URLs (route's referenceImageUrls is URL-only);
       // tolerant of array | lone string | JSON-stringified array inputs.
-      const i2iRefs = await resolveRefArray(args.reference_image_urls, session.userId, "image", requestImageLimit(provider) - 1)
+      // Beside the source, up to the model's limit; every one on a model that
+      // refuses images over its limit (FLUX 3 Klein), which the route refuses
+      // saying how many to remove, rather than one being left out here.
+      const i2iRefs = await resolveRefArray(
+        args.reference_image_urls,
+        session.userId,
+        "image",
+        refusesImagesOverLimit(provider) ? Number.POSITIVE_INFINITY : requestImageLimit(provider) - 1,
+      )
       const payload: Record<string, unknown> = {
         imageUrl,
         prompt: args.prompt,

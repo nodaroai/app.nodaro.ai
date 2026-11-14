@@ -620,6 +620,24 @@ describe("generate-image", () => {
     expect(mockRunImageGeneration).toHaveBeenCalledTimes(1)
   })
 
+  // The editor assembles with the shared assembler, which used to trim a
+  // node's attached images to the model's limit, so 11 on FLUX 3 Klein ran as
+  // 10. A model that refuses images over its limit is no longer trimmed: the
+  // request carries all 11 and the route refuses it, saying how many to remove,
+  // before anything is reserved.
+  it("sends every attached image on FLUX 3 Klein, so an 11th is refused rather than left out", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a still life" })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    mockCollectAncestorRefs.mockReturnValue([])
+    const urls = (n: number) => Array.from({ length: n }, (_, i) => `https://cdn.test/attached-${i + 1}.png`)
+    const extraRefs = (n: number) => urls(n).map((url) => ({ url, description: "a look" }))
+    await executeNode(makeNode("generate-image", { provider: "flux-3-klein", extraRefs: extraRefs(11) }), makeCtx())
+    expect(mockRunImageGeneration.mock.calls.at(-1)?.[3]).toEqual(urls(11))
+    // Every other model keeps its trim (Nano Banana Pro takes 8).
+    await executeNode(makeNode("generate-image", { provider: "nano-banana-pro", extraRefs: extraRefs(9) }), makeCtx())
+    expect(mockRunImageGeneration.mock.calls.at(-1)?.[3]).toEqual(urls(8))
+  })
+
   it("rejects with 'No prompt' when no prompt available", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(

@@ -3479,7 +3479,10 @@ the picture belongs instead of relying on the trailing auto-attach block.
 - Honored when the route assembles in the hybrid reference format. Under the
   legacy format the token stays literal text and the reference auto-attaches
   exactly as before. A token whose reference was capped out by the provider's
-  image-reference limit likewise stays literal.
+  image-reference limit likewise stays literal. FLUX 3 Klein caps nothing out:
+  a request that would send it more than 10 images, a base image counted, is
+  refused with a `400` (`validation_error`) saying how many to remove, before
+  anything is charged.
 
 Mentioning a reference **re-seats** it: its URL moves from the trailing
 auto-attach block into the mention block, which re-letters the references after

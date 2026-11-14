@@ -12,6 +12,7 @@ import {
   getMaxImagePromptChars,
   getMinImagePromptChars,
   imageReferenceLimit,
+  refusesImagesOverLimit,
   requestImageLimit,
 } from "../model-constants.js"
 import { isPricedPerInputImage, priceReadsInputImages, pricedEstimatedImages, pricedSentImages } from "../input-image-pricing.js"
@@ -49,11 +50,14 @@ describe("FLUX 3 Klein in the catalog", () => {
     expect(isFlux3KleinI2i(I2I)).toBe(true)
   })
 
-  it("takes 1K, 2K and 4K, 1K when none is named", () => {
+  it("takes 1K, 2K and 4K, 1K when none is named, declared rather than read from the list's order", () => {
     for (const id of [T2I, I2I]) {
       expect(MODEL_CATALOG[id]!.resolutions).toEqual(["1K", "2K", "4K"])
-      expect(MODEL_CATALOG[id]!.defaultResolution).toBeUndefined()
-      expect(defaultResolutionFor(id)).toBeUndefined()
+      expect(MODEL_CATALOG[id]!.defaultResolution).toBe("1K")
+      expect(MODEL_CATALOG[id]!.defaultResolution).toBe(FLUX_3_KLEIN_DEFAULT_RESOLUTION)
+      expect(defaultResolutionFor(id)).toBe("1K")
+      // A size it does not list snaps to the declared default.
+      expect(normalizeModelInput(id, { resolution: "8K" }).resolution).toBe("1K")
     }
     expect(FLUX_3_KLEIN_DEFAULT_RESOLUTION).toBe("1K")
     expect(flux3KleinResolution(undefined)).toBe("1K")
@@ -185,6 +189,50 @@ describe("FLUX 3 Klein's place in the shared lists", () => {
     expect(imageReferenceLimit("flux-2-klein")).toBe(1)
     expect(requestImageLimit("flux-2-klein")).toBe(14)
   })
+
+  it("refuses a run over its 10 images rather than having one left out (decided 2026-11-12)", () => {
+    expect(refusesImagesOverLimit(T2I)).toBe(true)
+    expect(refusesImagesOverLimit(I2I)).toBe(true)
+    expect(MODEL_CATALOG[T2I]!.refusesImagesOverLimit).toBe(true)
+    expect(MODEL_CATALOG[I2I]!.refusesImagesOverLimit).toBe(true)
+    expect(refusesImagesOverLimit("flux-2-klein")).toBe(false)
+    expect(refusesImagesOverLimit(undefined)).toBe(false)
+    expect(refusesImagesOverLimit("not-a-model")).toBe(false)
+  })
+})
+
+describe("a model that refuses images over its limit (`refusesImagesOverLimit`)", () => {
+  const flagged = Object.values(MODEL_CATALOG).filter((m) => m.refusesImagesOverLimit === true)
+  const t2iOf = (i2i: string) => Object.keys(T2I_TO_I2I_VARIANT).filter((t2i) => T2I_TO_I2I_VARIANT[t2i] === i2i)
+
+  it("is FLUX 3 Klein alone today: every other model keeps its trim", () => {
+    expect(flagged.map((m) => m.id).sort()).toEqual([T2I, I2I])
+  })
+
+  it("is an image model that takes reference images", () => {
+    for (const m of flagged) {
+      expect(m.kind, m.id).toBe("image")
+      expect(imageReferenceLimit(m.id), m.id).toBeGreaterThan(0)
+    }
+  })
+
+  it("is flagged on both ids, so the id picked and the edit it moves onto refuse alike", () => {
+    for (const m of flagged) {
+      const edit = T2I_TO_I2I_VARIANT[m.id]
+      if (edit !== undefined) expect(refusesImagesOverLimit(edit), `${m.id} → ${edit}`).toBe(true)
+      for (const t2i of t2iOf(m.id)) expect(refusesImagesOverLimit(t2i), `${t2i} → ${m.id}`).toBe(true)
+    }
+  })
+
+  it("is refused at the same count the canvas and the assembler stop at", () => {
+    // The routes refuse past `requestImageLimit`; the canvas handles and a
+    // moodboard's free seats read `imageReferenceLimit`. A flagged model that
+    // let them differ would offer seats a run is then refused for.
+    for (const m of flagged) expect(imageReferenceLimit(m.id), m.id).toBe(requestImageLimit(m.id))
+  })
+})
+
+describe("FLUX 3 Klein's prompts and quality levels", () => {
 
   it("prompts of 1 to 5000 characters: the default cap, no minimum", () => {
     expect(getMaxImagePromptChars(T2I)).toBe(5000)

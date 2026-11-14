@@ -7,7 +7,7 @@
 import { joinSentences } from "./hint-join.js"
 import { IMAGE_TOKEN_PATTERN } from "./image-token-pattern.js"
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
-import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared/models"
+import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, refusesImagesOverLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared/models"
 import { getStylePromptHint, isDeniedStyleId } from "./style.js"
 import {
   STYLE_SECTION_GAP,
@@ -952,7 +952,9 @@ interface ResolveImageMentionsHybridResult {
  *
  * CAPPED REFS: `imageReferenceLimit(provider)` truncates `connectedReferences`
  * BEFORE Phase 0, so a mention whose ref was capped out silently falls through
- * as literal text — matching how a capped character mention behaves today.
+ * as literal text — matching how a capped character mention behaves today. A
+ * model that refuses images over its limit (`refusesImagesOverLimit`) is not
+ * truncated: its run is refused instead.
  */
 function resolveImageMentionsHybrid(
   prompt: string,
@@ -1125,6 +1127,8 @@ interface ResolveEntityMentionsHybridResult {
  * CAPPED REFS: `imageReferenceLimit(provider)` truncates `connectedReferences`
  * BEFORE Phase 0, so a mention whose ref was capped out silently falls through as
  * literal text — matching how a capped character or image mention behaves today.
+ * A model that refuses images over its limit (`refusesImagesOverLimit`) is not
+ * truncated: its run is refused instead.
  */
 function resolveEntityMentionsHybrid(
   prompt: string,
@@ -2349,7 +2353,12 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // pointing at a slot the provider silently drops. Flat `referenceImageUrls` are
   // numbered first, so they consume the budget. Only ref-capable providers
   // (refCap > 0) cap here; non-ref providers drop all URLs via `supportsRefs`.
-  if (connectedReferences && connectedReferences.length > 0) {
+  // A model that refuses a run over its image limit (`refusesImagesOverLimit`:
+  // FLUX 3 Klein) is never trimmed: every reference the run attaches is sent,
+  // so the route, the workflow run and the editor's request refuse the count
+  // the run would really send, before anything is reserved, instead of an
+  // image being left out with its mention standing as plain text.
+  if (connectedReferences && connectedReferences.length > 0 && !refusesImagesOverLimit(provider)) {
     const refCap = imageReferenceLimit(provider)
     if (refCap > 0) {
       const structuredBudget = Math.max(0, refCap - referenceImageUrls.length)

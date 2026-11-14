@@ -955,6 +955,133 @@ describe("POST /v1/generate-image", () => {
       })
     })
 
+    // Prompt-mention images (`connectedReferences`, a client's pills) used to be
+    // trimmed by the assembler to the model's limit before the route counted
+    // them, so 11 FLUX 3 Klein pills ran as 10. A model that refuses images
+    // over its limit is no longer trimmed: the route counts what the run would
+    // send and refuses before any job row or reservation (decided 2026-11-12).
+    describe("prompt-mention images and a model's image limit", () => {
+      const send = async (provider: string, connectedReferences: unknown[], extra: Record<string, unknown> = {}) => {
+        vi.clearAllMocks()
+        const { jobInsert } = setupSupabaseMock({})
+        const res = await app.inject({
+          method: "POST",
+          url: "/v1/generate-image",
+          payload: { prompt: "a still life", userId: VALID_UUID, provider, connectedReferences, ...extra },
+        })
+        const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown> | undefined
+        return { res, jobInsert, queued }
+      }
+      const expectRefusedBeforeAnything = (r: Awaited<ReturnType<typeof send>>) => {
+        expect(r.res.statusCode).toBe(400)
+        expect(r.res.json().error.code).toBe("validation_error")
+        expect(r.jobInsert).not.toHaveBeenCalled()
+        expect(reserveCreditsForJob).not.toHaveBeenCalled()
+        expect(videoQueue.add).not.toHaveBeenCalled()
+      }
+
+      it("FLUX 3 Klein refuses 11 pills before any job row or reservation, saying to remove 1", async () => {
+        const r = await send("flux-3-klein", mkManualRefs(11))
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error.message).toBe(
+          "FLUX 3 Klein takes at most 10 input images, the source or base image included, and this run would send 11: remove 1.",
+        )
+      })
+
+      it("FLUX 3 Klein runs 10 pills with all 10 sent, on its edit model", async () => {
+        const r = await send("flux-3-klein", mkManualRefs(10))
+        expect(r.res.statusCode).toBe(200)
+        expect(r.queued?.referenceImageUrls).toEqual(mkManualRefs(10).map((ref) => ref.url))
+        expect(r.queued?.provider).toBe("flux-3-klein-i2i")
+        expect(reserveCreditsForJob).toHaveBeenCalledTimes(1)
+      })
+
+      it("FLUX 3 Klein counts a base image beside 10 pills, and refuses it", async () => {
+        const r = await send("flux-3-klein", mkManualRefs(10), { baseImageUrl: "https://r2.nodaro.ai/base.png" })
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error.message).toContain("would send 11: remove 1")
+      })
+
+      it("FLUX 3 Klein counts flat references and pills together", async () => {
+        const r = await send("flux-3-klein", mkManualRefs(6), {
+          referenceImageUrls: Array.from({ length: 5 }, (_, i) => `https://r2.nodaro.ai/flat-${i}.png`),
+        })
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error.message).toContain("would send 11: remove 1")
+      })
+
+      it("Seedream 5.5 keeps its own rule: 12 pills run with the first 10 sent", async () => {
+        const r = await send("seedream-5-5", mkManualRefs(12))
+        expect(r.res.statusCode).toBe(200)
+        expect(r.queued?.referenceImageUrls).toEqual(mkManualRefs(10).map((ref) => ref.url))
+      })
+
+      it("a model with no image limit of its own is unchanged: Nano Banana Pro runs 9 pills with 8 sent", async () => {
+        const r = await send("nano-banana-pro", mkManualRefs(9))
+        expect(r.res.statusCode).toBe(200)
+        expect(r.queued?.referenceImageUrls).toEqual(mkManualRefs(8).map((ref) => ref.url))
+      })
+
+      it("past the body's 14 pills, FLUX 3 Klein says how many to remove instead of the bare array bound", async () => {
+        const r = await send("flux-3-klein", mkManualRefs(15))
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error.message).toBe(
+          "FLUX 3 Klein takes at most 10 input images, the source or base image included, and this run would send 15: remove 5.",
+        )
+      })
+
+      it("past the body's 16 flat references, FLUX 3 Klein says how many to remove, a base image counted", async () => {
+        vi.clearAllMocks()
+        const { jobInsert } = setupSupabaseMock({})
+        const res = await app.inject({
+          method: "POST",
+          url: "/v1/generate-image",
+          payload: {
+            prompt: "a still life",
+            userId: VALID_UUID,
+            provider: "flux-3-klein",
+            referenceImageUrls: Array.from({ length: 17 }, (_, i) => `https://r2.nodaro.ai/flat-${i}.png`),
+            baseImageUrl: "https://r2.nodaro.ai/base.png",
+          },
+        })
+        expect(res.statusCode).toBe(400)
+        expect(res.json().error.message).toContain("would send 18: remove 8")
+        expect(jobInsert).not.toHaveBeenCalled()
+      })
+
+      it("past 14 pills on any other model, the array bound's message, as before", async () => {
+        const r = await send("nano-banana-pro", mkManualRefs(15))
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error.message).toMatch(/^connectedReferences: /)
+        expect(r.res.json().error.message).not.toContain("remove")
+      })
+
+      it("past 14 entries the run would not all send, the array bound's message, never an untrue count", async () => {
+        // One character and 14 unmentioned variants: the run would send its one canonical.
+        const kira = [
+          { id: "k", defaultName: "Kira", source: "wired-character", url: "https://r2.nodaro.ai/kira.png", characterSlug: "kira" },
+          ...Array.from({ length: 14 }, (_, i) => ({
+            id: `k${i}`,
+            defaultName: `Kira / look ${i}`,
+            source: "wired-character",
+            url: `https://r2.nodaro.ai/kira-${i}.png`,
+            characterSlug: "kira",
+            variantSlug: `look-${i}`,
+          })),
+        ]
+        const r = await send("flux-3-klein", kira)
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error.message).toMatch(/^connectedReferences: /)
+        expect(r.res.json().error.message).not.toContain("would send")
+      })
+
+      it("a body wrong in another way keeps its own message", async () => {
+        const r = await send("flux-3-klein", mkManualRefs(15), { aspectRatio: "not-a-ratio" })
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error.message).not.toContain("would send")
+      })
+    })
+
     it("preserves `referenceImageUrls: undefined` on the queue when the old shape omits refs", async () => {
       setupSupabaseMock({})
       const res = await app.inject({

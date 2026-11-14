@@ -875,6 +875,19 @@ export function requestImageLimit(provider: string | undefined): number {
   return (effective !== undefined ? REQUEST_IMAGE_LIMITS[effective] : undefined) ?? DEFAULT_REQUEST_IMAGE_LIMIT
 }
 
+/**
+ * True for a model that refuses a run sending more input images than
+ * {@link requestImageLimit} allows, the source or base image counted, instead
+ * of having some left out (its catalog entry's `refusesImagesOverLimit`:
+ * FLUX 3 Klein). The prompt assembler does not trim such a model's
+ * references, so every place that refuses counts the images the run would
+ * really send. False for every other model, whose structured references are
+ * still trimmed to its reference limit ({@link imageReferenceLimit}).
+ */
+export function refusesImagesOverLimit(provider: string | undefined): boolean {
+  return provider !== undefined && MODEL_CATALOG[provider]?.refusesImagesOverLimit === true
+}
+
 // Variable pricing: which setting type affects cost per provider
 export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | "rendering-speed"> = {
   "gpt-image": "quality",
