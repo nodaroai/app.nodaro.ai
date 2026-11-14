@@ -15,6 +15,7 @@ import { createEditorLink, type EditorLink } from "@/ee/lib/freecut-ai/editor-li
 import { EDIT_STEPS, type EditPlan, type EditStep } from "@/ee/lib/freecut-ai/edit-plan"
 import {
   AGENT_COLORS,
+  RunDeclined,
   RunFailed,
   RunStopped,
   runAiEdit,
@@ -68,6 +69,10 @@ interface FeedLine {
 type Phase =
   | { readonly kind: "idle" }
   | { readonly kind: "running" }
+  /** The plan leaves part of the request out: nothing paid has started, the person chooses. */
+  | { readonly kind: "confirming" }
+  /** The request asked for nothing this edit can do: only the reading was spent. */
+  | { readonly kind: "declined"; readonly plan: EditPlan }
   | { readonly kind: "done"; readonly summary: RunSummary }
   | { readonly kind: "stopped" }
   | { readonly kind: "failed"; readonly reason: string; readonly detail?: string }
@@ -92,6 +97,10 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videoUrl, onCl
   const [note, setNote] = useState<{ readonly key: MessageKey; readonly vars?: Record<string, string | number> } | null>(null)
   const linkRef = useRef<EditorLink | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  // The run's question about a partial plan, answered by the person's choice.
+  const confirmRef = useRef<((yes: boolean) => void) | null>(null)
+  // The person chose to change the request rather than run part of it.
+  const changingRef = useRef(false)
   // The undo entries the last run made, in order: Undo all reverts exactly these.
   const recordedRef = useRef<string[]>([])
   const feedRef = useRef<HTMLOListElement>(null)
@@ -137,9 +146,10 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videoUrl, onCl
   async function start() {
     const link = linkRef.current
     const text = request.trim() || t("freecutAi.example")
-    if (!link || phase.kind === "running") return
+    if (!link || phase.kind === "running" || phase.kind === "confirming") return
     const controller = new AbortController()
     abortRef.current = controller
+    changingRef.current = false
     recordedRef.current = []
     setAsked(text)
     setPlan(null)
@@ -159,10 +169,19 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videoUrl, onCl
         onEvent: (event) => {
           if (event.type === "recorded" || !controller.signal.aborted) onEvent(event)
         },
+        confirmPartial: () =>
+          new Promise<boolean>((resolve) => {
+            confirmRef.current = resolve
+            setPhase({ kind: "confirming" })
+          }),
       })
       setPhase({ kind: "done", summary })
     } catch (error) {
-      if (error instanceof RunStopped) {
+      if (error instanceof RunDeclined) {
+        setPhase(changingRef.current ? { kind: "idle" } : { kind: "declined", plan: error.plan })
+      } else if (error instanceof RunStopped) {
+        // Whoever was at work when the run stopped is no longer working.
+        setAgents((prev) => Object.fromEntries(AGENTS.map((id) => [id, prev[id].state === "working" ? { ...prev[id], state: "skipped" } : prev[id]])) as Record<AgentId, AgentView>)
         setPhase({ kind: "stopped" })
       } else {
         const reason = error instanceof RunFailed ? t(error.key, error.vars) : t("freecutAi.unexpected")
@@ -170,7 +189,17 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videoUrl, onCl
       }
     } finally {
       abortRef.current = null
+      confirmRef.current = null
     }
+  }
+
+  // The person's answer to a partial plan: run the steps it can do, or go back and change the request.
+  function answer(yes: boolean) {
+    const resolve = confirmRef.current
+    confirmRef.current = null
+    if (yes) setPhase({ kind: "running" })
+    else changingRef.current = true
+    resolve?.(yes)
   }
 
   // Exactly the undo entries the last run made, newest first; an edit by hand on top stops it.
@@ -227,7 +256,7 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videoUrl, onCl
           </div>
         )}
 
-        {plan && phase.kind !== "idle" && phase.kind !== "undone" ? (
+        {plan && phase.kind !== "idle" && phase.kind !== "undone" && phase.kind !== "declined" ? (
           <div className="rounded-lg border border-[#2D2D2D] bg-[#1E1E1E] px-3 py-2">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-white/50">{t("freecutAi.plan")}</span>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -236,11 +265,13 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videoUrl, onCl
               ))}
             </div>
             {plan.reply ? <p className="mt-2 text-xs text-white/80" dir="auto">{plan.reply}</p> : null}
-            {!plan.understood ? <p className="mt-2 text-xs text-white/60">{t("freecutAi.standardEdit")}</p> : null}
+            {plan.cannot.length > 0 ? (
+              <p className="mt-2 text-xs text-amber-200/90" dir="auto">{t("freecutAi.leftOut", { list: plan.cannot.join(t("common.listComma")) })}</p>
+            ) : null}
           </div>
         ) : null}
 
-        {phase.kind !== "idle" && phase.kind !== "undone" ? (
+        {phase.kind !== "idle" && phase.kind !== "undone" && phase.kind !== "declined" && phase.kind !== "confirming" ? (
           <ul className="flex flex-col gap-1.5">
             {AGENTS.map((id) => {
               const view = agents[id]
@@ -277,6 +308,7 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videoUrl, onCl
           </ol>
         ) : null}
 
+        {phase.kind === "declined" ? <Declined plan={phase.plan} /> : null}
         {phase.kind === "done" ? <Summary summary={phase.summary} /> : null}
         {phase.kind === "stopped" ? <p className="text-xs text-white/70">{t("freecutAi.stopped")}</p> : null}
         {phase.kind === "failed" ? <p className="text-xs text-red-400" dir="auto">{t("freecutAi.failed", { reason: phase.reason })}</p> : null}
@@ -305,6 +337,19 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videoUrl, onCl
             <button type="button" onClick={() => { setNote(null); setPhase({ kind: "idle" }) }} className="rounded-md px-3 py-1.5 text-xs text-white/70 hover:bg-white/10">
               {t("freecutAi.again")}
             </button>
+          </div>
+        ) : phase.kind === "confirming" ? (
+          <div className="flex flex-col gap-2" role="group" aria-label={t("freecutAi.confirmTitle")}>
+            <p className="text-xs font-semibold">{t("freecutAi.confirmTitle")}</p>
+            <p className="text-[11px] leading-snug text-white/55">{t("freecutAi.confirmNote")}</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => answer(true)} className="flex items-center gap-1.5 rounded-md bg-cta px-3 py-1.5 text-xs font-medium text-white hover:bg-cta-hover">
+                {t("freecutAi.confirmGo")}
+              </button>
+              <button type="button" onClick={() => answer(false)} className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-white/85 hover:bg-white/10">
+                {t("freecutAi.confirmEdit")}
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -343,6 +388,26 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videoUrl, onCl
         )}
       </div>
     </aside>
+  )
+}
+
+/** A request this edit cannot do: what it left out, what it can do, and that nothing was edited. */
+function Declined({ plan }: { readonly plan: EditPlan }) {
+  const t = useT()
+  return (
+    <div className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2.5" role="status">
+      <p className="text-sm font-semibold">{t(plan.cannot.length > 0 ? "freecutAi.declinedTitle" : "freecutAi.declinedNothing")}</p>
+      {plan.reply ? <p className="mt-1 text-xs text-white/85" dir="auto">{plan.reply}</p> : null}
+      {plan.cannot.length > 0 ? (
+        <ul className="mt-1.5 flex flex-col gap-0.5 text-xs text-white/85">
+          {plan.cannot.map((thing) => (
+            <li key={thing} dir="auto">{thing}</li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="mt-2 text-xs text-white/70">{t("freecutAi.canDo")}</p>
+      <p className="mt-1 text-[11px] text-white/50">{t("freecutAi.nothingEdited")}</p>
+    </div>
   )
 }
 

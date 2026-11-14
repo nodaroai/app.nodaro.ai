@@ -36,8 +36,8 @@ export interface EditPlan {
   readonly musicStyle: string | null
   /** A short answer to the person, in the language they wrote in. Null when none. */
   readonly reply: string | null
-  /** False when the request named nothing this edit can do, and the standard edit was chosen. */
-  readonly understood: boolean
+  /** What the request asked for that this edit cannot do yet, in the person's words. Empty when nothing. */
+  readonly cannot: readonly string[]
 }
 
 export const DEFAULT_MUSIC_STYLE = "upbeat modern background music, light percussion, positive, instrumental"
@@ -223,25 +223,38 @@ const INTENT_PATTERNS: Record<EditStep, RegExp> = {
   music: /music|\bsong\b|soundtrack|\bbeat\b|\bbgm\b|מוזיק|שיר|מנגינ|פסקול|音楽|ＢＧＭ|음악|배경음|브금|música|trilha/iu,
 }
 
-/** The plan a request asks for, read from its words alone. */
+/**
+ * The plan a request asks for, read from its words alone. A request that names
+ * nothing this edit can do gets no steps, and the run ends before anything is
+ * paid for: it never falls back to an edit nobody asked for.
+ */
 export function planFromRequest(request: string): EditPlan {
   const steps = EDIT_STEPS.filter((step) => INTENT_PATTERNS[step].test(request))
-  if (steps.length === 0) {
-    return { steps: ["fillers", "pauses", "captions", "music"], musicStyle: DEFAULT_MUSIC_STYLE, reply: null, understood: false }
-  }
-  return { steps, musicStyle: steps.includes("music") ? DEFAULT_MUSIC_STYLE : null, reply: null, understood: true }
+  return { steps, musicStyle: steps.includes("music") ? DEFAULT_MUSIC_STYLE : null, reply: null, cannot: [] }
 }
 
+// Only the steps decide the plan; everything else in the answer is read leniently,
+// so a long reply or an odd "cannot" never throws a good plan away.
 const modelPlan = z.object({
   steps: z.array(z.string()),
-  musicStyle: z.string().max(300).nullable().optional(),
-  reply: z.string().max(400).nullable().optional(),
+  musicStyle: z.unknown().optional(),
+  reply: z.unknown().optional(),
+  cannot: z.unknown().optional(),
 })
+
+/** At most this many things the request asked for that cannot be done, each this long. */
+const MAX_CANNOT = 6
+const MAX_CANNOT_CHARS = 120
+const MAX_REPLY_CHARS = 400
+const MAX_STYLE_CHARS = 300
+
+const textOf = (value: unknown, max: number): string | null => (typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null)
 
 /**
  * The planner model's answer (one JSON object, possibly in a code fence), as a
  * plan; null when it is not one. Steps it invents are dropped, and the order is
- * always the run order.
+ * always the run order. An empty steps list is an answer: the request asked for
+ * nothing this edit can do. A list of invented steps only is not one.
  */
 export function parseModelPlan(text: string): EditPlan | null {
   const json = /\{[\s\S]*\}/.exec(text)?.[0]
@@ -256,13 +269,14 @@ export function parseModelPlan(text: string): EditPlan | null {
   if (!parsed.success) return null
   const asked = new Set(parsed.data.steps.map((s) => s.trim().toLowerCase()))
   const steps = EDIT_STEPS.filter((step) => asked.has(step))
-  if (steps.length === 0) return null
-  const style = parsed.data.musicStyle?.trim()
+  if (asked.size > 0 && steps.length === 0) return null
+  const listed = Array.isArray(parsed.data.cannot) ? parsed.data.cannot : []
+  const cannot = [...new Set(listed.map((thing) => textOf(thing, MAX_CANNOT_CHARS)).filter((thing): thing is string => thing !== null))].slice(0, MAX_CANNOT)
   return {
     steps,
-    musicStyle: steps.includes("music") ? style || DEFAULT_MUSIC_STYLE : null,
-    reply: parsed.data.reply?.trim() || null,
-    understood: true,
+    musicStyle: steps.includes("music") ? textOf(parsed.data.musicStyle, MAX_STYLE_CHARS) ?? DEFAULT_MUSIC_STYLE : null,
+    reply: textOf(parsed.data.reply, MAX_REPLY_CHARS),
+    cannot,
   }
 }
 

@@ -13,6 +13,7 @@ const api = vi.hoisted(() => {
     transcribeNoCredits: false,
     transcribeJobFails: false,
     transcribeDelayMs: 0,
+    musicGate: null as Promise<void> | null,
     plannerNoCredits: false,
     statusErrors: 0,
     status401: false,
@@ -42,6 +43,7 @@ vi.mock("@/lib/api", () => ({
   }),
   sunoGenerateApi: vi.fn(async () => {
     api.order.push("music")
+    if (api.musicGate) await api.musicGate
     if (api.musicFails) throw new Error("provider down")
     return { jobId: "job-music" }
   }),
@@ -62,15 +64,16 @@ vi.mock("@/lib/api", () => ({
       : { status: "completed", output_data: { audioUrl: "https://cdn.example.com/track.mp3" } }
   }),
   generateAIWriterStream: vi.fn(async () => {
+    api.order.push("plan")
     if (api.plannerNoCredits) throw new api.InsufficientCreditsError("no credits")
     if (api.plannerFails) throw new Error("planner down")
     return { jobId: "job-plan", generatedText: api.plannerText }
   }),
 }))
 
-import { cancelJob, sunoGenerateApi, transcribeApi } from "@/lib/api"
+import { cancelJob, generateAIWriterStream, sunoGenerateApi, transcribeApi } from "@/lib/api"
 import type { EditorLink, OpsResult, PresenceCursor } from "../editor-link"
-import { RunFailed, RunStopped, musicFileOf, openedVideoMedia, runAiEdit, undoAiEdit, type RunEvent } from "../run-ai-edit"
+import { RunDeclined, RunFailed, RunStopped, musicFileOf, openedVideoMedia, runAiEdit, undoAiEdit, type RunEvent } from "../run-ai-edit"
 import { readTimelineView } from "../edit-plan"
 
 const VIDEO_URL = "https://cdn.example.com/uploads/take.mp4"
@@ -112,7 +115,7 @@ function fakeLink(timeline: unknown = TIMELINE): FakeLink {
 const NAMES = { lead: "Assistant", cutter: "Cutter", captions: "Captions", sound: "Sound" }
 const LABELS = { fillers: "Remove filler words", pauses: "Cut the pauses", captions: "Add captions", music: "Add music" }
 
-function run(link: EditorLink, events: RunEvent[] = [], signal = new AbortController().signal) {
+function run(link: EditorLink, events: RunEvent[] = [], signal = new AbortController().signal, extra: Partial<Parameters<typeof runAiEdit>[0]> = {}) {
   return runAiEdit({
     request: "cut the pauses, captions and calm music",
     videoUrl: VIDEO_URL,
@@ -122,6 +125,7 @@ function run(link: EditorLink, events: RunEvent[] = [], signal = new AbortContro
     stepLabels: LABELS,
     onEvent: (e) => events.push(e),
     pace: () => 1000,
+    ...extra,
   })
 }
 
@@ -133,6 +137,7 @@ beforeEach(() => {
   api.transcribeNoCredits = false
   api.transcribeJobFails = false
   api.transcribeDelayMs = 0
+  api.musicGate = null
   api.plannerNoCredits = false
   api.statusErrors = 0
   api.status401 = false
@@ -165,9 +170,94 @@ describe("runAiEdit", () => {
     expect(link.presences.at(-1)).toEqual([])
   })
 
-  it("asks for music only once the video has been heard", async () => {
+  it("reads the request first, and asks for music only once the video has been heard", async () => {
     await run(fakeLink())
-    expect(api.order).toEqual(["transcribe", "music"])
+    expect(api.order).toEqual(["plan", "transcribe", "music"])
+  })
+
+  it("ends a request it cannot do before anything paid starts", async () => {
+    api.plannerText = '{"steps":[],"musicStyle":null,"reply":"I cannot change the shirt yet.","cannot":["change the shirt color"]}'
+    const link = fakeLink()
+    const events: RunEvent[] = []
+
+    const outcome = run(link, events)
+
+    await expect(outcome).rejects.toBeInstanceOf(RunDeclined)
+    await expect(outcome).rejects.toMatchObject({ plan: { steps: [], cannot: ["change the shirt color"], reply: "I cannot change the shirt yet." } })
+    expect(transcribeApi).not.toHaveBeenCalled()
+    expect(sunoGenerateApi).not.toHaveBeenCalled()
+    expect(link.applied).toHaveLength(0)
+    expect(events.find((e) => e.type === "plan")).toMatchObject({ plan: { steps: [] } })
+  })
+
+  it("never falls back to an edit nobody asked for when the planner does not answer", async () => {
+    api.plannerFails = true
+
+    for (const request of ["make the presenter's shirt blue", "edit it for me"]) {
+      // Words that name no step are no answer: the person is asked to try again, nothing is declined or paid for.
+      await expect(run(fakeLink(), [], undefined, { request })).rejects.toMatchObject({ key: "freecutAi.unreadable" })
+    }
+    expect(transcribeApi).not.toHaveBeenCalled()
+    expect(sunoGenerateApi).not.toHaveBeenCalled()
+  })
+
+  it("reads the request itself when the planner's answer is not a plan", async () => {
+    api.plannerText = '{"steps":["teleport"]}'
+
+    const summary = await run(fakeLink())
+
+    expect(summary).toMatchObject({ pausesCut: 3, music: true })
+  })
+
+  it("keeps a plan whose extras are odd", async () => {
+    api.plannerText = '{"steps":["captions"],"musicStyle":null,"reply":null,"cannot":null}'
+    const link = fakeLink()
+
+    await run(link)
+
+    expect(link.applied.some((a) => a.ops[0]!.op === "addTranscriptCaptions")).toBe(true)
+  })
+
+  it("reads the editor again after the person says yes, since it stayed open", async () => {
+    api.plannerText = '{"steps":["pauses"],"musicStyle":null,"reply":"Cutting the pauses.","cannot":["make the shirt blue"]}'
+    const link = fakeLink()
+    const getTimeline = vi.fn(link.getTimeline)
+
+    await run({ ...link, getTimeline }, [], undefined, { confirmPartial: async () => true })
+
+    expect(getTimeline).toHaveBeenCalledTimes(2)
+  })
+
+  it("asks before running part of a request, with nothing paid started while it waits", async () => {
+    api.plannerText = '{"steps":["pauses"],"musicStyle":null,"reply":"Cutting the pauses.","cannot":["make the shirt blue"]}'
+    const confirmPartial = vi.fn(async () => {
+      expect(transcribeApi).not.toHaveBeenCalled()
+      return false
+    })
+
+    await expect(run(fakeLink(), [], undefined, { confirmPartial })).rejects.toBeInstanceOf(RunDeclined)
+    expect(confirmPartial).toHaveBeenCalledWith(expect.objectContaining({ steps: ["pauses"], cannot: ["make the shirt blue"] }))
+    expect(transcribeApi).not.toHaveBeenCalled()
+  })
+
+  it("runs the part it can do once the person says yes", async () => {
+    api.plannerText = '{"steps":["pauses"],"musicStyle":null,"reply":"Cutting the pauses.","cannot":["make the shirt blue"]}'
+
+    const summary = await run(fakeLink(), [], undefined, { confirmPartial: async () => true })
+
+    expect(summary).toMatchObject({ pausesCut: 3, music: false })
+  })
+
+  it("stops while it waits for the person's answer, with nothing paid started", async () => {
+    api.plannerText = '{"steps":["pauses"],"musicStyle":null,"reply":"Cutting the pauses.","cannot":["make the shirt blue"]}'
+    const controller = new AbortController()
+    const confirmPartial = vi.fn(() => new Promise<boolean>(() => {}))
+    const outcome = run(fakeLink(), [], controller.signal, { confirmPartial })
+    await vi.waitFor(() => expect(confirmPartial).toHaveBeenCalled())
+    controller.abort()
+
+    await expect(outcome).rejects.toBeInstanceOf(RunStopped)
+    expect(transcribeApi).not.toHaveBeenCalled()
   })
 
   it("reads the request itself when the planner does not answer", async () => {
@@ -210,12 +300,23 @@ describe("runAiEdit", () => {
     expect(cancelJob).toHaveBeenCalledWith("job-transcribe")
   })
 
-  it("cancels a job whose id arrives after the run has ended", async () => {
-    api.transcribeDelayMs = 60
+  it("starts nothing paid when there are no credits to read the request", async () => {
     api.plannerNoCredits = true
     await expect(run(fakeLink())).rejects.toMatchObject({ key: "freecutAi.noCredits" })
-    await new Promise((resolve) => setTimeout(resolve, 120))
-    expect(cancelJob).toHaveBeenCalledWith("job-transcribe")
+    expect(transcribeApi).not.toHaveBeenCalled()
+  })
+
+  it("cancels a job whose id arrives after the run has ended", async () => {
+    // The music job's id is held back until the run has failed, whatever the timing.
+    let release = () => {}
+    api.musicGate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const refusing: EditorLink = { ...fakeLink(), applyOps: async (): Promise<OpsResult> => ({ ok: false, error: { message: "refused" } }) }
+    await expect(run(refusing)).rejects.toMatchObject({ key: "freecutAi.editorChanged" })
+    expect(cancelJob).not.toHaveBeenCalled()
+    release()
+    await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith("job-music"))
   })
 
   it("shows a failed music job's provider words, and the rest of the edit is done", async () => {
@@ -289,25 +390,25 @@ describe("runAiEdit", () => {
 
   it("cancels the transcription it started when the person stops", async () => {
     const controller = new AbortController()
-    const events: RunEvent[] = []
-    const link = fakeLink()
-    const stopAtPlan = { ...link, presence: () => {} }
-    const running = runAiEdit({
-      request: "captions",
-      videoUrl: VIDEO_URL,
-      link: stopAtPlan,
-      signal: controller.signal,
-      names: NAMES,
-      stepLabels: LABELS,
-      onEvent: (e) => {
-        events.push(e)
-        if (e.type === "plan") controller.abort()
-      },
-      pace: () => 1000,
+    vi.mocked(transcribeApi).mockImplementationOnce(async () => {
+      controller.abort()
+      return { jobId: "job-transcribe" }
     })
 
-    await expect(running).rejects.toBeInstanceOf(RunStopped)
+    await expect(run(fakeLink(), [], controller.signal)).rejects.toBeInstanceOf(RunStopped)
     expect(cancelJob).toHaveBeenCalledWith("job-transcribe")
+  })
+
+  it("starts nothing paid when the person stops while the request is read", async () => {
+    const controller = new AbortController()
+    vi.mocked(generateAIWriterStream).mockImplementationOnce(async () => {
+      controller.abort()
+      return { jobId: "job-plan", generatedText: api.plannerText }
+    })
+
+    await expect(run(fakeLink(), [], controller.signal)).rejects.toBeInstanceOf(RunStopped)
+    expect(transcribeApi).not.toHaveBeenCalled()
+    expect(sunoGenerateApi).not.toHaveBeenCalled()
   })
 
   it("refuses a video longer than the limit before anything is paid for", async () => {

@@ -9,10 +9,13 @@
  * the named cursors and the playhead that follows them; the edits themselves
  * are instant.
  *
- * Paid work starts only when it will be used: the music starts once the video
- * has been heard, and a run that stops or fails cancels whatever it started
- * that has not finished. Everything it says goes out as dictionary keys
- * (`onEvent`), so the panel renders it in the person's language.
+ * Paid work starts only when it will be used. The request is read first, and
+ * nothing else starts unless the plan has a step the person wants: a request
+ * this edit cannot do ends there (`RunDeclined`), with only the reading spent.
+ * The music starts once the video has been heard, and a run that stops or
+ * fails cancels whatever it started that has not finished. Everything it says
+ * goes out as dictionary keys (`onEvent`), so the panel renders it in the
+ * person's language.
  */
 import type { MessageKey } from "@/lib/i18n"
 import { formatNumber } from "@/lib/i18n"
@@ -90,6 +93,12 @@ export interface RunAiEditOptions {
   readonly onEvent: (event: RunEvent) => void
   /** How fast the show runs: 1 is the normal pace, 2 twice as fast. */
   readonly pace?: () => number
+  /**
+   * Asked when the plan leaves part of the request out, before anything paid
+   * starts: true runs the steps it can do, false ends the run (`RunDeclined`).
+   * Without it, the run goes ahead with those steps.
+   */
+  readonly confirmPartial?: (plan: EditPlan) => Promise<boolean>
 }
 
 /** A run that stopped on purpose (the person pressed Stop or closed the editor). */
@@ -112,6 +121,18 @@ export class RunFailed extends Error {
   ) {
     super(key)
     this.name = "RunFailed"
+  }
+}
+
+/**
+ * A request this edit cannot do, answered before anything paid started: the
+ * plan has no step, or the person chose not to run only part of it. `plan`
+ * carries the planner's answer and what it left out, for the panel to show.
+ */
+export class RunDeclined extends Error {
+  constructor(readonly plan: EditPlan) {
+    super("Declined")
+    this.name = "RunDeclined"
   }
 }
 
@@ -171,6 +192,25 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
+/** A promise that settles as given, or ends with RunStopped once the run is stopped. */
+function untilStopped<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(new RunStopped())
+    const onAbort = () => reject(new RunStopped())
+    signal.addEventListener("abort", onAbort, { once: true })
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort)
+        resolve(value)
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort)
+        reject(error)
+      },
+    )
+  })
+}
+
 const statusOf = (error: unknown) => (error as { status?: unknown } | null)?.status
 
 /** A job's output once it completes. Throws when it fails, is gone, or takes too long. */
@@ -208,26 +248,33 @@ function keyOf(error: unknown): MessageKey {
 }
 
 async function readPlan(request: string, userId: string, signal: AbortSignal): Promise<EditPlan> {
+  let answer: EditPlan | null = null
   try {
     const { generatedText } = await generateAIWriterStream({
       systemPrompt: plannerSystemPrompt(),
       userInput: request,
       temperature: 0.2,
-      maxTokens: 400,
+      maxTokens: 800,
       userId,
       llmModel: PLANNER_MODEL,
       onToken: () => {},
       signal,
     })
-    return parseModelPlan(generatedText) ?? planFromRequest(request)
+    answer = parseModelPlan(generatedText)
+    if (!answer) console.warn("[Edit with AI] the planner's answer was not a plan; reading the request directly")
   } catch (error) {
     if (signal.aborted) throw new RunStopped()
     // No credits for the planner means none for the transcription either: say so now.
     if (error instanceof InsufficientCreditsError) throw new RunFailed("freecutAi.noCredits")
-    // The planner only reads the request: its words alone are a fair second reading.
     console.warn("[Edit with AI] the planner did not answer; reading the request directly", error)
-    return planFromRequest(request)
   }
+  if (answer) return answer
+  // Without the planner, the request's own words are a fair second reading. Words that
+  // name no step are no answer at all (a general request needs the planner): the person
+  // is asked to try again, rather than told the request cannot be done.
+  const read = planFromRequest(request)
+  if (read.steps.length === 0) throw new RunFailed("freecutAi.unreadable")
+  return read
 }
 
 /** The first audio address a finished music job gives (Suno tracks are re-hosted on our storage). */
@@ -384,30 +431,47 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
   try {
     const userId = await getCurrentUserId()
     if (!userId) throw new RunFailed("freecutAi.signedOut")
-    const report = (await link.getTimeline()) as { media?: unknown } | null
-    const first = readTimelineView(report)
-    if (!first) throw new RunFailed("freecutAi.noVideo")
-    const media = (Array.isArray(report?.media) ? report!.media : []) as MediaView[]
-    const opened = openedVideoMedia(first, media, opts.videoUrl)
-    if (!opened) throw new RunFailed("freecutAi.noVideo")
-    const clip = first.items.find((i) => i.mediaId === opened.id)
-    const mediaSeconds = opened.duration ?? (clip?.sourceEnd !== undefined ? clip.sourceEnd / (clip.sourceFps ?? first.fps) : timelineSeconds(first))
-    if (mediaSeconds > MAX_VIDEO_MINUTES * 60) throw new RunFailed("freecutAi.tooLong", { minutes: MAX_VIDEO_MINUTES })
+    // The opened video, as the editor holds it now: refused before anything is read or paid for.
+    const readStage = async () => {
+      const report = (await link.getTimeline()) as { media?: unknown } | null
+      const view = readTimelineView(report)
+      if (!view) throw new RunFailed("freecutAi.noVideo")
+      const media = (Array.isArray(report?.media) ? report!.media : []) as MediaView[]
+      const video = openedVideoMedia(view, media, opts.videoUrl)
+      if (!video) throw new RunFailed("freecutAi.noVideo")
+      const clip = view.items.find((i) => i.mediaId === video.id)
+      const seconds = video.duration ?? (clip?.sourceEnd !== undefined ? clip.sourceEnd / (clip.sourceFps ?? view.fps) : timelineSeconds(view))
+      if (seconds > MAX_VIDEO_MINUTES * 60) throw new RunFailed("freecutAi.tooLong", { minutes: MAX_VIDEO_MINUTES })
+      return { first: view, opened: video, mediaSeconds: seconds }
+    }
+    let { first, opened, mediaSeconds } = await readStage()
+
+    // ── reading the request: nothing paid starts before the plan has a step ──
+    cursor("lead", { preview: { x: 0.5, y: 0.42 } })
+    show()
+    agent("lead", "working", "freecutAi.reading")
+    const plan = await readPlan(opts.request, userId, signal)
+    checkStop(signal)
+    onEvent({ type: "plan", plan })
+    if (plan.steps.length === 0) throw new RunDeclined(plan)
+    if (plan.cannot.length > 0 && opts.confirmPartial) {
+      if (!(await untilStopped(opts.confirmPartial(plan), signal))) throw new RunDeclined(plan)
+      // The editor stayed open while the person chose: what it holds now is what gets edited.
+      const now = await readStage()
+      first = now.first
+      opened = now.opened
+      mediaSeconds = now.mediaSeconds
+    }
+    checkStop(signal)
 
     const stage: Stage = { timeline: first, mediaId: opened.id }
     const fromSeconds = timelineSeconds(first)
     const summary = { pausesCut: 0, fillersCut: 0, captions: 0, music: false }
+    for (const id of ["cutter", "captions", "sound"] as const) agent(id, "waiting", "freecutAi.waiting")
 
-    // ── listening and reading the request, side by side ──
-    cursor("lead", { preview: { x: 0.5, y: 0.42 } })
-    show()
+    // ── listening ──
     agent("lead", "working", "freecutAi.listening")
     const transcription = startJob(() => transcribeApi(opts.videoUrl, "elevenlabs-stt", undefined, userId, false, false, true))
-    transcription.catch(() => undefined)
-    const plan = await readPlan(opts.request, userId, signal)
-    checkStop(signal)
-    onEvent({ type: "plan", plan })
-    for (const id of ["cutter", "captions", "sound"] as const) agent(id, "waiting", "freecutAi.waiting")
 
     let words: TimedWord[]
     let language: string | null
@@ -569,6 +633,7 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
     return result
   } catch (error) {
     if (error instanceof RunStopped || signal.aborted) throw new RunStopped()
+    if (error instanceof RunDeclined) throw error
     if (!(error instanceof RunFailed)) console.warn("[Edit with AI] the run stopped", error)
     throw error instanceof RunFailed ? error : new RunFailed(keyOf(error), undefined, wordsOf(error))
   } finally {
