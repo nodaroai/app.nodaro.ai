@@ -1,5 +1,27 @@
 # @nodaro/prompts
 
+## 1.57.0
+
+### Minor Changes
+
+- 564ee46: `sentDialogueLines(lines, sheet)` and `sentDialogueChars(lines, sheet)` (from `@nodaro/prompts/prompt-fields`): a dialogue script as it is sent and billed — each line by `sentSpeechText` (on an angle-tag model its tags rewritten first), within what the lines before it left of the model's total cap; the line the cap falls in is cut and every line after it is sent empty. On a model that sends its tags as written the count is the lines' sum, at most the cap, as before. `dialogueTextBeforeCap(lines, sheet)` is the length a lane that refuses an over-cap script measures. A cut that leaves a lone `<` at the end of a text now drops it, as it drops any other broken tag.
+- 564ee46: `toAngleTags(text, tags)` and `speakableText(text, sheet)` (from `@nodaro/prompts/prompt-fields`, beside `stripAudioTags`): the text a speech model is sent. On a model whose tone tags are `<angle>` tags from a closed list (Gemini 3.8), a `[square]` tag becomes the model's own tag where it names one (`[laughs]` → `<laugh>`, `[pause]` → `<short pause>`), an angle tag the model performs stays, and every other tag is taken out; a model that performs `[square]` tags gets the text as written, one that performs none gets it stripped. A word in angle brackets that is not one of the model's tags keeps the word and loses the brackets. `sentSpeechText(text, sheet)` is the text a model is sent and billed for — on an angle-tag model its tags rewritten first and the model's cap applied after (a cut inside a tag drops the broken tag), on any other model cut first as before; `speechTextBeforeCap` is the length a lane that refuses over-cap text measures, and `angleTagGrowth(tags)` the most a text can grow when its tags are rewritten. Known HTML / formatting tags on an angle-tag model (`<br>`, `<p>`, `<b>`, `<i>`, `<strong>`, `<em>`, `<u>`, `<span>`, `<div>`, closing or with attributes) are taken out with their text kept, `<br>` and `<p>` / `</p>` read as a space; a cut that leaves a bare `<` at the end drops it.
+
+### Patch Changes
+
+- Updated dependencies [564ee46]
+- Updated dependencies [564ee46]
+- Updated dependencies [564ee46]
+- Updated dependencies [b26c865]
+- Updated dependencies [af8d59a]
+- Updated dependencies [70a48ec]
+- Updated dependencies [e53282b]
+- Updated dependencies [d8f8e4a]
+- Updated dependencies [e53282b]
+- Updated dependencies [60b1f87]
+- Updated dependencies [8903a09]
+  - @nodaro/shared@3.65.0
+
 ## 1.56.0
 
 ### Minor Changes
