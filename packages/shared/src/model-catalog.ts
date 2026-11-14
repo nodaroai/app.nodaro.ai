@@ -4219,7 +4219,9 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Video Analysis (Ultra)",
     series: "Video Analysis",
     description: "Deep-reasoning analysis — the most thorough model reads every window of the video. Better on fast cuts and on scenes with many people, and it does not invent cuts. Billed per duration bucket.",
-    useCases: ["video-analysis", "shot-list", "premium", "most-accurate"],
+    // Not `most-accurate`: that tag is Smart's (hand-counted edit list, always
+    // refined). Ultra's strengths are the footage that trips the other tiers.
+    useCases: ["video-analysis", "shot-list", "premium", "fast-cuts", "many-people", "no-invented-cuts"],
     pricing: [
       { identifier: "video-analysis:gemini-4-carbon", credits: 1745, note: "10-min ceiling (no duration given)" },
       { identifier: "video-analysis:gemini-4-carbon:60s", credits: 349 },

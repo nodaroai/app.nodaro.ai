@@ -83,8 +83,8 @@ Any source is capped at **10 minutes (600s)**.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Analysis Quality (`llmModel`) | Select | `pro` | `smart` (highest accuracy — a hybrid pass that blends a native skeleton read with several donor analysis rolls, then always refines the merged result; pick this when the shot list will drive regeneration), `ultra` (the deepest-reasoning analysis model reads every window — it holds up on fast cutting and on scenes with many people, and does not invent cuts that are not there; it samples the video at the same one frame per second as `pro`), `fast` (economy), `pro` (default), or `mixed` / `mixed-fast` (several economy passes combined for completeness). See [Credit Cost](#credit-cost) |
-| Result Selection (`selectionMode`) | Select | `choose` | `choose` — the standard result. `combine` — an enhanced result with additional verification for maximum captured detail (slightly slower, recommended). **Does not apply to `smart`** — that tier always refines regardless of this setting |
+| Analysis Quality (`llmModel`) | Select | `pro` | `smart` (highest accuracy — a hybrid pass that blends a native skeleton read with several donor analysis rolls, then always refines the merged result; pick this when the shot list will drive regeneration), `ultra` (the deepest-reasoning analysis model reads every window three times, a judge compares the readings and a frame-level check tests the result against the footage — it holds up on fast cutting and on scenes with many people, and does not invent cuts that are not there; it samples the video at the same one frame per second as `pro`, and refines on `combine` like `pro`), `fast` (economy), `pro` (default), or `mixed` / `mixed-fast` (several economy passes combined for completeness). See [Credit Cost](#credit-cost) |
+| Result Selection (`selectionMode`) | Select | `choose` | `choose` — the standard result. `combine` — an enhanced result with additional verification for maximum captured detail (slightly slower, recommended); applies to `ultra` as to `pro`. **Does not apply to `smart`** — that tier always refines regardless of this setting |
 | Cast variations (`variations`) | Checkbox | off | On — the analysis also detects per-entity appearance **looks** — a plain wardrobe change between scenes (a different outfit at the café, on the boat, at the wedding) counts exactly as much as a dream, flashback, disguise, transformation, or era look — and binds each look to the scenes where it is active (`slots[].variations` + `scenes[].slotVariations`). Off — the result keeps the pre-variations shape. Look extraction runs as its own dedicated pass after the main analysis, so turning it on does not reduce how many entities are extracted |
 | Music video (`musicVideo`) | API / MCP only | off | On — the clip is declared a **music video**: the song IS the piece, so all sung lyrics are transcribed verbatim as per-scene `speech` layers (the instrumental bed stays its own `music` layer). Off — the default classification: soundtrack vocals nobody on screen performs are folded into the `music` layer's description, and `speech` carries only words uttered inside the story world. No canvas control yet — pass it in the request body (`musicVideo: true`) or the MCP tool's `music_video` flag |
 | Translate speech (`translateSpeechToEnglish`) | Checkbox | off | On — spoken and sung words come back in English. See [Output language](#output-language) |
@@ -411,7 +411,9 @@ the result's `warnings`.
 > These values are the internal pricing formula's current outputs.
 
 > **New `ultra` tier, 2026-11-13.** `ultra` reads every window with the
-> deepest-reasoning analysis model, at the same one frame per second as `pro`.
+> deepest-reasoning analysis model, at the same one frame per second as `pro`,
+> and with `pro`'s shape: three independent readings of each window, a judge and
+> a frame-level check, and a refine pass when `combine` is chosen.
 > Pick it for footage that trips the other tiers: fast cutting, and scenes with
 > many people. It keeps up with rapid cuts without inventing cuts that are not
 > there. It is priced between the mixed tiers and `smart`; no other tier's
@@ -468,12 +470,16 @@ per window.
 Every tier also analyzes each window **several times independently** and keeps
 (or merges) the best result — three passes on `fast` and `pro`, and six on the
 mixed tiers (three of each model, so their readings can be compared and
-combined). `smart` runs its own hybrid roll plan — a native skeleton pass plus
-several economy-tier donor rolls — and always refines the merged result. That
-repetition is the main reason a tier costs what it does, and it is why the
-mixed and smart tiers sit well above a single-model tier. `ultra` is the
-exception among the single-model tiers: the deepest-reasoning model reads every
-window, which is why it sits above the mixed tiers.
+combined). `ultra` has `pro`'s shape — three readings of each window at one
+frame per second, a judge that compares them, a frame-level check of the
+result against the footage, and a refine pass when `combine` is chosen — with
+the deepest-reasoning model doing the reading. `smart` runs its own hybrid
+roll plan — a native skeleton pass plus several economy-tier donor rolls — and
+always refines the merged result. That repetition is the main reason a tier
+costs what it does, and it is why the mixed and smart tiers sit well above a
+single-model tier. `ultra` is the exception among the single-model tiers: the
+deepest-reasoning model reads every window, which is why it sits above the
+mixed tiers.
 
 **Duration tolerance.** Credits are reserved up front from the bucket that fits
 the probed (metadata) duration, grace included. After download, the worker
