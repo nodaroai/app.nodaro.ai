@@ -4628,6 +4628,8 @@ An Apply EDL job's `output_data` says what the render was cut from: `quality` (`
 
 An Apply EDL job recorded before `output_data.quality` was written reads back with the quality it was ordered at filled in on every job read above, plus `GET /v1/jobs/:id` and `GET /v1/jobs/:id/status` (`"proxy"` is a preview, anything else the final). The stored job is unchanged.
 
+A completed Grok Imagine video job (`grok` or `grok-i2v`) whose request named a resolution also carries it in `output_data.recordedResolution`, exactly as the request recorded it, beside its `providerTaskId`; a Grok Extend of that video is priced by that resolution.
+
 All three require `jobs:read` scope when using an OAuth token; admin tokens may
 see cross-user jobs. These endpoints are public API — they are used by the
 editor but are equally suited to external polling clients. `input_data` and

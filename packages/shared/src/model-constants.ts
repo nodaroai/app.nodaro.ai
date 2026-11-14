@@ -4569,7 +4569,8 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
   // The length tiers of the earlier Seedance Extend rows
   // (`seedance-2-extend:<tier>:<res>`). No extend is priced on them any more —
   // each Seedance extend provider has a row per second (`tailExtendCreditId`)
-  // — but the rows stay, and so do their tiers.
+  // — and the rows themselves were removed (migration 648); the tiers stay,
+  // unread, as part of this published table.
   "seedance-2-extend": [
     { maxSeconds: 4, suffix: "4s" },
     { maxSeconds: 8, suffix: "8s" },

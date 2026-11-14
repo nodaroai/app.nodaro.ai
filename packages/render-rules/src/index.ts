@@ -1023,4 +1023,4 @@ export { gvpOfferedResolutions, gvpRenderResolution, gvpRendersResolutionAsNamed
 export { GVP_GENERATE_AUDIO_DEFAULT, gvpSegmentAudio, pluginVideoAudioRequest } from "./gvp-audio"
 // The anchor choices Generate Video Pro's panel offers for a model (no "reference" where the model takes no reference images).
 export { gvpAnchorChoicesFor } from "./gvp-anchor-choices"
-export { RUN_OUTPUT_TASK_FIELD, handedOnTaskOf, ownTaskInputOf, recordedRunOutputTaskOf, runOutputTaskFields, upstreamTaskFits, type UpstreamTaskGraph, type UpstreamTaskNode } from "./upstream-task"
+export { RUN_OUTPUT_TASK_FIELD, handedOnTaskOf, ownTaskInputOf, recordedRunOutputTaskOf, runOutputTaskFields, runResultTaskFields, upstreamTaskFits, type UpstreamTaskGraph, type UpstreamTaskNode } from "./upstream-task"

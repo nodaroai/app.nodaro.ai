@@ -105,6 +105,8 @@ export interface NodeOutput {
   splitResults?: string[]
   combinedText?: string
   kieTaskId?: string
+  /** The resolution the job recorded beside its task (`input_data.resolution`, as stored). */
+  recordedResolution?: string
   paramOutputs?: Record<string, string>
   /** Accumulated results from fan-out (list/loop/split-text) execution */
   listResults?: string[]

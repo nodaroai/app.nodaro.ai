@@ -134,6 +134,7 @@ import { dispatchSlots, type DispatchSlots } from "../lib/dispatch-slots.js"
 import { assembleFanOutResult } from "./fan-out-result.js"
 import { resolveFanOutIterationInputs } from "./fan-out-inputs.js"
 import { hydrateEntityNodes } from "../lib/entity-hydration.js"
+import { withLegacyExtensionOutputs } from "../lib/legacy-extension-output.js"
 import { withResolvedResultIds } from "../lib/canvas-result-ids.js"
 import { settleAppRunFinalEdits } from "../lib/app-run-final-column.js"
 
@@ -815,7 +816,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     }))
     const cleaned = filterCloneNodes(allNodes, allEdges)
     // Also filter nodes still marked hidden after clone cleanup
-    const nodes: SimpleNode[] = cleaned.nodes
+    const loadedNodes: SimpleNode[] = cleaned.nodes
       .filter((n) => !(n as { hidden?: boolean }).hidden)
       .map((n) => ({
         id: n.id,
@@ -833,9 +834,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // Scoped to the WORKFLOW OWNER, set by both branches above — a published
     // app runs against its creator's characters, and using the runner's would
     // strip them.
-    await hydrateEntityNodes(nodes, ctx.workflowOwnerId ?? userId)
+    await hydrateEntityNodes(loadedNodes, ctx.workflowOwnerId ?? userId)
 
-    const nodeIds = new Set(nodes.map((n) => n.id))
+    const nodeIds = new Set(loadedNodes.map((n) => n.id))
     const filteredEdges = cleaned.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
     // Defensive Generate Image handles v2 migration — catches workflows
     // persisted before the migration deployed, or those created by external
@@ -845,9 +846,17 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // below (types, lists, fan-out, JSON kinds) sees exactly what entered the
     // pair. See @nodaro/render-rules teleport-bypass.ts.
     const edges = bypassTeleports(
-      nodes,
-      migrateGenerateImageHandles(nodes, filteredEdges as unknown as ReadonlyArray<{ id: string; source: string; target: string; targetHandle?: string | null }>) as unknown as typeof filteredEdges,
+      loadedNodes,
+      migrateGenerateImageHandles(loadedNodes, filteredEdges as unknown as ReadonlyArray<{ id: string; source: string; target: string; targetHandle?: string | null }>) as unknown as typeof filteredEdges,
     )
+    // An Extend / Upscale Video node saved before its own output task was
+    // recorded apart, whose saved task the runner's jobs show to be its own
+    // output, is read as recorded apart: that output handed on, its input the
+    // job's (lib/legacy-extension-output.ts). The runner's jobs, in runs of
+    // this workflow: a task is never read off another account's, nor off a
+    // node of the same id in another workflow. Nothing is asked when no node
+    // needs it.
+    const nodes: SimpleNode[] = [...(await withLegacyExtensionOutputs(loadedNodes, edges, { userId, workflowId }))]
 
     // Pass workflow settings (character definitions, prompt templates) to context
     // Load user-level prompt templates and tier from profiles

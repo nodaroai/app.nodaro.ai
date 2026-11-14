@@ -108,6 +108,32 @@ describe("Extend Video card — Grok's Run price", () => {
     expect(quote.id).toBe(getModelIdentifier(node, canvas.edges as never, canvas.nodes as never))
   })
 
+  it("quotes the resolution the Grok node's job recorded for the take its task names: 720p when it recorded none, or no take is named", () => {
+    const grok = (resolution: string, rows: Array<{ task?: string; recorded?: string }>) => [{
+      id: "g", type: "generate-video", position: { x: 0, y: 0 },
+      data: {
+        label: "Grok", provider: "grok-i2v", resolution, kieTaskId: "t-latest",
+        generatedResults: rows.map((r, i) => ({
+          url: `https://cdn.example/${i}.mp4`, jobId: `j${i}`, timestamp: "2026-11-13T00:00:00Z",
+          ...(r.task ? { kieTaskId: r.task } : {}), ...(r.recorded ? { recordedResolution: r.recorded } : {}),
+        })),
+      },
+    }]
+    canvas.edges = [{ id: "g-x1", source: "g", target: "x1", sourceHandle: "video", targetHandle: "video" }]
+    const quoted = (nodes: ReturnType<typeof grok>) => {
+      canvas.nodes = nodes
+      return mount({ provider: "grok-extend", duration: 10 }).quote
+    }
+    // Recorded 720p, the node set to 480p since.
+    expect(quoted(grok("480p", [{ task: "t-latest", recorded: "720p" }]))).toEqual({ id: "grok-extend:10s:720p", units: 1 })
+    // Recorded 480p.
+    expect(quoted(grok("720p", [{ task: "t-latest", recorded: "480p" }]))).toEqual({ id: "grok-extend:10s:480p", units: 1 })
+    // The task's take recorded none; its take deleted; results from before they recorded their task.
+    expect(quoted(grok("480p", [{ task: "t-latest" }]))).toEqual({ id: "grok-extend:10s:720p", units: 1 })
+    expect(quoted(grok("480p", [{ task: "t-older", recorded: "480p" }]))).toEqual({ id: "grok-extend:10s:720p", units: 1 })
+    expect(quoted(grok("480p", [{ recorded: "480p" }]))).toEqual({ id: "grok-extend:10s:720p", units: 1 })
+  })
+
   it("reads Grok Extend", () => {
     mount({ provider: "grok-extend" })
     expect(screen.getByText("Grok Extend")).toBeTruthy()

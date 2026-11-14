@@ -1,4 +1,5 @@
 import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
+import { isGrokExtendSourceModel } from "@nodaro/shared/models"
 import { supabase } from "./supabase.js"
 import { uploadToR2 } from "./storage.js"
 import { requestedImageFormat, storeFormattedImages } from "./image-output-store.js"
@@ -640,6 +641,24 @@ export async function finalizeJobWithMedia(
   if (lengthBoundSec !== undefined && videoR2Url !== undefined) {
     const durationSec = await recordedVideoLengthSec({ boundSec: lengthBoundSec, measuredSec: input.deliveredVideoSec, videoUrl: videoR2Url, jobId })
     if (durationSec !== undefined) outputData = { ...outputData, durationSec }
+  }
+
+  // 3c. A Grok Imagine video job (`grok` / `grok-i2v`, the model its request
+  //    recorded — as the Grok Extend source check reads it) that made a
+  //    provider task records, beside that task, the resolution its request
+  //    RECORDED (`input_data.resolution`, exactly as stored): the fact a Grok
+  //    Extend's charge reads off this job (lib/grok-extend-source.ts). The
+  //    lanes that land the take copy both onto its result row, so the quote
+  //    reads the same fact. Every other job completes as before.
+  const recordedResolution = job.input_data?.resolution
+  const recordedModel = job.input_data?.provider ?? job.input_data?.resolvedModel
+  if (
+    videoR2Url !== undefined &&
+    isGrokExtendSourceModel(typeof recordedModel === "string" ? recordedModel.trim() : recordedModel) &&
+    typeof outputData.kieTaskId === "string" && outputData.kieTaskId !== "" &&
+    typeof recordedResolution === "string" && recordedResolution !== ""
+  ) {
+    outputData = { ...outputData, recordedResolution }
   }
 
   // 4. CAS-guarded markJobCompleted (live statuses only). Null provider /

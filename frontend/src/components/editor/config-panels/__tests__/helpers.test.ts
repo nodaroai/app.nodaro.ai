@@ -405,6 +405,40 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(extend({ duration: 15 }))).toBe("grok-extend:10s:720p")
   })
 
+  it("prices a Grok extend at the resolution the Grok node's job recorded for the take its task names — its setting only when it makes a new clip in the run", () => {
+    const extend = makeNode({ id: "ext", type: "extend-video", data: { label: "Extend", provider: "grok-extend" } as any })
+    const wire = { id: "w", source: "src", target: "ext", sourceHandle: "video", targetHandle: "video" } as any
+    type Row = { task?: string; recorded?: string; width?: number; height?: number }
+    /** The node holds the latest run's task `t-latest`; its results newest first. */
+    const ran = (rows: Row[], resolution?: string) =>
+      makeNode({
+        id: "src",
+        type: "generate-video",
+        data: {
+          label: "Grok", provider: "grok-i2v", ...(resolution ? { resolution } : {}), kieTaskId: "t-latest",
+          generatedResults: rows.map((r, i) => ({
+            url: `https://cdn.example/${i}.mp4`, jobId: `j${i}`, timestamp: "2026-11-13T00:00:00Z",
+            ...(r.task ? { kieTaskId: r.task } : {}), ...(r.recorded ? { recordedResolution: r.recorded } : {}), ...(r.width ? { width: r.width, height: r.height } : {}),
+          })),
+        } as any,
+      })
+    const id = (node: ReturnType<typeof ran>, reruns?: ReadonlySet<string>) => getModelIdentifier(extend, [wire], [node, extend], reruns)
+    // The take the task names recorded 480p: 480p, whatever the node is set to.
+    expect(id(ran([{ task: "t-latest", recorded: "480p" }], "720p"))).toBe("grok-extend:6s:480p")
+    // Recorded 720p, set to 480p since: 720p.
+    expect(id(ran([{ task: "t-latest", recorded: "720p" }], "480p"))).toBe("grok-extend:6s:720p")
+    // The task's take recorded no resolution: 720p.
+    expect(id(ran([{ task: "t-latest" }], "480p"))).toBe("grok-extend:6s:720p")
+    // A 480p-sized file whose job recorded 720p: 720p (the file's size is never read).
+    expect(id(ran([{ task: "t-latest", recorded: "720p", width: 854, height: 480 }], "480p"))).toBe("grok-extend:6s:720p")
+    // The newest (720p) result deleted, or results from before they recorded their task: 720p.
+    expect(id(ran([{ task: "t-older", recorded: "480p" }], "480p"))).toBe("grok-extend:6s:720p")
+    expect(id(ran([{ width: 854, height: 480 }], "480p"))).toBe("grok-extend:6s:720p")
+    // A whole run that makes the Grok clip again extends the new one, made at the setting.
+    expect(id(ran([{ task: "t-latest", recorded: "720p" }], "480p"), new Set(["src", "ext"]))).toBe("grok-extend:6s:480p")
+    expect(id(ran([{ task: "t-latest", recorded: "480p" }], "720p"), new Set(["src", "ext"]))).toBe("grok-extend:6s:720p")
+  })
+
   it("prices an Extend node naming no provider as the VEO extend it runs (EXTEND_VIDEO_DEFAULT_PROVIDER), never the node-type row", () => {
     const extend = (data: Record<string, unknown>) => makeNode({ type: "extend-video", data: { label: "Extend", ...data } as any })
     expect(getModelIdentifier(extend({}))).toBe("veo-extend")

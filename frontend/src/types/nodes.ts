@@ -188,6 +188,10 @@ export interface GeneratedResult {
   // (grok-2-segment / grok-2-edit) key off the ACTIVE result's
   // task id so region edits target the version the user is looking at.
   readonly kieTaskId?: string
+  // Beside that task, the resolution the job that made this take RECORDED
+  // (`input_data.resolution`, as stored) — the fact a Grok Extend's charge
+  // reads off its source's job, and so what its quote reads off this row.
+  readonly recordedResolution?: string
   // A Seedance 2.5 DRAFT (480p) — the tile shows a "Draft" badge; finalize it
   // with Upscale Video → Seedance 2.5 HD (from draft) for the same take at 1080p.
   readonly draft?: boolean

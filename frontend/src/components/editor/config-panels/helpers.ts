@@ -906,10 +906,11 @@ export function getModelIdentifier(
     }
     // Grok: the seconds added at its SOURCE's resolution — the row its run is
     // held on, read off the source's job. Quoted at it when the wiring says
-    // for sure (a Grok Imagine node set to 480p), else at the dearer 720p row
-    // (the server's estimate reads the same rule); never the node's resolution.
+    // for sure (the 480p clip a wired Grok Imagine node made, or, when it makes
+    // its clip in the run, one set to 480p), else at the dearer 720p row (the
+    // server's estimate reads the same rule); never the node's resolution.
     if (isGrokExtendProvider(runsAs)) {
-      return grokExtendCreditId(data.duration, grokExtendWiredSourceResolution(node.id, nodes ?? [], edges))
+      return grokExtendCreditId(data.duration, grokExtendWiredSourceResolution(node.id, nodes ?? [], edges, reruns))
     }
   }
 

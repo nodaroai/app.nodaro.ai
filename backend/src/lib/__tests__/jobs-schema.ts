@@ -54,6 +54,19 @@ export function columnOf(ref: string): string {
   return ref.split(/->>?/)[0]!.trim()
 }
 
+/**
+ * A filter on an EMBEDDED resource's column (`execution.workflow_id`: PostgREST's
+ * `alias.column`, on an `alias:table!key!inner(...)` the chain selects) — not a
+ * column of the table itself, so never checked against it (as a select list's
+ * embedded resources are not). A dotted name whose prefix IS one of the table's
+ * `columns` (`input_data.node_id`, a JSON path mistyped) is no embed: it is
+ * still checked, and flagged.
+ */
+export function isEmbeddedRef(ref: string, columns: ReadonlySet<string>): boolean {
+  const m = /^([a-z_][a-z0-9_]*)\.[a-z_]/i.exec(columnOf(ref))
+  return m !== null && !columns.has(m[1]!.toLowerCase())
+}
+
 /** A PostgREST select list → the plain column names it reads from the table itself (embedded resources skipped). */
 export function selectColumns(list: string): string[] {
   let flat = list

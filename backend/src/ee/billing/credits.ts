@@ -1690,22 +1690,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // LTX extend + retake (Pro only, 1080p): per-second × duration at credit-guard time.
   // 5 cr/sec matches Pro:1080p rate (extend output is at the input's resolution; retake is locked 1080p).
   "ltx-2.3-pro-extend:per-second": 40,
-  // ── Seedance 2 Extend, the earlier length-tier rows. No run is priced on
-  //    them any more (Seedance 2.0 Extend has its own per-second rows below);
-  //    kept so the model_pricing rows they seeded keep a static twin. ──
-  "seedance-2-extend": 530,             // default 8s 720p
-  "seedance-2-extend:4s:480p": 150,
-  "seedance-2-extend:8s:480p": 260,
-  "seedance-2-extend:12s:480p": 380,
-  "seedance-2-extend:15s:480p": 470,
-  "seedance-2-extend:4s:720p": 280,
-  "seedance-2-extend:8s:720p": 530,
-  "seedance-2-extend:12s:720p": 780,
-  "seedance-2-extend:15s:720p": 970,
-  "seedance-2-extend:4s:1080p":   410,
-  "seedance-2-extend:8s:1080p":   780,
-  "seedance-2-extend:12s:1080p":  1160,
-  "seedance-2-extend:15s:1080p":  1440,
+  // (The retired `seedance-2-extend` id has no rows: it is priced as
+  //  seedance-2-5-extend, and migration 648 removed the rows it once had.)
   // ── Seedance 2.5 Extend — charged per second of (source seconds sent +
   //    seconds added): its two-second rate rows, and the earlier per-length
   //    rows, each now the most a run of its length costs (both above
@@ -1713,8 +1699,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   ...SEEDANCE_25_EXTEND_RATE_ROWS,
   ...SEEDANCE_25_EXTEND_FULL_WINDOW_ROWS,
   // ── Seedance 2.0 Extend — one row per second added (4–15s) × resolution,
-  //    held to the seedance-2 reference-video price the same way (the
-  //    earlier seedance-2-extend:<tier>:<res> rows above are no longer read). ──
+  //    held to the seedance-2 reference-video price the same way. ──
   "seedance-2-0-extend:4s:480p": 173,
   "seedance-2-0-extend:5s:480p": 202,
   "seedance-2-0-extend:6s:480p": 230,
@@ -6180,7 +6165,8 @@ function estimateNodeCredits(
     // A masked edit on a model that follows its photo is priced at the photo's size, when its source records it.
     sourceImage: edges && node.id ? wiredImageSize(node.id, nodes, edges) : undefined,
     masked: node.id ? nodeIsMasked(node.id, node.data, edges) : undefined,
-    grokExtendSourceResolution: node.type === "extend-video" ? grokExtendWiredSourceResolution(node.id, nodes, edges) : undefined,
+    // Grok Extend: the clip its source made, when the source does not make a new one in this run (else its setting).
+    grokExtendSourceResolution: node.type === "extend-video" ? grokExtendWiredSourceResolution(node.id, nodes, edges, rerunIds) : undefined,
   })
   // An LLM Chat node that says how large its call is (`data.expectedUsage`, a plugin's quote graph): that call on
   // the model's primary lane, never below the feature's typical one (each token count floored at it, so the field
@@ -7914,9 +7900,9 @@ export function getNodeModelIdentifier(
   }
   // Extend-video on Grok: the seconds added at the SOURCE's resolution, which
   // the run reads off its source's job. A quote knows it only when the graph
-  // says for sure (a Grok Imagine node set to 480p wired in); otherwise the
-  // dearer 720p row — a quote may run above the charge, never below. Never a
-  // resolution the node names.
+  // says for sure (the 480p clip a wired Grok Imagine node made, or one set to
+  // 480p that makes its clip in the run); otherwise the dearer 720p row. Never
+  // a resolution the node names.
   if (isGrokExtendProvider(catalogExtend)) return grokExtendCreditId(data.duration, graph.grokExtendSourceResolution)
 
   // Motion transfer: duration-tiered pricing

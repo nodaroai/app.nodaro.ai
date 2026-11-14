@@ -3,6 +3,27 @@ import { describe, it, expect } from "vitest"
 import { recordedVideoLengthField, runResultIdentity, runResultRowIdentity } from "../run-result-identity"
 
 describe("runResultIdentity — what a landed take carries (A1b)", () => {
+  it("a Grok Imagine video take (its job recorded its resolution beside its task) carries both on its row, exactly as stored", () => {
+    for (const type of ["generate-video", "image-to-video", "text-to-video"]) {
+      expect(runResultIdentity(type, { videoUrl: "v", kieTaskId: "task-1", recordedResolution: "480p" }), type).toEqual({ kieTaskId: "task-1", recordedResolution: "480p" })
+      expect(runResultIdentity(type, { videoUrl: "v", kieTaskId: "task-1", recordedResolution: "720P" }), type).toEqual({ kieTaskId: "task-1", recordedResolution: "720P" })
+    }
+  })
+
+  it("any other take carries no task of its own, as before: an image take (a Grok Imagine image too), a video take whose job recorded no resolution, an extension's", () => {
+    // A Grok image's take: the refine / segment section keeps reading the node's own task for it.
+    expect(runResultIdentity("generate-image", { imageUrl: "i", kieTaskId: "task-img" })).toEqual({})
+    expect(runResultIdentity("generate-image", { imageUrl: "i", kieTaskId: "task-img", recordedResolution: "1K" })).toEqual({})
+    // Another model's video (the job records no resolution beside its task).
+    expect(runResultIdentity("generate-video", { videoUrl: "v", kieTaskId: "task-veo" })).toEqual({})
+    // A recorded resolution without a task names no take.
+    expect(runResultIdentity("generate-video", { videoUrl: "v", recordedResolution: "480p" })).toEqual({})
+    // An Extend or Upscale Video node's `kieTaskId` is the task it works on.
+    for (const type of ["extend-video", "video-upscale"]) {
+      expect(runResultIdentity(type, { videoUrl: "v", kieTaskId: "task-ext", recordedResolution: "720p" }), type).toEqual({})
+    }
+  })
+
   it("a render's thumbnail, quality and clip", () => {
     expect(runResultIdentity("apply-edl", { videoUrl: "v", thumbnailUrl: "t", quality: "proxy", clipKey: "0-9" })).toEqual({
       thumbnailUrl: "t", quality: "proxy", clipKey: "0-9",

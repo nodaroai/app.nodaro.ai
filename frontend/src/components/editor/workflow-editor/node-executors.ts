@@ -1,6 +1,7 @@
 import type { FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared/video";
 import type { DeclaredSeedanceTaskType } from "@nodaro/shared/models";
 import type { ScriptSettings } from "@nodaro/shared/nodes";
+import { runResultTaskFields } from "@nodaro/render-rules";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import {
@@ -46,13 +47,22 @@ const extractKieTaskId = (od: Record<string, unknown>) => {
   return kieTaskId ? { kieTaskId } : {};
 };
 
+/** The node type a video generation's take is recorded for: a generation, whose own task the take's is. */
+const VIDEO_GENERATION_NODE_TYPE = "generate-video";
+
 /** A video generation's result: a Seedance draft is marked `draft` (the tile's
  *  "Draft" badge), and the length its run recorded (an automatic length, a
  *  Seedance Edit / Extend) is the row's `duration`, what a Trim / Loop / Combine
  *  Videos after it is charged by. Both on the RESULT only, never the node: the
  *  node's `draft` and `duration` are its settings. */
 const videoGenerationResultFields = (draft: boolean | undefined) => ({
-  resultFields: (od: Record<string, unknown>) => ({ ...(draft === true ? { draft: true } : {}), ...recordedVideoLengthField(od) }),
+  resultFields: (od: Record<string, unknown>) => ({
+    ...(draft === true ? { draft: true } : {}),
+    ...recordedVideoLengthField(od),
+    // The task that made the take and the resolution its job recorded — the
+    // row a Grok Extend's quote reads, as every other lane writes it.
+    ...runResultTaskFields(VIDEO_GENERATION_NODE_TYPE, od),
+  }),
 });
 
 // --- Image generation ---

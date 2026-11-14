@@ -4,7 +4,10 @@
  * a Preview), `clipKey` (the plan clip it cut), `planBasis` (the plan value it
  * cut), `renderBasis` (its own settings) and `duration` (the cut's length, what
  * a length-priced step after it is charged by; a generated video's real length
- * when its run recorded one). Every lane that lands a take
+ * when its run recorded one); and, for a generation, the provider task that
+ * made it (`kieTaskId` — which take the node's own task names, the clip a
+ * task-chained node continues) with the resolution its job recorded
+ * (`recordedResolution`). Every lane that lands a take
  * writes it — the single-node run, the browser fan-out, a server run (live and
  * at reopen) and the job restores — so the Preview label and the latest-batch
  * reader (@nodaro/shared savedRenderBatch) see the same take whichever lane
@@ -14,7 +17,7 @@
  * where `quality` is the node's own setting.
  */
 import { isRenderNodeType, renderResultStamp, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes"
-import { isUseCaseNodeType, RECORDED_OUTPUT_LENGTH_NODE_TYPES, usecaseListsItsResult } from "@nodaro/render-rules"
+import { isUseCaseNodeType, RECORDED_OUTPUT_LENGTH_NODE_TYPES, runResultTaskFields, usecaseListsItsResult } from "@nodaro/render-rules"
 
 export interface RunResultIdentity {
   readonly thumbnailUrl?: string
@@ -24,6 +27,10 @@ export interface RunResultIdentity {
   readonly renderBasis?: string
   /** A render's cut length (a use-case node's episode length; a generated video's real length, when its run recorded one), in seconds — what the step after it is charged by (`runForwardedVideoLengthSec`). */
   readonly duration?: number
+  /** A generation's provider task that made this take (`runResultTaskFields`): never on an Extend or Upscale Video node's take. */
+  readonly kieTaskId?: string
+  /** Beside that task, the resolution its job recorded (`input_data.resolution`, as stored), when it recorded one. */
+  readonly recordedResolution?: string
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
@@ -55,6 +62,10 @@ export function runResultIdentity(nodeType: string | null | undefined, output: u
     // and a Trim the length of the file it cut; on the result row it is the
     // length the step after it is handed.
     ...(isRenderNodeType(nodeType) || isUseCaseNodeType(nodeType) || RECORDED_OUTPUT_LENGTH_NODE_TYPES.has(nodeType ?? "") ? recordedVideoLengthField(o) : {}),
+    // The task that made the take, and the resolution its job recorded, on a
+    // node whose own task it is: a reader of the node's task (a Grok Extend's
+    // quote) finds the very take it names, and the fact its charge reads.
+    ...runResultTaskFields(nodeType, o),
   }
 }
 
