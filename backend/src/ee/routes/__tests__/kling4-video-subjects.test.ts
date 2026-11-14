@@ -89,7 +89,7 @@ const queueAdd = vi.hoisted(() => vi.fn((..._args: unknown[]) => Promise.resolve
 vi.mock("../../../lib/queue.js", () => ({ videoQueue: { add: queueAdd } }))
 
 import { buildKling4Request } from "../../../providers/kie/kling4.js"
-import { seedance2RefVideoActualBaseCredits } from "../../billing/seedance2-ref-video-credits.js"
+import { measureSeedance2Settle } from "../../../lib/seedance2-ref-video-settle.js"
 import { resetRefVideoProbeCache } from "../../../lib/ref-video-probe.js"
 
 const CLIP = (n: number) => `https://cdn.example.com/maya-${n}.mp4`
@@ -145,30 +145,90 @@ async function quoteRunSettle(route: "text-to-video" | "generate-video", params:
   const queued = queueAdd.mock.calls[0]![1] as Queued
   await app.close()
 
-  // The settlement: the delivered clip measured (5.04 s → the 5 s Kling bills),
-  // the reference clips from the reservation's own probe, carried on the job.
-  const base = await seedance2RefVideoActualBaseCredits({
+  // Without a route override the reservation prices the identifier through the
+  // same charged lookup `reserveCredits` falls back to.
+  const { getModelCreditCostFromDB } = await import("../../billing/credits.js")
+  const reserved = options?.creditOverride ?? (await getModelCreditCostFromDB(identifier)).creditCost
+
+  // The settlement, through the core shim every completing lane calls: the
+  // delivered clip measured (5.04 s → the 5 s Kling bills), the reference clips
+  // from the reservation's own probe and the character references, carried on
+  // the job. Nothing measured = the reservation is committed.
+  const settle = await measureSeedance2Settle({
     provider: params.provider as string,
     resolution: (params.resolution as string | undefined) ?? "720p",
     outputUrl: OUT,
-    referenceVideoUrls: queued.referenceVideoUrls ?? [],
-    durationsSec: queued.refVideoDurationsSec,
-    requestedDuration: params.duration,
+    referenceVideoUrls: queued.referenceVideoUrls,
+    refVideoDurationsSec: queued.refVideoDurationsSec,
+    characterReferences: queued.characterReferences,
+    duration: params.duration,
     referenceTaskType: undefined,
   })
-  return { quote, identifier, reserved: options?.creditOverride, charged: mk(base), queued }
+  return { quote, identifier, reserved, charged: settle.baseCredits === undefined ? reserved : mk(settle.baseCredits), queued }
 }
 
-describe("quote = hold = charge, priced as a reference video", () => {
-  it("Kling 4.0 Flash, a run whose only clip is a character's (text-to-video)", async () => {
+// Decided 2026-11-14, from a measured run: on Kling 4.0 Flash the provider bills
+// a video subject like an image subject (no reference-video seconds, no
+// reference rate); Kling 4.0 keeps pricing it as a reference video.
+describe("quote = hold = charge: Kling 4.0 Flash prices a video subject like an image subject", () => {
+  it("a run whose only clip is a character's: the plain kling-4-flash:5s:720p price, as with no clip", async () => {
     const params = { prompt: "Maya walks into the rain", provider: "kling-4-flash", duration: 5, characterReferences: [maya()] }
     const subject = await quoteRunSettle("text-to-video", params)
+    expect(subject.identifier).toBe("kling-4-flash:5s:720p")
+    // The seeded composite's charged price, not a reference-video base.
+    const { getModelCreditCostFromDB } = await import("../../billing/credits.js")
+    expect(subject.reserved).toBe((await getModelCreditCostFromDB("kling-4-flash:5s:720p")).creditCost)
     expect(subject.quote.identifier).toBe(subject.identifier)
-    expect(subject.reserved).toBeDefined()
     expect(subject.quote.reserve).toBe(subject.reserved)
     expect(subject.charged).toBe(subject.reserved)
-    // Flash 720p -ref: 230/8 a second × (5 out + max(5, 5 in)) = 287.5 → 288 base.
-    expect(subject.reserved).toBe(mk(Math.ceil((230 / 8) * 10)))
+    // The clip is still seated: measured and held to the caps, just not priced.
+    expect(subject.queued.referenceVideoUrls).toEqual([CLIP(1)])
+
+    vi.clearAllMocks()
+    const imagesOnly = await quoteRunSettle("text-to-video", { ...params, characterReferences: [maya(undefined)] })
+    expect(imagesOnly.identifier).toBe(subject.identifier)
+    expect(imagesOnly.reserved).toBe(subject.reserved)
+  })
+
+  it("beside a plain reference video: priced on the reference video alone, the subject's seconds adding nothing", async () => {
+    const params = { prompt: "@video_1 is the room; Maya crosses it", provider: "kling-4-flash", duration: 5, referenceVideoUrls: [REF(1)], characterReferences: [maya()] }
+    lengths.set(REF(1), 9)
+    const subject = await quoteRunSettle("text-to-video", params)
+    expect(subject.quote.reserve).toBe(subject.reserved)
+    expect(subject.charged).toBe(subject.reserved)
+    // Flash 720p -ref: 230/8 a second × (5 out + max(5, 9 in)) = 402.5 → 403 base.
+    expect(subject.reserved).toBe(mk(Math.ceil((230 / 8) * 14)))
+    expect(subject.queued.referenceVideoUrls).toEqual([REF(1), CLIP(1)])
+    expect(subject.queued.refVideoDurationsSec).toEqual([9, 5])
+
+    vi.clearAllMocks()
+    const noSubject = await quoteRunSettle("text-to-video", { ...params, characterReferences: [maya(undefined)] })
+    expect(noSubject.reserved).toBe(subject.reserved)
+  })
+})
+
+describe("Kling 4.0 Flash: the same clip wired as a reference video AND as the character's video", () => {
+  it("goes to the model as the character only, so it is quoted, held and charged at the plain price", async () => {
+    const params = { prompt: "Maya walks into the rain", provider: "kling-4-flash", duration: 5, referenceVideoUrls: [CLIP(1)], characterReferences: [maya()] }
+    const twice = await quoteRunSettle("text-to-video", params)
+    expect(twice.identifier).toBe("kling-4-flash:5s:720p")
+    expect(twice.quote.reserve).toBe(twice.reserved)
+    expect(twice.charged).toBe(twice.reserved)
+    const { getModelCreditCostFromDB } = await import("../../billing/credits.js")
+    expect(twice.reserved).toBe((await getModelCreditCostFromDB("kling-4-flash:5s:720p")).creditCost)
+    expect(twice.queued.referenceVideoUrls).toEqual([CLIP(1)])
+  })
+})
+
+describe("quote = hold = charge: Kling 4.0 prices a video subject as a reference video", () => {
+  it("a run whose only clip is a character's: the reference rate on the clip's seconds", async () => {
+    const params = { prompt: "Maya walks into the rain", provider: "kling-4", duration: 5, resolution: "720p", characterReferences: [maya()] }
+    const subject = await quoteRunSettle("text-to-video", params)
+    expect(subject.identifier).toMatch(/-ref$/)
+    expect(subject.quote.reserve).toBe(subject.reserved)
+    expect(subject.charged).toBe(subject.reserved)
+    // 720p -ref: 340/8 a second × (5 out + max(5, 5 in)) = 425 base.
+    expect(subject.reserved).toBe(mk(Math.ceil((340 / 8) * 10)))
 
     vi.clearAllMocks()
     const plain = await quoteRunSettle("text-to-video", { ...params, characterReferences: [maya(undefined)], referenceVideoUrls: [CLIP(1)] })

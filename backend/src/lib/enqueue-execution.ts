@@ -20,6 +20,11 @@
  *   - Its Idempotency-Key is released in the same write, so a retry with the
  *     same key starts a new run (the unique (user_id, idempotency_key)
  *     constraint would refuse it otherwise).
+ *   - A use-case run's wrapper (the job the caller holds, and whose
+ *     Idempotency-Key the caller sent) is settled by the run's failure path
+ *     and fails with that same key released (lib/use-case/finalize-wrapper.ts
+ *     recognises this run by its message), so a retry after the 500 starts a
+ *     new run instead of being answered with the failed wrapper.
  *   - Nothing is refunded here: a waiting execution has reserved nothing
  *     itself (its nodes reserve when they run). A route that holds something
  *     before queueing (a fee) releases it itself, confirmed.
@@ -42,6 +47,10 @@
  * never-started execution sweep fails it, its key held until then), failed
  * by a write whose answer was lost (its key released, but no event sent), or
  * running.
+ *
+ * A caller with no request in hand (a service its route calls, a plugin
+ * daemon's trigger fire) queues through `enqueueRunOrThrow`: the same settle,
+ * then an `UnqueuedRunError` its caller answers.
  */
 import type { FastifyReply, FastifyRequest } from "fastify"
 import { failWaitingExecutionDetailed } from "./concurrency-lanes/run-failure.js"
@@ -49,9 +58,10 @@ import { executionEvents } from "./execution-events.js"
 import { supabase } from "./supabase.js"
 import { insertAppReport } from "./app-reports.js"
 import { sendInternalError } from "./http-errors.js"
+import { UNQUEUED_EXECUTION_MESSAGE } from "./unqueued-run-message.js"
 
 /** What the failed run says (`workflow_executions.error_message`). */
-export const UNQUEUED_EXECUTION_MESSAGE = "The run could not be queued to start. Run it again."
+export { UNQUEUED_EXECUTION_MESSAGE }
 
 /** What the request is answered with (`500 internal_error`). */
 export const UNQUEUED_EXECUTION_CLIENT_MESSAGE = "The run could not be started. Please try again."
@@ -68,18 +78,26 @@ export type UnqueuedExecutionOutcome = "failed" | "moved-on" | "unsettled"
  * says what the caller may assume: "failed" — this call failed the run from
  * `pending` and released its key, so nothing runs; "unsettled" — the run's
  * state is unknown (still `pending`, failed with its answer lost, or running),
- * so a caller must not act as if nothing started. The queue's own error is
- * its `cause`.
+ * so a caller must not act as if nothing started: it follows the run to its
+ * real end, as it would a started one. The queue's own error is its `cause`.
  */
 export class UnqueuedRunError extends Error {
   readonly executionId: string
   readonly outcome: Exclude<UnqueuedExecutionOutcome, "moved-on">
+  /** The app run the service created for the run before queueing it, when it created one. */
+  readonly appRunId?: string
 
-  constructor(executionId: string, outcome: Exclude<UnqueuedExecutionOutcome, "moved-on">, cause: unknown) {
+  constructor(
+    executionId: string,
+    outcome: Exclude<UnqueuedExecutionOutcome, "moved-on">,
+    cause: unknown,
+    opts: { readonly appRunId?: string } = {},
+  ) {
     super(`The queue refused run ${executionId} (${outcome})`, { cause })
     this.name = "UnqueuedRunError"
     this.executionId = executionId
     this.outcome = outcome
+    if (opts.appRunId) this.appRunId = opts.appRunId
   }
 }
 
@@ -202,6 +220,39 @@ export async function settleUnqueuedRun(
   const { outcome, err } = await failUnqueuedRun(executionId, UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null }, log)
   if (outcome === "unsettled") await reportUnsettledRun(executionId, userId, log, err)
   return outcome
+}
+
+/**
+ * Run `enqueue` for the execution `executionId` that a caller with no request
+ * in hand inserted: a service its route calls (services/app-execution.ts,
+ * services/app-render-final.ts, services/use-case-execution.ts), or a plugin
+ * daemon's trigger fire (lib/plugin-triggers.ts). When the queue refuses the
+ * run it is settled like {@link settleUnqueuedRun}'s (failed from `pending`,
+ * its key released). Resolves when the run was queued or moved on (it is
+ * running: answered as started); otherwise throws an `UnqueuedRunError`
+ * saying whether the run is known not to run, which the caller answers.
+ * Awaited as its own statement (src/lib/__tests__/route-enqueue-guard.test.ts).
+ */
+export async function enqueueRunOrThrow(
+  executionId: string,
+  userId: string | null,
+  enqueue: () => Promise<unknown>,
+  opts: {
+    readonly log?: SettleLog
+    /** The app run the service created for this run, carried on the error so a caller that follows an unsettled run can report it. */
+    readonly appRunId?: string
+  } = {},
+): Promise<void> {
+  const log = opts.log ?? processLog
+  try {
+    await enqueue()
+  } catch (err) {
+    const outcome = await settleUnqueuedRun(executionId, userId, log)
+    if (outcome !== "moved-on") {
+      throw new UnqueuedRunError(executionId, outcome, err, opts.appRunId ? { appRunId: opts.appRunId } : {})
+    }
+    log.warn({ err, executionId }, "the queue refused a run that has since moved on — answered as started")
+  }
 }
 
 /** Fail a run the queue refused, from `pending` only, its key released. Never throws. */

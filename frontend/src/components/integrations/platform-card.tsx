@@ -19,7 +19,7 @@ import { AccountRow } from "./account-row"
 import { describeProvider } from "./platform-meta"
 import { TelegramConnectDialog, FieldsConnectDialog } from "./connect-dialogs"
 import { classifySocialConnectMessage } from "./social-connect-message"
-import { publicLinkOrigin } from "@/lib/public-links"
+import { runtimeCallbackOrigin } from "@/lib/runtime-config"
 
 /**
  * One connectable network. Everything about it comes from the registry entry,
@@ -78,13 +78,14 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
         clearInterval(interval)
         window.removeEventListener("message", handler)
       }
-      // Only the pop-up opened above, on this app's own origin (the one target
-      // the callback page posts to), can finish the connect. Any other message
-      // is ignored and changes nothing, so the real result still lands.
+      // Only the pop-up opened above, from the origin its callback page answers
+      // on (this page's own, or the kept origin when this page is on the app's
+      // own host), can finish the connect. Any other message is ignored and
+      // changes nothing, so the real result still lands.
       const handler = (e: MessageEvent) => {
         const verdict = classifySocialConnectMessage(e, {
           popup,
-          expectedOrigin: publicLinkOrigin(),
+          expectedOrigin: runtimeCallbackOrigin(),
           platform: provider.id,
         })
         if (verdict.kind === "ignore") return

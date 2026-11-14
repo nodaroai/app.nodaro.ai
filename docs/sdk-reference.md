@@ -3499,7 +3499,9 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > or a `videoUrl` (otherwise the clip is dropped). On both Kling 4.0 ids a
 > `videoUrl` — a 3–8 s single-shot clip of the character — makes the entry a
 > subject built from that video (at most 3 per request). The clip rides as one
-> of the 5 reference videos and is billed as one; any other model refuses it.
+> of the 5 reference videos. On `kling-4` it is billed as a reference video. On
+> `kling-4-flash` it is priced like an image-only entry and adds nothing. Any
+> other model refuses it.
 > See [Video subjects](nodes/ai-video/generate-video.md#video-subjects-kling-40-and-kling-40-flash).
 > Characters themselves add no credit charge. Prefer them over
 > `referenceImageUrls` whenever the face must hold.

@@ -267,13 +267,14 @@ describe("POST /v1/social/connect/finalize (between-steps picker)", () => {
 
 /**
  * The callback pages tell the app that opened the pop-up how the connect went,
- * with `postMessage`. Each must name the one origin that may receive it: the
- * origin of the redirect URI the provider sent the pop-up to, which is the
- * app's own origin. Never `*`, and never whatever host the page happened to be
- * reached on. Each page's script is run against a stand-in browser here, so
+ * with `postMessage`. Each post names one origin that may receive it: the
+ * origin of the redirect URI the provider sent the pop-up to (the app's own
+ * origin on a one-host deployment), and the app's own host too when the
+ * deployment gives its pages one. Never `*`, and never whatever host the page
+ * happened to be reached on. Each page's script is run against a stand-in browser here, so
  * the test reads what the page really sends rather than its source text.
  */
-describe("the OAuth callback pages post their result to one configured origin", () => {
+describe("the OAuth callback pages post their result only to configured origins", () => {
   /** Where the page is served in the stand-in browser: deliberately NOT the configured origin. */
   const SERVED_ON = "https://another-host.example"
   const expectedTarget = () => new URL(getRedirectUri("tiktok")).origin
@@ -406,7 +407,7 @@ describe("the OAuth callback pages post their result to one configured origin", 
   })
   describe("the app's own host, when it has one", () => {
     const FLOW = "https://flow.example.test"
-    // A running server with a Flow origin always names a legacy host and a kept origin (any partial set is refused at boot).
+    // A running server with a Flow origin always has a kept origin (PUBLIC_URL), plus a legacy host when the move is on (any other set is refused at boot).
     const MOVE = { LEGACY_UI_HOSTS: "app.example.test", PUBLIC_URL: "https://app.example.test" }
     let before: { LEGACY_UI_HOSTS?: string; PUBLIC_URL?: string }
     beforeEach(() => {
@@ -419,12 +420,13 @@ describe("the OAuth callback pages post their result to one configured origin", 
       Object.assign(config, before)
     })
 
-    it("a Flow setting without a legacy host is no move: one post, to the callback origin", async () => {
+    it("the pages' own host without the move (no legacy host): posts to both origins, since a page on either may have opened the connect", async () => {
       ;(config as { FLOW_UI_ORIGIN?: string }).FLOW_UI_ORIGIN = FLOW
       ;(config as { LEGACY_UI_HOSTS?: string }).LEGACY_UI_HOSTS = ""
       const r = await app.inject({ method: "GET", url: "/v1/social/callback/facebook?error=access_denied" })
       const posted = await runPageScript(r.body)
-      expect(posted.map((p) => p.targetOrigin)).toEqual([expectedTarget()])
+      expect(posted.map((p) => p.targetOrigin).sort()).toEqual([FLOW, expectedTarget()].sort())
+      expect(posted.every((p) => p.targetOrigin !== "*")).toBe(true)
     })
 
     it("posts once per origin, each naming its own exact target, never \"*\"", async () => {

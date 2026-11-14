@@ -77,6 +77,7 @@ import {
   type FrameFit,
   type FrameDelivery,
   characterReferencesFromWired,
+  pricedReferenceVideoUrls,
   seatCharacterVideos,
   videoCharacterRefCap,
   videoCharacterVideoCap,
@@ -4894,7 +4895,13 @@ function buildPayloadOf(
           // A soundtrack clip is a reference video by the time the run is
           // dispatched (node-executor applies lib/audio-soundtrack.ts); so is
           // a video subject's clip, seated above.
-          hasVideoRef: hasVideoRef || (gvReferenceVideoUrls?.length ?? 0) > 0 || playsAudioSoundtrack(resolvedProvider, data, resolvedInputs.referenceAudioUrls),
+          // a video subject's clip moves the price only where the model
+          // bills it as a reference video (on Kling 4.0 Flash it does not,
+          // decided 2026-11-14 — pricedReferenceVideoUrls).
+          // The seated list holds every resolved reference video, so it alone
+          // decides — a clip wired as a reference video AND a Flash character's
+          // clip goes as the character only, and is not priced.
+          hasVideoRef: (pricedReferenceVideoUrls({ provider: resolvedProvider, referenceVideoUrls: gvReferenceVideoUrls, characterReferences: gvCharacterReferences })?.length ?? 0) > 0 || playsAudioSoundtrack(resolvedProvider, data, resolvedInputs.referenceAudioUrls),
         },
         {
           jobId,

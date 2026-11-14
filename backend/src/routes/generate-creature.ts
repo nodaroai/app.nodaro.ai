@@ -6,7 +6,9 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
-import { enqueueRouteJobs } from "../lib/enqueue-route-job.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { batchQueueId, runJobBatch } from "../lib/job-batch.js"
+import { keyedBatchAnswer, keyedBatchJobsToPrice, keyedBatchReplay } from "../lib/keyed-batch-replay.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { plainEntityCheckIdentifier, plainEntityCreditIdentifier } from "../lib/entity-credit-identifier.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -90,6 +92,11 @@ function extractCount(body: unknown): number {
   return raw
 }
 
+/** The answer for several candidates: their jobs, in order (no `jobId` alias past count 1). */
+function creatureBatchAnswer(jobIds: readonly string[]): Record<string, unknown> {
+  return { jobIds: [...jobIds] }
+}
+
 export async function generateCreatureRoutes(app: FastifyInstance) {
   app.post(
     "/v1/generate-creature",
@@ -103,19 +110,25 @@ export async function generateCreatureRoutes(app: FastifyInstance) {
       //
       // NOTE: priced by the request `provider` (e.g. nano-banana) — there is
       // NO flat `"generate-creature"` credit identifier (matches object).
-      preHandler: creditGuard((req: FastifyRequest) => plainEntityCheckIdentifier(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character), {
-        runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.character),
-        computeCredits: async (body) => {
-          const count = extractCount(body)
-          const identifier = plainEntityCheckIdentifier(body, IMAGE_MODEL_ROLE_DEFAULTS.character)
-          // Dynamic import: getModelCreditBaseCost lives in ee/ and we keep
-          // core free of static ee/ imports. Only reached in cloud edition
-          // (creditGuard short-circuits to a no-op otherwise).
-          const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
-          const pricing = await getModelCreditBaseCost(identifier)
-          return pricing.creditCost * count
-        },
-      }),
+      // `keyedBatchReplay` first: a repeat of a keyed batch (count ≥ 2) is
+      // answered from its jobs before any check, or priced for the jobs it
+      // still pays for.
+      preHandler: [
+        keyedBatchReplay({ size: extractCount, jobType: "generate-creature", answer: creatureBatchAnswer }),
+        creditGuard((req: FastifyRequest) => plainEntityCheckIdentifier(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character), {
+          runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.character),
+          computeCredits: async (body, req) => {
+            const count = keyedBatchJobsToPrice(req) ?? extractCount(body)
+            const identifier = plainEntityCheckIdentifier(body, IMAGE_MODEL_ROLE_DEFAULTS.character)
+            // Dynamic import: getModelCreditBaseCost lives in ee/ and we keep
+            // core free of static ee/ imports. Only reached in cloud edition
+            // (creditGuard short-circuits to a no-op otherwise).
+            const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
+            const pricing = await getModelCreditBaseCost(identifier)
+            return pricing.creditCost * count
+          },
+        }),
+      ],
     },
     async (req, reply) => {
       const parsed = generateCreatureBody.safeParse(req.body)
@@ -206,17 +219,11 @@ export async function generateCreatureRoutes(app: FastifyInstance) {
       } = parsed.data
       const baseInputData = withResolvedModel(buildJobInputData(bodyWithoutAttach, "generate-creature"), "generate-creature")
 
-      // ──────────────────────────────────────────────────────────────────────
-      // Phase 1: Insert N pending jobs (always at least 1).
       // Multi-candidate (count=2/4) strips `attachToCreatureId` from input_data
       // so the worker doesn't auto-attach — the user must approve a winner
       // through `POST /v1/creatures/:id/approve-main-image`. Single-candidate
       // (count=1) propagates it for backward compat with the existing
       // "instant attach" Studio flow.
-      //
-      // On mid-batch insert failure: roll back any earlier inserts so we
-      // don't leave orphan `pending` rows that will never be queued.
-      // ──────────────────────────────────────────────────────────────────────
       const includeAttach = parsed.data.count === 1 && parsed.data.attachToCreatureId !== undefined
       const inputDataForInsert = includeAttach
         ? {
@@ -228,51 +235,47 @@ export async function generateCreatureRoutes(app: FastifyInstance) {
             subjectMinor,
           }
         : { ...baseInputData, prompt, subjectMinor }
-
-      const insertedJobIds: string[] = []
-      for (let i = 0; i < parsed.data.count; i++) {
-        const { data: job, error } = await insertJob(req, {
-            workflow_id: workflowId,
-            force_private: forcePrivate,
-            user_id: userId,
-            status: "pending",
-            input_data: inputDataForInsert,
-            ...(mcpClient ? { mcp_client: mcpClient } : {}),
-          })
-
-        if (error || !job) {
-          if (insertedJobIds.length > 0) {
-            try {
-              await supabase.from("jobs").delete().in("id", insertedJobIds)
-            } catch (cleanupErr) {
-              req.log.warn(
-                { err: cleanupErr, orphanJobIds: insertedJobIds },
-                "[generate-creature] failed to delete orphan jobs after mid-batch insert failure",
-              )
+      const row = {
+        workflow_id: workflowId,
+        force_private: forcePrivate,
+        user_id: userId,
+        status: "pending",
+        input_data: inputDataForInsert,
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
+      }
+      // The worker's payload beside the job id and its usage log.
+      // `attachToCreatureId` + auto-attach metadata rides it ONLY when count=1
+      // (matches what's in input_data — single source of truth). The BullMQ
+      // job name `"generate-creature"` matches the Phase C2 entityHandlers key
+      // the creature worker registered.
+      const queueData = {
+        prompt,
+        sourceImageUrl,
+        provider: parsed.data.provider,
+        aspectRatio,
+        seedPromptHint: parsed.data.seedPromptHint,
+        subjectMinor,
+        ...(includeAttach
+          ? {
+              attachToCreatureId: parsed.data.attachToCreatureId,
+              attachName: parsed.data.attachName,
+              expectedUpdatedAt: parsed.data.expectedUpdatedAt,
             }
-          }
-          return sendInternalError(reply, req, error, "Failed to create job")
-        }
-        insertedJobIds.push(job.id)
+          : {}),
       }
 
       // ──────────────────────────────────────────────────────────────────────
-      // Per-job creditOverride correction: the preHandler reserved the BATCH
-      // total (cost×count×markup) once; without resetting the override per job,
-      // the N-call reservation loop below would debit batchTotal×N (an N²
-      // over-charge). Mirror video-sfx: set the override to the per-JOB
-      // marked-up cost before each reserveCreditsForJob call.
+      // Per-job creditOverride correction: the preHandler priced the BATCH
+      // total (cost×count×markup) into the override, and every reservation
+      // reads it — without resetting it to the per-JOB marked-up cost, N jobs
+      // would each debit the batch total (an N² over-charge).
       //
       // The per-job BASE is `getModelCreditBaseCost(modelIdentifier).creditCost`
       // — identical to what computeCredits uses (it multiplies that same base
       // by `count`), so per-job = computeCredits's base ÷ count. We then apply
       // the SAME markup formula creditGuardImpl uses so the final per-job
       // number matches what was checked.
-      //
-      // TODO(nodaro): extract a shared per-job-override helper — this block is
-      // duplicated 5 ways (video-sfx + generate-character/location/object/creature).
       // ──────────────────────────────────────────────────────────────────────
-      let perJobCreditOverride: number | undefined
       if (hasCredits() && req.creditReservation) {
         const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
         const pricing = await getModelCreditBaseCost(modelIdentifier)
@@ -282,119 +285,52 @@ export async function generateCreatureRoutes(app: FastifyInstance) {
         // Same helper (integer-domain rounding + per-service margin) that
         // creditGuardImpl and the anomaly detector's actual use, so the reserve
         // can never round a credit apart from them (no phantom credit_anomalies).
-        perJobCreditOverride = applyServiceMarkup(pricing.creditCost, settings, modelIdentifier)
+        req.creditReservation.creditOverride = applyServiceMarkup(pricing.creditCost, settings, modelIdentifier)
       }
 
-      // ──────────────────────────────────────────────────────────────────────
-      // Phase 2A: Reserve credits for every job BEFORE enqueueing any.
-      // The preHandler already gated the full batch cost (computeCredits
-      // multiplies by `count`), so mid-batch reservation failure is unlikely
-      // — but not impossible. When it happens we roll back:
-      //   - refund any reservations that succeeded (jobs 0..K-1)
-      //   - delete the orphan `pending` rows that never got a reservation
-      //     (jobs K+1..N-1; job K itself was already deleted by
-      //     reserveCreditsForJobImpl on its failure path)
-      // We DO NOT call videoQueue.add yet — that happens only in Phase 2B
-      // after all reservations have succeeded.
-      //
-      // Per-job creditOverride correction (see comment above): reset
-      // `req.creditReservation.creditOverride` to the per-job number before
-      // each call so reserveCreditsForJobImpl debits per-job, not per-batch.
-      // ──────────────────────────────────────────────────────────────────────
-      type ReservationRecord = { jobId: string; usageLogId?: string }
-      const reservations: ReservationRecord[] = []
-      for (const jobId of insertedJobIds) {
-        if (req.creditReservation && perJobCreditOverride !== undefined) {
-          req.creditReservation.creditOverride = perJobCreditOverride
-        }
-        const reservation = await reserveCreditsForJob(req, reply, jobId, modelIdentifier)
-        if (reply.sent) {
-          // Refund reservations that succeeded earlier in this batch.
-          if (reservations.length > 0 && hasCredits()) {
-            try {
-              const { CreditsService } = await import("../ee/services/credits.js")
-              for (const r of reservations) {
-                if (!r.usageLogId) continue
-                try {
-                  await CreditsService.refundCredits(r.usageLogId)
-                } catch (refundErr) {
-                  req.log.warn(
-                    { err: refundErr, jobId: r.jobId, usageLogId: r.usageLogId },
-                    "[generate-creature] refund failed during batch rollback",
-                  )
-                }
-              }
-            } catch (importErr) {
-              req.log.warn(
-                { err: importErr },
-                "[generate-creature] failed to load CreditsService for rollback refund",
-              )
-            }
-          }
-          // Delete jobs that were inserted but never reserved (orphans).
-          // Job K itself was already deleted by reserveCreditsForJobImpl,
-          // so exclude any id that appears in `reservations`.
-          const reservedIds = new Set(reservations.map((r) => r.jobId))
-          const orphanIds = insertedJobIds.filter((id) => !reservedIds.has(id) && id !== jobId)
-          if (orphanIds.length > 0) {
-            try {
-              await supabase.from("jobs").delete().in("id", orphanIds)
-            } catch (deleteErr) {
-              req.log.warn(
-                { err: deleteErr, orphanJobIds: orphanIds },
-                "[generate-creature] failed to delete orphan jobs during batch rollback",
-              )
-            }
-          }
-          return
-        }
-        reservations.push({ jobId, usageLogId: reservation?.usageLogId })
+      if (parsed.data.count === 1) {
+        // One job: inserted, reserved (which writes the request's
+        // Idempotency-Key onto it) and queued; a queue that refuses it fails
+        // and refunds it (enqueueRouteJob). `jobIds` is ALWAYS present (the
+        // harmonized contract — matches characters); `jobId` is a deprecated
+        // back-compat alias kept for count===1 only.
+        const { data: job, error } = await insertJob(req, row)
+        if (error || !job) return sendInternalError(reply, req, error, "Failed to create job")
+        const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+        if (reply.sent) return
+        await enqueueRouteJob(req, reply, job.id, () =>
+          videoQueue.add("generate-creature", { jobId: job.id, ...queueData, usageLogId: reservation?.usageLogId }),
+        )
+        if (reply.sent) return
+        return { jobId: job.id, jobIds: [job.id] }
       }
 
-      // ──────────────────────────────────────────────────────────────────────
-      // Phase 2B: All reservations succeeded — enqueue every job, in order.
-      // `attachToCreatureId` + auto-attach metadata flows through the queue
-      // payload too, but ONLY when count=1 (matches what's in input_data —
-      // single source of truth). The BullMQ job name `"generate-creature"`
-      // matches the Phase C2 entityHandlers key the creature worker registered.
-      // When the queue refuses one, it and the jobs after it are failed and
-      // refunded, the ones already queued keep running, and the request is
-      // answered 500 with `error.startedJobIds` (enqueueRouteJobs).
-      // ──────────────────────────────────────────────────────────────────────
-      await enqueueRouteJobs(
+      // Several candidates: created, reserved and queued all or nothing by
+      // `runJobBatch` (lib/job-batch.ts), each under its own Idempotency-Key
+      // (`<key>:<i>`), so a repeat with the same key returns the same jobs and
+      // starts only what is missing. A failure before the queue refunds and
+      // removes what this request made; a queue that refuses the batch fails
+      // and refunds the jobs it did not start and answers 500 naming the ones
+      // that did (`error.startedJobIds`).
+      const jobs = await runJobBatch(
         req,
         reply,
-        reservations.map((r) => ({
-          jobId: r.jobId,
-          enqueue: () =>
-            videoQueue.add("generate-creature", {
-              jobId: r.jobId,
-              prompt,
-              sourceImageUrl,
-              provider: parsed.data.provider,
-              aspectRatio,
-              usageLogId: r.usageLogId,
-              seedPromptHint: parsed.data.seedPromptHint,
-              subjectMinor,
-              ...(includeAttach
-                ? {
-                    attachToCreatureId: parsed.data.attachToCreatureId,
-                    attachName: parsed.data.attachName,
-                    expectedUpdatedAt: parsed.data.expectedUpdatedAt,
-                  }
-                : {}),
-            }),
-        })),
+        Array.from({ length: parsed.data.count }, () => ({ row, creditIdentifier: modelIdentifier })),
+        {
+          idempotencyKey: req.idempotencyKey,
+          failureMessage: "Failed to create jobs",
+          // One call: the queue adds the whole list atomically, or none of it.
+          enqueue: async (toQueue) => {
+            await videoQueue.addBulk(toQueue.map((job) => ({
+              name: "generate-creature",
+              data: { jobId: job.jobId, ...queueData, usageLogId: job.usageLogId },
+              opts: { jobId: batchQueueId("generate-creature", job.jobId) },
+            })))
+          },
+        },
       )
-      if (reply.sent) return
-
-      // `jobIds` is ALWAYS present now (the harmonized contract — matches
-      // characters). `jobId` is kept ONLY for count===1 as a deprecated
-      // back-compat alias for callers that haven't migrated to jobIds yet; drop
-      // it on the next major. (Response shape only — billing is untouched.)
-      return parsed.data.count === 1
-        ? { jobId: insertedJobIds[0], jobIds: insertedJobIds }
-        : { jobIds: insertedJobIds }
+      if (!jobs) return
+      return keyedBatchAnswer(reply, jobs, creatureBatchAnswer)
     },
   )
 }

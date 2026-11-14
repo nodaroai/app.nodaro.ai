@@ -507,7 +507,7 @@ function scriptLiteral(value: string | Readonly<Record<string, unknown>>): strin
  * The script statement that hands a result (a JavaScript expression) to the
  * window that opened the pop-up. Its targets are named here, on the server,
  * from configuration: the origin the callback is served on, and the app's own
- * host when a deployment has moved its pages there. Never "*", and never
+ * host when a deployment gives its pages one. Never "*", and never
  * whatever host the page happened to be reached on: one post per origin, each
  * delivered only to an opener on that exact origin, so the result reaches no
  * other, even when the opener has navigated away mid-flow. With no usable

@@ -1,7 +1,9 @@
 // @test-watches backend/src/**/*.ts
 /**
  * Every route queues its work through the shared queue-failure helpers, never
- * with a bare `<queue>.add(…)`.
+ * with a bare `<queue>.add(…)` — and so does every other module under
+ * backend/src, unless it is listed in QUEUE_ADDS_OUTSIDE_A_HELPER with what
+ * becomes of a refused add there.
  *
  * The helpers (lib/enqueue-route-job.ts, lib/enqueue-execution.ts) are what
  * fail a job or a run the queue refused — from `pending` only, its
@@ -22,7 +24,17 @@
  *     null once it answered, so its stop is `if (!<result>) return`;
  *     `tryEnqueueExecution` never answers, so it is only held to being awaited;
  *   - a node unit's route imports no queue module at all and queues with
- *     `enqueueUnitJob`, the helper that names the queue from its descriptor.
+ *     `enqueueUnitJob`, the helper that names the queue from its descriptor;
+ *   - outside the routes, a module that queues on behalf of a request — a
+ *     service its route calls, the private-plugin toolkit, a plugin daemon's
+ *     trigger fire — queues through the same helpers (`enqueueRunOrThrow`,
+ *     the executions twin for a caller with no request in hand, throws an
+ *     `UnqueuedRunError` its caller answers; it is held to being awaited). A
+ *     module that adds bare is a worker, a cron or a sweep with no request to
+ *     answer and its own recovery, and is listed in
+ *     QUEUE_ADDS_OUTSIDE_A_HELPER with that reason and its exact number of
+ *     bare adds; the list is checked both ways (an unlisted bare add fails,
+ *     and so does a listed module with fewer or more than it states).
  *
  * "A queue" is found, not guessed from a name: every module under
  * backend/src that constructs a BullMQ queue is scanned for the queues and
@@ -54,12 +66,14 @@ const HELPERS = new Set(["enqueueRouteJob", "enqueueRouteJobs", "enqueueExecutio
 /** Runs a whole batch (lib/job-batch.ts) and resolves null once it answered the failure: `if (!<result>) return` follows. */
 const BATCH_RUNNER = "runJobBatch"
 /**
- * Settles a refused run WITHOUT answering (a chat platform's webhook must not
- * see a server error): awaited as its own statement, never held to the stop.
+ * Settle a refused run WITHOUT answering: `tryEnqueueExecution` (a chat
+ * platform's webhook must not see a server error) and `enqueueRunOrThrow` (a
+ * caller with no request in hand: it throws an UnqueuedRunError its caller
+ * answers). Awaited as their own statement, never held to the stop.
  */
-const AWAIT_ONLY_HELPERS = new Set(["tryEnqueueExecution"])
+const AWAIT_ONLY_HELPERS = new Set(["tryEnqueueExecution", "enqueueRunOrThrow"])
 /** The helpers whose closure argument may add to a queue. */
-const CLOSURE_HELPERS = new Set(["enqueueRouteJob", "enqueueExecution", "tryEnqueueExecution"])
+const CLOSURE_HELPERS = new Set(["enqueueRouteJob", "enqueueExecution", "tryEnqueueExecution", "enqueueRunOrThrow"])
 /** The helpers whose jobs' `enqueue` may add to a queue, when the job is written inside their arguments. */
 const BATCH_HELPERS = new Set(["enqueueRouteJobs", BATCH_RUNNER])
 
@@ -665,6 +679,129 @@ const routes = routeFiles.map((file) => {
   }
 })
 
+// ──────────────────────────────────────────── the modules outside the routes
+
+/**
+ * The modules outside the routes that add to a queue bare, each with its
+ * exact number of bare adds and what becomes of a refused add there: no
+ * request is waiting on it, and the reason says what settles the work (and
+ * how long anything it holds stays held) instead. Nothing else under backend/src may: a
+ * module that queues on behalf of a request queues through a helper
+ * (`enqueueRouteJob` / `enqueueRouteJobs` with the request's reply in hand,
+ * `enqueueRunOrThrow` without one), and so stays off this list.
+ */
+const QUEUE_ADDS_OUTSIDE_A_HELPER: Readonly<Record<string, { readonly adds: number; readonly reason: string }>> = {
+  "backend/src/ee/pipelines/queue.ts": {
+    adds: 1,
+    reason:
+      "the pipeline drive queue (`enqueuePipelineRun`). A pipeline carries no idempotency key. A refused FIRST drive is " +
+      "undone by its creator: createPipeline fails it from `queued` and refunds it at once (queue-failure.ts " +
+      "`settleUnqueuedPipeline`), seed-pipeline deletes it and branch-pipeline fails it, both refunding it (no other module " +
+      "queues a first drive: PIPELINE_FIRST_DRIVE_CREATORS). A refused " +
+      "RE-DRIVE leaves the request's effect in place and is re-driven by the reconcile cron (ee/pipelines/reconcile-cron.ts, " +
+      "where PIPELINE_RECONCILE_CRON_ENABLED=true): a `running` / `stopping` pipeline with no live drive, and a paused " +
+      "one whose redrive latch says a drive is owed. The redrive latch alone recovers only a drive deduped while another " +
+      "is active.",
+  },
+  "backend/src/ee/pipelines/services/_run-worker-job.ts": {
+    adds: 1,
+    reason:
+      "a pipeline stage's job, queued by the pipeline worker's drive: no request to answer. A refused add throws into " +
+      "the drive (the stage, and with it the pipeline, fails and its reservation is refunded), but the job row it left " +
+      "`pending` keeps its own credit hold until the never-started sweep (lib/reconcile/cron.ts) fails and refunds it, " +
+      "once the row is 30 minutes old. Nothing a client is waiting on is stranded; the hold is.",
+  },
+  "backend/src/lib/concurrency-lanes/queued-sweep.ts": {
+    adds: 1,
+    reason: "the queued sweep adding a lost line entry again under its deterministic id: a refusal leaves the row for its next pass.",
+  },
+  "backend/src/lib/private-plugins/scene3d-render-store.ts": {
+    adds: 1,
+    reason:
+      "a parent job's child render (the scene rendering port): it holds no credits and no key of its own (the parent " +
+      "bills), and a refused add leaves the child runnable for the parent's replay of `submit`, which adopts and queues it.",
+  },
+  "backend/src/lib/private-plugins/toolkit.ts": {
+    adds: 1,
+    reason:
+      "the deprecated `tk.http.videoQueue.add`, kept for a plugin built before `tk.http.enqueueJob` (the guarded form, " +
+      "on enqueueRouteJob) and for a plugin path with no request in hand (a worker's or a recovery's own re-add).",
+  },
+  "backend/src/lib/reconcile/cron.ts": {
+    adds: 1,
+    reason: "the reconcile cron re-queueing a job it claimed for a resume: a refusal leaves the row for the next tick.",
+  },
+  "backend/src/lib/schedule-fire.ts": {
+    adds: 1,
+    reason:
+      "a schedule's fire (a cron lane): it settles a refused run itself (`failUnqueuedRun`, from `pending`), keeping the " +
+      "row's key, which holds the fire's claim.",
+  },
+  "backend/src/lib/scheduled-posts-cron.ts": {
+    adds: 1,
+    reason: "the scheduled-posts cron: a refused add reverts the post's claim, so the next tick publishes it.",
+  },
+  "backend/src/services/workflow-engine/node-executor.ts": {
+    adds: 1,
+    reason:
+      "a run's node job, queued by the orchestrator: no request to answer. A refused add throws into the node, which " +
+      "fails in its run, but the job row it left `pending` keeps its credit hold until the never-started sweep " +
+      "(lib/reconcile/cron.ts) fails and refunds it, once the row is 30 minutes old. Nothing a client is waiting on is " +
+      "stranded; the hold is.",
+  },
+  "backend/src/workers/handlers/ffmpeg.ts": {
+    adds: 1,
+    reason:
+      "add-captions' burn handing its own running job on to the render queue, after its concurrency slot was handed " +
+      "over. A refused add throws out of the handler into the video worker, which retries it (the retry re-admits it " +
+      "and re-adds under the same render job id) and, on the final attempt, marks the job failed from `processing` " +
+      "and refunds it (video-worker.ts). The reconcile cron leaves the row alone meanwhile (its provider-call stamp " +
+      "was cleared before the add), so the worker's own failure path is the one that settles it.",
+  },
+}
+
+/**
+ * The pipeline drive queue's exemption above holds only while every FIRST
+ * drive of a pipeline (`enqueuePipelineRun` with reason "initial" or
+ * "branched") is queued by a creator that undoes a refusal itself.
+ */
+const PIPELINE_FIRST_DRIVE_CREATORS: ReadonlySet<string> = new Set([
+  "backend/src/ee/pipelines/create-pipeline.ts",
+  "backend/src/ee/pipelines/seed-pipeline.ts",
+  "backend/src/ee/pipelines/branch-pipeline.ts",
+])
+const FIRST_DRIVE_REASONS: ReadonlySet<string> = new Set(["initial", "branched"])
+
+/** Each `enqueuePipelineRun({ …, reason })` call: its line and its literal reason (or "<computed>"). */
+function pipelineDriveCalls(sf: ts.SourceFile): Array<{ line: number; reason: string }> {
+  const out: Array<{ line: number; reason: string }> = []
+  visit(sf, (n) => {
+    if (!ts.isCallExpression(n) || calleeName(n) !== "enqueuePipelineRun") return
+    const arg = n.arguments[0] && unwrap(n.arguments[0])
+    let reason = "<computed>"
+    if (arg && ts.isObjectLiteralExpression(arg)) {
+      for (const p of arg.properties) {
+        if (ts.isPropertyAssignment(p) && ts.isIdentifier(p.name) && p.name.text === "reason" && ts.isStringLiteralLike(p.initializer)) reason = p.initializer.text
+      }
+    }
+    out.push({ line: lineOf(sf, n), reason })
+  })
+  return out
+}
+
+const routeFileSet = new Set(routeFiles)
+const modules = tsFiles(SRC)
+  .filter((file) => !routeFileSet.has(file))
+  .map((file) => {
+    const sf = parseSource(file, readFileSync(file, "utf8"))
+    return {
+      rel: repoPath(file),
+      bareAdds: bareQueueAdds(sf, exportsFrom(file)),
+      awaitOnlyCalls: helperCalls(sf).filter((c) => AWAIT_ONLY_HELPERS.has(c.helper)),
+      pipelineDrives: pipelineDriveCalls(sf),
+    }
+  })
+
 describe("routes queue through the shared queue-failure helpers", () => {
   it("finds the routes, node units and helper users among them (the guard is wired to something)", () => {
     expect(routes.length).toBeGreaterThan(200)
@@ -714,6 +851,65 @@ describe("routes queue through the shared queue-failure helpers", () => {
         "(after a captured outcome, after the `if`s reading it; `runJobBatch`: its result captured, then `if (!result) return`; " +
         `\`tryEnqueueExecution\`: awaited) — otherwise a refused job is answered twice:\n${unchecked.join("\n")}`,
     ).toEqual([])
+  })
+
+  it("outside the routes, a module adds to a queue bare only when it is listed with its reason and its exact count", () => {
+    const found = new Map(modules.filter((mod) => mod.bareAdds.length > 0).map((mod) => [mod.rel, mod.bareAdds]))
+    const unlisted = [...found].filter(([rel]) => !QUEUE_ADDS_OUTSIDE_A_HELPER[rel]).map(([rel, lines]) => `${rel}:${lines.join(",")}`)
+    expect(
+      unlisted,
+      `These modules add to a queue directly:\n${unlisted.map((o) => `  - ${o}`).join("\n")}\n\n` +
+        "A module that queues on behalf of a request queues through a helper: `enqueueRouteJob` / `enqueueRouteJobs` with the " +
+        "request's reply in hand, `enqueueRunOrThrow` for a workflow run without one. A worker, cron or sweep with no request " +
+        "to answer joins QUEUE_ADDS_OUTSIDE_A_HELPER with what becomes of a refused add there.",
+    ).toEqual([])
+    const miscounted = Object.entries(QUEUE_ADDS_OUTSIDE_A_HELPER)
+      .filter(([rel, entry]) => (found.get(rel)?.length ?? 0) !== entry.adds)
+      .map(([rel, entry]) => `${rel}: listed with ${entry.adds}, found ${found.get(rel)?.length ?? 0}`)
+    expect(miscounted, `QUEUE_ADDS_OUTSIDE_A_HELPER no longer matches these modules (fix the count, or remove an entry with none left):\n${miscounted.join("\n")}`).toEqual([])
+    for (const [rel, entry] of Object.entries(QUEUE_ADDS_OUTSIDE_A_HELPER)) expect(entry.reason.length, `${rel} needs its reason`).toBeGreaterThan(40)
+  })
+
+  it("a pipeline's first drive is queued only by a creator that undoes a refusal (the pipeline queue's exemption)", () => {
+    const all = [...modules, ...routes.map((r) => ({ rel: r.rel, pipelineDrives: pipelineDriveCalls(parseSource(join(REPO_ROOT, r.rel), readFileSync(join(REPO_ROOT, r.rel), "utf8"))) }))]
+    const strays = all.flatMap((mod) =>
+      mod.pipelineDrives
+        .filter((c) => (FIRST_DRIVE_REASONS.has(c.reason) || c.reason === "<computed>") && !PIPELINE_FIRST_DRIVE_CREATORS.has(mod.rel))
+        .map((c) => `${mod.rel}:${c.line} (${c.reason})`),
+    )
+    expect(
+      strays,
+      "A pipeline's first drive (reason \"initial\" / \"branched\", or a reason the reader cannot see) queued outside its creators: " +
+        "a refusal there would leave the new pipeline holding its reservation. Undo it like createPipeline does " +
+        `(settleUnqueuedPipeline) and add the file to PIPELINE_FIRST_DRIVE_CREATORS:\n${strays.join("\n")}`,
+    ).toEqual([])
+    const seen = new Set(all.filter((mod) => mod.pipelineDrives.some((c) => FIRST_DRIVE_REASONS.has(c.reason))).map((mod) => mod.rel))
+    expect([...PIPELINE_FIRST_DRIVE_CREATORS].filter((rel) => !seen.has(rel)), "listed creators that no longer queue a first drive").toEqual([])
+  })
+
+  it("outside the routes too, every enqueueRunOrThrow / tryEnqueueExecution call is awaited as its own statement", () => {
+    const unchecked = modules.flatMap((mod) => mod.awaitOnlyCalls.filter((c) => !c.stops).map((c) => `${mod.rel}:${c.line} ${c.helper}`))
+    expect(unchecked, `Await each of these as its own statement:\n${unchecked.join("\n")}`).toEqual([])
+  })
+
+  it("the request-path services and the plugin lanes queue through the helpers (each is off the list, and calls one)", () => {
+    const helperUsers = [
+      ["backend/src/services/app-execution.ts", "enqueueRunOrThrow"],
+      ["backend/src/services/app-render-final.ts", "enqueueRunOrThrow"],
+      ["backend/src/services/use-case-execution.ts", "enqueueRunOrThrow"],
+      ["backend/src/lib/plugin-triggers.ts", "enqueueRunOrThrow"],
+    ] as const
+    for (const [rel, helper] of helperUsers) {
+      const mod = modules.find((x) => x.rel === rel)
+      expect(mod, rel).toBeDefined()
+      expect(mod!.bareAdds, rel).toEqual([])
+      expect(mod!.awaitOnlyCalls.map((c) => c.helper), rel).toContain(helper)
+    }
+    // The toolkit's guarded forms: `enqueueJob` / `enqueueJobs` hand their add to enqueueRouteJob / enqueueRouteJobs.
+    const toolkit = readFileSync(join(SRC, "lib", "private-plugins", "toolkit.ts"), "utf8")
+    // (Its one bare add, the deprecated facade, is all QUEUE_ADDS_OUTSIDE_A_HELPER allows it.)
+    expect(toolkit).toContain("await enqueueRouteJob(req, reply, jobId, () => videoQueue.add(name, pluginJobData(data), queueOpts))")
+    expect(toolkit).toContain("await enqueueRouteJobs(req, reply, jobs.map((job) => ({")
   })
 
   it("a node unit's route imports no queue module and queues with enqueueUnitJob", () => {
@@ -863,6 +1059,14 @@ describe("the guard's readers", () => {
         `await enqueueRouteJobs(req, reply, [{ jobId: "j", enqueue() { return vq.add("e", {}) } }])\n` +
         `const created = await runJobBatch(req, reply, jobs, { failureMessage: "m", enqueue: async (toQueue) => { await vq.addBulk(toQueue.map(() => ({ name: "n", data: {} }))) } })`,
     ))).toEqual([])
+  })
+
+  it("enqueueRunOrThrow is a closure helper held only to being awaited", () => {
+    expect(adds(withVq(`await enqueueRunOrThrow("e", "u", () => vq.add("a", {}))`))).toEqual([])
+    const call = (body: string) => helperCalls(sfOf(body))[0]!
+    expect(call(`await enqueueRunOrThrow("e", "u", () => q.add())\nreturn 1`)).toEqual({ helper: "enqueueRunOrThrow", line: 1, stops: true })
+    expect(call(`const p = enqueueRunOrThrow("e", "u", () => q.add())`).stops).toBe(false)
+    expect(call(`void enqueueRunOrThrow("e", "u", () => q.add())`).stops).toBe(false)
   })
 
   it("a queue's add inside each closure helper passes; reading a queue for anything else is not an add", () => {

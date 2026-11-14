@@ -74,7 +74,8 @@ In the price a published app or template lists, a Video SFX node on any recordin
 - Supported input formats: MP4 (H.264), MOV, WebM.
 - Maximum duration: **300 seconds** (5 minutes). Longer videos are rejected with HTTP 400 `video_duration_exceeds_limit`.
 - Maximum versions per run: **4**.
-- If a run's versions cannot all be queued to start, `POST /v1/video-sfx` answers `500 internal_error` with `error.startedJobIds` naming the versions that did start (follow those; the list is empty when none did); the others are failed and their credits refunded.
+- Several versions (2 or more) are made as one batch: with an `Idempotency-Key`, version *i* is keyed `<key>:<i>`, so repeating the request with the same key returns the same jobs (`deduped: true` once they all exist) and never charges a version twice. A key belongs to one request: repeating it on another route, or for a different request while any version still waits, answers `422 idempotency_key_reused`. The request includes the clip's measured length: if one attempt could not measure the clip (it is then charged at the 8-second bucket) and a repeat with the same key measures it while a version still waits, the repeat is a different request and answers `422 idempotency_key_reused`; send a new key.
+- If a run's versions cannot all be queued to start, `POST /v1/video-sfx` answers `500 internal_error` with `error.startedJobIds` naming the versions that did start (follow those; the list is empty when none did); the others are failed and their credits refunded, and the same request with the same key returns the started ones and starts only the rest.
 - Recommended input resolution: up to 1080p (higher resolutions are untested and increase processing time).
 
 ## Determinism

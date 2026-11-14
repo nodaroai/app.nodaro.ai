@@ -177,13 +177,23 @@ describe("seedanceRefQuoteRequest — Kling 4.0 video subjects", () => {
   const charWire = { id: "maya->gv", source: "maya", target: "gv", sourceHandle: "characterRef", targetHandle: "assets" } as WorkflowEdge
   const gv = (provider: string) => node("gv", "generate-video", { provider, duration: 5 })
 
-  it("a run whose only clip is a character's is quoted with that clip", () => {
-    for (const provider of ["kling-4", "kling-4-flash"]) {
-      const g = gv(provider)
-      expect(seedanceRefQuoteRequest(g, [maya({ subjectVideoUrl: MAYA_CLIP }), g], [charWire]), provider).toEqual({
-        provider, duration: 5, referenceVideoUrls: [MAYA_CLIP],
-      })
-    }
+  it("Kling 4.0: a run whose only clip is a character's is quoted with that clip", () => {
+    const g = gv("kling-4")
+    expect(seedanceRefQuoteRequest(g, [maya({ subjectVideoUrl: MAYA_CLIP }), g], [charWire])).toEqual({
+      provider: "kling-4", duration: 5, referenceVideoUrls: [MAYA_CLIP],
+    })
+  })
+
+  // Decided 2026-11-14, measured: Flash bills a video subject like an image subject.
+  it("Kling 4.0 Flash: a character's clip moves no price — no reference-video quote, and none beside a wired clip", () => {
+    const g = gv("kling-4-flash")
+    expect(seedanceRefQuoteRequest(g, [maya({ subjectVideoUrl: MAYA_CLIP }), g], [charWire])).toBeUndefined()
+    expect(seedanceRefQuoteRequest(g, [upload, maya({ subjectVideoUrl: MAYA_CLIP }), g], [edge("clip", "gv", "videoReferences"), charWire])?.referenceVideoUrls).toEqual([CLIP])
+    // A wired clip that is also the character's clip goes as the character only: no quote.
+    expect(seedanceRefQuoteRequest(g, [upload, maya({ subjectVideoUrl: CLIP }), g], [edge("clip", "gv", "videoReferences"), charWire])).toBeUndefined()
+    // On Kling 4.0 it stays one reference video.
+    const k = gv("kling-4")
+    expect(seedanceRefQuoteRequest(k, [upload, maya({ subjectVideoUrl: CLIP }), k], [edge("clip", "gv", "videoReferences"), charWire])?.referenceVideoUrls).toEqual([CLIP])
   })
 
   it("the character's clip follows the wired reference videos, once", () => {

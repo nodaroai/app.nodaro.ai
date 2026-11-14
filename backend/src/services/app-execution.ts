@@ -6,7 +6,7 @@
 import { supabase } from "../lib/supabase.js"
 import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
-import { settleUnqueuedRun, UnqueuedRunError } from "../lib/enqueue-execution.js"
+import { enqueueRunOrThrow, UnqueuedRunError } from "../lib/enqueue-execution.js"
 import { payloadBillingContext, type BillingContext } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
@@ -86,6 +86,22 @@ export interface ExecuteAppRunResult {
 // ---------------------------------------------------------------------------
 // Core function
 // ---------------------------------------------------------------------------
+
+/**
+ * An app run whose execution the queue refused and failed: the run row, written
+ * `running` before the add, says `failed` (a runner's list and a single run's
+ * status read it). Best effort: the execution already shows the failure
+ * wherever it is joined, and nothing here may replace the caller's error.
+ * Never throws.
+ */
+async function failAppRunRow(appRunId: string, runnerId: string): Promise<void> {
+  try {
+    const { error } = await supabase.from("app_runs").update({ status: "failed" }).eq("id", appRunId).eq("runner_id", runnerId)
+    if (error) console.warn(`[app-execution] app run ${appRunId} not marked failed after its run was refused: ${error.message}`)
+  } catch (err) {
+    console.warn(`[app-execution] app run ${appRunId} not marked failed after its run was refused: ${(err as Error).message}`)
+  }
+}
 
 /**
  * Create a workflow_execution + app_run and enqueue the orchestration job.
@@ -210,17 +226,23 @@ export async function executeAppRun(
     ...(cheapLanesOnly === true ? { cheapLanesOnly: true } : {}),
   }
 
+  // Never left `pending` with nothing queued, holding its Idempotency-Key:
+  // failed from `pending` with its key released (a run that moved on is
+  // running). The caller answers the error, told by its outcome whether the
+  // run is known not to run ("failed") or may still run ("unsettled").
   try {
-    await orchestrationQueue.add("workflow-execution", jobData, {
-      jobId: execution.id,
-    })
+    await enqueueRunOrThrow(execution.id, userId, () =>
+      orchestrationQueue.add("workflow-execution", jobData, {
+        jobId: execution.id,
+      }),
+      // The caller follows an unsettled run by its app run.
+      { appRunId: appRun.id },
+    )
   } catch (err) {
-    // Never left `pending` with nothing queued, holding its Idempotency-Key:
-    // failed from `pending` with its key released (a run that moved on is
-    // running). The caller answers the error, told by its outcome whether the
-    // run is known not to run ("failed") or may still run ("unsettled").
-    const outcome = await settleUnqueuedRun(execution.id, userId)
-    if (outcome !== "moved-on") throw new UnqueuedRunError(execution.id, outcome, err)
+    // A run known not to run leaves no `running` app run behind (an
+    // "unsettled" one may be running: its row is left as it is).
+    if (err instanceof UnqueuedRunError && err.outcome === "failed") await failAppRunRow(appRun.id, userId)
+    throw err
   }
 
   return {

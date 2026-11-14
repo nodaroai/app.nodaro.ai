@@ -62,9 +62,25 @@ function run(consumer: SimpleNode, chars: SimpleNode[], opts: { refVideo?: boole
 }
 
 describe("a Character node's clip on a workflow run", () => {
-  it("Kling 4.0 Flash: the character carries the clip, the clip is seated, and the run is priced as a reference-video run", () => {
+  // Decided 2026-11-14, measured: Flash bills a video subject like an image subject.
+  it("Kling 4.0 Flash: the character carries the clip and the clip is seated, but the run keeps the plain price", () => {
     const { videos, subjects, r } = run(video("kling-4-flash"), [character("m", { subjectVideoUrl: clip("m") })])
     expect(subjects?.map((s) => [s.name, s.videoUrl])).toEqual([["Maya", clip("m")]])
+    expect(videos).toEqual([clip("m")])
+    expect(r.modelIdentifier).toBe("kling-4-flash:5s:720p")
+    expect(r.modelIdentifier).toBe(run(video("kling-4-flash"), [character("m")]).r.modelIdentifier)
+  })
+
+  it("Kling 4.0 Flash: a wired reference video that is also the character's clip goes as the character only — the plain price", () => {
+    const { videos, r } = run(video("kling-4-flash"), [character("m", { subjectVideoUrl: ROOM })], { refVideo: true })
+    expect(videos).toEqual([ROOM])
+    expect(r.modelIdentifier).toBe("kling-4-flash:5s:720p")
+    // Kling 4.0 keeps pricing it as a reference video.
+    expect(run(video("kling-4"), [character("m", { subjectVideoUrl: ROOM })], { refVideo: true }).r.modelIdentifier).toMatch(/-ref$/)
+  })
+
+  it("Kling 4.0: the clip is seated and the run is priced as a reference-video run", () => {
+    const { videos, r } = run(video("kling-4"), [character("m", { subjectVideoUrl: clip("m") })])
     expect(videos).toEqual([clip("m")])
     expect(r.modelIdentifier).toMatch(/-ref$/)
   })

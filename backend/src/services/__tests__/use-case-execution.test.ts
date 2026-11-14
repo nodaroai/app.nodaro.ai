@@ -11,14 +11,12 @@ const m = vi.hoisted(() => ({
   insert: vi.fn(),
   add: vi.fn(),
   absent: false,
-  writes: [] as Array<[string, Record<string, unknown>]>,
+  failWaiting: vi.fn(),
+  report: vi.fn(),
 }))
-vi.mock("../../lib/execution-writes.js", () => ({
-  updateExecutionWithRetry: async (id: string, updates: Record<string, unknown>) => {
-    m.writes.push([id, updates])
-    return { cancelledRace: false }
-  },
-}))
+// The run's own failure path (a CAS from `pending`): what a refused run is settled through.
+vi.mock("../../lib/concurrency-lanes/run-failure.js", () => ({ failWaitingExecutionDetailed: m.failWaiting }))
+vi.mock("../../lib/app-reports.js", () => ({ insertAppReport: m.report }))
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../lib/idempotent-insert.js", () => ({ insertWithIdempotencyKey: m.insert }))
 vi.mock("../../lib/orchestration-queue.js", () => ({ orchestrationQueue: { add: m.add } }))
@@ -28,6 +26,7 @@ vi.mock("../../lib/execution-inline-graph.js", async (orig) => ({
 }))
 
 import { executeInlineGraph, InlineGraphUnavailableError } from "../use-case-execution.js"
+import { UnqueuedRunError, UNQUEUED_EXECUTION_MESSAGE } from "../../lib/enqueue-execution.js"
 import { resetInlineGraphColumnForTests, withInlineGraphColumns } from "../../lib/execution-inline-graph.js"
 
 /** The guard's own memory (its `inlineGraphColumnAbsent` is stubbed above): absent ⇔ it stops naming the columns. */
@@ -42,7 +41,8 @@ beforeEach(() => {
   m.insert.mockReset().mockResolvedValue({ row: { id: "exec-1" }, created: true })
   m.add.mockReset().mockResolvedValue(undefined)
   m.absent = false
-  m.writes.length = 0
+  m.failWaiting.mockReset().mockResolvedValue({ failed: true, attempts: 1 })
+  m.report.mockReset().mockResolvedValue(undefined)
   resetInlineGraphColumnForTests()
 })
 
@@ -167,14 +167,30 @@ describe("executeInlineGraph", () => {
     })
   })
 
-  it("an enqueue that fails leaves no pending run behind: the execution is failed, the error rethrown", async () => {
-    m.add.mockRejectedValue(new Error("redis down"))
-    await expect(executeInlineGraph({ userId: "u1", graph, wrapperJobId: "job-1", reviewerPresent: false, webFreeMode: false, appRun: false })).rejects.toThrow("redis down")
-    expect(m.writes).toEqual([["exec-1", expect.objectContaining({ status: "failed", completed_at: expect.any(String) })]])
+  it("an enqueue the queue refuses leaves no pending run behind: failed from `pending`, its key released, an UnqueuedRunError with the queue's error as its cause", async () => {
+    const refused = new Error("redis down")
+    m.add.mockRejectedValue(refused)
+    const err = await executeInlineGraph({ userId: "u1", graph, wrapperJobId: "job-1", reviewerPresent: false, webFreeMode: false, appRun: false }).then(
+      () => null,
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(UnqueuedRunError)
+    expect(err).toMatchObject({ executionId: "exec-1", outcome: "failed" })
+    expect((err as Error).cause).toBe(refused)
+    // Through the run's own failure path, which settles the wrapper it reports to.
+    expect(m.failWaiting).toHaveBeenCalledWith("exec-1", UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null })
+  })
+
+  it("a refused run a worker claimed meanwhile is never overwritten: answered as started", async () => {
+    m.add.mockRejectedValue(new Error("Connection is closed."))
+    m.failWaiting.mockResolvedValue({ failed: false, attempts: 1 })
+    await expect(
+      executeInlineGraph({ userId: "u1", graph, wrapperJobId: "job-1", reviewerPresent: false, webFreeMode: false, appRun: false }),
+    ).resolves.toEqual({ executionId: "exec-1", deduped: false })
   })
 
   it("a run that was enqueued is never written to", async () => {
     await executeInlineGraph({ userId: "u1", graph, wrapperJobId: "job-1", reviewerPresent: false, webFreeMode: false, appRun: false })
-    expect(m.writes).toEqual([])
+    expect(m.failWaiting).not.toHaveBeenCalled()
   })
 })

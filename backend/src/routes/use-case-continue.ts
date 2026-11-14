@@ -59,6 +59,7 @@ import { fromFailedCover } from "../lib/use-case/continue-credits.js"
 import { usecaseInnerDenial } from "../lib/use-case/inner-availability.js"
 import { continuationInputOverrides } from "../services/workflow-engine/run-continuation.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
+import { UnqueuedRunError } from "../lib/enqueue-execution.js"
 import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
 import { parentExecutionIdOf } from "../lib/concurrency-lanes/parent-execution.js"
 import { importViaOf } from "../lib/import-via.js"
@@ -276,7 +277,7 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
         } catch (err) {
           // The wrapper fails, any hold the throw left behind is refunded
           // (idempotent: only a reserved hold moves), the claim goes back.
-          await markJobFailed(wrapperId, { error_message: "The run's fee could not be held", from: ["processing"] })
+          await markJobFailed(wrapperId, { error_message: "The run's fee could not be held", from: ["processing"], extra: { idempotency_key: null } })
           await refundReservedCreditsForJob(wrapperId)
           await releaseContinuation(claim)
           return sendInternalError(reply, req, err, "Failed to continue the run")
@@ -284,7 +285,7 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
         if (reply.sent) {
           // The hold was refused (its own reply says why). A refused hold has
           // already removed the row; this only covers one that kept it.
-          await markJobFailed(wrapperId, { error_message: "The run's fee could not be held", from: ["processing"] })
+          await markJobFailed(wrapperId, { error_message: "The run's fee could not be held", from: ["processing"], extra: { idempotency_key: null } })
           await releaseContinuation(claim)
           return
         }
@@ -323,13 +324,28 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
         })
         executionId = started.executionId
       } catch (err) {
-        // Only a run that never started unwinds the wrapper and its fee.
-        if (await markJobFailed(wrapperId, { error_message: "The run could not continue", from: ["processing"] })) {
-          await refundReservedCreditsForJob(wrapperId)
+        if (err instanceof UnqueuedRunError && err.outcome === "unsettled") {
+          // The queue refused the run and what became of it is unknown: it may
+          // still be pending (the never-started sweep fails it and settles the
+          // wrapper), failed with its answer lost, or running. Nothing here
+          // may fail the wrapper, refund its fee or give the claim back (a
+          // second continuation would start beside a run that may be live),
+          // and its key stays. It is answered as started and followed like
+          // any run: the run's own completion or failure path settles it.
+          console.warn(`[use-case-continue] the queue refused run ${err.executionId} of wrapper ${wrapperId} and its state is unknown — answered as started`)
+          executionId = err.executionId
+        } else {
+          // Only a run that never started unwinds the wrapper and its fee, and
+          // releases the caller's key with it, so a retry starts a new run. (A
+          // run the queue refused and failed has already settled the wrapper
+          // through its own failure path, key released.)
+          if (await markJobFailed(wrapperId, { error_message: "The run could not continue", from: ["processing"], extra: { idempotency_key: null } })) {
+            await refundReservedCreditsForJob(wrapperId)
+          }
+          await releaseContinuation(claim)
+          if (err instanceof InlineGraphUnavailableError) return reply.status(503).send({ error: usecaseUnavailable(type) })
+          return sendInternalError(reply, req, err, "Failed to continue the run")
         }
-        await releaseContinuation(claim)
-        if (err instanceof InlineGraphUnavailableError) return reply.status(503).send({ error: usecaseUnavailable(type) })
-        return sendInternalError(reply, req, err, "Failed to continue the run")
       }
 
       // The run is live from here: a stamp that fails (or throws) never fails

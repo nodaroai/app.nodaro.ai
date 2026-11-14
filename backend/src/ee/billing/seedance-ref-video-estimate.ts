@@ -16,7 +16,7 @@ import {
 import {
   withWiredSettings,
 } from "@nodaro/shared/nodes"
-import { wiredCharacterSubjectClips } from "@nodaro/shared/video"
+import { videoCharacterClipsBilledAsReferenceVideo, wiredCharacterSubjectClips } from "@nodaro/shared/video"
 import { seedanceFinalizeDraftQuote, type SeedanceFinalizeDraftOptions } from "@nodaro/render-rules"
 import type { ChargedPriceTable, EstimateEdge, EstimateNode } from "./credits.js"
 import { plannedSeedanceDraftFinalizePlan, seedance2RefVideoQuote } from "./seedance2-ref-video-quote.js"
@@ -108,7 +108,11 @@ function refVideoEstimateRequest(
   // Kling 4.0 video subjects: a wired Character's own clip rides as one more
   // reference video (`seatCharacterVideos`), priced as one.
   const subjectClips = node.type === "generate-video" ? characterSubjectClipSources(node, nodes, edges, selectedProvider, clipEdges.map((e) => e.source)) : []
-  if (clipSourceIds.length === 0 && !soundtrack && subjectClips.length === 0) return undefined
+  // On Kling 4.0 Flash a video subject is priced like an image subject (decided
+  // 2026-11-14): a wired clip that is also a character's clip goes to the
+  // model as the character only, so it leaves the price.
+  const pricedSourceIds = clipSourceIds.filter((id) => !unpricedWiredClip(node, nodes, edges, id))
+  if (pricedSourceIds.length === 0 && !soundtrack && subjectClips.length === 0) return undefined
   let provider: string
   let resolution: string | undefined
   let duration: number | string | undefined
@@ -131,7 +135,7 @@ function refVideoEstimateRequest(
   return {
     provider, resolution, duration, draft: data.draft === true, referenceTaskType,
     videoTrim: { start: data.videoTrimStart, end: data.videoTrimEnd },
-    clipSources: [...clipSourceIds.map((id) => (id === undefined ? undefined : byId.get(id))), ...subjectClips],
+    clipSources: [...pricedSourceIds.map((id) => (id === undefined ? undefined : byId.get(id))), ...subjectClips],
     ...(soundtrack ? { soundtrack: { source: byId.get(audioEdges[0]!.source) } } : {}),
   }
 }
@@ -155,6 +159,10 @@ function characterSubjectClipSources(
   wiredSourceIds: ReadonlyArray<string | undefined>,
 ): EstimateNode[] {
   if (!node.id || !edges) return []
+  // Priced as reference video only where the model bills a video subject as one
+  // (Kling 4.0); on Kling 4.0 Flash it is priced like an image subject (decided
+  // 2026-11-14), so it moves no price here.
+  if (!videoCharacterClipsBilledAsReferenceVideo(provider)) return []
   const graphNodes = nodes.flatMap((n) => (n.id === undefined ? [] : [{ ...n, id: n.id }]))
   const graphEdges = edges.flatMap((e) => (e.source === undefined ? [] : [{ ...e, source: e.source }]))
   const clips = wiredCharacterSubjectClips(node.id, graphNodes, graphEdges, provider)
@@ -170,6 +178,32 @@ function characterSubjectClipSources(
   return clips
     .filter((url) => !wiredUrls.has(url))
     .map((url) => ({ id: owner(url), type: "upload-video", data: { url } }))
+}
+
+/**
+ * Whether the wired clip from `sourceId` leaves `node`'s price: on a Generate
+ * Video model that takes video subjects but does not bill them as reference
+ * video (Kling 4.0 Flash, decided 2026-11-14), a wired clip that is also one
+ * of the run's character clips (`wiredCharacterSubjectClips`) goes to the
+ * model as the character only. Read by this estimate and by the static
+ * estimate's `-ref` decision (`videoRefWired` in credits.ts), so the two agree.
+ */
+export function unpricedWiredClip(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  sourceId: string | undefined,
+): boolean {
+  if (node.type !== "generate-video" || !node.id || !edges || sourceId === undefined) return false
+  const data = node.data ?? {}
+  const provider = applyDefaultVideoSelection({ provider: data.provider as string | undefined, duration: data.duration as number | string | undefined }).provider
+  if (videoCharacterClipsBilledAsReferenceVideo(provider)) return false
+  const source = nodes.find((n) => n.id === sourceId)
+  const url = knownClipUrl(source) ?? activeResultUrl(source?.data)
+  if (!url) return false
+  const graphNodes = nodes.flatMap((n) => (n.id === undefined ? [] : [{ ...n, id: n.id }]))
+  const graphEdges = edges.flatMap((e) => (e.source === undefined ? [] : [{ ...e, source: e.source }]))
+  return wiredCharacterSubjectClips(node.id, graphNodes, graphEdges, provider).includes(url.trim())
 }
 
 /** A node's current result (its active one in `generatedResults`), when it has one. */

@@ -3800,7 +3800,7 @@ export const ja: ChromeDict = {
   "cfgext.entVideoSubjectUpload": "クリップをアップロード",
   "cfgext.entVideoSubjectRemove": "クリップを削除",
   "cfgext.entVideoSubjectUploadFailed": "クリップをアップロードできませんでした。",
-  "cfgext.entVideoSubjectHint": "Kling 4.0 と Kling 4.0 Flash のみ：このキャラクターを 1 カットで撮った 3〜8 秒のクリップ。キャラクターはこのクリップから作った被写体として送られ、クリップの秒数は参照動画の秒数として課金されます。ほかのモデルでは使われません。",
+  "cfgext.entVideoSubjectHint": "Kling 4.0 と Kling 4.0 Flash のみ：このキャラクターを 1 カットで撮った 3〜8 秒のクリップ。キャラクターはこのクリップから作った被写体として送られます。Kling 4.0 ではクリップの秒数が参照動画の秒数として課金され、Kling 4.0 Flash では料金に加算されません。ほかのモデルでは使われません。",
   "cfgext.entNoCanonicalDescription": "基準となる説明がまだありません。まずスタジオでポートレートを生成してください。",
   "cfgext.entCharacterName": "キャラクター名",
   "cfgext.entCharacterNamePlaceholder": "例：アルドリック卿（{} で入力を挿入）",

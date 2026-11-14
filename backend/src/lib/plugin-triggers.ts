@@ -24,7 +24,10 @@
  *      unique (user_id, idempotency_key) index turns a redelivered event into
  *      `duplicate` instead of a second paid run;
  *   8. the run is queued with `triggerNodeId`, so only the branch behind the
- *      trigger node executes (`triggerRunScope`).
+ *      trigger node executes (`triggerRunScope`);
+ *   9. a run the queue refuses is failed from `pending` with its key released
+ *      (lib/enqueue-execution.ts `enqueueRunOrThrow`) and the fire rejects, so
+ *      the event offered again fires instead of being answered `duplicate`.
  */
 import { TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE } from "@nodaro/shared/workflow"
 import type {
@@ -44,6 +47,7 @@ import { refuseUnpricedFire } from "./llm-unpriced-fire-refusal.js"
 import { resolveBillingContext, shouldRefuseDegradedRunFor } from "./billing-context.js"
 import { billingPairColumns } from "./insert-job.js"
 import { orchestrationQueue } from "./orchestration-queue.js"
+import { enqueueRunOrThrow, UnqueuedRunError } from "./enqueue-execution.js"
 import { withoutReservedStamps } from "./trigger-data-stamps.js"
 
 /** Each plugin lane and the node type its rows are projected from. */
@@ -165,12 +169,29 @@ async function overOffers(triggerId: string): Promise<boolean> {
   return count > TRIGGER_OFFERS_PER_MINUTE
 }
 
-/** True when this fire is over the trigger's per-minute rate. */
-async function overRate(triggerId: string): Promise<boolean> {
-  const key = rateKey(triggerId)
+/** True when this fire is over the trigger's per-minute rate (counted at `key`, this minute's {@link rateKey}). */
+async function overRate(key: string): Promise<boolean> {
   const count = await redis.incr(key)
   if (count === 1) await redis.expire(key, 120)
   return count > TRIGGER_FIRES_PER_MINUTE
+}
+
+/**
+ * Give back a fire's count of the minute's rate when its run never started
+ * (the queue refused it and it was failed): the count is taken before the
+ * run is written, so an outage of the queue would otherwise spend the whole
+ * minute's rate on events that fired nothing. Only inside the minute it was
+ * taken in (a later minute's key is a different key, and a decrement of a key
+ * that expired would leave one with no expiry). Best effort. The OFFERS count
+ * is not given back: it counts every event offered, fired or not.
+ */
+async function releaseRateCount(key: string, triggerId: string): Promise<void> {
+  if (key !== rateKey(triggerId)) return
+  try {
+    await redis.decr(key)
+  } catch {
+    // A count left spent only throttles a little longer; never fail the fire's own answer for it.
+  }
 }
 
 async function runsInFlight(workflowId: string, lane: PluginTriggerLane): Promise<number> {
@@ -222,7 +243,8 @@ export async function firePluginTrigger(input: PluginTriggerFireInput): Promise<
   if ((await runsInFlight(workflowId, lane)) >= MAX_TRIGGER_RUNS_IN_FLIGHT) {
     return { fired: false, reason: "throttled", throttle: "in_flight" }
   }
-  if (await overRate(row.id)) return { fired: false, reason: "throttled", throttle: "rate" }
+  const rateWindowKey = rateKey(row.id)
+  if (await overRate(rateWindowKey)) return { fired: false, reason: "throttled", throttle: "rate" }
 
   if (!(await canRunWorkflow(userId, workflowId))) {
     await recordTriggerFireRefusal({ workflowId, userId, triggerType: lane, triggerId: row.id })
@@ -275,7 +297,21 @@ export async function firePluginTrigger(input: PluginTriggerFireInput): Promise<
     // An account event cannot review a Preview render.
     reviewerPresent: false,
   }
-  await orchestrationQueue.add("workflow-execution", jobData, { jobId: execution.id })
+  // A run the queue refuses is never left `pending` holding its key, which
+  // would answer the daemon's redelivery of this event `duplicate` and lose
+  // it: failed from `pending` with its key released, and the fire rejects
+  // with an UnqueuedRunError, so the same event offered again fires a new
+  // run. A run a worker claimed meanwhile is running: answered as fired.
+  try {
+    await enqueueRunOrThrow(execution.id, userId, () =>
+      orchestrationQueue.add("workflow-execution", jobData, { jobId: execution.id }),
+    )
+  } catch (err) {
+    // A run the queue refused and failed fired nothing: it does not spend the
+    // minute's fire rate (an "unsettled" one may be running, so it does).
+    if (err instanceof UnqueuedRunError && err.outcome === "failed") await releaseRateCount(rateWindowKey, row.id)
+    throw err
+  }
   // Best effort, like the webhook lane: what the trigger list shows as "last fired".
   await supabase
     .from("workflow_triggers")

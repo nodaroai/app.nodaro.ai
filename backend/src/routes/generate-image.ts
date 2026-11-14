@@ -12,7 +12,7 @@ import { withAdjustments } from "../lib/image-gen-normalize.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { imagePromptTooShort } from "../lib/image-prompt-minimum.js"
 import { imageInputLimitProblem } from "../lib/image-input-limit.js"
-import { runJobBatch, type PlannedBatchJob } from "../lib/job-batch.js"
+import { batchQueueId, runJobBatch, type PlannedBatchJob } from "../lib/job-batch.js"
 import {
   batchSeed,
   imageBatchId,
@@ -406,7 +406,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
 
 /** A batch job's queue id: its own, so the queue holds one entry per job (BullMQ ids may not contain ":"). */
 export function imageBatchQueueId(jobId: string): string {
-  return `generate-image-${jobId}`
+  return batchQueueId("generate-image", jobId)
 }
 
 /**

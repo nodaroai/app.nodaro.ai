@@ -200,10 +200,19 @@ describe("text-to-video handler — Seedance reference-video settlement", () => 
     const job = { prompt: "a cat in the style of @video_1", provider: "seedance-2-5", resolution: "720p", duration: -1, referenceVideoUrls: REFS, refVideoDurationsSec: [5] }
     await handler(makeJob("text-to-video", { ...job, referenceTaskType: "reference" }) as never, ctx as never)
     expect(mocks.mockMeasure.mock.calls.at(-1)![0]).toStrictEqual({
-      provider: "seedance-2-5", resolution: "720p", outputUrl: RAW_URL, referenceVideoUrls: REFS, refVideoDurationsSec: [5], duration: -1, referenceTaskType: "reference", jobId: "job-1",
+      provider: "seedance-2-5", resolution: "720p", outputUrl: RAW_URL, referenceVideoUrls: REFS, refVideoDurationsSec: [5], characterReferences: undefined, duration: -1, referenceTaskType: "reference", jobId: "job-1",
     })
     await handler(makeJob("text-to-video", job) as never, ctx as never)
     expect(mocks.mockMeasure.mock.calls.at(-1)![0]).toHaveProperty("referenceTaskType", undefined)
+  })
+
+  // Decided 2026-11-14: the settlement prices what the hold priced, so it gets
+  // the job's character references (a Flash character's clip is not priced).
+  it("hands the settlement the job's character references", async () => {
+    const characterReferences = [{ imageUrl: "https://r2.example.com/p.png", description: "Maya", name: "Maya", videoUrl: REFS[0] }]
+    const job = { prompt: "Maya walks", provider: "seedance-2-5", resolution: "720p", duration: 5, referenceVideoUrls: REFS, refVideoDurationsSec: [5], characterReferences }
+    await handler(makeJob("text-to-video", job) as never, ctx as never)
+    expect(mocks.mockMeasure.mock.calls.at(-1)![0]).toHaveProperty("characterReferences", characterReferences)
   })
 
   it("no measurement → finalize commits the reservation as before", async () => {

@@ -1,6 +1,7 @@
 import { billsReferenceVideoSeconds, isGeminiOmniPerSecondProvider, isSeedance2Provider } from "@nodaro/shared/models"
 import { isAutoVideoDuration } from "@nodaro/shared/model-catalog"
 import { hasCredits } from "./config.js"
+import { pricedRefVideoInput } from "./ref-video-probe.js"
 
 /**
  * The BASE credits a Seedance 2 reference-video run actually billed, measured
@@ -37,6 +38,12 @@ export interface Seedance2SettleArgs {
   outputUrl: string
   referenceVideoUrls: unknown
   refVideoDurationsSec?: unknown
+  /** The run's character references (the job's `input_data.characterReferences`): a
+   *  character's video subject seated among the reference videos is priced only where
+   *  the model bills it as one (`pricedRefVideoInput`; not on Kling 4.0 Flash, decided
+   *  2026-11-14), so the settlement prices what the hold priced. Required so no lane can
+   *  skip it. */
+  characterReferences: unknown
   /** The REQUESTED duration. Only Auto (-1) matters here: with no reference
    *  video wired it is the one other run reserved at a worst case; with one,
    *  the hold was sized from the longest clip, and a delivered clip past it is
@@ -107,14 +114,23 @@ async function priceMeasured(
  */
 export async function measureSeedance2Settle(args: Seedance2SettleArgs): Promise<Seedance2Settle> {
   if (!hasCredits()) return NOT_MEASURED
-  const { provider, referenceVideoUrls } = args
+  const { provider } = args
+  // The clips the hold was priced on, and the hold's own probe of them.
+  const priced = pricedRefVideoInput({
+    provider,
+    referenceVideoUrls: args.referenceVideoUrls,
+    characterReferences: args.characterReferences,
+    durationsSec: Array.isArray(args.refVideoDurationsSec) ? (args.refVideoDurationsSec as unknown[]) : undefined,
+  })
+  const referenceVideoUrls = priced.referenceVideoUrls
+  const refVideoDurationsSec = priced.referenceVideoUrls === args.referenceVideoUrls ? args.refVideoDurationsSec : priced.durationsSec
   // Every model whose reference-video runs bill the clips' seconds (Seedance 2,
   // Kling 4.0) settles here; only Seedance has the Auto-duration case below.
   if (!billsReferenceVideoSeconds(provider)) return NOT_MEASURED
   // A per-second Gemini Omni edit is billed for its source clip, and the hold is
   // already that clip's price. Only a clip the hold could not read settles on
   // the clip delivered.
-  if (isGeminiOmniPerSecondProvider(provider) && everyClipMeasured(args.refVideoDurationsSec)) return NOT_MEASURED
+  if (isGeminiOmniPerSecondProvider(provider) && everyClipMeasured(refVideoDurationsSec)) return NOT_MEASURED
   const hasVideoRef = Array.isArray(referenceVideoUrls) && referenceVideoUrls.length > 0
   if (!hasVideoRef) {
     if (!isSeedance2Provider(provider)) return NOT_MEASURED
@@ -142,7 +158,7 @@ export async function measureSeedance2Settle(args: Seedance2SettleArgs): Promise
       resolution: args.resolution ?? "720p",
       outputUrl: args.outputUrl,
       referenceVideoUrls,
-      ...(Array.isArray(args.refVideoDurationsSec) ? { durationsSec: args.refVideoDurationsSec } : {}),
+      ...(Array.isArray(refVideoDurationsSec) ? { durationsSec: refVideoDurationsSec } : {}),
       requestedDuration: args.duration,
       referenceTaskType: args.referenceTaskType,
       ...(args.jobId ? { jobId: args.jobId } : {}),

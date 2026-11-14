@@ -24,7 +24,7 @@ import type {
 import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, listedSeedanceTaskType, seedanceTaskTypeFitsMedia, type DeclaredSeedanceTaskType, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isKling4RunnerProvider, isGrokVideo15Provider, videoStartFrameOnlyResolution, videoStartFrameOnlyMessage, isVeoProvider, videoProviderReferenceSyntax, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION, isVideoAutoAspectToken, videoAutoAspectRunsAt } from "@nodaro/shared/model-catalog"
 import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
-import { videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
+import { videoCharacterClipsBilledAsReferenceVideo, videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs, placeFramesAfterReferences } from "@nodaro/prompts/assembly"
 import { isGeminiOmniPerSecondProvider, isPixverseV6MaxProvider } from "@nodaro/shared/models"
 import { GEMINI_OMNI_12_RATE_USD_PER_SEC, buildGeminiOmni12Request, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames, prepareGeminiOmni12Source } from "./gemini-omni-12.js"
@@ -1946,11 +1946,19 @@ async function runKling4(
   // run bills output + max(output, input seconds), and the runner cannot see the
   // clips' lengths: it reports the floor (input ≤ output), and the worker
   // records the full figure from the seconds the charge settles on.
+  const billedVideoSubjects = videoCharacterClipsBilledAsReferenceVideo(modelKey)
+  const hasVideoElement = Array.isArray(input.elements) && (input.elements as Array<Record<string, unknown>>).some((el) => typeof el.video_url === "string")
+  // The body's video elements flag `videoInput`; where the model bills a video
+  // subject as an image subject (Flash) and no reference video rides along,
+  // the run is no video-input run.
+  const videoInputOverride = !billedVideoSubjects && hasVideoElement && !Array.isArray(input.video_urls) ? { videoInput: undefined } : {}
   const tierCostUsd = kling4CostUsd({
     provider: modelKey,
     resolution: input.resolution as string,
-    // A video subject is video input too (KIE bills its seconds as a reference video's).
-    hasVideoRef: Array.isArray(input.video_urls) || (Array.isArray(input.elements) && (input.elements as Array<Record<string, unknown>>).some((el) => typeof el.video_url === "string")),
+    // A video subject is video input only where the model bills it as a
+    // reference video (`videoCharactersBillAsReferenceVideo`: Kling 4.0); on
+    // Flash it bills as an image subject (measured, decided 2026-11-14).
+    hasVideoRef: Array.isArray(input.video_urls) || (billedVideoSubjects && hasVideoElement),
     outputSec: snapped,
     inputSec: 0,
   })
@@ -1958,7 +1966,7 @@ async function runKling4(
   console.log(`[KIE.ai] ${logLabel} (${model}) input:`, JSON.stringify(input, null, 2))
   const { resultJson, taskId, providerMs } = await runKieTask(
     model, input, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
-    { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
+    { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input), ...videoInputOverride } },
   )
   const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
   if (!videoUrl) {

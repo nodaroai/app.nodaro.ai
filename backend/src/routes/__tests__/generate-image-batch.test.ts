@@ -49,7 +49,7 @@ vi.mock("@/lib/supabase.js", () => ({
 vi.mock("@/lib/idempotent-insert.js", () => ({
   insertWithIdempotencyKey: vi.fn(async (_t: string, row: Record<string, unknown>, key: string | null | undefined) => {
     const prior = key ? h.existing.get(key) : undefined
-    if (prior) return { row: prior, created: false }
+    if (prior) return { row: { ...prior, input_data: prior.input_data === undefined ? { type: "generate-image" } : prior.input_data }, created: false }
     h.inserted.push({ row, key })
     return { row: { id: `job-${h.inserted.length}`, credits: null }, created: true }
   }),
@@ -82,7 +82,7 @@ vi.mock("@/lib/dedup-fingerprint.js", async (importOriginal) => ({
     const found = new Map<string, { id: string; status: string | null; credits: number | null; input_data: Record<string, unknown> | null }>()
     for (const key of keys) {
       const row = h.existing.get(key)
-      if (row) found.set(key, { id: row.id, status: row.status ?? null, credits: row.credits, input_data: row.input_data ?? null })
+      if (row) found.set(key, { id: row.id, status: row.status ?? null, credits: row.credits, input_data: row.input_data === undefined ? { type: "generate-image" } : row.input_data })
     }
     return found
   }),
@@ -302,6 +302,21 @@ describe("a repeat of a keyed batch is answered before the balance check", () =>
       deduped: true,
     })
     expect(h.checkIds).toBeUndefined()
+    expect(h.inserted).toHaveLength(0)
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("jobs another route made under the same key: 422, never replayed as images", async () => {
+    h.existing.set(`${KEY}:0`, { id: "job-a", credits: 60, status: "completed", input_data: { type: "generate-character" } })
+    h.existing.set(`${KEY}:1`, { id: "job-b", credits: 60, status: "completed", input_data: { type: "generate-character" } })
+    for (const body of [
+      { prompt: "a red car", provider: "gpt-image-2", count: 2 },
+      { prompt: "a red car", provider: "gpt-image-2", count: 3 },
+    ]) {
+      const res = await post(body, KEY)
+      expect(res.statusCode).toBe(422)
+      expect(res.json().error.code).toBe("idempotency_key_reused")
+    }
     expect(h.inserted).toHaveLength(0)
     expect(reserveCreditsForJob).not.toHaveBeenCalled()
   })

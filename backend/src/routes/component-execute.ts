@@ -8,6 +8,7 @@ import { insertJob, insertJobIdempotent } from "../lib/insert-job.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { executeAppRun, type ExecuteAppRunResult } from "../services/app-execution.js"
 import { UnqueuedRunError } from "../lib/enqueue-execution.js"
+import { failWaitingExecution } from "../lib/concurrency-lanes/run-failure.js"
 import { markJobFailedDetailed } from "../lib/job-failure.js"
 import { parentExecutionIdOf } from "../lib/concurrency-lanes/parent-execution.js"
 import { importViaOf } from "../lib/import-via.js"
@@ -64,11 +65,36 @@ const bodySchema = z.object({
  */
 export const COMPONENT_RUN_NOT_STARTED_MESSAGE = "The component's run could not be started. Run it again."
 
-async function updateWrapperJob(jobId: string, fields: Record<string, unknown>) {
-  // The wrapper settles here, never in a worker, so it carries the completion
-  // bookkeeping itself (progress 100 on success; completed_at either way).
-  const stamp = fields.status === "completed" ? completedJobColumns() : { completed_at: new Date().toISOString() }
-  await supabase.from("jobs").update({ ...fields, ...stamp }).eq("id", jobId)
+/**
+ * Complete the wrapper from the inner run's end — from `processing` only, so a
+ * wrapper its owner cancelled while the run was followed keeps its cancel. The
+ * wrapper settles here, never in a worker, so it carries the completion
+ * bookkeeping itself (progress 100, completed_at).
+ */
+async function completeWrapperJob(jobId: string, fields: Record<string, unknown>): Promise<void> {
+  // `fields.status` is "completed": the caller states the terminal status, the
+  // write adds the completion bookkeeping.
+  await supabase
+    .from("jobs")
+    .update({ ...fields, ...completedJobColumns() })
+    .eq("id", jobId)
+    .eq("status", "processing")
+}
+
+/**
+ * Fail the wrapper after its inner run was started, through the one failure
+ * writer (lib/job-failure.ts) and from `processing` only — a cancel is kept.
+ * The wrapper keeps its Idempotency-Key: the inner run exists (or may), so a
+ * same-key retry answers this job and never starts a second run beside it.
+ * Never throws; a write that fails leaves the wrapper to the stuck-wrapper
+ * sweep.
+ */
+async function failFollowedWrapper(jobId: string, message: string, extra: Record<string, unknown> = {}): Promise<void> {
+  try {
+    await markJobFailedDetailed(jobId, { error_message: message, from: ["processing"], extra })
+  } catch {
+    // The stuck-wrapper sweep (sweepStuckComponentWrappers) settles a wrapper left `processing`.
+  }
 }
 
 /**
@@ -84,6 +110,119 @@ async function failUnstartedWrapper(jobId: string, extra: Record<string, unknown
     if (outcome === "error") req.log.error({ jobId }, "could not fail a component wrapper whose inner run did not start")
   } catch (err) {
     req.log.error({ err, jobId }, "could not fail a component wrapper whose inner run did not start")
+  }
+}
+
+/** A component's wrapper job and the inner run it reports. */
+interface InnerRunWatch {
+  readonly wrapperJobId: string
+  readonly wrapperInput: Record<string, unknown>
+  /** The inner run, and its app run when known. */
+  readonly run: { readonly executionId: string; readonly appRunId?: string }
+  readonly userId: string
+  readonly componentMetadata: ComponentMetadata
+  readonly snapshotNodes: ReadonlyArray<{ id: string; type?: string }>
+  readonly snapshotEdges: ReadonlyArray<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>
+  /** The request's logger. */
+  readonly log?: FastifyRequest["log"]
+}
+
+/**
+ * Follow a component's inner run to its end and settle the wrapper from it:
+ * completed with the component's outputs and the run's credits, or failed
+ * with the run's own message, or failed as timed out once the wait is spent.
+ * The inner run is stamped on the wrapper first. Followed the same way
+ * whether the run was queued or the queue's refusal left its state unknown.
+ * Never throws.
+ */
+async function followInnerRun(w: InnerRunWatch): Promise<void> {
+  const { wrapperJobId, run } = w
+  try {
+    // Stamp the nested execution id on the wrapper IMMEDIATELY (it was
+    // otherwise only written on terminal completion below). If this server
+    // process dies mid-poll, the wrapper is left "processing" forever — the
+    // reconcile sweep (sweepStuckComponentWrappers) needs `_executionId` to
+    // find the nested execution and propagate its terminal status, instead of
+    // stranding the parent.
+    await supabase
+      .from("jobs")
+      .update({ input_data: { ...w.wrapperInput, _executionId: run.executionId } })
+      .eq("id", wrapperJobId)
+
+    // The wait is POLL_ABSOLUTE_TIMEOUT_MS plus the inner execution's
+    // budget excess (podcast Track 0.11) — the inner run's own cap grows by
+    // the excess of any long render it dispatches, so this wait must too.
+    // Looked up only once the base is spent: a component with nothing
+    // budgeted inside times out exactly as before. It grows the same lazy
+    // way by the time the inner run waited for concurrency slots — for its
+    // own run slot (a run started here by the editor or the API takes
+    // one) and for its jobs': queued time never counts (decided 2026-10-30).
+    const deadline = new BudgetedDeadline(
+      POLL_ABSOLUTE_TIMEOUT_MS,
+      () => executionBudgetExcessMs(run.executionId, w.userId),
+      () => executionQueuedMs(run.executionId, w.userId, { includeOwnWait: true }),
+    )
+    const startTime = Date.now()
+    while (!(await deadline.reached(Date.now() - startTime))) {
+      // Poll status + progress counts to propagate progress to wrapper job
+      const { data: exec } = await supabase
+        .from("workflow_executions")
+        .select("status, completed_nodes, total_nodes")
+        .eq("id", run.executionId)
+        .single()
+
+      if (!exec) break
+
+      // Propagate progress percentage to wrapper job so frontend can display it
+      const total = (exec.total_nodes as number) ?? 0
+      const completed = (exec.completed_nodes as number) ?? 0
+      if (total > 0) {
+        const pct = Math.round((completed / total) * 100)
+        await supabase.from("jobs").update({ progress: pct }).eq("id", wrapperJobId).eq("status", "processing")
+      }
+
+      if (exec.status === "completed" || exec.status === "failed") {
+        // Fetch full data only on terminal status
+        const { data: fullExec } = await supabase
+          .from("workflow_executions")
+          .select("status, node_states, total_credits_used, error_message")
+          .eq("id", run.executionId)
+          .single()
+
+        const runIds = { _executionId: run.executionId, ...(run.appRunId ? { _appRunId: run.appRunId } : {}) }
+        if (fullExec?.status === "completed") {
+          const nodeStates = (fullExec.node_states ?? {}) as Record<string, { output?: Record<string, unknown> }>
+          const outputData = collectComponentOutputs(w.componentMetadata, nodeStates, [...w.snapshotNodes], [...w.snapshotEdges])
+
+          await completeWrapperJob(wrapperJobId, {
+            status: "completed",
+            output_data: { ...outputData, ...runIds },
+            credits_actual: fullExec.total_credits_used ?? 0,
+          })
+        } else {
+          await failFollowedWrapper(wrapperJobId, fullExec?.error_message ?? "Component execution failed", { output_data: runIds })
+        }
+        return
+      }
+
+      await new Promise((r) => setTimeout(r, JOB_POLL_INTERVAL_MS))
+    }
+
+    // The wait is spent. A run still `pending` (it never got its run slot) is
+    // failed first — compare-and-set from `pending`, so it cannot start and
+    // charge after the wrapper says failed. One that is running is left to
+    // finish. A failure write that errors leaves the wrapper `processing` for
+    // the stuck-wrapper sweep, which settles it from the run's real end. The
+    // wrapper keeps its key either way: a retry needs a new one.
+    try {
+      await failWaitingExecution(run.executionId, "Component execution timed out")
+    } catch (err) {
+      w.log?.warn({ err, jobId: wrapperJobId, executionId: run.executionId }, "could not fail a component's waiting inner run at the timeout: left to the stuck-wrapper sweep")
+      return
+    }
+    await failFollowedWrapper(wrapperJobId, "Component execution timed out")
+  } catch (err) {
+    await failFollowedWrapper(wrapperJobId, err instanceof Error ? err.message : "Unknown error")
   }
 }
 
@@ -292,9 +431,9 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     // Runs the full published workflow (same as app runner) — no node subset
     // filtering so the execution is identical to Present mode.
     setImmediate(async () => {
-      let result: ExecuteAppRunResult
+      let run: { readonly executionId: string; readonly appRunId?: string }
       try {
-        result = await executeAppRun({
+        const result: ExecuteAppRunResult = await executeAppRun({
           appVersionId: appRow.id,
           workflowId: appRow.workflow_id as string,
           userId: req.userId!,
@@ -312,126 +451,46 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
           ...(forwardedPreviewStopRule !== undefined ? { previewStopRule: forwardedPreviewStopRule } : {}),
           ...(forwardedCheapLanesOnly ? { cheapLanesOnly: true } : {}),
         })
+        run = { executionId: result.executionId, appRunId: result.appRunId }
       } catch (err) {
-        // The inner run could not be created or queued. The wrapper is failed
-        // with a fixed message (the cause stays in the log, never in the job),
-        // from `processing` only, so a wrapper its owner cancelled meanwhile
-        // keeps its cancel. Whether its Idempotency-Key goes with it depends
-        // on whether anything may be running:
-        //   - nothing was queued (a row could not be created), or the queue
-        //     refused the run and executeAppRun failed it from `pending`
-        //     ("failed"): nothing runs, so the key is released in the same
-        //     write and a retry with the same key starts a new run;
-        //   - the queue refused the run and its state is unknown
-        //     ("unsettled"): it may be waiting or running. The key stays, so
-        //     a same-key retry never starts a second run beside it, and the
-        //     inner run is stamped on the wrapper as a started one is.
-        req.log.error({ err, jobId: wrapperJob.id }, "a component's inner run could not be started")
-        await failUnstartedWrapper(
-          wrapperJob.id,
-          err instanceof UnqueuedRunError && err.outcome === "unsettled"
-            ? { input_data: { ...wrapperInput, _executionId: err.executionId } }
-            : { idempotency_key: null },
-          req,
-        )
-        return
+        if (err instanceof UnqueuedRunError && err.outcome === "unsettled") {
+          // The queue refused the run and its state is unknown: it may still
+          // be waiting, be failed with only that write's answer lost, or be
+          // running — and a run that runs completes and is charged. So the
+          // wrapper is NOT failed: it stays `processing` and follows the run
+          // as it follows a started one (below), settling from the run's real
+          // end — completed with its outputs, or failed with the run's own
+          // message. Its key stays, so a same-key retry never starts a second
+          // run beside it.
+          req.log.warn({ err, jobId: wrapperJob.id, executionId: err.executionId }, "a component's inner run the queue refused may still run: following it")
+          run = { executionId: err.executionId, ...(err.appRunId ? { appRunId: err.appRunId } : {}) }
+        } else {
+          // The inner run could not be created, or the queue refused it and
+          // executeAppRun failed it from `pending` ("failed"): nothing runs.
+          // The wrapper is failed with a fixed message (the cause stays in the
+          // log, never in the job), from `processing` only, so a wrapper its
+          // owner cancelled meanwhile keeps its cancel, and its key is
+          // released in the same write: a retry with the same key starts a
+          // new run.
+          req.log.error({ err, jobId: wrapperJob.id }, "a component's inner run could not be started")
+          await failUnstartedWrapper(wrapperJob.id, { idempotency_key: null }, req)
+          return
+        }
       }
 
       // From here on the inner run exists and may be running: a failure below
       // keeps the wrapper's key, so a same-key retry never starts a second run
       // beside it.
-      try {
-        // Stamp the nested execution id on the wrapper IMMEDIATELY (it was
-        // otherwise only written on terminal completion below). If this server
-        // process dies mid-poll, the wrapper is left "processing" forever — the
-        // reconcile sweep (sweepStuckComponentWrappers) needs `_executionId` to
-        // find the nested execution and propagate its terminal status, instead of
-        // stranding the parent.
-        await supabase
-          .from("jobs")
-          .update({ input_data: { ...wrapperInput, _executionId: result.executionId } })
-          .eq("id", wrapperJob.id)
-
-        // The wait is POLL_ABSOLUTE_TIMEOUT_MS plus the inner execution's
-        // budget excess (podcast Track 0.11) — the inner run's own cap grows by
-        // the excess of any long render it dispatches, so this wait must too.
-        // Looked up only once the base is spent: a component with nothing
-        // budgeted inside times out exactly as before. It grows the same lazy
-        // way by the time the inner run waited for concurrency slots — for its
-        // own run slot (a run started here by the editor or the API takes
-        // one) and for its jobs': queued time never counts (decided 2026-10-30).
-        const deadline = new BudgetedDeadline(
-          POLL_ABSOLUTE_TIMEOUT_MS,
-          () => executionBudgetExcessMs(result.executionId, req.userId!),
-          () => executionQueuedMs(result.executionId, req.userId!, { includeOwnWait: true }),
-        )
-        const startTime = Date.now()
-        while (!(await deadline.reached(Date.now() - startTime))) {
-          // Poll status + progress counts to propagate progress to wrapper job
-          const { data: exec } = await supabase
-            .from("workflow_executions")
-            .select("status, completed_nodes, total_nodes")
-            .eq("id", result.executionId)
-            .single()
-
-          if (!exec) break
-
-          // Propagate progress percentage to wrapper job so frontend can display it
-          const total = (exec.total_nodes as number) ?? 0
-          const completed = (exec.completed_nodes as number) ?? 0
-          if (total > 0) {
-            const pct = Math.round((completed / total) * 100)
-            await supabase.from("jobs").update({ progress: pct }).eq("id", wrapperJob.id)
-          }
-
-          if (exec.status === "completed" || exec.status === "failed") {
-            // Fetch full data only on terminal status
-            const { data: fullExec } = await supabase
-              .from("workflow_executions")
-              .select("status, node_states, total_credits_used, error_message")
-              .eq("id", result.executionId)
-              .single()
-
-            if (fullExec?.status === "completed") {
-              const nodeStates = (fullExec.node_states ?? {}) as Record<string, { output?: Record<string, unknown> }>
-              const snapshotNodes = (appRow.snapshot_nodes ?? []) as Array<{ id: string; type?: string }>
-              const snapshotEdges = (appRow.snapshot_edges ?? []) as Array<{
-                source: string
-                target: string
-                sourceHandle?: string | null
-                targetHandle?: string | null
-              }>
-              const outputData = collectComponentOutputs(componentMetadata, nodeStates, snapshotNodes, snapshotEdges)
-
-              await updateWrapperJob(wrapperJob.id, {
-                status: "completed",
-                output_data: {
-                  ...outputData,
-                  _executionId: result.executionId,
-                  _appRunId: result.appRunId,
-                },
-                credits_actual: fullExec.total_credits_used ?? 0,
-              })
-            } else {
-              await updateWrapperJob(wrapperJob.id, {
-                status: "failed",
-                error_message: fullExec?.error_message ?? "Component execution failed",
-                output_data: { _executionId: result.executionId, _appRunId: result.appRunId },
-              })
-            }
-            return
-          }
-
-          await new Promise((r) => setTimeout(r, JOB_POLL_INTERVAL_MS))
-        }
-
-        await updateWrapperJob(wrapperJob.id, { status: "failed", error_message: "Component execution timed out" })
-      } catch (err) {
-        await updateWrapperJob(wrapperJob.id, {
-          status: "failed",
-          error_message: err instanceof Error ? err.message : "Unknown error",
-        })
-      }
+      await followInnerRun({
+        wrapperJobId: wrapperJob.id,
+        wrapperInput,
+        run,
+        userId: req.userId!,
+        componentMetadata,
+        snapshotNodes: (appRow.snapshot_nodes ?? []) as Array<{ id: string; type?: string }>,
+        snapshotEdges: (appRow.snapshot_edges ?? []) as InnerRunWatch["snapshotEdges"],
+        log: req.log,
+      })
     })
   })
 

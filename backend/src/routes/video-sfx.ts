@@ -10,8 +10,9 @@ import { insertJob } from "../lib/insert-job.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { videoQueue } from "../lib/queue.js"
-import { enqueueRouteJobs } from "../lib/enqueue-route-job.js"
-import { supabase } from "../lib/supabase.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { batchQueueId, runJobBatch } from "../lib/job-batch.js"
+import { keyedBatchAnswer, keyedBatchJobsToPrice, keyedBatchReplay } from "../lib/keyed-batch-replay.js"
 import { hasCredits } from "../lib/config.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
@@ -53,6 +54,17 @@ export async function probeDurationPreHandler(req: FastifyRequest, reply: Fastif
   ;(req.body as Record<string, unknown>).__probedDuration = measured.durationSec
 }
 
+/** How many versions the raw body asks for (1–4), read before validation like the price check. */
+function requestedVersions(body: unknown): number {
+  const raw = (body as Record<string, unknown> | undefined)?.versions
+  return typeof raw === "number" && Number.isInteger(raw) && raw >= 1 ? Math.min(raw, 4) : 1
+}
+
+/** The answer for several versions: their jobs, in order. */
+function videoSfxBatchAnswer(jobIds: readonly string[]): Record<string, unknown> {
+  return { jobIds: [...jobIds] }
+}
+
 /** The price row for the length the preHandler measured. */
 function probedCreditId(body: unknown): string {
   const probed = (body as Record<string, unknown> | undefined)?.__probedDuration
@@ -62,6 +74,10 @@ function probedCreditId(body: unknown): string {
 export default async function videoSfxRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/video-sfx", {
     preHandler: [
+      // A repeat of a keyed batch (versions ≥ 2) is answered from its jobs
+      // before the probe and any check, or priced for the jobs it still pays
+      // for (lib/keyed-batch-replay.ts).
+      keyedBatchReplay({ size: requestedVersions, jobType: "video-sfx", answer: videoSfxBatchAnswer }),
       probeDurationPreHandler,
       // Priced from the length's own row (`replicate-mmaudio:<n>s`, the
       // admin-editable model_pricing row over the static table), the same row
@@ -78,11 +94,9 @@ export default async function videoSfxRoutes(app: FastifyInstance): Promise<void
       creditGuard(
         (req) => probedCreditId(req.body),
         {
-          computeCredits: async (parsedBody) => {
-            const body = parsedBody as Record<string, unknown>
-            const versionsRaw = body.versions
-            const versions = typeof versionsRaw === "number" && versionsRaw >= 1 ? versionsRaw : 1
-            return (await baseCreditCostFor(probedCreditId(body))) * versions
+          computeCredits: async (parsedBody, req) => {
+            const versions = keyedBatchJobsToPrice(req) ?? requestedVersions(parsedBody)
+            return (await baseCreditCostFor(probedCreditId(parsedBody))) * versions
           },
         },
       ),
@@ -133,23 +147,15 @@ export default async function videoSfxRoutes(app: FastifyInstance): Promise<void
     // check above is correct. But reserveCreditsForJobImpl reads the SAME
     // `req.creditReservation.creditOverride` for EVERY per-row reservation
     // call — without correction, each of N rows would be deducted the batch
-    // total (N² over-charge). Recompute the per-job base (still pre-markup;
-    // creditGuardImpl applied markup once into the BATCH number, which we
-    // ignore — instead we set the per-job BASE here and let the RPC apply
-    // its own per-row markup via the override path).
+    // total (N² over-charge). So it is set to the per-ROW figure before any
+    // row is reserved.
     //
     // ⚠️ Subtlety: the override is consumed by `reserveCredits` as the
     // final p_credits value (post-markup), NOT as a pre-markup BASE. So
     // mirror what creditGuardImpl computed: apply the SAME markup formula
     // to the per-job base. We re-fetch app settings via the dynamic ee
     // import path keep this file ee-import-free. (hasCredits() guard.)
-    //
-    // generate-object / generate-character / generate-location currently
-    // DO NOT do this correction and over-charge multi-candidate batches
-    // (pre-existing issue, separate fix). Filed in code review for
-    // follow-up.
     // ──────────────────────────────────────────────────────────────────────
-    let perJobCreditOverride: number | undefined
     if (hasCredits() && req.creditReservation) {
       const baseCredits = await baseCreditCostFor(bucketKey)
       const { applyServiceMarkup } = await import("../ee/billing/service-margin.js")
@@ -158,23 +164,24 @@ export default async function videoSfxRoutes(app: FastifyInstance): Promise<void
       // Same helper (integer-domain rounding + per-service margin) creditGuardImpl
       // and the anomaly detector's actual use for the bucket row, so the
       // reserve can never round a credit apart from them (no phantom anomaly).
-      perJobCreditOverride = applyServiceMarkup(baseCredits, settings, bucketKey)
+      req.creditReservation.creditOverride = applyServiceMarkup(baseCredits, settings, bucketKey)
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    // Phase 1: Insert N pending jobs.
+    // One row per version. Each carries its own seed (sequential when
+    // user-supplied, -1 otherwise) + per-iteration index so the worker can
+    // identify which version of the batch it is.
     //
-    // Each row carries its own seed (sequential when user-supplied, -1
-    // otherwise) + per-iteration index so the worker can identify which
-    // version of the batch it is. On mid-batch insert failure: delete any
-    // rows already inserted (no credits reserved yet so no refund needed).
+    // Worker reads canonical fields (videoUrl, prompt, etc.) from the
+    // jobs row's input_data (single source of truth), but we still pass
+    // them in the BullMQ payload for parity with the rest of the worker
+    // pipeline and to avoid a second DB read on hot path.
     // ──────────────────────────────────────────────────────────────────────
-    const inserted: Array<{ jobId: string; inputData: Record<string, unknown> }> = []
-    for (let i = 0; i < versions; i++) {
+    const planned = Array.from({ length: versions }, (_, i) => {
       const seedForVersion = (body.seed !== undefined && body.seed >= 0)
         ? (body.seed + i) % SEED_MAX
         : -1
-      const inputData: Record<string, unknown> = {
+      const inputData = {
         type: "video-sfx",
         videoUrl: body.videoUrl,
         prompt: body.prompt,
@@ -187,147 +194,63 @@ export default async function videoSfxRoutes(app: FastifyInstance): Promise<void
         iterationIndex: i,
         iterationTotal: versions,
       }
-      const { data: job, error } = await insertJob(req, {
+      return {
+        row: {
           user_id: userId,
           status: "pending",
           input_data: inputData,
           ...(workflowId ? { workflow_id: workflowId } : {}),
           ...(forcePrivate !== undefined ? { force_private: forcePrivate } : {}),
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
-        })
-      if (error || !job) {
-        if (inserted.length > 0) {
-          const orphanIds = inserted.map((r) => r.jobId)
-          try {
-            await supabase.from("jobs").delete().in("id", orphanIds)
-          } catch (cleanupErr) {
-            req.log.warn(
-              { err: cleanupErr, orphanJobIds: orphanIds },
-              "[video-sfx] failed to delete orphan jobs after mid-batch insert failure",
-            )
-          }
-        }
-        return sendInternalError(reply, req, error, "Failed to create job")
+        },
+        queueData: { userId, model: "replicate-mmaudio", ...inputData },
       }
-      inserted.push({ jobId: job.id, inputData })
+    })
+    // The payload carries the input's fields but not its `type` (the job name says it).
+    const payloadOf = (i: number, jobId: string, usageLogId: string | undefined) => {
+      const { type: _type, ...fields } = planned[i]!.queueData
+      return { jobId, ...fields, usageLogId }
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Phase 2A: Reserve credits for every job BEFORE enqueueing any.
-    //
-    // The preHandler already gated the full batch cost (computeCredits
-    // multiplies by `versions`), so mid-batch reservation failure is
-    // unlikely — but not impossible. When it happens we roll back:
-    //   - refund any reservations that succeeded (jobs 0..K-1)
-    //   - delete the orphan `pending` rows that never got a reservation
-    //     (jobs K+1..N-1; job K itself was already deleted by
-    //     reserveCreditsForJobImpl on its failure path)
-    //
-    // Per-row creditOverride correction (see comment above the perJob
-    // calculation): mutate `req.creditReservation.creditOverride` to the
-    // per-job number before each call so reserveCreditsForJobImpl deducts
-    // per-job, not per-batch.
-    // ──────────────────────────────────────────────────────────────────────
-    type ReservationRecord = { jobId: string; usageLogId?: string }
-    const reservations: ReservationRecord[] = []
-    for (const { jobId } of inserted) {
-      if (req.creditReservation && perJobCreditOverride !== undefined) {
-        req.creditReservation.creditOverride = perJobCreditOverride
-      }
-      const reservation = await reserveCreditsForJob(req, reply, jobId, bucketKey)
-      if (reply.sent) {
-        // Refund reservations that succeeded earlier in this batch.
-        if (reservations.length > 0 && hasCredits()) {
-          try {
-            const { CreditsService } = await import("../ee/services/credits.js")
-            for (const r of reservations) {
-              if (!r.usageLogId) continue
-              try {
-                await CreditsService.refundCredits(r.usageLogId)
-              } catch (refundErr) {
-                req.log.warn(
-                  { err: refundErr, jobId: r.jobId, usageLogId: r.usageLogId },
-                  "[video-sfx] refund failed during batch rollback",
-                )
-              }
-            }
-          } catch (importErr) {
-            req.log.warn(
-              { err: importErr },
-              "[video-sfx] failed to load CreditsService for rollback refund",
-            )
-          }
-        }
-        // Delete jobs that were inserted but never reserved (orphans).
-        // Job K itself was already deleted by reserveCreditsForJobImpl,
-        // so exclude any id that appears in `reservations` AND the failing id.
-        const reservedIds = new Set(reservations.map((r) => r.jobId))
-        const orphanIds = inserted
-          .map((r) => r.jobId)
-          .filter((id) => !reservedIds.has(id) && id !== jobId)
-        if (orphanIds.length > 0) {
-          try {
-            await supabase.from("jobs").delete().in("id", orphanIds)
-          } catch (deleteErr) {
-            req.log.warn(
-              { err: deleteErr, orphanJobIds: orphanIds },
-              "[video-sfx] failed to delete orphan jobs during batch rollback",
-            )
-          }
-        }
-        return
-      }
-      reservations.push({ jobId, usageLogId: reservation?.usageLogId })
+    if (versions === 1) {
+      // One version: inserted, reserved (which writes the request's
+      // Idempotency-Key onto it) and queued; a queue that refuses it fails and
+      // refunds it (enqueueRouteJob). The legacy `{ jobId }` answer.
+      const { data: job, error } = await insertJob(req, planned[0]!.row)
+      if (error || !job) return sendInternalError(reply, req, error, "Failed to create job")
+      const reservation = await reserveCreditsForJob(req, reply, job.id, bucketKey)
+      if (reply.sent) return
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("video-sfx", payloadOf(0, job.id, reservation?.usageLogId)))
+      if (reply.sent) return
+      return { jobId: job.id }
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    // Phase 2B: All reservations succeeded — enqueue every job, in order.
-    //
-    // Worker reads canonical fields (videoUrl, prompt, etc.) from the
-    // jobs row's input_data (single source of truth), but we still pass
-    // them in the BullMQ payload for parity with the rest of the worker
-    // pipeline and to avoid a second DB read on hot path.
-    //
-    // When the queue refuses one version, it and the versions after it are
-    // failed and refunded, the ones already queued keep running, and the
-    // request is answered 500 with `error.startedJobIds` (enqueueRouteJobs).
-    // ──────────────────────────────────────────────────────────────────────
-    await enqueueRouteJobs(
+    // Several versions: created, reserved and queued all or nothing by
+    // `runJobBatch` (lib/job-batch.ts), each under its own Idempotency-Key
+    // (`<key>:<i>`), so a repeat with the same key returns the same jobs and
+    // starts only what is missing. A failure before the queue refunds and
+    // removes what this request made; a queue that refuses the batch fails and
+    // refunds the versions it did not start and answers 500 naming the ones
+    // that did (`error.startedJobIds`). Answered `{ jobIds }`, matching
+    // generate-object's contract.
+    const jobs = await runJobBatch(
       req,
       reply,
-      reservations.flatMap((r) => {
-        const entry = inserted.find((e) => e.jobId === r.jobId)
-        if (!entry) return []  // unreachable; satisfies TS
-        const { inputData } = entry
-        return [{
-          jobId: r.jobId,
-          enqueue: () =>
-            videoQueue.add("video-sfx", {
-              jobId: r.jobId,
-              userId,
-              model: "replicate-mmaudio",
-              videoUrl: inputData.videoUrl,
-              prompt: inputData.prompt,
-              negativePrompt: inputData.negativePrompt,
-              cfgStrength: inputData.cfgStrength,
-              numSteps: inputData.numSteps,
-              seed: inputData.seed,
-              duration_seconds: inputData.duration_seconds,
-              bucketKey: inputData.bucketKey,
-              iterationIndex: inputData.iterationIndex,
-              iterationTotal: inputData.iterationTotal,
-              usageLogId: r.usageLogId,
-            }),
-        }]
-      }),
+      planned.map((p) => ({ row: p.row, creditIdentifier: bucketKey })),
+      {
+        idempotencyKey: req.idempotencyKey,
+        failureMessage: "Failed to create jobs",
+        // One call: the queue adds the whole list atomically, or none of it.
+        enqueue: async (toQueue) => {
+          await videoQueue.addBulk(toQueue.map((job) => ({
+            name: "video-sfx",
+            data: payloadOf(job.index, job.jobId, job.usageLogId),
+            opts: { jobId: batchQueueId("video-sfx", job.jobId) },
+          })))
+        },
+      },
     )
-    if (reply.sent) return
-
-    // Backward-compat response shape: versions=1 returns the legacy
-    // `{ jobId }`, versions>1 returns `{ jobIds }`. Matches
-    // generate-object's response contract.
-    return versions === 1
-      ? { jobId: reservations[0]?.jobId }
-      : { jobIds: reservations.map((r) => r.jobId) }
+    if (!jobs) return
+    return keyedBatchAnswer(reply, jobs, videoSfxBatchAnswer)
   })
 }

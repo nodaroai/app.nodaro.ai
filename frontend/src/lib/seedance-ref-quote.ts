@@ -43,6 +43,7 @@ import {
   characterReferencesFromWired,
   characterVideoUrls,
   videoCharacterRefCap,
+  videoCharacterClipsBilledAsReferenceVideo,
   videoCharacterVideoCap,
 } from "@nodaro/shared/video"
 import { wiredCharacterVideoUrls } from "@nodaro/shared/entities"
@@ -97,7 +98,12 @@ export function seedanceRefQuoteRequest(
   // reference video (the route seats it, `seatCharacterVideos`), so it moves
   // the price as a wired clip does — the very references the Run sends.
   // Only Generate Video carries video subjects (the older video nodes never do).
-  const subjectClips = type === "generate-video" && soundtrackProvider ? characterSubjectClips(node.id, nodes, edges, soundtrackProvider) : []
+  const runSubjectClips = type === "generate-video" && soundtrackProvider ? characterSubjectClips(node.id, nodes, edges, soundtrackProvider) : []
+  // On Kling 4.0 Flash a video subject is priced like an image subject
+  // (decided 2026-11-14): it moves no price, even when the same clip is also
+  // wired as a reference video (the run sends it as the character only).
+  const subjectsPriced = !!soundtrackProvider && videoCharacterClipsBilledAsReferenceVideo(soundtrackProvider)
+  const subjectClips = subjectsPriced ? runSubjectClips : []
   if (clipEdges.length === 0 && !soundtrack && subjectClips.length === 0) return undefined
 
   let provider: string
@@ -124,7 +130,9 @@ export function seedanceRefQuoteRequest(
     ? (inputs.referenceVideoUrls ?? []).filter((u): u is string => typeof u === "string" && u.length > 0)
     : inputs.videoUrl ? [inputs.videoUrl] : []
   const unknown = Math.max(0, clipEdges.length - wiredUrls.length)
-  const urls = [...wiredUrls, ...subjectClips.filter((c) => !wiredUrls.includes(c))]
+  const pricedWiredUrls = subjectsPriced ? wiredUrls : wiredUrls.filter((u) => !runSubjectClips.includes(u))
+  const urls = [...pricedWiredUrls, ...subjectClips.filter((c) => !pricedWiredUrls.includes(c))]
+  if (urls.length === 0 && unknown === 0 && !soundtrack) return undefined
   const soundtrackAudioUrl = soundtrack
     ? (inputs.referenceAudioUrls ?? []).find((u): u is string => typeof u === "string" && u.length > 0)
     : undefined

@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { runtimeApiUrl, runtimeDefaultLocale, runtimeFlowUiOrigin, runtimeIsOnFlowUiHost, runtimeIsOnMovedHost, runtimeLegacyUiHosts, runtimeLinkOrigin, runtimeMediaOrigin, runtimeSettingsSourceOrigin, runtimeSupabaseAnonKey, runtimeSupabaseUrl, runtimeUploadModerationEnabled, runtimePreviewStopRule } from "../runtime-config"
+import { runtimeApiUrl, runtimeDefaultLocale, runtimeFlowUiOrigin, runtimeIsOnFlowUiHost, runtimeIsOnMovedHost, runtimeLegacyUiHosts, runtimeLinkOrigin, runtimeMediaOrigin, runtimeSettingsSourceOrigin, runtimeCallbackOrigin, runtimeSupabaseAnonKey, runtimeSupabaseUrl, runtimeUploadModerationEnabled, runtimePreviewStopRule } from "../runtime-config"
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 
@@ -223,7 +223,7 @@ describe("runtimeFlowUiOrigin / runtimeIsOnFlowUiHost / runtimeLinkOrigin", () =
     }
   })
 
-  it("the pages' own host alone (no legacy host) carries settings over and changes nothing else: API calls, links and the move stay off", () => {
+  it("the pages' own host alone (no legacy host) carries settings over, and API calls, links and the move stay off", () => {
     window.__NODARO_RUNTIME__ = { apiUrl: APP, flowUiOrigin: FLOW, linkOrigin: APP }
     expect(runtimeSettingsSourceOrigin(FLOW)).toBe(APP)
     expect(runtimeSettingsSourceOrigin(APP)).toBe("")
@@ -242,6 +242,22 @@ describe("runtimeFlowUiOrigin / runtimeIsOnFlowUiHost / runtimeLinkOrigin", () =
       window.__NODARO_RUNTIME__ = runtime
       expect(runtimeSettingsSourceOrigin(FLOW), JSON.stringify(runtime)).toBe("")
     }
+  })
+
+  it("runtimeCallbackOrigin: the kept origin on the pages' own host, with or without the move; this page's own origin anywhere else", () => {
+    window.__NODARO_RUNTIME__ = { apiUrl: APP, flowUiOrigin: FLOW, linkOrigin: APP }
+    expect(runtimeCallbackOrigin(FLOW)).toBe(APP)
+    expect(runtimeCallbackOrigin(APP)).toBe(APP)
+    expect(runtimeCallbackOrigin("https://sai.example.test")).toBe("https://sai.example.test")
+    window.__NODARO_RUNTIME__ = ON
+    expect(runtimeCallbackOrigin(FLOW)).toBe(APP)
+    expect(runtimeCallbackOrigin(APP)).toBe(APP)
+    for (const runtime of [{ apiUrl: APP }, { flowUiOrigin: FLOW }, { flowUiOrigin: FLOW, linkOrigin: FLOW }, { flowUiOrigin: "http://flow.example.test", linkOrigin: APP }]) {
+      window.__NODARO_RUNTIME__ = runtime
+      expect(runtimeCallbackOrigin(FLOW), JSON.stringify(runtime)).toBe(FLOW)
+    }
+    delete window.__NODARO_RUNTIME__
+    expect(runtimeCallbackOrigin(APP)).toBe(APP)
   })
 
   it("runtimeIsOnMovedHost: the Flow host and the named legacy hosts, never any other host the service answers on", () => {

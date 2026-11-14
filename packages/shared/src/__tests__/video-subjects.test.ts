@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest"
 import {
   characterReferencesFromWired,
   characterVideoUrls,
+  pricedReferenceVideoUrls,
   seatCharacterVideos,
+  videoCharacterClipsBilledAsReferenceVideo,
   videoCharacterVideoCap,
   videoCharacterVideoProviders,
 } from "../entries/video.js"
@@ -42,6 +44,29 @@ describe("which models take video subjects (data)", () => {
       expect(VIDEO_CHARACTER_CLIP_DURATION_LIMITS[id], id).toEqual({ minSec: 3, maxSec: 8 })
       expect(VIDEO_REF_LIMITS_BY_PROVIDER[id]?.videos, id).toBe(5)
     }
+  })
+})
+
+// Decided 2026-11-14, from a measured run: Kling 4.0 Flash bills a video subject
+// like an image subject; Kling 4.0 keeps pricing it as a reference video.
+describe("how a video subject is priced, per model (data)", () => {
+  it("Kling 4.0 bills it as reference video; Kling 4.0 Flash does not", () => {
+    expect(videoCharacterClipsBilledAsReferenceVideo("kling-4")).toBe(true)
+    expect(videoCharacterClipsBilledAsReferenceVideo("kling-4-flash")).toBe(false)
+    expect(videoCharacterClipsBilledAsReferenceVideo(undefined)).toBe(false)
+  })
+
+  it("pricedReferenceVideoUrls: a character's clip leaves the priced list on Flash only; plain reference videos stay", () => {
+    const seated = [ref(1), clip(1)]
+    const characters = [character(clip(1)), character()]
+    expect(pricedReferenceVideoUrls({ provider: "kling-4-flash", referenceVideoUrls: seated, characterReferences: characters })).toEqual([ref(1)])
+    expect(pricedReferenceVideoUrls({ provider: "kling-4-flash", referenceVideoUrls: [clip(1)], characterReferences: characters })).toEqual([])
+    const asSent = pricedReferenceVideoUrls({ provider: "kling-4", referenceVideoUrls: seated, characterReferences: characters })
+    expect(asSent).toBe(seated)
+    // Nothing to leave out: the same value.
+    const plain = [ref(1)]
+    expect(pricedReferenceVideoUrls({ provider: "kling-4-flash", referenceVideoUrls: plain, characterReferences: characters })).toBe(plain)
+    expect(pricedReferenceVideoUrls({ provider: "kling-4-flash", referenceVideoUrls: undefined, characterReferences: undefined })).toBeUndefined()
   })
 })
 

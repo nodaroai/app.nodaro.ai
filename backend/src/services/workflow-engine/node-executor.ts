@@ -137,7 +137,7 @@ import { stampNodaroImageUpscaleInput } from "../../lib/nodaro-image-upscale-lan
 import { runStopSignal } from "./run-stop-signal.js"
 import { discardDeletedJobScratch } from "../../lib/job-scratch.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
-import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
+import { pricedRefVideoInput, probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
 import { payloadReplicas, readReplica, ReplicaRecordingError, withoutReplicaLinks } from "../../lib/voice-replica.js"
 import { stampSeedanceReferenceTaskTypeForRun } from "../../lib/seedance-task-type-stamp.js"
 import { applyAudioSoundtrack } from "../../lib/audio-soundtrack.js"
@@ -1916,10 +1916,15 @@ async function computeSeedance2RefVideoCreditOverride(
   modelIdentifier = "",
 ): Promise<number | undefined> {
   const provider = payload.provider as string | undefined
-  const referenceVideoUrls = payload.referenceVideoUrls
+  // Priced on the clips the provider bills as reference video: on Kling 4.0
+  // Flash a character's video subject is not one (decided 2026-11-14). The
+  // duration gate above still read every sent clip.
+  const priced = pricedRefVideoInput({ provider, referenceVideoUrls: payload.referenceVideoUrls, characterReferences: payload.characterReferences, durationsSec: probedDurationsSec })
+  const referenceVideoUrls = priced.referenceVideoUrls
   if (!billsReferenceVideoSeconds(provider) || !Array.isArray(referenceVideoUrls) || referenceVideoUrls.length === 0) {
     return undefined
   }
+  const pricedDurationsSec = priced.durationsSec ? [...priced.durationsSec] : undefined
 
   const { seedance2RefVideoBaseCreditsFromUrls, seedance2RefVideoBaseCreditsFromDurations } =
     await import("../../ee/billing/seedance2-ref-video-credits.js")
@@ -1943,8 +1948,8 @@ async function computeSeedance2RefVideoCreditOverride(
   // this payload for any provider with a declared bound, so the DEBIT prices
   // from the very array the CHECK read (NaN entries included, still charged at
   // the worst case). No stash => no gate ran for this provider => probe here.
-  const baseCredits = probedDurationsSec
-    ? seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, durationsSec: probedDurationsSec })
+  const baseCredits = pricedDurationsSec
+    ? seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, durationsSec: pricedDurationsSec })
     : await seedance2RefVideoBaseCreditsFromUrls({
         ...priceArgs,
         referenceVideoUrls: referenceVideoUrls as unknown[],

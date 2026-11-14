@@ -5,7 +5,7 @@ import {
   checkCharacterClipDurations,
   checkRefVideoDurations,
 } from "@nodaro/shared/models"
-import { characterVideoUrls } from "@nodaro/shared/video"
+import { characterVideoUrls, pricedReferenceVideoUrls } from "@nodaro/shared/video"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { isOwnMediaUrl } from "./fetch-own-media.js"
 
@@ -214,6 +214,38 @@ export function refVideoProbeCandidates(provider: string, referenceVideoUrls: re
   return referenceVideoUrls
     .slice(0, refVideoCapFor(provider))
     .filter((u): u is string => typeof u === "string" && u.length > 0)
+}
+
+/**
+ * The reference videos a run is PRICED on, with the probe of them: the sent
+ * list less — on a model that does not bill video subjects as reference video
+ * (Kling 4.0 Flash, decided 2026-11-14) — the seats that are a character's
+ * clip (`pricedReferenceVideoUrls`, @nodaro/shared), and `durationsSec`
+ * (index-aligned with {@link refVideoProbeCandidates} of the sent list) less
+ * those seats' entries. The seats stay in the sent list, so the duration check
+ * and the video cap still read them; only the price leaves them out. Every
+ * lane that prices a reference-video run reads its clips through here: the
+ * routes' credit guard (and so `POST /v1/quote`), the workflow reservation and
+ * the completion settlement. The same values when nothing leaves the price;
+ * `durationsSec` undefined when a probe of another length cannot be aligned
+ * (the caller then probes the priced clips itself).
+ */
+export function pricedRefVideoInput<T>(args: {
+  provider: string | undefined
+  referenceVideoUrls: unknown
+  characterReferences: unknown
+  durationsSec?: readonly T[] | undefined
+}): { referenceVideoUrls: unknown; durationsSec: readonly T[] | undefined } {
+  const sent = Array.isArray(args.referenceVideoUrls) ? (args.referenceVideoUrls as unknown[]) : undefined
+  const characters = Array.isArray(args.characterReferences) ? (args.characterReferences as unknown[]) : undefined
+  const priced = pricedReferenceVideoUrls({ provider: args.provider, referenceVideoUrls: sent, characterReferences: characters })
+  if (priced === sent) return { referenceVideoUrls: args.referenceVideoUrls, durationsSec: args.durationsSec }
+  const clips = new Set(characterVideoUrls(characters))
+  const candidates = refVideoProbeCandidates(args.provider ?? "", sent ?? [])
+  const durationsSec = args.durationsSec && args.durationsSec.length === candidates.length
+    ? args.durationsSec.filter((_, i) => !clips.has(candidates[i]!))
+    : undefined
+  return { referenceVideoUrls: priced, durationsSec }
 }
 
 /** Outcome of {@link probeAndCheckRefVideoDurations}. */

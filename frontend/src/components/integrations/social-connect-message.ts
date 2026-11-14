@@ -21,9 +21,9 @@ export interface SocialConnectContext {
   /** What `window.open` returned for this connect. Null when the pop-up was blocked. */
   readonly popup: unknown
   /**
-   * The origin a genuine result comes from. The callback page names this app's
-   * own origin as its only target, so that is the origin to pass: a result
-   * from anywhere else was not sent by it.
+   * The origin a genuine result comes from: the origin the callback page
+   * answers on (lib/runtime-config.ts :: runtimeCallbackOrigin). A result from
+   * anywhere else was not sent by it.
    */
   readonly expectedOrigin: string
   /** The network this card is connecting. */

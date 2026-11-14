@@ -3696,7 +3696,7 @@ export const ko: ChromeDict = {
   "cfgext.entVideoSubjectUpload": "클립 업로드",
   "cfgext.entVideoSubjectRemove": "클립 제거",
   "cfgext.entVideoSubjectUploadFailed": "클립을 업로드하지 못했습니다.",
-  "cfgext.entVideoSubjectHint": "Kling 4.0 및 Kling 4.0 Flash 전용: 이 캐릭터를 한 컷으로 담은 3~8초 클립입니다. 캐릭터는 이 클립으로 만든 피사체로 전송되며, 클립의 초는 참조 동영상 초로 과금됩니다. 다른 모델은 이 클립을 사용하지 않습니다.",
+  "cfgext.entVideoSubjectHint": "Kling 4.0 및 Kling 4.0 Flash 전용: 이 캐릭터를 한 컷으로 담은 3~8초 클립입니다. 캐릭터는 이 클립으로 만든 피사체로 전송됩니다. Kling 4.0에서는 클립의 초가 참조 동영상 초로 과금되고, Kling 4.0 Flash에서는 요금에 더해지지 않습니다. 다른 모델은 이 클립을 사용하지 않습니다.",
   "cfgext.entNoCanonicalDescription": "아직 기준 설명이 없습니다. 먼저 스튜디오에서 포트레이트를 생성하세요.",
   "cfgext.entCharacterName": "캐릭터 이름",
   "cfgext.entCharacterNamePlaceholder": "예: 알드릭 경(입력을 삽입하려면 {} 사용)",

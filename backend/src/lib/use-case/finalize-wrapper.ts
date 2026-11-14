@@ -20,6 +20,7 @@ import type { StoredInlineGraph } from "@nodaro/render-rules"
 import { supabase } from "../supabase.js"
 import { loadExecutionForWrapper } from "../execution-inline-graph.js"
 import { markJobFailed } from "../job-failure.js"
+import { UNQUEUED_EXECUTION_MESSAGE } from "../unqueued-run-message.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../job-status.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import {
@@ -134,9 +135,15 @@ export async function finalizeUseCaseWrapper(executionId: string, expectedWrappe
     return "completed"
   }
 
+  // A run the queue refused never ran (lib/enqueue-execution.ts fails it from
+  // `pending`, which is exactly what its message records): the caller's
+  // Idempotency-Key leaves the wrapper in this same write, so a retry with
+  // the same key starts a new run. Every other failure keeps it — the retry
+  // is answered with that run's result.
+  const neverQueued = exec.status === "failed" && exec.errorMessage === UNQUEUED_EXECUTION_MESSAGE
   const flipped = await markJobFailed(exec.wrapperJobId, {
     error_message: failureMessage(exec.status, exec.errorMessage, output, exec.inlineGraph),
-    extra: { output_data: published, ...backfill },
+    extra: { output_data: published, ...backfill, ...(neverQueued ? { idempotency_key: null } : {}) },
     from: [...OPEN],
   })
   if (!flipped) return "already_final"

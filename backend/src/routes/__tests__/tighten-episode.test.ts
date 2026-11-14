@@ -24,6 +24,7 @@ import {
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
 import { InlineGraphUnavailableError } from "@/services/use-case-execution.js"
+import { UnqueuedRunError } from "@/lib/enqueue-execution.js"
 
 describe("POST /v1/tighten-episode", () => {
   it("starts the run: wrapper (use-case, processing), fee reserved, inline run, stamped, 202", async () => {
@@ -385,6 +386,37 @@ describe("POST /v1/tighten-episode", () => {
     expect(res.json().error.code).toBe("use_case_unavailable")
     expect(m.failed).toHaveBeenCalledWith("job-1", expect.objectContaining({ from: ["processing"] }))
     expect(m.refund).toHaveBeenCalledWith("job-1")
+  })
+
+  it("the queue refused the run and failed it: the wrapper's key is released with it (a retry starts a new run), 500", async () => {
+    m.execute.mockRejectedValue(new UnqueuedRunError("exec-1", "failed", new Error("OOM")))
+    const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "idempotency-key": "client-key-123" })
+    expect(res.statusCode).toBe(500)
+    // The run's own failure path already settled the wrapper with its key released; this write is the unwind for one it did not reach.
+    expect(m.failed).toHaveBeenCalledWith("job-1", expect.objectContaining({ from: ["processing"], extra: { idempotency_key: null } }))
+    expect(m.stamp).not.toHaveBeenCalled()
+  })
+
+  it("the queue refused the run and its state is unknown: the wrapper is neither failed nor refunded, its key stays, answered 202 and stamped with the run", async () => {
+    m.execute.mockRejectedValue(new UnqueuedRunError("exec-9", "unsettled", new Error("OOM")))
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "idempotency-key": "client-key-123" })
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toEqual({ jobId: "job-1", executionId: "exec-9" })
+    expect(m.failed).not.toHaveBeenCalled()
+    expect(m.refund).not.toHaveBeenCalled()
+    expect(m.stamp).toHaveBeenCalledWith({ input_data: expect.objectContaining({ _executionId: "exec-9", _feeCredits: 10 }) })
+    warn.mockRestore()
+  })
+
+  it("a fee hold that is refused releases the wrapper's key with the failure", async () => {
+    m.reserve.mockImplementation(async (_req: unknown, reply: { status: (n: number) => { send: (b: unknown) => unknown } }) => {
+      reply.status(402).send({ error: { code: "insufficient_credits", message: "x" } })
+      return undefined
+    })
+    const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] }, { "idempotency-key": "client-key-123" })
+    expect(res.statusCode).toBe(402)
+    expect(m.failed).toHaveBeenCalledWith("job-1", expect.objectContaining({ from: ["processing"], extra: { idempotency_key: null } }))
   })
 
   it("community (no credits): no estimate, no balance check, still runs", async () => {

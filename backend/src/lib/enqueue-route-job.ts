@@ -57,9 +57,15 @@
  *     `failed` with its key cleared and its hold still `reserved`, which no
  *     sweep reads — the report is the only way an operator hears of it.
  *
- * `enqueueRouteJobs` does the same for a batch route's jobs (the ones already
- * queued keep running; the 500 names them), and `enqueueUnitJob` for a node
- * unit's job on its own queue. `lib/enqueue-execution.ts` is the twin for a
+ * `enqueueRouteJobs` does the same for several jobs reserved under keys of
+ * their own and queued one by one (the ones already queued keep running; the
+ * 500 names them) — no route uses it today: a route that makes several jobs
+ * per request goes through `runJobBatch` (lib/job-batch.ts), which keys job i
+ * `<key>:<i>` (reserving them under the request's bare key collides on the
+ * unique key index). `enqueueUnitJob` does the same for a node unit's job on
+ * its own queue. `failUnqueuedRouteJob` gives the same settle
+ * and the same 500 to a job that never reached the queue because a step
+ * between its insert and its queue threw. `lib/enqueue-execution.ts` is the twin for a
  * workflow run. `src/lib/__tests__/route-enqueue-guard.test.ts` holds every
  * route (`routes/`, `ee/routes/`, the node units') to these helpers.
  */
@@ -175,6 +181,30 @@ async function settleUnqueuedJob(req: FastifyRequest, jobId: string): Promise<Jo
 }
 
 /**
+ * Fail a job the route inserted (and reserved, or tried to) that it will now
+ * never queue, because a step between the insert and the queue threw — a
+ * reservation that threw instead of answering, a sub-request it makes, a
+ * cleanup that failed — and answer the request `500 internal_error`. The job
+ * takes the same settle as one the queue refused: failed from `pending` with
+ * its key released, its holds refunded confirmed, reported when the outcome
+ * stays unknown. Unlike a refused queue nothing was handed to a queue, so a
+ * job that is no longer `pending` never started: its owner cancelled it, or it
+ * was removed. The answer is the 500 either way (unless one was already
+ * sent). The route returns right after. Never throws.
+ */
+export async function failUnqueuedRouteJob(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  jobId: string,
+  err: unknown,
+): Promise<void> {
+  if ((await settleUnqueuedJob(req, jobId)) === "missed") {
+    req.log.warn({ err, jobId }, "a job that failed before it was queued is no longer pending (cancelled or removed)")
+  }
+  if (!reply.sent) sendInternalError(reply, req, err, UNQUEUED_JOB_CLIENT_MESSAGE)
+}
+
+/**
  * Run `enqueue` for the job `jobId` the route inserted and reserved. On
  * success it sends nothing: the route answers as it always did. When the
  * queue refuses the job it fails it, refunds it and sends the 500, so the
@@ -210,7 +240,9 @@ export interface RouteJobEnqueue {
 }
 
 /**
- * Queue a batch route's jobs in order (its variants, versions or segments).
+ * Queue several jobs in order, each already inserted and reserved under a key
+ * of its own (never the request's bare key on more than one: see the file's
+ * header — a route that makes several jobs per request uses `runJobBatch`).
  * When the queue refuses one, that job and every job after it — none of them
  * queued — are settled like {@link enqueueRouteJob}'s (failed from `pending`,
  * key released, refund confirmed); the jobs already queued keep running. The

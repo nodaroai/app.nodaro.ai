@@ -19,6 +19,12 @@
  * Mirrors the per-stage resume_count accounting in `resume.ts` so we
  * respect the same cap (`MAX_RESUME = 3`).
  *
+ * It also re-drives a pipeline paused at `awaiting_approval` that is owed a
+ * drive which never reached the queue (`redriveOwedPausedPipelines`): the
+ * user's approve or reject moved the gate on, and the re-drive's add was
+ * refused, so nothing would ever drive it again. Like the rest of this cron
+ * it runs only where `PIPELINE_RECONCILE_CRON_ENABLED=true` (server.ts).
+ *
  * See the stuck-execution prevention design for the broader picture.
  */
 import { supabase } from "../../lib/supabase.js"
@@ -79,7 +85,8 @@ export async function reconcilePipelinesTick(): Promise<void> {
   // Note: `awaiting_approval` is intentionally NOT in the filter. That's a
   // pause state — the orchestrator is correctly not running. The user has
   // to click approve/reject to advance. Re-enqueuing those would clobber
-  // the pause semantics.
+  // the pause semantics. (One owed a drive the queue refused is re-driven
+  // below, by its redrive latch: `redriveOwedPausedPipelines`.)
   // `pipelines` table has `created_at` (not `started_at` — that's on
   // `pipeline_stages`). Use created_at for the backoff + abandon threshold.
   const read = (columns: string) => supabase
@@ -96,6 +103,12 @@ export async function reconcilePipelinesTick(): Promise<void> {
     ;({ data, error } = await read(base))
   }
   const rows = data as unknown as PipelineRow[] | null
+
+  // Independent of the running scan below: its own read, its own rows. It
+  // never throws (its first read is inside its try), and a failure there must
+  // never skip the running scan this tick.
+  const owed = await redriveOwedPausedPipelines(backoffCutoff)
+  if (owed > 0) console.log(`[reconcile/pipelines] tick: re-drove ${owed} paused pipeline(s) owed a drive`)
 
   if (error) {
     console.error("[reconcile/pipelines] query failed:", error.message)
@@ -138,17 +151,71 @@ interface PipelineRow {
   lane_wait_ms?: number | string | null
 }
 
-async function reconcileOne(row: PipelineRow, now: number): Promise<Outcome> {
-  // Is there a live BullMQ job? If yes, the orchestrator is still in
-  // control (or will be — `waiting`/`delayed` mean BullMQ has it scheduled).
-  // Leave alone.
-  const existing = await pipelineOrchestrationQueue.getJob(`pipeline-${row.id}`)
-  if (existing) {
-    const state = await existing.getState()
-    if (state === "active" || state === "waiting" || state === "delayed") {
-      return "skipped"
+/**
+ * Whether the pipeline's orchestration job is live: the orchestrator is in
+ * control (or will be — `waiting`/`delayed` mean BullMQ has it scheduled).
+ */
+async function hasLiveDrive(pipelineId: string): Promise<boolean> {
+  const existing = await pipelineOrchestrationQueue.getJob(`pipeline-${pipelineId}`)
+  if (!existing) return false
+  const state = await existing.getState()
+  return state === "active" || state === "waiting" || state === "delayed"
+}
+
+/**
+ * A pipeline paused at `awaiting_approval` owed a drive that never reached
+ * the queue. The approve or reject of the stage gate that paused it moves
+ * the gate on while the pipeline row stays `awaiting_approval` until a drive
+ * claims it; when that re-drive's add is refused (the queue's
+ * store answered an error), nothing drives it again and it holds its
+ * reservation. Its redrive latch (migration 158 `pending_redrive_at`) says a
+ * drive is owed: `enqueuePipelineRun` stamps it before every add, and the
+ * drive that takes it clears it before it runs (redrive-latch.ts) — so a
+ * pipeline legitimately paused has none, and its pause was written by the
+ * drive that cleared it. A latch older than the backoff (an add in flight is
+ * not owed), no live orchestration job, and no gate still open
+ * (`hasPendingUserAction`) is re-driven. No resume accounting and no abandon:
+ * the user acted on it just now, and re-adding it re-stamps the latch, so a
+ * queue that keeps refusing is tried again after the backoff.
+ * Answers how many it re-drove. Never throws.
+ */
+async function redriveOwedPausedPipelines(backoffCutoff: string): Promise<number> {
+  let rows: Array<{ id: string; user_id: string }>
+  try {
+    const { data, error } = await supabase
+      .from("pipelines")
+      .select("id, user_id")
+      .eq("status", "awaiting_approval")
+      .not("pending_redrive_at", "is", null)
+      .lt("pending_redrive_at", backoffCutoff)
+      .limit(BATCH_LIMIT)
+    if (error) {
+      console.error("[reconcile/pipelines] owed-drive query failed:", error.message)
+      return 0
+    }
+    rows = (data ?? []) as Array<{ id: string; user_id: string }>
+  } catch (err) {
+    console.error("[reconcile/pipelines] owed-drive query threw:", err)
+    return 0
+  }
+  let redriven = 0
+  for (const row of rows) {
+    try {
+      if (await hasLiveDrive(row.id)) continue
+      if (await hasPendingUserAction(row.id)) continue
+      await enqueuePipelineRun({ pipelineId: row.id, userId: row.user_id, reason: "resume" })
+      redriven++
+    } catch (err) {
+      console.error(`[reconcile/pipelines] paused pipeline ${row.id} owed a drive could not be re-driven:`, err)
     }
   }
+  return redriven
+}
+
+async function reconcileOne(row: PipelineRow, now: number): Promise<Outcome> {
+  // Is there a live BullMQ job? If yes, the orchestrator is still in
+  // control. Leave alone.
+  if (await hasLiveDrive(row.id)) return "skipped"
 
   // Guard against the manual-mode false positive. A manual/guided pipeline
   // paused at a per-entity approval gate (character description, main image,

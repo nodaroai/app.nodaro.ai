@@ -498,8 +498,9 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
    *   dropped, as is any clip past the last entry.
    * - Both Kling 4.0 ids: an entry's `videoUrl` (a 3–8 s single-shot clip of
    *   the character) makes it a subject built from that video — at most 3 per
-   *   request. The clip rides as one of the 5 reference videos and is billed
-   *   as one; any other model answers `400`.
+   *   request. The clip rides as one of the 5 reference videos. Kling 4.0
+   *   bills it as a reference video; Kling 4.0 Flash prices it like an image
+   *   subject (it adds nothing). Any other model answers `400`.
    */
   characterReferences?: VideoCharacterReference[]
   /** Kling 4.0 (`kling-4`, `kling-4-flash`): keep the reference videos' own

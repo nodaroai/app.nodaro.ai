@@ -40,6 +40,15 @@ vi.mock("@/lib/execution-budget.js", async (importOriginal) => {
     },
   }
 })
+// The wrapper's failure goes through the one failure writer: recorded as the update it is.
+vi.mock("@/lib/job-failure.js", () => ({
+  markJobFailedDetailed: async (_id: string, input: { error_message: string; extra?: Record<string, unknown> }) => {
+    h.wrapperUpdates.push({ status: "failed", error_message: input.error_message, ...(input.extra ?? {}) })
+    return "flipped"
+  },
+}))
+// The inner run here is running, never waiting for a slot: failing a waiting run matches nothing.
+vi.mock("@/lib/concurrency-lanes/run-failure.js", () => ({ failWaitingExecution: async () => false }))
 vi.mock("@/lib/concurrency-lanes/execution-wait.js", () => ({
   executionQueuedMs: async (id: string, _owner: string, opts?: { includeOwnWait?: boolean }) => {
     h.queuedReads.push({ id, includeOwnWait: opts?.includeOwnWait === true })

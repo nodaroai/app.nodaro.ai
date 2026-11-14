@@ -9,6 +9,7 @@ import {
   ID, USER, completedPreviewWrapper, failedFinalSource, failedSource, failedWrapper, graph, m, nothingWritten, post, previewSource, src,
 } from "./helpers/use-case-continue-harness.js"
 import { renderFinalEditKey } from "../../lib/use-case/continuation.js"
+import { UnqueuedRunError } from "../../lib/enqueue-execution.js"
 
 describe("from-failed: the balance covers what the run still executes plus its fee (before any row)", () => {
   it("priced on the remaining steps of the graph it executes, the fee on top", async () => {
@@ -282,6 +283,20 @@ describe("one continuation per run (fix round 1)", () => {
     expect((await post({ jobId: ID, mode: "from-failed" })).statusCode).toBe(500)
     expect(src.writes[ID]).not.toHaveProperty("_continuedBy")
     m.insertJob.mockResolvedValueOnce({ data: null, error: { message: "boom" } })
+    expect((await post({ jobId: ID, mode: "from-failed" })).statusCode).toBe(500)
+    expect(src.writes[ID]).not.toHaveProperty("_continuedBy")
+    expect((await post({ jobId: ID, mode: "from-failed" })).statusCode).toBe(202)
+  })
+
+  it("a run the queue refused whose state is unknown keeps its claim: a second Continue is refused while the run may be live", async () => {
+    m.execute.mockRejectedValueOnce(new UnqueuedRunError("exec-9", "unsettled", new Error("queue down")))
+    expect((await post({ jobId: ID, mode: "from-failed" })).statusCode).toBe(202)
+    expect(src.writes[ID]).toHaveProperty("_continuedBy")
+    expect((await post({ jobId: ID, mode: "from-failed" })).statusCode).toBe(409)
+  })
+
+  it("a run the queue refused and failed gives the claim back: a later Continue runs", async () => {
+    m.execute.mockRejectedValueOnce(new UnqueuedRunError("exec-1", "failed", new Error("queue down")))
     expect((await post({ jobId: ID, mode: "from-failed" })).statusCode).toBe(500)
     expect(src.writes[ID]).not.toHaveProperty("_continuedBy")
     expect((await post({ jobId: ID, mode: "from-failed" })).statusCode).toBe(202)

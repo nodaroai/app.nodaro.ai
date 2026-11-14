@@ -22,8 +22,11 @@ import type { FastifyReply, FastifyRequest } from "fastify"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
 import { findJobsByIdempotencyKeys, MIN_IDEMPOTENCY_KEY_LENGTH, type KeyedJobRow } from "./dedup-fingerprint.js"
 import { jobCreditHolds } from "./credits-job-lifecycle.js"
-import { batchJobKey } from "./job-batch.js"
+import { batchJobKey, recordedJobType, replyKeyReused } from "./job-batch.js"
 import { imageBatchId, imageBatchResponse, rawImageBatchOf } from "./image-batch.js"
+
+/** The job type generate-image records on its jobs (`input_data.type`). */
+const IMAGE_JOB_TYPE = "generate-image"
 
 const positionsToPrice = new WeakMap<FastifyRequest, ReadonlySet<number>>()
 
@@ -61,6 +64,11 @@ export async function replayImageBatch(req: FastifyRequest, reply: FastifyReply)
   const keys = Array.from({ length: size }, (_, i) => batchJobKey(key, i)!)
   const found = await findJobsByIdempotencyKeys(userId, keys)
   if (!found || found.size === 0) return
+  // A job under these keys that another route made: the key was reused for
+  // something else (422), never answered with that route's jobs.
+  if ([...found.values()].some((row) => recordedJobType(row.input_data) !== IMAGE_JOB_TYPE)) {
+    return replyKeyReused(reply)
+  }
 
   const waiting = [...found.values()].filter((row) => row.status === "pending").map((row) => row.id)
   const holds = await jobCreditHolds(waiting)
