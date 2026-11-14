@@ -94,7 +94,7 @@ export interface BillingSubscription {
   stripe_subscription_id: string | null
   /** The plan id: `"basic"`, `"standard"`, … */
   tier: string
-  /** `"active"`, `"trialing"`, `"past_due"`, `"paused"`, `"canceled"`, `"incomplete"` or `"expired"`. */
+  /** `"active"`, `"trialing"`, `"past_due"`, `"paused"`, `"canceled"`, `"incomplete"`, `"incomplete_expired"` or `"expired"`. */
   status: string
   stripe_price_id: string | null
   /** ISO-8601. */

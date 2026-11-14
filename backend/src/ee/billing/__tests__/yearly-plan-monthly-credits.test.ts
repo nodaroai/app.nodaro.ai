@@ -343,6 +343,30 @@ describe("grantYearlyPlanMonthlyCredits", () => {
     expect(result).toEqual({ granted: 0, refused: 0, errors: 1, awaitingMigration: false })
   })
 
+  it("never grants to a subscription whose plan was never granted (recorded unpaid, marked active by another writer)", async () => {
+    queue("subscriptions", { data: [{ ...yearlySub(), plan_granted: false }] })
+    queue("profiles", { data: [{ id: yearlySub().user_id, credits_reset_at: "2026-09-10T00:40:00+00:00" }] })
+
+    const result = await grantYearlyPlanMonthlyCredits(NOW)
+
+    expect(grantCalls()).toHaveLength(0)
+    expect(result).toEqual({ granted: 0, refused: 0, errors: 0, awaitingMigration: false })
+  })
+
+  it("a database without the grant marker yet is read without it, and grants as before", async () => {
+    queue(
+      "subscriptions",
+      { data: null, error: { code: "42703", message: "column subscriptions.plan_granted does not exist" } },
+      { data: [yearlySub()] },
+    )
+    queue("profiles", { data: [{ id: yearlySub().user_id, credits_reset_at: "2026-09-10T00:40:00+00:00" }] })
+
+    const result = await grantYearlyPlanMonthlyCredits(NOW)
+
+    expect(grantCalls()).toHaveLength(1)
+    expect(result).toEqual({ granted: 1, refused: 0, errors: 0, awaitingMigration: false })
+  })
+
   it("walks every page, keyed on the last id it saw", async () => {
     const page = Array.from({ length: YEARLY_CREDITS_PAGE_SIZE }, (_, i) =>
       yearlySub({

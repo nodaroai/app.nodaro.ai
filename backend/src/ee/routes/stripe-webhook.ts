@@ -23,6 +23,7 @@ import {
 } from "../billing/provision-credits.js"
 import { handleOrgPackCompleted, routeClawback } from "../billing/org-customer.js"
 import { invoicePriceLines } from "../billing/plan-change-credits.js"
+import { StripeEventRetryError } from "../billing/stripe-event-retry.js"
 import { reportStripePurchase } from "../billing/analytics/report-purchase.js"
 import { config } from "../../lib/config.js"
 import type Stripe from "stripe"
@@ -296,6 +297,11 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
       }
     } catch (err) {
       console.error(`[stripe-webhook] Error processing ${event.type}:`, (err as Error).message)
+      // The handler wrote nothing a second delivery would repeat and needs
+      // the event again: a non-2xx makes Stripe redeliver it.
+      if (err instanceof StripeEventRetryError) {
+        return reply.status(500).send({ error: "Event not processed, send it again" })
+      }
     }
 
     // The payment, when this event is one, for the site analytics — after the

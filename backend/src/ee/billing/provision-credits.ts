@@ -25,6 +25,23 @@ import { invalidateBalanceCache } from "./balance-cache.js"
 import { activateSignupGrantOnPurchase } from "./signup-grant.js"
 import { releaseQuietStopOnPurchase } from "../lib/account-blocking.js"
 import { grantPaidPlanChange, notePlanCreditPeak, restartPlanCreditPeriod, type InvoicePriceLine } from "./plan-change-credits.js"
+import {
+  claimSubscriptionGrant,
+  ENDED_STATUS_LIST,
+  grantSubscriptionPlan,
+  GRANTING_STATUSES,
+  insertTransaction,
+  isEndedStatus,
+  PAID_TIER_STATUSES,
+  planGranted,
+  readPreSubscribeProfile,
+  readSubscriptionRow,
+  recordAndGrantSubscription,
+  recordUnpaidSubscription,
+  SUBSCRIPTION_UPDATE_COLUMNS,
+  type GrantMarker,
+  type StoredSubscription,
+} from "./subscription-grant.js"
 
 /**
  * The free-grant exit by purchase: a withheld signup grant leaves 'withheld'
@@ -127,8 +144,6 @@ export async function handleSubscriptionCreated(
   }
 
   const tier = getTierFromPriceId(data.priceId)
-  const credits = TIER_CREDITS[tier] ?? TIER_CREDITS.free
-  const storageLimit = TIER_STORAGE_LIMITS[tier] ?? TIER_STORAGE_LIMITS.free
 
   // Idempotent: skip if subscription already exists
   const { data: existing } = await supabase
@@ -142,108 +157,14 @@ export async function handleSubscriptionCreated(
     return
   }
 
-  // Snapshot the pre-subscribe balance BEFORE the tier grant overwrites it.
-  // The free signup grant (or a prior post-cancel capped balance) lives in
-  // subscription_credits, and the SET below would silently destroy it —
-  // subscribing must never reduce a user's total credits. The remainder is
-  // preserved by moving it into the topup pool (which survives renewals and
-  // cancellation) after the profile update succeeds.
-  const { data: preProfile } = await supabase
-    .from("profiles")
-    .select("subscription_credits, topup_credits, subscription_tier")
-    .eq("id", userId)
-    .single()
-  const carryover = Math.max(0, preProfile?.subscription_credits ?? 0)
-  const priorTier = preProfile?.subscription_tier ?? "free"
-
-  // Insert subscription record
-  const { error: subError } = await supabase
-    .from("subscriptions")
-    .insert({
-      user_id: userId,
-      stripe_subscription_id: data.subscriptionId,
-      stripe_price_id: data.priceId,
-      tier,
-      status: data.status,
-      current_period_start: data.currentPeriodStart,
-      current_period_end: data.currentPeriodEnd,
-    })
-
-  if (subError) {
-    console.error("[stripe] subscription.created: insert failed:", subError.message)
-    return
+  // Not paid for yet: record it and grant nothing. The first update that sees
+  // it active or trialing grants it (handleSubscriptionUpdated).
+  if (!GRANTING_STATUSES.has(data.status)) {
+    const recorded = await recordUnpaidSubscription(userId, tier, data)
+    if (recorded !== "marker-missing") return
   }
 
-  // Update user profile
-  const { error: profileError } = await supabase
-    .from("profiles")
-    .update({
-      ...tierColumns(tier),
-      subscription_credits: credits,
-      credits_reset_at: new Date().toISOString(),
-      storage_limit_bytes: storageLimit,
-      subscription_ended_at: null,
-      current_period_end: data.currentPeriodEnd,
-    })
-    .eq("id", userId)
-
-  if (profileError) {
-    console.error("[stripe] subscription.created: profile update failed:", profileError.message)
-  }
-
-  // Carry the pre-subscribe remainder into topup AFTER the grant SET succeeded
-  // (if the profile update failed, subscription_credits still holds the old
-  // balance — granting the carryover on top would double it). The atomic RPC
-  // increments topup_credits; a redelivered created-event can't re-run this
-  // because the subscription-exists check above short-circuits first.
-  if (!profileError && carryover > 0) {
-    const { error: carryError } = await supabase.rpc("add_topup_credits", {
-      p_user_id: userId,
-      p_credits: carryover,
-    })
-    if (carryError) {
-      console.error("[stripe] subscription.created: balance carryover failed:", carryError.message)
-    } else {
-      await CreditsService.logTransaction({
-        userId,
-        amount: carryover,
-        creditType: "topup",
-        source: "subscription_created",
-        description: `Pre-subscription balance preserved: ${carryover} credits moved to top-up`,
-        balanceAfter: (preProfile?.topup_credits ?? 0) + carryover,
-      })
-    }
-  }
-
-  invalidateBalanceCache(userId)
-
-  // Insert transaction record (if transaction info provided)
-  if (data.transactionId) {
-    await insertTransaction({
-      userId,
-      stripeTransactionId: data.transactionId,
-      type: "subscription",
-      amountUsd: data.amountUsd ?? 0,
-      creditsGranted: credits,
-      tier,
-    })
-  }
-
-  // Audit log: subscription creation
-  await CreditsService.logTransaction({
-    userId,
-    amount: credits,
-    creditType: "subscription",
-    source: "subscription_created",
-    description: `Subscription created: ${tier} tier (${credits} credits)`,
-    balanceAfter: credits,
-  })
-
-  console.log(`[stripe] subscription.created: user=${userId} tier=${tier} credits=${credits}`)
-
-  // Internal founder milestone alert (fire-and-forget; a notification failure
-  // must never affect billing). Fires only on a real free→paid transition.
-  void notifyPaidConversion(userId, priorTier, tier)
+  await recordAndGrantSubscription(userId, tier, data, "subscription.created")
 }
 
 /**
@@ -318,16 +239,45 @@ export async function handleSubscriptionUpdated(
   }
 
   // Look up existing subscription
-  const { data: existing } = await supabase
-    .from("subscriptions")
-    .select("id, stripe_price_id, tier, current_period_start, current_period_end, cancel_at_period_end")
-    .eq("stripe_subscription_id", data.subscriptionId)
-    .single()
+  let existing = await readSubscriptionRow<StoredSubscription>(data.subscriptionId, SUBSCRIPTION_UPDATE_COLUMNS)
+
+  // Stripe does not deliver events in order: a paid subscription's update can
+  // arrive before its created event, which still says `incomplete` and would
+  // record it unpaid. Record and grant it here; created then finds the row.
+  let grantedNow = false
+  if (!existing && GRANTING_STATUSES.has(data.status)) {
+    grantedNow = await recordAndGrantSubscription(userId, getTierFromPriceId(data.priceId), data, "subscription.updated", true)
+    // When created recorded it first (the insert above lost), the claim below grants it.
+    existing = await readSubscriptionRow<StoredSubscription>(data.subscriptionId, SUBSCRIPTION_UPDATE_COLUMNS)
+  }
 
   if (!existing) {
     console.warn("[stripe] subscription.updated: subscription not found", data.subscriptionId)
     return
   }
+
+  // A subscription that has ended (cancelled, expired) never comes back: an
+  // event saying it is live is a late one (Stripe's order is not the order
+  // things happened). It grants nothing, renews nothing and moves no status.
+  const lateForEnded = isEndedStatus(existing.status) && !isEndedStatus(data.status)
+
+  // Paid at last: the first event to see the subscription active or trialing
+  // claims its grant and gives it — the same grant a subscription paid at
+  // creation gets, once. A claim the database could not answer throws before
+  // anything is written, and the route asks Stripe to deliver the event again.
+  if (!grantedNow && !lateForEnded && !planGranted(existing) && GRANTING_STATUSES.has(data.status)) {
+    grantedNow = await claimSubscriptionGrant(data.subscriptionId)
+    if (grantedNow) {
+      const preProfile = await readPreSubscribeProfile(userId)
+      await grantSubscriptionPlan(userId, getTierFromPriceId(data.priceId), data, preProfile, "subscription.updated")
+    }
+  }
+
+  // A plan held before this event: its renewals, plan changes and restarts
+  // follow as before. One granted by this event was just SET in full, and one
+  // never granted has nothing to renew or change.
+  const heldBefore = !lateForEnded && !grantedNow && planGranted(existing)
+  const grantedPlan = heldBefore || grantedNow
 
   const newTier = getTierFromPriceId(data.priceId)
   const oldTier = existing.tier
@@ -336,14 +286,14 @@ export async function handleSubscriptionUpdated(
   const storageLimit = TIER_STORAGE_LIMITS[newTier] ?? TIER_STORAGE_LIMITS.free
 
   // Check if this is a tier change (upgrade/downgrade)
-  const tierChanged = existing.stripe_price_id !== data.priceId
+  const tierChanged = heldBefore && existing.stripe_price_id !== data.priceId
 
   // Check if this is a renewal (billing period actually moved). MUST compare
   // as epochs, not strings — Postgres returns "+00:00" while the webhook
   // computes toISOString()'s ".000Z", so a string compare flags EVERY
   // subscription.updated (portal cancel request, payment-method change,
   // Stripe redelivery) as a renewal and refills subscription_credits for free.
-  const periodMoved = billingPeriodMoved(existing.current_period_start, data.currentPeriodStart)
+  const periodMoved = heldBefore && billingPeriodMoved(existing.current_period_start, data.currentPeriodStart)
   // A period that restarted part-way through (a monthly <-> yearly switch) is
   // not a renewal: the current period has already granted its credits.
   const isRestart = periodMoved && billingPeriodRestarted(existing.current_period_end, data.currentPeriodStart)
@@ -409,13 +359,26 @@ export async function handleSubscriptionUpdated(
     }
   }
 
-  // Update subscription record
-  const { error: subError } = await supabase
+  // Update subscription record.
+  //  - `incomplete` is only ever a subscription's first status, so an event
+  //    saying it is late (out of order, or redelivered) and never moves the
+  //    stored status back.
+  //  - A live status reaches a subscription not yet granted only with its
+  //    claim: until then the row keeps the status it has, so nothing that pays
+  //    active subscriptions (the yearly plans' monthly credits, the renewal
+  //    safety net) reads it as one.
+  //  - An ended subscription is never rewritten by an event saying it is live;
+  //    the database checks that too, for a cancellation landing between the
+  //    read above and this write.
+  const endsIt = isEndedStatus(data.status)
+  const writesStatus =
+    data.status !== "incomplete" && (endsIt || (!lateForEnded && (planGranted(existing) || grantedNow)))
+  let subscriptionUpdate = supabase
     .from("subscriptions")
     .update({
       stripe_price_id: data.priceId,
       tier: newTier,
-      status: data.status,
+      ...(writesStatus ? { status: data.status } : {}),
       current_period_start: data.currentPeriodStart,
       current_period_end: data.currentPeriodEnd,
       cancel_at_period_end: data.cancelAtPeriodEnd,
@@ -424,6 +387,11 @@ export async function handleSubscriptionUpdated(
       updated_at: new Date().toISOString(),
     })
     .eq("stripe_subscription_id", data.subscriptionId)
+  if (!endsIt) subscriptionUpdate = subscriptionUpdate.not("status", "in", ENDED_STATUS_LIST)
+  const { data: updatedRows, error: subError } = await subscriptionUpdate.select("id")
+  // The row the read found matched nothing: the subscription ended in between
+  // (a cancellation that landed after the read). Nothing of this event applies.
+  const endedMeanwhile = !subError && Array.isArray(updatedRows) && updatedRows.length === 0
 
   if (subError) {
     console.error("[stripe] subscription.updated: update failed:", subError.message)
@@ -441,23 +409,28 @@ export async function handleSubscriptionUpdated(
     }
   }
 
-  // Update profile tier, storage, and period end
-  const { error: profileError } = await supabase
-    .from("profiles")
-    .update({
-      ...tierColumns(newTier),
-      storage_limit_bytes: storageLimit,
-      current_period_end: data.currentPeriodEnd,
-      // Clear any stale cancellation marker — an updated/active subscription is
-      // NOT "ended". Leaving this set let the canceled-user media reaper
-      // (cleanup-service.ts) match a reactivated paying customer and delete
-      // their entire media library 60 days later.
-      subscription_ended_at: null,
-    })
-    .eq("id", userId)
+  // Update profile tier, storage, and period end — for a granted plan whose
+  // subscription is paid up or retrying a renewal. Any other status (never
+  // paid, expired, cancelled, paused, unpaid) leaves the account as it is.
+  const keepsPaidTier = grantedPlan && !endedMeanwhile && PAID_TIER_STATUSES.has(data.status)
+  if (keepsPaidTier) {
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({
+        ...tierColumns(newTier),
+        storage_limit_bytes: storageLimit,
+        current_period_end: data.currentPeriodEnd,
+        // Clear any stale cancellation marker — an updated/active subscription is
+        // NOT "ended". Leaving this set let the canceled-user media reaper
+        // (cleanup-service.ts) match a reactivated paying customer and delete
+        // their entire media library 60 days later.
+        subscription_ended_at: null,
+      })
+      .eq("id", userId)
 
-  if (profileError) {
-    console.error("[stripe] subscription.updated: profile update failed:", profileError.message)
+    if (profileError) {
+      console.error("[stripe] subscription.updated: profile update failed:", profileError.message)
+    }
   }
 
   invalidateBalanceCache(userId)
@@ -469,8 +442,8 @@ export async function handleSubscriptionUpdated(
   // flip means a later unrelated `updated` (e.g. a payment-method change while
   // already scheduled) won't re-fire it. The immediate-cancel case is covered
   // by handleSubscriptionCanceled below (which skips anything already flagged).
-  void notifyPaidConversion(userId, oldTier, newTier)
-  if (!existing.cancel_at_period_end && data.cancelAtPeriodEnd === true) {
+  if (keepsPaidTier) void notifyPaidConversion(userId, oldTier, newTier)
+  if (!lateForEnded && !existing.cancel_at_period_end && data.cancelAtPeriodEnd === true) {
     void notifyCancellation(userId, oldTier, true)
   }
 }
@@ -502,22 +475,41 @@ export async function handleSubscriptionCanceled(
     .single()
   const cancelAlreadyAnnounced = preCancelSub?.cancel_at_period_end === true
 
-  // Update subscription status
-  const { error: subError } = await supabase
-    .from("subscriptions")
-    .update({
-      status: "canceled",
-      canceled_at: now,
-      updated_at: now,
-    })
-    .eq("stripe_subscription_id", data.subscriptionId)
+  // Update subscription status. Whether its plan was ever granted is read
+  // from the row this write returns, not from an earlier read: once the row is
+  // `canceled` no paid update can claim it any more, so this answer is final
+  // (a claim that landed just before the write is seen here). A database
+  // without the marker yet returns the row without it: granted, as before.
+  const cancelSubscription = (returning: string) =>
+    supabase
+      .from("subscriptions")
+      .update({
+        status: "canceled",
+        canceled_at: now,
+        updated_at: now,
+      })
+      .eq("stripe_subscription_id", data.subscriptionId)
+      .select(returning)
+  let { data: canceledRows, error: subError } = await cancelSubscription("plan_granted")
+  if (isMissingColumnError(subError)) {
+    ;({ data: canceledRows, error: subError } = await cancelSubscription("id"))
+  }
 
   if (subError) {
     console.error("[stripe] subscription.canceled: update failed:", subError.message)
   }
+  const canceledRow = Array.isArray(canceledRows) ? (canceledRows[0] as GrantMarker | undefined) : undefined
 
   if (!userId) {
     console.error("[stripe] subscription.canceled: cannot resolve userId for customer", data.stripeCustomerId)
+    return
+  }
+
+  // Ended before it was ever paid (an expired or abandoned Checkout): it
+  // granted nothing, so there is nothing to take back. The account stays as
+  // it was — its tier, credits and storage, and no cancellation date.
+  if (canceledRow && !planGranted(canceledRow)) {
+    console.log(`[stripe] subscription.canceled: sub=${data.subscriptionId} user=${userId} was never paid, account unchanged`)
     return
   }
 
@@ -778,37 +770,6 @@ export async function captureReceiptUrl(piId: string): Promise<void> {
       .eq("stripe_transaction_id", piId)
   } catch (err) {
     console.error("[stripe] receipt-url capture failed:", piId, (err as Error).message)
-  }
-}
-
-// ── Shared: Insert Transaction Record ────────────────────────────
-
-interface InsertTransactionParams {
-  readonly userId: string
-  readonly stripeTransactionId: string
-  readonly type: "subscription" | "topup"
-  readonly amountUsd: number
-  readonly creditsGranted: number
-  readonly tier?: string
-}
-
-async function insertTransaction(params: InsertTransactionParams): Promise<void> {
-  const { error } = await supabase
-    .from("transactions")
-    .upsert(
-      {
-        user_id: params.userId,
-        stripe_transaction_id: params.stripeTransactionId,
-        type: params.type,
-        amount_usd: params.amountUsd,
-        credits_granted: params.creditsGranted,
-        tier: params.tier ?? null,
-      },
-      { onConflict: "stripe_transaction_id" }
-    )
-
-  if (error) {
-    console.error("[stripe] insertTransaction failed:", error.message)
   }
 }
 

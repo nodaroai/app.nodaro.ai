@@ -331,6 +331,36 @@ describe("cleanup-service", () => {
       expect(result.usersDowngraded).toBe(0)
       expect(result.errors).toBe(0)
     })
+
+    it("a subscription cancelled before it was ever paid downgrades nobody, and is still marked expired", async () => {
+      // An abandoned Checkout: the subscription was recorded unpaid
+      // (plan_granted false), granted nothing, then cancelled. The account's
+      // own tier (here one an admin set) is not this subscription's to take.
+      mockTableQueue("subscriptions", [
+        { data: [{ id: "sub-unpaid", user_id: "user-admin-tier", stripe_subscription_id: "ps-unpaid", plan_granted: false }], error: null },
+        { data: [], error: null }, // live-sub re-check: none active
+      ])
+      mockTableQueue("profiles", [
+        { data: [{ id: "user-admin-tier", tier: "enterprise" }], error: null },
+      ])
+
+      const result = await expireSubscriptions()
+
+      expect(result.usersDowngraded).toBe(0)
+      expect(result.errors).toBe(0)
+      const subscriptionUpdates = mockFrom.mock.calls.flatMap((call: unknown[], i: number) => {
+        if (call[0] !== "subscriptions") return []
+        const chain = mockFrom.mock.results[i]?.value as { update: { mock: { calls: Array<[Record<string, unknown>]> } } }
+        return chain.update.mock.calls.map((c) => c[0])
+      })
+      expect(subscriptionUpdates).toContainEqual(expect.objectContaining({ status: "expired" }))
+      const profileUpdates = mockFrom.mock.calls.flatMap((call: unknown[], i: number) => {
+        if (call[0] !== "profiles") return []
+        const chain = mockFrom.mock.results[i]?.value as { update: { mock: { calls: unknown[] } } }
+        return chain.update.mock.calls
+      })
+      expect(profileUpdates).toEqual([])
+    })
   })
 
   // ════════════════════════════════════════════════════════════════════════
@@ -1526,6 +1556,34 @@ describe("cleanup-service", () => {
   // ════════════════════════════════════════════════════════════════════════
 
   describe("renewSubscriptionCredits", () => {
+    it("never renews a subscription whose plan was never granted (recorded unpaid, marked active by another writer)", async () => {
+      mockTableQueue("subscriptions", [
+        {
+          data: [{ id: "sub-unpaid", user_id: "user-1", tier: "pro", current_period_end: "2026-01-01T00:00:00Z", plan_granted: false }],
+          error: null,
+        },
+      ])
+      mockTableQueue("profiles", [{ data: [{ id: "user-1", credits_reset_at: "2025-12-01T00:00:00Z" }], error: null }])
+
+      const result = await renewSubscriptionCredits()
+
+      expect(result.usersRenewed).toBe(0)
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+    })
+
+    it("a database without the grant marker yet is read without it, and renews as before", async () => {
+      mockTableQueue("subscriptions", [
+        { data: null, error: { code: "42703", message: "column subscriptions.plan_granted does not exist" } },
+        { data: [{ id: "sub-1", user_id: "user-1", tier: "pro", current_period_end: "2026-01-01T00:00:00Z" }], error: null },
+      ])
+      mockTableQueue("profiles", [{ data: [{ id: "user-1", credits_reset_at: "2025-12-01T00:00:00Z" }], error: null }])
+
+      const result = await renewSubscriptionCredits()
+
+      expect(result.usersRenewed).toBe(1)
+      expect(result.errors).toBe(0)
+    })
+
     it("returns zeros when no renewable subscriptions", async () => {
       mockTableQueue("subscriptions", [
         { data: [], error: null },

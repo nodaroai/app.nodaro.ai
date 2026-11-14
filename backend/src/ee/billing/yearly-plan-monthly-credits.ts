@@ -27,7 +27,7 @@
  * the source the renewal reads.
  */
 import { supabase } from "../../lib/supabase.js"
-import { isMissingFunctionError } from "../../lib/postgrest-errors.js"
+import { isMissingColumnError, isMissingFunctionError } from "../../lib/postgrest-errors.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 import { latestMonthlyAnchor } from "./monthly-credit-anchors.js"
 import { PRICE_TO_PLAN, TIER_CREDITS } from "./stripe-config.js"
@@ -61,7 +61,11 @@ interface YearlySubscriptionRow {
   readonly current_period_start: string | null
   readonly current_period_end: string | null
   readonly cancel_at: string | null
+  /** False only on a subscription recorded unpaid and not yet granted (migration 650); absent before that column. */
+  readonly plan_granted?: boolean | null
 }
+
+const YEARLY_SUBSCRIPTION_COLUMNS = "id, user_id, stripe_price_id, current_period_start, current_period_end, cancel_at"
 
 interface DueGrant {
   readonly row: YearlySubscriptionRow
@@ -134,21 +138,33 @@ export async function grantYearlyPlanMonthlyCredits(now: Date = new Date()): Pro
   let after: string | null = null
 
   for (;;) {
-    let query = supabase
-      .from("subscriptions")
-      .select("id, user_id, stripe_price_id, current_period_start, current_period_end, cancel_at")
-      .eq("status", "active")
-      .in("stripe_price_id", [...YEARLY_PRICE_IDS])
-    if (after) query = query.gt("id", after)
-    const { data, error } = await query.order("id", { ascending: true }).limit(YEARLY_CREDITS_PAGE_SIZE)
+    const page = (columns: string) => {
+      let query = supabase
+        .from("subscriptions")
+        .select(columns)
+        .eq("status", "active")
+        .in("stripe_price_id", [...YEARLY_PRICE_IDS])
+      if (after) query = query.gt("id", after)
+      return query.order("id", { ascending: true }).limit(YEARLY_CREDITS_PAGE_SIZE)
+    }
+    let { data, error } = await page(`${YEARLY_SUBSCRIPTION_COLUMNS}, plan_granted`)
+    // A database without migration 650's grant marker yet: every row there
+    // was granted when it was created, so the page is read without it.
+    if (isMissingColumnError(error)) ({ data, error } = await page(YEARLY_SUBSCRIPTION_COLUMNS))
     if (error) {
       console.error("[cleanup] Yearly plan credits: subscription query failed:", error.message)
       return { granted, refused, errors: errors + 1, awaitingMigration: false }
     }
-    const rows = (data ?? []) as YearlySubscriptionRow[]
+    const rows = (data ?? []) as unknown as YearlySubscriptionRow[]
     if (rows.length === 0) break
 
-    const due = rows.map((row) => dueGrant(row, now)).filter((g): g is DueGrant => g !== null)
+    // A subscription whose plan was never granted (recorded unpaid, then
+    // marked active by a writer other than its claim) has no monthly credits
+    // to set: they come with the plan's grant, once it is paid for.
+    const due = rows
+      .filter((row) => row.plan_granted !== false)
+      .map((row) => dueGrant(row, now))
+      .filter((g): g is DueGrant => g !== null)
     const resets = await lastResets([...new Set(due.map((g) => g.row.user_id))])
     if (resets === null) errors += 1
 

@@ -1,5 +1,5 @@
 import { supabase } from "../../lib/supabase.js"
-import { isMissingTableError } from "../../lib/postgrest-errors.js"
+import { isMissingColumnError, isMissingTableError } from "../../lib/postgrest-errors.js"
 import { deleteFromR2, listObjectsByPrefixWithMeta } from "../../lib/storage.js"
 import { tierColumns } from "./tier-columns.js"
 import { downgradeToEffectiveFloor, fetchLifetimeTopups } from "./downgrade-floor.js"
@@ -951,12 +951,19 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
   const now = new Date().toISOString()
 
   // Find canceled subscriptions whose paid period has ended
-  const { data: subs, error: subsError } = await supabase
-    .from("subscriptions")
-    .select("id, user_id, stripe_subscription_id")
-    .eq("status", "canceled")
-    .lt("current_period_end", now)
-    .limit(100)
+  const canceledPastPeriod = (columns: string) =>
+    supabase
+      .from("subscriptions")
+      .select(columns)
+      .eq("status", "canceled")
+      .lt("current_period_end", now)
+      .limit(100)
+  let { data: subs, error: subsError } = await canceledPastPeriod("id, user_id, stripe_subscription_id, plan_granted")
+  // A database without migration 650's grant marker yet: every row there was
+  // granted when it was created, so the rows are read without it.
+  if (isMissingColumnError(subsError)) {
+    ;({ data: subs, error: subsError } = await canceledPastPeriod("id, user_id, stripe_subscription_id"))
+  }
 
   if (subsError) {
     console.error("[cleanup] Failed to query expired subscriptions:", subsError.message)
@@ -967,13 +974,21 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
     return { usersDowngraded: 0, errors: 0 }
   }
 
+  const rows = subs as unknown as Array<{ id: string; user_id: string; plan_granted?: boolean | null }>
+
   try {
+    // A subscription that ended before it was ever paid granted nothing, so it
+    // downgrades nobody (an account's own tier, an admin-set one included, is
+    // not its to take). It is still marked expired below, like the rest.
+    const userIds = [...new Set(rows.filter(s => s.plan_granted !== false).map(s => s.user_id))]
+
     // Batch: fetch all affected profiles in one query
-    const userIds = subs.map(s => s.user_id)
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, tier")
-      .in("id", userIds)
+    const { data: profiles } = userIds.length > 0
+      ? await supabase
+        .from("profiles")
+        .select("id, tier")
+        .in("id", userIds)
+      : { data: [] as Array<{ id: string; tier: string | null }> }
 
     // SAFETY (billing-data guard): the subscriptions table permits multiple rows
     // per user (the partial unique index only forbids two status='active' rows —
@@ -1025,7 +1040,7 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
     // must be permitted by the subscriptions_status_check constraint
     // (migration 180); a rejected UPDATE here previously failed silently and
     // left rows re-matching every hour.
-    const subIds = subs.map(s => s.id)
+    const subIds = rows.map(s => s.id)
     const { error: expireErr } = await supabase
       .from("subscriptions")
       .update({ status: "expired", updated_at: now })
@@ -1060,12 +1075,26 @@ export async function renewSubscriptionCredits(): Promise<RenewalResult> {
   const now = new Date().toISOString()
 
   // Find active subscriptions whose billing period has ended
-  const { data: subs, error: subsError } = await supabase
-    .from("subscriptions")
-    .select("id, user_id, tier, current_period_end")
-    .eq("status", "active")
-    .lt("current_period_end", now)
-    .limit(100)
+  const activePastPeriod = (columns: string) =>
+    supabase
+      .from("subscriptions")
+      .select(columns)
+      .eq("status", "active")
+      .lt("current_period_end", now)
+      .limit(100)
+  let { data: found, error: subsError } = await activePastPeriod("id, user_id, tier, current_period_end, plan_granted")
+  // A database without migration 650's grant marker yet: every row there was
+  // granted when it was created, so the rows are read without it.
+  if (isMissingColumnError(subsError)) {
+    ;({ data: found, error: subsError } = await activePastPeriod("id, user_id, tier, current_period_end"))
+  }
+  // A subscription whose plan was never granted (recorded unpaid, then marked
+  // active by a writer other than its claim) has no credits to renew: they
+  // come with the plan's grant, once it is paid for.
+  const subs = found
+    ? (found as unknown as Array<{ id: string; user_id: string; tier: string; current_period_end: string; plan_granted?: boolean | null }>)
+      .filter((s) => s.plan_granted !== false)
+    : found
 
   if (subsError) {
     console.error("[cleanup] Failed to query renewable subscriptions:", subsError.message)

@@ -184,3 +184,45 @@ describe("invoice.paid hands the handler what sizes a plan-change grant", () => 
     expect(handlers.handleInvoicePaid.mock.calls[0][0].lines).toHaveLength(3)
   })
 })
+
+describe("an event the handler could not settle is redelivered", () => {
+  const subscriptionUpdated = {
+    id: "evt_sub_1",
+    type: "customer.subscription.updated",
+    data: {
+      object: {
+        id: "sub_1",
+        customer: "cus_1",
+        status: "active",
+        start_date: 1_790_000_000,
+        items: { data: [{ price: { id: "price_plan" }, current_period_start: 1_790_000_000, current_period_end: 1_792_600_000 }] },
+        cancel_at_period_end: false,
+        cancel_at: null,
+        canceled_at: null,
+        pause_collection: null,
+        metadata: {},
+      },
+    },
+  }
+
+  it("answers 500 when the handler asks for a redelivery, so Stripe sends the event again", async () => {
+    const { StripeEventRetryError } = await import("../../billing/stripe-event-retry.js")
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    handlers.handleSubscriptionUpdated.mockRejectedValueOnce(new StripeEventRetryError("claiming the plan grant failed"))
+
+    const res = await post(subscriptionUpdated)
+
+    expect(res.statusCode).toBe(500)
+    error.mockRestore()
+  })
+
+  it("any other handler error is still acknowledged with 200, as before", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    handlers.handleSubscriptionUpdated.mockRejectedValueOnce(new Error("boom"))
+
+    const res = await post(subscriptionUpdated)
+
+    expect(res.statusCode).toBe(200)
+    error.mockRestore()
+  })
+})
