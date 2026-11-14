@@ -135,17 +135,39 @@ export function runtimeLinkOrigin(): string {
 }
 
 /**
- * Where this page takes a browser's saved settings from (lib/storage-bridge-import.ts):
- * the kept origin (PUBLIC_URL), when the deployment gives its pages a host of
+ * The kept origin (PUBLIC_URL) when the deployment gives its pages a host of
  * their own (FLOW_UI_ORIGIN, with or without the move) and this page is on it;
- * else "". The proxy serves the kept host's bridge page by the same rule (a Flow
- * origin, and a kept origin that is not it: tools/gen-route-homes.mjs). Nothing
- * else follows it: API calls, links and navigation still follow the move alone.
+ * else "". The proxy reads the same rule (a Flow origin, and a kept origin that
+ * is not it: tools/gen-route-homes.mjs), and so does the server
+ * (lib/moved-pages-settings.ts :: flowHostOrigins).
  */
-export function runtimeSettingsSourceOrigin(currentOrigin: string = pageOrigin()): string {
+function keptOriginSeenFromFlowHost(currentOrigin: string): string {
   const { flowUiOrigin: flow, linkOrigin: kept } = runtime()
   if (!isHttpsOrigin(flow) || !isHttpsOrigin(kept) || kept === flow) return ""
   return currentOrigin === flow ? kept : ""
+}
+
+/**
+ * Where this page takes a browser's saved settings from (lib/storage-bridge-import.ts):
+ * the kept origin, when this page is on the pages' own host (the rule above);
+ * else "". The proxy serves the kept host's bridge page by that rule. API
+ * calls, links and navigation still follow the move alone.
+ */
+export function runtimeSettingsSourceOrigin(currentOrigin: string = pageOrigin()): string {
+  return keptOriginSeenFromFlowHost(currentOrigin)
+}
+
+/**
+ * The origin a genuine result from the server's callback pages can arrive
+ * from, seen from this page: the kept origin when this page is on the pages'
+ * own host (the rule above), else this page's own origin. A social connect's
+ * pop-up ends on such a page, served on the kept origin, which posts its
+ * result to that origin and, when the pages have their own host, to that host
+ * too (backend services/social/oauth.ts :: getCallbackOrigins). On any other
+ * host nothing arrives.
+ */
+export function runtimeCallbackOrigin(currentOrigin: string = pageOrigin()): string {
+  return keptOriginSeenFromFlowHost(currentOrigin) || currentOrigin
 }
 
 /** The Supabase URL the BROWSER uses (auth + PostgREST). */

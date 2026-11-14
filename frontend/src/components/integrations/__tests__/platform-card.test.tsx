@@ -3,6 +3,7 @@ import { act, render, fireEvent, screen, waitFor, within } from "@testing-librar
 import { toast } from "sonner"
 import { PlatformCard } from "../platform-card"
 import { disconnectSocial, type SocialProviderInfo } from "@/lib/api"
+import { runtimeCallbackOrigin } from "@/lib/runtime-config"
 import type { SocialConnection } from "@/types/nodes"
 
 // `asChild` must be honoured, not dropped: the real Button renders a Radix
@@ -36,6 +37,13 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
   ),
 }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+// The origin the connect pop-up's callback page answers on. In this test window
+// (no runtime config, an http origin) the real helper gives this page's own
+// origin; one test puts the page on the app's own host instead.
+vi.mock("@/lib/runtime-config", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/runtime-config")>()),
+  runtimeCallbackOrigin: vi.fn(() => window.location.origin),
+}))
 
 // Deferred read (call-time, not factory-time) so each describe can flip the
 // edition without re-importing the component.
@@ -281,10 +289,11 @@ describe("PlatformCard (reconnect surfacing)", () => {
 /**
  * The OAuth pop-up reports its result with a `message` event. Any window able
  * to post to this page can send one: a frame embedded in it, or another tab
- * holding a reference to it. Only the pop-up the card opened, on this page's
- * own origin (the callback page posts to that origin and no other), may
- * finish the connect. Anything else is ignored silently and changes nothing,
- * so the real result is still taken when it arrives.
+ * holding a reference to it. Only the pop-up the card opened, from the origin
+ * its callback page answers on (this page's own, or the kept origin when this
+ * page is on the app's own host), may finish the connect. Anything else is
+ * ignored silently and changes nothing, so the real result is still taken
+ * when it arrives.
  */
 describe("PlatformCard (the connect pop-up's result)", () => {
   const meta = (): SocialProviderInfo =>
@@ -304,6 +313,7 @@ describe("PlatformCard (the connect pop-up's result)", () => {
     vi.mocked(toast.error).mockClear()
     popup = { closed: false }
     vi.stubGlobal("open", vi.fn(() => popup))
+    vi.mocked(runtimeCallbackOrigin).mockImplementation(() => window.location.origin)
   })
 
   /** Deliver a `message` event the way the browser does: `source` is the window that sent it. */
@@ -378,6 +388,20 @@ describe("PlatformCard (the connect pop-up's result)", () => {
     deliver({ type: "social-auth-error" })
     expect(toast.error).toHaveBeenCalledTimes(1)
     expect(toast.error).toHaveBeenCalledWith("Connection failed")
+  })
+
+  it("on the app's own host, takes the result from the kept origin its callback page answers on, and none from this page's own", async () => {
+    const KEPT = "https://app.example.test"
+    vi.mocked(runtimeCallbackOrigin).mockImplementation(() => KEPT)
+    const onConnectionChange = await startConnect()
+
+    deliver(connected) // this page's own origin: the callback page never answers here
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(onConnectionChange).not.toHaveBeenCalled()
+
+    deliver(connected, { origin: KEPT })
+    expect(toast.success).toHaveBeenCalledTimes(1)
+    expect(onConnectionChange).toHaveBeenCalledTimes(1)
   })
 
   it("takes only the expected shape, even from the pop-up", async () => {

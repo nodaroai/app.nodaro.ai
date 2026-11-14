@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto"
 import { config } from "../../lib/config.js"
-import { movedFlowOrigin } from "../../lib/moved-pages-settings.js"
+import { flowHostOrigins } from "../../lib/moved-pages-settings.js"
 import type { OAuth2Config, SocialProvider } from "./providers/types.js"
 import { saveOAuthState } from "./state-store.js"
 
@@ -24,10 +24,11 @@ export function getRedirectUri(providerId: string): string {
 /**
  * The origin the callback pages are served on: the origin of every redirect
  * URI above, so the two cannot disagree. Those pages hand their result to the
- * window that opened the pop-up with `postMessage`, and this is the ONLY origin
- * they name as its target. With the app and its API on one origin, that is the
- * app's own; a page on any other origin receives nothing (it still sees the
- * pop-up close, and re-reads its connections).
+ * window that opened the pop-up with `postMessage`, naming this origin and the
+ * app's own host, if it has one (getCallbackOrigins below). With the app and
+ * its API on one origin, that is the app's own; a page on any other origin
+ * receives nothing (it still sees the pop-up close, and re-reads its
+ * connections).
  *
  * Null when PUBLIC_URL is not an http(s) URL: `postMessage` would refuse such a
  * target, so the pages then post nothing.
@@ -43,18 +44,18 @@ export function getCallbackOrigin(): string | null {
 
 /**
  * Every origin a callback page may hand its result to: the callback origin
- * above, plus the app's own host when a deployment has moved its pages off
- * PUBLIC_URL, by the one move-on rule (lib/moved-pages-settings.ts :: movedFlowOrigin).
- * The app may be open on either, so the page posts once per origin;
- * `postMessage` drops the post for any origin the opener is not on, so only
- * the right one is delivered, and no post ever names "*". Empty when no origin
- * is usable.
+ * above, plus the app's own host whenever a deployment gives its pages one,
+ * with or without the move (lib/moved-pages-settings.ts :: flowHostOrigins).
+ * Either host serves the app's pages then, so the connect may have been opened
+ * on either, and the page posts once per origin; `postMessage` drops the post
+ * for any origin the opener is not on, so only the right one is delivered, and
+ * no post ever names "*". Empty when no origin is usable.
  */
 export function getCallbackOrigins(): string[] {
   const origins = new Set<string>()
   const callback = getCallbackOrigin()
   if (callback) origins.add(callback)
-  const flow = movedFlowOrigin(config)
+  const flow = flowHostOrigins(config)?.flow
   if (flow) origins.add(flow)
   return [...origins]
 }

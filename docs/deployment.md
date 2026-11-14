@@ -131,7 +131,7 @@ here for each one anyway.
 | `LEGACY_UI_HOSTS` | `""` (unset = no host redirects) | With `FLOW_UI_ORIGIN`, moves the app's pages to their own host: see [Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host). Bare host names (separated by commas or spaces, any letter case; no scheme, port, path, tab or line break) on which a top-level visit to a moved page is redirected. Empty with `FLOW_UI_ORIGIN` set: the pages have their own host and nothing redirects. Set without `FLOW_UI_ORIGIN`, naming only the new host, or with an entry that is not a bare host name, and the server refuses to start. Restart to apply |
 | `FLOW_UI_ORIGIN` | `""` (unset = `FLOW_PUBLIC_URL`; both unset = the feature is off) | The https origin of the app's pages' own host, e.g. `https://flow.example.com` (a trailing slash is allowed, no path): see [Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host). On its own, every host keeps serving every page: a browser's saved settings carry over to the new host once, and public pages name their home with a canonical link. With `LEGACY_UI_HOSTS` too, the pages move there. `FLOW_PUBLIC_URL` is its other name; set either. Set to anything but an https origin, to a different origin than `FLOW_PUBLIC_URL`, or with `PUBLIC_URL` not another https origin, the server refuses to start |
 | `LEGACY_UI_REDIRECT_STATUS` | `302` | `302` (never cached) or `301` (cached by the browser only, for an hour). Any other value is `302` |
-| `FLOW_PUBLIC_URL` | `""` (unset = `FLOW_UI_ORIGIN`; both unset = the app's pages live on `PUBLIC_URL`) | The other name of `FLOW_UI_ORIGIN`: the origin the app's own pages live on when a deployment has moved them off `PUBLIC_URL`. Set either one and the other follows; both set to different origins, and the server refuses to start. Once the move is on (`LEGACY_UI_HOSTS`), links that open one of those pages — the editor, the gallery, the archive, billing — and the social-connect pop-ups use it. The API, the OAuth issuer and every machine-facing address stay on `PUBLIC_URL`. Restart to apply |
+| `FLOW_PUBLIC_URL` | `""` (unset = `FLOW_UI_ORIGIN`; both unset = the app's pages live on `PUBLIC_URL`) | The other name of `FLOW_UI_ORIGIN`: the origin the app's own pages live on when a deployment has moved them off `PUBLIC_URL`. Set either one and the other follows; both set to different origins, and the server refuses to start. Once the move is on (`LEGACY_UI_HOSTS`), links that open one of those pages — the editor, the gallery, the archive, billing — use it. Whenever it is set, with or without the move, the social-connect pop-ups also post their result to it. The API, the OAuth issuer and every machine-facing address stay on `PUBLIC_URL`. Restart to apply |
 | `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed). These are also the hosts the SSO landing redirect is emitted **relative** on — same-origin by construction — where a request arriving on any other host gets the absolute `PUBLIC_URL` form. With [MCP by path](#mcp-by-path-no-dedicated-mcp-host) on, `PUBLIC_URL` and every entry here are the hosts the MCP lane answers for by name |
 | `RESEND_API_KEY` | `""` | Cloud, organizations: API key for sending invitation emails through Resend. Unset = invitations are not emailed; the API returns a copy-and-paste link instead |
 | `EMAIL_FROM` | `""` | Cloud, organizations: the From address for invitation emails (a verified sender on the Resend account) |
@@ -2600,6 +2600,9 @@ With `FLOW_UI_ORIGIN` alone, the pages have their own host but nothing moves:
   are what they were.
 - A browser's saved settings are carried over once, on the first visit to the
   new host (see below).
+- A social account connected from either host reports its result to the page
+  that started it: the connect pop-up ends on `PUBLIC_URL`, which posts the
+  result to both origins (each delivered only to a page on that origin).
 - Each page search engines may index names its one home with a canonical link
   (`Link: <…>; rel="canonical"`), on every host that serves it: `/`,
   `/gallery` and `/tutorials/*` name `FLOW_UI_ORIGIN`; `/login`, `/signup` and
@@ -2634,8 +2637,8 @@ With `LEGACY_UI_HOSTS` too, the move is on:
   sent back to the origin of `PUBLIC_URL` (the kept host), so each public page
   has one home.
 - Links the server writes to the app's pages (the editor, the gallery, billing,
-  the archive) and the social-connect pop-ups name the new host; the API, the
-  OAuth issuer and every machine-facing address stay on `PUBLIC_URL`.
+  the archive) name the new host; the API, the OAuth issuer and every
+  machine-facing address stay on `PUBLIC_URL`.
 - Pages on the new host call the API same-origin: the same service answers
   under both names. On the new host and on the hosts in `LEGACY_UI_HOSTS`, the
   addresses people are handed name `PUBLIC_URL`, never the new host: published
