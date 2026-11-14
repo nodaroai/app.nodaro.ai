@@ -5,6 +5,7 @@ import {
   IMAGE_RESOLUTION_VALUES,
   getMinImagePromptChars,
   imageReferenceLimit,
+  refusesImagesOverLimit,
   requestImageLimit,
   T2I_TO_I2I_VARIANT,
 } from "../model-constants.js"
@@ -80,6 +81,15 @@ describe("Seedream 5.5 input images", () => {
     // Every other model's request limit is unchanged.
     expect(requestImageLimit("seedream-5-flash-i2i")).toBe(14)
     expect(requestImageLimit("gpt-image-2-6-flare-i2i")).toBe(16)
+  })
+
+  it("keeps its own rule past 10: a workflow run sends the first 10, so it is not one that refuses over its limit", () => {
+    // Its rule, since it shipped: a request with more is refused, a workflow
+    // run sends the first 10. FLUX 3 Klein's refusal everywhere is not its
+    // rule; joining it is a catalog flag (`refusesImagesOverLimit`), the
+    // owner's call.
+    expect(refusesImagesOverLimit("seedream-5-5")).toBe(false)
+    expect(refusesImagesOverLimit("seedream-5-5-i2i")).toBe(false)
   })
 
   it("is priced per input image, and counted as GPT Image 2.6 is", () => {

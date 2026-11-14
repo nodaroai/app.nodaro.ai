@@ -23,11 +23,19 @@ import { ConfigFieldRenderer } from "@/components/presentation/config-field-rend
 const MINIMAX = ["minimax-h3-image", "minimax-h3-image-i2i"]
 const SEEDREAM_5_5 = ["seedream-5-5", "seedream-5-5-i2i"]
 const DECLARING = [...MINIMAX, ...SEEDREAM_5_5]
+// FLUX 3 Klein declares its 1K, which is also its first listed size: declared
+// so a client reads it from the catalog, not from the order of the sizes.
+// Nothing an editor surface shows for it moves.
+const FLUX_3_KLEIN = ["flux-3-klein", "flux-3-klein-i2i"]
 
 describe("the declared default size", () => {
-  it("is declared by MiniMax H3 Image's and Seedream 5.5's two ids each and by video models only", () => {
+  it("is declared by MiniMax H3 Image's, Seedream 5.5's and FLUX 3 Klein's two ids each and by video models only", () => {
     const declaring = Object.values(MODEL_CATALOG).filter((m) => m.defaultResolution).map((m) => m.id).sort()
-    expect(declaring).toEqual(["gemini-omni-flash-1-2", "minimax-h3-image", "minimax-h3-image-i2i", "nodaro-video-upscale", "pixverse-v6-max", "seedream-5-5", "seedream-5-5-i2i", "wan-animate-move", "wan-animate-replace"])
+    expect(declaring).toEqual(["flux-3-klein", "flux-3-klein-i2i", "gemini-omni-flash-1-2", "minimax-h3-image", "minimax-h3-image-i2i", "nodaro-video-upscale", "pixverse-v6-max", "seedream-5-5", "seedream-5-5-i2i", "wan-animate-move", "wan-animate-replace"])
+    for (const id of FLUX_3_KLEIN) {
+      expect(MODEL_CATALOG[id]!.defaultResolution, id).toBe("1K")
+      expect(MODEL_CATALOG[id]!.resolutions?.[0], id).toBe("1K")
+    }
     // Wan Animate's 720p, its largest size: the size a request naming none runs
     // at, and the one a size it does not have (1080p) runs, and is charged, at
     // (`motionTransferResolution`, decided 2026-11-12). Its panel is not read
@@ -48,12 +56,18 @@ describe("the declared default size", () => {
     expect(MODEL_CATALOG["nodaro-video-upscale"]!.defaultResolution).toBe("1080p")
   })
 
-  it("is 2K on MiniMax H3 Image and Seedream 5.5 and nothing on every other image model with a size menu", () => {
+  it("is 2K on MiniMax H3 Image and Seedream 5.5, 1K on FLUX 3 Klein, and nothing on every other image model with a size menu", () => {
     for (const id of DECLARING) {
       expect(declaredDefaultResolution(id), id).toBe("2K")
       expect(defaultResolutionFor(id), id).toBe("2K")
     }
-    for (const id of Object.keys(IMAGE_RESOLUTION_OPTIONS).filter((id) => !DECLARING.includes(id))) {
+    for (const id of FLUX_3_KLEIN) {
+      expect(declaredDefaultResolution(id), id).toBe("1K")
+      expect(defaultResolutionFor(id), id).toBe("1K")
+      // The first size its menu lists, so the size a panel shows is unchanged.
+      expect(IMAGE_RESOLUTION_OPTIONS[id]?.[0]?.value, id).toBe("1K")
+    }
+    for (const id of Object.keys(IMAGE_RESOLUTION_OPTIONS).filter((id) => !DECLARING.includes(id) && !FLUX_3_KLEIN.includes(id))) {
       expect(declaredDefaultResolution(id), id).toBeUndefined()
     }
   })

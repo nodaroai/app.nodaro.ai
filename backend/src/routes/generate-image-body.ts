@@ -218,4 +218,14 @@ export const generateImageRequest = generateImageBody.superRefine((data, ctx) =>
   }
 })
 
+/**
+ * The body with its image arrays unbounded, read only to count what a request
+ * past their bounds would send (`oversizedImageArraysProblem`): never to run one.
+ */
+export const unboundedImageArraysBody = generateImageBody.extend({
+  connectedReferences: z.array(connectedReferenceSchema).optional(),
+  referenceImageUrls: z.array(safeUrlSchema).optional(),
+  referenceOrder: z.array(z.string()).optional(),
+})
+
 export type GenerateImageData = z.infer<typeof generateImageBody>

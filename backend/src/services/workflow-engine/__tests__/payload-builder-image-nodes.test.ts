@@ -1046,4 +1046,38 @@ describe("FLUX 3 Klein in a workflow run", () => {
     const r = buildPayload(node("image-to-image", { prompt: "make it winter", provider: "seedream-5-5-i2i" }), "j", { imageUrl: SRC, referenceImageUrls: refsOf(10) }, "u")
     expect(r.modelIdentifier).toMatch(/^seedream-5-5-i2i:/)
   })
+
+  // A node's attached images (`extraRefs`) ride the assembler's structured
+  // references, which it used to trim to the model's limit before the count:
+  // 11 ran as 10. FLUX 3 Klein is no longer trimmed, so the run is refused.
+  describe("Generate Image's attached images (structured references)", () => {
+    const extras = (n: number) => refsOf(n).map((url, i) => ({ url, description: `look ${i + 1}` }))
+    const gen = (provider: string, attached: number, data: Record<string, unknown> = {}) =>
+      buildPayload(node("generate-image", { prompt: "a still life", provider, aspectRatio: "1:1", extraRefs: extras(attached), ...data }), "j", {}, "u")
+
+    it("FLUX 3 Klein refuses an 11th attached image before any job row, saying to remove 1", () => {
+      expect(() => gen("flux-3-klein", 11)).toThrow(
+        "FLUX 3 Klein takes at most 10 input images, the source or base image included, and this run would send 11: remove 1.",
+      )
+    })
+
+    it("FLUX 3 Klein runs 10 attached images with all 10 sent", () => {
+      const r = gen("flux-3-klein", 10)
+      expect(r.payload.referenceImageUrls).toEqual(refsOf(10))
+      expect(r.modelIdentifier).toBe("flux-3-klein-i2i:1K")
+    })
+
+    it("FLUX 3 Klein counts a base image beside 10 attached images, and refuses it", () => {
+      expect(() => gen("flux-3-klein", 10, { baseImageUrl: SRC })).toThrow(/would send 11: remove 1/)
+    })
+
+    it("Seedream 5.5 keeps its own rule: a workflow run sends the first 10", () => {
+      const r = gen("seedream-5-5", 12)
+      expect(r.payload.referenceImageUrls).toEqual(refsOf(10))
+    })
+
+    it("a model with no image limit of its own is unchanged (Nano Banana Pro sends its 8)", () => {
+      expect(gen("nano-banana-pro", 9).payload.referenceImageUrls).toEqual(refsOf(8))
+    })
+  })
 })

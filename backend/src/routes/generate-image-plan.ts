@@ -8,14 +8,15 @@
  * handler.
  */
 import type { FastifyBaseLogger } from "fastify"
+import type { ZodError } from "zod"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { resolvedModelOfJob } from "../lib/job-resolved-model.js"
 import { applySnappedLevers } from "../lib/image-gen-normalize.js"
 import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { aspectRatioForLoraModel, imageJobPhotoUrl } from "../lib/image-auto-aspect.js"
-import { baseImageReservedSeats } from "../lib/image-input-limit.js"
+import { baseImageReservedSeats, imageInputLimitProblem } from "../lib/image-input-limit.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX } from "@nodaro/shared/models"
+import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX, refusesImagesOverLimit } from "@nodaro/shared/models"
 import { normalizedImageGenModelId, resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel, pricedSentImages, type ModelInputAdjustment } from "@nodaro/shared/model-catalog"
 import { assembleImageInput, type AssembleImageInput } from "@nodaro/prompts/assembly"
@@ -24,7 +25,7 @@ import { backendHybridRoles } from "../lib/reference-format.js"
 // The pure half of the user-direction module (no database client): the
 // resolution's shape and the moodboard warning.
 import { moodboardWarnings, type ResolvedUserDirection, type RunWarning } from "../lib/user-direction-result.js"
-import { generateImageBody, type GenerateImageData } from "./generate-image-body.js"
+import { generateImageBody, unboundedImageArraysBody, type GenerateImageData } from "./generate-image-body.js"
 
 const IDENTITY_PRESERVE_SUFFIX =
   "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
@@ -234,6 +235,39 @@ export function assembleImageRequest(
   }
 }
 
+/** The body arrays a request outgrows by naming too many images (`unboundedImageArraysBody`). */
+const IMAGE_ARRAY_FIELDS: ReadonlySet<string> = new Set(["connectedReferences", "referenceImageUrls", "referenceOrder"])
+
+/**
+ * The refusal a request gets when it names more images than the body's arrays
+ * take (14 `connectedReferences`, 16 `referenceImageUrls`) on a model that
+ * refuses images over its limit (`refusesImagesOverLimit`: FLUX 3 Klein): that
+ * model's own message, saying how many to remove, instead of the bare array
+ * bound. The count is the one the run would send, assembled as the handler
+ * assembles it (an unmentioned character variant attaches nothing, so it is
+ * not counted). Null when anything else is wrong with the body, or when no
+ * model it names refuses: every other request keeps the message it gets today.
+ */
+export function oversizedImageArraysProblem(
+  body: unknown,
+  error: ZodError,
+  userDirection: ResolvedUserDirection | undefined,
+): { code: "validation_error"; message: string } | null {
+  const onImageArrays = error.issues.every((issue) => issue.path.length === 1 && IMAGE_ARRAY_FIELDS.has(String(issue.path[0])))
+  if (!onImageArrays || !error.issues.some((issue) => issue.code === "too_big")) return null
+  const parsed = unboundedImageArraysBody.safeParse(body)
+  if (!parsed.success) return null
+  const data = parsed.data as GenerateImageData
+  const models = data.models?.length ? data.models : [data.provider ?? defaultImageModel("general", data.aspectRatio)]
+  for (const model of models) {
+    if (!refusesImagesOverLimit(model)) continue
+    const request = { ...data, provider: model as NonNullable<GenerateImageData["provider"]> }
+    const assembled = assembleImageRequest(request, isStructuredImageMode(request), userDirection)
+    const problem = imageInputLimitProblem(model, pricedSentImages(model, assembled?.queueReferenceImageUrls ?? [], data.baseImageUrl))
+    if (problem) return problem
+  }
+  return null
+}
 
 /** One image job, planned for one model: what it reserves, records and sends. */
 export interface ImageJobPlan {

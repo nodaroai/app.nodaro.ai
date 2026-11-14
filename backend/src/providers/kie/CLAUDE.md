@@ -1235,7 +1235,9 @@ and, for the callers that do not swap (the entity routes, a pipeline pin), in
 `generateImage` here (`GPT_IMAGE_T2I_TO_I2I`, `image-edit-sibling.ts`), since
 the text-to-image schema has no image field at all.
 
-- `resolution` is `1K` (KIE's default and ours), `2K` or `4K`, at every ratio.
+- `resolution` is `1K` (KIE's default and ours, declared as the catalog's
+  `defaultResolution` on both ids rather than read from the list's order),
+  `2K` or `4K`, at every ratio.
   `applyFlux3KleinResolution` (`image.ts`) sends `flux3KleinResolution` of the
   value, the one its price was built from: another spelling (`4k`) is sent as
   `4K`, anything else as `1K`, so the size rendered is the size charged.
@@ -1270,9 +1272,20 @@ the text-to-image schema has no image field at all.
   before any job row (`imageInputLimitProblem`, `lib/image-input-limit.ts`:
   Generate Image, Image to Image, Modify Image, Scene). A base takes a seat a
   moodboard would fill (`baseImageReservedSeats` → the assembler's
-  `reservedImageSeats`). `maxInputImages` stays as a backstop; the assembler
-  still trims structured references past the model's reference limit, as for
-  every model.
+  `reservedImageSeats`). `maxInputImages` stays as a backstop. Both catalog
+  entries carry `refusesImagesOverLimit` (the gate of all three helpers, and
+  of the prompt builder's reference cap): the assembler does NOT trim this
+  model's structured references (`connectedReferences`, a node's attached
+  images), so 11 prompt-mention images are refused at 11 on the route, in a
+  workflow run and on the editor's request, instead of running as 10 with the
+  11th mention left as text. An unmentioned character variant still attaches
+  nothing and is not counted. Past the body's array bounds (14
+  `connectedReferences`, 16 `referenceImageUrls`), `/v1/generate-image`
+  answers with the same message (`oversizedImageArraysProblem`), counted by
+  assembling the request. MCP `generate_image` and `image_to_image` pass every
+  `reference_image_urls` entry on for such a model (no cut at
+  `requestImageLimit`), so the route's refusal answers. Every other model,
+  Seedream 5.5 included, keeps the trim and the MCP cut.
 - **The id priced is the id run.** The provider runs the edit endpoint whenever
   any image goes, so every path that prices a run counts what it sends
   (`priceReadsInputImages`): a Generate Image base alone, references, wired
