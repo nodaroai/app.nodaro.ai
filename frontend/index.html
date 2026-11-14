@@ -135,11 +135,15 @@
           // Treat empty or unsubstituted ("%VITE_…%") values as disabled.
           var unset = function (v) { return !v || v.charAt(0) === "%"; };
 
-          // PRODUCTION HOST ONLY, mirroring studio.nodaro.ai/index.html. The env
+          // PRODUCTION HOSTS ONLY, mirroring studio.nodaro.ai/index.html. The env
           // guard above is not enough on its own: a VITE_* value that reaches a
           // local build sends dev traffic to the live GA4 property and into the
           // Clarity recordings. A hostname check cannot regress via env config.
-          var isProdHost = window.location.hostname === "app.nodaro.ai";
+          // Flow's production pages have two hosts: flow.nodaro.ai, their own,
+          // and app.nodaro.ai, which keeps serving them in full. No staging host
+          // is listed: no third-party script runs on staging.
+          var productionHosts = ["app.nodaro.ai", "flow.nodaro.ai"];
+          var isProdHost = productionHosts.indexOf(window.location.hostname) !== -1;
 
           // Microsoft Clarity
           if (!unset(clarityId) && isProdHost) {

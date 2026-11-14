@@ -18,13 +18,20 @@ interface Visit {
   readonly pathname?: string
   readonly framed?: boolean
   readonly staffBrowser?: boolean
-  readonly ids?: { readonly gtm?: string; readonly ga?: string }
+  readonly ids?: { readonly gtm?: string; readonly ga?: string; readonly clarity?: string }
 }
 
-function runLoader(visit: Visit = {}): { dataLayer: unknown[]; exposed: unknown } {
+/** What one run of the loader left behind: the data layer, the exposed GA identity, and the address of every script it added. */
+interface LoaderRun {
+  readonly dataLayer: unknown[]
+  readonly exposed: unknown
+  readonly scripts: readonly string[]
+}
+
+function runLoader(visit: Visit = {}): LoaderRun {
   const ids = visit.ids ?? { gtm: "GTM-TEST99", ga: "G-TEST1234" }
   const script = loader
-    .replace("%VITE_CLARITY_ID%", "")
+    .replace("%VITE_CLARITY_ID%", ids.clarity ?? "")
     .replace("%VITE_GTM_ID%", ids.gtm ?? "")
     .replace("%VITE_GA_ID%", ids.ga ?? "")
   const fakeWindow: Record<string, unknown> = {
@@ -33,16 +40,28 @@ function runLoader(visit: Visit = {}): { dataLayer: unknown[]; exposed: unknown 
   }
   fakeWindow.self = fakeWindow
   fakeWindow.top = visit.framed ? {} : fakeWindow
+  const created: { src?: string }[] = []
   const fakeDocument = {
     prerendering: false,
     addEventListener: () => {},
-    createElement: () => ({}),
+    createElement: () => {
+      const element: { src?: string } = {}
+      created.push(element)
+      return element
+    },
     getElementsByTagName: () => [{ parentNode: { insertBefore: () => {} } }],
   }
   // The loader is a classic script: give it the globals it reads, nothing else.
   new Function("window", "document", script)(fakeWindow, fakeDocument)
-  return { dataLayer: (fakeWindow.dataLayer as unknown[]) ?? [], exposed: fakeWindow.__NODARO_GA__ }
+  return {
+    dataLayer: (fakeWindow.dataLayer as unknown[]) ?? [],
+    exposed: fakeWindow.__NODARO_GA__,
+    scripts: created.map((element) => element.src ?? ""),
+  }
 }
+
+/** Every id configured, Clarity's included, as a production build has them. */
+const ALL_IDS = { gtm: "GTM-TEST99", ga: "G-TEST1234", clarity: "clartest01" }
 
 const describeEntry = (entry: unknown): unknown =>
   Object.prototype.toString.call(entry) === "[object Arguments]" ? ["command", ...Array.from(entry as ArrayLike<unknown>)] : (entry as { event?: unknown }).event
@@ -84,5 +103,28 @@ describe("index.html analytics loader", () => {
     const run = runLoader({ ids: { gtm: "GTM-TEST99", ga: "" }, staffBrowser: true })
     expect(run.exposed).toBeUndefined()
     expect(run.dataLayer.map(describeEntry)).toEqual(["gtm.js"])
+  })
+
+  // Flow's production pages have two hosts: flow.nodaro.ai, their own, and
+  // app.nodaro.ai, which keeps serving them in full. Both are measured.
+  it("loads Clarity and Tag Manager on both of Flow's production hosts", () => {
+    for (const hostname of ["app.nodaro.ai", "flow.nodaro.ai"]) {
+      const run = runLoader({ hostname, ids: ALL_IDS })
+      expect(run.scripts, hostname).toEqual([
+        "https://www.clarity.ms/tag/clartest01",
+        "https://www.googletagmanager.com/gtm.js?id=GTM-TEST99",
+      ])
+      expect(run.exposed, hostname).toEqual({ measurementId: "G-TEST1234", internal: false })
+    }
+  })
+
+  // No third-party script on any staging host, and a local build must not send
+  // its traffic to the live property either.
+  it("loads neither on a staging host, the site's staging, a local build or a look-alike host", () => {
+    for (const hostname of ["next.app.nodaro.ai", "next.flow.nodaro.ai", "next.nodaro.ai", "localhost", "flow.nodaro.ai.example.com", "notflow.nodaro.ai"]) {
+      const run = runLoader({ hostname, ids: ALL_IDS, staffBrowser: true })
+      expect(run.scripts, hostname).toEqual([])
+      expect(run.exposed, hostname).toBeUndefined()
+    }
   })
 })
