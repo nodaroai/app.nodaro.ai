@@ -141,7 +141,7 @@ export const textToVideoPricing: RoutePricing = {
     const body = req.body as Record<string, unknown>
     const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
     // The reference videos the provider bills: a character's video subject on
-    // Kling 4.0 Flash is not one (decided 2026-11-14).
+    // Kling 4.0 or Flash is not one (decided 2026-11-14).
     const hasVideoRef = pricedReferenceVideoCount(sel.provider, body ?? {}) > 0
     // Placement rule: the CHECK identifier, `computeCredits` and the
     // reservation must all be computed from the SAME normalized values.
@@ -213,7 +213,7 @@ export const textToVideoPricing: RoutePricing = {
           (await probeRefVideoDurations({ provider: priceArgs.provider, referenceVideoUrls: b.referenceVideoUrls as unknown[] }))
         req.refVideoDurationsSec = sentDurationsSec
         // Priced on the clips the provider bills as reference video: on Kling
-        // 4.0 Flash a character's video subject is not one (decided 2026-11-14).
+        // 4.0 or Flash a character's video subject is not one (decided 2026-11-14).
         const durationsSec = await pricedRefVideoDurations(priceArgs.provider, b, sentDurationsSec)
         await noteRefVideoPricing(req, { ...priceArgs, rawDuration: b.duration, durationsSec, settlesToActual: true })
         return seedance2RefVideoBaseCreditsFromDurations({

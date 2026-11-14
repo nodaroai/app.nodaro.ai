@@ -55,3 +55,42 @@ describe("Seedance 2.5 reference-video quote — Generate Video ≡ Video to Vid
     expect(generateVideo({ resolution: "720p", referenceVideoUrls: ["https://x/y.mp4"] }, false)).toBe("seedance-2-5:30s:720p")
   })
 })
+
+/**
+ * Kling 4.0 and Kling 4.0 Flash price a character's video subject like an
+ * image subject (decided 2026-11-14). A clip wired as a reference video that is
+ * also a wired character's clip goes to the model as the character only, so the
+ * editor's id stays on the plain ladder, as the server's does.
+ */
+describe("Kling 4.0 video subjects — the editor's id", () => {
+  const CLIP = "https://cdn.example/clip.mp4"
+  const clip = node("clip", "upload-video", { url: CLIP })
+  const maya = (subjectVideoUrl?: string) =>
+    node("maya", "character", { characterName: "Maya", sourceImageUrl: "https://cdn.example/maya.png", ...(subjectVideoUrl ? { subjectVideoUrl } : {}) })
+  const charWire = { id: "c1", source: "maya", target: "gv", sourceHandle: "characterRef", targetHandle: "assets" } as WorkflowEdge
+  const clipWire = { id: "e1", source: "clip", target: "gv", sourceHandle: "video", targetHandle: "videoReferences" } as WorkflowEdge
+  const idOf = (provider: string, nodes: WorkflowNode[], edges: WorkflowEdge[]) => {
+    const gv = node("gv", "generate-video", { provider, duration: 5, resolution: "720p" })
+    return getModelIdentifier(gv, edges, [...nodes, gv])
+  }
+
+  for (const [provider, plain] of [["kling-4", "kling-4:5s:720p"], ["kling-4-flash", "kling-4-flash:5s:720p"]] as const) {
+    it(`${provider}: a run whose only clip is a character's is on the plain ladder`, () => {
+      expect(idOf(provider, [maya(CLIP)], [charWire])).toBe(plain)
+    })
+
+    it(`${provider}: a wired clip that is also the character's clip is on the plain ladder`, () => {
+      expect(idOf(provider, [clip, maya(CLIP)], [clipWire, charWire])).toBe(plain)
+    })
+
+    it(`${provider}: a plain reference video beside the character stays on the -ref ladder`, () => {
+      expect(idOf(provider, [clip, maya()], [clipWire, charWire])).toBe(`${plain}-ref`)
+      expect(idOf(provider, [clip, maya("https://cdn.example/other.mp4")], [clipWire, charWire])).toBe(`${plain}-ref`)
+    })
+
+    it(`${provider}: a wired clip not known yet stays on the -ref ladder (never under-quoted)`, () => {
+      const pending = node("clip", "upload-video", {})
+      expect(idOf(provider, [pending, maya(CLIP)], [clipWire, charWire])).toBe(`${plain}-ref`)
+    })
+  }
+})

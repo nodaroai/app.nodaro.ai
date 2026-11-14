@@ -52,7 +52,7 @@ import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro
 import { isRenderNodeType, transcribeNodeReturnsWords, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
-import { sendsReferenceVideo } from "@/lib/audio-reference-handles"
+import { sendsPricedReferenceVideo } from "@/lib/seedance-ref-quote"
 import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
@@ -721,6 +721,8 @@ export function getModelIdentifier(
       nodeType === "text-to-video" ? "text-to-video" : "image-to-video"
     // The reference video is a GRAPH fact — a wired videoReferences edge —
     // never node data (nothing writes `referenceVideoUrls` into these nodes).
+    // A wire that is only a character's video subject moves no price on Kling
+    // 4.0 / Flash (`sendsPricedReferenceVideo`, decided 2026-11-14).
     // The shared builder applies the resolution fill + Seedance Draft the run
     // applies, so Generate Video and Video to Video's Seedance edit lane quote
     // one id for one KIE call. The length is the one the run is priced at once
@@ -737,7 +739,7 @@ export function getModelIdentifier(
       mode: (data.videoSize ?? data.mode) as string | undefined,
       resolution: data.resolution as string | undefined,
       draft: data.draft === true,
-      hasVideoRef: sendsReferenceVideo(node.id, sel.provider, typeof data.audioSoundtrack === "boolean" ? data.audioSoundtrack : undefined, edges ?? []),
+      hasVideoRef: sendsPricedReferenceVideo(node, nodes ?? [], edges ?? [], sel.provider, typeof data.audioSoundtrack === "boolean" ? data.audioSoundtrack : undefined, reruns),
     })
   }
 

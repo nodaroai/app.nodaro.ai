@@ -105,12 +105,13 @@ function refVideoEstimateRequest(
     audioSoundtrack: typeof data.audioSoundtrack === "boolean" ? data.audioSoundtrack : undefined,
     audioRefCount: audioEdges.length,
   })
-  // Kling 4.0 video subjects: a wired Character's own clip rides as one more
-  // reference video (`seatCharacterVideos`), priced as one.
+  // Video subjects: a wired Character's own clip rides as one more reference
+  // video (`seatCharacterVideos`), priced as one only on a model that bills it
+  // as reference video (none today).
   const subjectClips = node.type === "generate-video" ? characterSubjectClipSources(node, nodes, edges, selectedProvider, clipEdges.map((e) => e.source)) : []
-  // On Kling 4.0 Flash a video subject is priced like an image subject (decided
-  // 2026-11-14): a wired clip that is also a character's clip goes to the
-  // model as the character only, so it leaves the price.
+  // On Kling 4.0 and Flash a video subject is priced like an image subject
+  // (decided 2026-11-14): a wired clip that is also a character's clip goes to
+  // the model as the character only, so it leaves the price.
   const pricedSourceIds = clipSourceIds.filter((id) => !unpricedWiredClip(node, nodes, edges, id))
   if (pricedSourceIds.length === 0 && !soundtrack && subjectClips.length === 0) return undefined
   let provider: string
@@ -160,8 +161,9 @@ function characterSubjectClipSources(
 ): EstimateNode[] {
   if (!node.id || !edges) return []
   // Priced as reference video only where the model bills a video subject as one
-  // (Kling 4.0); on Kling 4.0 Flash it is priced like an image subject (decided
-  // 2026-11-14), so it moves no price here.
+  // (`videoCharactersBillAsReferenceVideo`, set on no model today); on Kling 4.0
+  // and Flash it is priced like an image subject (decided 2026-11-14), so it
+  // moves no price here.
   if (!videoCharacterClipsBilledAsReferenceVideo(provider)) return []
   const graphNodes = nodes.flatMap((n) => (n.id === undefined ? [] : [{ ...n, id: n.id }]))
   const graphEdges = edges.flatMap((e) => (e.source === undefined ? [] : [{ ...e, source: e.source }]))
@@ -183,7 +185,7 @@ function characterSubjectClipSources(
 /**
  * Whether the wired clip from `sourceId` leaves `node`'s price: on a Generate
  * Video model that takes video subjects but does not bill them as reference
- * video (Kling 4.0 Flash, decided 2026-11-14), a wired clip that is also one
+ * video (Kling 4.0 and Flash, decided 2026-11-14), a wired clip that is also one
  * of the run's character clips (`wiredCharacterSubjectClips`) goes to the
  * model as the character only. Read by this estimate and by the static
  * estimate's `-ref` decision (`videoRefWired` in credits.ts), so the two agree.

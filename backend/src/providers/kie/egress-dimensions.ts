@@ -39,7 +39,8 @@ export function deriveKieEgressDimensions(
   // models ("with video input" vs generated-from-nothing). `video_urls` (plural)
   // is the standard V2V / motion-control array field; an empty array is not a
   // supplied video, so it does not flag the lever. A Kling 4.0 video subject
-  // (`elements[].video_url`) is video input too.
+  // (`elements[].video_url`) is flagged too; the Kling runner clears the flag
+  // where the model bills the subject like an image subject (runKling4).
   if (
     hasVideoSource(body.video_url) ||
     hasVideoSource(body.video_urls) ||

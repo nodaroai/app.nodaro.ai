@@ -3,9 +3,10 @@
  * own clip (`subjectVideoUrl`) makes it a video subject on Kling 4.0 / Kling
  * 4.0 Flash. The payload builder seats the clip among the reference videos by
  * the rule /v1/generate-video's precheck applies (`seatCharacterVideos`), so
- * the DAG's duration gate, its reservation and the settlement measure and
- * price it as a reference video; the job the worker receives, run through the
- * KIE body builder, sends it as the character's element.
+ * the DAG's duration gate measures it and the caps count it as a reference
+ * video; the price leaves it out on both models (decided 2026-11-14, from
+ * measured runs: billed like an image subject). The job the worker receives,
+ * run through the KIE body builder, sends it as the character's element.
  *
  * Every case runs the real input resolver, then the payload builder, as the
  * orchestrator does.
@@ -62,28 +63,28 @@ function run(consumer: SimpleNode, chars: SimpleNode[], opts: { refVideo?: boole
 }
 
 describe("a Character node's clip on a workflow run", () => {
-  // Decided 2026-11-14, measured: Flash bills a video subject like an image subject.
-  it("Kling 4.0 Flash: the character carries the clip and the clip is seated, but the run keeps the plain price", () => {
-    const { videos, subjects, r } = run(video("kling-4-flash"), [character("m", { subjectVideoUrl: clip("m") })])
-    expect(subjects?.map((s) => [s.name, s.videoUrl])).toEqual([["Maya", clip("m")]])
-    expect(videos).toEqual([clip("m")])
-    expect(r.modelIdentifier).toBe("kling-4-flash:5s:720p")
-    expect(r.modelIdentifier).toBe(run(video("kling-4-flash"), [character("m")]).r.modelIdentifier)
-  })
+  // Decided 2026-11-14, measured: Kling 4.0 and Flash bill a video subject like an image subject.
+  for (const [provider, plain] of [["kling-4", "kling-4:5s:720p"], ["kling-4-flash", "kling-4-flash:5s:720p"]] as const) {
+    it(`${provider}: the character carries the clip and the clip is seated, but the run keeps the plain price`, () => {
+      const { videos, subjects, r } = run(video(provider, { resolution: "720p" }), [character("m", { subjectVideoUrl: clip("m") })])
+      expect(subjects?.map((s) => [s.name, s.videoUrl])).toEqual([["Maya", clip("m")]])
+      expect(videos).toEqual([clip("m")])
+      expect(r.modelIdentifier).toBe(plain)
+      expect(r.modelIdentifier).toBe(run(video(provider, { resolution: "720p" }), [character("m")]).r.modelIdentifier)
+    })
 
-  it("Kling 4.0 Flash: a wired reference video that is also the character's clip goes as the character only — the plain price", () => {
-    const { videos, r } = run(video("kling-4-flash"), [character("m", { subjectVideoUrl: ROOM })], { refVideo: true })
-    expect(videos).toEqual([ROOM])
-    expect(r.modelIdentifier).toBe("kling-4-flash:5s:720p")
-    // Kling 4.0 keeps pricing it as a reference video.
-    expect(run(video("kling-4"), [character("m", { subjectVideoUrl: ROOM })], { refVideo: true }).r.modelIdentifier).toMatch(/-ref$/)
-  })
+    it(`${provider}: a wired reference video that is also the character's clip goes as the character only — the plain price`, () => {
+      const { videos, r } = run(video(provider, { resolution: "720p" }), [character("m", { subjectVideoUrl: ROOM })], { refVideo: true })
+      expect(videos).toEqual([ROOM])
+      expect(r.modelIdentifier).toBe(plain)
+    })
 
-  it("Kling 4.0: the clip is seated and the run is priced as a reference-video run", () => {
-    const { videos, r } = run(video("kling-4"), [character("m", { subjectVideoUrl: clip("m") })])
-    expect(videos).toEqual([clip("m")])
-    expect(r.modelIdentifier).toMatch(/-ref$/)
-  })
+    it(`${provider}: a plain wired reference video beside the character's clip keeps the reference-video price`, () => {
+      const { videos, r } = run(video(provider, { resolution: "720p" }), [character("m", { subjectVideoUrl: clip("m") })], { refVideo: true })
+      expect(videos).toEqual([ROOM, clip("m")])
+      expect(r.modelIdentifier).toBe(`${plain}-ref`)
+    })
+  }
 
   it("Kling 4.0 with a wired reference video: the clip follows it, and KIE gets the reference video plus a video element", () => {
     const { p, videos, subjects } = run(video("kling-4", { prompt: "@video_1 is the room" }), [character("m", { subjectVideoUrl: clip("m") }), character("l")], { refVideo: true })

@@ -3433,14 +3433,12 @@ IS, for this run only:
   - all videos together within 20 s on Flash and 30 s on Kling 4.0;
   - no two entries on one clip.
 
-  Its price depends on the model:
-  - **`kling-4`:** the clip is billed as a reference video. Its seconds join the
-    reference-video seconds, at the reference rate.
-  - **`kling-4-flash`:** it is priced like an entry with images only, so it
-    adds nothing. A run whose only video is a character's keeps the plain
-    per-second price.
+  On both models it is priced like an entry with images only, so it adds
+  nothing: its seconds are not reference-video seconds, and a run whose only
+  video is a character's keeps the plain per-second price.
 
-  A clip already in `referenceVideoUrls` is the character only. Out of range is
+  A clip already in `referenceVideoUrls` is the character only, and is not
+  billed as a reference video either. Out of range is
   a `400` before anything is reserved (`character_videos_over_limit`,
   `reference_videos_over_limit`, `character_video_shared`, or `video_too_long`
   for a clip outside 3–8 s). A clip the platform cannot read is a `400`

@@ -1917,7 +1917,7 @@ async function computeSeedance2RefVideoCreditOverride(
 ): Promise<number | undefined> {
   const provider = payload.provider as string | undefined
   // Priced on the clips the provider bills as reference video: on Kling 4.0
-  // Flash a character's video subject is not one (decided 2026-11-14). The
+  // or Flash a character's video subject is not one (decided 2026-11-14). The
   // duration gate above still read every sent clip.
   const priced = pricedRefVideoInput({ provider, referenceVideoUrls: payload.referenceVideoUrls, characterReferences: payload.characterReferences, durationsSec: probedDurationsSec })
   const referenceVideoUrls = priced.referenceVideoUrls

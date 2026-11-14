@@ -3280,6 +3280,11 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
      * and does not move the run onto the reference-video rate (its clip still
      * counts toward the `videos` cap and the reference videos' total length).
      * Read through `videoCharacterClipsBilledAsReferenceVideo`.
+     *
+     * No model sets it today: Kling 4.0 and Kling 4.0 Flash, both measured,
+     * bill a video subject like an image subject (decided 2026-11-14). It stays
+     * for a model whose provider bills the clip, so that model declares it here
+     * and every price path follows.
      */
     videoCharactersBillAsReferenceVideo?: true
   } | undefined
@@ -3328,10 +3333,9 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // preset personas, which Kling does not take.
   // Of the 7 subjects, at most 3 may be video subjects (a 3-8 s clip each), and
   // reference videos plus video subjects are at most 5. A video subject is
-  // priced as a reference video here until a measured run confirms how Kling
-  // 4.0 bills one (decided 2026-11-14): Flash, measured, bills it as an image
-  // subject (no flag below).
-  "kling-4": { images: 10, videos: 5, audio: 3, characters: 7, materials: 15, videoCharacters: 3, videoCharactersBillAsReferenceVideo: true },
+  // billed like an image subject (measured, decided 2026-11-14), as on Flash:
+  // no `videoCharactersBillAsReferenceVideo`.
+  "kling-4": { images: 10, videos: 5, audio: 3, characters: 7, materials: 15, videoCharacters: 3 },
   // Kling 4.0 Keyframes — the Image References are the in-between frames
   // (`keyframe_urls`, max 8; the clip's duration lowers the cap, see
   // kling4KeyframeFrameCap). No reference videos or audio.
@@ -3342,8 +3346,7 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // (`voice_url`) when that character is a subject (2-4 images), so at most one
   // per character (7) and none takes a material seat. A wired start frame takes one of the 10 image slots when it
   // runs on this endpoint. A video subject is billed like an image subject
-  // (measured on a staging run, decided 2026-11-14): no
-  // `videoCharactersBillAsReferenceVideo`.
+  // (measured, decided 2026-11-14): no `videoCharactersBillAsReferenceVideo`.
   "kling-4-flash": { images: 10, videos: 5, audio: 7, characters: 7, materials: 15, audioBindsToCharacters: true, videoCharacters: 3 },
   "grok-i2v": { images: 7 },         // backend kie/models.ts maxRefImages: 7
   "happyhorse-ref2v": { images: 9 }, // backend kie/models.ts maxRefImages: 9

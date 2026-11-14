@@ -10,10 +10,12 @@ import { z } from "zod"
  *
  * A character reference's `videoUrl` (a 3-8 s clip of the character) is seated
  * among the run's reference videos before anything is measured or priced, so:
- *  - quote = hold = charge: POST /v1/quote equals what the run reserves, the
- *    settlement of the delivered run charges that same amount, and all three
- *    equal the same run with the clip sent as a plain reference video (KIE
- *    bills a video subject's seconds as reference-video seconds);
+ *  - quote = hold = charge: POST /v1/quote equals what the run reserves, and
+ *    the settlement of the delivered run charges that same amount. On both
+ *    Kling 4.0 ids all three equal the same run with the character made from
+ *    images (decided 2026-11-14, from measured runs: the provider bills a video
+ *    subject like an image subject);
+ *  - the clip still counts toward the 5-video cap and the videos' total length;
  *  - the job the worker receives carries the seated clip and the character's
  *    `videoUrl`, and the KIE body built from it sends the clip as the
  *    character's element, not as a reference video;
@@ -96,7 +98,7 @@ const CLIP = (n: number) => `https://cdn.example.com/maya-${n}.mp4`
 const REF = (n: number) => `https://cdn.example.com/room-${n}.mp4`
 const PORTRAIT = "https://cdn.example.com/maya.png"
 const OUT = "https://kie.example.com/out.mp4"
-const maya = (videoUrl: string | undefined = CLIP(1)) => ({
+const maya = (videoUrl: string | null = CLIP(1)) => ({
   imageUrl: PORTRAIT, description: "a woman in a red coat", name: "Maya", ...(videoUrl ? { videoUrl } : {}),
 })
 
@@ -185,7 +187,7 @@ describe("quote = hold = charge: Kling 4.0 Flash prices a video subject like an 
     expect(subject.queued.referenceVideoUrls).toEqual([CLIP(1)])
 
     vi.clearAllMocks()
-    const imagesOnly = await quoteRunSettle("text-to-video", { ...params, characterReferences: [maya(undefined)] })
+    const imagesOnly = await quoteRunSettle("text-to-video", { ...params, characterReferences: [maya(null)] })
     expect(imagesOnly.identifier).toBe(subject.identifier)
     expect(imagesOnly.reserved).toBe(subject.reserved)
   })
@@ -202,7 +204,7 @@ describe("quote = hold = charge: Kling 4.0 Flash prices a video subject like an 
     expect(subject.queued.refVideoDurationsSec).toEqual([9, 5])
 
     vi.clearAllMocks()
-    const noSubject = await quoteRunSettle("text-to-video", { ...params, characterReferences: [maya(undefined)] })
+    const noSubject = await quoteRunSettle("text-to-video", { ...params, characterReferences: [maya(null)] })
     expect(noSubject.reserved).toBe(subject.reserved)
   })
 })
@@ -220,23 +222,44 @@ describe("Kling 4.0 Flash: the same clip wired as a reference video AND as the c
   })
 })
 
-describe("quote = hold = charge: Kling 4.0 prices a video subject as a reference video", () => {
-  it("a run whose only clip is a character's: the reference rate on the clip's seconds", async () => {
+// Decided 2026-11-14, from a measured run: Kling 4.0 bills a video subject like
+// an image subject too, exactly as Flash.
+describe("quote = hold = charge: Kling 4.0 prices a video subject like an image subject", () => {
+  it("a run whose only clip is a character's: the plain kling-4:5s:720p price, as with no clip", async () => {
     const params = { prompt: "Maya walks into the rain", provider: "kling-4", duration: 5, resolution: "720p", characterReferences: [maya()] }
-    const subject = await quoteRunSettle("text-to-video", params)
-    expect(subject.identifier).toMatch(/-ref$/)
-    expect(subject.quote.reserve).toBe(subject.reserved)
-    expect(subject.charged).toBe(subject.reserved)
-    // 720p -ref: 340/8 a second × (5 out + max(5, 5 in)) = 425 base.
-    expect(subject.reserved).toBe(mk(Math.ceil((340 / 8) * 10)))
+    for (const route of ["text-to-video", "generate-video"] as const) {
+      vi.clearAllMocks()
+      const subject = await quoteRunSettle(route, params)
+      expect(subject.identifier, route).toBe("kling-4:5s:720p")
+      // The seeded composite's charged price (360 base at the 10 % markup), not a reference-video base.
+      const { getModelCreditCostFromDB } = await import("../../billing/credits.js")
+      expect(subject.reserved, route).toBe((await getModelCreditCostFromDB("kling-4:5s:720p")).creditCost)
+      expect(subject.reserved, route).toBe(396)
+      expect(subject.quote.identifier, route).toBe(subject.identifier)
+      expect(subject.quote.reserve, route).toBe(subject.reserved)
+      expect(subject.charged, route).toBe(subject.reserved)
+      // The clip is still seated: measured and held to the caps, just not priced.
+      expect(subject.queued.referenceVideoUrls, route).toEqual([CLIP(1)])
+      expect(subject.queued.refVideoDurationsSec, route).toEqual([5])
 
-    vi.clearAllMocks()
-    const plain = await quoteRunSettle("text-to-video", { ...params, characterReferences: [maya(undefined)], referenceVideoUrls: [CLIP(1)] })
-    expect(plain.reserved).toBe(subject.reserved)
-    expect(plain.identifier).toBe(subject.identifier)
+      vi.clearAllMocks()
+      const imagesOnly = await quoteRunSettle(route, { ...params, characterReferences: [maya(null)] })
+      expect(imagesOnly.identifier, route).toBe(subject.identifier)
+      expect(imagesOnly.reserved, route).toBe(subject.reserved)
+    }
   })
 
-  it("Kling 4.0 with a reference video and a character's clip (generate-video)", async () => {
+  it("a plain reference video is unchanged: the reference rate on its seconds", async () => {
+    const params = { prompt: "@video_1 is the room", provider: "kling-4", duration: 5, resolution: "720p", referenceVideoUrls: [CLIP(1)], characterReferences: [maya(null)] }
+    const plain = await quoteRunSettle("text-to-video", params)
+    expect(plain.identifier).toMatch(/-ref$/)
+    expect(plain.quote.reserve).toBe(plain.reserved)
+    expect(plain.charged).toBe(plain.reserved)
+    // 720p -ref: 340/8 a second × (5 out + max(5, 5 in)) = 425 base.
+    expect(plain.reserved).toBe(mk(Math.ceil((340 / 8) * 10)))
+  })
+
+  it("beside a plain reference video (generate-video): priced on the reference video alone, the subject's seconds adding nothing", async () => {
     const params = {
       prompt: "@video_1 is the room; Maya crosses it", provider: "kling-4", duration: 5, resolution: "720p",
       imageUrl: "https://cdn.example.com/start.png", referenceVideoUrls: [REF(1)], characterReferences: [maya()],
@@ -244,10 +267,24 @@ describe("quote = hold = charge: Kling 4.0 prices a video subject as a reference
     const subject = await quoteRunSettle("generate-video", params)
     expect(subject.quote.reserve).toBe(subject.reserved)
     expect(subject.charged).toBe(subject.reserved)
-    // 720p -ref: 340/8 a second × (5 out + max(5, 6 + 5 in)) = 680 base.
-    expect(subject.reserved).toBe(mk(Math.ceil((340 / 8) * 16)))
+    // 720p -ref: 340/8 a second × (5 out + max(5, 6 in)) = 467.5 → 468 base.
+    expect(subject.reserved).toBe(mk(Math.ceil((340 / 8) * 11)))
     expect(subject.queued.referenceVideoUrls).toEqual([REF(1), CLIP(1)])
     expect(subject.queued.refVideoDurationsSec).toEqual([6, 5])
+
+    vi.clearAllMocks()
+    const noSubject = await quoteRunSettle("generate-video", { ...params, characterReferences: [maya(null)] })
+    expect(noSubject.reserved).toBe(subject.reserved)
+  })
+
+  it("the same clip wired as a reference video AND as the character's video goes as the character only: the plain price", async () => {
+    const params = { prompt: "Maya walks into the rain", provider: "kling-4", duration: 5, resolution: "720p", referenceVideoUrls: [CLIP(1)], characterReferences: [maya()] }
+    const twice = await quoteRunSettle("text-to-video", params)
+    expect(twice.identifier).toBe("kling-4:5s:720p")
+    expect(twice.quote.reserve).toBe(twice.reserved)
+    expect(twice.charged).toBe(twice.reserved)
+    expect(twice.reserved).toBe(396)
+    expect(twice.queued.referenceVideoUrls).toEqual([CLIP(1)])
   })
 })
 
@@ -375,6 +412,31 @@ describe("refused with a 400 before the credit check, the job and the reservatio
     const err = await refused("text-to-video", t2v({ referenceVideoUrls: [REF(1)], characterReferences: [maya()] }))
     expect(err.code).toBe("video_too_long")
     expect(err.message).toContain("20 seconds in total")
+  })
+
+  // Decided 2026-11-14: priced like an image subject, a Kling 4.0 character's clip
+  // still counts toward the model's caps exactly as before.
+  it("Kling 4.0: the shared 30 s total counts the character's clip", async () => {
+    lengths.set(REF(1), 26)
+    const err = await refused("text-to-video", t2v({ provider: "kling-4", referenceVideoUrls: [REF(1)], characterReferences: [maya()] }))
+    expect(err.code).toBe("video_too_long")
+    expect(err.message).toContain("30 seconds in total")
+  })
+
+  it("Kling 4.0: more than 3 characters made from a video, and reference videos plus clips past 5", async () => {
+    const characters = [1, 2, 3, 4].map((n) => ({ ...maya(CLIP(n)), name: `C${n}` }))
+    expect((await refused("text-to-video", t2v({ provider: "kling-4", characterReferences: characters }))).code).toBe("character_videos_over_limit")
+    vi.clearAllMocks()
+    const err = await refused("text-to-video", t2v({ provider: "kling-4", referenceVideoUrls: [1, 2, 3, 4, 5].map(REF), characterReferences: [maya()] }))
+    expect(err.code).toBe("reference_videos_over_limit")
+    expect(probe.probeMediaDuration).not.toHaveBeenCalled()
+  })
+
+  it("Kling 4.0: a character's clip measured outside 3-8 s", async () => {
+    lengths.set(CLIP(1), 9.5)
+    const err = await refused("text-to-video", t2v({ provider: "kling-4", characterReferences: [maya()] }))
+    expect(err.code).toBe("video_too_long")
+    expect(err.message).toContain("between 3 and 8 seconds")
   })
 })
 

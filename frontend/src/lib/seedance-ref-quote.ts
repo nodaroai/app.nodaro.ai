@@ -52,6 +52,7 @@ import { bypassTeleports } from "@nodaro/render-rules"
 import { expandWiredCharacterRefsForVideo } from "@/lib/video-prompt-assembly"
 import { resolveNodeInputs } from "@/components/editor/workflow-editor/node-input-resolver"
 import { seedanceRefQuoteKey } from "@/lib/seedance-ref-quote-key"
+import { sendsReferenceVideo } from "@/lib/audio-reference-handles"
 
 export { SEEDANCE_REF_QUOTE_PREFIX, seedanceRefQuoteKey, isSeedanceRefQuoteKey, parseSeedanceRefQuoteKey } from "@/lib/seedance-ref-quote-key"
 
@@ -94,12 +95,13 @@ export function seedanceRefQuoteRequest(
     audioSoundtrack: typeof data.audioSoundtrack === "boolean" ? data.audioSoundtrack : undefined,
     audioRefCount: audioEdges.length,
   })
-  // Kling 4.0 video subjects: a wired Character's own clip rides as one more
-  // reference video (the route seats it, `seatCharacterVideos`), so it moves
-  // the price as a wired clip does — the very references the Run sends.
+  // Video subjects: a wired Character's own clip rides as one more reference
+  // video (the route seats it, `seatCharacterVideos`). It moves the price as a
+  // wired clip does only on a model that bills it as reference video
+  // (`videoCharactersBillAsReferenceVideo`, set on no model today).
   // Only Generate Video carries video subjects (the older video nodes never do).
   const runSubjectClips = type === "generate-video" && soundtrackProvider ? characterSubjectClips(node.id, nodes, edges, soundtrackProvider) : []
-  // On Kling 4.0 Flash a video subject is priced like an image subject
+  // On Kling 4.0 and Flash a video subject is priced like an image subject
   // (decided 2026-11-14): it moves no price, even when the same clip is also
   // wired as a reference video (the run sends it as the character only).
   const subjectsPriced = !!soundtrackProvider && videoCharacterClipsBilledAsReferenceVideo(soundtrackProvider)
@@ -177,6 +179,43 @@ function characterSubjectClips(
   return characterVideoUrls(
     characterReferencesFromWired(expandWiredCharacterRefsForVideo(consumerNodeId, nodes, edges), clips).slice(0, videoCharacterRefCap(provider)),
   )
+}
+
+/**
+ * Whether a video generation node's run is priced as a reference-video run:
+ * {@link sendsReferenceVideo} (a wired reference video, or a Kling 4.0
+ * soundtrack), less the wires that are only a character's video subject. On a
+ * Generate Video model that prices a video subject like an image subject
+ * (Kling 4.0 and Flash, decided 2026-11-14), a wired clip that is also one of
+ * the run's character clips goes to the model as the character only, so it
+ * moves no price — the server's estimate (`videoRefWired`) and the run
+ * (`pricedReferenceVideoUrls`) leave it out the same way. A wire whose clip is
+ * not known yet (no URL, or its source re-runs) still counts: the estimate may
+ * over-quote, never under-quote.
+ */
+export function sendsPricedReferenceVideo(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  rawEdges: ReadonlyArray<WorkflowEdge>,
+  provider: string | undefined,
+  audioSoundtrack: boolean | undefined,
+  rerunIds: ReadonlySet<string> = NO_RERUNS,
+): boolean {
+  if (!sendsReferenceVideo(node.id, provider, audioSoundtrack, rawEdges)) return false
+  // Cheap exits first: this runs in the node's store selector.
+  if (node.type !== "generate-video" || !provider || videoCharacterVideoCap(provider) === 0 || videoCharacterClipsBilledAsReferenceVideo(provider)) return true
+  // The wires the run reads, as the quote request reads them.
+  const edges = bypassTeleports(nodes as WorkflowNode[], rawEdges as WorkflowEdge[]) as WorkflowEdge[]
+  const into = (modality: "video" | "audio") => edges.filter((e) => e.target === node.id && referenceModalityForHandle(e.targetHandle) === modality)
+  const clipEdges = into("video")
+  if (clipEdges.length === 0 || audioSoundtrackActive({ provider, audioSoundtrack, audioRefCount: into("audio").length })) return true
+  const subjectClips = characterSubjectClips(node.id, nodes, edges, provider)
+  if (subjectClips.length === 0) return true
+  if (clipEdges.some((e) => rerunIds.has(e.source))) return true
+  const inputs = resolveNodeInputs(node, nodes as WorkflowNode[], edges)
+  const wiredUrls = (inputs.referenceVideoUrls ?? []).filter((u): u is string => typeof u === "string" && u.length > 0)
+  if (wiredUrls.length < clipEdges.length) return true
+  return wiredUrls.some((u) => !subjectClips.includes(u))
 }
 
 /** The node's quote key, or undefined when its price does not follow reference clips. */

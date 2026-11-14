@@ -785,7 +785,7 @@ export async function validateSeedance2AudioPreHandler(
 /**
  * How many reference videos a request is PRICED on: those the provider bills
  * as reference video (`pricedRefVideoInput`), so a character's video subject
- * on Kling 4.0 Flash, priced like an image subject (decided 2026-11-14), never
+ * on Kling 4.0 or Flash, priced like an image subject (decided 2026-11-14), never
  * moves the run onto the reference-video rate. Both video routes' identifier,
  * credit guard and handler read it.
  */
@@ -859,7 +859,7 @@ export const generateVideoPricing: RoutePricing = {
     const body = req.body as Record<string, unknown>
     const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
     // The reference videos the provider bills (`pricedRefVideoInput`): a
-    // character's video subject on Kling 4.0 Flash is not one.
+    // character's video subject on Kling 4.0 or Flash is not one.
     const hasVideoRef = pricedReferenceVideoCount(sel.provider, body ?? {}) > 0
     // Placement rule: the CHECK identifier, `computeCredits` and the
     // reservation must all be computed from the SAME normalized values.
@@ -941,7 +941,7 @@ export const generateVideoPricing: RoutePricing = {
           (await probeRefVideoDurations({ provider: priceArgs.provider, referenceVideoUrls: b.referenceVideoUrls as unknown[] }))
         req.refVideoDurationsSec = sentDurationsSec
         // Priced on the clips the provider bills as reference video: on Kling
-        // 4.0 Flash a character's video subject is not one (decided 2026-11-14).
+        // 4.0 or Flash a character's video subject is not one (decided 2026-11-14).
         const durationsSec = await pricedRefVideoDurations(priceArgs.provider, b, sentDurationsSec)
         const videoTrim = { start: b.videoTrimStart, end: b.videoTrimEnd }
         await noteRefVideoPricing(req, {
