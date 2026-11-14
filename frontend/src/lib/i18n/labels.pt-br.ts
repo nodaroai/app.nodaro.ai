@@ -1046,6 +1046,9 @@ const OPTION_LABELS_PT_BR: Record<string, string> = {
   "Smart": "Inteligente",
   "Mixed": "Misto",
   "Mixed (consistent)": "Misto (consistente)",
+  // The Video Analysis `ultra` tier — a whole-label entry; the "(Ultra)"
+  // qualifier below is a picture-quality grade and reads differently.
+  "Ultra": "Ultra",
   // Character facet menu, reference-role words, location photo kinds.
   "Full likeness": "Semelhança completa",
   "Hair": "Cabelo",

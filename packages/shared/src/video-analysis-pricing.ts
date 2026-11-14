@@ -130,6 +130,11 @@ export const VIDEO_ANALYSIS_WINDOW = { LEN: WINDOW_LEN, STRIDE: WINDOW_STRIDE, O
 // regenerated, on the deployed 9_082 basis: the new gemini-3.8-flash family,
 // and `mixed` / `smart`, whose plans roll the fast model too. Every other row
 // is exactly as deployed.
+//
+// 2026-11-13 — the `ultra` tier (gemini-4-carbon) joined. Its four rows are new
+// (migration 649); every other row is exactly as deployed. They are the decided
+// schedule, set between `mixed` and `smart` in every bucket; the plugin's
+// cost test holds its formula to them like every other row.
 export const VIDEO_ANALYSIS_BUCKET_CREDITS: Record<string, number> = {
   // Current fast tier (VIDEO_ANALYSIS_TIERS.fast, since 2026-11-13).
   "video-analysis:gemini-3.8-flash:60s": 186,
@@ -153,6 +158,12 @@ export const VIDEO_ANALYSIS_BUCKET_CREDITS: Record<string, number> = {
   "video-analysis:gemini-3.1-pro:180s": 232,
   "video-analysis:gemini-3.1-pro:360s": 640,
   "video-analysis:gemini-3.1-pro:600s": 1056,
+  // ULTRA (VIDEO_ANALYSIS_TIERS.ultra, since 2026-11-13) — the deepest-reasoning
+  // model reading every window. Above `mixed` and below `smart` per bucket.
+  "video-analysis:gemini-4-carbon:60s": 349,
+  "video-analysis:gemini-4-carbon:180s": 375,
+  "video-analysis:gemini-4-carbon:360s": 1054,
+  "video-analysis:gemini-4-carbon:600s": 1745,
   // Mixed tiers (`mixed` + `mixed-fast`) share ONE credit family — they are
   // variants of the same engine plan (plan internals live in the private
   // analysis plugin). Admin-tunable via model_pricing like every other row.

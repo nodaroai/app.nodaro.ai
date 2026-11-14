@@ -1046,6 +1046,9 @@ const OPTION_LABELS_JA: Record<string, string> = {
   "Smart": "スマート",
   "Mixed": "ミックス",
   "Mixed (consistent)": "ミックス（一貫性重視）",
+  // The Video Analysis `ultra` tier — a whole-label entry; the "(Ultra)"
+  // qualifier below is a picture-quality grade and reads differently.
+  "Ultra": "ウルトラ",
   // Character facet menu, reference-role words, location photo kinds.
   "Full likeness": "見た目全体",
   "Hair": "髪",

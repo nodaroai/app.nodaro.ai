@@ -246,9 +246,9 @@ for (const resolution of Object.keys(CINEMATIC_RATE_USD_PER_SEC) as CinematicRes
 // shared table so the numbers can't silently drift.
 // Per model: a bare id `video-analysis:<model>` (= the 600s unknown-duration
 // ceiling) + one composite per bucket `video-analysis:<model>:<bucket>s`.
-// The two models mirror the catalog's video-analysis entries (model-catalog.ts)
-// and the model_pricing rows (migrations 247+248) — extend all of them together
-// if a third video+audio model ships.
+// The models mirror the catalog's video-analysis entries (model-catalog.ts)
+// and the model_pricing rows (migrations 247+248, then each tier's own) —
+// extend all of them together when another video+audio model ships.
 //
 // Current values are deliberately NOT listed here — this comment hand-copied
 // them once and then sat stale through five repricings (last caught 2026-08-03,
@@ -286,7 +286,7 @@ const VIDEO_ANALYSIS_STATIC: Record<string, number> = {}
 // Model-backed tiers plus the two engine-plan SENTINELS that own credit rows
 // (`mixed` and `smart`). `mixed-fast` is absent because it shares `mixed`'s credit
 // family, so its colon ids are never built.
-for (const model of ["gemini-3.8-flash", "gemini-3-flash", "gemini-3.6-flash", "gemini-3.1-pro", "mixed", "smart"]) {
+for (const model of ["gemini-3.8-flash", "gemini-3-flash", "gemini-3.6-flash", "gemini-3.1-pro", "gemini-4-carbon", "mixed", "smart"]) {
   // Bare per-model id (`video-analysis:<model>`) = the unknown-duration ceiling
   // (600s). buildVideoAnalysisCreditId NEVER produces this id — it always appends
   // a `:<bucket>s` suffix; the bare id exists in STATIC only because MODEL_CATALOG

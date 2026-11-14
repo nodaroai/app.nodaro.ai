@@ -1599,12 +1599,13 @@ export const LLM_MODALITY_CAPS: Record<string, LlmModalityCaps> = {
   // video-analysis tier + pricing decision. That waits on a Video Analysis
   // bake-off; flip these two flags ONLY together with its outcome.
   "gemini-4-argon":    { image: true,  video: false, audio: false },
-  // gemini-4-carbon is IMAGE-ONLY for now, by decision (2026-11-12): the model
-  // reads video and audio, but full caps would auto-enroll it in
-  // VIDEO_ANALYSIS_LLM_MODELS (derived below). Its video + audio input comes in
-  // a follow-up change that also decides its Video Analysis enrolment; flip
-  // these two flags ONLY together with that.
-  "gemini-4-carbon":   { image: true,  video: false, audio: false },
+  // gemini-4-carbon takes video + audio (decided 2026-11-13): it backs the
+  // video-analysis `ultra` tier (VIDEO_ANALYSIS_TIERS below), which is what
+  // enrols it in VIDEO_ANALYSIS_LLM_MODELS. The same caps let LLM Chat send it
+  // video and audio references, and let a trend's LLM step that reads the clip
+  // choose it (modelReadsClip) — both intended. It was image-only from
+  // 2026-11-12 until this enrolment was decided.
+  "gemini-4-carbon":   { image: true,  video: true,  audio: true  },
   "claude-haiku-4.5":  { image: true,  video: false, audio: false },
   "claude-haiku-5.5":  { image: true,  video: false, audio: false },
   "claude-sonnet-4.6": { image: true,  video: false, audio: false },
@@ -2041,8 +2042,12 @@ export const VIDEO_ANALYSIS_LLM_MODELS: string[] = LLM_MODELS
  * (video-analysis-pricing.test.ts) asserts every tier target is a real
  * VIDEO_ANALYSIS_LLM_MODELS member AND every such model is reachable by a tier,
  * so adding a video model forces a tier decision instead of silently leaking.
+ *
+ * `ultra` (decided 2026-11-13) reads every window with the deepest-reasoning
+ * analysis model, at the same frame sampling as the other single-model tiers.
+ * It is priced between the mixed tiers and `smart`.
  */
-export const VIDEO_ANALYSIS_TIERS = { fast: "gemini-3.8-flash", pro: "gemini-3.1-pro" } as const
+export const VIDEO_ANALYSIS_TIERS = { fast: "gemini-3.8-flash", pro: "gemini-3.1-pro", ultra: "gemini-4-carbon" } as const
 export type VideoAnalysisModelTier = keyof typeof VIDEO_ANALYSIS_TIERS
 /**
  * Models that PREVIOUSLY backed a tier, mapped to the tier they backed.
@@ -2098,14 +2103,15 @@ export type VideoAnalysisMixedTier = (typeof VIDEO_ANALYSIS_MIXED_TIERS)[number]
  * As with the mixed sentinels, what the plan does internally is deliberately not
  * published here; only the wire vocabulary is contract.
  */
-/** UI/listing order — recommended (smart) first. */
-export const VIDEO_ANALYSIS_TIER_ORDER = ["smart", "pro", "fast", "mixed", "mixed-fast"] as const
+/** UI/listing order — recommended (smart) first, then `ultra`, the other high-accuracy tier. */
+export const VIDEO_ANALYSIS_TIER_ORDER = ["smart", "ultra", "pro", "fast", "mixed", "mixed-fast"] as const
 export type VideoAnalysisTier = (typeof VIDEO_ANALYSIS_TIER_ORDER)[number]
 export const DEFAULT_VIDEO_ANALYSIS_TIER: VideoAnalysisTier = "pro"
 export const DEFAULT_VIDEO_ANALYSIS_MODEL: string = VIDEO_ANALYSIS_TIERS[DEFAULT_VIDEO_ANALYSIS_TIER]
 /** Neutral, vendor-free display labels for the UI. */
 export const VIDEO_ANALYSIS_TIER_LABELS: Record<VideoAnalysisTier, string> = {
   smart: "Smart",
+  ultra: "Ultra",
   fast: "Fast",
   pro: "Pro",
   mixed: "Mixed",
@@ -2123,7 +2129,7 @@ export function isVideoAnalysisMixedTier(v: string): v is VideoAnalysisMixedTier
 /**
  * Resolve a user-supplied tier OR a raw internal model id to the analysis
  * ENGINE IDENTIFIER carried in the worker payload:
- *  - model-backed tiers ("fast"/"pro") → the internal model id;
+ *  - model-backed tiers ("fast"/"pro"/"ultra") → the internal model id;
  *  - mixed tiers ("mixed"/"mixed-fast") → the sentinel ITSELF (the engine
  *    expands it to a multi-model roll plan);
  *  - raw model ids pass through (back-compat for stored `llmModel` values);

@@ -631,7 +631,7 @@ export function estimateNodeCredits(
     return getCachedCredits(modelId) ?? SOCIAL_SEARCH_CREDIT_COSTS[modelId] ?? NODE_CREDIT_COSTS["social-search"] ?? 0
   }
   if (nodeType === "video-analysis" && node.data) {
-    // data.llmModel stores the TIER string ("fast"/"pro"/"mixed"/"mixed-fast") —
+    // data.llmModel stores the TIER string ("fast"/"pro"/"ultra"/"mixed"/…) —
     // resolve it to the engine id first (audit fix: the raw tier built
     // non-existent ids like "video-analysis:fast:180s", silently falling back
     // to the flat 1-credit placeholder for every fast/pro node).

@@ -1067,6 +1067,9 @@ const OPTION_LABELS_HE: Record<string, string> = {
   "Smart": "חכם",
   "Mixed": "משולב",
   "Mixed (consistent)": "משולב (עקבי)",
+  // The Video Analysis `ultra` tier — a whole-label entry; the "(Ultra)"
+  // qualifier below is a picture-quality grade and reads differently.
+  "Ultra": "אולטרה",
   // Character facet menu, reference-role words, location photo kinds.
   "Full likeness": "מראה מלא",
   "Hair": "שיער",
