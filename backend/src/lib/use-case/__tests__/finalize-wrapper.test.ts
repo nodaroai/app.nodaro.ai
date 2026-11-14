@@ -47,6 +47,7 @@ vi.mock("../../../workers/shared.js", () => ({ markJobCompleted: m.completed }))
 vi.mock("../../job-failure.js", () => ({ markJobFailed: m.failed }))
 vi.mock("../../credits-job-lifecycle.js", () => ({ commitReservedCreditsForJob: m.commit, refundReservedCreditsForJob: m.refund }))
 import { finalizeUseCaseWrapper } from "../finalize-wrapper.js"
+import { UNQUEUED_EXECUTION_MESSAGE } from "../../unqueued-run-message.js"
 
 const done = { "uc-plan": { status: "completed", output: { json: { v: 1 } } }, "uc-render": { status: "completed", output: { videoUrl: "https://r2/cut.mp4" } } }
 const exec = (over: Record<string, unknown> = {}) => ({ id: "exec-1", userId: "u1", status: "completed", nodeStates: done, totalCreditsUsed: 872, errorMessage: null, wrapperJobId: "job-w", inlineGraph: graph, ...over })
@@ -94,6 +95,19 @@ describe("finalizeUseCaseWrapper", () => {
     m.exec = exec()
     await finalizeUseCaseWrapper("exec-1")
     expect(m.completed.mock.calls[1]![1]).not.toHaveProperty("input_data")
+  })
+  it("a run the queue refused fails the wrapper with the caller's Idempotency-Key released in the same write; any other failure keeps it", async () => {
+    m.exec = exec({ status: "failed", nodeStates: {}, errorMessage: UNQUEUED_EXECUTION_MESSAGE })
+    expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+    expect(m.failed).toHaveBeenCalledWith("job-w", expect.objectContaining({
+      error_message: UNQUEUED_EXECUTION_MESSAGE,
+      extra: expect.objectContaining({ idempotency_key: null }),
+    }))
+    expect(m.refund).toHaveBeenCalledWith("job-w")
+    m.failed.mockClear()
+    m.exec = exec({ status: "failed", nodeStates: {}, errorMessage: "boom" })
+    expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+    expect(m.failed.mock.calls[0]![1].extra).not.toHaveProperty("idempotency_key")
   })
   it("a second call (the sweep after the finally) moves no money", async () => {
     await finalizeUseCaseWrapper("exec-1")

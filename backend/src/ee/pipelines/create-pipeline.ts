@@ -27,6 +27,9 @@ export type CreatePipelineResult =
       model?: string
     }
 
+/** What a caller answers when the queue refused a new pipeline's first drive (`500 internal_error`). */
+export const UNQUEUED_PIPELINE_CLIENT_MESSAGE = "The pipeline could not be started. Please try again."
+
 export interface CreatePipelineArgs {
   supabase: SupabaseClient
   userId: string
@@ -243,8 +246,19 @@ export async function createPipeline(
     return { ok: false, status: 402, code: reservation.reason }
   }
 
-  // 3. Enqueue.
-  await enqueuePipelineRun({ pipelineId: pipeline.id, userId, reason: "initial" })
+  // 3. Enqueue. A first drive the queue refuses is never left `queued` with
+  // its reservation held (no sweep would end it): failed from `queued` and
+  // refunded at once, and the caller answers 500 (queue-failure.ts). One a
+  // drive claimed meanwhile runs: answered as created.
+  try {
+    await enqueuePipelineRun({ pipelineId: pipeline.id, userId, reason: "initial" })
+  } catch (err) {
+    const { settleUnqueuedPipeline } = await import("./queue-failure.js")
+    const outcome = await settleUnqueuedPipeline({ supabase, pipelineId: pipeline.id, userId, err })
+    if (outcome !== "moved-on") {
+      return { ok: false, status: 500, code: "internal_error", message: UNQUEUED_PIPELINE_CLIENT_MESSAGE }
+    }
+  }
 
   return { ok: true, pipelineId: pipeline.id }
 }

@@ -22,6 +22,10 @@ interface EntityRow {
 
 const mocks = vi.hoisted(() => ({
   pipelines: [] as PipelineRow[],
+  /** Pipelines at `awaiting_approval`, with their redrive latch. */
+  pausedPipelines: [] as Array<{ id: string; user_id: string; pending_redrive_at: string | null }>,
+  /** How the owed-drive read of paused pipelines answers: normally, with an error, or by throwing. */
+  pausedRead: "ok" as "ok" | "error" | "throws",
   stages: [] as StageRow[],
   entities: [] as EntityRow[],
   pipelineUpdates: [] as Array<{ id: string; updates: Record<string, unknown> }>,
@@ -37,14 +41,38 @@ vi.mock("../../../lib/supabase.js", () => {
   function from(table: string) {
     if (table === "pipelines") {
       return {
-        select: () => ({
-          in: () => ({
-            lt: () => ({
-              limit: () =>
-                Promise.resolve({ data: mocks.pipelines, error: null }),
-            }),
-          }),
-        }),
+        // Two reads: the running scan (`in` status) and the owed-drive read
+        // of paused pipelines (`eq` status awaiting_approval, a latch set and
+        // older than the backoff).
+        select: () => {
+          let paused = false
+          let latchCutoff: string | null = null
+          const b: any = {
+            in: () => b,
+            eq: (_col: string, val: unknown) => {
+              if (val === "awaiting_approval") paused = true
+              return b
+            },
+            not: () => b,
+            lt: (col: string, val: string) => {
+              if (col === "pending_redrive_at") latchCutoff = val
+              return b
+            },
+            limit: () => {
+              if (paused && mocks.pausedRead === "throws") return Promise.reject(new Error("socket hang up"))
+              if (paused && mocks.pausedRead === "error") return Promise.resolve({ data: null, error: { message: "read failed" } })
+              return Promise.resolve({
+                data: paused
+                  ? mocks.pausedPipelines.filter(
+                    (p) => p.pending_redrive_at !== null && latchCutoff !== null && p.pending_redrive_at < latchCutoff,
+                  )
+                  : mocks.pipelines,
+                error: null,
+              })
+            },
+          }
+          return b
+        },
         update: (updates: Record<string, unknown>) => ({
           eq: (_col: string, id: string) => {
             mocks.pipelineUpdates.push({ id, updates })
@@ -153,6 +181,8 @@ const HOUR = 60 * 60 * 1000
 describe("reconcilePipelinesTick", () => {
   beforeEach(() => {
     mocks.pipelines.length = 0
+    mocks.pausedPipelines.length = 0
+    mocks.pausedRead = "ok"
     mocks.stages.length = 0
     mocks.entities.length = 0
     mocks.pipelineUpdates.length = 0
@@ -341,5 +371,73 @@ describe("reconcilePipelinesTick", () => {
 
     expect(mocks.enqueueCalls).toHaveLength(0)
     expect(mocks.pipelineUpdates).toHaveLength(0)
+  })
+})
+
+// A pipeline paused at `awaiting_approval` whose gate the user moved on, and
+// whose re-drive the queue refused: its redrive latch is the record that a
+// drive is owed (stamped before the add, cleared by the drive that takes it).
+describe("reconcilePipelinesTick — a paused pipeline owed a drive", () => {
+  const MINUTE = 60 * 1000
+  const ago = (ms: number) => new Date(Date.now() - ms).toISOString()
+
+  beforeEach(() => {
+    mocks.pipelines.length = 0
+    mocks.pausedPipelines.length = 0
+    mocks.pausedRead = "ok"
+    mocks.stages.length = 0
+    mocks.entities.length = 0
+    mocks.pipelineUpdates.length = 0
+    mocks.stageUpdates.length = 0
+    mocks.stageAttemptInserts.length = 0
+    mocks.bullmqJob.clear()
+    mocks.enqueueCalls.length = 0
+    mocks.refundCalls.length = 0
+  })
+
+  it("is re-driven when its latch is older than the backoff, no drive is live and no gate is open: no resume accounting, no abandon", async () => {
+    mocks.pausedPipelines.push({ id: "pa1", user_id: "u1", pending_redrive_at: ago(5 * MINUTE) })
+    await reconcilePipelinesTick()
+    expect(mocks.enqueueCalls).toEqual([{ pipelineId: "pa1", reason: "resume" }])
+    expect(mocks.stageUpdates).toEqual([])
+    expect(mocks.pipelineUpdates).toEqual([])
+    expect(mocks.refundCalls).toEqual([])
+  })
+
+  it("one legitimately paused (no latch: the drive that paused it cleared it) is left alone", async () => {
+    mocks.pausedPipelines.push({ id: "pa2", user_id: "u1", pending_redrive_at: null })
+    await reconcilePipelinesTick()
+    expect(mocks.enqueueCalls).toEqual([])
+  })
+
+  it("a latch younger than the backoff (an add still in flight) is not owed yet", async () => {
+    mocks.pausedPipelines.push({ id: "pa3", user_id: "u1", pending_redrive_at: ago(10 * 1000) })
+    await reconcilePipelinesTick()
+    expect(mocks.enqueueCalls).toEqual([])
+  })
+
+  it("an owed-drive read that fails or throws never skips the running scan of the same tick", async () => {
+    for (const mode of ["error", "throws"] as const) {
+      mocks.enqueueCalls.length = 0
+      mocks.pausedRead = mode
+      mocks.pipelines.length = 0
+      mocks.pipelines.push({ id: "p-run", user_id: "u1", status: "running", created_at: new Date(Date.now() - 60 * MINUTE).toISOString() })
+      mocks.stages.push({ id: `s-run-${mode}`, pipeline_id: "p-run", resume_count: 0, status: "running" })
+      const log = vi.spyOn(console, "error").mockImplementation(() => {})
+      await expect(reconcilePipelinesTick()).resolves.toBeUndefined()
+      log.mockRestore()
+      expect(mocks.enqueueCalls).toEqual([{ pipelineId: "p-run", reason: "resume" }])
+    }
+  })
+
+  it("a live drive, or a gate still open, leaves it alone", async () => {
+    mocks.pausedPipelines.push(
+      { id: "pa4", user_id: "u1", pending_redrive_at: ago(5 * MINUTE) },
+      { id: "pa5", user_id: "u1", pending_redrive_at: ago(5 * MINUTE) },
+    )
+    mocks.bullmqJob.set("pa4", { state: "waiting" })
+    mocks.stages.push({ id: "s5", pipeline_id: "pa5", resume_count: 0, status: "awaiting_approval" })
+    await reconcilePipelinesTick()
+    expect(mocks.enqueueCalls).toEqual([])
   })
 })

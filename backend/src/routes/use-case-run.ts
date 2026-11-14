@@ -56,6 +56,7 @@ import { clipMeasureStartLimiter } from "../lib/clip-measure-limit.js"
 import { usecaseClockSec, usecaseSourcesOf, usecaseWrapperRecordings } from "../lib/use-case/sources.js"
 import { usecaseFramesAvailable, usecaseInnerDenial, usecaseMulticamDenial } from "../lib/use-case/inner-availability.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
+import { UnqueuedRunError } from "../lib/enqueue-execution.js"
 import { replyIfLlmUnpriced } from "../lib/llm-unpriced-refusal.js"
 import { parentExecutionIdOf } from "../lib/concurrency-lanes/parent-execution.js"
 import { importViaOf } from "../lib/import-via.js"
@@ -277,7 +278,7 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
     if (reply.sent) {
       // The hold was refused (its own reply says why). A refused hold has
       // already removed the row; this only covers one that kept it.
-      await markJobFailed(wrapperId, { error_message: "The run's fee could not be held", from: ["processing"] })
+      await markJobFailed(wrapperId, { error_message: "The run's fee could not be held", from: ["processing"], extra: { idempotency_key: null } })
       return
     }
 
@@ -310,12 +311,28 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
       })
       executionId = started.executionId
     } catch (err) {
-      // Only a run that never started unwinds the wrapper and its fee.
-      if (await markJobFailed(wrapperId, { error_message: "The run could not start", from: ["processing"] })) {
-        await refundReservedCreditsForJob(wrapperId)
+      if (err instanceof UnqueuedRunError && err.outcome === "unsettled") {
+        // The queue refused the run and what became of it is unknown: it may
+        // still be pending (the never-started sweep fails it and settles the
+        // wrapper), failed with its answer lost, or running. Nothing here may
+        // fail the wrapper or refund its fee (the run could be running), and
+        // its key stays, so a retry never starts a second run beside it. It
+        // is answered as started and followed like any run: the run's own
+        // completion or failure path settles the wrapper.
+        console.warn(`[use-case-run] the queue refused run ${err.executionId} of wrapper ${wrapperId} and its state is unknown — answered as started`)
+        executionId = err.executionId
+      } else {
+        // Only a run that never started unwinds the wrapper and its fee, and
+        // releases the caller's key with it, so a retry starts a new run. (A
+        // run the queue refused and failed has already settled the wrapper
+        // through its own failure path, key released: this write then finds it
+        // no longer `processing` and moves nothing.)
+        if (await markJobFailed(wrapperId, { error_message: "The run could not start", from: ["processing"], extra: { idempotency_key: null } })) {
+          await refundReservedCreditsForJob(wrapperId)
+        }
+        if (err instanceof InlineGraphUnavailableError) return reply.status(503).send({ error: usecaseUnavailable(type) })
+        return sendInternalError(reply, req, err, `Failed to start ${d.label}`)
       }
-      if (err instanceof InlineGraphUnavailableError) return reply.status(503).send({ error: usecaseUnavailable(type) })
-      return sendInternalError(reply, req, err, `Failed to start ${d.label}`)
     }
 
     // The run is live from here: a stamp that fails (or throws) never fails

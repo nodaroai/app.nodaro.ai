@@ -23,7 +23,7 @@ import {
   inlineGraphColumnAbsent,
   noteInlineGraphColumnError,
 } from "../lib/execution-inline-graph.js"
-import { updateExecutionWithRetry } from "../lib/execution-writes.js"
+import { enqueueRunOrThrow } from "../lib/enqueue-execution.js"
 import { outerRunStamp } from "../lib/use-case-outer-run.js"
 import type { WorkflowExecutionJob } from "./workflow-engine/types.js"
 import type { ImportVia } from "../lib/content-rights.js"
@@ -142,21 +142,15 @@ export async function executeInlineGraph(p: ExecuteInlineGraphParams): Promise<E
     // Started by a node of a running run: no run slot of its own.
     ...(p.parentExecutionId ? { parentExecutionId: p.parentExecutionId } : {}),
   }
-  try {
-    await orchestrationQueue.add("workflow-execution", jobData, { jobId: result.row.id })
-  } catch (err) {
-    // Never left `pending` with nothing queued: the never-started sweep takes
-    // such a row only after 4 hours (lib/reconcile/never-started-executions.ts),
-    // and until then the budget reads it as still dispatching. The caller
-    // fails the wrapper and refunds its fee on the rethrow.
-    await updateExecutionWithRetry(result.row.id, {
-      status: "failed",
-      error_message: "The run could not be queued",
-      completed_at: new Date().toISOString(),
-    }).catch((writeErr: unknown) => {
-      console.error(`[use-case-execution] execution ${result.row.id} left pending after a failed enqueue: ${(writeErr as Error).message}`)
-    })
-    throw err
-  }
+  // Never left `pending` with nothing queued: the never-started sweep takes
+  // such a row only after 4 hours (lib/reconcile/never-started-executions.ts),
+  // and until then the budget reads it as still dispatching. Failed from
+  // `pending` only (a run a worker claimed meanwhile is running: answered as
+  // started), its key released, through the run's own failure path, which
+  // settles the wrapper it reports to. The caller unwinds a wrapper still
+  // `processing` and refunds its fee on the UnqueuedRunError.
+  await enqueueRunOrThrow(result.row.id, p.userId, () =>
+    orchestrationQueue.add("workflow-execution", jobData, { jobId: result.row.id }),
+  )
   return { executionId: result.row.id, deduped: false }
 }

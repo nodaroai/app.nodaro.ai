@@ -297,5 +297,20 @@ export type PluginTriggerFireResult =
 export interface PluginTriggersToolkit {
   /** Active rows of one lane, across all owners (the daemon serves them all). */
   listActive(query: { type: PluginTriggerLane }): Promise<PluginTriggerRow[]>
+  /**
+   * Rejects (rather than answering a result) when the host could not start
+   * the run: the execution row could not be written, or the queue refused
+   * the run. A run the queue refused is failed from `pending` with its
+   * idempotency key released, and the rejection is an error named
+   * `"UnqueuedRunError"` whose `outcome` is `"failed"` (nothing runs, the key
+   * is free: offering the same event again fires it) or `"unsettled"` (its
+   * state is unknown; a host report names it, and an offer that is then
+   * answered `duplicate` met a run that holds the key). A run a worker
+   * claimed meanwhile is answered `fired: true`. A run refused with outcome
+   * `"failed"` does not spend the trigger's per-minute fire rate (its count is
+   * given back), but every event offered still counts toward the offers the
+   * trigger is allowed per minute, fired or not, so a daemon that re-offers a
+   * refused event in a tight loop is turned away as `throttled` like any flood.
+   */
   fire(input: PluginTriggerFireInput): Promise<PluginTriggerFireResult>
 }

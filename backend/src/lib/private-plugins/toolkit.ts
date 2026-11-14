@@ -2038,7 +2038,24 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       internalRequest,
       ...(opts.workerApp ? { workerRequest: workerRequestVia(opts.workerApp) } : {}),
       supportsJobSubmissionContext: true,
+      // Deprecated in a request handler (types.ts): kept for a plugin built
+      // before `enqueueJob`, and for a path with no request in hand.
       videoQueue: { add: (name, data, queueOpts) => videoQueue.add(name, pluginJobData(data), queueOpts) },
+      // A plugin route's job, queued through the helpers every core route
+      // uses (lib/enqueue-route-job.ts): a job the queue refuses is failed
+      // from `pending` with its key released, refunded, and answered 500.
+      // Loaded on first use, like the toolkit's other request-time lanes.
+      enqueueJob: async (req, reply, jobId, name, data, queueOpts) => {
+        const { enqueueRouteJob } = await import("../enqueue-route-job.js")
+        await enqueueRouteJob(req, reply, jobId, () => videoQueue.add(name, pluginJobData(data), queueOpts))
+      },
+      enqueueJobs: async (req, reply, jobs) => {
+        const { enqueueRouteJobs } = await import("../enqueue-route-job.js")
+        await enqueueRouteJobs(req, reply, jobs.map((job) => ({
+          jobId: job.jobId,
+          enqueue: () => videoQueue.add(job.name, pluginJobData(job.data), job.opts),
+        })))
+      },
       creditGuard,
       reserveCreditsForJob,
       reserveCreditsForJobOnce,

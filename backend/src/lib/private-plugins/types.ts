@@ -2203,6 +2203,20 @@ export interface EditVideoProPricing {
   spanExceedsSource: boolean
 }
 
+/** The queue options a plugin may pass with a job (`tk.http.videoQueue.add`, `tk.http.enqueueJob`). */
+export interface PluginQueueJobOptions {
+  attempts?: number
+  jobId?: string
+}
+
+/** One job of `tk.http.enqueueJobs`: the row the route inserted and reserved, and how to queue it. */
+export interface PluginQueuedJob {
+  jobId: string
+  name: string
+  data: Record<string, unknown>
+  opts?: PluginQueueJobOptions
+}
+
 export interface PluginHttpToolkit {
   /** This host stores internalRequest.jobSubmission on the initial job insert. */
   supportsJobSubmissionContext?: true
@@ -2222,8 +2236,61 @@ export interface PluginHttpToolkit {
   ): Promise<number[]>
   /** Mirrors `supabase` (`lib/supabase.ts`), shaped to VCP route usage. */
   supabase: PluginSupabaseClient
-  /** Mirrors `videoQueue` (`lib/queue.ts`), narrowed to the one method used. */
-  videoQueue: { add(name: string, data: Record<string, unknown>, opts?: { attempts?: number; jobId?: string }): Promise<unknown> }
+  /**
+   * Mirrors `videoQueue` (`lib/queue.ts`), narrowed to the one method used.
+   *
+   * @deprecated in a request handler: queue the job with `enqueueJob` (or
+   * `enqueueJobs`), which fails and refunds a job the queue refuses and
+   * answers the request. A bare `add` the queue refuses leaves the row
+   * `pending`, holding its credits and its Idempotency-Key, until the
+   * never-started sweep (about 30 minutes), and a retry with the same key is
+   * answered with that dead job. Kept, unchanged, for a plugin built before
+   * `enqueueJob` existed and for a path with no request in hand (a worker's
+   * or a recovery sweep's own re-add).
+   */
+  videoQueue: { add(name: string, data: Record<string, unknown>, opts?: PluginQueueJobOptions): Promise<unknown> }
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it; an older
+   * host has no such member (queue with `videoQueue.add` there).
+   *
+   * Queue the job `jobId` a plugin route inserted and reserved, on the video
+   * queue under `name` (the worker dispatches it by that name), its payload
+   * `data` passed as `videoQueue.add` passes it. The host's own
+   * `enqueueRouteJob` (`lib/enqueue-route-job.ts`), the helper every core
+   * route queues through:
+   *   - queued: nothing is sent; the route answers as it always did;
+   *   - refused by the queue (its store answered an error, or the connection
+   *     closed): the job is failed from `pending` with its Idempotency-Key
+   *     released in the same write, its credits refunded (confirmed), and the
+   *     request answered `500 internal_error`. A job that is no longer
+   *     `pending` has moved on (a worker claimed it): nothing is sent, as
+   *     started.
+   * Never throws. The route's next statement is `if (reply.sent) return`,
+   * the same contract as `reserveCreditsForJob`.
+   */
+  enqueueJob?(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    jobId: string,
+    name: string,
+    data: Record<string, unknown>,
+    opts?: PluginQueueJobOptions,
+  ): Promise<void>
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   *
+   * `enqueueJob` for a route that queues several jobs it inserted and
+   * reserved, in order (the host's `enqueueRouteJobs`). When the queue
+   * refuses one, that job and every job after it are failed and refunded as
+   * `enqueueJob` does; the ones already queued keep running, and the request
+   * is answered `500 internal_error` with `error.startedJobIds` naming them.
+   * Never throws; `if (reply.sent) return` follows.
+   */
+  enqueueJobs?(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    jobs: ReadonlyArray<PluginQueuedJob>,
+  ): Promise<void>
   /** Mirrors `creditGuard` (`middleware/credit-guard.ts`). */
   creditGuard(
     modelResolver: (req: FastifyRequest) => string,

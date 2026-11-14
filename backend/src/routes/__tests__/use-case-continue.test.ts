@@ -25,6 +25,7 @@ import {
   usecaseGraphHash,
 } from "@nodaro/render-rules"
 import { InlineGraphUnavailableError } from "@/services/use-case-execution.js"
+import { UnqueuedRunError } from "@/lib/enqueue-execution.js"
 import { usecaseRenderFinalEditRefusal } from "@/lib/use-case/continuation.js"
 
 describe("from-failed", () => {
@@ -338,6 +339,26 @@ describe("one continuation per request", () => {
     expect(res.json().error.code).toBe("use_case_unavailable")
     expect(m.failed).toHaveBeenCalledWith("job-1", expect.objectContaining({ from: ["processing"] }))
     expect(m.refund).toHaveBeenCalledWith("job-1")
+  })
+
+  it("the queue refused the run and failed it: the wrapper's key is released with its failure (a retry starts a new run), 500", async () => {
+    m.execute.mockRejectedValue(new UnqueuedRunError("exec-1", "failed", new Error("OOM")))
+    const res = await post({ jobId: ID, mode: "from-failed" }, { "idempotency-key": "client-key-123" })
+    expect(res.statusCode).toBe(500)
+    expect(m.failed).toHaveBeenCalledWith("job-1", expect.objectContaining({ from: ["processing"], extra: { idempotency_key: null } }))
+    expect(m.stamp).not.toHaveBeenCalled()
+  })
+
+  it("the queue refused the run and its state is unknown: the wrapper is neither failed nor refunded, its key and the claim stay, answered 202 and stamped with the run", async () => {
+    m.execute.mockRejectedValue(new UnqueuedRunError("exec-9", "unsettled", new Error("OOM")))
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const res = await post({ jobId: ID, mode: "from-failed" }, { "idempotency-key": "client-key-123" })
+    expect(res.statusCode).toBe(202)
+    expect(res.json()).toEqual({ jobId: "job-1", executionId: "exec-9" })
+    expect(m.failed).not.toHaveBeenCalled()
+    expect(m.refund).not.toHaveBeenCalled()
+    expect(m.stamp).toHaveBeenCalledWith({ input_data: expect.objectContaining({ _executionId: "exec-9", _feeCredits: 10 }) })
+    warn.mockRestore()
   })
 
   it("a stamp that throws after the run started never fails the wrapper or refunds the fee", async () => {

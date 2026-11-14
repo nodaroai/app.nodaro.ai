@@ -2337,7 +2337,11 @@ BullMQ, or a restart lands between drives — leaving the row at
 re-drive these automatically. It is **off by default**; enable it with
 `PIPELINE_RECONCILE_CRON_ENABLED=true` on the API service. The
 reconciler only re-drives pipelines with no pending user action, so
-manual-mode runs paused at an approval gate are left untouched.
+manual-mode runs paused at an approval gate are left untouched. It also
+re-drives a pipeline whose approval or rejection was saved but whose
+next drive the queue refused (Redis answered an error): such a pipeline
+stays "awaiting approval" with no gate open until the reconciler drives
+it. Without the reconciler, that pipeline does not resume on its own.
 
 **Recast interactive runs stop when the user closes the tab.** Recast's
 interactive lane — buying each round of image candidates, waiting out a

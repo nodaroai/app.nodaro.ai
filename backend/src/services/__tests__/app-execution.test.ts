@@ -9,18 +9,24 @@ const mocks = vi.hoisted(() => ({
   insertWithIdempotencyKey: vi.fn(),
   queueAdd: vi.fn().mockResolvedValue({}),
   from: vi.fn(),
-  settleUnqueuedRun: vi.fn(),
+  failWaiting: vi.fn(),
+  insertAppReport: vi.fn(),
 }))
 vi.mock("../../lib/idempotent-insert.js", () => ({ insertWithIdempotencyKey: mocks.insertWithIdempotencyKey }))
 vi.mock("../../lib/orchestration-queue.js", () => ({ orchestrationQueue: { add: mocks.queueAdd } }))
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: mocks.from } }))
-vi.mock("../../lib/enqueue-execution.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../lib/enqueue-execution.js")>()),
-  settleUnqueuedRun: mocks.settleUnqueuedRun,
-}))
+// The run's own failure path (a CAS from `pending`): what a refused run is settled through.
+vi.mock("../../lib/concurrency-lanes/run-failure.js", () => ({ failWaitingExecutionDetailed: mocks.failWaiting }))
+vi.mock("../../lib/app-reports.js", () => ({ insertAppReport: mocks.insertAppReport }))
 
 const { executeAppRun } = await import("../app-execution.js")
-const { UnqueuedRunError } = await import("../../lib/enqueue-execution.js")
+const { UnqueuedRunError, UNQUEUED_EXECUTION_MESSAGE } = await import("../../lib/enqueue-execution.js")
+
+/** Make the failure write answer as `outcome` would: failed by this call, moved on, or unknown (the write throws). */
+function settleAs(outcome: "failed" | "moved-on" | "unsettled"): void {
+  if (outcome === "unsettled") mocks.failWaiting.mockRejectedValueOnce(new Error("write failed"))
+  else mocks.failWaiting.mockResolvedValueOnce({ failed: outcome === "failed", attempts: 1 })
+}
 const { appRunStampOf } = await import("../../lib/app-run-stamp.js")
 
 function chain(result: unknown) {
@@ -116,11 +122,11 @@ describe("executeAppRun — a run the queue refuses", () => {
   })
 
   it.each([["failed"], ["unsettled"]] as const)(
-    "is settled from pending with its key released (settleUnqueuedRun) and, when %s, the caller gets an UnqueuedRunError saying so, the queue's error as its cause and the run's app run on it",
+    "is settled from pending with its key released and, when %s, the caller gets an UnqueuedRunError saying so, the queue's error as its cause and the run's app run on it",
     async (outcome) => {
       const refused = new Error("Connection is closed.")
       mocks.queueAdd.mockRejectedValueOnce(refused)
-      mocks.settleUnqueuedRun.mockResolvedValueOnce(outcome)
+      settleAs(outcome)
       const err = await executeAppRun({ appVersionId: "app-v", workflowId: "wf-1", userId: "u1", appId: "app-1", idempotencyKey: "mcp:retry-1234" }).then(
         () => null,
         (e: unknown) => e,
@@ -129,9 +135,43 @@ describe("executeAppRun — a run the queue refuses", () => {
       // The run's app run rides along, so a caller that follows an unsettled run can report it.
       expect(err).toMatchObject({ outcome, executionId: "exec-1", appRunId: "run-1" })
       expect((err as Error).cause).toBe(refused)
-      expect(mocks.settleUnqueuedRun).toHaveBeenCalledWith("exec-1", "u1")
+      expect(mocks.failWaiting).toHaveBeenCalledWith("exec-1", UNQUEUED_EXECUTION_MESSAGE, { idempotency_key: null })
     },
   )
+
+  it("the app run row the refused run left `running` is marked failed, scoped to its runner; an unsettled or moved-on one is left alone", async () => {
+    const run = chain({ data: { id: "run-1" }, error: null })
+    const update = vi.fn().mockReturnValue(run)
+    run.update = update
+    mocks.from.mockReturnValue(run)
+    mocks.queueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    settleAs("failed")
+    await executeAppRun({ appVersionId: "app-v", workflowId: "wf-1", userId: "u1", appId: "app-1" }).catch(() => undefined)
+    expect(update).toHaveBeenCalledWith({ status: "failed" })
+    expect(run.eq).toHaveBeenCalledWith("id", expect.any(String))
+    expect(run.eq).toHaveBeenCalledWith("runner_id", "u1")
+
+    for (const outcome of ["unsettled", "moved-on"] as const) {
+      update.mockClear()
+      mocks.queueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+      settleAs(outcome)
+      await executeAppRun({ appVersionId: "app-v", workflowId: "wf-1", userId: "u1", appId: "app-1" }).catch(() => undefined)
+      expect(update).not.toHaveBeenCalled()
+    }
+  })
+
+  it("a write of the app run row that fails never replaces the caller's error", async () => {
+    const run = chain({ data: { id: "run-1" }, error: null })
+    run.update = vi.fn().mockReturnValue({ eq: () => ({ eq: () => Promise.reject(new Error("socket hang up")) }) })
+    mocks.from.mockReturnValue(run)
+    mocks.queueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    settleAs("failed")
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const err = await executeAppRun({ appVersionId: "app-v", workflowId: "wf-1", userId: "u1", appId: "app-1" }).then(() => null, (e: unknown) => e)
+    warn.mockRestore()
+    expect(err).toBeInstanceOf(UnqueuedRunError)
+    expect(err).toMatchObject({ outcome: "failed" })
+  })
 
   it("a row that cannot be created throws a plain error: nothing was queued, nothing settled", async () => {
     mocks.from.mockReturnValue(chain({ data: null, error: { message: "insert failed" } }))
@@ -142,12 +182,12 @@ describe("executeAppRun — a run the queue refuses", () => {
     expect(err).toBeInstanceOf(Error)
     expect(err).not.toBeInstanceOf(UnqueuedRunError)
     expect(mocks.queueAdd).not.toHaveBeenCalled()
-    expect(mocks.settleUnqueuedRun).not.toHaveBeenCalled()
+    expect(mocks.failWaiting).not.toHaveBeenCalled()
   })
 
   it("one that moved on meanwhile (a worker claimed it) is answered as started", async () => {
     mocks.queueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
-    mocks.settleUnqueuedRun.mockResolvedValueOnce("moved-on")
+    settleAs("moved-on")
     const result = await executeAppRun({ appVersionId: "app-v", workflowId: "wf-1", userId: "u1", appId: "app-1" })
     expect(result).toEqual({ executionId: "exec-1", appRunId: "run-1", deduped: false })
   })
