@@ -29,12 +29,18 @@ const DEFAULTS = vi.hoisted(() => ({
   queuedJob: { id: "queue-job-1" },
 }))
 
-vi.mock("@/lib/queue.js", () => ({
-  videoQueue: {
+vi.mock("@/lib/queue.js", () => {
+  const videoQueue = {
     add: vi.fn().mockResolvedValue(DEFAULTS.queuedJob),
-  },
-  redis: {},
-}))
+    // A batch (count ≥ 2) is queued in ONE bulk add (lib/job-batch.ts):
+    // recorded here as one `add` per entry — its job name and payload — so a
+    // test reads every queued job the same way.
+    addBulk: vi.fn(async (entries: Array<{ name: string; data: Record<string, unknown> }>) => {
+      for (const e of entries) await videoQueue.add(e.name, e.data)
+    }),
+  }
+  return { videoQueue, redis: {} }
+})
 
 vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard: () => async () => undefined,
@@ -50,7 +56,12 @@ const unqueued = vi.hoisted(() => ({
   insertAppReport: vi.fn(),
 }))
 vi.mock("@/lib/job-failure.js", () => ({ markJobFailedDetailed: unqueued.markJobFailedDetailed }))
-vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundJobHoldsConfirmed: unqueued.refundJobHoldsConfirmed }))
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({
+  refundJobHoldsConfirmed: unqueued.refundJobHoldsConfirmed,
+  // The batch lane reads an earlier request's holds only when a key repeats.
+  jobCreditHolds: vi.fn(async () => new Map()),
+  refundUsageLogConfirmed: vi.fn(async () => true),
+}))
 vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: unqueued.insertAppReport }))
 
 // Per-job creditOverride correction relies on these two dynamic imports inside
@@ -233,10 +244,11 @@ function mockJobsInsertChain() {
   })
   const select = vi.fn().mockReturnValue({ single })
   const insert = vi.fn().mockReturnValue({ select })
-  // `.delete().in("id", [...])` returns a thenable that resolves to { error: null }
-  const inFn = vi.fn().mockResolvedValue({ error: null })
+  // `.delete().in("id", [...]).eq("user_id", …)`: the batch's undo removes its own rows.
+  const eqFn = vi.fn().mockResolvedValue({ error: null })
+  const inFn = vi.fn().mockReturnValue({ eq: eqFn })
   const del = vi.fn().mockReturnValue({ in: inFn })
-  return { insert, select, single, delete: del, in: inFn }
+  return { insert, select, single, delete: del, in: inFn, eq: eqFn }
 }
 
 // ---------------------------------------------------------------------------
@@ -743,12 +755,11 @@ describe("POST /v1/generate-character", () => {
   })
 
   it("rollback on mid-batch credit-reservation failure (count=4, job 2 reservation fails)", async () => {
-    // Phase 1 inserts succeed for all 4 jobs; Phase 2A: reserveCredits succeeds for
-    // job-1, then job-2's reservation fails (reply.sent set). Expect:
-    //   - response = 402 from reserveCreditsForJob's mock
-    //   - mockRefundCredits called once (job-1's log-1)
-    //   - delete("id", ["job-3","job-4"]) — job-2 already deleted by reserveCreditsForJobImpl
-    //   - videoQueue.add NEVER called (Phase 2B unreached)
+    // All 4 jobs are inserted; job-1 reserves, then job-2's reservation answers
+    // 402 (reply sent). The batch lane (lib/job-batch.ts) then undoes what this
+    // request made: each job's holds refunded CONFIRMED (job-1's, the others
+    // hold nothing), then the four rows removed together, scoped to the
+    // caller. Nothing is queued.
     vi.mocked(reserveCreditsForJob)
       .mockResolvedValueOnce({ usageLogId: "log-1", creditsReserved: 6, watermark: false })
       .mockImplementationOnce(async (_req, reply) => {
@@ -771,23 +782,26 @@ describe("POST /v1/generate-character", () => {
 
     expect(res.statusCode).toBe(402)
     expect(res.json().error.code).toBe("insufficient_credits")
-    // All 4 jobs inserted, but only 2 reservation attempts.
+    // All 4 jobs inserted, but only 2 reservation attempts — each keeping its job for the undo.
     expect(chain.insert).toHaveBeenCalledTimes(4)
     expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledTimes(2)
-    // Refund the one reservation that succeeded.
-    expect(mockRefundCredits).toHaveBeenCalledTimes(1)
-    expect(mockRefundCredits).toHaveBeenCalledWith("log-1")
-    // Orphan delete: jobs 3 & 4 (job-2 already deleted by reserveCreditsForJobImpl).
+    expect(vi.mocked(reserveCreditsForJob).mock.calls.map((c) => c[4])).toEqual([{ retainJobOnFailure: true }, { retainJobOnFailure: true }])
+    // Refunded confirmed, then removed: never a row removed before its refund is confirmed.
+    expect(unqueued.refundJobHoldsConfirmed.mock.calls.map((c) => c[0])).toEqual(["job-1", "job-2", "job-3", "job-4"])
     expect(chain.delete).toHaveBeenCalledTimes(1)
-    expect(chain.in).toHaveBeenCalledWith("id", ["job-3", "job-4"])
-    // Critical: nothing enqueued — Phase 2B never reached.
+    expect(chain.in).toHaveBeenCalledWith("id", ["job-1", "job-2", "job-3", "job-4"])
+    expect(chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    // Critical: nothing enqueued.
     expect(videoQueue.add).not.toHaveBeenCalled()
+    expect(videoQueue.addBulk).not.toHaveBeenCalled()
   })
 
-  it("a queue that refuses the 2nd of 3 candidates: the 1st keeps running, the 2nd and 3rd are failed and refunded, 500 names the 1st", async () => {
+  it("a bulk add the queue refused after the 1st of 3 candidates reached a worker: the 1st keeps running, the 2nd and 3rd are failed and refunded, 500 names the 1st", async () => {
     vi.mocked(videoQueue.add)
       .mockResolvedValueOnce(DEFAULTS.queuedJob as never)
       .mockRejectedValueOnce(new Error("OOM command not allowed when used memory > 'maxmemory'."))
+    // The add was delivered for the 1st candidate and a worker took it: its failure write misses.
+    unqueued.markJobFailedDetailed.mockResolvedValueOnce("missed")
     const { insert } = mockJobsInsertChain()
     vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
@@ -802,9 +816,10 @@ describe("POST /v1/generate-character", () => {
     expect(res.json()).toEqual({
       error: { code: "internal_error", message: UNQUEUED_BATCH_CLIENT_MESSAGE, startedJobIds: ["job-1"] },
     })
-    // job-3 is never handed to the queue once job-2 is refused.
-    expect(vi.mocked(videoQueue.add).mock.calls.map((c) => (c[1] as { jobId: string }).jobId)).toEqual(["job-1", "job-2"])
-    expect(unqueued.markJobFailedDetailed.mock.calls.map((c) => c[0])).toEqual(["job-2", "job-3"])
+    // The batch is ONE bulk add: every candidate is settled from `pending`, and
+    // the one a worker already took (no longer pending) is left running.
+    expect(vi.mocked(videoQueue.addBulk)).toHaveBeenCalledTimes(1)
+    expect(unqueued.markJobFailedDetailed.mock.calls.map((c) => c[0])).toEqual(["job-1", "job-2", "job-3"])
     expect(unqueued.refundJobHoldsConfirmed.mock.calls.map((c) => c[0])).toEqual(["job-2", "job-3"])
   })
 

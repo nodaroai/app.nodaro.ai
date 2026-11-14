@@ -40,6 +40,7 @@ vi.mock("@/lib/supabase.js", () => ({
 import {
   enqueueRouteJob,
   enqueueUnitJob,
+  failUnqueuedRouteJob,
   UNQUEUED_JOB_CLIENT_MESSAGE,
   UNQUEUED_JOB_MESSAGE,
   UNQUEUED_FAILURE_UNCONFIRMED_KIND,
@@ -208,5 +209,54 @@ describe("enqueueRouteJob", () => {
     expect(res.statusCode).toBe(500)
     expect(m.markJobFailedDetailed).toHaveBeenCalledWith("job-2", FAILURE)
     expect(m.refundConfirmed).toHaveBeenCalledWith("job-2")
+  })
+})
+
+describe("failUnqueuedRouteJob — a step between the insert and the queue threw", () => {
+  /** A route whose step after the reservation throws, as llm-structured-jobs' analysis sub-request can. */
+  async function throwingApp(opts: { answerFirst?: boolean } = {}): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false })
+    app.post("/throws", async (req, reply) => {
+      try {
+        if (opts.answerFirst) reply.status(422).send({ error: { code: "refused", message: "refused" } })
+        throw new Error("connection reset reading the next step")
+      } catch (err) {
+        await failUnqueuedRouteJob(req, reply, "job-3", err)
+        return
+      }
+    })
+    await app.ready()
+    return app
+  }
+
+  it("fails the job from `pending` with its key released, refunds it confirmed, and answers 500 with the fixed message", async () => {
+    const res = await (await throwingApp()).inject({ method: "POST", url: "/throws" })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error).toMatchObject({ code: "internal_error", message: UNQUEUED_JOB_CLIENT_MESSAGE })
+    expect(res.body).not.toContain("connection reset")
+    expect(m.markJobFailedDetailed).toHaveBeenCalledWith("job-3", FAILURE)
+    expect(m.refundConfirmed).toHaveBeenCalledWith("job-3")
+  })
+
+  it("a job no longer `pending` (cancelled or removed) is not refunded here, and the request is still answered 500 — nothing was queued", async () => {
+    m.markJobFailedDetailed.mockResolvedValue("missed")
+    const res = await (await throwingApp()).inject({ method: "POST", url: "/throws" })
+    expect(res.statusCode).toBe(500)
+    expect(m.refundConfirmed).not.toHaveBeenCalled()
+  })
+
+  it("a failure whose outcome stays unknown is reported, and answered 500", async () => {
+    m.markJobFailedDetailed.mockResolvedValue("error")
+    const res = await (await throwingApp()).inject({ method: "POST", url: "/throws" })
+    expect(res.statusCode).toBe(500)
+    expect(m.refundConfirmed).not.toHaveBeenCalled()
+    expect(m.insertAppReport).toHaveBeenCalledWith(expect.objectContaining({ kind: UNQUEUED_FAILURE_UNCONFIRMED_KIND, jobId: "job-3" }))
+  })
+
+  it("never answers twice: a request already answered keeps its answer, and the job is still settled", async () => {
+    const res = await (await throwingApp({ answerFirst: true })).inject({ method: "POST", url: "/throws" })
+    expect(res.statusCode).toBe(422)
+    expect(m.markJobFailedDetailed).toHaveBeenCalledWith("job-3", FAILURE)
+    expect(m.refundConfirmed).toHaveBeenCalledWith("job-3")
   })
 })

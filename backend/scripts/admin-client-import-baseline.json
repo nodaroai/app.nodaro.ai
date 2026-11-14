@@ -128,11 +128,6 @@
       "line": 4
     },
     {
-      "file": "src/routes/generate-location.ts",
-      "hash": "98c2a93127d5",
-      "line": 4
-    },
-    {
       "file": "src/routes/generate-mask.ts",
       "hash": "98c2a93127d5",
       "line": 16

@@ -25,7 +25,7 @@ import { createHash } from "node:crypto"
 import { redis } from "./queue.js"
 import { acquireLease, releaseLease, renewLease, type LeaseClient } from "./redis-lease.js"
 
-/** Longer than a batch takes to insert, reserve and queue (at most 8 jobs). */
+/** Longer than a batch takes to insert, reserve and queue (at most 10 jobs; the heartbeat renews it in between). */
 export const BATCH_CLAIM_TTL_MS = 60_000
 /** How long a second request waits for the claim before answering 409. */
 export const BATCH_CLAIM_WAIT_MS = 15_000

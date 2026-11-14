@@ -116,7 +116,7 @@ describe("executeAppRun — a run the queue refuses", () => {
   })
 
   it.each([["failed"], ["unsettled"]] as const)(
-    "is settled from pending with its key released (settleUnqueuedRun) and, when %s, the caller gets an UnqueuedRunError saying so, the queue's error as its cause",
+    "is settled from pending with its key released (settleUnqueuedRun) and, when %s, the caller gets an UnqueuedRunError saying so, the queue's error as its cause and the run's app run on it",
     async (outcome) => {
       const refused = new Error("Connection is closed.")
       mocks.queueAdd.mockRejectedValueOnce(refused)
@@ -126,7 +126,8 @@ describe("executeAppRun — a run the queue refuses", () => {
         (e: unknown) => e,
       )
       expect(err).toBeInstanceOf(UnqueuedRunError)
-      expect(err).toMatchObject({ outcome, executionId: "exec-1" })
+      // The run's app run rides along, so a caller that follows an unsettled run can report it.
+      expect(err).toMatchObject({ outcome, executionId: "exec-1", appRunId: "run-1" })
       expect((err as Error).cause).toBe(refused)
       expect(mocks.settleUnqueuedRun).toHaveBeenCalledWith("exec-1", "u1")
     },

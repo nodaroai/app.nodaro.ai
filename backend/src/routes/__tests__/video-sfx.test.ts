@@ -93,6 +93,8 @@ describe("POST /v1/video-sfx", () => {
   // A job the queue refused (lib/enqueue-route-job.ts): the jobs failed, and the jobs refunded confirmed.
   let unqueuedFailed: string[] = []
   let unqueuedRefunded: string[] = []
+  // A job a worker already took when the queue's refusal is settled: its failure write misses.
+  let startedJobId: string | null = null
 
   // Override knobs reset per test
   let reserveBehavior: ((jobId: string, callIndex: number) => Promise<{ usageLogId: string } | undefined> | { usageLogId: string } | undefined) | null = null
@@ -107,6 +109,7 @@ describe("POST /v1/video-sfx", () => {
     jobDeleteIds = []
     unqueuedFailed = []
     unqueuedRefunded = []
+    startedJobId = null
     reserveBehavior = null
 
     app = Fastify()
@@ -125,7 +128,7 @@ describe("POST /v1/video-sfx", () => {
           creditOverride: credits,
         }
       },
-      reserveCreditsForJob: vi.fn(async (req: any, reply: any, jobId: string, model: string) => {
+      reserveCreditsForJob: vi.fn(async (req: any, reply: any, jobId: string, model: string, opts?: { retainJobOnFailure?: boolean }) => {
         const idx = reserveCallCount
         reserveCallCount += 1
         reserveCalls.push({ model, creditOverride: req.creditReservation?.creditOverride })
@@ -133,9 +136,10 @@ describe("POST /v1/video-sfx", () => {
           const result = await reserveBehavior(jobId, idx)
           if (result === undefined) {
             // Mimic reserveCreditsForJobImpl failure path: delete the failing
-            // row and send a 500 reply. The route detects reply.sent and
-            // rolls back the rest of the batch.
-            await (await import("../../lib/supabase.js")).supabase.from("jobs").delete().eq("id", jobId)
+            // row (unless the caller keeps it for its own undo, as the batch
+            // lane does) and send a 500 reply. The route detects reply.sent and
+            // undoes the rest of the batch.
+            if (!opts?.retainJobOnFailure) await (await import("../../lib/supabase.js")).supabase.from("jobs").delete().eq("id", jobId)
             reply.status(500).send({ error: { code: "credit_reservation_failed", message: "mock failure" } })
             return undefined
           }
@@ -146,9 +150,17 @@ describe("POST /v1/video-sfx", () => {
     }))
 
     // Stub video queue
-    vi.doMock("../../lib/queue.js", () => ({
-      videoQueue: { add: vi.fn().mockResolvedValue({ id: "queued-job-id" }) },
-    }))
+    // Several versions are queued in ONE bulk add (lib/job-batch.ts): recorded
+    // here as one `add` per entry — its job name and payload.
+    vi.doMock("../../lib/queue.js", () => {
+      const videoQueue = {
+        add: vi.fn().mockResolvedValue({ id: "queued-job-id" }),
+        addBulk: vi.fn(async (entries: Array<{ name: string; data: Record<string, unknown> }>) => {
+          for (const e of entries) await videoQueue.add(e.name, e.data)
+        }),
+      }
+      return { videoQueue }
+    })
 
     // Stub ffmpeg probe (resetModules invalidated the top-level import)
     vi.doMock("../../providers/video/ffmpeg-utils.js", () => ({
@@ -231,7 +243,7 @@ describe("POST /v1/video-sfx", () => {
     vi.doMock("../../lib/job-failure.js", () => ({
       markJobFailedDetailed: vi.fn(async (jobId: string) => {
         unqueuedFailed.push(jobId)
-        return "flipped"
+        return jobId === startedJobId ? "missed" : "flipped"
       }),
     }))
     vi.doMock("../../lib/credits-job-lifecycle.js", () => ({
@@ -239,6 +251,9 @@ describe("POST /v1/video-sfx", () => {
         unqueuedRefunded.push(jobId)
         return true
       }),
+      // The batch lane reads an earlier request's holds only when a key repeats.
+      jobCreditHolds: vi.fn(async () => new Map()),
+      refundUsageLogConfirmed: vi.fn(async () => true),
     }))
     vi.doMock("../../lib/app-reports.js", () => ({ insertAppReport: vi.fn(async () => true) }))
 
@@ -369,7 +384,7 @@ describe("POST /v1/video-sfx", () => {
     expect(seeds).toEqual([-1, -1])
   })
 
-  it("rollback: when reservation fails on 2nd of 3 versions, refund the 1st and delete the 3rd un-reserved row", async () => {
+  it("rollback: when reservation fails on 2nd of 3 versions, every version this request made is refunded confirmed, then removed", async () => {
     const ffmpeg = await import("../../providers/video/ffmpeg-utils.js")
     vi.mocked(ffmpeg.probeVideoSource).mockResolvedValue({
       width: 1920, height: 1080, durationSeconds: 8,
@@ -378,7 +393,7 @@ describe("POST /v1/video-sfx", () => {
     // Reservation succeeds for call 0, fails for call 1, never reached for call 2.
     reserveBehavior = (_jobId: string, idx: number) => {
       if (idx === 0) return { usageLogId: "ulog-0" }
-      if (idx === 1) return undefined  // triggers reply.sent=true + row delete
+      if (idx === 1) return undefined  // triggers reply.sent=true
       return { usageLogId: `ulog-${idx}` }
     }
 
@@ -389,7 +404,7 @@ describe("POST /v1/video-sfx", () => {
     })
 
     // The mock reserve sent a 500 directly; the route must NOT have
-    // attempted to enqueue ANY rows after rollback.
+    // attempted to enqueue ANY rows after the undo.
     expect(res.statusCode).toBe(500)
     expect(vi.mocked(videoQueue.add)).not.toHaveBeenCalled()
 
@@ -398,21 +413,22 @@ describe("POST /v1/video-sfx", () => {
     // 2 reservations were attempted: call 0 succeeded, call 1 failed (and aborted the loop).
     expect(reserveCallCount).toBe(2)
 
-    // The successful first reservation must have been refunded.
-    expect(refundCalls).toEqual(["ulog-0"])
-
-    // The failing row (job-2) was deleted by the mock reserve via supabase.eq().
-    // The route additionally deletes the un-reserved orphan (job-3) via supabase.in().
-    // Verify the .in() delete call: only job-3 should be in it.
-    expect(jobDeleteIds).toEqual([["job-3"]])
+    // The batch lane's undo (lib/job-batch.ts): each version's holds refunded
+    // CONFIRMED (the 1st's, the others hold nothing), then the three rows
+    // removed together — never one removed before its refund is confirmed.
+    expect(unqueuedRefunded).toEqual(["job-1", "job-2", "job-3"])
+    expect(refundCalls).toEqual([])
+    expect(jobDeleteIds).toEqual([["job-1", "job-2", "job-3"]])
   })
 
-  it("a queue that refuses the 2nd of 3 versions: the 1st keeps running, the 2nd and 3rd are failed and refunded, 500 names the 1st", async () => {
+  it("a bulk add the queue refused after the 1st of 3 versions reached a worker: the 1st keeps running, the 2nd and 3rd are failed and refunded, 500 names the 1st", async () => {
     const { videoQueue } = await import("../../lib/queue.js")
     const { UNQUEUED_BATCH_CLIENT_MESSAGE } = await import("../../lib/enqueue-route-job.js")
     vi.mocked(videoQueue.add)
       .mockResolvedValueOnce({ id: "queued-job-id" } as never)
       .mockRejectedValueOnce(new Error("OOM command not allowed when used memory > 'maxmemory'."))
+    // The add was delivered for the 1st version and a worker took it: its failure write misses.
+    startedJobId = "job-1"
 
     const res = await app.inject({
       method: "POST", url: "/v1/video-sfx",
@@ -423,12 +439,12 @@ describe("POST /v1/video-sfx", () => {
     expect(res.json()).toEqual({
       error: { code: "internal_error", message: UNQUEUED_BATCH_CLIENT_MESSAGE, startedJobIds: ["job-1"] },
     })
-    // job-3 is never handed to the queue once job-2 is refused.
-    expect(vi.mocked(videoQueue.add).mock.calls.map((c: any) => c[1].jobId)).toEqual(["job-1", "job-2"])
-    expect(unqueuedFailed).toEqual(["job-2", "job-3"])
+    // The batch is ONE bulk add: every version is settled from `pending`; the
+    // one a worker took is left running, the rest are failed, refunded and removed.
+    expect(vi.mocked(videoQueue.addBulk)).toHaveBeenCalledTimes(1)
+    expect(unqueuedFailed).toEqual(["job-1", "job-2", "job-3"])
     expect(unqueuedRefunded).toEqual(["job-2", "job-3"])
-    // Nothing goes through the reservation rollback: the failed jobs are refunded by the helper.
     expect(refundCalls).toEqual([])
-    expect(jobDeleteIds).toEqual([])
+    expect(jobDeleteIds).toEqual([["job-2", "job-3"]])
   })
 })

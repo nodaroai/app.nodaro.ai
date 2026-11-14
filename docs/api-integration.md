@@ -317,12 +317,19 @@ freed with it, so a retry with the same key starts a new run.
 before it starts the component's run, so a run that cannot be created or
 queued never turns into a `500`. The job then reads `failed` with "The
 component's run could not be started. Run it again." and its Idempotency-Key
-is freed, so a retry with the same key starts a new run. In the rare case that
-the run's own failure cannot be confirmed (it may still be waiting, or
-running), the job reads `failed` the same way but keeps its Idempotency-Key, so
-a retry with the same key is answered with this job and never starts a second
-run beside it; send a new key to run it again. A job you cancelled before this
-happens stays cancelled. A Telegram trigger's
+is freed, so a retry with the same key starts a new run; a job you cancelled
+before this happens stays cancelled. In the rare case that the run's own
+failure cannot be confirmed (it may still be waiting, or running, and a run
+that runs is charged), the job is not failed: it stays `processing` and
+follows that run like any started one, so it ends `completed` with the
+component's outputs when the run completes, `failed` with the run's own
+message when it fails, or `failed` as timed out when the run never starts
+within the job's wait. When the wait runs out and the run is still waiting for
+its slot, that run is failed first, so it cannot start and be charged after the
+job reads `failed`. The job keeps its Idempotency-Key in every case (the run
+may still be running), so a retry with the same key is answered with this job
+and never starts a second run beside it; to run the component again after a
+timeout, send a new key. A Telegram trigger's
 fire refused this way is failed the same way; the message is answered with an
 error only when none of the bot's triggers started a run for it and every
 refused run was failed (those runs hold no key, so the same message delivered
@@ -1385,7 +1392,8 @@ job, so code that reads it keeps working.
   for the first and then returns its jobs, or answers
   `409 batch_in_progress` if the first is still working after 15 seconds (retry
   it). A key belongs to one request: repeating it with a different body while
-  any of its images still waits answers `422 idempotency_key_reused`, and
+  any of its images still waits, or on a different route (the key already
+  belongs to that route's jobs), answers `422 idempotency_key_reused`, and
   nothing is charged or queued. Without a key, every request is a new batch.
 - **Seeds.** With `seed`, image *i* of each model gets `seed + i` — one seed
   for every image would draw the same image each time.
@@ -1741,10 +1749,12 @@ All errors share the same shape:
 | 409 | `job_cancelled` | — | A synchronous metered LLM request whose job was cancelled after its credits were held but before its call was sent. The call is never sent and nothing is charged (the hold is refunded). Do not retry it as-is: the job was cancelled on purpose. |
 | 409 | `idempotency_key_reused` | — | A use-case run or its continue (`POST /v1/tighten-episode`, `POST /v1/episode-chapters`, `POST /v1/episode-trailer`, `POST /v1/clip-pack`, `POST /v1/speaker-layout`, and their `/continue`): the `Idempotency-Key` already belongs to one of your jobs that is not a run of that node — a run of another use-case node, or any other kind of job (an image generation, say). Refused; nothing is created or charged. Send a new key. A key that already belongs to a run of the same node answers that run (`202`, `deduped: true`). |
 | 409 | `not_applicable` | — | (Cloud edition, deployment-payer instances) A free-signup-credit route on a deployment where one billing account pays for every run: `POST /v1/credits/claim-signup-grant`, `POST /v1/credits/welcome-offer/claim` and `POST /v1/credits/welcome-offer/seen`, and an administrator's restore or take-back of a free grant. Free signup credits do not apply there, so nothing is read, recorded or granted. Nothing to retry: a client that claims on every page load can ignore it. |
+| 409 | `batch_in_progress` | — | A batch route (an [image batch](#4g-several-images-in-one-call-count-models); `/v1/generate-character`, `/v1/generate-creature`, `/v1/generate-location` and `/v1/generate-object` with `count` 2 or more; `/v1/video-sfx` with `versions` 2 or more) received a second request with the same `Idempotency-Key` while another request is still creating the batch's jobs (or took the batch over from this one). Nothing more was created or charged by this request. Retry it shortly: it returns the same jobs. |
+| 422 | `idempotency_key_reused` | — | A batch route's `Idempotency-Key` already belongs to a different request: another route's jobs, or the same route's jobs for a different body while any still waits. Nothing is created, charged or queued. Send the same request again, or use a new key. (Use-case runs answer the same situation as a `409`, above.) |
 | 422 | `job_blocked` | — | A job policy or content guard registered by this deployment refused the generation before it ran. `message` is user-facing text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is. No job was created and nothing was charged. The platform does not retry a refused request; whether the same request would be judged differently is the deployment's policy's business. Only occurs on deployments that register a job policy — see [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile). Two bookkeeping inserts are the honest exception: the Suno voice-persona ownership rows and the connected-cloud LLM mirror row treat a block as best-effort — the operation proceeds and its row is simply not recorded — so a policy blocking one of those neither stops the call nor reaches you as a 422. |
 | 422 | `upload_blocked` | — | An upload policy registered by this deployment refused the upload before it was stored (every byte-carrying ingestion lane: `POST /v1/upload*`, the proxy PUT and the handoff POST). `message` is the deployment's own reason — show it as-is. Nothing was written. Only occurs on deployments that register an upload policy. |
 | 429 | `rate_limited` | — | You've exceeded the per-minute bucket. Back off. |
-| 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. When a request is answered this way because a job or a run could not be queued to start, that job or run is failed at once — a job with its credits refunded (the jobs of an [image batch](#4g-several-images-in-one-call-count-models) are refunded and removed) — and its `Idempotency-Key` is freed, so a retry with the same key starts a new job or run. A batch whose jobs only partly started names the running ones in `error.startedJobIds`: follow those, and send the rest with a new key (an image batch instead takes the same request with the same key again, which returns its running images and starts only the rest). In the rare case that the failure cannot be confirmed, either it did not land, and a retry with the same key is answered with that job or run (if it then fails, send the request again with a new key), or it landed with only its answer lost, and the key was freed with it, so a retry with the same key starts a new one. The use-case runs (`POST /v1/tighten-episode`, `/v1/episode-chapters`, `/v1/episode-trailer`, `/v1/clip-pack`, `/v1/speaker-layout`) keep their key: a retry with the same key answers the failed run, so send a new key. Routes served by the Nodaro Cloud plugin, such as [Nodaro Motion](#13f-nodaro-motion-cloud-edition) and the trend runs that start it, answer a repeated key as their own sections say. |
+| 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. When a request is answered this way because a job or a run could not be queued to start, that job or run is failed at once — a job with its credits refunded (the jobs of a batch are refunded and removed: an [image batch](#4g-several-images-in-one-call-count-models), or the candidates or versions of `/v1/generate-character`, `/v1/generate-creature`, `/v1/generate-location`, `/v1/generate-object` and `/v1/video-sfx`) — and its `Idempotency-Key` is freed, so a retry with the same key starts a new job or run. A batch whose jobs only partly started names the running ones in `error.startedJobIds`: follow those, and send the same request with the same key again, which returns them and starts only the rest. In the rare case that the failure cannot be confirmed, either it did not land, and a retry with the same key is answered with that job or run (if it then fails, send the request again with a new key), or it landed with only its answer lost, and the key was freed with it, so a retry with the same key starts a new one. The use-case runs (`POST /v1/tighten-episode`, `/v1/episode-chapters`, `/v1/episode-trailer`, `/v1/clip-pack`, `/v1/speaker-layout`) keep their key: a retry with the same key answers the failed run, so send a new key. Routes served by the Nodaro Cloud plugin, such as [Nodaro Motion](#13f-nodaro-motion-cloud-edition) and the trend runs that start it, answer a repeated key as their own sections say. |
 | 503 | `provider_key_missing` | — | A use-case run or its estimate (`POST /v1/tighten-episode`, `/v1/episode-chapters`, `/v1/episode-trailer`, `/v1/clip-pack`, `/v1/speaker-layout`, and their `/estimate`) whose chain transcribes (its Transcribe step, or Add Captions set to transcribe) on a self-hosted install that has no key for that transcription provider and no nodaro.ai connection covering it. The message names the key. Refused before anything is created. |
 | 503 | `job_start_failed` | — | A synchronous metered LLM request could not record that its call is starting. The call was not sent and nothing was charged (the hold is refunded). Retry it. |
 | 503 | `price_not_configured` | — | (Cloud edition only) No pricing row exists for the requested model — the server hard-fails rather than silently mis-billing. Operator must seed the price; the call is not retryable as-is. |
@@ -2234,11 +2244,32 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/v1/characters?q=maya&limit=20"
 
 All generation routes return at minimum `{ jobId }`. `/v1/generate-character`
 additionally returns `{ jobIds: string[] }` so multi-candidate runs are
-trackable. When a run's candidates cannot all be queued to start,
-`/v1/generate-character`, `/v1/generate-creature` and `/v1/generate-location`
-answer `500 internal_error` with `error.startedJobIds` naming the candidates
-that did start (follow those; the list is empty when none did); the others
-are failed and their credits refunded. Pass `attachToCharacterId` to auto-attach the result to the
+trackable. With `count` 2 or more, `/v1/generate-character`,
+`/v1/generate-creature` and `/v1/generate-location` (like `/v1/generate-object`,
+and `/v1/video-sfx` with `versions` 2 or more) make the candidates as one
+batch, the way an [image batch](#4g-several-images-in-one-call-count-models)
+does: the balance is
+checked against the whole batch, each candidate is charged its own price, and
+a failure before they are queued refunds and removes them all. With
+`Idempotency-Key: K`, candidate *i* is keyed `K:i`, so repeating the request
+with the same key returns the same job ids and never charges a candidate
+twice. When every candidate exists and is running or done, the repeat is
+answered from them before any balance check (`deduped: true` and
+`X-Dedup-Hit: 1`), so it cannot answer `402` for candidates that are already
+paid for; a batch that was only partly made is completed, checked and charged
+for the candidates still missing. Two requests with the same key at once do
+not split the batch: the second waits for the first, or answers
+`409 batch_in_progress` if the first is still working after 15 seconds (retry
+it). A key belongs to one request: repeating it with a different body while
+any of its candidates still waits, or on a different route (the key already
+belongs to that route's jobs), answers `422 idempotency_key_reused`, and
+nothing is charged or queued. Without a key every request is a
+new batch; `count: 1` is a single job, keyed `K` as before. When a run's
+candidates cannot all be queued to start, the route answers
+`500 internal_error` with `error.startedJobIds` naming the candidates that did
+start (follow those; the list is empty when none did); the others are failed,
+their credits refunded and their rows removed, and the same request with the
+same key returns the started ones and starts only the rest. Pass `attachToCharacterId` to auto-attach the result to the
 character row when the job completes — no separate `approve` step needed
 for single-candidate runs. Add `attachPortrait: false` to keep each take a
 candidate instead: only `approve-portrait` then sets the portrait.
@@ -2418,11 +2449,15 @@ stale-snapshot save would clobber the worker's atomic
 
 `/v1/generate-object` returns a discriminated union: `{ jobId }` for
 `count: 1` (default) and `{ jobIds: string[] }` for `count: 2 | 4` — branch
-on `"jobIds" in response`. When a run's candidates cannot all be queued to
-start, `/v1/generate-object` answers `500 internal_error` with
-`error.startedJobIds` naming the candidates that did start (follow those; the
-list is empty when none did); the others are failed and their credits
-refunded. The asset / motion routes always return
+on `"jobIds" in response`. Several candidates are made as one batch under
+per-candidate keys (`K:i`), as [character generation](#9-characters) describes:
+a repeat with the same key returns the same jobs (`deduped: true` when they
+all already existed) and starts only what is missing. When a run's candidates
+cannot all be queued to start, `/v1/generate-object` answers
+`500 internal_error` with `error.startedJobIds` naming the candidates that did
+start (follow those; the list is empty when none did); the others are failed,
+their credits refunded and their rows removed, and the same request with the
+same key returns the started ones and starts only the rest. The asset / motion routes always return
 `{ jobId }`. Pass `attachToObjectId` to auto-attach the result to the
 object row when the job completes — no separate approval step needed for
 single-candidate runs.

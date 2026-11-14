@@ -386,6 +386,61 @@ describe("a queue that refuses the draft (lib/enqueue-route-job.ts)", () => {
     expect(mocks.cancelOwnedJob).not.toHaveBeenCalled()
   })
 
+  it("a reservation that throws instead of answering: failed and refunded, answered 500, no analysis created, never queued", async () => {
+    mocks.reserveCreditsForJob.mockRejectedValueOnce(new Error("fetch failed"))
+    const res = await post({ ...VALID, videoUrl: VIDEO })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    expectFailedNotDeleted()
+    expect(analysisSeen).toBeNull()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+    await settle()
+    expect(mocks.cancelOwnedJob).not.toHaveBeenCalled()
+  })
+
+  it("an analysis sub-request that throws (not a refusal): failed and refunded, answered 500, never queued", async () => {
+    // `app.inject` rejects only for the analysis route; the test's own request passes through.
+    const original = app.inject.bind(app)
+    const spy = vi.spyOn(app, "inject").mockImplementation(((opts: { url?: string }) => {
+      if (opts?.url === "/v1/video-analysis") return Promise.reject(new Error("inject failed"))
+      return original(opts as never)
+    }) as never)
+    try {
+      const res = await post({ ...VALID, videoUrl: VIDEO })
+      expect(res.statusCode).toBe(500)
+      expect(res.json().error.code).toBe("internal_error")
+      expect(spy.mock.calls.some((call) => ((call as unknown[])[0] as { url?: string } | undefined)?.url === "/v1/video-analysis")).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
+    expectFailedNotDeleted()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+    // No child id came back, so there is nothing of this run's to cancel.
+    await settle()
+    expect(mocks.cancelOwnedJob).not.toHaveBeenCalled()
+  })
+
+  it("a refused analysis whose undo throws: the parent is failed and refunded through the shared rule instead, answered 500", async () => {
+    analysisAnswer = { status: 422, body: { error: { code: "video_too_long", message: "Video is too long." } } }
+    mocks.refundReservedCreditsForJob.mockRejectedValueOnce(new Error("fetch failed"))
+    const res = await post({ ...VALID, videoUrl: VIDEO })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    expect(mocks.markJobFailedDetailed).toHaveBeenCalledWith("parent-1", expect.objectContaining({ from: ["pending"], extra: { idempotency_key: null } }))
+    expect(mocks.refundJobHoldsConfirmed).toHaveBeenCalledWith("parent-1")
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("a throw before the queue on a job its owner cancelled meanwhile: nothing refunded twice, still answered 500", async () => {
+    mocks.reserveCreditsForJob.mockRejectedValueOnce(new Error("fetch failed"))
+    mocks.markJobFailedDetailed.mockResolvedValue("missed")
+    const res = await post(VALID)
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    expect(mocks.refundJobHoldsConfirmed).not.toHaveBeenCalled()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
   it("a queued movie run is unchanged: nothing failed, refunded or cancelled", async () => {
     const res = await post({ ...VALID, videoUrl: VIDEO })
     expect(res.statusCode).toBe(200)

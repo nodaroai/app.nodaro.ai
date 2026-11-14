@@ -6,7 +6,9 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
-import { enqueueRouteJobs } from "../lib/enqueue-route-job.js"
+import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { batchQueueId, runJobBatch } from "../lib/job-batch.js"
+import { keyedBatchAnswer, keyedBatchJobsToPrice, keyedBatchReplay } from "../lib/keyed-batch-replay.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId } from "../lib/request-helpers.js"
 import { resolveEntityImageCreditIdentifier, resolveEntityImageParams } from "../lib/entity-credit-identifier.js"
@@ -153,6 +155,11 @@ function extractCount(body: unknown): number {
   return raw
 }
 
+/** The route's answer: the first candidate's job and every candidate's, in order. */
+function characterBatchAnswer(jobIds: readonly string[]): Record<string, unknown> {
+  return { jobId: jobIds[0], jobIds: [...jobIds] }
+}
+
 export async function generateCharacterRoutes(app: FastifyInstance) {
   app.post(
     "/v1/generate-character",
@@ -167,11 +174,15 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       // "gpt-image:high") via the shared resolver — the SAME function the
       // handler's DEBIT uses, so the advisory CHECK can never price a
       // different tier than the reservation.
+      // `keyedBatchReplay` first: a repeat of a keyed batch (count ≥ 2) is
+      // answered from its jobs before any check, or priced for the jobs it
+      // still pays for.
       preHandler: [
+        keyedBatchReplay({ size: extractCount, jobType: "generate-character", answer: characterBatchAnswer }),
         creditGuard((req: FastifyRequest) => resolveEntityImageCreditIdentifier(req.body), {
           runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.character),
-          computeCredits: async (body) => {
-            const count = extractCount(body)
+          computeCredits: async (body, req) => {
+            const count = keyedBatchJobsToPrice(req) ?? extractCount(body)
             const identifier = resolveEntityImageCreditIdentifier(body)
             // Dynamic import: getModelCreditBaseCost lives in ee/ and we keep
             // core free of static ee/ imports. Only reached in cloud edition
@@ -380,61 +391,50 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
         assetType: "portrait",
       })
 
-      // ──────────────────────────────────────────────────────────────────────
-      // Phase 1: Insert N pending jobs (always at least 1).
       // `force_private: true` is unconditional per the Character Studio
       // privacy-by-default rule — generated character assets must never leak
       // to the public gallery, regardless of what the user requests.
-      //
-      // On mid-batch insert failure: roll back any earlier inserts so we
-      // don't leave orphan `pending` rows that will never be queued.
-      // ──────────────────────────────────────────────────────────────────────
-      const insertedJobIds: string[] = []
-      for (let i = 0; i < data.count; i++) {
-        const { data: job, error } = await insertJob(req, {
-            workflow_id: workflowId,
-            force_private: true,
-            user_id: userId,
-            status: "pending",
-            // `subjectMinor` is persisted, not just enqueued: a floored job has
-            // to be auditable after the fact from the jobs row alone.
-            input_data: { ...inputData, prompt: promptText, subjectMinor },
-            ...(mcpClient ? { mcp_client: mcpClient } : {}),
-          })
-
-        if (error || !job) {
-          if (insertedJobIds.length > 0) {
-            try {
-              await supabase.from("jobs").delete().in("id", insertedJobIds)
-            } catch (cleanupErr) {
-              req.log.warn(
-                { err: cleanupErr, orphanJobIds: insertedJobIds },
-                "[generate-character] failed to delete orphan jobs after mid-batch insert failure",
-              )
-            }
-          }
-          return sendInternalError(reply, req, error, "Failed to create job")
-        }
-        insertedJobIds.push(job.id)
+      const row = {
+        workflow_id: workflowId,
+        force_private: true,
+        user_id: userId,
+        status: "pending",
+        // `subjectMinor` is persisted, not just enqueued: a floored job has
+        // to be auditable after the fact from the jobs row alone.
+        input_data: { ...inputData, prompt: promptText, subjectMinor },
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
+      }
+      // The worker's payload beside the job id and its usage log.
+      const queueData = {
+        prompt: promptText,
+        sourceImageUrl: data.sourceImageUrl,
+        provider: data.provider,
+        attachToCharacterId: data.attachToCharacterId,
+        skipPortraitAttach: data.skipPortraitAttach,
+        attachPortrait: data.attachPortrait,
+        aspectRatio,
+        resolution: data.resolution,
+        quality: data.quality,
+        // W1-a: arms the minor-age-floor policy at the entity image
+        // chokepoint. The legacy (userPrompt/description) prompt path is
+        // NOT scaffolded here, so for those requests the worker floor is
+        // the only cover — which is exactly why this rides every job, not
+        // just the scaffolded ones.
+        subjectMinor,
       }
 
       // ──────────────────────────────────────────────────────────────────────
-      // Per-job creditOverride correction: the preHandler reserved the BATCH
-      // total (cost×count×markup) once; without resetting the override per job,
-      // the N-call reservation loop below would debit batchTotal×N (an N²
-      // over-charge). Mirror video-sfx: set the override to the per-JOB
-      // marked-up cost before each reserveCreditsForJob call.
+      // Per-job creditOverride correction: the preHandler priced the BATCH
+      // total (cost×count×markup) into the override, and every reservation
+      // reads it — without resetting it to the per-JOB marked-up cost, N jobs
+      // would each debit the batch total (an N² over-charge).
       //
       // The per-job BASE is `getModelCreditBaseCost(modelIdentifier).creditCost`
       // — identical to what computeCredits uses (it multiplies that same base
       // by `count`), so per-job = computeCredits's base ÷ count. We then apply
       // the SAME markup formula creditGuardImpl uses so the final per-job
       // number matches what was checked.
-      //
-      // TODO(nodaro): extract a shared per-job-override helper — this block is
-      // duplicated 4 ways (video-sfx + generate-character/location/object).
       // ──────────────────────────────────────────────────────────────────────
-      let perJobCreditOverride: number | undefined
       if (hasCredits() && req.creditReservation) {
         const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
         const pricing = await getModelCreditBaseCost(modelIdentifier)
@@ -444,113 +444,50 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
         // Same helper (integer-domain rounding + per-service margin) that
         // creditGuardImpl and the anomaly detector's actual use, so the reserve
         // can never round a credit apart from them (no phantom credit_anomalies).
-        perJobCreditOverride = applyServiceMarkup(pricing.creditCost, settings, modelIdentifier)
+        req.creditReservation.creditOverride = applyServiceMarkup(pricing.creditCost, settings, modelIdentifier)
       }
 
-      // ──────────────────────────────────────────────────────────────────────
-      // Phase 2A: Reserve credits for every job BEFORE enqueueing any.
-      //
-      // The preHandler already gated the full batch cost (computeCredits
-      // multiplies by `count`), so mid-batch reservation failure is unlikely
-      // — but not impossible (race conditions with concurrent spend, RPC
-      // errors, etc.). When it happens we must roll back:
-      //   - refund any reservations that succeeded (jobs 0..K-1)
-      //   - delete the orphan `pending` rows that never got a reservation
-      //     (jobs K..N-1; note `reserveCreditsForJobImpl` already deletes
-      //     the row for job K itself on failure)
-      // We DO NOT call videoQueue.add yet — that happens only in Phase 2B
-      // after all reservations have succeeded.
-      //
-      // Per-job creditOverride correction (see comment above): reset
-      // `req.creditReservation.creditOverride` to the per-job number before
-      // each call so reserveCreditsForJobImpl debits per-job, not per-batch.
-      // ──────────────────────────────────────────────────────────────────────
-      type ReservationRecord = { jobId: string; usageLogId?: string }
-      const reservations: ReservationRecord[] = []
-      for (const jobId of insertedJobIds) {
-        if (req.creditReservation && perJobCreditOverride !== undefined) {
-          req.creditReservation.creditOverride = perJobCreditOverride
-        }
-        const reservation = await reserveCreditsForJob(req, reply, jobId, modelIdentifier)
-        if (reply.sent) {
-          // Refund reservations that succeeded earlier in this batch.
-          if (reservations.length > 0 && hasCredits()) {
-            try {
-              const { CreditsService } = await import("../ee/services/credits.js")
-              for (const r of reservations) {
-                if (!r.usageLogId) continue
-                try {
-                  await CreditsService.refundCredits(r.usageLogId)
-                } catch (refundErr) {
-                  req.log.warn(
-                    { err: refundErr, jobId: r.jobId, usageLogId: r.usageLogId },
-                    "[generate-character] refund failed during batch rollback",
-                  )
-                }
-              }
-            } catch (importErr) {
-              req.log.warn(
-                { err: importErr },
-                "[generate-character] failed to load CreditsService for rollback refund",
-              )
-            }
-          }
-          // Delete jobs that were inserted but never reserved (orphans).
-          // Job K itself was already deleted by reserveCreditsForJobImpl,
-          // so exclude any id that appears in `reservations`.
-          const reservedIds = new Set(reservations.map((r) => r.jobId))
-          const orphanIds = insertedJobIds.filter((id) => !reservedIds.has(id) && id !== jobId)
-          if (orphanIds.length > 0) {
-            try {
-              await supabase.from("jobs").delete().in("id", orphanIds)
-            } catch (deleteErr) {
-              req.log.warn(
-                { err: deleteErr, orphanJobIds: orphanIds },
-                "[generate-character] failed to delete orphan jobs during batch rollback",
-              )
-            }
-          }
-          return
-        }
-        reservations.push({ jobId, usageLogId: reservation?.usageLogId })
+      if (data.count === 1) {
+        // One job: inserted, reserved (which writes the request's
+        // Idempotency-Key onto it) and queued; a queue that refuses it fails
+        // and refunds it (enqueueRouteJob).
+        const { data: job, error } = await insertJob(req, row)
+        if (error || !job) return sendInternalError(reply, req, error, "Failed to create job")
+        const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+        if (reply.sent) return
+        await enqueueRouteJob(req, reply, job.id, () =>
+          videoQueue.add("generate-character", { jobId: job.id, ...queueData, usageLogId: reservation?.usageLogId }),
+        )
+        if (reply.sent) return
+        return characterBatchAnswer([job.id])
       }
 
-      // ──────────────────────────────────────────────────────────────────────
-      // Phase 2B: All reservations succeeded — enqueue every job, in order.
-      // When the queue refuses one, it and the jobs after it are failed and
-      // refunded, the ones already queued keep running, and the request is
-      // answered 500 with `error.startedJobIds` (enqueueRouteJobs).
-      // ──────────────────────────────────────────────────────────────────────
-      await enqueueRouteJobs(
+      // Several candidates: created, reserved and queued all or nothing by
+      // `runJobBatch` (lib/job-batch.ts), each under its own Idempotency-Key
+      // (`<key>:<i>`), so a repeat with the same key returns the same jobs and
+      // starts only what is missing. A failure before the queue refunds and
+      // removes what this request made; a queue that refuses the batch fails
+      // and refunds the jobs it did not start and answers 500 naming the ones
+      // that did (`error.startedJobIds`).
+      const jobs = await runJobBatch(
         req,
         reply,
-        reservations.map((r) => ({
-          jobId: r.jobId,
-          enqueue: () =>
-            videoQueue.add("generate-character", {
-              jobId: r.jobId,
-              prompt: promptText,
-              sourceImageUrl: data.sourceImageUrl,
-              provider: data.provider,
-              attachToCharacterId: data.attachToCharacterId,
-              skipPortraitAttach: data.skipPortraitAttach,
-              attachPortrait: data.attachPortrait,
-              aspectRatio,
-              resolution: data.resolution,
-              quality: data.quality,
-              // W1-a: arms the minor-age-floor policy at the entity image
-              // chokepoint. The legacy (userPrompt/description) prompt path is
-              // NOT scaffolded here, so for those requests the worker floor is
-              // the only cover — which is exactly why this rides every job, not
-              // just the scaffolded ones.
-              subjectMinor,
-              usageLogId: r.usageLogId,
-            }),
-        })),
+        Array.from({ length: data.count }, () => ({ row, creditIdentifier: modelIdentifier })),
+        {
+          idempotencyKey: req.idempotencyKey,
+          failureMessage: "Failed to create jobs",
+          // One call: the queue adds the whole list atomically, or none of it.
+          enqueue: async (toQueue) => {
+            await videoQueue.addBulk(toQueue.map((job) => ({
+              name: "generate-character",
+              data: { jobId: job.jobId, ...queueData, usageLogId: job.usageLogId },
+              opts: { jobId: batchQueueId("generate-character", job.jobId) },
+            })))
+          },
+        },
       )
-      if (reply.sent) return
-
-      return { jobId: insertedJobIds[0], jobIds: insertedJobIds }
+      if (!jobs) return
+      return keyedBatchAnswer(reply, jobs, characterBatchAnswer)
     },
   )
 }

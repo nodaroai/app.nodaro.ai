@@ -11,7 +11,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify"
 
-interface Job { id: string; key: string; user_id: string; status: string; usage_log_id: string | null; credits: number | null; input_fingerprint: string | null }
+interface Job { id: string; key: string; user_id: string; status: string; usage_log_id: string | null; credits: number | null; input_fingerprint: string | null; input_data: unknown }
 interface Log { id: string; job_id: string; status: "reserved" | "committed" | "refunded"; credits: number; seq: number; by: string }
 
 const h = vi.hoisted(() => ({
@@ -47,7 +47,7 @@ vi.mock("../insert-job.js", () => ({
     if (existing) return { row: { ...existing }, created: false }
     const job: Job = {
       id: `job-${h.jobs.size}`, key, user_id: row.user_id as string, status: "pending",
-      usage_log_id: null, credits: null, input_fingerprint: (row.input_fingerprint as string) ?? null,
+      usage_log_id: null, credits: null, input_fingerprint: (row.input_fingerprint as string) ?? null, input_data: row.input_data,
     }
     h.jobs.set(job.id, job)
     return { row: { ...job }, created: true }

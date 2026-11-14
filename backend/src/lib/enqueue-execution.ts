@@ -68,18 +68,26 @@ export type UnqueuedExecutionOutcome = "failed" | "moved-on" | "unsettled"
  * says what the caller may assume: "failed" — this call failed the run from
  * `pending` and released its key, so nothing runs; "unsettled" — the run's
  * state is unknown (still `pending`, failed with its answer lost, or running),
- * so a caller must not act as if nothing started. The queue's own error is
- * its `cause`.
+ * so a caller must not act as if nothing started: it follows the run to its
+ * real end, as it would a started one. The queue's own error is its `cause`.
  */
 export class UnqueuedRunError extends Error {
   readonly executionId: string
   readonly outcome: Exclude<UnqueuedExecutionOutcome, "moved-on">
+  /** The app run the service created for the run before queueing it, when it created one. */
+  readonly appRunId?: string
 
-  constructor(executionId: string, outcome: Exclude<UnqueuedExecutionOutcome, "moved-on">, cause: unknown) {
+  constructor(
+    executionId: string,
+    outcome: Exclude<UnqueuedExecutionOutcome, "moved-on">,
+    cause: unknown,
+    opts: { readonly appRunId?: string } = {},
+  ) {
     super(`The queue refused run ${executionId} (${outcome})`, { cause })
     this.name = "UnqueuedRunError"
     this.executionId = executionId
     this.outcome = outcome
+    if (opts.appRunId) this.appRunId = opts.appRunId
   }
 }
 

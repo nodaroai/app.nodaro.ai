@@ -5,7 +5,7 @@ import { videoAnalysisResultSchema, type VideoAnalysisResult } from "@nodaro/sha
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
 import { shouldProxyLlmToCloud } from "../lib/cloud-llm-proxy.js"
 import { insertJob } from "../lib/insert-job.js"
-import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { enqueueRouteJob, failUnqueuedRouteJob } from "../lib/enqueue-route-job.js"
 import {
   stampAnalysisChild,
   discardUnstartedJob,
@@ -276,39 +276,54 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, jobError, "Failed to create job")
       }
 
-      // Metered (D1/D5): one attempt of the draft as the worker will send it —
-      // the input it composes from a reused analysis (exactly), or a movie
-      // run's 600 s analysis bound (the child does not exist yet: spec D16
-      // holds the parent first) — held under `llm-structured:<model>`. The
-      // worker settles the actual against this usage log (Task 11). Under the
-      // rollback `{ metered: false }` and the tier id is reserved as before.
-      const { input } = parsed.data
-      const plannedInput = reusedAnalysis
-        ? composeStructuredAnalysisInput(input, reusedAnalysis)
-        : input + "x".repeat(llmStructuredVideoBound(parsed.data).extraChars)
-      const planned = plannedStructuredCall(structuredCompletionRequest(parsed.data, prepared, plannedInput), prepared.schema, parsed.data.schemaName)
-      const reserve = await reserveLlmCall(req, reply, job.id, { feature: "llm-structured", calls: [planned] })
-      if (reply.sent || !reserve) return
-      const reservation = reserve.metered
-        ? reserve.reservation
-        : await reserveCreditsForJob(req, reply, job.id, prepared.modelIdentifier)
-      if (reply.sent) return
-
       // The analysis the draft reads: the caller's own finished one (admitted
       // above), or one created for it now through the analysis route.
       let analysisJobId: string | undefined
       const analysisReused = Boolean(parsed.data.analysisJobId)
-      if (parsed.data.analysisJobId) {
-        analysisJobId = parsed.data.analysisJobId
-      } else if (parsed.data.videoUrl) {
-        const child = await createAnalysisChild(app, req, parsed.data)
-        if (!child.ok) {
-          // The analysis route refused: nothing has run, so the parent goes
-          // away with its reservation.
-          await discardUnstartedJob(job.id, userId)
-          return reply.status(child.status).send(child.body)
+      let reservation: Awaited<ReturnType<typeof reserveCreditsForJob>>
+      // From here until the job is handed to the queue, a step that THROWS (a
+      // reservation that throws instead of answering, the analysis
+      // sub-request, the undo of a refused one) leaves no job pending with its
+      // credits and its Idempotency-Key held for the never-started sweep: the
+      // job is failed from `pending` with its key released, its holds refunded
+      // confirmed, and the request answered 500 (lib/enqueue-route-job.ts); an
+      // analysis child this run started is then cancelled. A step that
+      // ANSWERS (a 402, the analysis route's refusal) answers as before.
+      try {
+        // Metered (D1/D5): one attempt of the draft as the worker will send
+        // it — the input it composes from a reused analysis (exactly), or a
+        // movie run's 600 s analysis bound (the child does not exist yet: spec
+        // D16 holds the parent first) — held under `llm-structured:<model>`.
+        // The worker settles the actual against this usage log (Task 11).
+        // Under the rollback `{ metered: false }` and the tier id is reserved
+        // as before.
+        const { input } = parsed.data
+        const plannedInput = reusedAnalysis
+          ? composeStructuredAnalysisInput(input, reusedAnalysis)
+          : input + "x".repeat(llmStructuredVideoBound(parsed.data).extraChars)
+        const planned = plannedStructuredCall(structuredCompletionRequest(parsed.data, prepared, plannedInput), prepared.schema, parsed.data.schemaName)
+        const reserve = await reserveLlmCall(req, reply, job.id, { feature: "llm-structured", calls: [planned] })
+        if (reply.sent || !reserve) return
+        reservation = reserve.metered
+          ? reserve.reservation
+          : await reserveCreditsForJob(req, reply, job.id, prepared.modelIdentifier)
+        if (reply.sent) return
+
+        if (parsed.data.analysisJobId) {
+          analysisJobId = parsed.data.analysisJobId
+        } else if (parsed.data.videoUrl) {
+          const child = await createAnalysisChild(app, req, parsed.data)
+          if (!child.ok) {
+            // The analysis route refused: nothing has run, so the parent goes
+            // away with its reservation.
+            await discardUnstartedJob(job.id, userId)
+            return reply.status(child.status).send(child.body)
+          }
+          analysisJobId = child.jobId
         }
-        analysisJobId = child.jobId
+      } catch (err) {
+        await failUnqueuedRouteJob(req, reply, job.id, err)
+        return cancelUnusedAnalysisChild(req, analysisReused ? undefined : analysisJobId, userId)
       }
 
       // attempts: 1 — the LLM call is the paid step; a BullMQ re-run after a

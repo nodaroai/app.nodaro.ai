@@ -25,9 +25,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify"
 
+const IMAGE_DATA = { type: "generate-image" }
+
 const h = vi.hoisted(() => ({
   inserts: [] as Array<{ row: Record<string, unknown>; key: string | null | undefined; columns: string | undefined }>,
-  insertImpl: null as null | ((i: number, key: string | null | undefined) => Promise<{ row: { id: string; credits?: number | null; status?: string | null; input_fingerprint?: string | null }; created: boolean }>),
+  insertImpl: null as null | ((i: number, key: string | null | undefined) => Promise<{ row: { id: string; credits?: number | null; status?: string | null; input_fingerprint?: string | null; input_data?: unknown }; created: boolean }>),
   reserves: [] as Array<{ jobId: string; identifier: string; requestKey: string | undefined; opts: unknown }>,
   reserveImpl: null as null | ((jobId: string, reply: FastifyReply) => Promise<unknown>),
   refunded: [] as string[],
@@ -259,7 +261,7 @@ describe("runJobBatch — the happy path", () => {
 
   it("asks for the job's credits beside its id (a replayed job reports the earlier hold)", async () => {
     await run(plan(1), { key: "client-key-1" })
-    expect(h.inserts[0].columns).toBe("id, credits, status, input_fingerprint")
+    expect(h.inserts[0].columns).toBe("id, credits, status, input_fingerprint, input_data")
   })
 
   it("credits are null where nothing is charged (no reservation answered)", async () => {
@@ -271,7 +273,7 @@ describe("runJobBatch — the happy path", () => {
 
 describe("runJobBatch — a replay with the same key", () => {
   it("returns the same jobs and reserves and queues nothing again", async () => {
-    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: 60, status: "processing" }, created: false })
+    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: 60, status: "processing", input_data: IMAGE_DATA }, created: false })
     const { res, enqueued } = await run(plan(2), { key: "client-key-1" })
     expect(res.statusCode).toBe(200)
     expect(h.reserves).toHaveLength(0)
@@ -283,7 +285,7 @@ describe("runJobBatch — a replay with the same key", () => {
   })
 
   it("completes a partly-created batch: only the missing jobs are reserved and queued", async () => {
-    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: i === 0 ? 60 : null, status: i === 0 ? "completed" : "pending" }, created: i > 0 })
+    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: i === 0 ? 60 : null, status: i === 0 ? "completed" : "pending", input_data: IMAGE_DATA }, created: i > 0 })
     const { res, enqueued } = await run(plan(3), { key: "client-key-1" })
     expect(h.reserves.map((r) => r.jobId)).toEqual(["job-1", "job-2"])
     expect(enqueued[0].map((j) => j.index)).toEqual([1, 2])
@@ -485,7 +487,7 @@ describe("runJobBatch — undo never strands a hold", () => {
 
 describe("runJobBatch — the jobs an earlier request created", () => {
   it("takes over a job left pending with nothing held: reserves it and queues it", async () => {
-    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: null, status: "pending" }, created: false })
+    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: null, status: "pending", input_data: IMAGE_DATA }, created: false })
     const { res, enqueued } = await run(plan(2), { key: "client-key-1" })
     expect(res.statusCode).toBe(200)
     expect(h.holdReads[0]).toEqual(["job-0", "job-1"])
@@ -502,7 +504,7 @@ describe("runJobBatch — the jobs an earlier request created", () => {
   })
 
   it("queues again a job left pending and paid for, without charging it again", async () => {
-    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: 60, status: "pending" }, created: false })
+    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: 60, status: "pending", input_data: IMAGE_DATA }, created: false })
     h.holds = new Map([["job-0", "log-earlier-0"], ["job-1", "log-earlier-1"]])
     const { res, enqueued } = await run(plan(2), { key: "client-key-1" })
     expect(h.reserves).toHaveLength(0)
@@ -514,14 +516,14 @@ describe("runJobBatch — the jobs an earlier request created", () => {
   })
 
   it("leaves a running or finished job alone", async () => {
-    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: 60, status: i === 0 ? "processing" : "failed" }, created: false })
+    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: 60, status: i === 0 ? "processing" : "failed", input_data: IMAGE_DATA }, created: false })
     const { enqueued } = await run(plan(2), { key: "client-key-1" })
     expect(h.reserves).toHaveLength(0)
     expect(enqueued).toHaveLength(0)
   })
 
   it("a failed read of the holds charges nothing twice: it undoes its own jobs and answers 500", async () => {
-    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: null, status: "pending" }, created: i === 1 })
+    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: null, status: "pending", input_data: IMAGE_DATA }, created: i === 1 })
     h.holds = null
     const { res, enqueued } = await run(plan(2), { key: "client-key-1" })
     expect(res.statusCode).toBe(500)
@@ -531,7 +533,7 @@ describe("runJobBatch — the jobs an earlier request created", () => {
   })
 
   it("a queue failure undoes the jobs it took over, never the ones an earlier request paid for", async () => {
-    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: null, status: "pending" }, created: false })
+    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: null, status: "pending", input_data: IMAGE_DATA }, created: false })
     h.holds = new Map([["job-0", "log-earlier-0"]])
     await run(plan(2), { key: "client-key-1", enqueue: async () => { throw new Error("redis down") } })
     expect(h.fails.map((f) => f.jobId)).toEqual(["job-1"])
@@ -642,7 +644,7 @@ describe("runJobBatch — a failed reservation leaves its job to the confirmed u
 describe("runJobBatch — the same key for a different request", () => {
   it("a pending job made for another body is never run with this one: 422, this request's own jobs removed", async () => {
     h.insertImpl = async (i) => i === 0
-      ? { row: { id: "job-0", credits: null, status: "pending", input_fingerprint: "another-request" }, created: false }
+      ? { row: { id: "job-0", credits: null, status: "pending", input_fingerprint: "another-request", input_data: IMAGE_DATA }, created: false }
       : { row: { id: `job-${i}`, credits: null }, created: true }
     const { res, enqueued } = await run(plan(2), { key: "client-key-1" })
     expect(res.statusCode).toBe(422)
@@ -650,6 +652,29 @@ describe("runJobBatch — the same key for a different request", () => {
     expect(h.reserves).toHaveLength(0)
     expect(enqueued).toHaveLength(0)
     expect(h.deleted).toEqual([["job-1"]])
+  })
+
+  it("jobs another route made under the same key are never adopted: 422 for any status, this request's own jobs removed", async () => {
+    for (const status of ["processing", "completed", "pending"]) {
+      h.inserts.length = 0
+      h.deleted.length = 0
+      h.reserves.length = 0
+      h.insertImpl = async (i) => i < 2
+        ? { row: { id: `other-${i}`, credits: 60, status, input_data: { type: "generate-character" } }, created: false }
+        : { row: { id: `job-${i}`, credits: null }, created: true }
+      const { res, enqueued } = await run(plan(3), { key: "client-key-1" })
+      expect(res.statusCode).toBe(422)
+      expect(res.json().error.code).toBe("idempotency_key_reused")
+      expect(h.reserves).toHaveLength(0)
+      expect(enqueued).toHaveLength(0)
+      expect(h.deleted).toEqual([["job-2"]])
+    }
+  })
+
+  it("a kept job that records no type is not this route's either", async () => {
+    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: 60, status: "processing", input_data: null }, created: false })
+    const { res } = await run(plan(2), { key: "client-key-1" })
+    expect(res.statusCode).toBe(422)
   })
 
   it("every row is stamped with the request's fingerprint", async () => {
@@ -660,7 +685,7 @@ describe("runJobBatch — the same key for a different request", () => {
   })
 
   it("a running or finished job of another body is only reported, never queued", async () => {
-    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: 60, status: "completed", input_fingerprint: "another-request" }, created: false })
+    h.insertImpl = async (i) => ({ row: { id: `job-${i}`, credits: 60, status: "completed", input_fingerprint: "another-request", input_data: IMAGE_DATA }, created: false })
     const { res, enqueued } = await run(plan(2), { key: "client-key-1" })
     expect(res.statusCode).toBe(200)
     expect(enqueued).toHaveLength(0)

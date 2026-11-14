@@ -218,9 +218,10 @@ export async function executeAppRun(
     // Never left `pending` with nothing queued, holding its Idempotency-Key:
     // failed from `pending` with its key released (a run that moved on is
     // running). The caller answers the error, told by its outcome whether the
-    // run is known not to run ("failed") or may still run ("unsettled").
+    // run is known not to run ("failed") or may still run ("unsettled"), and
+    // given the run's app run to follow it by.
     const outcome = await settleUnqueuedRun(execution.id, userId)
-    if (outcome !== "moved-on") throw new UnqueuedRunError(execution.id, outcome, err)
+    if (outcome !== "moved-on") throw new UnqueuedRunError(execution.id, outcome, err, { appRunId: appRun.id })
   }
 
   return {

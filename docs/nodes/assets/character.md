@@ -122,7 +122,7 @@ Train a high-fidelity character LoRA from the character's own images, right insi
 
 The portrait and core identity for the character: **name**, **portrait** (with a **Generate Portrait** button and, for multi-candidate runs, an **approve** step to pick the keeper), **description**, **gender**, **style**, **base outfit**, an image-model **provider** picker, and a **seed prompt** that scaffolds portrait generation. Approving a portrait also fires an LLM caption that authors the character's canonical visual description (used by downstream prompts). The studio opens on this page.
 
-Over the API, if a portrait run's candidates cannot all be queued to start, `POST /v1/generate-character` answers `500 internal_error` with `error.startedJobIds` naming the candidates that did start (follow those; the list is empty when none did); the others are failed and their credits refunded.
+Over the API, several candidates (`count` 2 or more) are made as one batch: with an `Idempotency-Key`, candidate *i* is keyed `<key>:<i>`, so repeating the request with the same key returns the same jobs (`deduped: true` once they all exist) and never charges a candidate twice. If a portrait run's candidates cannot all be queued to start, `POST /v1/generate-character` answers `500 internal_error` with `error.startedJobIds` naming the candidates that did start (follow those; the list is empty when none did); the others are failed and their credits refunded, and the same request with the same key returns the started ones and starts only the rest.
 
 ### Identity → Appearance
 

@@ -1,7 +1,9 @@
 /**
  * Several jobs from ONE request — insert, reserve, queue — all or nothing.
  *
- * A request that plans N jobs (generate-image `count` / `models`) needs the
+ * A request that plans N jobs (generate-image `count` / `models`;
+ * generate-character / -creature / -location / -object `count` and video-sfx
+ * `versions` from 2 up, whose repeat `keyed-batch-replay.ts` answers) needs the
  * three steps a single job takes, with one rule a single job never needed: no
  * part of the batch may be left running unpaid, or paid for but never queued.
  * So the steps run in phases, and a failure in any phase undoes what THIS
@@ -11,7 +13,9 @@
  *     retried request returns the same jobs and creates only what is missing.
  *     Every row carries the request's fingerprint. Without a key, plain
  *     inserts — exactly what one unkeyed call gets.
- *  2. Sort the jobs an earlier request created. One still `pending` is queued
+ *  2. Sort the jobs an earlier request created. Each must be of this route's
+ *     job type (`input_data.type`): a key shared with another route's batch is
+ *     a 422 `idempotency_key_reused`. One still `pending` is queued
  *     by THIS request, so it must have been made for the same request: a
  *     different fingerprint is a 422 (the key was reused for something else),
  *     never the new request run at the earlier charge. Then: `pending` with no
@@ -108,6 +112,15 @@ export function batchJobKey(key: string | null | undefined, index: number): stri
   return key ? `${key}:${index}` : undefined
 }
 
+/**
+ * A batch job's queue id: its own, under the worker's job name, so the queue
+ * holds one entry per job and a retry that queues a paid job again is ignored
+ * while that job still waits (BullMQ ids may not contain ":").
+ */
+export function batchQueueId(name: string, jobId: string): string {
+  return `${name}-${jobId}`
+}
+
 /** A job this request reserves: one it created, or one it took over. */
 interface OwnedJob {
   readonly index: number
@@ -122,9 +135,40 @@ interface OwnedJob {
 /** A job an earlier request created and this one leaves to it. */
 interface KeptJob {
   readonly jobId: string
+  /** The job type its earlier request recorded (`input_data.type`). */
+  readonly jobType: string | null
   readonly credits: number | null
   readonly status: string | null
   readonly fingerprint: string | null
+}
+
+/**
+ * What the batch's rows record as their job type (`input_data.type`): the
+ * route's own, the same on every planned row; null when the route states none.
+ */
+function plannedJobType(planned: readonly PlannedBatchJob[]): string | null {
+  const type = (planned[0]?.row.input_data as { type?: unknown } | undefined)?.type
+  return typeof type === "string" && type ? type : null
+}
+
+/** The type a job row records (`input_data.type`), or null. */
+export function recordedJobType(inputData: unknown): string | null {
+  const type = (inputData as { type?: unknown } | null | undefined)?.type
+  return typeof type === "string" && type ? type : null
+}
+
+/**
+ * Answers 422: the Idempotency-Key was already used for a different request —
+ * another route, or the same route with other parameters. Never answered with
+ * the earlier request's jobs, and never run at the earlier charge.
+ */
+export function replyKeyReused(reply: FastifyReply): FastifyReply {
+  return reply.status(422).send({
+    error: {
+      code: "idempotency_key_reused",
+      message: "This Idempotency-Key was already used for a different request. Send the same request again, or use a new key.",
+    },
+  })
 }
 
 /** The claim a keyed batch runs under, or none for an unkeyed one. */
@@ -261,11 +305,11 @@ async function runBatch(
     try {
       // The throwing lane: a refused insert (a request-gate block, a bad
       // origin) throws, and the catch below answers it.
-      const inserted = await insertJobIdempotent<{ id: string; credits?: number | null; status?: string | null; input_fingerprint?: string | null }>(
+      const inserted = await insertJobIdempotent<{ id: string; credits?: number | null; status?: string | null; input_fingerprint?: string | null; input_data?: unknown }>(
         req,
         { ...planned[index]!.row, input_fingerprint: run.fingerprint },
         batchJobKey(opts.idempotencyKey, index),
-        "id, credits, status, input_fingerprint",
+        "id, credits, status, input_fingerprint, input_data",
       )
       const row = inserted.row
       if (inserted.created) owned.push({ index, jobId: row.id, created: true, credits: null })
@@ -275,6 +319,7 @@ async function runBatch(
           credits: typeof row.credits === "number" ? row.credits : null,
           status: row.status ?? null,
           fingerprint: row.input_fingerprint ?? null,
+          jobType: recordedJobType(row.input_data),
         })
       }
     } catch (err) {
@@ -285,18 +330,22 @@ async function runBatch(
   }
 
   // ── 2. Sort what an earlier request created ───────────────────────────────
+  // Every job an earlier request made under these keys must have been made by
+  // this route: a key shared with another route's batch is the key reused for
+  // something else, never answered with (or topped up beside) that batch.
+  const expectedType = plannedJobType(planned)
+  if (expectedType && [...kept.values()].some((job) => job.jobType !== expectedType)) {
+    await undoIfHeld(req, run, owned)
+    replyKeyReused(reply)
+    return null
+  }
   const requeue: BatchJobToQueue[] = []
   const waiting = [...kept].filter(([, job]) => job.status === "pending")
   if (waiting.length > 0) {
     // This request would queue these: they must be the same request's jobs.
     if (waiting.some(([, job]) => job.fingerprint !== null && job.fingerprint !== run.fingerprint)) {
       await undoIfHeld(req, run, owned)
-      reply.status(422).send({
-        error: {
-          code: "idempotency_key_reused",
-          message: "This Idempotency-Key was already used for a different request. Send the same request again, or use a new key.",
-        },
-      })
+      replyKeyReused(reply)
       return null
     }
     const holds = await jobCreditHolds(waiting.map(([, job]) => job.jobId))

@@ -66,7 +66,7 @@ The creature node itself is a setup/reference node and does not bill credits to 
 - **Image assets** (angles / poses / variations / main image) bill per the selected image provider (default `gpt-image-2`, 21 credits<!-- credits: gpt-image-2 -->). See [Generate Image](../ai-image/generate-image.md) for the per-provider credit table.
 - **Motion clips** bill per the selected image-to-video provider (default `kling-turbo`, 138 credits<!-- credits: kling-turbo -->). See [Image to Video](../ai-video/image-to-video.md) for the per-provider credit table.
 
-Over the API, if a main-image run's candidates cannot all be queued to start, `POST /v1/generate-creature` answers `500 internal_error` with `error.startedJobIds` naming the candidates that did start (follow those; the list is empty when none did); the others are failed and their credits refunded.
+Over the API, several candidates (`count` 2 or more) are made as one batch: with an `Idempotency-Key`, candidate *i* is keyed `<key>:<i>`, so repeating the request with the same key returns the same jobs (`deduped: true` once they all exist) and never charges a candidate twice. If a main-image run's candidates cannot all be queued to start, `POST /v1/generate-creature` answers `500 internal_error` with `error.startedJobIds` naming the candidates that did start (follow those; the list is empty when none did); the others are failed and their credits refunded, and the same request with the same key returns the started ones and starts only the rest.
 
 ## Best Practices
 - Approve a strong main image first — it becomes the visual anchor for every other asset when Style Lock is on.

@@ -20,12 +20,18 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
-vi.mock("@/lib/queue.js", () => ({
-  videoQueue: {
+vi.mock("@/lib/queue.js", () => {
+  const videoQueue = {
     add: vi.fn().mockResolvedValue({ id: "queue-job-1" }),
-  },
-  redis: {},
-}))
+    // A batch (count ≥ 2) is queued in ONE bulk add (lib/job-batch.ts):
+    // recorded here as one `add` per entry — its job name and payload — so a
+    // test reads every queued job the same way.
+    addBulk: vi.fn(async (entries: Array<{ name: string; data: Record<string, unknown> }>) => {
+      for (const e of entries) await videoQueue.add(e.name, e.data)
+    }),
+  }
+  return { videoQueue, redis: {} }
+})
 
 vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard: () => async () => undefined,
@@ -80,7 +86,12 @@ const unqueued = vi.hoisted(() => ({
   insertAppReport: vi.fn(async (_input: unknown) => true),
 }))
 vi.mock("@/lib/job-failure.js", () => ({ markJobFailedDetailed: unqueued.markJobFailedDetailed }))
-vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundJobHoldsConfirmed: unqueued.refundJobHoldsConfirmed }))
+vi.mock("@/lib/credits-job-lifecycle.js", () => ({
+  refundJobHoldsConfirmed: unqueued.refundJobHoldsConfirmed,
+  // The batch lane reads an earlier request's holds only when a key repeats.
+  jobCreditHolds: vi.fn(async () => new Map()),
+  refundUsageLogConfirmed: vi.fn(async () => true),
+}))
 vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: unqueued.insertAppReport }))
 
 // ---------------------------------------------------------------------------
@@ -220,11 +231,13 @@ describe("POST /v1/generate-creature — multi-candidate + auto-attach (Phase D5
     expect(videoQueue.add).toHaveBeenCalledTimes(10)
   })
 
-  it("a queue that refuses the 2nd of 3 candidates: the 1st keeps running, the 2nd and 3rd are failed and refunded, 500 names the 1st", async () => {
+  it("a bulk add the queue refused after the 1st of 3 candidates reached a worker: the 1st keeps running, the 2nd and 3rd are failed and refunded, 500 names the 1st", async () => {
     setupSupabaseMock()
     vi.mocked(videoQueue.add)
       .mockResolvedValueOnce({ id: "queue-job-1" } as never)
       .mockRejectedValueOnce(new Error("OOM command not allowed when used memory > 'maxmemory'."))
+    // The add was delivered for the 1st candidate and a worker took it: its failure write misses.
+    unqueued.markJobFailedDetailed.mockResolvedValueOnce("missed")
 
     const res = await app.inject({
       method: "POST",
@@ -237,9 +250,10 @@ describe("POST /v1/generate-creature — multi-candidate + auto-attach (Phase D5
     expect(res.json()).toEqual({
       error: { code: "internal_error", message: UNQUEUED_BATCH_CLIENT_MESSAGE, startedJobIds: ["job-1"] },
     })
-    // job-3 is never handed to the queue once job-2 is refused.
-    expect(vi.mocked(videoQueue.add).mock.calls.map((c) => (c[1] as { jobId: string }).jobId)).toEqual(["job-1", "job-2"])
-    expect(unqueued.markJobFailedDetailed.mock.calls.map((c) => c[0])).toEqual(["job-2", "job-3"])
+    // The batch is ONE bulk add: every candidate is settled from `pending`, and
+    // the one a worker already took (no longer pending) is left running.
+    expect(vi.mocked(videoQueue.addBulk)).toHaveBeenCalledTimes(1)
+    expect(unqueued.markJobFailedDetailed.mock.calls.map((c) => c[0])).toEqual(["job-1", "job-2", "job-3"])
     expect(unqueued.refundJobHoldsConfirmed.mock.calls.map((c) => c[0])).toEqual(["job-2", "job-3"])
   })
 
