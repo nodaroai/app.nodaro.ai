@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => {
   const mockStripAudioTags = vi.fn((text: string) => text)
   const mockVoiceChangerFromUrl = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
   const mockStartDubbing = vi.fn().mockResolvedValue({ dubbingId: "dub-id", expectedDurationSec: 30 })
+  const mockStartDubbingProjectLanguage = vi.fn().mockResolvedValue({ dubbingId: "project:p1:l9", expectedDurationSec: 0 })
   const mockWaitForDubbing = vi.fn().mockResolvedValue({ dubbing_id: "dub-id", status: "dubbed" })
   const mockPollDubbingStatus = vi.fn().mockResolvedValue({ dubbing_id: "dub-id", status: "dubbing", media_metadata: { content_type: "audio/mpeg", duration: 30 } })
   const mockDownloadDubbedMedia = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
@@ -86,6 +87,7 @@ const mocks = vi.hoisted(() => {
     mockStripAudioTags,
     mockVoiceChangerFromUrl,
     mockStartDubbing,
+    mockStartDubbingProjectLanguage,
     mockWaitForDubbing,
     mockPollDubbingStatus,
     mockDownloadDubbedMedia,
@@ -143,6 +145,10 @@ vi.mock("@/providers/elevenlabs/dubbing.js", () => ({
   pollDubbingStatus: mocks.mockPollDubbingStatus,
   downloadDubbedMedia: mocks.mockDownloadDubbedMedia,
   DUBBING_MAX_DURATION_SEC: 30 * 60,
+}))
+vi.mock("@/providers/elevenlabs/dubbing-project.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  startDubbingProjectLanguage: mocks.mockStartDubbingProjectLanguage,
 }))
 vi.mock("@/providers/elevenlabs/voice-remix.js", () => ({ remixVoice: mocks.mockRemixVoice }))
 vi.mock("@/providers/elevenlabs/voice-design.js", () => ({ designVoice: mocks.mockDesignVoice }))
@@ -1175,6 +1181,40 @@ describe("dubbing handler — modes, parking, post-hoc cap", () => {
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({ jobType: "text-to-audio", result: expect.objectContaining({ providerUsed: "elevenlabs-dubbing" }) }),
     )
+  })
+
+  it("a language added to a project dub joins that project: no dub is started anew", async () => {
+    const job = makeJob("dubbing", {
+      audioUrl: "https://example.com/in.mp3",
+      targetLanguage: "es",
+      probedDurationSec: 61,
+      projectTaskId: "project:p1",
+      dubbingModelId: "elevenlabs-dubbing-v2",
+    })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockStartDubbing).not.toHaveBeenCalled()
+    expect(mocks.mockStartDubbingProjectLanguage).toHaveBeenCalledWith(
+      "project:p1",
+      "es",
+      undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+    // The id handed back names the language: it is the one polled and delivered.
+    expect(mocks.mockWaitForDubbing.mock.calls[0]?.[0]).toBe("project:p1:l9")
+    expect(mocks.mockDownloadDubbedMedia).toHaveBeenCalledWith("project:p1:l9", "es", false, "https://example.com/in.mp3")
+  })
+
+  it("a language the project holds and no job delivers is delivered, not made again", async () => {
+    const job = makeJob("dubbing", {
+      videoUrl: "https://example.com/clip.mp4",
+      targetLanguage: "es",
+      probedDurationSec: 61,
+      projectTaskId: "project:p1",
+      adoptLanguageId: "l_held",
+    })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockStartDubbingProjectLanguage).toHaveBeenCalledWith("project:p1", "es", "l_held", expect.anything())
+    expect(mocks.mockStartDubbing).not.toHaveBeenCalled()
   })
 
   it("video upload: video mode end-to-end — real mime up, .mp4 down, video delivery with sidecar", async () => {

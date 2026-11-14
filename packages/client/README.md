@@ -293,6 +293,7 @@ try {
 | `client.objects` | Object Studio: CRUD, assets, motion |
 | `client.creatures` | Creature Studio: CRUD, assets, motion |
 | `client.voices` | Voice catalog + clones (from URL or file), voice changer, multi-speaker recast + the interactive `analyze`/stems/`exportMix` flow, design, remix, dubbing |
+| `client.dubbing` | A dub after it is made: its lines, languages and speakers, a caption file per language, and a language added to it |
 | `client.media` | Social-video import, trim, collage, save-to-storage, metadata probe |
 | `client.audio` | Audio primitives: separate, isolate, FX, mix, volume, combine |
 | `client.pipelines` | Showrunner pipelines: stages, approvals, chat, branch |
@@ -315,7 +316,7 @@ try {
 The root `@nodaro/sdk` exports everything. Each resource is also published as
 its own entry point, which loads only that resource's module:
 
-`/apps`, `/audio`, `/billing`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/dubbing`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 ```ts
 import { NotFoundError } from "@nodaro/sdk/errors"

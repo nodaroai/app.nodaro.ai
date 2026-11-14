@@ -91,7 +91,7 @@ const TIER_READS: Readonly<Record<string, Entry>> = {
   "ee/billing/downgrade-floor.ts#raiseStorageFloorOnActivation": exempt(1, "writes the user's own storage floor after a top-up; storage ceilings are not enforced under a payer"),
   "ee/billing/downgrade-floor.ts#reapplyStorageFloorAfterClawback": exempt(1, "writes the user's own storage floor after a clawback; storage ceilings are not enforced under a payer"),
   "ee/billing/provision-credits.ts#handleSubscriptionCanceled": exempt(1, "the Stripe webhook writing the subscriber's own row on cancellation"),
-  "ee/billing/provision-credits.ts#handleSubscriptionCreated": exempt(1, "the Stripe webhook writing the subscriber's own row on a new subscription"),
+  "ee/billing/subscription-grant.ts#readPreSubscribeProfile": exempt(1, "the Stripe webhook reading the subscriber's own row before it grants a subscription's plan"),
   "ee/routes/admin-credits.ts#adminCreditsRoutes": exempt(4, "admin views and the admin tier edit: each user's own row (under a payer the admin balance view shows allowances)"),
   "ee/routes/admin-subscription-health.ts#adminSubscriptionHealthRoutes": exempt(1, "the admin Stripe sync check of each subscriber's own row"),
   "ee/concurrency-lanes/live-usage.ts#createProfileLookup": exempt(1, "the admin live-usage view: each account's own plan"),

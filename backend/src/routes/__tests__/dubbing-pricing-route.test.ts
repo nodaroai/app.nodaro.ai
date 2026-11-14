@@ -59,6 +59,7 @@ vi.mock("@/lib/import-gate.js", () => ({
 }))
 
 import { dubbingRoutes } from "../dubbing.js"
+import { registerServerOnlyBodyKeysHook } from "../../middleware/server-only-body-keys.js"
 
 const USER_ID = "00000000-0000-4000-8000-000000000001"
 // The deployment's own storage (lib/own-storage-url.ts reads it from the env).
@@ -85,6 +86,8 @@ beforeEach(async () => {
     const kind = req.headers["x-auth-kind"]
     if (typeof kind === "string") req.authKind = kind as typeof req.authKind
   })
+  // As the app drops them: a body's server-only keys never reach the route.
+  registerServerOnlyBodyKeysHook(app)
   await app.register(async (instance) => {
     await dubbingRoutes(instance)
   })
@@ -130,6 +133,24 @@ describe("POST /v1/dubbing — priced per minute of the dubbed span", () => {
     expect(mocks.guardCalls).toEqual([1200])
     expect(inserted().input_data).toMatchObject({ reservedCeiling: true })
     expect(queued()).toMatchObject({ reservedCeiling: true })
+  })
+
+  it("a length the request states is never priced: a link that cannot be measured still holds the ceiling", async () => {
+    mocks.probe.mockRejectedValue(new Error("not a media file"))
+    const res = await post({ sourceUrl: "https://example.com/some-page", __probedDurationSec: 1 })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.guardCalls).toEqual([1200])
+    expect(inserted().input_data).toMatchObject({ reservedCeiling: true })
+    expect(inserted().input_data.probedDurationSec).toBeUndefined()
+    expect(queued()).toMatchObject({ reservedCeiling: true, probedDurationSec: undefined })
+  })
+
+  it("a length the request states is never priced: a measured upload is priced at its own length", async () => {
+    mocks.probe.mockResolvedValue(401)
+    const res = await post({ videoUrl: "https://cdn.example.com/v.mp4", __probedDurationSec: 1 })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.guardCalls).toEqual([280])
+    expect(inserted().input_data).toMatchObject({ probedDurationSec: 401 })
   })
 
   it("a link over 30 minutes is refused before anything is reserved", async () => {

@@ -357,6 +357,7 @@ import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNod
 import { OVERLAY_MAX_LAYERS } from "../../providers/image/overlay-contract.js"
 import { dropNullCaptionLevers } from "../../providers/video/caption-segments.js"
 import { editPlanModeRefusal } from "../../lib/private-plugins/edit-plan-mode-gate.js"
+import { withoutServerOnlyKeys } from "../../lib/server-only-keys.js"
 
 /**
  * Throw when the prompt an entity or Scene job sends is shorter than its model
@@ -5843,7 +5844,10 @@ function buildPayloadOf(
       // resolves script-first before reserving, so this aligns both paths.
       const aiAvatarResolvedScript =
         resolvedInputs.script ?? (data.script as string | undefined)
-      const aiAvatarCreditBody = { ...(data as Record<string, unknown>), script: aiAvatarResolvedScript }
+      // The node's data is the user's own record, saved as sent: a key it holds
+      // under a name the server keeps its own measurements under is not one, so
+      // the length an audio-mode run is priced by is never the node's word.
+      const aiAvatarCreditBody = { ...withoutServerOnlyKeys(data as Record<string, unknown>), script: aiAvatarResolvedScript }
       const aiAvatarCreditId = resolveAiAvatarCreditId(aiAvatarCreditBody)
       const aiAvatarPayload: Record<string, unknown> = {
         jobId,

@@ -11,6 +11,7 @@ import "../../routes/oauth.js"
 import "../../routes/oauth-plugin-connect.js"
 import "../../routes/generate-image.js"
 import "../../routes/generate-video.js"
+import "../../routes/dubbing-read.js"
 import { creditsRoutes } from "../../ee/routes/credits.js"
 import { generateOpenApiDoc } from "../openapi-registry.js"
 import { isAnonymousRoute } from "../../middleware/auth.js"
@@ -36,6 +37,8 @@ describe("OpenAPI document", () => {
     "/v1/nodes/{type}",
     "/v1/generate-image",
     "/v1/generate-video",
+    "/v1/dubbing/{jobId}",
+    "/v1/dubbing/{jobId}/captions",
     "/v1/oauth/token",
     "/v1/oauth/app-info",
   ])("includes %s", (p) => {

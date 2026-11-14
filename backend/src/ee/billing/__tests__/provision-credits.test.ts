@@ -57,6 +57,7 @@ const {
     chain.select = vi.fn(self)
     chain.eq = vi.fn(self)
     chain.in = vi.fn(self)
+    chain.not = vi.fn(self)
     chain.insert = vi.fn(self)
     chain.update = vi.fn(self)
     chain.upsert = vi.fn(self)

@@ -49,6 +49,7 @@ import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import { classifyMediaSource, isVideoMode } from "../../providers/video/media-source.js"
 import { startDubbing, waitForDubbing, pollDubbingStatus, downloadDubbedMedia, DUBBING_MAX_DURATION_SEC } from "../../providers/elevenlabs/dubbing.js"
 import { deliverDubbedMedia } from "../../lib/dubbing-delivery.js"
+import { startDubbingProjectLanguage } from "../../providers/elevenlabs/dubbing-project.js"
 import { effectiveDubbedSeconds } from "../../lib/dubbing-span.js"
 import { remixVoice } from "../../providers/elevenlabs/voice-remix.js"
 import { designVoice } from "../../providers/elevenlabs/voice-design.js"
@@ -1134,6 +1135,10 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
     probedDurationSec?: number
     /** Held at the 30-minute ceiling (length unknown before start) — settled at delivery. */
     reservedCeiling?: boolean
+    /** A language added to a project dub: the project's stored id (server-set, from the route). */
+    projectTaskId?: string
+    /** A language that project holds and no job delivers: delivered instead of a new one. */
+    adoptLanguageId?: string
   }
   // B4c: the voice lock's backstop, FIRST. A dub names no voice the platform
   // could judge (it speaks in clones of the source's speakers, or in voices the
@@ -1179,7 +1184,7 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
   }
 
   const dubbingOnTaskCreated = makeOnTaskCreated(ctx.jobId, "elevenlabs-async")
-  const { dubbingId, expectedDurationSec } = await startDubbing(
+  const startNewDub = () => startDubbing(
     uploadedUrl ? { url: uploadedUrl, mime: sourceMime, ext: sourceExt } : { sourceUrl: d.sourceUrl },
     d.targetLanguage,
     {
@@ -1196,6 +1201,10 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
     },
     { onTaskCreated: dubbingOnTaskCreated },
   )
+  // A language added to a project dub joins that project: nothing is uploaded again.
+  const { dubbingId, expectedDurationSec } = d.projectTaskId
+    ? await startDubbingProjectLanguage(d.projectTaskId, d.targetLanguage, d.adoptLanguageId, { onTaskCreated: dubbingOnTaskCreated })
+    : await startNewDub()
   await setJobProgress(job, ctx.jobId, 20)
 
   // Post-hoc duration + mode check for spans the ROUTE could not probe

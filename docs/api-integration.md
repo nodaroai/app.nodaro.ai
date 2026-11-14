@@ -4642,7 +4642,7 @@ answers a signed-in session, a personal API token without a workflow limit, or
 an app's OAuth token; a workflow-limited key gets `403 forbidden` and a billing
 integration key `403 billing_key_scope`. It answers `{ data, effectiveTier }`.
 `data` is the account's latest subscription — `tier`, `status` (`active`,
-`trialing`, `past_due`, `paused`, `canceled`, `incomplete` or `expired`),
+`trialing`, `past_due`, `paused`, `canceled`, `incomplete`, `incomplete_expired` or `expired`),
 `current_period_start`, `current_period_end`, `cancel_at_period_end`,
 `cancel_at`, `canceled_at` and its Stripe ids — or `null` when it never
 subscribed. `effectiveTier` is the tier the account's entitlements follow:
@@ -7348,6 +7348,162 @@ until `status` is `completed`, read the result from `output_data`.
 
 The id to use everywhere a voice is accepted is the clone's
 `elevenlabsVoiceId` (create/list responses) or the catalog's `voice_id`.
+
+### A dub after it is made
+
+A dub stays readable after its job completes: the lines of the original
+speech, every language the dub speaks with its lines, the speakers, and the
+captions of each language. Both reads are free, and go by the dub's job id.
+A language can be added to it later too, charged per started minute of the
+dub.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/dubbing/:jobId` | The dub's structure → `{ jobId, durationSec, source, languages, speakers, capabilities, addLanguage }` (below). |
+| `GET` | `/v1/dubbing/:jobId/captions` | The captions of one language, or of the original speech, as the text of a SubRip or WebVTT file: `?language=` (a code the dub lists, or `source`) and `?format=` (`srt`, the default, or `vtt`). |
+| `POST` | `/v1/dubbing/:jobId/languages` | Add a language to the dub → `{ jobId }`, the job that delivers it ([below](#adding-a-language)). |
+
+`jobId` is the job the dub was created by, or the job of a language added to
+it later: both read the same dub, whatever made it (this API, the editor, a
+workflow run). The owner only: anyone else's job, an admin's request
+included, is `404 not_found`. OAuth apps need `assets:read`. Each read is
+limited to 60 requests a minute, and no answer is cached
+(`Cache-Control: private, no-store`): what a dub answers changes while a
+language is made.
+
+```json
+{
+  "jobId": "0f1a…",
+  "durationSec": 94.2,
+  "source": {
+    "language": "en",
+    "segments": [
+      { "id": "1", "speakerId": "speaker_0", "start": 0.4, "end": 3.1, "text": "Welcome back to the show." }
+    ]
+  },
+  "languages": [
+    {
+      "code": "es",
+      "jobId": "0f1a…",
+      "status": "completed",
+      "segments": [
+        {
+          "id": "1",
+          "speakerId": "speaker_0",
+          "start": 0.4,
+          "end": 3.2,
+          "sourceSegmentId": null,
+          "sourceText": null,
+          "text": "Bienvenidos de nuevo al programa."
+        }
+      ]
+    }
+  ],
+  "speakers": [{ "id": "speaker_0", "name": null, "voice": null, "segmentCount": 1 }],
+  "capabilities": {
+    "editSegments": false,
+    "regenerate": false,
+    "setSpeakerVoice": false,
+    "render": false,
+    "addLanguage": true,
+    "captions": true
+  },
+  "addLanguage": {
+    "billableMinutes": 2,
+    "creditId": "elevenlabs-dubbing:2u",
+    "creditIdByLanguage": { "he": "elevenlabs-dubbing-v2:2u", "heb": "elevenlabs-dubbing-v2:2u" }
+  }
+}
+```
+
+The answer's own `jobId` is the job the dub was created by. `durationSec` is
+`null` when the length is not known, and `source` is `null` when the lines of
+the original speech cannot be read. Every `start` and `end` is in seconds
+from the start of the media.
+
+- **`languages`** — one entry per language. `status` is `processing` (being
+  made: no lines yet), `completed` (it is made), `stale` (its lines changed
+  after its media was last made) or `failed` (it was not made). `segments`
+  is empty unless the language is `completed` or `stale`, and is empty as
+  well where the dubbing service does not give that language's lines (its
+  `status` and its dubbed media stay as they are). A language's `jobId` is
+  the job whose result is its dubbed media, `null` when no job of the
+  account holds it.
+- **`sourceSegmentId`** — the `id` of the line in `source.segments` a dubbed
+  line translates. It is `null` where the dub's lines carry no link to the
+  lines of the original speech: there the two lists are read side by side,
+  by time.
+- **`sourceText`** — the original text a dubbed line translates, as the dub
+  keeps it beside the line; `null` where it keeps none. Each of the two is
+  told on its own: a line can carry its `sourceText` where
+  `sourceSegmentId` is `null`.
+- **`speakers`** — in the order they first speak, each with the number of
+  lines it speaks (`segmentCount`). `name` and `voice` are `null` when they
+  cannot be read.
+- **`capabilities`** — what can be done to this dub now; offer an action only
+  when its flag is `true`. `editSegments`, `regenerate`, `setSpeakerVoice`
+  and `render` are `false` today. `addLanguage` tells whether a target
+  language can be added to this dub, and `captions` whether its captions can
+  be read.
+- **`addLanguage`** — what adding a language is charged, told as a price id:
+  the price is the answer of `POST /v1/credits/model-costs` for
+  `creditIdByLanguage[language] ?? creditId` (see
+  [Model catalog](#model-catalog)). `billableMinutes` is the whole minutes an
+  added language is charged for: the longer of the length the dub was charged
+  for and the length the dubbing service holds, in started minutes. It and
+  `creditId` are `null` when the dub's length is only known once it runs.
+
+The captions read answers the file's text, not JSON, with
+`Content-Type: application/x-subrip; charset=utf-8` (`srt`) or
+`text/vtt; charset=utf-8` (`vtt`). `language` is matched whatever its case,
+and `language=source` reads the captions of the original speech. A language
+is exported once its status is `completed` or `stale`, as long as the
+dubbing service gives its captions.
+
+#### Adding a language
+
+`POST /v1/dubbing/:jobId/languages` with `{ "targetLanguage": "de" }` adds a
+language to the dub and answers `{ "jobId": "…" }`: the job that delivers the
+language. Follow it like any job; once it completes, the structure lists the
+language with that `jobId`. `jobId` in the path names the dub as it does for
+the reads, and the owner only may add to it. OAuth apps need `assets:write`,
+and the call is limited to 10 requests a minute.
+
+- **When** — offer it only where the structure's `capabilities.addLanguage`
+  is `true`. A language the dub already has, or one being made, is refused; a
+  language that failed can be added again.
+- **What it is charged** — per started minute of the dub, at the price the
+  structure's `addLanguage` names (`creditIdByLanguage[language] ?? creditId`).
+  The run reserves that price before it starts, like any run
+  ([§8](#8-error-envelope) for `402 insufficient_credits`); a regular dub
+  whose source cannot be measured again holds the 30-minute price, as a new
+  dub does, and is settled to the length dubbed.
+- **How it is made** — a Hebrew dub takes the language into the same project:
+  nothing is uploaded again, and it is charged for the dub's own length. Any
+  other dub takes it as a new dub of the same source, with the same settings
+  (`startTime`/`endTime` included), measured and charged as the create call
+  measures and charges a new dub. A dub made from a link someone else holds
+  takes the content rights `confirmationId` again, as the create call does.
+
+A refusal answers the error envelope ([§8](#8-error-envelope)):
+
+| Status | `error.code` | When |
+|---|---|---|
+| `404` | `not_found` | no such job, or it is not yours. A dub with a restricted job ([Content restrictions](#13k-content-restrictions)) answers the same, whichever of its jobs is asked for |
+| `422` | `not_a_dubbing_job` | the job is not a dub |
+| `409` | `dubbing_not_ready` | the dub is still being made — read it when its job completes |
+| `422` | `dubbing_failed` | the dub failed or was cancelled, so there is nothing to read |
+| `410` | `dubbing_unavailable` | the dub is no longer held by the dubbing service |
+| `502` | `dubbing_read_failed` | the dubbing service did not answer — try again |
+| `400` | `validation_error` | captions: `language` is missing or malformed, or `format` is neither `srt` nor `vtt` |
+| `404` | `dubbing_language_not_found` | captions: the dub has no such language |
+| `409` | `dubbing_language_processing` | captions: that language is still being made |
+| `422` | `dubbing_captions_unavailable` | captions: that language has no captions to read (it failed, the dubbing service does not give them, or the original speech cannot be read) |
+| `400` | `validation_error` | adding: `targetLanguage` is not a language code (two or three letters, and optionally a region or script: `es`, `pt-BR`, `zh-Hans`), or `confirmationId` is not an id |
+| `409` | `dubbing_language_exists` | adding: the dub already has that language, or it is being made |
+| `422` | `unreadable_dubbing_source` | adding: the dub's source or its length can no longer be read |
+| `413` | `media_duration_exceeds_limit` | adding: the dub is longer than 30 minutes |
+| `400` | `unsupported_dubbing_settings` | adding to a regular dub: its source or settings cannot be dubbed into that language (a dub into Hebrew takes an uploaded file, with automatic speakers, the original voices and background, and no start/end window) |
 
 ### Voice Changer & Voice Changer Pro
 

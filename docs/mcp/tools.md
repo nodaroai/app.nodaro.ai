@@ -15,8 +15,8 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workflows:write` | `clone_studio_production`†, `create_studio_production`†, `create_workflow`, `delete_workflow`, `edit_studio_production`†, `import_recast_script`†, `import_studio_production`†, `import_workflow`, `share_studio_production`†, `update_workflow_json` |
 | `workflows:execute` | `add_captions`, `analyze_prompt`, `animate_image`, `apply_audio_fx`, `apply_edl`, `assemble_narrated_video`, `audio_isolation`, `audio_sync`, `capture_site`, `cast_swap`†, `combine_videos`, `continue_use_case`, `continue_video_pro`, `create_explainer`†, `create_launch_video`†, `delete_app_run`, `download_youtube_audio`, `dubbing`, `edit_3d_scene`, `edit_image`, `enhance_prompt`, `estimate_full_quality`†, `estimate_trend`†, `estimate_use_case`, `extend_video`, `extract_frame`, `face_swap`, `forced_alignment`, `full_quality`†, `generate_3d_scene`, `generate_character`, `generate_character_motion`, `generate_creature`, `generate_creature_motion`, `generate_dialogue`, `generate_image`, `generate_location`, `generate_location_motion`, `generate_mask`, `generate_music`, `generate_object`, `generate_object_motion`, `generate_prompt`, `generate_script`, `generate_speech`, `generate_video`, `gif_to_video`, `image_collage`, `image_overlay`, `image_to_image`, `image_to_text`, `lip_sync`, `list_voices`, `loop_video`, `make_chapters`, `make_clip_pack`, `make_trailer`, `mask_composite`, `merge_video_audio`, `mix_audio`, `modify_image`, `modify_video`, `motion_transfer`, `overlay_images`, `pitch_tempo`, `plan_edit`†, `pro_3d_render`†, `reduce`, `relight_video`, `render_3d_scene`, `render_final`, `render_shot_sequence`, `resolve_recast_gate`†, `resolve_shot_sequence`, `retry_app_run`, `run_app`, `run_component`, `run_trend`†, `run_workflow`, `save_image_defaults`, `scan_competitor`†, `separate_audio`, `shot_cuts`, `silence_detect`, `slideshow`, `social_search`†, `speaker_layout`, `speaker_map`, `speaker_view`†, `speech_to_video`, `split_into_layers`, `split_media`, `start_recast`†, `still_to_video`, `stop_video_pro`, `suggest_overlay_placement`, `suno_add_instrumental`, `suno_add_vocals`, `suno_convert_wav`, `suno_cover`, `suno_extend`, `suno_generate`, `suno_lyrics`, `suno_mashup`, `suno_music_video`, `suno_replace_section`, `suno_separate_stems`, `suno_style_boost`, `suno_upload_extend`, `switch_cameras`†, `text_to_audio`, `tighten_episode`, `transcribe`, `trim_audio`, `trim_video`, `video_analysis`, `video_audit`, `video_depth`, `video_mask`, `video_upscale`, `voice_changer`, `voice_changer_pro`†, `voice_changer_pro_analyze`†, `voice_changer_pro_export`†, `voice_design`, `voice_remix` |
 | `jobs:read` | `diagnose_run`, `get_job`, `get_trend`†, `list_jobs`, `list_sessions`, `list_trash`, `list_trends`†, `read_session`, `wait_for_job` |
-| `assets:read` | `browse_gallery`, `browse_uploads`, `competitor_cards`†, `competitor_lessons`†, `competitor_tried`†, `display_asset`, `get_app_run`, `get_asset`, `get_character`, `get_creature`, `get_location`, `get_object`, `list_characters`, `list_collections`, `list_competitors`†, `list_creatures`, `list_favorites`, `list_locations`, `list_moodboards`, `list_objects`, `list_palettes`, `list_saved_posts`†, `list_voice_favorites`, `read_collection` |
-| `assets:write` | `add_collection_record`, `add_competitor`†, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `create_session`, `delete_node_preset`, `favorite_asset`, `favorite_node_preset`, `favorite_voice`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `rate_job`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `restore_job`, `save_moodboard`, `save_node_preset`, `save_palette`, `save_post`†, `update_character`, `update_location`, `update_session`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
+| `assets:read` | `browse_gallery`, `browse_uploads`, `competitor_cards`†, `competitor_lessons`†, `competitor_tried`†, `display_asset`, `get_app_run`, `get_asset`, `get_character`, `get_creature`, `get_dubbing`, `get_dubbing_captions`, `get_location`, `get_object`, `list_characters`, `list_collections`, `list_competitors`†, `list_creatures`, `list_favorites`, `list_locations`, `list_moodboards`, `list_objects`, `list_palettes`, `list_saved_posts`†, `list_voice_favorites`, `read_collection` |
+| `assets:write` | `add_collection_record`, `add_competitor`†, `add_dubbing_language`, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `create_session`, `delete_node_preset`, `favorite_asset`, `favorite_node_preset`, `favorite_voice`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `rate_job`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `restore_job`, `save_moodboard`, `save_node_preset`, `save_palette`, `save_post`†, `update_character`, `update_location`, `update_session`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
 | `credits:read` | `check_balance`†, `credit_transactions`† |
 | `apps:read` | `get_app_inputs`, `list_apps` |
 | `pipelines:read` | `get_pipeline_stage_chat`†, `get_pipeline_status`†, `pipeline_pending_approvals`† |
@@ -2380,6 +2380,71 @@ the star is refused with `limit_reached`.
 — what the voice is, as `generate_speech` takes it) and `name`, both required
 then and neither needed to unstar; optional `preview_url` (https; `""` clears a
 stored preview), `favorite` (default `true`).
+
+### `get_dubbing`
+
+**Scope:** `assets:read`
+
+Read a dub of the user's by its job id — one made with `dubbing` or by any
+other client (the editor, the SDK, the CLI): its languages, each with its
+`code`, its `status` (`processing`, `completed`, `stale` or `failed`), the
+`jobId` that holds its media and its `segmentCount`; its speakers; the
+original speech (`source`: its language and its segment count); what can be
+done to the dub now (`capabilities`); and what adding a language would be
+charged for (`addLanguage`: the whole minutes, the credit id that prices
+them and, in `creditIdByLanguage`, the languages priced by another id).
+`job_id` is the dub's job, or the job of a language added to it. Free to
+read; returns JSON.
+
+Pass `language` — a code the dub lists, or `source` for the original speech —
+to read that language's segments instead: `id`, `speakerId`, `start` and `end`
+in seconds and `text`, and on a translated segment the `sourceSegmentId` (the
+id of the source segment it translates, `null` where the dub's lines carry no
+link to the source's) and the `sourceText` (the original text it translates,
+`null` where the dub keeps none). Each of the two is told on its own.
+Segments come a page at a time, with `total`, `offset` and `nextOffset`
+(`null` on the last page). A language still being made answers an empty page
+with its `status`, and so does one whose lines the dubbing service does not
+give; a language the dub does not list is refused with
+`dubbing_language_not_found`. The other refusals are the REST read's own:
+`not_found`, `not_a_dubbing_job`, `dubbing_not_ready`, `dubbing_failed`,
+`dubbing_unavailable` and `dubbing_read_failed`.
+
+**Input:** `job_id`; optional `language`, `offset` (default `0`), `limit`
+(default `50`, at most `200`).
+
+### `get_dubbing_captions`
+
+**Scope:** `assets:read`
+
+The captions of a dub as the text of an SRT or WebVTT file, for one language
+the dub lists or for the original speech (`language: "source"`). The answer
+is the file's text as it is, ready to save. Free to read. A language the dub
+does not list is refused with `dubbing_language_not_found`, one still being
+made with `dubbing_language_processing`, and one whose lines cannot be read
+with `dubbing_captions_unavailable`.
+
+**Input:** `job_id`, `language`; optional `format` (`srt`, the default, or
+`vtt`).
+
+### `add_dubbing_language`
+
+**Scope:** `assets:write`
+
+Add a language to a dub of the user's, and start the job that delivers it.
+Follow that job with `get_job` or `wait_for_job`; once it completes,
+`get_dubbing` lists the language. Offer it only where `get_dubbing`'s
+`capabilities.addLanguage` is true. It costs credits: charged per started
+minute of the dub, at the price `get_dubbing`'s `addLanguage` names. A
+Hebrew dub takes the language into the same project, so nothing is uploaded
+again; any other dub takes it as a new dub of the same source, with the same
+settings. A language the dub already has is refused with
+`dubbing_language_exists`, and a dub whose source or length can no longer be
+read with `unreadable_dubbing_source`; the other refusals are those of
+`get_dubbing`.
+
+**Input:** `job_id`, `target_language`; optional `confirmation_id` (the
+content rights confirmation, for a dub made from a link someone else holds).
 
 ---
 

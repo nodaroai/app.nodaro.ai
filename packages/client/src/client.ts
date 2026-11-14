@@ -20,6 +20,7 @@ import { PipelinesResource } from "./resources/pipelines.js"
 import { ReduceResource } from "./resources/reduce.js"
 import { PromptHelperResource } from "./resources/prompt-helper.js"
 import { VoicesResource } from "./resources/voices.js"
+import { DubbingResource } from "./resources/dubbing.js"
 import { LlmResource } from "./resources/llm.js"
 import { MediaResource } from "./resources/media.js"
 import { ContentRightsResource } from "./resources/content-rights.js"
@@ -89,6 +90,8 @@ export class NodaroClient extends NodaroClientCore {
   readonly reduce: ReduceResource
   readonly promptHelper: PromptHelperResource
   readonly voices: VoicesResource
+  /** Dubbing: make a dub, read its structure, export its captions. */
+  readonly dubbing: DubbingResource
   readonly llm: LlmResource
   readonly media: MediaResource
   /** Content rights: the declaration confirmed before a link is imported, and the confirmation a download carries. */
@@ -158,6 +161,7 @@ export class NodaroClient extends NodaroClientCore {
     this.reduce = new ReduceResource(this)
     this.promptHelper = new PromptHelperResource(this)
     this.voices = new VoicesResource(this)
+    this.dubbing = new DubbingResource(this)
     this.llm = new LlmResource(this)
     this.media = new MediaResource(this)
     this.contentRights = new ContentRightsResource(this)

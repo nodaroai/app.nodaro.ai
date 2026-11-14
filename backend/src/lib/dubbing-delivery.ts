@@ -23,7 +23,8 @@ import { runPostProcessing } from "./post-processing-error.js"
 import { finalizeJobWithMedia, type FinalizeClaimant } from "./job-finalize.js"
 import { createWorkDir, cleanupWorkDir, probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { DUBBING_FALLBACK_SECONDS } from "../providers/elevenlabs/dubbing.js"
-import { dubbingBaseCredits, effectiveDubbedSeconds } from "./dubbing-span.js"
+import { dubbingBaseCreditsFor, effectiveDubbedSeconds } from "./dubbing-span.js"
+import { dubbingModelIdOfRequest } from "./dubbing-model.js"
 import { extractAudioTrack } from "../providers/video/extract-audio-track.js"
 import {
   commitJobCredits,
@@ -60,10 +61,11 @@ export interface DeliverDubbedMediaArgs {
   request?: Readonly<Record<string, unknown>>
 }
 
-/** What the request says about its reservation and its window. */
+/** What the request says about its reservation, its price row and its window. */
 interface DubbingSettleContext {
   readonly reservedCeiling: boolean
-  readonly targetLanguage: unknown
+  /** The row the run was reserved on: the one the server stamped, else its language's. */
+  readonly modelId: string
   readonly startTime?: number
   readonly endTime?: number
 }
@@ -72,7 +74,7 @@ function settleContextOf(request: Readonly<Record<string, unknown>> | undefined)
   const input = request ?? {}
   return {
     reservedCeiling: input.reservedCeiling === true,
-    targetLanguage: input.targetLanguage,
+    modelId: dubbingModelIdOfRequest(input),
     startTime: typeof input.startTime === "number" ? input.startTime : undefined,
     endTime: typeof input.endTime === "number" ? input.endTime : undefined,
   }
@@ -105,7 +107,7 @@ async function ceilingSettleBase(
   const span = sourceSec != null
     ? (effectiveDubbedSeconds(sourceSec, ctx.startTime, ctx.endTime) ?? sourceSec)
     : DUBBING_FALLBACK_SECONDS
-  return dubbingBaseCredits(ctx.targetLanguage, span)
+  return dubbingBaseCreditsFor(ctx.modelId, span)
 }
 
 async function loadReservedUsageLogId(jobId: string): Promise<string | null> {

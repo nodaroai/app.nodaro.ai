@@ -24,6 +24,7 @@
 | `reduce` | Fan-in reducer (pick-best, concat, vote, merge…) |
 | `promptHelper` | Prompt enhancement / wizard |
 | `voices` | Voice catalog + library, change, recast (Voice Changer Pro), design, remix, dub |
+| `dubbing` | A dub after it is made: start one (`create`), read its structure: the languages with their lines, the speakers, what it can do now (`get`), export captions as SRT or WebVTT (`captions`), add a language to it (`addLanguage`, charged per started minute) |
 | `llm` | Validated structured JSON from a language model |
 | `media` | Social video import, trim, split into parts, metadata, captions, overlays, collage, slideshow |
 | `contentRights` | The declaration a person confirms before a link is imported (`declaration`) and the confirmation a download carries (`confirm` → `confirmationId` on `media.downloadVideo`) |

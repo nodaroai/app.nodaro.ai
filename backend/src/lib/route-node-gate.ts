@@ -139,6 +139,8 @@ export const ROUTE_NODES: Readonly<Record<string, string | BodyResolver>> = Obje
   "/v1/generate-creature-motion": "creature",
   "/v1/creatures/:id/llm-caption": "creature",
   "/v1/creatures/:id/approve-main-image": "creature",
+  // A language added to a dub that is already made is a run of the Dubbing node.
+  "/v1/dubbing/:jobId/languages": "dubbing",
   "/v1/generate-location-asset": "location",
   "/v1/generate-location-motion": "location",
   "/v1/generate-surround-continuation": "location",

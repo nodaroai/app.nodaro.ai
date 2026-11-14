@@ -190,6 +190,116 @@ export async function probeDubbingDurationPreHandler(req: FastifyRequest, reply:
   if (effective != null) body.__probedDurationSec = effective
 }
 
+/**
+ * The BASE credits a dub's create body is held at: per-minute pricing of the
+ * measured span, or the 30-minute ceiling when it could not be read (settled
+ * down at delivery) → whole minutes x the per-minute row (admin-editable in
+ * model_pricing, so a row tunes the RATE). creditGuard applies the markup.
+ * The same plan prices a workflow run, and a language added to a regular dub,
+ * which is a dub of its own (routes/dubbing-languages.ts).
+ */
+export async function dubbingRequestBaseCredits(parsedBody: unknown): Promise<number> {
+  const body = parsedBody as Record<string, unknown>
+  const probed = body.__probedDurationSec
+  const plan = dubbingReservePlan(typeof probed === "number" ? probed : undefined)
+  return dubbingBaseCredits(body.targetLanguage, plan.seconds)
+}
+
+/**
+ * Files the dub the request's body asks for: its job, its reservation and its
+ * queue entry. `extraInput` is written into the job's input_data beside the
+ * body: a language added to a regular dub names the dub it joins there.
+ */
+export async function submitDubbing(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  extraInput: Readonly<Record<string, unknown>> = {},
+) {
+  // preHandler ran against the raw body — strip its stash before parsing so
+  // it can't leak into input_data / the queue payload via parsed.data.
+  const rawBody = (req.body ?? {}) as Record<string, unknown>
+  const { __probedDurationSec: stashedDuration, ...toParse } = rawBody
+  const parsed = dubbingBody.safeParse(toParse)
+  if (!parsed.success) {
+    return reply.status(400).send({
+      error: { code: "validation_error", ...formatZodError(parsed.error) },
+    })
+  }
+
+  // B4c: a voice lock refused this request before anything else ran
+  // (`refuseDubbingUnderVoiceLock`, the first preHandler) — a dub names no
+  // voice the platform could judge.
+  const {
+    audioUrl, videoUrl, sourceUrl, targetLanguage, sourceLanguage, numSpeakers,
+    disableVoiceCloning, dropBackgroundAudio, startTime, endTime,
+    highestResolution, useProfanityFilter, targetAccent, watermark, confirmationId,
+  } = parsed.data
+  const userId = req.userId
+
+  if (!userId) {
+    return reply.status(401).send({
+      error: { code: "unauthorized", message: "Authentication required" },
+    })
+  }
+
+  const mcpClient = extractMcpClient(req.body)
+
+  const { data: job, error } = await insertJob(req, {
+      workflow_id: extractWorkflowId(req.body),
+      node_id: extractNodeId(req.body),
+      force_private: extractForcePrivate(req.body) || undefined,
+      user_id: userId,
+      status: "pending",
+      // probedDurationSec rides input_data (not the parsed body — the stash
+      // was stripped above) for execution-stats and as reconcile context.
+      // `reservedCeiling` tells delivery the hold was the 30-minute
+      // ceiling, to be settled to the length actually dubbed.
+      input_data: {
+        ...buildJobInputData(parsed.data, "dubbing"),
+        ...extraInput,
+        ...(typeof stashedDuration === "number" ? { probedDurationSec: stashedDuration } : { reservedCeiling: true }),
+      },
+      ...(mcpClient ? { mcp_client: mcpClient } : {}),
+    })
+
+  if (error) {
+    return sendInternalError(reply, req, error, "Failed to create job")
+  }
+
+  const reservation = await reserveCreditsForJob(req, reply, job.id, dubbingModelIdentifier(targetLanguage))
+  if (reply.sent) return
+  const usageLogId = reservation?.usageLogId
+
+  await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("dubbing", {
+    jobId: job.id,
+    audioUrl,
+    videoUrl,
+    sourceUrl,
+    targetLanguage,
+    sourceLanguage,
+    numSpeakers,
+    disableVoiceCloning,
+    dropBackgroundAudio,
+    startTime,
+    endTime,
+    highestResolution,
+    useProfanityFilter,
+    targetAccent,
+    watermark,
+    probedDurationSec: typeof stashedDuration === "number" ? stashedDuration : undefined,
+    ...(typeof stashedDuration === "number" ? {} : { reservedCeiling: true }),
+    usageLogId,
+    // A link handed to the service is an import of the link: the
+    // confirmation, the way in (and the connected app), for the worker's
+    // gate (`importRightsOf`).
+    ...(confirmationId ? { confirmationId } : {}),
+    ...importJobFields(req),
+  }))
+  if (reply.sent) return
+
+  return { jobId: job.id }
+}
+
 export async function dubbingRoutes(app: FastifyInstance) {
   app.post("/v1/dubbing", {
     preHandler: [
@@ -197,101 +307,8 @@ export async function dubbingRoutes(app: FastifyInstance) {
       probeDubbingDurationPreHandler,
       creditGuard((req) => dubbingModelIdentifier((req.body as Record<string, unknown>)?.targetLanguage), {
         runModel: (req) => dubbingModelIdentifier(rawBodyRecord(req).targetLanguage),
-        // Per-minute pricing: the measured span, or the 30-minute ceiling
-        // when it could not be read (settled down at delivery) → whole
-        // minutes x the per-minute row (admin-editable in model_pricing, so
-        // a row tunes the RATE). Returns BASE credits — creditGuard applies
-        // the markup. The same plan prices a workflow run.
-        computeCredits: async (parsedBody) => {
-          const body = parsedBody as Record<string, unknown>
-          const probed = body.__probedDurationSec
-          const plan = dubbingReservePlan(typeof probed === "number" ? probed : undefined)
-          return dubbingBaseCredits(body.targetLanguage, plan.seconds)
-        },
+        computeCredits: dubbingRequestBaseCredits,
       }),
     ],
-  }, async (req, reply) => {
-    // preHandler ran against the raw body — strip its stash before parsing so
-    // it can't leak into input_data / the queue payload via parsed.data.
-    const rawBody = (req.body ?? {}) as Record<string, unknown>
-    const { __probedDurationSec: stashedDuration, ...toParse } = rawBody
-    const parsed = dubbingBody.safeParse(toParse)
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: { code: "validation_error", ...formatZodError(parsed.error) },
-      })
-    }
-
-    // B4c: a voice lock refused this request before anything else ran
-    // (`refuseDubbingUnderVoiceLock`, the first preHandler) — a dub names no
-    // voice the platform could judge.
-    const {
-      audioUrl, videoUrl, sourceUrl, targetLanguage, sourceLanguage, numSpeakers,
-      disableVoiceCloning, dropBackgroundAudio, startTime, endTime,
-      highestResolution, useProfanityFilter, targetAccent, watermark, confirmationId,
-    } = parsed.data
-    const userId = req.userId
-
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "Authentication required" },
-      })
-    }
-
-    const mcpClient = extractMcpClient(req.body)
-
-    const { data: job, error } = await insertJob(req, {
-        workflow_id: extractWorkflowId(req.body),
-        node_id: extractNodeId(req.body),
-        force_private: extractForcePrivate(req.body) || undefined,
-        user_id: userId,
-        status: "pending",
-        // probedDurationSec rides input_data (not the parsed body — the stash
-        // was stripped above) for execution-stats and as reconcile context.
-        // `reservedCeiling` tells delivery the hold was the 30-minute
-        // ceiling, to be settled to the length actually dubbed.
-        input_data: {
-          ...buildJobInputData(parsed.data, "dubbing"),
-          ...(typeof stashedDuration === "number" ? { probedDurationSec: stashedDuration } : { reservedCeiling: true }),
-        },
-        ...(mcpClient ? { mcp_client: mcpClient } : {}),
-      })
-
-    if (error) {
-      return sendInternalError(reply, req, error, "Failed to create job")
-    }
-
-    const reservation = await reserveCreditsForJob(req, reply, job.id, dubbingModelIdentifier(targetLanguage))
-    if (reply.sent) return
-    const usageLogId = reservation?.usageLogId
-
-    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("dubbing", {
-      jobId: job.id,
-      audioUrl,
-      videoUrl,
-      sourceUrl,
-      targetLanguage,
-      sourceLanguage,
-      numSpeakers,
-      disableVoiceCloning,
-      dropBackgroundAudio,
-      startTime,
-      endTime,
-      highestResolution,
-      useProfanityFilter,
-      targetAccent,
-      watermark,
-      probedDurationSec: typeof stashedDuration === "number" ? stashedDuration : undefined,
-      ...(typeof stashedDuration === "number" ? {} : { reservedCeiling: true }),
-      usageLogId,
-      // A link handed to the service is an import of the link: the
-      // confirmation, the way in (and the connected app), for the worker's
-      // gate (`importRightsOf`).
-      ...(confirmationId ? { confirmationId } : {}),
-      ...importJobFields(req),
-    }))
-    if (reply.sent) return
-
-    return { jobId: job.id }
-  })
+  }, (req, reply) => submitDubbing(req, reply))
 }

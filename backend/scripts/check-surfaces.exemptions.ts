@@ -147,6 +147,24 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
     { feature: "contentRights", surface: "cli" as const, atom, reason: "the standing authorization is given and revoked by the person in their own session (the server refuses a key), and a key reading it learns nothing a refused import does not say" },
     { feature: "contentRights", surface: "mcp" as const, atom, reason: "the standing authorization is given and revoked by the person in their own session (the server refuses an agent): an agent must not authorize its own imports" },
   ]),
+  // Dubbing: reading a dub back (its structure, its captions) and adding a
+  // language to it serve an app that shows a dub, and an agent. The CLI makes
+  // a dub with `voice dub` and follows its job; it has no command that reads
+  // one back or adds a language to one.
+  ...(["GET /v1/dubbing/:p", "GET /v1/dubbing/:p/captions"] as const).map((atom) => ({
+    feature: "dubbing",
+    surface: "cli" as const,
+    atom,
+    reason:
+      "reading a dub back serves an app that shows its lines and exports its captions (REST, the SDK) and an agent (MCP); the CLI makes a dub with `voice dub` and follows its job, and has no command that reads one back",
+  })),
+  {
+    feature: "dubbing",
+    surface: "cli",
+    atom: "POST /v1/dubbing/:p/languages",
+    reason:
+      "adding a language to a dub already made serves an app that shows the dub (REST, the SDK) and an agent (MCP); the CLI dubs a source into any language with `voice dub`",
+  },
   {
     feature: "characters",
     surface: "mcp",

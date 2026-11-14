@@ -102,3 +102,25 @@ describe("video dub", () => {
     expect(mocks.commit).toHaveBeenCalledWith("u-1", "job-1")
   })
 })
+
+// A language added to a project dub is reserved on the project's row whatever
+// it speaks, and the server stamps that row on the job. Delivery settles on the
+// same row, so a run is never held on one price and committed on another.
+describe("a dub stamped with its row", () => {
+  const STAMPED = { reservedCeiling: true, targetLanguage: "es", dubbingModelId: "elevenlabs-dubbing-v2" }
+
+  it("an audio dub settles on the stamped row, never on its language's", async () => {
+    await deliver({ request: STAMPED, mediaDurationSec: 95 })
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ meteredBaseCredits: 2 * 999 }))
+  })
+
+  it("a video dub settles on the stamped row too", async () => {
+    await deliver({ videoMode: true, request: STAMPED, mediaDurationSec: 61 })
+    expect(mocks.commit).toHaveBeenCalledWith("u-1", "job-1", null, 2 * 999, true)
+  })
+
+  it("a stamp that is not a dubbing row is ignored", async () => {
+    await deliver({ request: { ...STAMPED, dubbingModelId: "something-else" }, mediaDurationSec: 95 })
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ meteredBaseCredits: 80 }))
+  })
+})

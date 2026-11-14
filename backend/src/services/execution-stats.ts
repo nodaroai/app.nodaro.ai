@@ -1,4 +1,4 @@
-import { dubbingModelIdentifier } from "../lib/dubbing-model.js"
+import { dubbingModelIdOfRequest } from "../lib/dubbing-model.js"
 /**
  * Execution stats service — tracks actual job durations and provides
  * EMA-smoothed estimates for smart progress bars.
@@ -220,7 +220,7 @@ export function buildStatsKey(nodeType: string, inputData: InputData): StatsKey 
       // (0 = un-probeable sourceUrl / probe-failure fallback bucket).
       const probed = num(inputData.probedDurationSec)
       return {
-        model_identifier: dubbingModelIdentifier(inputData.targetLanguage),
+        model_identifier: dubbingModelIdOfRequest(inputData),
         aspect_ratio: "",
         quality: "",
         duration_seconds: probed > 0 ? probed : 0,

@@ -76,6 +76,12 @@ The default mode preserves speaker identity: a Hebrew speaker dubbed to English 
 
 The mode is decided by the **media**, not the slot: an audio-only file wired into the video input is dubbed as audio; a video wired into the audio input is treated as a request for audio.
 
+## Reading a dub back
+
+A finished dub stays readable by its job id, to the account that made it: the lines of the original speech, every language the dub speaks with its lines, the speakers, and the captions of each language as a SubRip or WebVTT file. Both reads are free. The editor has no panel for them: they are for an app or an agent, through the [API](../../api-integration.md#a-dub-after-it-is-made), the [SDK](../../sdk-reference.md#clientdubbing) and the MCP tools [`get_dubbing`](../../mcp/tools.md#get_dubbing) and [`get_dubbing_captions`](../../mcp/tools.md#get_dubbing_captions).
+
+A language can be added to a finished dub the same way: through the [API](../../api-integration.md#adding-a-language), the SDK's `dubbing.addLanguage` and the MCP tool [`add_dubbing_language`](../../mcp/tools.md#add_dubbing_language). A Hebrew dub takes the new language into the same project, so nothing is uploaded again, and it is charged at the Hebrew rate above for the dub's own length, whatever the language. Any other dub takes it as a new dub of the same source with the same settings, charged as a new dub into that language.
+
 ## Best Practices
 
 - Explicitly set the source language when you know it — auto-detection is reliable but specifying it avoids edge cases with accented or mixed-language speech.
