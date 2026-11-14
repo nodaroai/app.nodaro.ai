@@ -18,6 +18,19 @@ export const FREECUT_EXPORT_COMPLETE = "FREECUT_EXPORT_COMPLETE"
 export const FREECUT_EXPORT_PROGRESS = "FREECUT_EXPORT_PROGRESS" // reserved; fork emits it, v1 parents ignore it
 export const FREECUT_REQUEST_IMPORT = "FREECUT_REQUEST_IMPORT"
 
+// Editing the open project from the parent. An editor that can says so in its
+// FREECUT_READY `capabilities` ("edit-ops", "timeline-read", "playback",
+// "presence"). A request that is answered carries a `requestId`, and its answer
+// repeats it in its payload; PLAYBACK and PRESENCE are never answered.
+export const NODARO_GET_TIMELINE = "NODARO_GET_TIMELINE"
+export const NODARO_APPLY_OPS = "NODARO_APPLY_OPS"
+export const NODARO_UNDO_EDIT = "NODARO_UNDO_EDIT"
+export const NODARO_PLAYBACK = "NODARO_PLAYBACK"
+export const NODARO_PRESENCE = "NODARO_PRESENCE"
+export const FREECUT_TIMELINE = "FREECUT_TIMELINE"
+export const FREECUT_OPS_RESULT = "FREECUT_OPS_RESULT"
+export const FREECUT_UNDO_RESULT = "FREECUT_UNDO_RESULT"
+
 export interface FreecutImportFile {
   readonly name: string
   readonly type: string

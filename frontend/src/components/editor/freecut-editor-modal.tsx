@@ -30,6 +30,11 @@ const freecutOrigin = () => runtimeFreecutOrigin()
  */
 const READY_TIMEOUT_MS = 12_000
 
+/** Edit with AI opens beside the editor when the window has room for both; on a narrow one it waits for its button. */
+function roomBesideEditor(): boolean {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(min-width: 1024px)").matches
+}
+
 interface AdditionalAsset {
   readonly url: string
   readonly type: "video" | "image" | "audio"
@@ -60,11 +65,16 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
   const [ready, setReady] = useState(false)
   const [unreachable, setUnreachable] = useState(false)
   // What the editor said it can do in its handshake, and whether Edit with AI is open.
-  // Once opened, the panel stays mounted (only hidden) for as long as the editor
-  // is: closing it must not end a run the person is paying for, or forget its Undo all.
+  // It opens with the editor wherever there is room beside it (closing it is the
+  // exception), and once opened it stays mounted (only hidden) for as long as the
+  // editor is: closing it must not end a run the person is paying for, or forget
+  // its Undo all. `aiWide`: the panel shows the original video over the editor.
   const [capabilities, setCapabilities] = useState<readonly string[]>([])
-  const [aiOpen, setAiOpen] = useState(false)
-  const [aiMounted, setAiMounted] = useState(false)
+  const [aiOpen, setAiOpen] = useState(roomBesideEditor)
+  const [aiMounted, setAiMounted] = useState(roomBesideEditor)
+  const [aiWide, setAiWide] = useState(false)
+  // Bumped by New project: the panel forgets what it did in the project the editor dropped.
+  const [aiProject, setAiProject] = useState(0)
   const editorWindow = useCallback(() => iframeRef.current?.contentWindow, [])
   const editorDisabled = freecutUrl() === ""
 
@@ -240,6 +250,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
 
   function handleNewProject() {
     setShowNewProjectConfirm(false)
+    setAiProject((n) => n + 1)
     const iframe = iframeRef.current
     if (iframe?.contentWindow) {
       iframe.contentWindow.postMessage(
@@ -296,8 +307,8 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
         </button>
       </div>
 
-      {/* Iframe, with Edit with AI beside it when open */}
-      <div className="flex-1 min-h-0 flex">
+      {/* Iframe, with Edit with AI beside it when open (over it while it shows the original) */}
+      <div className="relative flex-1 min-h-0 flex">
       <div className="flex-1 relative min-w-0">
         {!iframeLoaded && !unreachable && (
           <div className="absolute inset-0 flex items-center justify-center bg-black">
@@ -324,11 +335,13 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
         )}
       </div>
       {aiMounted && aiEditAvailable(capabilities) && (
-        <div className={aiOpen ? "flex" : "hidden"}>
+        <div className={!aiOpen ? "hidden" : aiWide ? "absolute inset-0 z-10 flex" : "flex"}>
           <FreeCutAiSlot
             editorWindow={editorWindow}
             editorOrigin={freecutOrigin()}
             videoUrl={videoUrl}
+            onLayout={setAiWide}
+            project={aiProject}
             onClose={() => setAiOpen(false)}
           />
         </div>

@@ -3,7 +3,19 @@
  * and the replies it waits for, matched by request id. The protocol is the
  * editor's own (its `FREECUT_READY` capabilities `edit-ops`, `timeline-read`,
  * `playback`, `presence`); nothing here knows what an edit is for.
+ *
+ * `frame` is the window that holds the editor: the editor's own frame when the
+ * panel sits beside it on this page, or the host page when the panel is itself
+ * framed (`/embed/edit-with-ai`), which carries every request on to the editor.
  */
+import {
+  NODARO_APPLY_OPS,
+  NODARO_GET_TIMELINE,
+  NODARO_IMPORT_FILES,
+  NODARO_PLAYBACK,
+  NODARO_PRESENCE,
+  NODARO_UNDO_EDIT,
+} from "@nodaro/shared/media"
 
 export interface PresenceCursor {
   readonly id: string
@@ -99,16 +111,16 @@ export function createEditorLink(frame: () => Window | null | undefined, origin:
     })
 
   return {
-    getTimeline: async () => (await ask("NODARO_GET_TIMELINE", {})).timeline,
-    applyOps: async (label, ops) => (await ask("NODARO_APPLY_OPS", { label, ops })) as unknown as OpsResult,
+    getTimeline: async () => (await ask(NODARO_GET_TIMELINE, {})).timeline,
+    applyOps: async (label, ops) => (await ask(NODARO_APPLY_OPS, { label, ops })) as unknown as OpsResult,
     undoEdit: async (label) => {
-      const reply = await ask("NODARO_UNDO_EDIT", { label })
+      const reply = await ask(NODARO_UNDO_EDIT, { label })
       return { undone: reply.undone === true, timeline: reply.timeline }
     },
     importFile: (ref, name, type, buffer) =>
-      post("NODARO_IMPORT_FILES", { files: [{ ref, name, type, size: buffer.byteLength, buffer }] }, [buffer]),
-    playback: (action, frame) => post("NODARO_PLAYBACK", { action, ...(frame === undefined ? {} : { frame }) }),
-    presence: (cursors, highlights = []) => post("NODARO_PRESENCE", { cursors, highlights }),
+      post(NODARO_IMPORT_FILES, { files: [{ ref, name, type, size: buffer.byteLength, buffer }] }, [buffer]),
+    playback: (action, frame) => post(NODARO_PLAYBACK, { action, ...(frame === undefined ? {} : { frame }) }),
+    presence: (cursors, highlights = []) => post(NODARO_PRESENCE, { cursors, highlights }),
     dispose: () => {
       window.removeEventListener("message", onMessage)
       for (const entry of waiting.values()) {

@@ -64,8 +64,16 @@ export type AgentState = "waiting" | "working" | "done" | "skipped" | "failed"
 
 type Vars = Record<string, string | number>
 
+/** A video once it has been heard: listening is paid once per video, and every later run reads these. */
+export interface HeardVideo {
+  readonly words: readonly TimedWord[]
+  readonly language: string | null
+}
+
 export type RunEvent =
   | { readonly type: "plan"; readonly plan: EditPlan }
+  /** The video was listened to (it was not heard before this run). */
+  | { readonly type: "heard"; readonly heard: HeardVideo }
   /** An agent's state; `detail` is the provider's own words about a step that failed. */
   | { readonly type: "agent"; readonly agent: AgentId; readonly state: AgentState; readonly key: MessageKey; readonly vars?: Vars; readonly progress?: number; readonly detail?: string }
   | { readonly type: "feed"; readonly agent: AgentId; readonly key: MessageKey; readonly vars?: Vars }
@@ -85,6 +93,18 @@ export interface RunSummary {
 export interface RunAiEditOptions {
   readonly request: string
   readonly videoUrl: string
+  /** The video's file name as the editor shows it, when the host knows it: how it is told from other videos on the timeline. */
+  readonly videoName?: string
+  /** What an earlier run heard in this video: it is not listened to (or paid for) again. */
+  readonly heard?: HeardVideo
+  /** Steps an earlier run already did on this video: left out of this one. */
+  readonly done?: readonly EditStep[]
+  /**
+   * The steps the person was shown a price for. A plan that adds a paid part
+   * the price left out (listening to the video, music) is asked about first
+   * (`confirmPartial`), before anything paid starts.
+   */
+  readonly quoted?: readonly EditStep[]
   readonly link: EditorLink
   readonly signal: AbortSignal
   /** The agents' names and the steps' undo labels, in the person's language. */
@@ -94,11 +114,17 @@ export interface RunAiEditOptions {
   /** How fast the show runs: 1 is the normal pace, 2 twice as fast. */
   readonly pace?: () => number
   /**
-   * Asked when the plan leaves part of the request out, before anything paid
-   * starts: true runs the steps it can do, false ends the run (`RunDeclined`).
-   * Without it, the run goes ahead with those steps.
+   * Asked before anything paid starts when the plan leaves part of the request
+   * out, or costs more than the price shown (`extra`): true runs the plan,
+   * false ends the run (`RunDeclined`). Without it, the run goes ahead.
    */
-  readonly confirmPartial?: (plan: EditPlan) => Promise<boolean>
+  readonly confirmPartial?: (plan: EditPlan, extra: ExtraCharge) => Promise<boolean>
+}
+
+/** The paid parts a plan adds beyond the price the person was shown. */
+export interface ExtraCharge {
+  readonly listen: boolean
+  readonly music: boolean
 }
 
 /** A run that stopped on purpose (the person pressed Stop or closed the editor). */
@@ -125,14 +151,27 @@ export class RunFailed extends Error {
 }
 
 /**
- * A request this edit cannot do, answered before anything paid started: the
- * plan has no step, or the person chose not to run only part of it. `plan`
- * carries the planner's answer and what it left out, for the panel to show.
+ * Why a request ended before anything paid started: it asked for nothing this
+ * edit can do ("nothing"), only for things it cannot do yet ("cannot"), the
+ * person chose not to run only part of it ("cannot" too), or everything it
+ * asked for is already done on this video ("done").
+ */
+export type DeclinedReason = "nothing" | "cannot" | "done"
+
+/**
+ * A request this edit cannot do, answered before anything paid started.
+ * `plan` carries the planner's answer and what it left out, for the panel to show.
  */
 export class RunDeclined extends Error {
-  constructor(readonly plan: EditPlan) {
+  readonly reason: DeclinedReason
+
+  constructor(
+    readonly plan: EditPlan,
+    reason?: DeclinedReason,
+  ) {
     super("Declined")
     this.name = "RunDeclined"
+    this.reason = reason ?? (plan.cannot.length > 0 ? "cannot" : "nothing")
   }
 }
 
@@ -163,6 +202,9 @@ class JobUnreadable extends Error {
 /** The provider's words a failed step carries, for the panel to show under its sentence. */
 const wordsOf = (error: unknown): string | undefined =>
   error instanceof JobFailed && error.errorDetail ? error.errorDetail : undefined
+
+/** The engine the video is listened to on: its id is also what the listening is priced at. */
+export const LISTEN_PROVIDER = "elevenlabs-stt"
 
 const JOB_POLL_MS = 1500
 const TRANSCRIBE_TIMEOUT_MS = 10 * 60_000
@@ -340,19 +382,30 @@ interface MediaView {
   readonly duration?: number
 }
 
+const sameName = (a: string | undefined, b: string | undefined) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase()
+
 /**
- * The media the person opened the editor on: the only video media on the
- * timeline, or, when there are several, the one named like the video's file.
- * Refused when it cannot be told apart: cuts timed from one file must never
- * land on another.
+ * The media to edit: the one the host named (`videoName`, the file name the
+ * editor shows), else the only video media on the timeline, else the one named
+ * like the video's file. Refused when it cannot be told apart: cuts timed from
+ * one file must never land on another. A named video that is no longer on the
+ * timeline is refused too, even when another video is the only one there.
  */
-export function openedVideoMedia(timeline: TimelineView, media: readonly MediaView[], videoUrl: string): MediaView | null {
+export function openedVideoMedia(timeline: TimelineView, media: readonly MediaView[], videoUrl: string, videoName?: string): MediaView | null {
   const ids = [...new Set(timeline.items.filter((i) => i.type === "video" && i.mediaId).map((i) => i.mediaId!))]
   if (ids.length === 0) return null
   const known = (id: string): MediaView => media.find((m) => m.id === id) ?? { id }
-  if (ids.length === 1) return known(ids[0]!)
+  const onTimeline = ids.map(known)
+  if (videoName) {
+    const named = onTimeline.filter((m) => sameName(m.fileName, videoName))
+    if (named.length === 1) return named[0]!
+    // The one video there may still be it, when the editor did not say its name.
+    if (onTimeline.length === 1 && !onTimeline[0]!.fileName) return onTimeline[0]!
+    throw new RunFailed(named.length > 1 ? "freecutAi.manyVideos" : "freecutAi.videoGone")
+  }
+  if (onTimeline.length === 1) return onTimeline[0]!
   const name = fileNameOfUrl(videoUrl)
-  const named = ids.map(known).filter((m) => name && m.fileName === name)
+  const named = onTimeline.filter((m) => sameName(m.fileName, name))
   if (named.length === 1) return named[0]!
   throw new RunFailed("freecutAi.manyVideos")
 }
@@ -437,7 +490,7 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
       const view = readTimelineView(report)
       if (!view) throw new RunFailed("freecutAi.noVideo")
       const media = (Array.isArray(report?.media) ? report!.media : []) as MediaView[]
-      const video = openedVideoMedia(view, media, opts.videoUrl)
+      const video = openedVideoMedia(view, media, opts.videoUrl, opts.videoName)
       if (!video) throw new RunFailed("freecutAi.noVideo")
       const clip = view.items.find((i) => i.mediaId === video.id)
       const seconds = video.duration ?? (clip?.sourceEnd !== undefined ? clip.sourceEnd / (clip.sourceFps ?? view.fps) : timelineSeconds(view))
@@ -450,12 +503,19 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
     cursor("lead", { preview: { x: 0.5, y: 0.42 } })
     show()
     agent("lead", "working", "freecutAi.reading")
-    const plan = await readPlan(opts.request, userId, signal)
+    const read = await readPlan(opts.request, userId, signal)
     checkStop(signal)
+    // What an earlier run already did on this video is not done again.
+    const plan: EditPlan = { ...read, steps: read.steps.filter((step) => !opts.done?.includes(step)) }
     onEvent({ type: "plan", plan })
-    if (plan.steps.length === 0) throw new RunDeclined(plan)
-    if (plan.cannot.length > 0 && opts.confirmPartial) {
-      if (!(await untilStopped(opts.confirmPartial(plan), signal))) throw new RunDeclined(plan)
+    if (plan.steps.length === 0) throw new RunDeclined(plan, read.steps.length > 0 ? "done" : undefined)
+    // A plan that costs more than the price shown is asked about, like one that leaves something out.
+    const listens = (steps: readonly EditStep[]) => steps.some((step) => step !== "music")
+    const extra: ExtraCharge = opts.quoted
+      ? { listen: !opts.heard && listens(plan.steps) && !listens(opts.quoted), music: plan.steps.includes("music") && !opts.quoted.includes("music") }
+      : { listen: false, music: false }
+    if ((plan.cannot.length > 0 || extra.listen || extra.music) && opts.confirmPartial) {
+      if (!(await untilStopped(opts.confirmPartial(plan, extra), signal))) throw new RunDeclined(plan)
       // The editor stayed open while the person chose: what it holds now is what gets edited.
       const now = await readStage()
       first = now.first
@@ -469,24 +529,27 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
     const summary = { pausesCut: 0, fillersCut: 0, captions: 0, music: false }
     for (const id of ["cutter", "captions", "sound"] as const) agent(id, "waiting", "freecutAi.waiting")
 
-    // ── listening ──
-    agent("lead", "working", "freecutAi.listening")
-    const transcription = startJob(() => transcribeApi(opts.videoUrl, "elevenlabs-stt", undefined, userId, false, false, true))
-
-    let words: TimedWord[]
-    let language: string | null
-    try {
-      const transcript = (await finishJob(await transcription, TRANSCRIBE_TIMEOUT_MS)).json
-      words = wordsFromTranscript(transcript)
-      language = transcriptLanguage(transcript)
-    } catch (error) {
-      if (error instanceof RunStopped || signal.aborted) throw new RunStopped()
-      const key: MessageKey = error instanceof InsufficientCreditsError ? "freecutAi.noCredits" : error instanceof JobUnreadable ? "freecutAi.signedOut" : "freecutAi.listenFailed"
-      throw new RunFailed(key, undefined, wordsOf(error))
+    // ── listening: once per video, and only for a step that reads the words ──
+    let words: readonly TimedWord[] = opts.heard?.words ?? []
+    let language: string | null = opts.heard?.language ?? null
+    if (!opts.heard && plan.steps.some((step) => step !== "music")) {
+      agent("lead", "working", "freecutAi.listening")
+      const transcription = startJob(() => transcribeApi(opts.videoUrl, LISTEN_PROVIDER, undefined, userId, false, false, true))
+      try {
+        const transcript = (await finishJob(await transcription, TRANSCRIBE_TIMEOUT_MS)).json
+        words = wordsFromTranscript(transcript)
+        language = transcriptLanguage(transcript)
+      } catch (error) {
+        if (error instanceof RunStopped || signal.aborted) throw new RunStopped()
+        const key: MessageKey = error instanceof InsufficientCreditsError ? "freecutAi.noCredits" : error instanceof JobUnreadable ? "freecutAi.signedOut" : "freecutAi.listenFailed"
+        throw new RunFailed(key, undefined, wordsOf(error))
+      }
+      onEvent({ type: "heard", heard: { words, language } })
+      feed("lead", words.length > 0 ? "freecutAi.heardWords" : "freecutAi.noSpeech", { n: words.length })
     }
-    feed("lead", words.length > 0 ? "freecutAi.heardWords" : "freecutAi.noSpeech", { n: words.length })
 
-    // The music is paid for only once the video has been heard; it is laid down last.
+    // The music is paid for only once the video has been heard (when it has to be); it is laid down last.
+    checkStop(signal)
     const music =
       plan.steps.includes("music") && plan.musicStyle
         ? startJob(() => sunoGenerateApi({ prompt: plan.musicStyle!, instrumental: true, customMode: false, userId })).then((id) => finishJob(id, MUSIC_TIMEOUT_MS))
@@ -499,8 +562,10 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
     // ── the Cutter: filler words, and the pauses around them ──
     const cutFillers = plan.steps.includes("fillers")
     const cutPauses = plan.steps.includes("pauses")
-    // Filler sounds are the video's own language's: "um" is a word in Portuguese.
-    const spoken = cutFillers ? words.filter((w) => !isFillerWord(w, language)) : words
+    // Filler sounds are the video's own language's: "um" is a word in Portuguese. Once they are
+    // cut (now, or by an earlier run) they are not spoken any more, and not captioned.
+    const fillersGone = cutFillers || !!opts.done?.includes("fillers")
+    const spoken = fillersGone ? words.filter((w) => !isFillerWord(w, language)) : words
     const fillers = cutFillers ? fillerRanges(words, language) : []
     // With the fillers gone, the silence around each one is one pause.
     const ranges = mergeRanges([...fillers, ...(cutPauses ? pauseRanges(spoken, mediaSeconds) : [])])

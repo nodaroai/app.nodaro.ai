@@ -4,18 +4,16 @@
  * Core code may not statically import from `ee/`, so the panel arrives through
  * `lazy(() => import(...))`, as the Copilot does (`copilot-panel-slot.tsx`).
  * It is offered only on a build with credits, and only when the editor said in
- * its handshake that it can be edited from here (`edit-ops`, `timeline-read`,
- * `playback`, `presence`): an older editor simply shows no button.
+ * its handshake that it can be edited from here (`aiPanelOffered`: `edit-ops`,
+ * `timeline-read`, `playback`, `presence`): an older editor simply shows no button.
  */
-import { Suspense, lazy } from "react"
+import { Suspense, lazy, useMemo } from "react"
 import { Loader2 } from "lucide-react"
+import { aiPanelOffered } from "@nodaro/shared/media"
 import { hasCredits } from "@/lib/edition"
 
-/** The editor capabilities the panel needs, all of them (FREECUT_READY). */
-const AI_EDIT_CAPABILITIES = ["edit-ops", "timeline-read", "playback", "presence"] as const
-
 export function aiEditAvailable(capabilities: readonly string[]): boolean {
-  return hasCredits() && AI_EDIT_CAPABILITIES.every((c) => capabilities.includes(c))
+  return hasCredits() && aiPanelOffered(capabilities)
 }
 
 const LazyAiEditPanel = lazy(() => import("@/ee/components/freecut-ai/ai-edit-panel"))
@@ -25,9 +23,24 @@ export interface FreeCutAiSlotProps {
   readonly editorOrigin: string
   readonly videoUrl: string
   readonly onClose: () => void
+  /** The panel asks for the whole editor area (`true`, while it shows the original video) or its side column. */
+  readonly onLayout?: (wide: boolean) => void
+  /** Which project the editor holds; a new number (New project) makes the panel forget the old one. */
+  readonly project?: number
 }
 
-export function FreeCutAiSlot(props: FreeCutAiSlotProps) {
+/** The file name in an address, for the panel to show the video by. */
+function fileNameOf(url: string): string {
+  try {
+    return decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "") || url
+  } catch {
+    return url
+  }
+}
+
+export function FreeCutAiSlot({ videoUrl, ...props }: FreeCutAiSlotProps) {
+  // This editor was opened on one video, loaded under a name of the editor's choosing.
+  const videos = useMemo(() => [{ url: videoUrl, name: fileNameOf(videoUrl) }], [videoUrl])
   return (
     <Suspense
       fallback={
@@ -36,7 +49,7 @@ export function FreeCutAiSlot(props: FreeCutAiSlotProps) {
         </div>
       }
     >
-      <LazyAiEditPanel {...props} />
+      <LazyAiEditPanel {...props} videos={videos} openedVideoUrl={videoUrl} />
     </Suspense>
   )
 }
