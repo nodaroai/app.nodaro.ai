@@ -188,6 +188,10 @@ export function buildGenerateImagePresetBody(
   const assembled = assembleImageInput({
     userPrompt: computeNodePrompt(NODE_TYPE, data, { refMap, appendWired: true }),
     provider,
+    // The body of one request (the route's preset hook, MCP): a model with a
+    // request image limit of its own keeps every reference, and the route
+    // refuses a count over it, saying how many to remove.
+    runKind: "request",
     style: typeof data.style === "string" ? data.style : undefined,
     negativePrompt: composeNegative(negative, undefined) || undefined,
     ...(backendHybridRoles() ? { referenceFormat: "hybrid" as const } : {}),

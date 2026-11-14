@@ -83,6 +83,17 @@ A mask limits the edit to the area painted white; black is kept. Four models tak
 | flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate | Up to 4 reference images. Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP); per-MP pricing — ~42 credits at 2 MP with the primary image. |
 | flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate, up to 8 reference images | Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP). **Per-megapixel pricing**: ~110 credits at 2 MP with the primary image (1 ref), scaling with resolution and extra references. |
 
+**More images than the model takes.** Seedream 5.5 and FLUX 3 Klein take 10
+input images, GPT Image 2.6 Flare and Sunburst and MiniMax H3 Image take 16,
+the source image counted. A request that would send more (Run on this node,
+`POST /v1/image-to-image`, MCP `image_to_image`) is refused before anything is
+charged, with a message saying how many to remove ("Seedream 5.5 takes at most
+10 input images, the source or base image included, and this run would send
+11: remove 1."); no reference is left out to make it fit. In a workflow run,
+Seedream 5.5, GPT Image 2.6 and MiniMax H3 Image send their first 10 or 16 and
+leave the rest out, so a saved workflow keeps running; FLUX 3 Klein refuses
+there too.
+
 ## Best Practices
 
 - Start with a low strength value (0.3-0.5) to preserve more of the original image structure, then increase if you want more dramatic changes.

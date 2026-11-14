@@ -140,7 +140,7 @@ export async function presetFanOutPayload(
     ...(args.variables !== undefined ? { presetVariables: args.variables } : {}),
     models,
     ...(count ? { count } : {}),
-    ...(await presetCallFields(args, session)),
+    ...(await presetCallFields(args, session, models)),
     ...(args.aspect_ratio !== undefined ? { aspectRatio: isAutoAspectToken(args.aspect_ratio) ? "auto" : spelled.aspectRatio } : {}),
     ...(args.resolution !== undefined && spelled.resolution !== undefined ? { resolution: spelled.resolution } : {}),
     ...(args.quality !== undefined && spelled.quality !== undefined ? { quality: spelled.quality } : {}),

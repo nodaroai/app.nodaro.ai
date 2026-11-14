@@ -92,6 +92,11 @@ export function projectModel(m: ModelCatalogEntry, prices: ChargedPrices, opts: 
   if (m.features?.length) out.features = m.features
   if (m.aspectRatios?.length) out.aspectRatios = m.aspectRatios
   if (m.resolutions?.length) out.resolutions = m.resolutions
+  // The size a request that names no resolution lands on, where the catalog
+  // declares one (FLUX 3 Klein 1K, Seedream 5.5 and MiniMax H3 Image 2K,
+  // PixVerse V6 Max 720p): served as declared, never derived, so a client
+  // need not read it from the order of `resolutions`.
+  if (m.defaultResolution !== undefined) out.defaultResolution = m.defaultResolution
   // The ratios at which the model renders fewer sizes than `resolutions`, each
   // with the sizes it renders there (GPT Image 2.5: 1K only at 27:16, 16:27,
   // 9:8 and 8:9); a ratio not listed renders every size. A copy, in the

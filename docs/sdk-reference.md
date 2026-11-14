@@ -4008,6 +4008,11 @@ size rules (each absent on every other model, and on an older server):
 - `backgroundOnlyAtTransparentResolution?: true` — the model takes a
   background setting only at `transparentResolution` (GPT Image 2.5): at any
   other size none is sent, so `opaque` there renders as `auto`.
+- `defaultResolution?: string` — the size a request that names no
+  `resolution` lands on, where the model declares one, spelled as in
+  `resolutions`: `"1K"` on FLUX 3 Klein, `"2K"` on Seedream 5.5 and MiniMax H3
+  Image, `"720p"` on PixVerse V6 Max. Read it instead of assuming the first
+  entry of `resolutions` is the default.
 
 A model that writes more than one kind of file carries `outputFormats?:
 string[]` (its default first) and, where it writes them, `gifFrameSize` (512),

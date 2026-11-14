@@ -138,7 +138,9 @@ Both offer six qualities at each of 1K, 2K and 4K: auto, low, medium (the
 default), high, extra high and max. Draft at low and finish at medium or above.
 At auto the model picks the level, so the price it quotes is the most the run can
 cost (the max price), and you are charged what it really used. Up to 16 input
-images; each one adds to the price, so an edit with fewer images costs less.
+images; each one adds to the price, so an edit with fewer images costs less. A
+request with more is refused, saying how many to remove; a workflow run sends
+the first 16 (see [More images than a model takes](#more-images-than-a-model-takes)).
 
 ### Seedream 5.5
 
@@ -154,7 +156,9 @@ auto, and the node says so).
   changing what you ask and leaving the rest of the picture as it was. It takes
   up to 10 input images, and each one adds to the price: a 2K edit costs
   **22 credits**<!-- credits: seedream-5-5-i2i:2K:1ref --> with one image and
-  **58 credits**<!-- credits: seedream-5-5-i2i:2K:10ref --> with ten.
+  **58 credits**<!-- credits: seedream-5-5-i2i:2K:10ref --> with ten. A request
+  with more is refused, saying how many to remove; a workflow run sends the
+  first 10 (see [More images than a model takes](#more-images-than-a-model-takes)).
 - With no photo wired in, Auto is sent as 1:1 (the text-to-image model takes no
   auto). With a photo, the run moves to the edit model, which is sent its own
   auto; whether that keeps the photo's shape has not been measured yet, so pick
@@ -185,7 +189,10 @@ and edits, from a first draft up to 4K.
   images gets the same message, rather than a bare limit on the list. A
   moodboard's images fill only the seats left after your references and the
   base, and never make a run refused.
-- Other models still leave out wired and mentioned references past their
+- Seedream 5.5, GPT Image 2.6 Flare and Sunburst and MiniMax H3 Image refuse
+  such a request too, but a workflow run on them leaves the extra images out:
+  see [More images than a model takes](#more-images-than-a-model-takes). Every
+  other model still leaves out wired and mentioned references past its
   reference limit, as before.
 - PNG (the default) or JPEG, the same price.
 - With no photo wired in, Auto is sent as 1:1 (the text-to-image model takes no
@@ -195,6 +202,30 @@ and edits, from a first draft up to 4K.
 - The model rewrites the prompt into a fuller description before drawing; that
   is not a setting here yet. Neither is an exact width and height, WebP, nor
   several pictures from one request.
+
+### More images than a model takes
+
+Seedream 5.5 takes 10 input images, GPT Image 2.6 Flare and Sunburst and
+MiniMax H3 Image take 16, a base image counted each time. What happens to more
+depends on how the run was started:
+
+- **A request** — Run on one node in the editor, `POST /v1/generate-image` or
+  `POST /v1/image-to-image`, or the MCP `generate_image` and `image_to_image`
+  tools — that would send more is refused before anything is charged, with a
+  message saying how many to remove ("Seedream 5.5 takes at most 10 input
+  images, the source or base image included, and this run would send 12:
+  remove 2."). Every image the request would send counts: references, images
+  mentioned in the prompt (`connectedReferences`), images attached to the
+  node and the base. None is left out to make it fit, so a mention never stays
+  in the prompt as plain text for an image that was not sent. A moodboard's
+  images fill only the seats left after yours and the base, and never make a
+  request refused.
+- **A workflow run** keeps the rule these models have always had: it sends the
+  first 10 (Seedream 5.5) or 16 (GPT Image 2.6, MiniMax H3 Image) images and
+  leaves the rest out, so a saved workflow keeps running. FLUX 3 Klein refuses
+  in a workflow run too ([FLUX 3 Klein](#flux-3-klein)).
+- Every other model leaves out wired and mentioned references past its reference limit, on a
+  request and in a workflow run alike, as before.
 
 ### Formats: PNG, JPEG, WebP, GIF and SVG
 

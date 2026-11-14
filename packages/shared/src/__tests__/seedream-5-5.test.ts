@@ -4,8 +4,10 @@ import { resolveNormalizedImageGen } from "../credit-identifiers.js"
 import {
   IMAGE_RESOLUTION_VALUES,
   getMinImagePromptChars,
+  hasOwnRequestImageLimit,
   imageReferenceLimit,
   refusesImagesOverLimit,
+  refusesImagesOverLimitOn,
   requestImageLimit,
   T2I_TO_I2I_VARIANT,
 } from "../model-constants.js"
@@ -83,13 +85,18 @@ describe("Seedream 5.5 input images", () => {
     expect(requestImageLimit("gpt-image-2-6-flare-i2i")).toBe(16)
   })
 
-  it("keeps its own rule past 10: a workflow run sends the first 10, so it is not one that refuses over its limit", () => {
-    // Its rule, since it shipped: a request with more is refused, a workflow
-    // run sends the first 10. FLUX 3 Klein's refusal everywhere is not its
-    // rule; joining it is a catalog flag (`refusesImagesOverLimit`), the
-    // owner's call.
-    expect(refusesImagesOverLimit("seedream-5-5")).toBe(false)
-    expect(refusesImagesOverLimit("seedream-5-5-i2i")).toBe(false)
+  it("keeps its own rule past 10: a request with more is refused, a workflow run sends the first 10", () => {
+    // Its rule, since it shipped (decided 2026-11-14 for every model with a
+    // request limit of its own): nothing trims a request, so it is refused,
+    // saying how many to remove; a workflow run sends the first 10, so a saved
+    // graph keeps running. FLUX 3 Klein's refusal in a workflow run too is a
+    // catalog flag (`refusesImagesOverLimit`) Seedream 5.5 does not carry.
+    for (const id of ["seedream-5-5", "seedream-5-5-i2i"]) {
+      expect(hasOwnRequestImageLimit(id), id).toBe(true)
+      expect(refusesImagesOverLimitOn(id, "request"), id).toBe(true)
+      expect(refusesImagesOverLimitOn(id, "workflow"), id).toBe(false)
+      expect(refusesImagesOverLimit(id), id).toBe(false)
+    }
   })
 
   it("is priced per input image, and counted as GPT Image 2.6 is", () => {

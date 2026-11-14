@@ -187,6 +187,24 @@ describe("list_models tool (always available)", () => {
     expect(models.find((m) => m.id === "nano-banana-2")).not.toHaveProperty("transparentResolution")
   })
 
+  it("carries a model's declared default size as GET /v1/models does, only where the catalog declares one", async () => {
+    const server = buildServer()
+    registerModels({
+      server,
+      session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }),
+      fastify: Fastify(),
+    })
+    const result = await callTool(server, "list_models", { kind: "image" })
+    const body = JSON.parse(result.content[0]?.text ?? "") as {
+      sections: Array<{ families: Array<{ models: Array<Record<string, unknown> & { id: string }> }> }>
+    }
+    const models = body.sections.flatMap((s) => s.families.flatMap((f) => f.models))
+    expect(models.find((m) => m.id === "flux-3-klein")?.defaultResolution).toBe("1K")
+    expect(models.find((m) => m.id === "seedream-5-5")?.defaultResolution).toBe("2K")
+    expect(models.find((m) => m.id === "minimax-h3-image-i2i")?.defaultResolution).toBe("2K")
+    expect(models.find((m) => m.id === "nano-banana-pro")).not.toHaveProperty("defaultResolution")
+  })
+
   it("lists the reference task types a model takes, only on the models that take one", async () => {
     const server = buildServer()
     registerModels({

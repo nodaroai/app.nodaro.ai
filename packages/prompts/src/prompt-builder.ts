@@ -7,7 +7,7 @@
 import { joinSentences } from "./hint-join.js"
 import { IMAGE_TOKEN_PATTERN } from "./image-token-pattern.js"
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
-import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, refusesImagesOverLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared/models"
+import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, refusesImagesOverLimitOn, getMaxImagePromptChars, getMaxNegativePromptChars, type ImageRunKind } from "@nodaro/shared/models"
 import { getStylePromptHint, isDeniedStyleId } from "./style.js"
 import {
   STYLE_SECTION_GAP,
@@ -953,8 +953,8 @@ interface ResolveImageMentionsHybridResult {
  * CAPPED REFS: `imageReferenceLimit(provider)` truncates `connectedReferences`
  * BEFORE Phase 0, so a mention whose ref was capped out silently falls through
  * as literal text — matching how a capped character mention behaves today. A
- * model that refuses images over its limit (`refusesImagesOverLimit`) is not
- * truncated: its run is refused instead.
+ * run on a model that refuses that kind of run over its image limit
+ * (`refusesImagesOverLimitOn`) is not truncated: it is refused instead.
  */
 function resolveImageMentionsHybrid(
   prompt: string,
@@ -1127,8 +1127,8 @@ interface ResolveEntityMentionsHybridResult {
  * CAPPED REFS: `imageReferenceLimit(provider)` truncates `connectedReferences`
  * BEFORE Phase 0, so a mention whose ref was capped out silently falls through as
  * literal text — matching how a capped character or image mention behaves today.
- * A model that refuses images over its limit (`refusesImagesOverLimit`) is not
- * truncated: its run is refused instead.
+ * A run on a model that refuses that kind of run over its image limit
+ * (`refusesImagesOverLimitOn`) is not truncated: it is refused instead.
  */
 function resolveEntityMentionsHybrid(
   prompt: string,
@@ -2106,6 +2106,15 @@ export interface BuildImagePromptConfig {
    * token would reach the model as literal noise. Do not narrow it.
    */
   skipCharacterMentions?: boolean
+  /**
+   * How the run was asked for (`ImageRunKind`): `"request"` for one call to a
+   * route (the route itself, a preset applied for it, the editor's Run of one
+   * node), `"workflow"` (the default) for a node of a workflow run. A model
+   * that refuses this kind of run over its image limit
+   * (`refusesImagesOverLimitOn`) has none of its structured references
+   * trimmed, so the caller refuses the count the run would really send.
+   */
+  runKind?: ImageRunKind
 }
 
 export interface BuildImagePromptResult {
@@ -2353,12 +2362,15 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // pointing at a slot the provider silently drops. Flat `referenceImageUrls` are
   // numbered first, so they consume the budget. Only ref-capable providers
   // (refCap > 0) cap here; non-ref providers drop all URLs via `supportsRefs`.
-  // A model that refuses a run over its image limit (`refusesImagesOverLimit`:
-  // FLUX 3 Klein) is never trimmed: every reference the run attaches is sent,
-  // so the route, the workflow run and the editor's request refuse the count
-  // the run would really send, before anything is reserved, instead of an
-  // image being left out with its mention standing as plain text.
-  if (connectedReferences && connectedReferences.length > 0 && !refusesImagesOverLimit(provider)) {
+  // A model that refuses this kind of run over its image limit
+  // (`refusesImagesOverLimitOn`: a request on every model with a request
+  // limit of its own, a workflow run only on FLUX 3 Klein) is never trimmed:
+  // every reference the run attaches is sent, so the route, the editor's
+  // request and FLUX's workflow run refuse the count the run would really
+  // send, before anything is reserved, instead of an image being left out
+  // with its mention standing as plain text. Every other run keeps the trim
+  // (a Seedream 5.5 workflow run sends its first 10).
+  if (connectedReferences && connectedReferences.length > 0 && !refusesImagesOverLimitOn(provider, config.runKind ?? "workflow")) {
     const refCap = imageReferenceLimit(provider)
     if (refCap > 0) {
       const structuredBudget = Math.max(0, refCap - referenceImageUrls.length)

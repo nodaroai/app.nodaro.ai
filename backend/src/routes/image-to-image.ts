@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { imagePromptTooShort } from "../lib/image-prompt-minimum.js"
+import { imageInputLimitProblem } from "../lib/image-input-limit.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertJob } from "../lib/insert-job.js"
 import { z } from "zod"
@@ -95,13 +96,35 @@ export const imageToImageBody = z.object({
  *  `imageToImageBody` stays a plain object for `applySnappedLevers`. */
 const imageToImageRequest = imageToImageBody.superRefine((data, ctx) => {
   // No model named: the limit of the default the handler will run it on.
-  const limit = requestImageLimit(data.provider ?? defaultImageModel("edit", data.aspectRatio))
-  if (1 + (data.referenceImageUrls?.length ?? 0) > limit) {
-    ctx.addIssue({ code: "custom", path: ["referenceImageUrls"], message: `This model takes at most ${limit} input images, imageUrl included` })
+  const model = data.provider ?? defaultImageModel("edit", data.aspectRatio)
+  const limit = requestImageLimit(model)
+  const sent = 1 + (data.referenceImageUrls?.length ?? 0)
+  if (sent > limit) {
+    // A model with a request image limit of its own says how many to remove
+    // (`imageInputLimitProblem`); a model held to the default keeps its message.
+    const message = imageInputLimitProblem(model, sent, "request")?.message ?? `This model takes at most ${limit} input images, imageUrl included`
+    ctx.addIssue({ code: "custom", path: ["referenceImageUrls"], message })
   }
   const maskConflict = maskFormatConflict(data)
   if (maskConflict) ctx.addIssue({ code: "custom", path: ["maskUrl"], message: maskConflict })
 })
+
+/**
+ * The refusal a request gets when it names more references than the body's
+ * array takes, on a model that refuses a request over its image limit
+ * (`imageInputLimitProblem`): that model's own message, saying how many to
+ * remove, the source counted, instead of the bare array bound. Null when
+ * anything else is wrong with the body, or when the model refuses nothing:
+ * every other request keeps the message it gets today.
+ */
+function oversizedReferencesProblem(body: unknown, error: z.ZodError): { code: "validation_error"; message: string } | null {
+  const onReferences = error.issues.every((issue) => issue.path.length === 1 && issue.path[0] === "referenceImageUrls")
+  if (!onReferences || !error.issues.some((issue) => issue.code === "too_big")) return null
+  const raw = body as { provider?: unknown; aspectRatio?: unknown; referenceImageUrls?: unknown } | null
+  if (!raw || !Array.isArray(raw.referenceImageUrls)) return null
+  const model = typeof raw.provider === "string" ? raw.provider : defaultImageModel("edit", typeof raw.aspectRatio === "string" ? raw.aspectRatio : undefined)
+  return imageInputLimitProblem(model, 1 + raw.referenceImageUrls.length, "request")
+}
 
 const IDENTITY_PRESERVE_SUFFIX =
   "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
@@ -145,8 +168,11 @@ export async function imageToImageRoutes(app: FastifyInstance) {
   }, async (req, reply) => {
     const parsed = imageToImageRequest.safeParse(req.body)
     if (!parsed.success) {
+      // More references than the body's array takes, on a model that refuses a
+      // request over its limit: its own message, saying how many to remove.
+      const tooMany = oversizedReferencesProblem(req.body, parsed.error)
       return reply.status(400).send({
-        error: { code: "validation_error", ...formatZodError(parsed.error) },
+        error: tooMany ?? { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
     // No model named → the platform's edit default for this ratio (shared

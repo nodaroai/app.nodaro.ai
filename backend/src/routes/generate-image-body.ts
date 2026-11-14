@@ -209,9 +209,10 @@ export const generateImageRequest = generateImageBody.superRefine((data, ctx) =>
     const limit = requestImageLimit(model)
     const sent = pricedSentImages(model, references, data.baseImageUrl)
     if (sent > limit) {
-      // FLUX 3 Klein says how many to remove, the base image counted, as its
-      // workflow run does (`imageInputLimitProblem`); every other model keeps its message.
-      const message = imageInputLimitProblem(model, sent)?.message ?? `${model} takes at most ${limit} input images`
+      // A model with a request image limit of its own says how many to
+      // remove, the base image counted (`imageInputLimitProblem`); a model
+      // held to the default limit keeps its message.
+      const message = imageInputLimitProblem(model, sent, "request")?.message ?? `${model} takes at most ${limit} input images`
       ctx.addIssue({ code: "custom", path: ["referenceImageUrls"], message })
       break
     }

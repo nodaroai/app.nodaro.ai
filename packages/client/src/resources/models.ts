@@ -55,6 +55,13 @@ export interface ModelSummary {
    * `resolutionsByAspectRatio?.[ratio] ?? resolutions`.
    */
   resolutionsByAspectRatio?: Record<string, string[]>
+  /**
+   * The size a request that names no `resolution` lands on, where the model
+   * declares one (`"1K"` on FLUX 3 Klein, `"2K"` on Seedream 5.5 and MiniMax
+   * H3 Image, `"720p"` on PixVerse V6 Max), spelled as in `resolutions`.
+   * Absent on every other model (and on an older server).
+   */
+  defaultResolution?: string
   qualities?: string[]
   /** The image background settings the model takes (`auto`, `opaque`, `transparent`). */
   backgrounds?: string[]

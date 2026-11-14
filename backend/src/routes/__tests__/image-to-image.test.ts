@@ -401,6 +401,35 @@ describe("POST /v1/image-to-image", () => {
       const res = await post("gpt-image-2-5-flare-i2i", 14)
       expect(res.statusCode).toBe(400)
       expect(res.json().error.code).toBe("validation_error")
+      // A model held to the default limit keeps its message.
+      expect(res.json().error.message).toContain("This model takes at most 14 input images, imageUrl included")
+    })
+
+    // Every model with a request image limit of its own says how many to
+    // remove, the source counted (decided 2026-11-14).
+    it.each([
+      ["seedream-5-5-i2i", "Seedream 5.5"],
+      ["flux-3-klein-i2i", "FLUX 3 Klein"],
+    ] as const)("%s refuses the image and 10 more, saying to remove 1", async (provider, label) => {
+      const res = await post(provider, 10)
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.message).toContain(
+        `${label} takes at most 10 input images, the source or base image included, and this run would send 11: remove 1.`,
+      )
+    })
+
+    it("past the body's 15 references, a 16-image model says how many to remove instead of the bare array bound", async () => {
+      const res = await post("minimax-h3-image-i2i", 17)
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.message).toBe(
+        "MiniMax H3 Image takes at most 16 input images, the source or base image included, and this run would send 18: remove 2.",
+      )
+    })
+
+    it("past the body's 15 references, a model held to the default keeps the array bound's message", async () => {
+      const res = await post("gpt-image-2-5-flare-i2i", 16)
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.message).not.toContain("remove")
     })
   })
 
