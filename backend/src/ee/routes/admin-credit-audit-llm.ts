@@ -98,7 +98,7 @@ export interface LlmAuditRow {
   chargedCredits: number
   /** Overruns the platform absorbed (uncollected_overrun + org_usage_variance). */
   shortfallCredits: number
-  /** Share (0–1) of the tasks whose cost was estimated (`kie-size-estimate` / `abort-estimate`), not stated. */
+  /** Share (0–1) of the tasks whose cost was estimated (`kie-size-estimate` / `document-floor` / `abort-estimate`), not stated. */
   estimatedShare: number
   diff: number
   diffPercent: number | null
@@ -153,7 +153,7 @@ export interface LlmAuditSideCounts {
   missingLedgers: ReadonlyMap<string, number>
 }
 
-const ESTIMATED_SOURCES: ReadonlySet<string> = new Set(["kie-size-estimate", "abort-estimate"])
+const ESTIMATED_SOURCES: ReadonlySet<string> = new Set(["kie-size-estimate", "document-floor", "abort-estimate"])
 const PAGE = 1000
 const MAX_PAGES = 100
 /** Ids per `.in()` list: 500 UUIDs is past what the gateway reliably accepts (credits-digest.ts, deployment-billing.ts). */

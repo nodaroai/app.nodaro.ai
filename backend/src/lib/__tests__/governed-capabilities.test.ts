@@ -32,6 +32,7 @@ import {
   __resetAvailabilityOverridesForTests,
   __availabilityUniverseReadyForTests,
   GATEABLE_NODE_TYPES,
+  storedNodesEnabled,
 } from "../availability-override.js"
 
 beforeAll(() => __availabilityUniverseReadyForTests())
@@ -162,3 +163,68 @@ describe("competitor scans follow Social Search", () => {
     expect(await deniedCapabilityForUser("competitor-scan", { competitorId: "c1" }, "user-1")).toBeUndefined()
   })
 })
+
+describe("a one-off voice clone is governed by the Voice Clone node (decided 2026-11-13)", () => {
+  const replica = { sourceAudioUrl: "https://media.example/s.wav", consentAudioUrl: "https://media.example/c.wav" }
+  it("a speech node asking a clone (well formed or not) is governed by voice-clone; one without, by nothing", () => {
+    expect(governingNodeType("text-to-speech", { replica })).toBe("voice-clone-one-off")
+    expect(governingNodeType("text-to-speech", { replica: { sourceAudioUrl: "http://x" } })).toBe("voice-clone-one-off")
+    expect(governingNodeType("text-to-speech", { text: "hi" })).toBeUndefined()
+    expect(governingNodeType("text-to-dialogue", { dialogue: [{ text: "hi", voice: "Me" }], speakers: [{ voice: "Me", replica }] })).toBe("voice-clone-one-off")
+    // A cloned speaker no line uses is not sent, so it is not judged.
+    expect(governingNodeType("text-to-dialogue", { dialogue: [{ text: "hi", voice: "Puck" }], speakers: [{ voice: "Me", replica }] })).toBeUndefined()
+    expect(governingNodeType("text-to-dialogue", { speakers: [{ voice: "Puck", pace: "Natural" }] })).toBeUndefined()
+    expect(availabilityChecksFor("text-to-speech", { replica }).map((c) => c.label)).toEqual(["text-to-speech", "a one-off voice clone"])
+  })
+
+  it("where voice-clone is denied, the run and the publish rule name the clone; a node without one is untouched", () => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ nodes: { deny: ["voice-clone"] } })
+    __resetSurfaceProfileCacheForTests()
+    const nodes = [{ id: "a", type: "text-to-speech", data: { replica } }, { id: "b", type: "text-to-speech", data: { text: "hi" } }]
+    expect(findUnavailableCapabilities(nodes, USER_VIEWER)).toEqual(["a one-off voice clone"])
+    expect(findUnavailableCapabilities([nodes[1]!], USER_VIEWER)).toEqual([])
+  })
+})
+
+describe("the one-off voice clone is a gateable feature of its own (decided 2026-11-13)", () => {
+  const replica = { sourceAudioUrl: "https://media.example/s.wav", consentAudioUrl: "https://media.example/c.wav" }
+  const clone = [{ id: "a", type: "text-to-speech", data: { replica } }]
+
+  it("is in the gateable universe, so an allow-list that omits it refuses clones", () => {
+    expect(GATEABLE_NODE_TYPES.has("voice-clone-one-off")).toBe(true)
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ nodes: { allow: ["text-to-speech"] } })
+    __resetSurfaceProfileCacheForTests()
+    expect(findUnavailableCapabilities(clone, USER_VIEWER)).toEqual(["a one-off voice clone"])
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ nodes: { allow: ["text-to-speech", "voice-clone-one-off"] } })
+    __resetSurfaceProfileCacheForTests()
+    expect(findUnavailableCapabilities(clone, USER_VIEWER)).toEqual([])
+  })
+
+  it("a profile that denies it, or the Voice Clone node, refuses clones", () => {
+    for (const deny of [["voice-clone-one-off"], ["voice-clone"]]) {
+      process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ nodes: { deny } })
+      __resetSurfaceProfileCacheForTests()
+      expect(findUnavailableCapabilities(clone, USER_VIEWER), deny[0]).toEqual(["a one-off voice clone"])
+    }
+  })
+
+  it("an override saved before it was gateable leaves it to the profile; one saved after decides it", () => {
+    const everythingBut = (omit: string[], generation?: number) => new Set(storedNodesEnabled([...GATEABLE_NODE_TYPES].filter((t) => !omit.includes(t)), generation))
+    // Saved at generation 2 (before the clone joined), not listing it: the profile answers — no deny, so offered.
+    __resetAvailabilityOverridesForTests({ nodes: everythingBut(["voice-clone-one-off"], 2) })
+    expect(findUnavailableCapabilities(clone, USER_VIEWER)).toEqual([])
+    // ...and a profile deny still holds under that older override.
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ nodes: { deny: ["voice-clone"] } })
+    __resetSurfaceProfileCacheForTests()
+    expect(findUnavailableCapabilities(clone, USER_VIEWER)).toEqual(["a one-off voice clone"])
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+    // Saved now (generation 3) without it: the admin withheld it.
+    __resetAvailabilityOverridesForTests({ nodes: everythingBut(["voice-clone-one-off"]) })
+    expect(findUnavailableCapabilities(clone, USER_VIEWER)).toEqual(["a one-off voice clone"])
+    // Saved now with it: offered.
+    __resetAvailabilityOverridesForTests({ nodes: everythingBut([]) })
+    expect(findUnavailableCapabilities(clone, USER_VIEWER)).toEqual([])
+  })
+})
+

@@ -8,8 +8,8 @@
  * credits included (tools/fixtures/speech-estimate-cases.json).
  *
  * Exact when the text is literal on the node (pre/post text applied, then the
- * one counter: clamp to the run-as model's cap, strip the `[audio tags]` it
- * does not perform). Unknown — a connected text, a `{Reference}`, a field
+ * one counter: clamp to the run-as model's cap, its tags as the model takes
+ * them — kept, rewritten to its own `<angle>` tags, or stripped). Unknown — a connected text, a `{Reference}`, a field
  * mapping, no text — prices at the model's cap, or at an exposed input's
  * character limit: an estimate may over-quote, never under-quote.
  *
@@ -29,28 +29,31 @@ import {
   MODEL_CATALOG,
   TTS_FALLBACK_PROVIDER,
   canonicalTtsProvider,
-  ttsSupportsAudioTags,
+  getTtsCapabilities,
+  ttsAngleTags,
 } from "@nodaro/shared/model-catalog"
 import {
   readPromptAffixes,
 } from "@nodaro/shared/nodes"
 import {
   SPEECH_FLOOR_UNITS,
+  SPEECH_PER_1K_CREDIT_SUFFIX,
   SPEECH_UNIT_CREDIT_SUFFIX,
   speechPriceUnits,
   speechQuoteCreditId,
+  speechRowUnits,
   speechUnitCreditId,
 } from "@nodaro/shared/credits"
-import { applyPromptAffixes, stripAudioTags } from "@nodaro/prompts/prompt-fields"
+import { angleTagGrowth, applyPromptAffixes, sentDialogueChars, sentSpeechText } from "@nodaro/prompts/prompt-fields"
 
 export const SPEECH_NODE_TYPES: ReadonlySet<string> = new Set(["text-to-speech", "text-to-dialogue"])
 /** A `{Label}` reference — resolved at run time, so its length is unknown now. */
 const REFERENCE = /\{[^{}]+\}/
 const NO_REFS: ReadonlyMap<string, string> = new Map()
 
-/** Whether a price identifier is a speech model's per-100-characters RATE row — priced by this estimator, never a variant of the model (the model pickers' range skips it). */
+/** Whether a price identifier is a speech model's RATE row (`:per-100-chars`, or `:per-1k-chars` for a model quoted per 1,000) — priced by this estimator, never a variant of the model (the model pickers' range skips it). */
 export function isSpeechUnitRow(identifier: string): boolean {
-  return identifier.endsWith(SPEECH_UNIT_CREDIT_SUFFIX)
+  return identifier.endsWith(SPEECH_UNIT_CREDIT_SUFFIX) || identifier.endsWith(SPEECH_PER_1K_CREDIT_SUFFIX)
 }
 
 /**
@@ -67,23 +70,17 @@ export function speechRunsAs(provider: unknown): string {
   return Object.hasOwn(MODEL_CATALOG, id) && MODEL_CATALOG[id]!.modes.includes("tts") ? id : TTS_FALLBACK_PROVIDER
 }
 
-/** Characters of `text` the worker will send on `provider`: clamped to the model's cap, tags stripped when the model does not perform them. */
+/** Characters of `text` the worker will send on `provider` — `sentSpeechText`, the server's one rule: its tags as the model takes them (kept, rewritten or stripped) and its cap (on an angle-tag model applied after the rewrite). */
 export function billableSpeechChars(provider: unknown, text: unknown): number {
   if (typeof text !== "string") return 0
-  const runsAs = speechRunsAs(provider)
-  const clamped = text.slice(0, getMaxTtsChars(runsAs))
-  return (ttsSupportsAudioTags(runsAs) ? clamped : stripAudioTags(clamped)).length
+  return sentSpeechText(text, getTtsCapabilities(speechRunsAs(provider)))
+    .length
 }
 
-/** Characters of a dialogue script: the sum of its lines' texts, at most the dialogue model's total cap. */
+/** Characters of a dialogue script: each line as it is sent, summed, at most the dialogue model's total cap (`sentDialogueChars`). */
 export function billableDialogueChars(lines: unknown, provider?: unknown): number {
-  if (!Array.isArray(lines)) return 0
-  let total = 0
-  for (const line of lines) {
-    const text = (line as { text?: unknown } | null)?.text
-    if (typeof text === "string") total += text.length
-  }
-  return Math.min(total, getDialogueCapabilities(provider).maxChars)
+  // Each line as it is sent (on Gemini 3.8 its tags rewritten, then the cap), summed, at most the model's total cap.
+  return sentDialogueChars(lines, getDialogueCapabilities(provider))
 }
 
 /** The backend's omitted-provider rule (lib/omitted-tts-provider.ts): the default model up to its own cap, turbo above it. */
@@ -193,13 +190,38 @@ export function speechEstimateChars(nodeType: string, data: Record<string, unkno
 function limitedChars(runsAs: string, cap: number, textCap: number | undefined, data: Record<string, unknown>): number {
   if (textCap === undefined) return cap
   const wrapped = applyPromptAffixes("a".repeat(Math.min(textCap, cap)), readPromptAffixes(data), NO_REFS)
-  return REFERENCE.test(wrapped) ? cap : billableSpeechChars(runsAs, wrapped)
+  if (REFERENCE.test(wrapped)) return cap
+  return billableSpeechChars(runsAs, wrapped)
+}
+
+/**
+ * The characters a speech node is PRICED at: its script (`speechEstimateChars`)
+ * and, on an angle-tag model (Gemini 3.8), the most an input it does not know
+ * yet can grow when its tags are rewritten (`[pause]` → `<short pause>`, ×13/7:
+ * the worst case is listed, decided 2026-11-13) — the INPUT part only, under
+ * its limit: a literal pre/post text is already counted exactly as it is sent.
+ * Never above the cap. The price's count only: the script's length for timing
+ * (the backend's listed voice seconds) is `speechEstimateChars`, which never
+ * grows.
+ */
+export function speechPriceChars(nodeType: string, data: Record<string, unknown>, ctx: SpeechEstimateContext = {}): SpeechEstimateChars {
+  const script = speechEstimateChars(nodeType, data, ctx)
+  if (script.exact || ctx.textCap === undefined || script.chars >= script.cap) return script
+  // A dialogue's script under a limit is all input (no pre/post text); a Gemini 3.8 dialogue grows as one speaker does.
+  const sheet = nodeType === "text-to-dialogue" ? getDialogueCapabilities(script.runsAs) : undefined
+  const tags = sheet ? (sheet.tagSyntax === "angle" ? sheet.tags ?? [] : undefined) : ttsAngleTags(script.runsAs)
+  if (!tags) return script
+  const input = Math.min(ctx.textCap, script.cap)
+  return { ...script, chars: Math.min(script.cap, script.chars + Math.ceil(input * (angleTagGrowth(tags) - 1))) }
 }
 
 export interface SpeechQuote extends SpeechEstimateChars {
-  /** The `<model>:per-100-chars` row: the price of ONE started 100 characters, and the flag (served only while speech is priced by length). */
+  /**
+   * The model's rate row — `<model>:per-100-chars` (one started 100 characters), or `<model>:per-1k-chars` for a
+   * model quoted per 1,000 (`speechRowUnits` 10) — and the flag (served only while speech is priced by length).
+   */
   id: string
-  /** The row's price for one started 100 characters, as the server serves it. */
+  /** The row's price as the server serves it (per started 100 characters, or per 1,000 on a per-1K row). */
   unit: number
   /** Started hundreds, at least the floor. */
   units: number
@@ -237,7 +259,7 @@ export function speechQuote(
   priceOf: (creditId: string) => number | undefined,
 ): SpeechQuote | undefined {
   if (!SPEECH_NODE_TYPES.has(nodeType)) return undefined
-  const chars = speechEstimateChars(nodeType, data, ctx)
+  const chars = speechPriceChars(nodeType, data, ctx)
   const id = speechUnitCreditId(chars.runsAs)
   const unit = priceOf(id)
   if (unit === undefined) return undefined
@@ -245,10 +267,15 @@ export function speechQuote(
   const quoteId = speechQuoteCreditId(chars.runsAs, units)
   const whole = priceOf(quoteId)
   const served = whole !== undefined
-  const credits = whole ?? unit * units
-  const priced = served ? { id: quoteId, units: 1 } : { id, units }
+  // Units one row prices: 1, or 10 on a per-1,000-characters row. Until the whole price is cached the bound
+  // must stay at or above it: on a per-1K row the request is rounded up once below the row, so one more row's
+  // price covers that rounding whatever the markup.
+  const rowUnits = speechRowUnits(chars.runsAs)
+  const credits = whole ?? (rowUnits === 1 ? unit * units : Math.ceil((unit * units) / rowUnits) + unit)
+  // The same bound for the (id, units) pair a run estimate multiplies: one more row on a per-1K row.
+  const priced = served ? { id: quoteId, units: 1 } : { id, units: rowUnits === 1 ? units : units / rowUnits + 1 }
   if (chars.exact) return { ...chars, id, unit, units, quoteId, credits, served, priced }
-  const min = priceOf(speechQuoteCreditId(chars.runsAs, SPEECH_FLOOR_UNITS)) ?? SPEECH_FLOOR_UNITS * unit
+  const min = priceOf(speechQuoteCreditId(chars.runsAs, SPEECH_FLOOR_UNITS)) ?? Math.ceil((SPEECH_FLOOR_UNITS * unit) / rowUnits)
   return { ...chars, id, unit, units, quoteId, credits, served, priced, range: { min: Math.min(min, credits), max: credits } }
 }
 
@@ -260,7 +287,7 @@ export function speechQuote(
  */
 export function speechQuoteIds(nodeType: string, data: Record<string, unknown>, ctx: SpeechEstimateContext): string[] {
   if (!SPEECH_NODE_TYPES.has(nodeType)) return []
-  const chars = speechEstimateChars(nodeType, data, ctx)
+  const chars = speechPriceChars(nodeType, data, ctx)
   const ids = [speechUnitCreditId(chars.runsAs), speechQuoteCreditId(chars.runsAs, speechPriceUnits(chars.chars))]
   if (!chars.exact) ids.push(speechQuoteCreditId(chars.runsAs, SPEECH_FLOOR_UNITS))
   return [...new Set(ids)]

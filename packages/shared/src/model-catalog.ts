@@ -35,6 +35,19 @@ import { isAutoVideoDuration } from "./video-duration-auto.js"
 import type { DeclaredSeedanceTaskType } from "./seedance-task-type.js"
 import { SEEDREAM_5_5_DEFAULT_RESOLUTION, SEEDREAM_5_5_RESOLUTIONS } from "./seedream-5-5.js"
 import { FLUX_3_KLEIN_RESOLUTIONS } from "./flux-3-klein.js"
+import {
+  GEMINI_3_1_DEFAULT_VOICE,
+  GEMINI_3_1_TTS_ACCENTS,
+  GEMINI_3_1_TTS_PACES,
+  GEMINI_3_1_TTS_STYLES,
+  GEMINI_3_1_TTS_VOICES,
+  GEMINI_3_8_DEFAULT_VOICE,
+  GEMINI_3_8_TONE_TAGS,
+  GEMINI_3_8_TTS_VOICES,
+  GEMINI_TTS_MAX_CHARS,
+  TTS_DIRECTION_MAX_CHARS,
+  type TtsNamedVoice,
+} from "./gemini-tts.js"
 
 export type ModelKind = "image" | "video" | "audio"
 
@@ -108,6 +121,14 @@ export interface PriceVariant {
  */
 export const SPEECH_UNIT_PRICE_NOTE = "per started 100 characters, at least 8 units — where length pricing is on; a request costs at most its units × this"
 
+/**
+ * The note on a speech model's `<model>:per-1k-chars` row (`TtsCapabilities.ratePer1kChars`):
+ * the same count as {@link SPEECH_UNIT_PRICE_NOTE} — started 100 characters, at
+ * least 8 units — quoted per 1,000, so a request costs its hundreds × this ÷ 10,
+ * rounded up once (the exact price of N hundreds is the `<model>:per-100-chars:<N>u` id).
+ */
+export const SPEECH_PER_1K_PRICE_NOTE = "per 1,000 characters, counted in started 100s, at least 800 — where length pricing is on; a request costs its hundreds × this ÷ 10, rounded up"
+
 /** A voice-setting lever a speech model honours. */
 export type TtsSettingLever = "stability" | "similarity" | "style" | "speed" | "speakerBoost"
 
@@ -160,6 +181,81 @@ export interface TtsCapabilities {
   maxChars: number
   /** Languages offered in pickers (ISO 639-1; `fil` has no two-letter code). A curated list, not the vendor's full one. */
   languages: readonly string[]
+  /**
+   * The model speaks only these named voices, by wire name: a request's
+   * `voice` must be one of them (else a 400 before any hold), and none means
+   * `defaultVoice`. Absent ⇒ the ElevenLabs voices (premade, library, clones).
+   * A client offers this list in place of the ElevenLabs voice browser.
+   */
+  voices?: readonly TtsNamedVoice[]
+  /** With `voices`: the voice a request that names none runs with. */
+  defaultVoice?: string
+  /**
+   * With `audioTags`: the tags are written `<in angle brackets>`, from the
+   * closed list `tags`. The platform's `[square]` tags are rewritten to them
+   * where they match and the rest are taken out before sending
+   * (`@nodaro/prompts` `toAngleTags`). Absent ⇒ `[square]` tags, sent as written.
+   */
+  tagSyntax?: "angle"
+  /** With `tagSyntax: "angle"`: the tags the model performs, by their own names (`laugh`, `short pause`). */
+  tags?: readonly string[]
+  /**
+   * Style direction the model takes beside the text — never spoken, never
+   * billed. Absent ⇒ none (the request's direction fields are not sent).
+   */
+  direction?: TtsDirectionSheet
+  /**
+   * Dialogue lane only: at most this many speakers (distinct voices) in one
+   * script. Absent ⇒ the lane's own limit (ElevenLabs dialogue: 10).
+   */
+  dialogueSpeakers?: number
+  /**
+   * Dialogue lane only: the model can add natural filler words ("um", "you
+   * know") between two speakers when asked (`fillerWords` on a request).
+   */
+  fillerWords?: true
+  /**
+   * Dialogue lane only: the model delivers every speech file format
+   * (`TTS_OUTPUT_FORMATS`) — it renders a WAV the platform keeps as it is or
+   * encodes to MP3. Absent ⇒ the default MP3 only (the ElevenLabs dialogue
+   * endpoint, as the platform calls it).
+   */
+  dialogueAnyOutputFormat?: true
+  /**
+   * The model clones a speaker's voice for one request from two recordings
+   * (`replica`: a reference and a consent recording, `TtsReplica`), in place of
+   * a named voice; nothing is saved as a voice. Gemini 3.8 Flash only: KIE's
+   * 3.8 Flash-Lite refuses it ("Inline voice sample replication is not
+   * supported", probed 2026-11-13).
+   */
+  replica?: true
+  /**
+   * The model's length-price row is quoted per 1,000 characters
+   * (`<id>:per-1k-chars`) instead of per started 100 (`<id>:per-100-chars`).
+   * The count is the same — started 100 characters, at least 8 — and a
+   * request costs its hundreds × the row ÷ 10, rounded up once
+   * (`speechRowCredits`). For a rate below one credit per 100 characters,
+   * which a whole-credit row cannot hold.
+   */
+  ratePer1kChars?: true
+}
+
+/**
+ * The style direction a speech model takes (`styleDirection`, `pace`,
+ * `accent`, `audioProfile` on a request). A field the sheet does not name is
+ * never sent.
+ */
+export interface TtsDirectionSheet {
+  /** `styleDirection` is free text — tone, emotion, pace in the person's own words — up to this many characters. */
+  styleMaxChars?: number
+  /** `styleDirection` is one of these (the model's own names). */
+  styles?: readonly string[]
+  /** `pace` is one of these. */
+  paces?: readonly string[]
+  /** `accent` is one of these. */
+  accents?: readonly string[]
+  /** `audioProfile` (who is speaking, in words) is free text up to this many characters. */
+  audioProfileMaxChars?: number
 }
 
 /**
@@ -605,6 +701,7 @@ export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
   { intent: "video with start + end frame", modelIds: ["veo3", "veo3.1", "kling-turbo", "minimax", "hailuo-standard", "seedance-2"], note: "All listed support an end frame; VEO uses imageUrls[start, end]." },
   { intent: "music / song generation", modelIds: ["suno-v6", "suno-v6_wild", "suno-v6_mini", "suno-v5_5"], note: "V6 is the default flagship; V6 Wild for bolder, less predictable results; V6 Mini when speed matters; v5.5 / v5 / v4 keep their own character. Same price." },
   { intent: "voice over / narration", modelIds: ["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-v4-turbo", "elevenlabs-turbo"], note: "v4 is the default: [audio tags] for emotion and up to 10,000 characters per request. v3 is the previous expressive model, still selectable. v4 Turbo keeps v4's tags at Turbo's credit price; Turbo v2.5 is the cheapest for plain narration without tags." },
+  { intent: "low-cost narration with a named voice", modelIds: ["gemini-3-8-flash-lite-tts", "gemini-3-8-flash-tts", "gemini-3-1-flash-tts", "gemini-2-5-pro-tts"], note: "Google's Gemini voices cost far less per character than ElevenLabs. Each speaks only its own named voices (no clones or library voices) and no language is set: the text decides. 3.8 Flash-Lite is the cheapest; 3.8 Flash is the larger 3.8 model; both take their own tone tags (laugh, sigh, short pause…) and a free-text style. 3.1 Flash and 2.5 Pro take [audio tags] and a style, pace, accent and audio profile." },
   { intent: "lip-sync a portrait to audio", modelIds: ["kling-avatar-pro", "kling-avatar", "infinitalk"], note: "Pro for best mouth shape; InfiniTalk for resolution control." },
   { intent: "transcription / captions", modelIds: ["elevenlabs-stt", "incredibly-fast-whisper", "whisper", "nemotron-3-5-transcribe"], note: "Captions need WORD timestamps: ElevenLabs STT (always), Incredibly Fast Whisper or Nemotron 3.5 Transcribe (on request, with a speaker per word). Plain Whisper returns phrase segments only. To translate the speech (to or from English) instead of transcribing it, use Nemotron 3.5 Transcribe with a target language; a translation carries no word timings." },
   { intent: "motion transfer (drive a subject by another video)", modelIds: ["motion-transfer", "kling-3.0-motion"], note: "Kling 2.6 base is cheap; Kling 3.0 is premium." },
@@ -4244,6 +4341,65 @@ const DIALOGUE_V4_MAX_CHARS = 10000
  */
 const V4_TURBO_MAX_CHARS = 10000
 
+/**
+ * Gemini 3.8 (Flash-Lite, Flash) speech, one speaker: its own 70 voices, its
+ * closed list of `<angle>` tone tags, a free-text style per line. No language
+ * field, no timings, no neighbour text, no ElevenLabs levers. From the
+ * provider's schema (2026-11-12); whether each tag is performed rather than
+ * read aloud is to be checked on staging.
+ */
+const GEMINI_3_8_TTS_SHEET: TtsCapabilities = {
+  audioTags: true,
+  tagSyntax: "angle",
+  tags: GEMINI_3_8_TONE_TAGS,
+  ssmlBreaks: false,
+  levers: [],
+  languageCode: false,
+  timestamps: false,
+  stitching: false,
+  maxChars: GEMINI_TTS_MAX_CHARS,
+  // No picker: the language follows the text.
+  languages: [],
+  voices: GEMINI_3_8_TTS_VOICES,
+  defaultVoice: GEMINI_3_8_DEFAULT_VOICE,
+  direction: { styleMaxChars: TTS_DIRECTION_MAX_CHARS },
+  ratePer1kChars: true,
+  // Two-speaker dialogue (decided 2026-11-12): one or two voices, a style per line, filler words on request.
+  dialogueSpeakers: 2,
+  fillerWords: true,
+  // A dialogue's file is chosen as one speaker's is: MP3 or the WAV as rendered (decided 2026-11-13).
+  dialogueAnyOutputFormat: true,
+}
+
+/**
+ * Gemini 3.1 Flash and 2.5 Pro speech, one speaker: 30 voices, `[square]`
+ * tone tags written freely (sent as written), and the speaker's style, pace,
+ * accent and audio profile. Otherwise as the 3.8 sheet.
+ */
+const GEMINI_3_1_TTS_SHEET: TtsCapabilities = {
+  audioTags: true,
+  ssmlBreaks: false,
+  levers: [],
+  languageCode: false,
+  timestamps: false,
+  stitching: false,
+  maxChars: GEMINI_TTS_MAX_CHARS,
+  languages: [],
+  voices: GEMINI_3_1_TTS_VOICES,
+  defaultVoice: GEMINI_3_1_DEFAULT_VOICE,
+  direction: {
+    styles: GEMINI_3_1_TTS_STYLES,
+    paces: GEMINI_3_1_TTS_PACES,
+    accents: GEMINI_3_1_TTS_ACCENTS,
+    audioProfileMaxChars: TTS_DIRECTION_MAX_CHARS,
+  },
+  ratePer1kChars: true,
+  // Two-speaker dialogue (decided 2026-11-12): one or two voices, the style, pace, accent and profile per speaker.
+  dialogueSpeakers: 2,
+  // A dialogue's file is chosen as one speaker's is: MP3 or the WAV as rendered (decided 2026-11-13).
+  dialogueAnyOutputFormat: true,
+}
+
 const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   // ── ElevenLabs TTS ──
   "elevenlabs-v3": {
@@ -4391,6 +4547,86 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       maxChars: 10000,
       languages: TTS_LANGS_MULTILINGUAL_V2,
     },
+  },
+
+  // ── Google Gemini TTS (through KIE) ──
+  // One id per model for both lanes: the same KIE model takes one speaker
+  // (Text to Speech) and two (Text to Dialogue), and dialogue costs the same per
+  // character as one speaker (decided 2026-11-12) — so `tts` AND `dialogue`,
+  // one sheet and one price row, the same rate by construction.
+  // Named voices of their own (never ElevenLabs'), no language field (the
+  // language follows the text), no timings, no neighbour text. Priced per
+  // 1,000 characters on the same count as every speech model (decided
+  // 2026-11-12, provisional until measured on staging); the flat row is the
+  // price of 1,000 characters.
+  "gemini-3-8-flash-lite-tts": {
+    id: "gemini-3-8-flash-lite-tts",
+    kind: "audio",
+    modes: ["tts", "dialogue"] as const,
+    family: "Google",
+    maker: "google",
+    label: "Gemini 3.8 Flash-Lite TTS",
+    series: "Gemini",
+    description: "Google's lightest Gemini speech model and the cheapest speech on the platform — 70 named voices grouped by use, its own tone tags (laugh, sigh, short pause and more) and a free-text style direction. The language follows the text; up to 10,000 characters per request. Also voices a dialogue of two speakers.",
+    useCases: ["tts", "voice-over", "narration", "fast", "budget"],
+    features: ["audio-tags"],
+    pricing: [
+      { identifier: "gemini-3-8-flash-lite-tts", credits: 4 },
+      { identifier: "gemini-3-8-flash-lite-tts:per-1k-chars", credits: 4, note: SPEECH_PER_1K_PRICE_NOTE },
+    ],
+    tts: GEMINI_3_8_TTS_SHEET,
+  },
+  "gemini-3-8-flash-tts": {
+    id: "gemini-3-8-flash-tts",
+    kind: "audio",
+    modes: ["tts", "dialogue"] as const,
+    family: "Google",
+    maker: "google",
+    label: "Gemini 3.8 Flash TTS",
+    series: "Gemini",
+    description: "Google's Gemini 3.8 speech model — the same 70 voices, tone tags and free-text style direction as Flash-Lite, from the larger model of the generation. The language follows the text; up to 10,000 characters per request. Also voices a dialogue of two speakers.",
+    useCases: ["tts", "voice-over", "narration", "expressive"],
+    features: ["audio-tags"],
+    pricing: [
+      { identifier: "gemini-3-8-flash-tts", credits: 6 },
+      { identifier: "gemini-3-8-flash-tts:per-1k-chars", credits: 6, note: SPEECH_PER_1K_PRICE_NOTE },
+    ],
+    // A one-off clone (`replica`, decided 2026-11-13) on 3.8 Flash alone: its Flash-Lite sibling refuses it.
+    tts: { ...GEMINI_3_8_TTS_SHEET, replica: true },
+  },
+  "gemini-3-1-flash-tts": {
+    id: "gemini-3-1-flash-tts",
+    kind: "audio",
+    modes: ["tts", "dialogue"] as const,
+    family: "Google",
+    maker: "google",
+    label: "Gemini 3.1 Flash TTS",
+    series: "Gemini",
+    description: "Google's Gemini 3.1 speech model — 30 named voices, [audio tags] written freely, and a speaking style, pace, accent and audio profile for the speaker. The language follows the text; up to 10,000 characters per request. Also voices a dialogue of two speakers.",
+    useCases: ["tts", "voice-over", "narration", "expressive"],
+    features: ["audio-tags"],
+    pricing: [
+      { identifier: "gemini-3-1-flash-tts", credits: 13 },
+      { identifier: "gemini-3-1-flash-tts:per-1k-chars", credits: 13, note: SPEECH_PER_1K_PRICE_NOTE },
+    ],
+    tts: GEMINI_3_1_TTS_SHEET,
+  },
+  "gemini-2-5-pro-tts": {
+    id: "gemini-2-5-pro-tts",
+    kind: "audio",
+    modes: ["tts", "dialogue"] as const,
+    family: "Google",
+    maker: "google",
+    label: "Gemini 2.5 Pro TTS",
+    series: "Gemini",
+    description: "Google's Gemini 2.5 Pro speech model — the same 30 voices, [audio tags] and speaker controls (style, pace, accent, audio profile) as Gemini 3.1 Flash TTS, from the Pro model. The language follows the text; up to 10,000 characters per request. Also voices a dialogue of two speakers.",
+    useCases: ["tts", "voice-over", "narration", "expressive", "long-form"],
+    features: ["audio-tags"],
+    pricing: [
+      { identifier: "gemini-2-5-pro-tts", credits: 16 },
+      { identifier: "gemini-2-5-pro-tts:per-1k-chars", credits: 16, note: SPEECH_PER_1K_PRICE_NOTE },
+    ],
+    tts: GEMINI_3_1_TTS_SHEET,
   },
   "elevenlabs-dialogue": {
     id: "elevenlabs-dialogue",

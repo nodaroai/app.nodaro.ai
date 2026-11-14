@@ -35,6 +35,7 @@ import { exposedTextCaps, exposedVideoLinkNodeIds } from "../lib/exposed-text-ca
 import { ugcPublishedGraph } from "../lib/ugc-composed-graph.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
+import { cloneRunRefusal } from "../lib/clone-app-run.js"
 import { runStatesNeedReaderRelation, runStatesProviderWords, savedNodesProviderWords } from "../lib/provider-words.js"
 import { readerCreatedWorkflow } from "../lib/provider-words-readers.js"
 
@@ -413,6 +414,17 @@ export async function presentationRoutes(app: FastifyInstance) {
       ) {
         return reply.status(400).send({ error: { ...UGC_APP_PHOTO_REQUIRED } })
       }
+      // A one-off voice clone: the viewer's own recordings and consent, never the owner's (decided
+      // 2026-11-13), or refused before anything is written (lib/clone-app-run.ts).
+      const cloneRefusal = await cloneRunRefusal(
+        (workflow.nodes ?? []) as Array<{ id: string; type?: string; data?: Record<string, unknown> }>,
+        (workflow.edges ?? []) as UgcStripEdge[],
+        inputOverrides,
+        nodeIds,
+        workflow.user_id as string,
+        req.userId!,
+      )
+      if (cloneRefusal) return reply.status(cloneRefusal.status).send({ error: cloneRefusal.error })
     }
 
     // A present-link viewer runs the owner's live graph with no Render final

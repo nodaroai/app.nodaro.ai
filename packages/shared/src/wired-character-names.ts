@@ -73,44 +73,108 @@ export interface WiredCharacterName {
  *   unnamed ones: "Character 1", "Character 2", …, skipping a number whose
  *   name (by slug) another wired character already has. Unnamed nodes are
  *   never merged.
- * - A typed name the slug cannot spell ("マヤ", "מאיה", "마야" — no Latin
- *   letter or digit) is a real name: the model reads it as typed, and the node
- *   takes the next number of the same sequence as its key (`character-N`), so
- *   it is included on every path and no two keys collide.
+ * - A typed name with a letter of another script ("マヤ", "מאיה", "마야",
+ *   and a mixed one such as "マヤ1" or "マヤ A") is a real name: the model
+ *   reads it as typed. Which character it is goes by the WHOLE name
+ *   ({@link scriptNameKey}), never by the Latin part the slug can spell, so
+ *   "マヤ1" and "レオ1" are two characters and "マヤ A" is not "A" (decided
+ *   2026-11-13). Two nodes with the same such name are ONE character, as two
+ *   "Maya" nodes are (decided 2026-11-12).
+ * - Its mention key: the name's own slug when the name has one and no other
+ *   wired character claims it ("マヤ A" alone stays `@a`); else — no slug
+ *   ("マヤ"), or a slug another character also claims — the next number of
+ *   the unnamed sequence (`character-N`), taken once per character, so it is
+ *   included on every path and no two keys collide.
+ * - A name whose letters are all Latin is keyed by its slug, exactly as before
+ *   ("Maya", "maya" and "MAYA" are one character).
  *
  * `sources` are the consuming node's incoming wires in edge-array order.
  */
 export function wiredCharacterNames(sources: readonly WiredCharacterSource[]): Map<string, WiredCharacterName> {
-  const order: Array<{ key: string; own: string }> = []
+  const order: Array<{ key: string; own: string; identity: string; ownSlug: string }> = []
   const seen = new Set<string>()
   for (const s of sources) {
     if (seen.has(s.key) || resolveEffectiveSourceType(s.type, s.sourceHandle) !== "character") continue
     seen.add(s.key)
-    order.push({ key: s.key, own: characterOwnName(s.data) })
+    const own = characterOwnName(s.data)
+    order.push({ key: s.key, own, identity: characterIdentity(own) ?? `node:${s.key}`, ownSlug: characterMentionSlug(own) })
   }
+  // Every character that would go by each slug: a Latin name always keeps its
+  // own; another name keeps it only when it is the one character claiming it.
+  const claims = new Map<string, Set<string>>()
+  for (const { identity, ownSlug } of order) {
+    if (!ownSlug) continue
+    const set = claims.get(ownSlug) ?? new Set<string>()
+    set.add(identity)
+    claims.set(ownSlug, set)
+  }
+  const keepsOwnSlug = (identity: string, ownSlug: string): boolean =>
+    !!ownSlug && (identity.startsWith(LATIN_IDENTITY) || claims.get(ownSlug)?.size === 1)
   const taken = new Set<string>()
-  for (const { own } of order) {
-    const slug = characterMentionSlug(own)
-    if (slug) taken.add(slug)
-  }
+  for (const { identity, ownSlug } of order) if (keepsOwnSlug(identity, ownSlug)) taken.add(ownSlug)
   const out = new Map<string, WiredCharacterName>()
+  /** A character (by identity) → the `character-N` its first node took. */
+  const numberedOf = new Map<string, string>()
   let next = 1
-  for (const { key, own } of order) {
-    const ownSlug = characterMentionSlug(own)
-    if (ownSlug) {
+  for (const { key, own, identity, ownSlug } of order) {
+    if (keepsOwnSlug(identity, ownSlug)) {
       out.set(key, { name: own, slug: ownSlug, unnamed: false })
+      continue
+    }
+    const same = numberedOf.get(identity)
+    if (same) {
+      out.set(key, { name: own, slug: same, unnamed: false })
       continue
     }
     while (taken.has(numberedSlug(next))) next++
     const slug = numberedSlug(next)
     taken.add(slug)
+    numberedOf.set(identity, slug)
     out.set(key, own ? { name: own, slug, unnamed: false } : { name: `${UNNAMED_CHARACTER_NAME_PREFIX} ${next}`, slug, unnamed: true })
     next++
   }
   return out
 }
 
+const LATIN_IDENTITY = "latin:"
+
+/** A letter of a script other than Latin (accented Latin letters are Latin). */
+const OTHER_SCRIPT_LETTER = /(?=\p{L})\P{Script=Latin}/u
+
+/**
+ * Which character a typed name is — two names with the same identity are one
+ * character. A name whose letters are all Latin: its slug, exactly as before.
+ * Any other name with a letter or digit: the whole name ({@link scriptNameKey}).
+ * Undefined for no name, or one with no letter or digit at all ("!!!"): such a
+ * node is a character of its own.
+ */
+function characterIdentity(name: string): string | undefined {
+  const slug = characterMentionSlug(name)
+  if (slug && !OTHER_SCRIPT_LETTER.test(name)) return `${LATIN_IDENTITY}${slug}`
+  const key = scriptNameKey(name)
+  return key ? `script:${key}` : undefined
+}
+
 const numberedSlug = (n: number): string => characterMentionSlug(`${UNNAMED_CHARACTER_NAME_PREFIX} ${n}`)
+
+/**
+ * When two typed names the slug cannot spell are the same name: the rule
+ * {@link characterMentionSlug} applies to a Latin name ("Maya", "maya" and
+ * "MAYA" are one; so are "Maya Lee" and "maya-lee"), over every script.
+ * Unicode NFKC (half-width "ﾏﾔ" is "マヤ", a decomposed Hangul syllable is the
+ * composed one), then case folded (Cyrillic "Мая" is "мая"), then every run of
+ * characters that are no letter, digit or combining mark is one separator.
+ * Marks stay: "ガ" is not "カ". "" for a name with no letter or digit at all
+ * ("!!!"), which never matches another.
+ */
+function scriptNameKey(name: string): string {
+  return name
+    .normalize("NFKC")
+    .toUpperCase()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\p{M}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+}
 
 /**
  * The slugs an unnamed character's mentions were written with before it was
@@ -176,19 +240,48 @@ export function wiredCharacterNamesOf(
 }
 
 /**
+ * The slug a Character node goes by for the node it feeds: its slug in
+ * `names`; else — a node wired only by its plain `image` pip, which `names`
+ * leaves out — the slug of the wired character that is the same name (the
+ * same whole name is the same character, in any script); else a Latin name's
+ * own slug, when no wired character of another identity goes by it; else "".
+ */
+export function wiredCharacterSlug(
+  names: ReadonlyMap<string, WiredCharacterName>,
+  nodeId: string,
+  data: unknown,
+): string {
+  const wired = names.get(nodeId)?.slug
+  if (wired) return wired
+  const own = characterOwnName(data)
+  const identity = characterIdentity(own)
+  if (!identity) return ""
+  // The wired character that IS this name (the same identity, in any script).
+  for (const n of names.values()) {
+    if (!n.unnamed && characterIdentity(n.name) === identity) return n.slug
+  }
+  // None: a Latin name still goes by its own slug — unless a wired character
+  // of ANOTHER identity goes by it ("A" beside a wired "マヤ A", decided
+  // 2026-11-13), which it must never be filed under.
+  if (!identity.startsWith(LATIN_IDENTITY)) return ""
+  const slug = characterMentionSlug(own)
+  for (const n of names.values()) if (n.slug === slug) return ""
+  return slug
+}
+
+/**
  * The key a Character node's OWN elements (held prop, styling, …) are filed
  * under for the node it feeds, so they land on that character's identity
- * bullet: its slug in `names`; else — a node wired only by its plain `image`
- * pip, which `names` leaves out — its own name's slug (the same typed name is
- * the same character); else a key of its own that no character carries, so an
- * unnamed node's elements are never merged into another character's.
+ * bullet: the slug it goes by ({@link wiredCharacterSlug}); else a key of its
+ * own that no character carries, so an unnamed node's elements are never
+ * merged into another character's.
  */
 export function wiredCharacterKey(
   names: ReadonlyMap<string, WiredCharacterName>,
   nodeId: string,
   data: unknown,
 ): string {
-  return names.get(nodeId)?.slug || characterMentionSlug(characterOwnName(data)) || `node:${nodeId}`
+  return wiredCharacterSlug(names, nodeId, data) || `node:${nodeId}`
 }
 
 /** The wired character whose slug is `slug`, if any (first in wire order). */
@@ -199,4 +292,27 @@ export function wiredCharacterBySlug(
   if (!slug) return undefined
   for (const [key, named] of names) if (named.slug === slug) return { key, named }
   return undefined
+}
+
+/**
+ * The clip each Character node wired into `consumerId` carries as its VIDEO
+ * subject (its `subjectVideoUrl`, a short single-shot clip of the character),
+ * by the slug the node goes by ({@link wiredCharacterNamesOf}) — the key
+ * `characterReferencesFromWired` groups a character by. Two nodes that are one
+ * character (the same typed name) take the first node's clip, in wire order. A
+ * node wired only by its plain `image` pip is no character and gives none.
+ * Read it only for a model that takes video subjects.
+ */
+export function wiredCharacterVideoUrls(
+  consumerId: string,
+  nodes: ReadonlyArray<{ readonly id: string; readonly type?: string | null; readonly data?: unknown }>,
+  edges: ReadonlyArray<{ readonly source: string; readonly target: string; readonly sourceHandle?: string | null }>,
+): Map<string, string> {
+  const byId = new Map(nodes.map((n) => [n.id, n] as const))
+  const out = new Map<string, string>()
+  for (const [id, named] of wiredCharacterNamesOf(consumerId, nodes, edges)) {
+    const clip = (byId.get(id)?.data as { subjectVideoUrl?: unknown } | undefined)?.subjectVideoUrl
+    if (typeof clip === "string" && clip.trim() && !out.has(named.slug)) out.set(named.slug, clip.trim())
+  }
+  return out
 }

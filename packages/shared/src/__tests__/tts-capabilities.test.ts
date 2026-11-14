@@ -1,6 +1,7 @@
+import { replicaConsentProblem, replicaModels, replicaOf, ttsReplicaProblem, ttsTakesReplica } from "../tts-capabilities.js"
 import { describe, it, expect } from "vitest"
 import { MODEL_CATALOG, SPEECH_UNIT_PRICE_NOTE } from "../model-catalog.js"
-import { TTS_PROVIDERS, MAX_TTS_CHARS_BY_PROVIDER, getMaxTtsChars, TTS_TEXT_MAX } from "../model-constants.js"
+import { TTS_PROVIDERS, MAX_TTS_CHARS_BY_PROVIDER, getMaxTtsChars, TTS_TEXT_MAX, DEFAULT_TTS_PROVIDER } from "../model-constants.js"
 import {
   TTS_PROVIDER_ALIASES,
   TTS_FALLBACK_PROVIDER,
@@ -13,6 +14,14 @@ import {
   ttsHasLever,
   ttsLanguageCodes,
   ttsSupportsTimestamps,
+  ttsNamedVoices,
+  ttsAcceptsVoice,
+  ttsNamedVoiceFor,
+  ttsAngleTags,
+  ttsDirection,
+  ttsDirectionFor,
+  ttsDirectionProblem,
+  ttsVoiceForModel,
 } from "../tts-capabilities.js"
 
 describe("speech-model capability sheets — totality", () => {
@@ -48,9 +57,12 @@ describe("speech-model capability sheets — totality", () => {
     for (const m of Object.values(MODEL_CATALOG)) {
       if (!m.tts) continue
       expect(Number.isInteger(m.tts.maxChars) && m.tts.maxChars > 0, `${m.id} maxChars`).toBe(true)
-      expect(m.tts.levers, `${m.id} must honour stability`).toContain("stability")
+      // An ElevenLabs model honours stability; a named-voice model (Gemini) takes no ElevenLabs setting at all.
+      if (m.tts.voices) expect(m.tts.levers, `${m.id} takes no ElevenLabs lever`).toEqual([])
+      else expect(m.tts.levers, `${m.id} must honour stability`).toContain("stability")
       expect(new Set(m.tts.levers).size, `${m.id} duplicate lever`).toBe(m.tts.levers.length)
-      expect(m.tts.languages.length, `${m.id} languages`).toBeGreaterThan(0)
+      // No language picker only where no language is ever sent (the text decides).
+      if (m.tts.languageCode) expect(m.tts.languages.length, `${m.id} languages`).toBeGreaterThan(0)
       expect(new Set(m.tts.languages).size, `${m.id} duplicate language`).toBe(m.tts.languages.length)
       // The `features` flag other packages already read must agree with the sheet.
       expect(m.features?.includes("audio-tags") ?? false, `${m.id} audio-tags feature`).toBe(m.tts.audioTags)
@@ -313,7 +325,7 @@ describe("elevenlabs-v4-turbo — the fast v4, added beside v4 (decided 2026-10-
     expect(getTtsCapabilities("elevenlabs-v3").maxChars).toBe(5000)
     expect(getTtsCapabilities("elevenlabs-turbo").maxChars).toBe(40000)
     expect(getTtsCapabilities("elevenlabs-multilingual").maxChars).toBe(10000)
-    expect(TTS_PROVIDERS.filter((id) => id !== "elevenlabs-v4-turbo")).toEqual(["elevenlabs-v3", "elevenlabs-v4", "elevenlabs-turbo", "elevenlabs-multilingual", "elevenlabs"])
+    expect(TTS_PROVIDERS.filter((id) => id !== "elevenlabs-v4-turbo" && !id.startsWith("gemini-"))).toEqual(["elevenlabs-v3", "elevenlabs-v4", "elevenlabs-turbo", "elevenlabs-multilingual", "elevenlabs"])
   })
 
   it("the narration recommendation keeps v4 first and places v4 Turbo after v3, before Turbo v2.5", async () => {
@@ -373,3 +385,147 @@ describe("field mappings — the neighbour text fields are mappable", () => {
     expect(NODE_MAPPABLE_FIELDS["text-to-speech"]).toEqual(["directText", "previousText", "nextText"])
   })
 })
+
+describe("Gemini speech — four models beside ElevenLabs (decided 2026-11-12)", () => {
+  const GEMINI_3_8 = ["gemini-3-8-flash-lite-tts", "gemini-3-8-flash-tts"]
+  const GEMINI_3_1 = ["gemini-3-1-flash-tts", "gemini-2-5-pro-tts"]
+
+  it("each is a text-to-speech model of Google's, priced per 1,000 characters; ElevenLabs v4 stays the default", () => {
+    for (const id of [...GEMINI_3_8, ...GEMINI_3_1]) {
+      expect(TTS_PROVIDERS as readonly string[]).toContain(id)
+      expect(MODEL_CATALOG[id]?.maker).toBe("google")
+      expect(MODEL_CATALOG[id]?.modes).toEqual(["tts", "dialogue"]) // one id for one speaker and two: dialogue priced on the one-speaker row by construction
+      expect(getTtsCapabilities(id).ratePer1kChars).toBe(true)
+      expect(MODEL_CATALOG[id]!.pricing.map((p) => p.identifier)).toEqual([id, `${id}:per-1k-chars`])
+    }
+    expect(DEFAULT_TTS_PROVIDER).toBe("elevenlabs-v4")
+  })
+
+  it("named voices only: 70 grouped by use on 3.8, the same 30 on 3.1 and 2.5; a voice of one list is not a voice of the other", () => {
+    for (const id of GEMINI_3_8) {
+      const voices = ttsNamedVoices(id)!
+      expect(voices).toHaveLength(70)
+      expect(voices.every((v) => v.group !== undefined)).toBe(true)
+      expect(new Set(voices.map((v) => v.id)).size).toBe(70)
+      expect(getTtsCapabilities(id).defaultVoice).toBe("Fola")
+      expect(ttsAcceptsVoice(id, "Fola")).toBe(true)
+    }
+    for (const id of GEMINI_3_1) {
+      expect(ttsNamedVoices(id)).toHaveLength(30)
+      expect(getTtsCapabilities(id).defaultVoice).toBe("Kore")
+      expect(ttsAcceptsVoice(id, "Fola")).toBe(false) // a 3.8 voice (KIE refuses it: 422)
+      expect(ttsAcceptsVoice(id, "Kore")).toBe(true)
+    }
+    // Every default is on its own list, and an ElevenLabs model takes any voice id (its own checks apply).
+    for (const id of [...GEMINI_3_8, ...GEMINI_3_1]) expect(ttsAcceptsVoice(id, getTtsCapabilities(id).defaultVoice!)).toBe(true)
+    expect(ttsNamedVoices("elevenlabs-v4")).toBeUndefined()
+    expect(ttsAcceptsVoice("elevenlabs-v4", "Rachel")).toBe(true)
+  })
+
+  it("ttsNamedVoiceFor: the voice asked for when the model speaks it, else the model's default; nothing on ElevenLabs", () => {
+    expect(ttsNamedVoiceFor("gemini-3-8-flash-tts", "Zephyr")).toBe("Zephyr")
+    expect(ttsNamedVoiceFor("gemini-3-8-flash-tts", "Rachel")).toBe("Fola")
+    expect(ttsNamedVoiceFor("gemini-3-1-flash-tts", undefined)).toBe("Kore")
+    expect(ttsNamedVoiceFor("elevenlabs-v4", "Rachel")).toBeUndefined()
+  })
+
+  it("no ElevenLabs lever, no language field, no timings, no neighbour text, a 10,000-character cap", () => {
+    for (const id of [...GEMINI_3_8, ...GEMINI_3_1]) {
+      const c = getTtsCapabilities(id)
+      expect(c).toMatchObject({ levers: [], languageCode: false, languages: [], timestamps: false, stitching: false, ssmlBreaks: false, maxChars: 10000, audioTags: true })
+      expect(getMaxTtsChars(id)).toBe(10000)
+    }
+  })
+
+  it("tags: 3.8 writes its own <angle> tags from a closed list; 3.1 / 2.5 take [square] tags as written", () => {
+    for (const id of GEMINI_3_8) {
+      expect(ttsAngleTags(id)).toContain("laugh")
+      expect(ttsAngleTags(id)).toContain("short pause")
+      expect(ttsAngleTags(id)).toHaveLength(40)
+    }
+    for (const id of [...GEMINI_3_1, "elevenlabs-v4"]) expect(ttsAngleTags(id)).toBeUndefined()
+  })
+
+  it("direction: free text per line on 3.8; style, pace, accent and audio profile on 3.1 / 2.5; none on ElevenLabs", () => {
+    for (const id of GEMINI_3_8) expect(ttsDirection(id)).toEqual({ styleMaxChars: 1000 })
+    for (const id of GEMINI_3_1) {
+      const d = ttsDirection(id)!
+      expect(d.styles).toContain("Deadpan")
+      expect(d.paces).toContain("Staccato")
+      expect(d.accents).toContain("British (RP)")
+      expect(d.audioProfileMaxChars).toBe(1000)
+      expect(d.styleMaxChars).toBeUndefined()
+    }
+    expect(ttsDirection("elevenlabs-v4")).toBeUndefined()
+  })
+
+  it("ttsDirectionFor keeps only what the model takes, trimmed; ttsDirectionProblem judges only that", () => {
+    const all = { styleDirection: "  slow and dry ", pace: "Staccato", accent: "Australian", audioProfile: "A narrator" }
+    expect(ttsDirectionFor("gemini-3-8-flash-lite-tts", all)).toEqual({ styleDirection: "slow and dry" })
+    expect(ttsDirectionFor("gemini-3-1-flash-tts", { ...all, styleDirection: "Deadpan" })).toEqual({ styleDirection: "Deadpan", pace: "Staccato", accent: "Australian", audioProfile: "A narrator" })
+    expect(ttsDirectionFor("gemini-3-1-flash-tts", all)).toEqual({ pace: "Staccato", accent: "Australian", audioProfile: "A narrator" })
+    expect(ttsDirectionFor("elevenlabs-v4", all)).toEqual({})
+    expect(ttsDirectionProblem("gemini-3-8-flash-tts", all)).toBeUndefined()
+    expect(ttsDirectionProblem("gemini-3-8-flash-tts", { styleDirection: "x".repeat(1001) })).toMatchObject({ field: "styleDirection" })
+    expect(ttsDirectionProblem("gemini-3-1-flash-tts", all)).toMatchObject({ field: "styleDirection" })
+    expect(ttsDirectionProblem("gemini-3-1-flash-tts", { pace: "Slow" })).toMatchObject({ field: "pace" })
+    expect(ttsDirectionProblem("gemini-2-5-pro-tts", { accent: "" })).toBeUndefined()
+    expect(ttsDirectionProblem("elevenlabs-v4", { pace: "Slow" })).toBeUndefined()
+  })
+})
+
+describe("ttsVoiceForModel — the editor's model-switch rule where the editor is not there (decided 2026-11-13)", () => {
+  it("an ElevenLabs voice on a Gemini model becomes the model's default; a voice of its own list stays", () => {
+    expect(ttsVoiceForModel("gemini-3-8-flash-tts", "Rachel")).toBe("Fola")
+    expect(ttsVoiceForModel("gemini-3-1-flash-tts", "Fola")).toBe("Kore") // a 3.8 voice is not on 3.1's list
+    expect(ttsVoiceForModel("gemini-3-8-flash-tts", "Zephyr")).toBe("Zephyr")
+    expect(ttsVoiceForModel("gemini-2-5-pro-tts", "")).toBeUndefined()
+    expect(ttsVoiceForModel("gemini-2-5-pro-tts", undefined)).toBeUndefined()
+  })
+
+  it("a Gemini voice on an ElevenLabs model becomes no voice (the deployment's default); an ElevenLabs voice stays", () => {
+    expect(ttsVoiceForModel("elevenlabs-v4", "Fola")).toBeUndefined()
+    expect(ttsVoiceForModel("elevenlabs-turbo", "Kore")).toBeUndefined()
+    expect(ttsVoiceForModel("elevenlabs-v4", "Rachel")).toBe("Rachel")
+    expect(ttsVoiceForModel("elevenlabs-v4", "21m00Tcm4TlvDq8ikWAM")).toBe("21m00Tcm4TlvDq8ikWAM")
+    expect(ttsVoiceForModel(undefined, "Puck")).toBeUndefined() // no model: the fallback model, ElevenLabs
+  })
+
+  it("no Gemini voice name is also an ElevenLabs premade name", () => {
+    const premade = ["Rachel", "Aria", "Roger", "Sarah", "Laura", "Charlie", "George", "Callum", "River", "Liam", "Charlotte", "Alice", "Matilda", "Will", "Jessica", "Eric", "Chris", "Brian", "Daniel", "Lily", "Bill"]
+    for (const id of ["gemini-3-8-flash-tts", "gemini-3-1-flash-tts"]) {
+      for (const v of ttsNamedVoices(id)!) expect(premade, v.id).not.toContain(v.id)
+    }
+  })
+})
+
+describe("a one-off clone (replica, decided 2026-11-13)", () => {
+  it("3.8 Flash takes it; 3.8 Flash-Lite (KIE refuses it), 3.1, 2.5 and every ElevenLabs model do not", () => {
+    expect(ttsTakesReplica("gemini-3-8-flash-tts")).toBe(true)
+    for (const id of ["gemini-3-8-flash-lite-tts", "gemini-3-1-flash-tts", "gemini-2-5-pro-tts", "elevenlabs-v4", undefined]) expect(ttsTakesReplica(id), String(id)).toBe(false)
+    expect(replicaModels()).toEqual(["gemini-3-8-flash-tts"])
+  })
+
+  it("replicaOf reads two https links; ttsReplicaProblem refuses one on a model that does not clone, and a malformed one", () => {
+    const ok = { sourceAudioUrl: "https://a.example/s.wav", consentAudioUrl: "https://a.example/c.wav" }
+    expect(replicaOf(ok)).toEqual(ok)
+    expect(replicaOf({ ...ok, sourceAudioUrl: "http://a.example/s.wav" })).toBeUndefined()
+    expect(replicaOf({ sourceAudioUrl: "https://a" })).toBeUndefined()
+    expect(ttsReplicaProblem("gemini-3-8-flash-tts", ok)).toBeUndefined()
+    expect(ttsReplicaProblem("gemini-3-8-flash-tts", undefined)).toBeUndefined()
+    expect(ttsReplicaProblem("gemini-3-8-flash-lite-tts", ok)).toBe("gemini-3-8-flash-lite-tts does not clone a voice; a one-off clone runs on gemini-3-8-flash-tts")
+    expect(ttsReplicaProblem("gemini-3-8-flash-tts", { sourceAudioUrl: "file:///etc/passwd", consentAudioUrl: ok.consentAudioUrl })).toMatch(/https link/)
+  })
+})
+
+describe("a one-off clone's consent on the API and MCP (decided 2026-11-13)", () => {
+  it("a clone must say consent: true; none asked is no problem", () => {
+    const links = { sourceAudioUrl: "https://a.example/s.wav", consentAudioUrl: "https://a.example/c.wav" }
+    expect(replicaConsentProblem(undefined)).toBeUndefined()
+    expect(replicaConsentProblem({ ...links, consent: true })).toBeUndefined()
+    for (const replica of [links, { ...links, consent: false }, { ...links, consent: "yes" }]) {
+      expect(replicaConsentProblem(replica)).toMatch(/^replica\.consent must be true: it confirms "I confirm the voice in these recordings is my own/)
+    }
+  })
+})
+

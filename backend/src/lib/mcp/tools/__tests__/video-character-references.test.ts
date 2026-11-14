@@ -120,4 +120,30 @@ describe("MCP generate_video — character_references", () => {
       ?.properties?.character_references?.items
     expect(items?.properties).toHaveProperty("voice_preset")
   })
+
+  // Video subjects (decided 2026-11-13): the route seats the clip and is the gate.
+  it("maps a character's video_url onto the route's videoUrl, and advertises it", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/text-to-video", { jobId: "j-7" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const CLIP = "https://cdn.nodaro.ai/uploads/ava.mp4"
+    await callTool(server, "generate_video", {
+      prompt: "she walks to camera",
+      model: "kling-4-flash",
+      character_references: [
+        { image_url: PORTRAIT, description: DESC, name: "Ava", video_url: CLIP },
+        { image_url: PORTRAIT, description: DESC },
+      ],
+    })
+
+    expect(received.body?.characterReferences).toEqual([
+      { imageUrl: PORTRAIT, description: DESC, name: "Ava", videoUrl: CLIP },
+      { imageUrl: PORTRAIT, description: DESC },
+    ])
+    const tool = (await listTools(server)).find((t) => t.name === "generate_video")
+    const items = (tool?.inputSchema as { properties?: Record<string, { items?: { properties?: Record<string, unknown> } }> } | undefined)
+      ?.properties?.character_references?.items
+    expect(items?.properties).toHaveProperty("video_url")
+  })
 })

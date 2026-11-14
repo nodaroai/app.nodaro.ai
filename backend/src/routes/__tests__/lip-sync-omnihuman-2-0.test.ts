@@ -21,6 +21,8 @@ const state = vi.hoisted(() => ({
   busy: false,
 }))
 
+// The balance check before the audio is measured (lib/lip-sync-floor-check.ts, its own test): the payer can afford it.
+vi.mock("@/lib/lip-sync-floor-check.js", () => ({ lipSyncFloorRefusal: async () => undefined }))
 vi.mock("@/lib/image-source-probe.js", () => ({ probeImageSource: async () => state.image }))
 vi.mock("@/lib/lip-sync-download-slots.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("@/lib/lip-sync-download-slots.js")>()
@@ -63,8 +65,14 @@ vi.mock("@/lib/queue.js", () => ({
 }))
 // The guard records what it would price: the identifier and the route's computeCredits.
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: (resolve: (req: unknown) => string, opts?: { computeCredits?: (body: unknown, req: unknown) => Promise<number | undefined> }) =>
-    async (req: { body: unknown }) => {
+  // As the real guard: its `beforePricing` step (the audio measurement) after its doors, then the pricing.
+  creditGuard: (
+    resolve: (req: unknown) => string,
+    opts?: { computeCredits?: (body: unknown, req: unknown) => Promise<number | undefined>; beforePricing?: (req: unknown, reply: unknown) => Promise<unknown> },
+  ) =>
+    async (req: { body: unknown }, reply: { sent: boolean }) => {
+      await opts?.beforePricing?.(req, reply)
+      if (reply.sent) return
       state.guardCalls.push({ identifier: resolve(req), base: await opts?.computeCredits?.(req.body, req) })
     },
   reserveCreditsForJob: vi.fn().mockResolvedValue({ usageLogId: "u-1", creditsReserved: 1, watermark: false }),
@@ -173,21 +181,21 @@ describe("POST /v1/lip-sync — OmniHuman 2.0", () => {
     expect(insertJob).not.toHaveBeenCalled()
   })
 
-  it("leaves 1.5 as it was: its bucket id from the sent length, its levers, no download — and no held seconds a request smuggled in", async () => {
-    state.audio = { seconds: 999, bytes: 1 }
+  it("1.5, priced by a length bucket, is priced on the length it measures, never the one sent (decided 2026-11-13) — its levers as they were, and no held seconds a request smuggled in", async () => {
+    // The request says 5 s (the 15 s bucket); the audio plays 40.2 s (the 60 s bucket).
+    state.audio = { seconds: 40.2, bytes: 1 }
     const res = await app.inject({
       method: "POST",
       url: "/v1/lip-sync",
-      payload: body({ provider: "omnihuman-1-5", audioDurationSec: 25, resolution: "1080p", seed: 7, __lipSyncBilledSeconds: 1, __lipSyncAudioSec: 1 }),
+      payload: body({ provider: "omnihuman-1-5", audioDurationSec: 5, resolution: "1080p", seed: 7, __lipSyncBilledSeconds: 1, __lipSyncAudioSec: 1 }),
     })
     expect(res.statusCode).toBe(200)
-    expect(state.downloads).toBe(0)
-    expect(state.guardCalls).toEqual([{ identifier: "omnihuman-1-5:30s", base: undefined }])
+    expect(state.downloads).toBe(1)
+    expect(state.guardCalls).toEqual([{ identifier: "omnihuman-1-5:60s", base: undefined }])
     const row = vi.mocked(insertJob).mock.calls[0]![1] as { input_data: Record<string, unknown> }
-    expect(row.input_data.lipSyncBilledSeconds).toBeUndefined()
+    expect(row.input_data).toMatchObject({ audioDurationSec: 40.2, lipSyncBilledSeconds: 60 })
     const queued = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
-    expect(queued).toMatchObject({ provider: "omnihuman-1-5", audioDurationSec: 25, resolution: "1080p", seed: 7 })
-    expect(queued.lipSyncBilledSeconds).toBeUndefined()
+    expect(queued).toMatchObject({ provider: "omnihuman-1-5", audioDurationSec: 40.2, lipSyncBilledSeconds: 60, resolution: "1080p", seed: 7 })
   })
 
   it("held seconds a 2.0 request sends are replaced by the measured ones", async () => {
@@ -215,13 +223,14 @@ describe("POST /v1/lip-sync — OmniHuman 2.0", () => {
     expect(state.routeConfig).toMatchObject({ rateLimit: { max: 30, timeWindow: "1 minute", hook: "preValidation" } })
   })
 
-  it("resolves the rate id for 2.0 before the bucket branch", () => {
+  it("resolves the rate id for 2.0 before the bucket branch; a bucketed model's id is the measured bucket, never a sent length", () => {
     expect(resolveLipSyncIdentifier({ provider: "omnihuman-2-0", audioDurationSec: 8 })).toBe("omnihuman-2-0:per-second")
-    expect(resolveLipSyncIdentifier({ provider: "omnihuman-1-5", audioDurationSec: 8 })).toBe("omnihuman-1-5:15s")
+    expect(resolveLipSyncIdentifier({ provider: "omnihuman-1-5", audioDurationSec: 8, __lipSyncBilledSeconds: 30 })).toBe("omnihuman-1-5:30s")
+    expect(() => resolveLipSyncIdentifier({ provider: "omnihuman-1-5", audioDurationSec: 8 })).toThrow(/without its measured audio/)
   })
 })
 
-describe("POST /v1/lip-sync — the rate limit is for per-second-rate models only (decided 2026-11-12)", () => {
+describe("POST /v1/lip-sync — the rate limit is for the models that measure their audio (decided 2026-11-12, extended 2026-11-13)", () => {
   let app: FastifyInstance
 
   beforeEach(async () => {
@@ -256,18 +265,23 @@ describe("POST /v1/lip-sync — the rate limit is for per-second-rate models onl
     expect((await send("b")).statusCode).toBe(200)
   })
 
-  it("a Kling Avatar request is never limited (an editor list fanning out, a connected install), and does not use up 2.0's allowance", async () => {
+  it("a Kling Avatar request now measures its audio, so it is counted too (decided 2026-11-13), on the caller's one allowance", async () => {
     const kling = { provider: "kling-avatar", audioDurationSec: 12 }
-    for (let i = 0; i < 40; i++) expect((await send("a", kling)).statusCode, `request ${i + 1}`).toBe(200)
-    expect(state.downloads).toBe(0)
-    expect((await send("a")).statusCode).toBe(200)
+    for (let i = 0; i < 30; i++) expect((await send("a", kling)).statusCode, `request ${i + 1}`).toBe(200)
+    expect(state.downloads).toBe(30)
+    expect((await send("a", kling)).statusCode).toBe(429)
+    expect((await send("a")).statusCode).toBe(429)
+    expect(state.downloads).toBe(30)
+    expect((await send("b", kling)).statusCode).toBe(200)
   })
 
-  it("only a per-second-rate model is counted; no model named is the default, which is not one", () => {
-    expect(lipSyncRateLimitSkips({ body: { provider: "omnihuman-2-0" } })).toBe(false)
-    for (const provider of ["kling-avatar", "kling-avatar-pro", "omnihuman-1-5", "infinitalk", "seedance-2", "latentsync", undefined]) {
-      expect(lipSyncRateLimitSkips({ body: { provider } }), String(provider)).toBe(true)
+  it("every model that measures its audio is counted, the default (Kling Avatar) included; a model priced by no length never is", () => {
+    for (const provider of ["omnihuman-2-0", "kling-avatar", "kling-avatar-pro", "omnihuman-1-5", "heygen-lipsync-precision", "lipsync-2-pro", "sync-lipsync-v3", "volcengine-lipsync", undefined]) {
+      expect(lipSyncRateLimitSkips({ body: { provider } }), String(provider)).toBe(false)
     }
-    expect(lipSyncRateLimitSkips({ body: undefined })).toBe(true)
+    for (const provider of ["infinitalk", "seedance-2", "latentsync", "minimax-h3"]) {
+      expect(lipSyncRateLimitSkips({ body: { provider } }), provider).toBe(true)
+    }
+    expect(lipSyncRateLimitSkips({ body: undefined })).toBe(false)
   })
 })

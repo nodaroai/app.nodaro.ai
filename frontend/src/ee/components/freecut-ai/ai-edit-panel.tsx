@@ -54,6 +54,8 @@ interface AgentView {
   readonly key: MessageKey
   readonly vars?: Record<string, string | number>
   readonly progress?: number
+  /** The provider's own words about a step that failed. */
+  readonly detail?: string
 }
 
 interface FeedLine {
@@ -122,7 +124,7 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videoUrl, onCl
   const onEvent = (event: RunEvent) => {
     if (event.type === "plan") setPlan(event.plan)
     else if (event.type === "agent") {
-      setAgents((prev) => ({ ...prev, [event.agent]: { state: event.state, key: event.key, vars: event.vars, progress: event.progress } }))
+      setAgents((prev) => ({ ...prev, [event.agent]: { state: event.state, key: event.key, vars: event.vars, progress: event.progress, detail: event.detail } }))
     } else if (event.type === "feed") {
       lineId.current += 1
       const line: FeedLine = { id: lineId.current, agent: event.agent, key: event.key, vars: event.vars }
@@ -255,6 +257,9 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videoUrl, onCl
                   <span className="h-1 overflow-hidden rounded bg-white/10">
                     <span className="block h-full transition-[width] duration-300" style={{ width: `${Math.round((view.progress ?? (view.state === "done" ? 1 : 0)) * 100)}%`, background: AGENT_COLORS[id] }} />
                   </span>
+                  {view.state === "failed" && view.detail ? (
+                    <span className="col-span-2 col-start-3 truncate text-[11px] text-white/45" dir="auto" title={view.detail}>{view.detail}</span>
+                  ) : null}
                 </li>
               )
             })}

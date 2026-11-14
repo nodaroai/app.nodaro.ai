@@ -22,6 +22,7 @@ import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem } from "@nodaro/shared/video"
 import { kling4InputProblem } from "../lib/kling4-inputs.js"
 import { videoMaterialCounts } from "../lib/video-material-counts.js"
+import { seatCharacterVideosPreHandler } from "../lib/character-video-seat.js"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import { imageRequiredError } from "../lib/video-image-required.js"
 import { composeVideoPromptText, resolveReferenceTokens } from "@nodaro/prompts/assembly"
@@ -135,7 +136,7 @@ export const textToVideoBody = z.object({
 export const textToVideoPricing: RoutePricing = {
   // Reference audio the provider would refuse (format, length) is refused here,
   // before the reservation — the same check /v1/generate-video runs.
-  prechecks: [applyAudioSoundtrackPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
+  prechecks: [seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
     const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
@@ -481,12 +482,12 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
   // A character whose portrait the editor also seated in the reference images
   // counts ONCE on a one-budget model, through the same function
   // /v1/generate-video reads (lib/video-material-counts.ts).
-  const materialCounts = videoMaterialCounts({ provider, characterReferences: parsed.data.characterReferences, referenceImageUrls })
+  const materialCounts = videoMaterialCounts({ provider, characterReferences: parsed.data.characterReferences, referenceImageUrls, referenceVideoUrls })
   const characterProblem = videoCharacterRefProblem({
     provider,
     characterReferences: parsed.data.characterReferences,
     imageCount: materialCounts.imageCountForCharacterRule,
-    videoCount: referenceVideoUrls?.length ?? 0,
+    videoCount: materialCounts.videoCountForCharacterRule,
     hasStartFrame: false,
     audioCount: referenceAudioUrls?.length ?? 0,
   })
@@ -501,7 +502,8 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
     hasStartFrame: false,
     hasEndFrame: false,
     referenceImageCount: referenceImageUrls?.length ?? 0,
-    referenceVideoCount: referenceVideoUrls?.length ?? 0,
+    // A video subject's clip seat is the subject, not one more video.
+    referenceVideoCount: materialCounts.videoCountForCharacterRule,
     referenceAudioCount: referenceAudioUrls?.length ?? 0,
     characterCount: materialCounts.unseatedCharacters,
   })

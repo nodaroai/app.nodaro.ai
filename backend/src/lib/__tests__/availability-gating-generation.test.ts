@@ -188,7 +188,8 @@ describe("the film pipeline and the Video Director: gateable features that were 
 
   it("are in the gateable universe, at a generation newer than cast-swap", () => {
     for (const id of FEATURES) expect(GATEABLE_NODE_TYPES.has(id), id).toBe(true)
-    expect(GATING_GENERATION).toBe(2)
+    // 3 since the one-off voice clone joined (decided 2026-11-13); these two are generation 2.
+    expect(GATING_GENERATION).toBe(3)
   })
 
   it("follow the profile with no override stored: on without lists, off when a whitelist leaves them out", () => {

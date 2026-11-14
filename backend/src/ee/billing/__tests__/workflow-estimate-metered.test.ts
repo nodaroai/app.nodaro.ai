@@ -144,24 +144,25 @@ describe("metered: a workflow estimate prices LLM nodes per model", () => {
 
   // GPT-6.1 Terra's price does not depend on its effort: its key is the bare
   // key at every effort, and the estimate, the badge and the workflow total
-  // quote it the same. Typical llm-chat call (1k / 1k): 2 base → 3 charged;
-  // ai-writer (2k / 2k): 3 base → 4.
+  // quote it the same. Its added input is counted at the 25,500 ceiling
+  // (decided 2026-11-13). The charged figure of a typical llm-chat call
+  // (1k / 1k) is 6, of an ai-writer call (2k / 2k) 7.
   it("GPT-6.1 Terra: the same key, quote and workflow estimate at every effort", async () => {
     const terra = (data: Record<string, unknown>): EstimateNode => ({ id: "terra", type: "llm-chat", data: { llmModel: "gpt-6.1-terra", ...data } })
     for (const reasoningEffort of [undefined, "none", "low", "high", "max"]) {
       expect(getNodeModelIdentifier(terra(reasoningEffort ? { reasoningEffort } : {})), String(reasoningEffort)).toBe("llm-chat:gpt-6.1-terra")
     }
-    expect(charged("llm-chat:gpt-6.1-terra")).toBe(3)
-    expect(charged("ai-writer:gpt-6.1-terra")).toBe(4)
+    expect(charged("llm-chat:gpt-6.1-terra")).toBe(6)
+    expect(charged("ai-writer:gpt-6.1-terra")).toBe(7)
     // A key naming an effort is no key for a model whose price does not depend on it.
     expect(isMeteredLlmQuoteId("llm-chat:gpt-6.1-terra:effort-high")).toBe(false)
     const auto = await estimateWorkflowCreditsDetailed([terra({})], [])
     const high = await estimateWorkflowCreditsDetailed([terra({ reasoningEffort: "high" })], [])
-    expect(auto).toEqual({ credits: 3, estimate: true, perNode: { terra: { credits: 3, estimate: true } } })
+    expect(auto).toEqual({ credits: 6, estimate: true, perNode: { terra: { credits: 6, estimate: true } } })
     expect(high).toEqual(auto)
-    // A Terra node with its own expected call size is priced at that size (2k / 2k → 4).
+    // A Terra node with its own expected call size is priced at that size (2k / 2k → 7).
     const sized = await estimateWorkflowCreditsDetailed([terra({ reasoningEffort: "high", expectedUsage: { inputTokens: 2_000, outputTokens: 2_000 } })], [])
-    expect(sized.credits).toBe(4)
+    expect(sized.credits).toBe(7)
   })
 
   // The effort suffix still prices on a model flagged `effortPriced` (none is today): Terra

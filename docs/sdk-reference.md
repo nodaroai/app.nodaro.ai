@@ -3191,8 +3191,8 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `referenceVideoUrls` ≤ 5 at 2–20 s together, `characterReferences` ≤ 7, or a
 > start frame beside them) runs in reference mode, 15 materials in all.
 > `referenceAudioUrls` clip N (≤ 7) becomes the voice of `characterReferences`
-> entry N; a character needs 2–4 images to carry a voice, otherwise its clip is
-> dropped, as is any clip past the last character. `duration` 3–20 (default 5), 720p only
+> entry N; a character needs 2–4 images, or a `videoUrl`, to carry a voice,
+> otherwise its clip is dropped, as is any clip past the last character. `duration` 3–20 (default 5), 720p only
 > (anything else → 720p), no end frame, no seed, no `audioSoundtrack`. See
 > [Kling 4.0 Flash](nodes/ai-video/generate-video.md#kling-40-flash).
 > **PixVerse V6 Max** (`pixverse-v6-max`) runs `run("generate-video")` with an
@@ -3248,7 +3248,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 
 > **Continuity across clips.** `run("text-to-speech", { text, previousText, nextText, … })`
 > passes the lines spoken just before and after the clip; a model that stitches
-> (ElevenLabs v4, v4 Turbo, Turbo v2.5 and Multilingual v2; not v3) keeps one intonation across clips produced separately. Up to 1,000
+> (ElevenLabs v4, v4 Turbo, Turbo v2.5 and Multilingual v2; not v3, Gemini 3.8 Flash-Lite, Gemini 3.8 Flash, Gemini 3.1 Flash and Gemini 2.5 Pro) keeps one intonation across clips produced separately. Up to 1,000
 > characters each; context is not spoken. See the Text to Speech node docs.
 
 > **Timings and the file on `text-to-speech`.** `TextToSpeechParams.withTimestamps: true`
@@ -3261,6 +3261,18 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > and `output_data.audioMimeType` names it (`audio/mpeg` or `audio/wav`) — name a
 > download from that, not from the format asked for. The values are
 > `TTS_OUTPUT_FORMATS` in `@nodaro/shared/models`.
+
+> **Gemini speech models.** `provider` also takes Google's
+> `gemini-3-8-flash-lite-tts`, `gemini-3-8-flash-tts`, `gemini-3-1-flash-tts` and
+> `gemini-2-5-pro-tts`. Each speaks only its own named voices (`voices.list({ model })`;
+> another `voice` is a `400` before anything is charged, none runs the model's
+> default), takes no `languageCode` (the text decides) and returns no timings. Their
+> style direction: `styleDirection` — free text on 3.8 ("slow and dry, like a
+> night-shift radio host"), one of the model's styles on 3.1 / 2.5 — and on 3.1 / 2.5
+> `pace`, `accent` and `audioProfile`; each model's lists are its capability sheet's
+> `direction` (`getTtsCapabilities(provider).direction`). Not spoken and not billed.
+> On 3.8 a `[square]` tag is sent as its own `<angle>` tag (`[laughs]` → `<laugh>`) or
+> removed. Prices are per 1,000 characters — see the Text to Speech node docs.
 
 > **Presets on `generate-image`.** `GenerateImageParams.presetId` applies a node
 > preset (a factory id from `presets.listFactory("generate-image")`, or one of
@@ -3472,7 +3484,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 
 > **Keeping a person's face (Gemini Omni).** `GenerateVideoParams` and
 > `TextToVideoParams` take `characterReferences` — up to 3
-> `VideoCharacterReference`s (`{ imageUrl, description, bodyImageUrl?, name?, voice? }`;
+> `VideoCharacterReference`s (`{ imageUrl, description, bodyImageUrl?, extraImageUrls?, name?, voice?, videoUrl? }`;
 > `voice` is `{ preset, description?, exampleLine? }` — `preset` is one of the
 > `GEMINI_OMNI_VOICE_PRESETS` ids exported by `@nodaro/shared`, and pins one voice
 > to that character across clips).
@@ -3484,7 +3496,12 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `imageUrl`, `bodyImageUrl` and up to 3 `extraImageUrls`, a start frame is
 > allowed, and `voice` is refused; `kling-4-flash` takes them the same way, with
 > `referenceAudioUrls` clip N as entry N's voice when that entry has 2–4 images
-> (otherwise the clip is dropped). They add no credit charge. Prefer them over
+> or a `videoUrl` (otherwise the clip is dropped). On both Kling 4.0 ids a
+> `videoUrl` — a 3–8 s single-shot clip of the character — makes the entry a
+> subject built from that video (at most 3 per request). The clip rides as one
+> of the 5 reference videos and is billed as one; any other model refuses it.
+> See [Video subjects](nodes/ai-video/generate-video.md#video-subjects-kling-40-and-kling-40-flash).
+> Characters themselves add no credit charge. Prefer them over
 > `referenceImageUrls` whenever the face must hold.
 
 > **Naming an image reference in the prompt.** On
@@ -5052,8 +5069,8 @@ const dub = await client.nodes.runAndWait("lip-sync", {
   provider: "volcengine-lipsync",
   mode: "basic",          // complex scenes
   openScenedet: true,     // multi-speaker: scene detection + speaker ID (basic mode)
-  audioDurationSec: 42,   // buckets per-second pricing; absent → 5-min ceiling, no refund
 })
+// No length to send: the server measures the audio and charges its length's tier.
 ```
 
 Binding a creature into a shot uses the shared reference contract:
@@ -6019,14 +6036,25 @@ one-shot single-voice / multi-speaker recasts plus the interactive Voice
 Changer Pro flow (`analyze` → `recast({ output: "stems" })` → `exportMix`),
 voice design/remix, and dubbing.
 
-#### `list()`
+#### `list(params?)`
 
 ```ts
-list(): Promise<Voice[]>
+list(params?: { model?: string }): Promise<Voice[]>
 ```
 
 List the premade ElevenLabs voices (`GET /v1/voices`). Falls back to a curated
 set server-side when no ElevenLabs API key is configured.
+
+With `model` set to one of Google's Gemini speech models
+(`gemini-3-8-flash-lite-tts`, `gemini-3-8-flash-tts`, `gemini-3-1-flash-tts`,
+`gemini-2-5-pro-tts`), it lists that model's own voices instead — a Gemini model
+speaks only those (`voice` on `text-to-speech` must be one of them). Each row's
+`voice_id` and `name` are the voice's name, and `use_case` is what it is meant
+for on 3.8 (`tutor`, `commercial-voiceover`, `instructional`, `podcast`,
+`storyteller`, `digital-assistant`, `call-center`, `concierge`, `tech-support`,
+`professional`; empty on 3.1 / 2.5); no preview or gender. Any other model, or
+none, lists the premade voices as before. The same lists are on each model's
+capability sheet (`getTtsCapabilities(model).voices` in `@nodaro/shared`).
 
 On a deployment that serves voice previews from its own host
 (`VOICE_PREVIEW_PROXY=true`), each voice's `preview_url` here and in
@@ -6035,6 +6063,7 @@ the provider's address: resolve it against the API's origin to play it.
 
 ```ts
 const voices = await client.voices.list()
+const geminiVoices = await client.voices.list({ model: "gemini-3-8-flash-tts" })
 ```
 
 #### `searchLibrary(params?)`
@@ -6182,7 +6211,9 @@ client for source compatibility but are `@deprecated`: the routes answer
 `410` with `error.code = "voice_cloning_retired"` and the call rejects with
 that error. Clones created before the retirement still appear in `listClones()`
 and still work as voice ids everywhere a voice is accepted. For a new custom
-voice, use `design(input)` below.
+voice, use `design(input)` below. The one exception is a one-off clone for a
+single request on Gemini 3.8 Flash (`replica` on `nodes.textToSpeech` and on a
+`voices.textToDialogue` speaker), which is never saved as a voice.
 
 #### `deleteClone(id)`
 
@@ -6543,8 +6574,11 @@ standing authorization (`contentRights.authorize()`).
 
 ```ts
 textToDialogue(input: {
-  dialogue: Array<{ text: string; voice: string }>  // in speaking order
-  provider?: "elevenlabs-dialogue" | "elevenlabs-dialogue-v4"  // v3 (default) or v4
+  dialogue: Array<{ text: string; voice: string; styleDirection?: string }>  // in speaking order; styleDirection: Gemini 3.8
+  provider?: DialogueProvider                        // v3 (default), "elevenlabs-dialogue-v4", or a Gemini model
+  speakers?: Array<{ voice: string; styleDirection?: string; pace?: string; accent?: string; audioProfile?: string }>  // Gemini 3.1 / 2.5
+  fillerWords?: boolean                              // Gemini 3.8, two voices
+  outputFormat?: TtsOutputFormat                     // Gemini: "mp3_44100_128" (default) | "mp3_44100_192" | "wav_24000"
   stability?: number                                 // v3: exactly 0, 0.5 or 1; v4: any 0–1
   similarityBoost?: number                           // v4 only (v3 ignores it), 0–1
   languageCode?: string                              // ISO 639-1 hint, auto-detected when omitted
@@ -6568,6 +6602,19 @@ at no extra credits — `output_data.transcript`, a `Transcript`
 `segments[]` entry per line, `speaker` being the line's `voice` as you sent it.
 Pass `transcript.words` to `addCaptions({ captions, autoTranscribe: false })` to
 caption the dialogue without a second transcription.
+
+> **Gemini dialogue.** `provider` may be one of Google's Gemini speech models
+> (`gemini-3-8-flash-lite-tts`, `gemini-3-8-flash-tts`, `gemini-3-1-flash-tts`,
+> `gemini-2-5-pro-tts`) for one or two speakers: each line's `voice` one of the
+> model's own voices (`voices.list({ model })`), at most two distinct, 10,000
+> characters in total. On 3.8 a line's `styleDirection` says how it is spoken and
+> `fillerWords: true` adds filler words between two speakers; on 3.1 / 2.5
+> `speakers` gives each voice its style, pace, accent and audio profile (the
+> model's lists: `getDialogueCapabilities(provider).direction`). A refused voice
+> or direction is a `400` before anything is charged. Priced at the model's
+> per-character rate for one speaker, over every line; no `transcript`.
+> `outputFormat` picks the file as on `textToSpeech` (the WAV as rendered, or MP3
+> encoded from it); the ElevenLabs dialogue models deliver the default MP3 only.
 
 ---
 

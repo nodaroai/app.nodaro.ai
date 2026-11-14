@@ -39,7 +39,16 @@ import {
 import {
   withWiredSettings,
 } from "@nodaro/shared/nodes"
+import {
+  characterReferencesFromWired,
+  characterVideoUrls,
+  videoCharacterRefCap,
+  videoCharacterVideoCap,
+} from "@nodaro/shared/video"
+import { wiredCharacterVideoUrls } from "@nodaro/shared/entities"
+import { hasFeature } from "@nodaro/shared/model-catalog"
 import { bypassTeleports } from "@nodaro/render-rules"
+import { expandWiredCharacterRefsForVideo } from "@/lib/video-prompt-assembly"
 import { resolveNodeInputs } from "@/components/editor/workflow-editor/node-input-resolver"
 import { seedanceRefQuoteKey } from "@/lib/seedance-ref-quote-key"
 
@@ -84,7 +93,12 @@ export function seedanceRefQuoteRequest(
     audioSoundtrack: typeof data.audioSoundtrack === "boolean" ? data.audioSoundtrack : undefined,
     audioRefCount: audioEdges.length,
   })
-  if (clipEdges.length === 0 && !soundtrack) return undefined
+  // Kling 4.0 video subjects: a wired Character's own clip rides as one more
+  // reference video (the route seats it, `seatCharacterVideos`), so it moves
+  // the price as a wired clip does — the very references the Run sends.
+  // Only Generate Video carries video subjects (the older video nodes never do).
+  const subjectClips = type === "generate-video" && soundtrackProvider ? characterSubjectClips(node.id, nodes, edges, soundtrackProvider) : []
+  if (clipEdges.length === 0 && !soundtrack && subjectClips.length === 0) return undefined
 
   let provider: string
   let resolution: string | undefined
@@ -106,10 +120,11 @@ export function seedanceRefQuoteRequest(
   const stale = new Set(clipEdges.filter((e) => rerunIds.has(e.source)).map((e) => e.id))
   const readable = edges.filter((e) => !stale.has(e.id))
   const inputs = resolveNodeInputs(node, nodes as WorkflowNode[], readable)
-  const urls = isGeneration
+  const wiredUrls = isGeneration
     ? (inputs.referenceVideoUrls ?? []).filter((u): u is string => typeof u === "string" && u.length > 0)
     : inputs.videoUrl ? [inputs.videoUrl] : []
-  const unknown = Math.max(0, clipEdges.length - urls.length)
+  const unknown = Math.max(0, clipEdges.length - wiredUrls.length)
+  const urls = [...wiredUrls, ...subjectClips.filter((c) => !wiredUrls.includes(c))]
   const soundtrackAudioUrl = soundtrack
     ? (inputs.referenceAudioUrls ?? []).find((u): u is string => typeof u === "string" && u.length > 0)
     : undefined
@@ -135,6 +150,25 @@ export function seedanceRefQuoteRequest(
     ...(isGeminiOmniPerSecondProvider(provider) && typeof data.videoTrimStart === "number" ? { videoTrimStart: data.videoTrimStart } : {}),
     ...(isGeminiOmniPerSecondProvider(provider) && typeof data.videoTrimEnd === "number" ? { videoTrimEnd: data.videoTrimEnd } : {}),
   }
+}
+
+/**
+ * The clips the Run's wired characters carry as video subjects on `provider`
+ * (empty on a model that takes none) — read through the same grouping the Run
+ * sends (`characterReferencesFromWired`, capped at the model's characters).
+ */
+function characterSubjectClips(
+  consumerNodeId: string,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  provider: string,
+): string[] {
+  if (videoCharacterVideoCap(provider) === 0 || !hasFeature(provider, "character-subjects")) return []
+  const clips = wiredCharacterVideoUrls(consumerNodeId, nodes, edges)
+  if (clips.size === 0) return []
+  return characterVideoUrls(
+    characterReferencesFromWired(expandWiredCharacterRefsForVideo(consumerNodeId, nodes, edges), clips).slice(0, videoCharacterRefCap(provider)),
+  )
 }
 
 /** The node's quote key, or undefined when its price does not follow reference clips. */

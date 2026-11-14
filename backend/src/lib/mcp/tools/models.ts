@@ -9,7 +9,7 @@ import { listUsageTransactions, USAGE_TRANSACTIONS_PAGE_MAX as USAGE_PAGE_MAX } 
 import { CreditsService } from "../../../ee/billing/credits.js"
 import { deploymentPayerActive, deploymentPayerId } from "../../deployment-payer.js"
 import { IMAGE_GIF_FRAME_SIZE, MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByKindAndFamily, modelMakerOf, type ModelCatalogEntry, type ModelKind, type ModelMakerId, type ModelMode } from "@nodaro/shared/model-catalog"
-import { SPEECH_UNIT_CREDIT_SUFFIX } from "@nodaro/shared/credits"
+import { isSpeechLengthPriceId } from "@nodaro/shared/credits"
 import { isModelDenied, recommendationsServedHere } from "../../surface-deny.js"
 import { loadChargedPrices, type ChargedPrices } from "../../pricing/charged-prices.js"
 import { getPromptTips, getPromptDoctrine } from "@nodaro/prompts/doctrine"
@@ -36,7 +36,7 @@ export interface RegisterModelsOpts {
 export function chargedPricing(rows: ModelCatalogEntry["pricing"], prices: ChargedPrices): ModelCatalogEntry["pricing"] {
   return rows.flatMap((row) => {
     const credits = prices.credits(row.identifier)
-    if (credits === undefined && row.identifier.endsWith(SPEECH_UNIT_CREDIT_SUFFIX)) return []
+    if (credits === undefined && isSpeechLengthPriceId(row.identifier)) return []
     return [credits === undefined || credits === row.credits ? row : { ...row, credits }]
   })
 }

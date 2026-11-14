@@ -33,6 +33,13 @@ import {
   llmServesDirect,
   llmTierCreditIds,
   LLM_CREDIT_RUNGS,
+  LLM_MODALITY_CAPS,
+  LLM_FILE_MODELS,
+  LLM_REFERENCE_FILES_MAX,
+  LLM_REFERENCE_FILES_MAX_TOTAL_BYTES,
+  LLM_REFERENCE_FILES_MAX_PAGES,
+  LLM_REFERENCE_FILE_MIME_TYPES,
+  llmAcceptsFiles,
 } from "../llm-models.js"
 import type { LlmModelDef, LlmTier, LlmFeature } from "../llm-models.js"
 import { PIPELINE_ACCEPTED_SCRIPT_LLMS, PIPELINE_LEGACY_PINNED_SCRIPT_LLMS, PIPELINE_PINNABLE_SCRIPT_LLMS, PipelineConfigSchema } from "../pipeline-types.js"
@@ -1136,7 +1143,8 @@ describe("gpt-6.1-terra exposure", () => {
     expect(m.supportsTemperature).toBe(false)
     expect(m.kieCollapseStream).toBeUndefined()
     expect(supportsAdvancedMode("gpt-6.1-terra")).toBe(false)
-    expect(getLlmModalityCaps("gpt-6.1-terra")).toEqual({ image: true, video: false, audio: false })
+    // Reads documents (PDF): the one model whose caps say `file` (2026-11-13).
+    expect(getLlmModalityCaps("gpt-6.1-terra")).toEqual({ image: true, video: false, audio: false, file: true })
   })
 
   it("offers low…max but never `none`: a `none` request clamps to Auto (nothing sent)", () => {
@@ -1152,6 +1160,30 @@ describe("gpt-6.1-terra exposure", () => {
   it("is the default of no feature, and the GPT-5.6 Terra entry is untouched", () => {
     expect(Object.values(LLM_FEATURE_DEFAULTS)).not.toContain("gpt-6.1-terra")
     expect(getLlmModel("gpt-5.6-terra")?.reasoningEfforts).toEqual(["none", "low", "medium", "high", "xhigh", "max"])
+  })
+})
+
+describe("the `file` modality cap (documents, decided 2026-11-13)", () => {
+  it("is declared on GPT-6.1 Terra alone, and never derived for another model", () => {
+    expect(LLM_FILE_MODELS.map((m) => m.id)).toEqual(["gpt-6.1-terra"])
+    expect(Object.entries(LLM_MODALITY_CAPS).filter(([, c]) => c.file).map(([id]) => id)).toEqual(["gpt-6.1-terra"])
+    for (const m of LLM_MODELS) expect(llmAcceptsFiles(m.id), m.id).toBe(m.id === "gpt-6.1-terra")
+    expect(llmAcceptsFiles(undefined)).toBe(false)
+    expect(llmAcceptsFiles("no-such-model")).toBe(false)
+    // Its siblings on the same endpoint do not read files here.
+    expect(llmAcceptsFiles("gpt-6.1-sol")).toBe(false)
+    expect(llmAcceptsFiles("gpt-5.6-terra")).toBe(false)
+  })
+
+  it("PDF only, up to 5 files, 6 MB in all and 100 pages in all", () => {
+    expect(LLM_REFERENCE_FILE_MIME_TYPES).toEqual(["application/pdf"])
+    expect(LLM_REFERENCE_FILES_MAX).toBe(5)
+    expect(LLM_REFERENCE_FILES_MAX_TOTAL_BYTES).toBe(6 * 1024 * 1024)
+    expect(LLM_REFERENCE_FILES_MAX_PAGES).toBe(100)
+  })
+
+  it("a document never enrolls a model in video analysis", () => {
+    expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gpt-6.1-terra")
   })
 })
 

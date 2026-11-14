@@ -1180,28 +1180,71 @@ jobs:
         uses: ./.github/actions/restore-ci-build
         with:
           kind: packages
-      # The five checks below run CONCURRENTLY in one step (decided
-      # 2026-10-13: they used to run one after another, ~7 min): each is a
-      # background process with its own log and exit status, waited on by PID,
-      # and printed afterwards in its own log group. A failure of any of them
-      # fails the job, except the surface report, which never does.
+      # The five checks below run in one step, in two phases (decided
+      # 2026-11-13): the type check first, ALONE, then the other four
+      # CONCURRENTLY (decided 2026-10-13: they used to run one after another,
+      # ~7 min). Each is a background process with its own log and exit
+      # status, waited on by PID once and printed in its own log group as soon
+      # as it is waited on. A failure of any of them fails the job, except the
+      # surface report, which never does; a failed type check does not stop
+      # the other four from running.
       #
-      # 1. typecheck — `npm run typecheck -- --serial` (tools/typecheck-all.mjs):
-      #    `tsc --noEmit` on TypeScript 7 (native) for frontend, backend,
-      #    packages/cli and packages/shared. One project at a time HERE: each
+      # 1. typecheck — tools/typecheck-all.mjs (`npm run typecheck`): `tsc
+      #    --noEmit` on TypeScript 7 (native) for frontend, backend,
+      #    packages/cli and packages/shared, one project at a time HERE
+      #    (`type_check` below): frontend, packages/cli and packages/shared
+      #    first (`--serial`), then the backend alone on settings of its own,
+      #    `GOMAXPROCS=2` and `-- --singleThreaded` (decided 2026-11-14). Each
       #    TS 7 run already checks on every core, and frontend + backend at
-      #    once peak above 7.7 GB (SIGKILLed in a 4-CPU / 7.7 GB container,
-      #    measured 2026-10-13); one at a time with GOMEMLIMIT=4GiB (a soft
-      #    cap: the Go GC works harder near it, it never fails a run) peaks
-      #    ~4.7 GB in ~31 s on 4 cores, leaving the other three checks (~1.4-
-      #    1.8 GB each) room on this runner (private repo: 2 vCPU / 8 GB, the
-      #    same size as a Railway pool slot).
-      #    The whole step passed in a 2-CPU / 7 GB container, peak 6.2 GB.
-      #    The parity tests get the CPU first: the checker runs at
-      #    `nice -n 19`, gen-skills and the surface report at `nice -n 10`,
-      #    and the parity run's per-test timeout is 30 s here (5 s default;
-      #    several tests scan the whole tree, ~1.7 s each on a fast laptop,
-      #    and two timed out next to TS 7 in a container).
+      #    once peaked above 7.7 GB (SIGKILLed in a 4-CPU / 7.7 GB container,
+      #    measured 2026-10-13). Beside the other four checks (~1.4-1.8 GB
+      #    each) the backend no longer fit this runner (private repo: 2 vCPU /
+      #    8 GB, the same size as a Railway pool slot), so nothing runs beside
+      #    the type check (decided 2026-11-13). Alone, at the default checkers,
+      #    it was still SIGKILLed on dev (after 132 s and 169 s), passing on
+      #    re-runs. GOMEMLIMIT=4GiB is a soft cap below the backend's live
+      #    heap: the Go GC works harder near it and never fails a run. TS
+      #    7.0.2's Go (1.26) takes its processor count from the cgroup's CPU
+      #    quota, so on a 2 vCPU slot it runs on 2 processors, where its GC
+      #    falls furthest behind and the peak is highest (a slot reported
+      #    nproc 48, cgroup cpu.max `200000 100000` and memory.max
+      #    8000000000 on 2026-11-14).
+      #    The backend's peak (max RSS, `--incremental false --noEmit`,
+      #    GOMEMLIMIT=4GiB unless said), measured on dev 2026-11-14 in a Linux
+      #    container held to 2 CPUs (cgroup cpu.max) and 7 GiB with no swap
+      #    (the linux-arm64 binary; the runners are x64), each line up to four
+      #    times, and on a 16-core Mac without a limit:
+      #
+      #      backend setting                   2-CPU container      16-core Mac
+      #      default, 4 checkers (until now)   SIGKILLed at 7 GiB   7.20 GB  13 s
+      #                                        (2 of 2 runs)
+      #      --checkers 2                      7.35 GB  36-37 s     6.66 GB  21 s
+      #      GOMEMLIMIT=3GiB --checkers 2      7.48 GB  40 s        -
+      #      --checkers 1                      6.67-6.87 GB 37-39 s 6.15 GB  34 s
+      #      --singleThreaded (chosen)         6.33-6.48 GB 38-39 s 5.40 GB  48 s
+      #      GOMEMLIMIT=3GiB --singleThreaded  6.48 GB  41 s        -
+      #      GOMAXPROCS=16, default            7.23 GB  109 s       -
+      #      GOMAXPROCS=16, --singleThreaded   5.41 GB  270 s       -
+      #
+      #    On the Mac held to GOMAXPROCS=2: default 8.06 GB 31 s,
+      #    `--checkers 2` 7.51 GB 28 s, `--checkers 1` 6.74 GB 32 s,
+      #    `--singleThreaded` 6.32 GB 33 s; GOGC=25 or 50 in place of the
+      #    memory limit, single-threaded, 6.81 and 7.48 GB. On 2 processors
+      #    fewer checkers cost no time (there are only 2 cores to share), and
+      #    single-threaded is the lowest peak, ~1.5 GB under the 8 GB slot.
+      #    On the slots it then passed in 50-60 s (3 of 3 runs), where the
+      #    default settings took 79-134 s when they were not killed.
+      #    GOMAXPROCS=2 is pinned, not left to the quota: a Go that saw the
+      #    host's cores instead (the README of tools/ci-runner says Node does)
+      #    runs the single-threaded check in 270 s on 2 CPUs. `type_check`
+      #    first prints what the slot gives (nproc, cgroup cpu.max and
+      #    memory.max).
+      #    Among the other four the parity tests get the CPU first: gen-skills,
+      #    the surface report and gen-units run at `nice -n 10` (the checker's
+      #    `nice -n 19` dates from when it shared the CPU), and the parity
+      #    run's per-test timeout is 30 s here (5 s default; several tests scan
+      #    the whole tree, ~1.7 s each on a fast laptop, and two timed out next
+      #    to TS 7 in a container).
       #    Locally `npm run typecheck` runs all four projects at once.
       #    packages/shared's tsconfig includes its tests, which gives the
       #    catalog-projection @ts-expect-error guard real teeth (TS2578 when a
@@ -1243,7 +1286,7 @@ jobs:
       #    gate like gen-skills: a frontend-only node PR writes backend
       #    aggregates. Under 2 s; it reads none of gen-skills' outputs, so the
       #    two run side by side.
-      - name: Type check (TS 7) + skill drift gate + cross-tree parity + surface report + unit drift gate, in parallel
+      - name: Type check (TS 7) alone, then skill drift gate + cross-tree parity + surface report + unit drift gate in parallel
         if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
         env:
           SUPABASE_URL: https://stub.supabase.co
@@ -1253,6 +1296,16 @@ jobs:
           logs="$RUNNER_TEMP/type-check-job"
           mkdir -p "$logs"
           declare -A pid
+
+          # Every project but the backend, then the backend on its own
+          # settings (see 1. above); fails if either fails, after both ran.
+          type_check() {
+            local status=0
+            echo "Slot: nproc $(nproc), cgroup cpu.max $(cat /sys/fs/cgroup/cpu.max 2>/dev/null || echo n/a), memory.max $(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo n/a)"
+            nice -n 19 env GOMEMLIMIT=4GiB npm run typecheck -- --serial frontend packages/cli packages/shared || status=1
+            nice -n 19 env GOMEMLIMIT=4GiB GOMAXPROCS=2 npm run typecheck -- backend -- --singleThreaded || status=1
+            return $status
+          }
 
           cross_tree_parity() {
             cd backend
@@ -1294,15 +1347,11 @@ jobs:
             ( "$@" ) > "$logs/$name.log" 2>&1 &
             pid[$name]=$!
           }
-          start typecheck nice -n 19 env GOMEMLIMIT=4GiB npm run typecheck -- --serial
-          start gen-skills nice -n 10 npm -w backend run gen:skills:check
-          start parity cross_tree_parity
-          start surfaces nice -n 10 timeout 300 npm -w backend run check:surfaces -- --all
-          start gen-units nice -n 10 npm run gen:units -- --check
-
+          # Waits on one check (once: bash hands a PID's status out once),
+          # prints its log in its own group and records a failure.
           failed=()
-          for name in typecheck gen-skills parity surfaces gen-units; do
-            status=0
+          finish() {
+            local name=$1 status=0
             wait "${pid[$name]}" || status=$?
             echo "::group::$name (exit $status)"
             cat "$logs/$name.log"
@@ -1315,6 +1364,19 @@ jobs:
                 failed+=("$name")
               fi
             fi
+          }
+
+          # Phase 1: the type check, alone (see 1. above).
+          start typecheck type_check
+          finish typecheck
+          # Phase 2: the other four side by side, whatever the type check said.
+          echo "Type check done at $(date -u +%H:%M:%S); starting gen-skills, parity, surfaces and gen-units."
+          start gen-skills nice -n 10 npm -w backend run gen:skills:check
+          start parity cross_tree_parity
+          start surfaces nice -n 10 timeout 300 npm -w backend run check:surfaces -- --all
+          start gen-units nice -n 10 npm run gen:units -- --check
+          for name in gen-skills parity surfaces gen-units; do
+            finish "$name"
           done
           if [ ${#failed[@]} -gt 0 ]; then
             echo "Failed: ${failed[*]}"

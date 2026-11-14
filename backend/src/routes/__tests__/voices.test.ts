@@ -263,6 +263,47 @@ describe("GET /v1/voices", () => {
   })
 })
 
+describe("GET /v1/voices?model= — a named-voice model's own voices (decided 2026-11-12)", () => {
+  it("a Gemini 3.8 model answers its 70 voices, each grouped by use, with no ElevenLabs call", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/voices?model=gemini-3-8-flash-lite-tts" })
+    expect(res.statusCode).toBe(200)
+    const voices = (res.json() as { voices: Array<Record<string, string>> }).voices
+    expect(voices).toHaveLength(70)
+    expect(voices.find((v) => v.voice_id === "Fola")).toEqual({
+      voice_id: "Fola", name: "Fola", preview_url: "", gender: "", accent: "", age: "", description: "", use_case: "call-center", category: "premade",
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("a Gemini 3.1 / 2.5 model answers its 30 voices, ungrouped", async () => {
+    const voices = ((await app.inject({ method: "GET", url: "/v1/voices?model=gemini-2-5-pro-tts" })).json() as { voices: Array<{ voice_id: string; use_case: string }> }).voices
+    expect(voices).toHaveLength(30)
+    expect(voices.every((v) => v.use_case === "")).toBe(true)
+    expect(voices.some((v) => v.voice_id === "Kore")).toBe(true)
+  })
+
+  it("an ElevenLabs model (or an unknown one) answers the premade list as before", async () => {
+    cfgState.key = ""
+    const plain = (await app.inject({ method: "GET", url: "/v1/voices" })).json() as { voices: unknown[] }
+    const withModel = (await app.inject({ method: "GET", url: "/v1/voices?model=elevenlabs-v4" })).json() as { voices: unknown[] }
+    const unknown = (await app.inject({ method: "GET", url: "/v1/voices?model=not-a-model" })).json() as { voices: unknown[] }
+    expect(withModel.voices).toEqual(plain.voices)
+    expect(unknown.voices).toEqual(plain.voices)
+  })
+
+  it("a deployment with a voice lock lists none of them: no Gemini voice has a known gender", async () => {
+    cfgState.business = true
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male", "female", "neutral"] } })
+    try {
+      const res = await app.inject({ method: "GET", url: "/v1/voices?model=gemini-3-8-flash-tts" })
+      expect((res.json() as { voices: unknown[] }).voices).toEqual([])
+    } finally {
+      delete process.env.NODARO_SURFACE_PROFILE
+      cfgState.business = false
+    }
+  })
+})
+
 // ═══════════════════════════════════════════════════════════════════════════
 // GET /v1/voices/library — paginated shared voices
 // ═══════════════════════════════════════════════════════════════════════════

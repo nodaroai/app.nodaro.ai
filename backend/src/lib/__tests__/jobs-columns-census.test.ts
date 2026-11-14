@@ -21,7 +21,7 @@
 import { describe, it, expect } from "vitest"
 import ts from "typescript"
 import { SCAN_TIMEOUT_MS, eachSourceFile, lineOf, walk } from "./source-scan.js"
-import { columnOf, jobsColumns, selectColumns } from "./jobs-schema.js"
+import { columnOf, isEmbeddedRef, jobsColumns, selectColumns } from "./jobs-schema.js"
 
 const COLUMNS = jobsColumns()
 
@@ -188,7 +188,7 @@ function takeCensus(): Census {
         if (keys === null) nonLiteral[rel] = (nonLiteral[rel] ?? 0) + 1
         else check(keys, `${method} key`)
       } else if (FILTER_METHODS.has(method) && arg && ts.isStringLiteralLike(arg)) {
-        check([columnOf(arg.text)], `${method} column`)
+        if (!isEmbeddedRef(arg.text, COLUMNS)) check([columnOf(arg.text)], `${method} column`)
       } else if (method === "select" && arg && ts.isStringLiteralLike(arg)) {
         check(selectColumns(arg.text), "select column")
       }
@@ -210,6 +210,13 @@ describe("the jobs columns census", () => {
 
   it("reads a select list's own columns, not an embedded resource's", () => {
     expect(selectColumns("id, user_id, profiles!user_id(tier, subscription_tier), metadata->>x, a:status, credits::text")).toEqual(["id", "user_id", "metadata", "status", "credits"])
+  })
+
+  it("reads a filter on an embedded resource's column (`alias.column`) as not the table's own — never a jobs column's", () => {
+    expect(isEmbeddedRef("execution.workflow_id", COLUMNS)).toBe(true)
+    for (const ref of ["workflow_execution_id", "input_data->>node_id", "status"]) expect(isEmbeddedRef(ref, COLUMNS), ref).toBe(false)
+    // A jobs column with a dot is a mistyped JSON path, not an embed: still checked (and flagged).
+    for (const ref of ["input_data.node_id", "output_data.videoUrl"]) expect(isEmbeddedRef(ref, COLUMNS), ref).toBe(false)
   })
 
   it("every jobs column the backend names exists", () => {

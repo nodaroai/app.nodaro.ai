@@ -8,8 +8,9 @@
  * 16-bit: ~53 MB at the 300 s maximum, removed once counted). A burst of those must not fill the disk, so each takes a slot: at most
  * {@link LIP_SYNC_MEASURE_MAX_INFLIGHT_PER_USER} for one user and
  * {@link LIP_SYNC_MEASURE_MAX_INFLIGHT_GLOBAL} in all. A call over a limit
- * waits up to {@link LIP_SYNC_MEASURE_SLOT_WAIT_MS} for one, then is refused
- * ("try again in a moment") before anything is held.
+ * waits for one — up to {@link LIP_SYNC_MEASURE_SLOT_WAIT_MS} on a request,
+ * {@link LIP_SYNC_RUN_MEASURE_SLOT_WAIT_MS} in a workflow or app run — then is
+ * refused ("try again in a moment") before anything is held.
  *
  * LOCAL COPY: the same shape and constants as the shared in-flight limiter
  * (`createInflightSlots`, lib/inflight-slots.ts) that another change is adding.
@@ -23,6 +24,17 @@
 export const LIP_SYNC_MEASURE_MAX_INFLIGHT_PER_USER = 2
 export const LIP_SYNC_MEASURE_MAX_INFLIGHT_GLOBAL = 8
 export const LIP_SYNC_MEASURE_SLOT_WAIT_MS = 30_000
+
+/**
+ * How long a workflow or app run waits for a slot before it is refused
+ * (decided 2026-11-13). A run's level or list fans out many Lip Sync nodes at
+ * once, and nobody is holding a connection open on it, so it waits rather than
+ * fails: 20 nodes of one user at 8 s a measurement all get through. A direct
+ * request (`POST /v1/lip-sync`, MCP, the SDK) keeps the shorter
+ * {@link LIP_SYNC_MEASURE_SLOT_WAIT_MS} and fails fast with a 429 to retry,
+ * rather than holding its HTTP connection open for two minutes.
+ */
+export const LIP_SYNC_RUN_MEASURE_SLOT_WAIT_MS = 120_000
 
 export interface InflightLimits {
   /** At most this many at once for one user. */

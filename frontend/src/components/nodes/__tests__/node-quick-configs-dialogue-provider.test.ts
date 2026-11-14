@@ -33,4 +33,26 @@ describe("text-to-dialogue quick-strip model pill", () => {
   it("keeps the language control beside it", () => {
     expect(getQuickConfigs("text-to-dialogue").map((c) => c.field)).toEqual(["provider", "languageCode"])
   })
+
+  it("a user's pick of a Gemini model moves the lines' voices onto its own and resets the language (the panel's patch)", () => {
+    const patch = control.write!("gemini-3-1-flash-tts", {
+      provider: "elevenlabs-dialogue",
+      languageCode: "en",
+      dialogue: [{ id: "1", text: "Hi", voice: "Sarah" }, { id: "2", text: "Yo", voice: "Rachel" }],
+    })
+    expect(patch).toStrictEqual({
+      provider: "gemini-3-1-flash-tts",
+      languageCode: "",
+      dialogue: [{ id: "1", text: "Hi", voice: "Kore", voiceLabel: "Kore" }, { id: "2", text: "Yo", voice: "Achernar", voiceLabel: "Achernar" }],
+    })
+  })
+
+  it("the language control is offered only on a model offered in a language (none on Gemini)", () => {
+    const language = getQuickConfigs("text-to-dialogue").find((c) => c.field === "languageCode")!
+    const options = (data: Record<string, unknown>) => (typeof language.options === "function" ? language.options(data as never) : language.options)
+    expect(options({ provider: "elevenlabs-dialogue" }).length).toBeGreaterThan(0)
+    expect(options({}).length).toBeGreaterThan(0)
+    expect(options({ provider: "gemini-3-8-flash-tts" })).toEqual([])
+    expect(options({ provider: "gemini-2-5-pro-tts" })).toEqual([])
+  })
 })

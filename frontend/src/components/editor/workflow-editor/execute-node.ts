@@ -75,7 +75,13 @@ import {
   clampTopazVideoFps,
   isTopazVideoResolution,
   NODARO_VIDEO_UPSCALE_PROVIDER,
+  dialogueVoicesForModel,
+  dialogueOutputFormatFor,
+  getDialogueCapabilities,
 } from "@nodaro/shared/models";
+import { dialogueFillerWordsFor, dialogueHoldsReplica, dialogueLineStyleFor, dialogueSpeakersFor, dialogueTakesReplica } from "@/lib/dialogue-direction";
+import { dialogueCloneRunProblem, ttsCloneRunProblem } from "@/lib/voice-clone";
+import { ttsOutputFormatOf } from "@/lib/speech-output-format";
 import { sunoSeparateRunOutputFields } from "@/lib/named-run-outputs";
 import {
   resolveEditPlanSources,
@@ -124,6 +130,7 @@ import {
   uiResolutionFill,
   characterReferencesFromWired,
   videoCharacterRefCap,
+  videoCharacterVideoCap,
 } from "@nodaro/shared/video";
 import { isSoundPageLink, videoLinkTrackInto } from "@/lib/sound-page-links";
 import {
@@ -277,6 +284,10 @@ import {
 } from "@nodaro/shared/credits";
 import {
   ttsSupportsStitching,
+  ttsDirectionFor,
+  ttsVoiceForModel,
+  replicaOf,
+  replicaModels,
   isSeedanceDraftCapable,
   SEEDANCE_DRAFT_RESOLUTION,
   SEEDANCE_DRAFT_FINALIZE_PROVIDER,
@@ -285,7 +296,7 @@ import {
   IMAGE_MODEL_ROLE_DEFAULTS,
   defaultImageModel
 } from "@nodaro/shared/model-catalog";
-import { tx } from "@/lib/i18n";
+import { tx, type MessageKey } from "@/lib/i18n";
 import { confirmNodeLink, hasOwnLinkBox, isNodeLinkRightsTicked } from "@/lib/node-link-rights";
 import { previewSingleRunRefusal } from "./preview-gate";
 import { completeAsPassThrough } from "./pass-through";
@@ -305,10 +316,12 @@ import {
   aliasRetiredCharacterMentions,
   entityImageUrl,
   characterMentionableAssetArrays,
+  wiredCharacterVideoUrls,
   expandExtraRefsToConnectedReferences,
   type ExtraRefCharacterContext
 } from "@nodaro/shared/entities"
 import { applyPromptAffixes, appendPromptHints, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts/prompt-fields"
+import { buildExtraRefCharacterContextLookup } from "@/lib/extra-ref-character-context";
 import { ownMotionHint, collectIdentityLockClause, characterLockToRefLock } from "@nodaro/prompts/doctrine"
 import { buildSeedanceVideoEditPrompt, assembleImageInput, composeVideoPromptText, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts/assembly"
 import { pickerFanoutTargets } from "@nodaro/prompts/picker-catalogs"
@@ -543,6 +556,23 @@ import {
 } from "@/lib/upstream-duration";
 import { editPlanIssueText, nodeRunError, nodeRunText } from "@/components/editor/workflow-editor/node-run-message";
 import { startFrameOnlyText } from "@/lib/video-start-frame-only";
+
+/** The models that clone a voice, by their names, for the refusal on any other model (`replicaModels`). */
+function cloningModelNames(): string {
+  return replicaModels().map((id) => MODEL_CATALOG[id]?.label ?? id).join(tx("common.listComma"));
+}
+
+/** Why a clone is refused before any request, in the person's language. Typed by the reasons, so a new one needs its words. */
+const CLONE_REFUSAL_KEYS: Record<"model" | "recordings" | "consent", MessageKey> = {
+  model: "nodeRun.cloneNeedsCloningModel",
+  recordings: "nodeRun.cloneNeedsRecordings",
+  consent: "nodeRun.cloneNeedsConsent",
+};
+const CLONE_REFUSAL_ERRORS: Record<"model" | "recordings" | "consent", string> = {
+  model: "This model can't use a cloned voice",
+  recordings: "The cloned voice needs both recordings",
+  consent: "The cloned voice needs its consent",
+};
 
 // ---------------------------------------------------------------------------
 // Manual-edit pending promise bridge
@@ -884,49 +914,6 @@ function expandLocationNodeIntoRefs(
     ])
   }
   return out
-}
-
-/**
- * Build a `slug → ExtraRefCharacterContext` lookup for the consumer node by
- * walking back through edges to wired Character upstreams. Used by the
- * extra-ref expansion (`expandExtraRefsToConnectedReferences`) so character-
- * sourced extras inherit `defaultUsageMode` + `canonicalDescription` from the
- * upstream Character node when the user-typed extra ref doesn't override.
- *
- * Returns a function that takes a slug and returns the upstream context, or
- * `undefined` if no character matching that slug is wired (e.g. the user
- * disconnected the character after attaching the extra — the extra still
- * carries the slug + URL, but inherits nothing).
- */
-function buildExtraRefCharacterContextLookup(
-  consumerNodeId: string,
-  nodes: readonly WorkflowNode[],
-  edges: readonly WorkflowEdge[],
-): (slug: string) => ExtraRefCharacterContext | undefined {
-  const bySlug = new Map<string, ExtraRefCharacterContext>();
-  const incoming = edges.filter((e) => e.target === consumerNodeId);
-  // Named as the workflow run names them (each unnamed node its own
-  // "Character N"); a node wired only by its image pip goes by its own name.
-  const names = wiredCharacterNamesOf(consumerNodeId, nodes, edges);
-  for (const e of incoming) {
-    const upstream = nodes.find((n) => n.id === e.source);
-    if (!upstream || upstream.type !== "character") continue;
-    const charData = upstream.data as CharacterNodeData;
-    const named = names.get(upstream.id);
-    const charName = named ? named.name : characterOwnName(charData);
-    const slug = named ? named.slug : characterMentionSlug(charName);
-    if (!slug) continue;
-    if (!bySlug.has(slug)) {
-      bySlug.set(slug, {
-        defaultUsageMode: charData.defaultUsageMode,
-        canonicalDescription: charData.canonicalDescription ?? null,
-        displayName: charName,
-        defaultRole: charData.defaultRole,
-        identityLock: characterLockToRefLock(charData.identityLock),
-      });
-    }
-  }
-  return (slug) => bySlug.get(slug);
 }
 
 const WIRED_SOURCE_TYPE_MAP: Record<string, ReferenceSource> = {
@@ -3281,8 +3268,10 @@ function executeNodeCore(
         ...(i2vTaskType ? { referenceTaskType: i2vTaskType } : {}),
         // Kling 4.0: wired characters as named subjects (the same shared
         // grouping payload-builder sends) and the keep-original-sound lever.
+        // A Character node's own clip makes it a video subject on a model that
+        // takes one; the route seats the clip among the reference videos.
         ...(nodeProvider && hasFeature(nodeProvider, "character-subjects")
-          ? { characterReferences: characterReferencesFromWired(expandWiredCharacterRefsForVideo(node.id, nodes, edges)).slice(0, videoCharacterRefCap(nodeProvider)) }
+          ? { characterReferences: wiredSubjectReferences(node, nodes, edges, nodeProvider) }
           : {}),
         keepOriginalSound: (i2vData as Record<string, unknown>).keepOriginalSound as boolean | undefined,
         audioSoundtrack: (i2vData as Record<string, unknown>).audioSoundtrack as boolean | undefined,
@@ -3684,7 +3673,7 @@ function executeNodeCore(
       // Kling 4.0: wired characters as named subjects (the same shared grouping
       // payload-builder sends) and the keep-original-sound lever.
       ...(t2vProvider && hasFeature(t2vProvider, "character-subjects")
-        ? { characterReferences: characterReferencesFromWired(expandWiredCharacterRefsForVideo(node.id, nodes, edges)).slice(0, videoCharacterRefCap(t2vProvider)) }
+        ? { characterReferences: wiredSubjectReferences(node, nodes, edges, t2vProvider) }
         : {}),
       keepOriginalSound: t2vRaw.keepOriginalSound as boolean | undefined,
       audioSoundtrack: t2vRaw.audioSoundtrack as boolean | undefined,
@@ -3709,7 +3698,20 @@ function executeNodeCore(
       toast.error(nodeRunError(ttsData.label, "nodeRun.noTextFound"));
       return Promise.reject(new Error("No text"));
     }
-    const voice = ttsData.voiceId;
+    // A one-off clone of a person's voice (decided 2026-11-13) runs only on a model that clones (the model may
+    // come from a field mapping), with both recordings and the person's consent. Otherwise the run is refused
+    // before any request — never sent without the consent, never dropped for another voice.
+    // The consent must be the runner's own (a template's or a copy's is someone else's: decided 2026-11-13).
+    const cloneProblem = ttsCloneRunProblem(ttsData.provider || undefined, ttsData, ctx.userId);
+    if (cloneProblem) {
+      toast.error(nodeRunError(ttsData.label, CLONE_REFUSAL_KEYS[cloneProblem], { models: cloningModelNames() }));
+      return Promise.reject(new Error(CLONE_REFUSAL_ERRORS[cloneProblem]));
+    }
+    const replica = replicaOf(ttsData.replica);
+    // The voice the chosen model can speak — the model may come from a field mapping, apart from the voice:
+    // the editor's model-switch rule (decided 2026-11-13, `ttsVoiceForModel`), as the server's workflow run applies it.
+    const voice = ttsVoiceForModel(ttsData.provider || undefined, ttsData.voiceId);
+    const voiceMoved = Boolean(ttsData.voiceId) && voice !== ttsData.voiceId;
     const ttsOptions = {
       ...(ttsData.stability != null && { stability: ttsData.stability }),
       ...(ttsData.similarityBoost != null && {
@@ -3722,7 +3724,14 @@ function executeNodeCore(
       // Only for a model whose sheet stitches (a node switched away from one keeps a mapping the panel no longer shows), and
       // through the one rule the server's exits apply — trimmed, shortened to the cap — so the route never answers 400.
       ...(ttsSupportsStitching(ttsData.provider) ? normalizeTtsNeighbourText(ttsData) : {}),
-      voiceType: (ttsData.voiceType as "premade" | "custom" | "library" | undefined) || "premade",
+      // Style direction (Gemini): only what the model takes, as the server's exits read it.
+      ...ttsDirectionFor(ttsData.provider, ttsData),
+      // The clone: on a model that clones, both recordings in and the consent given (checked above), which the
+      // request says (`consent: true`, the route's attestation of the checkbox's sentence).
+      ...(replica ? { replica: { ...replica, consent: true as const } } : {}),
+      voiceType: voiceMoved ? "premade" : (ttsData.voiceType as "premade" | "custom" | "library" | undefined) || "premade",
+      // The file (decided 2026-11-13): only a format the platform offers; none ⇒ the default MP3.
+      ...(ttsOutputFormatOf(ttsData.outputFormat) ? { outputFormat: ttsOutputFormatOf(ttsData.outputFormat) } : {}),
     };
     setUserPromptTemplate(ttsData.directText?.trim() || undefined);
     return runTextToSpeechGeneration(
@@ -3908,6 +3917,30 @@ function executeNodeCore(
       toast.error(nodeRunError(d.label, "nodeRun.noDialogueLines"));
       return Promise.reject(new Error("No dialogue lines"));
     }
+    // A speaker cloned from a person's own voice (decided 2026-11-13) is refused on a model that does not
+    // clone, never dropped — before anything else, since its label is no voice of any other model.
+    if (dialogueHoldsReplica(d.speakers) && !dialogueTakesReplica(d.provider)) {
+      toast.error(nodeRunError(d.label, CLONE_REFUSAL_KEYS.model, { models: cloningModelNames() }));
+      return Promise.reject(new Error(CLONE_REFUSAL_ERRORS.model));
+    }
+    // A clone the script speaks with needs both recordings and the person's consent (a clone no line uses is not sent).
+    const dialogueCloneProblem = dialogueCloneRunProblem(d.provider, d.speakers, dialogue.map((l) => l.voice), ctx.userId);
+    if (dialogueCloneProblem) {
+      toast.error(nodeRunError(d.label, CLONE_REFUSAL_KEYS[dialogueCloneProblem]));
+      return Promise.reject(new Error(CLONE_REFUSAL_ERRORS[dialogueCloneProblem]));
+    }
+    // The voices the chosen model speaks — the model may come from a field mapping, apart from the
+    // voices (`node.data` is mapping-resolved here): the editor's model-switch rule, per line. A cloned
+    // speaker's label stays on a model that clones.
+    const storedVoices = dialogue.map((l) => l.voice);
+    const voices = dialogueVoicesForModel(d.provider || undefined, storedVoices, d.speakers);
+    // A model that speaks the ElevenLabs voices needs one on every line: a line with none (a Gemini voice
+    // the model does not speak, a node switched back from Gemini) is refused before any request — the route
+    // refuses it too, and two such lines must not merge into one default voice.
+    if (!getDialogueCapabilities(d.provider).voices && voices.some((v) => !v)) {
+      toast.error(nodeRunError(d.label, "nodeRun.chooseVoiceForEveryLine"));
+      return Promise.reject(new Error("A dialogue line has no voice"));
+    }
     const dialogueTemplate = (d.dialogue ?? [])
       .map((l) => l.text)
       .join("\n")
@@ -3922,11 +3955,25 @@ function executeNodeCore(
     // write `transcript` alone — lib/json-run-result.ts. Both engines read
     // `transcript` first, then the bare field.)
     const transcriptOf = (od: Record<string, unknown>) => (od.transcript !== undefined ? { transcript: od.transcript } : {});
+    // A style per line, a direction per speaker, filler words: only what the model takes (decided 2026-11-12).
+    const lines = dialogue.map((l, i) => {
+      const styleDirection = dialogueLineStyleFor(d.provider, l.styleDirection);
+      return { text: l.text, voice: voices[i]!, ...(styleDirection !== undefined ? { styleDirection } : {}) };
+    });
+    const speakers = dialogueSpeakersFor(d.provider, d.speakers, storedVoices, voices, ctx.userId);
+    const fillerWords = dialogueFillerWordsFor(d.provider, d.fillerWords, voices);
+    // The file asked for, only one the model delivers (none: the default MP3; decided 2026-11-13).
+    const outputFormat = dialogueOutputFormatFor(d.provider, d.outputFormat);
+    const extras = {
+      ...(speakers.length > 0 ? { speakers } : {}),
+      ...(fillerWords !== undefined ? { fillerWords } : {}),
+      ...(outputFormat !== undefined ? { outputFormat } : {}),
+    };
     return pollJobWithNodeUpdate(
       node.id,
       () =>
         textToDialogueApi(
-          dialogue.map((l) => ({ text: l.text, voice: l.voice })),
+          lines,
           ctx.userId,
           d.stability,
           d.languageCode || undefined,
@@ -3934,6 +3981,7 @@ function executeNodeCore(
           d.applyTextNormalization,
           d.provider,
           d.similarityBoost,
+          Object.keys(extras).length > 0 ? extras : undefined,
         ),
       "generatedAudioUrl",
       "Text to Dialogue",
@@ -5788,6 +5836,9 @@ function executeNodeCore(
       referenceImageUrls: inputs.referenceImageUrls,
       referenceVideoUrls: inputs.referenceVideoUrls,
       referenceAudioUrls: inputs.referenceAudioUrls,
+      // Documents are the node's own links: no node outputs one. Always sent:
+      // on a model that reads none the route refuses them, never a silent drop.
+      ...(chatData.referenceFileUrls?.length ? { referenceFileUrls: chatData.referenceFileUrls } : {}),
       temperature: chatData.temperature ?? 0.7,
       maxTokens: chatData.maxTokens ?? 2048,
       llmModel: chatData.llmModel,
@@ -11143,4 +11194,28 @@ function executeNodeCore(
   }
 
   return Promise.resolve("");
+}
+
+/**
+ * The wired characters a `character-subjects` model (Kling 4.0) takes as named
+ * subjects — the grouping payload-builder sends — with each Character node's
+ * own clip (`subjectVideoUrl`) as its video subject on a model that takes one.
+ * Only Generate Video carries video subjects; the older Image to Video / Text
+ * to Video nodes send their characters' images only, as the workflow run does
+ * (decided 2026-11-13).
+ */
+function wiredSubjectReferences(
+  consumer: WorkflowNode,
+  nodes: readonly WorkflowNode[],
+  edges: readonly WorkflowEdge[],
+  provider: string,
+) {
+  // Generate Video reaches the i2v / t2v paths re-typed, marked `__appendWired`;
+  // a node that arrives here unmarked is an older Image / Text to Video node.
+  const fromGenerateVideo = consumer.type === "generate-video" || (consumer.data as Record<string, unknown> | undefined)?.__appendWired === true;
+  const clips = fromGenerateVideo && videoCharacterVideoCap(provider) > 0
+    ? wiredCharacterVideoUrls(consumer.id, nodes, edges)
+    : undefined;
+  return characterReferencesFromWired(expandWiredCharacterRefsForVideo(consumer.id, nodes, edges), clips)
+    .slice(0, videoCharacterRefCap(provider));
 }

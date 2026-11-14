@@ -492,6 +492,66 @@ describe("generate_speech — the model and its per-request cap", () => {
   })
 })
 
+describe("generate_speech — a one-off clone (replica, decided 2026-11-13)", () => {
+  const replica = { source_audio_url: "https://media.example/s.wav", consent_audio_url: "https://media.example/c.wav", consent: true }
+  it("on 3.8 Flash the recordings and the user's consent reach the route under its names", async () => {
+    const { result, body } = await runGenerateSpeech({ text: "Hi.", model: "gemini-3-8-flash-tts", replica })
+    expect(result.isError).toBeUndefined()
+    expect(body?.replica).toEqual({ sourceAudioUrl: replica.source_audio_url, consentAudioUrl: replica.consent_audio_url, consent: true })
+  })
+
+  it("a clone without the user's consent is refused before the route", async () => {
+    const { result, body } = await runGenerateSpeech({ text: "Hi.", model: "gemini-3-8-flash-tts", replica: { ...replica, consent: false } })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toMatch(/^replica\.consent must be true/)
+    expect(body).toBeUndefined()
+  })
+
+  it("a model that does not clone refuses it before the route", async () => {
+    const { result, body } = await runGenerateSpeech({ text: "Hi.", model: "gemini-3-8-flash-lite-tts", replica })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toBe("gemini-3-8-flash-lite-tts does not clone a voice; a one-off clone runs on gemini-3-8-flash-tts")
+    expect(body).toBeUndefined()
+  })
+})
+
+describe("generate_speech on a Gemini model (decided 2026-11-13)", () => {
+  it("refuses 3.8 text whose tag rewrite grows past the cap, with the numbers (the route is never hit)", async () => {
+    const { result, body } = await runGenerateSpeech({ text: " [pause]".repeat(1250), model: "gemini-3-8-flash-tts" })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toMatch(/17499 characters; gemini-3-8-flash-tts takes at most 10000/)
+    expect(body).toBeUndefined()
+    // 3.1 sends [square] tags as written: the same text fits.
+    const ok = await runGenerateSpeech({ text: " [pause]".repeat(1250), model: "gemini-3-1-flash-tts" })
+    expect(ok.result.isError).toBeUndefined()
+  })
+
+  it("a preset's ElevenLabs voice with a Gemini model the caller names moves onto the model's default voice", async () => {
+    customPresetRow.value = {
+      id: "33333333-3333-3333-3333-333333333333",
+      node_type: "text-to-speech",
+      name: "Narrator",
+      description: null,
+      data: { provider: "elevenlabs-v4", voice: "Rachel", voiceType: "library" },
+    }
+    const { result, body } = await runGenerateSpeech({ presetId: "33333333-3333-3333-3333-333333333333", text: "Hi", model: "gemini-3-8-flash-tts" })
+    expect(result.isError).toBeUndefined()
+    expect(body).toMatchObject({ provider: "gemini-3-8-flash-tts", voice: "Fola", voiceType: "premade" })
+  })
+
+  it("a voice the caller names stays theirs (the route judges it)", async () => {
+    customPresetRow.value = {
+      id: "44444444-4444-4444-4444-444444444444",
+      node_type: "text-to-speech",
+      name: "Narrator",
+      description: null,
+      data: { provider: "elevenlabs-v4", voice: "Rachel" },
+    }
+    const { body } = await runGenerateSpeech({ presetId: "44444444-4444-4444-4444-444444444444", text: "Hi", model: "gemini-3-8-flash-tts", voice_id: "Zephyr" })
+    expect(body?.voice).toBe("Zephyr")
+  })
+})
+
 describe("generate_speech preset application", () => {
   it("applies a factory preset's tuning (speed/stability/style) as an overlay; caller supplies text", async () => {
     const { result, body } = await runGenerateSpeech({

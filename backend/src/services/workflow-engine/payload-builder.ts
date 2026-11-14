@@ -77,7 +77,9 @@ import {
   type FrameFit,
   type FrameDelivery,
   characterReferencesFromWired,
+  seatCharacterVideos,
   videoCharacterRefCap,
+  videoCharacterVideoCap,
 } from "@nodaro/shared/video"
 import {
   defaultImageModel,
@@ -89,6 +91,11 @@ import {
   MODEL_CATALOG,
   hasFeature,
   normalizeModelInput,
+  ttsDirectionFor,
+  ttsVoiceForModel,
+  getTtsCapabilities,
+  replicaOf,
+  ttsReplicaProblem,
 } from "@nodaro/shared/model-catalog"
 import { applyOrder, generateImageNodeProvider, getNodeImageUrl, orderedSourceImages, sourceImageNodeProvider } from "./source-image.js"
 import { aspectRatioForLoraModel } from "../../lib/image-auto-aspect.js"
@@ -113,8 +120,6 @@ import {
   buildVideoCreditModelIdentifier,
   buildMotionCreditModelIdentifier,
   motionTransferResolution,
-  buildLipSyncCreditId,
-  isPerSecondLipSyncProvider,
   lipSyncAudioRateOf,
   resolveAiAvatarCreditId,
   resolveSwitchXCreditId,
@@ -147,8 +152,17 @@ import {
 } from "@nodaro/shared/social"
 import {
   DEFAULT_TEXT_TO_AUDIO_PROVIDER,
+  TTS_OUTPUT_FORMATS,
   dialogueProviderOf,
   getDialogueCapabilities,
+  dialogueLineStyleFor,
+  dialogueOutputFormatFor,
+  dialogueProblem,
+  dialogueReplicaOf,
+  dialogueReplicaVoices,
+  dialogueSpeakerDirectionFor,
+  dialogueTakesFillerWords,
+  dialogueVoicesForModel,
   applyDefaultVideoSelection,
   applyVideoNegativePrompt,
   resolveVideoProviderForMode,
@@ -252,6 +266,7 @@ import {
   characterMentionSlug,
   wiredCharacterNamesOf,
   wiredCharacterKey,
+  wiredCharacterVideoUrls,
   aliasRetiredCharacterMentions,
   entityImageUrl,
   expandExtraRefsToConnectedReferences,
@@ -266,7 +281,7 @@ import { resolveVideoAnalysisModel, buildLlmCreditIdentifier, motionGraphicsFeat
 import { extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, resolveNodeRefs, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN } from "@nodaro/shared/workflow"
 import { PARAMETER_NODE_TYPES, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES } from "@nodaro/shared/catalogs"
 import { captionRoutesToRemotion, normalizeCaptionNumericLevers, styleCaptionPlan } from "@nodaro/shared/captions"
-import { composeNegative, computeNodePrompt, appendPromptHints, joinSentences, computeScriptTopic, applyPromptAffixes, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts/prompt-fields"
+import { composeNegative, computeNodePrompt, appendPromptHints, joinSentences, computeScriptTopic, applyPromptAffixes, NODE_PROMPT_CANDIDATE_FIELDS, speechTextBeforeCap, dialogueTextBeforeCap } from "@nodaro/prompts/prompt-fields"
 import { resolveTemplate, applyTemplate, collectIdentityLockClause as sharedCollectIdentityLockClause, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, ownMotionHint } from "@nodaro/prompts/doctrine"
 import {
   assembleImageInput,
@@ -293,7 +308,7 @@ import { maskFormatConflict } from "../../lib/image-format-schema.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config, llmMeteredPricing } from "../../lib/config.js"
 import { resolveScriptModelId, type ScriptProvider } from "../../providers/script/script-generator.js"
-import { isNodeDenied, nodeNotAvailableError, isModelDenied, modelNotAvailableError, modelRestrictionConfigured, namesHouseModel, unservedHouseModelsOf, USER_VIEWER, type AvailabilityViewer } from "../../lib/surface-deny.js"
+import { availabilityChecksFor, isNodeDenied, nodeNotAvailableError, isModelDenied, modelNotAvailableError, modelRestrictionConfigured, namesHouseModel, unservedHouseModelsOf, USER_VIEWER, type AvailabilityViewer } from "../../lib/surface-deny.js"
 import { jobRunModelOfBuild } from "../../lib/run-model.js"
 import { trainedCharacterModelWithheld } from "../../lib/trained-character-model.js"
 import { servesEveryHouseModel } from "../../lib/house-models-served.js"
@@ -318,6 +333,9 @@ import {
   VOICE_NOT_AVAILABLE_MESSAGE,
   type VoiceGender,
 } from "../../lib/voice-policy.js"
+import { judgeNamedVoiceModel } from "../../lib/voice-lock.js"
+import { distinctMovedVoices } from "../../lib/dialogue-voice-pool.js"
+import { ONE_OFF_CLONE_CONSENT_MESSAGE, replicaConsentIsFor } from "../../lib/voice-clone-consent.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { speechRunsAs } from "../../lib/speech-credits.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
@@ -425,6 +443,11 @@ export interface PayloadBuildContext {
    *  `viewerForNode` because this builder is synchronous. ABSENT = a user:
    *  a caller that does not say who is asking never gets the admin's view. */
   viewer?: AvailabilityViewer
+  /**
+   * The EXECUTION's user id (an app run's runner, a scheduled run's owner): a one-off voice clone's consent
+   * must be theirs (`replicaConsentIsFor`, decided 2026-11-13). ABSENT = no clone runs.
+   */
+  runUserId?: string
   /** The list ROW a fan-out iteration reads (`plan.rows[i]`), absent for a node
    *  run once and for a Repeat xN copy nothing list-drives. A render reads its
    *  plan clip's identity from it. */
@@ -3078,6 +3101,13 @@ function buildPayloadOf(
   if (isNodeDenied(type, buildCtx?.viewer ?? USER_VIEWER)) {
     throw nodeNotAvailableError([type])
   }
+  // A capability a speech node hosts that another node governs: a one-off voice clone follows the Voice Clone
+  // node (decided 2026-11-13). The route's guard asks the same registry (`availabilityChecksFor`); this run
+  // goes to the queue without it, so it is asked here, before any recording is read or anything reserved.
+  if (type === "text-to-speech" || type === "text-to-dialogue") {
+    const hosted = availabilityChecksFor(type, data).find((c) => c.governedBy !== type && isNodeDenied(c.governedBy, buildCtx?.viewer ?? USER_VIEWER))
+    if (hosted) throw nodeNotAvailableError([hosted.label])
+  }
 
   // Deployment surface MODEL deny (B1): node deny has a run-time backstop above,
   // but model deny was discovery-only — a denied model still runs + bills when its
@@ -4143,6 +4173,11 @@ function buildPayloadOf(
     case "image-to-video": {
       const provider = (data.provider as string) ?? LEGACY_VIDEO_NODE_DEFAULT_PROVIDER
       const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
+      // On a model whose reference videos and video subjects share one cap
+      // (Kling 4.0), videos past it are refused before any jobs row, never left
+      // out (decided 2026-11-13) — the rule the video routes apply.
+      const legacyVideoCap = seatCharacterVideos({ provider, referenceVideoUrls: resolvedInputs.referenceVideoUrls, characterReferences: undefined })
+      if (!legacyVideoCap.ok) throw new Error(legacyVideoCap.message)
       // Compose the prompt first so we can run @-mention resolution against
       // it before the worker sees the final string. The mention pass swaps
       // `@kira-smile` for "Kira" + prepends a "Use these characters:" block
@@ -4365,6 +4400,11 @@ function buildPayloadOf(
     case "text-to-video": {
       const provider = (data.provider as string) ?? LEGACY_VIDEO_NODE_DEFAULT_PROVIDER
       const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
+      // On a model whose reference videos and video subjects share one cap
+      // (Kling 4.0), videos past it are refused before any jobs row, never left
+      // out (decided 2026-11-13) — the rule the video routes apply.
+      const legacyVideoCap = seatCharacterVideos({ provider, referenceVideoUrls: resolvedInputs.referenceVideoUrls, characterReferences: undefined })
+      if (!legacyVideoCap.ok) throw new Error(legacyVideoCap.message)
       // Resolve @-mentions in the t2v prompt (see i2v case for the rationale).
       // t2v has no `imageUrl` slot — all resolved URLs become entries in
       // `referenceImageUrls`, merged with whatever upstream already provided.
@@ -4773,8 +4813,27 @@ function buildPayloadOf(
       // character's seat in the image list stays: the provider runner turns
       // that seat into the subject's name.
       const gvCharacterReferences = hasFeature(resolvedProvider, "character-subjects")
-        ? characterReferencesFromWired(expandWiredCharacterRefs(node.id, buildCtx)).slice(0, videoCharacterRefCap(resolvedProvider))
+        ? characterReferencesFromWired(
+            expandWiredCharacterRefs(node.id, buildCtx),
+            // A Character node's own clip makes it a video subject, on a model that takes one.
+            videoCharacterVideoCap(resolvedProvider) > 0 && buildCtx?.nodes && buildCtx.edges
+              ? wiredCharacterVideoUrls(node.id, buildCtx.nodes, buildCtx.edges)
+              : undefined,
+          ).slice(0, videoCharacterRefCap(resolvedProvider))
         : undefined
+      // Video subjects (decided 2026-11-13): each character's clip is seated
+      // among the reference videos — the rule /v1/generate-video's precheck
+      // applies — so the duration gate, the reservation and the settlement
+      // measure and price it as a reference video. Refused here, before any
+      // jobs row or reservation, exactly as the route refuses it.
+      const gvSeat = seatCharacterVideos({
+        provider: resolvedProvider,
+        referenceVideoUrls: resolvedInputs.referenceVideoUrls,
+        characterReferences: gvCharacterReferences,
+      })
+      if (!gvSeat.ok) throw new Error(gvSeat.message)
+      const gvReferenceVideoUrls = gvSeat.referenceVideoUrls as string[] | undefined
+      const gvVideoSubjectSeats = (gvCharacterReferences ?? []).filter((c) => !!c.videoUrl && (gvReferenceVideoUrls ?? []).includes(c.videoUrl)).length
 
       // R5: the identifier already used `resolvedProvider` while the ui-fills
       // used the stored `provider` — a pre-existing disagreement. Both now read
@@ -4802,7 +4861,9 @@ function buildPayloadOf(
         hasStartFrame: !!imageUrl,
         hasEndFrame: !!endFrameUrl,
         referenceImageCount: referenceImageUrls?.length ?? 0,
-        referenceVideoCount: resolvedInputs.referenceVideoUrls?.length ?? 0,
+        // A video subject's clip seat is the subject (its portrait's seat
+        // already counts it), not one more video.
+        referenceVideoCount: (gvReferenceVideoUrls?.length ?? 0) - gvVideoSubjectSeats,
         referenceAudioCount: resolvedInputs.referenceAudioUrls?.length ?? 0,
         characterCount: 0,
       })
@@ -4831,8 +4892,9 @@ function buildPayloadOf(
           sizeOrMode: (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
           resolution: gvNorm.resolution,
           // A soundtrack clip is a reference video by the time the run is
-          // dispatched (node-executor applies lib/audio-soundtrack.ts).
-          hasVideoRef: hasVideoRef || playsAudioSoundtrack(resolvedProvider, data, resolvedInputs.referenceAudioUrls),
+          // dispatched (node-executor applies lib/audio-soundtrack.ts); so is
+          // a video subject's clip, seated above.
+          hasVideoRef: hasVideoRef || (gvReferenceVideoUrls?.length ?? 0) > 0 || playsAudioSoundtrack(resolvedProvider, data, resolvedInputs.referenceAudioUrls),
         },
         {
           jobId,
@@ -4845,7 +4907,7 @@ function buildPayloadOf(
           imageUrl,            // swap-aware
           endFrameUrl,         // gated on having a startFrame to pair with
           referenceImageUrls,
-          referenceVideoUrls: resolvedInputs.referenceVideoUrls,
+          referenceVideoUrls: gvReferenceVideoUrls,
           videoTrimStart: data.videoTrimStart,
           videoTrimEnd: data.videoTrimEnd,
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
@@ -5649,21 +5711,17 @@ function buildPayloadOf(
           },
         }
       }
-      // infinitalk is tier-priced by resolution. Per-second providers
-      // (kling-avatar(-pro), heygen-lipsync-precision, lipsync-2-pro) bucket by
-      // the persisted audio duration when it's known — mirroring the route's
-      // resolveLipSyncIdentifier. When the duration is unknown (e.g. audio is
-      // produced by an upstream node at runtime), fall back to the bare provider
-      // id: for HeyGen/Sync that bare entry is the 5-min ceiling (billing-safe),
-      // and kling-avatar(-pro) keep their existing bare reservation unchanged.
+      // infinitalk is tier-priced by resolution. A model priced by a length
+      // BUCKET (kling-avatar(-pro), omnihuman-1-5, the dubbing models) reserves
+      // the bucket of the audio the run measures before the hold
+      // (`stampLipSyncInputs`, then `lipSyncBucketReserveId` — the route's own
+      // row for that audio), never a length the node carries (decided
+      // 2026-11-13: a browser's reading, or none — the bare row then held
+      // ~14 s of Kling AI Avatar whatever the audio's length). The node's
+      // length rides the payload as before, read for no price: the stamp
+      // replaces it with the measured one for a bucketed model.
       const lipSyncResolution = (data.resolution as string | undefined) ?? "720p"
-      const audioDurationSec = typeof data.audioDurationSec === "number" ? data.audioDurationSec : undefined
-      const lipSyncIdentifier =
-        provider === "infinitalk"
-          ? `infinitalk:${lipSyncResolution}`
-          : isPerSecondLipSyncProvider(provider) && audioDurationSec !== undefined
-            ? buildLipSyncCreditId(provider, audioDurationSec)
-            : provider
+      const lipSyncIdentifier = provider === "infinitalk" ? `infinitalk:${lipSyncResolution}` : provider
       return {
         jobName: "lip-sync",
         queueName: "video-generation",
@@ -5676,7 +5734,7 @@ function buildPayloadOf(
           prompt: applyPromptAffixes((resolvedInputs.prompt || data.prompt) as string | undefined, readPromptAffixes(data), refMap) || "A person talking naturally",
           provider,
           resolution: data.resolution,
-          audioDurationSec,
+          audioDurationSec: typeof data.audioDurationSec === "number" ? data.audioDurationSec : undefined,
           guidanceScale: data.guidanceScale,
           inferenceSteps: data.inferenceSteps,
           seed: data.seed,
@@ -6252,11 +6310,15 @@ function buildPayloadOf(
       // and paying for a mid-run vendor reject. The alias and an unknown id are
       // judged by the cap of the model they run as (turbo), never the 5,000
       // default `getMaxTtsChars` answers for an id with no sheet.
+      // Measured on the text as the model takes it before its cap: on an angle-tag model (Gemini 3.8)
+      // after its tags are rewritten, which can lengthen it (decided 2026-11-13); on any other model
+      // the text as written, as before.
       const speechRunsAsId = speechRunsAs(provider)
       const speechCap = getMaxTtsChars(speechRunsAsId)
-      if (ttsText.length > speechCap) {
+      const speechLength = speechTextBeforeCap(ttsText, getTtsCapabilities(speechRunsAsId)).length
+      if (speechLength > speechCap) {
         const err = new Error(
-          `text is ${ttsText.length} characters; ${speechRunsAsId} takes at most ${speechCap} per request. Split the script into several calls, or pick a model with a larger cap.`,
+          `text is ${speechLength} characters; ${speechRunsAsId} takes at most ${speechCap} per request. Split the script into several calls, or pick a model with a larger cap.`,
         ) as Error & { errorCode?: string }
         err.errorCode = "text_too_long"
         throw err
@@ -6264,8 +6326,15 @@ function buildPayloadOf(
       // The EFFECTIVE voice + type this node will DISPATCH — computed once with
       // the same precedence the payload below uses, so the value we vet is byte-
       // identical to the value we send.
-      const effectiveVoice = ttsVoiceOf(resolvedInputs.voice, data.voiceId, data.voice)
-      const effectiveVoiceType = resolvedInputs.voiceType || data.voiceType || "premade"
+      // A voice the model cannot speak — the model and the voice chosen apart: a published app's Model card,
+      // a field mapping onto the model, an upstream Character's voice — moves onto one it can, as the
+      // editor moves it on a model switch (decided 2026-11-13, `ttsVoiceForModel`): on a Gemini model its
+      // default voice, on an ElevenLabs model none (the deployment's default) for a Gemini voice.
+      const wiredVoice = ttsVoiceOf(resolvedInputs.voice, data.voiceId, data.voice)
+      const switchedVoice = ttsVoiceForModel(speechRunsAsId, wiredVoice)
+      const voiceMoved = typeof wiredVoice === "string" && wiredVoice !== "" && switchedVoice !== wiredVoice
+      const effectiveVoice = voiceMoved ? (switchedVoice ?? "") : wiredVoice
+      const effectiveVoiceType = voiceMoved ? "premade" : (resolvedInputs.voiceType || data.voiceType || "premade")
       // B4c: voice-gender dispatch backstop. The orchestrator path dispatches
       // without the route, so an auto-wired Character voice (input-resolver) or
       // an imported/MCP-authored voice must be vetted HERE: the EFFECTIVE voice,
@@ -6275,6 +6344,18 @@ function buildPayloadOf(
       // premade voice of an allowed gender. Thrown with model-deny's coded
       // shape. Inert by default: no lock, no refusal.
       refuseVoicesTheLockRefuses(voicesToJudge([effectiveVoice]), buildCtx, "The selected voice is not available on this deployment.")
+      // A model that speaks only its own named voices (Gemini) under a voice lock: refused whole, whatever
+      // voice is named — no gender is recorded for its voices (decided 2026-11-13; the route's 400).
+      if (!judgeNamedVoiceModel(speechRunsAsId).allowed) throw voiceLockRefusal(VOICE_NOT_AVAILABLE_MESSAGE)
+      // A one-off clone (Gemini 3.8 Flash, decided 2026-11-13) on a model that does not clone — the model
+      // chosen apart, an app's Model card — is refused before any reservation, never dropped: a stock voice
+      // would speak in its place. Its recordings are judged by the run's gate (node-executor) and the worker.
+      const replicaProblem = ttsReplicaProblem(speechRunsAsId, data.replica)
+      if (replicaProblem) throw new Error(`Text to Speech: ${replicaProblem}`)
+      const ttsReplica = replicaOf(data.replica)
+      // The node's consent box (decided 2026-11-13): the run's own user's record for these recordings, never
+      // the author's of a template or an app (`replicaConsentIsFor`).
+      if (ttsReplica && !replicaConsentIsFor(data.replicaConsent, buildCtx?.runUserId, ttsReplica)) throw new Error(ONE_OFF_CLONE_CONSENT_MESSAGE)
       return {
         jobName: "text-to-speech",
         queueName: "video-generation",
@@ -6294,6 +6375,13 @@ function buildPayloadOf(
           // exit normalises (neighbour-text.ts) and the sheet decides whether they are sent.
           previousText: data.previousText,
           nextText: data.nextText,
+          // Style direction, only what the model takes (Gemini); none for an ElevenLabs model, so
+          // its payload is byte-identical to before the fields existed. Never billed.
+          ...ttsDirectionFor(speechRunsAsId, data),
+          // Consent given on the node (checked above): carried, so a relay to the cloud says it too.
+          ...(ttsReplica ? { replica: { ...ttsReplica, consent: true } } : {}),
+          // The file (decided 2026-11-13): a format the platform offers, as the editor sends it; none ⇒ the default MP3.
+          ...(typeof data.outputFormat === "string" && (TTS_OUTPUT_FORMATS as readonly string[]).includes(data.outputFormat) ? { outputFormat: data.outputFormat } : {}),
           usageLogId,
         },
       }
@@ -6418,36 +6506,96 @@ function buildPayloadOf(
       if (!filteredDialogue || filteredDialogue.length === 0) {
         throw new Error("Text to Dialogue has no dialogue lines — add at least one line with text before running")
       }
+      // The model the node runs on: `effectiveDispatchProvider` is what the
+      // deployment model-deny check above read, so deny and dispatch agree; an
+      // unknown id runs (and is billed) as v3 dialogue.
+      const dialogueProvider = dialogueProviderOf(effectiveDispatchProvider(type, data, resolvedInputs))
+      // Each line's voice as it is SENT: a voice the model cannot speak — the model and the voices chosen
+      // apart (a published app's Model card, a field mapping onto the model) — moves onto one it can, as the
+      // editor moves it on a model switch (`dialogueVoicesForModel`, the text-to-speech lane's
+      // `ttsVoiceForModel` per speaker): on a Gemini model onto its voices the script does not use yet, on
+      // an ElevenLabs model none (the deployment's default) for a Gemini voice. Judged, checked and sent as moved.
+      // A one-off clone on a speaker a line uses, on a model that does not clone, is refused, never dropped. A
+      // speaker no line uses is not sent, so it is not judged (as the editor's Run node does not).
+      const lineVoices = new Set(filteredDialogue.map((l) => l.voice).filter((v): v is string => typeof v === "string"))
+      for (const sp of Array.isArray(data.speakers) ? (data.speakers as unknown[]) : []) {
+        const entry = sp as { voice?: unknown; replica?: unknown } | null
+        if (typeof entry?.voice !== "string" || !lineVoices.has(entry.voice)) continue
+        const replicaProblem = ttsReplicaProblem(dialogueProvider, entry.replica)
+        if (replicaProblem) throw new Error(`Text to Dialogue: ${replicaProblem}`)
+      }
+      // A speaker cloned for this request keeps its label on a model that clones (`dialogueReplicaVoices`). On an
+      // ElevenLabs dialogue model each speaker moved off a named-voice model takes its own premade voice
+      // (decided 2026-11-13: two speakers stay two), the lock respected (`distinctMovedVoices`).
+      const namedMoves = dialogueVoicesForModel(dialogueProvider, filteredDialogue.map((l) => l.voice), data.speakers)
+      const movedVoices = getDialogueCapabilities(dialogueProvider).voices
+        ? namedMoves
+        : distinctMovedVoices(filteredDialogue.map((l) => l.voice), namedMoves)
+      const sentDialogue = filteredDialogue.map((line, i) => {
+        const { styleDirection, ...rest } = line as typeof line & { styleDirection?: unknown }
+        // A line's style only on a model that takes one per line (Gemini 3.8), trimmed and within its limit.
+        const style = dialogueLineStyleFor(dialogueProvider, styleDirection)
+        return { ...rest, voice: movedVoices[i]!, ...(style ? { styleDirection: style } : {}) }
+      })
       // B4c: per-line voice-gender backstop, mirroring the TTS case above —
       // the orchestrator path must vet what it dispatches, not trust the
       // route. Each line's voice, judged by its id alone, from what the caller
       // resolved; one nobody resolved must be a premade voice of an allowed
       // gender.
-      refuseVoicesTheLockRefuses(voicesToJudge(filteredDialogue.map((l) => l.voice)), buildCtx, "A selected voice is not available on this deployment.")
-      // The model the node runs on: `effectiveDispatchProvider` is what the
-      // deployment model-deny check above read, so deny and dispatch agree; an
-      // unknown id runs (and is billed) as v3 dialogue.
-      const dialogueProvider = dialogueProviderOf(effectiveDispatchProvider(type, data, resolvedInputs))
+      const dialogueClones = dialogueReplicaVoices(dialogueProvider, data.speakers)
+      refuseVoicesTheLockRefuses(voicesToJudge(sentDialogue.map((l) => l.voice).filter((v) => !dialogueClones.has(v))), buildCtx, "A selected voice is not available on this deployment.")
+      // A model that speaks only its own named voices (Gemini) under a voice lock: refused whole — no gender
+      // is recorded for its voices (decided 2026-11-13; the route's 400).
+      if (!judgeNamedVoiceModel(dialogueProvider).allowed) throw voiceLockRefusal(VOICE_NOT_AVAILABLE_MESSAGE)
       // Fail HONESTLY before dispatch when the script exceeds the model's total
       // cap — the route's Zod cannot see this path, and the provider would
       // refuse it mid-run after credits reserve. Refused unconditionally, before
       // any reservation, with a stable code (length pricing never prices over-cap text).
-      const dialogueCap = getDialogueCapabilities(dialogueProvider).maxChars
-      const dialogueTotal = filteredDialogue.reduce((sum, l) => sum + l.text.length, 0)
+      // Measured as the model takes each line before the cap: on Gemini 3.8 its tags rewritten.
+      const dialogueSheet = getDialogueCapabilities(dialogueProvider)
+      const dialogueCap = dialogueSheet.maxChars
+      const dialogueTotal = dialogueTextBeforeCap(sentDialogue, dialogueSheet)
       if (dialogueTotal > dialogueCap) {
         const err = new Error(`Text to Dialogue has ${dialogueTotal} characters of dialogue; this model takes at most ${dialogueCap} characters in total — shorten the lines or split them across two nodes`) as Error & { errorCode?: string }
         err.errorCode = "text_too_long"
         throw err
       }
+      // Each speaker's direction (Gemini 3.1 / 2.5), re-keyed onto the voice its lines are sent with and
+      // filtered to what the model takes; only speakers the script uses.
+      const speakerOf = new Map<string, Record<string, unknown>>()
+      for (const entry of Array.isArray(data.speakers) ? (data.speakers as unknown[]) : []) {
+        if (entry && typeof entry === "object" && typeof (entry as { voice?: unknown }).voice === "string") speakerOf.set((entry as { voice: string }).voice, entry as Record<string, unknown>)
+      }
+      const sentSpeakers = filteredDialogue.flatMap((line, i) => {
+        const named = speakerOf.get(String(line.voice ?? ""))
+        const direction = named ? dialogueSpeakerDirectionFor(dialogueProvider, named) : {}
+        // A cloned speaker carries its recordings' links (judged by the run's gate, then the worker), and only
+        // once its consent box is ticked (decided 2026-11-13), as the editor's run reads it.
+        const replica = dialogueClones.has(movedVoices[i]!) ? dialogueReplicaOf(dialogueProvider, data.speakers, movedVoices[i]!) : undefined
+        if (replica && !replicaConsentIsFor(named?.replicaConsent, buildCtx?.runUserId, replica)) throw new Error(ONE_OFF_CLONE_CONSENT_MESSAGE)
+        return Object.keys(direction).length > 0 || replica ? [{ voice: movedVoices[i]!, ...direction, ...(replica ? { replica: { ...replica, consent: true } } : {}) }] : []
+      }).filter((sp, i, all) => all.findIndex((o) => o.voice === sp.voice) === i)
+      // The one check every dialogue door runs (the route's schema, the MCP verb): the speaker limit, the
+      // model's own voices — refused here, before any reservation, with the route's sentence.
+      const problem = dialogueProblem(dialogueProvider, { dialogue: sentDialogue, speakers: sentSpeakers })
+      if (problem) throw new Error(`Text to Dialogue: ${problem.message}`)
+      const fillerWords = dialogueTakesFillerWords(dialogueProvider) && data.fillerWords === true
+      // The file (decided 2026-11-13), only one the model delivers: a node moved onto a model that does not
+      // (an app's Model card onto ElevenLabs dialogue) runs as the default MP3, as the editor's switch clears it.
+      const outputFormat = dialogueOutputFormatFor(dialogueProvider, data.outputFormat)
       return simpleResult("text-to-dialogue", dialogueProvider, {
         jobId,
         provider: dialogueProvider,
-        dialogue: filteredDialogue,
+        dialogue: sentDialogue,
         stability: data.stability,
         similarityBoost: data.similarityBoost,
         languageCode: data.languageCode,
         seed: data.seed,
         applyTextNormalization: data.applyTextNormalization,
+        // A Gemini model's own fields, only where the model takes them (the worker sends each only there too).
+        ...(sentSpeakers.length > 0 ? { speakers: sentSpeakers } : {}),
+        ...(fillerWords ? { fillerWords: true } : {}),
+        ...(outputFormat ? { outputFormat } : {}),
         usageLogId,
       })
     }

@@ -1,5 +1,7 @@
 import {
   usdToCredits,
+  buildLipSyncCreditId,
+  isPerSecondLipSyncProvider,
   lipSyncAudioRateOf,
   lipSyncEstimateSeconds,
   TEXT_TO_AUDIO_SFX_CREDIT_IDS,
@@ -118,7 +120,7 @@ import { generateVideoProCapSec as generateVideoProCapSecOfEnv } from "../../lib
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, lipSyncAudioSourceId, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -1688,22 +1690,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // LTX extend + retake (Pro only, 1080p): per-second × duration at credit-guard time.
   // 5 cr/sec matches Pro:1080p rate (extend output is at the input's resolution; retake is locked 1080p).
   "ltx-2.3-pro-extend:per-second": 40,
-  // ── Seedance 2 Extend, the earlier length-tier rows. No run is priced on
-  //    them any more (Seedance 2.0 Extend has its own per-second rows below);
-  //    kept so the model_pricing rows they seeded keep a static twin. ──
-  "seedance-2-extend": 530,             // default 8s 720p
-  "seedance-2-extend:4s:480p": 150,
-  "seedance-2-extend:8s:480p": 260,
-  "seedance-2-extend:12s:480p": 380,
-  "seedance-2-extend:15s:480p": 470,
-  "seedance-2-extend:4s:720p": 280,
-  "seedance-2-extend:8s:720p": 530,
-  "seedance-2-extend:12s:720p": 780,
-  "seedance-2-extend:15s:720p": 970,
-  "seedance-2-extend:4s:1080p":   410,
-  "seedance-2-extend:8s:1080p":   780,
-  "seedance-2-extend:12s:1080p":  1160,
-  "seedance-2-extend:15s:1080p":  1440,
+  // (The retired `seedance-2-extend` id has no rows: it is priced as
+  //  seedance-2-5-extend, and migration 648 removed the rows it once had.)
   // ── Seedance 2.5 Extend — charged per second of (source seconds sent +
   //    seconds added): its two-second rate rows, and the earlier per-length
   //    rows, each now the most a run of its length costs (both above
@@ -1711,8 +1699,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   ...SEEDANCE_25_EXTEND_RATE_ROWS,
   ...SEEDANCE_25_EXTEND_FULL_WINDOW_ROWS,
   // ── Seedance 2.0 Extend — one row per second added (4–15s) × resolution,
-  //    held to the seedance-2 reference-video price the same way (the
-  //    earlier seedance-2-extend:<tier>:<res> rows above are no longer read). ──
+  //    held to the seedance-2 reference-video price the same way. ──
   "seedance-2-0-extend:4s:480p": 173,
   "seedance-2-0-extend:5s:480p": 202,
   "seedance-2-0-extend:6s:480p": 230,
@@ -2097,6 +2084,22 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "elevenlabs-v4-turbo:per-100-chars": 2,
   "elevenlabs-turbo:per-100-chars": 2,
   "elevenlabs-multilingual:per-100-chars": 4,
+  // Google's Gemini speech on KIE (decided 2026-11-12, provisional until
+  // re-measured on staging): base = KIE's measured cost per 1,000 characters
+  // × 2.5, rounded up (1.46 / 2.13 / 5.05 / 6.27 KIE credits). A whole-credit
+  // row cannot hold a rate under one credit per 100 characters, so these are
+  // quoted per 1,000 (`:per-1k-chars`, `TtsCapabilities.ratePer1kChars`): the
+  // same count (started 100s, at least 8), a request = its hundreds × the row
+  // ÷ 10, rounded up once. The flat row (length pricing off) is the price of
+  // 1,000 characters.
+  "gemini-3-8-flash-lite-tts": 4,
+  "gemini-3-8-flash-tts": 6,
+  "gemini-3-1-flash-tts": 13,
+  "gemini-2-5-pro-tts": 16,
+  "gemini-3-8-flash-lite-tts:per-1k-chars": 4,
+  "gemini-3-8-flash-tts:per-1k-chars": 6,
+  "gemini-3-1-flash-tts:per-1k-chars": 13,
+  "gemini-2-5-pro-tts:per-1k-chars": 16,
   // Sound effects are priced by the length asked for: one row per whole second
   // (`elevenlabs-sfx:1s` … `:30s`, ELEVENLABS_SFX_PER_SECOND_ROWS below), picked
   // by `textToAudioCreditId` on every path. The bare row is the no-duration
@@ -6143,6 +6146,10 @@ function estimateNodeCredits(
     videoSfxSec: node.type === "video-sfx" ? videoSfxClipSecOf(node, edges, measuredFor("video-sfx")) : undefined,
     videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, nodes, edges, measuredFor("video-depth"), prices) : undefined,
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, measuredFor("pitch-tempo")) : undefined,
+    // Lip Sync on a model priced by a length bucket: its audio wire as OmniHuman 2.0's is read (graphPricingUnits).
+    lipSyncAudioSec: node.type === "lip-sync"
+      ? lipSyncAudioWireSecOf(node, nodes, edges, (sourceId) => wires.measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"], { voiceTakeAsMinimum: true }))
+      : undefined,
     // Transcribe on Nemotron 3.5: its audio wire as a run estimate reads it (not the measured walk: it was not moved onto it).
     transcribeSec: node.type === "transcribe" ? transcribeInputSecOf(node, edges, wireSec) : undefined,
     // Add Captions on Nemotron 3.5 Transcribe: its video wire as a run estimate reads it, as Transcribe's
@@ -6158,7 +6165,8 @@ function estimateNodeCredits(
     // A masked edit on a model that follows its photo is priced at the photo's size, when its source records it.
     sourceImage: edges && node.id ? wiredImageSize(node.id, nodes, edges) : undefined,
     masked: node.id ? nodeIsMasked(node.id, node.data, edges) : undefined,
-    grokExtendSourceResolution: node.type === "extend-video" ? grokExtendWiredSourceResolution(node.id, nodes, edges) : undefined,
+    // Grok Extend: the clip its source made, when the source does not make a new one in this run (else its setting).
+    grokExtendSourceResolution: node.type === "extend-video" ? grokExtendWiredSourceResolution(node.id, nodes, edges, rerunIds) : undefined,
   })
   // An LLM Chat node that says how large its call is (`data.expectedUsage`, a plugin's quote graph): that call on
   // the model's primary lane, never below the feature's typical one (each token count floored at it, so the field
@@ -6350,21 +6358,23 @@ function videoOverlayVideoCredits(
 }
 
 /**
- * The length of the audio a Lip Sync priced by its audio's seconds is driven
- * by when a run is estimated: its `audio` wire as the measured walk reads it
- * (`wireSec`, the editor's reading) — an upload at its recorded length, a node
- * outside the run at its take, a node that runs at the length it will produce
- * plus the container slack. The run measures the real audio before it holds.
- * Undefined when unknown.
+ * The length of the audio a Lip Sync priced by its audio's length is driven
+ * by when a run is estimated: the audio a SERVER run of it plays
+ * (`lipSyncAudioSourceId`, decided 2026-11-13: the last wired `audio`, else
+ * the dropdown-selected node), as the measured walk reads it (`wireSec`) — an
+ * upload at its recorded length, a node outside the run at its take, a node
+ * that runs at the length it will produce plus the container slack. The run
+ * measures the real audio before it holds. Undefined when unknown — never a
+ * length the Lip Sync node itself carries.
  */
 function lipSyncAudioWireSecOf(
   node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
   wireSec: WireSecOf,
 ): number | undefined {
-  if (node.id === undefined || !edges) return undefined
-  const wire = edges.find((e) => e.target === node.id && e.targetHandle === "audio")
-  return wire === undefined ? undefined : wireSec(wire.source ?? "")
+  const source = lipSyncAudioSourceId(node, nodes, edges, "server")
+  return source === undefined ? undefined : wireSec(source)
 }
 
 /**
@@ -7039,7 +7049,7 @@ export function graphPricingUnits(
   // The run measures the real audio before it reserves (lib/lip-sync-inputs.ts).
   if (node.type === "lip-sync") {
     const rate = lipSyncAudioRateOf(withWiredSettings(node, nodes, edges ?? []).data?.provider)
-    if (rate) return lipSyncEstimateSeconds(rate, lipSyncAudioWireSecOf(node, edges, (sourceId) => measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"], { voiceTakeAsMinimum: true })))
+    if (rate) return lipSyncEstimateSeconds(rate, lipSyncAudioWireSecOf(node, nodes, edges, (sourceId) => measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"], { voiceTakeAsMinimum: true })))
   }
   // Nodaro Video Upscale: its tier's four-second row × the billed seconds ÷ 4,
   // at the length its video wire gives as the measured walk reads it, with
@@ -7500,6 +7510,8 @@ export function getNodeModelIdentifier(
     editPlan?: { readonly sourceSec: number | undefined; readonly perMinute: boolean }
     /** Video SFX: the input clip's length a run estimate knows (undefined = an unmeasured clip). */
     videoSfxSec?: number
+    /** Lip Sync: the length of the audio its `audio` wire gives a run estimate (undefined = not known). */
+    lipSyncAudioSec?: number
     /** A render: the id its graph prices it on (`renderEstimateCreditId`). */
     renderCreditId?: string
     /** Video Depth: the input clip's length a run estimate knows (undefined = an unmeasured clip). */
@@ -7827,9 +7839,16 @@ export function getNodeModelIdentifier(
   // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): its
   // one-second row, which the estimate multiplies by the seconds
   // (graphPricingUnits). It has no bare row and no buckets.
+  // A model priced by a length bucket (Kling AI Avatar, OmniHuman 1.5, the
+  // dubbing models; decided 2026-11-13): the bucket of the audio its wire gives
+  // (`lipSyncAudioSec`, the length the run measures and holds), else the
+  // model's largest bucket — the most a run can hold, so an estimate never
+  // quotes below the run. A node naming no model runs the default one.
   if (nodeType === "lip-sync") {
     const rate = lipSyncAudioRateOf(data.provider)
     if (rate) return rate.rateId
+    const lipSyncModel = typeof data.provider === "string" && data.provider !== "" ? data.provider : LIP_SYNC_DEFAULT_PROVIDER
+    if (isPerSecondLipSyncProvider(lipSyncModel)) return buildLipSyncCreditId(lipSyncModel, graph.lipSyncAudioSec)
   }
 
   // A node naming no model whose default is priced per input image: the node-type
@@ -7881,9 +7900,9 @@ export function getNodeModelIdentifier(
   }
   // Extend-video on Grok: the seconds added at the SOURCE's resolution, which
   // the run reads off its source's job. A quote knows it only when the graph
-  // says for sure (a Grok Imagine node set to 480p wired in); otherwise the
-  // dearer 720p row — a quote may run above the charge, never below. Never a
-  // resolution the node names.
+  // says for sure (the 480p clip a wired Grok Imagine node made, or one set to
+  // 480p that makes its clip in the run); otherwise the dearer 720p row. Never
+  // a resolution the node names.
   if (isGrokExtendProvider(catalogExtend)) return grokExtendCreditId(data.duration, graph.grokExtendSourceResolution)
 
   // Motion transfer: duration-tiered pricing

@@ -29,7 +29,7 @@ import {
   type ResolvedDialogueVoiceLine,
 } from "@nodaro/shared/pipeline"
 import {
-  speechCredits,
+  speechCreditsFor,
   speechUnitCreditId,
 } from "@nodaro/shared/credits"
 import {
@@ -38,7 +38,7 @@ import {
 import { stripAudioTags } from "../providers/elevenlabs/audio-tags.js"
 import { speechLengthPricingEnabled } from "./config.js"
 import { baseCreditCostFor } from "./credit-base-cost.js"
-import { voicedDialogueProvider } from "./voiced-dialogue-model.js"
+import { voicedDialogueProvider, voicedSpeechProvider } from "./voiced-dialogue-model.js"
 import { billableDialogueChars, speechRunsAs } from "./speech-credits.js"
 
 /** The voiced fields of a generate-video body, read before Zod (the guard sees the raw body). */
@@ -135,7 +135,7 @@ export function planVoicedDialogue(input: VoicedDialogueInput): VoicedDialoguePl
   return {
     lines: kept,
     dropped: resolved.length - kept.length,
-    synthModel: multiSpeaker ? dialogueModel : speechRunsAs(voices[0]?.ttsProvider),
+    synthModel: multiSpeaker ? dialogueModel : speechRunsAs(voicedSpeechProvider(voices[0]?.ttsProvider)),
     multiSpeaker,
   }
 }
@@ -184,5 +184,5 @@ function plannedSpeechChars(plan: VoicedDialoguePlan): number {
 export async function voicedAddonBaseCredits(body: VoicedDialogueInput): Promise<number> {
   if (!speechLengthPricingEnabled()) return baseCreditCostFor(castDialogueModel(body))
   const plan = planVoicedDialogue(body)
-  return speechCredits(plannedSpeechChars(plan), await baseCreditCostFor(speechUnitCreditId(plan.synthModel)))
+  return speechCreditsFor(plan.synthModel, plannedSpeechChars(plan), await baseCreditCostFor(speechUnitCreditId(plan.synthModel)))
 }

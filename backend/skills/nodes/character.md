@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-10-14T09:27:19.115Z
-generated_from: ff6948d60
+generated_at: 2026-11-13T15:30:36.002Z
+generated_from: 68f8354cd8
 ---
 
 # Character
@@ -74,6 +74,7 @@ generated_from: ff6948d60
 - `loraReplicateVersion?: string | null`
 - `loraTriggerWord?: string | null`
 - `loraTrainingStatus?: "queued" | "training" | "succeeded" | "failed" | "cancelled" | null`
+- `subjectVideoUrl?: string`
 - `defaultAssetUrl?: string`
 - `defaultAssetName?: string`
 - `defaultAssetAspectRatio?: CharacterAspectRatio`

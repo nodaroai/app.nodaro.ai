@@ -1,7 +1,7 @@
 ---
 node_type: text-to-speech
-generated_at: 2026-11-08T19:17:23.310Z
-generated_from: dc897a152
+generated_at: 2026-11-13T13:42:54.714Z
+generated_from: c48e6514de
 ---
 
 # Text to Speech
@@ -9,7 +9,7 @@ generated_from: dc897a152
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `text-to-speech`
 **Category:** ai
-**Credit cost:** `17-33` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `5-33` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `prompt`
 **Outputs (source handles):** `audio`
 
@@ -36,6 +36,13 @@ generated_from: dc897a152
 - `voiceLabel?: string`
 - `previousText?: string`
 - `nextText?: string`
+- `styleDirection?: string`
+- `pace?: string`
+- `accent?: string`
+- `audioProfile?: string`
+- `replica?: TtsReplica`
+- `replicaConsent?: ReplicaConsentRecord`
+- `outputFormat?: TtsOutputFormat`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`
@@ -86,6 +93,11 @@ generated_from: dc897a152
 - `output_format`
 - `previous_text`
 - `next_text`
+- `style_direction`
+- `pace`
+- `accent`
+- `audio_profile`
+- `replica`
 - `user_request`
 - `flow_id`
 <!-- AUTO-GEN:END mcp-call -->

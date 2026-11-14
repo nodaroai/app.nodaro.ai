@@ -128,7 +128,7 @@ import { stampVideoOverlayLength, videoOverlayBaseCredits, videoOverlayReserveId
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { seedanceExtendStampedBaseCredits, stampSeedanceExtendSource } from "../../lib/seedance-extend-credits.js"
 import { grokExtendReserveId, stampGrokExtendSource } from "../../lib/grok-extend-stamp.js"
-import { lipSyncRateBaseCredits, stampLipSyncInputs, stampedLipSyncBilledSeconds } from "../../lib/lip-sync-inputs.js"
+import { lipSyncBucketReserveId, lipSyncRateBaseCredits, stampLipSyncInputs, stampedLipSyncBilledSeconds } from "../../lib/lip-sync-inputs.js"
 import { stampTopazVideoUpscale, topazVideoStampedBaseCredits } from "../../lib/topaz-video-plan.js"
 import { isNodaroVideoUpscaleJob, nodaroVideoUpscaleReserveId, nodaroVideoUpscaleStampedBaseCredits, stampNodaroVideoUpscale } from "../../lib/nodaro-video-upscale-plan.js"
 import { stampTopazImageSize, topazImageStampedBaseCredits } from "../../lib/topaz-image-size.js"
@@ -138,6 +138,7 @@ import { runStopSignal } from "./run-stop-signal.js"
 import { discardDeletedJobScratch } from "../../lib/job-scratch.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
+import { payloadReplicas, readReplica, ReplicaRecordingError, withoutReplicaLinks } from "../../lib/voice-replica.js"
 import { stampSeedanceReferenceTaskTypeForRun } from "../../lib/seedance-task-type-stamp.js"
 import { applyAudioSoundtrack } from "../../lib/audio-soundtrack.js"
 import { probeAndCheckRefAudio } from "../../lib/ref-audio-probe.js"
@@ -1122,6 +1123,12 @@ export function buildSyncHttpBody(
         referenceImageUrls: resolvedInputs.referenceImageUrls,
         referenceVideoUrls: resolvedInputs.referenceVideoUrls,
         referenceAudioUrls: resolvedInputs.referenceAudioUrls,
+        // Documents are the node's own links (no node outputs one); the route
+        // reads, checks and counts them before it holds anything. Always sent,
+        // as the editor's Run does: on a model that reads none the route
+        // refuses them (`modality_not_supported`) rather than the node
+        // answering about a document it never saw (decided 2026-11-13).
+        ...(Array.isArray(data.referenceFileUrls) && data.referenceFileUrls.length ? { referenceFileUrls: data.referenceFileUrls } : {}),
         ...llmNodeParams(data),
         temperature: data.temperature ?? 0.7,
         maxTokens: data.maxTokens ?? LLM_NODE_MAX_TOKENS_DEFAULTS["llm-chat"],
@@ -2342,6 +2349,8 @@ async function executeWorkerNode(
         nodeStates,
         authoredData,
         viewer,
+        // A one-off voice clone runs only on its runner's own consent (decided 2026-11-13).
+        ...(ctx.userId ? { runUserId: ctx.userId } : {}),
         listRow,
         editPlanPerMinute,
         ...(speakerViewTracks ? { speakerViewTracks } : {}),
@@ -2412,11 +2421,14 @@ async function executeWorkerNode(
   const refVideoCheck = await probeAndCheckRefVideoDurations({
     provider: payload.provider as string | undefined,
     referenceVideoUrls: payload.referenceVideoUrls,
+    // A video subject's clip is seated among the reference videos (payload
+    // builder, seatCharacterVideos) and held to its own length bound too.
+    characterReferences: payload.characterReferences,
   })
   if (!refVideoCheck.ok) {
     await supabase.from("jobs").delete().eq("id", jobId)
     const err = new Error(refVideoCheck.message) as Error & { errorCode?: string }
-    err.errorCode = "video_too_long"
+    err.errorCode = refVideoCheck.code ?? "video_too_long"
     throw err
   }
   // Same gate for a provider's reference-AUDIO contract (format + length,
@@ -2432,6 +2444,21 @@ async function executeWorkerNode(
     const err = new Error(refAudioCheck.message) as Error & { errorCode?: string }
     err.errorCode = refAudioCheck.code
     throw err
+  }
+  // Same gate for a one-off voice clone's recordings (Gemini 3.8 Flash, decided 2026-11-13): the routes judge
+  // them before their hold through the same reader (`lib/voice-replica.ts`), so a workflow or app run refuses a
+  // recording KIE would not take (not a WAV, over 10 MB, a reference outside 10–30 s, an unreachable link)
+  // before anything is reserved. The worker judges them again and sends its own scratch copies.
+  for (const replica of payloadReplicas(payload)) {
+    try {
+      await readReplica(replica)
+    } catch (err) {
+      if (!(err instanceof ReplicaRecordingError)) throw err
+      await supabase.from("jobs").delete().eq("id", jobId)
+      const refusal = new Error(err.message) as Error & { errorCode?: string }
+      refusal.errorCode = err.code
+      throw refusal
+    }
   }
   // Reused by the reservation below so a legal set is ffprobed ONCE per run (R15).
   // The gate probes only a provider with a DECLARED bound. A Seedance
@@ -2476,12 +2503,13 @@ async function executeWorkerNode(
     err.errorCode = sfxRefusal.code
     throw err
   }
-  // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): the
-  // route's own rule — measure the audio and the image, refuse what the model
-  // cannot take, stamp the measured length and the billed seconds — before
-  // input_data is written and before anything is reserved. Every edition: the
-  // length a node carried (a browser's reading, maybe of an older clip) is
-  // never what the run is priced on. A refusal leaves no jobs row.
+  // Lip Sync on a model priced by its audio's length (OmniHuman 2.0's rate,
+  // the bucketed models — Kling AI Avatar, OmniHuman 1.5, the dubbing models):
+  // the route's own rule — measure the audio (and a rate model's image),
+  // refuse what the model cannot take, stamp the measured length and the held
+  // seconds — before input_data is written and before anything is reserved.
+  // Every edition: the length a node carried (a browser's reading, maybe of an
+  // older clip) is never what the run is priced on. A refusal leaves no jobs row.
   const lipSyncRefusal = await stampLipSyncInputs(jobName, payload, ctx.userId)
   if (lipSyncRefusal) {
     await supabase.from("jobs").delete().eq("id", jobId)
@@ -2730,7 +2758,8 @@ async function executeWorkerNode(
   const resolvedModel = resolvedModelOfJob(jobName, payload)
   const inputData: Record<string, unknown> = {
     ...(resolvedModel ? { resolvedModel } : {}),
-    ...payload,
+    // A one-off clone's recording links never reach the job row (`withoutReplicaLinks`); the payload keeps them.
+    ...withoutReplicaLinks(payload),
     type: node.type,
     node_id: node.id,
     ...(iterationIndex !== undefined ? { iterationIndex } : {}),
@@ -2833,6 +2862,9 @@ async function executeWorkerNode(
         meteredHold?.chargeId ??
         (await computeEditPlanReserveId(jobName, payload, editPlanPerMinute)) ??
         videoSfxReserveId(jobName, payload) ??
+        // Lip Sync on a model priced by a length bucket: the bucket of the audio
+        // `stampLipSyncInputs` measured above — the route's own row for it.
+        lipSyncBucketReserveId(jobName, payload) ??
         // Nodaro Image Upscale: the tier stamped from its output's size, else the hold.
         nodaroImageUpscaleReserveId(jobName, payload) ??
         videoDepthReserveId(jobName, payload) ??

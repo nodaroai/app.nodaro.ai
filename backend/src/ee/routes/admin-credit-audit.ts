@@ -706,16 +706,27 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
 
       const isVariable = stats.minCredits !== stats.maxCredits
       const hasTiers = allTiers.length > 1
-      // A key with no bare row is priced only through its composite rows (per
-      // length, per resolution…): there is no single price to compare a cost
-      // with, and the provider's records do not say which row each task was
-      // charged at. Each billed amount is compared with the rows that cover
-      // it: one no row covers is UNDERPRICED (every charge of the key is
-      // below it); otherwise the key is CHECK_TIERS, never OK — a task
-      // charged at a cheaper row than the one that covers it would be
-      // under-priced, and nothing here can tell. The breakdown names the
-      // cheapest covering row of each amount.
-      const compositeOnly = mapping.ourCredits === null && allTiers.length > 0
+      // A billed amount is judged by the row a task of the key is CHARGED at:
+      // its bare row (`ourCredits`). A row other than that one covering the
+      // amount says only that SOME charge of the key covers it — the
+      // provider's records do not say which row each task was charged at — so
+      // such an amount is CHECK_TIERS, never OK; one no row covers is
+      // UNDERPRICED (every charge of the key is below it). A key with no bare
+      // row is priced only through its composite rows (per length, per
+      // resolution…): the charged row is never known, so every amount some
+      // row covers is CHECK_TIERS. The breakdown names the cheapest covering
+      // row of each amount.
+      const chargedRow = mapping.ourCredits
+      const compositeOnly = chargedRow === null && allTiers.length > 0
+      const requiredFor = (kieCost: number) => Math.ceil(((kieCost / KIE_CREDITS_PER_NODARO) * (100 + markupPercent)) / 100)
+      /** Each billed amount with the cheapest row that covers it (the dearest row when none does). */
+      const breakdownOf = () =>
+        [...stats.costBuckets].map(([kieCost, count]) => {
+          const required = requiredFor(kieCost)
+          const coveringTiers = allTiers.filter(t => t >= required).sort((a, b) => a - b)
+          const covered = coveringTiers.length > 0
+          return { kieCost, tasks: count, required, bestTier: covered ? coveringTiers[0]! : Math.max(...allTiers), covered }
+        })
 
       // For variable models with tiers, and keys priced only through composite
       // rows: validate EACH observed cost level against our actual tier
@@ -728,27 +739,20 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
 
       if ((isVariable && hasTiers) || compositeOnly) {
         // Per-cost-level validation
-        tierBreakdown = []
-        let worstDiff = 0
-        for (const [kieCost, count] of stats.costBuckets) {
-          const required = Math.ceil(((kieCost / KIE_CREDITS_PER_NODARO) * (100 + markupPercent)) / 100)
-          // Find the smallest tier that covers this cost
-          const coveringTiers = allTiers.filter(t => t >= required).sort((a, b) => a - b)
-          const bestTier = coveringTiers.length > 0 ? coveringTiers[0] : Math.max(...allTiers)
-          const covered = coveringTiers.length > 0
-          tierBreakdown.push({ kieCost, tasks: count, required, bestTier, covered })
-          if (!covered) {
-            worstDiff = Math.min(worstDiff, bestTier - required)
-          }
-        }
-        const allCovered = tierBreakdown.every(t => t.covered)
-        diff = allCovered ? 0 : worstDiff
+        tierBreakdown = breakdownOf()
+        const uncovered = tierBreakdown.filter(t => !t.covered)
+        // A level the charged row itself covers is matched; any other covered level is only covered by some row.
+        const coveredByOtherRow = tierBreakdown.some(t => t.covered && (chargedRow === null || chargedRow < t.required))
         diffPercent = null
-        if (!allCovered) status = "UNDERPRICED"
-        else if (compositeOnly) {
+        if (uncovered.length > 0) {
+          status = "UNDERPRICED"
+          diff = Math.min(0, ...uncovered.map(t => t.bestTier - t.required))
+        } else if (coveredByOtherRow) {
           // Covered by some row, not known to be charged at one: no diff to show.
           status = "CHECK_TIERS"
           diff = null
+        } else {
+          diff = 0
         }
       } else {
         // Fixed-cost model: compare directly (a key priced nowhere at 0)
@@ -757,7 +761,17 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
           ? round2((diff / expectedCredits) * 100)
           : null
         if (diff < -0.5) {
-          status = "UNDERPRICED"
+          // Below the bare row: a dearer row that covers the cost makes it a
+          // tier to check, never a match; none does: under-priced.
+          const levels = chargedRow !== null && hasTiers ? breakdownOf() : []
+          if (levels.length > 0 && levels.every(t => t.covered)) {
+            status = "CHECK_TIERS"
+            tierBreakdown = levels
+            diff = null
+            diffPercent = null
+          } else {
+            status = "UNDERPRICED"
+          }
         } else if (expectedCredits > 0 && diffPercent != null && diffPercent > 100) {
           status = "OVERPRICED"
         }

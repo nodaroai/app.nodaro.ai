@@ -36,6 +36,7 @@ import { billingPairColumns } from "../lib/insert-job.js"
 import { estimateWorkflowCreditsDetailed, type EstimateNode } from "../ee/billing/credits.js"
 import { existingDraftsFor } from "../ee/billing/existing-drafts-option.js"
 import { isLlmUnpricedError, llmUnpricedMessage, refuseIfRunUnpriced } from "../lib/llm-unpriced-refusal.js"
+import { unfillableCloneRefusal } from "../lib/clone-app-run.js"
 import { usecaseViewerEstimateFor } from "../lib/use-case/inner-availability.js"
 import { exposedTextCaps } from "../lib/exposed-text-caps.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
@@ -823,6 +824,19 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       // A metered LLM call on a model with no price (R51): refused before any row exists, so no fixed
       // node runs and is charged ahead of the call the run would refuse mid-graph.
       if (await refuseIfRunUnpriced(reply, nodes, ((workflow as { edges?: unknown }).edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [], { overrides: inputOverrides as Record<string, Record<string, unknown>> | undefined })) return reply
+
+      // A one-off voice clone inside a component the run executes: nothing can fill it, so it is refused before
+      // any row exists rather than after the nodes before it were paid for (lib/clone-app-run.ts).
+      {
+        const cloneRefusal = await unfillableCloneRefusal(
+          nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
+          ((workflow as { edges?: unknown }).edges as ReadonlyArray<{ source?: string; target?: string; targetHandle?: string | null }> | null) ?? [],
+          undefined,
+          resolved.userId,
+          { published: false },
+        )
+        if (cloneRefusal) return reply.status(cloneRefusal.status).send({ error: cloneRefusal.error })
+      }
 
       // Create execution
       const { data: execution, error: execError } = await supabase

@@ -1,3 +1,4 @@
+import { useId } from "react"
 import { Play, Loader2, LogIn, Sparkles, RotateCcw, Plus } from "lucide-react"
 import { useT } from "@/lib/i18n"
 import { isResetAction, newRunActionLabel, type NewRunAction } from "./types"
@@ -15,6 +16,8 @@ interface MobileStickyActionProps {
   onGetCredits: () => void
   inputsReadOnly?: boolean
   hidden: boolean
+  /** Why Run waits, said just above the bar (a cloned voice's recordings and tick); empty when it does not. */
+  waitReason?: string
 }
 
 export function MobileStickyAction({
@@ -30,9 +33,12 @@ export function MobileStickyAction({
   onGetCredits,
   inputsReadOnly,
   hidden,
+  waitReason,
 }: MobileStickyActionProps) {
   const t = useT()
+  const reasonId = useId()
   if (hidden || inputsReadOnly) return null
+  const reason = isAuthenticated && !isRunning && !needsMoreCredits && !allInputsFilled && waitReason ? waitReason : ""
 
   const showNewRun = !!onNewRun
 
@@ -44,6 +50,11 @@ export function MobileStickyAction({
         height: "56px",
       }}
     >
+      {reason && (
+        <p id={reasonId} role="status" className="absolute bottom-full start-0 end-0 px-4 py-1.5 text-xs text-amber-400 bg-card/95 border-t border-border">
+          {reason}
+        </p>
+      )}
       {showNewRun && (
         <button
           type="button"
@@ -87,6 +98,7 @@ export function MobileStickyAction({
           type="button"
           onClick={onRun}
           disabled={isAuthenticated && !allInputsFilled}
+          aria-describedby={reason ? reasonId : undefined}
           className="flex-1 h-11 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center justify-center gap-2 transition-colors touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {!isAuthenticated ? (

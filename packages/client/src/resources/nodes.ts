@@ -1,6 +1,7 @@
 import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Scene3DJobOutput, Pro3DRenderRunParams, Pro3DRenderJobOutput } from "./scene3d-types.js"
 import type { ImageToImageParams, EditImageParams, SplitImageParams, SplitImageResult, GenerateMaskParams, GenerateMaskJobOutput, ImageJobStarted } from "./nodes-image-params.js"
 import type { VideoToVideoParams, NodeQuote } from "./nodes-video-params.js"
+import type { LlmChatParams } from "./nodes-llm-params.js"
 import type { NodaroClientCore } from "../core.js"
 import type { JobStatusResult, JobsResource } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError, NodaroError, NotFoundError } from "../errors.js"
@@ -16,7 +17,7 @@ import {
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import type { VideoCharacterReference } from "@nodaro/shared/video"
 import type { ModelInputAdjustment } from "@nodaro/shared/model-catalog"
-import type { ImageBackground, ImageOutputFormat, ImageSvgLevel, TtsOutputFormat } from "@nodaro/shared/models"
+import type { ImageBackground, ImageOutputFormat, ImageSvgLevel, TtsOutputFormat, TtsReplicaRequest } from "@nodaro/shared/models"
 import type { VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution } from "@nodaro/shared/media"
 import type { DirectionFields, SubjectFields } from "@nodaro/prompts/prompt-builder"
 
@@ -229,10 +230,17 @@ export interface ReferenceCaptionParams {
  */
 export interface TextToSpeechParams extends GenerationSessionParams {
   text: string
-  /** A premade voice NAME (Rachel, George, …) or a library / custom voice id. */
+  /**
+   * A premade voice NAME (Rachel, George, …) or a library / custom voice id. On a Gemini
+   * model, one of that model's own voices (`getTtsCapabilities(provider).voices`, or
+   * `voices.list({ model })`); any other is refused with a 400. None: the model's default.
+   */
   voice?: string
   voiceType?: "premade" | "custom" | "library"
-  /** `elevenlabs-v4` (the default), `elevenlabs-v3`, `elevenlabs-v4-turbo`, `elevenlabs-turbo`, `elevenlabs-multilingual`. */
+  /**
+   * `elevenlabs-v4` (the default), `elevenlabs-v3`, `elevenlabs-v4-turbo`, `elevenlabs-turbo`, `elevenlabs-multilingual`,
+   * or Google's `gemini-3-8-flash-lite-tts`, `gemini-3-8-flash-tts`, `gemini-3-1-flash-tts`, `gemini-2-5-pro-tts`.
+   */
   provider?: string
   stability?: number
   similarityBoost?: number
@@ -259,6 +267,28 @@ export interface TextToSpeechParams extends GenerationSessionParams {
    * WAV). Same credits; the job's `audioUrl` ends in `.mp3` or `.wav` accordingly.
    */
   outputFormat?: TtsOutputFormat
+  /**
+   * Style direction, on a model whose capability sheet takes it (`getTtsCapabilities(provider).direction`):
+   * free text on Gemini 3.8 (tone, emotion, pace — "slow and dry, like a night-shift radio host"), one of the
+   * model's styles on Gemini 3.1 / 2.5. Not spoken, not billed; ignored by a model that takes none.
+   */
+  styleDirection?: string
+  /** Gemini 3.1 / 2.5: one of the model's paces (`direction.paces`). */
+  pace?: string
+  /** Gemini 3.1 / 2.5: one of the model's accents (`direction.accents`). */
+  accent?: string
+  /** Gemini 3.1 / 2.5: who is speaking, in words ("a warm, unhurried narrator"). */
+  audioProfile?: string
+  /**
+   * `gemini-3-8-flash-tts` only: speak in a person's own voice, cloned for this request alone and not
+   * saved, from two real recordings of the same adult (never AI-generated), each an https link to a WAV
+   * of at most 10 MB — `sourceAudioUrl`, 10–30 s of natural speech, and `consentAudioUrl`, the same person
+   * reading `REPLICA_CONSENT_SENTENCE` (`@nodaro/shared/models`) — and `consent: true`, your user's
+   * confirmation of `REPLICA_CONSENT_ATTESTATION` (ask them; never assume it). Replaces `voice`. No extra
+   * charge. A clone without that consent, a recording the platform cannot take, or a model that does not
+   * clone is a `400` before anything is charged.
+   */
+  replica?: TtsReplicaRequest
   [k: string]: unknown
 }
 
@@ -464,8 +494,12 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
    *   voice as `referenceAudioUrls`).
    * - Kling 4.0 Flash (`kling-4-flash`): the same named subjects, and
    *   `referenceAudioUrls` clip N becomes the voice of entry N. An entry needs
-   *   2–4 images to carry a voice; otherwise its clip is dropped, as is any
-   *   clip past the last entry.
+   *   2–4 images, or a `videoUrl`, to carry a voice; otherwise its clip is
+   *   dropped, as is any clip past the last entry.
+   * - Both Kling 4.0 ids: an entry's `videoUrl` (a 3–8 s single-shot clip of
+   *   the character) makes it a subject built from that video — at most 3 per
+   *   request. The clip rides as one of the 5 reference videos and is billed
+   *   as one; any other model answers `400`.
    */
   characterReferences?: VideoCharacterReference[]
   /** Kling 4.0 (`kling-4`, `kling-4-flash`): keep the reference videos' own
@@ -944,6 +978,8 @@ export class NodesResource {
   run(type: "generate-video", params?: GenerateVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "text-to-video", params: TextToVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "video-to-video", params: VideoToVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  /** Synchronous: answers `{ jobId, generatedText }`. */
+  run(type: "llm-chat", params: LlmChatParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "video-upscale", params: VideoUpscaleParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "social-search", params: SocialSearchParams, options?: RunNodeOptions): Promise<RunNodeResult>

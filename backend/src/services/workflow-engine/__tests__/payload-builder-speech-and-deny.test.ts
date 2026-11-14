@@ -14,6 +14,8 @@ import { voicesTheBuildDispatches } from "../dispatched-voices.js"
 import type { SimpleNode } from "../types.js"
 import { config } from "../../../lib/config.js"
 import { __resetSurfaceProfileCacheForTests } from "../../../lib/surface-profile.js"
+import { signReplicaConsent } from "../../../lib/voice-clone-consent.js"
+import * as premadeVoices from "../../../lib/premade-voices.js"
 import { DEFAULT_TTS_PROVIDER, getMaxTtsChars } from "@nodaro/shared/models"
 import { ADMIN_VIEWER, USER_VIEWER, type AvailabilityViewer } from "../../../lib/surface-deny.js"
 import { __resetAvailabilityOverridesForTests, __availabilityUniverseReadyForTests, GATEABLE_NODE_TYPES } from "../../../lib/availability-override.js"
@@ -1013,3 +1015,286 @@ describe("payload-builder-node-deny-viewer.test.ts", () => {
     })
   })
 })
+
+describe("payload-builder-gemini-speech.test.ts", () => {
+  /**
+   * A Gemini speech model on the workflow lane (decided 2026-11-13): a voice chosen apart from the model (a
+   * published app's Model card, a field mapping, an upstream Character's voice) moves onto one the model speaks,
+   * as the editor moves it on a model switch; under a voice lock the model is refused whole; and the cap is
+   * measured after 3.8's tags are rewritten.
+   */
+  afterEach(() => {
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+  })
+  const ttsNode = (data: Record<string, unknown> = {}): SimpleNode => ({
+    id: "tts-g",
+    type: "text-to-speech",
+    data: { textSource: "direct", directText: "hello", ...data },
+  })
+  const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
+
+  it("an app that picks a Gemini model on a node holding an ElevenLabs voice runs the model's default voice", () => {
+    const n = ttsNode({ provider: "gemini-3-8-flash-tts", voiceId: "Rachel", voiceType: "premade" })
+    const built = buildPayload(n, "job-g1", {}, undefined, ctx(n))
+    expect(built.payload.provider).toBe("gemini-3-8-flash-tts")
+    expect(built.payload.voice).toBe("Fola")
+    expect(built.payload.voiceType).toBe("premade")
+    // A 3.8 voice on 3.1 / 2.5 moves too; a voice of the model's own list stays.
+    expect(buildPayload(ttsNode({ provider: "gemini-3-1-flash-tts", voiceId: "Fola" }), "job-g2", {}, undefined, ctx(n)).payload.voice).toBe("Kore")
+    expect(buildPayload(ttsNode({ provider: "gemini-3-1-flash-tts", voiceId: "Puck" }), "job-g3", {}, undefined, ctx(n)).payload.voice).toBe("Puck")
+  })
+
+  it("an app that picks an ElevenLabs model on a node holding a Gemini voice runs the deployment's default voice", () => {
+    const n = ttsNode({ provider: "elevenlabs-v4", voiceId: "Fola", voiceType: "premade" })
+    const built = buildPayload(n, "job-g4", {}, undefined, ctx(n))
+    expect(built.payload.provider).toBe("elevenlabs-v4")
+    expect(built.payload.voice).toBe("")
+    // An ElevenLabs voice on an ElevenLabs model is untouched.
+    expect(buildPayload(ttsNode({ provider: "elevenlabs-v4", voiceId: "Rachel", voiceType: "library" }), "job-g5", {}, undefined, ctx(n)).payload).toMatchObject({ voice: "Rachel", voiceType: "library" })
+  })
+
+  it("an upstream Character's ElevenLabs voice on a Gemini node moves onto the model's default", () => {
+    const n = ttsNode({ provider: "gemini-2-5-pro-tts" })
+    const built = buildPayload(n, "job-g6", { voice: "21m00Tcm4TlvDq8ikWAM", voiceType: "library" }, undefined, ctx(n))
+    expect(built.payload).toMatchObject({ voice: "Kore", voiceType: "premade" })
+  })
+
+  it("under a voice lock a Gemini model is refused whole, with or without a voice named", () => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male", "female", "neutral"] } })
+    __resetSurfaceProfileCacheForTests()
+    for (const data of [{ provider: "gemini-3-8-flash-lite-tts" }, { provider: "gemini-3-1-flash-tts", voiceId: "Kore" }]) {
+      const n = ttsNode(data)
+      try {
+        buildPayload(n, "job-g7", {}, undefined, ctx(n))
+        expect.unreachable("a Gemini model must be refused under a lock")
+      } catch (e) {
+        expect((e as { code?: string }).code).toBe("voice_not_available")
+      }
+    }
+  })
+
+  it("the cap is measured after 3.8's tags are rewritten: text at the cap whose rewrite grows past it is refused with the number", () => {
+    const n = ttsNode({ provider: "gemini-3-8-flash-tts", directText: " [pause]".repeat(1250) })
+    expect(() => buildPayload(n, "job-g8", {}, undefined, ctx(n))).toThrow(/text is 17499 characters; gemini-3-8-flash-tts takes at most 10000/)
+    // On 3.1 the same text is sent as written, within the cap.
+    const ok = buildPayload(ttsNode({ provider: "gemini-3-1-flash-tts", directText: " [pause]".repeat(1250) }), "job-g9", {}, undefined, ctx(n))
+    expect(ok.jobName).toBe("text-to-speech")
+  })
+})
+
+describe("payload-builder — a Gemini dialogue (decided 2026-11-12)", () => {
+  /**
+   * The workflow lane's text-to-dialogue case on a Gemini model: the voices moved as the editor moves them
+   * (`dialogueVoicesForModel`) when the model was chosen apart, each one judged and sent as moved; a line's
+   * style and the speakers' direction only where the model takes them; filler words on 3.8; the speaker
+   * limit and the cap after 3.8's rewrite refused before any reservation; refused whole under a voice lock.
+   */
+  afterEach(() => {
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+  })
+  const dlg = (data: Record<string, unknown>): SimpleNode => ({ id: "dlg-g", type: "text-to-dialogue", data })
+  const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
+
+  it("3.8: its voices, a line's style trimmed, filler words; a speaker's direction (3.1's) not sent", () => {
+    const n = dlg({
+      provider: "gemini-3-8-flash-tts",
+      dialogue: [{ id: "1", text: "Hi [laughs]", voice: "Fola", styleDirection: " warm " }, { id: "2", text: "Hey", voice: "Puck" }],
+      speakers: [{ voice: "Fola", pace: "Staccato" }],
+      fillerWords: true,
+    })
+    const built = buildPayload(n, "job-d1", {}, undefined, ctx(n))
+    expect(built.modelIdentifier).toBe("gemini-3-8-flash-tts")
+    expect(built.payload.dialogue).toEqual([{ id: "1", text: "Hi [laughs]", voice: "Fola", styleDirection: "warm" }, { id: "2", text: "Hey", voice: "Puck" }])
+    expect(built.payload.fillerWords).toBe(true)
+    expect(built.payload.speakers).toBeUndefined()
+  })
+
+  it("an app that picks a Gemini model on a node holding ElevenLabs voices: each moves onto a voice of the model's the script does not use, two speakers kept two; their direction follows them on 3.1", () => {
+    const n = dlg({
+      provider: "gemini-3-1-flash-tts",
+      dialogue: [{ id: "1", text: "Hi", voice: "Rachel", styleDirection: "ignored" }, { id: "2", text: "Hey", voice: "George" }, { id: "3", text: "Bye", voice: "Rachel" }],
+      speakers: [{ voice: "Rachel", styleDirection: "Whisper", accent: "Nowhere" }, { voice: "Nobody", pace: "Natural" }],
+      fillerWords: true,
+    })
+    const built = buildPayload(n, "job-d2", {}, undefined, ctx(n))
+    const voices = (built.payload.dialogue as Array<{ voice: string }>).map((l) => l.voice)
+    expect(voices[0]).toBe("Kore")
+    expect(voices[2]).toBe("Kore")
+    expect(voices[1]).not.toBe("Kore")
+    // No line style on 3.1; the first speaker's direction re-keyed onto its moved voice, its accent off the list dropped; no filler words.
+    expect((built.payload.dialogue as Array<Record<string, unknown>>).some((l) => "styleDirection" in l)).toBe(false)
+    expect(built.payload.speakers).toEqual([{ voice: "Kore", styleDirection: "Whisper" }])
+    expect(built.payload.fillerWords).toBeUndefined()
+  })
+
+  it("an app that picks an ElevenLabs dialogue model on a node holding Gemini voices gives each speaker its own premade voice, never one the script uses; no Gemini field is sent (decided 2026-11-13)", () => {
+    // Fola moves; Rachel (the deployment's default) is already a speaker, so Fola takes the next premade voice.
+    const n = dlg({ provider: "elevenlabs-dialogue-v4", dialogue: [{ id: "1", text: "Hi", voice: "Fola", styleDirection: "warm" }, { id: "2", text: "Hey", voice: "Rachel" }], fillerWords: true })
+    const built = buildPayload(n, "job-d3", {}, undefined, ctx(n))
+    const voices = (built.payload.dialogue as Array<{ voice: string }>).map((l) => l.voice)
+    expect(voices[1]).toBe("Rachel")
+    expect(voices[0]).not.toBe("")
+    expect(voices[0]).not.toBe("Rachel")
+    expect(built.payload.dialogue).toEqual([{ id: "1", text: "Hi", voice: voices[0] }, { id: "2", text: "Hey", voice: "Rachel" }])
+    expect(built.payload.fillerWords).toBeUndefined()
+    expect(built.payload.speakers).toBeUndefined()
+    // Two Gemini speakers → two different voices, the deployment's default first; a speaker's lines keep one voice.
+    const two = dlg({ provider: "elevenlabs-dialogue", dialogue: [{ id: "1", text: "a", voice: "Fola" }, { id: "2", text: "b", voice: "Puck" }, { id: "3", text: "c", voice: "Fola" }] })
+    const moved = (buildPayload(two, "job-d3b", {}, undefined, ctx(two)).payload.dialogue as Array<{ voice: string }>).map((l) => l.voice)
+    expect(moved[0]).toBe("Rachel")
+    expect(moved[2]).toBe("Rachel")
+    expect(moved[1]).not.toBe("Rachel")
+    expect(moved[1]).not.toBe("")
+  })
+
+  it("under a voice lock the moved speakers take only voices the lock allows", () => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male"] } })
+    __resetSurfaceProfileCacheForTests()
+    const n = dlg({ provider: "elevenlabs-dialogue", dialogue: [{ id: "1", text: "a", voice: "Fola" }, { id: "2", text: "b", voice: "Puck" }] })
+    const voices = (buildPayload(n, "job-d3c", {}, undefined, { ...ctx(n), voiceGenders: new Map() }).payload.dialogue as Array<{ voice: string }>).map((l) => l.voice)
+    const { FALLBACK_VOICES } = premadeVoices
+    for (const v of voices) expect(FALLBACK_VOICES.find((p) => p.voice_id === v || p.name === v)?.gender, v).toBe("male")
+    expect(new Set(voices).size).toBe(2)
+  })
+
+  it("refuses before any reservation: three voices, and a 3.8 script whose rewrite passes the total cap", () => {
+    const three = dlg({ provider: "gemini-3-8-flash-tts", dialogue: [{ id: "1", text: "a", voice: "Fola" }, { id: "2", text: "b", voice: "Puck" }, { id: "3", text: "c", voice: "Kore" }] })
+    expect(() => buildPayload(three, "job-d4", {}, undefined, ctx(three))).toThrow(/at most 2 unique voices/)
+    const grown = dlg({ provider: "gemini-3-8-flash-tts", dialogue: [{ id: "1", text: " [pause]".repeat(1250), voice: "Fola" }] })
+    expect(() => buildPayload(grown, "job-d5", {}, undefined, ctx(grown))).toThrow(/17499 characters of dialogue; this model takes at most 10000/)
+    // 3.1 sends its tags as written: the same script is exactly its cap.
+    expect(buildPayload(dlg({ provider: "gemini-3-1-flash-tts", dialogue: [{ id: "1", text: " [pause]".repeat(1250), voice: "Kore" }] }), "job-d6", {}, undefined, ctx(grown)).jobName).toBe("text-to-dialogue")
+  })
+
+  it("under a voice lock a Gemini dialogue is refused whole", () => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male", "female", "neutral"] } })
+    __resetSurfaceProfileCacheForTests()
+    const n = dlg({ provider: "gemini-3-8-flash-lite-tts", dialogue: [{ id: "1", text: "Hi", voice: "Fola" }] })
+    try {
+      buildPayload(n, "job-d7", {}, undefined, ctx(n))
+      expect.unreachable("a Gemini dialogue must be refused under a lock")
+    } catch (e) {
+      expect((e as { code?: string }).code).toBe("voice_not_available")
+    }
+  })
+})
+
+describe("payload-builder — a dialogue's file (decided 2026-11-13)", () => {
+  const dlg = (data: Record<string, unknown>): SimpleNode => ({ id: "dlg-f", type: "text-to-dialogue", data })
+  const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
+
+  it("a Gemini node sends the file it asks for; a node moved onto ElevenLabs dialogue runs as the default MP3", () => {
+    const g = dlg({ provider: "gemini-2-5-pro-tts", dialogue: [{ id: "1", text: "Hi", voice: "Kore" }], outputFormat: "wav_24000" })
+    expect(buildPayload(g, "job-f1", {}, undefined, ctx(g)).payload.outputFormat).toBe("wav_24000")
+    const e = dlg({ provider: "elevenlabs-dialogue", dialogue: [{ id: "1", text: "Hi", voice: "Rachel" }], outputFormat: "wav_24000" })
+    expect(buildPayload(e, "job-f2", {}, undefined, ctx(e)).payload.outputFormat).toBeUndefined()
+  })
+})
+
+describe("payload-builder — a one-off clone (replica, decided 2026-11-13)", () => {
+  const REPLICA = { sourceAudioUrl: "https://media.example/s.wav", consentAudioUrl: "https://media.example/c.wav" }
+  const AUTHOR = "00000000-0000-4000-8000-0000000000a1"
+  const OTHER = "00000000-0000-4000-8000-0000000000b2"
+  const node = (type: string, data: Record<string, unknown>): SimpleNode => ({ id: "n-r", type, data })
+  const ctx = (n: SimpleNode, runUserId: string = AUTHOR) => ({ nodes: [n], edges: [], nodeStates: {}, runUserId })
+  const authorsTick = signReplicaConsent(AUTHOR, REPLICA)
+
+  it("Text to Speech on 3.8 Flash sends the clone on its runner's own consent; a model that does not clone refuses it", () => {
+    const ok = node("text-to-speech", { textSource: "direct", directText: "Hi.", provider: "gemini-3-8-flash-tts", replica: REPLICA, replicaConsent: authorsTick })
+    expect(buildPayload(ok, "job-r1", {}, undefined, ctx(ok)).payload.replica).toEqual({ ...REPLICA, consent: true })
+    // Unticked, a bare `true` a client wrote, or a tick over other recordings: refused.
+    for (const replicaConsent of [undefined, true, signReplicaConsent(AUTHOR, { ...REPLICA, sourceAudioUrl: "https://media.example/other.wav" })]) {
+      const n = node("text-to-speech", { textSource: "direct", directText: "Hi.", provider: "gemini-3-8-flash-tts", replica: REPLICA, replicaConsent })
+      expect(() => buildPayload(n, "job-r0", {}, undefined, ctx(n))).toThrow(/Tick the consent box beside the cloned voice's recordings yourself/)
+    }
+    // An app's Model card onto 3.8 Flash-Lite: never dropped (a stock voice would speak instead).
+    const lite = node("text-to-speech", { textSource: "direct", directText: "Hi.", provider: "gemini-3-8-flash-lite-tts", replica: REPLICA, replicaConsent: authorsTick })
+    expect(() => buildPayload(lite, "job-r2", {}, undefined, ctx(lite))).toThrow(/does not clone a voice/)
+    // No clone asked: no key at all.
+    const plain = node("text-to-speech", { textSource: "direct", directText: "Hi.", provider: "gemini-3-8-flash-tts" })
+    expect("replica" in buildPayload(plain, "job-r3", {}, undefined, ctx(plain)).payload).toBe(false)
+  })
+
+  it("consent is per person: a template's copy, an app run or an MCP flow run by anyone but the person who ticked it is refused; the author's own run goes", () => {
+    const tts = node("text-to-speech", { textSource: "direct", directText: "Hi.", provider: "gemini-3-8-flash-tts", replica: REPLICA, replicaConsent: authorsTick })
+    expect(buildPayload(tts, "job-p1", {}, undefined, ctx(tts, AUTHOR)).payload.replica).toEqual({ ...REPLICA, consent: true })
+    expect(() => buildPayload(tts, "job-p2", {}, undefined, ctx(tts, OTHER))).toThrow(/never on a template's or an app's author's/)
+    // No run user said: no clone runs.
+    expect(() => buildPayload(tts, "job-p3", {}, undefined, { nodes: [tts], edges: [], nodeStates: {} })).toThrow(/Tick the consent box/)
+    // The other person's own tick (their record) runs it for them.
+    const theirs = node("text-to-speech", { ...tts.data, replicaConsent: signReplicaConsent(OTHER, REPLICA) })
+    expect(buildPayload(theirs, "job-p4", {}, undefined, ctx(theirs, OTHER)).payload.replica).toEqual({ ...REPLICA, consent: true })
+    // A record naming the runner but signed for someone else is no tick.
+    const forged = node("text-to-speech", { ...tts.data, replicaConsent: { userId: OTHER, signature: authorsTick.signature } })
+    expect(() => buildPayload(forged, "job-p5", {}, undefined, ctx(forged, OTHER))).toThrow(/Tick the consent box/)
+  })
+
+  it("Text to Dialogue on 3.8 Flash keeps the cloned speaker's label and sends it on its runner's consent; a speaker no line uses is not judged", () => {
+    const n = node("text-to-dialogue", {
+      provider: "gemini-3-8-flash-tts",
+      dialogue: [{ id: "1", text: "It's me.", voice: "Me" }, { id: "2", text: "Hey.", voice: "Puck" }],
+      speakers: [{ voice: "Me", replica: REPLICA, replicaConsent: authorsTick }],
+    })
+    const built = buildPayload(n, "job-r4", {}, undefined, ctx(n))
+    expect((built.payload.dialogue as Array<{ voice: string }>).map((l) => l.voice)).toEqual(["Me", "Puck"])
+    expect(built.payload.speakers).toEqual([{ voice: "Me", replica: { ...REPLICA, consent: true } }])
+    expect(() => buildPayload(n, "job-r4b", {}, undefined, ctx(n, OTHER))).toThrow(/Tick the consent box/)
+    const unticked = node("text-to-dialogue", { ...n.data, speakers: [{ voice: "Me", replica: REPLICA }] })
+    expect(() => buildPayload(unticked, "job-r6", {}, undefined, ctx(unticked))).toThrow(/Tick the consent box/)
+    const lite = node("text-to-dialogue", { ...n.data, provider: "gemini-3-8-flash-lite-tts" })
+    expect(() => buildPayload(lite, "job-r5", {}, undefined, ctx(lite))).toThrow(/does not clone a voice/)
+    // A pending clone (no recordings yet) that no line speaks with: the run goes, as the editor's Run node does.
+    const pending = node("text-to-dialogue", {
+      provider: "gemini-3-1-flash-tts",
+      dialogue: [{ id: "1", text: "Hi.", voice: "Kore" }],
+      speakers: [{ voice: "Me", replica: { sourceAudioUrl: "", consentAudioUrl: "" } }],
+    })
+    expect(buildPayload(pending, "job-r7", {}, undefined, ctx(pending)).jobName).toBe("text-to-dialogue")
+  })
+})
+
+describe("payload-builder — a Text to Speech node's file (decided 2026-11-13)", () => {
+  const tts = (data: Record<string, unknown>): SimpleNode => ({ id: "tts-f", type: "text-to-speech", data: { textSource: "direct", directText: "hello", ...data } })
+  const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
+
+  it("sends the node's file on any model, as the editor does; none or an unknown one sends none", () => {
+    const wav = tts({ provider: "elevenlabs-v4", outputFormat: "wav_24000" })
+    expect(buildPayload(wav, "job-tf1", {}, undefined, ctx(wav)).payload.outputFormat).toBe("wav_24000")
+    const g = tts({ provider: "gemini-3-8-flash-tts", outputFormat: "mp3_44100_192" })
+    expect(buildPayload(g, "job-tf2", {}, undefined, ctx(g)).payload.outputFormat).toBe("mp3_44100_192")
+    for (const outputFormat of [undefined, "flac"]) {
+      const n = tts({ provider: "elevenlabs-v4", outputFormat })
+      expect("outputFormat" in buildPayload(n, "job-tf3", {}, undefined, ctx(n)).payload).toBe(false)
+    }
+  })
+})
+
+describe("payload-builder — a one-off clone where the Voice Clone node is denied (decided 2026-11-13)", () => {
+  const REPLICA = { sourceAudioUrl: "https://media.example/s.wav", consentAudioUrl: "https://media.example/c.wav" }
+  const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
+  afterEach(() => {
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+  })
+
+  it("is refused before anything is built or reserved, on both speech nodes; speech without a clone runs", () => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ nodes: { deny: ["voice-clone"] } })
+    __resetSurfaceProfileCacheForTests()
+    const tts: SimpleNode = { id: "t", type: "text-to-speech", data: { textSource: "direct", directText: "Hi.", provider: "gemini-3-8-flash-tts", replica: REPLICA } }
+    const dlg: SimpleNode = { id: "d", type: "text-to-dialogue", data: { provider: "gemini-3-8-flash-tts", dialogue: [{ id: "1", text: "Hi.", voice: "Me" }], speakers: [{ voice: "Me", replica: REPLICA }] } }
+    for (const n of [tts, dlg]) {
+      try {
+        buildPayload(n, "job-vc", {}, undefined, ctx(n))
+        expect.unreachable("a clone must be refused where voice-clone is denied")
+      } catch (e) {
+        expect((e as { code?: string }).code).toBe("node_not_available")
+        expect((e as Error).message).toContain("a one-off voice clone")
+      }
+    }
+    const plain: SimpleNode = { id: "p", type: "text-to-speech", data: { textSource: "direct", directText: "Hi.", provider: "gemini-3-8-flash-tts" } }
+    expect(buildPayload(plain, "job-vc2", {}, undefined, ctx(plain)).jobName).toBe("text-to-speech")
+  })
+})
+

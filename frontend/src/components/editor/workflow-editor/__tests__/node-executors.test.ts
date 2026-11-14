@@ -292,6 +292,37 @@ describe("runVideoGeneration", () => {
     expect(mockToastSuccess).toHaveBeenCalledWith("Video generation complete")
   })
 
+  it("a completed take records the task that made it on its result row, as on the node", async () => {
+    vi.useFakeTimers()
+    mockGenerateVideo.mockResolvedValue({ jobId: "j-task" })
+    mockGetJobStatusLean.mockResolvedValue({ status: "completed", output_data: { videoUrl: "http://vid.mp4", kieTaskId: "task-grok" } })
+    mockNodes = [{ id: "n1", data: { generatedResults: [] } }]
+    const promise = runVideoGeneration("n1", "http://frame.png", makeCtx())
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(2000)
+    await promise
+    const data = mockNodes[0].data as { kieTaskId?: string; generatedResults: Array<Record<string, unknown>> }
+    expect(data.kieTaskId).toBe("task-grok")
+    expect(data.generatedResults[0]).toMatchObject({ url: "http://vid.mp4", kieTaskId: "task-grok" })
+    // The job recorded no resolution: nothing is written.
+    expect(data.generatedResults[0]).not.toHaveProperty("recordedResolution")
+  })
+
+  it("a completed take records the resolution its job recorded beside its task, on the result row only", async () => {
+    vi.useFakeTimers()
+    mockGenerateVideo.mockResolvedValue({ jobId: "j-res" })
+    mockGetJobStatusLean.mockResolvedValue({ status: "completed", output_data: { videoUrl: "http://vid.mp4", kieTaskId: "task-grok", recordedResolution: "480p" } })
+    mockNodes = [{ id: "n1", data: { generatedResults: [], resolution: "720p" } }]
+    const promise = runVideoGeneration("n1", "http://frame.png", makeCtx())
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(2000)
+    await promise
+    const data = mockNodes[0].data as Record<string, unknown> & { generatedResults: Array<Record<string, unknown>> }
+    expect(data.generatedResults[0]).toMatchObject({ kieTaskId: "task-grok", recordedResolution: "480p" })
+    expect(data.resolution).toBe("720p")
+    expect(data).not.toHaveProperty("recordedResolution")
+  })
+
   it("forwards a Seedance reference task type, and sends no key when there is none", () => {
     mockGenerateVideo.mockReturnValue(new Promise(() => {}))
     const run = (extras?: { referenceTaskType?: "edit"; draft?: boolean }) =>

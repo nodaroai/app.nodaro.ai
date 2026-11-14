@@ -117,6 +117,18 @@ describe("POST /v1/text-to-dialogue — the voice lock", () => {
     expect(videoQueue.add).toHaveBeenCalledTimes(1)
   })
 
+  it("refuses a Gemini dialogue whole under a lock, whatever its voices — none has a recorded gender (decided 2026-11-13)", async () => {
+    maleOnly()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-dialogue",
+      payload: { provider: "gemini-3-8-flash-tts", dialogue: [{ text: "Hi.", voice: "Fola" }, { text: "Hey.", voice: "Puck" }], userId: USER_ID },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("voice_not_available")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
   it("with no lock, looks nothing up and runs any voice as before", async () => {
     const res = await talk(["Rachel", "W3C2vBPukr5b5jvoXhPK"])
 

@@ -154,6 +154,40 @@ describe("syncNodeStatesToStore — a finished node's named side outputs", () =>
     expect(byId.gen.outputKieTaskId).toBeUndefined()
   })
 
+  it("a server run's takes carry no task of their own, as before, unless a Grok Imagine video's job recorded its resolution", () => {
+    mockNodes = [
+      { id: "ext", type: "extend-video", data: { executionStatus: "running", provider: "veo-extend", kieTaskId: "orig-veo-task" } },
+      { id: "gen", type: "generate-video", data: { executionStatus: "running", provider: "veo3.1" } },
+      { id: "img", type: "generate-image", data: { executionStatus: "running", provider: "grok" } },
+    ]
+    streamBackendExecution("exec-1", ctx, vi.fn(), vi.fn())
+    const byId = sync({
+      ext: { status: "completed", output: { videoUrl: "https://cdn.test/ext.mp4", kieTaskId: "task-ext1" } },
+      gen: { status: "completed", output: { videoUrl: "https://cdn.test/gen.mp4", kieTaskId: "task-gen" } },
+      img: { status: "completed", output: { imageUrl: "https://cdn.test/img.png", kieTaskId: "task-img" } },
+    })
+    for (const id of ["ext", "gen", "img"]) {
+      const rows = byId[id]!.generatedResults as Array<Record<string, unknown>>
+      expect(rows[0]?.url, id).toMatch(/^https:\/\/cdn\.test\//)
+      expect(rows[0], id).not.toHaveProperty("kieTaskId")
+      expect(rows[0], id).not.toHaveProperty("recordedResolution")
+    }
+    // The node-level task, as before.
+    expect(byId.gen.kieTaskId).toBe("task-gen")
+    expect(byId.img.kieTaskId).toBe("task-img")
+  })
+
+  it("a server run's generation result records the resolution its job recorded beside its task, on the row only", () => {
+    mockNodes = [{ id: "gen", type: "generate-video", data: { executionStatus: "running", provider: "grok-i2v", resolution: "720p" } }]
+    streamBackendExecution("exec-1", ctx, vi.fn(), vi.fn())
+    const byId = sync({ gen: { status: "completed", output: { videoUrl: "https://cdn.test/gen.mp4", kieTaskId: "task-gen", recordedResolution: "480p" } } })
+    const rows = byId.gen.generatedResults as Array<Record<string, unknown>>
+    expect(rows[0]).toMatchObject({ kieTaskId: "task-gen", recordedResolution: "480p" })
+    // The node's own resolution is its setting: untouched.
+    expect(byId.gen.resolution).toBe("720p")
+    expect(byId.gen).not.toHaveProperty("recordedResolution")
+  })
+
   it("a Suno Separate run lands its other stems, its takes and how it ran — the reload lanes' mapping", () => {
     const output = {
       audioUrl: "https://cdn.test/vocals.mp3",

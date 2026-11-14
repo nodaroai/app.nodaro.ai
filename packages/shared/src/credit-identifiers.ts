@@ -1010,18 +1010,55 @@ export function grokExtendCreditId(duration?: unknown, sourceResolution?: unknow
 const GROK_EXTEND_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set(["generate-video", "text-to-video", "image-to-video"])
 
 /**
+ * The resolution a Grok Extend is quoted at from the clip a Grok Imagine node
+ * already made — the clip the run extends: the take its task (`kieTaskId`, the
+ * task the node hands on) names. The charge reads the resolution the source's
+ * JOB recorded (`input_data.resolution`; with none, the KIE config's pin, else
+ * Grok's own 480p default — `sourceResolution` in grok-extend-source.ts), and
+ * every lane that lands a take records that value on the result row beside
+ * the task (`recordedResolution`), so the quote reads the same fact: `480p`
+ * (any case) → `480p`; anything else, or none → `720p`, never below the charge
+ * — a take with no recorded value may have been charged at a pinned 720p. Also
+ * `720p` when no result names the node's task (a result landed before results
+ * recorded it, or the take was deleted while the node kept its task).
+ * Undefined when the node holds neither a task nor a result (it has not run).
+ */
+function grokMadeClipResolution(data: Record<string, unknown>): GrokExtendSourceResolution | undefined {
+  const rows = (Array.isArray(data.generatedResults) ? (data.generatedResults as ReadonlyArray<unknown>) : []).filter(
+    (r): r is Record<string, unknown> =>
+      typeof r === "object" && r !== null && typeof (r as { url?: unknown }).url === "string" && (r as { url: string }).url.trim() !== "",
+  )
+  const task = typeof data.kieTaskId === "string" && data.kieTaskId.trim() !== "" ? data.kieTaskId.trim() : undefined
+  if (task === undefined && rows.length === 0) return undefined
+  const named = task !== undefined ? rows.find((r) => typeof r.kieTaskId === "string" && r.kieTaskId.trim() === task) : undefined
+  const recorded = typeof named?.recordedResolution === "string" ? named.recordedResolution.trim().toLowerCase() : undefined
+  return recorded === "480p" ? "480p" : "720p"
+}
+
+/**
  * The source resolution a Grok Extend node is QUOTED at (its estimate, its
- * editor price), read off the node wired into its `video` input: `480p` only
- * when that node surely renders at 480p — a Grok Imagine video node (text- or
- * image-to-video) set to 480p, which every mode sends as set — and `720p`, the
- * dearer row, for anything else: nothing wired, another model, a Grok node with
- * no resolution set (Grok may render it at either). The run is held and
- * charged at the source's own row, read off its job.
+ * editor price), read off the node wired into its `video` input — `480p` only
+ * when the clip the extension continues is surely 480p; `720p`, the dearer
+ * row, for anything else (nothing wired, another model, a clip whose
+ * resolution is not known):
+ *
+ * - a Grok Imagine video node (text- or image-to-video) that already made a
+ *   clip and does not make a new one in the quoted run: THAT clip's
+ *   resolution ({@link grokMadeClipResolution}) — the run extends it, whatever
+ *   the node is set to now;
+ * - one that has not run yet, or runs again in the quoted run (it is in
+ *   `rerunIds` and not frozen): its setting — `480p` when set so, which every
+ *   mode sends as set; unset, Grok may render it at either.
+ *
+ * `rerunIds`: the nodes the quoted run executes — empty for one node's own
+ * price (its pill, its Run button), where nothing upstream runs again. The
+ * run is held and charged at the source's own row, read off its job.
  */
 export function grokExtendWiredSourceResolution(
   nodeId: string | undefined,
   nodes: ReadonlyArray<{ readonly id?: string; readonly type?: string; readonly data?: unknown }>,
   edges: ReadonlyArray<{ readonly source?: string; readonly target?: string; readonly targetHandle?: string | null }> | undefined,
+  rerunIds: ReadonlySet<string> = new Set(),
 ): GrokExtendSourceResolution {
   if (nodeId === undefined || !edges) return "720p"
   const sources = edges
@@ -1030,13 +1067,11 @@ export function grokExtendWiredSourceResolution(
   if (sources.length === 0) return "720p"
   const surely480p = sources.every((n) => {
     const data = (n?.data ?? {}) as Record<string, unknown>
-    return (
-      n?.type !== undefined &&
-      GROK_EXTEND_SOURCE_NODE_TYPES.has(n.type) &&
-      isGrokExtendSourceModel(data.provider) &&
-      typeof data.resolution === "string" &&
-      data.resolution.trim().toLowerCase() === "480p"
-    )
+    if (n?.type === undefined || !GROK_EXTEND_SOURCE_NODE_TYPES.has(n.type) || !isGrokExtendSourceModel(data.provider)) return false
+    const runsAgain = n.id !== undefined && rerunIds.has(n.id) && data.skipped !== true
+    const made = runsAgain ? undefined : grokMadeClipResolution(data)
+    if (made !== undefined) return made === "480p"
+    return typeof data.resolution === "string" && data.resolution.trim().toLowerCase() === "480p"
   })
   return surely480p ? "480p" : "720p"
 }

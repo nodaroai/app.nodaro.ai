@@ -14,6 +14,7 @@ import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { getVoiceName } from "@/lib/tts-voices"
+import { ttsNamedVoiceFor } from "@nodaro/shared/model-catalog"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useSpeechPricing } from "@/ee/hooks/use-speech-pricing"
 import { AudioResultOverlay } from "./audio-result-overlay"
@@ -150,7 +151,8 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
 
         <div className="flex justify-between text-muted-foreground">
           <span>{nodeData.provider}</span>
-          <span>{nodeData.voiceLabel || getVoiceName(nodeData.voiceId)}</span>
+          {/* A model with named voices (Gemini) shows the voice it runs: the node's own, else the model's default — never the ElevenLabs default. */}
+          <span>{nodeData.voiceLabel || ttsNamedVoiceFor(nodeData.provider, nodeData.voiceId) || getVoiceName(nodeData.voiceId)}</span>
         </div>
       </div>
     </BaseNode>

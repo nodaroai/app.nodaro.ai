@@ -1635,12 +1635,44 @@ const NEMOTRON_TRANSCRIBE_BYTES = 1_122
 // generate_music.
 const SUNO_V4_5_CATALOG_ENTRIES_BYTES = 135
 
+// RAISED 2026-11-12 by Google's Gemini speech models on generate_speech and list_voices (decided
+// 2026-11-12), and nothing else: the four ids in each TTS_PROVIDERS enum (generate_speech's
+// `model`, list_voices' new `model`), generate_speech's lines on the Gemini voices, tags and
+// direction, its four new arguments (`style_direction`, `pace` and `accent` with their lists,
+// `audio_profile`), list_voices' sentence on `model`, and the `voice_id` describe's note that a
+// Gemini model takes only its own voices. No tool was added, so the fixture does NOT move.
+// Measured by this suite: 530_265 total − 528_781 = 1_484 B.
+const GEMINI_TTS_BYTES = 1_484
+
+// RAISED 2026-11-13 by two-speaker dialogue on the Gemini speech models (decided 2026-11-12), and
+// nothing else: the four ids in generate_dialogue's `model` enum (DIALOGUE_PROVIDERS), its lines on
+// the Gemini models, the line's `style_direction`, the `speakers` argument (each voice's style, pace
+// and accent with their lists, audio profile), `filler_words` and `output_format` (decided
+// 2026-11-13). No tool was added, so the fixture does NOT move. Measured by this suite: 1_512 B,
+// then 223 B for `output_format` (533_861 total − 533_638) = 1_735 B.
+const GEMINI_DIALOGUE_BYTES = 1_735
+
+// RAISED 2026-11-13 by the one-off voice clone on Gemini 3.8 Flash (decided 2026-11-13), and nothing
+// else: generate_speech's `replica` (its two links, the consent sentence the recording reads, the line
+// on who and what), and a generate_dialogue speaker's shorter `replica`. No tool was added, so the
+// fixture does NOT move. Measured by this suite: 534_959 total − 533_861 = 1_098 B, then 405 B for the
+// required `consent` on both (the user's confirmation, its sentence in generate_speech's): 1_503 B.
+const GEMINI_REPLICA_BYTES = 1_503
+
 // RAISED 2026-11-13 by Nemotron 3.5 Transcribe joining Add Captions' engines, and nothing else:
 // `add_captions`'s `transcribe_provider` enum (CAPTION_TRANSCRIBE_LANES) gains its id (26 B); its
 // describe was tightened (−14 B) to keep add_captions inside its own headroom
 // (add-captions-max-words-per-line.test.ts), the price living in its skill. No tool added, so the
 // fixture does not move. 12 B, all on add_captions.
 const ADD_CAPTIONS_NEMOTRON_BYTES = 12
+
+// RAISED 2026-11-13 by video subjects on Kling 4.0 / Kling 4.0 Flash, and nothing else:
+// generate_video's `character_references` items gain `video_url` (a 3-8 s clip of the
+// character, sent as a video subject), and the Flash voice note in `reference_audio_urls`
+// now says a clip binds to a character that is a subject (images or a clip). No tool was
+// added, so the fixture does NOT move. Measured by this suite: 530_952 total − 530_864 =
+// 88 B, all on generate_video (9_864 → 9_952 B, inside the per-tool budget).
+const KLING_4_VIDEO_SUBJECT_BYTES = 88
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES,
@@ -1848,7 +1880,11 @@ export const TOOL_WIRE_BUDGET = {
     FLUX_3_KLEIN_TOTAL_BYTES +
     NEMOTRON_TRANSCRIBE_BYTES +
     ADD_CAPTIONS_NEMOTRON_BYTES +
-    SUNO_V4_5_CATALOG_ENTRIES_BYTES,
+    SUNO_V4_5_CATALOG_ENTRIES_BYTES +
+    GEMINI_TTS_BYTES +
+    GEMINI_DIALOGUE_BYTES +
+    GEMINI_REPLICA_BYTES +
+    KLING_4_VIDEO_SUBJECT_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -363,6 +363,10 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [...new Set<keyof NodeOutput
   "splitResults",
   "combinedText",
   "kieTaskId",
+  // The resolution the job recorded beside its task (job-finalize 3c): a
+  // server run's take carries it onto its result row, where a Grok Extend's
+  // quote reads it.
+  "recordedResolution",
   "listResults",
   "brandLessons",
   "approved",

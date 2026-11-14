@@ -17,7 +17,11 @@ import {
   runKieTask,
   MAX_POLL_ATTEMPTS_VIDEO,
 } from "./client.js"
-import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS } from "./models.js"
+import { KIE_CREDIT_USD, KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS } from "./models.js"
+import { getTtsCapabilities, ttsDirectionFor, ttsNamedVoiceFor } from "@nodaro/shared/model-catalog"
+import { sentSpeechText } from "@nodaro/prompts/prompt-fields"
+import { isGeminiTtsModel } from "./gemini-tts-models.js"
+import { geminiSpeechInput, runGeminiSpeech } from "./gemini-tts.js"
 import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
@@ -170,6 +174,18 @@ export class KieAudioProvider
   ): Promise<ProviderResult> {
     // Map legacy "elevenlabs" to "elevenlabs-turbo"
     const provider = model === "elevenlabs" ? "elevenlabs-turbo" : (model ?? "elevenlabs-turbo")
+    // Gemini speech has its own request shape (kie/gemini-tts.ts): its named voice, its tags, its direction.
+    if (isGeminiTtsModel(provider)) {
+      const sent = sentSpeechText(text, getTtsCapabilities(provider))
+      const direction = ttsDirectionFor(provider, { ...options })
+      const input = geminiSpeechInput(
+        provider,
+        [{ voice: ttsNamedVoiceFor(provider, voice)!, direction }],
+        [{ speaker: 0, text: sent, ...(direction.styleDirection ? { style: direction.styleDirection } : {}) }],
+      )
+      const result = await runGeminiSpeech(provider, input, reconcileOpts)
+      return { url: result.url, cost: result.kieCredits !== undefined ? result.kieCredits * KIE_CREDIT_USD : KIE_TTS_MODELS[provider]!.cost, ...(result.providerMs !== undefined && { providerMs: result.providerMs }) }
+    }
     const modelConfig = KIE_TTS_MODELS[provider]
     if (!modelConfig) {
       throw createSanitizedError(

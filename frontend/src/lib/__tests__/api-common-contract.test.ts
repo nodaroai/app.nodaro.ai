@@ -424,6 +424,31 @@ describe("textToDialogueApi", () => {
 
     expect(parseBody(mock)).toEqual({ dialogue: [{ text: "Hi", voice: "v1" }] })
   })
+
+  it("sends a line's style, the speakers and filler words when given; an empty speaker list is not sent", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "jd" })
+    vi.stubGlobal("fetch", mock)
+
+    const dialogue = [{ text: "Hi", voice: "Kore", styleDirection: "Warm" }, { text: "Bye", voice: "Puck" }]
+    await textToDialogueApi(dialogue, undefined, undefined, undefined, undefined, undefined, "gemini-3-1-flash-tts", undefined, {
+      speakers: [{ voice: "Kore", pace: "Natural" }],
+      fillerWords: false,
+      outputFormat: "wav_24000",
+    })
+    expect(parseBody(mock)).toEqual({
+      dialogue,
+      provider: "gemini-3-1-flash-tts",
+      speakers: [{ voice: "Kore", pace: "Natural" }],
+      fillerWords: false,
+      outputFormat: "wav_24000",
+    })
+
+    const empty = mockFetchJson({ jobId: "jd" })
+    vi.stubGlobal("fetch", empty)
+    await textToDialogueApi([{ text: "Hi", voice: "Kore" }], undefined, undefined, undefined, undefined, undefined, undefined, undefined, { speakers: [] })
+    expect(parseBody(empty)).toEqual({ dialogue: [{ text: "Hi", voice: "Kore" }] })
+  })
 })
 
 // ===========================================================================

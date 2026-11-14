@@ -38,6 +38,7 @@
  * A double press is one Retry: the execution is keyed by the run's current one.
  */
 import type { FastifyInstance } from "fastify"
+import { cloneRecordingsRefusal, cloneRunCheck } from "../lib/clone-app-run.js"
 import { z } from "zod"
 import { filterCloneNodes } from "@nodaro/shared/workflow"
 import { CONTINUATION_SUBSET_REQUIRED, isPreviewHoldingType, withRunOverrides } from "@nodaro/shared/nodes"
@@ -267,6 +268,11 @@ export async function appRunResumeRoutes(app: FastifyInstance) {
         })
         if (stop) return reply.status(400).send({ error: stop })
       }
+      // A one-off voice clone the Retry runs: the runner's own recordings and consent, as the run applied
+      // them (decided 2026-11-13; lib/clone-app-run.ts). Refused before anything is priced or held; the
+      // recordings themselves are read after the credit checks below.
+      const cloneCheck = await cloneRunCheck(nodes, edges, effective, runSet, version.creator_id ?? "", userId)
+      if (cloneCheck.refusal) return reply.status(cloneCheck.refusal.status).send({ error: cloneCheck.refusal.error })
 
       const billingContext = req.billingContext ?? personalPayer(userId)
       const webFreeMode = await resolveWebSurfaceFlag(req)
@@ -327,6 +333,11 @@ export async function appRunResumeRoutes(app: FastifyInstance) {
             error: { code: "insufficient_credits", message: price.message ?? `This retry can hold up to about ${price.holdCredits} credits; your balance is ${price.available ?? 0}.` },
           })
         }
+      }
+
+      {
+        const refusal = await cloneRecordingsRefusal(cloneCheck.recordings)
+        if (refusal) return reply.status(refusal.status).send({ error: refusal.error })
       }
 
       // One Retry per execution the run points at: a double press is the same Retry.

@@ -116,7 +116,9 @@ const SPEECH_JOB_LITERAL = new RegExp(`"(${ALL_SPEECH_JOB_TYPES.join("|")})"`)
  */
 const JOB_CREATORS: Readonly<Record<string, { readonly judges: RegExp; readonly row?: RegExp }>> = {
   "routes/text-to-speech.ts": { judges: /await judgeVoice\(parsed\.data\.voice, \{ userId \}\)/, row: /insertJob\(/ },
-  "routes/text-to-dialogue.ts": { judges: /await judgeVoices\(dialogue\.map\(\(line\) => line\.voice\), \{ userId \}\)/, row: /insertJob\(/ },
+  // A cloned speaker's label (a one-off clone, decided 2026-11-13) is no stored voice: left out of the judge (the
+  // Gemini models are refused whole under a lock before this), every other line's voice judged.
+  "routes/text-to-dialogue.ts": { judges: /await judgeVoices\(dialogue\.map\(\(line\) => line\.voice\)\.filter\(\(v\) => !clones\.has\(v\)\), \{ userId \}\)/, row: /insertJob\(/ },
   "routes/voice-changer.ts": { judges: /await judgeVoice\(voiceId, \{ userId \}\)/, row: /insertJob\(/ },
   "routes/generate-video.ts": {
     judges: /if \(dispatchesVoicedVideo\(parsed\.data\)\) \{\s*const voiceVerdict = await judgeVoicesUnderLock\(\s*voicesTheVoicedVideoSends\(\{ prompt, dialogue, characterVoices, dialogueProvider: voicedDialogueProvider\(characterVoices\) \}, provider\),\s*\{ userId \},?\s*\)/,

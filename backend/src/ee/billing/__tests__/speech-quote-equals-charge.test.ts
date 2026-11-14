@@ -56,6 +56,8 @@ import {
   parseSpeechQuoteCreditId,
   speechPriceUnits,
   speechQuoteCreditId,
+  speechRowCredits,
+  speechRowUnits,
   speechUnitCreditId,
 } from "@nodaro/shared/credits"
 import {
@@ -68,7 +70,7 @@ import {
 } from "../credits.js"
 import { applyServiceMarkup } from "../service-margin.js"
 import { billableDialogueChars, billableSpeechChars, dialogueBaseCredits, speechBaseCredits, speechRunsAs } from "../../../lib/speech-credits.js"
-import { speechChargeOverride, speechEstimateChars, type SpeechEstimateContext } from "../../../lib/speech-estimate.js"
+import { speechChargeOverride, speechPriceChars, type SpeechEstimateContext } from "../../../lib/speech-estimate.js"
 import { resolveTextToSpeechGuardProvider } from "../../../routes/text-to-speech.js"
 import { DIALOGUE_PARITY_CASES, SPEECH_PARITY_CASES } from "../../../lib/__tests__/speech-parity-cases.js"
 
@@ -78,7 +80,7 @@ type Case = {
   nodeType: string
   data: Record<string, unknown>
   ctx?: Record<string, unknown>
-  expect: { runsAs: string; chars: number; exact: boolean; units: number; quoteId: string; credits: number }
+  expect: { runsAs: string; chars: number; exact: boolean; units: number; quoteId: string; credits: number; scriptChars?: number }
 }
 const FIXTURE = resolve(__dirname, "../../../../../tools/fixtures/speech-estimate-cases.json")
 const fixture = JSON.parse(readFileSync(FIXTURE, "utf8")) as {
@@ -121,13 +123,13 @@ describe("the fixture's charge — every case, at its non-zero percent", () => {
   it.each(fixture.cases.map((c) => [c.name, c] as const))("%s", async (_name, c) => {
     const data = expand(c.data) as Record<string, unknown>
     const ctx = (c.ctx ? expand(c.ctx) : {}) as SpeechEstimateContext
-    const e = speechEstimateChars(c.nodeType, data, ctx)
+    const e = speechPriceChars(c.nodeType, data, ctx)
     const units = speechPriceUnits(e.chars)
     const quoteId = speechQuoteCreditId(e.runsAs, units)
     expect(quoteId).toBe(c.expect.quoteId)
 
     // What the run reserves: the base of those characters on the model's unit row, marked up once at the model.
-    const base = units * STATIC_CREDIT_COSTS[speechUnitCreditId(e.runsAs)]!
+    const base = speechRowCredits(units, STATIC_CREDIT_COSTS[speechUnitCreditId(e.runsAs)]!, speechRowUnits(e.runsAs))
     expect(applyServiceMarkup(base, settings.current as never, e.runsAs)).toBe(c.expect.credits)
 
     // What a client is told: the batch endpoint's rule over the price table, and the single GET.
@@ -181,7 +183,9 @@ describe("every lane's charge equals the quote of the same request (per-model ma
 
 describe("what the quote ids accept", () => {
   it("a request of any length a model can run: from the floor up to its cap in started hundreds", () => {
-    expect(parseSpeechQuoteCreditId("elevenlabs-v4:per-100-chars:8u")).toEqual({ model: "elevenlabs-v4", unitId: "elevenlabs-v4:per-100-chars", units: 8 })
+    expect(parseSpeechQuoteCreditId("elevenlabs-v4:per-100-chars:8u")).toEqual({ model: "elevenlabs-v4", unitId: "elevenlabs-v4:per-100-chars", units: 8, rowUnits: 1 })
+    // A model quoted per 1,000 characters keeps the one id shape: N started hundreds, on its per-1K row.
+    expect(parseSpeechQuoteCreditId("gemini-3-8-flash-tts:per-100-chars:8u")).toEqual({ model: "gemini-3-8-flash-tts", unitId: "gemini-3-8-flash-tts:per-1k-chars", units: 8, rowUnits: 10 })
     expect(parseSpeechQuoteCreditId("elevenlabs-v4:per-100-chars:100u")?.units).toBe(100)
     expect(parseSpeechQuoteCreditId("elevenlabs-turbo:per-100-chars:400u")?.units).toBe(400)
     expect(parseSpeechQuoteCreditId("elevenlabs-dialogue:per-100-chars:50u")?.units).toBe(speechPriceUnits(getDialogueCapabilities("elevenlabs-dialogue").maxChars))

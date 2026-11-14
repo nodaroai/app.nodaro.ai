@@ -22,6 +22,9 @@ import { runVeoExtendTask, runVeo1080pTask, runVeo4kTask, KieError } from "../..
 import { runRunwayExtendTask } from "../../providers/kie/runway-client.js"
 import { replicateLipSync } from "../../providers/replicate/lip-sync.js"
 import { falLipSync } from "../../providers/fal/lip-sync.js"
+import { prepareLipSyncAudio } from "../../providers/kie/lip-sync-audio.js"
+import { lipSyncAudioPricingOf, lipSyncModelLabel } from "../../lib/lip-sync-inputs.js"
+import { providersCanFetchOwnMedia } from "../../lib/own-media-reachability.js"
 import { replicateFaceSwap } from "../../providers/replicate/face-swap.js"
 import { runGroundedSam } from "../../providers/replicate/grounded-sam.js"
 import {
@@ -113,6 +116,7 @@ import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
 import { planVoicedDialogue, voicesTheVoicedVideoSends } from "../../lib/voiced-dialogue-lines.js"
+import { voicedSpeechProvider } from "../../lib/voiced-dialogue-model.js"
 import { assertVoicesAllowed } from "../../lib/voice-lock.js"
 
 /**
@@ -943,7 +947,8 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     alignAudio?: boolean
     alignAudioReverse?: boolean
     templStartSeconds?: number
-    // A per-second-rate model (OmniHuman 2.0): the seconds the run was held for.
+    // A model priced by its audio's length: the seconds the run was held for
+    // (OmniHuman 2.0's whole seconds, a bucketed model's bucket).
     lipSyncBilledSeconds?: number
   }
 
@@ -990,6 +995,31 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   }
   const lipSyncOnTaskCreated = makeOnTaskCreated(ctx.jobId, lipSyncKind)
 
+  // A model priced by a length BUCKET (Kling AI Avatar, OmniHuman 1.5, the
+  // dubbing models — decided 2026-11-13): the run was held on the price
+  // check's measurement of the caller's URL, so whatever lane runs it is sent
+  // OUR copy of that audio, never the caller's URL — downloaded once here,
+  // decoded by the price check's own decode, refused (failed and refunded,
+  // nothing sent) when it now bills a bigger bucket than was held, and
+  // encoded to MP3 from exactly the samples counted, cut under the model's
+  // maximum when it plays past it (`prepareLipSyncAudio`, the per-second-rate
+  // model's own path). A job carrying no held seconds was not priced from its
+  // audio here (queued before this rule, or a pipeline step that priced its own
+  // generated speech): it runs as it was priced. A per-second-rate model
+  // (OmniHuman 2.0) prepares its audio inside its provider, as before.
+  // On an install whose storage no outside provider can fetch (no publicly
+  // reachable media host — the community edition's default, decided
+  // 2026-11-13) our copy would be a link the provider cannot open, so every
+  // lane runs as before: the caller's own link, and the KIE lane's own trim.
+  const bucketPricing = lipSyncAudioPricingOf(resolvedProvider)
+  let sendAudioUrl = audioUrl
+  let audioPrepared = false
+  if (bucketPricing?.kind === "bucket" && lipSyncBilledSeconds !== undefined && providersCanFetchOwnMedia()) {
+    const prepared = await prepareLipSyncAudio(audioUrl, bucketPricing, lipSyncModelLabel(resolvedProvider), lipSyncBilledSeconds)
+    sendAudioUrl = prepared.url
+    audioPrepared = true
+  }
+
   if (onReplicate) {
     // Replicate path
     const faceUrl = videoUrl || imageUrl
@@ -998,7 +1028,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     const { videoUrl: outUrl, cost } = await replicateLipSync(
       resolvedProvider,
       faceUrl,
-      audioUrl,
+      sendAudioUrl,
       { guidanceScale, inferenceSteps, seed, pads, smooth, fps, resizeFactor, enhancer, preprocess, still, poseStyle, expressionScale, enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement, syncMode, temperature, activeSpeaker },
       { onTaskCreated: lipSyncOnTaskCreated },
     )
@@ -1047,7 +1077,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     const out = await falLipSync(
       resolvedProvider,
       faceUrl,
-      audioUrl,
+      sendAudioUrl,
       { syncMode, audioDurationSec, activeSpeaker },
       { onTaskCreated: lipSyncOnTaskCreated },
     )
@@ -1063,9 +1093,9 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     if (!videoUrl) throw new Error("Volcengine lip sync requires a video input (videoUrl)")
     const result = await lipSyncVideo(
       videoUrl,
-      audioUrl,
+      sendAudioUrl,
       resolvedProvider,
-      { mode, separateVocal, openScenedet, alignAudio, alignAudioReverse, templStartSeconds },
+      { mode, separateVocal, openScenedet, alignAudio, alignAudioReverse, templStartSeconds, ...(audioPrepared ? { audioPrepared } : {}) },
       audioDurationSec,
       { onTaskCreated: lipSyncOnTaskCreated },
     )
@@ -1079,13 +1109,13 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     // kling-avatar(-pro) and selects the longer poll budget for >30s runs.
     const result = await lipSync(
       imageUrl!,
-      audioUrl,
+      sendAudioUrl,
       resolvedProvider,
       prompt,
       resolution,
       audioDurationSec,
       { onTaskCreated: lipSyncOnTaskCreated },
-      { fastMode, seed, ...(lipSyncBilledSeconds !== undefined ? { billedSeconds: lipSyncBilledSeconds } : {}) },
+      { fastMode, seed, ...(lipSyncBilledSeconds !== undefined ? { billedSeconds: lipSyncBilledSeconds } : {}), ...(audioPrepared ? { audioPrepared } : {}) },
     )
     resultUrl = result.url
     resultCost = result.cost
@@ -2390,7 +2420,8 @@ async function synthesizeDialogueTrack(
   }
   // Single voice → direct ElevenLabs TTS (supports library/custom by id;
   // premade names resolve too). Honour the voice's ttsProvider.
-  const ttsProvider = voices[0]?.ttsProvider
+  // (A Gemini model, which speaks only its own named voices, is not offered on this lane: voicedSpeechProvider.)
+  const ttsProvider = voicedSpeechProvider(voices[0]?.ttsProvider)
   const joined = resolved.map((r) => r.text).join(" ")
   const processed = ttsSupportsAudioTags(ttsProvider) ? joined : stripAudioTags(joined)
   const buf = await directElevenLabsTTS(processed, resolved[0]!.voice, ttsProvider, {

@@ -64,7 +64,8 @@ describe("a workflow's Lip Sync node under models.allow", () => {
       const allowed = buildLipSync(node({ provider, audioDurationSec: 42 }))
       expect(allowed).toEqual(unrestricted)
       expect(allowed.jobName).toBe("lip-sync")
-      expect(allowed.modelIdentifier).toBe(provider === "latentsync" ? "latentsync" : `${provider}:60s`)
+      // A bucketed model's build prices no length: the run measures its bucket (decided 2026-11-13).
+      expect(allowed.modelIdentifier).toBe(provider)
       expect(allowed.payload).toMatchObject({ provider, videoUrl: VIDEO, audioUrl: AUDIO })
     })
 

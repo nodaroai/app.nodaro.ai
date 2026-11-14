@@ -76,6 +76,7 @@
     "jsdom": "^27.4.0",
     "node-cron": "^4.2.1",
     "onnxruntime-node": "1.30.0",
+    "pdf-lib": "1.17.1",
     "pg": "^8.23.0",
     "qrcode": "^1.5.4",
     "replicate": "^1.4.0",

@@ -186,6 +186,8 @@ const CLEANED_AT_JOB_END: Readonly<Record<string, string>> = {
  * job's id. A new call site fails this census until someone checks which.
  */
 const SCRATCH_CALL_SITES: Readonly<Record<string, string>> = {
+  "lib/voice-replica.ts :: \"replica-source\"": "a one-off voice clone's reference recording, the bytes `readReplica` judged (never the caller's link), sent to KIE: `stageReplica` is called only from the speech handlers, inside a video-worker job (the running job's id)",
+  "lib/voice-replica.ts :: \"replica-consent\"": "a one-off voice clone's consent recording, the bytes judged, sent to KIE: from the speech handlers, inside a video-worker job (the running job's id)",
   "lib/private-plugins/toolkit.ts :: name": "the plugin toolkit's `storage.uploadJobScratchFile`: a plugin's job handler, which the video worker runs inside `runWithJobCancellation` (the running job's id; the member takes no job id)",
   "lib/still-input-image.ts :: \"still-input\"": "a GIF or SVG input drawn as a PNG still for an image model: called from the provider router's image calls, which run only inside a video-worker job or a plugin's job handler (the running job's id)",
   "providers/kie/image.ts :: \"prepared-mask\"": "a mask in the form its model reads (Ideogram edit's resized and inverted to black = edit; GPT Image 2.6's an RGBA PNG, transparent = change): the KIE image provider runs only inside a video-worker job (the running job's id)",

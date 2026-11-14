@@ -1,7 +1,7 @@
 ---
 node_type: text-to-dialogue
-generated_at: 2026-10-14T00:02:33.272Z
-generated_from: b83a9467d
+generated_at: 2026-11-13T09:51:39.388Z
+generated_from: 1fc72a06b3
 ---
 
 # Text to Dialogue
@@ -9,7 +9,7 @@ generated_from: b83a9467d
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `text-to-dialogue`
 **Category:** ai
-**Credit cost:** `28` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `5-28` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `prompt`
 **Outputs (source handles):** `audio`, `json`
 
@@ -25,6 +25,9 @@ generated_from: b83a9467d
 - `similarityBoost?: number`
 - `seed?: number`
 - `applyTextNormalization?: "auto" | "on" | "off"`
+- `speakers?: DialogueSpeakerDirection[]`
+- `fillerWords?: boolean`
+- `outputFormat?: TtsOutputFormat`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`

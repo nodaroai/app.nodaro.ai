@@ -28,6 +28,7 @@ import { describeLockedOverrides, findLockedOverrides } from "../lib/input-overr
 import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../lib/exposed-unit-field-check.js"
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
+import { cloneRunRefusal } from "../lib/clone-app-run.js"
 import { requireScope } from "../lib/scopes.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { completedJobColumns } from "../lib/job-status.js"
@@ -203,6 +204,17 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       ) {
         return reply.status(400).send({ error: { ...UGC_APP_PHOTO_REQUIRED } })
       }
+      // A one-off voice clone: the caller's own recordings and consent, or refused before the wrapper
+      // job exists (lib/clone-app-run.ts; decided 2026-11-13).
+      const cloneRefusal = await cloneRunRefusal(
+        componentNodes,
+        (appRow.snapshot_edges ?? []) as ReadonlyArray<{ source?: string; target?: string; targetHandle?: string | null }>,
+        inputOverrides,
+        undefined,
+        appRow.creator_id as string,
+        req.userId!,
+      )
+      if (cloneRefusal) return reply.status(cloneRefusal.status).send({ error: cloneRefusal.error })
     }
 
     // A metered LLM call on a model with no price (R51): refused before the wrapper job exists, so no

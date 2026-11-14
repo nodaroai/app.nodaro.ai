@@ -10,13 +10,15 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { TTS_OUTPUT_FORMATS, TTS_PROVIDERS, getMaxTtsChars } from "@nodaro/shared/models"
-import { ttsSupportsStitching } from "@nodaro/shared/model-catalog"
+import { ttsAcceptsVoice, ttsAngleTags, ttsDirectionFor, ttsDirectionProblem, ttsNamedVoices, ttsReplicaProblem, replicaConsentProblem, ttsSupportsStitching } from "@nodaro/shared/model-catalog"
 import { resolveOmittedTtsProvider, ttsModelOf } from "../lib/omitted-tts-provider.js"
 import { speechLengthPricingEnabled } from "../lib/config.js"
 import { speechBaseCredits } from "../lib/speech-credits.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { judgeVoice, voiceNotAvailableBody } from "../lib/voice-gender.js"
+import { judgeNamedVoiceModel } from "../lib/voice-lock.js"
+import { readReplica, ReplicaRecordingError, withoutReplicaLinks } from "../lib/voice-replica.js"
 import { TTS_VOICE_SETTING_RANGES, type TtsVoiceSettingKey } from "../providers/elevenlabs/voice-settings.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../providers/elevenlabs/neighbour-text.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
@@ -65,12 +67,26 @@ export const textToSpeechBody = z.object({
   // The file to deliver (`TTS_OUTPUT_FORMATS`): omitted ⇒ the MP3 every request delivered before
   // the field existed, so the payload and the vendor request stay byte-identical without it.
   outputFormat: z.enum(TTS_OUTPUT_FORMATS).optional(),
+  // A one-off clone of a speaker's voice (Gemini 3.8 Flash, decided 2026-11-13): two https links to WAV
+  // recordings — a reference and a consent recording — in place of `voice`. Judged in the refinement (the
+  // model must clone) and again before any hold (the recordings themselves, `lib/voice-replica.ts`).
+  // `consent: true` is the caller's confirmation of the editor checkbox's sentence (REPLICA_CONSENT_ATTESTATION).
+  replica: z.object({ sourceAudioUrl: z.string().max(2048), consentAudioUrl: z.string().max(2048), consent: z.boolean().optional() }).optional(),
   // What is spoken just before / after this clip in the finished piece — context a stitching
   // model (v4) uses for one continuous intonation across clips; the funnel sends it only to a
   // model whose sheet takes it. Checked in the refinement below, because whether a value can
   // matter depends on the model the request runs as.
   previousText: z.unknown().optional(),
   nextText: z.unknown().optional(),
+  // Style direction, for a model whose sheet takes it (Gemini): `styleDirection` is free text on
+  // 3.8 and one of the model's styles on 3.1 / 2.5; `pace`, `accent`, `audioProfile` on 3.1 / 2.5.
+  // Judged in the refinement below against the model the request runs as; a field the model does
+  // not take is never sent (as the neighbour text on a model that does not stitch). Never spoken,
+  // never billed (decided 2026-11-12).
+  styleDirection: z.unknown().optional(),
+  pace: z.unknown().optional(),
+  accent: z.unknown().optional(),
+  audioProfile: z.unknown().optional(),
 })
   // The route REJECTS an unusable value (a REST caller gets a 400, not a silently shortened
   // request) — but ONLY for a model whose sheet stitches: on any other model the fields are
@@ -78,7 +94,23 @@ export const textToSpeechBody = z.object({
   // an unknown key was stripped). The cap is measured on the TRIMMED text, as the funnel does.
   // The orchestrator path, which skips this Zod, is trimmed at the exit (neighbour-text.ts).
   .superRefine((body, ctx) => {
-    if (!ttsSupportsStitching(resolveRequestProvider(body.provider, body.text))) return
+    const runsAs = resolveRequestProvider(body.provider, body.text)
+    // A model with named voices speaks only those (Gemini): any other voice — an ElevenLabs id, a
+    // clone, a voice of the other Gemini generation — is refused here, before any hold, with the list.
+    const named = ttsNamedVoices(runsAs)
+    if (named && body.voice !== undefined && body.voice !== "" && !ttsAcceptsVoice(runsAs, body.voice)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["voice"],
+        message: `${body.voice} is not a voice of ${runsAs}. Its voices: ${named.map((v) => v.id).join(", ")}`,
+      })
+    }
+    const direction = ttsDirectionProblem(runsAs, body)
+    if (direction) ctx.addIssue({ code: "custom", path: [direction.field], message: direction.message })
+    // A one-off clone on a model that does not clone is refused, never dropped (someone else's voice would speak).
+    const replica = ttsReplicaProblem(runsAs, body.replica) ?? replicaConsentProblem(body.replica)
+    if (replica) ctx.addIssue({ code: "custom", path: ["replica"], message: replica })
+    if (!ttsSupportsStitching(runsAs)) return
     for (const key of ["previousText", "nextText"] as const) {
       const value = body[key]
       if (value === undefined) continue
@@ -94,6 +126,10 @@ export const textToSpeechBody = z.object({
     ...body,
     previousText: typeof body.previousText === "string" ? body.previousText : undefined,
     nextText: typeof body.nextText === "string" ? body.nextText : undefined,
+    styleDirection: typeof body.styleDirection === "string" ? body.styleDirection : undefined,
+    pace: typeof body.pace === "string" ? body.pace : undefined,
+    accent: typeof body.accent === "string" ? body.accent : undefined,
+    audioProfile: typeof body.audioProfile === "string" ? body.audioProfile : undefined,
   }))
 
 /**
@@ -166,14 +202,35 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
     const resolvedProvider = resolveRequestProvider(parsed.data.provider, parsed.data.text)
     const modelIdentifier = resolvedProvider
 
+    // A model that speaks only its own named voices (Gemini) under a voice lock: refused whole, whatever voice is
+    // named — no gender is recorded for its voices, and naming none runs its default (decided 2026-11-13).
+    if (!judgeNamedVoiceModel(resolvedProvider).allowed) {
+      return reply.status(400).send(voiceNotAvailableBody())
+    }
+
     // Clamp to the model's verified per-request character cap (turbo 40000 /
     // multilingual 10000 / v3 5000) so an over-long request can't be rejected by
     // the provider. Mutate parsed.data BEFORE destructuring below so both
     // input_data (built from parsed.data) and the queue payload (built from
-    // the destructured `text`) see the clamped value.
-    parsed.data.text = parsed.data.text.slice(0, getMaxTtsChars(resolvedProvider))
+    // the destructured `text`) see the clamped value. On an angle-tag model
+    // (Gemini 3.8) the text is kept as given: its tags are rewritten first and
+    // the cap applied after (`sentSpeechText`, the worker's and the credit
+    // guard's one rule), since a rewrite can lengthen it (decided 2026-11-13).
+    if (!ttsAngleTags(resolvedProvider)) parsed.data.text = parsed.data.text.slice(0, getMaxTtsChars(resolvedProvider))
 
-    const { text, voice, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, withTimestamps, outputFormat } = parsed.data
+    const { text, voice, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, withTimestamps, outputFormat, replica } = parsed.data
+
+    // A one-off clone's recordings are judged before anything is held: an https link, allowed here, a WAV
+    // within 10 MB, the reference 10–30 s. Nothing is stored; the worker judges them again and sends its own
+    // scratch copies. Their links are never written on the job row.
+    if (replica) {
+      try {
+        await readReplica(replica)
+      } catch (err) {
+        if (err instanceof ReplicaRecordingError) return reply.status(400).send({ error: { code: err.code, message: err.message } })
+        throw err
+      }
+    }
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await insertJob(req, {
@@ -182,7 +239,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: { ...buildJobInputData(parsed.data, "text-to-speech"), resolvedModel: resolvedProvider },
+        input_data: { ...buildJobInputData(withoutReplicaLinks(parsed.data), "text-to-speech"), resolvedModel: resolvedProvider },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -210,8 +267,12 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       // Only when asked: an absent key keeps the payload byte-identical.
       ...(withTimestamps ? { withTimestamps } : {}),
       ...(outputFormat ? { outputFormat } : {}),
+      ...(replica ? { replica } : {}),
       previousText,
       nextText,
+      // The direction the model takes, and only that (an ElevenLabs model takes none, so its
+      // payload is byte-identical to before the fields existed).
+      ...ttsDirectionFor(resolvedProvider, parsed.data),
       // LLM-originated (MCP) requests may carry a hallucinated voice id —
       // only they get the Rachel voice_not_found fallback. User-picked
       // voices fail loudly (see directElevenLabsTTS).

@@ -111,28 +111,50 @@ export function pauseRanges(words: readonly TimedWord[], durationSeconds: number
 }
 
 /**
- * Hesitation sounds in the languages Nodaro speaks: "um", "אממ", "えーと", "음",
- * "hã". Only sounds that are never a word of their own: "ah", "あの" or "그"
- * can be speech, and cutting them would cut the sentence.
+ * Hesitation sounds, by the language the video is spoken in. Only sounds that
+ * are never a word of their own in that language: "ah", "あの" or "그" can be
+ * speech, and "um" is a word in Portuguese ("um carro") and German ("um 8 Uhr"),
+ * so each language cuts only its own sounds.
  */
-const FILLER_WORDS = new Set([
-  "um", "umm", "uh", "uhh", "uhm", "erm", "hmm", "mm", "mmm",
-  "אממ", "אמממ", "אמ", "אהה", "אההה", "ממ", "מממ", "הממ",
-  "えー", "えーと", "えっと", "あのー", "うーん",
-  "음", "으음",
-  "hã", "ãh", "hum", "ahn",
-])
+const FILLERS_BY_LANGUAGE: Readonly<Record<string, ReadonlySet<string>>> = {
+  en: new Set(["um", "umm", "uh", "uhh", "uhm", "erm", "hmm", "mmm"]),
+  he: new Set(["אממ", "אמממ", "אמ", "אהה", "אההה", "ממ", "מממ", "הממ"]),
+  ja: new Set(["えー", "えーと", "えっと", "あのー", "うーん"]),
+  ko: new Set(["음", "으음"]),
+  pt: new Set(["hã", "ãh", "ahn", "hum", "humm"]),
+}
+
+/** Sounds that are a word in none of the languages served: cut whatever the language, or when it is not known. */
+const UNIVERSAL_FILLERS: ReadonlySet<string> = new Set(["umm", "uhh", "uhm", "erm", "hmm", "mmm"])
+
+// The transcriber answers ISO 639-3 ("eng"); other engines answer "en" or "pt-BR".
+const LANGUAGE_3_TO_2: Readonly<Record<string, string>> = { eng: "en", heb: "he", jpn: "ja", kor: "ko", por: "pt" }
+
+/** The language a transcript says it is in, as a two-letter code; null when it does not say. */
+export function transcriptLanguage(json: unknown): string | null {
+  const raw = (json as { language?: unknown } | null)?.language
+  if (typeof raw !== "string") return null
+  const code = raw.trim().toLowerCase().split(/[-_]/)[0] ?? ""
+  return LANGUAGE_3_TO_2[code] ?? (/^[a-z]{2}$/.test(code) ? code : null)
+}
 
 const normalizeWord = (text: string) => text.toLowerCase().replace(/[\p{P}\p{S}]+/gu, "").trim()
 
-export const isFillerWord = (word: TimedWord) => FILLER_WORDS.has(normalizeWord(word.text))
+/** A hesitation sound in `language` (a two-letter code), or one that is a word in no language. */
+export function isFillerWord(word: TimedWord, language: string | null): boolean {
+  const text = normalizeWord(word.text)
+  return UNIVERSAL_FILLERS.has(text) || (language ? FILLERS_BY_LANGUAGE[language]?.has(text) === true : false)
+}
 
 /** The filler words, each as a range of its own sound. */
-export function fillerRanges(words: readonly TimedWord[]): Array<SecondsRange & { readonly word: string }> {
-  return words.filter(isFillerWord).map((w) => ({ start: Math.max(0, w.start - 0.03), end: w.end + 0.03, word: w.text }))
+export function fillerRanges(words: readonly TimedWord[], language: string | null): Array<SecondsRange & { readonly word: string }> {
+  return words.filter((w) => isFillerWord(w, language)).map((w) => ({ start: Math.max(0, w.start - 0.03), end: w.end + 0.03, word: w.text }))
 }
 
 // ── captions ─────────────────────────────────────────────────────────────────
+
+/** The shortest a caption is: the editor refuses one that ends where it starts. */
+const MIN_CUE_SECONDS = 0.1
 
 // Scripts written without spaces between words.
 const NO_SPACE_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u
@@ -181,9 +203,10 @@ export function captionCues(words: readonly TimedWord[], opts: CaptionOptions = 
   return groups.map((group, index) => {
     const next = groups[index + 1]?.[0]
     const end = group.at(-1)!.end
-    // Hold the caption a little past the last word, never into the next one.
+    // Hold the caption a little past the last word, never into the next one, and
+    // never shorter than a moment: a word timed with no length still gets one.
     const held = next ? Math.min(end + 0.25, next.start) : end + 0.25
-    return { text: joinWords(group), start: group[0]!.start, end: Math.max(held, end) }
+    return { text: joinWords(group), start: group[0]!.start, end: Math.max(held, end, group[0]!.start + MIN_CUE_SECONDS) }
   })
 }
 
@@ -193,7 +216,8 @@ export function captionCues(words: readonly TimedWord[], opts: CaptionOptions = 
 // planner cannot answer: the model reads the request first.
 const INTENT_PATTERNS: Record<EditStep, RegExp> = {
   // `\b` knows only ASCII letters, so a word with accents is bounded by lookarounds instead.
-  fillers: /filler|\bums?\b|\buhs?\b|stutter|hesitat|מילות ה?מילוי|אממ|גמגו|היסוס|フィラー|えーと|言い淀|필러|군말|더듬|vícios? de linguagem|muletas?|(?<!\p{L})hã(?!\p{L})/iu,
+  // Not a bare "um": in Portuguese it is the article ("coloque um fundo musical").
+  fillers: /filler|\bums\b|\bumm+s?\b|\buhs?\b|stutter|hesitat|מילות ה?מילוי|אממ|גמגו|היסוס|フィラー|えーと|言い淀|필러|군말|더듬|vícios? de linguagem|muletas?|(?<!\p{L})hã(?!\p{L})/iu,
   pauses: /pause|silen|dead air|\bgaps?\b|tighten|שתיק|הפסק|רווח|שקט|מתים|間を|無音|沈黙|詰め|침묵|공백|쉼|pausa|silênc|silenc|respiro/iu,
   captions: /caption|subtit|text on screen|כתובי|תמליל על|字幕|テロップ|자막|legend/iu,
   music: /music|\bsong\b|soundtrack|\bbeat\b|\bbgm\b|מוזיק|שיר|מנגינ|פסקול|音楽|ＢＧＭ|음악|배경음|브금|música|trilha/iu,

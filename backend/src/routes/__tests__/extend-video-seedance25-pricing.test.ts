@@ -10,6 +10,7 @@ import { tailRecipeSeconds } from "@/lib/extend-recipe.js"
 import { resolveNodeInputs } from "@/services/workflow-engine/input-resolver.js"
 import { stampGrokExtendSource } from "@/lib/grok-extend-stamp.js"
 import { GROK_EXTEND_SOURCE_MESSAGE } from "@/lib/grok-extend-source.js"
+import { withLegacyExtensionOutputs, type LegacyOutputJob } from "@/lib/legacy-extension-output.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "@/services/workflow-engine/types.js"
 
 // ---------------------------------------------------------------------------
@@ -378,6 +379,70 @@ describe("workflow payload builder — a VEO or Runway extend's task", () => {
     ]
     const states: Record<string, NodeExecutionState> = { x: { status: "completed", output: { videoUrl: "https://e.mp4" } } }
     expect(build(second, [gen, first, second], edges, states).payload.kieTaskId).toBe("task-ext1-old")
+  })
+})
+
+// An extension saved before outputs were recorded apart, wired to no source
+// that fits (an MCP-built node), holding its own old output in `kieTaskId`: the
+// server's run reads it from the database (lib/legacy-extension-output.ts) —
+// its output handed on, its own run on the task it really extended.
+describe("workflow run — an MCP-built extension whose task an old server run overwrote", () => {
+  const ext = (id: string, data: Record<string, unknown>): SimpleNode => ({ id, type: "extend-video", data: { label: "Extend Video", provider: "veo-extend", prompt: "keep going", ...data } })
+  const USER = "user-a"
+  const WORKFLOW = "wf-1"
+  /** The run's jobs: the legacy node's own completed extension in this workflow (it extended `task-gen` and made `task-ext-own`). */
+  const ownExtension: LegacyOutputJob = { userId: USER, status: "completed", jobType: "extend-video", taskId: "task-ext-own", nodeId: "x", workflowId: WORKFLOW, inputTask: "task-gen", deletedAt: null }
+  const read = (nodes: SimpleNode[], edges: SimpleEdge[], jobs: LegacyOutputJob[]) =>
+    withLegacyExtensionOutputs(nodes, edges, { userId: USER, workflowId: WORKFLOW }, { fetchJobs: async () => jobs }) as Promise<SimpleNode[]>
+  const build = (target: SimpleNode, nodes: SimpleNode[], edges: SimpleEdge[], states: Record<string, NodeExecutionState> = {}) =>
+    buildPayload(target, `job-${target.id}`, resolveNodeInputs(target, edges, states, nodes), undefined, { nodes, edges, nodeStates: states })
+  // Refused at build, before anything is held (no video and no task to run on).
+  const NO_SOURCE = /^video_required: /
+
+  it("a VEO extend wired after it receives its own output task", async () => {
+    // It ran before and does not run again in this run (Run from here on the next one): seeded from its saved video, no task.
+    const legacy = ext("x", { kieTaskId: "task-ext-own", generatedVideoUrl: "https://cdn.example.com/ext-old.mp4" })
+    const next = ext("y", { prompt: "and more" })
+    const edges = [{ id: "x->y", source: "x", target: "y", sourceHandle: "video", targetHandle: "video" }]
+    const seeded: Record<string, NodeExecutionState> = { x: { status: "completed", output: { videoUrl: "https://cdn.example.com/ext-old.mp4" } } }
+    // As stored, the graph alone reads the task as the legacy node's input: nothing is handed on.
+    expect(() => build(next, [legacy, next], edges, seeded)).toThrow(NO_SOURCE)
+    const nodes = await read([legacy, next], edges, [ownExtension])
+    expect(build(nodes[1]!, nodes, edges, seeded).payload.kieTaskId).toBe("task-ext-own")
+  })
+
+  it("the legacy node run again extends the task it extended, never its own old output", async () => {
+    const legacy = ext("x", { kieTaskId: "task-ext-own" })
+    expect(build(legacy, [legacy], []).payload.kieTaskId).toBe("task-ext-own")
+    const [read1] = await read([legacy], [], [ownExtension])
+    expect(build(read1!, [read1!], []).payload.kieTaskId).toBe("task-gen")
+  })
+
+  it("one that ran again since (newest output recorded apart, older output still in kieTaskId) runs on its input and hands on its newest output", async () => {
+    const legacy = ext("x", { kieTaskId: "task-ext-own", outputKieTaskId: "task-ext-newest", generatedVideoUrl: "https://cdn.example.com/ext-new.mp4" })
+    const next = ext("y", { prompt: "and more" })
+    const edges = [{ id: "x->y", source: "x", target: "y", sourceHandle: "video", targetHandle: "video" }]
+    // As stored, it would run again on its older output.
+    expect(build(legacy, [legacy, next], edges).payload.kieTaskId).toBe("task-ext-own")
+    const nodes = await read([legacy, next], edges, [ownExtension])
+    expect(build(nodes[0]!, nodes, edges).payload.kieTaskId).toBe("task-gen")
+    const seeded: Record<string, NodeExecutionState> = { x: { status: "completed", output: { videoUrl: "https://cdn.example.com/ext-new.mp4" } } }
+    expect(build(nodes[1]!, nodes, edges, seeded).payload.kieTaskId).toBe("task-ext-newest")
+  })
+
+  it("a saved task that is a generation's (the node's input) is unchanged: it runs on it and hands nothing on", async () => {
+    const mcp = ext("x", { kieTaskId: "task-gen" })
+    const next = ext("y", { prompt: "and more" })
+    const edges = [{ id: "x->y", source: "x", target: "y", sourceHandle: "video", targetHandle: "video" }]
+    // The jobs behind `task-gen`: its generation, and a VEO 1080p upscale of it (whose provider task is that same input).
+    const jobs: LegacyOutputJob[] = [
+      { userId: USER, status: "completed", jobType: "generate-video", taskId: "task-gen", nodeId: "g", workflowId: WORKFLOW, inputTask: null, deletedAt: null },
+      { userId: USER, status: "completed", jobType: "video-upscale", taskId: "task-gen", nodeId: "u", workflowId: WORKFLOW, inputTask: "task-gen", deletedAt: null },
+    ]
+    const nodes = await read([mcp, next], edges, jobs)
+    expect(nodes[0]).toBe(mcp)
+    expect(build(nodes[0]!, nodes, edges).payload.kieTaskId).toBe("task-gen")
+    expect(() => build(nodes[1]!, nodes, edges)).toThrow(NO_SOURCE)
   })
 })
 

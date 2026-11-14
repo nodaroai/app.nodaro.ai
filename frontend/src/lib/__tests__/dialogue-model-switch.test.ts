@@ -36,3 +36,126 @@ describe("dialogueModelSwitchPatch — what a user's dialogue model switch write
     expect(dialogueModelSwitchPatch("elevenlabs-dialogue", {})).toStrictEqual({})
   })
 })
+
+describe("dialogueModelSwitchPatch — the Gemini dialogue models (decided 2026-11-12)", () => {
+  const line = (id: string, voice: string, extra: Record<string, unknown> = {}) => ({ id, text: `line ${id}`, voice, ...extra })
+
+  it("ElevenLabs → Gemini 3.1: two ElevenLabs speakers become two of the model's voices (its default first), each line named by its voice", () => {
+    const patch = dialogueModelSwitchPatch("gemini-3-1-flash-tts", {
+      dialogue: [line("1", "Sarah", { voiceLabel: "Sarah" }), line("2", "Rachel"), line("3", "Sarah", { voiceLabel: "Sarah" })],
+    })
+    expect(patch.dialogue).toEqual([
+      line("1", "Kore", { voiceLabel: "Kore" }),
+      line("2", "Achernar", { voiceLabel: "Achernar" }),
+      line("3", "Kore", { voiceLabel: "Kore" }),
+    ])
+  })
+
+  it("ElevenLabs → Gemini: the language resets to auto-detect (the model is offered in none); stability waits for the way back", () => {
+    const patch = dialogueModelSwitchPatch("gemini-3-8-flash-tts", { languageCode: "en", stability: 0.5 })
+    expect(patch).toStrictEqual({ languageCode: "" })
+  })
+
+  it("Gemini → ElevenLabs: a Gemini voice becomes none (the deployment's default) and loses its name; filler words and the speakers go", () => {
+    const patch = dialogueModelSwitchPatch("elevenlabs-dialogue", {
+      dialogue: [line("1", "Kore", { voiceLabel: "Kore", styleDirection: "Warm" }), line("2", "Puck", { voiceLabel: "Puck" })],
+      speakers: [{ voice: "Kore", pace: "Natural" }],
+      fillerWords: true,
+    })
+    expect(patch.dialogue).toEqual([{ id: "1", text: "line 1", voice: "" }, { id: "2", text: "line 2", voice: "" }])
+    expect(Object.keys(patch.dialogue![0]!)).not.toContain("voiceLabel")
+    expect(patch).toHaveProperty("speakers", undefined)
+    expect(patch).toHaveProperty("fillerWords", undefined)
+  })
+
+  it("Gemini 3.8 → 3.1: the per-line styles go (3.1 directs each speaker), the voices both speak stay", () => {
+    const patch = dialogueModelSwitchPatch("gemini-3-1-flash-tts", {
+      dialogue: [line("1", "Kore", { styleDirection: "Warm" }), line("2", "Puck")],
+      fillerWords: false,
+    })
+    expect(patch.dialogue).toEqual([line("1", "Kore"), line("2", "Puck")])
+    expect(Object.keys(patch.dialogue![0]!)).not.toContain("styleDirection")
+    expect(patch).toHaveProperty("fillerWords", undefined)
+  })
+
+  it("Gemini 3.1 → 3.8: each line keeps its style-less self, and the speakers' direction goes (3.8 directs each line)", () => {
+    const patch = dialogueModelSwitchPatch("gemini-3-8-flash-tts", {
+      dialogue: [line("1", "Kore"), line("2", "Puck")],
+      speakers: [{ voice: "Kore", styleDirection: "Whisper", pace: "Natural", audioProfile: "A radio host" }],
+    })
+    expect(patch).toStrictEqual({ speakers: undefined })
+  })
+
+  it("Gemini 3.1 → 2.5: what both take is kept as it is — nothing to write", () => {
+    expect(dialogueModelSwitchPatch("gemini-2-5-pro-tts", {
+      dialogue: [line("1", "Kore"), line("2", "Puck")],
+      speakers: [{ voice: "Kore", styleDirection: "Whisper", pace: "Natural" }],
+    })).toStrictEqual({})
+  })
+
+  it("the speakers follow their voices when the voices move, and keep only what the model takes", () => {
+    const patch = dialogueModelSwitchPatch("gemini-3-1-flash-tts", {
+      dialogue: [line("1", "Sarah"), line("2", "Puck")],
+      speakers: [{ voice: "Sarah", pace: "Natural", accent: "Not an accent" }, { voice: "Puck", audioProfile: "A tired detective" }],
+    })
+    expect(patch.speakers).toEqual([{ voice: "Kore", pace: "Natural" }, { voice: "Puck", audioProfile: "A tired detective" }])
+  })
+
+  it("a node that already fits the Gemini model yields an empty patch", () => {
+    expect(dialogueModelSwitchPatch("gemini-3-8-flash-tts", {
+      dialogue: [line("1", "Kore", { voiceLabel: "Kore", styleDirection: "Warm" }), line("2", "Puck", { voiceLabel: "Puck" })],
+      fillerWords: true,
+    })).toStrictEqual({})
+  })
+})
+
+describe("dialogueModelSwitchPatch — the file format (decided 2026-11-13)", () => {
+  it("Gemini → ElevenLabs: a WAV or a 192 kbps MP3 goes (ElevenLabs dialogue delivers MP3 128 kbps only)", () => {
+    expect(dialogueModelSwitchPatch("elevenlabs-dialogue", { outputFormat: "wav_24000" })).toStrictEqual({ outputFormat: undefined })
+    expect(dialogueModelSwitchPatch("elevenlabs-dialogue-v4", { outputFormat: "mp3_44100_192" })).toStrictEqual({ outputFormat: undefined })
+  })
+
+  it("a format the new model delivers stays (no key)", () => {
+    expect(dialogueModelSwitchPatch("gemini-3-1-flash-tts", { outputFormat: "wav_24000" })).toStrictEqual({})
+    expect(dialogueModelSwitchPatch("elevenlabs-dialogue", { outputFormat: "mp3_44100_128" })).toStrictEqual({})
+  })
+})
+
+describe("dialogueModelSwitchPatch — a cloned speaker (decided 2026-11-13)", () => {
+  const replica = { sourceAudioUrl: "https://cdn.example/me.wav", consentAudioUrl: "https://cdn.example/consent.wav" }
+  const lines = [{ id: "1", text: "Hello", voice: "Me", voiceLabel: "Me" }, { id: "2", text: "Hi", voice: "Kore", voiceLabel: "Kore" }]
+
+  it("to a model that does not clone: the clone goes (its entry with it), and its label moves onto one of the model's voices", () => {
+    const patch = dialogueModelSwitchPatch("gemini-3-8-flash-lite-tts", { dialogue: lines, speakers: [{ voice: "Me", replica }] })
+    expect(patch).toHaveProperty("speakers", undefined)
+    expect(patch.dialogue!.map((l) => l.voice)).toEqual(["Fola", "Kore"])
+  })
+
+  it("to a model that does not clone: an entry that also holds a direction the model takes keeps it, under its new voice", () => {
+    const patch = dialogueModelSwitchPatch("gemini-3-1-flash-tts", { dialogue: lines, speakers: [{ voice: "Me", replica, pace: "Natural" }] })
+    const moved = patch.dialogue![0]!.voice
+    expect(moved).not.toBe("Me")
+    expect(patch.speakers).toEqual([{ voice: moved, pace: "Natural" }])
+  })
+
+  it("on the model that clones the cloned label stays and nothing is written", () => {
+    expect(dialogueModelSwitchPatch("gemini-3-8-flash-tts", { dialogue: lines, speakers: [{ voice: "Me", replica }] })).toStrictEqual({})
+  })
+})
+
+describe("dialogueModelSwitchPatch — a clone's consent (decided 2026-11-13)", () => {
+  const replica = { sourceAudioUrl: "https://cdn.example/me.wav", consentAudioUrl: "https://cdn.example/consent.wav" }
+  const consent = { userId: "u1", signature: "sig-u1" }
+  const lines = [{ id: "1", text: "Hello", voice: "Me", voiceLabel: "Me" }, { id: "2", text: "Hi", voice: "Kore", voiceLabel: "Kore" }]
+
+  it("goes with the clone to a model that does not clone; an entry keeping a direction keeps neither", () => {
+    const patch = dialogueModelSwitchPatch("gemini-3-1-flash-tts", { dialogue: lines, speakers: [{ voice: "Me", replica, replicaConsent: consent, pace: "Natural" }] })
+    expect(patch.speakers).toHaveLength(1)
+    expect(patch.speakers![0]).not.toHaveProperty("replica")
+    expect(patch.speakers![0]).not.toHaveProperty("replicaConsent")
+  })
+
+  it("on the model that clones the clone and its consent stay as they are", () => {
+    expect(dialogueModelSwitchPatch("gemini-3-8-flash-tts", { dialogue: lines, speakers: [{ voice: "Me", replica, replicaConsent: consent }] })).toStrictEqual({})
+  })
+})

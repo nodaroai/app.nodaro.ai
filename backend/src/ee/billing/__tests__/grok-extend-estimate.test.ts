@@ -82,6 +82,71 @@ describe("the Grok Extend quote", () => {
     }
   })
 
+  describe("a Grok node that already made a clip: the resolution its job recorded, not the node's setting", () => {
+    /** The source node holding the take its task TASK names, which recorded `recorded` (none: undefined), set to `resolution`. */
+    const made = (recorded: string | undefined, resolution?: string, extra: Record<string, unknown> = {}): Node => {
+      const node = source("generate-video", "grok-i2v", resolution)
+      const take = { url: "https://cdn.example/src.mp4", jobId: "j1", kieTaskId: TASK, ...(recorded !== undefined ? { recordedResolution: recorded } : {}) }
+      return { ...node, data: { ...node.data, kieTaskId: TASK, generatedResults: [take], ...extra } }
+    }
+    /** The extend node's quote in a run of the extension alone (the source does not run again). */
+    const extendOnly = async (nodes: Node[]) => (await estimateWorkflowCreditsDetailed(nodes, wired, { runNodeIds: new Set(["ext"]) })).perNode.ext!.credits
+
+    it("recorded 720p, the node set to 480p since: quoted at 720p — the clip it extends", async () => {
+      for (const duration of [6, 10]) {
+        expect(await extendOnly([made("720p", "480p"), extend({ duration })]), String(duration)).toBe(await charged(`grok-extend:${duration}s:720p`))
+      }
+      // A frozen source does not run again either: the same.
+      expect(await quoteOf([made("720p", "480p", { skipped: true }), extend()])).toBe(await charged("grok-extend:6s:720p"))
+    })
+
+    it("recorded 480p: quoted at 480p, even unset or set to 720p since", async () => {
+      for (const resolution of ["480p", undefined, "720p"]) {
+        expect(await extendOnly([made("480p", resolution), extend()]), String(resolution)).toBe(await charged("grok-extend:6s:480p"))
+      }
+    })
+
+    it("no recorded resolution, or no take the task names (deleted, or from before takes recorded it): 720p", async () => {
+      expect(await extendOnly([made(undefined, "480p"), extend()])).toBe(await charged("grok-extend:6s:720p"))
+      const deleted = made("480p", "480p")
+      const older = { ...deleted, data: { ...deleted.data, generatedResults: [{ url: "https://cdn.example/old.mp4", jobId: "j0", kieTaskId: "task-older", recordedResolution: "480p" }] } }
+      expect(await extendOnly([older, extend()])).toBe(await charged("grok-extend:6s:720p"))
+      const legacy = { ...deleted, data: { ...deleted.data, generatedResults: [{ url: "https://cdn.example/old.mp4", jobId: "j0", width: 854, height: 480 }] } }
+      expect(await extendOnly([legacy, extend()])).toBe(await charged("grok-extend:6s:720p"))
+    })
+
+    it("reads the same fact the charge reads: never below what the source check charges for the job that made the take", async () => {
+      for (const provider of ["grok", "grok-i2v"]) {
+        for (const recorded of [undefined, "480p", "480P", "720p"]) {
+          const label = `${provider} ${String(recorded)}`
+          db.source = {
+            id: "job-src", user_id: USER, status: "completed", provider_task_id: TASK, provider_kind: "kie-standard", relay_job_id: null,
+            input_data: { provider, ...(recorded !== undefined ? { resolution: recorded } : {}) },
+            output_data: { videoUrl: "https://cdn.example/src.mp4", kieTaskId: TASK },
+          }
+          const checked = await resolveGrokExtendSource({ taskId: TASK, userId: USER })
+          if (!checked.ok) throw new Error(`${label}: refused`)
+          const charge = await charged(grokExtendCreditId(6, checked.resolution))
+          const node = made(recorded, "480p")
+          const quote = await extendOnly([{ ...node, data: { ...node.data, provider } }, extend()])
+          expect(quote, label).toBeGreaterThanOrEqual(charge)
+          // A recorded resolution is quoted at exactly what is charged.
+          if (recorded !== undefined) expect(quote, label).toBe(charge)
+        }
+      }
+    })
+
+    it("a source that makes a new clip in the run is quoted at its setting — the clip the run will extend", async () => {
+      expect(await quoteOf([made("720p", "480p"), extend()])).toBe(await charged("grok-extend:6s:480p"))
+      expect(await quoteOf([made("480p", "720p"), extend()])).toBe(await charged("grok-extend:6s:720p"))
+    })
+
+    it("a source that has not run: its setting, 480p as set, else 720p", async () => {
+      expect(await extendOnly([source("generate-video", "grok", "480p"), extend()])).toBe(await charged("grok-extend:6s:480p"))
+      expect(await extendOnly([source("generate-video", "grok"), extend()])).toBe(await charged("grok-extend:6s:720p"))
+    })
+  })
+
   it("quotes the dearer 720p row when the source is not known for sure: nothing wired, no resolution set, an upload, another model", async () => {
     const want = await charged("grok-extend:6s:720p")
     expect(await quoteOf([extend()], [])).toBe(want)

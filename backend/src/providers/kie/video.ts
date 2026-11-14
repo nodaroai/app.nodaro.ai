@@ -62,7 +62,7 @@ import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
 import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
 import { lipSyncRateModelOf } from "../../lib/lip-sync-inputs.js"
-import { prepareRateLipSyncAudio } from "./lip-sync-audio.js"
+import { LIP_SYNC_TRIM_MARGIN_SEC, prepareRateLipSyncAudio } from "./lip-sync-audio.js"
 import { ensureVideoFitsSize, KLING_4_REF_VIDEO_LIMIT } from "./reference-video-size.js"
 import { reencodeReferenceVideos } from "./reference-video-reencode.js"
 import { fetchOwnMedia } from "../../lib/fetch-own-media.js"
@@ -519,10 +519,10 @@ export function minimaxH3TaskModel(defaultModel: string, input: Record<string, u
 // Audio-duration cap per lip-sync provider (seconds).
 // Kling AI Avatar 2.0 raised its limit to 5min (May 2026). InfiniTalk still
 // enforces a 15s cap upstream. Subtract a small safety margin so ffprobe /
-// KIE.ai rounding never trips the upstream rejection.
-const LIP_SYNC_AUDIO_SAFETY_MARGIN_SEC = 0.5
+// KIE.ai rounding never trips the upstream rejection — the margin a bucketed
+// model's prepared copy is cut by too (`LIP_SYNC_TRIM_MARGIN_SEC`).
 function lipSyncAudioCapFor(provider: string): number {
-  return getLipSyncMaxAudioSeconds(provider) - LIP_SYNC_AUDIO_SAFETY_MARGIN_SEC
+  return getLipSyncMaxAudioSeconds(provider) - LIP_SYNC_TRIM_MARGIN_SEC
 }
 
 /**
@@ -1931,10 +1931,13 @@ async function runKling4(
   if (lastFrame) input.last_frame_url = lastFrame
   if (Array.isArray(input.elements)) {
     input.elements = await Promise.all(
-      (input.elements as Array<{ image_urls: string[] } & Record<string, unknown>>).map(async (el, e) => ({
-        ...el,
-        image_urls: await Promise.all(el.image_urls.map((u, i) => norm(u, `element ${e + 1} image #${i + 1}`))),
-      })),
+      (input.elements as Array<{ image_urls?: string[]; video_url?: string } & Record<string, unknown>>).map(async (el, e) =>
+        // A video subject's clip gets a reference video's size treatment; an
+        // image subject's images a reference image's.
+        typeof el.video_url === "string"
+          ? { ...el, video_url: await ensureVideoFitsSize(el.video_url, KLING_4_REF_VIDEO_LIMIT, "Video generation", logLabel, `element ${e + 1} video`) }
+          : { ...el, image_urls: await Promise.all((el.image_urls ?? []).map((u, i) => norm(u, `element ${e + 1} image #${i + 1}`))) },
+      ),
     )
   }
 
@@ -1946,7 +1949,8 @@ async function runKling4(
   const tierCostUsd = kling4CostUsd({
     provider: modelKey,
     resolution: input.resolution as string,
-    hasVideoRef: Array.isArray(input.video_urls),
+    // A video subject is video input too (KIE bills its seconds as a reference video's).
+    hasVideoRef: Array.isArray(input.video_urls) || (Array.isArray(input.elements) && (input.elements as Array<Record<string, unknown>>).some((el) => typeof el.video_url === "string")),
     outputSec: snapped,
     inputSec: 0,
   })
@@ -3625,14 +3629,16 @@ export class KieVideoProvider
     // the seconds the run was priced at, ALWAYS encoded to MP3 (padded to the
     // minimum when shorter — never trimmed), the encode measured and held too,
     // and the model is sent OUR stored encode, never the caller's URL
-    // (lip-sync-audio.ts: price and send the same bytes). Every other model:
-    // auto-trim to the provider's upstream cap (300s for kling-avatar(-pro),
-    // 15s for infinitalk).
+    // (lip-sync-audio.ts: price and send the same bytes). A model priced by a
+    // length bucket arrives with its audio already prepared the same way by
+    // the worker (`audioPrepared`). Every other model (or a bucketed job
+    // queued unpriced): auto-trim to the provider's upstream cap (300s for
+    // kling-avatar(-pro), 15s for infinitalk).
     const rateModel = lipSyncRateModelOf(provider)
     const prepared = rateModel
       ? await prepareRateLipSyncAudio(audioUrl, rateModel.rate, rateModel.rule, getModel(provider)?.label ?? provider, options?.billedSeconds)
       : undefined
-    const effectiveAudioUrl = prepared?.url ?? await ensureAudioDuration(audioUrl, lipSyncAudioCapFor(provider))
+    const effectiveAudioUrl = prepared?.url ?? (options?.audioPrepared ? audioUrl : await ensureAudioDuration(audioUrl, lipSyncAudioCapFor(provider)))
 
     const input = buildLipSyncInput(modelConfig, {
       imageUrl,
@@ -3711,9 +3717,10 @@ export class KieVideoProvider
     console.log(`[KIE.ai] Generating video lip-sync (dubbing) with ${modelConfig.model}`)
     console.log(`[KIE.ai] Video: ${videoUrl}, Audio: ${audioUrl}`)
 
-    // Auto-trim audio to the provider's upstream cap (300s for volcengine).
-    const audioCapSec = lipSyncAudioCapFor(provider)
-    const effectiveAudioUrl = await ensureAudioDuration(audioUrl, audioCapSec)
+    // Our prepared copy (already measured, held and cut under the cap by the
+    // worker) is sent as it is; else auto-trim to the provider's upstream cap
+    // (300s for volcengine).
+    const effectiveAudioUrl = opts.audioPrepared ? audioUrl : await ensureAudioDuration(audioUrl, lipSyncAudioCapFor(provider))
 
     const input: Record<string, unknown> = {
       ...(modelConfig.extraParams ?? {}),

@@ -13,8 +13,9 @@ import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { LIP_SYNC_DEFAULT_PROVIDER } from "../workers/handlers/default-models.js"
 import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, isMinimaxH3Provider, lipSyncLeverClearPatch, retiredLipSyncProviderMessage } from "@nodaro/shared/models"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
-import { buildLipSyncCreditId, isPerSecondLipSyncProvider, lipSyncAudioRateOf } from "@nodaro/shared/credits"
-import { checkLipSyncInputs, lipSyncRateBaseCredits } from "../lib/lip-sync-inputs.js"
+import { lipSyncAudioRateOf } from "@nodaro/shared/credits"
+import { checkLipSyncInputs, lipSyncAudioPricingOf, lipSyncHeldCreditId, lipSyncRateBaseCredits } from "../lib/lip-sync-inputs.js"
+import { lipSyncFloorRefusal } from "../lib/lip-sync-floor-check.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
@@ -29,9 +30,9 @@ const lipSyncBody = z.object({
   provider: z.enum(LIP_SYNC_PROVIDERS).optional(),
   // 1080p / 4k only valid for the seedance-2 family; infinitalk caps at 720p.
   resolution: z.enum(["480p", "720p", "1080p", "4k"]).optional(),
-  // Audio length in seconds — drives per-second credit reservation for
-  // kling-avatar(-pro). If absent, we reserve the worst-case 5-min bucket
-  // and refund the unused credits after the worker reconciles actual cost.
+  // Accepted for older clients and never read (decided 2026-11-13): every
+  // model priced by its audio's length is priced on the length the server
+  // measures (`lipSyncInputPreHandler`), and the job records that length.
   audioDurationSec: z.number().min(0.1).max(600).optional(),
   // LatentSync params
   guidanceScale: z.number().min(1).max(3).optional(),
@@ -78,7 +79,7 @@ export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefin
   const provider = (body?.provider as string) ?? LIP_SYNC_DEFAULT_PROVIDER
   // A model charged per second of its audio at a rate (OmniHuman 2.0): its
   // one-second row, which `computeCredits` multiplies by the seconds the
-  // preHandler measured. Before the bucket branch below, which would bucket it.
+  // guard's measuring step measured. Before the bucket branch below, which would bucket it.
   const rate = lipSyncAudioRateOf(provider)
   if (rate) return rate.rateId
   if (provider === "infinitalk") {
@@ -107,14 +108,16 @@ export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefin
     const res = supported.includes(want) ? want : (supported[supported.length - 1] ?? "720p")
     return `${provider}:8s:${res}-ref`
   }
-  // Per-second-billed providers (Kling AI Avatar 2.0, HeyGen Lipsync Precision,
-  // Sync Lipsync 2 Pro) — bucketed by audio length. Missing audioDurationSec
-  // falls back to the 5-min bucket (worst case); for Kling the worker refunds
-  // the diff once actual KIE costTime is known. Data-driven off
-  // PER_SECOND_LIP_SYNC_PROVIDERS so new per-second models wire themselves.
-  if (isPerSecondLipSyncProvider(provider)) {
-    const dur = typeof body?.audioDurationSec === "number" ? body.audioDurationSec : undefined
-    return buildLipSyncCreditId(provider, dur)
+  // Models priced by a length BUCKET (Kling AI Avatar, OmniHuman 1.5, HeyGen
+  // Lipsync Precision, Sync Lipsync 2 Pro / v3, Volcengine): the bucket of the
+  // length the measuring step measured (decided 2026-11-13) — never a length the
+  // request sent. The charge is this hold, committed as it is, so a run whose
+  // audio was not measured is never priced on a guess: it is refused.
+  const pricing = lipSyncAudioPricingOf(provider)
+  if (pricing?.kind === "bucket") {
+    const held = stashedBilledSeconds(body)
+    if (held === undefined) throw new Error("lip-sync: a run priced by its audio's length reached its pricing without its measured audio")
+    return lipSyncHeldCreditId(pricing, held)
   }
   return provider
 }
@@ -134,37 +137,73 @@ async function retiredLipSyncProviderPreHandler(req: FastifyRequest, reply: Fast
   }
 }
 
-/** The body keys the preHandler stashes the measured audio under (the credit guard sees only the body). */
+/** The body keys the measuring step (`lipSyncInputPreHandler`) stashes the measured audio under, for the guard's pricing and the handler. */
 const MEASURED_AUDIO_SEC = "__lipSyncAudioSec"
 const BILLED_SECONDS = "__lipSyncBilledSeconds"
 
-/** The seconds the preHandler measured for a per-second-rate run, read off the body. */
+/**
+ * The face input a request is refused without, or undefined: an image or a
+ * video, and a video for Volcengine (video-to-video dubbing, no image
+ * fallback). The handler asks it, and — for a model priced by a length bucket
+ * — the measuring step asks it first, so such a request costs no download.
+ */
+function faceInputRefusal(provider: string, imageUrl: unknown, videoUrl: unknown): string | undefined {
+  if (!imageUrl && !videoUrl) return "Either imageUrl or videoUrl is required"
+  if (provider === "volcengine-lipsync" && !videoUrl) return "Volcengine lip sync requires a video input (videoUrl)"
+  return undefined
+}
+
+/** The status a measuring refusal answers with: busy is a 429 (try again in a moment), a stopped measurement a 503 (ours), the rest the request's (400). */
+function measureRefusalStatus(code: string): number {
+  if (code === "lip_sync_audio_busy") return 429
+  if (code === "lip_sync_audio_measure_stopped") return 503
+  return 400
+}
+
+/** The seconds the measuring step measured and held a run priced by its audio's length for, read off the body. */
 function stashedBilledSeconds(body: Record<string, unknown> | undefined): number | undefined {
   const s = body?.[BILLED_SECONDS]
   return typeof s === "number" && Number.isInteger(s) && s > 0 ? s : undefined
 }
 
 /**
- * Fastify preHandler, before the credit guard: for a model charged per second
- * of its audio at a rate (OmniHuman 2.0), validate the body (the handler's own
- * schema — a request that would 400 there never costs a download), measure the
- * audio and the image (`checkLipSyncInputs`, the rule the workflow run
- * shares), refuse what the model cannot take with a 400 before anything is
- * held, and stash the measured length and the billed seconds on the body for
- * the guard. A length the request sent (`audioDurationSec`) is never trusted
- * for these models, and the stash keys are cleared from EVERY request first,
- * whatever its model: only this check may set them. Every other model passes
- * straight through, unprobed.
+ * The credit guard's `beforePricing` step (decided 2026-11-13: it runs after
+ * the guard's model and node doors, the app-token scope gate and the
+ * Idempotency-Key dedup, so a model the deployment withholds answers 403
+ * without its audio ever being downloaded): for a model priced by the length
+ * of its audio — at a per-second rate (OmniHuman 2.0) or by a length bucket
+ * (Kling AI Avatar, OmniHuman 1.5, the dubbing models; `lipSyncAudioPricingOf`)
+ * — validate the body (the handler's own schema — a request that would 400
+ * there never costs a download), measure the audio (and a rate model's image:
+ * `checkLipSyncInputs`, the rule the workflow run shares), refuse what the
+ * model cannot take with a 400 before anything is held, and stash the measured
+ * length and the held seconds on the body for the guard's pricing. A length
+ * the request sent (`audioDurationSec`) is never trusted, and the stash keys
+ * are cleared from EVERY request first, whatever its model: only this check
+ * may set them. Every other model passes straight through, unprobed. A request
+ * waits at most `LIP_SYNC_MEASURE_SLOT_WAIT_MS` for a measuring slot, then is
+ * refused with a 429 to retry.
  */
 export async function lipSyncInputPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const body = (req.body ?? {}) as Record<string, unknown>
   delete body[MEASURED_AUDIO_SEC]
   delete body[BILLED_SECONDS]
-  if (!lipSyncAudioRateOf(body.provider ?? LIP_SYNC_DEFAULT_PROVIDER)) return
+  const model = (body.provider ?? LIP_SYNC_DEFAULT_PROVIDER) as string
+  const pricing = lipSyncAudioPricingOf(model)
+  if (!pricing) return
   const parsed = lipSyncBody.safeParse(body)
   if (!parsed.success) {
     return void reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
   }
+  // The cheap checks first, so a request they refuse costs no download: its face
+  // input (a bucketed model; OmniHuman 2.0's own check asks for its image before
+  // fetching anything), then whether the payer can afford even the cheapest run.
+  if (pricing.kind === "bucket") {
+    const face = faceInputRefusal(model, parsed.data.imageUrl, parsed.data.videoUrl)
+    if (face) return void reply.status(400).send({ error: { code: "validation_error", message: face } })
+  }
+  const floor = await lipSyncFloorRefusal(req, pricing)
+  if (floor) return void reply.status(floor.statusCode).send(floor.body)
   const checked = await checkLipSyncInputs({
     provider: body.provider ?? LIP_SYNC_DEFAULT_PROVIDER,
     audioUrl: body.audioUrl,
@@ -173,17 +212,18 @@ export async function lipSyncInputPreHandler(req: FastifyRequest, reply: Fastify
   })
   if (!checked) return
   if (!checked.ok) {
-    // Busy (this process's measuring downloads are all taken): a 429, try again in a moment.
-    const status = checked.code === "lip_sync_audio_busy" ? 429 : 400
-    return void reply.status(status).send({ error: { code: checked.code, message: checked.message } })
+    return void reply.status(measureRefusalStatus(checked.code)).send({ error: { code: checked.code, message: checked.message } })
   }
   body[MEASURED_AUDIO_SEC] = checked.audioSec
   body[BILLED_SECONDS] = checked.billedSeconds
+  // The length the request named is gone from here on: nothing the guard runs
+  // can read it, and the handler records the measured one.
+  delete body.audioDurationSec
 }
 
 /**
  * BASE credits for a per-second-rate run: the rate's row × the seconds the
- * preHandler measured (`lipSyncRateBaseCredits`, rounded up once); undefined
+ * measuring step measured (`lipSyncRateBaseCredits`, rounded up once); undefined
  * for every other model, which the guard prices from its row as before. A rate
  * model whose audio was not measured is never priced at a guess.
  */
@@ -196,27 +236,31 @@ export async function lipSyncComputeCredits(body: unknown): Promise<number | und
   return lipSyncRateBaseCredits(rate, billed)
 }
 
-/** At most this many requests a minute per caller for a per-second-rate model (decided 2026-11-12). */
+/**
+ * At most this many requests a minute per caller for a model priced by its
+ * audio's length (decided 2026-11-12 for OmniHuman 2.0, extended 2026-11-13 to
+ * every model that measures its audio).
+ */
 export const LIP_SYNC_RATE_MODEL_REQUESTS_PER_MINUTE = 30
 
 /**
  * Whether the route's rate limit lets a request through uncounted: every
- * request but one for a per-second-rate model (OmniHuman 2.0), which downloads
- * and decodes its audio before anything is held. Every other model — an
- * editor list fanning out into Kling Avatar, a connected self-hosted install —
- * is never limited here.
+ * request but one for a model that downloads and decodes its audio before
+ * anything is held (`lipSyncAudioPricingOf`: OmniHuman 2.0, Kling Avatar,
+ * OmniHuman 1.5, the dubbing models). A model priced by no length is never
+ * limited here.
  */
 export function lipSyncRateLimitSkips(req: Pick<FastifyRequest, "body">): boolean {
   const body = req.body as Record<string, unknown> | undefined
-  return lipSyncAudioRateOf(body?.provider ?? LIP_SYNC_DEFAULT_PROVIDER) === undefined
+  return lipSyncAudioPricingOf(body?.provider ?? LIP_SYNC_DEFAULT_PROVIDER) === undefined
 }
 
 export async function lipSyncRoutes(app: FastifyInstance) {
   app.post("/v1/lip-sync", {
-    // Per user / credential (`rateLimitKeyGenerator`), for per-second-rate
-    // models only (`lipSyncRateLimitSkips`). Checked at preValidation: the body
+    // Per user / credential (`rateLimitKeyGenerator`), for the models that
+    // measure their audio only (`lipSyncRateLimitSkips`). Checked at preValidation: the body
     // is parsed by then (the model is in it), and it runs before every
-    // preHandler — before the audio is downloaded.
+    // preHandler — before the audio is downloaded (in the guard).
     config: {
       rateLimit: {
         max: LIP_SYNC_RATE_MODEL_REQUESTS_PER_MINUTE,
@@ -227,10 +271,11 @@ export async function lipSyncRoutes(app: FastifyInstance) {
     },
     preHandler: [
       retiredLipSyncProviderPreHandler,
-      lipSyncInputPreHandler,
+      // The audio is measured inside the guard (`beforePricing`), after its model and node doors.
       creditGuard((req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined), {
         runModel: jobRunModel("lip-sync"),
         computeCredits: lipSyncComputeCredits,
+        beforePricing: lipSyncInputPreHandler,
       }),
     ],
   }, async (req, reply) => {
@@ -258,19 +303,11 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       })
     }
 
-    // Validate that at least one face input is provided
-    if (!imageUrl && !videoUrl) {
-      return reply.status(400).send({
-        error: { code: "validation_error", message: "Either imageUrl or videoUrl is required" },
-      })
-    }
-
-    // Volcengine is video-to-video dubbing — no image fallback, so a video input
-    // is mandatory (the worker routes it through the KIE lipSyncVideo path).
-    if (provider === "volcengine-lipsync" && !videoUrl) {
-      return reply.status(400).send({
-        error: { code: "validation_error", message: "Volcengine lip sync requires a video input (videoUrl)" },
-      })
+    // A face input is required — an image or a video, and a video for Volcengine
+    // (video-to-video dubbing, routed through the KIE lipSyncVideo path).
+    const face = faceInputRefusal(provider ?? LIP_SYNC_DEFAULT_PROVIDER, imageUrl, videoUrl)
+    if (face) {
+      return reply.status(400).send({ error: { code: "validation_error", message: face } })
     }
 
     // B4b: deployment prompt policy at this route's assembly point — only when
@@ -282,18 +319,23 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       : prompt
     parsed.data.prompt = finalPrompt
 
-    // A per-second-rate model (OmniHuman 2.0): the job records the length the
-    // preHandler measured, never one the request sent, and none of the levers
-    // the model does not take (a resolution, fast mode or seed left from
-    // another model).
+    // A model priced by its audio's length: the job records the length the
+    // measuring step measured, never one the request sent, and the seconds it
+    // held (the worker holds the audio it sends to them). A per-second-rate
+    // model (OmniHuman 2.0) also takes none of the levers it does not take (a
+    // resolution, fast mode or seed left from another model).
     // The held seconds are read off the body only for such a model (the
-    // preHandler cleared them from every request and set them only for these).
+    // measuring step cleared them from every request and set them only for these).
+    // Every other model's job is what it was: its price reads no length.
     const rawBody = req.body as Record<string, unknown> | undefined
-    const isRateModel = lipSyncAudioRateOf(provider ?? LIP_SYNC_DEFAULT_PROVIDER) !== undefined
-    const billedSeconds = isRateModel ? stashedBilledSeconds(rawBody) : undefined
-    if (isRateModel) {
+    const resolvedModel = provider ?? LIP_SYNC_DEFAULT_PROVIDER
+    const isMeasuredModel = lipSyncAudioPricingOf(resolvedModel) !== undefined
+    const billedSeconds = isMeasuredModel ? stashedBilledSeconds(rawBody) : undefined
+    if (isMeasuredModel) {
       const measured = rawBody?.[MEASURED_AUDIO_SEC]
       parsed.data.audioDurationSec = typeof measured === "number" ? measured : undefined
+    }
+    if (lipSyncAudioRateOf(resolvedModel) !== undefined) {
       Object.assign(parsed.data, lipSyncLeverClearPatch(provider, parsed.data))
     }
     const { resolution: sentResolution, seed: sentSeed, fastMode: sentFastMode, audioDurationSec: sentAudioDurationSec } = parsed.data

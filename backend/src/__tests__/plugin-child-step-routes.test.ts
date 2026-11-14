@@ -81,6 +81,9 @@ const JUDGES_NODES_ITSELF: Readonly<Record<string, string>> = {
   "lib/mcp/tools/video-director-tools.ts": "lists the MCP tools only where the Video Director is offered",
   "ee/pipelines/engine.ts": "the pipeline engine's check before each stage it runs, asked as the pipeline's owner (a worker, no route)",
   "lib/private-plugins/toolkit.ts": "`tk.pipelines.createSeeded`: a seeded pipeline is the film pipeline whoever asks for it (a toolkit method, no route)",
+  "lib/clone-app-run.ts": "an app's, a component's or a share link's run: the runner's one-off voice clones judged before anything is written (no plugin step)",
+  "routes/voice-clone-consent.ts": "the clone consent box's own route (POST /v1/voice-clone/consent), which no plugin engine's job calls",
+  "workers/handlers/audio-ai.ts": "the speech worker's backstop for a one-off voice clone, asked as the job's user (a worker, no route)",
 }
 
 const BACKEND_SRC = join(REPO_ROOT, "backend/src")

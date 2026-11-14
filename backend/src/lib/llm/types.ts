@@ -74,6 +74,39 @@ export type LlmContentBlock =
       fps?: number
     }
   | { type: "audio"; url: string; mimeType?: string }
+  | {
+      /**
+       * A document's BYTES, read and checked before the request is built
+       * (`lib/llm-files.ts :: prepareLlmFiles`): a PDF the caller linked,
+       * fetched once (SSRF-safe, byte-capped), its pages counted, sent inline.
+       * Only a model whose modality caps say `file` (`llmAcceptsFiles`) takes
+       * it, and only the KIE `responses` builder carries it (as an
+       * `input_file` part); every other builder throws on it.
+       *
+       * Inline rather than a URL for the reason images are (KIE's OpenAI-shaped
+       * lanes failed media sent as URLs): the model reads exactly the bytes
+       * the hold was sized from.
+       */
+      type: "file_base64"
+      /** Exact: only PDF is accepted (the aggregator refused text and Word files). */
+      mediaType: "application/pdf"
+      /** Canonical base64 of the raw file bytes — no data: prefix. */
+      data: string
+      /** The name the model is told (the link's last path segment, else `document.pdf`). */
+      filename: string
+      /**
+       * Its page count as a reader shows it (`lib/pdf-pages.ts`: the page
+       * tree's leaves) — what the page cap, the charge floor and a stopped
+       * stream's estimate use.
+       */
+      pages: number
+      /**
+       * The larger count the hold sizes it by, never below `pages`: a crafted
+       * file can hide pages from the tree a front-to-back parse walks
+       * (`lib/pdf-pages.ts`). Absent = `pages`.
+       */
+      holdPages?: number
+    }
 
 export interface LlmMessage {
   role: "user" | "assistant"
@@ -235,6 +268,12 @@ export interface LlmAttemptSpend {
   creditsUsd?: number
   /** The usage is an estimate (a client-stopped stream, `LlmStreamAbortedError`). */
   estimated?: true
+  /**
+   * The fewest input tokens this attempt is charged at when its reply states
+   * no charge: set only for a request that sent documents
+   * (`documentInputFloorTokens`), whose reported input may leave them out.
+   */
+  fileInputFloor?: number
 }
 
 export interface LlmResponse {

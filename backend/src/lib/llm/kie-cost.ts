@@ -16,6 +16,55 @@ import type { LlmRequest } from "./types.js"
 export const KIE_IMAGE_ESTIMATE_CHARS = 6_400
 
 /**
+ * Characters one page of a document stands for in the size estimate — about
+ * 500 tokens, what a dense text page measured on GPT-6.1 Terra (2026-11-13).
+ * An estimate of what was spent (a stopped stream), not the hold's ceiling
+ * (`LLM_FILE_PAGE_TOKENS`).
+ */
+export const KIE_FILE_PAGE_ESTIMATE_CHARS = 2_000
+
+/**
+ * The fewest input tokens a document page is charged at when the reply states
+ * no charge and reports less input than its documents (a stream's reply may
+ * carry no stated charge, and a document call has reported 0 input): about
+ * 500 a page measured on GPT-6.1 Terra (2026-11-13: 3 dense text pages, about
+ * 1,500 tokens), plus a margin. The measured rate, never the hold's ceiling
+ * (`LLM_FILE_PAGE_TOKENS`).
+ */
+export const LLM_FILE_CHARGE_PAGE_TOKENS = 600
+
+/** The fewest input tokens a document is charged at beyond its pages: its name and wrapper. */
+export const LLM_FILE_CHARGE_FILE_TOKENS = 100
+
+/**
+ * The fewest input tokens a call that sent documents is charged at when its
+ * reply states no charge (decided 2026-11-13): its documents at the measured
+ * rate ({@link LLM_FILE_CHARGE_PAGE_TOKENS} a page,
+ * {@link LLM_FILE_CHARGE_FILE_TOKENS} a file) plus its text's size estimate
+ * (system prompt, the schema as sent, text: chars ÷ 4). 0 for a call with no
+ * document, which is never floored.
+ */
+export function documentInputFloorTokens(req: LlmRequest): number {
+  let files = 0
+  let pages = 0
+  let textChars = req.system.length + sentSchemaText(req).length
+  for (const message of req.messages) {
+    if (typeof message.content === "string") {
+      textChars += message.content.length
+      continue
+    }
+    for (const block of message.content) {
+      if (block.type === "file_base64") {
+        files++
+        pages += block.pages
+      } else if (block.type === "text") textChars += block.text.length
+    }
+  }
+  if (files === 0) return 0
+  return files * LLM_FILE_CHARGE_FILE_TOKENS + pages * LLM_FILE_CHARGE_PAGE_TOKENS + kieInputTokens(textChars)
+}
+
+/**
  * The models whose KIE endpoint reports a top-level `usage.input_tokens: 0`
  * (GPT-6 on codex/v1/responses, measured 2026-10-08 — the real counts sit in
  * `usage.attribution`). Named one by one, never by an id prefix: GPT-6.1 Terra
@@ -42,8 +91,9 @@ export function kieInputUntrusted(modelId: string): boolean {
 /**
  * The request's size in characters: system prompt, schema as it is sent (only
  * when the model's calls send it — `sentSchemaText`, which counts a prompt-JSON
- * call's one-object rule and the schema's wire form), text, and
- * {@link KIE_IMAGE_ESTIMATE_CHARS} per media block.
+ * call's one-object rule and the schema's wire form), text,
+ * {@link KIE_FILE_PAGE_ESTIMATE_CHARS} per document page and
+ * {@link KIE_IMAGE_ESTIMATE_CHARS} per other media block.
  */
 export function requestChars(req: LlmRequest): number {
   let chars = req.system.length + sentSchemaText(req).length
@@ -52,7 +102,9 @@ export function requestChars(req: LlmRequest): number {
       chars += message.content.length
       continue
     }
-    for (const block of message.content) chars += block.type === "text" ? block.text.length : KIE_IMAGE_ESTIMATE_CHARS
+    for (const block of message.content) {
+      chars += block.type === "text" ? block.text.length : block.type === "file_base64" ? block.pages * KIE_FILE_PAGE_ESTIMATE_CHARS : KIE_IMAGE_ESTIMATE_CHARS
+    }
   }
   return chars
 }

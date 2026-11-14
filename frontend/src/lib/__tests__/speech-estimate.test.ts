@@ -17,6 +17,7 @@ import { SPEECH_FLOOR_UNITS, speechPriceUnits, speechQuoteCreditId } from "@noda
 import {
   speechEstimateChars,
   speechFlatId,
+  speechPriceChars,
   speechPriceIdsFor,
   speechQuote,
   speechQuoteIds,
@@ -30,7 +31,8 @@ type Case = {
   nodeType: string
   data: Record<string, unknown>
   ctx?: Record<string, unknown>
-  expect: { runsAs: string; chars: number; exact: boolean; units: number; quoteId: string; credits: number }
+  /** `chars` is the PRICED count; `scriptChars`, when given, the script's own length (what a voice's timing reads), when the two differ. */
+  expect: { runsAs: string; chars: number; exact: boolean; units: number; quoteId: string; credits: number; scriptChars?: number }
 }
 
 const FIXTURE = resolve(__dirname, "../../../../tools/fixtures/speech-estimate-cases.json")
@@ -69,9 +71,12 @@ describe("the speech estimate fixture — editor engine", () => {
   it.each(cases.map((c) => [c.name, c] as const))("%s", (_name, c) => {
     const data = expand(c.data) as Record<string, unknown>
     const ctx = (c.ctx ? expand(c.ctx) : {}) as SpeechEstimateContext
-    const e = speechEstimateChars(c.nodeType, data, ctx)
+    const e = speechPriceChars(c.nodeType, data, ctx)
     const units = speechPriceUnits(e.chars)
-    expect({ runsAs: e.runsAs, chars: e.chars, exact: e.exact, units, quoteId: speechQuoteCreditId(e.runsAs, units), credits: c.expect.credits }).toEqual(c.expect)
+    const { scriptChars, ...priced } = c.expect
+    expect({ runsAs: e.runsAs, chars: e.chars, exact: e.exact, units, quoteId: speechQuoteCreditId(e.runsAs, units), credits: c.expect.credits }).toEqual(priced)
+    // The script's own length never carries the price's tag growth.
+    expect(speechEstimateChars(c.nodeType, data, ctx).chars).toBe(scriptChars ?? e.chars)
   })
 
   // The backend suite (ee/billing/__tests__/speech-quote-equals-charge.test.ts) holds every server lane
@@ -126,6 +131,24 @@ describe("speechQuote — the (row, units, credits) the editor shows", () => {
     expect(speechQuote("text-to-speech", tts({ textSource: "connected" }), { textCap: 1200 }, WHOLE)).toMatchObject({ credits: 54, range: { min: 36, max: 54 } })
     // Cold whole prices: the bound, never a floor above the ceiling.
     expect(speechQuote("text-to-speech", tts({ textSource: "connected" }), { textCap: 1200 }, UNIT_ONLY)).toMatchObject({ credits: 60, range: { min: 40, max: 60 } })
+  })
+
+  it("a Gemini model (a per-1,000-characters row): served, the whole request's price; cold, a bound never below it (decided 2026-11-12)", () => {
+    const fixtureCases = cases.filter((c) => c.expect.quoteId.startsWith("gemini-"))
+    expect(fixtureCases.length).toBeGreaterThan(0)
+    for (const c of fixtureCases) {
+      const data = expand(c.data) as Record<string, unknown>
+      const ctx = (c.ctx ? expand(c.ctx) : {}) as SpeechEstimateContext
+      const row = pricing.unitRows[`${c.expect.runsAs}:per-1k-chars`]!
+      // The row as a server serves it (marked up once), and nothing else cached yet.
+      const servedRow = Math.ceil((row * (100 + pricing.chargePercent)) / 100)
+      const cold = speechQuote(c.nodeType, data, ctx, (id) => (id === `${c.expect.runsAs}:per-1k-chars` ? servedRow : undefined))
+      expect(cold, c.name).toMatchObject({ id: `${c.expect.runsAs}:per-1k-chars`, unit: servedRow, units: c.expect.units, served: false })
+      expect(cold!.credits, c.name).toBeGreaterThanOrEqual(c.expect.credits)
+      expect(servedRow * cold!.priced.units, c.name).toBeGreaterThanOrEqual(c.expect.credits)
+      const warm = speechQuote(c.nodeType, data, ctx, (id) => (id === c.expect.quoteId ? c.expect.credits : id === `${c.expect.runsAs}:per-1k-chars` ? servedRow : undefined))
+      expect(warm, c.name).toMatchObject({ credits: c.expect.credits, served: true, priced: { id: c.expect.quoteId, units: 1 } })
+    }
   })
 
   it("dialogue prices its lines on its own model", () => {

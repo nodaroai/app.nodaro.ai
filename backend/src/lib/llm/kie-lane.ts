@@ -20,7 +20,7 @@ import {
 import { kieChatPromptJsonFormat, kieClaudePromptJson, kiePromptJsonFloorRequest, kiePromptJsonText } from "./structured-schema.js"
 import { assertKieEnvelope, assertMediaIngested, buildResponse, extractActualUsd } from "./response.js"
 import { requestChars } from "./kie-cost.js"
-import { llmLaneAddedInputTokens } from "../pricing/llm-cost.js"
+import { llmLaneStopEstimateAddedInputTokens } from "../pricing/llm-cost.js"
 import { CHAT_COMPLETIONS_USAGE_KEYS, MESSAGES_USAGE_KEYS, kieReportedUsage } from "./kie-usage.js"
 import { parseSseStream } from "./sse.js"
 import { asStoppedStream, type StreamAbortContext } from "./stream-abort.js"
@@ -153,7 +153,7 @@ async function streamKieUnguarded(
   signal?: AbortSignal,
 ): Promise<LlmResponse> {
   const abort = signal
-    ? { signal, requestChars: requestChars(req), addedInputTokens: llmLaneAddedInputTokens(model, "kie", req.reasoningEffort) }
+    ? { signal, requestChars: requestChars(req), addedInputTokens: llmLaneStopEstimateAddedInputTokens(model, "kie", req.reasoningEffort) }
     : undefined
   switch (model.kieFormat) {
     case "chat-completions":

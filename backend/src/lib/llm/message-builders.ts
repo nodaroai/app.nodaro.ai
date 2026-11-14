@@ -97,6 +97,7 @@ export function buildChatCompletionsMessages(req: LlmRequest): Array<Record<stri
         if (b.type === "video_base64") {
           throw new Error(INLINE_VIDEO_LANE_ERROR("KIE chat-completions"))
         }
+        if (b.type === "file_base64") throw new Error(FILE_LANE_ERROR("KIE chat-completions"))
         const _exhaustive: never = b
         return _exhaustive
       })
@@ -121,6 +122,7 @@ export function buildMessagesBody(model: LlmModelDef, req: LlmRequest): Record<s
       if (b.type === "video_base64") {
         throw new Error(INLINE_VIDEO_LANE_ERROR("Claude messages"))
       }
+      if (b.type === "file_base64") throw new Error(FILE_LANE_ERROR("Claude messages"))
       const _exhaustive: never = b
       return _exhaustive
     })
@@ -215,6 +217,11 @@ export function buildResponsesInput(req: LlmRequest): Array<Record<string, unkno
         if (b.type === "video_base64") {
           throw new Error(INLINE_VIDEO_LANE_ERROR("GPT responses"))
         }
+        // A document, inline: the one lane that reads one (`input_file`, as
+        // `file_data` — KIE's doc names `file_url`; both answered, 2026-11-13).
+        if (b.type === "file_base64") {
+          return { type: "input_file", filename: b.filename, file_data: `data:${b.mediaType};base64,${b.data}` }
+        }
         const _exhaustive: never = b
         return _exhaustive
       })
@@ -241,9 +248,19 @@ export function llmBlockToAnthropic(b: LlmContentBlock): Anthropic.Messages.Cont
   if (b.type === "video" || b.type === "audio") {
     throw new Error(`Anthropic does not support ${b.type} input — pick a Gemini model for video/audio refs.`)
   }
+  if (b.type === "file_base64") throw new Error(FILE_LANE_ERROR("Anthropic"))
   const _exhaustive: never = b
   return _exhaustive
 }
+
+/**
+ * A document on a lane that cannot carry one. The routes refuse files on a
+ * model without the `file` cap before anything is held (`llmAcceptsFiles`), so
+ * reaching a builder that throws this means a new call site skipped that
+ * check — throw rather than drop the file and answer about nothing.
+ */
+export const FILE_LANE_ERROR = (lane: string): string =>
+  `llm-client: a document (file_base64) cannot be sent on the ${lane} lane — only a model whose modality caps say \`file\` reads documents`
 
 export function buildAnthropicMessages(req: LlmRequest) {
   return req.messages.map((m) => {

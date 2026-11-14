@@ -32,7 +32,8 @@ export interface StreamAbortContext {
   requestChars: number
   /**
    * Input tokens the lane adds to the call of its own and bills
-   * (`llmLaneAddedInputTokens`: GPT-6.1 Terra's on KIE), counted on top of the
+   * (`llmLaneStopEstimateAddedInputTokens`: GPT-6.1 Terra's on KIE, at its
+   * most frequent reading rather than the hold's ceiling), counted on top of the
    * request's size in the estimate — the provider read them before the stop.
    * Absent = none.
    */

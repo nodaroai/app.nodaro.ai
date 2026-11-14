@@ -777,6 +777,12 @@ describe("buildNodeOutputFromJobData", () => {
     expect(result.kieTaskId).toBe("kie-1")
   })
 
+  it("preserves the resolution the job recorded beside its task (what a Grok Extend quote reads)", () => {
+    const result = buildNodeOutputFromJobData({ videoUrl: "https://cdn.test/g.mp4", kieTaskId: "kie-1", recordedResolution: "480p" }, "generate-video")
+    expect(result.recordedResolution).toBe("480p")
+    expect(buildNodeOutputFromJobData({ videoUrl: "https://cdn.test/g.mp4", kieTaskId: "kie-1" }, "generate-video").recordedResolution).toBeUndefined()
+  })
+
   it("surfaces motion-graphics lottieUrl from completed job output_data (with the plan)", () => {
     const result = buildNodeOutputFromJobData({
       motionPlan: { planType: "lottie-graphic" },

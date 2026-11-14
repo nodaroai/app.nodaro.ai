@@ -84,3 +84,75 @@ describe("generate_dialogue — the model", () => {
     for (const n of stated) expect(n).toBeLessThanOrEqual(largestCap)
   })
 })
+
+describe("generate_dialogue — a Gemini model, one or two speakers (decided 2026-11-12)", () => {
+  it("3.8: its voices, a line's style and filler words reach the route under the route's names", async () => {
+    const { result, body } = await run({
+      model: "gemini-3-8-flash-tts",
+      dialogue: [{ text: "Hi [laughs]", voice_id: "Fola", style_direction: "warm" }, { text: "Hey", voice_id: "Puck" }],
+      filler_words: true,
+    })
+    expect(result.isError).toBeUndefined()
+    expect(body).toEqual(expect.objectContaining({
+      provider: "gemini-3-8-flash-tts",
+      dialogue: [{ text: "Hi [laughs]", voice: "Fola", styleDirection: "warm" }, { text: "Hey", voice: "Puck" }],
+      fillerWords: true,
+    }))
+  })
+
+  it("3.1: each speaker's style, pace, accent and audio profile", async () => {
+    const { result, body } = await run({
+      model: "gemini-3-1-flash-tts",
+      dialogue: [{ text: "Hi", voice_id: "Kore" }, { text: "Hey", voice_id: "Puck" }],
+      speakers: [{ voice_id: "Kore", style_direction: "Vocal Smile", pace: "Rapid Fire", accent: "American (Gen)" }, { voice_id: "Puck", audio_profile: "A tired engineer" }],
+    })
+    expect(result.isError).toBeUndefined()
+    expect(body?.speakers).toEqual([
+      { voice: "Kore", styleDirection: "Vocal Smile", pace: "Rapid Fire", accent: "American (Gen)" },
+      { voice: "Puck", audioProfile: "A tired engineer" },
+    ])
+  })
+
+  it("refuses before the route, with the route's sentence: a third voice, a voice not of the model, a 3.8 rewrite over the cap", async () => {
+    const three = await run({ model: "gemini-3-8-flash-lite-tts", dialogue: [{ text: "a", voice_id: "Fola" }, { text: "b", voice_id: "Puck" }, { text: "c", voice_id: "Kore" }] })
+    expect(three.result.isError).toBe(true)
+    expect((three.result.content[0] as { text: string }).text).toMatch(/at most 2 unique voices/)
+    expect(three.body).toBeUndefined()
+    const foreign = await run({ model: "gemini-3-1-flash-tts", dialogue: [{ text: "a", voice_id: "Rachel" }] })
+    expect(foreign.result.isError).toBe(true)
+    expect((foreign.result.content[0] as { text: string }).text).toMatch(/^Rachel is not a voice of gemini-3-1-flash-tts/)
+    const grown = await run({ model: "gemini-3-8-flash-tts", dialogue: [{ text: " [pause]".repeat(1250), voice_id: "Fola" }] })
+    expect(grown.result.isError).toBe(true)
+    expect((grown.result.content[0] as { text: string }).text).toMatch(/17499 characters in total; gemini-3-8-flash-tts takes at most 10000/)
+  })
+})
+
+describe("generate_dialogue — the file (decided 2026-11-13)", () => {
+  it("a Gemini model takes output_format; ElevenLabs dialogue refuses a non-default one before the route", async () => {
+    const g = await run({ model: "gemini-3-8-flash-tts", dialogue: [{ text: "Hi", voice_id: "Fola" }], output_format: "wav_24000" })
+    expect(g.result.isError).toBeUndefined()
+    expect(g.body?.outputFormat).toBe("wav_24000")
+    const e = await run({ dialogue: LINES, output_format: "wav_24000" })
+    expect(e.result.isError).toBe(true)
+    expect((e.result.content[0] as { text: string }).text).toBe("outputFormat on elevenlabs-dialogue must be one of: mp3_44100_128")
+    expect(e.body).toBeUndefined()
+  })
+})
+
+describe("generate_dialogue — a cloned speaker (replica, decided 2026-11-13)", () => {
+  it("maps a speaker's replica to the route's names; a model that does not clone refuses it before the route", async () => {
+    const replica = { source_audio_url: "https://media.example/s.wav", consent_audio_url: "https://media.example/c.wav", consent: true }
+    const ok = await run({ model: "gemini-3-8-flash-tts", dialogue: [{ text: "It's me.", voice_id: "Me" }, { text: "Hey.", voice_id: "Puck" }], speakers: [{ voice_id: "Me", replica }] })
+    expect(ok.result.isError).toBeUndefined()
+    expect(ok.body?.speakers).toEqual([{ voice: "Me", replica: { sourceAudioUrl: replica.source_audio_url, consentAudioUrl: replica.consent_audio_url, consent: true } }])
+    const unconsented = await run({ model: "gemini-3-8-flash-tts", dialogue: [{ text: "It's me.", voice_id: "Me" }], speakers: [{ voice_id: "Me", replica: { ...replica, consent: false } }] })
+    expect(unconsented.result.isError).toBe(true)
+    expect((unconsented.result.content[0] as { text: string }).text).toMatch(/^replica\.consent must be true/)
+    expect(unconsented.body).toBeUndefined()
+    const lite = await run({ model: "gemini-3-8-flash-lite-tts", dialogue: [{ text: "Hi", voice_id: "Fola" }], speakers: [{ voice_id: "Fola", replica }] })
+    expect(lite.result.isError).toBe(true)
+    expect((lite.result.content[0] as { text: string }).text).toBe("gemini-3-8-flash-lite-tts does not clone a voice; a one-off clone runs on gemini-3-8-flash-tts")
+    expect(lite.body).toBeUndefined()
+  })
+})
+

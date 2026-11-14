@@ -101,6 +101,11 @@ export type {
 } from "../resources/nodes-video-params.js"
 
 export type {
+  // `nodes.run("llm-chat", …)`: Generate Text, documents included.
+  LlmChatParams,
+} from "../resources/nodes-llm-params.js"
+
+export type {
   // The image routes beside generate-image: `nodes.run("image-to-image" |
   // "edit-image" | "split-image" | "generate-mask", …)`.
   ImageJobStarted,

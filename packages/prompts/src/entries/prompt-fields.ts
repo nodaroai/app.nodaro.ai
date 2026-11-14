@@ -9,7 +9,7 @@ export * from "../prompt-hint-join.js"
 export * from "../hint-shedding.js"
 export * from "../hint-join.js"
 export * from "../resolve-prompt.js"
-export { stripAudioTags } from "../audio-tags.js"
+export { stripAudioTags, toAngleTags, speakableText, speechTextBeforeCap, sentSpeechText, angleTagGrowth, sentDialogueLines, sentDialogueChars, dialogueTextBeforeCap, type SpeechTagSheet, type SpeechSendSheet } from "../audio-tags.js"
 export * from "../node-prompt-fields.js"
 // --- What a text-requiring node would send (the orchestrator's empty-input skip reads it) ---
 export * from "../node-send-text.js"

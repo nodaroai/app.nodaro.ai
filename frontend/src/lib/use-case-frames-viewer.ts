@@ -1,5 +1,5 @@
 import { USE_CASE_FRAMES_TYPE } from "@nodaro/render-rules"
-import { isNodeUnavailable, surfaceAvailabilityLoaded, useSurfaceAvailability } from "./surface-availability"
+import { isNodeUnavailable, surfaceAvailabilityFailed, surfaceAvailabilityLoaded, useSurfaceAvailability } from "./surface-availability"
 
 /**
  * Whether the canvas's run of a use-case node sends an `auto` framing source
@@ -24,15 +24,24 @@ export function usecaseFramesWithheld(): boolean {
   return surfaceAvailabilityLoaded() && isNodeUnavailable(USE_CASE_FRAMES_TYPE)
 }
 
-/** What the editor shows a viewer of the framing source: nothing until their availability has landed. */
+/**
+ * What the editor shows a viewer of the framing source: nothing while their
+ * availability is awaited, then whether Speaker Frames is offered to them.
+ * After a read of that answer that failed, the deployment's static profile
+ * decides (`isNodeUnavailable` falls back to its `nodes.deny`), never
+ * "loading" for the rest of the session. The run and its estimate do not
+ * change with it: `auto` is still sent as is (the route decides it for the
+ * real caller) and quoted following faces, and a Follow faces the route
+ * withholds is refused before anything is charged.
+ */
 export type UseCaseFramesViewer = "loading" | "offered" | "withheld"
 
 export function usecaseFramesViewer(): UseCaseFramesViewer {
-  if (!surfaceAvailabilityLoaded()) return "loading"
+  if (!surfaceAvailabilityLoaded() && !surfaceAvailabilityFailed()) return "loading"
   return isNodeUnavailable(USE_CASE_FRAMES_TYPE) ? "withheld" : "offered"
 }
 
-/** `usecaseFramesViewer`, re-read when the viewer's availability lands. */
+/** `usecaseFramesViewer`, re-read when the viewer's availability lands or its read fails. */
 export function useUseCaseFramesViewer(): UseCaseFramesViewer {
   useSurfaceAvailability()
   return usecaseFramesViewer()

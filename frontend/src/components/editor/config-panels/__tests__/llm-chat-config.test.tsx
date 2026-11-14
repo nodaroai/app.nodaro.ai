@@ -317,3 +317,80 @@ describe("LLMChatConfig (Generate Text — merged presets + fan-out)", () => {
     }
   })
 })
+
+// Documents (decided 2026-11-13): only a model that reads files shows the
+// file input, and switching to one that does not clears the node's files.
+describe("LLMChatConfig — documents (referenceFileUrls)", () => {
+  beforeEach(() => {
+    storeState = baseStoreState()
+  })
+  const openReferences = () => fireEvent.click(screen.getByText("References"))
+
+  it("shows the file input for GPT-6.1 Terra, with the node's files", () => {
+    renderConfig({ llmModel: "gpt-6.1-terra", referenceFileUrls: ["https://media.example/uploads/documents/report.pdf"] })
+    openReferences()
+    const refs = screen.getByTestId("llm-file-refs")
+    expect(within(refs).getByText("Files (PDF)")).toBeInTheDocument()
+    expect(within(refs).getByText("report.pdf")).toBeInTheDocument()
+    expect(within(refs).getByText("Upload PDF")).toBeInTheDocument()
+    expect(within(refs).getByText("1/5")).toBeInTheDocument()
+  })
+
+  it.each(["gemini-3.6-flash", "claude-sonnet-5.5", "gpt-6.1-sol"])("shows no file input for %s", (llmModel) => {
+    renderConfig({ llmModel })
+    openReferences()
+    expect(screen.queryByTestId("llm-file-refs")).toBeNull()
+  })
+
+  it("clears the node's files on a model that reads none", () => {
+    const { onUpdate } = renderConfig({ llmModel: "gemini-3.6-flash", referenceFileUrls: ["https://media.example/a.pdf"] })
+    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ referenceFileUrls: undefined }))
+  })
+
+  it("keeps them on GPT-6.1 Terra", () => {
+    const { onUpdate } = renderConfig({ llmModel: "gpt-6.1-terra", referenceFileUrls: ["https://media.example/a.pdf"] })
+    expect(onUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ referenceFileUrls: undefined }))
+  })
+})
+
+describe("LlmFileRefs — uploads", () => {
+  it("refuses a non-PDF and a file over the call's whole limit before uploading, and uploads a PDF", async () => {
+    const api = await import("@/lib/api")
+    const upload = vi.spyOn(api, "uploadFile").mockResolvedValue({ url: "https://media.example/uploads/documents/x.pdf" } as never)
+    const { LlmFileRefs } = await import("../llm-file-refs")
+    const onChange = vi.fn()
+    const { container } = render(<LlmFileRefs urls={[]} onChange={onChange} />)
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    const pick = (file: File) => fireEvent.change(input, { target: { files: [file] } })
+
+    pick(new File(["hi"], "notes.txt", { type: "text/plain" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent(/PDF/)
+    const big = new File(["x"], "big.pdf", { type: "application/pdf" })
+    Object.defineProperty(big, "size", { value: 6 * 1024 * 1024 + 1 })
+    pick(big)
+    expect(await screen.findByRole("alert")).toHaveTextContent(/6 MB/)
+    expect(upload).not.toHaveBeenCalled()
+
+    pick(new File(["%PDF-1.4"], "report.pdf", { type: "application/pdf" }))
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith(["https://media.example/uploads/documents/x.pdf"]))
+    upload.mockRestore()
+  })
+})
+
+describe("LlmFileRefs — an upload that lands after another change", () => {
+  it("adds to the list as it is when the upload lands, not the one it started from", async () => {
+    const api = await import("@/lib/api")
+    let finish: (v: unknown) => void = () => {}
+    const upload = vi.spyOn(api, "uploadFile").mockImplementation(() => new Promise((resolve) => { finish = resolve }) as never)
+    const { LlmFileRefs } = await import("../llm-file-refs")
+    const onChange = vi.fn()
+    const { container, rerender } = render(<LlmFileRefs urls={["https://media.example/a.pdf"]} onChange={onChange} />)
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [new File(["%PDF-1.4"], "c.pdf", { type: "application/pdf" })] } })
+    // While it uploads, a link is added elsewhere.
+    rerender(<LlmFileRefs urls={["https://media.example/a.pdf", "https://media.example/b.pdf"]} onChange={onChange} />)
+    finish({ url: "https://media.example/c.pdf" })
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith(["https://media.example/a.pdf", "https://media.example/b.pdf", "https://media.example/c.pdf"]))
+    upload.mockRestore()
+  })
+})

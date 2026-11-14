@@ -3,7 +3,9 @@
 // the per-second row × the billed seconds, and queues the job WITH the held
 // seconds — the worker refuses a 2.0 job without them (price and send the same
 // bytes, providers/kie/lip-sync-audio.ts). A refused input leaves no
-// reservation and no queued job. Harness: import-via-threading.test.ts.
+// reservation and no queued job. The models priced by a length bucket do the
+// same since 2026-11-13: the bucket of the measured audio, never the length
+// the node carries. Harness: import-via-threading.test.ts.
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const { mockCheckCredits, mockReserveCredits, mockGetAppSettings, mockQueueAdd } = vi.hoisted(() => ({
@@ -42,7 +44,13 @@ vi.mock("@/ee/billing/credits.js", () => ({
   CreditsService: { checkCredits: mockCheckCredits, reserveCredits: mockReserveCredits },
   getModelCreditBaseCost: vi.fn(async (id: string) => ({ creditCost: id === "omnihuman-2-0:per-second" ? 35 : 999, isEnabled: true, tierRestriction: null })),
 }))
-const probes = vi.hoisted(() => ({ audioSec: 10.04 }))
+const probes = vi.hoisted(() => ({
+  audioSec: 10.04 as number,
+  /** The decode reads the file only part-way (damaged, cut short). */
+  damaged: false,
+  /** What the payload builder built for the node. */
+  built: undefined as undefined | { modelIdentifier: string; payload: Record<string, unknown> },
+}))
 vi.mock("@/lib/image-source-probe.js", () => ({
   probeImageSource: async () => ({ size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 }),
 }))
@@ -54,10 +62,16 @@ vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
     await writeFile(path, Buffer.alloc(300_000))
   },
 }))
-vi.mock("@/providers/video/decoded-audio-length.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/providers/video/decoded-audio-length.js")>()),
-  measureDecodedAudio: async () => ({ overCap: false, samples: Math.round(probes.audioSec * 44_100), seconds: probes.audioSec }),
-}))
+vi.mock("@/providers/video/decoded-audio-length.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("@/providers/video/decoded-audio-length.js")>()
+  return {
+    ...orig,
+    measureDecodedAudio: async () => {
+      if (probes.damaged) throw new orig.AudioReadStoppedError("the file reports damage")
+      return { overCap: false, samples: Math.round(probes.audioSec * 44_100), seconds: probes.audioSec }
+    },
+  }
+})
 
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: mockQueueAdd } }))
 vi.mock("@/lib/render-queue.js", () => ({ renderQueue: { add: vi.fn().mockResolvedValue(undefined) } }))
@@ -77,8 +91,12 @@ vi.mock("../payload-builder.js", () => ({
   buildPayload: vi.fn(() => ({
     jobName: "lip-sync",
     queueName: "video-generation",
-    modelIdentifier: "omnihuman-2-0:per-second",
-    payload: { jobId: "test-job-id", provider: "omnihuman-2-0", imageUrl: "https://cdn.test/i.png", audioUrl: "https://cdn.test/a.mp3", prompt: "hi", audioDurationSec: 3 },
+    ...(probes.built
+      ? { modelIdentifier: probes.built.modelIdentifier, payload: { ...probes.built.payload } }
+      : {
+          modelIdentifier: "omnihuman-2-0:per-second",
+          payload: { jobId: "test-job-id", provider: "omnihuman-2-0", imageUrl: "https://cdn.test/i.png", audioUrl: "https://cdn.test/a.mp3", prompt: "hi", audioDurationSec: 3 },
+        }),
   })),
   buildNodeRefMap: vi.fn().mockReturnValue({}),
 }))
@@ -115,6 +133,8 @@ function makeCtx(): OrchestratorContext {
 beforeEach(() => {
   vi.clearAllMocks()
   probes.audioSec = 10.04
+  probes.damaged = false
+  probes.built = undefined
   mockGetAppSettings.mockResolvedValue({ cost_markup_percent: 10 })
   mockCheckCredits.mockResolvedValue({ allowed: true, balance: 50_000, watermark: false })
   mockReserveCredits.mockResolvedValue({ usageLogId: "usage-1", creditsReserved: 424, watermark: false })
@@ -139,6 +159,43 @@ describe("an OmniHuman 2.0 node in a workflow run", () => {
   it("audio past 300 s is refused before anything is held or queued", async () => {
     probes.audioSec = 301
     await expect(executeNode(node, {}, [], [], {}, makeCtx())).rejects.toThrow()
+    expect(mockReserveCredits).not.toHaveBeenCalled()
+    expect(mockQueueAdd).not.toHaveBeenCalled()
+  })
+})
+
+/** The models priced by a length bucket, each with the face input it takes. */
+const BUCKETED = [
+  ["kling-avatar", "imageUrl"], ["kling-avatar-pro", "imageUrl"], ["omnihuman-1-5", "imageUrl"],
+  ["heygen-lipsync-precision", "videoUrl"], ["lipsync-2-pro", "videoUrl"], ["sync-lipsync-v3", "videoUrl"], ["volcengine-lipsync", "videoUrl"],
+] as const
+
+describe("a model priced by a length bucket in a workflow run (decided 2026-11-13)", () => {
+  /** The job the payload builder builds for a node on `provider` that carries a stale 3 s: its bare id, the node's length. */
+  const build = (provider: string, face: string) => {
+    probes.built = {
+      modelIdentifier: provider,
+      payload: { jobId: "test-job-id", provider, [face]: "https://cdn.test/face", audioUrl: "https://cdn.test/a.mp3", prompt: "hi", audioDurationSec: 3, lipSyncBilledSeconds: 15 },
+    }
+    return { id: "n1", type: "lip-sync", data: { provider, audioDurationSec: 3 } } as SimpleNode
+  }
+
+  it.each(BUCKETED)("%s: holds the bucket of the audio it measured — never the node's shorter length — and queues the job with it", async (provider, face) => {
+    probes.audioSec = 42
+    await expect(executeNode(build(provider, face), {}, [], [], {}, makeCtx())).rejects.toThrow(/enqueue-sentinel/)
+    const [, , identifier, , , opts] = mockReserveCredits.mock.calls[0] as [string, string, string, number, number, { creditOverride?: number }]
+    expect(identifier).toBe(`${provider}:60s`)
+    expect(opts.creditOverride).toBeUndefined()
+    // The preflight judges the same row.
+    expect(mockCheckCredits.mock.calls[0]![1]).toBe(`${provider}:60s`)
+    const [, payload] = mockQueueAdd.mock.calls[0] as [string, Record<string, unknown>]
+    expect(payload).toMatchObject({ provider, audioDurationSec: 42, lipSyncBilledSeconds: 60, usageLogId: "usage-1" })
+  })
+
+  it.each(BUCKETED)("%s: damaged or cut-short audio is refused before anything is held or queued", async (provider, face) => {
+    probes.damaged = true
+    await expect(executeNode(build(provider, face), {}, [], [], {}, makeCtx())).rejects.toThrow(/could not read the audio to its end/)
+    expect(mockCheckCredits).not.toHaveBeenCalled()
     expect(mockReserveCredits).not.toHaveBeenCalled()
     expect(mockQueueAdd).not.toHaveBeenCalled()
   })

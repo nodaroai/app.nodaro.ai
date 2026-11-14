@@ -199,3 +199,29 @@ export function runOutputTaskFields(type: string | undefined, outputTask: unknow
   const task = str(outputTask)
   return task !== undefined && type !== undefined && TASK_CONSUMER_NODE_TYPES.has(type) ? { [RUN_OUTPUT_TASK_FIELD]: task } : {}
 }
+
+/** The video node types whose run a Grok Extend continues (a Grok Imagine text- or image-to-video node). */
+const GROK_EXTEND_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set(["generate-video", "text-to-video", "image-to-video"])
+
+/**
+ * What a RESULT row records of the job that made it, on the take of a Grok
+ * Extend's SOURCE only: the job's task (`kieTaskId`) and the resolution its
+ * request recorded beside it (`recordedResolution`, exactly as stored) — so a
+ * Grok Extend's quote finds the take its source's task names, and reads the
+ * fact its charge reads. Such a take is a video node's (`type`) whose job is a
+ * Grok Imagine video's: the job's finalize records `recordedResolution` beside
+ * its task for a `grok` / `grok-i2v` video job only (the model its own request
+ * recorded — never the node's provider string, which a Grok Imagine IMAGE node
+ * shares). Every other take — an image's, another model's video, an Extend or
+ * Upscale Video node's — gets nothing here, as before.
+ */
+export function runResultTaskFields(
+  type: string | null | undefined,
+  output: unknown,
+): { readonly kieTaskId?: string; readonly recordedResolution?: string } {
+  const o = (output && typeof output === "object" ? output : {}) as Record<string, unknown>
+  const task = str(o.kieTaskId)
+  const recorded = typeof o.recordedResolution === "string" && o.recordedResolution !== "" ? o.recordedResolution : undefined
+  if (task === undefined || recorded === undefined || !GROK_EXTEND_SOURCE_NODE_TYPES.has(type ?? "")) return {}
+  return { kieTaskId: task, recordedResolution: recorded }
+}

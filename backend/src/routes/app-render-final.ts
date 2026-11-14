@@ -65,6 +65,7 @@ import { findUnitFieldOverrideRefusals, unitFieldOverrideErrorBody } from "../li
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { usecaseRenderFinalEditRefusal } from "../lib/use-case/continuation.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
+import { cloneRecordingsRefusal, cloneRunCheck } from "../lib/clone-app-run.js"
 import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { appReviewerPresent } from "../lib/app-reviewer.js"
@@ -287,6 +288,11 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
       })
       if (stop) return reply.status(400).send({ error: stop })
     }
+    // A one-off voice clone the final runs: the runner's own recordings and consent, as the run applied
+    // them (decided 2026-11-13; lib/clone-app-run.ts). Refused before anything is held; the recordings
+    // themselves are read after the credit checks below.
+    const cloneCheck = await cloneRunCheck(nodes, edges, effective, nodeIds, appRow.creator_id ?? "", userId)
+    if (cloneCheck.refusal) return reply.status(cloneCheck.refusal.status).send({ error: cloneCheck.refusal.error })
 
     // The payer: the route's authenticated context, as an app run's.
     if (req.billingContext && (await shouldRefuseDegradedRunFor(req.billingContext, appRow.workflow_id))) {
@@ -307,6 +313,11 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
           },
         })
       }
+    }
+
+    {
+      const refusal = await cloneRecordingsRefusal(cloneCheck.recordings)
+      if (refusal) return reply.status(refusal.status).send({ error: refusal.error })
     }
 
     const headerKeyRaw = req.headers["idempotency-key"]

@@ -11,6 +11,10 @@ export {
   VIDEO_CHARACTER_NAME_MAX,
   VIDEO_CHARACTER_EXTRA_IMAGES_MAX,
   characterReferencesFromWired,
+  characterVideoUrls,
+  seatCharacterVideos,
+  videoCharacterVideoCap,
+  videoCharacterVideoProviders,
   videoCharacterRefCap,
   videoCharacterRefProviders,
   videoCharacterRefUnits,
@@ -22,7 +26,8 @@ export {
   VIDEO_CHARACTER_VOICE_DESCRIPTION_MAX,
   VIDEO_CHARACTER_VOICE_EXAMPLE_MAX,
 } from "../video-character-refs.js"
-export type { VideoCharacterReference, VideoCharacterVoice, VideoCharacterRefProblem } from "../video-character-refs.js"
+export { wiredCharacterSubjectClips } from "../wired-character-video-subjects.js"
+export type { VideoCharacterReference, VideoCharacterVoice, VideoCharacterRefProblem, CharacterVideoSeatProblem } from "../video-character-refs.js"
 export { CONTAINER_OVERHANG_SEC, extractVideoDurationFromNode, editPlanSourceDurationSec } from "../video-duration.js"
 // --- Video URL node + social-video import (host allowlist, node output rule) ---
 export {

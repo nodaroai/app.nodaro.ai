@@ -217,6 +217,33 @@ describe("a generated voice is listed at its script's expected length", () => {
     expect(d.fixed).toBe(clipCharge(estimateScriptDurationSec("x".repeat(600))))
   })
 
+  it("Gemini 3.8 under an input limit of 6,000: the voice is listed at the 6,000 characters it may speak — the tag growth prices the voice, never its length (decided 2026-11-13)", () => {
+    // 6,000 × 13/7 passes the 10,000 cap: had the growth reached the script's length, the voice would have no bound.
+    const voice: N = { id: "voice", type: "text-to-speech", data: { textSource: "connected", provider: "gemini-3-8-flash-tts" } }
+    const text: N = { id: "txt", type: "text-prompt", data: { text: "placeholder" } }
+    const wired = (limit: number | null) => voiceTo(voice, [text], [{ source: "txt", target: "voice", targetHandle: "prompt" }], { "txt:text": limit })
+    expect(wired(6000).fixed).toBe(combineCharge([Math.min(GENERATED_VOICE_MAX_SEC, estimateScriptDurationSec("x".repeat(6000)))]))
+    // A limit of 600 is read at its own 600 characters too, on 3.8 as on any model.
+    expect(wired(600).fixed).toBe(combineCharge([estimateScriptDurationSec("x".repeat(600))]))
+  })
+
+  it("Gemini 3.8 under an input limit of 6,000: Pitch & Tempo after the voice is priced at the voice's length, not as an input of unknown length (decided 2026-11-13)", () => {
+    const voice: N = { id: "voice", type: "text-to-speech", data: { textSource: "connected", provider: "gemini-3-8-flash-tts" } }
+    const text: N = { id: "txt", type: "text-prompt", data: { text: "placeholder" } }
+    const pitch: N = { id: "pitch", type: "pitch-tempo", data: { pitch: 2, tempo: 1 } }
+    const wire: E = { source: "txt", target: "voice", targetHandle: "prompt" }
+    const stepOf = (limit: number | null) => {
+      const caps = { speechTextCaps: { "txt:text": limit } }
+      const withStep = listingOf([text, voice, pitch], [wire, { source: "voice", target: "pitch", targetHandle: "audio" }], [], caps)
+      return withStep.preview - listingOf([text, voice], [wire], [], caps).preview
+    }
+    // 6,000 and 3,600 characters both read past 300 seconds: the 300-second voice, 5 started minutes, either way.
+    expect(stepOf(6000)).toBe(5 * STATIC_CREDIT_COSTS["pitch-tempo"]!)
+    expect(stepOf(6000)).toBe(stepOf(3600))
+    // A bound: an input with no limit is an audio of unknown length, listed otherwise.
+    expect(stepOf(6000)).not.toBe(stepOf(null))
+  })
+
   describe("a script an LLM node writes (decided 2026-10-07): at most maxTokens x 8 characters, read at the same speaking rate", () => {
     const voice = (extra: Record<string, unknown> = {}): N => ({ id: "voice", type: "text-to-speech", data: { textSource: "connected", provider: "elevenlabs-turbo", ...extra } })
     const wire: E = { source: "llm", target: "voice", targetHandle: "prompt" }

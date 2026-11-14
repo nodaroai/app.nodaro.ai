@@ -1,3 +1,5 @@
+import { replicaOf } from "@nodaro/shared/model-catalog"
+import { signReplicaConsent, type ReplicaConsentRecord } from "../../../voice-clone-consent.js"
 import { bool, defined, inputsOf, num, str, urls, type Body, type FlowMediaKind, type FlowOutputKey, type RouteMapper, type RouteMappers } from "./kit.js"
 
 const VIDEO_EXTENSION = /\.(mp4|mov|m4v|webm|mkv|avi)$/i
@@ -63,12 +65,19 @@ const sunoGenerate: RouteMapper = {
 }
 
 /** Audio routes whose calls become nodes. */
+/** The consent record for a clone the call attested (`consent: true`), issued to the call's own user. */
+function consentRecordFor(body: Body, value: unknown): ReplicaConsentRecord | undefined {
+  const replica = replicaOf(value)
+  const userId = typeof body.userId === "string" ? body.userId : undefined
+  return replica && userId && (value as { consent?: unknown }).consent === true ? signReplicaConsent(userId, replica) : undefined
+}
+
 export const AUDIO_ROUTE_MAPPERS: RouteMappers = {
   "/v1/text-to-speech": {
     tools: ["generate_speech"],
     fields: new Set([
       "text", "voice", "provider", "voiceType", "stability", "similarityBoost", "style", "speed",
-      "languageCode", "previousText", "nextText",
+      "languageCode", "previousText", "nextText", "styleDirection", "pace", "accent", "audioProfile", "replica", "outputFormat",
     ]),
     map(body) {
       const text = str(body.text)
@@ -97,6 +106,17 @@ export const AUDIO_ROUTE_MAPPERS: RouteMappers = {
           languageCode: str(body.languageCode),
           previousText: str(body.previousText),
           nextText: str(body.nextText),
+          // Style direction (Gemini) — the node carries what the call sent.
+          styleDirection: str(body.styleDirection),
+          pace: str(body.pace),
+          accent: str(body.accent),
+          audioProfile: str(body.audioProfile),
+          // A one-off clone (Gemini 3.8 Flash): the recordings' links, as the call sent them.
+          replica: replicaOf(body.replica),
+          // The caller's consent (`replica.consent: true`) is the node's consent box, ticked by the session's user:
+          // a record the server signs for them (anyone else running a copy ticks it themselves).
+          replicaConsent: consentRecordFor(body, body.replica),
+          outputFormat: str(body.outputFormat),
           fieldMappings: {},
         }),
       }
@@ -105,15 +125,27 @@ export const AUDIO_ROUTE_MAPPERS: RouteMappers = {
 
   "/v1/text-to-dialogue": {
     tools: ["generate_dialogue"],
-    fields: new Set(["dialogue", "provider", "stability", "similarityBoost", "languageCode", "seed", "applyTextNormalization"]),
+    fields: new Set(["dialogue", "provider", "stability", "similarityBoost", "languageCode", "seed", "applyTextNormalization", "speakers", "fillerWords", "outputFormat"]),
     map(body) {
       const lines = Array.isArray(body.dialogue) ? (body.dialogue as unknown[]) : []
       const dialogue = lines.map((line, i) => {
         const record = (line ?? {}) as Record<string, unknown>
         const text = str(record.text)
         const voice = str(record.voice)
-        return text && voice ? { id: `line-${i + 1}`, text, voice } : null
+        // Gemini 3.8: the line's own style rides on the line, as the node keeps it.
+        const styleDirection = str(record.styleDirection)
+        return text && voice ? { id: `line-${i + 1}`, text, voice, ...(styleDirection ? { styleDirection } : {}) } : null
       })
+      // Gemini 3.1 / 2.5: each speaker's direction, keyed by voice, as the node keeps it.
+      const speakers = Array.isArray(body.speakers)
+        ? (body.speakers as unknown[]).flatMap((entry) => {
+            const record = (entry ?? {}) as Record<string, unknown>
+            const voice = str(record.voice)
+            return voice
+              ? [defined({ voice, styleDirection: str(record.styleDirection), pace: str(record.pace), accent: str(record.accent), audioProfile: str(record.audioProfile), replica: replicaOf(record.replica), replicaConsent: consentRecordFor(body, record.replica) })]
+              : []
+          })
+        : undefined
       if (dialogue.length === 0 || dialogue.some((l) => l === null)) return null
       return {
         type: "text-to-dialogue",
@@ -129,6 +161,9 @@ export const AUDIO_ROUTE_MAPPERS: RouteMappers = {
           languageCode: str(body.languageCode),
           seed: num(body.seed),
           applyTextNormalization: str(body.applyTextNormalization),
+          speakers: speakers && speakers.length > 0 ? speakers : undefined,
+          fillerWords: bool(body.fillerWords),
+          outputFormat: str(body.outputFormat),
           fieldMappings: {},
         }),
       }

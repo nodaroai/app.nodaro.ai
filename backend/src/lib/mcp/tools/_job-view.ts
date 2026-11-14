@@ -79,6 +79,8 @@ export const JOB_INPUT_VIEW_KEYS = [
   "referenceImageUrls",
   "referenceVideoUrls",
   "referenceAudioUrls",
+  // The documents a Generate Text call read (PDF links).
+  "referenceFileUrls",
   // Identity inputs (portrait URLs + descriptions) — the caller's own creative
   // input, the same standing as the reference lists above.
   "characterReferences",

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { GEMINI_3_8_TONE_TAGS } from "@nodaro/shared/models"
 import {
   AUDIO_TAGS,
   SSML_BREAK_OPTIONS,
@@ -8,6 +9,7 @@ import {
   getAudioTagCategories,
   getLanguagesForModel,
   ALL_LANGUAGES,
+  angleTagMenu,
   tagInsertWarning,
 } from "@/lib/audio-tags"
 
@@ -108,6 +110,12 @@ describe("getLanguagesForModel", () => {
     expect(langs).toHaveLength(46)
   })
 
+  it("a model offered in no language (Gemini: the language follows the text) lists none", () => {
+    for (const provider of ["gemini-3-8-flash-lite-tts", "gemini-3-8-flash-tts", "gemini-3-1-flash-tts", "gemini-2-5-pro-tts"]) {
+      expect(getLanguagesForModel(provider), provider).toEqual([])
+    }
+  })
+
   it("returns 32 languages when called with no argument (default = turbo)", () => {
     const langs = getLanguagesForModel()
     expect(langs).toHaveLength(32)
@@ -185,6 +193,49 @@ describe("tagInsertWarning — what inserting a tag earns on each model", () => 
   it("agrees with every shipped tag: all audio tags start with [ and every SSML break with <", () => {
     for (const t of AUDIO_TAGS) expect(tagInsertWarning("elevenlabs-turbo", t.tag), t.tag).toBe("audioTag")
     for (const b of SSML_BREAK_OPTIONS) expect(tagInsertWarning("elevenlabs-v3", b.tag), b.tag).toBe("ssml")
+  })
+
+  describe("on a model that writes its own <tone tags> (Gemini 3.8)", () => {
+    const LITE_38 = "gemini-3-8-flash-lite-tts"
+
+    it("every tag of its own list is no warning — it is not SSML", () => {
+      for (const name of GEMINI_3_8_TONE_TAGS) expect(tagInsertWarning(LITE_38, `<${name}>`), name).toBeNull()
+    })
+
+    it("a [square] tag the platform rewrites to one of them is no warning; one it takes out is", () => {
+      expect(tagInsertWarning(LITE_38, "[laughs]")).toBeNull() // → <laugh>
+      expect(tagInsertWarning(LITE_38, "[pause]")).toBeNull() // → <short pause>
+      expect(tagInsertWarning(LITE_38, "[whispers]")).toBeNull() // its own name
+      expect(tagInsertWarning(LITE_38, "[sarcastic]")).toBe("audioTag")
+      expect(tagInsertWarning(LITE_38, "[explosion]")).toBe("audioTag")
+    })
+
+    it("an angle tag not on its list is taken out; an SSML break is still SSML (it honours none)", () => {
+      expect(tagInsertWarning(LITE_38, "<excited>")).toBe("audioTag")
+      expect(tagInsertWarning(LITE_38, BREAK)).toBe("ssml")
+    })
+
+    it("3.1 / 2.5 take [square] tags as written: no warning; still no SSML", () => {
+      for (const provider of ["gemini-3-1-flash-tts", "gemini-2-5-pro-tts"]) {
+        expect(tagInsertWarning(provider, TAG)).toBeNull()
+        expect(tagInsertWarning(provider, "[sarcastic]")).toBeNull()
+        expect(tagInsertWarning(provider, BREAK)).toBe("ssml")
+      }
+    })
+  })
+})
+
+describe("angleTagMenu — the tag menu on an angle-tag model", () => {
+  it("3.8 offers exactly its own tags, written as it reads them, in its sheet's order", () => {
+    for (const provider of ["gemini-3-8-flash-lite-tts", "gemini-3-8-flash-tts"]) {
+      expect(angleTagMenu(provider)).toEqual(GEMINI_3_8_TONE_TAGS.map((name) => ({ tag: `<${name}>`, label: name })))
+    }
+  })
+
+  it("every other model keeps the platform's menu (undefined), a missing or unknown id included", () => {
+    for (const provider of ["gemini-3-1-flash-tts", "gemini-2-5-pro-tts", "elevenlabs-v4", "elevenlabs-turbo", "not-a-model", undefined]) {
+      expect(angleTagMenu(provider), String(provider)).toBeUndefined()
+    }
   })
 })
 

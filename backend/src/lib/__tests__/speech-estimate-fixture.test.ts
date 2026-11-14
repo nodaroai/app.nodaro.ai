@@ -9,7 +9,7 @@ import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { speechPriceUnits, speechQuoteCreditId } from "@nodaro/shared/credits"
-import { speechEstimateChars, type SpeechEstimateContext } from "../speech-estimate.js"
+import { speechEstimateChars, speechPriceChars, type SpeechEstimateContext } from "../speech-estimate.js"
 
 type Repeat = { repeat: number; of: string; prefix?: string }
 type Case = {
@@ -17,7 +17,8 @@ type Case = {
   nodeType: string
   data: Record<string, unknown>
   ctx?: Record<string, unknown>
-  expect: { runsAs: string; chars: number; exact: boolean; units: number; quoteId: string; credits: number }
+  /** `chars` is the PRICED count; `scriptChars`, when given, the script's own length (what a voice's timing reads), when the two differ. */
+  expect: { runsAs: string; chars: number; exact: boolean; units: number; quoteId: string; credits: number; scriptChars?: number }
 }
 
 const FIXTURE = resolve(__dirname, "../../../../tools/fixtures/speech-estimate-cases.json")
@@ -45,9 +46,12 @@ describe("the speech estimate fixture — backend engine", () => {
   it.each(cases.map((c) => [c.name, c] as const))("%s", (_name, c) => {
     const data = expand(c.data) as Record<string, unknown>
     const ctx = (c.ctx ? expand(c.ctx) : {}) as SpeechEstimateContext
-    const e = speechEstimateChars(c.nodeType, data, ctx)
+    const e = speechPriceChars(c.nodeType, data, ctx)
     const units = speechPriceUnits(e.chars)
+    const { scriptChars, ...priced } = c.expect
     // `credits` is the server's charge, held by ee/billing/__tests__/speech-quote-equals-charge.test.ts.
-    expect({ runsAs: e.runsAs, chars: e.chars, exact: e.exact, units, quoteId: speechQuoteCreditId(e.runsAs, units) }).toEqual({ ...c.expect, credits: undefined })
+    expect({ runsAs: e.runsAs, chars: e.chars, exact: e.exact, units, quoteId: speechQuoteCreditId(e.runsAs, units) }).toEqual({ ...priced, credits: undefined })
+    // The script's own length (a generated voice's listed seconds read it) never carries the price's tag growth.
+    expect(speechEstimateChars(c.nodeType, data, ctx).chars).toBe(scriptChars ?? e.chars)
   })
 })

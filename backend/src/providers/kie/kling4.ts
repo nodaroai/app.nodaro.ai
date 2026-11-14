@@ -23,7 +23,9 @@
  * characters to the `@image_N` seat their image occupies. This module is the ONE
  * place that numbering becomes Kling's:
  *   - reference: a character seat becomes the subject's `@Name`, the remaining
- *     images renumber, `@audio_N` becomes the voice's `@VoiceN`;
+ *     images renumber, `@audio_N` becomes the voice's `@VoiceN`; a character's
+ *     clip seated among the reference videos (a video subject) does the same:
+ *     its `@video_N` becomes `@Name` and the remaining videos renumber;
  *   - keyframes: `@image_N` becomes `@keyframe_N`;
  * and then every `@word` the body does not declare loses its `@`, so no path
  * — editor, workflow, API, MCP — can reach the 422.
@@ -142,10 +144,11 @@ export function buildKling4Request(args: Kling4RequestArgs): Kling4Request {
   return args.provider === "kling-4-keyframes" ? buildKeyframes(args) : buildReference(args)
 }
 
-/** A character reference with at least one usable image (it reaches the
- *  reference endpoint as a subject, or as a reference image when it has one). */
+/** A character reference with a clip or at least one usable image (it reaches
+ *  the reference endpoint as a subject, or as a reference image when it has
+ *  one image only). */
 const hasCharacterImage = (ref: VideoCharacterReference): boolean =>
-  cleanList([ref.imageUrl, ref.bodyImageUrl ?? "", ...(ref.extraImageUrls ?? [])]).length > 0
+  !!ref.videoUrl?.trim() || cleanList([ref.imageUrl, ref.bodyImageUrl ?? "", ...(ref.extraImageUrls ?? [])]).length > 0
 
 /**
  * Which Kling 4.0 Flash endpoint a run takes (decided 2026-11-11): a start
@@ -235,7 +238,11 @@ interface Subject {
   name: string
   /** Every name the caller may have written it under (its raw name). */
   rawName?: string
+  /** An image subject's 2-4 images; a video subject's images, read only to
+   *  recognise its portrait's seat (a video subject sends no images). */
   imageUrls: string[]
+  /** A video subject's clip (`characterReferences[].videoUrl`). */
+  videoUrl?: string
   description?: string
 }
 
@@ -244,9 +251,17 @@ interface Subject {
  * model, 720p whatever was asked, and no `voices`): reference audio clip N
  * belongs to wired character N, in `characterReferences` order (decided
  * 2026-11-11) — that character's `voice_url` when it is a subject (2-4
- * images), dropped with a note when it is not (one image makes a plain
- * reference image, which cannot carry a voice) or when there is no character
- * N. `@audio_N` is left undeclared so it loses its `@`.
+ * images, or a clip), dropped with a note when it is not (one image makes a
+ * plain reference image, which cannot carry a voice) or when there is no
+ * character N. `@audio_N` is left undeclared so it loses its `@`.
+ *
+ * VIDEO SUBJECTS (decided 2026-11-13): a character with a `videoUrl` is a
+ * video subject — `{ name, video_url, tag: "character" }` (Flash adds
+ * `type: "video"`; Kling 4.0's schema has no `type`), never `image_urls`
+ * beside it. Its clip arrives seated among the reference videos
+ * (`seatCharacterVideos`, which is how it was measured and priced): that seat
+ * leaves `video_urls` and its `@video_N` names the subject. Its portrait's
+ * seat among the reference images is the subject too, as for an image subject.
  */
 function buildReference(args: Kling4RequestArgs, opts: { flash?: boolean; notes?: string[] } = {}): Kling4Request {
   const notes: string[] = opts.notes ?? []
@@ -276,6 +291,18 @@ function buildReference(args: Kling4RequestArgs, opts: { flash?: boolean; notes?
   for (const ref of (args.characterReferences ?? []).slice(0, MAX_SUBJECTS)) {
     const images = [...new Set(cleanList([ref.imageUrl, ref.bodyImageUrl ?? "", ...(ref.extraImageUrls ?? [])]))]
       .slice(0, MAX_SUBJECT_IMAGES)
+    const videoUrl = ref.videoUrl?.trim()
+    if (videoUrl) {
+      subjectOfCharacter.push(subjects.length)
+      subjects.push({
+        name: uniqueName(kling4Name(ref.name, `Character${subjects.length + 1}`), taken),
+        rawName: ref.name,
+        imageUrls: images,
+        videoUrl,
+        description: ref.description?.trim().slice(0, SUBJECT_DESCRIPTION_MAX) || undefined,
+      })
+      continue
+    }
     if (images.length < 2) {
       subjectOfCharacter.push(undefined)
       if (images.length === 1) singleImageRefs.push({ rawName: ref.name, url: images[0]! })
@@ -327,7 +354,23 @@ function buildReference(args: Kling4RequestArgs, opts: { flash?: boolean; notes?
     }
   }
 
-  const videos = cleanList(args.referenceVideoUrls).slice(0, MAX_VIDEOS)
+  // A video subject's clip seat IS that subject: its `@video_N` becomes
+  // `@Name` and the clip leaves the list; the other videos renumber (with no
+  // video subject the numbering is unchanged).
+  const subjectByVideo = new Map<string, Subject>()
+  for (const s of subjects) if (s.videoUrl && !subjectByVideo.has(s.videoUrl)) subjectByVideo.set(s.videoUrl, s)
+  const videos: string[] = []
+  const videoSeatName = new Map<number, string>()
+  cleanList(args.referenceVideoUrls).forEach((url, i) => {
+    const subject = subjectByVideo.get(url)
+    if (subject) {
+      videoSeatName.set(i + 1, subject.name)
+    } else if (videos.length < MAX_VIDEOS) {
+      videos.push(url)
+      videoSeatName.set(i + 1, `video_${videos.length}`)
+    }
+  })
+  prompt = renumber(prompt, "video", (n) => videoSeatName.get(n))
   let voices: Array<{ name: string; audio_url: string }> = []
   /** Flash: subject i's voice clip, index-aligned with `subjects`. */
   const subjectVoices: Array<string | undefined> = subjects.map(() => undefined)
@@ -373,8 +416,13 @@ function buildReference(args: Kling4RequestArgs, opts: { flash?: boolean; notes?
   if (subjects.length > 0) {
     input.elements = subjects.map((s, i) => ({
       name: s.name,
-      image_urls: s.imageUrls,
-      // Only a `character` subject may carry a voice (KIE): always this tag.
+      // A video subject sends its clip and no images (KIE refuses both on one
+      // element); Flash names the kind, Kling 4.0's schema has no `type`.
+      ...(s.videoUrl
+        ? { video_url: s.videoUrl, ...(flash ? { type: "video" } : {}) }
+        : { image_urls: s.imageUrls }),
+      // Only a `character` subject may carry a voice (KIE), and a video
+      // subject is always one: always this tag.
       tag: "character",
       ...(s.description ? { description: s.description } : {}),
       ...(subjectVoices[i] ? { voice_url: subjectVoices[i] } : {}),

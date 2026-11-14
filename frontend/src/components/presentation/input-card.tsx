@@ -13,6 +13,7 @@ import { ListInputCard } from "./input-cards/list-input-card"
 import { LoopInputCard } from "./input-cards/loop-input-card"
 import { CreatorSourceCard } from "./input-cards/creator-source-card"
 import { isParameterPickerNode } from "@/lib/parameter-picker-types"
+import { APP_CLONE_INPUT_TYPE } from "@/lib/app-clone-inputs"
 import { inferPromptContext } from "@/lib/prompt-context"
 import { hasCredits } from "@/lib/edition"
 import { isMultiColumnList } from "@/lib/list-loop-migration"
@@ -39,6 +40,12 @@ const AiAvatarInputCard = lazy(() =>
 // of the main app-runner chunk for apps that don't use cinematic-avatar nodes.
 const CinematicAvatarInputCard = lazy(() =>
   import("./input-cards/cinematic-avatar-input-card").then((m) => ({ default: m.CinematicAvatarInputCard })),
+)
+
+// Lazy-load "Your voice" (a published app's one-off voice clone, the runner's
+// own recordings and consent): only an app that clones a voice loads it.
+const VoiceCloneInputCard = lazy(() =>
+  import("./input-cards/voice-clone-input-card").then((m) => ({ default: m.VoiceCloneInputCard })),
 )
 
 /** System-wide ceiling for fan-out items. Will be fetched from app_settings in future. */
@@ -113,6 +120,19 @@ function InputCardInner({
         <p className="text-sm font-medium text-foreground"><span dir="auto">{label}</span></p>
         <p className="text-xs text-muted-foreground mt-0.5">{t("present.clickToConfigure")}</p>
       </button>
+    )
+  }
+
+  // "Your voice": the runner's own recordings and consent for a clone node (the
+  // runner's inputs append one per clone node, `useAppCloneInputs`). Only the
+  // runner fills it; in the editor's preview the author edits the node itself.
+  // Compared as a string: the synthetic type is no node type of the canvas.
+  if ((node.type as string | undefined) === APP_CLONE_INPUT_TYPE) {
+    if (!isFullscreen) return null
+    return (
+      <Suspense fallback={null}>
+        <VoiceCloneInputCard node={node} inputValues={inputValues} onUpdateInput={onUpdateInput} readOnly={readOnly} variant={variant} />
+      </Suspense>
     )
   }
 

@@ -46,7 +46,7 @@ describe("a node unit's provider attribution", () => {
   it("HANDLER_PROVIDERS composes it beside the core handlers, frozen, every core row kept", () => {
     expect(HANDLER_PROVIDERS[KIE_UNIT]).toBe("kie")
     expect(Object.isFrozen(HANDLER_PROVIDERS)).toBe(true)
-    expect(HANDLER_PROVIDERS["text-to-speech"]).toBe("elevenlabs")
+    expect(HANDLER_PROVIDERS["voice-changer"]).toBe("elevenlabs")
     expect(primaryProviderOfJob("audio-isolation", {})).toBe("kie")
   })
 

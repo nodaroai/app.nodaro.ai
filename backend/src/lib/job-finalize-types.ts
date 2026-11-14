@@ -84,11 +84,14 @@ export const AUDIO_JOB_TYPES = [
   // reconcile/__tests__/finalize-job-type-coverage.test.ts asserts the
   // producer→set direction ONLY, never the reverse.
   "audio-isolation", "speech-to-text", "generate-dialogue",
-  // `text-to-dialogue` is handleTextToDialogue under another name
-  // (audio-ai.ts:804) and finalizes as "generate-dialogue" (:405). Sync today
-  // (no makeOnTaskCreated → no provider_kind), so no reconcile tick reaches
-  // it — but it is an ALIAS, not a denial, and listing it here rather than in
-  // NOT_GENERIC_RECOVERABLE keeps that honest (M-3a).
+  // `text-to-dialogue` is handleTextToDialogue under another name and
+  // finalizes as "generate-dialogue". An ElevenLabs dialogue is sync (no
+  // makeOnTaskCreated → no provider_kind), so no reconcile tick reaches it; a
+  // Gemini dialogue is a KIE task ("kie-standard"), which the reconcile
+  // delivers through the worker's own path (lib/gemini-speech.ts,
+  // `recoverGeminiSpeechJob`), never the generic finalize. It is an ALIAS, not
+  // a denial, and listing it here rather than in NOT_GENERIC_RECOVERABLE keeps
+  // that honest (M-3a).
   "text-to-dialogue",
   // voice-remix (audio-ai.ts:684) and voice-design (audio-ai.ts:713) are each
   // a single unconditional completion path through finalizeJobWithMedia with

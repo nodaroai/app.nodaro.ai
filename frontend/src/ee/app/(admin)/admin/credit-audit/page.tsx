@@ -19,8 +19,9 @@ interface AuditModel {
   providerCostInCredits: number
   diff: number | null
   diffPercent: number | null
-  /** CHECK_TIERS: a key priced only through composite rows, each billed amount
-   *  covered by some row but not known to be charged at one (never OK). */
+  /** CHECK_TIERS: a billed amount covered only by a row other than the one a
+   *  task is charged at (the key's bare row; for a key priced only through
+   *  composite rows, by any row) — never OK. */
   status: "OK" | "UNDERPRICED" | "OVERPRICED" | "UNMAPPED" | "CHECK_TIERS"
   variable: boolean
   /** Per billed amount: the cheapest of the key's rows that covers it. */

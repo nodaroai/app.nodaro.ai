@@ -91,3 +91,9 @@ d9d5b81de9a8adac5d2f6e17267cb5b8e1d1fc08:backend/src/__tests__/fixtures/suno-req
 # (NEMOTRON_TRANSCRIBE_ID), so no later commit or the squash merge repeats the match.
 e096ef9ea8139389270ac71e6e368f15e781f20b:backend/src/providers/kie/nemotron-transcribe.ts:generic-api-key:114
 a9cc2b67ce2c71ad05a6c28810ed46f5268c74d2:backend/src/providers/kie/__tests__/nemotron-transcribe.test.ts:generic-api-key:93
+
+# backend/src/lib/__tests__/pdf-pages.test.ts: a list of PDF fixture FILE NAMES
+# ("…-dup-pages-key.pdf", "…-dup-kids-key.pdf") read as a key assignment. Not a
+# credential (PR #3130). The live line no longer names them (the fixtures are
+# picked by prefix); this entry neutralises only the pushed commit that did.
+708e5f595688a82ba621d802c0b6fbdfbd5c3db3:backend/src/lib/__tests__/pdf-pages.test.ts:generic-api-key:91

@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { creditLadderHint, lipSyncPriceSuffix } from "./_credit-hint.js"
-import { MAX_LIP_SYNC_AUDIO_SEC, measuredAudioSeconds } from "./_audio-length.js"
+import { MAX_LIP_SYNC_AUDIO_SEC } from "./_audio-length.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { COMBINE_VIDEOS_MAX_CLIPS, combineVideosTooManyClipsMessage } from "../../video-utility-credits.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
@@ -30,7 +30,7 @@ import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PR
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
-import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, isPerSecondLipSyncProvider, motionTransferResolution } from "@nodaro/shared/credits"
+import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, motionTransferResolution } from "@nodaro/shared/credits"
 import { VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_CHARACTER_REFS_WIRE_MAX, VIDEO_CHARACTER_EXTRA_IMAGES_MAX, videoCharacterRefProviders } from "@nodaro/shared/video"
 import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared/media"
@@ -289,7 +289,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference audio, capped per model (seedance-2-5 10; seedance-2 family, minimax-h3 3; " +
-            "wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack; kling-4-flash 7, clip N = character N's voice if it has 2-4 images); else dropped.",
+            "wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack; kling-4-flash 7, clip N = character N's voice if it's a subject); else dropped.",
           ),
         character_references: z
           .array(z.object({
@@ -299,6 +299,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             description: z.string(),
             name: z.string().optional(),
             voice_preset: z.string().optional().describe("Gemini voice id (e.g. kore): pins this character's voice."),
+            video_url: z.string().optional().describe("kling-4(-flash): 3-8s clip; a video subject."),
           }))
           .max(VIDEO_CHARACTER_REFS_WIRE_MAX)
           .optional()
@@ -509,6 +510,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
                 // Preset only: the full voice object (description, example line) does
                 // not fit the per-tool wire budget — it is an SDK / REST lever.
                 ...(c.voice_preset ? { voice: { preset: c.voice_preset } } : {}),
+                // The route seats the clip among the reference videos and is the gate.
+                ...(c.video_url ? { videoUrl: c.video_url } : {}),
               })),
             }
           : {}),
@@ -1447,7 +1450,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .min(0.1)
           .max(MAX_LIP_SYNC_AUDIO_SEC)
           .optional()
-          .describe("Length of the audio in seconds. Models billed by the second reserve and charge by this length; when it is left out, the audio is measured first. omnihuman-2-0 always measures the audio itself."),
+          .describe("Ignored: accepted so older calls still work. A model priced by its audio's length is priced on the length measured from the audio itself."),
         prompt: z
           .string()
           .max(500)
@@ -1589,16 +1592,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       }
 
       const provider = args.model ?? "kling-avatar"
-      // A per-second model reserves (and, for every one but Kling, charges) the bucket its audio
-      // length picks; with no length the route reserves its largest bucket. So the length is sent
-      // as given, or measured first; a failed measurement sends none, today's behaviour.
-      const audioDurationSec = args.audio_duration_sec ?? (isPerSecondLipSyncProvider(provider) ? await measuredAudioSeconds(audioUrl) : undefined)
+      // No length is sent (decided 2026-11-13): the route measures the audio of
+      // every model priced by its length and prices, holds and charges that.
       const payload: Record<string, unknown> = {
         ...(imageUrl ? { imageUrl } : {}),
         ...(videoUrl ? { videoUrl } : {}),
         audioUrl,
         provider,
-        ...(audioDurationSec !== undefined ? { audioDurationSec } : {}),
         ...(args.prompt ? { prompt: args.prompt } : {}),
         ...(args.resolution ? { resolution: args.resolution } : {}),
         ...(args.seed !== undefined ? { seed: args.seed } : {}),

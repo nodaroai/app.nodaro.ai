@@ -67,6 +67,7 @@ import {
   isSeedanceVideoEditProvider,
   DEFAULT_TTS_PROVIDER,
   DEFAULT_DIALOGUE_PROVIDER,
+  getDialogueCapabilities,
   VOICE_CHANGER_MODELS,
   DEFAULT_VOICE_CHANGER_MODEL,
   SUNO_SEPARATE_TYPES,
@@ -450,10 +451,12 @@ const upscaleImageProviderControl = (): QuickConfigControl => ({
 })
 
 /** Text-to-speech model dropdown. The user's choice also clears the voice
- *  settings the new model does not honour and a language it is not offered in —
+ *  settings the new model does not honour, a language it is not offered in and
+ *  a style direction it does not take, and moves the voice onto one it speaks —
  *  exactly what the config panel's dropdown does (`ttsModelSwitchPatch`), so the
  *  two surfaces cannot disagree. The fail-safe snap calls `write` without data
- *  and so writes the provider alone. */
+ *  and so writes the provider alone (with no data, the patch would read an empty
+ *  node and snap a voice it never had). */
 const ttsProviderControl = (): QuickConfigControl => ({
   field: "provider",
   ariaLabel: tx("field.model"),
@@ -462,7 +465,7 @@ const ttsProviderControl = (): QuickConfigControl => ({
   // A node with no stored model runs on the default speech model — show that, not
   // whichever model happens to be listed first.
   defaultValue: DEFAULT_TTS_PROVIDER,
-  write: (value, data) => ({ provider: value, ...ttsModelSwitchPatch(value, (data ?? {}) as TtsSwitchFields) }),
+  write: (value, data) => ({ provider: value, ...(data ? ttsModelSwitchPatch(value, data as TtsSwitchFields) : undefined) }),
 })
 
 /** Suno model dropdown (writes `data.model`), shared by all Suno nodes that
@@ -716,11 +719,14 @@ const videoDepthSideBySideControl = (): QuickConfigControl => ({
 const targetLanguageControl = (): QuickConfigControl => ({
   field: "targetLanguage", ariaLabel: tx("field.language"), icon: Languages, options: ALL_LANGUAGES,
 })
+/** Only on a dialogue model offered in a language (its sheet's `languageCode`): none on Gemini, whose language follows the text. */
 const dialogueLanguageControl = (): QuickConfigControl => ({
-  field: "languageCode", ariaLabel: tx("field.language"), icon: Languages, options: ALL_LANGUAGES,
+  field: "languageCode", ariaLabel: tx("field.language"), icon: Languages,
+  options: (data) => (getDialogueCapabilities(data.provider).languageCode ? ALL_LANGUAGES : []),
 })
 /** Text to Dialogue model dropdown. The user's choice also snaps / clears what
- *  the new model does not take — exactly the panel's patch
+ *  the new model does not take (levers, language, the lines' voices and styles,
+ *  the speakers' direction, filler words) — exactly the panel's patch
  *  (`dialogueModelSwitchPatch`), so the two surfaces cannot disagree. The
  *  fail-safe snap calls `write` without data and writes the provider alone; an
  *  unset node shows v3 dialogue (what it runs as) without a write. */

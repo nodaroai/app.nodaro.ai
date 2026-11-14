@@ -261,20 +261,14 @@ describe("lip-sync — infinitalk composite credit identifier", () => {
     expect(result.modelIdentifier).toBe("kling-avatar")
   })
 
-  it("buckets per-second providers by audio duration when it is known", () => {
-    const kling = buildPayload(node("l1", "lip-sync", { provider: "kling-avatar", audioDurationSec: 12 }), JOB_ID, { imageUrl: PORTRAIT, audioUrl: TRACK })
-    expect(kling.modelIdentifier).toBe("kling-avatar:15s")
-    const heygen = buildPayload(node("l2", "lip-sync", { provider: "heygen-lipsync-precision", audioDurationSec: 45 }), JOB_ID, { imageUrl: PORTRAIT, audioUrl: TRACK })
-    expect(heygen.modelIdentifier).toBe("heygen-lipsync-precision:60s")
-    const sync = buildPayload(node("l3", "lip-sync", { provider: "lipsync-2-pro", audioDurationSec: 200 }), JOB_ID, { imageUrl: PORTRAIT, audioUrl: TRACK })
-    expect(sync.modelIdentifier).toBe("lipsync-2-pro:300s")
-  })
-
-  it("falls back to the bare (5-min ceiling) id for HeyGen/Sync when duration is unknown", () => {
-    const heygen = buildPayload(node("l1", "lip-sync", { provider: "heygen-lipsync-precision" }), JOB_ID, { imageUrl: PORTRAIT, audioUrl: TRACK })
-    expect(heygen.modelIdentifier).toBe("heygen-lipsync-precision")
-    const sync = buildPayload(node("l2", "lip-sync", { provider: "lipsync-2-pro" }), JOB_ID, { imageUrl: PORTRAIT, audioUrl: TRACK })
-    expect(sync.modelIdentifier).toBe("lipsync-2-pro")
+  // A model priced by a length bucket: the build prices no length (decided
+  // 2026-11-13) — the run measures the audio before it holds anything and
+  // reserves that bucket (stampLipSyncInputs → lipSyncBucketReserveId).
+  it("never buckets a per-second provider on the length the node carries", () => {
+    for (const [provider, audioDurationSec] of [["kling-avatar", 12], ["heygen-lipsync-precision", 45], ["lipsync-2-pro", 200], ["lipsync-2-pro", undefined]] as const) {
+      const built = buildPayload(node("l1", "lip-sync", { provider, ...(audioDurationSec !== undefined ? { audioDurationSec } : {}) }), JOB_ID, { imageUrl: PORTRAIT, audioUrl: TRACK })
+      expect(built.modelIdentifier, `${provider} @ ${audioDurationSec}`).toBe(provider)
+    }
   })
 
   it("defaults infinitalk resolution to 720p", () => {

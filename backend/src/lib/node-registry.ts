@@ -14,6 +14,7 @@ import {
   UPSCALE_IMAGE_PROVIDERS,
   TTS_PROVIDERS,
   DIALOGUE_PROVIDERS,
+  TTS_OUTPUT_FORMATS,
   TEXT_TO_AUDIO_PROVIDERS,
   MOTION_TRANSFER_PROVIDERS,
   hasContiguousSegmentDurations,
@@ -24,10 +25,11 @@ import {
 import { VIDEO_ANALYSIS_TIER_ORDER, llmTierCreditIds } from "@nodaro/shared/llm-models"
 import { REFERENCE_BOARD_PROVIDERS } from "@nodaro/shared/entities"
 import {
-  SPEECH_UNIT_CREDIT_SUFFIX,
+  isSpeechLengthPriceId,
   buildMotionCreditModelIdentifier,
   SPEECH_FLOOR_UNITS,
   speechPriceUnits,
+  speechRowUnits,
   speechUnitCreditId,
   VIDEO_OVERLAY_PRICING,
   videoOverlayVideoUnits,
@@ -220,9 +222,9 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
     // below 16. With the flag off the band is the flat per-request rows (what a
     // run then costs); with it on, `band` states the length rule's own range —
     // the cheapest model's floor up to the priciest model's cap.
-    ids: familyIds(...TTS_PROVIDERS).filter((id) => !id.endsWith(SPEECH_UNIT_CREDIT_SUFFIX)),
+    ids: familyIds(...TTS_PROVIDERS).filter((id) => !isSpeechLengthPriceId(id)),
     band: speechLengthBand(TTS_CATALOG_PROVIDERS, getMaxTtsChars),
-    note: "Reserves on the ElevenLabs model row, not a node-type row (the legacy `elevenlabs` alias prices as turbo).",
+    note: "Reserves on the model's own row, not a node-type row (the legacy `elevenlabs` alias prices as turbo).",
   },
   "text-to-audio": {
     ids: familyIds(...TEXT_TO_AUDIO_PROVIDERS),
@@ -505,9 +507,11 @@ function speechLengthBand(models: readonly string[], capOf: (model: string) => n
     const lows: number[] = []
     const highs: number[] = []
     for (const model of models) {
+      // A model quoted per 1,000 characters reads its row as 10 units (speechRowUnits): N hundreds = N ÷ 10 rows.
       const unitId = speechUnitCreditId(model)
-      const low = credits(unitId, SPEECH_FLOOR_UNITS)
-      const high = credits(unitId, speechPriceUnits(capOf(model)))
+      const perRow = speechRowUnits(model)
+      const low = credits(unitId, SPEECH_FLOOR_UNITS / perRow)
+      const high = credits(unitId, speechPriceUnits(capOf(model)) / perRow)
       if (low !== undefined) lows.push(low)
       if (high !== undefined) highs.push(high)
     }
@@ -1263,6 +1267,8 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         // Continuity across clips: the lines spoken just before / after this one (context, not spoken).
         { key: "previousText", type: "text" },
         { key: "nextText", type: "text" },
+        // The file (decided 2026-11-13): MP3 128 kbps (the default), MP3 192 kbps or WAV 24 kHz, on every model.
+        { key: "outputFormat", type: "select", options: [...TTS_OUTPUT_FORMATS] },
       ],
     },
   },
@@ -1295,7 +1301,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "text-to-dialogue",
     label: "Text to Dialogue",
     category: "ai-audio",
-    description: "Generate multi-speaker dialogue audio where each line is spoken by a different voice (ElevenLabs Dialogue v3 by default or Dialogue v4 via `provider`, direct API — any voice: premade, library, or cloned). `stability` is 0–1: v3 takes exactly 0, 0.5 or 1, v4 any value; `similarityBoost` (0–1) is v4 only. Priced under the chosen model's identifier: where length pricing is on, per started 100 characters of the script, at least 8 units (32 credits on either dialogue model); otherwise flat per request. Its `json` output carries the timings (one segment per line, per-word timings) on both models.",
+    description: "Generate multi-speaker dialogue audio where each line is spoken by a different voice (ElevenLabs Dialogue v3 by default or Dialogue v4 via `provider`, direct API — any voice: premade, library, or cloned). `stability` is 0–1: v3 takes exactly 0, 0.5 or 1, v4 any value; `similarityBoost` (0–1) is v4 only. Priced under the chosen model's identifier: where length pricing is on, per started 100 characters of the script, at least 8 units (32 credits on either ElevenLabs dialogue model); otherwise flat per request. Its `json` output carries the timings (one segment per line, per-word timings) on both ElevenLabs models. Google's Gemini speech models (`provider` gemini-3-8-flash-lite-tts, gemini-3-8-flash-tts, gemini-3-1-flash-tts, gemini-2-5-pro-tts) voice one or two of their own named voices at their one-speaker rate per character, with no timings: a line's `styleDirection` and `fillerWords` on 3.8, `speakers` (each voice's styleDirection, pace, accent, audioProfile) on 3.1 / 2.5, and `outputFormat` (MP3 or the WAV as rendered) on each.",
     outputType: "audio",
     creditCost: creditBandFor("text-to-dialogue"),
     inputSchema: {
@@ -1307,6 +1313,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "languageCode", type: "text" },
         { key: "seed", type: "number" },
         { key: "applyTextNormalization", type: "select", options: ["auto", "on", "off"] },
+        { key: "speakers", type: "json" },
+        { key: "fillerWords", type: "boolean" },
+        { key: "outputFormat", type: "select", options: [...TTS_OUTPUT_FORMATS] },
       ],
     },
   },
@@ -1415,7 +1424,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "llm-chat",
     label: "Generate Text - Any LLM",
     category: "ai-text",
-    description: "LLM text generation from a prompt (+ optional image/video/audio refs). Stream-capable. Two outputs: full text and a fan-out item list split on ===NEXT===.",
+    description: "LLM text generation from a prompt (+ optional image/video/audio refs, and PDF documents on a model that reads files: referenceFileUrls). Stream-capable. Two outputs: full text and a fan-out item list split on ===NEXT===.",
     outputType: "text",
     creditCost: creditBandFor("llm-chat"),
   },

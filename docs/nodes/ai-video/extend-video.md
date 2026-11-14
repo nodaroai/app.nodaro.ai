@@ -238,7 +238,7 @@ Priced by the seconds added and the resolution of the source video, which is the
 | 6 (or none set) | 44<!-- credits: grok-extend:6s:480p --> | 77<!-- credits: grok-extend:6s:720p --> |
 | 10 | 66<!-- credits: grok-extend:10s:480p --> | 132<!-- credits: grok-extend:10s:720p --> |
 
-The run holds the price for its source's resolution, read from the source video's own job, never from the request. The node's Run button and the workflow estimate quote the 720p price unless the video wired in comes from a Grok Imagine node set to 480p; they read that node's current setting, so the quote is below the charge only when its video was made at 720p before the node was set to 480p. `GET /v1/credits/model-cost` (identifier `grok-extend:<6|10>s:<480p|720p>`, e.g. `grok-extend:6s:480p`) shows each price.
+The run holds the price for its source's resolution, read from the source video's own job, never from the request. The node's Run button and the workflow estimate quote the 720p price unless the video the run extends is known to be 480p: a video the wired Grok Imagine node already made whose run recorded 480p, or, when that node has not run yet or makes a new video in the same run, its setting of 480p. A quote is never below the charge; it can be above it (the 720p price for a 480p video) when the canvas has no recorded resolution for the video to extend, for example a result made before results recorded it, or a deleted one. `GET /v1/credits/model-cost` (identifier `grok-extend:<6|10>s:<480p|720p>`, e.g. `grok-extend:6s:480p`) shows each price.
 
 ## Best Practices
 

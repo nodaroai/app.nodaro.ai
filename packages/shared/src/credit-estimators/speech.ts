@@ -18,6 +18,14 @@
  * whole number of units times a charged unit price never under-quotes the
  * charge (the same property the per-second video rows rely on).
  *
+ * A model whose rate is below one credit per 100 characters (a row holds
+ * whole credits) quotes its row per 1,000 instead — `<model>:per-1k-chars`,
+ * its sheet's `ratePer1kChars` (decided 2026-11-12). The count is the same
+ * (started 100s, at least 8), and a request costs its hundreds × the row ÷ 10,
+ * rounded up once (`speechRowCredits`). Its request quote keeps the one id
+ * shape, `<model>:per-100-chars:<N>u`, N in started hundreds, so a client
+ * that builds that id quotes every model alike.
+ *
  * Decided 2026-10-06. Every name here is a published contract.
  */
 import { canonicalTtsProvider, findTtsCapabilities } from "../tts-capabilities.js"
@@ -33,13 +41,39 @@ export const SPEECH_FLOOR_UNITS = 8
 /** Appended to a speech model's id to name its per-unit price row. */
 export const SPEECH_UNIT_CREDIT_SUFFIX = ":per-100-chars"
 
+/** Appended to a speech model's id to name its rate row quoted per 1,000 characters (`TtsCapabilities.ratePer1kChars`). */
+export const SPEECH_PER_1K_CREDIT_SUFFIX = ":per-1k-chars"
+
 /**
- * The price-row id of one unit for the model a request runs as. The legacy
+ * How many units (started 100 characters) one rate row of the model prices:
+ * 10 for a model whose row is quoted per 1,000 characters, else 1. The
+ * legacy alias resolved; an id with no speech sheet is 1.
+ */
+export function speechRowUnits(modelId: string): 1 | 10 {
+  const id = canonicalTtsProvider(modelId)
+  return (findTtsCapabilities(id) ?? findDialogueCapabilities(id))?.ratePer1kChars ? 10 : 1
+}
+
+/**
+ * The price-row id of the rate the model a request runs as is charged at:
+ * `<model>:per-100-chars` (one unit), or `<model>:per-1k-chars` for a model
+ * quoted per 1,000 characters ({@link speechRowUnits}). The legacy
  * `elevenlabs` alias prices on turbo's row, as it runs on turbo; any other id
  * (including the dialogue model) is used as given.
  */
 export function speechUnitCreditId(modelId: string): string {
-  return `${canonicalTtsProvider(modelId)}${SPEECH_UNIT_CREDIT_SUFFIX}`
+  const id = canonicalTtsProvider(modelId)
+  return `${id}${speechRowUnits(id) === 10 ? SPEECH_PER_1K_CREDIT_SUFFIX : SPEECH_UNIT_CREDIT_SUFFIX}`
+}
+
+/**
+ * Base credits of `units` (started hundreds) at a rate row of `rowCredits`
+ * that prices `rowUnits` units: `ceil(units × row ÷ rowUnits)`, in whole
+ * numbers so it never rounds a hair high. With `rowUnits` 1 it is exactly
+ * units × the row (every per-100 row is a whole number).
+ */
+export function speechRowCredits(units: number, rowCredits: number, rowUnits: number = 1): number {
+  return rowUnits === 1 ? units * rowCredits : Math.ceil((units * rowCredits) / rowUnits)
 }
 
 /**
@@ -58,6 +92,16 @@ export function speechCredits(chars: number, perUnitCredits: number): number {
 }
 
 /**
+ * Base credits for `chars` characters on `modelId` at its rate row
+ * (`speechUnitCreditId(modelId)`, read as `rowCredits`): per-100 or per-1K,
+ * whichever the model is quoted in. What every seam that reserves speech, and
+ * every client that quotes it, computes.
+ */
+export function speechCreditsFor(modelId: string, chars: number, rowCredits: number): number {
+  return speechRowCredits(speechPriceUnits(chars), rowCredits, speechRowUnits(modelId))
+}
+
+/**
  * The id of the exact charge of a whole request of `units` units on `modelId`:
  * `<model>:per-100-chars:<N>u`. Never a row of its own — a price lookup prices
  * it from the model's unit row × N as one whole, exactly as a request of that
@@ -65,17 +109,20 @@ export function speechCredits(chars: number, perUnitCredits: number): number {
  * row it is priced from.
  */
 export function speechQuoteCreditId(modelId: string, units: number): string {
-  return unitQuoteCreditId(speechUnitCreditId(modelId), units)
+  // Always the per-100 shape, whatever the model's rate row: N is started hundreds.
+  return unitQuoteCreditId(`${canonicalTtsProvider(modelId)}${SPEECH_UNIT_CREDIT_SUFFIX}`, units)
 }
 
 /** A `<model>:per-100-chars:<N>u` id, read back. */
 export interface SpeechQuoteCreditIdParts {
   /** The speech model (canonical id) the request runs as. */
   model: string
-  /** Its `<model>:per-100-chars` unit row. */
+  /** Its rate row: `<model>:per-100-chars`, or `<model>:per-1k-chars` for a model quoted per 1,000. */
   unitId: string
   /** Units priced: at least the floor, at most the model's per-request cap in started hundreds. */
   units: number
+  /** How many units one `unitId` row prices (10 for a per-1,000 row, else 1): the request is `speechRowCredits(units, row, rowUnits)`. */
+  rowUnits: 1 | 10
 }
 
 const SPEECH_QUOTE_ID = /^(.+):per-100-chars:(\d{1,6})u$/
@@ -96,16 +143,17 @@ export function parseSpeechQuoteCreditId(id: string): SpeechQuoteCreditIdParts |
   if (!caps) return undefined
   const units = Number(m[2])
   if (!Number.isInteger(units) || units < SPEECH_FLOOR_UNITS || units > speechPriceUnits(caps.maxChars)) return undefined
-  return { model, unitId: speechUnitCreditId(model), units }
+  return { model, unitId: speechUnitCreditId(model), units, rowUnits: speechRowUnits(model) }
 }
 
 /**
  * Whether an id is a length price of speech — a `<model>:per-100-chars` unit
- * row or a `<model>:per-100-chars:<N>u` request quote — by its shape alone.
- * Both are served only while the server prices speech by length.
+ * row, a `<model>:per-1k-chars` rate row or a `<model>:per-100-chars:<N>u`
+ * request quote — by its shape alone. All are served only while the server
+ * prices speech by length.
  */
 export function isSpeechLengthPriceId(id: string): boolean {
-  return typeof id === "string" && /:per-100-chars(?::\d+u)?$/.test(id)
+  return typeof id === "string" && /(?::per-100-chars(?::\d+u)?|:per-1k-chars)$/.test(id)
 }
 
 /**
@@ -115,5 +163,5 @@ export function isSpeechLengthPriceId(id: string): boolean {
  */
 export function speechLengthPriceModel(id: string): string | undefined {
   if (!isSpeechLengthPriceId(id)) return undefined
-  return id.replace(/:per-100-chars(?::\d+u)?$/, "")
+  return id.replace(/(?::per-100-chars(?::\d+u)?|:per-1k-chars)$/, "")
 }

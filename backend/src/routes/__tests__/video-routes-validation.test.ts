@@ -27,13 +27,17 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
+// The balance check before the audio is measured (lib/lip-sync-floor-check.ts, its own test): the payer can afford it.
+vi.mock("@/lib/lip-sync-floor-check.js", () => ({ lipSyncFloorRefusal: async () => undefined }))
 vi.mock("@/lib/queue.js", () => ({
   videoQueue: { add: vi.fn().mockResolvedValue({ id: "queue-job-1" }) },
   redis: {},
 }))
 
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: () => async () => {},
+  // A route's `beforePricing` step (Lip Sync's audio measurement) runs, as the real guard runs it.
+  creditGuard: (_resolve: unknown, opts?: { beforePricing?: (req: unknown, reply: unknown) => Promise<unknown> }) =>
+    async (req: unknown, reply: unknown) => { await opts?.beforePricing?.(req, reply) },
   reserveCreditsForJob: vi.fn().mockResolvedValue({ usageLogId: "u-1", creditsReserved: 1, watermark: false }),
 }))
 
@@ -50,9 +54,19 @@ vi.mock("@/lib/url-validator.js", async () => {
 })
 
 // Seedance extend measures its source before the guard; a 10 s clip (no network probe).
+// Lip Sync measures the audio of every model priced by its length before the
+// guard (decided 2026-11-13): a 10 s file, read with no network.
 vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   probeVideoSource: vi.fn().mockResolvedValue({ width: 1280, height: 720, durationSeconds: 10, videoDurationSeconds: 10 }),
+  downloadFile: async (_url: string, path: string) => {
+    const { writeFile } = await import("node:fs/promises")
+    await writeFile(path, "")
+  },
+}))
+vi.mock("@/providers/video/decoded-audio-length.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  measureDecodedAudio: async () => ({ overCap: false, samples: 441_000, seconds: 10 }),
 }))
 
 vi.mock("@/lib/request-helpers.js", () => ({

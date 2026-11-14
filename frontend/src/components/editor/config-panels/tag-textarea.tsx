@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo, useEffect, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { Textarea } from "@/components/ui/textarea"
-import { AUDIO_TAGS, SSML_BREAK_OPTIONS, tagInsertWarning } from "@/lib/audio-tags"
+import { AUDIO_TAGS, SSML_BREAK_OPTIONS, angleTagMenu, tagInsertWarning } from "@/lib/audio-tags"
 import type { NodeRefItem } from "@/lib/node-refs"
 import type { VariableDisplayMode } from "./types"
 import { renderNodeRefs } from "@/lib/render-node-refs"
@@ -565,7 +565,12 @@ export function TagTextarea(props: TagTextareaProps) {
       if (triggerInfo.char === "<") return []
       items = customTags
     } else if (tagMode === "audio") {
-      items = triggerInfo.char === "<" ? ssmlSuggestions() : getAllSuggestions()
+      // A model that writes its own <tone tags> from a closed list (its sheet's `tags`) is offered exactly those, on
+      // every trigger: the platform's [audio tags] would mostly be taken out before sending, and it honours no SSML.
+      const angle = angleTagMenu(provider)
+      items = angle
+        ? angle.map((a) => ({ ...a, category: tx("cfgext.tagTaToneTags") }))
+        : triggerInfo.char === "<" ? ssmlSuggestions() : getAllSuggestions()
     } else {
       return []
     }
@@ -575,7 +580,7 @@ export function TagTextarea(props: TagTextareaProps) {
     return items.filter((s) => s.kind === "back" || s.label.toLowerCase().includes(q) || s.category.toLowerCase().includes(q))
     // `t` re-runs the memo on a language switch: the audio-tag / SSML category
     // headers above are built from the live locale.
-  }, [showDropdown, triggerInfo, filterText, customTags, nodeRefSuggestions, refImageSuggestions, tagMode, snippets, t])
+  }, [showDropdown, triggerInfo, filterText, customTags, nodeRefSuggestions, refImageSuggestions, tagMode, provider, snippets, t])
 
   const groupedFiltered = useMemo(() => {
     const map = new Map<string, SuggestionItem[]>()

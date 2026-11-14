@@ -307,6 +307,23 @@ const KNOWN_GHOST_IDENTIFIERS: ReadonlySet<string> = new Set([
   "seedance:4s",
   "seedance:8s",
   "seedance:12s",
+  // ── seedance-2-extend — Extend Video's earlier single Seedance id, retired
+  //    when Seedance 2.5 and 2.0 became separate choices: it runs, and is
+  //    priced, as seedance-2-5-extend. Migration 648 deletes its length-tier
+  //    rows; 217's and 288's INSERTs stay on disk, hence documented here. ──
+  "seedance-2-extend",
+  "seedance-2-extend:4s:480p",
+  "seedance-2-extend:8s:480p",
+  "seedance-2-extend:12s:480p",
+  "seedance-2-extend:15s:480p",
+  "seedance-2-extend:4s:720p",
+  "seedance-2-extend:8s:720p",
+  "seedance-2-extend:12s:720p",
+  "seedance-2-extend:15s:720p",
+  "seedance-2-extend:4s:1080p",
+  "seedance-2-extend:8s:1080p",
+  "seedance-2-extend:12s:1080p",
+  "seedance-2-extend:15s:1080p",
   // ── Disabled / experimental providers ──
   "tangoflux",
   "musicgen",

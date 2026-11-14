@@ -131,6 +131,13 @@ vi.mock("../../lib/cloud-llm-proxy.js", () => ({
   maybeProxyLlmStreamToCloud: vi.fn(async () => false),
 }))
 
+// Documents: read for real elsewhere (llm-files.test.ts); here a 3-page PDF.
+vi.mock("../../lib/llm-files.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/llm-files.js")>()),
+  prepareLlmFiles: vi.fn(async (urls: string[]) =>
+    urls.map((_, i) => ({ type: "file_base64", mediaType: "application/pdf", data: "JVBERi0xLjQK", filename: `f${i}.pdf`, pages: 3 }))),
+}))
+
 const { llmChatRoutes } = await import("../llm-chat.js")
 const { aiWriterRoutes } = await import("../ai-writer.js")
 const { promptHelperRoutes } = await import("../prompt-helper.js")
@@ -808,5 +815,80 @@ describe("rollback (LLM_TIER_PRICING_ROLLBACK)", () => {
     expect(h.reserveCreditsForJob.mock.calls[0]![3]).toBe(resolveLlmCreditId("prompt-helper", body))
     expect(h.markProviderCallStart).not.toHaveBeenCalled()
     expect(CreditsService.refundCredits).toHaveBeenCalledWith(LOG)
+  })
+})
+
+
+// A call that sent documents (decided 2026-11-13): a reply that states no
+// charge and reports less input than the documents hold (a stream's reply may
+// carry no stated charge; a document call has reported 0 input) is charged its
+// documents at their measured size plus its text — on both routes. A stated
+// charge is followed as it is.
+describe("Generate Text with documents — the charge never leaves them out", () => {
+  const TERRA = "gpt-6.1-terra"
+  const body = textBody(400, { llmModel: TERRA, maxTokens: 1000, referenceFileUrls: ["https://media.example/report.pdf"] })
+  const terraReply = (inputTokens: number, creditsUsd?: number) =>
+    ({ text: "the answer", model: TERRA, lane: "kie", usage: { inputTokens, outputTokens: 50 }, ...(creditsUsd !== undefined ? { creditsUsd } : {}) })
+
+  async function expectedFloorCostUsd(sent: LlmRequest): Promise<number> {
+    const { documentInputFloorTokens, LLM_FILE_CHARGE_PAGE_TOKENS, LLM_FILE_CHARGE_FILE_TOKENS } = await import("../../lib/llm/kie-cost.js")
+    const { calculateLlmCost } = await import("../../lib/pricing/llm-cost.js")
+    // One 3-page file and 400 characters of prompt.
+    expect(documentInputFloorTokens(sent)).toBe(LLM_FILE_CHARGE_FILE_TOKENS + 3 * LLM_FILE_CHARGE_PAGE_TOKENS + 100)
+    return calculateLlmCost(TERRA, { inputTokens: documentInputFloorTokens(sent), outputTokens: 50 }, "kie")
+  }
+
+  it("sync: input reported as 0 with no stated charge → charged the documents' measured size", async () => {
+    commitReturns(1)
+    h.llmComplete.mockResolvedValueOnce(terraReply(0))
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body })
+    expect(res.statusCode).toBe(200)
+    const sent = h.llmComplete.mock.calls[0]![0] as LlmRequest
+    expect((ledgerWrite() as { costUsd: number }).costUsd).toBeCloseTo(await expectedFloorCostUsd(sent), 12)
+  })
+
+  it("stream: the same reply on the editor's route is charged the same way", async () => {
+    commitReturns(1)
+    h.llmStream.mockImplementationOnce(async (_req: LlmRequest, onChunk: (d: string) => void) => {
+      onChunk("the answer")
+      return terraReply(0)
+    })
+    const app = await buildApp()
+    await app.inject({ method: "POST", url: "/v1/llm-chat/generate-stream", payload: body })
+    const sent = h.llmStream.mock.calls[0]![0] as LlmRequest
+    expect((ledgerWrite() as { costUsd: number }).costUsd).toBeCloseTo(await expectedFloorCostUsd(sent), 12)
+    expect(terminalWrites()).toEqual([expect.objectContaining({ status: "completed" })])
+  })
+
+  it("a floored charge says so in the job's ledger (`document-floor`)", async () => {
+    commitReturns(1)
+    const { prepareLlmFiles } = await import("../../lib/llm-files.js")
+    vi.mocked(prepareLlmFiles).mockResolvedValueOnce([{ type: "file_base64", mediaType: "application/pdf", data: "JVBERi0xLjQK", filename: "long.pdf", pages: 100 }])
+    h.llmStream.mockImplementationOnce(async (_req: LlmRequest, onChunk: (d: string) => void) => {
+      onChunk("the answer")
+      return terraReply(0)
+    })
+    const app = await buildApp()
+    await app.inject({ method: "POST", url: "/v1/llm-chat/generate-stream", payload: body })
+    expect(ledgerWrite()).toMatchObject({ source: "document-floor", calls: 1, lanes: ["kie"] })
+  })
+
+  it("reported input above the floor is charged as reported", async () => {
+    commitReturns(1)
+    h.llmComplete.mockResolvedValueOnce(terraReply(30_000))
+    const app = await buildApp()
+    await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body })
+    const { calculateLlmCost } = await import("../../lib/pricing/llm-cost.js")
+    expect((ledgerWrite() as { costUsd: number }).costUsd).toBeCloseTo(calculateLlmCost(TERRA, { inputTokens: 30_000, outputTokens: 50 }, "kie"), 12)
+  })
+
+  it("a stated charge is followed as it is, even beside a reported input of 0", async () => {
+    commitReturns(1)
+    h.llmComplete.mockResolvedValueOnce(terraReply(0, 0.00005))
+    const app = await buildApp()
+    await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body })
+    // Below one base credit's cost, so the record says `floor`; the cost is KIE's stated one.
+    expect(ledgerWrite()).toMatchObject({ costUsd: 0.00005 })
   })
 })

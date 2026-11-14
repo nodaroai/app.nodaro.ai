@@ -296,6 +296,13 @@ export interface LipSyncOptions {
    * the bytes sent are the same file.
    */
   billedSeconds?: number
+  /**
+   * The audio URL is already OUR prepared copy (a model priced by a length
+   * bucket: the worker measured, held and encoded it, cut under the model's
+   * maximum — `prepareLipSyncAudio`). Sent as it is: no second download or
+   * trim.
+   */
+  audioPrepared?: boolean
 }
 
 /** Optional dubbing toggles for video-input lip-sync (e.g. volcengine). */
@@ -306,6 +313,8 @@ export interface VideoLipSyncOptions {
   alignAudio?: boolean
   alignAudioReverse?: boolean
   templStartSeconds?: number
+  /** As `LipSyncOptions.audioPrepared`: the audio URL is our prepared copy, sent as it is. Never a provider field. */
+  audioPrepared?: boolean
 }
 
 export interface LipSyncProvider {
@@ -380,6 +389,13 @@ export interface TextToSpeechOptions {
   nextText?: string
   /** The file to deliver (`TTS_OUTPUT_FORMATS`); absent ⇒ the vendor's default MP3, as every request delivered before the field existed. */
   outputFormat?: TtsOutputFormat
+  /** Style direction, on a model whose sheet takes it (Gemini) — already filtered by `ttsDirectionFor`. */
+  styleDirection?: string
+  pace?: string
+  accent?: string
+  audioProfile?: string
+  /** A one-off clone (Gemini 3.8 Flash): the two recordings' https links, relayed as the caller gave them (the cloud judges them). */
+  replica?: { sourceAudioUrl: string; consentAudioUrl: string; consent?: true }
 }
 
 export interface TextToSpeechProvider {

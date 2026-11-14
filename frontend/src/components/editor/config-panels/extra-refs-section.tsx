@@ -42,7 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { uploadImage } from "@/lib/api"
-import { USAGE_MODES, type UsageMode, characterMentionSlug, characterOwnName, entityImageUrl, wiredCharacterNamesOf, usageModeLabel } from "@nodaro/shared/entities"
+import { USAGE_MODES, type UsageMode, characterMentionSlug, characterOwnName, entityImageUrl, wiredCharacterNamesOf, wiredCharacterSlug, usageModeLabel } from "@nodaro/shared/entities"
 import { bypassTeleports } from "@nodaro/render-rules"
 import type {
   ExtraRef,
@@ -86,7 +86,8 @@ function buildCharacterOptions(
   const out: CharacterVariantOption[] = []
   const incoming = edges.filter((e) => e.target === consumerNodeId)
   // Named as the run names them (each unnamed node its own "Character N"); a
-  // node wired only by its image pip goes by its own name.
+  // node wired only by its image pip goes by its own name (the slug of the
+  // wired character with that name, in any script: wiredCharacterSlug).
   const names = wiredCharacterNamesOf(consumerNodeId, nodes, bypassTeleports(nodes, edges))
   for (const e of incoming) {
     const upstream = nodes.find((n) => n.id === e.source)
@@ -97,7 +98,7 @@ function buildCharacterOptions(
     // skipped. The picker localizes the name at render (node-label table).
     const named = names.get(upstream.id)
     const charName = named ? named.name : characterOwnName(charData)
-    const slug = named ? named.slug : characterMentionSlug(charName)
+    const slug = wiredCharacterSlug(names, upstream.id, charData)
     if (!slug) continue
 
     // Canonical entry (the character's portrait / source image).

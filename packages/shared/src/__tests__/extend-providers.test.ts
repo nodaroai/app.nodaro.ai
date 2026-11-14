@@ -431,4 +431,91 @@ describe("Grok Extend Video provider", () => {
     expect(grokExtendWiredSourceResolution("ext", [ext], [])).toBe("720p")
     expect(grokExtendWiredSourceResolution("ext", [ext, video("grok-i2v", "480p")], wire("prompt"))).toBe("720p")
   })
+
+  // The charge reads the resolution the SOURCE's job recorded (`input_data.resolution`; none: the
+  // KIE config's pin, else Grok's own 480p default). Every lane that lands a take records the task
+  // that made it and that recorded resolution on the result row, so the quote reads the same fact,
+  // off the take the node's task names (the clip the run extends): `480p` → the 480p row; anything
+  // else, or none → the 720p row, never below the charge.
+  describe("a Grok node that already made a clip: quoted from the resolution its job recorded, not from its setting", () => {
+    const ext = { id: "ext", type: "extend-video", data: { provider: "grok-extend" } }
+    const wire = [{ source: "src", target: "ext", targetHandle: "video" }]
+    type Row = { task?: string; recorded?: string; width?: number; height?: number }
+    /** A Grok Imagine node holding task `t-latest`, set to `resolution`; its results newest first. */
+    const ran = (rows: readonly Row[], resolution?: string, extra: Record<string, unknown> = {}) => ({
+      id: "src",
+      type: "generate-video",
+      data: {
+        provider: "grok-i2v",
+        ...(resolution !== undefined ? { resolution } : {}),
+        kieTaskId: "t-latest",
+        generatedResults: rows.map((r, i) => ({
+          url: `https://cdn.example/${i}.mp4`, jobId: `j${i}`,
+          ...(r.task !== undefined ? { kieTaskId: r.task } : {}),
+          ...(r.recorded !== undefined ? { recordedResolution: r.recorded } : {}),
+          ...(r.width !== undefined ? { width: r.width, height: r.height } : {}),
+        })),
+        ...extra,
+      },
+    })
+    const quote = (node: ReturnType<typeof ran>, rerunIds?: ReadonlySet<string>) => grokExtendWiredSourceResolution("ext", [ext, node], wire, rerunIds)
+
+    it("the take the task names recorded 480p: 480p, whatever the node is set to now", () => {
+      for (const resolution of ["480p", "720p", undefined]) {
+        expect(quote(ran([{ task: "t-latest", recorded: "480p" }], resolution)), String(resolution)).toBe("480p")
+      }
+      // Case-insensitive, as the charge reads it.
+      expect(quote(ran([{ task: "t-latest", recorded: "480P" }]))).toBe("480p")
+    })
+
+    it("recorded 720p (a node set to 480p since): 720p", () => {
+      expect(quote(ran([{ task: "t-latest", recorded: "720p" }], "480p"))).toBe("720p")
+    })
+
+    it("the take names the task but recorded no resolution: 720p", () => {
+      expect(quote(ran([{ task: "t-latest" }], "480p"))).toBe("720p")
+    })
+
+    it("the file's pixel size is never read: a 480p-sized file whose job recorded 720p is 720p (and a 720p-sized one recording 480p is 480p)", () => {
+      expect(quote(ran([{ task: "t-latest", recorded: "720p", width: 854, height: 480 }], "480p"))).toBe("720p")
+      expect(quote(ran([{ task: "t-latest", recorded: "480p", width: 1280, height: 720 }], "720p"))).toBe("480p")
+      expect(quote(ran([{ task: "t-latest", width: 854, height: 480 }], "480p"))).toBe("720p")
+    })
+
+    it("no result names the node's task — its result deleted, results from before they recorded their task, or none at all: 720p", () => {
+      for (const resolution of ["480p", "720p", undefined]) {
+        // The newest (720p) result deleted; the node still holds its task.
+        expect(quote(ran([{ task: "t-older", recorded: "480p" }], resolution)), String(resolution)).toBe("720p")
+        // Results that recorded no task.
+        expect(quote(ran([{ recorded: "480p" }, { width: 854, height: 480 }], resolution)), String(resolution)).toBe("720p")
+        // A task with no result.
+        expect(quote(ran([], resolution)), String(resolution)).toBe("720p")
+      }
+    })
+
+    it("reads the take the task names — never the one only shown, nor the newest", () => {
+      const node = ran([{ task: "t-older", recorded: "720p" }, { task: "t-latest", recorded: "480p" }], "720p", { activeResultIndex: 0 })
+      expect(quote(node)).toBe("480p")
+      // An edit landed after it (a result with no task of its own).
+      expect(quote(ran([{ recorded: "720p" }, { task: "t-latest", recorded: "480p" }], "720p"))).toBe("480p")
+    })
+
+    it("a node that has not run quotes its setting: 480p as set, else 720p", () => {
+      const fresh = (resolution?: string) => ({ id: "src", type: "generate-video", data: { provider: "grok", ...(resolution !== undefined ? { resolution } : {}) } })
+      expect(grokExtendWiredSourceResolution("ext", [ext, fresh("480p")], wire)).toBe("480p")
+      expect(grokExtendWiredSourceResolution("ext", [ext, fresh()], wire)).toBe("720p")
+      expect(grokExtendWiredSourceResolution("ext", [ext, fresh("720p")], wire)).toBe("720p")
+    })
+
+    it("a node that makes a new clip in the quoted run is quoted at its setting (the clip it will make)", () => {
+      // Recorded 480p, now set to 720p, and it runs again: the run extends the new 720p clip.
+      expect(quote(ran([{ task: "t-latest", recorded: "480p" }], "720p"), new Set(["src", "ext"]))).toBe("720p")
+      // Recorded 720p, now set to 480p, and it runs again: the new clip is 480p.
+      expect(quote(ran([{ task: "t-latest", recorded: "720p" }], "480p"), new Set(["src", "ext"]))).toBe("480p")
+      // A frozen node does not run again: it hands on the clip it holds.
+      expect(quote(ran([{ task: "t-latest", recorded: "720p" }], "480p", { skipped: true }), new Set(["src", "ext"]))).toBe("720p")
+      // Outside the run's nodes (Run from here on the extension): the clip it holds.
+      expect(quote(ran([{ task: "t-latest", recorded: "720p" }], "480p"), new Set(["ext"]))).toBe("720p")
+    })
+  })
 })

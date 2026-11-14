@@ -35,6 +35,7 @@ import { pipeline } from "node:stream/promises"
 import type { GoogleGenAI, Part } from "@google/genai"
 import { safeFetch } from "../safe-fetch.js"
 import type { LlmContentBlock } from "../llm-client.js"
+import { FILE_LANE_ERROR } from "../llm/message-builders.js"
 
 /** Raw-bytes ceiling for inlining rather than uploading. See module docstring. */
 const INLINE_MAX_BYTES = 6 * 1024 * 1024
@@ -315,6 +316,9 @@ async function resolveBlockPart(ai: GoogleGenAI, block: LlmContentBlock): Promis
     assertInlineVideoBytes(block)
     return { inlineData: { mimeType: block.mediaType, data: block.data } }
   }
+  // No Gemini model declares the `file` cap: a document reaching this lane is
+  // a call site that skipped the routes' check.
+  if (block.type === "file_base64") throw new Error(FILE_LANE_ERROR("direct Gemini"))
 
   const declared = block.type === "image" ? undefined : block.mimeType
 

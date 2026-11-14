@@ -1,6 +1,6 @@
 import type { Voice, VoiceClone, VoiceFavorite, VoiceFavoriteInput, VoiceLibraryFacets, VoiceLibraryFacetsParams, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared/pipeline"
 import type { AudioFxPreset } from "@nodaro/shared/media"
-import type { DialogueProvider } from "@nodaro/shared/models"
+import type { DialogueProvider, TtsOutputFormat, TtsReplicaRequest } from "@nodaro/shared/models"
 export type {
   Voice,
   SharedVoice,
@@ -47,9 +47,18 @@ export class VoicesResource {
   /**
    * List the premade ElevenLabs voices (`GET /v1/voices`). Falls back to a
    * curated set server-side when no ElevenLabs API key is configured.
+   *
+   * With `model`, a speech model that speaks only its own named voices
+   * (Google's Gemini models) answers those instead: `voice_id` and `name` are
+   * the voice's name, `use_case` the model's own grouping (`tutor`,
+   * `commercial-voiceover`, … — empty when it groups none). Any other model,
+   * or none, answers the premade list as before. The same lists are on each
+   * model's capability sheet (`getTtsCapabilities(model).voices`).
    */
-  async list(): Promise<Voice[]> {
-    const res = await this.client.request<{ voices: Voice[] }>("GET", "/v1/voices")
+  async list(params: { model?: string } = {}): Promise<Voice[]> {
+    const res = params.model
+      ? await this.client.request<{ voices: Voice[] }>("GET", "/v1/voices", { query: { model: params.model } })
+      : await this.client.request<{ voices: Voice[] }>("GET", "/v1/voices")
     return res.voices
   }
 
@@ -91,7 +100,8 @@ export class VoicesResource {
 
   /**
    * @deprecated Voice cloning is no longer offered on Nodaro (retired
-   * 2026-09-15). The route answers `410 voice_cloning_retired` and this call
+   * 2026-09-15); a one-off clone for one Gemini 3.8 Flash request, never saved,
+   * is `replica` on `nodes.textToSpeech`. The route answers `410 voice_cloning_retired` and this call
    * rejects with that error. Clones created before the retirement are still
    * listed by {@link VoicesResource.listClones} and still work as voice ids.
    * For a new custom voice use {@link VoicesResource.design}.
@@ -283,11 +293,52 @@ export class VoicesResource {
    * `voice` as you sent it. Pass `transcript.words` to
    * `addCaptions({ captions, autoTranscribe: false })` to caption the dialogue
    * without a second transcription.
+   *
+   * Google's Gemini speech models voice a dialogue of one or two speakers
+   * (`provider: "gemini-3-8-flash-lite-tts"`, `"gemini-3-8-flash-tts"`,
+   * `"gemini-3-1-flash-tts"`, `"gemini-2-5-pro-tts"`): each line's `voice` is one
+   * of the model's own named voices (`voices.list({ model })`), at most two
+   * distinct, 10,000 characters in total. On 3.8 a line may carry its own
+   * `styleDirection` (free text) and `fillerWords: true` lets the model add
+   * filler words between two speakers; on 3.1 / 2.5 `speakers` gives each voice
+   * its style, pace, accent and audio profile. A field the model does not take
+   * is not sent. The stability, similarity, language and seed fields are
+   * ElevenLabs'. A Gemini dialogue returns no `transcript`. A refused voice or
+   * direction is a `400`, before anything is charged.
    */
   textToDialogue(input: {
-    dialogue: Array<{ text: string; voice: string }>
-    /** Dialogue model: `"elevenlabs-dialogue"` (v3, the default) or `"elevenlabs-dialogue-v4"`. */
+    dialogue: Array<{
+      text: string
+      voice: string
+      /** Gemini 3.8: how this line is spoken, in words (at most 1,000 characters). Never spoken, never billed. */
+      styleDirection?: string
+    }>
+    /** Dialogue model: `"elevenlabs-dialogue"` (v3, the default), `"elevenlabs-dialogue-v4"`, or a Gemini speech model. */
     provider?: DialogueProvider
+    /**
+     * Gemini 3.1 / 2.5: each speaker's direction, keyed by its voice — `styleDirection`, `pace` and `accent`
+     * from the model's lists, `audioProfile` free text (at most 1,000 characters).
+     */
+    speakers?: Array<{
+      voice: string
+      styleDirection?: string
+      pace?: string
+      accent?: string
+      audioProfile?: string
+      /**
+       * `gemini-3-8-flash-tts` only: this speaker cloned for this request alone (as `textToSpeech`'s
+       * `replica`, with its `consent: true`); the lines that name this `voice` — any label — are spoken in the
+       * cloned voice.
+       */
+      replica?: TtsReplicaRequest
+    }>
+    /** Gemini 3.8, two speakers: let the model add natural filler words between them. */
+    fillerWords?: boolean
+    /**
+     * The file: `"mp3_44100_128"` (the default), `"mp3_44100_192"` or `"wav_24000"`, at the same credits, on a
+     * Gemini model. The ElevenLabs dialogue models deliver the default MP3 only (another format is a `400`).
+     */
+    outputFormat?: TtsOutputFormat
     /** v3: exactly 0, 0.5 or 1 (0 = most variable, 1 = most stable). v4: any value 0–1. */
     stability?: number
     /** v4 only (v3 ignores it): how closely each line keeps its voice's character, 0–1. */
@@ -304,7 +355,8 @@ export class VoicesResource {
 
   /**
    * @deprecated Voice cloning is no longer offered on Nodaro (retired
-   * 2026-09-15). The route answers `410 voice_cloning_retired` and this call
+   * 2026-09-15); a one-off clone for one Gemini 3.8 Flash request, never saved,
+   * is `replica` on `nodes.textToSpeech`. The route answers `410 voice_cloning_retired` and this call
    * rejects with that error. See {@link VoicesResource.createClone}.
    */
   createCloneFromFile(input: {

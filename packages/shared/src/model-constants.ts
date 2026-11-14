@@ -1805,6 +1805,12 @@ export const TTS_PROVIDERS = [
   "elevenlabs-v4-turbo",
   "elevenlabs-turbo",
   "elevenlabs-multilingual",
+  // Google's Gemini speech through KIE (decided 2026-11-12): named voices of
+  // their own (`TtsCapabilities.voices`), never ElevenLabs'.
+  "gemini-3-8-flash-lite-tts",
+  "gemini-3-8-flash-tts",
+  "gemini-3-1-flash-tts",
+  "gemini-2-5-pro-tts",
   "elevenlabs",
 ] as const
 export type TtsProvider = typeof TTS_PROVIDERS[number]
@@ -1831,10 +1837,20 @@ export const TTS_OUTPUT_FORMAT_FILES: Readonly<Record<TtsOutputFormat, { readonl
 /**
  * Text-to-dialogue models (the `provider` of `/v1/text-to-dialogue` and of the
  * Text to Dialogue node). Each IS its catalog id and its credit identifier.
- * Never members of TTS_PROVIDERS: a dialogue model takes a script of lines, not
- * one text (`dialogue-capabilities.test.ts` pins both directions).
+ * The ElevenLabs dialogue models are dialogue-only ids, never members of
+ * TTS_PROVIDERS: their dialogue endpoint is its own model. Google's Gemini
+ * models take one speaker and two under ONE id, so each is in both lists,
+ * priced on its one row (dialogue costs what one speaker costs per character,
+ * decided 2026-11-12); `dialogue-capabilities.test.ts` pins exactly that.
  */
-export const DIALOGUE_PROVIDERS = ["elevenlabs-dialogue", "elevenlabs-dialogue-v4"] as const
+export const DIALOGUE_PROVIDERS = [
+  "elevenlabs-dialogue",
+  "elevenlabs-dialogue-v4",
+  "gemini-3-8-flash-lite-tts",
+  "gemini-3-8-flash-tts",
+  "gemini-3-1-flash-tts",
+  "gemini-2-5-pro-tts",
+] as const
 export type DialogueProvider = typeof DIALOGUE_PROVIDERS[number]
 
 /** The model a dialogue request runs on when its provider is missing or unknown: v3 dialogue (decided 2026-10-04 — v3 stays the default). */
@@ -3184,6 +3200,15 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
      * `elements[].voice_url`, no standalone `voices`).
      */
     audioBindsToCharacters?: true
+    /**
+     * How many of the `characters` may be VIDEO subjects — a character made
+     * from a short clip of itself (`characterReferences[].videoUrl`) instead of
+     * images. The clip counts as one of the `videos` too: the provider caps
+     * reference videos and video subjects together. Absent ⇒ none (any other
+     * model refuses a character video). Each clip's own length is
+     * `VIDEO_CHARACTER_CLIP_DURATION_LIMITS`.
+     */
+    videoCharacters?: number
   } | undefined
 > = {
   // Seedance 2 — full multimodal caps.
@@ -3228,7 +3253,9 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // (docs.kie.ai/market/kling/v4-reference-to-video). A wired start frame takes
   // one of the 10 image slots. No `voices` key: that names Gemini Omni's
   // preset personas, which Kling does not take.
-  "kling-4": { images: 10, videos: 5, audio: 3, characters: 7, materials: 15 },
+  // Of the 7 subjects, at most 3 may be video subjects (a 3-8 s clip each), and
+  // reference videos plus video subjects are at most 5.
+  "kling-4": { images: 10, videos: 5, audio: 3, characters: 7, materials: 15, videoCharacters: 3 },
   // Kling 4.0 Keyframes — the Image References are the in-between frames
   // (`keyframe_urls`, max 8; the clip's duration lowers the cap, see
   // kling4KeyframeFrameCap). No reference videos or audio.
@@ -3239,7 +3266,7 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // (`voice_url`) when that character is a subject (2-4 images), so at most one
   // per character (7) and none takes a material seat. A wired start frame takes one of the 10 image slots when it
   // runs on this endpoint.
-  "kling-4-flash": { images: 10, videos: 5, audio: 7, characters: 7, materials: 15, audioBindsToCharacters: true },
+  "kling-4-flash": { images: 10, videos: 5, audio: 7, characters: 7, materials: 15, audioBindsToCharacters: true, videoCharacters: 3 },
   "grok-i2v": { images: 7 },         // backend kie/models.ts maxRefImages: 7
   "happyhorse-ref2v": { images: 9 }, // backend kie/models.ts maxRefImages: 9
   // VEO 3.x — REFERENCE_2_VIDEO path caps refs at 3 (kie/video.ts slices to
@@ -3318,6 +3345,56 @@ export const VIDEO_REF_VIDEO_DURATION_LIMITS: Record<string, RefVideoDurationLim
   // between 2 and 20 seconds, got 45", docs.kie.ai/market/kling/v4-flash-reference-to-video).
   // A 2 s floor per clip makes the combined floor hold too.
   "kling-4-flash": { minSec: 2, maxSec: 20, maxTotalSec: 20 },
+}
+
+/**
+ * The length a character's own clip (`characterReferences[].videoUrl`, a video
+ * subject) must have, per provider. Kling 4.0 and Kling 4.0 Flash: "one 3-8
+ * second single-shot character video" (docs.kie.ai/market/kling/v4-reference-to-video,
+ * v4-flash-reference-to-video, read 2026-11-13). The clip is also one of the
+ * run's reference videos, so `VIDEO_REF_VIDEO_DURATION_LIMITS` (its per-clip
+ * bound and the combined `maxTotalSec`) applies to it as well.
+ */
+export const VIDEO_CHARACTER_CLIP_DURATION_LIMITS: Record<string, { minSec: number; maxSec: number } | undefined> = {
+  "kling-4": { minSec: 3, maxSec: 8 },
+  "kling-4-flash": { minSec: 3, maxSec: 8 },
+}
+
+/**
+ * Validate probed character-clip durations against
+ * {@link VIDEO_CHARACTER_CLIP_DURATION_LIMITS}. Unlike a reference video
+ * ({@link checkRefVideoDurations}, which ignores a clip the probe could not
+ * read and charges its worst case), a character's clip must be measured within
+ * its bounds to be accepted (decided 2026-11-13): one the probe could not read
+ * (NaN, ≤0) is refused too, as `character_video_unreadable`.
+ */
+export function checkCharacterClipDurations(
+  provider: string,
+  durationsSec: readonly number[],
+): { ok: true } | { ok: false; code: "video_too_long" | "character_video_unreadable"; message: string } {
+  const limit = VIDEO_CHARACTER_CLIP_DURATION_LIMITS[provider]
+  if (!limit) return { ok: true }
+  if (durationsSec.some((d) => !Number.isFinite(d) || d <= 0)) {
+    return {
+      ok: false,
+      code: "character_video_unreadable",
+      message:
+        `A character's video could not be measured, and it must be ${limit.minSec}–${limit.maxSec} seconds long. ` +
+        "Check that the link is a playable video file anyone can open, and run again. Nothing was charged.",
+    }
+  }
+  const offender = durationsSec.find((d) => d < limit.minSec || d > limit.maxSec)
+  if (offender === undefined) return { ok: true }
+  // The measured length, rounded UP to hundredths, so a clip just past the
+  // bound never reads as inside it (8.03 s, never "8.0 s").
+  const shown = (Math.ceil(offender * 100 - 1e-9) / 100).toFixed(2)
+  return {
+    ok: false,
+    code: "video_too_long",
+    message:
+      `A character's video must be between ${limit.minSec} and ${limit.maxSec} seconds — one is ${shown} s. ` +
+      `Use a single-shot clip of that length (a Trim Video node upstream works) and run again.`,
+  }
 }
 
 /**
@@ -4492,7 +4569,8 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
   // The length tiers of the earlier Seedance Extend rows
   // (`seedance-2-extend:<tier>:<res>`). No extend is priced on them any more —
   // each Seedance extend provider has a row per second (`tailExtendCreditId`)
-  // — but the rows stay, and so do their tiers.
+  // — and the rows themselves were removed (migration 648); the tiers stay,
+  // unread, as part of this published table.
   "seedance-2-extend": [
     { maxSeconds: 4, suffix: "4s" },
     { maxSeconds: 8, suffix: "8s" },

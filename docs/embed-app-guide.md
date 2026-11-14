@@ -572,6 +572,10 @@ All errors have shape `{ "error": { "code": "...", "message": "..." } }`.
 | 400 | `input_too_long` | A text input longer than the field's `maxLength` | Shorten the text to the limit the item declares |
 | 400 | `locked_field` | An `inputOverrides` entry names a destination on an outbound node (a Webhook Output's `url`, a publisher's account, a scraper's target), or a field a UGC node does not take from a run | Remove it — where the app sends to or fetches from is decided by the app itself, and a UGC node takes only the creator card's fields and the video length |
 | 400 | `ugc_photo_required` | A UGC Creator set to **My photo**, and the run gives no photo of the runner's | Ask for the runner's photo, or switch the card to AI creator |
+| 400 | `clone_recordings_required` | A Text to Speech or Text to Dialogue node clones a voice (Gemini 3.8 Flash), and the run gives no recordings of the runner's own | Ask for the runner's two WAV recordings: `inputOverrides[<node>].replica` (a dialogue: its `speakers`) |
+| 400 | `clone_consent_required` | The cloned voice's consent is not the runner's own record for those recordings | Have the runner tick the consent box: `POST /v1/voice-clone/consent` as the runner, then pass the record as `replicaConsent` |
+| 400 | `clone_model_unsupported` | The model the run dispatches for a cloned voice (an exposed Model card, a wired Character's voice) does not clone | Keep the node on Gemini 3.8 Flash |
+| 400 | `clone_not_fillable` | The app clones a voice inside a sub-workflow or a component, where a runner's recordings can't reach it | Move the clone node into the app's own graph |
 | 401 | `unauthorized` | Missing/expired/revoked token | Re-mint or re-authorize |
 | 402 | `insufficient_app_credits` | Token's account is out of credits | Top up credits or switch plan |
 | 402 | `insufficient_credits` | An app that makes a UGC video: the balance does not cover what the video can hold while its clips render (`This video can hold up to about <n> credits while it renders; your balance is <balance>.`) | Top up credits, or make a shorter video |

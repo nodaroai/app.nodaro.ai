@@ -32,6 +32,7 @@ import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
+import { RETIRED_VIDEO_PROVIDERS } from "@nodaro/shared/models"
 import { rowListInsert } from "./model-pricing-row-list.js"
 
 const MIGRATIONS_DIR = join(__dirname, "..", "..", "..", "..", "..", "supabase", "migrations")
@@ -242,6 +243,14 @@ describe("STATIC_CREDIT_COSTS equals the latest migration-seeded model_pricing v
     expect(drift, "a reprice ships the migration and the static row together").toEqual([])
     // The replay reads (nearly) the whole table; a parser that silently stopped matching would compare nothing.
     expect(compared).toBeGreaterThan(1500)
+  })
+
+  it("a retired video model keeps no price row: no migration leaves one and STATIC_CREDIT_COSTS holds none", () => {
+    // A retired id is priced as the model it runs as (`pricedAsId`): a row under its own
+    // spelling is never read, and would only list a stale price on /admin/models.
+    const retired = (id: string) => Object.keys(RETIRED_VIDEO_PROVIDERS).some((r) => id === r || id.startsWith(`${r}:`))
+    expect([...seeded.keys()].filter(retired), "model_pricing rows a migration leaves").toEqual([])
+    expect(Object.keys(STATIC_CREDIT_COSTS).filter(retired), "STATIC_CREDIT_COSTS rows").toEqual([])
   })
 
   it("the ids the replay cannot read are exactly the SQL-derived rungs", () => {

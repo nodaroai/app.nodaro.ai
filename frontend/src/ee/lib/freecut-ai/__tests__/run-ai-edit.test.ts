@@ -12,6 +12,12 @@ const api = vi.hoisted(() => {
     musicFails: false,
     transcribeNoCredits: false,
     transcribeJobFails: false,
+    transcribeDelayMs: 0,
+    plannerNoCredits: false,
+    statusErrors: 0,
+    status401: false,
+    musicJobFails: false,
+    language: "eng",
     words: [] as Array<{ text: string; startMs: number; endMs: number }>,
     order: [] as string[],
   }
@@ -30,6 +36,7 @@ vi.mock("@/lib/api", () => ({
   getCurrentUserId: vi.fn(async () => "8b1f6a2e-1c2d-4e5f-8a9b-0c1d2e3f4a5b"),
   transcribeApi: vi.fn(async () => {
     api.order.push("transcribe")
+    if (api.transcribeDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, api.transcribeDelayMs))
     if (api.transcribeNoCredits) throw new api.InsufficientCreditsError("no credits")
     return { jobId: "job-transcribe" }
   }),
@@ -39,14 +46,23 @@ vi.mock("@/lib/api", () => ({
     return { jobId: "job-music" }
   }),
   getJobStatusLean: vi.fn(async (id: string) => {
+    if (id === "job-transcribe" && api.status401) throw Object.assign(new Error("Unauthorized"), { status: 401 })
+    if (id === "job-transcribe" && api.statusErrors > 0) {
+      api.statusErrors -= 1
+      throw Object.assign(new Error("Service Unavailable"), { status: 503 })
+    }
+    if (id === "job-music" && api.musicJobFails) {
+      return { status: "failed", error_message: "The music could not be made.", error_detail: "Suno refused the prompt" }
+    }
     if (id === "job-transcribe" && api.transcribeJobFails) {
       return { status: "failed", error_message: "The transcription failed.", error_detail: "Audio file contains no audible speech" }
     }
     return id === "job-transcribe"
-      ? { status: "completed", output_data: { json: { version: 1, words: api.words } } }
+      ? { status: "completed", output_data: { json: { version: 1, language: api.language, words: api.words } } }
       : { status: "completed", output_data: { audioUrl: "https://cdn.example.com/track.mp3" } }
   }),
   generateAIWriterStream: vi.fn(async () => {
+    if (api.plannerNoCredits) throw new api.InsufficientCreditsError("no credits")
     if (api.plannerFails) throw new Error("planner down")
     return { jobId: "job-plan", generatedText: api.plannerText }
   }),
@@ -116,6 +132,12 @@ beforeEach(() => {
   api.musicFails = false
   api.transcribeNoCredits = false
   api.transcribeJobFails = false
+  api.transcribeDelayMs = 0
+  api.plannerNoCredits = false
+  api.statusErrors = 0
+  api.status401 = false
+  api.musicJobFails = false
+  api.language = "eng"
   api.words = WORDS
   api.order = []
   vi.stubGlobal("fetch", vi.fn(async () => new Response(new ArrayBuffer(16), { status: 200 })))
@@ -174,6 +196,54 @@ describe("runAiEdit", () => {
 
     expect(link.applied.filter((a) => a.ops[0]!.op === "removeSourceRanges").length).toBeLessThanOrEqual(12)
     expect(link.applied.filter((a) => a.ops[0]!.op === "addTranscriptCaptions").length).toBeLessThanOrEqual(10)
+  })
+
+  it("waits out a status read that fails while the API restarts, then goes on", async () => {
+    api.statusErrors = 1
+    const summary = await run(fakeLink())
+    expect(summary).toMatchObject({ pausesCut: 3, music: true })
+  })
+
+  it("ends a run whose job it can no longer follow (signed out), and cancels that job", async () => {
+    api.status401 = true
+    await expect(run(fakeLink())).rejects.toMatchObject({ key: "freecutAi.signedOut" })
+    expect(cancelJob).toHaveBeenCalledWith("job-transcribe")
+  })
+
+  it("cancels a job whose id arrives after the run has ended", async () => {
+    api.transcribeDelayMs = 60
+    api.plannerNoCredits = true
+    await expect(run(fakeLink())).rejects.toMatchObject({ key: "freecutAi.noCredits" })
+    await new Promise((resolve) => setTimeout(resolve, 120))
+    expect(cancelJob).toHaveBeenCalledWith("job-transcribe")
+  })
+
+  it("shows a failed music job's provider words, and the rest of the edit is done", async () => {
+    api.musicJobFails = true
+    const events: RunEvent[] = []
+
+    const summary = await run(fakeLink(), events)
+
+    expect(summary).toMatchObject({ music: false, pausesCut: 3 })
+    expect(events).toContainEqual(expect.objectContaining({ type: "agent", agent: "sound", state: "failed", key: "freecutAi.musicFailed", detail: "Suno refused the prompt" }))
+  })
+
+  it("keeps a Portuguese 'um': it is the article there, not a filler", async () => {
+    api.language = "por"
+    api.plannerText = '{"steps":["fillers"],"musicStyle":null,"reply":"Tirando os vícios de linguagem."}'
+    api.words = [
+      { text: "Um", startMs: 1000, endMs: 1200 },
+      { text: " dia", startMs: 1250, endMs: 1500 },
+      { text: " comprei", startMs: 1550, endMs: 1900 },
+      { text: " um", startMs: 1950, endMs: 2100 },
+      { text: " carro.", startMs: 2150, endMs: 2600 },
+    ]
+    const link = fakeLink()
+
+    const summary = await run(link)
+
+    expect(summary.fillersCut).toBe(0)
+    expect(link.applied.filter((a) => a.ops[0]!.op === "removeSourceRanges")).toEqual([])
   })
 
   it("names a removed filler word without the transcript's punctuation", async () => {
@@ -252,15 +322,25 @@ describe("runAiEdit", () => {
 })
 
 describe("musicFileOf", () => {
-  it("names the music as its bytes are: a Suno track is a WAV", () => {
-    expect(musicFileOf("https://cdn.nodaro.ai/audios/8caa956f.wav", "audio/wav")).toEqual({ name: "ai-music.wav", type: "audio/wav" })
-    expect(musicFileOf("https://cdn.example.com/track.mp3", null)).toEqual({ name: "ai-music.mp3", type: "audio/mpeg" })
+  const bytes = (...head: Array<number | string>) =>
+    new Uint8Array(head.flatMap((part) => (typeof part === "string" ? [...part].map((c) => c.charCodeAt(0)) : [part]))).buffer
+  const unknown = new ArrayBuffer(16)
+
+  it("names the music as its bytes are, whatever its address says", () => {
+    // As a Suno track was served on 2026-11-13: ".wav" and audio/wav, but an ID3-tagged MP3.
+    expect(musicFileOf(bytes("ID3", 4, 0, 0), "https://cdn.nodaro.ai/audios/8caa956f.wav", "audio/wav")).toEqual({ name: "ai-music.mp3", type: "audio/mpeg" })
+    expect(musicFileOf(bytes("RIFF", 0, 0, 0, 0, "WAVE"), "https://cdn.example.com/track.mp3", "audio/mpeg")).toEqual({ name: "ai-music.wav", type: "audio/wav" })
+    expect(musicFileOf(bytes(0xff, 0xfb, 0x90), "https://cdn.example.com/track", null)).toEqual({ name: "ai-music.mp3", type: "audio/mpeg" })
+    expect(musicFileOf(bytes(0xff, 0xf1, 0x50), "https://cdn.example.com/track", null)).toEqual({ name: "ai-music.aac", type: "audio/aac" })
+    expect(musicFileOf(bytes(0, 0, 0, 0x20, "ftypM4A "), "https://cdn.example.com/track", null)).toEqual({ name: "ai-music.m4a", type: "audio/mp4" })
   })
 
-  it("falls back to the response's type when the address has no extension", () => {
-    expect(musicFileOf("https://cdn.example.com/track", "audio/x-wav")).toEqual({ name: "ai-music.wav", type: "audio/wav" })
-    expect(musicFileOf("https://cdn.example.com/track", "audio/flac; charset=binary")).toEqual({ name: "ai-music.flac", type: "audio/flac" })
-    expect(musicFileOf("https://cdn.example.com/track", null)).toEqual({ name: "ai-music.mp3", type: "audio/mpeg" })
+  it("falls back to the address, then the response's type, when the bytes say nothing", () => {
+    expect(musicFileOf(unknown, "https://cdn.example.com/track.ogg", null)).toEqual({ name: "ai-music.ogg", type: "audio/ogg" })
+    expect(musicFileOf(unknown, "https://cdn.example.com/track", "audio/x-wav")).toEqual({ name: "ai-music.wav", type: "audio/wav" })
+    expect(musicFileOf(unknown, "https://cdn.example.com/track", "audio/flac; charset=binary")).toEqual({ name: "ai-music.flac", type: "audio/flac" })
+    expect(musicFileOf(unknown, "https://cdn.example.com/track", null)).toEqual({ name: "ai-music.mp3", type: "audio/mpeg" })
+    expect(musicFileOf(new ArrayBuffer(0), "https://cdn.example.com/track", null)).toEqual({ name: "ai-music.mp3", type: "audio/mpeg" })
   })
 })
 

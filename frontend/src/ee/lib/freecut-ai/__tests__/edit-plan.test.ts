@@ -11,6 +11,7 @@ import {
   primaryVideo,
   readTimelineView,
   timelineFrameOf,
+  transcriptLanguage,
   wordsFromTranscript,
   type TimedWord,
 } from "../edit-plan"
@@ -87,14 +88,45 @@ describe("mergeRanges", () => {
 })
 
 describe("fillerRanges", () => {
-  it("finds hesitation sounds in several languages, whatever their punctuation", () => {
-    const words = [w("So,", 0, 0.3), w("um,", 0.4, 0.7), w("אממ", 1, 1.4), w("えーと", 2, 2.5), w("음", 3, 3.2), w("plan", 4, 4.3)]
-    expect(fillerRanges(words).map((r) => r.word)).toEqual(["um,", "אממ", "えーと", "음"])
+  const found = (words: TimedWord[], language: string | null) => fillerRanges(words, language).map((r) => r.word)
+
+  it("finds the hesitation sounds of the video's language, whatever their punctuation", () => {
+    expect(found([w("So,", 0, 0.3), w("um,", 0.4, 0.7), w("plan", 1, 1.3)], "en")).toEqual(["um,"])
+    expect(found([w("אממ", 1, 1.4), w("תוכנית", 2, 2.4)], "he")).toEqual(["אממ"])
+    expect(found([w("えーと", 2, 2.5), w("計画", 3, 3.4)], "ja")).toEqual(["えーと"])
+    expect(found([w("음", 3, 3.2), w("계획", 4, 4.3)], "ko")).toEqual(["음"])
+    expect(found([w("hã,", 3, 3.2), w("plano", 4, 4.3)], "pt")).toEqual(["hã,"])
+  })
+
+  it("never cuts a word that is a filler only in another language", () => {
+    // Portuguese "um" is the article, German "um" means "at", English "hum" is a sound a fan makes.
+    expect(found([w("Um", 0, 0.2), w("dia", 0.25, 0.5), w("comprei", 0.55, 0.9), w("um", 0.95, 1.1), w("carro.", 1.15, 1.6)], "pt")).toEqual([])
+    expect(found([w("um", 0, 0.2), w("8", 0.3, 0.5), w("Uhr", 0.6, 0.9)], "de")).toEqual([])
+    expect(found([w("the", 0, 0.1), w("hum", 0.2, 0.5)], "en")).toEqual([])
+  })
+
+  it("cuts only sounds that are a word in no language when the language is not known", () => {
+    expect(found([w("um", 0, 0.2), w("umm", 0.5, 0.8), w("hmm,", 1, 1.3)], null)).toEqual(["umm", "hmm,"])
   })
 
   it("leaves alone a sound that can be a word of its own", () => {
     const words = [w("Ah,", 0, 0.3), w("あの", 1, 1.3), w("그", 2, 2.2), w("er", 3, 3.2)]
-    expect(fillerRanges(words)).toEqual([])
+    for (const language of ["en", "he", "ja", "ko", "pt", null]) expect(fillerRanges(words, language)).toEqual([])
+  })
+})
+
+describe("transcriptLanguage", () => {
+  it("reads the transcriber's language as a two-letter code", () => {
+    expect(transcriptLanguage({ language: "eng", words: [] })).toBe("en")
+    expect(transcriptLanguage({ language: "por" })).toBe("pt")
+    expect(transcriptLanguage({ language: "pt-BR" })).toBe("pt")
+    expect(transcriptLanguage({ language: "he" })).toBe("he")
+  })
+
+  it("is null when the transcript does not say", () => {
+    expect(transcriptLanguage({ words: [] })).toBeNull()
+    expect(transcriptLanguage({ language: "klingon" })).toBeNull()
+    expect(transcriptLanguage(null)).toBeNull()
   })
 })
 
@@ -102,6 +134,9 @@ describe("planFromRequest with accented words", () => {
   it("finds a filler word written with an accent, and only as a word", () => {
     expect(planFromRequest("tire o hã da fala").steps).toContain("fillers")
     expect(planFromRequest("hãx e legendas").steps).toEqual(["captions"])
+    // The Portuguese article is not a request to cut fillers; "the ums" is.
+    expect(planFromRequest("coloque um fundo musical").steps).toEqual(["music"])
+    expect(planFromRequest("remove the ums").steps).toEqual(["fillers"])
   })
 })
 
@@ -115,6 +150,13 @@ describe("captionCues", () => {
     const cues = captionCues([w("a", 0, 0.5), w("b.", 0.5, 1), w("c", 1.1, 1.5)])
     expect(cues[0]).toEqual({ text: "a b.", start: 0, end: 1.1 })
     expect(cues[1]).toEqual({ text: "c", start: 1.1, end: 1.75 })
+  })
+
+  it("gives a word timed with no length a caption that still lasts a moment", () => {
+    // The editor refuses a caption that ends where it starts, and with it the whole step.
+    const cues = captionCues([w("Yes.", 1.7, 1.7), w("Then", 1.7, 2)])
+    expect(cues[0]!.text).toBe("Yes.")
+    expect(cues[0]!.end).toBeGreaterThan(cues[0]!.start)
   })
 
   it("writes Japanese words without spaces between them", () => {

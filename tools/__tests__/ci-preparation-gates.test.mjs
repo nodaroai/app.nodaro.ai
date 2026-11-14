@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { PROJECTS } from '../typecheck-all.mjs'
 
 const workflow = readFileSync('.github/workflows/ci.yml', 'utf8')
 const jobs = Object.fromEntries([...workflow.matchAll(/^  ([\w-]+):\n([\s\S]*?)(?=^  [\w-]+:\n|$(?![\s\S]))/gm)]
@@ -295,17 +296,51 @@ test('nightly coverage can never mark main red (its checks land on main HEAD, wh
   assert.equal(nightly.match(/outcome === "skipped" \|\| !outcome \? "⚠️ no tests ran/g)?.length, 2)
 })
 
-test('Type Check runs its four checks concurrently, type checking on TypeScript 7', () => {
+// The type check runs alone first (decided 2026-11-13: beside the other
+// checks, its backend project was SIGKILLed on the 8 GB runner), then the
+// other four concurrently.
+test('Type Check runs the type check alone first, then its other four checks concurrently, type checking on TypeScript 7', () => {
   const job = jobs.typecheck
   assert.match(job, /^    name: Type Check$/m, 'the required check keeps its name')
-  for (const check of ['typecheck nice -n 19 env GOMEMLIMIT=4GiB npm run typecheck -- --serial', 'gen-skills nice -n 10 npm -w backend run gen:skills:check',
-    'parity cross_tree_parity', 'surfaces nice -n 10 timeout 300 npm -w backend run check:surfaces -- --all']) {
-    assert.match(job, new RegExp(`^          start ${check.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}`, 'm'), check)
+  const startOf = (check) => {
+    const at = job.search(new RegExp(`^          start ${check.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}$`, 'm'))
+    assert.ok(at > 0, check)
+    return at
   }
+  const typecheck = startOf('typecheck type_check')
+  const typecheckDone = job.search(/^          finish typecheck$/m)
+  assert.ok(typecheckDone > typecheck, 'the type check is waited on right after it starts')
+  for (const check of ['gen-skills nice -n 10 npm -w backend run gen:skills:check', 'parity cross_tree_parity',
+    'surfaces nice -n 10 timeout 300 npm -w backend run check:surfaces -- --all', 'gen-units nice -n 10 npm run gen:units -- --check']) {
+    assert.ok(startOf(check) > typecheckDone, `${check} starts only once the type check has finished`)
+  }
+  assert.match(job, /^          for name in gen-skills parity surfaces gen-units; do\n            finish "\$name"\n          done$/m,
+    'the other four are each waited on once, after all of them started')
+  assert.equal(job.match(/^ +finish /gm)?.length, 2, 'no check is waited on twice')
   assert.match(job, /npx vitest run --testTimeout=30000 "\$\{files\[@\]\}"/, 'parity tests get room next to the checker')
   assert.match(job, /wait "\$\{pid\[\$name\]\}"/, 'each check is waited on by PID for its own exit status')
   assert.match(job, /if \[ "\$name" = surfaces \]; then\n\s+echo "::warning::/, 'the surface report never fails the job')
   assert.doesNotMatch(job, /npx tsc/, 'type checking goes through `npm run typecheck`, not the root .bin/tsc (TS 5.9)')
+})
+
+// The backend's own settings (decided 2026-11-14: alone at the default
+// checkers it was still SIGKILLed on the 8 GB slot): one project at a time,
+// the backend single-threaded on 2 Go processors, and every project of
+// tools/typecheck-all.mjs checked exactly once.
+test('Type Check runs the backend single-threaded on 2 processors, after the other projects, checking each project once', () => {
+  const body = jobs.typecheck.match(/^          type_check\(\) \{\n([\s\S]*?)^          \}$/m)?.[1]
+  assert.ok(body, 'type_check() is defined in the step')
+  const runs = [...body.matchAll(/^            (.*npm run typecheck -- .*)$/gm)].map(([, line]) => line)
+  assert.deepEqual(runs, [
+    'nice -n 19 env GOMEMLIMIT=4GiB npm run typecheck -- --serial frontend packages/cli packages/shared || status=1',
+    'nice -n 19 env GOMEMLIMIT=4GiB GOMAXPROCS=2 npm run typecheck -- backend -- --singleThreaded || status=1',
+  ], 'the other projects one at a time, then the backend alone on its own settings')
+  assert.match(body, /^            local status=0$/m)
+  assert.match(body, /^            return \$status$/m, 'a failure of either run fails the type check, after both ran')
+  // typecheck-all.mjs's own args sit between the first and any second ` -- `.
+  const checked = runs.flatMap((line) => line.replace(/ \|\| status=1$/, '').split(' -- ')[1].split(' ')
+    .filter((word) => !word.startsWith('-')))
+  assert.deepEqual([...checked].sort(), [...PROJECTS].sort(), 'every project typecheck-all.mjs knows is checked, once')
 })
 
 test('boot smoke waits only for the compiled backend, not for Type Check', () => {

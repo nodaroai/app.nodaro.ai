@@ -6,8 +6,8 @@ import { gaVisitIdsFromCookies, type GaVisitIds } from "./ga-cookies"
  * the shared tag container) and Microsoft Clarity.
  *
  * Inert by construction; index.html's analytics loader is the one gate (never
- * inside an iframe or on a public surface, the production host only, only once
- * the page is shown, only with ids configured):
+ * inside an iframe or on a public surface, Flow's production hosts only, only
+ * once the page is shown, only with ids configured):
  * - GA4: only once the loader has loaded the container AND exposed the tag's
  *   measurement id (`window.__NODARO_GA__`, set from VITE_GA_ID). Without it
  *   nothing here reaches the data layer.

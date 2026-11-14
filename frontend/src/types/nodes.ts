@@ -18,6 +18,7 @@ import type {
 } from "@nodaro/shared/nodes"
 import type { Node, Edge } from "@xyflow/react"
 import type { VideoUpscaleResolution } from "@nodaro/shared/model-catalog"
+import type { TtsOutputFormat, TtsReplica } from "@nodaro/shared/models"
 // Node units (frontend/src/nodes/<type>/, tools/units/README.md): this file is
 // the reviewed composer of the definitions aggregate — NODE_DEFINITIONS is the
 // legacy literal below ∪ every unit, each at its position.after.
@@ -187,6 +188,10 @@ export interface GeneratedResult {
   // (grok-2-segment / grok-2-edit) key off the ACTIVE result's
   // task id so region edits target the version the user is looking at.
   readonly kieTaskId?: string
+  // Beside that task, the resolution the job that made this take RECORDED
+  // (`input_data.resolution`, as stored) — the fact a Grok Extend's charge
+  // reads off its source's job, and so what its quote reads off this row.
+  readonly recordedResolution?: string
   // A Seedance 2.5 DRAFT (480p) — the tile shows a "Draft" badge; finalize it
   // with Upscale Video → Seedance 2.5 HD (from draft) for the same take at 1080p.
   readonly draft?: boolean
@@ -2247,6 +2252,31 @@ export type TextToSpeechData = PromptAffixFields & {
    */
   previousText?: string
   nextText?: string
+  /**
+   * Style direction, for a model whose sheet takes it (Gemini; `TtsCapabilities.direction`): free text on 3.8, one of
+   * the model's styles on 3.1 / 2.5. Never spoken, never billed; a model that takes none is never sent it.
+   */
+  styleDirection?: string
+  /** Gemini 3.1 / 2.5: one of the model's paces. */
+  pace?: string
+  /** Gemini 3.1 / 2.5: one of the model's accents. */
+  accent?: string
+  /** Gemini 3.1 / 2.5: who is speaking, in words ("a warm, unhurried narrator"). */
+  audioProfile?: string
+  /**
+   * A one-off clone of a person's voice for this request (Gemini 3.8 Flash, `ttsTakesReplica`; decided
+   * 2026-11-13): two https links to WAV recordings, in place of the voice. Nothing is saved as a voice.
+   * Both links empty: the clone is switched on and its recordings are not in yet.
+   */
+  replica?: TtsReplica
+  /**
+   * The person's consent for this clone's recordings: the record the server signed for the user who ticked
+   * the box (`POST /v1/voice-clone/consent`; decided 2026-11-13). It counts only for that user, so a copy of
+   * the node (a template, a published app) is unticked for anyone else. Cleared when either recording changes.
+   */
+  replicaConsent?: ReplicaConsentRecord
+  /** The file (decided 2026-11-13): MP3 128 kbps (none stored), MP3 192 kbps or WAV 24 kHz — every model delivers each. */
+  outputFormat?: TtsOutputFormat
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -3662,6 +3692,37 @@ export interface DialogueLine {
   readonly text: string
   readonly voice: string
   readonly voiceLabel?: string
+  /** Gemini 3.8 (`TtsCapabilities.direction.styleMaxChars`): how THIS line is spoken, in words. Never spoken, never billed. */
+  readonly styleDirection?: string
+}
+
+/**
+ * One speaker's direction on a dialogue model that takes it per speaker (Gemini 3.1 / 2.5:
+ * `direction.styles` / `paces` / `accents` / `audioProfileMaxChars`), keyed by the speaker's voice.
+ */
+export interface DialogueSpeakerDirection {
+  readonly voice: string
+  readonly styleDirection?: string
+  readonly pace?: string
+  readonly accent?: string
+  readonly audioProfile?: string
+  /**
+   * This speaker spoken in a person's own voice, cloned for this request (Gemini 3.8 Flash, decided
+   * 2026-11-13); `voice` is then the label the speaker's lines use (`dialogueReplicaVoices`).
+   * Both links empty: the clone is set up and its recordings are not in yet.
+   */
+  readonly replica?: TtsReplica
+  /** The person's consent for this clone's recordings (`TextToSpeechData.replicaConsent`). */
+  readonly replicaConsent?: ReplicaConsentRecord
+}
+
+/**
+ * A person's consent to a one-off clone of the voice in two recordings, as the server issued it to them
+ * (decided 2026-11-13): their user id and the server's signature over that id and the two links.
+ */
+export interface ReplicaConsentRecord {
+  readonly userId: string
+  readonly signature: string
 }
 
 export type TextToDialogueData = {
@@ -3678,6 +3739,12 @@ export type TextToDialogueData = {
   seed?: number
   /** ElevenLabs text normalization: "auto" (default) | "on" | "off". */
   applyTextNormalization?: "auto" | "on" | "off"
+  /** Gemini 3.1 / 2.5: each speaker's style, pace, accent and audio profile, keyed by voice (decided 2026-11-12). */
+  speakers?: DialogueSpeakerDirection[]
+  /** Gemini 3.8, two speakers: let the model add filler words between them (`TtsCapabilities.fillerWords`). */
+  fillerWords?: boolean
+  /** The file the dialogue is delivered as, where the model offers a choice (`dialogueOutputFormats`; decided 2026-11-13). None = MP3 128 kbps. */
+  outputFormat?: TtsOutputFormat
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -5534,6 +5601,14 @@ export type CharacterNodeData = {
   readonly loraReplicateVersion?: string | null
   readonly loraTriggerWord?: string | null
   readonly loraTrainingStatus?: "queued" | "training" | "succeeded" | "failed" | "cancelled" | null
+  /**
+   * A short single-shot clip of this character (3-8 s; public URL). On Kling
+   * 4.0 / Kling 4.0 Flash a node with one is sent as a VIDEO subject (made from
+   * this clip) instead of an image subject; every other model ignores it.
+   * Per canvas node, like `defaultAssetUrl` — not a property of the character
+   * row. See `wiredCharacterVideoUrls` (@nodaro/shared).
+   */
+  readonly subjectVideoUrl?: string
   // Per-CANVAS-NODE default asset selected from the Character Studio's grid
   // (expression / pose / angle / lighting / motion). Drives the canvas
   // thumbnail when set (falls back to `sourceImageUrl`). NOT a property of
@@ -5959,6 +6034,8 @@ export type LLMChatData = PromptAffixFields & {
   referenceVideoUrls?: readonly string[]
   /** Audio reference URLs. Only used when llmModel supports audio (Gemini family). */
   referenceAudioUrls?: readonly string[]
+  /** Document links (PDF, up to 5). Only used when llmModel reads files (`llmAcceptsFiles`: GPT-6.1 Terra). */
+  referenceFileUrls?: readonly string[]
 }
 
 // --- Web Scrape Node Data ---
@@ -8968,6 +9045,12 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "elevenlabs-v4-turbo", label: "ElevenLabs v4 Turbo (fast)" },
           { value: "elevenlabs-turbo", label: "ElevenLabs Turbo v2.5 (fast)" },
           { value: "elevenlabs-multilingual", label: "ElevenLabs Multilingual v2" },
+          // Gemini (decided 2026-11-12): each speaks only its own named voices, so a run on one keeps a voice of its list
+          // (the node's, when the creator set one there) — an ElevenLabs voice is refused before anything is charged.
+          { value: "gemini-3-8-flash-lite-tts", label: "Gemini 3.8 Flash-Lite TTS" },
+          { value: "gemini-3-8-flash-tts", label: "Gemini 3.8 Flash TTS" },
+          { value: "gemini-3-1-flash-tts", label: "Gemini 3.1 Flash TTS" },
+          { value: "gemini-2-5-pro-tts", label: "Gemini 2.5 Pro TTS" },
         ],
       },
       { key: "stability", label: "Stability", type: "slider" as const, min: 0, max: 1, step: 0.05, defaultValue: TTS_VOICE_SETTING_DEFAULTS.stability },

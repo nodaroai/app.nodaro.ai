@@ -518,6 +518,8 @@ sub-workflow's input. So is a component whose published version holds a
 **My photo** creator: the run's inputs must give an image to a node whose image
 reaches the component.
 
+<a id="cloned-voices-in-a-published-app"></a>**Cloned voices in a published app.** A Text to Speech or Text to Dialogue node that clones a voice for one request (Gemini 3.8 Flash; see [Text to Speech](./nodes/ai-audio/text-to-speech.md)) never ships its author's recordings or consent: publishing an app, a template or a component, a share link and every published run's graph carry the clone with its recordings empty and no consent record. The runner gives their own two WAV recordings and their own consent, signed for them by `POST /v1/voice-clone/consent` (called as the runner), in the run's `inputOverrides`: `{ "<tts node>": { "replica": { "sourceAudioUrl": "...", "consentAudioUrl": "..." }, "replicaConsent": { "userId": "...", "signature": "..." } } }`, or a dialogue node's whole `speakers` list with each cloned speaker's `replica` and `replicaConsent`. `/v1/app/:slug/run`, `/v1/component/execute` and a share link viewer's `/v1/present/:token/run` refuse a run that does not, before anything is written or billed: `400 clone_recordings_required` (no recordings), `400 clone_consent_required` (no consent of the runner's own for those recordings), `403 node_not_available` (one-off clones withheld), `400 clone_model_unsupported` (the model the run dispatches does not clone), `400 clone_not_fillable` (a clone inside a sub-workflow or a component the run executes), or the recording checks' own `400` (`replica_not_wav`, `replica_length`, …); the recordings are downloaded only after the run's daily limit and credit checks. An app run's Retry and Render final are judged the same way, on the inputs the run applied. `/v1/workflows/:id/run` and `/v1/api/run` refuse a workflow that runs a component holding a clone with the same `400 clone_not_fillable`, before anything is written. `POST /v1/voice-clone/consent` needs a session or an OAuth app with a `:write` or `:execute` scope. A dialogue asks only for the clones its lines speak with. The flat `inputs` of `apps.run` and MCP `run_app` list no clone inputs.
+
 A presentation share link treats a UGC video the same way. `GET /v1/present/:token`
 gives anyone but the workflow's owner the graph as published: its UGC nodes,
 every node whose value can flow into a UGC Creator's photo input, and every
@@ -2969,7 +2971,8 @@ so a value the model doesn't support is ignored, never a 400:
   off (see the [Generate Video node](nodes/ai-video/generate-video.md)); the 4K
   tier is not available on the free tier.
 - **`kling-4`** (Kling 4.0) is text-to-video with no materials, or runs from
-  `referenceImageUrls` (≤ 10), `referenceVideoUrls` (≤ 5, each 2–30 s),
+  `referenceImageUrls` (≤ 10), `referenceVideoUrls` (≤ 5, each 2–30 s; a 6th
+  is a `400` `reference_videos_over_limit` before anything is reserved),
   `characterReferences` (≤ 7, as named subjects — see below) and
   `referenceAudioUrls` (≤ 3, as named voices `@Voice1` …), **at most 15
   materials in all** — more is a `400` before anything is reserved
@@ -3008,13 +3011,13 @@ so a value the model doesn't support is ignored, never a 400:
   characters, or a start frame beside them — runs in reference mode, where an
   `imageUrl` joins the reference images after your own, as on `kling-4`.
   Reference mode takes `referenceImageUrls` (≤ 10), `referenceVideoUrls` (≤ 5,
-  **2–20 s together** — a set outside that is a `400` before anything is
-  reserved) and `characterReferences` (≤ 7 named subjects, as on `kling-4`),
+  **2–20 s together** — a set outside that, or a 6th video, is a `400` before
+  anything is reserved) and `characterReferences` (≤ 7 named subjects, as on `kling-4`),
   **at most 15 materials in all**. There are no standalone voices:
   `referenceAudioUrls` clip N (≤ 7) becomes the voice of `characterReferences`
-  entry N, in order. A character needs 2–4 images to carry a voice: a clip
-  whose character has one image, and any clip past the last character, is
-  dropped (the run still starts). A clip takes no material seat, and an
+  entry N, in order. A character needs 2–4 images, or a `videoUrl`, to carry a
+  voice: a clip whose character has one image and no video, and any clip past
+  the last character, is dropped (the run still starts). A clip takes no material seat, and an
   `@audio_N` mention has its `@` removed. `keepOriginalSound` works as on
   `kling-4`; there is no `audioSoundtrack`. `duration` 3–20 (default 5);
   **720p only** — any `resolution` renders and bills 720p; `aspectRatio` as on
@@ -3357,7 +3360,7 @@ IS, for this run only:
   up to 3 on Gemini Omni, 7 on Kling 4.0 and Kling 4.0 Flash).** Identity inputs that keep a real person's face on models with a
   dedicated character channel — today `gemini-omni-video`,
   `gemini-omni-flash`, `kling-4` and `kling-4-flash`. Each entry is `{ imageUrl, description, bodyImageUrl?,
-  extraImageUrls?, name?, voice? }`: a portrait URL, a description of the person (appearance, clothing,
+  extraImageUrls?, name?, voice?, videoUrl? }`: a portrait URL, a description of the person (appearance, clothing,
   style; ≤ 2000 chars), an optional full-body image and an optional name (≤ 100
   chars). Unlike `referenceImageUrls`, which a multimodal model treats as loose
   context, this is the input that holds the face. Any other model answers `400`
@@ -3380,9 +3383,27 @@ IS, for this run only:
   (`400` `character_voice_unsupported`) — send voice clips as
   `referenceAudioUrls`. See [Kling 4.0](nodes/ai-video/generate-video.md#kling-40-references-characters-and-keyframes).
   `kling-4-flash` takes them the same way, and `referenceAudioUrls` clip N
-  becomes entry N's voice when that entry has 2–4 images (otherwise the clip is
-  dropped) — see
+  becomes entry N's voice when that entry has 2–4 images or a `videoUrl`
+  (otherwise the clip is dropped) — see
   [Kling 4.0 Flash](nodes/ai-video/generate-video.md#kling-40-flash).
+  **Video subjects (`kling-4`, `kling-4-flash`):** an entry's optional
+  `videoUrl` — a 3–8 s single-shot clip of the character — makes it a subject
+  built from that video instead of its images (`imageUrl` and `description`
+  are still required). The platform adds the clip to the run's reference
+  videos, so it is measured, limited and billed exactly as a reference video:
+  - at most 3 such entries;
+  - at most 5 videos with `referenceVideoUrls`;
+  - all videos together within 20 s on Flash and 30 s on Kling 4.0;
+  - no two entries on one clip;
+  - its seconds join the reference-video seconds of the price.
+
+  A clip already in `referenceVideoUrls` is the character only. Out of range is
+  a `400` before anything is reserved (`character_videos_over_limit`,
+  `reference_videos_over_limit`, `character_video_shared`, or `video_too_long`
+  for a clip outside 3–8 s). A clip the platform cannot read is a `400`
+  `character_video_unreadable`, since its length cannot be checked. Any other
+  model answers `400` `character_video_unsupported`. See [Video
+  subjects](nodes/ai-video/generate-video.md#video-subjects-kling-40-and-kling-40-flash).
 
 ### Naming an image reference in the prompt (`@<name-slug>:<index>[:<role>]`)
 
@@ -4606,6 +4627,8 @@ The listing, plus two endpoints that poll multiple job statuses in a single roun
 An Apply EDL job's `output_data` says what the render was cut from: `quality` (`"proxy"` is a preview), `clipKey` (the plan clip, when one was given), `planBasis` (the plan value, when one was given: `POST /v1/apply-edl` accepts an optional `planBasis` of 16 lowercase hex digits, `renderReadBasis` in `@nodaro/shared`) and `renderBasis` (always: the server's fingerprint of the render's `output`, `crossfadeMs` and the effective source URLs). See the SDK's [`applyEdl`](./sdk-reference.md#applyedlinput) for the full parameter list.
 
 An Apply EDL job recorded before `output_data.quality` was written reads back with the quality it was ordered at filled in on every job read above, plus `GET /v1/jobs/:id` and `GET /v1/jobs/:id/status` (`"proxy"` is a preview, anything else the final). The stored job is unchanged.
+
+A completed Grok Imagine video job (`grok` or `grok-i2v`) whose request named a resolution also carries it in `output_data.recordedResolution`, exactly as the request recorded it, beside its `providerTaskId`; a Grok Extend of that video is priced by that resolution.
 
 All three require `jobs:read` scope when using an OAuth token; admin tokens may
 see cross-user jobs. These endpoints are public API — they are used by the
@@ -7266,7 +7289,7 @@ until `status` is `completed`, read the result from `output_data`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/voices` | Premade voice catalog (name, `voice_id`, gender/accent/age metadata). |
+| `GET` | `/v1/voices` | Premade voice catalog (name, `voice_id`, gender/accent/age metadata). `?model=<speech model>`: a model that speaks only its own named voices (the `gemini-*-tts` models) lists those instead — `voice_id` and `name` are the voice's name, `use_case` what it is meant for (3.8; empty on 3.1 / 2.5); any other model, or none, lists the premade catalog. |
 | `GET` | `/v1/voices/library` | Search the shared Voice Library (`?search=`, `?gender=`, `?age=`, `?accent=`, `?language=`, `?category=`, `?use_cases=` — one of `advertisement`, `characters_animation`, `conversational`, `entertainment_tv`, `informative_educational`, `narrative_story`, `social_media`; `?descriptives=` — one tone word, e.g. `calm`, `deep`, `cute`; `?featured=`, `?sort=`, `?page=`, `?page_size=`). Each voice carries its `descriptive` (the library's one-word tone, `""` when none), `language` + `locale` (primary, `""` when unstated) and `verifiedLanguages` (every language code it is verified for, primary first — the set `?language=` matches against). |
 | `GET` | `/v1/voices/library/facets` | How many library voices each category, tone, language, gender, age, accent and category has, for the listing's filters (`?search=`, `?gender=`, `?age=`, `?accent=`, `?language=`, `?category=`, `?use_cases=`, `?descriptives=`, `?featured=`; no paging): `{ total, use_cases, languages, descriptives, genders, ages, accents, categories, approximate, updatedAt }`, each facet `[{ value, count }]` sorted by count, zero counts left out, each facet ignoring its own filter. Public, no credits, cacheable for five minutes. Counted over the platform's copy of the library (`updatedAt` = when it was read; `languages` counts a voice under every language it is verified for). With `?search=` the counts are a lower estimate (`approximate: true`). `503 voice_library_warming` (with `Retry-After`) for the few minutes after a deployment first reads the library; zero counts with `keyMissing: true` on a deployment without a speech key. |
 | `GET` | `/v1/voices/:voiceId/preview` | A voice's preview, served from the deployment's own host — only on a deployment that sets `VOICE_PREVIEW_PROXY=true` (otherwise `404`). There, both lists above give each `preview_url` as this route's signed address (`?src=…&sig=…`) instead of the speech provider's storage address; play it as given. No bearer (an `<audio src>` sends none): the signature is the credential. Answers the audio (`206` for a byte `Range`), `404` for an address the lists did not give, `400 voice_not_available` for a voice the deployment's voice lock refuses, `502 preview_unavailable` when the provider's file cannot be served. |
@@ -7274,7 +7297,8 @@ until `status` is `completed`, read the result from `output_data`.
 | `PUT` | `/v1/voices/favorites/:voiceId` | Star a voice — body `{ voiceType: "premade" \| "library" \| "custom", name, previewUrl? }` → `{ favorite }`. Idempotent (starring again refreshes the snapshot); `409 limit_reached` past 500 favorites. OAuth apps need `assets:write`. |
 | `DELETE` | `/v1/voices/favorites/:voiceId` | Unstar a voice → `{ success: true }`. Idempotent. OAuth apps need `assets:write`. |
 | `GET` | `/v1/voice-clones` | List the voice clones you created before cloning was retired. |
-| `POST` | `/v1/voice-clones`, `/v1/voice-clones/from-url` | **Retired** — voice cloning is no longer offered. Both answer `410` with `error.code = "voice_cloning_retired"`. Use `/v1/voice-design` for a new custom voice. |
+| `POST` | `/v1/voice-clones`, `/v1/voice-clones/from-url` | **Retired** — voice cloning is no longer offered. Both answer `410` with `error.code = "voice_cloning_retired"`. (A one-off clone for a single request, never saved, is `replica` on `/v1/text-to-speech` and a `/v1/text-to-dialogue` speaker with `gemini-3-8-flash-tts`, with `consent: true`.) Use `/v1/voice-design` for a new custom voice. |
+| `POST` | `/v1/voice-clone/consent` | The editor's consent box for a one-off voice clone: `{ sourceAudioUrl, consentAudioUrl }` → `{ userId, signature }`, a record of the signed-in user's consent for exactly those two recordings, which a workflow run accepts only from that user. Nothing is fetched, stored or charged; `403 node_not_available` where one-off clones are withheld. |
 | `PATCH` | `/v1/voice-clones/:id` | Rename / edit an existing clone. |
 | `DELETE` | `/v1/voice-clones/:id` | Delete an existing clone. |
 | `POST` | `/v1/voice-design` | Design a synthetic voice from a description (`{ text, voiceDescription, model?, loudness?, guidanceScale?, seed?, quality?, shouldEnhance? }`) → job. |

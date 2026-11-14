@@ -7,10 +7,12 @@
  */
 import { describe, expect, it, vi, beforeEach } from "vitest"
 
-const avail = vi.hoisted(() => ({ loaded: true, unavailable: [] as string[] }))
+const avail = vi.hoisted(() => ({ loaded: true, failed: false, unavailable: [] as string[] }))
 vi.mock("@/lib/surface-availability", async (orig) => ({
   ...(await orig<typeof import("@/lib/surface-availability")>()),
   surfaceAvailabilityLoaded: () => avail.loaded,
+  surfaceAvailabilityFailed: () => avail.failed,
+  // The answer once it is in; before it (awaited, or after a failed read) the static profile's deny list.
   isNodeUnavailable: (type: string) => avail.unavailable.includes(type),
 }))
 
@@ -20,6 +22,7 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 beforeEach(() => {
   avail.loaded = true
+  avail.failed = false
   avail.unavailable = []
 })
 
@@ -39,6 +42,13 @@ describe("the canvas's run and estimate", () => {
     expect(usecaseFramesOffered()).toBe(true)
     expect(usecaseFramesWithheld()).toBe(false)
   })
+  it("after a read that failed: as while loading, whatever the panel shows (the route decides auto; never quoted under the hold)", () => {
+    avail.loaded = false
+    avail.failed = true
+    avail.unavailable = ["speaker-frames"]
+    expect(usecaseFramesOffered()).toBe(true)
+    expect(usecaseFramesWithheld()).toBe(false)
+  })
 })
 
 describe("usecaseFramesViewer: the three states the panel shows", () => {
@@ -46,6 +56,14 @@ describe("usecaseFramesViewer: the three states the panel shows", () => {
     avail.loaded = false
     expect(usecaseFramesViewer()).toBe("loading")
     avail.loaded = true
+    expect(usecaseFramesViewer()).toBe("offered")
+    avail.unavailable = ["speaker-frames"]
+    expect(usecaseFramesViewer()).toBe("withheld")
+  })
+
+  it("a read that failed: the static profile decides, never loading for the session", () => {
+    avail.loaded = false
+    avail.failed = true
     expect(usecaseFramesViewer()).toBe("offered")
     avail.unavailable = ["speaker-frames"]
     expect(usecaseFramesViewer()).toBe("withheld")

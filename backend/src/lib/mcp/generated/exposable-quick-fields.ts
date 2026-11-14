@@ -160,8 +160,8 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "provider": { valueType: "string", fixed: true, values: ["elevenlabs-sfx"] },
   },
   "text-to-dialogue": {
-    "languageCode": { valueType: "string", fixed: true, values: ["af","ar","bg","bn","ca","cs","da","de","el","en","es","et","fa","fi","fil","fr","he","hi","hr","hu","id","is","it","ja","ka","ko","lt","lv","ms","nl","no","pl","pt","ro","ru","sk","sr","sv","sw","ta","th","tr","uk","ur","vi","zh"] },
-    "provider": { valueType: "string", fixed: true, values: ["elevenlabs-dialogue","elevenlabs-dialogue-v4"] },
+    "languageCode": { valueType: "string", fixed: false, values: ["af","ar","bg","bn","ca","cs","da","de","el","en","es","et","fa","fi","fil","fr","he","hi","hr","hu","id","is","it","ja","ka","ko","lt","lv","ms","nl","no","pl","pt","ro","ru","sk","sr","sv","sw","ta","th","tr","uk","ur","vi","zh"] },
+    "provider": { valueType: "string", fixed: true, values: ["elevenlabs-dialogue","elevenlabs-dialogue-v4","gemini-2-5-pro-tts","gemini-3-1-flash-tts","gemini-3-8-flash-lite-tts","gemini-3-8-flash-tts"] },
   },
   "transcribe": {
     "provider": { valueType: "string", fixed: true, values: ["elevenlabs-stt","nemotron-3-5-transcribe"] },

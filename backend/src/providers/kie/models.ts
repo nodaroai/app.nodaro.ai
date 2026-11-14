@@ -17,6 +17,7 @@
 import { GROK_EXTEND_PROVIDER, MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, PIXVERSE_V6_EXTEND_PROVIDER, requestImageLimit } from "@nodaro/shared/models"
 import { FLUX_3_KLEIN_DEFAULT_RESOLUTION, SEEDREAM_5_5_DEFAULT_RESOLUTION, type Flux3KleinResolution, type Seedream55Resolution } from "@nodaro/shared/model-catalog"
 import { confirmedByRun, ENABLE_SAFETY_CHECKER_LEVER, NSFW_CHECKER_LEVER, NSFW_CHECKER_SENT_FALSE_LEVER, type SafetyLever, MODERATION_LEVER } from "../safety-levers.js"
+import { GEMINI_TTS_WIRE_MODELS } from "./gemini-tts-models.js"
 
 /** 1 KIE credit = $0.005 USD */
 export const KIE_CREDIT_USD = 0.005
@@ -2389,6 +2390,34 @@ export const KIE_TTS_MODELS: Record<string, KieModelConfig> = {
     model: "elevenlabs/text-to-speech-turbo-2-5",
     credits: 6,
     cost: 0.03,
+  },
+  // Google's Gemini speech (one speaker; kie/gemini-tts.ts sends it). KIE bills
+  // by the tokens a run used, so a job records its task's `creditsConsumed`;
+  // `credits` / `cost` are the measured KIE credits per 1,000 characters of a
+  // calm narration (2026-11-12 probes), used only when a record carries none.
+  "gemini-3-8-flash-lite-tts": {
+    model: GEMINI_TTS_WIRE_MODELS["gemini-3-8-flash-lite-tts"]!,
+    credits: 1.46,
+    cost: 0.0073, // per 1K chars, measured
+    costFromTaskRecord: true,
+  },
+  "gemini-3-8-flash-tts": {
+    model: GEMINI_TTS_WIRE_MODELS["gemini-3-8-flash-tts"]!,
+    credits: 2.13,
+    cost: 0.01065, // per 1K chars, measured
+    costFromTaskRecord: true,
+  },
+  "gemini-3-1-flash-tts": {
+    model: GEMINI_TTS_WIRE_MODELS["gemini-3-1-flash-tts"]!,
+    credits: 5.05,
+    cost: 0.02525, // per 1K chars, measured
+    costFromTaskRecord: true,
+  },
+  "gemini-2-5-pro-tts": {
+    model: GEMINI_TTS_WIRE_MODELS["gemini-2-5-pro-tts"]!,
+    credits: 6.27,
+    cost: 0.03135, // per 1K chars, measured
+    costFromTaskRecord: true,
   },
 }
 

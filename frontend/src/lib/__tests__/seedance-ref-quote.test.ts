@@ -168,6 +168,44 @@ describe("seedanceRefQuoteRequest — Kling 4.0 audio soundtrack", () => {
   })
 })
 
+// Video subjects (decided 2026-11-13): a wired Character's own clip rides as one
+// more reference video, so the quote names it — the clip the Run's route seats.
+describe("seedanceRefQuoteRequest — Kling 4.0 video subjects", () => {
+  const MAYA_CLIP = "https://cdn.example/maya.mp4"
+  const maya = (data: Record<string, unknown> = {}) =>
+    node("maya", "character", { characterName: "Maya", sourceImageUrl: "https://cdn.example/maya.png", ...data })
+  const charWire = { id: "maya->gv", source: "maya", target: "gv", sourceHandle: "characterRef", targetHandle: "assets" } as WorkflowEdge
+  const gv = (provider: string) => node("gv", "generate-video", { provider, duration: 5 })
+
+  it("a run whose only clip is a character's is quoted with that clip", () => {
+    for (const provider of ["kling-4", "kling-4-flash"]) {
+      const g = gv(provider)
+      expect(seedanceRefQuoteRequest(g, [maya({ subjectVideoUrl: MAYA_CLIP }), g], [charWire]), provider).toEqual({
+        provider, duration: 5, referenceVideoUrls: [MAYA_CLIP],
+      })
+    }
+  })
+
+  it("the character's clip follows the wired reference videos, once", () => {
+    const g = gv("kling-4")
+    expect(seedanceRefQuoteRequest(g, [upload, maya({ subjectVideoUrl: MAYA_CLIP }), g], [edge("clip", "gv", "videoReferences"), charWire])?.referenceVideoUrls)
+      .toEqual([CLIP, MAYA_CLIP])
+    const sameClip = maya({ subjectVideoUrl: CLIP })
+    expect(seedanceRefQuoteRequest(g, [upload, sameClip, g], [edge("clip", "gv", "videoReferences"), charWire])?.referenceVideoUrls).toEqual([CLIP])
+  })
+
+  it("the older video nodes carry no video subject: their quote ignores the clip", () => {
+    const t = node("gv", "text-to-video", { provider: "kling-4", duration: 5 })
+    expect(seedanceRefQuoteRequest(t, [maya({ subjectVideoUrl: MAYA_CLIP }), t], [charWire])).toBeUndefined()
+  })
+
+  it("is undefined without a clip, and on a model that takes no video subjects", () => {
+    expect(seedanceRefQuoteRequest(gv("kling-4"), [maya(), gv("kling-4")], [charWire])).toBeUndefined()
+    const s = gv("seedance-2-5")
+    expect(seedanceRefQuoteRequest(s, [maya({ subjectVideoUrl: MAYA_CLIP }), s], [charWire])).toBeUndefined()
+  })
+})
+
 describe("seedanceRefQuoteRequest — Video to Video's Seedance edit lane", () => {
   it("prices the source clip at Auto with the node's one resolution field and its draft toggle", () => {
     const v = node("v2v", "video-to-video", { provider: "seedance-2-5", v2vResolution: "1080p", draft: true })

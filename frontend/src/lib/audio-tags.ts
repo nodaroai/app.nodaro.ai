@@ -1,8 +1,10 @@
-// Audio tags for ElevenLabs TTS
-// Which models perform [audio tags] and which honour <break .../> SSML is read
-// from each model's capability sheet (`MODEL_CATALOG[id].tts`, @nodaro/shared):
-// `ttsSupportsAudioTags` / `ttsSupportsSsmlBreaks`. Nothing here names a model.
-import { MODEL_CATALOG, ttsLanguageCodes, ttsSupportsAudioTags, ttsSupportsSsmlBreaks } from "@nodaro/shared/model-catalog"
+// Audio tags for text-to-speech
+// Which models perform [audio tags], which write their own <tone tags> from a
+// closed list, and which honour <break .../> SSML is read from each model's
+// capability sheet (`MODEL_CATALOG[id].tts`, @nodaro/shared):
+// `ttsSupportsAudioTags` / `ttsAngleTags` / `ttsSupportsSsmlBreaks`. Nothing here names a model.
+import { MODEL_CATALOG, ttsAngleTags, ttsLanguageCodes, ttsSupportsAudioTags, ttsSupportsSsmlBreaks } from "@nodaro/shared/model-catalog"
+import { toAngleTags } from "@nodaro/prompts/prompt-fields"
 
 export interface AudioTag {
   tag: string
@@ -94,12 +96,19 @@ export const SSML_BREAK_OPTIONS: SSMLBreakOption[] = [
   { tag: '<break time="3.0s" />', label: "Break 3.0s" },
 ]
 
+/** A tone tag as an angle-tag model writes it (`<laugh>`, `<short pause>`) — never an SSML element such as `<break …/>`. */
+const ANGLE_TONE_TAG = /^<[A-Za-z][A-Za-z -]*>$/
+
 /**
  * Which warning inserting `tag` earns on `provider`, if any: an SSML break
  * (`<break …/>`) on a model whose sheet says it does not honour them, or an audio
- * tag (`[whispers]`) on a model that does not perform them. A node with no model
- * chosen (`provider === undefined`) never warns; a legacy or unknown id is judged
- * as the turbo model it runs as.
+ * tag (`[whispers]`) on a model that does not perform them. On a model that
+ * writes its own tone tags in angle brackets from a closed list (`ttsAngleTags`),
+ * a tag survives when it is one of them or a `[square]` tag the platform rewrites
+ * to one (`toAngleTags`, what the run sends); any other tag is taken out before
+ * sending, so it earns the audio-tag warning. A node with no model chosen
+ * (`provider === undefined`) never warns; a legacy or unknown id is judged as the
+ * turbo model it runs as.
  *
  * The text area sets the matching message and then dismisses its own dropdown,
  * which clears it, so the warning does not reach the screen today (pre-existing,
@@ -108,9 +117,23 @@ export const SSML_BREAK_OPTIONS: SSMLBreakOption[] = [
  */
 export function tagInsertWarning(provider: string | undefined, tag: string): "ssml" | "audioTag" | null {
   if (provider === undefined) return null
+  const angle = ttsAngleTags(provider)
+  // Performed only when it comes out as one of the model's own tags: an unknown `[tag]` is removed and an unknown
+  // `<word>` is spoken as the word (decided 2026-11-13) — either way not a tone the model performs.
+  if (angle && (tag.startsWith("[") || ANGLE_TONE_TAG.test(tag))) return /^<[^<>]+>$/.test(toAngleTags(tag, angle)) ? null : "audioTag"
   if (tag.startsWith("<")) return ttsSupportsSsmlBreaks(provider) ? null : "ssml"
   if (tag.startsWith("[")) return ttsSupportsAudioTags(provider) ? null : "audioTag"
   return null
+}
+
+/**
+ * The tags the text area's tag menu offers on a model that writes its own tone
+ * tags in angle brackets (`ttsAngleTags`): exactly those, written as the model
+ * reads them (`<laugh>`), in the sheet's order. `undefined` on any other model,
+ * whose menu stays the platform's `[audio tags]` and SSML breaks.
+ */
+export function angleTagMenu(provider: string | undefined): { tag: string; label: string }[] | undefined {
+  return ttsAngleTags(provider)?.map((name) => ({ tag: `<${name}>`, label: name }))
 }
 
 /** Get all tags available for autocomplete (both audio tags and SSML) */

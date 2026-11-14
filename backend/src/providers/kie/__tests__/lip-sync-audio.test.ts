@@ -93,9 +93,16 @@ vi.mock("../client.js", async (importOriginal) => ({
 
 import { LIP_SYNC_AUDIO_RATES } from "@nodaro/shared/credits"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
-import { LIP_SYNC_INPUT_RULES, audioReadStoppedMessage } from "../../../lib/lip-sync-inputs.js"
+import { LIP_SYNC_INPUT_RULES, audioReadStoppedMessage, lipSyncAudioPricingOf } from "../../../lib/lip-sync-inputs.js"
 import { AudioReadStoppedError } from "../../video/decoded-audio-length.js"
-import { LIP_SYNC_ENCODE_TOLERANCE_SEC, LIP_SYNC_PAD_MARGIN_SEC, lipSyncAudioEncodeArgs, prepareRateLipSyncAudio } from "../lip-sync-audio.js"
+import {
+  LIP_SYNC_ENCODE_TOLERANCE_SEC,
+  LIP_SYNC_PAD_MARGIN_SEC,
+  LIP_SYNC_TRIM_MARGIN_SEC,
+  lipSyncAudioEncodeArgs,
+  prepareLipSyncAudio,
+  prepareRateLipSyncAudio,
+} from "../lip-sync-audio.js"
 import { KieVideoProvider, lipSyncKieCostUsd } from "../video.js"
 import { KIE_LIP_SYNC_MODELS } from "../models.js"
 
@@ -128,6 +135,7 @@ describe("an honest file runs, billed as reserved, and the model gets OUR encode
       sentSec: 10.04,
       sentSamples: 442_764,
       padded: false,
+      trimmed: false,
     })
     expect(state.ffmpegArgs).toHaveLength(1)
     // The encode reads the decoded PCM — never the caller's file again.
@@ -293,13 +301,16 @@ describe("a file that is not the one priced is refused — deterministic, nothin
 })
 
 describe("the pieces", () => {
-  it("the encode command: MP3 of the decoded PCM (read as that PCM, a local file only), the padding only when asked", () => {
+  it("the encode command: MP3 of the decoded PCM (read as that PCM, a local file only), the padding or the cut only when asked", () => {
     const pcmIn = ["-protocol_whitelist", "file", "-format_whitelist", "s16le", "-f", "s16le", "-ar", "44100", "-ac", "2", "-i", "in.pcm"]
     expect(lipSyncAudioEncodeArgs("in.pcm", "out.mp3", undefined)).toEqual([
       "-nostdin", "-v", "error", ...pcmIn, "-c:a", "libmp3lame", "-b:a", "192k", "-y", "out.mp3",
     ])
     expect(lipSyncAudioEncodeArgs("in.pcm", "out.mp3", 4.1)).toEqual([
       "-nostdin", "-v", "error", ...pcmIn, "-af", "apad=whole_dur=4.1", "-c:a", "libmp3lame", "-b:a", "192k", "-y", "out.mp3",
+    ])
+    expect(lipSyncAudioEncodeArgs("in.pcm", "out.mp3", undefined, 299.5)).toEqual([
+      "-nostdin", "-v", "error", ...pcmIn, "-t", "299.5", "-c:a", "libmp3lame", "-b:a", "192k", "-y", "out.mp3",
     ])
   })
 
@@ -310,3 +321,124 @@ describe("the pieces", () => {
     expect(lipSyncKieCostUsd(14, 300)).toBe(21)
   })
 })
+
+/**
+ * A model priced by a length BUCKET (decided 2026-11-13: Kling AI Avatar,
+ * OmniHuman 1.5, the dubbing models) takes the same path: its held seconds are
+ * its bucket, a file that now falls in a bigger bucket is refused, audio past
+ * its maximum is cut under it (the trim the KIE lane always made) and priced at
+ * it — never padded, never refused for its length — and every lane is sent OUR
+ * MP3 of exactly the samples counted.
+ */
+describe("a bucketed model's audio — the same path", () => {
+  const bucket = (provider: string, held: number | undefined) =>
+    prepareLipSyncAudio(URL_, lipSyncAudioPricingOf(provider)!, provider, held)
+
+  it.each([
+    ["kling-avatar", 42, 60],
+    ["omnihuman-1-5", 15, 15],
+    ["heygen-lipsync-precision", 3.2, 15],
+    ["sync-lipsync-v3", 119.9, 120],
+    ["volcengine-lipsync", 200, 300],
+  ] as const)("%s: %s s held at %s s is sent as OUR MP3 of exactly the samples counted — never padded, never cut", async (provider, sec, held) => {
+    serve({ bytes: 400_000 })
+    state.measures = [sec, sec]
+    const prepared = await bucket(provider, held)
+    expect(prepared).toMatchObject({ url: "https://cdn.test/scratch/lip-sync-prepared.mp3", measuredSec: sec, billedSeconds: held, sentSec: sec, padded: false, trimmed: false })
+    const encode = state.ffmpegArgs[0]!
+    expect(encode).not.toContain("-af")
+    expect(encode).not.toContain("-t")
+    expect(state.measureFormats).toEqual([undefined, ["mp3"]])
+  })
+
+  it.each([
+    ["kling-avatar", 300],
+    ["kling-avatar-pro", 300],
+    ["omnihuman-1-5", 60],
+    ["lipsync-2-pro", 300],
+  ] as const)("%s: audio past its %s s maximum is cut under it and held at its top bucket — not refused", async (provider, max) => {
+    serve({ bytes: 9_000_000 }, { bytes: 9_000_000 })
+    // Stopped at the cap, and a length just past the trim (between it and the maximum).
+    for (const source of ["over", max - 0.2] as const) {
+      state.ffmpegArgs = []
+      state.measures = [source, max - LIP_SYNC_TRIM_MARGIN_SEC]
+      const prepared = await bucket(provider, max)
+      expect(prepared).toMatchObject({ billedSeconds: max, trimmed: true, padded: false, sentSec: max - LIP_SYNC_TRIM_MARGIN_SEC })
+      const encode = state.ffmpegArgs[0]!
+      expect(encode[encode.indexOf("-t") + 1]).toBe(String(max - LIP_SYNC_TRIM_MARGIN_SEC))
+    }
+    expect(state.measureCaps).toEqual([max, max + 1, max, max + 1])
+  })
+
+  it("audio 18.7 ms past the 15 s bucket (an exact 15 s AAC file on the pinned ffmpeg) is held at 15 s and sent cut to exactly 15 s", async () => {
+    serve({ bytes: 400_000 })
+    state.measures = [15.0187, 15]
+    expect(await bucket("kling-avatar", 15)).toMatchObject({ measuredSec: 15.0187, billedSeconds: 15, trimmed: true, sentSec: 15 })
+    const encode = state.ffmpegArgs[0]!
+    expect(encode[encode.indexOf("-t") + 1]).toBe("15")
+    // Past the 50 ms edge it is the next bucket, sent whole.
+    serve({ bytes: 400_000 })
+    state.ffmpegArgs = []
+    state.measures = [15.06, 15.06]
+    expect(await bucket("kling-avatar", 30)).toMatchObject({ billedSeconds: 30, trimmed: false, sentSec: 15.06 })
+    expect(state.ffmpegArgs[0]).not.toContain("-t")
+  })
+
+  it("a server that answers the run's fetch with a longer file (held at the 15 s bucket, now 42 s) is refused before any encode — nothing sent, refunded", async () => {
+    serve({ bytes: 400_000 })
+    state.measures = [42]
+    const err = await bucket("kling-avatar", 15).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(String(err)).toMatch(/the audio changed between the price check and the run — it is now 42 seconds, and the run was priced for 15 seconds/)
+    expect(state.ffmpegArgs).toEqual([])
+    expect(state.uploaded).toEqual([])
+  })
+
+  it("…and past the maximum when the run was held for less: refused", async () => {
+    serve({ bytes: 9_000_000 })
+    state.measures = ["over"]
+    const err = await bucket("kling-avatar", 60).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(String(err)).toMatch(/it is now over 300 seconds/)
+  })
+
+  it("a shorter file than was held runs, at no more than was held", async () => {
+    serve({ bytes: 400_000 })
+    state.measures = [9, 9]
+    expect(await bucket("kling-avatar", 60)).toMatchObject({ billedSeconds: 15, sentSec: 9 })
+  })
+
+  it("damaged or cut-short audio is refused with the price check's sentence, deterministic, nothing sent", async () => {
+    serve({ bytes: 400_000 })
+    state.measures = [new AudioReadStoppedError("the file reports damage: [in#0/ogg @ 0x1] CRC mismatch!")]
+    const err = await bucket("kling-avatar", 15).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(String(err)).toContain(`${audioReadStoppedMessage("kling-avatar")} Nothing is charged.`)
+    expect(state.uploaded).toEqual([])
+  })
+
+  it("a source of 100 MB or more is refused on the bytes read", async () => {
+    serve({ bytes: 101_000_000, declared: 1_000 })
+    const err = await bucket("sync-lipsync-v3", 300).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(String(err)).toMatch(/under 100 MB/)
+  })
+
+  it("has no cap on the MP3's size beyond its length (a rate model's 15 MB is its own)", async () => {
+    serve({ bytes: 60_000_000 })
+    state.measures = [290, 290]
+    state.convertedBytes = 15_000_000
+    expect(await bucket("kling-avatar", 300)).toMatchObject({ billedSeconds: 300 })
+  })
+
+  it("the KIE lanes send a prepared copy as it is: no second download, no trim", async () => {
+    await new KieVideoProvider().lipSync("https://cdn.test/face.png", "https://cdn.test/scratch/lip-sync-prepared.mp3", "hi", "kling-avatar", undefined, 42, undefined, { billedSeconds: 60, audioPrepared: true })
+    expect(state.kieInputs).toHaveLength(1)
+    expect(state.kieInputs[0]!.audio_url).toBe("https://cdn.test/scratch/lip-sync-prepared.mp3")
+    await new KieVideoProvider().lipSyncVideo("https://cdn.test/face.mp4", "https://cdn.test/scratch/lip-sync-prepared.mp3", { mode: "lite", audioPrepared: true }, "volcengine-lipsync", 42)
+    expect(state.kieInputs[1]).toMatchObject({ audio_url: "https://cdn.test/scratch/lip-sync-prepared.mp3", mode: "lite" })
+    expect(state.kieInputs[1]).not.toHaveProperty("audioPrepared")
+    expect(state.ffmpegArgs).toEqual([])
+  })
+})
+

@@ -189,9 +189,11 @@ describe("a stopped stream throws LlmStreamAbortedError carrying its estimated u
     expect(billedProviderCost(err)).toBeCloseTo((1001 * 1.6 + 26 * 8) / 1_000_000, 12)
   })
 
-  // GPT-6.1 Terra: KIE adds instructions of its own to the call and bills them
-  // (about 4,400 input tokens, with or without an effort), so a stop estimates
-  // them on top of the request's size.
+  // GPT-6.1 Terra: KIE adds instructions of its own to the call and bills them,
+  // so a stop estimates them on top of the request's size. That estimate is the
+  // charge, so it counts their most frequent reading, 4,400, with or without an
+  // effort — never the 25,500 ceiling the quote and the hold count (decided
+  // 2026-11-13).
   it.each([
     [undefined, 4_400],
     ["none", 4_400], // not one of its levels: clamps to Auto, nothing sent

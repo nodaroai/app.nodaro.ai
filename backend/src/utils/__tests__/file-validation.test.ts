@@ -227,3 +227,22 @@ describe("acceptedTypesSentence", () => {
     expect(validateFile("text/html", 1).error).toContain(acceptedTypesSentence())
   })
 })
+
+// Documents an LLM reads (decided 2026-11-13): PDF only, stored as a `document`.
+describe("documents", () => {
+  it("accepts a PDF as a document, by its type, an alias or its extension", () => {
+    expect(validateFile("application/pdf", 1000)).toMatchObject({ valid: true, category: "document", mimeType: "application/pdf" })
+    expect(validateFile("application/x-pdf", 1000)).toMatchObject({ valid: true, category: "document", mimeType: "application/pdf" })
+    expect(validateFile("application/octet-stream", 1000, "report.PDF")).toMatchObject({ valid: true, category: "document" })
+    expect(detectCategory("application/pdf")).toBe("document")
+    expect(getExtensionFromMime("application/pdf")).toBe("pdf")
+  })
+
+  it("caps a document at 25 MB and still refuses other document types", () => {
+    expect(getSizeLimit("document")).toBe(25 * 1024 * 1024)
+    expect(validateFile("application/pdf", 25 * 1024 * 1024 + 1).valid).toBe(false)
+    expect(validateFile("text/plain", 10).valid).toBe(false)
+    expect(validateFile("application/vnd.openxmlformats-officedocument.wordprocessingml.document", 10).valid).toBe(false)
+    expect(acceptedTypesSentence()).toContain("documents (pdf)")
+  })
+})

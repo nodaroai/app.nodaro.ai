@@ -4,12 +4,13 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from 
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getNodeLabel } from "@/lib/presentation-utils"
 import { isParameterPickerNode } from "@/lib/parameter-picker-types"
+import { APP_CLONE_INPUT_TYPE } from "@/lib/app-clone-inputs"
 import type { WorkflowNode } from "@/types/nodes"
 import { useT } from "@/lib/i18n"
 import { getChipValue, isUploadNode } from "./chat-view-helpers"
 
 /** Inputs that own internal modals / large surfaces — edited in a Dialog, not a popover. */
-const TALL_INPUT_TYPES = new Set(["list", "ai-avatar", "cinematic-avatar"])
+const TALL_INPUT_TYPES = new Set(["list", "ai-avatar", "cinematic-avatar", APP_CLONE_INPUT_TYPE])
 
 interface ComposerChipProps {
   node: WorkflowNode

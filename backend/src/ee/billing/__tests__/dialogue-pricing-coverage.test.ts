@@ -6,8 +6,8 @@
  */
 import { describe, it, expect } from "vitest"
 import { DIALOGUE_PROVIDERS } from "@nodaro/shared/models"
-import { MODEL_CATALOG, SPEECH_UNIT_PRICE_NOTE } from "@nodaro/shared/model-catalog"
-import { speechUnitCreditId } from "@nodaro/shared/credits"
+import { MODEL_CATALOG, SPEECH_PER_1K_PRICE_NOTE, SPEECH_UNIT_PRICE_NOTE } from "@nodaro/shared/model-catalog"
+import { speechRowUnits, speechUnitCreditId } from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 
 describe("text-to-dialogue pricing coverage", () => {
@@ -25,12 +25,12 @@ describe("text-to-dialogue pricing coverage", () => {
     }
   })
 
-  it("each dialogue model carries its unit row as pricing[1], at the static value, with the one unit note", () => {
+  it("each dialogue model carries its unit row as pricing[1], at the static value, with its unit note (a Gemini model's per-1,000 row: the one-speaker row, decided 2026-11-12)", () => {
     for (const id of DIALOGUE_PROVIDERS) {
       const rows = MODEL_CATALOG[id]!.pricing
       expect(rows[1]?.identifier, id).toBe(speechUnitCreditId(id))
       expect(rows[1]?.credits, id).toBe(STATIC_CREDIT_COSTS[speechUnitCreditId(id)])
-      expect(rows[1]?.note, id).toBe(SPEECH_UNIT_PRICE_NOTE)
+      expect(rows[1]?.note, id).toBe(speechRowUnits(id) === 10 ? SPEECH_PER_1K_PRICE_NOTE : SPEECH_UNIT_PRICE_NOTE)
       expect(rows, id).toHaveLength(2)
     }
   })

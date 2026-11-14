@@ -24,6 +24,10 @@
  * run of the video or of a node made from it left. The workflow's own character definitions follow
  * the same rule: one whose reference picture a node on a creator's photo path draws on, or whose
  * picture is tainted, ships without it (`settings.characterDefinitions[].referenceImageUrl`).
+ *
+ * A one-off voice clone ships with its recordings emptied, no consent and none of its node's earlier
+ * results (lib/clone-recordings.ts): its recordings are the runner's own, given as the app's inputs
+ * (decided 2026-11-13).
  */
 import {
   stripUgcPublishState,
@@ -52,6 +56,7 @@ import { storageUrlPath } from "./key-ownership.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { proveKeptChain, type KeepJobRow } from "./ugc-template-keep-ledger.js"
 import { TRASHED_JOB_COLUMN } from "./public-job-data.js"
+import { CLONE_FIELDS, withoutCloneRecordings } from "./clone-recordings.js"
 
 interface GraphNode {
   readonly id?: unknown
@@ -159,6 +164,19 @@ function keepDestination(type: string, key: string): boolean {
  * set at all, the set is read on this graph alone.
  */
 export function ugcStripPart<T extends GraphNode>(
+  nodes: readonly T[],
+  edges: ReadonlyArray<GraphEdge> | null | undefined,
+  sets: UgcStripSet | undefined,
+  key: string,
+  keep?: ReadonlyMap<string, Readonly<Record<string, unknown>>>,
+): T[] {
+  // Every graph as it ships or a run loads it: no author's clone recordings or consent, and no earlier result of a
+  // clone node (its author's voice), whatever the UGC strip keeps.
+  return withoutCloneRecordings(ugcStripUgcPart(nodes, edges, sets, key, keep), { outputs: true })
+}
+
+/** `ugcStripPart`'s UGC strip alone. */
+function ugcStripUgcPart<T extends GraphNode>(
   nodes: readonly T[],
   edges: ReadonlyArray<GraphEdge> | null | undefined,
   sets: UgcStripSet | undefined,
@@ -336,6 +354,11 @@ export async function ugcPublishedGraph<T extends GraphNode>(
     ...(kept ? { kept: kept.results } : {}),
     sets,
     shippedValue: (nodeId, field, copy) => {
+      // A clone's recordings and consent are never the author's copy: the field as the node ships.
+      if (CLONE_FIELDS.has(field)) {
+        const shipped = stripped.find((node) => node.id === nodeId)
+        return shipped ? dataOf(shipped)[field] : undefined
+      }
       if (!strip.has(nodeId)) return sets.taint ? ugcWithoutTainted(copy, sets.taint) : copy
       const shipped = stripped.find((node) => node.id === nodeId)
       return shipped ? dataOf(shipped)[field] : undefined

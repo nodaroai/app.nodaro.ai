@@ -29,6 +29,14 @@ describe("characterReferenceSchema — SSRF parity with referenceImageUrls", () 
   it("rejects a private body image too", () => {
     expect(characterReferenceSchema.safeParse({ ...ok, bodyImageUrl: "http://192.168.1.10/b.png" }).success).toBe(false)
   })
+
+  // Video subjects (Kling 4.0): the clip rides the same URL rule, and is kept.
+  it("keeps a public videoUrl and rejects a private one", () => {
+    const clip = "https://cdn.example.com/ava.mp4"
+    expect(characterReferenceSchema.parse({ ...ok, videoUrl: clip }).videoUrl).toBe(clip)
+    expect(characterReferenceSchema.safeParse({ ...ok, videoUrl: "http://10.0.0.5/ava.mp4" }).success).toBe(false)
+    expect(characterReferenceSchema.safeParse({ ...ok, videoUrl: "not a url" }).success).toBe(false)
+  })
 })
 
 describe("characterReferenceSchema — description and name", () => {

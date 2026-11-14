@@ -65,7 +65,7 @@ export const EXPOSABLE_DECLARED_FIELDS: Readonly<Record<string, Readonly<Record<
     "alphaMode": { kind: "select", values: ["auto","fill","select","custom"] },
   },
   "text-to-speech": {
-    "provider": { kind: "select", values: ["elevenlabs-v4","elevenlabs-v3","elevenlabs-v4-turbo","elevenlabs-turbo","elevenlabs-multilingual"] },
+    "provider": { kind: "select", values: ["elevenlabs-v4","elevenlabs-v3","elevenlabs-v4-turbo","elevenlabs-turbo","elevenlabs-multilingual","gemini-3-8-flash-lite-tts","gemini-3-8-flash-tts","gemini-3-1-flash-tts","gemini-2-5-pro-tts"] },
   },
   "text-to-video": {
     "aspectRatio": { kind: "select", values: ["16:9","9:16","1:1"] },

@@ -26,7 +26,7 @@ export async function safeFetchBytes(url: string, maxBytes: number, signal?: Abo
 /** Shared decoded-byte limiter for memory and disk consumers. No origin read
  * fallback is permitted, including on an own-storage HTTP 404. */
 export async function* boundedPublicChunks(url: string, options: {
-  maxBytes: number; timeoutMs: number; label: "Image" | "Video"; signal?: AbortSignal
+  maxBytes: number; timeoutMs: number; label: "Image" | "Video" | "File"; signal?: AbortSignal
 }): AsyncGenerator<Buffer> {
   const { maxBytes, timeoutMs, label, signal } = options
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 500 * 1024 * 1024

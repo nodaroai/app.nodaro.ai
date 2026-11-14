@@ -34,6 +34,8 @@ vi.mock("@/lib/supabase.js", () => ({
     auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-123" } }, error: null }) },
   },
 }))
+// The balance check before the audio is measured (lib/lip-sync-floor-check.ts, its own test): the payer can afford it.
+vi.mock("@/lib/lip-sync-floor-check.js", () => ({ lipSyncFloorRefusal: async () => undefined }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: h.queueAdd }, redis: {} }))
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: vi.fn().mockResolvedValue(false) }))
 vi.mock("@/lib/url-validator.js", async () => {
@@ -46,6 +48,20 @@ vi.mock("@/ee/lib/credit-guard-impl.js", () => ({
   checkPayerCanAffordImpl: vi.fn(),
   blockPaygOnConsumerSurface: vi.fn(),
   isWebFreeModeCandidate: vi.fn(() => false),
+}))
+
+// Lip Sync measures the audio of every model priced by its length before the
+// guard (decided 2026-11-13): a 10 s file here, read with no network.
+vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  downloadFile: async (_url: string, path: string) => {
+    const { writeFile } = await import("node:fs/promises")
+    await writeFile(path, "")
+  },
+}))
+vi.mock("@/providers/video/decoded-audio-length.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  measureDecodedAudio: async () => ({ overCap: false, samples: 441_000, seconds: 10 }),
 }))
 
 import { lipSyncRoutes } from "../lip-sync.js"

@@ -453,6 +453,13 @@ interface LaneAddedInput {
   withoutEffort: number
   /** Any effort on the wire. */
   withEffort: number
+  /**
+   * What a stopped stream's estimate counts, when it differs from the figure
+   * the quote and the hold count: that estimate IS the charge (no usage was
+   * reported), so it takes the most frequent reading, never a ceiling.
+   * Absent = the same as the quote's.
+   */
+  stopEstimate?: number
 }
 
 /**
@@ -471,13 +478,20 @@ interface LaneAddedInput {
  * the two together.
  */
 const KIE_ADDED_INPUT_TOKENS: Readonly<Record<string, LaneAddedInput>> = {
-  // GPT-6.1 Terra (KIE codex/v1/responses), measured 2026-11-12: at 10:45 IST
-  // a 20-token prompt reported 4,400 input tokens with no effort sent and
-  // 25,477 with any effort sent (`none` included); by 16:30 IST KIE had changed
-  // the endpoint, and the same requests with an effort (echoed `high`) reported
-  // 4,400–4,423. So about 4,400 either way, and Terra is no longer
-  // `effortPriced`. Re-measure if its reported input jumps again.
-  "gpt-6.1-terra": { withoutEffort: 4_400, withEffort: 4_400 },
+  // GPT-6.1 Terra (KIE codex/v1/responses). KIE's own instructions are not a
+  // stable size, so this is the CEILING it has been seen at, both ways
+  // (decided 2026-11-13), and the quote and hold are never below the charge:
+  //  - 2026-11-12 10:45 IST: a 20-token prompt reported 4,400 input tokens
+  //    with no effort sent and 25,477 with any effort sent (`none` included);
+  //  - 2026-11-12 16:30 IST: the same requests reported 4,400–4,423 either way;
+  //  - 2026-11-13: a plain prompt with no effort sent reported 25,451 (KIE's
+  //    stated charge matched it), and calls in production reported 0.
+  // The charge still follows what KIE states or reports (llm-spend.ts). Both
+  // figures equal, so Terra stays not `effortPriced`. A stopped stream reports
+  // nothing, so its estimate is the charge: it counts 4,400, the most frequent
+  // reading (`stopEstimate`, decided 2026-11-13), never the ceiling.
+  // Re-measure if KIE's reported input settles.
+  "gpt-6.1-terra": { withoutEffort: 25_500, withEffort: 25_500, stopEstimate: 4_400 },
 }
 
 /**
@@ -499,6 +513,24 @@ export function llmLaneAddedInputTokens(
   if (!added) return 0
   // The KIE lane clamps against the aggregator's ladder (`advanced = false`).
   return effectiveReasoningEffort(model!.id, reasoningEffort) === undefined ? added.withoutEffort : added.withEffort
+}
+
+/**
+ * The input tokens a stopped stream's estimate counts for what `lane` adds to
+ * a call on `model`: the entry's `stopEstimate` when it has one (the most
+ * frequent reading, where the quote and the hold count a ceiling), else
+ * {@link llmLaneAddedInputTokens}. That estimate is the charge of a stream
+ * stopped before its usage was reported.
+ */
+export function llmLaneStopEstimateAddedInputTokens(
+  modelOrId: string | LlmModelDef,
+  lane: LlmServingLane,
+  reasoningEffort?: string,
+): number {
+  if (lane !== "kie") return 0
+  const model = typeof modelOrId === "string" ? getLlmModel(modelOrId) : modelOrId
+  const stop = model ? KIE_ADDED_INPUT_TOKENS[model.id]?.stopEstimate : undefined
+  return stop ?? llmLaneAddedInputTokens(modelOrId, lane, reasoningEffort)
 }
 
 /** Test/introspection hook: model ids whose KIE lane adds input of its own. */

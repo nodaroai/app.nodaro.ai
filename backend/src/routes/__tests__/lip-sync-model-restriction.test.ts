@@ -19,6 +19,8 @@ const h = vi.hoisted(() => ({
   reserve: vi.fn(),
   insert: vi.fn(),
   queueAdd: vi.fn(),
+  /** Every download of the audio the route's measurement made. */
+  downloads: 0,
 }))
 
 vi.mock("@/lib/config.js", () => ({
@@ -35,6 +37,8 @@ vi.mock("@/lib/supabase.js", () => ({
     auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-123" } }, error: null }) },
   },
 }))
+// The balance check before the audio is measured (lib/lip-sync-floor-check.ts, its own test): the payer can afford it.
+vi.mock("@/lib/lip-sync-floor-check.js", () => ({ lipSyncFloorRefusal: async () => undefined }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: h.queueAdd }, redis: {} }))
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: vi.fn().mockResolvedValue(false) }))
 vi.mock("@/lib/url-validator.js", async () => {
@@ -47,6 +51,22 @@ vi.mock("@/ee/lib/credit-guard-impl.js", () => ({
   checkPayerCanAffordImpl: vi.fn(),
   blockPaygOnConsumerSurface: vi.fn(),
   isWebFreeModeCandidate: vi.fn(() => false),
+}))
+
+// Lip Sync measures the audio of every model priced by its length before the
+// guard (decided 2026-11-13): a 42 s file here (the 60 s bucket), read with no
+// network.
+vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  downloadFile: async (_url: string, path: string) => {
+    h.downloads++
+    const { writeFile } = await import("node:fs/promises")
+    await writeFile(path, "")
+  },
+}))
+vi.mock("@/providers/video/decoded-audio-length.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  measureDecodedAudio: async () => ({ overCap: false, samples: 42 * 44_100, seconds: 42 }),
 }))
 
 import { lipSyncRoutes } from "../lip-sync.js"
@@ -76,6 +96,7 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  h.downloads = 0
   h.creditCheck.mockResolvedValue(undefined)
   h.reserve.mockResolvedValue({ usageLogId: "usage-1", creditsReserved: 2211, watermark: false })
   h.insert.mockReturnValue({ select: () => ({ single: async () => ({ data: { id: "job-1" }, error: null }) }) })
@@ -98,6 +119,8 @@ afterEach(async () => {
 const run = (body: Record<string, unknown>) => app.inject({ method: "POST", url: "/v1/lip-sync", payload: { ...BODY, audioDurationSec: 42, ...body } })
 
 function expectNothingStarted(): void {
+  // The guard's model door answers before its measuring step: a withheld model's audio is never downloaded.
+  expect(h.downloads).toBe(0)
   expect(h.creditCheck).not.toHaveBeenCalled()
   expect(h.insert).not.toHaveBeenCalled()
   expect(h.reserve).not.toHaveBeenCalled()
