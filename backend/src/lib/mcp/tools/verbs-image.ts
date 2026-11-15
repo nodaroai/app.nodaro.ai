@@ -32,7 +32,7 @@ import {
 import { imageFormatArgs, imageFormatBody } from "./_image-format-args.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodaro/shared/model-catalog"
-import { I2I_MASK_SUPPORT, IMAGE_BACKGROUND_VALUES, IMAGE_K_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, refusesImagesOverLimit, requestImageLimit } from "@nodaro/shared/models"
+import { I2I_MASK_SUPPORT, IMAGE_BACKGROUND_VALUES, IMAGE_K_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, refusesImagesOverLimitOn, requestImageLimit } from "@nodaro/shared/models"
 import { UPSCALE_FACTORS } from "@nodaro/shared/credits"
 import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
 import { getUserMcpPreferences } from "../user-preferences.js"
@@ -356,14 +356,16 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         )
         // Tolerant: array | JSON-string | lone URL; asset ids resolved to URLs.
         // The route's referenceImageUrls schema is URL-only (and capped per model).
-        // A model that refuses images over its limit (`refusesImagesOverLimit`:
-        // FLUX 3 Klein) gets every reference, so the route's refusal says how
-        // many to remove instead of the extra ones being left out here.
+        // A model that refuses a request over its limit
+        // (`refusesImagesOverLimitOn`: every model with a request image limit
+        // of its own — Seedream 5.5, GPT Image 2.6 Flare and Sunburst, MiniMax
+        // H3 Image, FLUX 3 Klein) gets every reference, so the route's refusal
+        // says how many to remove instead of the extra ones being left out here.
         const refUrls = await resolveRefArray(
           effective.reference_image_urls,
           session.userId,
           "image",
-          (fanOut ? fanModels : [model]).some((m) => refusesImagesOverLimit(m))
+          (fanOut ? fanModels : [model]).some((m) => refusesImagesOverLimitOn(m, "request"))
             ? Number.POSITIVE_INFINITY
             : requestImageLimit(fanOut ? undefined : ((effective.model as string | undefined) ?? model)),
         )
@@ -706,7 +708,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
-            "Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6 or MiniMax H3, 9 on Seedream 5.5 or FLUX 3 Klein) for multi-ref " +
+            "Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6 or MiniMax H3, 9 on Seedream 5.5 or FLUX 3 Klein — on those models more is refused, saying how many to remove) for multi-ref " +
             "models — asset ids are resolved server-side. Accepts an array; a lone URL " +
             "or a JSON-stringified array is coerced.",
           ),
@@ -762,13 +764,14 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       // Resolve asset ids → URLs (route's referenceImageUrls is URL-only);
       // tolerant of array | lone string | JSON-stringified array inputs.
       // Beside the source, up to the model's limit; every one on a model that
-      // refuses images over its limit (FLUX 3 Klein), which the route refuses
+      // refuses a request over its limit (`refusesImagesOverLimitOn`: every
+      // model with a request image limit of its own), which the route refuses
       // saying how many to remove, rather than one being left out here.
       const i2iRefs = await resolveRefArray(
         args.reference_image_urls,
         session.userId,
         "image",
-        refusesImagesOverLimit(provider) ? Number.POSITIVE_INFINITY : requestImageLimit(provider) - 1,
+        refusesImagesOverLimitOn(provider, "request") ? Number.POSITIVE_INFINITY : requestImageLimit(provider) - 1,
       )
       const payload: Record<string, unknown> = {
         imageUrl,

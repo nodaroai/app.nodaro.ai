@@ -1949,15 +1949,16 @@ async function runKling4(
   const billedVideoSubjects = videoCharacterClipsBilledAsReferenceVideo(modelKey)
   const hasVideoElement = Array.isArray(input.elements) && (input.elements as Array<Record<string, unknown>>).some((el) => typeof el.video_url === "string")
   // The body's video elements flag `videoInput`; where the model bills a video
-  // subject as an image subject (Flash) and no reference video rides along,
-  // the run is no video-input run.
+  // subject as an image subject (Kling 4.0 and Flash) and no reference video
+  // rides along, the run is no video-input run.
   const videoInputOverride = !billedVideoSubjects && hasVideoElement && !Array.isArray(input.video_urls) ? { videoInput: undefined } : {}
   const tierCostUsd = kling4CostUsd({
     provider: modelKey,
     resolution: input.resolution as string,
     // A video subject is video input only where the model bills it as a
-    // reference video (`videoCharactersBillAsReferenceVideo`: Kling 4.0); on
-    // Flash it bills as an image subject (measured, decided 2026-11-14).
+    // reference video (`videoCharactersBillAsReferenceVideo`, set on no model
+    // today); Kling 4.0 and Flash bill it as an image subject (measured,
+    // decided 2026-11-14).
     hasVideoRef: Array.isArray(input.video_urls) || (billedVideoSubjects && hasVideoElement),
     outputSec: snapped,
     inputSec: 0,

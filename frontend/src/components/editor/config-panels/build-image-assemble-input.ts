@@ -151,6 +151,10 @@ export function buildImageAssembleInput(
     // unnamed character wired here, exactly as the run reads it.
     userPrompt: aliasRetiredCharacterMentions(composedPrompt, wiredCharacterNamesOf(node.id, nodes, bypassTeleports(nodes, edges))),
     provider,
+    // As the editor's Run of this node sends it, a request: a model with a
+    // request image limit of its own shows every attached image bound (a run
+    // over its limit is refused, saying how many to remove).
+    runKind: "request",
     style: styleBypass ? undefined : style,
     negativePrompt: resolvedNegative || undefined,
     connectedReferences,

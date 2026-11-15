@@ -3414,8 +3414,9 @@ function buildPayloadOf(
       // fill only the reference seats the node's own references leave free.
       const generateUserDirection = buildCtx?.userDirection
       // A base image FLUX 3 Klein counts against its limit takes a seat the
-      // moodboard would otherwise fill (`baseImageReservedSeats`, as on the route).
-      const generateReservedSeats = baseImageReservedSeats(effectiveProvider, resolvedInputs.baseImageUrl || data.baseImageUrl)
+      // moodboard would otherwise fill (`baseImageReservedSeats`, as on the
+      // route). A workflow run: every other model keeps its fill, and its trim.
+      const generateReservedSeats = baseImageReservedSeats(effectiveProvider, resolvedInputs.baseImageUrl || data.baseImageUrl, "workflow")
       const userDirectionLevers = generateUserDirection
         ? {
             directionRefs: generateUserDirection.refs,
@@ -3545,8 +3546,10 @@ function buildPayloadOf(
       // A prompt shorter than the model takes: refused before any job row, as on the route.
       const generateTooShort = lora ? null : imagePromptTooShort(imageParams.modelId, result.prompt)
       if (generateTooShort) throw new Error(generateTooShort.message)
-      // More images than FLUX 3 Klein takes: refused before any job row, as on the route.
-      const generateTooMany = lora ? null : imageInputLimitProblem(provider, generateSentImages)
+      // More images than FLUX 3 Klein takes: refused before any job row, as on
+      // the route. A workflow run: every other model sends its first images up
+      // to its limit (decided 2026-11-14), so a saved graph keeps running.
+      const generateTooMany = lora ? null : imageInputLimitProblem(provider, generateSentImages, "workflow")
       if (generateTooMany) throw new Error(generateTooMany.message)
 
       return {
@@ -3877,8 +3880,9 @@ function buildPayloadOf(
       // A prompt shorter than the model takes: refused before any job row, as on the route.
       const i2iTooShort = imagePromptTooShort(provider, i2iResult.prompt)
       if (i2iTooShort) throw new Error(i2iTooShort.message)
-      // The source and its references past what FLUX 3 Klein takes: refused, as on the route.
-      const i2iTooMany = imageInputLimitProblem(provider, 1 + (i2iResult.referenceImageUrls?.length ?? 0))
+      // The source and its references past what FLUX 3 Klein takes: refused, as
+      // on the route. Every other model's workflow run sends its first images.
+      const i2iTooMany = imageInputLimitProblem(provider, 1 + (i2iResult.referenceImageUrls?.length ?? 0), "workflow")
       if (i2iTooMany) throw new Error(i2iTooMany.message)
 
       return {
@@ -4080,8 +4084,9 @@ function buildPayloadOf(
       // A prompt shorter than the model takes: refused before any job row, as on the route.
       const modTooShort = imagePromptTooShort(provider, i2iResult.prompt)
       if (modTooShort) throw new Error(modTooShort.message)
-      // The source and its references past what FLUX 3 Klein takes: refused, as on the route.
-      const modTooMany = imageInputLimitProblem(provider, 1 + (i2iResult.referenceImageUrls?.length ?? 0))
+      // The source and its references past what FLUX 3 Klein takes: refused, as
+      // on the route. Every other model's workflow run sends its first images.
+      const modTooMany = imageInputLimitProblem(provider, 1 + (i2iResult.referenceImageUrls?.length ?? 0), "workflow")
       if (modTooMany) throw new Error(modTooMany.message)
 
       return {
@@ -4897,10 +4902,10 @@ function buildPayloadOf(
           // dispatched (node-executor applies lib/audio-soundtrack.ts); so is
           // a video subject's clip, seated above.
           // a video subject's clip moves the price only where the model
-          // bills it as a reference video (on Kling 4.0 Flash it does not,
-          // decided 2026-11-14 — pricedReferenceVideoUrls).
+          // bills it as a reference video (on Kling 4.0 and Flash it does
+          // not, decided 2026-11-14 — pricedReferenceVideoUrls).
           // The seated list holds every resolved reference video, so it alone
-          // decides — a clip wired as a reference video AND a Flash character's
+          // decides — a clip wired as a reference video AND a character's
           // clip goes as the character only, and is not priced.
           hasVideoRef: (pricedReferenceVideoUrls({ provider: resolvedProvider, referenceVideoUrls: gvReferenceVideoUrls, characterReferences: gvCharacterReferences })?.length ?? 0) > 0 || playsAudioSoundtrack(resolvedProvider, data, resolvedInputs.referenceAudioUrls),
         },
@@ -8399,7 +8404,7 @@ function buildPayloadOf(
       assertImagePromptLongEnough(provider, scenePrompt)
       // More references than FLUX 3 Klein takes (its wired ones and its assets'):
       // refused before any job row, never left out by the provider.
-      const sceneTooMany = imageInputLimitProblem(provider, sceneRefUrls.length)
+      const sceneTooMany = imageInputLimitProblem(provider, sceneRefUrls.length, "workflow")
       if (sceneTooMany) throw new Error(sceneTooMany.message)
 
       return {

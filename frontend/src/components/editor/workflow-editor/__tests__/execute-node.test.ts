@@ -638,6 +638,22 @@ describe("generate-image", () => {
     expect(mockRunImageGeneration.mock.calls.at(-1)?.[3]).toEqual(urls(8))
   })
 
+  // The editor's Run of one node is a request to the route, so a model with a
+  // request image limit of its own is not trimmed either (decided 2026-11-14):
+  // 12 attached images on Seedream 5.5 used to run as 10. The route refuses
+  // them, saying how many to remove; a workflow run still sends the first 10.
+  it("sends every attached image on a model with a request limit of its own, so the route refuses the count", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a still life" })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    mockCollectAncestorRefs.mockReturnValue([])
+    const urls = (n: number) => Array.from({ length: n }, (_, i) => `https://cdn.test/attached-${i + 1}.png`)
+    const extraRefs = (n: number) => urls(n).map((url) => ({ url, description: "a look" }))
+    await executeNode(makeNode("generate-image", { provider: "seedream-5-5", extraRefs: extraRefs(12) }), makeCtx())
+    expect(mockRunImageGeneration.mock.calls.at(-1)?.[3]).toEqual(urls(12))
+    await executeNode(makeNode("generate-image", { provider: "gpt-image-2-6-flare", extraRefs: extraRefs(18) }), makeCtx())
+    expect(mockRunImageGeneration.mock.calls.at(-1)?.[3]).toEqual(urls(18))
+  })
+
   it("rejects with 'No prompt' when no prompt available", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(

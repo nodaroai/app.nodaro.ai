@@ -61,7 +61,7 @@ import {
 } from "./prompt-style-section.js"
 import { keepableDirectionHints } from "./hint-shedding.js"
 import { styleReferenceDescription, type StyleReferenceInput } from "./user-direction-refs.js"
-import { imageReferenceLimit } from "@nodaro/shared/models"
+import { imageReferenceLimit, type ImageRunKind } from "@nodaro/shared/models"
 import type { CharacterDef, ConnectedReference, DescribedReference, IdentityMeta } from "@nodaro/shared/types"
 
 /**
@@ -134,7 +134,9 @@ export interface AssembleImageInput {
   /**
    * Seats of the model's reference limit that another image the run sends
    * takes, outside this assembly: a base image the job sends first, on a model
-   * that counts it against the same limit (FLUX 3 Klein). Style references fill
+   * that refuses this kind of run over its limit, counting the base (FLUX 3
+   * Klein on any run; on a request, every model with a request limit of its
+   * own). Style references fill
    * only the seats left after them, so the platform never adds an image the
    * model cannot take. 0 (the default) changes nothing.
    */
@@ -191,6 +193,17 @@ export interface AssembleImageInput {
    * machinery (the trigger word + LoRA carry identity).
    */
   skipCharacterMentions?: boolean
+  /**
+   * How the run was asked for: `"request"` for one call to a route (the
+   * route, a preset applied for it, the editor's Run of one node),
+   * `"workflow"` (the default) for a node of a workflow run. Forwarded to
+   * `buildImagePrompt`: a model that refuses this kind of run over its image
+   * limit (`refusesImagesOverLimitOn` — a request on every model with a
+   * request limit of its own, a workflow run only on FLUX 3 Klein) has none of
+   * its structured references trimmed, so the caller refuses the count the
+   * run would really send; every other run is trimmed as before.
+   */
+  runKind?: ImageRunKind
   /**
    * Reject a truly-empty FINAL (post-assembly) prompt with `throw`. OFF by
    * default to match the backend `payload-builder`, which never threw. The
@@ -453,6 +466,7 @@ function assembleOnce(input: AssembleImageInput): BuildImagePromptResult {
     ...(input.skipCharacterMentions !== undefined
       ? { skipCharacterMentions: input.skipCharacterMentions }
       : {}),
+    ...(input.runKind !== undefined ? { runKind: input.runKind } : {}),
   })
 
   // Fold everything first (the under-cap byte-parity pass), then shed hints

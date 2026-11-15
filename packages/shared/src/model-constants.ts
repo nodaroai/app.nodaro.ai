@@ -854,6 +854,13 @@ export const DEFAULT_REQUEST_IMAGE_LIMIT = 14
  * 2.6 takes more; a model whose provider takes fewer (Seedream 5.5 and FLUX 3
  * Klein: 10) is held to its own, so a request is refused before it is
  * reserved instead of failing at the provider.
+ *
+ * A row here is also what makes a request over the limit refused rather than
+ * trimmed ({@link hasOwnRequestImageLimit}, decided 2026-11-14): the routes,
+ * MCP and the editor's Run send every image such a request names, and the
+ * route says how many to remove. A workflow run on such a model still sends
+ * its first images up to the limit, unless its catalog entry also refuses
+ * there ({@link refusesImagesOverLimit}).
  */
 const REQUEST_IMAGE_LIMITS: Record<string, number> = {
   "gpt-image-2-6-flare-i2i": 16,
@@ -876,16 +883,59 @@ export function requestImageLimit(provider: string | undefined): number {
 }
 
 /**
- * True for a model that refuses a run sending more input images than
+ * True for a model with a request image limit of its own: a row in the table
+ * above, read through a text-to-image id's edit sibling as
+ * {@link requestImageLimit} reads it (GPT Image 2.6 Flare and Sunburst,
+ * MiniMax H3 Image, Seedream 5.5, FLUX 3 Klein). False for a model held to
+ * {@link DEFAULT_REQUEST_IMAGE_LIMIT}.
+ */
+export function hasOwnRequestImageLimit(provider: string | undefined): boolean {
+  if (provider === undefined) return false
+  return Object.hasOwn(REQUEST_IMAGE_LIMITS, T2I_TO_I2I_VARIANT[provider] ?? provider)
+}
+
+/**
+ * True for a model that refuses a WORKFLOW run sending more input images than
  * {@link requestImageLimit} allows, the source or base image counted, instead
  * of having some left out (its catalog entry's `refusesImagesOverLimit`:
- * FLUX 3 Klein). The prompt assembler does not trim such a model's
- * references, so every place that refuses counts the images the run would
- * really send. False for every other model, whose structured references are
- * still trimmed to its reference limit ({@link imageReferenceLimit}).
+ * FLUX 3 Klein). A request is refused on more models
+ * ({@link refusesImagesOverLimitOn}). The prompt assembler never trims such a
+ * model's references, so every place that refuses counts the images the run
+ * would really send. False for every other model, whose workflow runs still
+ * trim structured references to its reference limit
+ * ({@link imageReferenceLimit}).
  */
 export function refusesImagesOverLimit(provider: string | undefined): boolean {
   return provider !== undefined && MODEL_CATALOG[provider]?.refusesImagesOverLimit === true
+}
+
+/**
+ * How a run was asked for, which decides what happens to images past a
+ * model's limit: `"request"` is one call to a route (the API, an MCP tool,
+ * the editor's Run of one node), `"workflow"` a node of a workflow run.
+ */
+export type ImageRunKind = "request" | "workflow"
+
+/**
+ * True when a run of this kind that would send `provider` more input images
+ * than {@link requestImageLimit} allows is refused before anything is
+ * reserved, saying how many to remove, rather than having the images past the
+ * limit left out (decided 2026-11-14):
+ *
+ * - a request, on every model with a request image limit of its own
+ *   ({@link hasOwnRequestImageLimit}): nothing trims it first, so the count
+ *   refused is the count the request names;
+ * - a workflow run, only on a model whose catalog entry carries
+ *   `refusesImagesOverLimit` (FLUX 3 Klein). Every other model's workflow run
+ *   keeps its rule: its first images up to the limit are sent, so a saved
+ *   graph keeps running.
+ *
+ * False on a model held to {@link DEFAULT_REQUEST_IMAGE_LIMIT} (Nano Banana
+ * Pro, Flux 2 Pro): its structured references are trimmed to its reference
+ * limit on every kind of run, as before.
+ */
+export function refusesImagesOverLimitOn(provider: string | undefined, run: ImageRunKind): boolean {
+  return refusesImagesOverLimit(provider) || (run === "request" && hasOwnRequestImageLimit(provider))
 }
 
 // Variable pricing: which setting type affects cost per provider
@@ -3230,6 +3280,11 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
      * and does not move the run onto the reference-video rate (its clip still
      * counts toward the `videos` cap and the reference videos' total length).
      * Read through `videoCharacterClipsBilledAsReferenceVideo`.
+     *
+     * No model sets it today: Kling 4.0 and Kling 4.0 Flash, both measured,
+     * bill a video subject like an image subject (decided 2026-11-14). It stays
+     * for a model whose provider bills the clip, so that model declares it here
+     * and every price path follows.
      */
     videoCharactersBillAsReferenceVideo?: true
   } | undefined
@@ -3278,10 +3333,9 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // preset personas, which Kling does not take.
   // Of the 7 subjects, at most 3 may be video subjects (a 3-8 s clip each), and
   // reference videos plus video subjects are at most 5. A video subject is
-  // priced as a reference video here until a measured run confirms how Kling
-  // 4.0 bills one (decided 2026-11-14): Flash, measured, bills it as an image
-  // subject (no flag below).
-  "kling-4": { images: 10, videos: 5, audio: 3, characters: 7, materials: 15, videoCharacters: 3, videoCharactersBillAsReferenceVideo: true },
+  // billed like an image subject (measured, decided 2026-11-14), as on Flash:
+  // no `videoCharactersBillAsReferenceVideo`.
+  "kling-4": { images: 10, videos: 5, audio: 3, characters: 7, materials: 15, videoCharacters: 3 },
   // Kling 4.0 Keyframes — the Image References are the in-between frames
   // (`keyframe_urls`, max 8; the clip's duration lowers the cap, see
   // kling4KeyframeFrameCap). No reference videos or audio.
@@ -3292,8 +3346,7 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // (`voice_url`) when that character is a subject (2-4 images), so at most one
   // per character (7) and none takes a material seat. A wired start frame takes one of the 10 image slots when it
   // runs on this endpoint. A video subject is billed like an image subject
-  // (measured on a staging run, decided 2026-11-14): no
-  // `videoCharactersBillAsReferenceVideo`.
+  // (measured, decided 2026-11-14): no `videoCharactersBillAsReferenceVideo`.
   "kling-4-flash": { images: 10, videos: 5, audio: 7, characters: 7, materials: 15, audioBindsToCharacters: true, videoCharacters: 3 },
   "grok-i2v": { images: 7 },         // backend kie/models.ts maxRefImages: 7
   "happyhorse-ref2v": { images: 9 }, // backend kie/models.ts maxRefImages: 9

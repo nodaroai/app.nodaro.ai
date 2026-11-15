@@ -173,13 +173,13 @@ describe("planFromRequest", () => {
     expect(planFromRequest("Corte as pausas e coloque legendas").steps).toEqual(["pauses", "captions"])
   })
 
-  it("takes the standard edit, and says so, when the request names nothing it can do", () => {
-    expect(planFromRequest("make it great")).toEqual({
-      steps: ["fillers", "pauses", "captions", "music"],
-      musicStyle: DEFAULT_MUSIC_STYLE,
-      reply: null,
-      understood: false,
-    })
+  it("names no step, never an edit nobody asked for, when the request names nothing it can do", () => {
+    expect(planFromRequest("make the presenter's shirt blue")).toEqual({ steps: [], musicStyle: null, reply: null, cannot: [] })
+    expect(planFromRequest("לשנות למציג את החולצה לכחול").steps).toEqual([])
+  })
+
+  it("gives music its default style when it reads music from the words alone", () => {
+    expect(planFromRequest("add some music")).toEqual({ steps: ["music"], musicStyle: DEFAULT_MUSIC_STYLE, reply: null, cannot: [] })
   })
 
   it("the panel's example request asks for all four steps, in every language", () => {
@@ -192,7 +192,28 @@ describe("planFromRequest", () => {
 describe("parseModelPlan", () => {
   it("reads the planner's JSON, even in a code fence, in run order", () => {
     const text = '```json\n{"steps":["music","pauses","teleport"],"musicStyle":"calm piano","reply":"On it."}\n```'
-    expect(parseModelPlan(text)).toEqual({ steps: ["pauses", "music"], musicStyle: "calm piano", reply: "On it.", understood: true })
+    expect(parseModelPlan(text)).toEqual({ steps: ["pauses", "music"], musicStyle: "calm piano", reply: "On it.", cannot: [] })
+  })
+
+  it("takes an empty steps list as an answer: the request asked for nothing it can do", () => {
+    const text = '{"steps":[],"musicStyle":null,"reply":"I cannot change colors yet.","cannot":["change the shirt color"]}'
+    expect(parseModelPlan(text)).toEqual({ steps: [], musicStyle: null, reply: "I cannot change colors yet.", cannot: ["change the shirt color"] })
+  })
+
+  it("reads odd extras leniently instead of throwing the plan away", () => {
+    expect(parseModelPlan('{"steps":["captions"],"musicStyle":null,"reply":null,"cannot":null}')).toEqual({ steps: ["captions"], musicStyle: null, reply: null, cannot: [] })
+    const long = parseModelPlan(JSON.stringify({ steps: ["music"], musicStyle: "m".repeat(500), reply: "r".repeat(900), cannot: ["zooms", "zooms", 7] }))
+    expect(long?.reply).toHaveLength(400)
+    expect(long?.musicStyle).toHaveLength(300)
+    expect(long?.cannot).toEqual(["zooms"])
+  })
+
+  it("keeps what was left out short: trimmed, without blanks, at most six", () => {
+    const cannot = ["  b-roll ", "", "x".repeat(200), "a", "b", "c", "d", "e"]
+    const plan = parseModelPlan(JSON.stringify({ steps: ["captions"], musicStyle: null, reply: "Ok.", cannot }))
+    expect(plan?.cannot).toHaveLength(6)
+    expect(plan?.cannot[0]).toBe("b-roll")
+    expect(plan?.cannot[1]).toHaveLength(120)
   })
 
   it("is null for an answer that is not a plan", () => {

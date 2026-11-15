@@ -2647,11 +2647,13 @@ address only once the file is in storage — never before it is uploaded (see
 [Model maker marks](./deployment.md#model-maker-marks-logourl)).
 
 A few image models render fewer sizes at some aspect ratios, or a transparent
-background at one size only. Their capability sheets say so, with these
-fields (absent on every other model, and on an older server):
+background at one size only, and a few models declare the size a request
+naming none lands on. Their capability sheets say so, with these fields
+(absent on every other model, and on an older server):
 
 | Field | Type | Meaning |
 |---|---|---|
+| `defaultResolution` | string | The size a request that names no `resolution` lands on, spelled as in `resolutions`, where the model declares one: `1K` on FLUX 3 Klein (`flux-3-klein`, `flux-3-klein-i2i`), `2K` on Seedream 5.5 and MiniMax H3 Image (and their `-i2i` edit models), `720p` on PixVerse V6 Max. Read it instead of assuming the first entry of `resolutions` is the default. |
 | `resolutionsByAspectRatio` | `{ [ratio]: string[] }` | The aspect ratios at which the model renders fewer sizes than `resolutions`, each with the sizes it renders there, spelled as in `resolutions`. A ratio not listed renders every entry of `resolutions`. A request for a size its ratio does not render runs, and is charged, at the largest size the ratio renders at or below it, and the response's `adjustments` say so ([4d](#4d-parameter-corrections-adjustments)). |
 | `transparentResolution` | string | The one size a transparent background (`background: "transparent"`) renders at. A transparent request at another size runs, and is charged, at this one, reported in `adjustments`. |
 | `backgroundOnlyAtTransparentResolution` | `true` | The model takes a background setting only at `transparentResolution`: at any other size none is sent, so `opaque` there renders as `auto` (reported in `adjustments`). |
@@ -3431,14 +3433,12 @@ IS, for this run only:
   - all videos together within 20 s on Flash and 30 s on Kling 4.0;
   - no two entries on one clip.
 
-  Its price depends on the model:
-  - **`kling-4`:** the clip is billed as a reference video. Its seconds join the
-    reference-video seconds, at the reference rate.
-  - **`kling-4-flash`:** it is priced like an entry with images only, so it
-    adds nothing. A run whose only video is a character's keeps the plain
-    per-second price.
+  On both models it is priced like an entry with images only, so it adds
+  nothing: its seconds are not reference-video seconds, and a run whose only
+  video is a character's keeps the plain per-second price.
 
-  A clip already in `referenceVideoUrls` is the character only. Out of range is
+  A clip already in `referenceVideoUrls` is the character only, and is not
+  billed as a reference video either. Out of range is
   a `400` before anything is reserved (`character_videos_over_limit`,
   `reference_videos_over_limit`, `character_video_shared`, or `video_too_long`
   for a clip outside 3–8 s). A clip the platform cannot read is a `400`
@@ -3479,10 +3479,20 @@ the picture belongs instead of relying on the trailing auto-attach block.
 - Honored when the route assembles in the hybrid reference format. Under the
   legacy format the token stays literal text and the reference auto-attaches
   exactly as before. A token whose reference was capped out by the provider's
-  image-reference limit likewise stays literal. FLUX 3 Klein caps nothing out:
-  a request that would send it more than 10 images, a base image counted, is
-  refused with a `400` (`validation_error`) saying how many to remove, before
-  anything is charged.
+  image-reference limit likewise stays literal. A model with an image limit of
+  its own caps nothing out of a request: a request that would send Seedream 5.5
+  or FLUX 3 Klein more than 10 images, or GPT Image 2.6 Flare, GPT Image 2.6
+  Sunburst or MiniMax H3 Image more than 16, a base image counted, is refused
+  with a `400` (`validation_error`) saying how many to remove ("Seedream 5.5
+  takes at most 10 input images, the source or base image included, and this
+  run would send 12: remove 2."), before anything is charged. Flat
+  `referenceImageUrls`, `connectedReferences` and the base all count, and a
+  request past the lists' own limits (14 `connectedReferences`, 16
+  `referenceImageUrls`) that would send more than the model takes gets the
+  same message. `POST /v1/image-to-image`
+  answers the same way, its `imageUrl` counted. A workflow run on Seedream 5.5,
+  GPT Image 2.6 or MiniMax H3 Image still sends the first 10 or 16 and leaves
+  the rest out; FLUX 3 Klein refuses there too.
 
 Mentioning a reference **re-seats** it: its URL moves from the trailing
 auto-attach block into the mention block, which re-letters the references after

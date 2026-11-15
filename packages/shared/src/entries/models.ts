@@ -52,7 +52,9 @@ export {
   DEFAULT_REQUEST_IMAGE_LIMIT,
   MAX_REQUEST_IMAGE_LIMIT,
   requestImageLimit,
+  hasOwnRequestImageLimit,
   refusesImagesOverLimit,
+  refusesImagesOverLimitOn,
   VARIABLE_PRICING_MODELS,
   HIGH_QUALITY_PROVIDERS,
   TWO_K_RESOLUTION_PROVIDERS,
@@ -277,6 +279,7 @@ export {
   PRICING_DEFAULT_RESOLUTION,
 } from "../model-constants.js"
 export type { VideoStartFrameOnlyProblem } from "../model-constants.js"
+export type { ImageRunKind } from "../model-constants.js"
 export {
   CAST_SWAP_POST_PROMPT_MAX,
   TREND_PROMPT_LIMITS,

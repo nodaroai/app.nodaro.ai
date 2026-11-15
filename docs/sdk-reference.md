@@ -3500,9 +3500,8 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > or a `videoUrl` (otherwise the clip is dropped). On both Kling 4.0 ids a
 > `videoUrl` — a 3–8 s single-shot clip of the character — makes the entry a
 > subject built from that video (at most 3 per request). The clip rides as one
-> of the 5 reference videos. On `kling-4` it is billed as a reference video. On
-> `kling-4-flash` it is priced like an image-only entry and adds nothing. Any
-> other model refuses it.
+> of the 5 reference videos. On both it is priced like an image-only entry and
+> adds nothing. Any other model refuses it.
 > See [Video subjects](nodes/ai-video/generate-video.md#video-subjects-kling-40-and-kling-40-flash).
 > Characters themselves add no credit charge. Prefer them over
 > `referenceImageUrls` whenever the face must hold.
@@ -4008,6 +4007,11 @@ size rules (each absent on every other model, and on an older server):
 - `backgroundOnlyAtTransparentResolution?: true` — the model takes a
   background setting only at `transparentResolution` (GPT Image 2.5): at any
   other size none is sent, so `opaque` there renders as `auto`.
+- `defaultResolution?: string` — the size a request that names no
+  `resolution` lands on, where the model declares one, spelled as in
+  `resolutions`: `"1K"` on FLUX 3 Klein, `"2K"` on Seedream 5.5 and MiniMax H3
+  Image, `"720p"` on PixVerse V6 Max. Read it instead of assuming the first
+  entry of `resolutions` is the default.
 
 A model that writes more than one kind of file carries `outputFormats?:
 string[]` (its default first) and, where it writes them, `gifFrameSize` (512),

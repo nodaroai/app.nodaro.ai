@@ -53,9 +53,10 @@ export interface VideoCharacterReference {
    * positive `videoCharacters` cap (Kling 4.0, Kling 4.0 Flash) the character
    * becomes a VIDEO subject made from this clip instead of an image subject.
    * The clip rides as one more reference video ({@link seatCharacterVideos}),
-   * so it is measured, capped and priced exactly as a reference video is; its
-   * own length must fit `VIDEO_CHARACTER_CLIP_DURATION_LIMITS`. Any other model
-   * refuses it.
+   * so it is measured and capped as a reference video is; its own length must
+   * fit `VIDEO_CHARACTER_CLIP_DURATION_LIMITS`. It is priced like an image
+   * subject unless the model bills it as reference video
+   * ({@link pricedReferenceVideoUrls}). Any other model refuses it.
    */
   videoUrl?: string
 }
@@ -109,9 +110,10 @@ export function characterVideoUrls(
 
 /**
  * Whether the provider bills a character's video subject as reference-video
- * seconds (`videoCharactersBillAsReferenceVideo`: Kling 4.0). On any other
- * model that takes video subjects (Kling 4.0 Flash, measured, decided
- * 2026-11-14) the subject is priced like an image subject.
+ * seconds (`videoCharactersBillAsReferenceVideo`). False on every model today:
+ * Kling 4.0 and Kling 4.0 Flash, both measured, price a video subject like an
+ * image subject (decided 2026-11-14). A model that bills the clip declares the
+ * flag on its `VIDEO_REF_LIMITS_BY_PROVIDER` row.
  */
 export function videoCharacterClipsBilledAsReferenceVideo(provider: string | undefined): boolean {
   return provider ? VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.videoCharactersBillAsReferenceVideo === true : false
@@ -148,10 +150,13 @@ export interface CharacterVideoSeatProblem {
  * The reference-video list a run sends once its characters' clips are seated
  * in it — the ONE rule both video routes (a precheck, before the duration
  * check, the quote and any reservation) and the workflow run (the payload
- * builder) apply, so a video subject's clip is measured, capped, priced, held
- * and settled exactly as a reference video is (KIE bills video subjects as
- * reference-video seconds, summed). The provider runner then takes the seat
- * back out of the reference videos and sends it as the character's subject.
+ * builder) apply, so a video subject's clip is measured and capped exactly as
+ * a reference video is (the provider counts both in one cap and one total
+ * length). The price reads the seated list through
+ * {@link pricedReferenceVideoUrls}, which leaves the clip out on a model that
+ * bills a video subject like an image subject. The provider runner then takes
+ * the seat back out of the reference videos and sends it as the character's
+ * subject.
  *
  * - No clip: the list as it came (the same value).
  * - A clip already in the list (also wired as a plain reference video) keeps

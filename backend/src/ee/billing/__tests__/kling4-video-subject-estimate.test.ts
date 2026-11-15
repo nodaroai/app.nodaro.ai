@@ -4,10 +4,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 /**
  * The server's workflow estimate (the run estimate, the published-app listing)
  * prices a Kling 4.0 / Flash run whose wired Character carries its own clip
- * (a video subject) exactly like the same run with that clip wired as a
- * reference video: the run seats the clip among its reference videos, and KIE
- * bills a video subject's seconds as reference-video seconds (decided
- * 2026-11-13).
+ * (a video subject) exactly like the same run with the character made from
+ * images: the run seats the clip among its reference videos (decided
+ * 2026-11-13), but neither model bills a video subject as reference video
+ * (decided 2026-11-14, from measured runs), so the clip leaves the price.
  */
 
 const probe = vi.hoisted(() => ({ durations: new Map<string, number>() }))
@@ -60,31 +60,28 @@ beforeEach(() => {
 })
 
 describe("workflow estimate — a Character's clip on Kling 4.0", () => {
-  it("kling-4: priced as the same clip wired as a reference video", async () => {
+  // Decided 2026-11-14, measured: Kling 4.0 and Flash bill a video subject like an image subject.
+  for (const provider of ["kling-4", "kling-4-flash"]) {
+    it(`${provider}: priced as the same character without the clip`, async () => {
+      const withSubject = (await estimate([maya({ subjectVideoUrl: CLIP }), video(provider)], [characterWire])) - (await estimate([maya({ subjectVideoUrl: CLIP })], []))
+      const plain = (await estimate([maya(), video(provider)], [characterWire])) - (await estimate([maya()], []))
+      expect(withSubject).toBe(plain)
+      // A plain reference video still moves the price.
+      const withClip = (await estimate([maya(), upload, video(provider)], [characterWire, videoWire])) - (await estimate([maya(), upload], []))
+      expect(withSubject).not.toBe(withClip)
+    })
+
+    it(`${provider}: a wired upload that is also the character's clip is priced as the character only (plain)`, async () => {
+      const withBoth = (await estimate([maya({ subjectVideoUrl: CLIP }), upload, video(provider)], [characterWire, videoWire])) - (await estimate([maya({ subjectVideoUrl: CLIP }), upload], []))
+      const plain = (await estimate([maya(), video(provider)], [characterWire])) - (await estimate([maya()], []))
+      expect(withBoth).toBe(plain)
+    })
+  }
+
+  it("kling-4: the subject-only run is the plain kling-4:5s:720p price", async () => {
     const withSubject = (await estimate([maya({ subjectVideoUrl: CLIP }), video("kling-4")], [characterWire])) - (await estimate([maya({ subjectVideoUrl: CLIP })], []))
-    const withClip = (await estimate([maya(), upload, video("kling-4")], [characterWire, videoWire])) - (await estimate([maya(), upload], []))
-    expect(withSubject).toBe(withClip)
-    const plain = (await estimate([maya(), video("kling-4")], [characterWire])) - (await estimate([maya()], []))
-    expect(withSubject).not.toBe(plain)
-  })
-
-  // Decided 2026-11-14, measured: Flash bills a video subject like an image subject.
-  it("kling-4-flash: priced as the same character without the clip", async () => {
-    const withSubject = (await estimate([maya({ subjectVideoUrl: CLIP }), video("kling-4-flash")], [characterWire])) - (await estimate([maya({ subjectVideoUrl: CLIP })], []))
-    const plain = (await estimate([maya(), video("kling-4-flash")], [characterWire])) - (await estimate([maya()], []))
-    expect(withSubject).toBe(plain)
-    const withClip = (await estimate([maya(), upload, video("kling-4-flash")], [characterWire, videoWire])) - (await estimate([maya(), upload], []))
-    expect(withSubject).not.toBe(withClip)
-  })
-
-  it("kling-4-flash: a wired upload that is also the character's clip is priced as the character only (plain)", async () => {
-    const withBoth = (await estimate([maya({ subjectVideoUrl: CLIP }), upload, video("kling-4-flash")], [characterWire, videoWire])) - (await estimate([maya({ subjectVideoUrl: CLIP }), upload], []))
-    const plain = (await estimate([maya(), video("kling-4-flash")], [characterWire])) - (await estimate([maya()], []))
-    expect(withBoth).toBe(plain)
-    // On Kling 4.0 it stays one reference video: the same as the clip wired alone.
-    const k4Both = (await estimate([maya({ subjectVideoUrl: CLIP }), upload, video("kling-4")], [characterWire, videoWire])) - (await estimate([maya({ subjectVideoUrl: CLIP }), upload], []))
-    const k4Clip = (await estimate([maya(), upload, video("kling-4")], [characterWire, videoWire])) - (await estimate([maya(), upload], []))
-    expect(k4Both).toBe(k4Clip)
+    const { getModelCreditCostFromDB } = await import("../credits.js")
+    expect(withSubject).toBe((await getModelCreditCostFromDB("kling-4:5s:720p")).creditCost)
   })
 
   it("a model that takes no video subjects prices the node as without the clip", async () => {
@@ -135,25 +132,18 @@ describe("workflow estimate — the character clips are the run's", () => {
     probe.durations = new Map([1, 2, 3, 4, 5, 6, 7, 8].map((n) => [clipOf(n), 4 + (n % 3)]))
   })
 
-  it("a portrait and a clip on Kling 4.0: the run seats it, the estimate names it and prices it as the run's upload", async () => {
-    const chars = [characterNode(1, { subjectVideoUrl: clipOf(1) }), characterNode(2)]
-    const edges = [wireOf(1), wireOf(2)]
-    const nodes = [...chars, video("kling-4")]
-    expect(runSubjectClips(nodes, edges)).toEqual([clipOf(1)])
-    expect(estimateSubjectClips(nodes, edges)).toEqual([clipOf(1)])
-    const withSubject = (await estimate(nodes, edges)) - (await estimate(chars, []))
-    expect(withSubject).toBe(await asUploads("kling-4", [clipOf(1)], chars, edges))
-  })
-
-  it("a portrait and a clip on Flash: the run seats it, but it is not priced — and the estimate names none", async () => {
-    const chars = [characterNode(1, { subjectVideoUrl: clipOf(1) }), characterNode(2)]
-    const edges = [wireOf(1), wireOf(2)]
-    const nodes = [...chars, video("kling-4-flash")]
-    expect(runSubjectClips(nodes, edges)).toEqual([clipOf(1)])
-    expect(estimateSubjectClips(nodes, edges)).toEqual([])
-    const withSubject = (await estimate(nodes, edges)) - (await estimate(chars, []))
-    expect(withSubject).toBe(await asUploads("kling-4-flash", [], chars, edges))
-  })
+  // Decided 2026-11-14, measured: neither model prices the clip, so the estimate names none.
+  for (const provider of ["kling-4", "kling-4-flash"]) {
+    it(`a portrait and a clip on ${provider}: the run seats it, but it is not priced — and the estimate names none`, async () => {
+      const chars = [characterNode(1, { subjectVideoUrl: clipOf(1) }), characterNode(2)]
+      const edges = [wireOf(1), wireOf(2)]
+      const nodes = [...chars, video(provider)]
+      expect(runSubjectClips(nodes, edges)).toEqual([clipOf(1)])
+      expect(estimateSubjectClips(nodes, edges)).toEqual([])
+      const withSubject = (await estimate(nodes, edges)) - (await estimate(chars, []))
+      expect(withSubject).toBe(await asUploads(provider, [], chars, edges))
+    })
+  }
 
   it("a clip on a Character with no image at all: the run makes no character of it, the estimate names no clip", async () => {
     const chars = [characterNode(1, { sourceImageUrl: "", subjectVideoUrl: clipOf(1) }), characterNode(2)]
@@ -174,24 +164,26 @@ describe("workflow estimate — the character clips are the run's", () => {
     }
   })
 
-  it("a clip that is also a wired generation's result is that one seat, in the run and in the estimate", async () => {
+  it("a clip that is also a wired generation's result is that one seat in the run, and goes as the character only: not priced", async () => {
     const gen: Node = { id: "g", type: "generate-video", data: { provider: "kling-4", duration: 5, generatedResults: [{ url: clipOf(1) }], activeResultIndex: 0 } }
     const chars = [characterNode(1, { subjectVideoUrl: clipOf(1) })]
     const edges = [wireOf(1), { source: "g", target: "gv", sourceHandle: "video", targetHandle: "videoReferences" }]
     const nodes = [gen, ...chars, video("kling-4")]
     expect(runSubjectClips(nodes, edges)).toEqual([clipOf(1)])
     expect(estimateSubjectClips(nodes, edges)).toEqual([])
-    // The generation's clip stays the one wired source the estimate prices.
-    expect(refVideoClipSources(nodes, edges).map((n) => n?.id)).toEqual(["g"])
+    expect(refVideoClipSources(nodes, edges)).toEqual([])
+    // A generation whose clip is not the character's stays the one wired source the estimate prices.
+    const other: Node = { ...gen, data: { ...gen.data, generatedResults: [{ url: clipOf(3) }] } }
+    expect(refVideoClipSources([other, ...chars, video("kling-4")], edges).map((n) => n?.id)).toEqual(["g"])
   })
 
-  it("more than 7 characters: a clip past the run's 7th character is left out of both", async () => {
+  it("more than 7 characters: a clip past the run's 7th character is left out of the run, and none is priced", async () => {
     const chars = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => characterNode(n, n === 2 || n === 8 ? { subjectVideoUrl: clipOf(n) } : {}))
     const edges = chars.map((_, i) => wireOf(i + 1))
     const nodes = [...chars, video("kling-4")]
     expect(runSubjectClips(nodes, edges)).toEqual([clipOf(2)])
-    expect(estimateSubjectClips(nodes, edges)).toEqual([clipOf(2)])
+    expect(estimateSubjectClips(nodes, edges)).toEqual([])
     const withSubjects = (await estimate(nodes, edges)) - (await estimate(chars, []))
-    expect(withSubjects).toBe(await asUploads("kling-4", [clipOf(2)], chars, edges))
+    expect(withSubjects).toBe(await asUploads("kling-4", [], chars, edges))
   })
 })

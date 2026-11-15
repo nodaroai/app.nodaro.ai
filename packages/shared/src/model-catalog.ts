@@ -417,15 +417,20 @@ export interface ModelCatalogEntryFields {
    */
   features?: readonly string[]
   /**
-   * A run that would send this image model more input images than
+   * A WORKFLOW run that would send this image model more input images than
    * `requestImageLimit` allows, the source or base image counted, is refused
    * before anything is reserved, with a message saying how many to remove
-   * (`refusesImagesOverLimit`). Nothing trims it first: the prompt assembler
-   * sends every image a run attaches, so the count refused is the count the
-   * run would send. Set on FLUX 3 Klein, text to image and edit alike
-   * (decided 2026-11-12: an 11th image is refused, never left out). Without
-   * it, the assembler trims structured references past the model's reference
-   * limit, as it always has.
+   * (`refusesImagesOverLimit`), as a request is. Nothing trims it first: the
+   * prompt assembler sends every image a run attaches, so the count refused
+   * is the count the run would send. Set on FLUX 3 Klein, text to image and
+   * edit alike (decided 2026-11-12: an 11th image is refused, never left out).
+   *
+   * Without it, a model with a request image limit of its own (Seedream 5.5,
+   * GPT Image 2.6 Flare and Sunburst, MiniMax H3 Image) refuses a request
+   * over its limit but a workflow run sends its first images up to it
+   * (`refusesImagesOverLimitOn`, decided 2026-11-14), and every other model
+   * has its structured references trimmed past its reference limit, as it
+   * always has.
    */
   refusesImagesOverLimit?: true
   /**
@@ -497,7 +502,8 @@ export interface ModelCatalogEntryFields {
    */
   resolutionsByAspectRatio?: Readonly<Record<string, readonly string[]>>
   /** The resolution a caller who names none lands on when it is not the
-   *  cheapest entry (see `defaultResolutionFor`). */
+   *  cheapest entry (see `defaultResolutionFor`). `GET /v1/models` and MCP
+   *  `list_models` serve it as declared, on the models that declare it. */
   defaultResolution?: string
   /**
    * What this model actually RENDERS for a resolution outside `resolutions`.

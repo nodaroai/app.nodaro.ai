@@ -1010,10 +1010,69 @@ describe("POST /v1/generate-image", () => {
         expect(r.res.json().error.message).toContain("would send 11: remove 1")
       })
 
-      it("Seedream 5.5 keeps its own rule: 12 pills run with the first 10 sent", async () => {
+      // Every model with a request image limit of its own refuses a request
+      // over it the same way (decided 2026-11-14): its rule since it shipped
+      // ("a request with more is refused"), which 12 pills used to slip past as
+      // 10. Its workflow run still sends the first 10 (payload-builder tests).
+      it("Seedream 5.5 refuses 12 pills before any job row or reservation, saying to remove 2", async () => {
         const r = await send("seedream-5-5", mkManualRefs(12))
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error.message).toBe(
+          "Seedream 5.5 takes at most 10 input images, the source or base image included, and this run would send 12: remove 2.",
+        )
+      })
+
+      it("Seedream 5.5 runs 10 pills with all 10 sent, on its edit model", async () => {
+        const r = await send("seedream-5-5", mkManualRefs(10))
         expect(r.res.statusCode).toBe(200)
         expect(r.queued?.referenceImageUrls).toEqual(mkManualRefs(10).map((ref) => ref.url))
+        expect(r.queued?.provider).toBe("seedream-5-5-i2i")
+        expect(reserveCreditsForJob).toHaveBeenCalledTimes(1)
+      })
+
+      it("Seedream 5.5 counts a base image beside 10 pills, and refuses it", async () => {
+        const r = await send("seedream-5-5", mkManualRefs(10), { baseImageUrl: "https://r2.nodaro.ai/base.png" })
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error.message).toContain("would send 11: remove 1")
+      })
+
+      it.each([
+        ["gpt-image-2-6-flare", "GPT Image 2.6 Flare"],
+        ["gpt-image-2-6-sunburst", "GPT Image 2.6 Sunburst"],
+        ["minimax-h3-image", "MiniMax H3 Image"],
+      ])("%s refuses 6 flat references and 12 pills, saying to remove 2", async (provider, label) => {
+        const r = await send(provider, mkManualRefs(12), {
+          referenceImageUrls: Array.from({ length: 6 }, (_, i) => `https://r2.nodaro.ai/flat-${i}.png`),
+        })
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error.message).toBe(
+          `${label} takes at most 16 input images, the source or base image included, and this run would send 18: remove 2.`,
+        )
+      })
+
+      it("GPT Image 2.6 Flare runs 4 flat references and 12 pills with all 16 sent", async () => {
+        const flat = Array.from({ length: 4 }, (_, i) => `https://r2.nodaro.ai/flat-${i}.png`)
+        const r = await send("gpt-image-2-6-flare", mkManualRefs(12), { referenceImageUrls: flat })
+        expect(r.res.statusCode).toBe(200)
+        expect(r.queued?.referenceImageUrls).toEqual([...flat, ...mkManualRefs(12).map((ref) => ref.url)])
+      })
+
+      it("past the body's 14 pills, MiniMax H3 Image says how many to remove beside 2 flat references", async () => {
+        const r = await send("minimax-h3-image", mkManualRefs(15), {
+          referenceImageUrls: Array.from({ length: 2 }, (_, i) => `https://r2.nodaro.ai/flat-${i}.png`),
+        })
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error.message).toContain("would send 17: remove 1")
+      })
+
+      it("Seedream 5.5 refuses 11 flat references with the same message, not the bare limit", async () => {
+        const r = await send("seedream-5-5", [], {
+          referenceImageUrls: Array.from({ length: 11 }, (_, i) => `https://r2.nodaro.ai/flat-${i}.png`),
+        })
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error.message).toContain(
+          "Seedream 5.5 takes at most 10 input images, the source or base image included, and this run would send 11: remove 1.",
+        )
       })
 
       it("a model with no image limit of its own is unchanged: Nano Banana Pro runs 9 pills with 8 sent", async () => {

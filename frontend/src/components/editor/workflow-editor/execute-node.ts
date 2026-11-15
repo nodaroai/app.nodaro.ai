@@ -1924,6 +1924,10 @@ function executeNodeCore(
     const result = assembleImageInput({
       userPrompt: prompt ?? "",
       provider: providerKey,
+      // The editor's Run of one node is a request to the route: a model with a
+      // request image limit of its own keeps every attached image, and the
+      // route refuses a count over it, saying how many to remove.
+      runKind: "request",
       referenceFormat: IMAGE_REFERENCE_FORMAT,
       ...(nodeDirection !== undefined ? { direction: nodeDirection } : {}),
       ...(nodeSubject !== undefined ? { subject: nodeSubject } : {}),
@@ -2252,6 +2256,8 @@ function executeNodeCore(
       referenceFormat: IMAGE_REFERENCE_FORMAT,
       suppressedCanonicalCharacterIds: i2iData.suppressedCanonicalCharacterIds ?? undefined,
       suppressedCanonicalLocationIds: i2iData.suppressedCanonicalLocationIds ?? undefined,
+      // A request to /v1/image-to-image: nothing trimmed on a request-limited model.
+      runKind: "request",
     });
 
     // Post-assembly empty-prompt check: only reject when the FINAL prompt
@@ -2410,6 +2416,8 @@ function executeNodeCore(
       referenceFormat: IMAGE_REFERENCE_FORMAT,
       suppressedCanonicalCharacterIds: modData.suppressedCanonicalCharacterIds ?? undefined,
       suppressedCanonicalLocationIds: modData.suppressedCanonicalLocationIds ?? undefined,
+      // A request to /v1/image-to-image: nothing trimmed on a request-limited model.
+      runKind: "request",
     });
 
     // Post-assembly empty-prompt check: only reject when the FINAL prompt

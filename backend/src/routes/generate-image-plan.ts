@@ -16,7 +16,7 @@ import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { aspectRatioForLoraModel, imageJobPhotoUrl } from "../lib/image-auto-aspect.js"
 import { baseImageReservedSeats, imageInputLimitProblem } from "../lib/image-input-limit.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX, refusesImagesOverLimit } from "@nodaro/shared/models"
+import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX, refusesImagesOverLimitOn } from "@nodaro/shared/models"
 import { normalizedImageGenModelId, resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel, pricedSentImages, type ModelInputAdjustment } from "@nodaro/shared/model-catalog"
 import { assembleImageInput, type AssembleImageInput } from "@nodaro/prompts/assembly"
@@ -101,13 +101,17 @@ export function buildAssembleInput(
   userDirection: ResolvedUserDirection | undefined,
 ): AssembleImageInput {
   const provider = body.provider ?? defaultImageModel("general", body.aspectRatio)
-  const reservedImageSeats = baseImageReservedSeats(provider, body.baseImageUrl)
+  const reservedImageSeats = baseImageReservedSeats(provider, body.baseImageUrl, "request")
   return {
     userPrompt: body.prompt ?? "",
     // Default provider mirrors the rest of the route — the credit check and the
     // handler pick it by aspect ratio — so the per-provider reference gate (and
     // a moodboard's free seats) resolve the same way at every call site.
     provider,
+    // A request: on a model with a request image limit of its own, nothing is
+    // trimmed, so the handler refuses the count the request names (and the
+    // credit check prices the same list). Every other model is trimmed as before.
+    runKind: "request",
     // HYBRID IS THE DEFAULT everywhere (dev AND production). Test runs resolve
     // to legacy (route tests assert the legacy assembly), as does an explicit
     // IMAGE_REFERENCE_FORMAT=legacy. `backendHybridRoles()` IS that
@@ -142,8 +146,8 @@ export function buildAssembleInput(
     ...(userDirection !== undefined
       ? { directionRefs: userDirection.refs, styleReferences: userDirection.styleReferences }
       : {}),
-    // A base image FLUX 3 Klein counts against its limit takes a seat the
-    // moodboard would otherwise fill (`baseImageReservedSeats`).
+    // A base image a request-limited model counts against its limit takes a
+    // seat the moodboard would otherwise fill (`baseImageReservedSeats`).
     ...(reservedImageSeats > 0 ? { reservedImageSeats } : {}),
     throwOnEmpty,
   }
@@ -241,12 +245,13 @@ const IMAGE_ARRAY_FIELDS: ReadonlySet<string> = new Set(["connectedReferences", 
 /**
  * The refusal a request gets when it names more images than the body's arrays
  * take (14 `connectedReferences`, 16 `referenceImageUrls`) on a model that
- * refuses images over its limit (`refusesImagesOverLimit`: FLUX 3 Klein): that
- * model's own message, saying how many to remove, instead of the bare array
- * bound. The count is the one the run would send, assembled as the handler
- * assembles it (an unmentioned character variant attaches nothing, so it is
- * not counted). Null when anything else is wrong with the body, or when no
- * model it names refuses: every other request keeps the message it gets today.
+ * refuses a request over its limit (`refusesImagesOverLimitOn`: every model
+ * with a request image limit of its own): that model's own message, saying how
+ * many to remove, instead of the bare array bound. The count is the one the
+ * run would send, assembled as the handler assembles it (an unmentioned
+ * character variant attaches nothing, so it is not counted). Null when
+ * anything else is wrong with the body, when the count fits the model, or when
+ * no model it names refuses: every other request keeps the message it gets today.
  */
 export function oversizedImageArraysProblem(
   body: unknown,
@@ -260,10 +265,10 @@ export function oversizedImageArraysProblem(
   const data = parsed.data as GenerateImageData
   const models = data.models?.length ? data.models : [data.provider ?? defaultImageModel("general", data.aspectRatio)]
   for (const model of models) {
-    if (!refusesImagesOverLimit(model)) continue
+    if (!refusesImagesOverLimitOn(model, "request")) continue
     const request = { ...data, provider: model as NonNullable<GenerateImageData["provider"]> }
     const assembled = assembleImageRequest(request, isStructuredImageMode(request), userDirection)
-    const problem = imageInputLimitProblem(model, pricedSentImages(model, assembled?.queueReferenceImageUrls ?? [], data.baseImageUrl))
+    const problem = imageInputLimitProblem(model, pricedSentImages(model, assembled?.queueReferenceImageUrls ?? [], data.baseImageUrl), "request")
     if (problem) return problem
   }
   return null

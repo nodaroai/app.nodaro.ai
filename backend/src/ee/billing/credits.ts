@@ -7490,7 +7490,7 @@ function audioSyncWiredSourceCount(node: EstimateNode, edges?: ReadonlyArray<Est
  */
 function videoRefWired(node: EstimateNode, edges?: ReadonlyArray<EstimateEdge>, nodes: ReadonlyArray<EstimateNode> = []): boolean {
   if (!edges || !node.id) return false
-  // A wired clip that is also a Kling 4.0 Flash character's clip goes as the
+  // A wired clip that is also a Kling 4.0 or Flash character's clip goes as the
   // character only, and is no reference video to the price (decided 2026-11-14).
   // (the same edges `countRefModalityEdges` counts).
   const videoWires = edges.filter((e) => e.target === node.id && referenceModalityForHandle(e.targetHandle) === "video")

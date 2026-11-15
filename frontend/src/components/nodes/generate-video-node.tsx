@@ -49,6 +49,7 @@ import { buildVideoCreditModelIdentifier, videoGenerationCreditId } from "@nodar
 import { applyDefaultVideoSelection } from "@nodaro/shared/models"
 import { audioReferencesLabel, sendsReferenceVideo } from "@/lib/audio-reference-handles"
 import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
+import { sendsPricedReferenceVideo } from "@/lib/seedance-ref-quote"
 import { SETTINGS_INPUT_HANDLE } from "@nodaro/shared/nodes"
 import { copyToClipboard, computeDeleteResultUpdates } from "@/lib/utils"
 import type { GenerateVideoNodeData, GeneratedResult, WorkflowNode } from "@/types/nodes"
@@ -147,9 +148,15 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   // A wired reference video moves the price to the reference-video ladder. It
   // is a GRAPH fact (a videoReferences edge) — nothing writes
   // `referenceVideoUrls` into this node's data.
-  // A Kling 4.0 soundtrack is sent as a reference video too (sendsReferenceVideo).
+  // A Kling 4.0 soundtrack is sent as a reference video too; a wire that is
+  // only a character's video subject is not one on Kling 4.0 / Flash
+  // (sendsPricedReferenceVideo — the id the run estimate quotes).
   const audioSoundtrack = typeof runData.audioSoundtrack === "boolean" ? runData.audioSoundtrack : undefined
-  const hasVideoRef = useWorkflowStore((s) => sendsReferenceVideo(id, provider, audioSoundtrack, s.edges))
+  const hasVideoRef = useWorkflowStore((s) => {
+    if (!sendsReferenceVideo(id, provider, audioSoundtrack, s.edges)) return false
+    const self = s.nodes.find((n) => n.id === id)
+    return self ? sendsPricedReferenceVideo(self, s.nodes, s.edges, provider, audioSoundtrack) : true
+  })
   // The length the run is priced at once a Seedance reference task type is
   // resolved (Edit: automatic length; Extend at automatic length: the model's
   // default) — the same helper the run estimate reads. A primitive, so the

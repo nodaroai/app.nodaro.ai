@@ -40,7 +40,7 @@ export interface Seedance2SettleArgs {
   refVideoDurationsSec?: unknown
   /** The run's character references (the job's `input_data.characterReferences`): a
    *  character's video subject seated among the reference videos is priced only where
-   *  the model bills it as one (`pricedRefVideoInput`; not on Kling 4.0 Flash, decided
+   *  the model bills it as one (`pricedRefVideoInput`; not on Kling 4.0 or Flash, decided
    *  2026-11-14), so the settlement prices what the hold priced. Required so no lane can
    *  skip it. */
   characterReferences: unknown

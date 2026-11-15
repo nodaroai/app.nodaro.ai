@@ -1049,8 +1049,16 @@ Six SKUs on the standard `createTask` lane. Flare and Sunburst are billed by
   nearest it (`autoAspectNeedsSourceImage` → the routes' and the workflow's photo
   probe). Only a request with no photo, or one whose size cannot be read, still
   sends `auto`.
-- Up to 16 input images on Flare and Sunburst; the routes hold every other model to
-  14 (`requestImageLimit`, separate from `REF_IMAGE_MAX_LIMITS`).
+- Up to 16 input images on Flare and Sunburst; the routes hold a model with no
+  row of its own to 14 (`requestImageLimit`, separate from `REF_IMAGE_MAX_LIMITS`;
+  Economy has none). A request that would send Flare or Sunburst more
+  (`/v1/generate-image`, `/v1/image-to-image`, MCP, the editor's Run of one node)
+  is refused before anything is reserved, saying how many to remove, the base or
+  source image counted (`refusesImagesOverLimitOn`, decided 2026-11-14): nothing
+  trims it first, so 6 flat references and 12 prompt-mention images are refused
+  at 18 rather than run as 16. A workflow run sends its first 16 (the
+  assembler's reference cap, then `maxInputImages`), so a saved graph keeps
+  running.
 - All six 2.6 models send an explicit field list (`inputFields` in `models.ts`):
   their schemas are `additionalProperties: false`, and a worker passes along
   whatever a node carries. A new setting joins the list with the feature.
@@ -1129,7 +1137,12 @@ MiniMax's H3 image model, a different model from the H3 video model `minimax-h3`
   on the edit id, so the entity routes and pipeline pins, which do not swap,
   are priced as the edit they run.
 - An edit takes 1 to 16 `image_urls` (each up to 20 MB and 64 MP); the prompt
-  names them `<Picture 1>`, `<Picture 2>`, … in array order. The platform's
+  names them `<Picture 1>`, `<Picture 2>`, … in array order. A request that
+  would send more (`requestImageLimit`, a base or source image counted) is
+  refused before anything is reserved, saying how many to remove
+  (`refusesImagesOverLimitOn`, decided 2026-11-14), as on GPT Image 2.6; a
+  workflow run sends its first 16 (the assembler's reference cap, then
+  `maxInputImages`). The platform's
   image prompts write references as `Image N` for every model (there is no
   per-model reference syntax for images, only for video), so nothing rewrites
   them to `<Picture N>`.
@@ -1211,10 +1224,16 @@ text-to-image schema has no image field at all.
   GPT Image 2 renders 21:9 and 4:5 (measured 2026-11-11) though its catalog
   list names neither.
 - 1 to 10 input images (JPEG, PNG, WebP, 10 MB each: `ensureImageForProvider`'s
-  defaults). The routes refuse more than 10 (`requestImageLimit`, a base image
-  counted); a workflow run prices and sends the first 10 (`maxInputImages`), and
-  MCP caps references without counting a base image; the price id counts no more
-  than 10.
+  defaults). A request with more is refused before anything is reserved, saying
+  how many to remove (`requestImageLimit`, a base image counted;
+  `refusesImagesOverLimitOn`, decided 2026-11-14): the route, a preset applied
+  for it and the editor's Run of one node assemble without trimming
+  (`runKind: "request"`), so 12 prompt-mention images (`connectedReferences`)
+  are refused at 12 instead of running as 10, and MCP passes every
+  `reference_image_urls` entry on. A base image takes a seat a moodboard would
+  fill on a request (`baseImageReservedSeats`). A workflow run prices and sends
+  the first 10 (the assembler's reference cap, then `maxInputImages`), so a
+  saved graph keeps running; the price id counts no more than 10.
 - Billing: 3.6 KIE credits per picture at 1K or 1.5K, 6.3 at 2K, plus 1.44 for
   each input image of an edit (`SEEDREAM_5_5_KIE_HUNDREDTHS`, `models.ts`). Rows
   in `ee/billing/seedream-5-5-pricing.ts`
@@ -1273,19 +1292,25 @@ the text-to-image schema has no image field at all.
   Generate Image, Image to Image, Modify Image, Scene). A base takes a seat a
   moodboard would fill (`baseImageReservedSeats` → the assembler's
   `reservedImageSeats`). `maxInputImages` stays as a backstop. Both catalog
-  entries carry `refusesImagesOverLimit` (the gate of all three helpers, and
-  of the prompt builder's reference cap): the assembler does NOT trim this
-  model's structured references (`connectedReferences`, a node's attached
-  images), so 11 prompt-mention images are refused at 11 on the route, in a
-  workflow run and on the editor's request, instead of running as 10 with the
-  11th mention left as text. An unmentioned character variant still attaches
+  entries carry `refusesImagesOverLimit`, which makes a workflow run refused
+  too (`refusesImagesOverLimitOn(…, "workflow")`, the gate of
+  `imageInputLimitProblem`, `baseImageReservedSeats` and the prompt builder's
+  reference cap): the assembler does NOT trim this model's structured
+  references (`connectedReferences`, a node's attached images) on any run, so
+  11 prompt-mention images are refused at 11 on the route, in a workflow run
+  and on the editor's request, instead of running as 10 with the 11th mention
+  left as text. An unmentioned character variant still attaches
   nothing and is not counted. Past the body's array bounds (14
   `connectedReferences`, 16 `referenceImageUrls`), `/v1/generate-image`
   answers with the same message (`oversizedImageArraysProblem`), counted by
   assembling the request. MCP `generate_image` and `image_to_image` pass every
   `reference_image_urls` entry on for such a model (no cut at
-  `requestImageLimit`), so the route's refusal answers. Every other model,
-  Seedream 5.5 included, keeps the trim and the MCP cut.
+  `requestImageLimit`), so the route's refusal answers. A request on every
+  other model with a request limit of its own (Seedream 5.5, GPT Image 2.6
+  Flare and Sunburst, MiniMax H3 Image) is refused the same way (decided
+  2026-11-14); what sets FLUX 3 Klein apart is its workflow run, where those
+  models keep their trim instead. A model with no request limit of its own
+  keeps the trim and the MCP cut on every run.
 - **The id priced is the id run.** The provider runs the edit endpoint whenever
   any image goes, so every path that prices a run counts what it sends
   (`priceReadsInputImages`): a Generate Image base alone, references, wired

@@ -219,7 +219,7 @@ export function refVideoProbeCandidates(provider: string, referenceVideoUrls: re
 /**
  * The reference videos a run is PRICED on, with the probe of them: the sent
  * list less — on a model that does not bill video subjects as reference video
- * (Kling 4.0 Flash, decided 2026-11-14) — the seats that are a character's
+ * (Kling 4.0 and Flash, decided 2026-11-14) — the seats that are a character's
  * clip (`pricedReferenceVideoUrls`, @nodaro/shared), and `durationsSec`
  * (index-aligned with {@link refVideoProbeCandidates} of the sent list) less
  * those seats' entries. The seats stay in the sent list, so the duration check

@@ -169,7 +169,9 @@ describe("seedanceRefQuoteRequest — Kling 4.0 audio soundtrack", () => {
 })
 
 // Video subjects (decided 2026-11-13): a wired Character's own clip rides as one
-// more reference video, so the quote names it — the clip the Run's route seats.
+// more reference video in the run. Decided 2026-11-14, from measured runs: Kling
+// 4.0 and Kling 4.0 Flash both price it like an image subject, so the quote
+// never names it.
 describe("seedanceRefQuoteRequest — Kling 4.0 video subjects", () => {
   const MAYA_CLIP = "https://cdn.example/maya.mp4"
   const maya = (data: Record<string, unknown> = {}) =>
@@ -177,31 +179,22 @@ describe("seedanceRefQuoteRequest — Kling 4.0 video subjects", () => {
   const charWire = { id: "maya->gv", source: "maya", target: "gv", sourceHandle: "characterRef", targetHandle: "assets" } as WorkflowEdge
   const gv = (provider: string) => node("gv", "generate-video", { provider, duration: 5 })
 
-  it("Kling 4.0: a run whose only clip is a character's is quoted with that clip", () => {
-    const g = gv("kling-4")
-    expect(seedanceRefQuoteRequest(g, [maya({ subjectVideoUrl: MAYA_CLIP }), g], [charWire])).toEqual({
-      provider: "kling-4", duration: 5, referenceVideoUrls: [MAYA_CLIP],
+  for (const provider of ["kling-4", "kling-4-flash"]) {
+    it(`${provider}: a character's clip moves no price — no reference-video quote, and none beside a wired clip`, () => {
+      const g = gv(provider)
+      expect(seedanceRefQuoteRequest(g, [maya({ subjectVideoUrl: MAYA_CLIP }), g], [charWire])).toBeUndefined()
+      // Beside a plain wired clip, only that clip is quoted.
+      expect(seedanceRefQuoteRequest(g, [upload, maya({ subjectVideoUrl: MAYA_CLIP }), g], [edge("clip", "gv", "videoReferences"), charWire])?.referenceVideoUrls).toEqual([CLIP])
+      // A wired clip that is also the character's clip goes as the character only: no quote.
+      expect(seedanceRefQuoteRequest(g, [upload, maya({ subjectVideoUrl: CLIP }), g], [edge("clip", "gv", "videoReferences"), charWire])).toBeUndefined()
     })
-  })
+  }
 
-  // Decided 2026-11-14, measured: Flash bills a video subject like an image subject.
-  it("Kling 4.0 Flash: a character's clip moves no price — no reference-video quote, and none beside a wired clip", () => {
-    const g = gv("kling-4-flash")
-    expect(seedanceRefQuoteRequest(g, [maya({ subjectVideoUrl: MAYA_CLIP }), g], [charWire])).toBeUndefined()
-    expect(seedanceRefQuoteRequest(g, [upload, maya({ subjectVideoUrl: MAYA_CLIP }), g], [edge("clip", "gv", "videoReferences"), charWire])?.referenceVideoUrls).toEqual([CLIP])
-    // A wired clip that is also the character's clip goes as the character only: no quote.
-    expect(seedanceRefQuoteRequest(g, [upload, maya({ subjectVideoUrl: CLIP }), g], [edge("clip", "gv", "videoReferences"), charWire])).toBeUndefined()
-    // On Kling 4.0 it stays one reference video.
-    const k = gv("kling-4")
-    expect(seedanceRefQuoteRequest(k, [upload, maya({ subjectVideoUrl: CLIP }), k], [edge("clip", "gv", "videoReferences"), charWire])?.referenceVideoUrls).toEqual([CLIP])
-  })
-
-  it("the character's clip follows the wired reference videos, once", () => {
+  it("a plain reference video on Kling 4.0 is quoted as before", () => {
     const g = gv("kling-4")
-    expect(seedanceRefQuoteRequest(g, [upload, maya({ subjectVideoUrl: MAYA_CLIP }), g], [edge("clip", "gv", "videoReferences"), charWire])?.referenceVideoUrls)
-      .toEqual([CLIP, MAYA_CLIP])
-    const sameClip = maya({ subjectVideoUrl: CLIP })
-    expect(seedanceRefQuoteRequest(g, [upload, sameClip, g], [edge("clip", "gv", "videoReferences"), charWire])?.referenceVideoUrls).toEqual([CLIP])
+    expect(seedanceRefQuoteRequest(g, [upload, maya(), g], [edge("clip", "gv", "videoReferences"), charWire])).toEqual({
+      provider: "kling-4", duration: 5, referenceVideoUrls: [CLIP],
+    })
   })
 
   it("the older video nodes carry no video subject: their quote ignores the clip", () => {

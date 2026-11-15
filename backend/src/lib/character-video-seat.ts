@@ -6,13 +6,16 @@ import { safeUrlSchema } from "./url-validator.js"
 /**
  * Video subjects (decided 2026-11-13): a character reference may carry a
  * short clip of the character (`characterReferences[].videoUrl`), which Kling
- * 4.0 / Kling 4.0 Flash take as a video subject. The provider bills a video
- * subject's seconds as reference-video seconds and counts it against the same
- * five-video cap, so the clip is SEATED among the request's reference videos
+ * 4.0 / Kling 4.0 Flash take as a video subject. The provider counts a video
+ * subject against the same five-video cap and the same total length as the
+ * reference videos, so the clip is SEATED among the request's reference videos
  * (`seatCharacterVideos`, @nodaro/shared — the rule the workflow run applies
- * too): from here on the duration check, the price, the quote, the hold and
- * the settlement read it exactly as they read a reference video. The provider
- * runner takes the seat back out and sends it as the subject.
+ * too): from here on the duration check reads it exactly as it reads a
+ * reference video. The price, the quote, the hold and the settlement read the
+ * seated list through `pricedReferenceVideoUrls`, which leaves the clip out on
+ * a model that bills a video subject like an image subject (Kling 4.0 and
+ * Flash, decided 2026-11-14). The provider runner takes the seat back out and
+ * sends it as the subject.
  *
  * A pricing pre-check of both video routes, after the model's lane id and
  * before the audio soundtrack, the duration check and creditGuard — so a

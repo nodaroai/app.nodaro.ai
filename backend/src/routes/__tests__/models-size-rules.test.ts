@@ -11,8 +11,8 @@ import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
  * and left out everywhere else, so a client that reads only the SDK knows
  * that GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only, and that
  * GPT Image 2 renders every ratio it offers at every size. The reference task
- * types a model takes (`referenceTaskTypes`, Seedance 2.5) follow the same
- * rule.
+ * types a model takes (`referenceTaskTypes`, Seedance 2.5) and the size a
+ * request naming none lands on (`defaultResolution`) follow the same rule.
  */
 
 // Not about prices or marks: both read the database, which this test has none of.
@@ -30,6 +30,7 @@ interface ServedModel {
   id: string
   referenceTaskTypes?: string[]
   resolutions?: string[]
+  defaultResolution?: string
   resolutionsByAspectRatio?: Record<string, string[]>
   transparentResolution?: string
   backgroundOnlyAtTransparentResolution?: true
@@ -132,5 +133,38 @@ describe("GET /v1/models — the reference task types a model takes", () => {
       if (declared?.length) expect(m.referenceTaskTypes, m.id).toEqual([...declared])
       else expect(m, m.id).not.toHaveProperty("referenceTaskTypes")
     }
+  })
+})
+
+describe("GET /v1/models — the size a request naming none lands on", () => {
+  it.each([
+    ["flux-3-klein", "1K"],
+    ["flux-3-klein-i2i", "1K"],
+    ["seedream-5-5", "2K"],
+    ["seedream-5-5-i2i", "2K"],
+    ["minimax-h3-image", "2K"],
+    ["minimax-h3-image-i2i", "2K"],
+    ["pixverse-v6-max", "720p"],
+  ])("%s declares %s, one of the sizes it lists", (id, size) => {
+    const m = byId(id)
+    expect(m.defaultResolution).toBe(size)
+    expect(m.resolutions).toContain(size)
+  })
+
+  it("is served exactly as the catalog declares it, and left out on every other model", () => {
+    const carrying = served.filter((m) => m.defaultResolution !== undefined).map((m) => m.id)
+    expect(carrying.sort()).toEqual(
+      served.filter((m) => MODEL_CATALOG[m.id]?.defaultResolution !== undefined).map((m) => m.id).sort(),
+    )
+    for (const m of served) {
+      const declared = MODEL_CATALOG[m.id]?.defaultResolution
+      if (declared !== undefined) expect(m.defaultResolution, m.id).toBe(declared)
+      else expect(m, m.id).not.toHaveProperty("defaultResolution")
+    }
+  })
+
+  it("is never derived: a Flux 2 model, whose size menu snaps to a mid default, declares none", () => {
+    expect(byId("flux-2-pro")).not.toHaveProperty("defaultResolution")
+    expect(byId("nano-banana-pro")).not.toHaveProperty("defaultResolution")
   })
 })

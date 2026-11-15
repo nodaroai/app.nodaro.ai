@@ -55,6 +55,12 @@ Modify Image exposes the full image-to-image provider catalog plus Nano Banana E
 | Flux 2 Pro / Flux 2 Max (Safety Tolerance) | BFL Flux 2 via Replicate; Max supports up to 8 refs |
 | Nano Banana Edit | Context-aware editing from a text instruction (style presets, negative prompt, aspect ratio, seed, asset references) |
 
+Seedream 5.5 (10 images), GPT Image 2.6 Flare and Sunburst and MiniMax H3
+Image (16 each) count the source too. Run on this node with more images than
+that is refused before anything is charged, saying how many to remove; in a
+workflow run they send their first 10 or 16 and leave the rest out. FLUX 3
+Klein refuses in both. See [Image to Image](./image-to-image.md#supported-providers).
+
 ## Pricing
 
 Credits depend on the selected provider, and several providers cost more at higher quality/resolution settings. Typical costs range from **5 credits**<!-- credits: flux-3-klein-i2i:1K --> (FLUX 3 Klein at 1K) to **~682 credits** (Flux 2 Max at 4 MP with 8 references). Representative prices:

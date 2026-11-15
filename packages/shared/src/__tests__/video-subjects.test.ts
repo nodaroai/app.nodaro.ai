@@ -19,10 +19,11 @@ import type { ConnectedReference } from "../types.js"
 
 /**
  * Video subjects on Kling 4.0 / Kling 4.0 Flash (decided 2026-11-13): a
- * character made from a short clip of itself. KIE takes at most 3 of them,
- * counts them with the reference videos (5 in all) and bills their seconds as
- * reference-video seconds — so the clip is SEATED among the reference videos,
- * and every reference-video seam measures and prices it.
+ * character made from a short clip of itself. KIE takes at most 3 of them and
+ * counts them with the reference videos (5 in all, one total length) — so the
+ * clip is SEATED among the reference videos, and every reference-video seam
+ * measures and caps it. Neither model bills it as a reference video (decided
+ * 2026-11-14), so the price leaves it out (`pricedReferenceVideoUrls`).
  */
 const clip = (n: number) => `https://cdn.example/clip-${n}.mp4`
 const ref = (n: number) => `https://cdn.example/ref-${n}.mp4`
@@ -47,26 +48,42 @@ describe("which models take video subjects (data)", () => {
   })
 })
 
-// Decided 2026-11-14, from a measured run: Kling 4.0 Flash bills a video subject
-// like an image subject; Kling 4.0 keeps pricing it as a reference video.
+// Decided 2026-11-14, from measured runs: Kling 4.0 and Kling 4.0 Flash both
+// bill a video subject like an image subject. The flag stays, unset, for a
+// model whose provider bills the clip as reference video.
 describe("how a video subject is priced, per model (data)", () => {
-  it("Kling 4.0 bills it as reference video; Kling 4.0 Flash does not", () => {
-    expect(videoCharacterClipsBilledAsReferenceVideo("kling-4")).toBe(true)
+  it("no model bills it as reference video today: Kling 4.0 and Kling 4.0 Flash price it like an image subject", () => {
+    expect(videoCharacterClipsBilledAsReferenceVideo("kling-4")).toBe(false)
     expect(videoCharacterClipsBilledAsReferenceVideo("kling-4-flash")).toBe(false)
     expect(videoCharacterClipsBilledAsReferenceVideo(undefined)).toBe(false)
+    for (const [id, limits] of Object.entries(VIDEO_REF_LIMITS_BY_PROVIDER)) {
+      expect(limits?.videoCharactersBillAsReferenceVideo, id).toBeUndefined()
+    }
   })
 
-  it("pricedReferenceVideoUrls: a character's clip leaves the priced list on Flash only; plain reference videos stay", () => {
+  it("pricedReferenceVideoUrls: a character's clip leaves the priced list on both Kling 4.0 ids; plain reference videos stay", () => {
     const seated = [ref(1), clip(1)]
     const characters = [character(clip(1)), character()]
-    expect(pricedReferenceVideoUrls({ provider: "kling-4-flash", referenceVideoUrls: seated, characterReferences: characters })).toEqual([ref(1)])
-    expect(pricedReferenceVideoUrls({ provider: "kling-4-flash", referenceVideoUrls: [clip(1)], characterReferences: characters })).toEqual([])
-    const asSent = pricedReferenceVideoUrls({ provider: "kling-4", referenceVideoUrls: seated, characterReferences: characters })
-    expect(asSent).toBe(seated)
-    // Nothing to leave out: the same value.
-    const plain = [ref(1)]
-    expect(pricedReferenceVideoUrls({ provider: "kling-4-flash", referenceVideoUrls: plain, characterReferences: characters })).toBe(plain)
+    for (const provider of ["kling-4", "kling-4-flash"]) {
+      expect(pricedReferenceVideoUrls({ provider, referenceVideoUrls: seated, characterReferences: characters }), provider).toEqual([ref(1)])
+      expect(pricedReferenceVideoUrls({ provider, referenceVideoUrls: [clip(1)], characterReferences: characters }), provider).toEqual([])
+      // Nothing to leave out: the same value.
+      const plain = [ref(1)]
+      expect(pricedReferenceVideoUrls({ provider, referenceVideoUrls: plain, characterReferences: characters }), provider).toBe(plain)
+    }
     expect(pricedReferenceVideoUrls({ provider: "kling-4-flash", referenceVideoUrls: undefined, characterReferences: undefined })).toBeUndefined()
+  })
+
+  it("a model that declares the flag keeps the clip in the priced list, as sent", () => {
+    const row = VIDEO_REF_LIMITS_BY_PROVIDER["kling-4"]!
+    VIDEO_REF_LIMITS_BY_PROVIDER["kling-4"] = { ...row, videoCharactersBillAsReferenceVideo: true }
+    try {
+      expect(videoCharacterClipsBilledAsReferenceVideo("kling-4")).toBe(true)
+      const seated = [ref(1), clip(1)]
+      expect(pricedReferenceVideoUrls({ provider: "kling-4", referenceVideoUrls: seated, characterReferences: [character(clip(1))] })).toBe(seated)
+    } finally {
+      VIDEO_REF_LIMITS_BY_PROVIDER["kling-4"] = row
+    }
   })
 })
 

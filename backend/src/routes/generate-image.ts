@@ -232,8 +232,8 @@ export async function generateImageRoutes(app: FastifyInstance) {
   }, async (req, reply) => {
     const parsed = generateImageRequest.safeParse(req.body)
     if (!parsed.success) {
-      // More images than the body's arrays take, on a model that refuses
-      // images over its limit: its own message, saying how many to remove.
+      // More images than the body's arrays take, on a model that refuses a
+      // request over its limit: its own message, saying how many to remove.
       const tooMany = oversizedImageArraysProblem(req.body, parsed.error, userDirectionOf(req))
       return reply.status(400).send({
         error: tooMany ?? { code: "validation_error", ...formatZodError(parsed.error) },
@@ -347,15 +347,18 @@ export async function generateImageRoutes(app: FastifyInstance) {
     for (const plan of plans) {
       const tooShort = imagePromptTooShort(plan.queueData.provider as string | undefined, plan.queueData.prompt as string | undefined)
       if (tooShort) return reply.status(400).send({ error: tooShort })
-      // More images than FLUX 3 Klein takes, counted as the job sends them: the
-      // ASSEMBLED references (structured `connectedReferences` included, which
-      // the body schema cannot count, and which the assembler never trims for
+      // More images than a model with a request image limit of its own takes
+      // (Seedream 5.5, GPT Image 2.6 Flare and Sunburst, MiniMax H3 Image, FLUX
+      // 3 Klein), counted as the job sends them: the ASSEMBLED references
+      // (structured `connectedReferences` included, which the body schema
+      // cannot count, and which the assembler never trims on a request for
       // such a model) and a base image. Refused here, before any job row or
       // reservation, never left out by the assembler or the provider.
       const sentRefs = Array.isArray(plan.queueData.referenceImageUrls) ? (plan.queueData.referenceImageUrls as string[]) : []
       const tooMany = imageInputLimitProblem(
         plan.queueData.provider as string | undefined,
         pricedSentImages(plan.queueData.provider as string | undefined, sentRefs, plan.queueData.baseImageUrl),
+        "request",
       )
       if (tooMany) return reply.status(400).send({ error: tooMany })
     }

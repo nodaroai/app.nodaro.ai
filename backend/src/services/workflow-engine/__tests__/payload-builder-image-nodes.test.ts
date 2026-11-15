@@ -1080,4 +1080,37 @@ describe("FLUX 3 Klein in a workflow run", () => {
       expect(gen("nano-banana-pro", 9).payload.referenceImageUrls).toEqual(refsOf(8))
     })
   })
+
+  // A request over the limit of a model with a request image limit of its own
+  // is refused (decided 2026-11-14), but its workflow run keeps its documented
+  // trim, so a saved graph keeps running: only FLUX 3 Klein, whose catalog
+  // entry carries `refusesImagesOverLimit`, refuses one.
+  describe("a request-limited model's workflow run keeps its trim", () => {
+    const extras = (n: number) => refsOf(n).map((url, i) => ({ url, description: `look ${i + 1}` }))
+    const wired = (n: number) => Array.from({ length: n }, (_, i) => `https://media.nodaro.ai/wired-${i}.png`)
+    const gen = (provider: string, attached: number, inputs: Record<string, unknown> = {}, data: Record<string, unknown> = {}) =>
+      buildPayload(node("generate-image", { prompt: "a still life", provider, aspectRatio: "1:1", extraRefs: extras(attached), ...data }), "j", inputs, "u")
+
+    it.each(["gpt-image-2-6-flare", "gpt-image-2-6-sunburst", "minimax-h3-image"])(
+      "%s runs 6 wired images and 12 attached ones, sending the 6 and the first 10 attached: 16",
+      (provider) => {
+        const r = gen(provider, 12, { referenceImageUrls: wired(6) })
+        const sent = r.payload.referenceImageUrls as string[]
+        expect(sent).toHaveLength(16)
+        expect([...sent].sort()).toEqual([...wired(6), ...refsOf(10)].sort())
+      },
+    )
+
+    it("Seedream 5.5 runs a base image beside 10 attached images: nothing is refused, the provider sends its first 10", () => {
+      const r = gen("seedream-5-5", 10, {}, { baseImageUrl: SRC })
+      expect(r.payload.referenceImageUrls).toEqual(refsOf(10))
+      // The price counts no more than the 10 the provider takes.
+      expect(r.modelIdentifier).toBe("seedream-5-5-i2i:2K:10ref")
+    })
+
+    it("Image to Image on GPT Image 2.6 Flare runs a source with 16 more images, as before", () => {
+      const r = buildPayload(node("image-to-image", { prompt: "make it winter", provider: "gpt-image-2-6-flare-i2i" }), "j", { imageUrl: SRC, referenceImageUrls: refsOf(16) }, "u")
+      expect(r.modelIdentifier).toMatch(/^gpt-image-2-6-flare-i2i:/)
+    })
+  })
 })
