@@ -1,5 +1,6 @@
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, hasAudioStream, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { mp3EncodeArgs } from "./mp3-encode.js"
 
 /**
  * Provider for the "Extract Audio" node: download a video and demux its audio
@@ -20,6 +21,11 @@ export interface ExtractAudioResult {
   readonly audioPath: string
 }
 
+/** The ffmpeg arguments that write a video's audio as an MP3 (VBR quality 2). Shared with `extract-audio-track.ts`. */
+export function extractAudioArgs(videoPath: string, audioPath: string): string[] {
+  return ["-y", "-i", videoPath, "-vn", ...mp3EncodeArgs({ quality: 2 }), audioPath]
+}
+
 export async function extractAudio({ videoUrl }: ExtractAudioOptions): Promise<ExtractAudioResult> {
   const workDir = await createWorkDir("extract-audio")
   try {
@@ -32,7 +38,7 @@ export async function extractAudio({ videoUrl }: ExtractAudioOptions): Promise<E
     }
 
     const audioPath = join(workDir, "audio.mp3")
-    await runFfmpeg(["-y", "-i", videoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", audioPath])
+    await runFfmpeg(extractAudioArgs(videoPath, audioPath))
     return { audioPath }
   } catch (err) {
     await cleanupWorkDir(workDir)

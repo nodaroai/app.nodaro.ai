@@ -279,7 +279,8 @@ export const TOOL_NEEDS: Readonly<Record<string, ToolNeed>> = Object.freeze({
   split_media: runs("/v1/split-media"),
   speaker_map: runs("/v1/speaker-map"),
   speaker_view: runs("/v1/speaker-view"),
-  capture_site: runs("/v1/site-capture"),
+  // Every capture is of a page on another site: its one argument is that page.
+  capture_site: { ...runs("/v1/site-capture"), linkImports: true },
   forced_alignment: runs("/v1/forced-alignment"),
   resolve_shot_sequence: needs(["render-video"], "plans a shot sequence that only Render Video renders"),
   render_shot_sequence: runs("/v1/render-video/plan"),

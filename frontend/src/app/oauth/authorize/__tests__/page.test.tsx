@@ -26,10 +26,11 @@ vi.mock("@/lib/supabase", () => ({
 }))
 
 const mockAppInfo = vi.fn()
+const mockAuthorize = vi.fn()
 
 vi.mock("@/lib/api", () => ({
   getOAuthAppInfo: (...args: unknown[]) => mockAppInfo(...args),
-  oauthAuthorize: vi.fn(),
+  oauthAuthorize: (...args: unknown[]) => mockAuthorize(...args),
 }))
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
@@ -115,7 +116,7 @@ describe("OAuth consent screen — redirect_uri must be registered", () => {
   it("asks the server about the exact redirect_uri from the query string", async () => {
     render(<OAuthAuthorizePage />)
     await screen.findByRole("button", { name: /allow/i })
-    expect(mockAppInfo).toHaveBeenCalledWith("cid-123", REDIRECT_URI)
+    expect(mockAppInfo).toHaveBeenCalledWith("cid-123", REDIRECT_URI, [])
   })
 
   it("renders an error and no Allow/Cancel when the redirect_uri is not registered", async () => {
@@ -139,5 +140,45 @@ describe("OAuth consent screen — redirect_uri must be registered", () => {
     render(<OAuthAuthorizePage />)
     expect(await screen.findByRole("button", { name: /allow/i })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument()
+  })
+})
+
+/**
+ * A deployment that lists its MCP clients (MCP_ALLOWED_CLIENT_IDS) refuses an
+ * unlisted client that asks for MCP before consent. The server can only tell
+ * when it sees the client's RFC 8707 `resource`, so the page forwards it on
+ * both calls, and a refusal from app-info shows through the existing
+ * could-not-load screen: no Allow, no Cancel, no new wording.
+ */
+describe("OAuth consent screen — the resource the client asks for reaches the server", () => {
+  const RESOURCE = "https://mcp.example.com/mcp"
+
+  it("forwards every resource to app-info and to the Allow call", async () => {
+    window.history.replaceState({}, "", `${AUTHORIZE_PATH}&resource=${encodeURIComponent(RESOURCE)}`)
+    mockAuthorize.mockResolvedValue({ code: "c", state: null, redirectUri: REDIRECT_URI })
+    const user = userEvent.setup()
+    render(<OAuthAuthorizePage />)
+    await user.click(await screen.findByRole("button", { name: /allow/i }))
+    expect(mockAppInfo).toHaveBeenCalledWith("cid-123", REDIRECT_URI, [RESOURCE])
+    await waitFor(() => expect(mockAuthorize).toHaveBeenCalledTimes(1))
+    expect(mockAuthorize.mock.calls[0]![0]).toMatchObject({ clientId: "cid-123", resource: RESOURCE })
+  })
+
+  it("sends no resource when the client named none", async () => {
+    mockAuthorize.mockResolvedValue({ code: "c", state: null, redirectUri: REDIRECT_URI })
+    const user = userEvent.setup()
+    render(<OAuthAuthorizePage />)
+    await user.click(await screen.findByRole("button", { name: /allow/i }))
+    await waitFor(() => expect(mockAuthorize).toHaveBeenCalledTimes(1))
+    expect(mockAuthorize.mock.calls[0]![0].resource).toBeUndefined()
+  })
+
+  it("a client the deployment refuses for MCP gets no consent screen", async () => {
+    window.history.replaceState({}, "", `${AUTHORIZE_PATH}&resource=${encodeURIComponent(RESOURCE)}`)
+    mockAppInfo.mockRejectedValue(new Error("This deployment accepts MCP connections only from the clients it has set up. Connect through the deployment's own app."))
+    render(<OAuthAuthorizePage />)
+    expect(await screen.findByText(/only from the clients it has set up/i)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /allow/i })).toBeNull()
+    expect(screen.queryByRole("button", { name: /cancel/i })).toBeNull()
   })
 })

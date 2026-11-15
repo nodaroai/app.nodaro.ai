@@ -37,6 +37,7 @@ vi.mock("../../../workers/shared.js", async () => {
 })
 
 import { runFfmpeg } from "../ffmpeg-utils.js"
+import { mp3EncodeArgs } from "../mp3-encode.js"
 import { applyDraftAudioMux } from "../../../lib/seedance-draft-audio-apply.js"
 import { generateVideoAudioMergeRecipe, voiceTrackMuxRecipe } from "../../../lib/seedance-draft-audio.js"
 
@@ -49,7 +50,7 @@ describe.skipIf(!mp3EncoderAvailable)("Seedance draft finalize audio mux (e2e, r
     // The "1080p" finalize: a silent 3 s picture (small, for speed).
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "testsrc2=s=192x108:r=24:d=3", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", p("hd-silent.mp4")])
     // The draft's voice track and a stored (already muxed) draft clip.
-    await runFfmpeg(["-y", "-f", "lavfi", "-i", "sine=f=440:r=44100:d=3", "-c:a", "libmp3lame", p("voice.mp3")])
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "sine=f=440:r=44100:d=3", ...mp3EncodeArgs(), p("voice.mp3")])
     await runFfmpeg([
       "-y", "-f", "lavfi", "-i", "testsrc2=s=96x54:r=24:d=3", "-f", "lavfi", "-i", "sine=f=660:r=44100:d=3",
       "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", p("draft-stored.mp4"),

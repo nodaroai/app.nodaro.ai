@@ -21,6 +21,7 @@ vi.mock("../ffmpeg-utils.js", async (importOriginal) => {
 })
 
 import { runFfmpeg } from "../ffmpeg-utils.js"
+import { mp3EncodeArgs } from "../mp3-encode.js"
 import { renderVideoOverlay } from "../video-overlay.js"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 import {
@@ -328,7 +329,7 @@ describe.skipIf(!ffmpegAvailable)("renderVideoOverlay — real ffmpeg", () => {
   })
 
   it("an MP3 with cover art is refused as not a video before any image is fetched (Review Focus 2)", async () => {
-    await runFfmpeg(["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", "-c:a", "libmp3lame", p("tone.mp3")])
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", ...mp3EncodeArgs(), p("tone.mp3")])
     await runFfmpeg(["-y", "-i", p("tone.mp3"), "-i", p("magenta-1x2.png"), "-map", "0", "-map", "1", "-c", "copy", "-disposition:v:0", "attached_pic", p("cover.mp3")])
     const layers = [{ imageUrl: url("does-not-exist.png"), start: 0 }]
     const err = await renderVideoOverlay({ videoUrl: url("cover.mp3"), layers }, await work()).catch((e: unknown) => e)

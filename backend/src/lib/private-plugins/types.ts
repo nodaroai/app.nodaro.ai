@@ -761,6 +761,57 @@ export interface PluginFfmpegToolkit {
    * any credit is reserved when it is missing.
    */
   renderEdlTimeline?(opts: PluginEdlTimelineOptions): Promise<PluginEdlTimelineResult>
+  /**
+   * Mirrors `mp3EncodeArgs` (`providers/video/mp3-encode.ts`) — SYNC and pure,
+   * no slot: the output arguments of an MP3 encode with an `-af` chain (the
+   * plugin's `filters`, then the end every host MP3 encode closes with), then
+   * libmp3lame. Place them after the inputs, before the output path, and pass
+   * the result to `runFfmpeg`.
+   *
+   * Why: libmp3lame refuses a frame whose float plane is not padded to a whole
+   * group of 8 samples, and ffmpeg's encoder queue can hand it one on a
+   * 16-byte-SIMD machine (arm64, an x86 without AVX). The chain ends as
+   * ffmpeg's own output chain does (its format for the encoder, then the cut)
+   * and then re-cuts the stream into whole 1152-sample frames; an MP3 that
+   * encoded before is byte-identical. A cut goes in `cut`, never an output
+   * `-ss`/`-to`/`-t`, which ffmpeg places after the chain. The host's launcher
+   * logs any MP3 encode not built this way.
+   *
+   * ADDITIVE-OPTIONAL: absent on an older host. A plugin feature-detects it
+   * (`typeof tk.ffmpeg.mp3EncodeArgs === "function"`) and keeps its own argv
+   * when it is missing.
+   */
+  mp3EncodeArgs?(opts?: PluginMp3EncodeOptions): string[]
+  /**
+   * Mirrors `mp3GraphEncodeArgs` (`providers/video/mp3-encode.ts`) — SYNC and
+   * pure, no slot: the output arguments of an MP3 encode of a
+   * `-filter_complex` graph's `output` label (`"[a]"`): the graph with the
+   * same end appended to the chain that ends in that label (the graph must end
+   * with it), the `-map`, then libmp3lame. ADDITIVE-OPTIONAL, as
+   * `mp3EncodeArgs`.
+   */
+  mp3GraphEncodeArgs?(graph: string, output: string, opts?: Omit<PluginMp3EncodeOptions, "filters">): string[]
+}
+
+/** Mirrors `Mp3Cut` (`providers/video/mp3-encode.ts`): an output-side cut in seconds, read as ffmpeg reads an `-ss` (`start`), `-t` (`duration`) or `-to` (`end`). */
+export interface PluginMp3Cut {
+  readonly start?: number
+  readonly end?: number
+  readonly duration?: number
+}
+
+/** Mirrors `Mp3EncodeOptions` (`providers/video/mp3-encode.ts`). */
+export interface PluginMp3EncodeOptions {
+  /** The audio filters the encode applies (an `-af` chain), in order. */
+  readonly filters?: readonly string[]
+  /** A cut of the encoded output; never an `-ss`/`-to`/`-t` on the output itself. */
+  readonly cut?: PluginMp3Cut
+  /** The output sample rate (`-ar`). */
+  readonly sampleRate?: number
+  /** A constant bitrate (`-b:a`, "192k"). */
+  readonly bitrate?: string
+  /** A VBR quality (`-q:a`, 0 best … 9). */
+  readonly quality?: number
 }
 
 /** Mirrors `EdlPictureSlot` (`providers/video/edl-picture.ts`). */

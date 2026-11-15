@@ -58,6 +58,7 @@ import {
 import { uploadJobScratchFile } from "../../lib/job-scratch.js"
 import { cleanupWorkDir, createWorkDir, runFfmpeg } from "../video/ffmpeg-utils.js"
 import { audioPeakMemoryMiB } from "../video/ffmpeg-memory-model.js"
+import { mp3EncodeArgs } from "../video/mp3-encode.js"
 import {
   DECODED_AUDIO_RATE_HZ,
   decodeAudioToPcm,
@@ -92,7 +93,7 @@ export const LIP_SYNC_TRIM_MARGIN_SEC = 0.5
 export const LIP_SYNC_ENCODE_TOLERANCE_SEC = 0.001
 
 /** The encode every prepared file gets: MP3 at 192 kb/s (300 s of it is ~7.2 MB, far under the cap). */
-const MP3_ENCODE = ["-c:a", "libmp3lame", "-b:a", "192k"] as const
+const MP3_BITRATE = "192k"
 
 /** The one container our encode is read back as. */
 const SENT_FORMATS: readonly string[] = ["mp3"]
@@ -129,9 +130,11 @@ export function lipSyncAudioEncodeArgs(pcmPath: string, output: string, padToSec
     "-v", "error",
     ...decodedPcmInputArgs(),
     "-i", pcmPath,
-    ...(padToSec !== undefined ? ["-af", `apad=whole_dur=${padToSec}`] : []),
-    ...(trimToSec !== undefined ? ["-t", String(trimToSec)] : []),
-    ...MP3_ENCODE,
+    ...mp3EncodeArgs({
+      filters: padToSec !== undefined ? [`apad=whole_dur=${padToSec}`] : [],
+      ...(trimToSec !== undefined ? { cut: { duration: trimToSec } } : {}),
+      bitrate: MP3_BITRATE,
+    }),
     "-y",
     output,
   ]

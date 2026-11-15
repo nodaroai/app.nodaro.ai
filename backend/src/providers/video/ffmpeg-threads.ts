@@ -264,54 +264,124 @@ export const LIBX265_ENCODE_THREADS = 0
 /** The options that name an output's encoder (`-c:v`, `-codec:v:0`, `-vcodec`, a bare `-c`). */
 const CODEC_OPTIONS: ReadonlySet<string> = new Set(["c", "codec", "vcodec"])
 
-/** Whether a codec option (its name as written, `c:v:0`) sets the video encoder: a video stream specifier, or none (every stream). */
-const setsVideoCodec = (raw: string): boolean => {
-  const [name, spec] = raw.split(":")
-  return name === "vcodec" || spec === undefined || spec === "v" || spec === "V"
+/** Whether a codec option sets the video encoder: `-vcodec`, or a video stream specifier (`c:v:0`), or none (every stream). */
+const setsVideoCodec = (option: FfmpegArgvOption): boolean => {
+  const first = option.spec?.split(":")[0]
+  return option.name === "vcodec" || first === undefined || first === "v" || first === "V"
+}
+
+/** One option as ffmpeg's splitter reads it: its name (after an optional `-/`
+ *  prefix, up to a `:` stream specifier), that specifier (`a:0`), its value
+ *  (none for a valueless option) and its index in the argv. */
+export interface FfmpegArgvOption {
+  readonly name: string
+  readonly spec: string | undefined
+  readonly value: string | undefined
+  readonly index: number
+}
+
+/** A file of the argv with the options that belong to it — the ones since the
+ *  previous file, as ffmpeg binds them: an input (`index` is its `-i`) or an
+ *  output (`index` is its path). */
+export interface FfmpegArgvFile {
+  readonly kind: "input" | "output"
+  readonly index: number
+  readonly path: string
+  readonly options: readonly FfmpegArgvOption[]
+}
+
+/** `args` read the way ffmpeg's command-line splitter reads them. */
+export interface FfmpegArgv {
+  /** Every input and output, in order. */
+  readonly files: readonly FfmpegArgvFile[]
+  /** An informational option (`-version`, `-h …`): ffmpeg prints and exits, nothing
+   *  is rendered, and the reading stops there. */
+  readonly informational: boolean
+  /** An option that sets a thread count (`THREAD_OPTIONS`). */
+  readonly setsThreads: boolean
+}
+
+/** How `readFfmpegArgv` takes a value that looks like an option name. */
+export interface FfmpegArgvReading {
+  /**
+   * `"refuse"` (the default): the argv cannot be read for certain — finding
+   * one where a value is due usually means a valueless option this table does
+   * not know, and the thread placement, which rewrites the argv, must not guess.
+   * `"take"`: take it as the value, as ffmpeg itself does for every option that
+   * has one — a flag list may start with a dash (`-cpuflags -avx2`,
+   * `-fflags -autobsf`). For a reader that only classifies the argv.
+   */
+  readonly optionLikeValue?: "refuse" | "take"
+}
+
+/**
+ * `args` split as ffmpeg splits them (`split_commandline`): each file with its
+ * own options — an option before an `-i` is that input's (a decoder, a seek),
+ * one before an output path is that output's. Global options (`-y`,
+ * `-cpuflags`, `-filter_complex`, …) are read like any other, value and all,
+ * and land in whichever file's group they precede. Undefined when it cannot be
+ * read for certain: `--`, a dangling option, or (unless `reading` takes it) a
+ * value that looks like an option. Pure.
+ */
+export function readFfmpegArgv(args: readonly string[], reading: FfmpegArgvReading = {}): FfmpegArgv | undefined {
+  const takeOptionLike = reading.optionLikeValue === "take"
+  const files: FfmpegArgvFile[] = []
+  let options: FfmpegArgvOption[] = []
+  let setsThreads = false
+  for (let k = 0; k < args.length; k++) {
+    const token = args[k]!
+    if (token === "--") return undefined
+    if (!token.startsWith("-") || token === "-") {
+      files.push({ kind: "output", index: k, path: token, options })
+      options = []
+      continue
+    }
+    const raw = token.slice(1)
+    if (raw === "i" || raw === "dec") {
+      // Group separators (`-dec` opens a loopback decoder, whose options are its own) — each takes a value.
+      const value = args[k + 1]
+      if (value === undefined || (!takeOptionLike && OPTION_LIKE.test(value))) return undefined
+      if (raw === "i") files.push({ kind: "input", index: k, path: value, options })
+      options = []
+      k++
+      continue
+    }
+    const bare = raw.startsWith("/") ? raw.slice(1) : raw
+    const colon = bare.indexOf(":")
+    const name = colon < 0 ? bare : bare.slice(0, colon)
+    const spec = colon < 0 ? undefined : bare.slice(colon + 1)
+    if (FFMPEG_EXIT_OPTIONS.has(name)) return { files, informational: true, setsThreads }
+    if (THREAD_OPTIONS.has(name)) setsThreads = true
+    if (FFMPEG_BOOL_OPTIONS.has(name) || FFMPEG_VALUELESS_FUNC_OPTIONS.has(name) || (name.startsWith("no") && FFMPEG_BOOL_OPTIONS.has(name.slice(2)))) {
+      options.push({ name, spec, value: undefined, index: k })
+      continue
+    }
+    const value = args[k + 1]
+    if (value === undefined || (!takeOptionLike && OPTION_LIKE.test(value))) return undefined
+    options.push({ name, spec, value, index: k })
+    k++
+  }
+  return { files, informational: false, setsThreads }
 }
 
 /** Where ffmpeg would see each file of `args`: the index of every `-i` and of
  *  every output path, and which of those outputs encode their picture with
  *  libx265 (`LIBX265_ENCODE_THREADS`). Undefined when the argv must be
  *  left as given: an informational run, one that sets its own thread counts,
- *  one with no output, or one it cannot read for certain (`--`, a value that
- *  looks like an option, a dangling option). */
+ *  one with no output, or one it cannot read for certain (`readFfmpegArgv`). */
 function ffmpegFileTokens(args: readonly string[]): { inputs: number[]; outputs: number[]; x265Outputs: Set<number> } | undefined {
-  const inputs: number[] = []
-  const outputs: number[] = []
+  const read = readFfmpegArgv(args)
+  if (!read || read.informational || read.setsThreads) return undefined
+  const inputs = read.files.filter((f) => f.kind === "input").map((f) => f.index)
+  const outputs = read.files.filter((f) => f.kind === "output")
   const x265Outputs = new Set<number>()
-  // The video encoder the options since the last file name: they belong to the next output (or, before an `-i`, to that input's decoder).
-  let x265 = false
-  for (let k = 0; k < args.length; k++) {
-    const token = args[k]!
-    if (token === "--") return undefined
-    if (!token.startsWith("-") || token === "-") {
-      outputs.push(k)
-      if (x265) x265Outputs.add(k)
-      x265 = false
-      continue
-    }
-    const raw = token.slice(1)
-    if (raw === "i" || raw === "dec") {
-      // Group separators (`-dec` opens a loopback decoder) — each takes a value.
-      const value = args[k + 1]
-      if (value === undefined || OPTION_LIKE.test(value)) return undefined
-      if (raw === "i") inputs.push(k)
-      x265 = false
-      k++
-      continue
-    }
-    const bare = raw.startsWith("/") ? raw.slice(1) : raw
-    const name = bare.split(":")[0]!
-    if (FFMPEG_EXIT_OPTIONS.has(name) || THREAD_OPTIONS.has(name)) return undefined
-    if (FFMPEG_BOOL_OPTIONS.has(name) || FFMPEG_VALUELESS_FUNC_OPTIONS.has(name)) continue
-    if (name.startsWith("no") && FFMPEG_BOOL_OPTIONS.has(name.slice(2))) continue
-    const value = args[k + 1]
-    if (value === undefined || OPTION_LIKE.test(value)) return undefined
-    if (CODEC_OPTIONS.has(name) && setsVideoCodec(bare)) x265 = value === "libx265"
-    k++
+  for (const out of outputs) {
+    // The video encoder its own options name last.
+    let x265 = false
+    for (const o of out.options) if (CODEC_OPTIONS.has(o.name) && setsVideoCodec(o)) x265 = o.value === "libx265"
+    if (x265) x265Outputs.add(out.index)
   }
-  return outputs.length > 0 ? { inputs, outputs, x265Outputs } : undefined
+  return outputs.length > 0 ? { inputs, outputs: outputs.map((f) => f.index), x265Outputs } : undefined
 }
 
 /**

@@ -122,6 +122,14 @@ hand count (`kind: "user"` in the list response); MCP clients that
 registered themselves (see the next section) appear in the same list but
 do not use up the cap. Admin accounts are not capped.
 
+A deployment may let only its administrators manage developer apps (the
+surface profile's `developerApps.manage: "admin"`,
+[deployment guide](deployment.md#surface-profile-nodaro_surface_profile)).
+There, creating, changing, rotating the secret of or deleting an app as
+anyone else answers `403 developer_apps_admin_only`, and the developer-app
+pages show a notice instead. Reading your own apps, and the apps you made
+before, with their tokens, keep working.
+
 ## Discovery & Dynamic Client Registration (MCP clients)
 
 Manual app registration (above) is the path for traditional web/SaaS
@@ -205,6 +213,10 @@ DCR is governed by the `MCP_DYNAMIC_REGISTRATION` operator setting:
 | `open` | Any client may register, but there's a cap of **5 unconsumed registrations per (`client_name` + `redirect_uris`)** within a 24h window (429 `too_many_open_registrations` once exceeded). |
 | `off` | DCR is disabled entirely (403 `dcr_disabled`); operators hand out a static `client_id`/`client_secret` instead. |
 
+A deployment that lists its MCP clients (`MCP_ALLOWED_CLIENT_IDS`, see
+[below](#deployments-that-list-their-mcp-clients)) answers as `off` whatever
+the mode says.
+
 A dynamically-registered MCP client carries `kind=dynamic_mcp`. (Self-hosted
 community installs also register at this endpoint — with
 `kind=community_instance`, governed by the separate connect flow in the
@@ -214,6 +226,42 @@ screen renders an extra warning so the user knows the app identity wasn't
 vetted by an operator. Its declared
 scopes are informational — the user-controlled consent screen is the
 actual gate, so any valid Nodaro scope may be requested at authorize-time.
+
+### Deployments that list their MCP clients
+
+An operator can set `MCP_ALLOWED_CLIENT_IDS` to the `client_id`s of the
+developer apps that may use MCP on the deployment
+([deployment guide](deployment.md#mcp-only-through-your-own-client)). With
+such a list:
+
+- The MCP endpoint takes only an access token issued to a listed client.
+  Any other bearer — another client's token, a signed-in session, a personal
+  API token — gets `403 mcp_client_not_allowed`. The check runs on every
+  call, so a client taken off the list stops at its next call.
+- A client that is not listed and **asks for MCP** is refused at every step
+  of the sign-in, starting before the consent screen. It asks for MCP when it
+  registered itself as an MCP client (`kind=dynamic_mcp`), or when its RFC 8707
+  `resource` parameter names an MCP endpoint (`…/mcp`, or the path a
+  deployment serves MCP at); a `resource` that is not a URL counts too.
+  - `GET /v1/oauth/authorize` sends the browser back to the client's
+    registered `redirect_uri` with `error=unauthorized_client`,
+    `error_description` and the request's `state` (RFC 6749 §4.1.2.1). An
+    unknown client, or a `redirect_uri` not registered for it, is never
+    redirected to: the consent page shows its own error, as always.
+  - `GET /v1/oauth/app-info` (what the consent page reads) and
+    `POST /v1/oauth/authorize` (consent) answer `403`
+    `{ "error": { "code": "mcp_client_not_allowed", "message": "…" } }`, and
+    no code is issued. The consent page forwards the client's `resource` to
+    both.
+  - `POST /v1/oauth/token` answers `400`
+    `{ "error": "unauthorized_client", "error_description": "…" }`, so a code
+    issued before the client was refused gets no token.
+- A developer app that is not listed and does not ask for MCP signs in as
+  before; its token works on the REST API and is refused on the MCP endpoint.
+- Dynamic registration answers `403 dcr_disabled` for MCP clients.
+
+The `resource` parameter is read only for this rule: it is never stored, and
+a token is not tied to a resource. With no list set it is ignored, as before.
 
 ## 4. Scope vocabulary
 
@@ -608,6 +656,7 @@ OAuth-specific errors returned by the token endpoint:
 | 401 | `{ "error": "invalid_client", "error_description": "Unknown client" }` | `client_id` doesn't match any registered app | Check `client_id` env var |
 | 401 | `{ "error": "invalid_client", "error_description": "Bad client_secret" }` | `client_secret` wrong (often: rotated and old one cached) | Pull the latest secret; restart your service |
 | 400 | `{ "error": "invalid_grant", "error_description": "Code expired, used, or redirect_uri mismatch" }` | Code >10 min old, redeemed twice, or `redirect_uri` doesn't match the one used at authorize | Re-prompt user; ensure URIs are byte-for-byte identical |
+| 400 | `{ "error": "unauthorized_client", "error_description": "..." }` | The deployment lists its MCP clients; this one is not listed and asks for MCP | Connect through the client the deployment set up |
 
 Authorize-endpoint errors (returned to the frontend, NOT redirected):
 
@@ -616,6 +665,7 @@ Authorize-endpoint errors (returned to the frontend, NOT redirected):
 | 400 | `{ "error": { "code": "invalid_redirect_uri", "message": "..." } }` | `redirect_uri` not in app's registered list | Add the URI in `/settings/developer-apps` |
 | 400 | `{ "error": { "code": "invalid_scope", "message": "Scope X not in app's scopes_requested" } }` | Requested a scope outside `scopes_requested` | Edit the app to widen `scopes_requested` |
 | 404 | `{ "error": { "code": "invalid_client", "message": "Unknown client_id or app suspended" } }` | `client_id` unknown or app status ≠ active | Verify `client_id`; check the app isn't suspended |
+| 403 | `{ "error": { "code": "mcp_client_not_allowed", "message": "..." } }` | The deployment lists its MCP clients and this one is not listed, and it asks for MCP | Connect through the client the deployment set up — see [above](#deployments-that-list-their-mcp-clients) |
 
 API-endpoint errors when using the access token:
 
@@ -623,6 +673,7 @@ API-endpoint errors when using the access token:
 |-------------|------|------|------------|
 | 401 | `{ "error": { "code": "unauthorized" } }` | Token expired, revoked, or malformed | Re-prompt user via `/oauth/authorize` |
 | 403 | `{ "error": { "code": "insufficient_scope", "message": "Missing required scope: workflows:execute", "missingScope": "workflows:execute" } }` | Token doesn't carry the scope the route requires | Re-do `/oauth/authorize` with broader `scope` — the existing authorization will be widened |
+| 403 | `{ "error": { "code": "mcp_client_not_allowed", "message": "..." } }` | On the MCP endpoint of a deployment that lists its MCP clients: the token's client is not listed (or the bearer is not a client's token) | Connect through the client the deployment set up |
 
 The SDK surfaces the 403 case as `ForbiddenError` with a typed
 `missingScope` field:

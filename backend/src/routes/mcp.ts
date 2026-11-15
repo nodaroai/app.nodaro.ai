@@ -5,6 +5,7 @@ import { conversationIdentityFromHeaders } from "../lib/mcp/flows/conversation-k
 import { config } from "../lib/config.js"
 import { mcpLaneAddresses, mcpServedPath, type McpLane, type McpLaneAddresses } from "../lib/mcp-lane-addresses.js"
 import { surfaceMcpPath } from "../lib/surface-profile.js"
+import { admitMcpCaller } from "../lib/mcp-listed-clients.js"
 import type { Scope } from "../lib/scopes.js"
 
 /**
@@ -111,6 +112,16 @@ function mcpHandler(app: FastifyInstance, lane: McpLane) {
               "MCP requires a Bearer token. See /.well-known/oauth-protected-resource.",
           },
         })
+    }
+
+    // Only listed clients (decided 2026-11-11): a deployment that sets
+    // MCP_ALLOWED_CLIENT_IDS takes a token issued to a listed client here and
+    // no other credential. Asked on EVERY call — nothing is cached — so a
+    // client removed from the list stops at its next call. No list: admitted
+    // without a read, exactly as before.
+    const admission = await admitMcpCaller(req)
+    if (!admission.ok) {
+      return reply.status(admission.status).send({ error: { code: admission.code, message: admission.message } })
     }
 
     const scopes = (req.appAuthorization?.scopes ?? []) as Scope[]

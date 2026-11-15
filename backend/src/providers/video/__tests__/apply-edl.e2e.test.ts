@@ -23,6 +23,7 @@ import { basename, dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { runFfmpeg, runFfprobe, probeStreamEnds } from "../ffmpeg-utils.js"
+import { mp3EncodeArgs } from "../mp3-encode.js"
 import type { Edl } from "@nodaro/shared/edl"
 import {
   ffmpegAvailable, mp3EncoderAvailable, makeSource, probeDurationSec, colourOfFrame, probeColor,
@@ -129,7 +130,7 @@ describe.skipIf(!ffmpegAvailable)("applyEdl (real ffmpeg)", () => {
     await makeSource(srcC, "green", 660, 6)
     // A 30 s VBR mp3 with NO Xing/Info header — its container under-reports.
     if (mp3EncoderAvailable) {
-      await runFfmpeg(["-y", "-f", "lavfi", "-i", "sine=f=440:r=44100:d=30", "-c:a", "libmp3lame", "-q:a", "9", "-write_xing", "0", srcVbr])
+      await runFfmpeg(["-y", "-f", "lavfi", "-i", "sine=f=440:r=44100:d=30", ...mp3EncodeArgs({ quality: 9 }), "-write_xing", "0", srcVbr])
       // The same, with embedded cover art (an ID3 `attached_pic` video stream —
       // what almost every real podcast mp3 carries). Mapping that "video" into
       // a `-c copy -f null` pass made ffmpeg 8.1 report N/A, so the file went

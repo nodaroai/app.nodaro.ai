@@ -10,6 +10,16 @@ import { hashToken, mintAppAccessToken } from "../lib/oauth-tokens.js"
 import { ALL_SCOPES } from "../lib/scopes.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { mcpClientListSet, mcpSignInRefusal, type McpSignInRefusal } from "../lib/mcp-listed-clients.js"
+
+/**
+ * RFC 8707 `resource`: the resource a client asks a token for. Read only by
+ * the listed-clients rule (lib/mcp-listed-clients.ts), which refuses an
+ * unlisted client that names the MCP endpoint; never stored, and ignored
+ * entirely on a deployment that lists no clients. A repeated parameter
+ * arrives as an array.
+ */
+const resourceParam = z.union([z.string(), z.array(z.string())]).optional()
 
 const authorizeBody = z.object({
   clientId: z.string().min(1),
@@ -19,6 +29,7 @@ const authorizeBody = z.object({
   // PKCE (RFC 7636) — optional; required when caller is a public client.
   codeChallenge: z.string().min(43).max(128).optional(),
   codeChallengeMethod: z.enum(["S256"]).optional(),
+  resource: resourceParam,
 })
 
 const tokenBody = z.object({
@@ -31,6 +42,7 @@ const tokenBody = z.object({
   redirect_uri: z.string().url(),
   // PKCE verifier — required iff the issued code carried a code_challenge.
   code_verifier: z.string().min(43).max(128).optional(),
+  resource: resourceParam,
 })
 
 const revokeBody = z.object({
@@ -71,7 +83,41 @@ openApiRegistry.registerPath({
 const appInfoQuery = z.object({
   client_id: z.string().min(1),
   redirect_uri: z.string().optional(),
+  resource: resourceParam,
 })
+
+/** A listed-clients refusal on the JSON surfaces (app-info, consent). */
+function refusalBody(refusal: McpSignInRefusal) {
+  return { error: { code: refusal.code, message: refusal.message } }
+}
+
+/**
+ * The consent redirect's half of the listed-clients rule: where it would send
+ * a refused client's user, or null to go on to the consent page as always.
+ * Only with a list set, and only when the client is known and the
+ * `redirect_uri` is registered for it — RFC 6749 §4.1.2.1: the error goes back
+ * to the client, with its `state`; any other request goes on to the consent
+ * page, which shows its own errors. No list: null before anything is read.
+ */
+async function consentRedirectRefusal(query: unknown): Promise<string | null> {
+  if (!mcpClientListSet()) return null
+  const q = (query ?? {}) as Record<string, unknown>
+  if (typeof q.client_id !== "string" || typeof q.redirect_uri !== "string") return null
+  const dApp = await findAppByClientId(q.client_id)
+  if (!dApp || !((dApp.redirect_uris as string[] | null) ?? []).includes(q.redirect_uri)) return null
+  const refusal = mcpSignInRefusal(dApp as { client_id: string; kind: string | null; status: string | null }, q.resource)
+  if (!refusal) return null
+  let target: URL
+  try {
+    target = new URL(q.redirect_uri)
+  } catch {
+    return null
+  }
+  target.searchParams.set("error", refusal.error)
+  target.searchParams.set("error_description", refusal.message)
+  if (typeof q.state === "string") target.searchParams.set("state", q.state)
+  return target.toString()
+}
 
 export async function oauthRoutes(app: FastifyInstance) {
   // GET /v1/oauth/app-info?client_id=<id>[&redirect_uri=<uri>] — public, returns
@@ -88,11 +134,15 @@ export async function oauthRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }
-    const { client_id: clientId, redirect_uri: redirectUri } = parsed.data
+    const { client_id: clientId, redirect_uri: redirectUri, resource } = parsed.data
     const dApp = await findAppByClientId(clientId)
     if (!dApp) {
       return reply.status(404).send({ error: { code: "not_found", message: "Unknown client_id or app suspended" } })
     }
+    // A client this deployment does not let use MCP, asking for MCP: refused
+    // here too, so the consent page never shows it (lib/mcp-listed-clients.ts).
+    const refusal = mcpSignInRefusal(dApp, resource)
+    if (refusal) return reply.status(403).send(refusalBody(refusal))
     // Return only public-safe fields — no secret, no full origin list, no owner_user_id.
     // `kind` lets the consent UI warn for self-claimed dynamic_mcp clients (RFC 7591 DCR).
     // The registered list itself is never returned; only a yes/no about the one asked.
@@ -119,6 +169,10 @@ export async function oauthRoutes(app: FastifyInstance) {
   // Never a host the deployment did not declare: an unknown `Host` gets the
   // primary address, so this is no open redirect.
   app.get("/v1/oauth/authorize", async (req, reply) => {
+    // An unlisted client asking for MCP never reaches the consent page: the
+    // user goes straight back to the client with the refusal.
+    const refused = await consentRedirectRefusal(req.query)
+    if (refused) return reply.redirect(refused, 302)
     const idx = req.url.indexOf("?")
     const queryString = idx >= 0 ? req.url.slice(idx) : ""
     return reply.redirect(`${mcpLaneAddresses(req, metadataLane()).issuer}/oauth/authorize${queryString}`, 302)
@@ -141,7 +195,7 @@ export async function oauthRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }
 
-    const { clientId, redirectUri, scopes, state, codeChallenge, codeChallengeMethod } = parsed.data
+    const { clientId, redirectUri, scopes, state, codeChallenge, codeChallengeMethod, resource } = parsed.data
 
     const dApp = await findAppByClientId(clientId)
     if (!dApp) {
@@ -151,6 +205,11 @@ export async function oauthRoutes(app: FastifyInstance) {
     if (!(dApp.redirect_uris as string[]).includes(redirectUri)) {
       return reply.status(400).send({ error: { code: "invalid_redirect_uri", message: "redirect_uri not registered for this app" } })
     }
+
+    // The listed-clients rule, before any code exists and before a self-
+    // registered row is claimed (lib/mcp-listed-clients.ts).
+    const refusal = mcpSignInRefusal(dApp, resource)
+    if (refusal) return reply.status(403).send(refusalBody(refusal))
 
     // For dynamic_mcp (RFC 7591 DCR) clients, scopes_requested is informational —
     // the client_name is allowlisted at registration, and the user-controlled
@@ -214,7 +273,7 @@ export async function oauthRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.status(400).send({ error: "invalid_request", error_description: parsed.error.issues[0]?.message ?? "Invalid request" })
     }
-    const { client_id, client_secret, code, redirect_uri, code_verifier } = parsed.data
+    const { client_id, client_secret, code, redirect_uri, code_verifier, resource } = parsed.data
 
     const dApp = await findAppByClientId(client_id)
     if (!dApp) {
@@ -249,6 +308,11 @@ export async function oauthRoutes(app: FastifyInstance) {
         return reply.status(401).send({ error: "invalid_client", error_description: "Bad client_secret" })
       }
     }
+
+    // The listed-clients rule once more: a code issued before the list changed,
+    // or a `resource` named only here, gets no token (lib/mcp-listed-clients.ts).
+    const refusal = mcpSignInRefusal(dApp, resource)
+    if (refusal) return reply.status(400).send({ error: refusal.error, error_description: refusal.message })
 
     const minted = await mintAppAccessToken({ appId: grant.appId, userId: grant.userId, scopes: grant.scopes })
     if (!minted.ok) {

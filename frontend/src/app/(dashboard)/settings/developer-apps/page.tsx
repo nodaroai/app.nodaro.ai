@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog"
 import { useAuth } from "@/hooks/use-auth"
 import { hasAdmin } from "@/lib/edition"
+import { surfaceDeveloperAppsAdminOnly } from "@/lib/surface-selectors"
 import { toast } from "sonner"
 import { Link } from "react-router-dom"
 import {
@@ -80,7 +81,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 export default function DeveloperAppsPage() {
   const t = useT()
   const isRtl = useAppDir() === "rtl"
-  const { loading: authLoading, isAdmin } = useAuth()
+  const { loading: authLoading, isAdmin, roleLoaded } = useAuth()
   const { data: apps, isLoading } = useDeveloperApps()
   // Mirrors the server: only hand-registered apps count toward the cap, and
   // admins are not capped. Self-registered MCP clients live in the same list
@@ -107,6 +108,24 @@ export default function DeveloperAppsPage() {
         <p className="text-muted-foreground">
           {t("devApp.editionGate")}
         </p>
+      </div>
+    )
+  }
+
+  // Only admins manage developer apps on this deployment (decided
+  // 2026-11-11): the page is not offered to anyone else, since the server
+  // refuses their create / change / rotate / delete.
+  if (surfaceDeveloperAppsAdminOnly() && !isAdmin) {
+    if (!roleLoaded) {
+      return (
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )
+    }
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <p className="text-muted-foreground">{t("devApp.adminOnly")}</p>
       </div>
     )
   }

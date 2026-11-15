@@ -78,6 +78,13 @@ export interface SurfaceProfile {
   header?: SurfaceHeaderMode
   /** UI-string overrides, validated by the backend; `lib/i18n` lays them over the dictionaries (see `localeText`). */
   strings?: RuntimeSurfaceStrings
+  /** Who manages developer apps; see the backend twin. `"admin"`: the developer-app pages are offered to admins only. */
+  developerApps?: SurfaceDeveloperApps
+}
+
+/** Mirror of the backend's SurfaceDeveloperApps (decided 2026-11-11). */
+export interface SurfaceDeveloperApps {
+  manage: "owner" | "admin"
 }
 
 export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
@@ -123,6 +130,7 @@ export function runtimeSurfaceProfile(): SurfaceProfile {
     ...(o.imports ? { imports: o.imports } : {}),
     ...(o.header ? { header: o.header } : {}),
     ...(o.strings ? { strings: o.strings } : {}),
+    ...(o.developerApps ? { developerApps: o.developerApps } : {}),
   }
 }
 

@@ -191,6 +191,30 @@ export interface SurfaceProfile {
    * it, the server states every MCP address itself.
    */
   mcp?: SurfaceMcp
+  /**
+   * Who may create, change, rotate the secret of and delete a developer app:
+   * see SurfaceDeveloperApps. Absent unless configured. Reaches /config.js:
+   * the editor hides the developer-app pages from everyone else.
+   */
+  developerApps?: SurfaceDeveloperApps
+}
+
+/** Who may manage developer apps (OAuth clients). */
+export const DEVELOPER_APP_MANAGERS = ["owner", "admin"] as const
+export type DeveloperAppManagers = (typeof DEVELOPER_APP_MANAGERS)[number]
+
+/**
+ * `developerApps.manage` (decided 2026-11-11): `"owner"` — every signed-in
+ * person manages their own developer apps, today's behaviour and what an
+ * absent key means; `"admin"` — only an admin of the deployment may create,
+ * change, rotate the secret of or delete one, so the clients that can sign
+ * people in are the ones the deployment set up. Reading one's own apps, and
+ * every existing app and its tokens, keep working. The one reader is
+ * `surfaceDeveloperAppManagers`, and `routes/developer-apps.ts` is where it is
+ * applied.
+ */
+export interface SurfaceDeveloperApps {
+  manage: DeveloperAppManagers
 }
 
 /**
@@ -406,6 +430,30 @@ const surfaceMcpSchema = z
   })
 
 /**
+ * `developerApps`, leniently, and a SAFETY control like `jobs`: absent (or an
+ * object that leaves `manage` out) is no key, today's behaviour. Any value
+ * that is not one of DEVELOPER_APP_MANAGERS — and a `developerApps` that is
+ * not an object — falls to the restrictive side, `"admin"`, loudly: a typo
+ * must never let more people mint sign-in clients than the deployment asked
+ * for. Degrades alone; never fails the profile.
+ */
+const surfaceDeveloperAppsSchema = z
+  .unknown()
+  .optional()
+  .transform((raw): SurfaceDeveloperApps | undefined => {
+    if (raw === undefined) return undefined
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      console.warn('[surface-profile] developerApps must be an object { manage } — only admins manage developer apps ("admin")')
+      return { manage: "admin" }
+    }
+    const value = (raw as Record<string, unknown>).manage
+    if (value === undefined) return undefined
+    if ((DEVELOPER_APP_MANAGERS as readonly unknown[]).includes(value)) return { manage: value as DeveloperAppManagers }
+    console.warn(`[surface-profile] developerApps.manage ${JSON.stringify(value)} is not one of ${DEVELOPER_APP_MANAGERS.join(" | ")} — using the restrictive "admin"`)
+    return { manage: "admin" }
+  })
+
+/**
  * The unit trio is validated HERE, as a unit, and dropped as a unit (§3.5):
  *
  *  1. Both-or-neither. A label without a rate, or a rate without a label, is
@@ -592,6 +640,7 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
   strings: z.unknown().optional(),
   jobs: surfaceJobsSchema.optional(),
   mcp: surfaceMcpSchema.optional(),
+  developerApps: surfaceDeveloperAppsSchema.optional(),
 }) as z.ZodType<SurfaceProfile>
 
 /** One-level-deep merge: each override sub-object replaces the default's, keys
@@ -620,6 +669,7 @@ function mergeOverDefault(override: Partial<SurfaceProfile>): SurfaceProfile {
     ...(override.strings !== undefined ? { strings: override.strings } : {}),
     ...(override.jobs ? { jobs: override.jobs } : {}),
     ...(override.mcp ? { mcp: override.mcp } : {}),
+    ...(override.developerApps ? { developerApps: override.developerApps } : {}),
   }
 }
 
@@ -774,6 +824,38 @@ export function surfaceMcpPath(): string | null {
   if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return null
   const mcp = runtimeSurfaceProfile().mcp
   return mcp?.byPath === true ? mcp.path : null
+}
+
+/**
+ * Who may manage developer apps on this deployment (`developerApps.manage`):
+ * `"owner"` (each person their own — absent, or no profile at all, which is
+ * exactly today's behaviour) or `"admin"` (admins only). The one reader of the
+ * key; `routes/developer-apps.ts` is its one caller.
+ *
+ * The unset case returns before the profile is read, as `surfaceAllowsLinkImports`
+ * does, so a route suite that mocks the config module partially cannot break on it.
+ */
+export function surfaceDeveloperAppManagers(): DeveloperAppManagers {
+  if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return "owner"
+  return runtimeSurfaceProfile().developerApps?.manage ?? "owner"
+}
+
+/**
+ * Whether this deployment lists published apps to people who are not their
+ * owner (decided 2026-11-11): false where the profile hides the `apps`
+ * navigation entry (`nav.hide` names "apps"). The marketplace browse
+ * (`GET /v1/apps/browse`, except a components-only browse) and MCP
+ * `list_apps` in its public scope then list nothing — the listing follows the
+ * hidden page. A person's own apps (`/v1/apps/mine`, `list_apps` scope
+ * "mine"), components, and every read of one app by its link stay as they are.
+ *
+ * The unset case returns before the profile is read, as `surfaceAllowsLinkImports`
+ * does: the browse is a hot public read, and a route suite that mocks the
+ * config module partially cannot break on it.
+ */
+export function surfaceListsPublishedApps(): boolean {
+  if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return true
+  return !runtimeSurfaceProfile().nav.hide.includes("apps")
 }
 
 /**

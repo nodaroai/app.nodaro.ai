@@ -25,6 +25,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { mp3ChainTail, mp3EncodeArgs } from "../mp3-encode.js"
+import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -470,6 +472,14 @@ describe("resizeVideo", () => {
 // ===========================================================================
 
 describe("mixAudio", () => {
+  /** The mix graph as built: the `-filter_complex` less the MP3 chain's own end, which the encode adds before [aout] (mp3-encode.ts). */
+  const mixGraph = (args: readonly string[]): string => {
+    const fc = args[args.indexOf("-filter_complex") + 1]!
+    const tail = `,${mp3ChainTail()}[aout]`
+    expect(fc.endsWith(tail)).toBe(true)
+    expect(args.slice(args.indexOf("-map"), args.indexOf("-map") + 4)).toEqual(["-map", "[aout]", "-c:a", "libmp3lame"])
+    return `${fc.slice(0, -tail.length)}[aout]`
+  }
   it("downloads each input audio in order", async () => {
     await mixAudio({ audioUrls: ["a.mp3", "b.mp3", "c.mp3"] })
     expect(mocks.downloadFile).toHaveBeenCalledTimes(3)
@@ -487,8 +497,8 @@ describe("mixAudio", () => {
       "-i", "/tmp/work/input_2.mp3",
     ])
     // The graph still names three inputs in order, the key still track 0.
-    expect(args[args.indexOf("-filter_complex") + 1]).toContain("[2:a]volume=1[a2]")
-    expect(args[args.indexOf("-filter_complex") + 1]).toContain("[a0]asplit=3[k0]")
+    expect(mixGraph(args)).toContain("[2:a]volume=1[a2]")
+    expect(mixGraph(args)).toContain("[a0]asplit=3[k0]")
   })
 
   it("a silent track with no readable length lasts as long as the longest sounding track", async () => {
@@ -527,30 +537,30 @@ describe("mixAudio", () => {
     await mixAudio({ audioUrls: ["a.mp3", "b.mp3"] })
     const args = ffargs()
     const fcIdx = args.indexOf("-filter_complex")
-    expect(args[fcIdx + 1]).toContain("[0:a]volume=1[a0]")
-    expect(args[fcIdx + 1]).toContain("[1:a]volume=1[a1]")
+    expect(mixGraph(args)).toContain("[0:a]volume=1[a0]")
+    expect(mixGraph(args)).toContain("[1:a]volume=1[a1]")
   })
 
   it("respects custom trackVolumes (50, 200) → 0.5, 2", async () => {
     await mixAudio({ audioUrls: ["a.mp3", "b.mp3"], trackVolumes: [50, 200] })
     const args = ffargs()
     const fcIdx = args.indexOf("-filter_complex")
-    expect(args[fcIdx + 1]).toContain("[0:a]volume=0.5[a0]")
-    expect(args[fcIdx + 1]).toContain("[1:a]volume=2[a1]")
+    expect(mixGraph(args)).toContain("[0:a]volume=0.5[a0]")
+    expect(mixGraph(args)).toContain("[1:a]volume=2[a1]")
   })
 
   it("filter_complex chains volume → amix with duration=longest", async () => {
     await mixAudio({ audioUrls: ["a.mp3", "b.mp3", "c.mp3"] })
     const args = ffargs()
     const fcIdx = args.indexOf("-filter_complex")
-    expect(args[fcIdx + 1]).toContain("[a0][a1][a2]amix=inputs=3:duration=longest[aout]")
+    expect(mixGraph(args)).toContain("[a0][a1][a2]amix=inputs=3:duration=longest[aout]")
   })
 
   it("does NOT add normalize=0 by default (back-compat averaging)", async () => {
     await mixAudio({ audioUrls: ["a.mp3", "b.mp3"] })
     const args = ffargs()
     const fcIdx = args.indexOf("-filter_complex")
-    expect(args[fcIdx + 1]).not.toContain("normalize=0")
+    expect(mixGraph(args)).not.toContain("normalize=0")
   })
 
   it("sumTracks:true adds normalize=0 + a brickwall limiter to the amix (sum, no clip)", async () => {
@@ -558,16 +568,16 @@ describe("mixAudio", () => {
     const args = ffargs()
     const fcIdx = args.indexOf("-filter_complex")
     // normalize=0 sums (preserves loudness); the limiter caps summed peaks past 0 dBFS.
-    expect(args[fcIdx + 1]).toContain("amix=inputs=2:duration=longest:normalize=0")
-    expect(args[fcIdx + 1]).toContain("alimiter=level=disabled:limit=0.95")
-    expect(args[fcIdx + 1]).toMatch(/normalize=0,alimiter=level=disabled:limit=0\.95\[aout\]/)
+    expect(mixGraph(args)).toContain("amix=inputs=2:duration=longest:normalize=0")
+    expect(mixGraph(args)).toContain("alimiter=level=disabled:limit=0.95")
+    expect(mixGraph(args)).toMatch(/normalize=0,alimiter=level=disabled:limit=0\.95\[aout\]/)
   })
 
   describe("duck (sidechain compression)", () => {
     const graph = async (opts: Parameters<typeof mixAudio>[0]) => {
       await mixAudio(opts)
       const args = ffargs()
-      return args[args.indexOf("-filter_complex") + 1]
+      return mixGraph(args)
     }
 
     it("leaves the no-duck graph byte-identical", async () => {
@@ -760,6 +770,16 @@ describe("trimVideo", () => {
 // ===========================================================================
 
 describe("trimAudio", () => {
+  it.each(["mp3", "wav", "aac"] as const)("%s: refuses an end at or before its start, before any download, as a deterministic error", async (audioFormat) => {
+    for (const [startTime, endTime] of [[3, 2], [2, 2]]) {
+      const err = await trimAudio({ videoUrl: "https://r2.example/video.mp4", audioFormat, startTime, endTime }, RIGHTS).catch((e: unknown) => e)
+      expect(isDeterministicJobError(err)).toBe(true)
+      expect((err as Error).message).toBe("The end time must be after the start time.")
+    }
+    expect(mocks.downloadFile).not.toHaveBeenCalled()
+    expect(mocks.runFfmpeg).not.toHaveBeenCalled()
+  })
+
   it("uses downloadFile for non-social-media URLs", async () => {
     await trimAudio({ videoUrl: "https://r2.example/video.mp4" }, RIGHTS)
     expect(mocks.downloadFile).toHaveBeenCalled()
@@ -781,15 +801,14 @@ describe("trimAudio", () => {
     expect(mocks.downloadFile).not.toHaveBeenCalled()
   })
 
-  it("default audioFormat is mp3 with libmp3lame codec", async () => {
+  it("default audioFormat is mp3, encoded through the MP3 chain (mp3-encode.ts)", async () => {
     await trimAudio({ videoUrl: "https://r2/x.mp4" }, RIGHTS)
     const args = ffargs()
-    const idx = args.indexOf("-acodec")
-    expect(args[idx + 1]).toBe("libmp3lame")
+    expect(args.slice(args.indexOf("-vn") + 1, -1)).toEqual(mp3EncodeArgs({ cut: {} }))
+    expect(args[args.indexOf("-c:a") + 1]).toBe("libmp3lame")
   })
 
   it.each([
-    ["mp3", "libmp3lame"],
     ["wav", "pcm_s16le"],
     ["aac", "aac"],
   ] as const)("audioFormat %s → codec %s", async (format, codec) => {
@@ -799,13 +818,21 @@ describe("trimAudio", () => {
     expect(args[idx + 1]).toBe(codec)
   })
 
-  it("includes -ss + -to when startTime + endTime set", async () => {
-    await trimAudio({ videoUrl: "https://r2/x.mp4", startTime: 5, endTime: 15 }, RIGHTS)
+  it("wav/aac: -ss + -to on the output when startTime + endTime set", async () => {
+    await trimAudio({ videoUrl: "https://r2/x.mp4", audioFormat: "wav", startTime: 5, endTime: 15 }, RIGHTS)
     const args = ffargs()
     expect(args).toContain("-ss")
     expect(args[args.indexOf("-ss") + 1]).toBe("5")
     expect(args).toContain("-to")
     expect(args[args.indexOf("-to") + 1]).toBe("15")
+  })
+
+  it("mp3: the same cut inside the MP3 chain (from 5 s, for the 10 s to 15 s), never on the output", async () => {
+    await trimAudio({ videoUrl: "https://r2/x.mp4", startTime: 5, endTime: 15 }, RIGHTS)
+    const args = ffargs()
+    expect(args).not.toContain("-ss")
+    expect(args).not.toContain("-to")
+    expect(args[args.indexOf("-af") + 1]).toMatch(/,atrim=start=5\.000000:duration=10\.000000,asetnsamples=n=1152:p=0$/)
   })
 
   it("strips video stream with -vn", async () => {

@@ -1,5 +1,6 @@
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { mp3EncodeArgs, writesMp3ByDefault } from "./mp3-encode.js"
 
 interface AdjustVolumeOptions {
   readonly audioUrl?: string
@@ -13,6 +14,18 @@ interface AdjustVolumeOptions {
 function getExtension(url: string, fallback: string): string {
   const match = url.match(/\.(\w{2,5})(?:\?|$)/)
   return match?.[1] ?? fallback
+}
+
+/**
+ * The ffmpeg arguments that apply `audioFilters` and write `outputPath`, whose
+ * extension (the input's own) picks the container and, with no codec named,
+ * its audio encoder. A video keeps its picture (stream copy). A container whose
+ * default audio is MP3 (`.mp3`, and the `.avi`/`.flv`/`.swf` video containers)
+ * is an MP3 encode, built by mp3-encode.ts.
+ */
+export function adjustVolumeArgs(inputPath: string, outputPath: string, isVideo: boolean, audioFilters: readonly string[]): string[] {
+  const audio = writesMp3ByDefault(outputPath) ? mp3EncodeArgs({ filters: audioFilters }) : ["-af", audioFilters.join(",")]
+  return ["-y", "-i", inputPath, ...(isVideo ? ["-c:v", "copy"] : []), ...audio, outputPath]
 }
 
 export async function adjustVolume(options: AdjustVolumeOptions): Promise<{ outputPath: string; inputType: "video" | "audio" }> {
@@ -45,24 +58,8 @@ export async function adjustVolume(options: AdjustVolumeOptions): Promise<{ outp
       audioFilters.push(`afade=t=out:d=${fadeOut}`)
     }
 
-    if (isVideo) {
-      // Video input: copy video stream unchanged, only modify audio
-      await runFfmpeg([
-        "-y",
-        "-i", inputPath,
-        "-c:v", "copy",
-        "-af", audioFilters.join(","),
-        outputPath,
-      ])
-    } else {
-      // Audio-only input: existing behavior
-      await runFfmpeg([
-        "-y",
-        "-i", inputPath,
-        "-af", audioFilters.join(","),
-        outputPath,
-      ])
-    }
+    // A video keeps its picture unchanged; only the audio is modified.
+    await runFfmpeg(adjustVolumeArgs(inputPath, outputPath, isVideo, audioFilters))
 
     console.log(`[adjustVolume] Output: ${outputPath}`)
     return { outputPath, inputType: isVideo ? "video" : "audio" }

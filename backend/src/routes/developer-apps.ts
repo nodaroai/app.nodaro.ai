@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { randomBytes } from "node:crypto"
 import bcrypt from "bcryptjs"
@@ -11,6 +11,7 @@ import { bareOriginSchema } from "../lib/url-validator.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
+import { surfaceDeveloperAppManagers } from "../lib/surface-profile.js"
 
 const httpsUrl = z.string().url().refine((v) => v.startsWith("https://") || v.startsWith("http://localhost"), {
   message: "Must be https:// or http://localhost",
@@ -75,6 +76,32 @@ const CAPPED_APP_KIND = "user"
 // developer apps, so a third-party app must not create/rotate/delete the owner's).
 const DEV_APPS_NO_OAUTH_MSG = "Developer-app management is not available to OAuth apps."
 
+/**
+ * Developer apps admin-only (decided 2026-11-11): where the surface profile
+ * sets `developerApps.manage: "admin"`, only an admin of the deployment may
+ * create, change, rotate the secret of or delete a developer app — so the
+ * clients that can sign people in are the ones the deployment set up. Asked by
+ * EVERY route here that writes (`developer-apps-managers.test.ts` holds that);
+ * reading one's own apps, and every existing app and its tokens, keep working.
+ * Unset (or "owner"): returns false before anything is read. An admin check
+ * that fails refuses. Returns true when it answered.
+ */
+async function refuseUnlessDeveloperAppManager(req: FastifyRequest, reply: FastifyReply): Promise<boolean> {
+  if (surfaceDeveloperAppManagers() !== "admin") return false
+  let admin: boolean
+  try {
+    admin = await checkIsAdmin(req.userId!)
+  } catch (err) {
+    sendInternalError(reply, req, err, "Failed to check who may manage developer apps")
+    return true
+  }
+  if (admin) return false
+  reply.status(403).send({
+    error: { code: "developer_apps_admin_only", message: "On this deployment, only an administrator can create or change developer apps." },
+  })
+  return true
+}
+
 export async function developerAppRoutes(app: FastifyInstance) {
   // Opt-in rate limit: with admins uncapped, this is the only bound on the
   // route, and each call runs a bcrypt hash and flushes the CORS origin cache.
@@ -83,6 +110,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
     if (rejectProgrammaticAuth(req, reply, DEV_APPS_NO_OAUTH_MSG, { allowPersonalToken: true })) return
+    if (await refuseUnlessDeveloperAppManager(req, reply)) return
 
     const parsed = createBody.safeParse(req.body)
     if (!parsed.success) {
@@ -177,6 +205,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
     if (rejectProgrammaticAuth(req, reply, DEV_APPS_NO_OAUTH_MSG, { allowPersonalToken: true })) return
+    if (await refuseUnlessDeveloperAppManager(req, reply)) return
     const idParsed = idParams.safeParse(req.params)
     if (!idParsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Invalid id" } })
@@ -216,6 +245,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
     if (rejectProgrammaticAuth(req, reply, DEV_APPS_NO_OAUTH_MSG, { allowPersonalToken: true })) return
+    if (await refuseUnlessDeveloperAppManager(req, reply)) return
     const parsed = idParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Invalid id" } })
@@ -238,6 +268,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
     if (rejectProgrammaticAuth(req, reply, DEV_APPS_NO_OAUTH_MSG, { allowPersonalToken: true })) return
+    if (await refuseUnlessDeveloperAppManager(req, reply)) return
     const parsed = idParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Invalid id" } })

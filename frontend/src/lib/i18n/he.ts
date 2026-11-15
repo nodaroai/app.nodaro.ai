@@ -3566,6 +3566,7 @@ export const he: ChromeDict = {
   "devApp.failedUpdate": "עדכון היישום נכשל",
   "devApp.failedRotate": "החלפת הסוד נכשלה",
   "devApp.editionGate": "יישומי מפתחים דורשים מהדורת Business או Cloud.",
+  "devApp.adminOnly": "בפריסה זו, יישומי מפתחים מנוהלים על ידי מנהל מערכת.",
   "devApp.notFound": "היישום לא נמצא, או שאין לכם גישה אליו.",
   "apiTok.editionGate": "אסימוני API דורשים מהדורת Business או Cloud.",
   "devApp.copyAria": "העתקת {text}",

@@ -3579,6 +3579,7 @@ export const ja: ChromeDict = {
   "devApp.failedUpdate": "アプリの更新に失敗しました",
   "devApp.failedRotate": "シークレットの再発行に失敗しました",
   "devApp.editionGate": "開発者アプリを使用するには、Business または Cloud エディションが必要です。",
+  "devApp.adminOnly": "このデプロイでは、開発者アプリは管理者が管理します。",
   "devApp.notFound": "アプリが見つからないか、アクセス権がありません。",
   "apiTok.editionGate": "APIトークンを使用するには、Business または Cloud エディションが必要です。",
   "devApp.copyAria": "{text} をコピー",

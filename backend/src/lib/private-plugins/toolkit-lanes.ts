@@ -110,6 +110,8 @@ export const FFMPEG_MEMBER_LANES: SectionLanes<PluginFfmpegToolkit> = {
   transcodeToBrowserSafe: local(),
   needsContainerRemux: { exempt: "a synchronous check of a name" },
   remuxToMp4: local(),
+  mp3EncodeArgs: { exempt: "a synchronous, pure argv builder: no launch" },
+  mp3GraphEncodeArgs: { exempt: "a synchronous, pure argv builder: no launch" },
 }
 
 export const MEDIA_MEMBER_LANES: SectionLanes<PluginMediaToolkit> = {

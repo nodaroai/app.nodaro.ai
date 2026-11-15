@@ -3588,6 +3588,7 @@ export const en = {
   "devApp.failedUpdate": "Failed to update app",
   "devApp.failedRotate": "Failed to rotate secret",
   "devApp.editionGate": "Developer apps require Business or Cloud edition.",
+  "devApp.adminOnly": "On this deployment, developer apps are managed by an administrator.",
   "devApp.notFound": "App not found, or you don't have access to it.",
   "apiTok.editionGate": "API tokens require Business or Cloud edition.",
   "devApp.copyAria": "Copy {text}",

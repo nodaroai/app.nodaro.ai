@@ -1,5 +1,6 @@
 import "dotenv/config"
 import { movedPagesSettingsProblem } from "./moved-pages-settings.js"
+import { mcpAllowedClientIdsProblem } from "./mcp-client-ids.js"
 import { z } from "zod"
 import { parseSiteCaptureEnabled } from "./site-capture-switch.js"
 import {
@@ -638,6 +639,17 @@ export const envSchema = z.object({
   /** Comma-separated allowlist of MCP client_name values that may register dynamically. Only used when MCP_DYNAMIC_REGISTRATION="allowlist". */
   MCP_DCR_ALLOWLIST: z.string().default("Claude,Claude Code,Cursor,Cline,Continue,Goose,ChatGPT,OpenAI,Lovable,Gemini,Gemini CLI,Codex,MCP Inspector,mcp-inspector"),
   /**
+   * The clients that may use the MCP endpoint, by `client_id` (decided
+   * 2026-11-11): comma-separated ids of developer apps the deployment created
+   * itself. Unset or blank = no list, and every other MCP lever keeps its
+   * meaning. When set, the endpoint accepts only tokens issued to a listed
+   * client, the sign-in refuses any other client that asks for MCP before
+   * consent, and self-registration answers as `MCP_DYNAMIC_REGISTRATION=off`.
+   * A malformed value (an entry that is not `app_` + 32 hex, a self-registered
+   * `ndr_dcr_` id) is refused at boot. Read through `lib/mcp-listed-clients.ts`.
+   */
+  MCP_ALLOWED_CLIENT_IDS: z.string().default(""),
+  /**
    * client_id of the developer app the Figma plugin connects through (see
    * `routes/oauth-plugin-connect.ts`). The operator registers the app once with
    * this deployment's `/v1/oauth/plugin/callback` in its redirect_uris and the
@@ -764,6 +776,9 @@ function loadConfig() {
   // Settings that only make sense together: refused here, at boot, naming the setting.
   const movedPages = movedPagesSettingsProblem(result.data)
   if (movedPages) throw new Error(`Invalid env vars: ${movedPages}`)
+  // The MCP client list is sign-in policy: a value that cannot be read must stop the boot, never be ignored.
+  const mcpClients = mcpAllowedClientIdsProblem(result.data)
+  if (mcpClients) throw new Error(`Invalid env vars: ${mcpClients}`)
   return result.data
 }
 

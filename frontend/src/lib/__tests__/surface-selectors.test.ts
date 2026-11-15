@@ -10,6 +10,7 @@ import {
   surfaceOutputsAllowPublic,
   surfaceLocalePicker,
   personalFreeCreditsShown,
+  surfaceDeveloperAppsAdminOnly,
 } from "../surface-selectors"
 
 afterEach(() => {
@@ -232,5 +233,15 @@ describe("the keys the client apps read — absent means today's behaviour", () 
     const s = await import("../surface-selectors")
     window.__NODARO_RUNTIME__ = { surface: { worlds: { allow: [] } } }
     expect(s.surfaceWorldAllowed("app")).toBe(false)
+  })
+})
+
+describe("surfaceDeveloperAppsAdminOnly — developer apps managed by admins only (decided 2026-11-11)", () => {
+  it("off with no surface, or developerApps.manage owner; on with admin", () => {
+    expect(surfaceDeveloperAppsAdminOnly()).toBe(false)
+    window.__NODARO_RUNTIME__ = { surface: { developerApps: { manage: "owner" } } } as never
+    expect(surfaceDeveloperAppsAdminOnly()).toBe(false)
+    window.__NODARO_RUNTIME__ = { surface: { developerApps: { manage: "admin" } } } as never
+    expect(surfaceDeveloperAppsAdminOnly()).toBe(true)
   })
 })

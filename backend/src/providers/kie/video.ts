@@ -61,6 +61,7 @@ import {
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
 import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
+import { mp3EncodeArgs } from "../video/mp3-encode.js"
 import { lipSyncRateModelOf } from "../../lib/lip-sync-inputs.js"
 import { LIP_SYNC_TRIM_MARGIN_SEC, prepareRateLipSyncAudio } from "./lip-sync-audio.js"
 import { ensureVideoFitsSize, KLING_4_REF_VIDEO_LIMIT } from "./reference-video-size.js"
@@ -593,6 +594,11 @@ export function lipSyncKieCostUsd(kieCreditsPerSecond: number, billedSeconds: nu
   return Math.round(kieCreditsPerSecond * billedSeconds * KIE_CREDIT_USD * 1_000_000) / 1_000_000
 }
 
+/** The ffmpeg arguments that cut an audio file to its first `maxSeconds` as a 192 kb/s MP3. */
+export function lipSyncAudioTrimArgs(inputPath: string, outputPath: string, maxSeconds: number): string[] {
+  return ["-i", inputPath, ...mp3EncodeArgs({ cut: { duration: maxSeconds }, bitrate: "192k" }), "-y", outputPath]
+}
+
 /**
  * If audio exceeds the model's max duration, trim it with FFmpeg
  * and upload the trimmed version to R2. Returns the (possibly new) audio URL.
@@ -623,13 +629,7 @@ async function ensureAudioDuration(
     )
 
     // Always output as mp3 for maximum compatibility with KIE API
-    await runFfmpeg([
-      "-i", inputPath,
-      "-t", String(maxSeconds),
-      "-c:a", "libmp3lame", "-b:a", "192k",
-      "-y",
-      outputPath,
-    ])
+    await runFfmpeg(lipSyncAudioTrimArgs(inputPath, outputPath, maxSeconds))
 
     const trimmedBuffer = await readFile(outputPath)
     // A provider input: the running job's scratch folder, emptied when the job ends.

@@ -9358,9 +9358,13 @@ export interface OAuthAppInfo {
  * Fetch public app metadata for the OAuth consent screen.
  * No auth required — client_id is public by OAuth design.
  */
-export async function getOAuthAppInfo(clientId: string, redirectUri?: string): Promise<OAuthAppInfo> {
+export async function getOAuthAppInfo(clientId: string, redirectUri?: string, resources: readonly string[] = []): Promise<OAuthAppInfo> {
   const query = new URLSearchParams({ client_id: clientId })
   if (redirectUri) query.set("redirect_uri", redirectUri)
+  // RFC 8707 `resource`, forwarded as the client sent it: a deployment that
+  // lists its MCP clients refuses an unlisted one asking for MCP here, before
+  // the consent screen renders.
+  for (const resource of resources) query.append("resource", resource)
   return apiRequest(`/v1/oauth/app-info?${query.toString()}`, "oauth.failedLoadAppInfo", { skipAuth: true })
 }
 
@@ -9373,6 +9377,8 @@ export interface OAuthAuthorizeInput {
   codeChallenge?: string
   /** PKCE code_challenge_method — only "S256" is accepted server-side. */
   codeChallengeMethod?: "S256"
+  /** RFC 8707 `resource`, forwarded verbatim from the OAuth client (one value or several). */
+  resource?: string | string[]
 }
 
 export interface OAuthAuthorizeResult {

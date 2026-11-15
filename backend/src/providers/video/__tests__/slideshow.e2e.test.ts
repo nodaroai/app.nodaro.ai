@@ -18,6 +18,7 @@ import { basename, dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { runFfmpeg, runFfprobe, probeMediaDuration } from "../ffmpeg-utils.js"
+import { mp3EncodeArgs } from "../mp3-encode.js"
 import { slideshow } from "../slideshow.js"
 
 vi.mock("../ffmpeg-utils.js", async (importOriginal) => {
@@ -81,7 +82,7 @@ describe.skipIf(!ffmpegAvailable)("slideshow (real ffmpeg)", () => {
     await runFfmpeg([
       "-y",
       "-f", "lavfi", "-i", "sine=frequency=330:duration=30",
-      "-c:a", "libmp3lame",
+      ...mp3EncodeArgs(),
       join(dir, "track-30s.mp3"),
     ])
     audioDuration = await probeMediaDuration(join(dir, "track-30s.mp3"))

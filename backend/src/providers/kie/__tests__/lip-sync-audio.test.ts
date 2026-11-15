@@ -17,6 +17,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { writeFile } from "node:fs/promises"
+import { mp3ChainTail, mp3EncodeArgs } from "../../video/mp3-encode.js"
 
 const state = vi.hoisted(() => ({
   /** What the caller's server answers, fetch after fetch, by URL. */
@@ -111,6 +112,8 @@ const rule = LIP_SYNC_INPUT_RULES["omnihuman-2-0"]!
 const URL_ = "https://caller.example/voice"
 const serve = (...files: Array<{ bytes: number; declared?: number }>) => state.served.set(URL_, files)
 const prepare = (held: number | undefined) => prepareRateLipSyncAudio(URL_, rate, rule, "OmniHuman 2.0", held)
+/** The encode's audio chain (its `-af`): every pad and cut is in it. */
+const audioChain = (args: readonly string[]) => args[args.indexOf("-af") + 1]
 
 beforeEach(() => {
   state.served.clear()
@@ -142,7 +145,8 @@ describe("an honest file runs, billed as reserved, and the model gets OUR encode
     const encode = state.ffmpegArgs[0]!
     expect(encode[encode.indexOf("-i") + 1]).toMatch(/decoded\.pcm$/)
     expect(encode).toEqual(expect.arrayContaining(["-f", "s16le", "-c:a", "libmp3lame"]))
-    expect(encode).not.toContain("-af")
+    // Neither padded nor cut: the audio chain is the MP3 encode's own end, nothing before it.
+    expect(audioChain(encode)).toBe(mp3ChainTail())
     expect(state.uploaded).toEqual([{ name: "lip-sync-prepared", ext: "mp3", type: "audio/mpeg" }])
     // The source is decoded up to the rate's maximum, as any container the lane takes; the encode
     // is measured just past it, as the MP3 it is.
@@ -161,7 +165,7 @@ describe("an honest file runs, billed as reserved, and the model gets OUR encode
     serve({ bytes: 100_000 })
     state.measures = [3.2, 4 + LIP_SYNC_PAD_MARGIN_SEC]
     expect(await prepare(4)).toMatchObject({ padded: true, measuredSec: 3.2, billedSeconds: 4, sentSec: 4 })
-    expect(state.ffmpegArgs[0]).toEqual(expect.arrayContaining(["-af", `apad=whole_dur=${4 + LIP_SYNC_PAD_MARGIN_SEC}`]))
+    expect(audioChain(state.ffmpegArgs[0]!)).toBe(`apad=whole_dur=${4 + LIP_SYNC_PAD_MARGIN_SEC},${mp3ChainTail()}`)
   })
 
   it("a 40 MB WAV (over the model's 15 MB as given) is encoded to an MP3 under 15 MB, runs, and is billed as held", async () => {
@@ -303,15 +307,17 @@ describe("a file that is not the one priced is refused — deterministic, nothin
 describe("the pieces", () => {
   it("the encode command: MP3 of the decoded PCM (read as that PCM, a local file only), the padding or the cut only when asked", () => {
     const pcmIn = ["-protocol_whitelist", "file", "-format_whitelist", "s16le", "-f", "s16le", "-ar", "44100", "-ac", "2", "-i", "in.pcm"]
+    // The pad and the cut are inside the MP3 chain, ahead of the encoder's frame size (mp3-encode.ts).
     expect(lipSyncAudioEncodeArgs("in.pcm", "out.mp3", undefined)).toEqual([
-      "-nostdin", "-v", "error", ...pcmIn, "-c:a", "libmp3lame", "-b:a", "192k", "-y", "out.mp3",
+      "-nostdin", "-v", "error", ...pcmIn, ...mp3EncodeArgs({ bitrate: "192k" }), "-y", "out.mp3",
     ])
     expect(lipSyncAudioEncodeArgs("in.pcm", "out.mp3", 4.1)).toEqual([
-      "-nostdin", "-v", "error", ...pcmIn, "-af", "apad=whole_dur=4.1", "-c:a", "libmp3lame", "-b:a", "192k", "-y", "out.mp3",
+      "-nostdin", "-v", "error", ...pcmIn, ...mp3EncodeArgs({ filters: ["apad=whole_dur=4.1"], bitrate: "192k" }), "-y", "out.mp3",
     ])
     expect(lipSyncAudioEncodeArgs("in.pcm", "out.mp3", undefined, 299.5)).toEqual([
-      "-nostdin", "-v", "error", ...pcmIn, "-t", "299.5", "-c:a", "libmp3lame", "-b:a", "192k", "-y", "out.mp3",
+      "-nostdin", "-v", "error", ...pcmIn, ...mp3EncodeArgs({ cut: { duration: 299.5 }, bitrate: "192k" }), "-y", "out.mp3",
     ])
+    expect(audioChain(lipSyncAudioEncodeArgs("in.pcm", "out.mp3", undefined, 299.5))).toMatch(/,atrim=duration=299\.500000,asetnsamples=n=1152:p=0$/)
   })
 
   it("provider cost is KIE's 14 per second × the billed seconds, not 1.5's rate or the flat anchor", () => {
@@ -346,7 +352,7 @@ describe("a bucketed model's audio — the same path", () => {
     const prepared = await bucket(provider, held)
     expect(prepared).toMatchObject({ url: "https://cdn.test/scratch/lip-sync-prepared.mp3", measuredSec: sec, billedSeconds: held, sentSec: sec, padded: false, trimmed: false })
     const encode = state.ffmpegArgs[0]!
-    expect(encode).not.toContain("-af")
+    expect(audioChain(encode)).toBe(mp3ChainTail())
     expect(encode).not.toContain("-t")
     expect(state.measureFormats).toEqual([undefined, ["mp3"]])
   })
@@ -365,7 +371,7 @@ describe("a bucketed model's audio — the same path", () => {
       const prepared = await bucket(provider, max)
       expect(prepared).toMatchObject({ billedSeconds: max, trimmed: true, padded: false, sentSec: max - LIP_SYNC_TRIM_MARGIN_SEC })
       const encode = state.ffmpegArgs[0]!
-      expect(encode[encode.indexOf("-t") + 1]).toBe(String(max - LIP_SYNC_TRIM_MARGIN_SEC))
+      expect(audioChain(encode)).toBe(mp3ChainTail({ cut: { duration: max - LIP_SYNC_TRIM_MARGIN_SEC } }))
     }
     expect(state.measureCaps).toEqual([max, max + 1, max, max + 1])
   })
@@ -375,13 +381,13 @@ describe("a bucketed model's audio — the same path", () => {
     state.measures = [15.0187, 15]
     expect(await bucket("kling-avatar", 15)).toMatchObject({ measuredSec: 15.0187, billedSeconds: 15, trimmed: true, sentSec: 15 })
     const encode = state.ffmpegArgs[0]!
-    expect(encode[encode.indexOf("-t") + 1]).toBe("15")
+    expect(audioChain(encode)).toBe(mp3ChainTail({ cut: { duration: 15 } }))
     // Past the 50 ms edge it is the next bucket, sent whole.
     serve({ bytes: 400_000 })
     state.ffmpegArgs = []
     state.measures = [15.06, 15.06]
     expect(await bucket("kling-avatar", 30)).toMatchObject({ billedSeconds: 30, trimmed: false, sentSec: 15.06 })
-    expect(state.ffmpegArgs[0]).not.toContain("-t")
+    expect(audioChain(state.ffmpegArgs[0]!)).toBe(mp3ChainTail())
   })
 
   it("a server that answers the run's fetch with a longer file (held at the 15 s bucket, now 42 s) is refused before any encode — nothing sent, refunded", async () => {

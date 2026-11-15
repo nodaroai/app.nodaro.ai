@@ -11,6 +11,8 @@ import {
   refineSurfaceEdition,
   runtimeSurfaceProfile,
   surfaceGateOpen,
+  surfaceDeveloperAppManagers,
+  surfaceListsPublishedApps,
   surfaceMcpPath,
   surfaceProfileFailedToLoad,
   __resetSurfaceProfileCacheForTests,
@@ -1055,5 +1057,63 @@ describe("mcp — MCP by path, off unless turned on", () => {
     const out = JSON.parse(renderSurfaceProfileForRuntimeConfig())
     expect(out.brand.productName).toBe("Acme")
     expect(out).not.toHaveProperty("mcp")
+  })
+})
+
+describe("developerApps.manage — a safety switch: unknown falls to admins only (decided 2026-11-11)", () => {
+  afterEach(() => {
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+    vi.restoreAllMocks()
+  })
+  const of = (developerApps: unknown) => parseSurfaceProfile(JSON.stringify({ developerApps })).developerApps
+
+  it("absent, or an object without manage, is no key: today's behaviour", () => {
+    expect(parseSurfaceProfile("{}").developerApps).toBeUndefined()
+    expect(of({})).toBeUndefined()
+  })
+
+  it("a known value is kept; anything else is admins only, warned", () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    expect(of({ manage: "owner" })).toEqual({ manage: "owner" })
+    expect(of({ manage: "admin" })).toEqual({ manage: "admin" })
+    expect(of({ manage: "admins" })).toEqual({ manage: "admin" })
+    expect(of({ manage: true })).toEqual({ manage: "admin" })
+    expect(of("admin")).toEqual({ manage: "admin" })
+    expect(of(["owner"])).toEqual({ manage: "admin" })
+    expect(spy).toHaveBeenCalled()
+  })
+
+  it("the reader: owner with no profile, or on Community; the profile's value otherwise; and it reaches /config.js", async () => {
+    config.EDITION = "cloud"
+    expect(surfaceDeveloperAppManagers()).toBe("owner")
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ developerApps: { manage: "admin" } })
+    __resetSurfaceProfileCacheForTests()
+    expect(surfaceDeveloperAppManagers()).toBe("admin")
+    const { renderSurfaceProfileForRuntimeConfig } = await import("../surface-profile-runtime-config.js")
+    expect(JSON.parse(renderSurfaceProfileForRuntimeConfig()).developerApps).toEqual({ manage: "admin" })
+    config.EDITION = "community"
+    __resetSurfaceProfileCacheForTests()
+    expect(surfaceDeveloperAppManagers()).toBe("owner")
+    config.EDITION = "cloud"
+  })
+})
+
+describe("surfaceListsPublishedApps — the listing follows the Apps navigation entry (decided 2026-11-11)", () => {
+  afterEach(() => {
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+  })
+  const with_ = (profile: unknown) => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify(profile)
+    __resetSurfaceProfileCacheForTests()
+    return surfaceListsPublishedApps()
+  }
+
+  it("listed with no profile, or a profile that hides something else; not listed where apps is hidden", () => {
+    config.EDITION = "cloud"
+    expect(surfaceListsPublishedApps()).toBe(true)
+    expect(with_({ nav: { hide: ["explore"] } })).toBe(true)
+    expect(with_({ nav: { hide: ["apps"] } })).toBe(false)
   })
 })

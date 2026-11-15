@@ -19,6 +19,7 @@ import {
 } from "../surface-deny.js"
 import { runtimeSurfaceProfile, surfaceAllowsLinkImports } from "../surface-profile.js"
 import type { McpSession } from "./session.js"
+import { outsideAddressRefusal } from "./tool-addresses.js"
 import { TOOL_NEEDS, type RouteNeed, type ToolNeed } from "./tool-needs.js"
 import { errorResult } from "./tools/_verb-helpers.js"
 
@@ -51,6 +52,12 @@ import { errorResult } from "./tools/_verb-helpers.js"
  * turn) re-judges each call, so a tool withheld mid-turn is refused at its
  * next call. There is no `tools/list_changed` push: the HTTP transport is
  * stateless JSON with no stream to send one on.
+ *
+ * THE ADDRESSES A CALL CARRIES. Where link imports are off, a call to a tool
+ * that IS offered is still refused, with `link_imports_disabled`, when one of
+ * its arguments is a link outside this deployment's storage
+ * (`tool-addresses.ts`): judged here, before the tool runs, whatever route,
+ * plugin or service the tool would reach.
  *
  * NOTHING RESTRICTED, NOTHING CHANGES. Where the deployment restricts nothing
  * no tool is judged, every registration goes through untouched, and every
@@ -219,7 +226,7 @@ function reportUndeclared(name: string): void {
 }
 
 type ToolCallback = (...args: unknown[]) => unknown
-type CallHandler = (request: { params: { name: string } }, extra: unknown) => unknown
+type CallHandler = (request: { params: { name: string; arguments?: unknown } }, extra: unknown) => unknown
 
 /**
  * Put the offer between the server and its tools, BEFORE any tool registers:
@@ -228,9 +235,16 @@ type CallHandler = (request: { params: { name: string } }, extra: unknown) => un
  * when it is made (a server kept across calls), and reaches its tool when
  * nothing is withheld. With no offer (nothing restricted) every registration
  * passes through untouched.
+ *
+ * Where link imports are off, a call is also refused when its arguments carry
+ * an address outside this deployment's storage (`tool-addresses.ts`, decided
+ * 2026-11-11), with the same refusal, before the tool runs. With link imports
+ * on the call reaches its tool exactly as it was sent: nothing is read.
  */
 export function installToolOffer(server: McpServer, opts: { userId: string; offer: ToolOffer | undefined }): void {
   const withheld = new Map<string, ToolRefusal>()
+  // Each tool's schema as it registered it, for the addresses a call carries.
+  const schemas = new Map<string, unknown>()
   const register = server.registerTool.bind(server) as (name: string, config: Record<string, unknown>, cb: ToolCallback) => unknown
   const patchedRegister = (name: string, config: Record<string, unknown>, cb: ToolCallback): unknown => {
     if (!Object.hasOwn(TOOL_NEEDS, name)) reportUndeclared(name)
@@ -239,6 +253,7 @@ export function installToolOffer(server: McpServer, opts: { userId: string; offe
       withheld.set(name, refusal)
       return undefined
     }
+    schemas.set(name, config?.inputSchema)
     return register(name, config, cb)
   }
   ;(server as unknown as { registerTool: typeof patchedRegister }).registerTool = patchedRegister
@@ -256,6 +271,10 @@ export function installToolOffer(server: McpServer, opts: { userId: string; offe
           ? undefined
           : (withheld.get(name) ?? (Object.hasOwn(TOOL_NEEDS, name) ? (await resolveToolOffer(opts.userId))?.refusalOf(name) : undefined))
       if (refusal) return refusalResult(refusal)
+      if (!surfaceAllowsLinkImports() && typeof name === "string") {
+        const outside = outsideAddressRefusal(name, request.params.arguments, schemas.get(name))
+        if (outside) return refusalResult(outside)
+      }
       return handler(request, extra)
     })
   }

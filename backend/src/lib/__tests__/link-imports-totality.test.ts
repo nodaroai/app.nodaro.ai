@@ -462,6 +462,17 @@ describe("the switch is asked first, in all three funnels of the import gate", (
     const portability = read("lib/media-portability.ts")
     expect(portability).toMatch(/linkImportRefusal\(url\)/)
   })
+
+  it("an MCP call is judged at the call, before its tool runs, by the switch's own refusal (decided 2026-11-11)", () => {
+    // Whatever route or plugin a tool reaches, the arguments are judged first:
+    // `lib/mcp/__tests__/tool-addresses-census.test.ts` proves every argument.
+    const offer = read("lib/mcp/tool-offer.ts")
+    const call = offer.slice(offer.search(/inner\.setRequestHandler = /))
+    const ask = call.search(/if \(!surfaceAllowsLinkImports\(\) && typeof name === "string"\) \{\s*const outside = outsideAddressRefusal\(name, request\.params\.arguments, schemas\.get\(name\)\)\s*if \(outside\) return refusalResult\(outside\)/)
+    expect(ask, "the MCP call wrapper no longer judges a call's addresses").toBeGreaterThan(0)
+    expect(ask, "the addresses must be judged before the tool's handler runs").toBeLessThan(call.search(/return handler\(request, extra\)/))
+    expect(read("lib/mcp/tool-addresses.ts")).toMatch(/const refusal = linkImportRefusal\(address\)/)
+  })
 })
 
 describe("every route that takes a URL is counted", () => {
