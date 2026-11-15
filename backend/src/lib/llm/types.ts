@@ -9,6 +9,9 @@ import type { LlmServingLane } from "../pricing/llm-cost.js"
 // Public types
 // ---------------------------------------------------------------------------
 
+/** The highest video frame sampling rate a model takes (the `fps` of a video block): Google's documented ceiling for `VideoMetadata.fps`. */
+export const LLM_VIDEO_FPS_MAX = 24
+
 export type LlmContentBlock =
   | { type: "text"; text: string }
   | { type: "image"; url: string }

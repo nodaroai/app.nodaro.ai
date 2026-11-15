@@ -196,9 +196,14 @@ describe("start_film_director MCP tool", () => {
     expect(doctrine).toContain("`keep_original_audio: false`")
     // The check before showing: the words, the mix, the picture, and what not to trust or use.
     expect(doctrine).toContain("Run `transcribe` on the final video")
-    expect(doctrine).toContain("a Generate Text node (`llm-chat`) on `gemini-3.8-flash`")
-    expect(doctrine).toContain("an Upload Video node (`upload-video`) into its `references` handle")
-    expect(doctrine).toContain("Do not rely on that picture check for sound.")
+    expect(doctrine).toContain("Call `generate_text` directly (`llmModel: \"gemini-3.8-flash\"`) with the finished video in `video_urls`.")
+    expect(doctrine).toContain("Do not build a workflow for this.")
+    // The sound is asked about on its own, as audio, and its answer is a hint.
+    expect(doctrine).toContain("In a second `generate_text` call pass the final mix in `audio_urls`, with no video")
+    expect(doctrine).toContain("Treat the answer as a hint, not a pass")
+    // No node of a workflow is left in the check.
+    expect(doctrine).not.toContain("llm-chat")
+    expect(doctrine).not.toContain("upload-video")
     expect(doctrine).toContain("Do not use `video_analysis` for this check.")
   })
 

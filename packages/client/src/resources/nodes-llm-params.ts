@@ -18,6 +18,16 @@ export type LlmChatParams = {
   referenceImageUrls?: string[]
   /** Up to 3 video links, on a model that reads video. */
   referenceVideoUrls?: string[]
+  /**
+   * Frames sampled per second of each reference video: above 0, up to 24.
+   * A model reads 1 frame per second when this is left out. More frames of
+   * the same clip are more input tokens; a video's sound is read the same
+   * at any rate. Only the provider's own API carries a sampling rate, so it
+   * needs `advancedMode: true` on a model that reads video (a Gemini
+   * model): without it the call answers `400 video_fps_needs_advanced_mode`,
+   * and with no video `400 video_fps_without_video`.
+   */
+  referenceVideoFps?: number
   /** Up to 3 audio links, on a model that reads audio. */
   referenceAudioUrls?: string[]
   /**

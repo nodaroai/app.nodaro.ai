@@ -430,3 +430,97 @@ describe("POST /v1/llm-chat/generate — a provider content stop (direct Gemini 
     expect(credits.commitCredits).not.toHaveBeenCalled()
   })
 })
+
+describe("POST /v1/llm-chat/generate — a video frame rate (referenceVideoFps)", () => {
+  // Advanced mode on a Gemini model needs this install's Gemini key; the suite's config holds none.
+  const withGeminiKey = async () => {
+    const { config } = (await import("../../lib/config.js")) as unknown as { config: Record<string, unknown> }
+    config.GEMINI_API_KEY = "gem"
+    return () => {
+      delete config.GEMINI_API_KEY
+    }
+  }
+  beforeEach(() => {
+    vi.clearAllMocks()
+    jobInserts.length = 0
+  })
+  const payload = (extra: Record<string, unknown>) => ({
+    systemPrompt: "",
+    userInput: "list the defects",
+    referenceVideoUrls: ["https://media.example/cut.mp4"],
+    llmModel: "gemini-3.8-flash",
+    ...extra,
+  })
+  const videoBlocks = () =>
+    (vi.mocked(llmComplete).mock.calls[0]![0].messages[0]!.content as Array<Record<string, unknown>>).filter((b) => b.type === "video")
+
+  it("sends each video with the rate, on the provider's own lane, when Advanced mode is on", async () => {
+    const restore = await withGeminiKey()
+    try {
+      const app = await buildApp()
+      const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload({ referenceVideoFps: 4, advancedMode: true }) })
+      expect(res.statusCode).toBe(200)
+      expect(videoBlocks()).toEqual([{ type: "video", url: "https://media.example/cut.mp4", fps: 4 }])
+      expect(vi.mocked(llmComplete).mock.calls[0]![0]).toMatchObject({ requireLane: "direct" })
+      // The row records what was asked.
+      expect((jobInserts[0] as { input_data: Record<string, unknown> }).input_data.referenceVideoFps).toBe(4)
+    } finally {
+      restore()
+    }
+  })
+
+  it("no rate asked: the video block carries none, as before the field existed", async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload({}) })
+    expect(res.statusCode).toBe(200)
+    expect(videoBlocks()).toEqual([{ type: "video", url: "https://media.example/cut.mp4" }])
+  })
+
+  it("refuses a rate without Advanced mode with 400 video_fps_needs_advanced_mode: no job, no call", async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload({ referenceVideoFps: 4 }) })
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).error).toMatchObject({ code: "video_fps_needs_advanced_mode", message: expect.stringContaining("advancedMode: true") })
+    expect(jobInserts).toHaveLength(0)
+    expect(llmComplete).not.toHaveBeenCalled()
+  })
+
+  it("refuses a rate with no video with 400 video_fps_without_video", async () => {
+    const restore = await withGeminiKey()
+    try {
+      const app = await buildApp()
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/llm-chat/generate",
+        payload: { systemPrompt: "", userInput: "hello", llmModel: "gemini-3.8-flash", referenceVideoFps: 4, advancedMode: true },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(JSON.parse(res.body).error.code).toBe("video_fps_without_video")
+      expect(llmComplete).not.toHaveBeenCalled()
+    } finally {
+      restore()
+    }
+  })
+
+  it.each([0, -2, 24.5, 60])("refuses a rate of %s at validation", async (fps) => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload({ referenceVideoFps: fps, advancedMode: true }) })
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).error.code).toBe("validation_error")
+  })
+
+  it("a model with no lane of its own for Advanced mode is refused by that rule first", async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload({ referenceVideoFps: 4, advancedMode: true }) })
+    // No Gemini key on this install: Advanced mode itself cannot run.
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).error.code).toBe("advanced_mode_unavailable")
+  })
+
+  it("the stream route refuses a rate without Advanced mode the same way", async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate-stream", payload: payload({ referenceVideoFps: 4 }) })
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).error.code).toBe("video_fps_needs_advanced_mode")
+  })
+})

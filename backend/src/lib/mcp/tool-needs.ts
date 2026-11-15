@@ -232,6 +232,7 @@ export const TOOL_NEEDS: Readonly<Record<string, ToolNeed>> = Object.freeze({
   image_overlay: runs("/v1/image-overlay"),
   suggest_overlay_placement: runs("/v1/image-overlay/suggest-placement"),
   image_to_text: runs("/v1/image-to-text/describe"),
+  generate_text: runs("/v1/llm-chat/generate"),
   generate_script: runs("/v1/generate-script"),
   analyze_prompt: runs("/v1/prompt-helper/wizard"),
   generate_prompt: runs("/v1/prompt-helper/wizard"),

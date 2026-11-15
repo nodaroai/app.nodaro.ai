@@ -37,13 +37,13 @@ import type { McpSession } from "../session.js"
 import { statedDocument } from "../served-documents.js"
 
 /**
- * Embedded fallback — verbatim copy of SKILL.md v2.1.0. The unit test
+ * Embedded fallback — verbatim copy of SKILL.md v2.2.0. The unit test
  * `film-director.test.ts` (`embedded constant matches on-disk SKILL.md`)
  * fails if this drifts from the canonical file. Bump both together.
  */
 export const FALLBACK_SKILL_CONTENT = `---
 name: nodaro-film-director
-version: 2.1.0
+version: 2.2.0
 description: Use when the user wants to make a cinematic video, short film, trailer, music video, reel, or commercial using Nodaro. Guides them through a director-quality workflow that assembles an editable Nodaro workflow on the user's canvas in real-time during conversation.
 ---
 
@@ -312,7 +312,7 @@ The workflow is already on the user's canvas — it was assembled incrementally 
 
 ## Narration and audio mix
 
-Follow this section whenever the film has a spoken narration track and the user has opted into voiced audio (the opt-in question in Stage 7, asked at Stage 1 for a narrated film). That approval covers what this section uses beyond the minimal set: \`generate_speech\`, \`silence_detect\`, \`trim_audio\`, \`mix_audio\` and \`transcribe\`, and the two nodes of the picture check in rule 11.
+Follow this section whenever the film has a spoken narration track and the user has opted into voiced audio (the opt-in question in Stage 7, asked at Stage 1 for a narrated film). That approval covers what this section uses beyond the minimal set: \`generate_speech\`, \`silence_detect\`, \`trim_audio\`, \`mix_audio\`, \`transcribe\` and \`generate_text\`.
 
 In a narrated film the picture is usually right early. The correction rounds go to the audio: a buried voice, uneven line levels, a reverb-like sound on the voice, no pauses, a click, the wrong music level. Each rule below prevents one of those.
 
@@ -370,11 +370,11 @@ Call \`merge_video_audio\` with the picture, the single mixed audio file, and \`
 
 ### 11. Check the result with platform tools before showing it
 
-- **Words and pauses.** Run \`transcribe\` on the final video (ElevenLabs STT, the default engine, returns per-word timings). Every word matches the script, the gaps between sentences are at least 0.5 seconds, and the last word ends at least 0.8 seconds before the end. It is a cheap call.
-- **Mix balance.** Run the \`silence_detect\` level probes of rules 7 and 8 on the final mix. This is the only reliable check of the voice against the music.
-- **Picture and gross errors.** Run a Generate Text node (\`llm-chat\`) on \`gemini-3.8-flash\`, with the finished video wired from an Upload Video node (\`upload-video\`) into its \`references\` handle. Media URLs set in the node's data do not reach the model. Ask for a short, timestamped list of defects: morphing hair, hands and faces, ghosted people, a product that changes shape, an end card that cannot be read. It is a cheap call.
-- **Do not rely on that picture check for sound.** In calibration it passed a cut with reverb on the voice and a cut where the music buried the voice. Still ask the user to listen once for voice quality.
-- **Do not use \`video_analysis\` for this check.** It costs about a hundred times as much as that picture check, takes minutes to run, and describes the video for re-creation instead of reporting defects.
+- **Words and pauses.** Run \`transcribe\` on the final video (ElevenLabs STT, the default engine, returns per-word timings). Every word matches the script, the gaps between sentences are at least 0.5 seconds, and the last word ends at least 0.8 seconds before the end.
+- **Mix balance.** Run the \`silence_detect\` level probes of rules 7 and 8 on the final mix.
+- **Picture and gross errors.** Call \`generate_text\` directly (\`llmModel: "gemini-3.8-flash"\`) with the finished video in \`video_urls\`. Ask for a short, timestamped list of defects: morphing hair, hands and faces, ghosted people, a product that changes shape, an end card that cannot be read. Do not build a workflow for this. The model sees one frame per second; to catch a defect that lasts under a second, pass \`video_fps\` (up to 24) with \`advanced_mode: true\`. More frames cost more tokens and do not change how the sound is read.
+- **Sound.** In a second \`generate_text\` call pass the final mix in \`audio_urls\`, with no video, and ask only about voice clarity, reverb or doubling, clicks, and the voice against the music. Treat the answer as a hint, not a pass, until this check has been shown to catch a known-bad mix. Still ask the user to listen once.
+- **Do not use \`video_analysis\` for this check.** It describes a video for re-creation, not its defects, takes minutes to run and costs far more.
 
 ### 12. You cannot hear
 

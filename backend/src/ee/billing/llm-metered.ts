@@ -20,7 +20,7 @@ import { usdToCredits } from "@nodaro/shared/credits"
 import { getLlmModel, supportsAdvancedMode } from "@nodaro/shared/llm-models"
 import { KIE_IMAGE_ESTIMATE_CHARS } from "../../lib/llm/kie-cost.js"
 import { sentSchemaText } from "../../lib/llm/structured-schema.js"
-import type { LlmRequest } from "../../lib/llm/types.js"
+import type { LlmContentBlock, LlmRequest } from "../../lib/llm/types.js"
 import { llmEffectiveOutputCap } from "../../lib/llm-node-output-cap.js"
 import {
   calculateLlmCost,
@@ -162,10 +162,23 @@ export function llmInputTokenBound(input: { text: string; imageCount: number; me
  * calls send it; a prompt-JSON call's one-object rule and the schema's wire
  * form) and every text message or block; each `image` / `image_base64` block is one image; each
  * `video` / `video_base64` / `audio` block adds `opts.mediaSeconds` (else
- * {@link LLM_UNKNOWN_MEDIA_SECONDS}); each `file_base64` block is one document
+ * {@link LLM_UNKNOWN_MEDIA_SECONDS}), a video sampled above one frame per second
+ * that many times its seconds ({@link videoSamplingWeight}); each `file_base64` block is one document
  * of its hold's page count (`holdPages`, never below its `pages`: a crafted
  * file is never under-held; the settle releases the rest).
  */
+/**
+ * How many times its seconds a media block is held for: a video sampled at
+ * `fps` frames per second sends that many frames each second, so its bound
+ * grows with the rate. {@link LLM_MEDIA_TOKENS_PER_SECOND} already covers one
+ * frame and the second of sound beside it, so `fps` times it covers `fps`
+ * frames. A rate of 1 or less, a video with no rate, and audio are held as before.
+ */
+function videoSamplingWeight(block: LlmContentBlock): number {
+  if (block.type !== "video" && block.type !== "video_base64") return 1
+  return Math.max(1, block.fps ?? 1)
+}
+
 export function llmRequestInputBound(req: LlmRequest, opts?: { mediaSeconds?: number }): number {
   const perMediaSeconds = opts?.mediaSeconds ?? LLM_UNKNOWN_MEDIA_SECONDS
   let text = req.system + sentSchemaText(req)
@@ -184,7 +197,7 @@ export function llmRequestInputBound(req: LlmRequest, opts?: { mediaSeconds?: nu
       else if (block.type === "file_base64") {
         fileCount++
         filePages += Math.max(block.pages, block.holdPages ?? 0)
-      } else mediaSeconds += perMediaSeconds
+      } else mediaSeconds += perMediaSeconds * videoSamplingWeight(block)
     }
   }
   return llmInputTokenBound({ text, imageCount, mediaSeconds, fileCount, filePages })

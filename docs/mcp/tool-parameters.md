@@ -1389,6 +1389,25 @@ Needs `workflows:write` and `workflows:execute` · Nodaro Cloud only.
 | `dry_run` | boolean |  | Price it and stop — no job is started and nothing is charged. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
+## `generate_text`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `prompt` | string | yes | What to ask or write. From 1 to 100000 characters. |
+| `system_prompt` | string |  | The model's instructions: its role and the shape of the answer. At most 100000 characters. |
+| `image_urls` | string[] or string |  | Up to 5 images (links or Nodaro ids). |
+| `video_urls` | string[] or string |  | Up to 3 videos (links or Nodaro ids), read with their sound. |
+| `audio_urls` | string[] or string |  | Up to 3 audio files (links or Nodaro ids). |
+| `file_urls` | string (URL)[] |  | PDF links. At most 5 items. |
+| `video_fps` | number |  | Frames sampled per second of each video (default 1). More frames cost more tokens; the sound is read the same. Needs advanced_mode on a Gemini model. At most 24. Above 0. |
+| `llmModel` | string |  | LLM model id. Defaults to Gemini 3.6 Flash (`gemini-3.6-flash`). Charged per token at the model's rate: ≈3<!-- credits: llm-chat:gemini-3.6-flash --> credits typical on Gemini 3.6 Flash (every model: docs/pricing/llm-models.md). One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-haiku-5.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `gemini-4-argon`, `gemini-4-carbon`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `gpt-6.1-terra`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `kimi-k3.1-pro`, `deepseek-v4.1-flash`. |
+| `reasoning_effort` | string |  | Reasoning effort (model-dependent). A higher effort usually spends more output tokens, and the call is charged per token. On a Claude model any effort runs on Anthropic's own API, charged at that lane's rate (docs/pricing/llm-models.md). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
+| `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply, charged per token at that lane's rate (docs/pricing/llm-models.md); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
+| `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
+| `max_tokens` | integer |  | Output token cap. Only honoured when advanced_mode is true. From 1 to 32768. |
+
 ## `generate_video`
 
 Needs `workflows:execute`.

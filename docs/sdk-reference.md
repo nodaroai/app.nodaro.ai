@@ -3667,6 +3667,14 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > on their node `data` (`advancedMode?: boolean`), and the CLI exposes it as
 > `--advanced`.
 >
+> **Video frame rate.** `llm-chat` (`POST /v1/llm-chat/generate`) reads one
+> frame per second of a reference video unless `referenceVideoFps` (above 0,
+> up to 24) asks for more. It needs `advancedMode: true` on a Gemini model:
+> only the provider's own API carries a sampling rate, so without it the call
+> answers `400 video_fps_needs_advanced_mode`. More frames are more input
+> tokens; a video's sound is read the same at any rate (see
+> [Multimodal inputs](nodes/ai-text/llm-chat.md#multimodal-inputs)).
+>
 > `client.nodes.run(type, params)` posts each LLM-backed node type to its own
 > route: `/v1/<type>` for `generate-script`, `image-critic`, `qa-check` and
 > `describe-to-picker`, and the nested route for the others (`llm-chat` →
