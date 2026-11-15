@@ -37,7 +37,7 @@ vi.mock("../../supabase.js", () => ({
 }))
 
 const { registerVerbs } = await import("../verbs.js")
-const { generateImageRequest } = await import("../../../../routes/generate-image-body.js")
+const { parseGenerateImageRequest } = await import("../../../../routes/generate-image-body.js")
 
 const SOURCE = "https://cdn.nodaro.ai/uploads/source.png"
 
@@ -329,7 +329,7 @@ describe("generate_image — the saved model: used only when generation runs it"
   // The session's test user id is not a uuid; the route reads the real one from auth.
   const accepted = (body: Record<string, unknown>) => {
     const { userId: _userId, ...sent } = body
-    return generateImageRequest.safeParse(sent).success
+    return parseGenerateImageRequest(sent).success
   }
 
   it.each(["gpt-image-2-6-flare-i2i", "gpt-image-2-i2i", "seedream-5-pro-i2i", "recraft-remove-bg"])(

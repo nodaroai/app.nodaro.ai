@@ -1,5 +1,5 @@
 import { getModel } from "@nodaro/shared/model-catalog"
-import { refusesImagesOverLimitOn, requestImageLimit, T2I_TO_I2I_VARIANT, type ImageRunKind } from "@nodaro/shared/models"
+import { DEFAULT_REQUEST_IMAGE_LIMIT, MAX_REQUEST_IMAGE_LIMIT, refusesImagesOverLimitOn, requestImageLimit, T2I_TO_I2I_VARIANT, type ImageRunKind } from "@nodaro/shared/models"
 
 /**
  * A run that would send a model more input images than it takes, refused
@@ -59,4 +59,26 @@ function modelLabel(model: string | undefined): string {
  */
 export function baseImageReservedSeats(model: string | undefined, baseImageUrl: unknown, run: ImageRunKind): number {
   return refusesImagesOverLimitOn(model, run) && typeof baseImageUrl === "string" && baseImageUrl.length > 0 ? 1 : 0
+}
+
+/**
+ * The most `connectedReferences` (and `referenceOrder` ids) one image request
+ * may carry when it runs on `models`, every model it names or defaults to
+ * (decided 2026-11-15):
+ *
+ * - when every one refuses a request over its image limit
+ *   (`refusesImagesOverLimitOn`), the largest limit any model has
+ *   (`MAX_REQUEST_IMAGE_LIMIT`). The count that decides is then the model's:
+ *   the images the run would send after assembly and de-duplication, against
+ *   its own limit (`imageInputLimitProblem`), so a list the model can take runs
+ *   and one it cannot is told how many to remove;
+ * - otherwise `DEFAULT_REQUEST_IMAGE_LIMIT`, the bound these lists always had:
+ *   such a model's references past its reference limit are left out by the
+ *   prompt assembler, so a longer list is refused as before rather than run
+ *   with some left out.
+ */
+export function structuredReferenceListLimit(models: readonly (string | undefined)[]): number {
+  return models.length > 0 && models.every((model) => refusesImagesOverLimitOn(model, "request"))
+    ? MAX_REQUEST_IMAGE_LIMIT
+    : DEFAULT_REQUEST_IMAGE_LIMIT
 }
