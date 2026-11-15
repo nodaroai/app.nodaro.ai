@@ -25,6 +25,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { hasAdmin } from "@/lib/edition"
+import { surfaceDeveloperAppsAdminOnly } from "@/lib/surface-selectors"
+import { useAuth } from "@/hooks/use-auth"
 import { toast } from "sonner"
 import {
   useDeveloperApp,
@@ -109,6 +111,7 @@ export default function DeveloperAppDetailPage() {
   const isRtl = useAppDir() === "rtl"
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { isAdmin, roleLoaded } = useAuth()
 
   const { data: appRow, isLoading, error } = useDeveloperApp(id)
   const updateMutation = useUpdateDeveloperAppMutation()
@@ -146,6 +149,24 @@ export default function DeveloperAppDetailPage() {
         <p className="text-muted-foreground">
           {t("devApp.editionGate")}
         </p>
+      </div>
+    )
+  }
+
+  // Only admins manage developer apps on this deployment (decided
+  // 2026-11-11): the page is not offered to anyone else, since the server
+  // refuses their create / change / rotate / delete.
+  if (surfaceDeveloperAppsAdminOnly() && !isAdmin) {
+    if (!roleLoaded) {
+      return (
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )
+    }
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <p className="text-muted-foreground">{t("devApp.adminOnly")}</p>
       </div>
     )
   }

@@ -7,6 +7,7 @@ import { clientNetworkHash, rateLimitAddressKey, type AddressedRequest } from ".
 import { ALL_SCOPES } from "../lib/scopes.js"
 import { hashSecret } from "./developer-apps.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { registrationClosedByClientList } from "../lib/mcp-listed-clients.js"
 
 const SECRET_TTL_DAYS = 90
 const CLIENT_ID_PREFIX = "ndr_dcr_"
@@ -175,7 +176,11 @@ export async function registerOauthRegister(app: FastifyInstance): Promise<void>
       }
 
       // Kill-switch: operator can disable DCR entirely without taking down /mcp.
-      if (!isCommunityInstance && config.MCP_DYNAMIC_REGISTRATION === "off") {
+      // A deployment that lists its MCP clients (MCP_ALLOWED_CLIENT_IDS) answers
+      // exactly as `off` does, whatever MCP_DYNAMIC_REGISTRATION says: a client
+      // that registers itself can never be listed, so its row could only be
+      // refused at sign-in (lib/mcp-listed-clients.ts).
+      if (!isCommunityInstance && (config.MCP_DYNAMIC_REGISTRATION === "off" || registrationClosedByClientList())) {
         return reply.status(403).send({
           error: {
             code: "dcr_disabled",

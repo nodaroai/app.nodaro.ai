@@ -157,6 +157,18 @@ the tutorial channel (`GET /v1/tutorials`, which an administrator curates) is
 read and cloned by anyone as before. Your own apps and templates stay listed by
 `GET /v1/apps/mine` and `GET /v1/templates/mine`.
 
+**On a deployment that hides its Apps page** (the surface profile's `nav.hide`
+names `apps`), the app marketplace lists no apps: `GET /v1/apps/browse` answers
+`{ data: [], nextCursor: null }` unless it asks for components only
+(`publishType=component`), favorites included. Your own apps stay listed by
+`GET /v1/apps/mine`, and an app you have the link to is read and run as before.
+
+**Developer apps** (`/v1/developer-apps`): on a deployment that lets only its
+administrators manage them (`developerApps.manage: "admin"`), `POST`, `PATCH`,
+`DELETE` and `POST …/rotate-secret` from anyone else answer
+`403 { "error": { "code": "developer_apps_admin_only", … } }`; listing and
+reading your own apps work as before.
+
 There, a published app is also its creator's alone:
 
 - `GET /v1/app/:slug` answers everyone but the app's signed-in creator (and an

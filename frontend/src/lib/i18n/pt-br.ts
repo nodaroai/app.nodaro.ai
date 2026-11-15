@@ -3475,6 +3475,7 @@ export const ptBR: ChromeDict = {
   "devApp.failedUpdate": "Não foi possível atualizar o app",
   "devApp.failedRotate": "Não foi possível rotacionar o segredo",
   "devApp.editionGate": "Os apps de desenvolvedor exigem a edição Business ou Cloud.",
+  "devApp.adminOnly": "Nesta implantação, os apps de desenvolvedor são gerenciados por um administrador.",
   "devApp.notFound": "App não encontrado ou você não tem acesso a ele.",
   "apiTok.editionGate": "Os tokens de API exigem a edição Business ou Cloud.",
   "devApp.copyAria": "Copiar {text}",

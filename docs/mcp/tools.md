@@ -1998,6 +1998,7 @@ List published apps. Supports `scope: "public" | "mine"` and ordering by
 recency.
 
 On a deployment that does not allow public work (`outputs.allowPublic: false`),
+or that hides its Apps page (the surface profile's `nav.hide` names `apps`),
 the public scope (the default) lists nothing:
 `{ "data": [], "scope": "public", "next_cursor": null }`. Your own apps are still
 listed with `scope: "mine"`.

@@ -45,6 +45,27 @@ Your MCP client's `client_name` isn't on the allowlist. Either:
 - Ask the operator of your Nodaro instance to add your client_name to `MCP_DCR_ALLOWLIST`, OR
 - Set `MCP_DYNAMIC_REGISTRATION=open` if you operate the instance.
 
+## "This deployment accepts MCP connections only from the clients it has set up" {#listed-clients}
+
+The deployment lets only the MCP clients it set up itself use its MCP
+endpoint (its operator listed them in `MCP_ALLOWED_CLIENT_IDS`; see
+[MCP only through your own client](../deployment.md#mcp-only-through-your-own-client)).
+What your client sees depends on where it is stopped:
+
+| Where | What comes back |
+|-------|-----------------|
+| Registering itself (`POST /v1/oauth/register`) | `403` `{"error":{"code":"dcr_disabled",…}}` — the same answer as a deployment with registration turned off |
+| Signing in (`GET /v1/oauth/authorize`) | The browser goes straight back to the client's callback with `error=unauthorized_client` and an `error_description`; no consent screen is shown |
+| The consent page opened directly, or consent | `403` `{"error":{"code":"mcp_client_not_allowed",…}}`; the page shows the message and no Allow button |
+| Exchanging a code for a token | `400` `{"error":"unauthorized_client","error_description":…}` |
+| Calling the MCP endpoint with a token of another client, a signed-in session or a personal API token | `403` `{"error":{"code":"mcp_client_not_allowed",…}}` |
+| Calling it while the client cannot be looked up | `503` `{"error":{"code":"mcp_client_check_failed",…}}` — try again |
+
+None of these name the deployment's clients. There is nothing to change in
+your client: on such a deployment, connect through the app the deployment
+provides. A client that was working stops at its next call once the operator
+removes it from the list.
+
 ## "via MCP" trigger badge shows but I didn't use MCP
 
 A connected MCP client may have submitted a job on your behalf. Open

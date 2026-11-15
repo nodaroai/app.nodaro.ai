@@ -57,6 +57,10 @@ export default function OAuthAuthorizePage() {
   // PKCE (RFC 7636) — Claude.ai and most modern MCP clients send these.
   const codeChallenge = params.get("code_challenge") ?? ""
   const codeChallengeMethod = params.get("code_challenge_method") ?? ""
+  // RFC 8707 — the resource the client asks a token for (MCP clients name the
+  // MCP endpoint). Forwarded to the server on both calls, which decides.
+  const resources = params.getAll("resource")
+  const resourcesKey = resources.join("\n")
 
   const [appInfo, setAppInfo] = useState<OAuthAppInfo | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -77,13 +81,13 @@ export default function OAuthAuthorizePage() {
   useEffect(() => {
     if (missingParam) return
     let cancelled = false
-    getOAuthAppInfo(clientId, redirectUri)
+    getOAuthAppInfo(clientId, redirectUri, resourcesKey ? resourcesKey.split("\n") : [])
       .then((info) => { if (!cancelled) setAppInfo(info) })
       // tx() (not the `t` hook) so the error message is localized without adding
       // `t` to the deps — which would re-fetch the app info on every locale switch.
       .catch((err) => { if (!cancelled) setLoadError(err instanceof Error ? err.message : tx("oauth.failedLoadAppInfo")) })
     return () => { cancelled = true }
-  }, [clientId, redirectUri, missingParam])
+  }, [clientId, redirectUri, resourcesKey, missingParam])
 
   // The server compares redirect_uri with the app's registered list (exact
   // match, same rule the Allow path enforces in POST /v1/oauth/authorize).
@@ -174,6 +178,7 @@ export default function OAuthAuthorizePage() {
         state: state || undefined,
         codeChallenge: codeChallenge || undefined,
         codeChallengeMethod: codeChallengeMethod === "S256" ? "S256" : undefined,
+        resource: resources.length === 0 ? undefined : resources.length === 1 ? resources[0] : resources,
       })
       const url = new URL(result.redirectUri)
       url.searchParams.set("code", result.code)

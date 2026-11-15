@@ -19,7 +19,7 @@ import { perMinuteOf, selectWithPerMinute, writeWithPerMinute } from "../lib/lis
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 import { bareOriginSchema } from "../lib/url-validator.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { surfaceAllowsPublicOutputs } from "../lib/surface-profile.js"
+import { surfaceAllowsPublicOutputs, surfaceListsPublishedApps } from "../lib/surface-profile.js"
 import { requireAnyAppScope, requireAppScope } from "../lib/scope-prehandler.js"
 import type { Scope } from "../lib/scopes.js"
 import { accessAtLeast, workflowAccessFromRow } from "../lib/workflow-access.js"
@@ -290,6 +290,16 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // MCP `list_apps` / `list_components` in their public scope). A person's
     // own apps stay listed by GET /v1/apps/mine.
     if (!surfaceAllowsPublicOutputs()) {
+      reply.header("Cache-Control", "public, max-age=30, stale-while-revalidate=86400")
+      return reply.send({ data: [], nextCursor: null })
+    }
+    // The listing follows the Apps page (decided 2026-11-11): a deployment that
+    // hides the `apps` navigation entry lists no published apps here either —
+    // favorites included — and reads none to find that out. Components are not
+    // apps: a components-only browse (the editor's component marketplace) is
+    // unchanged; a browse that names no type lists apps too, so it lists
+    // nothing. A person's own apps stay listed by GET /v1/apps/mine.
+    if (publishType !== "component" && !surfaceListsPublishedApps()) {
       reply.header("Cache-Control", "public, max-age=30, stale-while-revalidate=86400")
       return reply.send({ data: [], nextCursor: null })
     }

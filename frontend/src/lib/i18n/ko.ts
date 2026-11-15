@@ -3475,6 +3475,7 @@ export const ko: ChromeDict = {
   "devApp.failedUpdate": "앱을 업데이트하지 못했습니다",
   "devApp.failedRotate": "시크릿을 재발급하지 못했습니다",
   "devApp.editionGate": "개발자 앱을 사용하려면 Business 또는 Cloud 에디션이 필요합니다.",
+  "devApp.adminOnly": "이 배포에서는 관리자가 개발자 앱을 관리합니다.",
   "devApp.notFound": "앱을 찾을 수 없거나 앱에 액세스할 권한이 없습니다.",
   "apiTok.editionGate": "API 토큰을 사용하려면 Business 또는 Cloud 에디션이 필요합니다.",
   "devApp.copyAria": "{text} 복사",

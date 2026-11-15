@@ -25,6 +25,12 @@ client names) and `MCP_DYNAMIC_REGISTRATION` (`allowlist` — the default — / 
 to accept any client / `off` to disable DCR entirely). To let any client register
 on a hosted instance, set `MCP_DYNAMIC_REGISTRATION=open` in the backend env.
 
+A deployment that lists its MCP clients (`MCP_ALLOWED_CLIENT_IDS`) accepts
+no self-registered client at all: registration answers `403 dcr_disabled`, and
+only the clients the deployment created can sign in for MCP or call the
+endpoint — see [MCP only through your own client](../deployment.md#mcp-only-through-your-own-client)
+and the [refusals a client sees](./troubleshooting.md#listed-clients).
+
 ## Manual registration
 
 For a long-lived integration, prefer registering once via the dashboard:

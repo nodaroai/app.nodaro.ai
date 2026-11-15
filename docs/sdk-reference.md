@@ -5581,7 +5581,9 @@ list(params?: ListAppsParams): Promise<ListAppsResult>
 ```
 
 Cursor-paginated browse of published apps (`GET /v1/apps/browse`). Optional
-`search`, `category`, and `limit` (server caps at 50). On a deployment that does
+`search`, `category`, and `limit` (server caps at 50). On a deployment that hides
+its Apps page (`nav.hide` names `apps`) the browse lists no apps:
+`{ data: [], nextCursor: null }`. On a deployment that does
 not allow public work (`outputs.allowPublic: false`) the marketplace lists
 nothing: `{ data: [], nextCursor: null }`, and an app is its creator's alone:
 `get()`, `run()` and `resume()` of someone else's app throw `NotFoundError`, as
@@ -5768,7 +5770,11 @@ await client.apps.deleteRun("pro-headshot", runId)
 ### `client.developerApps`
 
 Manage your own OAuth developer apps. Only the owner can read or modify their
-apps; secrets are returned exactly once.
+apps; secrets are returned exactly once. On a deployment that lets only its
+administrators manage developer apps (`developerApps.manage: "admin"`),
+`create()`, `update()`, `delete()` and `rotateSecret()` from anyone else throw
+`ForbiddenError` with `code: "developer_apps_admin_only"`; `list()` and `get()`
+work as before.
 
 #### `list()`
 

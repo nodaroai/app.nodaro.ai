@@ -217,6 +217,7 @@ here for each one anyway.
 | `DOWNLOAD_SLOT_LEDGER` | `redis` | Where the per-account cap on running video downloads (4 at once) is counted. `redis`: ONE count shared by every backend process and replica through the Redis the queues already use (keys `download:slots:{<account id>}`), so a download started from the editor or an app's page and one a run starts on the server count against each other. Each running download holds a lease that its process renews while it runs and that expires within 30 s if the process dies. If Redis is unreachable the cap is counted per process until it answers. `local`: this process counts its own downloads only — for a deployment that runs one backend process |
 | `MCP_PUBLIC_URL` | `""` = the Nodaro Cloud host | Public base of the MCP host when it differs from `PUBLIC_URL`; self-hosters serving MCP on their main host set it equal to `PUBLIC_URL`. A Business/Cloud deployment with no host to spare for MCP can serve it by path instead: see [MCP by path](#mcp-by-path-no-dedicated-mcp-host) |
 | `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | `allowlist` · 14 known clients (Claude, Claude Code, Cursor, Cline, Continue, Goose, ChatGPT, OpenAI, Lovable, Gemini, Gemini CLI, Codex, MCP Inspector, mcp-inspector) | RFC 7591 dynamic client registration for MCP clients (`allowlist` · `open` · `off`), and the `client_name` allowlist consulted in `allowlist` mode — see §10 |
+| `MCP_ALLOWED_CLIENT_IDS` | `""` = no list | Comma-separated `client_id`s of developer apps (`app_…`) that may use the MCP endpoint. Set: MCP takes only tokens issued to a listed client, the sign-in refuses any other client that asks for MCP before the consent screen, and dynamic registration answers as `off`. A malformed entry (anything but `app_` + 32 hex, including a self-registered `ndr_dcr_…` id) stops every backend process at boot. See [MCP only through your own client](#mcp-only-through-your-own-client) |
 | `FIGMA_PLUGIN_OAUTH_CLIENT_ID` | `""` = plugin connect off | client_id of the developer app the Figma plugin connects through; the app must list `<PUBLIC_URL>/v1/oauth/plugin/callback` in its redirect URIs and request `jobs:read`, `assets:read`, `assets:write`, `credits:read` — see the [plugin connect handshake](./oauth-flow.md#plugin-connect-handshake-figma) |
 | `COMMUNITY_CONNECT_ENABLED` | off | **Cloud side only** — accept community-instance connections |
 | `PLATFORM_OWNER_EMAIL` | `""` | Business/Cloud — the super_admin no other admin can demote; empty = none |
@@ -807,7 +808,16 @@ serving the full surface. Unset = the full default surface. The profile can only
 **narrow** — it never turns on a surface the edition gates off. Fields (all
 optional; each array empty = "keep the default"):
 
-- `nav.hide`: `["gallery","explore","pricing","templates","apps","community","integrations"]`
+- `nav.hide`: `["gallery","explore","pricing","templates","apps","community","integrations"]`.
+  Hiding `apps` also stops the public app listing: the marketplace browse
+  (`GET /v1/apps/browse`, favorites included — what the SDK's `apps.list()`
+  and the CLI's app listing read) and the MCP tool `list_apps` in its public scope list
+  no published apps. A components-only browse (`publishType=component`, the
+  editor's component marketplace), a person's own apps (`GET /v1/apps/mine`,
+  `list_apps` with `scope: "mine"`) and the reads of one app by its link
+  (`/app/<slug>`, `/embed/<slug>`, `run_app`) are unchanged; whether other
+  people's work is readable at all is `outputs.allowPublic`. Hiding `gallery`
+  also unregisters the public `/v1/gallery` route.
 - `dashboard.tabs`: one ordered whitelist of the home screen's sections. The
   workspace filter on the **Continue** tab (`workflows`, `projects`, `studio`)
   renders the intersection of this list with its three lists, in the list's
@@ -1253,6 +1263,20 @@ optional; each array empty = "keep the default"):
   `MCP_ENABLED=true` and `PUBLIC_URL` set to the deployment's http(s) address.
   See [MCP by path](#mcp-by-path-no-dedicated-mcp-host) for what a client
   sees. Backend-only: stripped from `/config.js`.
+- `developerApps.manage`: who may create, change, rotate the secret of and
+  delete a **developer app** (an OAuth client, `/v1/developer-apps`).
+  `"owner"` (the default, and what an absent key means): every signed-in
+  person manages their own. `"admin"`: only an administrator of the deployment
+  (role `admin` or `super_admin`, signed in or through their personal API
+  token); anyone else gets `403 developer_apps_admin_only`, and the editor
+  shows them a notice instead of the developer-app pages. Reading one's own
+  apps (`GET /v1/developer-apps`, `GET /v1/developer-apps/:id`) still works,
+  and so does every app made before the switch, with its tokens. Any other
+  value, and a `developerApps` that is not an object, reads as `"admin"`, with
+  a warning. Dynamic client registration is a separate lever
+  (`MCP_DYNAMIC_REGISTRATION`, closed by `MCP_ALLOWED_CLIENT_IDS`). Reaches
+  `/config.js` (the editor reads it). See
+  [MCP only through your own client](#mcp-only-through-your-own-client).
 - `features` — whole features this deployment switches off:
   `{"features":{"hide":["copilot","presentation"]}}`. `copilot` removes the
   Workflow Copilot everywhere — the canvas rail and its collapsed tab, the
@@ -2567,6 +2591,88 @@ a user's behalf via OAuth. It is gated behind `MCP_ENABLED` (default
 
 4. **Add the connector** in your MCP client. In Claude.ai: Settings →
    Connectors → Add custom connector → URL `https://mcp.your-domain.com/mcp`.
+
+### MCP only through your own client
+
+A deployment that serves a closed community can make its MCP endpoint
+reachable **only through the client or clients it set up itself** — for
+example its own chat application — signed in through its own sign-in, with a
+consent click per person. It is one environment variable, which every edition
+reads:
+
+```
+MCP_ALLOWED_CLIENT_IDS=app_0123456789abcdef0123456789abcdef
+```
+
+A comma-separated list of developer-app `client_id`s. Unset or blank: no list,
+and every other MCP setting keeps its meaning. It is a list of ids, not names,
+on purpose: a client chooses its own name (any client can call itself
+"Claude"), but a `client_id` is minted by this deployment. Each entry must be a
+developer app's id (`app_` and 32 lowercase hex characters); anything else — an
+empty entry, a stray character, a self-registered `ndr_dcr_…` id — **stops every
+backend process at boot**, naming the entry's position. Changing the list takes
+a restart, like any variable.
+
+With a list set:
+
+- **The MCP endpoint** (`/mcp`, or the path of [MCP by path](#mcp-by-path-no-dedicated-mcp-host))
+  accepts only an access token issued to a listed client that is active and
+  was created as a developer app. Every other credential the endpoint accepts
+  otherwise — a token of any other client, a signed-in session, a personal API
+  token — is refused with `403 mcp_client_not_allowed` ("This deployment
+  accepts MCP connections only from the clients it has set up."), which names
+  no client and nothing of the list. A request with no token still gets the
+  usual 401 challenge, so clients can discover the sign-in. The check runs on
+  every call and nothing is cached: once a client leaves the list (after the
+  restart), its tokens stop working on the MCP endpoint at their next call, not
+  when they expire. If the client cannot be looked up, the call is refused
+  (`503 mcp_client_check_failed`), never let through.
+- **The sign-in** refuses any other client that asks for MCP **before the
+  consent screen**, so nobody is asked to approve a client that cannot be
+  used. A client asks for MCP when it registered itself as an MCP client, or
+  when its `resource` parameter (RFC 8707) names an MCP endpoint (a path of
+  `/mcp`, or the MCP path, on any host); a `resource` that cannot be read
+  counts as asking. The person is sent straight back to the client with
+  `error=unauthorized_client`; the consent page, consent itself and the token
+  exchange refuse the same clients, so a code issued earlier gets no token
+  either. A developer app that is not listed and does not ask for MCP signs in
+  for the REST API as before — its token is still refused on the MCP endpoint.
+- **Dynamic client registration** (`POST /v1/oauth/register`) answers exactly
+  as `MCP_DYNAMIC_REGISTRATION=off` does (`403 dcr_disabled`), whatever that
+  variable says: a client that registers itself can never be listed, so
+  registering could only make a client the sign-in then refuses.
+  Community-instance registrations keep their own switch
+  (`COMMUNITY_CONNECT_ENABLED`).
+- **The in-app Workflow Copilot** is not an MCP client of the endpoint (it
+  runs the same tools inside the server for a signed-in browser) and keeps
+  working.
+
+There is no refresh grant: access tokens are 90-day bearer tokens, and a new
+one always goes through the sign-in above.
+
+**Setting up one client for your own chat application:**
+
+1. On Business or Cloud, set the [surface profile](#surface-profile-nodaro_surface_profile)
+   key `{"developerApps": {"manage": "admin"}}`, so only an administrator can
+   create, change or delete developer apps — the clients that can sign people
+   in are then the ones you set up. (Hiding the `apps` navigation entry as
+   well keeps other people's published apps out of the listings.)
+2. Signed in as an administrator, create the client: **Settings → Developer
+   apps** (`/settings/developer-apps`), or `POST /v1/developer-apps` with your
+   chat application's callback in `redirectUris` and the scopes it needs in
+   `scopesRequested`. Copy the `client_id` and the client secret (shown once).
+3. List the `client_id` in `MCP_ALLOWED_CLIENT_IDS` and restart the backend.
+4. Turn self-registration off for clarity (`MCP_DYNAMIC_REGISTRATION=off`); with
+   the list set it answers as `off` anyway.
+5. Configure your chat application with the MCP address, the `client_id`, the
+   secret (or PKCE) and its callback. Its users sign in through this
+   deployment's sign-in and approve the app once on the consent screen.
+
+What people see: in your chat application, the usual sign-in and one consent
+screen naming your app. Any other MCP client — Claude.ai, Cursor, a client
+someone registers — is sent back with `unauthorized_client` at its sign-in, or
+gets `403 mcp_client_not_allowed` if it already holds a token. See
+[MCP troubleshooting](./mcp/troubleshooting.md#listed-clients).
 
 ### MCP by path (no dedicated MCP host)
 

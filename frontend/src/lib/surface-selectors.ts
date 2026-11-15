@@ -35,6 +35,17 @@ export function surfaceNavHidden(key: NavKey): boolean {
   return runtimeSurfaceProfile().nav.hide.includes(key)
 }
 
+/**
+ * True when only an admin of this deployment manages developer apps
+ * (`developerApps.manage: "admin"`, decided 2026-11-11): the developer-app
+ * pages are then offered to admins only. The server refuses everyone else's
+ * create / change / rotate / delete either way; this only keeps the pages from
+ * offering what would be refused.
+ */
+export function surfaceDeveloperAppsAdminOnly(): boolean {
+  return runtimeSurfaceProfile().developerApps?.manage === "admin"
+}
+
 export function surfaceTabs<T extends DashboardTabKey>(codeDefault: readonly T[]): readonly T[] {
   const tabs = runtimeSurfaceProfile().dashboard.tabs
   if (!tabs.length) return codeDefault
