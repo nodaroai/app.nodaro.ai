@@ -1045,6 +1045,31 @@ optional; each array empty = "keep the default"):
   - An admin role change reaches this check within about five minutes (the
     admin lookup is cached per process).
 
+  **Before the viewer's answer.** The editor asks `GET /v1/surface/availability`
+  once a viewer is signed in, and that per-viewer answer (this profile, the
+  Admin → Availability override and the admin's model switch, with the admin
+  exception) decides what it offers. Until it arrives, when the request fails,
+  after sign-out, and on pages that never ask (a published app, a
+  presentation), a deployment that sets lists is judged by its own lists, by
+  the rule above: with `nodes.allow` set a node type it does not list is not
+  offered (utility nodes excepted), nothing `nodes.deny` names is (a denied
+  `voice-clone` takes the one-off clone with it), and `models.allow` /
+  `models.deny` and `worlds` are read the same way. So from the first paint
+  nothing the lists withhold is drawn (the node picker and sidebar, the model
+  menus, the white-label header's worlds and menus, a published app's cards,
+  an input that follows a node) and nothing they offer is hidden. What the
+  lists cannot carry shows only with the answer: a node or model an admin
+  switched off may show until it arrives, one an admin released beyond the
+  lists appears when it does, and Site Capture shows unless the profile denies
+  it, also on an install that switches it off. Two readers wait instead of
+  guessing: on a deployment that sets node lists, Web Scrape's source dropdown
+  offers only the node's current source until the answer arrives (which source
+  follows which node is the server's to say), and a use-case node's cameras
+  settings appear only with the answer, because its run reads one recording
+  until then. A deployment that sets no lists withholds nothing before the
+  answer, as before. Whatever the browser shows, the server refuses a
+  withheld node or model at write and run.
+
   **The MCP tool list follows the offer** (decided 2026-11-11). Where the
   deployment restricts what it offers — `nodes.allow` / `nodes.deny`,
   `models.allow` / `models.deny`, `worlds.allow`, `imports.links: false`, or an
@@ -1959,15 +1984,20 @@ logo is dropped with a warning and the rest of `brand` is kept.
     viewer by `GET /v1/surface/availability`, each at its path on the same site
     (`/image`, `/video`, `/music`, `/trends`, `/video/nodaro-motion`,
     `/voice-changer`, and the editor at `/projects`). Explore and Studio are
-    not drawn;
+    not drawn. Before that answer, and when the request fails, the profile's
+    own node lists narrow them: a world whose node types `nodes.allow` leaves
+    out or `nodes.deny` names is not drawn (see "Before the viewer's answer"
+    under `nodes.allow`);
   - in each world's menu, only what the deployment offers. Video's Translate
     (its page at `/video/translate`) is listed for a viewer offered the
-    `dubbing` node once `GET /v1/surface/availability` has answered for them,
-    and not while that answer is awaited. When the request fails, the
-    profile's own `nodes.deny` decides: Translate is listed unless it names
-    `dubbing`. Image's Presets is listed only where the deployment has
-    presets, and the menu names the deployment (`brand.productName`) as the
-    maker of its own tools;
+    `dubbing` node, as `GET /v1/surface/availability` answers for them. Before
+    that answer, and when the request fails, a deployment that sets node lists
+    is judged by them from the first paint: Translate is listed unless
+    `nodes.allow` leaves `dubbing` out or `nodes.deny` names it. Where no
+    node lists are set, Translate appears only once the answer is in (or the
+    request has failed), so it is never drawn and then taken away. Image's
+    Presets is listed only where the deployment has presets, and the menu
+    names the deployment (`brand.productName`) as the maker of its own tools;
   - the deployment's name (`brand.productName`) and logo (`brand.logo`);
   - its billing: with `billing.selfServe: false` no plans, upgrade, billing or
     welcome credits. The credit figure is the one the sidebar card shows (the

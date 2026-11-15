@@ -1,5 +1,5 @@
 import { CAMERA_SWITCH_SPEAKER_MAP_HANDLE, MULTICAM_SPEAKER_MAP_TYPE, isUseCaseNodeType, usecaseDescriptor } from "@nodaro/render-rules"
-import { isNodeUnavailable, surfaceAvailabilityLoaded } from "./surface-availability"
+import { isNodeUnavailableUntilKnown } from "./surface-availability"
 
 /**
  * Input pips that follow another node's availability.
@@ -10,11 +10,13 @@ import { isNodeUnavailable, surfaceAvailabilityLoaded } from "./surface-availabi
  * hides it from users; admins still see it), the pip is withheld with it — not
  * drawn on the node, not offered by a pip popover or the add-node popup, and a
  * new wire to it is refused on the canvas. The viewer's answer is the one the
- * Add Node picker reads (`isNodeUnavailable`), so the pip appears the moment
- * the node does, with no list of its own. Until that answer has landed the
- * input is withheld (hidden until loaded, never the reverse): the static
- * profile the picker falls back to does not carry the admin switch that hides
- * a node in production, and a failed fetch keeps it withheld for the session.
+ * Add Node picker reads, so the pip appears the moment the node does, with no
+ * list of its own (`isNodeUnavailableUntilKnown`). Until that answer has
+ * landed the input is withheld (hidden until known, never the reverse): a
+ * deployment that sets no node lists cannot say before it that the node is
+ * offered (the admin switch that hides a node in production is not in its
+ * profile), and a failed fetch keeps it withheld for the session. A deployment
+ * that set node lists is judged by them from the first paint, as the picker is.
  *
  * Withholding is the EDITOR's offer only. The input stays declared
  * (NODE_DEFINITIONS, the MCP handle table), so a wire already saved — or
@@ -41,10 +43,10 @@ export function targetHandleGovernedBy(nodeType: string | undefined, handleId: s
 }
 
 /** True when the viewer is not offered this input: the node it exists for is
- *  withheld from them, or their availability answer has not landed yet. */
+ *  withheld from them, or not yet known to be offered to them. */
 export function isTargetHandleWithheld(nodeType: string | undefined, handleId: string | null | undefined): boolean {
   const governedBy = targetHandleGovernedBy(nodeType, handleId)
-  return governedBy !== undefined && (!surfaceAvailabilityLoaded() || isNodeUnavailable(governedBy))
+  return governedBy !== undefined && isNodeUnavailableUntilKnown(governedBy)
 }
 
 /**

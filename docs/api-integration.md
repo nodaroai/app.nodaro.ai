@@ -2897,6 +2897,14 @@ No scopes required.
 `worlds` reports a deployment's availability settings only. Whether the
 edition serves a node at all is decided where its route is registered.
 
+Before this answers, and when it cannot be read, an app can judge the
+deployment by its own lists in its runtime configuration (`surface.nodes`,
+`surface.models`, `surface.worlds`), with the rule the server applies before
+any Admin → Availability setting: `nodeListsWithhold`, `listsWithhold` and
+`worldOffered` in `@nodaro/shared/runtime-config`. The workflow editor does
+(see "Before the viewer's answer" under `nodes.allow` in
+[deployment.md](./deployment.md#surface-profile-nodaro_surface_profile)).
+
 ### Edit Plan modes
 
 `GET /v1/edit-plan/capabilities` — the [Edit Plan](./nodes/processing-video/edit-plan.md)

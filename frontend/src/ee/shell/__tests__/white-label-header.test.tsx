@@ -191,6 +191,85 @@ describe("the header mount on a white-label deployment", () => {
     expect(seen.props?.worldMenus).toEqual({ video: { pages: ["translate"] } })
   })
 
+  describe("a deployment that sets no lists (no node, model or world lists)", () => {
+    const NO_LISTS = { header: "white-label", brand: { productName: "Acme Studio" }, billing: { selfServe: false } }
+    // Every world with an address on the site, in the canonical order.
+    const EVERY_WORLD = ["image", "video", "music", "trends", "motion", "voice", "app"]
+    beforeEach(() => {
+      window.__NODARO_RUNTIME__ = { surface: NO_LISTS } as unknown as typeof window.__NODARO_RUNTIME__
+    })
+
+    it("while the answer is awaited: every world, and no page below one", () => {
+      mount()
+      expect(seen.props?.worlds).toEqual(EVERY_WORLD)
+      expect(seen.props?.worldMenus).toEqual({ video: { pages: [] } })
+    })
+
+    it("after a read of it failed: every world, and Translate", () => {
+      mount()
+      act(() => __failSurfaceAvailabilityForTests())
+      expect(seen.props?.worlds).toEqual(EVERY_WORLD)
+      expect(seen.props?.worldMenus).toEqual({ video: { pages: ["translate"] } })
+    })
+
+    it("once it answers: its worlds, and Translate only where it offers dubbing", () => {
+      mount()
+      act(() => __resetSurfaceAvailabilityForTests({ nodes: [], models: [], worlds: ["image", "app"] }))
+      expect(seen.props?.worlds).toEqual(["image", "app"])
+      expect(seen.props?.worldMenus).toEqual({ video: { pages: ["translate"] } })
+      act(() => __resetSurfaceAvailabilityForTests({ nodes: ["dubbing"], models: [], worlds: ["video", "app"] }))
+      expect(seen.props?.worlds).toEqual(["video", "app"])
+      expect(seen.props?.worldMenus).toEqual({ video: { pages: [] } })
+    })
+  })
+
+  describe("a deployment that whitelists its nodes: its lists decide until the answer arrives", () => {
+    const whitelist = (allow: string[]) => {
+      window.__NODARO_RUNTIME__ = { surface: { ...WHITE_LABEL_SURFACE, nodes: { allow, deny: [] } } } as unknown as typeof window.__NODARO_RUNTIME__
+    }
+
+    it.each([
+      ["while the answer is awaited", () => {}],
+      ["after a read of it failed", () => act(() => __failSurfaceAvailabilityForTests())],
+    ])("%s: no Translate unless the lists offer dubbing, and no world whose node types they withhold", (_state, enter) => {
+      whitelist(["generate-image", "suno-generate"])
+      mount()
+      enter()
+      expect(seen.props?.worldMenus).toEqual({ video: { pages: [] } })
+      // Video runs generate-video and text-to-video, which the list leaves out.
+      expect(seen.props?.worlds).toEqual(["app", "image", "music"])
+      cleanup()
+      whitelist(["generate-image", "suno-generate", "dubbing", "generate-video", "text-to-video"])
+      mount()
+      enter()
+      expect(seen.props?.worldMenus).toEqual({ video: { pages: ["translate"] } })
+      expect(seen.props?.worlds).toEqual(["app", "video", "image", "music"])
+    })
+
+    it("from the first paint: a Translate the lists withhold is never drawn, even before the answer", () => {
+      whitelist(["generate-image"])
+      mount()
+      const menus = [seen.props?.worldMenus]
+      act(() => __resetSurfaceAvailabilityForTests({ nodes: ["dubbing"], models: [], worlds: ["image", "app"] }))
+      menus.push(seen.props?.worldMenus)
+      expect(menus).toEqual([{ video: { pages: [] } }, { video: { pages: [] } }])
+    })
+
+    it("once it answers, the answer decides: an admin's release or switch-off included", () => {
+      whitelist(["generate-image"])
+      mount()
+      act(() => __resetSurfaceAvailabilityForTests({ nodes: [], models: [], worlds: ["video", "app"] }))
+      expect(seen.props?.worldMenus).toEqual({ video: { pages: ["translate"] } })
+      expect(seen.props?.worlds).toEqual(["video", "app"])
+      cleanup()
+      whitelist(["generate-image", "dubbing"])
+      mount()
+      expect(seen.props?.worldMenus).toEqual({ video: { pages: ["translate"] } })
+      act(() => __resetSurfaceAvailabilityForTests({ nodes: ["dubbing"], models: [], worlds: ["image", "app"] }))
+      expect(seen.props?.worldMenus).toEqual({ video: { pages: [] } })
+    })
+  })
+
   it("the app's own pages go through the router; another app's page on the site is a full page load", () => {
     const props = mount().props()
     act(() => props.onNavigate?.("/projects?tab=templates"))

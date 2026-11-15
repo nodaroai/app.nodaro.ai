@@ -68,6 +68,16 @@ export function worldAllowed(worlds: SurfaceWorlds | undefined, id: string): boo
   return worlds?.allow === undefined || worlds.allow.includes(id)
 }
 
+/**
+ * Whether a world is offered: the profile's allowlist lets it through and none
+ * of the node types it runs (`WORLD_REQUIRED_NODE_TYPES`) is withheld, as
+ * `nodeWithheld` judges them: the platform per viewer, or a client by the
+ * deployment's own lists (`nodeListsWithhold`) before the platform's answer.
+ */
+export function worldOffered(worlds: SurfaceWorlds | undefined, id: WorldId, nodeWithheld: (type: string) => boolean): boolean {
+  return worldAllowed(worlds, id) && !WORLD_REQUIRED_NODE_TYPES[id].some(nodeWithheld)
+}
+
 /** Every world, `order`'s known ids first (each once), then the rest in canonical order. */
 export function orderWorlds(order?: readonly string[]): WorldId[] {
   const out: WorldId[] = []

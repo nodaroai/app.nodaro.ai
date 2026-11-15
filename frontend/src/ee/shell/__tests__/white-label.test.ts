@@ -31,21 +31,15 @@ const BASE: UserBalance = {
   monthlyAllocation: 1000,
 } as unknown as UserBalance
 
+// Which worlds are offered, before the answer and after it, is `offeredWorlds`
+// (lib/__tests__/availability-states-lists.test.tsx, surface-availability-worlds.test.ts).
 describe("whiteLabelWorlds", () => {
-  it("the server's answer when it has one: its order, only worlds with an address on the site", () => {
-    expect(whiteLabelWorlds({ allow: ["image", "video", "music", "app"] }, ["video", "explore", "image", "studio", "app"])).toEqual(["video", "image", "app"])
+  it("the worlds offered, in their order, only those with an address on the site", () => {
+    expect(whiteLabelWorlds(["video", "explore", "image", "studio", "app"])).toEqual(["video", "image", "app"])
   })
 
-  it("before the answer (or from an older server): the profile's allowlist, in its order", () => {
-    expect(whiteLabelWorlds({ allow: ["music", "image", "app", "explore"], order: ["app", "image"] }, null)).toEqual(["app", "image", "music"])
-  })
-
-  it("no allowlist: every world with an address on the site, in the canonical order", () => {
-    expect(whiteLabelWorlds(undefined, null)).toEqual(["image", "video", "music", "trends", "motion", "voice", "app"])
-  })
-
-  it("an empty allowlist draws no world", () => {
-    expect(whiteLabelWorlds({ allow: [] }, null)).toEqual([])
+  it("no world offered: none drawn", () => {
+    expect(whiteLabelWorlds([])).toEqual([])
   })
 })
 

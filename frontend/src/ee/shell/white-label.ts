@@ -1,4 +1,4 @@
-import { orderWorlds, surfaceUnitLabel, worldAllowed, type SurfaceWorlds, type WorldId } from "@nodaro/shared/runtime-config"
+import { surfaceUnitLabel, type WorldId } from "@nodaro/shared/runtime-config"
 import type { NodaroClient } from "@nodaro/sdk/client"
 import type { UserBalance } from "@nodaro/sdk/credits"
 import { spendableCredits, spendableDisplayFigure } from "@/lib/spendable-credits"
@@ -13,16 +13,14 @@ import type { SiteHeaderTranslate, SiteWorldId, SiteWorldMenu, SiteWorldMenuPage
  */
 
 /**
- * The worlds the header draws, in order. The server's per-viewer answer
- * (`GET /v1/surface/availability` → `worlds`, already in the deployment's
- * order and narrowed to what the viewer may run) once it has landed; before
- * that, or from a server that sends none, the profile's `worlds` (its
- * allowlist, in its order). Either way only worlds with an address on the
- * site (`WHITE_LABEL_WORLD_PATHS`).
+ * The worlds the header draws, in order: the worlds offered to the viewer
+ * (`offeredWorlds`: the server's per-viewer answer once it has landed, already
+ * in the deployment's order and narrowed to what the viewer may run; before
+ * that, the deployment's own `worlds` and node lists), those with an address
+ * on the site (`WHITE_LABEL_WORLD_PATHS`).
  */
-export function whiteLabelWorlds(profile: SurfaceWorlds | undefined, offered: readonly WorldId[] | null): SiteWorldId[] {
-  const worlds = offered ?? orderWorlds(profile?.order).filter((id) => worldAllowed(profile, id))
-  return worlds.filter((id) => WHITE_LABEL_WORLD_PATHS[id] !== undefined)
+export function whiteLabelWorlds(offered: readonly WorldId[]): SiteWorldId[] {
+  return offered.filter((id) => WHITE_LABEL_WORLD_PATHS[id] !== undefined)
 }
 
 /**
@@ -35,10 +33,9 @@ export function whiteLabelWorlds(profile: SurfaceWorlds | undefined, offered: re
  * of these node types from them. A white-label header draws such a page only
  * where the host names it, so this app names it by the same rule once the
  * viewer's answer is in, and both headers on the site (and the worlds app's
- * tabs) agree. They differ in one case: after a read of that answer that
- * failed, this header follows the deployment's static profile (no Translate
- * where its `nodes.deny` names `dubbing`), while the worlds app withholds
- * nothing and shows it.
+ * tabs) agree. Before that answer, and after a read of it that failed, a
+ * deployment that set node lists is judged by them: no Translate where they
+ * withhold `dubbing` (outside `nodes.allow`, or in `nodes.deny`).
  *
  * Every page the package lists for a world this header draws is here
  * (`white-label-menus-package.test.tsx` fails one that is not); a world with
@@ -53,9 +50,12 @@ export const WHITE_LABEL_MENU_PAGES: Readonly<Partial<Record<SiteWorldId, Readon
  * The white-label header's `worldMenus`: for each world above, the pages the
  * viewer is offered, those none of whose node types `unavailable` names (the
  * server's per-viewer answer, `GET /v1/surface/availability` → `nodes.denied`;
- * after a read that failed, the deployment's static profile). `null` while
- * that answer is awaited names none, so a page the answer may withhold is
- * never drawn and then taken away.
+ * before it, or after a read that failed, the deployment's own node lists:
+ * `settledNodeJudge`). `null` (the answer awaited on a deployment that sets no
+ * node lists) names none, so a page the answer may withhold is not drawn and
+ * then taken away. Where node lists are set they decide from the first paint:
+ * a page they withhold is never drawn, and one an admin switched off shows
+ * until the answer arrives.
  */
 export function whiteLabelWorldMenus(unavailable: ((nodeType: string) => boolean) | null): Partial<Record<SiteWorldId, SiteWorldMenu>> {
   const menus: Partial<Record<SiteWorldId, SiteWorldMenu>> = {}

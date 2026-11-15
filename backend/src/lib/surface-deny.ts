@@ -1,4 +1,4 @@
-import { WORLD_REQUIRED_NODE_TYPES, orderWorlds, worldAllowed, type WorldId } from "@nodaro/shared/runtime-config"
+import { listsWithhold, nodeListsWithhold, orderWorlds, worldOffered, type WorldId } from "@nodaro/shared/runtime-config"
 import { runtimeSurfaceProfile } from "./surface-profile.js"
 import { parseSiteCaptureEnabled } from "./site-capture-switch.js"
 import {
@@ -89,14 +89,15 @@ export function switchedOffNodeTypes(): string[] {
 }
 
 /** The FACTORY layer alone (profile allow/deny), ignoring any admin override —
- *  what this deployment offers before its admins released or withheld anything. */
+ *  what this deployment offers before its admins released or withheld anything.
+ *  The lists' rule is the shared one (`nodeListsWithhold`, @nodaro/shared/runtime-config),
+ *  which the browser applies the same way before this server's availability answer
+ *  arrives: a whitelist over the gateable universe, `deny` over anything, and a
+ *  profile that denies the Voice Clone node withholds a one-off clone too
+ *  (decided 2026-11-13). The install switches are this server's alone. */
 export function isNodeFactoryDenied(type: string): boolean {
   if (switchedOffNodeTypes().includes(type)) return true
-  const { deny, allow } = runtimeSurfaceProfile().nodes
-  if (allow.length && GATEABLE_NODE_TYPES.has(type) && !allow.includes(type)) return true
-  // A profile that denies the Voice Clone node withholds a one-off clone too (decided 2026-11-13).
-  if (type === ONE_OFF_VOICE_CLONE_FEATURE && deny.includes("voice-clone")) return true
-  return deny.includes(type)
+  return nodeListsWithhold(runtimeSurfaceProfile().nodes, type, (t) => GATEABLE_NODE_TYPES.has(t))
 }
 
 /**
@@ -302,11 +303,11 @@ export function nodeNotAvailableError(types: readonly string[]): Error & { code:
  * override and the admin's model switch: what this deployment offers by its own
  * configuration. What a boot-time check judges against — the admin layers change
  * at run time, are loaded only later in boot, and asking them kicks a load.
+ * The lists' rule is the shared one (`listsWithhold`), which the browser applies
+ * the same way before this server's availability answer arrives.
  */
 export function isModelFactoryDenied(id: string): boolean {
-  const { deny, allow } = runtimeSurfaceProfile().models
-  if (allow.length && GATEABLE_MODEL_IDS.has(id) && !allow.includes(id)) return true
-  return deny.includes(id)
+  return listsWithhold(runtimeSurfaceProfile().models, id, (m) => GATEABLE_MODEL_IDS.has(m))
 }
 
 /**
@@ -495,6 +496,6 @@ export function effectiveWorlds(viewer: AvailabilityViewer): Array<{ id: WorldId
   const worlds = runtimeSurfaceProfile().worlds
   return orderWorlds(worlds?.order).map((id) => ({
     id,
-    enabled: worldAllowed(worlds, id) && WORLD_REQUIRED_NODE_TYPES[id].every((type) => !isNodeDenied(type, viewer)),
+    enabled: worldOffered(worlds, id, (type) => isNodeDenied(type, viewer)),
   }))
 }

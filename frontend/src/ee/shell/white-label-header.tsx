@@ -17,14 +17,7 @@ import { useUiLanguage } from "@/hooks/use-ui-language"
 import { useT } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
 import { runtimeMediaOrigin } from "@/lib/runtime-config"
-import {
-  availableWorlds,
-  isNodeUnavailable,
-  surfaceAvailabilityFailed,
-  surfaceAvailabilityLoaded,
-  useSurfaceAvailability,
-} from "@/lib/surface-availability"
-import { runtimeSurfaceProfile } from "@/lib/surface-profile"
+import { offeredWorlds, settledNodeJudge, useSurfaceAvailability } from "@/lib/surface-availability"
 import {
   surfaceBillingSelfServe,
   surfaceBrandLogo,
@@ -55,13 +48,14 @@ import type { SiteHeaderHandle, SiteHeaderLanguage, SiteHeaderTheme } from "./ty
  * has no white-label mode; this mount, and the package behind it, stay for the
  * deployments that do.
  *
- *   - worlds: the deployment's (its profile's allowlist and order, narrowed by
- *     the server's per-viewer answer once it lands), each at its address on
- *     this same site (`WHITE_LABEL_WORLD_PATHS`), never a build's origins;
- *     their menus open a page below a world (Video's Translate) only for a
- *     viewer that answer offers it to (after a read of it that failed, one the
- *     profile does not deny), and none while it is awaited
- *     (`whiteLabelWorldMenus`, `menuWithheld`);
+ *   - worlds: the deployment's (`offeredWorlds`: its profile's allowlist and
+ *     order, the server's per-viewer answer once it lands, the deployment's
+ *     own lists before then), each at its address on this same site
+ *     (`WHITE_LABEL_WORLD_PATHS`), never a build's origins; their menus open a
+ *     page below a world (Video's Translate) only for a viewer offered its
+ *     node types (`whiteLabelWorldMenus`, judged by `settledNodeJudge`: the
+ *     answer, or the deployment's node lists before it; none while the answer
+ *     is awaited on a deployment that sets no node lists);
  *   - its name and logo (`brand.productName`, `brand.logo`), and images only
  *     from this site, the logo's own host and its media host (`mediaOrigin`);
  *   - its billing (`billing.selfServe`), and the credit pill in its own unit,
@@ -87,18 +81,6 @@ import type { SiteHeaderHandle, SiteHeaderLanguage, SiteHeaderTheme } from "./ty
  *     (`buttonHiddenOn`); Alt+A still opens it. Both menus keep the same shared
  *     choices (`lib/accessibility-preferences.ts`).
  */
-
-/**
- * What is withheld from the viewer, as the world menus read it: the viewer's
- * availability answer once it is in; after a read of it that failed, the
- * deployment's own configuration (the static profile's deny list, known
- * without the read, which every other reader falls back to as well:
- * `isNodeUnavailable` before an answer); `null` while the answer is awaited,
- * when no page is named.
- */
-function menuWithheld(): ((nodeType: string) => boolean) | null {
-  return surfaceAvailabilityLoaded() || surfaceAvailabilityFailed() ? isNodeUnavailable : null
-}
 
 /** The app's own phone/desktop switch (Tailwind `md`). */
 const PHONE_BREAKPOINT = 768
@@ -128,8 +110,10 @@ export default function WhiteLabelHeader({ compact, onOpenMenu, onHeaderOverlay 
 
   // Re-render when the viewer's worlds land (DashboardLayout fetches them).
   const availability = useSurfaceAvailability()
-  // The pages below a world its menu opens: none while the viewer's answer is awaited, then those it offers.
-  const worldMenus = useMemo(() => whiteLabelWorldMenus(menuWithheld()), [availability])
+  // The pages below a world its menu opens: those the viewer is offered (`settledNodeJudge`: none while
+  // the answer is awaited on a deployment without node lists).
+  const worldMenus = useMemo(() => whiteLabelWorldMenus(settledNodeJudge()), [availability])
+  const worlds = useMemo(() => whiteLabelWorlds(offeredWorlds()), [availability])
   // The balance the header itself keeps (its own key; never fetched from here): its unit names the pill's words.
   const { data: balance } = useQuery<UserBalance>({
     queryKey: HEADER_QUERY_KEYS.credits,
@@ -256,7 +240,7 @@ export default function WhiteLabelHeader({ compact, onOpenMenu, onHeaderOverlay 
       onSignOut={onSignOut}
       onOverlayChange={onOverlayChange}
       whiteLabel
-      worlds={whiteLabelWorlds(runtimeSurfaceProfile().worlds, availableWorlds())}
+      worlds={worlds}
       worldMenus={worldMenus}
       {...(logo ? { logo: { src: logo, alt: name ?? "" } } : {})}
       {...(name ? { brandName: name } : {})}

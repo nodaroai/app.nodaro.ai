@@ -214,8 +214,9 @@ export function withOfferedResetModels(type: string, current: Data, reset: Recor
 
 /**
  * Availability is fetched after the first paint. Before it lands only the
- * static profile's `models.deny` is known, so a node made in that window is
- * judged against that alone, and noted here with the models it runs. When the
+ * deployment's own model lists are known (`isModelUnavailable` judges by them:
+ * the admin's layer is not in them), so a node made in that window is judged
+ * against them alone, and noted here with the models it runs. When the
  * answer lands, the noted nodes go once to the store's handler
  * (`onNewNodesAvailabilityLanded`), which judges each again as it would have
  * been judged at creation — only a node still on the canvas whose models are

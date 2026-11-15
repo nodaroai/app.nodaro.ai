@@ -1,6 +1,15 @@
 import { useSyncExternalStore } from "react"
-import { isWorldId, type WorldId } from "@nodaro/shared/runtime-config"
+import {
+  isWorldId,
+  listsSet,
+  listsWithhold,
+  nodeListsWithhold,
+  orderWorlds,
+  worldOffered,
+  type WorldId,
+} from "@nodaro/shared/runtime-config"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { LLM_MODELS } from "@nodaro/shared/llm-models"
 import { runtimeSurfaceProfile } from "./surface-profile"
 
 /**
@@ -19,12 +28,21 @@ import { runtimeSurfaceProfile } from "./surface-profile"
  * lists for the rest of the session: the narrowing silently did nothing in the
  * UI. Components that filter must call `useSurfaceAvailability()`.
  *
- * Before the fetch lands, the helpers fall back to the static profile's
- * explicit `deny` lists only — deliberately NOT the `allow` whitelist
- * inversion, whose gateable-universe scoping (utility nodes exempt) lives
- * backend-side; a brief over-show costs nothing because the backend refuses a
- * denied node/model at write and run regardless. Stock deployments (no allow,
- * no override) render byte-identically with or without the fetch.
+ * BEFORE THE ANSWER — while it is awaited, after a read of it that failed, and
+ * on every page that never asks (a published app, a signed-out visitor) — a
+ * deployment that set lists is judged by its OWN lists (`nodes.allow` /
+ * `nodes.deny`, `models.allow` / `models.deny`, `worlds`), by the rule the
+ * server applies before any admin setting (`nodeListsWithhold`, `listsWithhold`
+ * and `worldOffered`, @nodaro/shared/runtime-config). So from the first paint
+ * a restricted deployment draws nothing its lists withhold (nothing drawn and
+ * then taken away) and hides nothing they offer. What the lists cannot carry
+ * is the admin's layer: a node or model an admin switched off may show until
+ * the answer arrives, and one an admin released beyond the lists appears when
+ * it does; the server refuses at write and run regardless. A deployment that
+ * sets no lists withholds nothing before the answer but a house model, exactly
+ * as before. This module is the ONE place that rule is read
+ * (`__tests__/availability-reads-funnel.test.ts`): every reader asks the
+ * helpers below and never the state flags or the profile's lists itself.
  *
  * PER VIEWER. The backend answers for whoever asked: the admin switch hides a
  * node from users, not from admins, so an admin's `denied` omits what the switch
@@ -172,7 +190,7 @@ async function fetchAnswer(getAuthHeaders: () => Promise<Record<string, string>>
         denied: toSet(json.webScrapeSources?.denied),
         hiddenFromUsers: toSet(json.webScrapeSources?.hiddenFromUsers),
       },
-      worlds: offeredWorlds(json.worlds),
+      worlds: answerWorlds(json.worlds),
     }
     failed = false
     emit()
@@ -195,7 +213,7 @@ function readFailed(seq: number): void {
  * does not know (a newer server's world) or an entry it cannot read is left
  * out. Null when the answer has no list at all.
  */
-function offeredWorlds(value: unknown): readonly WorldId[] | null {
+function answerWorlds(value: unknown): readonly WorldId[] | null {
   if (!Array.isArray(value)) return null
   return value.flatMap((entry: unknown) => {
     const world = entry as { id?: unknown; enabled?: unknown } | null
@@ -245,7 +263,10 @@ export function __failSurfaceAvailabilityForTests(): void {
 }
 
 /** True once the viewer's availability answer has landed (false before it,
- *  after sign-out, and for the whole session when the fetch failed). */
+ *  after sign-out, and for the whole session when the fetch failed). For a
+ *  reader that acts when the answer lands (`new-node-models.ts` re-judges the
+ *  nodes made before it) or one tied to a run, which goes by the answer alone;
+ *  a reader that draws asks the judges below. */
 export function surfaceAvailabilityLoaded(): boolean {
   return fetched !== null
 }
@@ -255,19 +276,71 @@ export function surfaceAvailabilityLoaded(): boolean {
  * `surfaceAvailabilityLoaded()` is false both while the read is awaited and
  * after it failed, and this tells the two apart. False while awaited, once an
  * answer lands (a later failed re-read keeps it), and after sign-out or a
- * change of account. For a reader whose rule for a failed read differs from
- * its rule while awaiting (the white-label header's world menus: after a
- * failed read they follow the static profile, as `isNodeUnavailable` does;
- * while it is awaited they name nothing).
+ * change of account. Only for a reader tied to a RUN, which must do what the
+ * server would do with an availability it cannot read (the cameras settings,
+ * `use-case-multicam-viewer.ts`); a reader that draws asks the judges below.
  */
 export function surfaceAvailabilityFailed(): boolean {
   return failed
 }
 
-/** True when this deployment does not offer this node type in the picker. */
+// ── The deployment's own lists: what decides before an answer ──────────────
+
+/**
+ * The model ids a model whitelist governs: the catalog's and the LLMs' — the
+ * server's `GATEABLE_MODEL_IDS` (backend lib/availability-override.ts), built
+ * from the same two shared tables. An id outside them is withheld only by
+ * `models.deny`.
+ */
+const ALLOW_LIST_GATED_MODEL_IDS: ReadonlySet<string> = new Set([...Object.keys(MODEL_CATALOG), ...LLM_MODELS.map((m) => m.id)])
+
+/** Whether the deployment set node lists (`nodes.allow` or `nodes.deny`): they then judge node types until the answer arrives. */
+function nodeListsSet(): boolean {
+  return listsSet(runtimeSurfaceProfile().nodes)
+}
+
+/** The node lists' verdict, the server's factory rule (a whitelist never withholds a utility node by leaving it out). */
+function nodeWithheldByLists(type: string): boolean {
+  return nodeListsWithhold(runtimeSurfaceProfile().nodes, type)
+}
+
+/** The model lists' verdict, the server's factory rule over its gateable models. */
+function modelWithheldByLists(id: string): boolean {
+  return listsWithhold(runtimeSurfaceProfile().models, id, (model) => ALLOW_LIST_GATED_MODEL_IDS.has(model))
+}
+
+/**
+ * True when this deployment does not offer this node type to the viewer: the
+ * answer once it is in; before it (awaited, failed, never asked) the
+ * deployment's own node lists — nothing, where it set none. The picker, the
+ * sidebar, the edge-drop menu and the quick-add suggestions read it
+ * (`getNodeOptions`).
+ */
 export function isNodeUnavailable(type: string): boolean {
   if (fetched) return fetched.nodes.has(type)
-  return runtimeSurfaceProfile().nodes.deny.includes(type)
+  return nodeWithheldByLists(type)
+}
+
+/**
+ * The node judge of a reader that must not draw something and then take it
+ * away (the white-label header's world menus, the framing source): before the
+ * answer it names nothing — null — unless the deployment set node lists, which
+ * then decide from the first paint. `isNodeUnavailable` once the answer is in,
+ * after a read of it failed, and wherever node lists are set.
+ */
+export function settledNodeJudge(): ((type: string) => boolean) | null {
+  return fetched || failed || nodeListsSet() ? isNodeUnavailable : null
+}
+
+/**
+ * True when `type` is withheld from a reader that offers it only once it is
+ * known to be offered (an input pip that follows a node,
+ * `target-handle-availability.ts`): the answer once it is in; before it, the
+ * deployment's node lists where it set any; otherwise withheld, also after a
+ * failed read.
+ */
+export function isNodeUnavailableUntilKnown(type: string): boolean {
+  return fetched || nodeListsSet() ? isNodeUnavailable(type) : true
 }
 
 /**
@@ -285,21 +358,35 @@ export function isWebScrapeSourceUnavailable(source: string): boolean {
   return fetched?.webScrapeSources.denied.has(source) ?? false
 }
 
+/**
+ * True while the viewer's Web Scrape sources cannot be told on a deployment
+ * that set node lists: a source can follow a node (the Instagram source the
+ * Instagram node), and which one is the server's to say — the browser is sent
+ * the result, never that mapping, so the lists cannot say which sources they
+ * withhold. Until the answer arrives (for good, after a failed read) the
+ * source dropdown offers only the node's current source. Never true where no
+ * node lists are set.
+ */
+export function webScrapeSourcesAwaited(): boolean {
+  return !fetched && nodeListsSet()
+}
+
 /** True when the viewer is an admin looking at a source their users cannot pick. */
 export function isWebScrapeSourceHiddenFromUsers(source: string): boolean {
   return fetched?.webScrapeSources.hiddenFromUsers.has(source) ?? false
 }
 
 /**
- * True when this deployment does not offer this model id in dropdowns. Before
- * the answer lands, a house model (the catalog's `ownLabel`, offered only
- * where the deployment serves it — the server decides) is withheld: it is
- * never shown to an install that turns out not to serve it.
+ * True when this deployment does not offer this model id in dropdowns: the
+ * answer once it is in; before it, the deployment's own model lists (nothing,
+ * where it set none) and a house model (the catalog's `ownLabel`, offered only
+ * where the deployment serves it — the server decides), which is withheld: it
+ * is never shown to an install that turns out not to serve it.
  */
 export function isModelUnavailable(id: string): boolean {
   if (fetched) return fetched.models.has(id)
   if (Object.hasOwn(MODEL_CATALOG, id) && MODEL_CATALOG[id]!.ownLabel === true) return true
-  return runtimeSurfaceProfile().models.deny.includes(id)
+  return modelWithheldByLists(id)
 }
 
 /**
@@ -311,16 +398,28 @@ export function isModelUnavailable(id: string): boolean {
  */
 export function modelRestrictionActive(): boolean {
   if (fetched) return fetched.modelsRestricted
-  const { allow, deny } = runtimeSurfaceProfile().models
-  return allow.length > 0 || deny.length > 0
+  return listsSet(runtimeSurfaceProfile().models)
+}
+
+/**
+ * The worlds the server's answer offers the viewer (`worlds`), in its order.
+ * Null before the answer lands, after sign-out, and when the server sent
+ * none. A reader asks `offeredWorlds`, which also answers before then.
+ */
+export function availableWorlds(): readonly WorldId[] | null {
+  return fetched?.worlds ?? null
 }
 
 /**
  * The worlds this deployment offers the viewer, in its order: the profile's
- * `worlds.allow` AND every node type each one runs available to them (the
- * server's answer, `worlds`). Null before the answer lands, after sign-out,
- * and when the server sent none — a reader then goes by the profile alone.
+ * `worlds.allow` AND every node type each one runs available to them. The
+ * server's answer once it is in; before it (or from a server that sends none)
+ * the profile's own `worlds` with the node types judged as `isNodeUnavailable`
+ * judges them — every world the profile allows, where it set no node lists.
  */
-export function availableWorlds(): readonly WorldId[] | null {
-  return fetched?.worlds ?? null
+export function offeredWorlds(): readonly WorldId[] {
+  const answered = availableWorlds()
+  if (answered) return answered
+  const { worlds } = runtimeSurfaceProfile()
+  return orderWorlds(worlds?.order).filter((id) => worldOffered(worlds, id, isNodeUnavailable))
 }

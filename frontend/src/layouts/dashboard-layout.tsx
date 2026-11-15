@@ -63,8 +63,8 @@ export default function DashboardLayout() {
 
   // B5: fetch the effective node/model availability once per session — the
   // admin runtime override can't ride the static /config.js profile, so the
-  // picker / model-dropdown filters read this fetched set (profile deny is
-  // their pre-fetch fallback; the backend refuses denied types regardless).
+  // picker / model-dropdown filters read this fetched set (the profile's own
+  // lists are their pre-fetch fallback; the backend refuses denied types regardless).
   // Keyed on the user: the answer is per viewer (an admin's includes nodes their
   // users must not be offered), so it is dropped on sign-out and on a change of
   // account instead of lingering until — or unless — the next fetch lands.

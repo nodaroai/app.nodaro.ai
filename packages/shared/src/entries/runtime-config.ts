@@ -1,5 +1,5 @@
 /**
- * `@nodaro/shared/runtime-config` — The deployment runtime config contract: `/config.js`'s keys and their shapes, a lenient parser, and the worlds a deployment can offer.
+ * `@nodaro/shared/runtime-config` — The deployment runtime config contract: `/config.js`'s keys and their shapes, a lenient parser, the worlds a deployment can offer, and how its own lists withhold what it offers.
  *
  * One of the package's subpath entries (see `src/index.ts`). The root
  * re-exports every entry, so each name here is also importable from
@@ -10,10 +10,19 @@ export {
   WORLD_REQUIRED_NODE_TYPES,
   isWorldId,
   worldAllowed,
+  worldOffered,
   orderWorlds,
   type WorldId,
   type SurfaceWorlds,
 } from "../runtime-config/worlds.js"
+export {
+  ALLOW_LIST_EXEMPT_NODE_TYPES,
+  isAllowListGatedNodeType,
+  listsSet,
+  listsWithhold,
+  nodeListsWithhold,
+  type SurfaceAllowDeny,
+} from "../runtime-config/lists.js"
 export {
   RUNTIME_CONFIG_GLOBAL,
   RUNTIME_CONFIG_KEYS,

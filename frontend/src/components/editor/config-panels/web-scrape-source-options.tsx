@@ -6,6 +6,7 @@ import {
   isWebScrapeSourceHiddenFromUsers,
   isWebScrapeSourceUnavailable,
   useSurfaceAvailability,
+  webScrapeSourcesAwaited,
 } from "@/lib/surface-availability"
 
 /**
@@ -21,12 +22,19 @@ import {
  * The node's CURRENT source is always kept, even when withdrawn: an existing
  * node must never render an empty select. It is tagged as unavailable, and once
  * the user picks something else it is gone from the list.
+ *
+ * Before the answer, on a deployment that set node lists, the lists cannot say
+ * which sources they withhold (that mapping is the server's), so only the
+ * current source is offered until the answer arrives (`webScrapeSourcesAwaited`)
+ * — none drawn and then taken away. A deployment that sets no node lists
+ * offers every source, as it always did.
  */
 export function offeredWebScrapeSources(
   options: ReadonlyArray<ScraperActorId>,
   current: ScraperActorId,
 ): ScraperActorId[] {
-  return options.filter((id) => id === current || !isWebScrapeSourceUnavailable(id))
+  const awaited = webScrapeSourcesAwaited()
+  return options.filter((id) => id === current || (!awaited && !isWebScrapeSourceUnavailable(id)))
 }
 
 interface SourceItemsProps {
