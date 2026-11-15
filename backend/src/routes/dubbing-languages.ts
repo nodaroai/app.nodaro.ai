@@ -180,7 +180,7 @@ function modelOf(req: FastifyRequest): string {
 
 async function baseCreditsOf(parsedBody: unknown, req: FastifyRequest): Promise<number> {
   const plan = asks.get(req)?.plan
-  return plan?.engine === "project" ? dubbingBaseCreditsFor(PROJECT_DUBBING_MODEL_ID, plan.seconds) : dubbingRequestBaseCredits(parsedBody)
+  return plan?.engine === "project" ? dubbingBaseCreditsFor(PROJECT_DUBBING_MODEL_ID, plan.seconds) : dubbingRequestBaseCredits(parsedBody, req)
 }
 
 type ProjectPlan = Extract<AddLanguagePlan, { readonly engine: "project" }>

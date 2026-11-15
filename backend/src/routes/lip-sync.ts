@@ -20,6 +20,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
 
 const lipSyncBody = z.object({
   imageUrl: safeUrlSchema.optional(),     // Portrait/face image (required for the KIE avatars)
@@ -75,7 +76,7 @@ const lipSyncBody = z.object({
  * can never drift from the charged price. Mirrors extend-video.ts's
  * resolveExtendVideoIdentifier().
  */
-export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefined): string {
+export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefined, measured?: LipSyncMeasure): string {
   const provider = (body?.provider as string) ?? LIP_SYNC_DEFAULT_PROVIDER
   // A model charged per second of its audio at a rate (OmniHuman 2.0): its
   // one-second row, which `computeCredits` multiplies by the seconds the
@@ -115,7 +116,7 @@ export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefin
   // audio was not measured is never priced on a guess: it is refused.
   const pricing = lipSyncAudioPricingOf(provider)
   if (pricing?.kind === "bucket") {
-    const held = stashedBilledSeconds(body)
+    const held = measured?.billedSeconds
     if (held === undefined) throw new Error("lip-sync: a run priced by its audio's length reached its pricing without its measured audio")
     return lipSyncHeldCreditId(pricing, held)
   }
@@ -137,9 +138,21 @@ async function retiredLipSyncProviderPreHandler(req: FastifyRequest, reply: Fast
   }
 }
 
-/** The body keys the measuring step (`lipSyncInputPreHandler`) stashes the measured audio under, for the guard's pricing and the handler. */
+/** Body fields named like the measure (the names the route once stashed it under): dropped from every request, never read. */
 const MEASURED_AUDIO_SEC = "__lipSyncAudioSec"
 const BILLED_SECONDS = "__lipSyncBilledSeconds"
+/** The request measure the measuring step (`lipSyncInputPreHandler`) keeps, server-side only, for the guard's pricing and the handler. */
+const MEASURE = "lipSyncAudio"
+/** What the measuring step measured: the audio's decoded length and the seconds the run is held for. */
+export interface LipSyncMeasure {
+  readonly audioSec: number
+  readonly billedSeconds: number
+}
+
+/** What the measuring step measured for this request (the server-side request's, never the body's). */
+export function lipSyncMeasureOf(req: FastifyRequest): LipSyncMeasure | undefined {
+  return requestMeasure<LipSyncMeasure>(req, MEASURE)
+}
 
 /**
  * The face input a request is refused without, or undefined: an image or a
@@ -160,11 +173,6 @@ function measureRefusalStatus(code: string): number {
   return 400
 }
 
-/** The seconds the measuring step measured and held a run priced by its audio's length for, read off the body. */
-function stashedBilledSeconds(body: Record<string, unknown> | undefined): number | undefined {
-  const s = body?.[BILLED_SECONDS]
-  return typeof s === "number" && Number.isInteger(s) && s > 0 ? s : undefined
-}
 
 /**
  * The credit guard's `beforePricing` step (decided 2026-11-13: it runs after
@@ -176,18 +184,17 @@ function stashedBilledSeconds(body: Record<string, unknown> | undefined): number
  * — validate the body (the handler's own schema — a request that would 400
  * there never costs a download), measure the audio (and a rate model's image:
  * `checkLipSyncInputs`, the rule the workflow run shares), refuse what the
- * model cannot take with a 400 before anything is held, and stash the measured
- * length and the held seconds on the body for the guard's pricing. A length
- * the request sent (`audioDurationSec`) is never trusted, and the stash keys
- * are cleared from EVERY request first, whatever its model: only this check
- * may set them. Every other model passes straight through, unprobed. A request
+ * model cannot take with a 400 before anything is held, and keep the measured
+ * length and the held seconds on the server-side request (never the body) for
+ * the guard's pricing and the handler. A length the request sent
+ * (`audioDurationSec`) is never trusted, and the measure's old body names are
+ * dropped from EVERY request first, whatever its model. Every other model passes straight through, unprobed. A request
  * waits at most `LIP_SYNC_MEASURE_SLOT_WAIT_MS` for a measuring slot, then is
  * refused with a 429 to retry.
  */
 export async function lipSyncInputPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  dropClientMeasureFields(req.body, [MEASURED_AUDIO_SEC, BILLED_SECONDS])
   const body = (req.body ?? {}) as Record<string, unknown>
-  delete body[MEASURED_AUDIO_SEC]
-  delete body[BILLED_SECONDS]
   const model = (body.provider ?? LIP_SYNC_DEFAULT_PROVIDER) as string
   const pricing = lipSyncAudioPricingOf(model)
   if (!pricing) return
@@ -214,8 +221,7 @@ export async function lipSyncInputPreHandler(req: FastifyRequest, reply: Fastify
   if (!checked.ok) {
     return void reply.status(measureRefusalStatus(checked.code)).send({ error: { code: checked.code, message: checked.message } })
   }
-  body[MEASURED_AUDIO_SEC] = checked.audioSec
-  body[BILLED_SECONDS] = checked.billedSeconds
+  setRequestMeasure(req, MEASURE, { audioSec: checked.audioSec, billedSeconds: checked.billedSeconds } satisfies LipSyncMeasure)
   // The length the request named is gone from here on: nothing the guard runs
   // can read it, and the handler records the measured one.
   delete body.audioDurationSec
@@ -227,11 +233,11 @@ export async function lipSyncInputPreHandler(req: FastifyRequest, reply: Fastify
  * for every other model, which the guard prices from its row as before. A rate
  * model whose audio was not measured is never priced at a guess.
  */
-export async function lipSyncComputeCredits(body: unknown): Promise<number | undefined> {
+export async function lipSyncComputeCredits(body: unknown, req: FastifyRequest): Promise<number | undefined> {
   const b = body as Record<string, unknown> | undefined
   const rate = lipSyncAudioRateOf(b?.provider ?? LIP_SYNC_DEFAULT_PROVIDER)
   if (!rate) return undefined
-  const billed = stashedBilledSeconds(b)
+  const billed = lipSyncMeasureOf(req)?.billedSeconds
   if (billed === undefined) throw new Error("lip-sync: a per-second-rate run reached the credit guard without its measured audio")
   return lipSyncRateBaseCredits(rate, billed)
 }
@@ -272,7 +278,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
     preHandler: [
       retiredLipSyncProviderPreHandler,
       // The audio is measured inside the guard (`beforePricing`), after its model and node doors.
-      creditGuard((req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined), {
+      creditGuard((req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined, lipSyncMeasureOf(req)), {
         runModel: jobRunModel("lip-sync"),
         computeCredits: lipSyncComputeCredits,
         beforePricing: lipSyncInputPreHandler,
@@ -324,17 +330,14 @@ export async function lipSyncRoutes(app: FastifyInstance) {
     // held (the worker holds the audio it sends to them). A per-second-rate
     // model (OmniHuman 2.0) also takes none of the levers it does not take (a
     // resolution, fast mode or seed left from another model).
-    // The held seconds are read off the body only for such a model (the
-    // measuring step cleared them from every request and set them only for these).
+    // The held seconds are read off the server-side request only for such a
+    // model (the measuring step sets them only for these, never on the body).
     // Every other model's job is what it was: its price reads no length.
-    const rawBody = req.body as Record<string, unknown> | undefined
     const resolvedModel = provider ?? LIP_SYNC_DEFAULT_PROVIDER
     const isMeasuredModel = lipSyncAudioPricingOf(resolvedModel) !== undefined
-    const billedSeconds = isMeasuredModel ? stashedBilledSeconds(rawBody) : undefined
-    if (isMeasuredModel) {
-      const measured = rawBody?.[MEASURED_AUDIO_SEC]
-      parsed.data.audioDurationSec = typeof measured === "number" ? measured : undefined
-    }
+    const measure = isMeasuredModel ? lipSyncMeasureOf(req) : undefined
+    const billedSeconds = measure?.billedSeconds
+    if (isMeasuredModel) parsed.data.audioDurationSec = measure?.audioSec
     if (lipSyncAudioRateOf(resolvedModel) !== undefined) {
       Object.assign(parsed.data, lipSyncLeverClearPatch(provider, parsed.data))
     }
@@ -362,7 +365,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
     }
 
     const baseProvider = provider ?? LIP_SYNC_DEFAULT_PROVIDER
-    const modelIdentifier = resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined)
+    const modelIdentifier = resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined, lipSyncMeasureOf(req))
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId

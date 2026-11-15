@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { PITCH_TEMPO_LIMITS, pitchTempoCreditId } from "@nodaro/shared/credits"
+import { PITCH_TEMPO_LIMITS, pitchTempoCreditId, pitchTempoHeldCreditId } from "@nodaro/shared/credits"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { measurePitchTempoDuration } from "../lib/pitch-tempo-duration.js"
+import { dropClientMeasureFields } from "../lib/request-measure.js"
 import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
@@ -30,7 +31,7 @@ export const PitchTempoBody = z
   })
 export type PitchTempoBody = z.infer<typeof PitchTempoBody>
 
-/** Request keys the preHandler stashes on the body for the credit guard. */
+/** A body field named like the measure (the name the route once stashed it under): dropped, never read. */
 const PROBED_KEY = "__probedDuration"
 
 function withoutStash(body: unknown): Record<string, unknown> {
@@ -41,10 +42,12 @@ function withoutStash(body: unknown): Record<string, unknown> {
 /**
  * Validate, then measure the input's length BEFORE the credit guard (decided
  * 2026-10-12): an invalid body, an unreadable length and an over-30-minute
- * input are all refused with nothing reserved. The length is stashed on the
- * body so the guard prices `pitch-tempo:<N>m` without probing again.
+ * input are all refused with nothing reserved. The length is kept on the
+ * server-side request (`req.probedDuration`), never on the body, so the guard
+ * prices `pitch-tempo:<N>m` from what the server measured without probing again.
  */
 async function validateAndMeasure(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  dropClientMeasureFields(req.body, [PROBED_KEY])
   const parsed = PitchTempoBody.safeParse(withoutStash(req.body))
   if (!parsed.success) {
     return void reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
@@ -56,20 +59,25 @@ async function validateAndMeasure(req: FastifyRequest, reply: FastifyReply): Pro
   if (!measured.ok) {
     return void reply.status(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
-  ;(req.body as Record<string, unknown>)[PROBED_KEY] = measured.durationSec
+  req.probedDuration = measured.durationSec
 }
 
-function probedSeconds(body: unknown): number | undefined {
-  const probed = (body as Record<string, unknown> | undefined)?.[PROBED_KEY]
-  return typeof probed === "number" ? probed : undefined
+/** The minutes the run holds for the length the preHandler measured (`pitchTempoHeldCreditId`: a hair past a minute forgiven); unmeasured, one minute. */
+function pitchTempoHeldIdOf(sec: number | undefined): string {
+  return sec === undefined ? pitchTempoCreditId(undefined) : pitchTempoHeldCreditId(sec)
+}
+
+/** The length the preHandler measured: the server-side request's, never the body's. */
+function probedSeconds(req: FastifyRequest): number | undefined {
+  return req.probedDuration
 }
 
 export async function pitchTempoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/pitch-tempo",
-    { preHandler: [validateAndMeasure, creditGuard((req) => pitchTempoCreditId(probedSeconds(req.body)))] },
+    { preHandler: [validateAndMeasure, creditGuard((req) => pitchTempoHeldIdOf(probedSeconds(req)))] },
     async (req, reply) => {
-      const durationSec = probedSeconds(req.body)
+      const durationSec = probedSeconds(req)
       const parsed = PitchTempoBody.safeParse(withoutStash(req.body))
       if (!parsed.success || durationSec === undefined) {
         return reply.status(400).send({
@@ -83,7 +91,7 @@ export async function pitchTempoRoutes(app: FastifyInstance) {
       }
 
       const { userId: _bodyUserId, ...settings } = parsed.data
-      const creditId = pitchTempoCreditId(durationSec)
+      const creditId = pitchTempoHeldCreditId(durationSec)
       const { data: job, error } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),

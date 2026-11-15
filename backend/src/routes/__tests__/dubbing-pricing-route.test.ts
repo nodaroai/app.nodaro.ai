@@ -109,6 +109,24 @@ describe("POST /v1/dubbing — priced per minute of the dubbed span", () => {
     expect(inserted().input_data.reservedCeiling).toBeUndefined()
   })
 
+  // A length is the server's own reading, never a field a client sends (decided 2026-11-14).
+  it("a client-sent __probedDurationSec is ignored: a 1 s claim for the 6 min 41 s upload is reserved at 7 minutes", async () => {
+    mocks.probe.mockResolvedValue(401)
+    const res = await post({ videoUrl: "https://cdn.example.com/v.mp4", __probedDurationSec: 1 })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.guardCalls).toEqual([280])
+    expect(inserted().input_data).toMatchObject({ probedDurationSec: 401 })
+    expect(inserted().input_data).not.toHaveProperty("__probedDurationSec")
+    expect(queued()).not.toHaveProperty("__probedDurationSec")
+  })
+
+  it("…and when the probe fails, the 30-minute ceiling is held, never the client's 1 s", async () => {
+    mocks.probe.mockRejectedValue(new Error("not a media file"))
+    const res = await post({ sourceUrl: "https://example.com/some-page", __probedDurationSec: 1 })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.guardCalls).toEqual([1200])
+  })
+
   it("a post link is measured through the social-post probe (95 s → 80 base)", async () => {
     mocks.postProbe.mockResolvedValue(95)
     const res = await post({ sourceUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" })

@@ -18,7 +18,7 @@
  * itself, so an administrator's retune moves the quote and the charge together.
  */
 import { VIDEO_UTIL_PRICING, assembleNarratedVideoCredits } from "@nodaro/shared/credits"
-import { loopVideoRunFields, trimVideoRunFields, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, videoUtilityUnitsOf } from "@nodaro/render-rules"
+import { combineVideosRunFields, loopVideoRunFields, trimVideoRunFields, UNREADABLE_CLIP_FPS, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, videoUtilityUnitsOf } from "@nodaro/render-rules"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 import type { ClipLengthReading } from "./video-utility-probe.js"
 
@@ -34,24 +34,27 @@ const unitsOf = (estimatorCredits: number): number => estimatorCredits / VIDEO_U
  * (`videoUtilityUnitsOf`, @nodaro/render-rules: each clip less the frame grace,
  * then the node's own formula) — the rule the editor's quote counts by too —
  * at the lengths the body carries (`upstreamDuration` / `upstreamDurations`:
- * the measured lengths on a run, the planned ones on an estimate).
+ * the measured lengths on a run, the planned ones on an estimate) and the
+ * frame rates beside it (`clipFps`, in input order: the probed rates on a run,
+ * the rates the graph knows on an estimate; never a body field, which a
+ * client could set). A rate not known cuts no frames: the uncut clip.
  */
-export function trimVideoUnits(body: Body): number {
-  return videoUtilityUnitsOf("trim-video", body, [num(body.upstreamDuration)])!
+export function trimVideoUnits(body: Body, clipFps: ClipRates = []): number {
+  return videoUtilityUnitsOf("trim-video", body, [num(body.upstreamDuration)], clipFps)!
 }
 
 export function loopVideoUnits(body: Body): number {
   return videoUtilityUnitsOf("loop-video", body, [num(body.upstreamDuration)])!
 }
 
-export function combineVideosUnits(body: Body): number {
+export function combineVideosUnits(body: Body, clipFps: ClipRates = []): number {
   const urls = Array.isArray(body.videoUrls) ? body.videoUrls : []
   const rawDurations = Array.isArray(body.upstreamDurations) ? body.upstreamDurations : []
   // Align by position; drop length mismatches (estimator falls back per-position).
   const aligned = rawDurations.length === urls.length
     ? (rawDurations as unknown[]).map(num)
     : urls.map(() => undefined)
-  return videoUtilityUnitsOf("combine-videos", body, aligned)!
+  return videoUtilityUnitsOf("combine-videos", body, aligned, clipFps.length === urls.length ? clipFps : [])!
 }
 
 /** Read the block count before any defaults: 1..60 blocks, the route's own bound. */
@@ -60,11 +63,14 @@ export function assembleNarratedVideoUnits(body: Body): number {
   return unitsOf(assembleNarratedVideoCredits(Math.max(1, Math.min(60, n))))
 }
 
-const UNITS_BY_JOB: Readonly<Record<string, (body: Body) => number>> = {
+/** Each input clip's frame rate, in input order; `undefined` where it is not known. */
+export type ClipRates = ReadonlyArray<number | undefined>
+
+const UNITS_BY_JOB: Readonly<Record<string, (body: Body, clipFps: ClipRates) => number>> = {
   "trim-video": trimVideoUnits,
-  "loop-video": loopVideoUnits,
+  "loop-video": (body) => loopVideoUnits(body),
   "combine-videos": combineVideosUnits,
-  "assemble-narrated-video": assembleNarratedVideoUnits,
+  "assemble-narrated-video": (body) => assembleNarratedVideoUnits(body),
 }
 
 /** The video-utility jobs (each also its node type and its one-unit price row). */
@@ -125,9 +131,20 @@ export function withMeasuredInputLengths(jobName: string, body: Body, secs: read
   return jobName === "combine-videos" ? { ...body, upstreamDurations: [...secs] } : { ...body, upstreamDuration: secs[0] }
 }
 
-/** The pricing units of a video-utility job (at least one), or undefined for any other job. */
-export function videoUtilityUnits(jobName: string, body: Body): number | undefined {
-  return UNITS_BY_JOB[jobName]?.(body)
+/**
+ * Each clip's frame rate as the job's worker cuts its frame trims by, from the
+ * rate the probe read (`fps`, absent when it could not read one): that rate;
+ * one that could not be read, Combine Videos reads as `UNREADABLE_CLIP_FPS`
+ * (its worker's `getVideoFps`), while Trim fails on it (left unknown: the units
+ * rule then cuts no frames, the bound).
+ */
+export function workerClipRates(jobName: string, readings: ReadonlyArray<{ readonly fps?: number }>): Array<number | undefined> {
+  return readings.map((r) => r.fps ?? (jobName === "combine-videos" ? UNREADABLE_CLIP_FPS : undefined))
+}
+
+/** The pricing units of a video-utility job (at least one), at its clips' frame rates when known (`clipFps`), or undefined for any other job. */
+export function videoUtilityUnits(jobName: string, body: Body, clipFps: ClipRates = []): number | undefined {
+  return UNITS_BY_JOB[jobName]?.(body, clipFps)
 }
 
 /**
@@ -161,13 +178,7 @@ export function videoUtilityEstimateBody(
     case "loop-video":
       return { ...data, ...loopVideoRunFields(data) }
     case "combine-videos":
-      return {
-        transition: data.transition ?? "cut",
-        transitionDuration: data.transitionDuration ?? 0.5,
-        trimStartFrames: data.trimStartFrames ?? 1,
-        trimEndFrames: data.trimEndFrames ?? 2,
-        videoUrls: incoming.map(() => ""),
-      }
+      return { ...combineVideosRunFields(data), videoUrls: incoming.map(() => "") }
     case "assemble-narrated-video":
       return { blocks: incoming.filter((e) => e.targetHandle === "video").map(() => ({})) }
     default:

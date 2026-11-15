@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest"
 import {
   NEMOTRON_TRANSCRIBE_ID,
   NEMOTRON_TRANSCRIBE_PRICING,
+  NEMOTRON_UPWARD_GRACE_SEC,
+  nemotronHeldMinutes,
   nemotronTranscribeBaseCredits,
   nemotronTranscribeCreditId,
+  nemotronTranscribeHeldCreditId,
   nemotronTranscribeQuoteCreditId,
   nemotronTranscribeStartedMinutes,
   parseNemotronTranscribeCreditId,
 } from "../credit-estimators/nemotron-transcribe.js"
+import { addCaptionsNemotronHeldCreditId, addCaptionsNemotronQuoteCreditId, parseAddCaptionsNemotronCreditId } from "../credit-estimators/add-captions-nemotron.js"
 import { MODEL_CATALOG } from "../model-catalog.js"
 
 const RATE = NEMOTRON_TRANSCRIBE_PRICING.CREDITS_PER_RATE_DEFAULT
@@ -51,6 +55,34 @@ describe("Nemotron 3.5 Transcribe pricing (per started minute, decided 2026-11-1
     expect(nemotronTranscribeQuoteCreditId(undefined)).toBe("nemotron-3-5-transcribe:60m")
     expect(nemotronTranscribeQuoteCreditId(null)).toBe("nemotron-3-5-transcribe:60m")
     expect(nemotronTranscribeQuoteCreditId(125)).toBe("nemotron-3-5-transcribe:3m")
+  })
+
+  it("holds a measured file at the minutes the charge settles at: up to the grace past a minute is the minute below", () => {
+    expect(NEMOTRON_UPWARD_GRACE_SEC).toBe(1)
+    // A re-encoded 60-second cut measures a hair past 60 s (60.0004–60.011 s): held, and charged, at one minute.
+    expect(nemotronHeldMinutes(60)).toBe(1)
+    expect(nemotronHeldMinutes(60.0004)).toBe(1)
+    expect(nemotronHeldMinutes(60.011)).toBe(1)
+    expect(nemotronHeldMinutes(61)).toBe(1)
+    expect(nemotronHeldMinutes(61.001)).toBe(2)
+    expect(nemotronHeldMinutes(0.4)).toBe(1)
+    expect(nemotronHeldMinutes(3600)).toBe(60)
+    expect(nemotronTranscribeHeldCreditId(60.011)).toBe("nemotron-3-5-transcribe:1m")
+    expect(nemotronTranscribeHeldCreditId(125)).toBe("nemotron-3-5-transcribe:3m")
+  })
+
+  // The guard: a quote of a known length is never below the hold of a file that measures up to the grace past it.
+  const KNOWN = [0.5, 1, 30, 59, 59.5, 60, 60.5, 61, 119, 120, 180, 599.99, 600, 1800, 3540, 3599, 3600]
+  const OVER = [0, 1e-6, 0.0004, 0.011, 0.25, 0.5, 0.999, NEMOTRON_UPWARD_GRACE_SEC]
+  it.each(KNOWN)("a quote of %s s is never below the hold of a file measured up to the grace past it", (known) => {
+    for (const over of OVER) {
+      const measured = Math.min(known + over, NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC)
+      const quoted = parseNemotronTranscribeCreditId(nemotronTranscribeQuoteCreditId(known))!.minutes
+      expect(parseNemotronTranscribeCreditId(nemotronTranscribeHeldCreditId(measured))!.minutes, `${known} + ${over}`).toBeLessThanOrEqual(quoted)
+      // Add Captions on Nemotron: the same rule, its own ids.
+      const captionQuote = parseAddCaptionsNemotronCreditId(addCaptionsNemotronQuoteCreditId(known))!.minutes
+      expect(parseAddCaptionsNemotronCreditId(addCaptionsNemotronHeldCreditId(measured))!.minutes, `${known} + ${over}`).toBeLessThanOrEqual(captionQuote)
+    }
   })
 
   it("lists the four-minute rate row in the catalog at the launch rate", () => {

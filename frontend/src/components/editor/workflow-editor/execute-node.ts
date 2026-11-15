@@ -72,7 +72,6 @@ import {
   DEFAULT_TEXT_TO_AUDIO_PROVIDER,
   transcribeLaneSupportsWordTimestamps,
   DEFAULT_SUNO_STEM_NAME,
-  clampTopazVideoFps,
   isTopazVideoResolution,
   NODARO_VIDEO_UPSCALE_PROVIDER,
   dialogueVoicesForModel,
@@ -115,7 +114,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { UNIT_EXECUTORS } from "@/nodes/_generated/executors";
 import { createUnitExecKit } from "./unit-exec-kit";
 import { runGraph } from "./run-graph";
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, loopVideoRunFields, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, runOutputTaskFields, trimVideoRunFields } from "@nodaro/render-rules";
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, loopVideoRunFields, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, runOutputTaskFields, topazTargetFpsOf, trimVideoRunFields } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -6843,8 +6842,8 @@ function executeNodeCore(
         // factor sends that instead, which the server maps over the source.
         targetResolution: isTopazVideoResolution(vuData.targetResolution) ? vuData.targetResolution : undefined,
         upscaleFactor: isTopazVideoResolution(vuData.targetResolution) ? undefined : vuData.upscaleFactor || undefined,
-        // No frame rate = the source's own.
-        targetFps: typeof vuData.targetFps === "number" && Number.isFinite(vuData.targetFps) ? clampTopazVideoFps(vuData.targetFps) : undefined,
+        // No frame rate = the source's own; a rate stored as text is read as the quote reads it (`topazTargetFpsOf`).
+        targetFps: topazTargetFpsOf(vuData.targetFps),
         userId: ctx.userId,
         provider: "topaz",
       }),

@@ -63,6 +63,7 @@ vi.mock("../../providers/video/ffmpeg-utils.js", () => ({ probeVideoSource: prob
 // The one clip reading both sides measure by (lib/video-utility-probe.ts), driven by the probe above.
 vi.mock("../../lib/video-utility-probe.js", () => ({
   probeClipLengthSec: async (src: string) => (await probeSpy(src)).durationSeconds,
+  probeClipReading: async (src: string) => ({ sec: (await probeSpy(src)).durationSeconds }),
   ClipUnreadableError: class ClipUnreadableError extends Error {},
 }))
 

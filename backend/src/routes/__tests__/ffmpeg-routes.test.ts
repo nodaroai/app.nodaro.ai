@@ -63,7 +63,11 @@ vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
   assertSafeProbeSource: vi.fn(async () => undefined),
 }))
 
-vi.mock("@/lib/video-utility-probe.js", () => ({ probeClipLengthSec: vi.fn(async () => 10), ClipUnreadableError: class ClipUnreadableError extends Error {} }))
+vi.mock("@/lib/video-utility-probe.js", () => ({
+  probeClipLengthSec: vi.fn(async () => 10),
+  probeClipReading: vi.fn(async () => ({ sec: 10 })),
+  ClipUnreadableError: class ClipUnreadableError extends Error {},
+}))
 vi.mock("@/lib/url-validator.js", async () => {
   const { z } = await import("zod")
   // The example links are direct files: not an import of a link, so the

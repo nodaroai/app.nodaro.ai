@@ -1,5 +1,5 @@
 {
-  "$comment": "Mask Composite's and Video Overlay's quote before a run when what reaches them is made by another node — read by BOTH estimates over the same graphs, through the one measured walk (`measuredWireLengthSec`, @nodaro/render-rules): the editor's (frontend maskCompositePricingUnits / videoOverlayPricingUnits — the node's pill, its Run button, the confirm and the workflow badge) and the server's workflow estimate (CreditsService.estimateWorkflowCreditsAt, the composite's own line). Each case wires its sources into the step `c` (an edge with no `target` goes into `c`), which is a Mask Composite with default settings, or a Video Overlay with one stored video layer (so it quotes on its video row) and the case's `video` wire as its base. `expectedUnits` holds the 5-second units both quote, for two run sets (and, where a case gives `partial`, a third: exactly its `runSet`, passed as the editor's run set and the server's `runNodeIds`): `whole` (the editor's whole-run badge and confirm, which pass every executable node, frozen ones included; the server's estimate with no run set, which leaves frozen nodes out) and `alone` (the step's own Run and its pill on the editor; a server run of only `c`). Mask Composite's cap is 60 units (300 s), Video Overlay's 12 (60 s). A video made in the run is read at its planned length plus each step's slack once for every clip a node makes on the way (0.1 s on Mask Composite, which charges the container; 1/24 s on Video Overlay, which charges the video stream) — a step that only passes its input on adds none; a node that does not run hands on its take, at the length recorded with it.",
+  "$comment": "Mask Composite's and Video Overlay's quote before a run when what reaches them is made by another node — read by BOTH estimates over the same graphs, through the one measured walk (`measuredWireLengthSec`, @nodaro/render-rules): the editor's (frontend maskCompositePricingUnits / videoOverlayPricingUnits — the node's pill, its Run button, the confirm and the workflow badge) and the server's workflow estimate (CreditsService.estimateWorkflowCreditsAt, the composite's own line). Each case wires its sources into the step `c` (an edge with no `target` goes into `c`), which is a Mask Composite with default settings, or a Video Overlay with one stored video layer (so it quotes on its video row) and the case's `video` wire as its base. `expectedUnits` holds the 5-second units both quote, for two run sets (and, where a case gives `partial`, a third: exactly its `runSet`, passed as the editor's run set and the server's `runNodeIds`): `whole` (the editor's whole-run badge and confirm, which pass every executable node, frozen ones included; the server's estimate with no run set, which leaves frozen nodes out) and `alone` (the step's own Run and its pill on the editor; a server run of only `c`). Mask Composite's cap is 60 units (300 s), Video Overlay's 12 (60 s). A video made in the run is read at its planned length plus each step's slack once for every clip a node makes on the way (0.1 s on Mask Composite, which charges the container; 1/24 s on Video Overlay, which charges the video stream; a quarter second on both after a PixVerse V6 extension, whose file runs further past its planned length, picture and sound; after a Dubbing or an Audio Isolation a quarter second on Mask Composite only, since a dub keeps its input's video stream exactly and Video Overlay charges the stream) — a step that only passes its input on adds none; a node that does not run hands on its take, at the length recorded with it.",
   "cases": [
     {
       "name": "1. Generate Video on Kling 4.0 set to 5 s, never run: 5 s planned, plus the slack",
@@ -354,7 +354,7 @@
       }
     },
     {
-      "name": "2d. A 10 s upload extended on PixVerse V6 set to 5 s: 15 s, plus the slack (as Seedance 2.5's 5 s)",
+      "name": "2d. A 10 s upload extended on PixVerse V6 set to 5 s: 15 s, plus a quarter second on both steps (a PixVerse V6 extension runs further past its length than Seedance 2.5's): 15.25 s, a unit past Video Overlay's 15 s",
       "nodes": [
         {
           "id": "u",
@@ -393,16 +393,16 @@
       "expectedUnits": {
         "whole": {
           "maskComposite": 4,
-          "videoOverlay": 3
+          "videoOverlay": 4
         },
         "alone": {
           "maskComposite": 4,
-          "videoOverlay": 3
+          "videoOverlay": 4
         }
       }
     },
     {
-      "name": "2e. PixVerse V6 set to 40 s is held to its 15 s: a 10 s upload reads 25 s, plus the slack",
+      "name": "2e. PixVerse V6 set to 40 s is held to its 15 s: a 10 s upload reads 25 s, plus a quarter second: 25.25 s",
       "nodes": [
         {
           "id": "u",
@@ -441,16 +441,16 @@
       "expectedUnits": {
         "whole": {
           "maskComposite": 6,
-          "videoOverlay": 5
+          "videoOverlay": 6
         },
         "alone": {
           "maskComposite": 6,
-          "videoOverlay": 5
+          "videoOverlay": 6
         }
       }
     },
     {
-      "name": "2f. PixVerse V6 with no length set adds its default 5 s: a 30 s upload reads 35 s, plus the slack",
+      "name": "2f. PixVerse V6 with no length set adds its default 5 s: a 30 s upload reads 35 s, plus a quarter second: 35.25 s",
       "nodes": [
         {
           "id": "u",
@@ -488,11 +488,11 @@
       "expectedUnits": {
         "whole": {
           "maskComposite": 8,
-          "videoOverlay": 7
+          "videoOverlay": 8
         },
         "alone": {
           "maskComposite": 8,
-          "videoOverlay": 7
+          "videoOverlay": 8
         }
       }
     },
@@ -630,6 +630,51 @@
         "alone": {
           "maskComposite": 4,
           "videoOverlay": 4
+        }
+      }
+    },
+    {
+      "name": "2j. A Dubbing of a 10 s video upload: its sound runs further past its input, its picture does not — Mask Composite (the container) reads 10.25 s, 3 units; Video Overlay (the video stream, which a dub keeps exactly) keeps its frame, 10.04 s, 2 units",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "d",
+          "type": "dubbing",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "d",
+          "targetHandle": "video"
+        },
+        {
+          "source": "d",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 3,
+          "videoOverlay": 2
         }
       }
     },

@@ -140,6 +140,22 @@ describe("POST /v1/video-face-mesh — a child step", () => {
     })
   })
 
+  // The length and its row are the server's own measure, never a field a client sends (decided 2026-11-14).
+  it("a client-sent __videoFaceMesh is ignored: the 21 s clip is held and recorded at the measured 30 s row", async () => {
+    const res = await asChild({ videoUrl: CLIP, forcePrivate: true, __videoFaceMesh: { billedSec: 1, creditId: "video-face-mesh:5s" } })
+    expect(res.statusCode).toBe(202)
+    expect(guardedId).toBe("video-face-mesh:30s")
+    expect(reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-fm-1", "video-face-mesh:30s")
+    expect(inserted!.input_data).toMatchObject({ billedSec: 21, bucketKey: "video-face-mesh:30s" })
+  })
+
+  it("…and a body the measure skips (a link that is not a safe URL) is checked at the ceiling row, never the client's", async () => {
+    const res = await asChild({ videoUrl: "not-a-url", forcePrivate: true, __videoFaceMesh: { billedSec: 1, creditId: "video-face-mesh:5s" } })
+    expect(res.statusCode).toBe(400)
+    expect(guardedId).not.toBe("video-face-mesh:5s")
+    expect(guardedId).toMatch(/^video-face-mesh:\d+s$/)
+  })
+
   it("the bare request: draw on the clip itself, no mask, no limits, no zone", async () => {
     const res = await asChild({ videoUrl: CLIP })
     expect(res.statusCode).toBe(202)

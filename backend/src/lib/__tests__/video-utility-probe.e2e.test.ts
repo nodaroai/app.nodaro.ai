@@ -100,7 +100,7 @@ describe("a browser's live WebM recording (VP8, VP9), no length in its header", 
     const header = await runFfprobe(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=duration:format=duration", "-of", "csv=p=0", file()])
     expect(header.split("\n").map((l) => l.trim()).filter(Boolean).every((l) => l === "N/A")).toBe(true)
     expect(await probeClipLengthSec(file())).toBeCloseTo(3.2, 3)
-    // 3.2 s less the grace, two copies: 6.2 s, 2 units — and the render's check passes it at 2.
+    // 3.2 s less the grace, two copies: 6.1 s, 2 units — and the render's check passes it at 2.
     await expect(measureVideoUtilityCharge("loop-video", { videoUrl: file(), mode: "repeat", repeatCount: 2 })).resolves.toMatchObject({ ok: true, units: 2 })
     await expect(videoUtilityChargeCheck("loop-video", { mode: "repeat", repeatCount: 2, billedUnits: 2, upstreamDuration: 3.2 })([file()])).resolves.toBeUndefined()
   })

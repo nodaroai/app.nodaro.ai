@@ -25,8 +25,11 @@ The dubbed span is the Start/End window when set, otherwise the whole source. It
 
 When the length cannot be read up front (a link that cannot be read, or a file that cannot be probed), the run holds the 30-minute price (**1,320 credits**<!-- credits: elevenlabs-dubbing@30 -->, so that amount has to be available to start). When the dub is delivered, it is charged for the span that was actually dubbed, from ElevenLabs' own reading of the media or the length of the delivered file, and the rest of the hold is refunded automatically. A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way.
 
+**A hair past a minute is that minute.** A span that measures up to 0.05 seconds past a whole minute is held and charged that minute, here and when a held dub is settled at delivery: a 60-second cut that measures 60.011 seconds (a re-encoded file often runs a few hundredths past its length) is 1 minute. The price before a run reads the span exactly, so it is never below the charge.
+
 **Worked examples:**
 - A 60-second clip → 1 minute → **44 credits**<!-- credits: elevenlabs-dubbing@1 -->.
+- A clip that measures 60.04 seconds → still 1 minute → **44 credits**<!-- credits: elevenlabs-dubbing@1 -->.
 - A typical 2-minute clip → **88 credits**<!-- credits: elevenlabs-dubbing@2 --> (exactly the old flat price).
 - A 10-minute video → **440 credits**<!-- credits: elevenlabs-dubbing@10 -->.
 - A 45-minute video with a window of 0:00–10:00 → the window is the span → **440 credits**<!-- credits: elevenlabs-dubbing@10 --> (without the window the request is rejected at 30+ minutes).
@@ -36,7 +39,8 @@ To quote a dub, ask for the identifier `elevenlabs-dubbing:<N>u` (Hebrew: `eleve
 In the editor, the node's price, its Run button, the run confirmation and the workflow's estimate all show this whole-dub price for the started minutes of the span: the Start/End window when one is set (never longer than the source when its length is known), otherwise the length of the wired source (a wired video wins over a wired audio input), at most 30 minutes. A workflow estimate from the API reads the span the same way. The wired source's length is read as the run will meet it:
 
 - **an upload**, or a file added from your own uploads in the Library (an audio upload's too): the length recorded for it;
-- **a video another node makes in this run**: the length that node will produce at its settings (a generation at the length its model renders, an Extend Video at its source plus the seconds it adds), plus about a tenth of a second for each clip made on the way — the run measures the whole file and counts any started minute, so a Generate Video Pro clip of 60 s (stitched to 61 s) is quoted at 2 minutes, 88 credits<!-- credits: elevenlabs-dubbing@2 -->;
+- **a video another node makes in this run**: the length that node will produce at its settings (a generation at the length its model renders, an Extend Video at its source plus the seconds it adds), plus about a tenth of a second for each clip made on the way (a quarter second for a Dubbing, an Audio Isolation or a PixVerse V6 extension, whose files were measured to run further past their planned length) — the run measures the whole file and counts any started minute, so a Generate Video Pro clip of 60 s (stitched to 61 s) is quoted at 2 minutes, 88 credits<!-- credits: elevenlabs-dubbing@2 -->;
+- **audio another node makes in this run** from a length known before the run: a Voice Changer, Voice Changer Pro, Adjust Volume or Audio Isolation of a recording, an Extract Audio of a video, or a Trim Audio's window (at most what is left of its input after the start), at that length plus about a tenth of a second, as a new file runs a few hundredths past it — a quarter second after an Audio Isolation (or a Dubbing), whose files run further past their input: an Audio Isolation of a 59.8-second recording is quoted at 60.05 seconds, 2 minutes, where a Voice Changer of it is quoted at 59.9 seconds, 1 minute;
 - **a node that does not run in this run** (the dub run on its own, or a frozen node): the length recorded with the result it hands on (a video generation (Generate Video, Image to Video, Text to Video, Video to Video) whose result recorded no length — a fixed-length run records none — made that result at its settings, so it is read at the length they make, its Duration, as a clip the node makes in this run is read);
 - a length the upstream node only stores (an earlier result of a node that runs again) is never read.
 
@@ -73,6 +77,8 @@ The default mode preserves speaker identity: a Hebrew speaker dubbed to English 
 
 - **Inputs**: `audio` — source audio to dub; `video` — source video to dub (video wins when both are wired; a Source Link overrides both). A Video URL node wired in gives the video it downloaded, never its page link
 - **Outputs**: `audio` — the dubbed audio track (URL; always produced); `video` — the dubbed video (URL; video mode only)
+
+A dub was measured to run up to about 0.13 seconds past its input, so a step after it that measures what it is given and is charged by its length (Trim, Loop, Combine Videos, Lip Sync, Pitch & Tempo, Video SFX, …) quotes it a quarter second past its input's length: a Trim of a Dubbing of a 10-second upload is quoted at 10.1 seconds (10.25 less its grace), 33 credits<!-- credits: trim-video@3 -->. The extra length is sound: a dubbed video's picture is as long as its input's, so Video Overlay and Video Upscale, which charge by the picture, quote it with their usual frame.
 
 The mode is decided by the **media**, not the slot: an audio-only file wired into the video input is dubbed as audio; a video wired into the audio input is treated as a request for audio.
 

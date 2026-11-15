@@ -58,7 +58,29 @@ export interface CombineVideosEstimatorInput {
   transitionDuration?: number
   trimStartFrames?: number
   trimEndFrames?: number
+  /**
+   * The frame rate the clips' frame trims are cut at (the rate the join
+   * conforms its clips to), when known. Absent, 24 fps, the estimate's
+   * long-standing assumption. The trims come off at the joins only: the start
+   * of every clip but the first, the end of every clip but the last.
+   */
+  trimFramesPerSecond?: number
+  /**
+   * Per-join transitions (Combine Videos' `transitions`): `index` k is the
+   * join between clip k and clip k + 1. A join with an entry blends for its
+   * own `duration` (a `"cut"`, or a duration of 0, overlaps nothing); every
+   * other join keeps `transition` / `transitionDuration`. An index outside the
+   * joins is ignored, and a later entry for the same join wins, as the join
+   * renders them.
+   */
+  transitions?: ReadonlyArray<{ readonly index?: number; readonly transition?: string; readonly duration?: number }>
 }
+
+/** The most a join may overlap, as a share of the shortest clip it joins (the render's own clamp). */
+const COMBINE_MAX_OVERLAP_SHARE = 0.9
+
+/** A length in seconds when it is a positive one, else 0 (a transition with no length overlaps nothing). */
+const positiveSeconds = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0)
 
 export function estimateLoopVideoCredits(
   data: LoopVideoEstimatorInput,
@@ -130,19 +152,33 @@ export function estimateCombineVideosCredits(
   const fallback = VIDEO_UTIL_PRICING.FALLBACK_DURATION_SECONDS
   const n = upstreamDurations.length
 
-  let total = 0
-  for (const d of upstreamDurations) {
-    total += typeof d === "number" && Number.isFinite(d) && d >= 0 ? d : fallback
-  }
+  const trimFps =
+    data.trimFramesPerSecond !== undefined && Number.isFinite(data.trimFramesPerSecond) && data.trimFramesPerSecond > 0
+      ? data.trimFramesPerSecond
+      : VIDEO_UTIL_PRICING.FRAMES_PER_CREDIT
+  const startSec = (data.trimStartFrames ?? 0) / trimFps
+  const endSec = (data.trimEndFrames ?? 0) / trimFps
+  // Each clip as the join cuts it: the trims come off only where two clips
+  // meet — the start of every clip but the first, the end of every clip but
+  // the last. The film's own first and last frames are kept.
+  const clips = upstreamDurations.map((d, i) => {
+    const sec = typeof d === "number" && Number.isFinite(d) && d >= 0 ? d : fallback
+    return sec - (i > 0 ? startSec : 0) - (i < n - 1 ? endSec : 0)
+  })
+  let total = clips.reduce((sum, sec) => sum + sec, 0)
 
-  if (data.transition && data.transition !== "cut" && n > 1) {
-    total -= (data.transitionDuration ?? 0.5) * (n - 1)
+  // Each join's overlap, as the join renders it: its own transition where one
+  // is set, else the global one; at most 90 % of the shortest clip.
+  const globalOverlap = data.transition && data.transition !== "cut" ? Math.max(0, data.transitionDuration ?? 0.5) : 0
+  const overrides = new Map<number, number>()
+  for (const entry of data.transitions ?? []) {
+    const index = entry?.index
+    if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || index >= n - 1) continue
+    const overlap = positiveSeconds(entry.duration)
+    overrides.set(index, entry.transition === "cut" ? 0 : overlap)
   }
-
-  const trimSecPerClip =
-    ((data.trimStartFrames ?? 0) + (data.trimEndFrames ?? 0)) /
-    VIDEO_UTIL_PRICING.FRAMES_PER_CREDIT
-  total -= trimSecPerClip * n
+  const maxOverlap = Math.max(0, Math.min(...clips) * COMBINE_MAX_OVERLAP_SHARE)
+  for (let k = 0; k < n - 1; k++) total -= Math.min(overrides.get(k) ?? globalOverlap, maxOverlap)
 
   const base = Math.ceil(Math.max(0, total) / 5)
   const inputAdder = Math.max(0, n - 2)

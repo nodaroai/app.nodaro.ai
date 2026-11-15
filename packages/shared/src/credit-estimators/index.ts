@@ -14,7 +14,7 @@ export {
   imageOverlayCredits,
 } from "./image-overlay.js"
 
-export { VIDEO_SFX_PRICING, videoSfxCreditId, videoSfxQuoteCreditId } from "./video-sfx.js"
+export { VIDEO_SFX_PRICING, videoSfxCreditId, videoSfxHeldCreditId, videoSfxQuoteCreditId } from "./video-sfx.js"
 
 export {
   TEXT_TO_AUDIO_PRICING,
@@ -80,6 +80,7 @@ export {
   PITCH_TEMPO_LIMITS,
   pitchTempoStartedMinutes,
   pitchTempoCreditId,
+  pitchTempoHeldCreditId,
   pitchTempoQuoteCreditId,
   parsePitchTempoCreditId,
   pitchTempoBaseCredits,
@@ -89,8 +90,11 @@ export {
 export {
   NEMOTRON_TRANSCRIBE_ID,
   NEMOTRON_TRANSCRIBE_PRICING,
+  NEMOTRON_UPWARD_GRACE_SEC,
   nemotronTranscribeStartedMinutes,
+  nemotronHeldMinutes,
   nemotronTranscribeCreditId,
+  nemotronTranscribeHeldCreditId,
   nemotronTranscribeQuoteCreditId,
   parseNemotronTranscribeCreditId,
   nemotronTranscribeBaseCredits,
@@ -101,6 +105,7 @@ export {
   ADD_CAPTIONS_NEMOTRON_ID_PREFIX,
   addCaptionsNemotronMinutesId,
   addCaptionsNemotronCreditId,
+  addCaptionsNemotronHeldCreditId,
   addCaptionsNemotronQuoteCreditId,
   parseAddCaptionsNemotronCreditId,
   addCaptionsNemotronBaseCredits,

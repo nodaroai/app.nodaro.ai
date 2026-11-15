@@ -6,6 +6,7 @@ vi.mock("../../workers/shared.js", () => ({
   commitJobCreditsAtActualPrice: shared.commitJobCreditsAtActualPrice,
 }))
 
+import { nemotronTranscribeHeldCreditId, nemotronTranscribeQuoteCreditId } from "@nodaro/shared/credits"
 import { nemotronChargeId, nemotronLengthsDisagree, settleNemotronTranscribe } from "../nemotron-transcribe-settle.js"
 
 /**
@@ -101,6 +102,23 @@ describe("settleNemotronTranscribe", () => {
       await settleNemotronTranscribe({ usageLogId: "ul", jobId: "j", heldId: "nemotron-3-5-transcribe:2m", measuredSec: 61, kieSec: 59.5 })
       expect(shared.commitJobCreditsAtActualPrice).toHaveBeenCalledWith("ul", "j", "nemotron-3-5-transcribe:1m")
       expect(commits()).toBe(1)
+    })
+
+    // The hold reads the same second (`nemotronHeldMinutes`): a 60-second cut re-encoded to 60.011 s is held at one
+    // minute, the figure its 60 s is quoted at, and charged there. Held at two (the started minutes of 60.011 s), the
+    // grace — which only reads ABOVE the held minutes — could never bring it back to the quote.
+    it("the hold takes the same second, so a file a hair past a minute is held and charged the minute its length is quoted at", async () => {
+      const heldId = nemotronTranscribeHeldCreditId(60.011)
+      expect(heldId).toBe(nemotronTranscribeQuoteCreditId(60))
+      await settleNemotronTranscribe({ usageLogId: "ul", jobId: "j", heldId, measuredSec: 60.011, kieSec: 60.02 })
+      expect(shared.commitJobCredits).toHaveBeenCalledWith("ul", "j")
+      // KIE's own length missing: the measured length settles the same way.
+      await settleNemotronTranscribe({ usageLogId: "ul", jobId: "j2", heldId, measuredSec: 60.011 })
+      expect(shared.commitJobCredits).toHaveBeenLastCalledWith("ul", "j2")
+      expect(commits()).toBe(2)
+      // More than the grace past the held minute: the next minute, collected as before.
+      await settleNemotronTranscribe({ usageLogId: "ul", jobId: "j3", heldId, measuredSec: 60.011, kieSec: 61.5 })
+      expect(shared.commitJobCreditsAtActualPrice).toHaveBeenCalledWith("ul", "j3", "nemotron-3-5-transcribe:2m")
     })
 
     it("nemotronChargeId", () => {

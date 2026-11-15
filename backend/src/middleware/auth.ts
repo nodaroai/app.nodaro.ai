@@ -94,10 +94,15 @@ declare module "fastify" {
      *  `(user_id, idempotency_key)` (migration 163) closes the duplicate-
      *  execution race that any read-then-write dedup leaves open. */
     idempotencyKey?: string
-    /** Set by route-level pre-handlers that ffprobe an input video URL before
-     *  credit reservation, so creditGuard.computeCredits can pick a duration
-     *  bucket without re-probing. Currently used by video-sfx. */
+    /** Set by route-level pre-handlers that ffprobe an input before credit
+     *  reservation, so creditGuard.computeCredits can pick a duration bucket
+     *  without re-probing (video-sfx, pitch-tempo). Server-side only: never
+     *  read from, or mirrored onto, the body a client sends. */
     probedDuration?: number
+    /** The price row a measuring pre-handler resolved for what it probed
+     *  (video-sfx: the held row of the measured clip). Server-side only, as
+     *  `probedDuration`: the guard and the handler read it, never the body. */
+    probedCreditId?: string
     /** Set when the request is authenticated via a developer-app OAuth token. */
     appAuthorization?: {
       appId: string

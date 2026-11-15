@@ -45,7 +45,8 @@
  */
 import { join } from "node:path"
 import { rm, stat } from "node:fs/promises"
-import type { LipSyncAudioRate } from "@nodaro/shared/credits"
+import { lipSyncBilledSeconds, type LipSyncAudioRate } from "@nodaro/shared/credits"
+import { CLIP_PRICE_GRACE_SEC } from "@nodaro/shared/media"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import {
   audioReadStoppedMessage,
@@ -110,6 +111,13 @@ export interface PreparedLipSyncAudio {
   readonly measuredSamples: number
   /** The seconds the downloaded audio bills (`lipSyncHeldSecondsOf`), at most what the run was held for. */
   readonly billedSeconds: number
+  /**
+   * The seconds the provider bills for it — a rate model's own rounding,
+   * every started second (`lipSyncBilledSeconds`), with none of the hair past
+   * a whole second the run's hold forgives (decided 2026-11-14: the platform
+   * pays that hair). What the run's provider cost is recorded at.
+   */
+  readonly providerBilledSeconds: number
   /** Our encode's decoded length, in seconds — what the model is sent. */
   readonly sentSec: number
   /** …in sample frames: `measuredSamples` exactly, the padded minimum, or the trimmed maximum. */
@@ -213,11 +221,14 @@ export async function prepareLipSyncAudio(
     // The source and its PCM are done with: only our MP3 is read from here on.
     await Promise.all([rm(pcmPath, { force: true }), rm(inputPath, { force: true })])
 
-    // What we send must play no longer than what was held: the held seconds,
-    // or the padded minimum. Our own file, so a failure to measure it is ours (not deterministic).
+    // What we send must play no longer than what was held: the held seconds —
+    // on a rate model plus the hair past a whole second its hold forgives
+    // (`lipSyncHeldSeconds`, CLIP_PRICE_GRACE_SEC: decided 2026-11-14) — or the
+    // padded minimum. Our own file, so a failure to measure it is ours (not deterministic).
     const sent = await measureDecodedAudio(sendPath, { capSec: capSec + 1, formats: SENT_FORMATS })
     if (!sent) throw new Error(`${label}: the prepared audio could not be measured`)
-    const sendLimitSec = Math.max(heldBilledSeconds, shape.padToSec ?? 0)
+    const forgivenSec = pricing.kind === "rate" ? CLIP_PRICE_GRACE_SEC : 0
+    const sendLimitSec = Math.max(heldBilledSeconds + forgivenSec, shape.padToSec ?? 0)
     if (sent.overCap || sent.seconds > sendLimitSec + LIP_SYNC_ENCODE_TOLERANCE_SEC) {
       throw new DeterministicJobError(
         `${label}: prepared for the model, the audio plays ${sent.overCap ? `over ${capSec + 1}` : Number(sent.seconds.toFixed(3))} seconds, ` +
@@ -247,6 +258,7 @@ export async function prepareLipSyncAudio(
       measuredSec,
       measuredSamples: source.overCap ? Math.round(capSec * DECODED_AUDIO_RATE_HZ) : source.samples,
       billedSeconds,
+      providerBilledSeconds: pricing.kind === "rate" && !source.overCap ? lipSyncBilledSeconds(pricing.rate, source.seconds) : billedSeconds,
       sentSec: sent.seconds,
       sentSamples: sent.samples,
       padded,

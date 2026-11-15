@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -84,7 +84,8 @@ const combineVideosBody = z.object({
 
 export async function combineVideosRoutes(app: FastifyInstance) {
   // One unit when the request was not measured yet (the floor), the measured units once it was.
-  const computeCredits = (body: unknown) => videoUtilityMeasuredBaseCredits("combine-videos", stashedVideoUtilityLength(body)?.units ?? 1)
+  // The units the preHandler measured: the server-side request's, never the body's.
+  const computeCredits = (_body: unknown, req: FastifyRequest) => videoUtilityMeasuredBaseCredits("combine-videos", stashedVideoUtilityLength(req)?.units ?? 1)
   const guard = creditGuard(() => "combine-videos", { computeCredits })
   const measuredGuard = creditGuard(() => "combine-videos", { computeCredits, dedup: false })
   app.post("/v1/combine-videos", {
@@ -97,7 +98,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
       measuredGuard,
     ],
   }, async (req, reply) => {
-    const measured = stashedVideoUtilityLength(req.body)
+    const measured = stashedVideoUtilityLength(req)
     const parsed = combineVideosBody.safeParse(withoutVideoUtilityStash(req.body))
     if (!parsed.success) {
       return reply.status(400).send({

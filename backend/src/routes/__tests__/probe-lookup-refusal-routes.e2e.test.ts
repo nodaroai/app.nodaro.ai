@@ -55,9 +55,10 @@ vi.mock("../../lib/queue.js", () => ({
 }))
 vi.mock("../../middleware/credit-guard.js", () => ({
   // Records what the real guard would price: the id (or its resolver's answer) and the hook's base credits.
-  creditGuard: (id: unknown, opts?: { computeCredits?: (body: unknown) => Promise<number> }) => async (req: { body: unknown; userId?: string }) => {
+  creditGuard: (id: unknown, opts?: { computeCredits?: (body: unknown, req: unknown) => Promise<number> }) => async (req: { body: unknown; userId?: string }) => {
     state.guardIds.push(typeof id === "function" ? (id as (r: unknown) => string)(req) : String(id))
-    if (opts?.computeCredits) state.guardedCredits.push(await opts.computeCredits(req.body))
+    // As the real guard calls it: the body and the request (a measured row lives on the request, never the body).
+    if (opts?.computeCredits) state.guardedCredits.push(await opts.computeCredits(req.body, req))
     req.userId = USER
   },
   reserveCreditsForJob: async () => ({ usageLogId: "u-1", creditsReserved: 10, watermark: false }),

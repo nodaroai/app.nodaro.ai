@@ -39,10 +39,12 @@ const m = vi.hoisted(() => ({
 }))
 vi.mock("../../providers/video/ffmpeg-utils.js", () => m)
 // The one clip reading both sides measure by (lib/video-utility-probe.ts), driven by the probe above.
-vi.mock("../video-utility-probe.js", () => ({
-  probeClipLengthSec: vi.fn(async (src: string, _opts?: Record<string, unknown>) => (await m.probeVideoSource(src)).durationSeconds),
-  ClipUnreadableError: class ClipUnreadableError extends Error {},
-}))
+vi.mock("../video-utility-probe.js", () => {
+  const probeClipLengthSec = vi.fn(async (src: string, _opts?: Record<string, unknown>) => (await m.probeVideoSource(src)).durationSeconds)
+  // The measure reads a clip's length and rate in one call: here, the length the mocked probe gives (no rate).
+  const probeClipReading = vi.fn(async (src: string, opts?: Record<string, unknown>) => ({ sec: await probeClipLengthSec(src, opts) }))
+  return { probeClipLengthSec, probeClipReading, ClipUnreadableError: class ClipUnreadableError extends Error {} }
+})
 
 import { OWN_STORAGE_MEASURE_MAX_BYTES, measureVideoUtilityCharge, videoUtilityRefusalStatus } from "../video-utility-length.js"
 
@@ -73,7 +75,7 @@ afterAll(() => {
 
 describe("measuring a clip in this install's own storage (a self-host)", () => {
   it("a file the guard refuses inside the own-storage subtree is downloaded (capped at 2 GiB) and measured on disk (12 s → 3 units)", async () => {
-    await expect(measureVideoUtilityCharge("trim-video", trim(OWN))).resolves.toEqual({ ok: true, secs: [12], units: 3 })
+    await expect(measureVideoUtilityCharge("trim-video", trim(OWN))).resolves.toEqual({ ok: true, secs: [12], fps: [undefined], units: 3 })
     expect(OWN_STORAGE_MEASURE_MAX_BYTES).toBe(2 * 1024 ** 3)
     // No client waiting (a workflow, a pipeline): the render's own download bound.
     // (Its signal is the measure's own stop: a failing sibling clip.)
@@ -200,7 +202,7 @@ describe("measuring a clip in this install's own storage (a self-host)", () => {
 
 describe("a link the guard allows is probed where it is, never downloaded", () => {
   it("a public link (12 s ×2 → 5 units)", async () => {
-    await expect(measureVideoUtilityCharge("loop-video", { videoUrl: PUBLIC, mode: "repeat", repeatCount: 2 })).resolves.toEqual({ ok: true, secs: [12], units: 5 })
+    await expect(measureVideoUtilityCharge("loop-video", { videoUrl: PUBLIC, mode: "repeat", repeatCount: 2 })).resolves.toEqual({ ok: true, secs: [12], fps: [undefined], units: 5 })
     expect(m.downloadFile).not.toHaveBeenCalled()
   })
 

@@ -23,7 +23,6 @@ import {
   grokExtendWiredSourceResolution,
   buildMotionCreditModelIdentifier,
   AI_AVATAR_DURATION_BUCKETS,
-  resolveAiAvatarCreditId,
   type AiAvatarEngine,
   type AiAvatarResolution,
   CINEMATIC_MIN_DURATION_SEC,
@@ -31,7 +30,6 @@ import {
   cinematicCreditId,
   resolveCinematicCreditId,
   type CinematicResolution,
-  resolveSwitchXCreditId,
   VIDEO_ANALYSIS_DURATION_BUCKETS,
   VIDEO_ANALYSIS_MAX_DURATION_SEC,
   VIDEO_ANALYSIS_BUCKET_CREDITS,
@@ -73,12 +71,11 @@ import {
 } from "@nodaro/shared/media"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { pricedAsId } from "../../lib/retired-price-id.js"
+import { aiAvatarCreditIdOf, switchXCreditIdOf } from "../../lib/probed-credit-ids.js"
 import { estimatedCaptionEngine } from "../../lib/add-captions-transcription.js"
 import { withWiredSettings, renderNodeOf, isRenderNodeType, withRunOverrides, transcribeNodeReturnsWords } from "@nodaro/shared/nodes"
 import {
   MUSIC_CREDIT_ID,
-  clampTopazVideoFps,
-  isTopazVideoResolution,
   dialogueProviderOf,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
   isSeedanceVideoEditProvider,
@@ -121,7 +118,7 @@ import { generateVideoProCapSec as generateVideoProCapSecOfEnv } from "../../lib
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, lipSyncAudioSourceId, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, NEMOTRON_WIRE_READ_OPTIONS, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuoteSeconds, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_READING, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_OVERLAY_READING, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, measuredWireLengthSec, type MeasuredWireLengthOptions, type MeasuredFileReading, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, withoutMediaShape, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoQuoteUnits, topazWiredSource, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -3154,19 +3151,18 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
     return meteredLlmNodeId("reduce:pick-best-llm", model, undefined, false, () => buildLlmCreditIdentifier("reduce:pick-best-llm", model))
   },
 
-  // AI Avatar (HeyGen): delegates to resolveAiAvatarCreditId — same body-reading
-  // logic the creditGuard preHandler uses directly at request time.
-  "ai-avatar": (data) => resolveAiAvatarCreditId(data),
+  // AI Avatar (HeyGen): the id the creditGuard holds (`aiAvatarCreditIdOf`):
+  // an estimate measures no audio, and never reads a length the node's data carries.
+  "ai-avatar": (data) => aiAvatarCreditIdOf(data),
 
   // Cinematic Avatar (HeyGen): delegates to resolveCinematicCreditId — exact
   // (resolution, duration) id, same logic the creditGuard preHandler uses.
   "cinematic-avatar": (data) => resolveCinematicCreditId(data),
 
-  // Beeble SwitchX relight: delegates to resolveSwitchXCreditId — builds the
-  // `beeble-switchx:<tier>f:<res>p` composite from the ffprobed frame count
-  // (__probedFrameCount) + maxResolution, same logic the creditGuard preHandler
-  // uses at request time.
-  "switchx": (data) => resolveSwitchXCreditId(data),
+  // Beeble SwitchX relight: the `beeble-switchx:<tier>f:<res>p` composite the
+  // creditGuard holds (`switchXCreditIdOf`); an estimate probes no frames, so the
+  // top tier, and never a count the node's data carries.
+  "switchx": (data) => switchXCreditIdOf(data),
 
   // Render Video: a 3D scene render is priced by FRAME SIZE, so the id depends
   // on the plan the node carries. Same `renderVideoCreditId` the route guard
@@ -5887,8 +5883,8 @@ type WireFpsOf = (sourceId: string | undefined) => number | undefined
 type MeasuredWireSecOf = (
   sourceId: string | undefined,
   plannedClipSlackSec: number,
-  /** What one step's reading adds (Lip Sync: a re-run voice at its earlier take, a minimum). */
-  extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum">,
+  /** What one step's reading adds (Lip Sync: a re-run voice at its earlier take, a minimum; on a per-second model, a recording at its decoded length; a step that measures the video stream: its `reading`). */
+  extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum" | "decodedAudioLength" | "reading">,
 ) => number | undefined
 
 /** How a run estimate reads the video on a wire: its length, its measured length, the length the graph knows, and its frame rate. */
@@ -5898,17 +5894,33 @@ interface RunWireReaders {
   /** Only a length the graph knows (a recording, a take's record): the measured walk's `knownOnly` reading. */
   readonly knownSec: WireSecOf
   readonly fps: WireFpsOf
+  /**
+   * The rate a Trim's or a Combine Videos' frame trims are quoted at (decided
+   * 2026-11-14: the clip's real rate where the graph knows it, else no frames
+   * cut): `fps`, except that a listing reads none from a recording the app
+   * user replaces — their file's rate is not the sample's.
+   */
+  readonly trimFps: WireFpsOf
 }
 
-/** The three wire readings of a run estimate, over one graph and one run set. */
+/** The wire readings of a run estimate, over one graph and one run set. */
 function runWireReadersOf(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
   rerunIds: ReadonlySet<string>,
   /** A listing's app inputs typed with no enumerable domain (`listingOpenValues`); a run estimate has none. */
   openSourceIds?: ReadonlySet<string>,
+  /** A listing's recordings the app user replaces: no frame trim is read at their sample's rate. */
+  replacedMediaIds: ReadonlySet<string> = new Set(),
 ): RunWireReaders {
-  return { sec: runWireLengthOf(nodes, edges, rerunIds), measuredSec: measuredWireLengthOf(nodes, edges, rerunIds, openSourceIds), knownSec: knownWireLengthOf(nodes, edges, rerunIds, openSourceIds), fps: runWireFpsOf(nodes, edges) }
+  const fps = runWireFpsOf(nodes, edges)
+  const trimFps = replacedMediaIds.size === 0 ? fps : runWireFpsOf(withoutReplacedShape(nodes, replacedMediaIds), edges)
+  return { sec: runWireLengthOf(nodes, edges, rerunIds), measuredSec: measuredWireLengthOf(nodes, edges, rerunIds, openSourceIds), knownSec: knownWireLengthOf(nodes, edges, rerunIds, openSourceIds), fps, trimFps }
+}
+
+/** A graph whose recordings the app user replaces say nothing of their file's size or rate (`withoutMediaShape`). */
+function withoutReplacedShape(nodes: ReadonlyArray<EstimateNode>, replacedMediaIds: ReadonlySet<string>): EstimateNode[] {
+  return nodes.map((n) => (n.id && replacedMediaIds.has(n.id) ? { ...n, data: withoutMediaShape(n.data) } : n))
 }
 
 /**
@@ -6043,7 +6055,8 @@ function estimateNodeCredits(
   // The steps whose run measures its input before it reserves (Video SFX, Video
   // Mask, Video Depth, Pitch & Tempo, Dubbing, Topaz): each wire through the
   // measured walk the editor's quote reads, with that step's slack.
-  const measuredFor = (type: MeasuredInputStepType): WireSecOf => (sourceId) => wires.measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC[type])
+  const measuredFor = (type: MeasuredInputStepType): WireSecOf => (sourceId) => wires.measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC[type], { reading: MEASURED_INPUT_READING[type] })
+  const nemotronWireSec: WireSecOf = (sourceId) => wires.measuredSec(sourceId, NEMOTRON_WIRE_READ_OPTIONS.plannedClipSlackSec ?? 0, { voiceTakeAsMinimum: NEMOTRON_WIRE_READ_OPTIONS.voiceTakeAsMinimum })
   // A parameter node (Provider, Duration, a picker) is read, never run: no
   // job, no charge. A Provider's data names a model ("veo3"), which the
   // lookups below would otherwise price as a run of that model. The editor's
@@ -6114,7 +6127,8 @@ function estimateNodeCredits(
     const secs = clipWires.map((e) =>
       MEASURED_VIDEO_UTILITY_JOBS.has(node.type) ? wires.measuredSec(e.source, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC) : wireSec(e.source))
     const body = secs.some((sec) => sec !== undefined) ? withUpstreamLengths(node.type, utilityBody, secs) : utilityBody
-    const units = videoUtilityUnits(node.type, body)
+    // Frame trims at each clip's rate where the graph knows it (`runWireFps`), else none cut: the bound (decided 2026-11-14).
+    const units = videoUtilityUnits(node.type, body, clipWires.map((e) => wires.trimFps(e.source)))
     const credits = units === undefined ? undefined : chargedCredits(prices, node.type, units)
     if (credits !== undefined) return credits
   }
@@ -6156,15 +6170,14 @@ function estimateNodeCredits(
     videoSfxSec: node.type === "video-sfx" ? videoSfxClipSecOf(node, edges, measuredFor("video-sfx")) : undefined,
     videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, nodes, edges, measuredFor("video-depth"), prices) : undefined,
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, measuredFor("pitch-tempo")) : undefined,
-    // Lip Sync on a model priced by a length bucket: its audio wire as OmniHuman 2.0's is read (graphPricingUnits).
+    // Lip Sync on a model priced by a length bucket: its audio wire as OmniHuman 2.0's is read (graphPricingUnits), an AAC recording at its decoded length.
     lipSyncAudioSec: node.type === "lip-sync"
-      ? lipSyncAudioWireSecOf(node, nodes, edges, (sourceId) => wires.measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"], { voiceTakeAsMinimum: true }))
+      ? lipSyncAudioWireSecOf(node, nodes, edges, (sourceId) => wires.measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"], LIP_SYNC_AUDIO_WIRE_READ_OPTIONS))
       : undefined,
-    // Transcribe on Nemotron 3.5: its audio wire as a run estimate reads it (not the measured walk: it was not moved onto it).
-    transcribeSec: node.type === "transcribe" ? transcribeInputSecOf(node, edges, wireSec) : undefined,
-    // Add Captions on Nemotron 3.5 Transcribe: its video wire as a run estimate reads it, as Transcribe's
-    // input is read (not the measured walk: neither was moved onto it).
-    addCaptionsVideoSec: node.type === "add-captions" ? addCaptionsVideoSecOf(node, edges, wireSec) : undefined,
+    // Transcribe and Add Captions on Nemotron 3.5: their wire as the editor reads it, the measured walk with no slack
+    // (the hold forgives a second) and a voice made again in the run at its take, a minimum (NEMOTRON_WIRE_READ_OPTIONS).
+    transcribeSec: node.type === "transcribe" ? transcribeInputSecOf(node, edges, nemotronWireSec) : undefined,
+    addCaptionsVideoSec: node.type === "add-captions" ? addCaptionsVideoSecOf(node, edges, nemotronWireSec) : undefined,
     addCaptionsSourceWired: node.type === "add-captions" ? addCaptionsSourceKnownWired(node, nodes, edges) : undefined,
     videoMaskSec: node.type === "video-mask" ? videoMaskClipSecOf(node, edges, measuredFor("video-mask"), wireFps) : undefined,
     // Video Face Mesh (the Cast Swap engine's quote graph): its `video` wire as a run estimate reads it (not the
@@ -6264,8 +6277,8 @@ function pitchTempoInputSecOf(
 /**
  * The file length a Transcribe on a length-priced engine (Nemotron 3.5
  * Transcribe, per started minute) is priced at when a run is estimated: its
- * audio wire's length where a run estimate knows it, at most the 60 minutes a
- * run accepts. Undefined when unknown: the 60-minute id stands in
+ * audio wire's length as the measured walk reads it (`NEMOTRON_WIRE_READ_OPTIONS`,
+ * the editor's reading), at most the 60 minutes a run accepts. Undefined when unknown: the 60-minute id stands in
  * (`nemotronTranscribeQuoteCreditId`) — a run measures the real file before it
  * reserves, so no run is charged more.
  */
@@ -6281,8 +6294,9 @@ function transcribeInputSecOf(
 
 /**
  * The video length an Add Captions on Nemotron 3.5 Transcribe (priced per
- * started minute of the video) is quoted at: its video wire's length where a
- * run estimate knows it, at most the 60 minutes a run accepts. Undefined when
+ * started minute of the video) is quoted at: its video wire's length as the
+ * measured walk reads it (`NEMOTRON_WIRE_READ_OPTIONS`, the editor's reading),
+ * the longest of its `in` wires, at most the 60 minutes a run accepts. Undefined when
  * unknown: the 60-minute id stands in — a run measures the real video first.
  */
 function addCaptionsVideoSecOf(
@@ -6363,7 +6377,7 @@ function videoOverlayVideoCredits(
   const self = { id: node.id ?? "", type: node.type, data: node.data }
   if (!videoOverlayQuotesVideo(self, listingGateNodes(nodes), listingGateEdges(edges ?? []))) return undefined
   const inputs = node.id === undefined ? [] : (edges ?? []).filter((e) => e.target === node.id)
-  const units = videoOverlayVideoUnits(videoOverlayBaseSec(inputs, inputs.map((e) => measuredSec(e.source, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC))))
+  const units = videoOverlayVideoUnits(videoOverlayBaseSec(inputs, inputs.map((e) => measuredSec(e.source, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, { reading: VIDEO_OVERLAY_READING }))))
   return chargedCredits(prices, VIDEO_OVERLAY_PRICING.VIDEO_CREDIT_ID, units)
 }
 
@@ -6742,6 +6756,11 @@ function listingMeasuredSlackOf(type: string): number | undefined {
   return Object.hasOwn(MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type) ? MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC[type as MeasuredInputStepType] : undefined
 }
 
+/** What a listed step whose run measures its clips measures of them (`MEASURED_INPUT_READING`; Trim, Loop and Combine Videos read as the container). */
+function listingMeasuredReadingOf(type: string): MeasuredFileReading {
+  return Object.hasOwn(MEASURED_INPUT_READING, type) ? MEASURED_INPUT_READING[type as MeasuredInputStepType] : "container"
+}
+
 /**
  * A length-priced utility's listed parts (decided 2026-10-07), from the same
  * estimator its run is charged with, evaluated at the length each input wire
@@ -6783,7 +6802,7 @@ function utilityListingParts(
     const listed = wireInputLength(e.source, nodes, edges, replacedMediaIds, episodeIds, rerunIds, speechTextCaps, chargedByLength)
     // A length that follows the episode is listed per minute of it, as before.
     if (!measuredSec || slack === undefined || (knownLength(listed)?.perEpisodeSec ?? 0) > 0) return listed
-    const sec = measuredSec(e.source, slack)
+    const sec = measuredSec(e.source, slack, { reading: listingMeasuredReadingOf(node.type) })
     return sec !== undefined ? { fixedSec: sec, perEpisodeSec: 0 } : listed
   })
   const videoWire = incoming.findIndex((e) => e.targetHandle === "video")
@@ -6798,6 +6817,10 @@ function utilityListingParts(
   }
   const lengths = wires.map(knownLength)
   if (lengths.every((l) => l === undefined)) return undefined
+  // A Trim's or a Combine Videos' frame trims at each clip's rate where the graph knows it — never a replaced
+  // recording's sample rate — else none cut, the bound (decided 2026-11-14).
+  const trimFpsOf = runWireFpsOf(withoutReplacedShape(nodes, replacedMediaIds), edges)
+  const clipRates = incoming.map((e) => trimFpsOf(e.source))
   const videoSfxLength = knownLength(videoSfxWire)
   const secAt = (l: InputLength | undefined, minutes: number) => (l ? l.fixedSec + l.perEpisodeSec * minutes : undefined)
   // The base price of a run when the episode is `minutes` long, and the id it is charged at.
@@ -6828,7 +6851,7 @@ function utilityListingParts(
     // upload) the window is cut at that length, as the estimate, the pill and the charge cut it.
     const secs = node.type === "trim-video" && perEpisode && trimVideoCutsFixedWindow(body) ? [] : lengths.map((l) => secAt(l, minutes))
     // Each unit at the node's own row, the price its run reserves (`unitRateBaseCredits`).
-    const units = videoUtilityUnits(node.type, withUpstreamLengths(node.type, body, secs))
+    const units = videoUtilityUnits(node.type, withUpstreamLengths(node.type, body, secs), clipRates)
     const unit = prices.base(node.type)
     return units === undefined || unit === undefined ? undefined : { id: node.type, base: quoteBaseCredits(unit, units) }
   }
@@ -6975,14 +6998,14 @@ function sumListingParts(
   // The graph the length rules read: a replaced source's sample length removed
   // (`withoutMediaLength`), so a render or plan that follows it lists per minute.
   const lengthNodes = nodes.map((n) => (n.id && replacedMediaIds.has(n.id) ? { ...n, data: withoutMediaLength(n.data) } : n))
-  const wires = runWireReadersOf(lengthNodes, edges, rerunIds, openValueNodeIds)
+  const wires = runWireReadersOf(lengthNodes, edges, rerunIds, openValueNodeIds, replacedMediaIds)
   const utilityWireSec = listingUtilityWireSecOf(lengthNodes, edges, rerunIds, openValueNodeIds, speechTextCaps)
   return nodes.reduce<ListingParts>((sum, node, i) => {
     if (!include(node)) return sum
     const runs = nodeFanOut({ id: node.id ?? "", type: node.type, data: node.data }, gateNodes, gateEdges, rerunIds)
     if (runs === 0) return sum
     // The listing's own measured walk (a generated voice by its script, as Pitch & Tempo and Dubbing read it).
-    const unitsOf = (n: EstimateNode) => graphPricingUnits(n, lengthNodes, edges, rerunIds, utilityWireSec)
+    const unitsOf = (n: EstimateNode) => graphPricingUnits(n, lengthNodes, edges, rerunIds, utilityWireSec, replacedMediaIds)
     // Several providers on one node: each runs, at its own price (the run's
     // expansion), as the run estimate and the editor's estimate sum them.
     const parts = lengthDependentParts(lengthNodes[i]!, lengthNodes, edges, prices, rerunIds, replacedMediaIds, speechTextCaps, utilityWireSec) ?? {
@@ -7023,6 +7046,8 @@ export function graphPricingUnits(
   rerunIds: ReadonlySet<string>,
   /** The measured walk a Topaz upscale's video is read by (the caller's, with an app listing's open inputs); else one over this graph and run set. */
   measuredSec: MeasuredWireSecOf = measuredWireLengthOf(nodes, edges, rerunIds),
+  /** Sources whose recording the app user replaces (a listing's): a Topaz upscale reads no size or rate from their sample. */
+  replacedMediaIds: ReadonlySet<string> = new Set(),
 ): number {
   // Speaker Frames: the blocks of the edit wired in when it is known now; a
   // length not known before the run, 180 min on each camera the run will
@@ -7037,29 +7062,42 @@ export function graphPricingUnits(
     }
     return speakerFramesEstimateBlocks(self, listingGateNodes(nodes), listingGateEdges(edges), rerunIds)
   }
-  // Topaz video upscale: the units its hold reads — its target at the length
-  // its video wire gives as the measured walk reads it (the editor's reading:
-  // a node that runs at the length it will produce plus one frame of slack,
-  // the hold counting the video stream's frames), else the estimate's fallback
-  // length, a 16:9 frame. The run measures the real clip before it reserves
-  // (lib/topaz-video-plan.ts).
+  // Topaz video upscale: the units its hold reads (`topazVideoQuoteUnits`, the
+  // editor's rule) — its target over the length its video wire gives as the
+  // measured walk reads it (a node that runs at the length it will produce plus
+  // one frame of slack, the hold counting the video stream's frames), and the
+  // clip's known frame and declared rate (`topazWiredSource`: "Same as source"
+  // and an old factor read them; a recording an app's user replaces says
+  // nothing of their file); unknown, a 10-second clip, 16:9, 30 fps. The run
+  // measures the real clip before it reserves (lib/topaz-video-plan.ts).
   if (node.type === "video-upscale" && isTopazVideoUpscaleNode(node)) {
     const wired = withWiredSettings(node, nodes, edges ?? [])
     const slack = MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["video-upscale"]
     const sec = edges && node.id
-      ? edges.filter((e) => e.target === node.id).map((e) => measuredSec(e.source, slack)).find((v) => v !== undefined)
+      ? edges.filter((e) => e.target === node.id).map((e) => measuredSec(e.source, slack, { reading: MEASURED_INPUT_READING["video-upscale"] })).find((v) => v !== undefined)
       : undefined
-    return topazVideoEstimateUnits(topazVideoEstimateTarget(wired.data ?? {}, sec))
+    const source = edges && node.id ? topazWiredSource(node.id, listingGateNodes(nodes), listingGateEdges(edges), rerunIds, replacedMediaIds) : {}
+    return topazVideoQuoteUnits(wired.data ?? {}, sec, source)
   }
   // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): the
   // billed seconds of its `audio` wire as the measured walk reads it (0.1 s
-  // slack on audio made in the run; a voice made again in the run at the take
-  // it holds, a minimum; in a listing, a voice by its script) — or, not known,
-  // the model's maximum: an estimate never quotes below what the run may hold.
-  // The run measures the real audio before it reserves (lib/lip-sync-inputs.ts).
+  // slack on audio made in the run, a quarter second after a Dubbing or an
+  // Audio Isolation; a voice made again in the run at the take
+  // it holds, a minimum; in a listing, a voice by its script; an AAC recording
+  // at its decoded length, a frame past its record: `LIP_SYNC_AUDIO_WIRE_READ_OPTIONS`)
+  // — or, not known, the editor's minimum (decided 2026-11-14): the 15-second
+  // stand-in, or with no audio to play the length the node measured at its last
+  // run (`lipSyncRateQuoteSeconds`, the editor's own rule). The run measures the
+  // real audio — its decoded samples — before it reserves (lib/lip-sync-inputs.ts)
+  // and charges it.
   if (node.type === "lip-sync") {
-    const rate = lipSyncAudioRateOf(withWiredSettings(node, nodes, edges ?? []).data?.provider)
-    if (rate) return lipSyncEstimateSeconds(rate, lipSyncAudioWireSecOf(node, nodes, edges, (sourceId) => measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"], { voiceTakeAsMinimum: true })))
+    const wired = withWiredSettings(node, nodes, edges ?? [])
+    const rate = lipSyncAudioRateOf(wired.data?.provider)
+    if (rate) {
+      const source = lipSyncAudioSourceId(node, nodes, edges, "server")
+      const sec = source === undefined ? undefined : measuredSec(source, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"], LIP_SYNC_AUDIO_WIRE_READ_OPTIONS)
+      return lipSyncRateQuoteSeconds(rate, sec, source !== undefined, node.data)
+    }
   }
   // Nodaro Video Upscale: its tier's four-second row × the billed seconds ÷ 4,
   // at the length its video wire gives as the measured walk reads it, with
@@ -7071,7 +7109,7 @@ export function graphPricingUnits(
   // it asks for units.
   if (node.type === "video-upscale" && isNodaroVideoUpscaleNode(node)) {
     const slack = MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["video-upscale"]
-    return nodaroVideoUpscaleEstimateUnits(videoUpscaleWireSec(node, edges, (sourceId) => measuredSec(sourceId, slack)))
+    return nodaroVideoUpscaleEstimateUnits(videoUpscaleWireSec(node, edges, (sourceId) => measuredSec(sourceId, slack, { reading: MEASURED_INPUT_READING["video-upscale"] })))
   }
   // Extend Video on Seedance 2.5: (seconds sent + seconds added) ÷ 2 of its
   // two-second row — the source's last 10 s at the length the graph knows it
@@ -7422,15 +7460,6 @@ function videoUpscaleWireSec(node: EstimateNode, edges: ReadonlyArray<EstimateEd
 function isTopazVideoUpscaleNode(node: EstimateNode): boolean {
   const provider = node.data?.provider
   return provider === undefined || provider === "" || provider === "topaz"
-}
-
-/** What an estimate reads of a Topaz node: its target (else the defaults) at `durationSec`. */
-function topazVideoEstimateTarget(data: Record<string, unknown>, durationSec: number | undefined) {
-  return {
-    resolution: isTopazVideoResolution(data.targetResolution) ? data.targetResolution : undefined,
-    fps: typeof data.targetFps === "number" && Number.isFinite(data.targetFps) ? clampTopazVideoFps(data.targetFps) : undefined,
-    durationSec,
-  }
 }
 
 function estimatePricingUnits(node: EstimateNode): number {

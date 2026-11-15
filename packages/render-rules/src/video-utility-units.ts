@@ -23,6 +23,22 @@
  * when the clip's length is known (an unknown clip is not cut at the 8-second
  * stand-in: a longer clip would then be charged above its quote). A start at
  * or past the clip's end is the one-unit minimum.
+ *
+ * Frame trims are cut at the clip's real frame rate (decided 2026-11-14: the
+ * `r_frame_rate` the worker cuts by; the charge and the render's check read
+ * it from the probed file, a quote from the rate the graph knows —
+ * `runWireFps`). A Trim's frames become seconds at its clip's rate; a Combine
+ * Videos' at the one rate the join conforms its clips to
+ * ({@link combineTargetFps}), and only where they are cut (decided 2026-11-14,
+ * "charge what is cut"): at each of its n − 1 joins, the end of the clip before
+ * and the start of the clip after — never the film's own first and last frames.
+ * Each join takes off its own transition's overlap (a request's per-join
+ * `transitions`; the global one where it sets none). With Smart cut on, the
+ * trims are found during the render, so the fixed trim values price it; a
+ * smart-cut boundary mask (an intentional hard cut, no trims) is set only by
+ * the platform's own plugin combines, never by a charged Combine Videos run. A rate that is not known cuts no frames: the
+ * uncut clip, a bound (the run cuts by the rate it reads, and a Trim whose
+ * rate cannot be read fails before anything is kept).
  */
 import {
   estimateCombineVideosCredits,
@@ -54,6 +70,41 @@ export function videoUtilityPricedClipSec(sec: number | undefined): number | und
 }
 
 const unitsOf = (estimatorCredits: number): number => estimatorCredits / VIDEO_UTIL_PRICING.CREDIT_UNIT
+
+/** A clip's frame rate, when it is one (a positive, finite number of frames a second). */
+const rateOf = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined)
+
+/** The rate Combine Videos reads a clip at whose rate cannot be read (the worker's `getVideoFps`). */
+export const UNREADABLE_CLIP_FPS = 30
+
+/** The rate Combine Videos conforms an empty set of clips to (the worker's own default). */
+const COMBINE_DEFAULT_FPS = 24
+
+/**
+ * The one frame rate Combine Videos conforms its clips to before it joins and
+ * trims them (the worker's `pickTargetFps`): the rate most clips share, keyed
+ * to 0.001 (29.97 = 30000/1001), a tie to the higher; 24 for no clips; at
+ * least 1 and at most 60. `rates` are the clips' own, as the worker reads each
+ * (a rate it cannot read counts as the worker's 30).
+ */
+export function combineTargetFps(rates: readonly number[]): number {
+  const counts = new Map<number, number>()
+  for (const r of rates) {
+    const rate = Math.round(r * 1000) / 1000
+    counts.set(rate, 1 + (counts.get(rate) ?? 0))
+  }
+  let best = { fps: COMBINE_DEFAULT_FPS, count: 0 }
+  for (const [fps, count] of counts) {
+    if (count > best.count || (count === best.count && fps > best.fps)) best = { fps, count }
+  }
+  return Math.min(60, Math.max(1, best.fps))
+}
+
+/** The rate a Combine Videos of `clipCount` clips cuts its frame trims at: its target over every clip's rate, when all are known. */
+function combineTrimFps(clipFps: ReadonlyArray<number | undefined>, clipCount: number): number | undefined {
+  const rates = Array.from({ length: clipCount }, (_, i) => rateOf(clipFps[i]))
+  return clipCount > 0 && rates.every((r) => r !== undefined) ? combineTargetFps(rates as number[]) : undefined
+}
 
 /** The cuts a Trim run can make, as the estimator names them. */
 export type TrimVideoBranch = NonNullable<TrimVideoEstimatorInput["trimMode"]>
@@ -99,6 +150,26 @@ export function trimVideoCutsFixedWindow(body: Body): boolean {
 }
 
 /**
+ * The fields a Combine Videos run in a workflow prices by, from the node's
+ * settings with the defaults the workflow run applies (payload-builder: a
+ * cut, 0.5 s, the 1 + 2 frame trims). Never the per-join `transitions` a
+ * request to the route may carry: a workflow run sends none, so its quote
+ * reads none.
+ */
+export function combineVideosRunFields(data: Body): Record<string, unknown> {
+  return {
+    transition: data.transition ?? "cut",
+    transitionDuration: data.transitionDuration ?? 0.5,
+    trimStartFrames: data.trimStartFrames ?? COMBINE_DEFAULT_TRIM_START_FRAMES,
+    trimEndFrames: data.trimEndFrames ?? COMBINE_DEFAULT_TRIM_END_FRAMES,
+  }
+}
+
+/** The frame trims a Combine Videos join cuts when a request or a node sets none (the route's and the workflow run's defaults). */
+export const COMBINE_DEFAULT_TRIM_START_FRAMES = 1
+export const COMBINE_DEFAULT_TRIM_END_FRAMES = 2
+
+/**
  * The fields a Trim run sends its worker, from the node's settings: the ones of
  * its `trimMode` (default `time`) only, as the workflow run's payload and the
  * editor's run send them, and an end time that is not after 0 left out — a
@@ -123,11 +194,17 @@ export function trimVideoRunFields(data: Body): Record<string, unknown> {
   }
 }
 
-function trimUnits(body: Body, clipSec: number | undefined): number {
-  return Math.max(...trimVideoBranches(body).map((branch) => trimBranchUnits(branch, body, clipSec)))
+function trimUnits(body: Body, clipSec: number | undefined, clipFps: number | undefined): number {
+  return Math.max(...trimVideoBranches(body).map((branch) => trimBranchUnits(branch, body, clipSec, clipFps)))
 }
 
-function trimBranchUnits(branch: TrimVideoBranch, body: Body, clipSec: number | undefined): number {
+function trimBranchUnits(branch: TrimVideoBranch, body: Body, clipSec: number | undefined, clipFps: number | undefined): number {
+  // Frames are cut at the clip's own rate, as the worker cuts them (`startTime = frames / fps`,
+  // `endTime = length − frames / fps`): the seconds cut. A rate not known cuts none — the uncut clip.
+  if (branch === "frames") {
+    const secOf = (frames: unknown) => (clipFps === undefined ? 0 : Math.max(0, num(frames) ?? 0) / clipFps)
+    return unitsOf(estimateTrimVideoCredits({ trimMode: "seconds", trimStartSeconds: secOf(body.trimStartFrames), trimEndSeconds: secOf(body.trimEndFrames) }, clipSec))
+  }
   const endTime = num(body.endTime)
   // A time cut with no end runs from its start to the clip's end: the seconds cut of its start.
   if (branch === "time" && endTime === undefined) {
@@ -155,13 +232,19 @@ function trimBranchUnits(branch: TrimVideoBranch, body: Body, clipSec: number | 
  * The units of a `type` run (`trim-video`, `loop-video`, `combine-videos`)
  * with these settings (`body`: the request or payload a run sends, or a node's
  * settings for a quote) on clips of `clipSecs` seconds (in input order;
- * `undefined` where a clip's length is not known). `undefined` for any other
- * type.
+ * `undefined` where a clip's length is not known) at `clipFps` frames a second
+ * (in the same order; `undefined`, or missing, where a clip's rate is not
+ * known: its frame trims cut nothing). `undefined` for any other type.
  */
-export function videoUtilityUnitsOf(type: string, body: Body, clipSecs: ReadonlyArray<number | undefined>): number | undefined {
+export function videoUtilityUnitsOf(
+  type: string,
+  body: Body,
+  clipSecs: ReadonlyArray<number | undefined>,
+  clipFps: ReadonlyArray<number | undefined> = [],
+): number | undefined {
   switch (type) {
     case "trim-video":
-      return trimUnits(body, videoUtilityPricedClipSec(clipSecs[0]))
+      return trimUnits(body, videoUtilityPricedClipSec(clipSecs[0]), rateOf(clipFps[0]))
     case "loop-video":
       return unitsOf(estimateLoopVideoCredits(
         {
@@ -173,16 +256,28 @@ export function videoUtilityUnitsOf(type: string, body: Body, clipSecs: Readonly
         },
         videoUtilityPricedClipSec(clipSecs[0]),
       ))
-    case "combine-videos":
+    case "combine-videos": {
+      // Its frame trims at the rate the join conforms its clips to; not known, no frames cut (the bound).
+      const fps = combineTrimFps(clipFps, clipSecs.length)
+      const trims: Pick<CombineVideosEstimatorInput, "trimStartFrames" | "trimEndFrames" | "trimFramesPerSecond"> = fps === undefined
+        ? { trimStartFrames: 0, trimEndFrames: 0 }
+        // A trim the request leaves out is the one the join cuts by default (the route's and the workflow run's 1 + 2).
+        : {
+            trimStartFrames: num(body.trimStartFrames) ?? COMBINE_DEFAULT_TRIM_START_FRAMES,
+            trimEndFrames: num(body.trimEndFrames) ?? COMBINE_DEFAULT_TRIM_END_FRAMES,
+            trimFramesPerSecond: fps,
+          }
       return unitsOf(estimateCombineVideosCredits(
         {
           transition: body.transition as CombineVideosEstimatorInput["transition"],
           transitionDuration: num(body.transitionDuration),
-          trimStartFrames: num(body.trimStartFrames),
-          trimEndFrames: num(body.trimEndFrames),
+          ...trims,
+          // Each join's own transition where the request sets one (`transitions`), as the join renders it.
+          ...(Array.isArray(body.transitions) ? { transitions: body.transitions as CombineVideosEstimatorInput["transitions"] } : {}),
         },
         clipSecs.map(videoUtilityPricedClipSec),
       ))
+    }
     default:
       return undefined
   }

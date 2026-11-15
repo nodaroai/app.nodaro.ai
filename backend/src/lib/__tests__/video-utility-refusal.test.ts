@@ -29,7 +29,7 @@ describe("videoUtilityRefusalForCharge", () => {
 
   it("a re-measure up to half a second longer is the same file, and the frame grace holds there too: a Trim priced for 10 s renders at 10.6 s; 10.7 s is refused", () => {
     expect(videoUtilityRefusalForCharge("trim-video", trim(2, 10), [10.4])).toBeUndefined()
-    // 10.6 − 0.5 (re-measure slack) − 0.1 (the grace) = 10 s: still 2 units.
+    // 10.6 − 0.5 (re-measure slack) − 0.15 (the grace) = 9.95 s: still 2 units.
     expect(videoUtilityRefusalForCharge("trim-video", trim(2, 10), [10.6])).toBeUndefined()
     expect(videoUtilityRefusalForCharge("trim-video", trim(2, 10), [10.7])).toEqual({
       code: "video_utility_input_changed",
@@ -66,5 +66,22 @@ describe("videoUtilityRefusalForCharge", () => {
     }
     expect(videoUtilityUnpricedRefusal("combine-videos", undefined)?.message).toBe("This run was not priced for its clips — run it again")
     expect(videoUtilityUnpricedRefusal("loop-video", 3)).toBeUndefined()
+  })
+})
+
+describe("the render's check counts frame trims at the rate it re-probes (decided 2026-11-14)", () => {
+  // Charged 2 units for a 12 s clip cut 60 frames at 24 fps (11.9 − 2.5 = 9.4 s).
+  const job = { billedUnits: 2, upstreamDuration: 12, trimEndFrames: 60, videoUrl: "https://cdn.example/a.mp4" }
+
+  it("the same file at the same rate passes", () => {
+    expect(videoUtilityRefusalForCharge("trim-video", job, [12], [24])).toBeUndefined()
+  })
+
+  it("a file served at a higher rate since (60 frames are then 1 s: 10.4 s, 3 units) is refused", () => {
+    expect(videoUtilityRefusalForCharge("trim-video", job, [12], [60])?.code).toBe("video_utility_input_changed")
+  })
+
+  it("a rate it cannot read cuts no frames (the worker then fails on it): 3 units, refused", () => {
+    expect(videoUtilityRefusalForCharge("trim-video", job, [12], [undefined])?.code).toBe("video_utility_input_changed")
   })
 })

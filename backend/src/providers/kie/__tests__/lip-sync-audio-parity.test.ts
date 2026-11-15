@@ -60,7 +60,7 @@ vi.mock("../../../lib/job-scratch.js", async (importOriginal) => ({
   },
 }))
 
-import { LIP_SYNC_AUDIO_RATES } from "@nodaro/shared/credits"
+import { LIP_SYNC_AUDIO_RATES, lipSyncHeldSeconds } from "@nodaro/shared/credits"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 import { LIP_SYNC_INPUT_RULES, audioReadStoppedMessage, checkLipSyncInputs, lipSyncAudioPricingOf } from "../../../lib/lip-sync-inputs.js"
 import { DECODED_AUDIO_RATE_HZ } from "../../video/decoded-audio-length.js"
@@ -146,7 +146,8 @@ describe.skipIf(!hasFfmpeg)("the hold equals what the encode bills — real file
       const f = join(dir, "cbr.mp3")
       ffmpeg("-f", "lavfi", "-i", "sine=f=440:r=44100", "-t", "10.04", "-ac", "1", "-c:a", "libmp3lame", "-b:a", "128k", f)
       return f
-    }, 11],
+      // Held 10: the hold forgives up to 0.05 s past a whole second (decided 2026-11-14).
+    }, 10],
     ["a VBR MP3 with no Xing header (its declared length is a guess)", () => {
       const f = join(dir, "vbr-no-header.mp3")
       ffmpeg("-f", "lavfi", "-i", "anoisesrc=r=44100:a=0.3:d=9.6", "-f", "lavfi", "-i", "sine=f=220:r=44100:d=9.6", "-filter_complex", "amix=inputs=2:duration=shortest", "-ac", "2", "-c:a", "libmp3lame", "-q:a", "4", "-write_xing", "0", f)
@@ -318,7 +319,7 @@ describe.skipIf(!hasFfmpeg)("the hold equals what the encode bills — real file
       const aac = adtsPiece("r-aac.aac", 44100, 10)
       const { billedSeconds, prepared } = await priceThenRun(serve(await joinBytes(join(dir, "mp3-then-adts.mp3"), [mp3, aac])))
       expect(prepared.measuredSec).toBeLessThan(11)
-      expect(billedSeconds).toBe(Math.ceil(prepared.measuredSec))
+      expect(billedSeconds).toBe(lipSyncHeldSeconds(rate, prepared.measuredSec))
     }, REAL_MEDIA_TIMEOUT_MS)
   })
 
@@ -385,14 +386,15 @@ describe.skipIf(!hasFfmpeg)("the hold equals what the encode bills — real file
       expect(world.uploads).toBe(0)
     }, REAL_MEDIA_TIMEOUT_MS)
 
-    it("declares 31 s, plays 290 s: held 291 s (rounded up), and exactly what was counted is sent", async () => {
+    // 290.04 s is held 290 s: the hold forgives up to 0.05 s past a whole second (decided 2026-11-14).
+    it("declares 31 s, plays 290 s: held 290 s, and exactly what was counted is sent", async () => {
       const path = fixture("declares-31s-plays-290s.mp3")
       expect((await probeMediaFormatAndDuration(path)).durationSec).toBeLessThan(32)
       const url = serve(path)
       const held = await hold(url)
-      expect(held).toMatchObject({ ok: true, billedSeconds: 291 })
+      expect(held).toMatchObject({ ok: true, billedSeconds: 290 })
       expect(held?.ok ? held.audioSec : 0).toBeCloseTo(290.04, 1)
-      expect((await priceThenRun(url)).billedSeconds).toBe(291)
+      expect((await priceThenRun(url)).billedSeconds).toBe(290)
       // A run held on its declaration (32 s) never reaches the model.
       expect(isDeterministicJobError(await prepareRateLipSyncAudio(url, rate, rule, "OmniHuman 2.0", 32).catch((e: unknown) => e))).toBe(true)
     }, REAL_MEDIA_TIMEOUT_MS)

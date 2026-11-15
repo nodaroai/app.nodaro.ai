@@ -11,9 +11,13 @@ import { dubbingBaseCredits, dubbingBaseCreditsFor, dubbingMinutes, dubbingReser
 describe("dubbing span pricing — the docs' worked examples", () => {
   it.each([
     [60, 40],
+    // A source a hair past a minute is held and charged that minute (0.05 s, decided 2026-11-14); past it, the next.
+    [60.011, 40],
+    [60.05, 40],
+    [60.06, 80],
     [120, 80],
     [10 * 60, 400],
-  ])("%i s → %i credits", async (seconds, credits) => {
+  ])("%s s → %i credits", async (seconds, credits) => {
     expect(await dubbingBaseCredits("fr", seconds)).toBe(credits)
   })
 

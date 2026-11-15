@@ -80,11 +80,16 @@ function settleContextOf(request: Readonly<Record<string, unknown>> | undefined)
   }
 }
 
-/** The length of a delivered file in whole seconds, or undefined when it cannot be read. */
+/**
+ * The length of a delivered file in seconds, unrounded, or undefined when it
+ * cannot be read: the charge forgives a hair past a minute
+ * (`dubbingHeldMinutes`, through `dubbingBaseCredits`), so rounding up to a
+ * whole second first would lose that grace (a 60.02 s dub is 1 minute).
+ */
 async function deliveredSeconds(path: string): Promise<number | undefined> {
   try {
     const seconds = await probeMediaDuration(path)
-    return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined
   } catch {
     return undefined
   }
@@ -102,7 +107,8 @@ async function ceilingSettleBase(
   readDelivered: () => Promise<number | undefined>,
 ): Promise<number | undefined> {
   if (!ctx.reservedCeiling) return undefined
-  const fromMetadata = typeof mediaDurationSec === "number" && mediaDurationSec > 0 ? Math.ceil(mediaDurationSec) : undefined
+  // Unrounded: the charge forgives a hair past a minute (`dubbingHeldMinutes`, through `dubbingBaseCredits`).
+  const fromMetadata = typeof mediaDurationSec === "number" && mediaDurationSec > 0 ? mediaDurationSec : undefined
   const sourceSec = fromMetadata ?? (await readDelivered())
   const span = sourceSec != null
     ? (effectiveDubbedSeconds(sourceSec, ctx.startTime, ctx.endTime) ?? sourceSec)

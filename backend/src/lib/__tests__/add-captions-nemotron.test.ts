@@ -65,10 +65,24 @@ describe("measureAddCaptionsNemotronHold (the route's preHandler and the workflo
   })
 
   it("never refuses on the video's SIZE: only its audio track is sent", async () => {
-    probe.fn = async () => ({ durationSec: 61, sizeBytes: 5 * 1024 * 1024 * 1024 })
+    probe.fn = async () => ({ durationSec: 61.5, sizeBytes: 5 * 1024 * 1024 * 1024 })
     expect(await measureAddCaptionsNemotronHold({ transcribe_provider: NEMOTRON_TRANSCRIBE_ID, videoUrl: VIDEO })).toMatchObject({
       ok: true,
       hold: { creditId: addCaptionsNemotronMinutesId(2) },
+    })
+  })
+
+  // The charge forgives up to 1 s past the held minutes, so the hold takes the same second: a video re-encoded
+  // to a 60-second cut measures 60.0004–60.011 s and is held (and charged) the minute its 60 s is quoted at.
+  it.each([
+    [60.011, 1],
+    [61, 1],
+    [61.001, 2],
+  ])("holds a video measured at %s s at %s minute(s): up to 1 s past a minute is the minute below", async (sec, minutes) => {
+    probe.fn = async () => ({ durationSec: sec })
+    expect(await measureAddCaptionsNemotronHold({ transcribe_provider: NEMOTRON_TRANSCRIBE_ID, videoUrl: VIDEO })).toEqual({
+      ok: true,
+      hold: { creditId: addCaptionsNemotronMinutesId(minutes), durationSec: sec },
     })
   })
 

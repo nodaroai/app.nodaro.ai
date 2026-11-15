@@ -7,12 +7,13 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
+import { SWITCHX_PROBED_FIELD, SWITCHX_TRIM_FIELD, switchXCreditIdOf } from "../lib/probed-credit-ids.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { probeVideoFrames, exactFrameCount } from "../lib/ffprobe-frames.js"
-import { resolveSwitchXCreditId } from "@nodaro/shared/credits"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 /**
@@ -53,23 +54,44 @@ const switchXBody = z
  *  generic validation_error) so the client can branch on the exact failure. */
 const REFINE_CODES = new Set(["MISSING_STYLE_INPUT", "MISSING_ALPHA"])
 
+/** What the preflight measured, kept on the server-side request (`lib/request-measure.ts`), never the body. */
+export interface SwitchXMeasure {
+  /** The frame count the reserve is bucketed by. */
+  readonly frames: number
+  /** Set for a small overage of the frame cap: the worker trims the source to this many frames. */
+  readonly trimSourceToFrames?: number
+}
+const MEASURE = "switchx"
+
+/** What this request's preflight measured, or `undefined` when it measured nothing (no url: the handler's Zod answers). */
+export function measuredSwitchX(req: FastifyRequest): SwitchXMeasure | undefined {
+  return requestMeasure<SwitchXMeasure>(req, MEASURE)
+}
+
+/** The credit id the guard and the reservation hold: the body's settings and the frame count the server probed (`switchXCreditIdOf`). */
+const switchXCreditIdOfRequest = (req: FastifyRequest): string =>
+  switchXCreditIdOf(req.body as Record<string, unknown> | undefined, measuredSwitchX(req)?.frames)
+
 /**
  * Fastify preHandler: ffprobe the source video, reject oversize inputs, and
- * stash the frame count on the RAW body as `__probedFrameCount`. This MUST run
- * BEFORE the creditGuard preHandler so `resolveSwitchXCreditId` (which reads the
- * raw body) buckets the credit reserve by the ACTUAL frame count.
+ * keep the frame count on the server-side request (`measuredSwitchX`) — never
+ * the body, whose `__probedFrameCount` / `__trimSourceToFrames` (a client
+ * could send either) are dropped first. This MUST run BEFORE the creditGuard
+ * preHandler so the credit id buckets the reserve by the ACTUAL frame count.
  *
  * On a SUCCESSFUL probe we enforce both caps. A clip just over the frame cap
- * (≤270 after an exact-count confirm) is flagged via `__trimSourceToFrames` for
+ * (≤270 after an exact-count confirm) is flagged (`trimSourceToFrames`) for
  * the worker to trim to 240; a larger frame count, or >2.77 Mpx, is rejected
  * here. A cheap over-estimate that an exact decode shows is really ≤240 passes
  * through untouched (no trim).
  *
  * On probe FAILURE we cannot reject (no data to reject on — Beeble will), so we
- * stash the worst-case `MAX_FRAMES` so the reserve holds the top tier rather
+ * record the worst-case `MAX_FRAMES` so the reserve holds the top tier rather
  * than under-reserving. The probe is SSRF-guarded inside probeVideoFrames.
  */
 export async function switchXPreflight(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  dropClientMeasureFields(req.body, [SWITCHX_PROBED_FIELD, SWITCHX_TRIM_FIELD])
+  const record = (m: SwitchXMeasure) => setRequestMeasure(req, MEASURE, m)
   const body = (req.body ?? {}) as Record<string, unknown>
   const url = body.videoUrl
   if (typeof url !== "string" || url.length === 0) return // Zod will 400 on the missing/invalid url
@@ -86,7 +108,7 @@ export async function switchXPreflight(req: FastifyRequest, reply: FastifyReply)
       })
     }
     if (frames <= MAX_FRAMES) {
-      body.__probedFrameCount = frames
+      record({ frames })
       return
     }
     // Over the frame cap. The cheap nb_frames/duration×fps estimate can be ±1 at
@@ -99,12 +121,11 @@ export async function switchXPreflight(req: FastifyRequest, reply: FastifyReply)
       if (exact !== undefined) real = exact
     }
     if (real <= MAX_FRAMES) {
-      body.__probedFrameCount = real // estimate over-counted — proceed, no trim
+      record({ frames: real }) // estimate over-counted — proceed, no trim
     } else if (real <= AUTO_TRIM_MAX) {
       // Small overage: the worker trims the source to MAX_FRAMES before Beeble.
       // Bill the 240-frame tier (what actually gets relit).
-      body.__trimSourceToFrames = MAX_FRAMES
-      body.__probedFrameCount = MAX_FRAMES
+      record({ frames: MAX_FRAMES, trimSourceToFrames: MAX_FRAMES })
     } else {
       return void reply.status(400).send({
         error: {
@@ -117,7 +138,7 @@ export async function switchXPreflight(req: FastifyRequest, reply: FastifyReply)
     // Non-fatal: we can't reject without dimensions, so reserve the worst-case
     // top tier. Beeble enforces the real limit on its side.
     req.log.warn({ err }, "switchx: ffprobe failed; reserving worst-case 240-frame tier")
-    body.__probedFrameCount = MAX_FRAMES
+    record({ frames: MAX_FRAMES })
   }
 }
 
@@ -125,12 +146,12 @@ export async function switchXRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     "/v1/switchx",
     {
-      // Order matters: the preflight stashes __probedFrameCount on the raw body
-      // so the creditGuard's resolveSwitchXCreditId can bucket the reserve by
-      // the ACTUAL frame count. The probe MUST run first.
+      // Order matters: the preflight records the frame count on the request so
+      // the creditGuard's credit id can bucket the reserve by the ACTUAL frame
+      // count. The probe MUST run first.
       preHandler: [
         switchXPreflight,
-        creditGuard((req) => resolveSwitchXCreditId((req.body ?? {}) as Record<string, unknown>)),
+        creditGuard(switchXCreditIdOfRequest),
       ],
     },
     async (req, reply) => {
@@ -188,12 +209,9 @@ export async function switchXRoutes(app: FastifyInstance): Promise<void> {
         return sendInternalError(reply, req, error, "Failed to process video")
       }
 
-      // Resolve from the RAW body (not parsed.data) so the reserve matches the
-      // creditGuard check: Zod strips the preHandler-stashed __probedFrameCount,
-      // so resolving from parsed.data would lose the frame-tier bucket and fall
-      // back to the worst-case 240f tier — a mismatch with the preHandler's
-      // affordance check. The raw body retains __probedFrameCount.
-      const modelId = resolveSwitchXCreditId((req.body ?? {}) as Record<string, unknown>)
+      // The same id the creditGuard checked: the body's settings and the frame
+      // count the preflight probed (never one the body carries).
+      const modelId = switchXCreditIdOfRequest(req)
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelId)
       if (reply.sent) return
@@ -211,7 +229,7 @@ export async function switchXRoutes(app: FastifyInstance): Promise<void> {
         seed,
         // Set by the preflight when the source is a small overage of the frame
         // cap — the worker trims it to this many frames before submitting.
-        trimSourceToFrames: (req.body as Record<string, unknown>).__trimSourceToFrames as number | undefined,
+        trimSourceToFrames: measuredSwitchX(req)?.trimSourceToFrames,
         usageLogId,
       }))
       if (reply.sent) return

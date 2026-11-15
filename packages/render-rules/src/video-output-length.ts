@@ -120,7 +120,41 @@ export interface OutputLengthRule {
    * length); a carrier's inputs bring theirs. Absent: the node makes a clip.
    */
   readonly carries?: true
+  /**
+   * How far past its planned length the file this node makes can run, as a
+   * measuring step after it reads that file (`reading`: what the step's run
+   * measures), when it runs further than that step's own slack covers
+   * (measured: see {@link LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC}): the measured
+   * walk adds the larger of the two to the clip the node makes. `undefined`
+   * (or absent): the step's own slack.
+   */
+  readonly plannedOvershootSec?: (node: OutputLengthNode, reading: MeasuredFileReading) => number | undefined
 }
+
+/**
+ * What a measuring step's run measures of the file it is given: its CONTAINER
+ * (ffprobe's format duration, an audio tail included) or its VIDEO STREAM.
+ */
+export type MeasuredFileReading = "container" | "video-stream"
+
+/**
+ * The slack a measuring step's quote adds to the file a Dubbing, an Audio
+ * Isolation or a PixVerse V6 extension makes in the run, in place of the
+ * step's own when that is less: their files were measured to run further past
+ * their planned length than a generation's (production):
+ * - a dub's CONTAINER up to 0.133 s past its input, while its VIDEO STREAM
+ *   keeps the input's exactly (53 of 53 measured, at most +0.000 s): the extra
+ *   length is audio, so a step that charges by the video stream (Video
+ *   Overlay, Topaz and Nodaro Video Upscale) keeps its own one-frame slack
+ *   after a Dubbing. Audio Isolation is not measured yet and is read as a
+ *   Dubbing;
+ * - a PixVerse V6 extension 0.145 s past its source plus the seconds it adds,
+ *   its video stream 0.144 s: every measuring step after it takes this.
+ * Voice Changer, Voice Changer Pro, Adjust Volume and Extract Audio keep the
+ * step's own slack (a changed voice was measured at most 0.046 s past its
+ * input).
+ */
+export const LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC = 0.25
 
 /** The length, when the wire has one. */
 export const knownOutputLength = (l: OutputWireLength): InputLength | undefined => (typeof l === "object" ? l : undefined)
@@ -194,6 +228,16 @@ for (const t of CLIP_REMAKING_KEPT_LENGTH_TYPES) {
  * input (Adjust Volume's loudness pass on an AAC input: a few milliseconds).
  */
 const remakeMedia: OutputLengthRule = { via: "rule", run: (_n, inputs) => (inputs.find((i) => i.kind === "video") ?? inputs.find((i) => i.kind === "audio"))?.length ?? "unknown" }
+/**
+ * {@link remakeMedia} for a step whose file runs further past its input, in its
+ * sound only: Dubbing, Audio Isolation ({@link LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC}
+ * on a step that measures the container; a step that measures the video
+ * stream keeps its own slack, as a dub keeps its input's picture).
+ */
+const remakeMediaLongOvershoot: OutputLengthRule = {
+  ...remakeMedia,
+  plannedOvershootSec: (_node, reading) => (reading === "container" ? LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC : undefined),
+}
 
 /** A run's own stitch seam: the plan pads a stitched clip by less than this (generated-video-length.ts). */
 const STITCH_SLACK_SEC = 1
@@ -238,10 +282,17 @@ function generatedLength(node: OutputLengthNode, inputs: readonly OutputWireInpu
   return sec === undefined ? "unknown" : fixed(sec)
 }
 
+/** The model an Extend Video runs, as its length rule and its overshoot read it: its provider (a retired id as the model it maps to), else the node's default. */
+const extendProviderOf = (node: OutputLengthNode): string => canonicalVideoProvider((dataOf(node).provider as string | undefined) ?? EXTEND_VIDEO_DEFAULT_PROVIDER)
+
+/** A PixVerse V6 extension's file — its container and its video stream alike — runs further past its source plus the seconds it adds ({@link LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC}); every other model's, the step's own slack. */
+const extendOvershootSec = (node: OutputLengthNode): number | undefined =>
+  isPixverseExtendProvider(extendProviderOf(node)) ? LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC : undefined
+
 /** The extension Extend Video adds, by provider: `ltxExtendDurationSec`, a tail recipe's seconds (`tailRecipeSeconds`, in the recipe's window), PixVerse V6's (`pixverseExtendSeconds`: its priced 1–15 s, joined onto the source) and Grok's (`grokExtendSeconds`: its 6 or 10 s, from the source's end). */
 function extendLength(node: OutputLengthNode, inputs: readonly OutputWireInput[]): OutputWireLength {
   const data = dataOf(node)
-  const provider = canonicalVideoProvider((data.provider as string | undefined) ?? EXTEND_VIDEO_DEFAULT_PROVIDER)
+  const provider = extendProviderOf(node)
   const input = knownOutputLength(videoIn(inputs))
   if (!input) return "unknown"
   if (provider === "ltx-2.3-pro") return addSec(input, ltxExtendDurationSec(data.duration))
@@ -551,14 +602,15 @@ export const VIDEO_LENGTH_RULES: Readonly<Record<string, OutputLengthRule>> = co
   "pitch-tempo": { via: "rule", carries: true, run: pitchTempoLength },
   "voice-changer": remakeMedia,
   "voice-changer-pro": remakeMedia,
-  "dubbing": remakeMedia,
+  // A dub runs further past its input than a changed voice (LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC).
+  "dubbing": remakeMediaLongOvershoot,
   // The replaced span is regenerated from segments the plan pads by a seam (STITCH_SLACK_SEC).
   "edit-video-pro": { via: "rule", run: (_n, inputs) => { const l = knownOutputLength(videoIn(inputs)); return l ? addSec(l, STITCH_SLACK_SEC) : "unknown" } },
 
   // Steps with their own length rule.
   "video-to-video": { via: "rule", run: videoToVideoLength },
   "motion-transfer": { via: "rule", run: motionTransferLength },
-  "extend-video": { via: "rule", run: extendLength },
+  "extend-video": { via: "rule", run: extendLength, plannedOvershootSec: extendOvershootSec },
   "lip-sync": { via: "rule", run: lipSyncLength },
   "ai-avatar": { via: "rule", run: aiAvatarLength },
   "speed-ramp": { via: "rule", run: speedRampLength },
@@ -579,6 +631,56 @@ export const VIDEO_LENGTH_RULES: Readonly<Record<string, OutputLengthRule>> = co
   "sub-workflow": { via: "rule", run: () => "unknown" },
   "reduce": { via: "rule", run: () => "unknown" },
 }, usecaseLengthRules())
+
+/**
+ * Trim Audio: its window — its run cuts `-ss <start> -to <end>`
+ * (providers/video/trim-audio.ts), so a window with an end after its start is
+ * `end − start`, at most what is left of a known input after the start; with
+ * no such end, the rest of its input after the start (unknown when the input
+ * is). The input is its video, else its audio, as the run picks it.
+ */
+function trimAudioLength(node: OutputLengthNode, inputs: readonly OutputWireInput[]): OutputWireLength {
+  const data = dataOf(node)
+  const start = Math.max(0, num(data.startTime) ?? 0)
+  const end = num(data.endTime)
+  const input = knownOutputLength((inputs.find((i) => i.kind === "video") ?? inputs.find((i) => i.kind === "audio"))?.length)
+  const fixedInput = input && input.perEpisodeSec === 0 ? input.fixedSec : undefined
+  // A window that starts past a known input keeps nothing: 0, never a negative length.
+  if (end !== undefined && end > start) return fixed(Math.max(0, (fixedInput === undefined ? end : Math.min(end, fixedInput)) - start))
+  if (!input) return "unknown"
+  return fixedInput === undefined ? input : fixed(Math.max(0, fixedInput - start))
+}
+
+/**
+ * The audio steps whose length a step that measures its input can read (a
+ * Lip Sync's audio, Pitch & Tempo, Dubbing): an UPPER BOUND on the file each
+ * makes, read by the measured walk beside {@link VIDEO_LENGTH_RULES} through
+ * {@link lengthRuleOf} (decided 2026-11-14). Each re-encodes what it is given
+ * into a new file, so no row is a carrier: the measured walk adds the
+ * measuring step's slack once after it, as after the steps that re-render
+ * their input. A table of its own: the video table holds the producers that
+ * deliver a video (the listing's guard), and these deliver audio only.
+ *
+ * Mix Audio has no row yet: a Mix that ends with its voice keeps that voice's
+ * length exactly (`keptLengthWire`, as before), and one that ends with its
+ * longest track is unknown. A row with the slack would raise the quote of a
+ * per-minute step after a Tighten Episode with a music bed by a minute.
+ */
+export const AUDIO_LENGTH_RULES: Readonly<Record<string, OutputLengthRule>> = {
+  // Extract Audio: the video's sound, demuxed to an MP3 (providers/video/extract-audio.ts): as long as the video.
+  "extract-audio": remakeMedia,
+  // Audio Isolation: the voice of its audio, re-rendered by its provider: as long as the audio (read as a Dubbing past it: LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC).
+  "audio-isolation": remakeMediaLongOvershoot,
+  "trim-audio": { via: "rule", run: trimAudioLength },
+}
+for (const type of Object.keys(AUDIO_LENGTH_RULES)) {
+  if (Object.hasOwn(VIDEO_LENGTH_RULES, type)) throw new Error(`AUDIO_LENGTH_RULES: ${type} is also in VIDEO_LENGTH_RULES — a type lives in one table`)
+}
+
+/** A node type's length rule, from the video table or the audio one ({@link AUDIO_LENGTH_RULES}); `undefined` for a type with none. */
+export function lengthRuleOf(type: string): OutputLengthRule | undefined {
+  return Object.hasOwn(VIDEO_LENGTH_RULES, type) ? VIDEO_LENGTH_RULES[type] : Object.hasOwn(AUDIO_LENGTH_RULES, type) ? AUDIO_LENGTH_RULES[type] : undefined
+}
 
 /** Why a hand-written row cannot always bound its node's output (the backend adds the "length:unknown" units' own reasons). */
 export const VIDEO_LENGTH_UNBOUNDED_REASONS: Readonly<Record<string, string>> = {

@@ -63,7 +63,11 @@ vi.mock("../../providers/video/ffmpeg-utils.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../providers/video/ffmpeg-utils.js")>()),
   assertSafeProbeSource: vi.fn(async () => undefined),
 }))
-vi.mock("../../lib/video-utility-probe.js", () => ({ probeClipLengthSec: h.probe, ClipUnreadableError: class ClipUnreadableError extends Error {} }))
+vi.mock("../../lib/video-utility-probe.js", () => ({
+  probeClipLengthSec: h.probe,
+  probeClipReading: async (src: string, opts?: Record<string, unknown>) => ({ sec: await h.probe(src, opts) }),
+  ClipUnreadableError: class ClipUnreadableError extends Error {},
+}))
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify()

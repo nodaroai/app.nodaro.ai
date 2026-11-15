@@ -11,6 +11,8 @@
  * span under the dub's whole-request id (`<per-minute row>:<N>u`).
  */
 
+import { gracedMeasuredSec } from "@nodaro/shared/media"
+
 /** The longest span a dub may cover, in whole minutes (the route refuses longer). */
 export const DUBBING_MAX_SPAN_MINUTES = 30
 
@@ -24,9 +26,20 @@ export function effectiveDubbedSeconds(probedSec: number | undefined, startTime?
   return probedSec
 }
 
-/** Whole minutes a span is charged: rounded up, at least one. */
+/** Whole minutes of a span: rounded up, at least one — what a quote names for a span it knows. */
 export function dubbingMinutes(seconds: number): number {
   return Math.max(1, Math.ceil(seconds / 60))
+}
+
+/**
+ * The whole minutes a dub is HELD and CHARGED for a span it measured at
+ * `seconds`: the started minutes of the span less `CLIP_PRICE_GRACE_SEC`
+ * (0.05 s, decided 2026-11-14), so a source a hair past a minute (a re-encoded
+ * 60 s cut measures 60.011 s) is charged the minute its span is quoted at
+ * ({@link dubbingQuotedMinutes} reads the span exactly). At least one.
+ */
+export function dubbingHeldMinutes(seconds: number): number {
+  return dubbingMinutes(Math.max(0, gracedMeasuredSec(seconds)))
 }
 
 /**

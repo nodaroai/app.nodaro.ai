@@ -34,6 +34,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -99,9 +100,12 @@ async function internalChildOnly(req: FastifyRequest, reply: FastifyReply): Prom
   if (!createsChildJob(req)) return void reply.code(403).send(INTERNAL_ONLY)
 }
 
-const STASH = "__videoFaceMesh"
-type Stash = { billedSec: number; creditId: string }
-const stashOf = (body: unknown): Stash | undefined => (body as Record<string, unknown> | undefined)?.[STASH] as Stash | undefined
+/** The body field the measure was once stashed under: a client's copy is dropped, never read. */
+const STASH_FIELD = "__videoFaceMesh"
+/** The request measure the length and row are kept under (server-side only, `lib/request-measure.ts`). */
+const MEASURE = "videoFaceMesh"
+type Measure = { billedSec: number; creditId: string }
+const measureOf = (req: FastifyRequest): Measure | undefined => requestMeasure<Measure>(req, MEASURE)
 /** The ceiling row: only ever read for a body the preHandler already refused. */
 const CEILING_ROW = videoFaceMeshCreditIds().at(-1)!
 
@@ -109,30 +113,31 @@ const CEILING_ROW = videoFaceMeshCreditIds().at(-1)!
  * Measures the clip the faces are found in before the credit guard prices it
  * (the URL validated first, so nothing unsafe is probed), refuses one that
  * cannot be read or is past the cap (400, before anything is reserved), and
- * stashes the price row.
+ * keeps the length and price row on the server-side request — never the body,
+ * whose field of the old stash name is dropped first.
  */
 async function measurePreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  dropClientMeasureFields(req.body, [STASH_FIELD])
   const body = (req.body ?? {}) as Record<string, unknown>
   const url = safeUrlSchema.safeParse(body.videoUrl)
   if (!url.success) return // the handler's Zod parse answers it
   const measured = await measureVideoFaceMeshLength(url.data)
   if (!measured.ok) return void reply.code(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
-  body[STASH] = { billedSec: measured.billedSec, creditId: measured.creditId } satisfies Stash
+  setRequestMeasure(req, MEASURE, { billedSec: measured.billedSec, creditId: measured.creditId } satisfies Measure)
 }
 
 export async function videoFaceMeshRoutes(app: FastifyInstance) {
   // The literal path (`VIDEO_FACE_MESH_PATH` in @nodaro/shared): the route scans read it from the source.
   app.post("/v1/video-face-mesh", {
-    preHandler: [internalChildOnly, measurePreHandler, creditGuard((req) => stashOf(req.body)?.creditId ?? CEILING_ROW)],
+    preHandler: [internalChildOnly, measurePreHandler, creditGuard((req) => measureOf(req)?.creditId ?? CEILING_ROW)],
   }, async (req, reply) => {
-    const { [STASH]: _stash, ...raw } = (req.body ?? {}) as Record<string, unknown>
-    const parsed = videoFaceMeshBody.safeParse(raw)
+    const parsed = videoFaceMeshBody.safeParse(req.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
-    const stash = stashOf(req.body)
+    const stash = measureOf(req)
     if (!stash) {
       // Unreachable while measurePreHandler runs first; an invariant, not a user error.
       return sendInternalError(reply, req, new Error("video-face-mesh: length stash missing"), "Failed to create job")

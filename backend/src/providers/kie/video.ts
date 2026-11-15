@@ -3686,10 +3686,11 @@ export class KieVideoProvider
       )
     }
 
-    // A per-second model's provider cost is what KIE bills for the seconds the
-    // run is charged, never the flat display anchor.
+    // A per-second model's provider cost is what KIE bills for the audio it is
+    // sent (its own rounding: the hair past a whole second the run forgives is
+    // the platform's), never the flat display anchor.
     const cost = prepared && modelConfig.kieCreditsPerAudioSecond !== undefined
-      ? lipSyncKieCostUsd(modelConfig.kieCreditsPerAudioSecond, prepared.billedSeconds)
+      ? lipSyncKieCostUsd(modelConfig.kieCreditsPerAudioSecond, prepared.providerBilledSeconds)
       : modelConfig.cost
     console.log(
       `[KIE.ai] Lip sync completed: ${videoUrl} (cost: $${cost.toFixed(4)})`

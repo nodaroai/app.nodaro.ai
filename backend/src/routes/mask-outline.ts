@@ -26,6 +26,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -69,24 +70,31 @@ async function internalChildOnly(req: FastifyRequest, reply: FastifyReply): Prom
   if (!createsChildJob(req)) return void reply.code(403).send(INTERNAL_ONLY)
 }
 
-const STASH = "__maskOutlineUnits"
+/** The body field the units were once stashed under: a client's copy is dropped, never read. */
+const UNITS_FIELD = "__maskOutlineUnits"
+/** The request measure the units are kept under (server-side only, `lib/request-measure.ts`). */
+const MEASURE = "maskOutlineUnits"
 
 /**
  * Measures the clip before the credit guard prices it (the URL validated
  * first, so nothing unsafe is probed), refuses one that cannot be read or is
- * too long (400, before anything is reserved), and stashes the unit count.
+ * too long (400, before anything is reserved), and keeps the unit count on
+ * the server-side request — never the body, whose field of the old stash name
+ * is dropped first.
  */
 async function measurePreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  dropClientMeasureFields(req.body, [UNITS_FIELD])
   const body = (req.body ?? {}) as Record<string, unknown>
   const url = safeUrlSchema.safeParse(body.videoUrl)
   if (!url.success) return // the handler's Zod parse answers it
   const measured = await measureMaskOutlineLength(url.data)
   if (!measured.ok) return void reply.code(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
-  body[STASH] = measured.units
+  setRequestMeasure(req, MEASURE, measured.units)
 }
 
-const stashedUnits = (body: unknown): number => {
-  const u = (body as Record<string, unknown> | undefined)?.[STASH]
+/** The units the preHandler measured; 1 when it measured nothing (a body the handler's parse refuses). */
+const measuredUnits = (req: FastifyRequest): number => {
+  const u = requestMeasure<number>(req, MEASURE)
   return typeof u === "number" && u >= 1 ? u : 1
 }
 
@@ -96,11 +104,11 @@ export async function maskOutlineRoutes(app: FastifyInstance) {
       internalChildOnly,
       measurePreHandler,
       // BASE credits = the one-unit row × the measured units; creditGuard applies the markup.
-      creditGuard(() => "mask-outline", { computeCredits: async (body) => maskOutlineBaseCredits(stashedUnits(body)) }),
+      creditGuard(() => "mask-outline", { computeCredits: async (_body, req) => maskOutlineBaseCredits(measuredUnits(req)) }),
     ],
   }, async (req, reply) => {
-    const { [STASH]: billedUnits, ...raw } = (req.body ?? {}) as Record<string, unknown>
-    const parsed = maskOutlineBody.safeParse(raw)
+    const billedUnits = requestMeasure<number>(req, MEASURE)
+    const parsed = maskOutlineBody.safeParse(req.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }

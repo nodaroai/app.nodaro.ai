@@ -373,8 +373,9 @@ describe("a Lip Sync priced by its audio's seconds lists a generated voice at it
     expect(listed.fixed).toBeLessThan(Math.ceil(perSecond * 300))
   })
 
-  it("a voice whose script the listing cannot read: the model's 300 s maximum", () => {
+  // A length nothing knows: the editor's minimum, the 15-second stand-in (decided 2026-11-14), no longer the 300 s maximum.
+  it("a voice whose script the listing cannot read: the 15-second minimum", () => {
     const listed = listedLipSync({ id: "voice", type: "text-to-speech", data: { textSource: "connected", provider: "elevenlabs-turbo" } })
-    expect(listed.fixed).toBe(Math.ceil(perSecond * 300))
+    expect(listed.fixed).toBe(Math.ceil(perSecond * 15))
   })
 })

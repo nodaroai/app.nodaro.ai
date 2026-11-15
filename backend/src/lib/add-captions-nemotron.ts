@@ -1,6 +1,6 @@
 import {
   NEMOTRON_TRANSCRIBE_ID,
-  addCaptionsNemotronCreditId,
+  addCaptionsNemotronHeldCreditId,
   addCaptionsNemotronQuoteCreditId,
   parseAddCaptionsNemotronCreditId,
 } from "@nodaro/shared/credits"
@@ -82,10 +82,11 @@ export async function measureAddCaptionsNemotronHold(
   return {
     ok: true,
     hold: {
-      // An unread length holds the 60-minute id: the most any run can be charged.
+      // A measured length holds its minutes less the second the charge forgives (`nemotronHeldMinutes`, the
+      // Transcribe node's own rule). An unread length holds the 60-minute id: the most any run can be charged.
       creditId:
         measured.durationSec !== undefined
-          ? addCaptionsNemotronCreditId(measured.durationSec)
+          ? addCaptionsNemotronHeldCreditId(measured.durationSec)
           : addCaptionsNemotronQuoteCreditId(undefined),
       ...(measured.durationSec !== undefined ? { durationSec: measured.durationSec } : {}),
     },

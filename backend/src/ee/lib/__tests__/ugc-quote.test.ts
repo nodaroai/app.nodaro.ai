@@ -145,7 +145,7 @@ describe("pricing each item", () => {
     expect((await quote([item("combine_videos", { transition: "cut" })], [], 2)).lines[0]!.credits).toBe(60)
   })
   it("the join prices each clip at the seconds its item carries (`clipSeconds`, on the envelope): 12 s clips, 5 units", async () => {
-    // 12 s planned + 0.1 s made-clip slack, less the 0.1 s grace: 12 s a clip, 24 s → 5 units.
+    // 12 s planned + 0.15 s made-clip slack, less the 0.15 s grace: 12 s a clip, 24 s → 5 units.
     expect(await pricingFor("combine_videos", { transition: "cut" }, { clipCount: 2, clipSeconds: [12, 12] })).toEqual({ id: "combine-videos", base: 50 })
     const join = { ...item("combine_videos", { transition: "cut" }, "Join"), clipSeconds: [12, 12] }
     expect((await quote([join], [], 2)).lines[0]!.credits).toBe(50)

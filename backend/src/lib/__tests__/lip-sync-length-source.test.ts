@@ -10,6 +10,9 @@
  *     a workflow run) and the worker measure;
  *   - ee/pipelines/services/pipeline-lip-sync.ts: a pipeline step's speech,
  *     which the pipeline generated itself and the server probed.
+ *   - providers/kie/lip-sync-audio.ts: the provider's own whole seconds of the
+ *     audio the worker measured (`lipSyncBilledSeconds`), recorded as the run's
+ *     provider cost, never charged to the user.
  * And one estimate, which holds and charges nothing:
  *   - ee/billing/credits.ts: the server's run estimate, at the length its
  *     audio wire gives, else the model's largest bucket (never below a run).
@@ -40,7 +43,11 @@ function sources(dir = BACKEND_SRC): string[] {
 const LENGTH_PRICE_RULES: Readonly<Record<string, readonly string[]>> = {
   buildLipSyncCreditId: ["lib/lip-sync-inputs.ts", "ee/pipelines/services/pipeline-lip-sync.ts", "ee/billing/credits.ts"],
   pickLipSyncBucket: ["lib/lip-sync-inputs.ts"],
-  lipSyncBilledSeconds: ["lib/lip-sync-inputs.ts"],
+  // The run holds a rate model through `lipSyncHeldSeconds` (its charge grace); the quote through `lipSyncEstimateSeconds`.
+  lipSyncHeldSeconds: ["lib/lip-sync-inputs.ts"],
+  // The provider's own rounding of the audio the worker measured, recorded as the run's provider cost — never
+  // what the user is charged (the platform pays the hair the hold forgives, decided 2026-11-14).
+  lipSyncBilledSeconds: ["providers/kie/lip-sync-audio.ts"],
 }
 
 describe("a lip-sync price is applied only to a length the server measured", () => {

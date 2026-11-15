@@ -17,8 +17,9 @@ const reserve = vi.fn().mockResolvedValue({ usageLogId: "u-1", creditsReserved: 
 let guardedCredits: number | undefined
 vi.mock("@/middleware/credit-guard.js", () => ({
   // Records the BASE credits the real guard would price, from the hook the route gives it.
-  creditGuard: (_id: unknown, opts?: { computeCredits?: (body: unknown) => Promise<number> }) =>
-    async (req: { body: unknown }) => { guardedCredits = opts?.computeCredits ? await opts.computeCredits(req.body) : undefined },
+  // As the real guard calls it: the body and the request (the measured units live on the request).
+  creditGuard: (_id: unknown, opts?: { computeCredits?: (body: unknown, req: unknown) => Promise<number> }) =>
+    async (req: { body: unknown }) => { guardedCredits = opts?.computeCredits ? await opts.computeCredits(req.body, req) : undefined },
   reserveCreditsForJob: (...args: unknown[]) => reserve(...args),
 }))
 

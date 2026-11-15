@@ -5,7 +5,8 @@
  * The base price is 0.75 credits a minute, which no whole-credit row can hold
  * (`model_pricing.credit_cost` is an integer), so the rate row prices FOUR
  * minutes — the same trick as Nodaro Video Upscale's four-second rows. A run
- * reserves `nemotron-3-5-transcribe:<N>m` (N = started minutes, 1..60), which
+ * reserves `nemotron-3-5-transcribe:<N>m` (N = started minutes, 1..60; a
+ * measured file's less the one second its charge forgives), which
  * billing prices as that row × N ÷ 4, rounded up once for the whole run, then
  * marked up once — never a row of its own, so a retune of the rate row moves
  * the route, the workflow run, the node's Run button and every estimate
@@ -16,7 +17,9 @@
  * `lib/nemotron-transcribe-settle.ts`).
  *
  * Worked base prices at the row's launch value of 3 (per 4 minutes):
- *   0:45 → 1,  1:00 → 1,  1:01 → 2,  10:00 → 8,  60:00 → 45.
+ *   0:45 → 1,  1:00 → 1,  1:05 → 2,  10:00 → 8,  60:00 → 45
+ * (a length's started minutes; a measured file up to 1 s past a minute is
+ * held and charged the minute below, {@link nemotronHeldMinutes}).
  * The listed (marked-up) price follows from those.
  */
 
@@ -50,9 +53,38 @@ export function nemotronTranscribeStartedMinutes(durationSec: number | null | un
   return Math.min(NEMOTRON_TRANSCRIBE_PRICING.MAX_MINUTES, Math.max(1, Math.ceil(durationSec / 60)))
 }
 
-/** `nemotron-3-5-transcribe:<N>m` — the id a run on a file of `durationSec` seconds reserves. */
+/** `nemotron-3-5-transcribe:<N>m` — the id of `durationSec` seconds' started minutes (the price of that length; a quote names it). */
 export function nemotronTranscribeCreditId(durationSec: number | null | undefined): string {
   return `${NEMOTRON_TRANSCRIBE_ID}:${nemotronTranscribeStartedMinutes(durationSec)}m`
+}
+
+/**
+ * How far past a whole minute a file may run and still be held and charged the
+ * minute below it: one second (decided 2026-11-12 for the charge, which reads
+ * KIE's decoded length; the hold reads it too, {@link nemotronHeldMinutes}).
+ * Decoders and containers disagree by a few hundredths at a file's end — a
+ * 60-second cut re-encoded with its sound measures 60.0004–60.011 s.
+ */
+export const NEMOTRON_UPWARD_GRACE_SEC = 1
+
+/**
+ * The started minutes a run HOLDS for a file it measured at `measuredSec`
+ * before it runs: those of the length less {@link NEMOTRON_UPWARD_GRACE_SEC},
+ * at least 1, at most 60 — the minutes its charge settles at when KIE decodes
+ * the file within the grace of them (backend `nemotronChargeId`, which forgives
+ * only a length past the HELD minutes). So a quote of a length the graph knows
+ * is never below the hold of a file that measures up to the grace past it, and
+ * a file a hair past a minute is held and charged as that minute. The one rule
+ * both holds read: the Transcribe node's (`nemotronTranscribeHeldCreditId`) and
+ * Add Captions' on Nemotron (`addCaptionsNemotronHeldCreditId`).
+ */
+export function nemotronHeldMinutes(measuredSec: number): number {
+  return nemotronTranscribeStartedMinutes(measuredSec - NEMOTRON_UPWARD_GRACE_SEC)
+}
+
+/** `nemotron-3-5-transcribe:<N>m` — the id a run on a file it measured at `measuredSec` seconds holds ({@link nemotronHeldMinutes}). */
+export function nemotronTranscribeHeldCreditId(measuredSec: number): string {
+  return `${NEMOTRON_TRANSCRIBE_ID}:${nemotronHeldMinutes(measuredSec)}m`
 }
 
 /**

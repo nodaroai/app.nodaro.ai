@@ -27,6 +27,7 @@ import { rawBodyRecord } from "../lib/run-model.js"
 // the length actually dubbed at delivery (lib/dubbing-duration.ts).
 import { DUBBING_MAX_DURATION_SEC, DUBBING_FALLBACK_SECONDS } from "../providers/elevenlabs/dubbing.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { dropClientMeasureFields } from "../lib/request-measure.js"
 
 export { DUBBING_MAX_DURATION_SEC, DUBBING_FALLBACK_SECONDS }
 
@@ -99,14 +100,17 @@ export async function refuseDubbingUnderVoiceLock(_req: FastifyRequest, reply: F
  * Fastify preHandler: measures the source (an upload by ffprobe; a link —
  * where credits are charged — through the social-post probe or ffprobe,
  * lib/dubbing-duration.ts), rejects anything whose dubbed span exceeds
- * {@link DUBBING_MAX_DURATION_SEC} (413 — the spec's word for it), and
- * stashes the span on `body.__probedDurationSec` for creditGuard's
- * computeCredits. A source that cannot be measured is never rejected for it:
+ * {@link DUBBING_MAX_DURATION_SEC} (413 — the spec's word for it), and keeps
+ * the span on the server-side request (`req.probedDuration`, never the body)
+ * for creditGuard's computeCredits and the handler; a client's own
+ * `__probedDurationSec` is dropped first. A source that cannot be measured is never rejected for it:
  * the run holds the 30-minute ceiling, the worker enforces the cap post-start,
  * and delivery settles the hold to the length dubbed. Mirrors
  * probeDurationPreHandler (video-sfx) / probeAudioDurationPreHandler (ai-avatar).
  */
 export async function probeDubbingDurationPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  dropClientMeasureFields(req.body, [DUBBING_SPAN_FIELD])
+  req.probedDuration = undefined
   const body = (req.body ?? {}) as Record<string, unknown>
   // A link handed to the dubbing service is an import of that link: refused
   // when two URL parsers would read it differently, then held to the gate
@@ -187,8 +191,11 @@ export async function probeDubbingDurationPreHandler(req: FastifyRequest, reply:
       },
     })
   }
-  if (effective != null) body.__probedDurationSec = effective
+  if (effective != null) req.probedDuration = effective
 }
+
+/** A body field named like the measured span (the name the route once stashed it under): dropped, never read. */
+const DUBBING_SPAN_FIELD = "__probedDurationSec"
 
 /**
  * The BASE credits a dub's create body is held at: per-minute pricing of the
@@ -198,10 +205,10 @@ export async function probeDubbingDurationPreHandler(req: FastifyRequest, reply:
  * The same plan prices a workflow run, and a language added to a regular dub,
  * which is a dub of its own (routes/dubbing-languages.ts).
  */
-export async function dubbingRequestBaseCredits(parsedBody: unknown): Promise<number> {
+export async function dubbingRequestBaseCredits(parsedBody: unknown, req: FastifyRequest): Promise<number> {
   const body = parsedBody as Record<string, unknown>
-  const probed = body.__probedDurationSec
-  const plan = dubbingReservePlan(typeof probed === "number" ? probed : undefined)
+  // The span the preHandler measured: the server-side request's, never the body's.
+  const plan = dubbingReservePlan(req.probedDuration)
   return dubbingBaseCredits(body.targetLanguage, plan.seconds)
 }
 
@@ -218,7 +225,9 @@ export async function submitDubbing(
   // preHandler ran against the raw body — strip its stash before parsing so
   // it can't leak into input_data / the queue payload via parsed.data.
   const rawBody = (req.body ?? {}) as Record<string, unknown>
-  const { __probedDurationSec: stashedDuration, ...toParse } = rawBody
+  const { __probedDurationSec: _clientSpan, ...toParse } = rawBody
+  // The span the preHandler measured (server-side only); undefined when it could not be read.
+  const stashedDuration = req.probedDuration
   const parsed = dubbingBody.safeParse(toParse)
   if (!parsed.success) {
     return reply.status(400).send({

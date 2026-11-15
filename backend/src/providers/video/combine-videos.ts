@@ -4,6 +4,7 @@ import { downloadFile, runFfmpeg, runFfprobe, getVideoFps, getVideoStreamDuratio
 import { getSmartCutMatcher, type SmartCutMode } from "./smart-cut.js"
 import { csvFields } from "./ffprobe-csv.js"
 import { resolveXfadeName, resolveAudioCrossfadeCurve } from "@nodaro/shared/edl"
+import { combineTargetFps } from "@nodaro/render-rules"
 
 interface CombineOptions {
   readonly videoUrls: readonly string[]
@@ -224,17 +225,8 @@ export async function pickTargetResolution(
  * 30000/1001 tally together; the result is clamped to a sane 1–60.
  */
 export async function pickTargetFps(paths: readonly string[]): Promise<number> {
-  const rates = await Promise.all(paths.map(getVideoFps))
-  const tally = new Map<number, number>()
-  for (const r of rates) {
-    const key = Math.round(r * 1000) / 1000
-    tally.set(key, (tally.get(key) ?? 0) + 1)
-  }
-  let best = { fps: 24, count: 0 }
-  for (const [fps, count] of tally) {
-    if (count > best.count || (count === best.count && fps > best.fps)) best = { fps, count }
-  }
-  return Math.min(60, Math.max(1, best.fps))
+  // The one rule the charge counts the frame trims by (`combineTargetFps`, @nodaro/render-rules).
+  return combineTargetFps(await Promise.all(paths.map(getVideoFps)))
 }
 
 /**

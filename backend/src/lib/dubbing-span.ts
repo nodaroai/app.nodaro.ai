@@ -17,11 +17,11 @@
 import { DUBBING_MAX_DURATION_SEC } from "../providers/elevenlabs/dubbing.js"
 import { baseCreditCostFor } from "./credit-base-cost.js"
 import { dubbingModelIdentifier } from "./dubbing-model.js"
-import { dubbingMinutes } from "@nodaro/render-rules"
+import { dubbingHeldMinutes } from "@nodaro/render-rules"
 
 // The span and its whole minutes: ONE rule with the server's run estimate and
 // the editor, which quote a dub before it runs (`@nodaro/render-rules`).
-export { effectiveDubbedSeconds, dubbingMinutes } from "@nodaro/render-rules"
+export { effectiveDubbedSeconds, dubbingHeldMinutes, dubbingMinutes } from "@nodaro/render-rules"
 
 /** What a dub holds: the span when it is known, else the 30-minute ceiling,
  *  which delivery settles down to the length actually dubbed. */
@@ -38,8 +38,9 @@ export function dubbingReservePlan(spanSec: number | undefined): DubbingReserveP
 
 /**
  * BASE (pre-markup) credits for dubbing `seconds` into `targetLanguage`: the
- * language's per-minute row (admin-editable in model_pricing) × whole minutes.
- * 0 when credits are off.
+ * language's per-minute row (admin-editable in model_pricing) × the whole
+ * minutes a measured span is held and charged (`dubbingHeldMinutes`: a hair
+ * past a minute forgiven, decided 2026-11-14). 0 when credits are off.
  */
 export async function dubbingBaseCredits(targetLanguage: unknown, seconds: number): Promise<number> {
   return dubbingBaseCreditsFor(dubbingModelIdentifier(targetLanguage), seconds)
@@ -47,8 +48,9 @@ export async function dubbingBaseCredits(targetLanguage: unknown, seconds: numbe
 
 /**
  * The same price for a dub whose row is already known: a language added to a
- * project dub is charged on the project's row, whatever language it speaks.
+ * project dub is charged on the project's row, whatever language it speaks —
+ * by the same held minutes (`dubbingHeldMinutes`).
  */
 export async function dubbingBaseCreditsFor(modelId: string, seconds: number): Promise<number> {
-  return (await baseCreditCostFor(modelId)) * dubbingMinutes(seconds)
+  return (await baseCreditCostFor(modelId)) * dubbingHeldMinutes(seconds)
 }

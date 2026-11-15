@@ -21,6 +21,8 @@ vi.mock("../../providers/video/ffmpeg-utils.js", () => ({
 }))
 vi.mock("../video-utility-probe.js", () => ({
   probeClipLengthSec: async () => { throw notMedia() },
+  // Trim, Loop and Combine Videos read a clip's length with its frame rate.
+  probeClipReading: async () => { throw notMedia() },
   ClipUnreadableError: class ClipUnreadableError extends Error {},
 }))
 

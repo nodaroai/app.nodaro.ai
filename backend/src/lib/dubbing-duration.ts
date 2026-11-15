@@ -17,8 +17,10 @@ import { probeSocialPostDurationSec } from "../services/workflow-engine/video-an
 export { dubbingBaseCredits, dubbingReservePlan, effectiveDubbedSeconds } from "./dubbing-span.js"
 
 /**
- * How long a dub source is, in whole seconds; undefined when it cannot be
- * read (a failed or blocked probe, a page that is not a media file). Never
+ * How long a dub source is, in seconds as measured (never rounded: the hold
+ * forgives a hair past a minute, `dubbingHeldMinutes`, and a whole-second
+ * rounding would take that hair to the next second); undefined when it cannot
+ * be read (a failed or blocked probe, a page that is not a media file). Never
  * throws: the caller holds the ceiling instead.
  */
 export async function measureDubbingSourceSec(
@@ -38,5 +40,5 @@ export async function measureDubbingSourceSec(
       seconds = null
     }
   }
-  return seconds !== null && Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined
+  return seconds !== null && Number.isFinite(seconds) && seconds > 0 ? seconds : undefined
 }

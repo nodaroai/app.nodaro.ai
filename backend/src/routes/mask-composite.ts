@@ -39,6 +39,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { maskCompositeBaseCredits, maskCompositeLeadOf, measureMaskCompositeLength } from "../lib/mask-composite-length.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
 import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 const b = MASK_COMPOSITE_BOUNDS
@@ -66,10 +67,13 @@ export const maskCompositeBody = z.object({
  * Measures the leading video before the credit guard prices it — the
  * foreground, or the background when `fill` is pixelate / blur (the URL is
  * validated first, so nothing unsafe is probed) — refuses one that can't be
- * read or is over the cap (400, before anything is reserved), and stashes the
- * unit count on the body for the guard.
+ * read or is over the cap (400, before anything is reserved), and keeps the
+ * unit count on the server-side request (`setRequestMeasure`, never the body)
+ * for the guard and the handler; a client's own `__maskCompositeUnits` is
+ * dropped first.
  */
 async function measureLeadPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  dropClientMeasureFields(req.body, [UNITS_FIELD])
   const body = (req.body ?? {}) as Record<string, unknown>
   const { lead, url: raw } = maskCompositeLeadOf(body)
   const url = safeUrlSchema.safeParse(raw)
@@ -78,11 +82,17 @@ async function measureLeadPreHandler(req: FastifyRequest, reply: FastifyReply): 
   if (!measured.ok) {
     return void reply.code(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
-  body.__maskCompositeUnits = measured.units
+  setRequestMeasure(req, UNITS_MEASURE, measured.units)
 }
 
-const stashedUnits = (body: unknown): number => {
-  const u = (body as Record<string, unknown> | undefined)?.__maskCompositeUnits
+/** A body field named like the measured units (the name the route once stashed them under): dropped, never read. */
+const UNITS_FIELD = "__maskCompositeUnits"
+/** The request measure the units are kept under. */
+const UNITS_MEASURE = "maskCompositeUnits"
+
+/** The units the preHandler measured (the server-side request's), at least one; one when it measured nothing. */
+const stashedUnits = (req: FastifyRequest): number => {
+  const u = requestMeasure<number>(req, UNITS_MEASURE)
   return typeof u === "number" && u >= 1 ? u : 1
 }
 
@@ -91,10 +101,12 @@ export async function maskCompositeRoutes(app: FastifyInstance) {
     preHandler: [
       measureLeadPreHandler,
       // BASE credits = the one-unit row × the measured units; creditGuard applies the markup.
-      creditGuard(() => "mask-composite", { computeCredits: async (body) => maskCompositeBaseCredits(stashedUnits(body)) }),
+      creditGuard(() => "mask-composite", { computeCredits: async (_body, req) => maskCompositeBaseCredits(stashedUnits(req)) }),
     ],
   }, async (req, reply) => {
-    const { __maskCompositeUnits: billedUnits, ...raw } = (req.body ?? {}) as Record<string, unknown>
+    const { __maskCompositeUnits: _clientUnits, ...raw } = (req.body ?? {}) as Record<string, unknown>
+    // The units the preHandler measured (server-side only); undefined when it measured nothing.
+    const billedUnits = requestMeasure<number>(req, UNITS_MEASURE)
     // Pixelate / blur never read a foreground: one sent is ignored outright —
     // dropped before the parse, so even a malformed value is no reason to refuse.
     const { foregroundUrl: _unused, ...withoutForeground } = raw

@@ -13,7 +13,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 const state = vi.hoisted(() => ({
   image: { size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 } as { size?: { width: number; height: number }; sizeBytes?: number },
   /** The audio: what it decodes to (seconds, or "over" the cap) and the bytes downloaded. */
-  audio: { seconds: 10.04, bytes: 300_000 } as { seconds: number | "over"; bytes: number },
+  audio: { seconds: 10.1, bytes: 300_000 } as { seconds: number | "over"; bytes: number },
   downloads: 0,
   routeConfig: undefined as unknown,
   guardCalls: [] as Array<{ identifier: string; base: number | undefined }>,
@@ -111,7 +111,7 @@ describe("POST /v1/lip-sync — OmniHuman 2.0", () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     state.image = { size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 }
-    state.audio = { seconds: 10.04, bytes: 300_000 }
+    state.audio = { seconds: 10.1, bytes: 300_000 }
     state.downloads = 0
     state.guardCalls = []
     state.busy = false
@@ -127,19 +127,19 @@ describe("POST /v1/lip-sync — OmniHuman 2.0", () => {
 
   afterEach(async () => { await app.close() })
 
-  it("prices the audio it measured itself (10.04 s → 11 s at the rate), not the length the request sent", async () => {
+  it("prices the audio it measured itself (10.1 s → 11 s at the rate), not the length the request sent", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/lip-sync", payload: body({ audioDurationSec: 3, resolution: "1080p", seed: 7, fastMode: true }) })
     expect(res.statusCode).toBe(200)
     expect(state.guardCalls).toEqual([{ identifier: "omnihuman-2-0:per-second", base: 35 * 11 }])
 
     const row = vi.mocked(insertJob).mock.calls[0]![1] as { input_data: Record<string, unknown> }
-    expect(row.input_data).toMatchObject({ provider: "omnihuman-2-0", audioDurationSec: 10.04, lipSyncBilledSeconds: 11 })
+    expect(row.input_data).toMatchObject({ provider: "omnihuman-2-0", audioDurationSec: 10.1, lipSyncBilledSeconds: 11 })
     expect(row.input_data.resolution).toBeUndefined()
     expect(row.input_data.seed).toBeUndefined()
     expect(row.input_data.fastMode).toBeUndefined()
 
     const queued = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
-    expect(queued).toMatchObject({ provider: "omnihuman-2-0", audioDurationSec: 10.04, lipSyncBilledSeconds: 11 })
+    expect(queued).toMatchObject({ provider: "omnihuman-2-0", audioDurationSec: 10.1, lipSyncBilledSeconds: 11 })
     expect(queued.resolution).toBeUndefined()
     expect(queued.seed).toBeUndefined()
     expect(queued.fastMode).toBeUndefined()
@@ -203,7 +203,7 @@ describe("POST /v1/lip-sync — OmniHuman 2.0", () => {
     expect(res.statusCode).toBe(200)
     expect(state.guardCalls).toEqual([{ identifier: "omnihuman-2-0:per-second", base: 35 * 11 }])
     const queued = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
-    expect(queued).toMatchObject({ audioDurationSec: 10.04, lipSyncBilledSeconds: 11 })
+    expect(queued).toMatchObject({ audioDurationSec: 10.1, lipSyncBilledSeconds: 11 })
   })
 
   it.each([
@@ -225,8 +225,10 @@ describe("POST /v1/lip-sync — OmniHuman 2.0", () => {
 
   it("resolves the rate id for 2.0 before the bucket branch; a bucketed model's id is the measured bucket, never a sent length", () => {
     expect(resolveLipSyncIdentifier({ provider: "omnihuman-2-0", audioDurationSec: 8 })).toBe("omnihuman-2-0:per-second")
-    expect(resolveLipSyncIdentifier({ provider: "omnihuman-1-5", audioDurationSec: 8, __lipSyncBilledSeconds: 30 })).toBe("omnihuman-1-5:30s")
+    expect(resolveLipSyncIdentifier({ provider: "omnihuman-1-5", audioDurationSec: 8 }, { audioSec: 29, billedSeconds: 30 })).toBe("omnihuman-1-5:30s")
     expect(() => resolveLipSyncIdentifier({ provider: "omnihuman-1-5", audioDurationSec: 8 })).toThrow(/without its measured audio/)
+    // The measure's old body name is never read: only the server-side measure prices.
+    expect(() => resolveLipSyncIdentifier({ provider: "omnihuman-1-5", audioDurationSec: 8, __lipSyncBilledSeconds: 30 })).toThrow(/without its measured audio/)
   })
 })
 
@@ -236,7 +238,7 @@ describe("POST /v1/lip-sync — the rate limit is for the models that measure th
   beforeEach(async () => {
     vi.clearAllMocks()
     state.image = { size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 }
-    state.audio = { seconds: 10.04, bytes: 300_000 }
+    state.audio = { seconds: 10.1, bytes: 300_000 }
     state.downloads = 0
     state.guardCalls = []
     state.busy = false

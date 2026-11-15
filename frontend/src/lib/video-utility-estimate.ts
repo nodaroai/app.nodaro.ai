@@ -22,39 +22,13 @@ import {
   videoOverlayVideoUnits,
 } from "@nodaro/shared/credits"
 import { maskCompositeUnits } from "@nodaro/shared/media"
-import { fanInClipCount, forwardedVideoLengthSec, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, loopVideoRunFields, runWireLengthSec, withoutRecordedVideoLength, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, maskCompositeLeadSec, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, measuredWireLengthSec, runWireFps, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, trimVideoRunFields, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, videoUtilityUnitsOf, type MeasuredInputStepType, type MeasuredWireLengthOptions } from "@nodaro/render-rules"
-import { clampTopazVideoFps, isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER, resolveTopazVideoTarget, type TopazVideoResolution, type TopazVideoSource } from "@nodaro/shared/models"
+import { combineVideosRunFields, fanInClipCount, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, loopVideoRunFields, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, maskCompositeLeadSec, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_READING, measuredWireLengthSec, runWireFps, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_OVERLAY_READING, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, trimVideoRunFields, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, videoUtilityUnitsOf, type MeasuredInputStepType, type MeasuredWireLengthOptions } from "@nodaro/render-rules"
+import { NODARO_VIDEO_UPSCALE_PROVIDER, type TopazVideoResolution } from "@nodaro/shared/models"
 import { withWiredSettings } from "@nodaro/shared/nodes"
-import { lipSyncAudioSourceId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, resolveGraphOrigin, topazVideoEstimateUnits } from "@nodaro/render-rules"
-import { readNodeOutput } from "@/lib/node-output-reader"
+import { lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuotedAudioSec, NEMOTRON_WIRE_READ_OPTIONS, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, topazLegacyFactorOf, topazQuotedTarget, topazVideoQuoteUnits, topazWiredSource, type TopazWiredSource } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
-import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { getCombineUpstreamDurations, getUpstreamDuration, type WireDurationReader } from "@/lib/upstream-duration"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
-
-/**
- * The length, in seconds, of the media on a wire as a RUN estimate reads it,
- * without the measured walk's slack: a render's output at the render's
- * estimated minutes, a chain of Trim / Loop / Combine Videos / Video SFX at the
- * length each passes on, and any other source at the length a run forwards
- * from it (`forwardedVideoLengthSec`), a generated video read as it was before
- * its runs recorded a length (`withoutRecordedVideoLength`). The reading the
- * server's run estimate gives the same step (`runWireLengthOf`): Transcribe on
- * Nemotron 3.5. Unknown stays `undefined`.
- *
- * @param rerunIds the nodes about to EXECUTE (empty for a single node's own price).
- */
-function wireDurationReader(
-  nodes: ReadonlyArray<WorkflowNode>,
-  edges: ReadonlyArray<WorkflowEdge>,
-  rerunIds: ReadonlySet<string>,
-): WireDurationReader {
-  return (sourceId) =>
-    runWireLengthSec(sourceId, nodes, edges, rerunIds, {
-      planOutputOf: readPlan,
-      otherSec: (origin) => forwardedVideoLengthSec(withoutRecordedVideoLength(origin)),
-    })
-}
 
 /**
  * The seconds the video on a wire into a step whose run measures it (Mask
@@ -80,8 +54,8 @@ function measuredWireReader(
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string>,
   plannedClipSlackSec: number,
-  /** What one step's reading adds (Lip Sync: a re-run voice at its earlier take, a minimum). */
-  extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum">,
+  /** What one step's reading adds (Lip Sync: a re-run voice at its earlier take, a minimum; on a per-second model, a recording at its decoded length; a step that measures the video stream: its `reading`). */
+  extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum" | "decodedAudioLength" | "reading">,
 ): WireDurationReader {
   return (sourceId) =>
     measuredWireLengthSec(sourceId, nodes, edges, rerunIds, {
@@ -107,9 +81,9 @@ function measuredInputReader(
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string>,
-  extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum">,
+  extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum" | "decodedAudioLength">,
 ): WireDurationReader {
-  return measuredWireReader(nodes, edges, rerunIds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC[type], extra)
+  return measuredWireReader(nodes, edges, rerunIds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC[type], { reading: MEASURED_INPUT_READING[type], ...extra })
 }
 
 /**
@@ -168,12 +142,19 @@ export function pitchTempoQuotedSec(
   return sec === undefined ? null : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC)
 }
 
+/** Transcribe and Add Captions on Nemotron read their wire as the server's estimate does (`NEMOTRON_WIRE_READ_OPTIONS`). */
+function nemotronWireReader(nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>, rerunIds: ReadonlySet<string>): WireDurationReader {
+  return measuredWireReader(nodes, edges, rerunIds, NEMOTRON_WIRE_READ_OPTIONS.plannedClipSlackSec ?? 0, { voiceTakeAsMinimum: NEMOTRON_WIRE_READ_OPTIONS.voiceTakeAsMinimum })
+}
+
 /**
  * The file length, in seconds, a Transcribe on Nemotron 3.5 Transcribe (priced
  * per started minute) is QUOTED at, or `null` when unknown (the 60-minute
- * price): the length the graph gives its `audio` wire, else what the upstream
- * node itself reports (an upload's length). Capped at the 60 minutes a run
- * accepts. The run itself measures the real file.
+ * price): its `audio` wire as the measured walk reads it, the server's reading
+ * (`NEMOTRON_WIRE_READ_OPTIONS`: an upload at its recorded length, media a node
+ * makes in the run at its planned length, a voice made again in the run at its
+ * take — a minimum). Capped at the 60 minutes a run accepts. The run itself
+ * measures the real file and charges its minutes.
  */
 export function transcribeQuotedSec(
   node: Pick<WorkflowNode, "id">,
@@ -181,18 +162,18 @@ export function transcribeQuotedSec(
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | null {
-  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
-  const fromGraph = edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source)).find((v) => v !== undefined)
-  const sec = fromGraph ?? upstreamVideoDurationSec(node.id, "audio", nodes, edges)
-  return sec === null || sec === undefined ? null : Math.min(sec, NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC)
+  const lengthOf = nemotronWireReader(nodes, edges, rerunIds)
+  const sec = edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source)).find((v) => v !== undefined)
+  return sec === undefined ? null : Math.min(sec, NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC)
 }
 
 /**
  * The video length, in seconds, an Add Captions transcribing on Nemotron 3.5
  * Transcribe (one charge: the render plus the video's started minutes) is
- * QUOTED at, or `null` when unknown (the 60-minute price): the length the graph
- * gives its video wire (`in`), else what the upstream node itself reports.
- * Capped at the 60 minutes a run accepts. The run itself measures the video.
+ * QUOTED at, or `null` when unknown (the 60-minute price): the longest of its
+ * video wires (`in`) as the measured walk reads them, the server's reading
+ * ({@link transcribeQuotedSec}'s). Capped at the 60 minutes a run accepts. The
+ * run itself measures the video.
  */
 export function addCaptionsQuotedSec(
   node: Pick<WorkflowNode, "id">,
@@ -200,13 +181,12 @@ export function addCaptionsQuotedSec(
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | null {
-  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
-  const fromGraph = edges
+  const lengthOf = nemotronWireReader(nodes, edges, rerunIds)
+  const lengths = edges
     .filter((e) => e.target === node.id && (e.targetHandle === "in" || e.targetHandle == null))
     .map((e) => lengthOf(e.source))
-    .find((v) => v !== undefined)
-  const sec = fromGraph ?? upstreamVideoDurationSec(node.id, "in", nodes, edges)
-  return sec === null || sec === undefined ? null : Math.min(sec, NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC)
+    .filter((v): v is number => v !== undefined)
+  return lengths.length === 0 ? null : Math.min(Math.max(...lengths), NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC)
 }
 
 /**
@@ -306,7 +286,12 @@ export function videoDepthQuotedSec(
  * 8-second fallback — a minimum, since the run is charged the length it
  * measures. Units are counted by the one rule the charge counts by
  * (`videoUtilityUnitsOf`: each clip less the frame grace, then the node's
- * formula), a Trim over the fields its run sends (`trimVideoRunFields`).
+ * formula), a Trim over the fields its run sends (`trimVideoRunFields`). Frame
+ * trims are cut at each clip's rate where the graph knows it (`runWireFps`:
+ * an upload's declared `fps`, through Trim, Loop and a Combine Videos whose
+ * clips share one), else none is cut — the uncut clip, a bound (decided
+ * 2026-11-14; the run cuts at the rate it probes), as the server's estimate
+ * reads them.
  *
  * @param rerunIds the nodes about to EXECUTE (empty for a single node's own price).
  */
@@ -318,6 +303,8 @@ export function estimateVideoUtilityBaseCredits(
 ): number | undefined {
   const data = node.data as Record<string, unknown>
   const durationOf = measuredWireReader(nodes, edges, rerunIds, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC)
+  // Each wire's frame rate, read in the same order as its length.
+  const fpsOf = (sourceId: string) => runWireFps(sourceId, nodes, edges)
   const credits = (units: number | undefined) => (units === undefined ? undefined : units * VIDEO_UTIL_PRICING.CREDIT_UNIT)
   switch (node.type) {
     case "loop-video":
@@ -326,15 +313,20 @@ export function estimateVideoUtilityBaseCredits(
         node.type,
         node.type === "trim-video" ? trimVideoRunFields(data) : loopVideoRunFields(data),
         [getUpstreamDuration(node.id, nodes, edges, durationOf)],
+        [getUpstreamDuration(node.id, nodes, edges, fpsOf)],
       ))
-    case "combine-videos":
+    case "combine-videos": {
       // One length per clip it receives: a Bundle from a fanned-out source hands it every run's clip
       // (`fanInClipCount`, the count the server's estimate reads).
+      const clipsOf = (e: WorkflowEdge) => fanInClipCount(e, nodes, edges, rerunIds)
       return credits(videoUtilityUnitsOf(
         node.type,
-        data,
-        getCombineUpstreamDurations(node, nodes, edges, durationOf, (e) => fanInClipCount(e, nodes, edges, rerunIds)),
+        // The fields the workflow run prices by, with its defaults — never per-join `transitions` it does not send.
+        combineVideosRunFields(data),
+        getCombineUpstreamDurations(node, nodes, edges, durationOf, clipsOf),
+        getCombineUpstreamDurations(node, nodes, edges, fpsOf, clipsOf),
       ))
+    }
     case "assemble-narrated-video": {
       // Block count = edges wired into the "video" handle (the `blocks` array
       // driver — see execute-node.ts). No inputs wired yet still prices the
@@ -434,7 +426,7 @@ export function videoOverlayQuotedSec(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | null {
   const inputs = edges.filter((e) => e.target === node.id)
-  const lengthOf = measuredWireReader(nodes, edges, rerunIds, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC)
+  const lengthOf = measuredWireReader(nodes, edges, rerunIds, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, { reading: VIDEO_OVERLAY_READING })
   return videoOverlayBaseSec(inputs, inputs.map((e) => lengthOf(e.source))) ?? null
 }
 
@@ -450,7 +442,7 @@ export function videoOverlayWireBaseSec(
   edges: ReadonlyArray<WorkflowEdge>,
 ): number | null {
   const inputs = edges.filter((e) => e.target === node.id)
-  const lengthOf = measuredWireReader(nodes, edges, new Set(), VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC)
+  const lengthOf = measuredWireReader(nodes, edges, new Set(), VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, { reading: VIDEO_OVERLAY_READING })
   return videoOverlayBaseWireSec(inputs, inputs.map((e) => lengthOf(e.source))) ?? null
 }
 
@@ -493,82 +485,48 @@ export function topazVideoQuotedSourceSec(
   return edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source)).find((v) => v !== undefined)
 }
 
-/** The old relative levers a saved Video Upscale may still hold (the shared resolver's own set). */
-const TOPAZ_LEGACY_FACTORS: ReadonlySet<string> = new Set(["1", "2", "4"])
-
 /**
  * The old 1×/2×/4× factor a Topaz Video Upscale still runs by — only while it
  * names no resolution Topaz takes (a target, once set, replaces it). `undefined`
- * for a node set the current way.
+ * for a node set the current way. The shared rule's (`topazLegacyFactorOf`).
  */
 export function topazVideoLegacyFactor(data: Record<string, unknown> | undefined): string | undefined {
-  if (!data || isTopazVideoResolution(data.targetResolution)) return undefined
-  const factor = typeof data.upscaleFactor === "string" ? data.upscaleFactor.trim() : ""
-  return TOPAZ_LEGACY_FACTORS.has(factor) ? factor : undefined
+  return topazLegacyFactorOf(data)
 }
 
-const positivePx = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined)
-
 /**
- * The pixel size of the video wired into a Video Upscale's `video` input, when
- * the editor has measured it: the source (through teleports) hands on a url,
- * and the result row holding that url records its width and height (an
- * upload records them at upload, any other video when its result is first
- * shown — `useResultAspectRatio`); an upload with no such row, its upload
- * metadata while that upload is still the file it hands on. `undefined`
- * otherwise — an aspect ratio or a resolution SETTING is not a size.
+ * What the graph knows of the clip wired into a Video Upscale's `video` input
+ * — its recorded frame and its declared rate — as the server's estimate reads
+ * it (`topazWiredSource`): an upload's recorded size, the size recorded with
+ * the take a node outside the run hands on, carried through Trim, Loop and a
+ * Combine Videos whose clips share it; a node made again in the run has none.
  */
-export function topazVideoQuotedSourceSize(
+export function topazVideoQuotedSource(
   node: Pick<WorkflowNode, "id">,
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
-): Pick<TopazVideoSource, "width" | "height"> | undefined {
-  const edge = edges.find((e) => e.target === node.id && e.targetHandle === "video")
-  if (!edge) return undefined
-  const src = nodes.find((n) => n.id === edge.source)
-  const origin = resolveGraphOrigin(src, nodes as WorkflowNode[], edges as WorkflowEdge[])
-  if (!origin) return undefined
-  const out = readNodeOutput(origin, origin === src ? edge.sourceHandle ?? undefined : undefined)
-  const url = typeof out === "string" ? out.trim() : ""
-  if (url === "") return undefined
-  const data = (origin.data ?? {}) as Record<string, unknown>
-  const rows = Array.isArray(data.generatedResults) ? (data.generatedResults as Array<Record<string, unknown> | null | undefined>) : []
-  for (const r of rows) {
-    if (typeof r?.url !== "string" || r.url.trim() !== url) continue
-    const width = positivePx(r.width)
-    const height = positivePx(r.height)
-    if (width !== undefined && height !== undefined) return { width, height }
-  }
-  if (origin.type === "upload-video" && !data.externalUrl && typeof data.url === "string" && data.url.trim() === url) {
-    const meta = (data.metadata ?? {}) as Record<string, unknown>
-    const width = positivePx(meta.width)
-    const height = positivePx(meta.height)
-    if (width !== undefined && height !== undefined) return { width, height }
-  }
-  return undefined
+  rerunIds: ReadonlySet<string> = new Set(),
+): TopazWiredSource {
+  return topazWiredSource(node.id, nodes as WorkflowNode[], edges as WorkflowEdge[], rerunIds)
 }
 
 /**
  * The resolution a Topaz Video Upscale is SHOWN and QUOTED at — the one place
  * the config panel and every estimate read it, so they cannot disagree — and
  * the old factor it runs by, if any. Both from its settings as it runs (a wired
- * Settings input included): a target wins; a saved node that holds only the
- * old factor maps it the way the run does (`resolveTopazVideoTarget`: the
- * factor × the source's short side, to the nearest target) when the wired
- * clip's size is known ({@link topazVideoQuotedSourceSize}), else 1080p.
+ * Settings input included), by the shared rule (`topazQuotedTarget`): a target
+ * wins; a saved node that holds only the old factor maps it the way the run
+ * does (the factor × the source's short side, to the nearest target) when the
+ * wired clip's size is known ({@link topazVideoQuotedSource}), else 1080p.
  */
 export function topazVideoQuotedTarget(
   node: Pick<WorkflowNode, "id" | "type" | "data">,
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
 ): { resolution: TopazVideoResolution; legacyFactor?: string } {
   const data = (withWiredSettings(node, nodes, edges).data ?? {}) as Record<string, unknown>
-  const legacyFactor = topazVideoLegacyFactor(data)
-  const { resolution } = resolveTopazVideoTarget({
-    targetResolution: typeof data.targetResolution === "string" ? data.targetResolution : undefined,
-    upscaleFactor: legacyFactor,
-    source: legacyFactor === undefined ? undefined : topazVideoQuotedSourceSize(node, nodes, edges),
-  })
+  const { resolution, legacyFactor } = topazQuotedTarget(data, topazVideoQuotedSource(node, nodes, edges, rerunIds))
   return legacyFactor === undefined ? { resolution } : { resolution, legacyFactor }
 }
 
@@ -608,11 +566,11 @@ export function nodaroVideoUpscaleRefusedSec(
 }
 
 /**
- * The Topaz units a Video Upscale is QUOTED at (`topazVideoEstimateUnits`, the
- * rule the server's run estimate reads): its resolution as
- * {@link topazVideoQuotedResolution} reads it, and its frame rate (else 30
- * fps), at the length {@link topazVideoQuotedSourceSec} gives, on a 16:9
- * frame. One unit for every other provider, whose row is the whole price. The
+ * The Topaz units a Video Upscale is QUOTED at (`topazVideoQuoteUnits`, the
+ * rule the server's run estimate reads): its target as the run resolves it
+ * over the wired clip's known frame and declared rate
+ * ({@link topazVideoQuotedSource}; unknown, 16:9 at 30 fps), at the length
+ * {@link topazVideoQuotedSourceSec} gives (unknown, 10 s). One unit for every other provider, whose row is the whole price. The
  * node's pill, its Run button, the confirm and the workflow badge all read this.
  */
 export function videoUpscalePricingUnits(
@@ -632,11 +590,7 @@ export function videoUpscalePricingUnits(
     return nodaroVideoUpscaleEstimateUnits(topazVideoQuotedSourceSec(node, nodes, edges, rerunIds))
   }
   if (!isTopazVideoUpscaleProvider(data.provider)) return 1
-  return topazVideoEstimateUnits({
-    resolution: topazVideoQuotedResolution(node, nodes, edges),
-    fps: typeof data.targetFps === "number" && Number.isFinite(data.targetFps) ? clampTopazVideoFps(data.targetFps) : undefined,
-    durationSec: topazVideoQuotedSourceSec(node, nodes, edges, rerunIds),
-  })
+  return topazVideoQuoteUnits(data, topazVideoQuotedSourceSec(node, nodes, edges, rerunIds), topazVideoQuotedSource(node, nodes, edges, rerunIds))
 }
 
 /**
@@ -650,7 +604,10 @@ export function videoUpscalePricingUnits(
  * minimum). Never a length the Lip Sync node itself carries
  * (`audioDurationSec`, a browser's reading or a client's word): with no audio
  * node to read it is unknown, and a model priced by a length tier is quoted at
- * its top tier. The run measures the real audio before it holds.
+ * its top tier. A recording is read at its decoded length, on every model priced
+ * by its audio's length: an AAC recording a frame past its record
+ * (`LIP_SYNC_AUDIO_WIRE_READ_OPTIONS`, the server's reading too). The run
+ * measures the real audio before it holds.
  */
 export function lipSyncQuotedAudioSec(
   node: Pick<WorkflowNode, "id" | "data">,
@@ -659,7 +616,7 @@ export function lipSyncQuotedAudioSec(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | undefined {
   const source = lipSyncAudioSourceId(node, nodes, edges, "editor")
-  return source === undefined ? undefined : measuredInputReader("lip-sync", nodes, edges, rerunIds, { voiceTakeAsMinimum: true })(source)
+  return source === undefined ? undefined : measuredInputReader("lip-sync", nodes, edges, rerunIds, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS)(source)
 }
 
 /**
@@ -674,9 +631,9 @@ function rateModelQuotedAudioSec(
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string>,
 ): number | undefined {
-  if (lipSyncAudioSourceId(node, nodes, edges, "editor") !== undefined) return lipSyncQuotedAudioSec(node, nodes, edges, rerunIds)
-  const own = (node.data as { audioDurationSec?: unknown } | undefined)?.audioDurationSec
-  return typeof own === "number" && Number.isFinite(own) && own > 0 ? own : undefined
+  const plays = lipSyncAudioSourceId(node, nodes, edges, "editor") !== undefined
+  // The server's estimate reads the same rule (`lipSyncRateQuotedAudioSec`), with its own run's audio.
+  return lipSyncRateQuotedAudioSec(plays ? lipSyncQuotedAudioSec(node, nodes, edges, rerunIds) : undefined, plays, node.data)
 }
 
 /**

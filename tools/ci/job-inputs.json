@@ -700,6 +700,7 @@
         "backend/src/lib/private-plugins/toolkit.ts",
         "backend/src/lib/private-plugins/tts-capabilities-toolkit.ts",
         "backend/src/lib/private-plugins/types.ts",
+        "backend/src/lib/probed-credit-ids.ts",
         "backend/src/lib/prompt-policy.ts",
         "backend/src/lib/provider-credentials.ts",
         "backend/src/lib/provider-error-detail.ts",

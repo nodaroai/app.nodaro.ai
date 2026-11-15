@@ -288,11 +288,12 @@ export { seedanceTaskTypeAsRun, wiredReferenceVideoSec, type SeedanceTaskTypeAsR
 export { seedanceFinalizeDraftQuote, type SeedanceFinalizeDraftOptions, type SeedanceFinalizeDraftQuote } from "./seedance-draft-finalize-estimate"
 export { videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo } from "./video-overlay-pricing"
 export { AUTO_EDIT_MARGIN_SEC, CONFIGURED_DURATION_VIDEO_TYPES, GENERATE_VIDEO_PRO_DEFAULT_DURATION_SEC, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, LEGACY_VIDEO_NODE_DEFAULT_PROVIDER, TAIL_RECIPE_WINDOWS, generatedVideoRenderedSec, generateVideoProClampedSec, generateVideoProLengthSec, isTailRecipeProvider, longestModelClipSec, referenceClipOutputSec, referenceClipWorstCaseSec, pixverseExtendSeconds, tailRecipeSeconds, videoProviderRenderedSec, type GeneratedVideoLengthOptions } from "./generated-video-length"
-export { CLIP_REMAKING_KEPT_LENGTH_TYPES, DYNAMIC_VIDEO_OUTPUT_TYPES, PASS_THROUGH_VIDEO_TYPES, SLIDESHOW_MAX_IMAGES, VIDEO_LENGTH_RULES, VIDEO_LENGTH_UNBOUNDED_REASONS, knownOutputLength, longestCatalogVideoSec, motionTransferCeilingSec, seedanceEditChargedLength, usecaseLength, wireKindOf, type OutputLengthContext, type OutputLengthNode, type OutputLengthRule, type OutputWireInput, type OutputWireKind, type OutputWireLength } from "./video-output-length"
+export { AUDIO_LENGTH_RULES, CLIP_REMAKING_KEPT_LENGTH_TYPES, DYNAMIC_VIDEO_OUTPUT_TYPES, LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC, PASS_THROUGH_VIDEO_TYPES, SLIDESHOW_MAX_IMAGES, VIDEO_LENGTH_RULES, VIDEO_LENGTH_UNBOUNDED_REASONS, knownOutputLength, lengthRuleOf, longestCatalogVideoSec, motionTransferCeilingSec, seedanceEditChargedLength, usecaseLength, wireKindOf, type OutputLengthContext, type MeasuredFileReading, type OutputLengthNode, type OutputLengthRule, type OutputWireInput, type OutputWireKind, type OutputWireLength } from "./video-output-length"
 export { ENGINE_SKIPPED_NODE_TYPES } from "./engine-skipped-types"
-export { GRACED_VIDEO_UTILITY_TYPES, trimVideoBranches, trimVideoCutsFixedWindow, trimVideoRunFields, videoUtilityPricedClipSec, videoUtilityUnitsOf, type TrimVideoBranch } from "./video-utility-units"
-export { lipSyncAudioSourceId, type LipSyncRunEngine } from "./lip-sync-audio-source"
-export { GENERATED_VOICE_NODE_TYPES, LENGTH_DECIDING_MAPPABLE_FIELDS, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, RECORDING_SOURCE_TYPES, mappedLengthFields, recordedTakeSec, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PRICE_GRACE_SEC, measuredWireLengthSec, plannedVideoLengthSec, recordingLengthSec, type MeasuredInputStepType, type MeasuredWireLengthOptions } from "./measured-wire-length"
+export { combineTargetFps, combineVideosRunFields, GRACED_VIDEO_UTILITY_TYPES, UNREADABLE_CLIP_FPS, trimVideoBranches, trimVideoCutsFixedWindow, trimVideoRunFields, videoUtilityPricedClipSec, videoUtilityUnitsOf, type TrimVideoBranch } from "./video-utility-units"
+export { lipSyncAudioSourceId, lipSyncRateQuoteSeconds, lipSyncRateQuotedAudioSec, type LipSyncRunEngine } from "./lip-sync-audio-source"
+export { AAC_FRAME_SAMPLES, AAC_LOWEST_SAMPLE_RATE_HZ, recordingDecodeOverhangSec } from "./recorded-audio-decode"
+export { GENERATED_VOICE_NODE_TYPES, LENGTH_DECIDING_MAPPABLE_FIELDS, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_READING, VIDEO_OVERLAY_READING, RECORDING_SOURCE_TYPES, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, mappedLengthFields, NEMOTRON_WIRE_READ_OPTIONS, recordedTakeSec, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PRICE_GRACE_SEC, measuredWireLengthSec, plannedVideoLengthSec, recordingLengthSec, type MeasuredInputStepType, type MeasuredWireLengthOptions } from "./measured-wire-length"
 export {
   UGC_CREATOR_NO_IMAGE_MESSAGE,
   UGC_SPEND_REFUSAL_CODES,
@@ -718,6 +719,7 @@ export {
 } from "./speaker-layout-graph"
 export {
   DUBBING_MAX_SPAN_MINUTES,
+  dubbingHeldMinutes,
   dubbingMinutes,
   dubbingQuotedMinutes,
   dubbingSourceHandle,
@@ -912,6 +914,7 @@ export {
   topazVideoOutputGigapixels,
   topazVideoHoldUnits,
   topazVideoEstimateUnits,
+  topazTargetFpsOf,
   TOPAZ_IMAGE_UNIT_CREDIT_ID,
   TOPAZ_IMAGE_UNIT_STEPS,
   TOPAZ_IMAGE_MAX_OUTPUT_MP,
@@ -919,6 +922,8 @@ export {
   topazImageSizeUnits,
   type TopazVideoHoldInput,
 } from "./topaz-pricing.js"
+// A Topaz Video Upscale's quote: the run's resolver over the clip's known frame and rate (the documented minimum where unknown).
+export { runWireFrame, topazLegacyFactorOf, topazQuotedTarget, topazVideoQuoteUnits, topazWiredSource, withoutMediaShape, type TopazWiredSource, type VideoFrame } from "./topaz-video-quote.js"
 // Nodaro Image Upscale: the output's size, its price tier and the limits a run is refused past.
 export {
   NODARO_IMAGE_UPSCALE_HOLD_CREDIT_ID,
@@ -1032,3 +1037,5 @@ export { GVP_GENERATE_AUDIO_DEFAULT, gvpSegmentAudio, pluginVideoAudioRequest } 
 // The anchor choices Generate Video Pro's panel offers for a model (no "reference" where the model takes no reference images).
 export { gvpAnchorChoicesFor } from "./gvp-anchor-choices"
 export { RUN_OUTPUT_TASK_FIELD, handedOnTaskOf, ownTaskInputOf, recordedRunOutputTaskOf, runOutputTaskFields, runResultTaskFields, upstreamTaskFits, type UpstreamTaskGraph, type UpstreamTaskNode } from "./upstream-task"
+// AI Avatar's and SwitchX's credit ids from a server-side measure only (never a probed length a body or a node carries).
+export { AI_AVATAR_PROBED_FIELD, aiAvatarCreditIdOf, SWITCHX_PROBED_FIELD, SWITCHX_TRIM_FIELD, switchXCreditIdOf } from "./probed-credit-ids.js"

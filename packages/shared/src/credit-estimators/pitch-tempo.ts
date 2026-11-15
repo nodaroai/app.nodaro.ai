@@ -14,6 +14,8 @@
  *   0:45 → 20,  1:00 → 20,  1:01 → 40,  3:10 → 80,  30:00 → 600.
  */
 
+import { gracedMeasuredSec } from "../priced-clip-seconds.js"
+
 export const PITCH_TEMPO_PRICING = {
   /** The rate row: credits per started minute. Never reserved by itself. */
   RATE_CREDIT_ID: "pitch-tempo",
@@ -47,6 +49,18 @@ export function pitchTempoStartedMinutes(durationSec: number | null | undefined)
 /** `pitch-tempo:<N>m` — the id a run on an input of `durationSec` seconds reserves. */
 export function pitchTempoCreditId(durationSec: number | null | undefined): string {
   return `pitch-tempo:${pitchTempoStartedMinutes(durationSec)}m`
+}
+
+/**
+ * `pitch-tempo:<N>m` — the id a run HOLDS and is CHARGED for an input it
+ * measured at `measuredSec` seconds: the started minutes of the length less
+ * `CLIP_PRICE_GRACE_SEC` (0.05 s, decided 2026-11-14), so a file a hair past a
+ * minute is charged the minute its length is quoted at
+ * ({@link pitchTempoQuoteCreditId} reads the length exactly).
+ */
+export function pitchTempoHeldCreditId(measuredSec: number): string {
+  // Less a float-noise hair too (`gracedMeasuredSec`): 60.05 s less 0.05 s is 60.00000000000001, not past a minute.
+  return pitchTempoCreditId(Math.max(Number.MIN_VALUE, gracedMeasuredSec(measuredSec)))
 }
 
 /**

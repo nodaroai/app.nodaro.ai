@@ -5,13 +5,14 @@ import {
   parseNemotronTranscribeCreditId,
   NEMOTRON_TRANSCRIBE_ID,
   NEMOTRON_TRANSCRIBE_PRICING,
+  NEMOTRON_UPWARD_GRACE_SEC,
 } from "@nodaro/shared/credits"
 import { nemotronSecondsFromKieCredits } from "../providers/audio/nemotron-output.js"
 import { commitJobCredits, commitJobCreditsAtActualPrice } from "../workers/shared.js"
 
 /**
- * Nemotron 3.5 Transcribe is HELD at the minutes the file's header declares
- * (`lib/nemotron-transcribe-input.ts`) and CHARGED for the minutes KIE reports
+ * Nemotron 3.5 Transcribe is HELD at the minutes the file's header declares,
+ * less the grace below (`lib/nemotron-transcribe-input.ts`) and CHARGED for the minutes KIE reports
  * it decoded — its `duration`, in started minutes, with the hold's own
  * per-minute rounding (decided 2026-11-12). A header can misstate a file's
  * length (a VBR MP3 without a Xing header: 60 s declared for 3:00 decoded) and
@@ -33,14 +34,13 @@ import { commitJobCredits, commitJobCreditsAtActualPrice } from "../workers/shar
  * length measured before the run; and only then the hold itself — a 60-minute
  * hold on a file nobody could measure then committed whole is an `[ALERT]`.
  *
- * A grace of {@link NEMOTRON_UPWARD_GRACE_SEC} upward (decided 2026-11-12): a
- * KIE length at most that far past the held minutes' boundary (held `:1m`, KIE
- * 60.05 s) is charged the held minutes. Only upward; a shorter KIE length
- * still settles down.
+ * A grace of `NEMOTRON_UPWARD_GRACE_SEC` (one second, @nodaro/shared) upward
+ * (decided 2026-11-12): a KIE length at most that far past the held minutes'
+ * boundary (held `:1m`, KIE 60.05 s) is charged the held minutes. Only upward;
+ * a shorter KIE length still settles down. The hold takes the same second
+ * (`nemotronHeldMinutes`, @nodaro/shared): a file measured a hair past a minute
+ * is held at that minute, so the grace can settle it there.
  */
-
-/** How far past the held minutes' boundary a KIE length may run and still be charged the held minutes. */
-export const NEMOTRON_UPWARD_GRACE_SEC = 1
 
 /**
  * A family of per-started-minute ids a Nemotron run is held and charged on:

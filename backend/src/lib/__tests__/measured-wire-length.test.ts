@@ -29,6 +29,8 @@ import {
   MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC,
   VIDEO_LENGTH_RULES,
   LOSSLESS_TRIM_OVERSHOOT_SEC,
+  LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC,
+  VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC,
   VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC,
   generateVideoProLengthSec,
   measuredWireLengthSec,
@@ -271,12 +273,42 @@ describe("the slack: once on each clip a node makes in the run, carried on by th
     for (const type of ["generate-video", "generate-video-pro", "cinematic-avatar", "extend-video", "lip-sync", "ai-avatar", "motion-transfer", "video-to-video", "pro-3d-render", "ugc-clip", "ugc-finish-clips", "speed-ramp", "slideshow", "edit-video-pro", "face-swap", "video-retake", "video-upscale", "switchx", "video-mask", "video-depth", "voice-changer", "voice-changer-pro", "dubbing", "adjust-volume"]) expect(carriers, type).not.toContain(type)
   })
 
-  it("Voice Changer, Voice Changer Pro, Dubbing and Adjust Volume make a new file of what they are given: its length plus the slack", () => {
+  it("Voice Changer, Voice Changer Pro and Adjust Volume make a new file of what they are given: its length plus the slack", () => {
     const audio: N = { id: "a", type: "upload-audio", data: { url: "https://cdn.example/a.mp3", metadata: { durationSeconds: 8 } } }
-    for (const type of ["voice-changer", "voice-changer-pro", "dubbing", "adjust-volume"]) {
+    for (const type of ["voice-changer", "voice-changer-pro", "adjust-volume"]) {
       expect(read("n", [audio, { id: "n", type, data: {} }], [wire("a", "n", "audio")], MC), type).toBeCloseTo(8 + MC, 9)
       expect(read("n", [upload("u", 10), { id: "n", type, data: {} }], [wire("u", "n")], MC), type).toBeCloseTo(10 + MC, 9)
     }
+  })
+
+  it("a Dubbing's file runs further past its input: its length plus a quarter second, whatever the step's own slack", () => {
+    expect(LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC).toBe(0.25)
+    const audio: N = { id: "a", type: "upload-audio", data: { url: "https://cdn.example/a.mp3", metadata: { durationSeconds: 8 } } }
+    for (const slack of [MC, VO, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC]) {
+      expect(read("n", [audio, { id: "n", type: "dubbing", data: {} }], [wire("a", "n", "audio")], slack), String(slack)).toBeCloseTo(8.25, 9)
+      expect(read("n", [upload("u", 10), { id: "n", type: "dubbing", data: {} }], [wire("u", "n")], slack), String(slack)).toBeCloseTo(10.25, 9)
+    }
+    // A step that measures the video stream (Video Overlay, Video Upscale) keeps its own frame: a dub keeps its input's picture exactly.
+    const stream = (nodes: N[], edges: EstimateGraphEdge[]) => measuredWireLengthSec("n", nodes, edges, new Set(nodes.map((n) => n.id)), { plannedClipSlackSec: VO, reading: "video-stream" })
+    expect(stream([upload("u", 10), { id: "n", type: "dubbing", data: {} }], [wire("u", "n")])).toBeCloseTo(10 + VO, 9)
+    expect(stream([upload("u", 10), { id: "n", type: "audio-isolation", data: {} }], [wire("u", "n", "audio")])).toBeCloseTo(10 + VO, 9)
+    // Once, on the file it makes: a Trim after it carries it on, and a step that reads with no slack (Nemotron) adds none.
+    const chain: N[] = [upload("u", 10), { id: "n", type: "dubbing", data: {} }, { id: "t", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0 } }]
+    expect(read("t", chain, [wire("u", "n"), wire("n", "t", "in")], MC)).toBeCloseTo(10.25, 9)
+    expect(read("n", [upload("u", 10), { id: "n", type: "dubbing", data: {} }], [wire("u", "n")], 0)).toBe(10)
+    // A Dubbing that does not run hands on its take; its row records no length, so it is unknown (the step's cap or minimum).
+    expect(read("n", [upload("u", 10), { id: "n", type: "dubbing", data: { ...take(undefined) } }], [wire("u", "n")], MC, ["u"])).toBeUndefined()
+  })
+
+  it("a PixVerse V6 extension's file runs further past its source plus the seconds it adds: a quarter second; every other extend model, the step's slack", () => {
+    const ext = (provider: string): N => ({ id: "e", type: "extend-video", data: { provider, duration: 5 } })
+    for (const slack of [MC, VO, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC]) {
+      expect(read("e", [upload("u", 10), ext("pixverse-v6-extend")], [wire("u", "e")], slack), String(slack)).toBeCloseTo(15.25, 9)
+      expect(read("e", [upload("u", 10), ext("seedance-2-5-extend")], [wire("u", "e")], slack), String(slack)).toBeCloseTo(15 + slack, 9)
+    }
+    // Its picture runs past too (0.144 s measured): a step that measures the video stream takes the quarter second as well.
+    const nodes = [upload("u", 10), ext("pixverse-v6-extend")]
+    expect(measuredWireLengthSec("e", nodes, [wire("u", "e")], new Set(["u", "e"]), { plannedClipSlackSec: VO, reading: "video-stream" })).toBeCloseTo(15.25, 9)
   })
 
   it("a generated voice made again in the run: unknown, unless the caller asks for its take as a minimum (Lip Sync)", () => {

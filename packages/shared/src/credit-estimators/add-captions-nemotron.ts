@@ -21,6 +21,7 @@
  */
 import {
   NEMOTRON_TRANSCRIBE_PRICING,
+  nemotronHeldMinutes,
   nemotronTranscribeBaseCredits,
   nemotronTranscribeStartedMinutes,
 } from "./nemotron-transcribe.js"
@@ -37,9 +38,18 @@ export function addCaptionsNemotronMinutesId(minutes: number): string {
   return `${ADD_CAPTIONS_NEMOTRON_ID_PREFIX}:${n}m`
 }
 
-/** The id a Nemotron caption run on a video of `durationSec` seconds holds (its started minutes). */
+/** The id of a Nemotron caption run on a video of `durationSec` seconds' started minutes (the price of that length; a quote names it). */
 export function addCaptionsNemotronCreditId(durationSec: number | null | undefined): string {
   return addCaptionsNemotronMinutesId(nemotronTranscribeStartedMinutes(durationSec))
+}
+
+/**
+ * The id a Nemotron caption run on a video it measured at `measuredSec`
+ * seconds HOLDS: the started minutes less the one second its charge forgives
+ * (`nemotronHeldMinutes`, the Transcribe node's own rule).
+ */
+export function addCaptionsNemotronHeldCreditId(measuredSec: number): string {
+  return addCaptionsNemotronMinutesId(nemotronHeldMinutes(measuredSec))
 }
 
 /**

@@ -321,6 +321,20 @@ describe("POST /v1/switchx", () => {
     expect(modelId).toBe("beeble-switchx:90f:1080p")
   })
 
+  // A frame count is the server's own reading, never a field a client sends (decided 2026-11-14).
+  it("a client-sent __probedFrameCount and __trimSourceToFrames are ignored: a 30-frame claim on a 90-frame clip holds the 90f tier, nothing trimmed", async () => {
+    mockProbeVideoFrames.mockResolvedValueOnce({ frames: 90, width: 1280, height: 720 })
+    mockJobInsert({ data: { id: "job-claim" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/switchx",
+      payload: { videoUrl: VALID_VIDEO_URL, prompt: "relight", alphaMode: "auto", userId: VALID_USER_ID, __probedFrameCount: 30, __trimSourceToFrames: 10 },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]?.[3]).toBe("beeble-switchx:90f:1080p")
+    expect(videoQueue.add).toHaveBeenCalledWith("switchx", expect.objectContaining({ trimSourceToFrames: undefined }))
+  })
+
   it("still reserves (worst-case 240f tier) and enqueues when the probe FAILS", async () => {
     mockProbeVideoFrames.mockRejectedValueOnce(new Error("ffprobe blew up"))
     mockJobInsert({ data: { id: "job-probefail" }, error: null })

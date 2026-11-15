@@ -220,6 +220,17 @@ export function utilityOutputLength(
       // Audio is stretched by 1 / tempo (at most ×2, tempo ≥ 0.5) and a video
       // passes through whole (tempo is fixed at 1× there); which one the run
       // gets is not known before it, so the longer of the two is passed on.
+      //
+      // With no slack, unlike the steps that re-render their input (the
+      // `remakeMedia` rows: a measuring step's slack is added after them), by
+      // measurement: on the production-pinned ffmpeg 8.1.2 the output decodes
+      // to exactly its input's samples for MP3 and WAV at tempo 1, to at most
+      // its input's for AAC, and to the input ÷ tempo or a little under at
+      // another tempo; the video lane cuts its sound to the picture's length
+      // (`apad,atrim`). The audio lane's MP3 reads as long as it decodes (a
+      // 60.000 s WAV → 60.000000 s, container and decode, on 9.0.2 too). A
+      // slack here would lift every quote after it at a whole second, minute or
+      // row for a length the run never makes.
       if (!known) return input
       const tempo = num(data.tempo)
       const stretch = tempo !== undefined && tempo > 0 ? 1 / Math.min(1, Math.max(0.5, tempo)) : 1

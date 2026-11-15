@@ -99,11 +99,14 @@ describe("OmniHuman 2.0 pricing at the 10% markup", () => {
     expect(await CreditsService.getModelCreditCost(unitQuoteCreditId(ID, 11))).toBe(370)
   })
 
-  it("the server's run estimate: the wired audio's billed seconds, else the 5-minute ceiling", async () => {
+  // Unknown audio: the editor's minimum, the 15-second stand-in (decided 2026-11-14) — no longer the 5-minute ceiling.
+  it("the server's run estimate: the wired audio's billed seconds, else the 15-second minimum", async () => {
     const node = { id: "x", type: "lip-sync", data: { provider: "omnihuman-2-0" } }
     const upload = { id: "a", type: "upload-audio", data: { url: "https://m.test/a.mp3", metadata: { durationSeconds: 3.2 } } }
     const edges = [{ source: "a", target: "x", targetHandle: "audio" }]
     expect(await CreditsService.estimateWorkflowCredits([upload, node], edges)).toBe(154)
-    expect(await CreditsService.estimateWorkflowCredits([node], [])).toBe(11550)
+    expect(await CreditsService.estimateWorkflowCredits([node], [])).toBe(578)
+    // With no audio to play, the length the node measured at its last run, as the editor reads it.
+    expect(await CreditsService.estimateWorkflowCredits([{ ...node, data: { ...node.data, audioDurationSec: 9.5 } }], [])).toBe(385)
   })
 })

@@ -37,6 +37,7 @@ vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: mockGetAppSettings }))
 
 import { computeLipSyncRateCreditOverride } from "../node-executor.js"
 import { buildPayload } from "../payload-builder.js"
+import type { FastifyRequest } from "fastify"
 import { lipSyncComputeCredits } from "../../../routes/lip-sync.js"
 import { applyServiceMarkup } from "../../../ee/billing/service-margin.js"
 
@@ -61,7 +62,9 @@ describe("computeLipSyncRateCreditOverride", () => {
 
   it("is exactly what the route's guard holds for the same measured audio (computeCredits, marked up once)", async () => {
     for (const seconds of [4, 7, 11, 299, 300]) {
-      const routeBase = await lipSyncComputeCredits({ provider: "omnihuman-2-0", __lipSyncBilledSeconds: seconds })
+      // The measure the route's measuring step keeps on the request (server-side, never the body).
+      const req = { requestMeasures: { lipSyncAudio: { audioSec: seconds, billedSeconds: seconds } } } as unknown as FastifyRequest
+      const routeBase = await lipSyncComputeCredits({ provider: "omnihuman-2-0" }, req)
       const routeHold = applyServiceMarkup(routeBase!, SETTINGS as never, ID)
       expect(await computeLipSyncRateCreditOverride("lip-sync", { provider: "omnihuman-2-0", lipSyncBilledSeconds: seconds }, ID)).toBe(routeHold)
     }
@@ -69,15 +72,17 @@ describe("computeLipSyncRateCreditOverride", () => {
 
   it("a rate run that was never measured is refused, never priced at a guess — on both lanes", async () => {
     await expect(computeLipSyncRateCreditOverride("lip-sync", { provider: "omnihuman-2-0", audioDurationSec: 10 }, ID)).rejects.toThrow(/measured audio/)
-    await expect(lipSyncComputeCredits({ provider: "omnihuman-2-0", audioDurationSec: 10 })).rejects.toThrow(/measured audio/)
+    await expect(lipSyncComputeCredits({ provider: "omnihuman-2-0", audioDurationSec: 10 }, {} as FastifyRequest)).rejects.toThrow(/measured audio/)
+    // A length a client writes on the body under the measure's old name is never read.
+    await expect(lipSyncComputeCredits({ provider: "omnihuman-2-0", __lipSyncBilledSeconds: 4 }, {} as FastifyRequest)).rejects.toThrow(/measured audio/)
   })
 
   it("leaves every other model and job alone (their rows price them as before)", async () => {
     expect(await computeLipSyncRateCreditOverride("lip-sync", { provider: "omnihuman-1-5", audioDurationSec: 10 }, "omnihuman-1-5:15s")).toBeUndefined()
     expect(await computeLipSyncRateCreditOverride("lip-sync", { provider: "kling-avatar" }, "kling-avatar")).toBeUndefined()
     expect(await computeLipSyncRateCreditOverride("image-to-video", { provider: "omnihuman-2-0", lipSyncBilledSeconds: 4 }, ID)).toBeUndefined()
-    expect(await lipSyncComputeCredits({ provider: "omnihuman-1-5", audioDurationSec: 10 })).toBeUndefined()
-    expect(await lipSyncComputeCredits({})).toBeUndefined()
+    expect(await lipSyncComputeCredits({ provider: "omnihuman-1-5", audioDurationSec: 10 }, {} as FastifyRequest)).toBeUndefined()
+    expect(await lipSyncComputeCredits({}, {} as FastifyRequest)).toBeUndefined()
   })
 })
 

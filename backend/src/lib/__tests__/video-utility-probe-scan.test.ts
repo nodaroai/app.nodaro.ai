@@ -20,7 +20,7 @@ vi.mock("node:child_process", async (importOriginal) => ({
   execFile: h.execFile,
 }))
 
-import { probeClipLengthSec } from "../video-utility-probe.js"
+import { probeClipLengthSec, probeClipReading } from "../video-utility-probe.js"
 
 const PACKETS = 300_001
 const FPS = 60
@@ -97,5 +97,32 @@ describe("a recording with no length in its header, read from its packets", () =
     const pending = probeClipLengthSec("/tmp/slow.webm", { signal: stop.signal }).then(() => undefined, (e: unknown) => e as { aborted?: boolean })
     setTimeout(() => stop.abort(), 10)
     expect((await pending)?.aborted).toBe(true)
+  })
+})
+
+describe("the frame rate read with the length (decided 2026-11-14: frame trims are cut at it)", () => {
+  /** The header read: a video stream with a length and `r_frame_rate`. */
+  function header(rFrameRate: string | undefined) {
+    h.execFile.mockImplementation((_cmd: string, args: string[], _opts: unknown, cb: (e: null, out: string, err: string) => void) => {
+      // One read gives both: the rate is asked for in the same call as the length.
+      expect(args.join(" ")).toContain("r_frame_rate")
+      cb(null, JSON.stringify({ streams: [{ index: 0, codec_type: "video", duration: "12.000000", ...(rFrameRate === undefined ? {} : { r_frame_rate: rFrameRate }) }], format: { duration: "12.040000" } }), "")
+      return {}
+    })
+  }
+
+  it.each([
+    ["30000/1001", 30000 / 1001],
+    ["25/1", 25],
+    ["60", 60],
+  ])("%s is read as the stream's rate", async (expr, fps) => {
+    header(expr)
+    await expect(probeClipReading("/tmp/clip.mp4")).resolves.toEqual({ sec: 12.04, fps })
+  })
+
+  it.each([["0/0"], ["30/0"], ["n/a"], [undefined]])("%s is no rate: the length alone", async (expr) => {
+    header(expr)
+    await expect(probeClipReading("/tmp/clip.mp4")).resolves.toEqual({ sec: 12.04 })
+    await expect(probeClipLengthSec("/tmp/clip.mp4")).resolves.toBe(12.04)
   })
 })

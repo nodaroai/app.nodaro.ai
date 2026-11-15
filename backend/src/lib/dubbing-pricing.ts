@@ -5,6 +5,7 @@ import { DUBBING_MAX_DURATION_SEC } from "../providers/elevenlabs/dubbing.js"
 import { getAppSettings } from "./app-settings.js"
 import { hasCredits } from "./config.js"
 import { dubbingBaseCredits, dubbingReservePlan, effectiveDubbedSeconds, measureDubbingSourceSec } from "./dubbing-duration.js"
+import { dubbingHeldMinutes } from "./dubbing-span.js"
 
 /** A dub the route would refuse, refused before a workflow run reserves anything. */
 export interface DubbingRefusal {
@@ -78,5 +79,5 @@ export async function projectDubbingCreditOverride(jobName: string, payload: Rec
   payload.probedDurationSec = Math.ceil(seconds)
   const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
   const { creditCost } = await getModelCreditBaseCost("elevenlabs-dubbing-v2")
-  return applyServiceMarkup(creditCost * Math.ceil(seconds / 60), await getAppSettings(), "elevenlabs-dubbing-v2")
+  return applyServiceMarkup(creditCost * dubbingHeldMinutes(seconds), await getAppSettings(), "elevenlabs-dubbing-v2")
 }

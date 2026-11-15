@@ -24,6 +24,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
 import { extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -64,22 +65,31 @@ async function internalChildOnly(req: FastifyRequest, reply: FastifyReply): Prom
   if (!createsChildJob(req)) return void reply.code(403).send(INTERNAL_ONLY)
 }
 
+/** The body field the units were once stashed under: a client's copy is dropped, never read. */
+const UNITS_FIELD = "__maskEraseUnits"
+/** The request measure the units are kept under (server-side only, `lib/request-measure.ts`). */
+const MEASURE = "maskEraseUnits"
+
 /**
  * Measures the mask before the credit guard prices it (the URL validated
  * first, so nothing unsafe is probed), refuses one that cannot be read or is
- * too long (400, before anything is reserved), and stashes the unit count.
+ * too long (400, before anything is reserved), and keeps the unit count on
+ * the server-side request — never the body, whose field of the old stash name
+ * is dropped first.
  */
 async function measureMaskPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  dropClientMeasureFields(req.body, [UNITS_FIELD])
   const body = (req.body ?? {}) as Record<string, unknown>
   const url = safeUrlSchema.safeParse(body.maskUrl)
   if (!url.success) return // the handler's Zod parse answers it
   const measured = await measureMaskEraseLength(url.data)
   if (!measured.ok) return void reply.code(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
-  body.__maskEraseUnits = measured.units
+  setRequestMeasure(req, MEASURE, measured.units)
 }
 
-const stashedUnits = (body: unknown): number => {
-  const u = (body as Record<string, unknown> | undefined)?.__maskEraseUnits
+/** The units the preHandler measured; 1 when it measured nothing (a body the handler's parse refuses). */
+const measuredUnits = (req: FastifyRequest): number => {
+  const u = requestMeasure<number>(req, MEASURE)
   return typeof u === "number" && u >= 1 ? u : 1
 }
 
@@ -89,11 +99,11 @@ export async function maskEraseRoutes(app: FastifyInstance) {
       internalChildOnly,
       measureMaskPreHandler,
       // BASE credits = the one-unit row × the measured units; creditGuard applies the markup.
-      creditGuard(() => "mask-erase", { computeCredits: async (body) => maskEraseBaseCredits(stashedUnits(body)) }),
+      creditGuard(() => "mask-erase", { computeCredits: async (_body, req) => maskEraseBaseCredits(measuredUnits(req)) }),
     ],
   }, async (req, reply) => {
-    const { __maskEraseUnits: billedUnits, ...raw } = (req.body ?? {}) as Record<string, unknown>
-    const parsed = maskEraseBody.safeParse(raw)
+    const billedUnits = requestMeasure<number>(req, MEASURE)
+    const parsed = maskEraseBody.safeParse(req.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }

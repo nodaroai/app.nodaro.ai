@@ -12,7 +12,14 @@
  * read the clip's real length. Other models round as they always have.
  */
 
-/** How far past a whole second a clip is still priced as that second. */
+/**
+ * How far past a whole second a clip is still priced as that second — and how
+ * far past a mark a measured file may run and still be HELD and CHARGED at
+ * that mark by the steps that measure their input and round with no grace of
+ * their own (decided 2026-11-14: Video SFX's rows, Pitch & Tempo's and
+ * Dubbing's minutes, OmniHuman 2.0's seconds). Their quotes read the length
+ * exactly, so a quote is never below the charge of a file up to this past it.
+ */
 export const CLIP_PRICE_GRACE_SEC = 0.05
 
 /**
@@ -21,6 +28,17 @@ export const CLIP_PRICE_GRACE_SEC = 0.05
  * 4.050000000000001: 4, not 5.
  */
 const FLOAT_NOISE_SEC = 1e-9
+
+/**
+ * A measured length less the hair its hold and charge forgive
+ * (`CLIP_PRICE_GRACE_SEC`) and less float noise: the ONE arithmetic Video
+ * SFX's, Pitch & Tempo's, Dubbing's and OmniHuman 2.0's held rows are read
+ * from. It can be 0 or below for a file under the grace; each caller keeps its
+ * own floor.
+ */
+export function gracedMeasuredSec(measuredSec: number): number {
+  return measuredSec - CLIP_PRICE_GRACE_SEC - FLOAT_NOISE_SEC
+}
 
 /** At least one second. The caller has checked that `sec` is a real length. */
 export function pricedClipSeconds(sec: number): number {
