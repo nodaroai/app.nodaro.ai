@@ -4,6 +4,7 @@ import {
   ADD_CAPTIONS_NEMOTRON_ID_PREFIX,
   addCaptionsNemotronBaseCredits,
   addCaptionsNemotronCreditId,
+  addCaptionsNemotronHeldCreditId,
   addCaptionsNemotronMinutesId,
   addCaptionsNemotronQuoteCreditId,
   parseAddCaptionsNemotronCreditId,
@@ -32,8 +33,19 @@ describe("Add Captions on Nemotron 3.5 Transcribe: one charge, render + per minu
     [61, 2],
     [600, 10],
     [3600, 60],
-  ])("a %s s video holds %s started minutes", (sec, minutes) => {
+  ])("a %s s video is priced at %s started minutes", (sec, minutes) => {
     expect(parseAddCaptionsNemotronCreditId(addCaptionsNemotronCreditId(sec))).toEqual({ minutes })
+  })
+
+  it.each([
+    [45, 1],
+    [60.011, 1], // a hair past a minute: the minute below, as the charge settles it
+    [61, 1],
+    [61.5, 2],
+    [600, 10],
+    [3600, 60],
+  ])("a video measured at %s s holds %s minutes (the charge's 1 s grace)", (sec, minutes) => {
+    expect(parseAddCaptionsNemotronCreditId(addCaptionsNemotronHeldCreditId(sec))).toEqual({ minutes })
   })
 
   it("an unknown length is quoted at 60 minutes, a known one at its own minutes", () => {

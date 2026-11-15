@@ -151,7 +151,12 @@ describe("the docs state the Video SFX listing", () => {
     (rel) => {
       const text = read(rel)
       expect(text, rel).toMatch(/(generated video|another node makes)[^.]*(will render|will produce)/)
-      expect(text, rel).toMatch(/a tenth of a second/)
+      // The slack each clip made adds: 0.15 s for Trim, Loop and Combine Videos (VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC), 0.1 s for Video SFX.
+      if (rel === "nodes/ai-video/video-sfx.md") expect(text, rel).toMatch(/a tenth of a second/)
+      else {
+        expect(text, rel).toMatch(new RegExp(`${String(VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC).replace(".", "\\.")} seconds`))
+        expect(text, rel).toMatch(new RegExp(`Video SFX[^.]*${String(MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["video-sfx"]).replace(".", "\\.")} seconds`))
+      }
       expect(text, rel).not.toMatch(/generated video[^.]*configured duration/)
       expect(text, rel).not.toMatch(/generated video[^.]*8-second bucket/)
     },

@@ -1,5 +1,5 @@
 // @test-watches packages/shared/src/__tests__/fixtures/video-utility-quote-parity.json
-// @test-units-by-name prices the node types its fixture names (trim-video, loop-video, combine-videos, generate-video, image-to-video, extend-video, upload-video, duration, llm-chat)
+// @test-units-by-name prices the node types its fixture names (trim-video, loop-video, combine-videos, generate-video, image-to-video, extend-video, upload-video, duration, llm-chat, dubbing, voice-changer)
 /**
  * Trim Video, Loop Video and Combine Videos are charged the length their run
  * measures, so the server's workflow estimate quotes them at the units the
@@ -16,7 +16,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
-import { VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC } from "@nodaro/render-rules"
+import { VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PRICE_GRACE_SEC } from "@nodaro/render-rules"
 import { CreditsService, STATIC_CREDIT_COSTS, type ChargedPriceTable } from "../credits.js"
 
 type StepKey = "trim" | "loop" | "combine"
@@ -53,8 +53,9 @@ function stepUnits(c: ParityCase, run: "whole" | "alone" | "partial"): number | 
 const rows = F.cases.map((c) => [c.name, c] as const)
 
 describe("the server's workflow estimate of a Trim, Loop or Combine Videos equals the editor's quote, read from the measured walk", () => {
-  it("the slack is Mask Composite's (both charge the container), and every step's one-unit row is priced", () => {
-    expect(VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC).toBe(0.1)
+  it("the slack is the price grace, 0.15 s (a made clip's container was measured up to 0.104 s past its length), and every step's one-unit row is priced", () => {
+    expect(VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC).toBe(0.15)
+    expect(VIDEO_UTILITY_PRICE_GRACE_SEC).toBe(VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC)
     for (const step of Object.values(F.steps)) expect(STATIC_CREDIT_COSTS[step.type]).toBeGreaterThan(0)
     expect(new Set(F.cases.map((c) => c.step))).toEqual(new Set(["trim", "loop", "combine"]))
   })

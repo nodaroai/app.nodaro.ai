@@ -3,7 +3,8 @@
 import { useT } from "@/lib/i18n"
 import { memo, useState, useRef, useEffect, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { UserRound, Loader2, AlertCircle, AlertTriangle, Film, Volume2, Type, Image as ImageIcon, Expand, Download, Link, X, LayoutGrid, Scissors, Settings } from "lucide-react"
+import { UserRound, Loader2, AlertCircle, AlertTriangle, Film, Volume2, Type, Image as ImageIcon, Expand, Download, Link, X, LayoutGrid, Settings } from "lucide-react"
+import { EditVideoButton } from "./edit-video-button"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -20,7 +21,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import type { AiAvatarData } from "@/types/nodes"
 import { isValidAiAvatarConnection } from "@/lib/video-producer-handles"
 import { isVisualPickerType } from "@/lib/parameter-picker-types"
-import { resolveAiAvatarCreditId } from "@nodaro/shared/credits"
+import { aiAvatarCreditIdOf } from "@nodaro/render-rules"
 import { AiAvatarSetupBody } from "./ai-avatar/ai-avatar-setup-body"
 import { AiAvatarNewRunToggle } from "./ai-avatar/new-run-toggle"
 
@@ -71,10 +72,11 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
     useResultAspectRatio(id, results, activeIndex)
 
   // Exact-bucket reserve id from the shared single source of truth (mirrors
-  // cinematic-avatar-node). resolveAiAvatarCreditId always returns a seeded id
-  // (∈ AI_AVATAR_RESERVE_IDS), so the cost preview never hits the 503
-  // price-not-configured trap the old hand-built `:max` id caused.
-  const creditModelId = resolveAiAvatarCreditId(nodeData)
+  // cinematic-avatar-node), the server's own (`aiAvatarCreditIdOf`): it always
+  // returns a seeded id (∈ AI_AVATAR_RESERVE_IDS), so the cost preview never
+  // hits the 503 price-not-configured trap the old hand-built `:max` id caused,
+  // and never reads a probed length the node's data carries.
+  const creditModelId = aiAvatarCreditIdOf(nodeData as unknown as Record<string, unknown>)
   const credits = useModelCredits(creditModelId, 9)
 
   useEffect(() => {
@@ -262,12 +264,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
                 title={t("cfgshared.copyUrl")}>
                 <Link className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label={t("node.editInNodarcut")}
-                className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }}
-                title={t("node.editInNodarcut")}>
-                <Scissors className="w-3.5 h-3.5" />
-              </button>
+              <EditVideoButton onEdit={() => openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl)} />
             </div>
 
             {/* Bottom right: settings */}

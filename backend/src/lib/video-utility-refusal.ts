@@ -45,7 +45,8 @@ export function videoUtilityUnpricedRefusal(jobName: string, billedUnits: unknow
  * The render's check, from `job` (the queue payload: the node's settings, the
  * `billedUnits` it was charged and the lengths it was charged for) and the
  * container length of each clip it downloaded (`durationsSec`, in the order of
- * its inputs): the units those clips cost by the node's own formula, each clip
+ * its inputs) and the frame rate its worker cuts each by (`clipFps`, the same
+ * order): the units those clips cost by the node's own formula, each clip
  * first shortened by {@link VIDEO_UTILITY_REMEASURE_SLACK_SEC}, must not exceed
  * the units charged. A clip that has grown past its price since (a link that
  * served a short file to the price probe and a long one to the download) is
@@ -56,12 +57,13 @@ export function videoUtilityRefusalForCharge(
   jobName: string,
   job: Readonly<Record<string, unknown>>,
   durationsSec: readonly number[],
+  clipFps: ReadonlyArray<number | undefined> = [],
 ): VideoUtilityChargeRefusal | undefined {
   const unpriced = videoUtilityUnpricedRefusal(jobName, job.billedUnits)
   if (unpriced) return unpriced
   const billedUnits = job.billedUnits as number
   const remeasured = durationsSec.map((sec) => Math.max(sec - VIDEO_UTILITY_REMEASURE_SLACK_SEC, MIN_POSITIVE_SEC))
-  const units = videoUtilityUnits(jobName, withMeasuredInputLengths(jobName, job, remeasured)) ?? 0
+  const units = videoUtilityUnits(jobName, withMeasuredInputLengths(jobName, job, remeasured), clipFps) ?? 0
   if (units <= billedUnits) return undefined
   // Name the clip that grew: the first whose re-measure is past the length it was priced at.
   const priced = jobName === "combine-videos" ? (Array.isArray(job.upstreamDurations) ? job.upstreamDurations : []) : [job.upstreamDuration]

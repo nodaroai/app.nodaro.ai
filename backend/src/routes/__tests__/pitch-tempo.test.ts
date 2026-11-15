@@ -103,12 +103,21 @@ describe("POST /v1/pitch-tempo", () => {
 
   it.each([
     [60, "pitch-tempo:1m"],
-    [60.01, "pitch-tempo:2m"],
+    // A hair past a minute is forgiven (the charge grace, 0.05 s, decided 2026-11-14); past it, the next minute.
+    [60.01, "pitch-tempo:1m"],
+    [60.05, "pitch-tempo:1m"],
+    [60.06, "pitch-tempo:2m"],
     [1800, "pitch-tempo:30m"],
   ])("a %ss input reserves %s", async (sec, id) => {
     state.probe = async () => sec
     await post({ audioUrl: "https://cdn.example.com/a.mp3" })
     expect(state.reserveIds).toEqual([id])
+  })
+
+  it("a client cannot pick its minutes: a body naming __probedDuration 1 for a 61 s input reserves the measured 2 minutes", async () => {
+    state.probe = async () => 61
+    await post({ audioUrl: "https://cdn.example.com/a.mp3", __probedDuration: 1 })
+    expect(state.reserveIds).toEqual(["pitch-tempo:2m"])
   })
 
   it("refuses an input over 30 minutes before the guard, with no job", async () => {

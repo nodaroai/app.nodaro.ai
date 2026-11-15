@@ -5,12 +5,13 @@ import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
+import { AI_AVATAR_PROBED_FIELD, aiAvatarCreditIdOf } from "../lib/probed-credit-ids.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { probeSoundLengthSec } from "../lib/video-utility-probe.js"
 import { PRE_CHARGE_PROBE_TIMEOUT_MS, ROUTE_MEASURE_DEADLINE_MS } from "../lib/pre-charge-probe-bounds.js"
-import { resolveAiAvatarCreditId } from "@nodaro/shared/credits"
 import { sendInternalError } from "../lib/http-errors.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 import { probeLinkRefusal, probeRefusalStatus } from "../providers/video/probe-guard.js"
@@ -124,11 +125,24 @@ const aiAvatarBody = z
     }
   })
 
+/** The request measure the probed audio seconds are kept under (server-side only, `lib/request-measure.ts`). */
+const AUDIO_MEASURE = "aiAvatarAudioSec"
+
+/** The audio seconds this request's preHandler measured, or `undefined` (text mode, no audio, a failed probe). */
+export function measuredAiAvatarAudioSec(req: FastifyRequest): number | undefined {
+  return requestMeasure<number>(req, AUDIO_MEASURE)
+}
+
+/** The credit id the guard and the reservation hold: the body's settings and the audio length the server measured (`aiAvatarCreditIdOf`). */
+const aiAvatarCreditIdOfRequest = (req: FastifyRequest): string =>
+  aiAvatarCreditIdOf(req.body as Record<string, unknown> | undefined, measuredAiAvatarAudioSec(req))
+
 /**
  * Fastify preHandler: in AUDIO mode, ffprobes the input audio to measure its
- * real duration and stashes ceil(duration) on the raw request body as
- * `__probedDurationSec`. This MUST run BEFORE the creditGuard preHandler so
- * `resolveAiAvatarCreditId` (which reads the raw body) buckets the credit
+ * real duration and keeps ceil(duration) on the server-side request
+ * (`measuredAiAvatarAudioSec`) — never the body, whose `__probedDurationSec`
+ * (a client could send one) is dropped first. This MUST run BEFORE the
+ * creditGuard preHandler so the credit id (`aiAvatarCreditIdOf`) buckets the
  * reserve by the ACTUAL clip length instead of the modest 120s default.
  *
  * Without a probe, audio-mode reserve falls back to 120s (resolveAiAvatarCreditId)
@@ -136,7 +150,7 @@ const aiAvatarBody = z
  * over-reservation (~4020 credits held for a ~$0.75 clip).
  *
  * Without an audioUrl the route's schema takes (or outside audio mode) nothing
- * is probed and `__probedDurationSec` stays unset: the handler's validation
+ * is probed and no length is recorded: the handler's validation
  * answers a bad one. The sound's length is read as Trim reads a clip
  * (`probeSoundLengthSec`): from the header, and for a recording whose header
  * carries none (a WebM a browser recorded) from its last audio packet,
@@ -153,6 +167,7 @@ export async function probeAudioDurationPreHandler(
   req: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {
+  dropClientMeasureFields(req.body, [AI_AVATAR_PROBED_FIELD])
   const body = (req.body ?? {}) as Record<string, unknown>
   if (body.speechMode !== "audio") return
   const audioUrl = body.audioUrl
@@ -162,7 +177,7 @@ export async function probeAudioDurationPreHandler(
     // Its sound's length, read as Trim reads a clip: the header, else (a recording a browser made) its last audio packet.
     const duration = await probeSoundLengthSec(audioUrl, { timeoutMs: PRE_CHARGE_PROBE_TIMEOUT_MS, deadlineAt: Date.now() + ROUTE_MEASURE_DEADLINE_MS })
     if (Number.isFinite(duration) && duration > 0) {
-      body.__probedDurationSec = Math.ceil(duration)
+      setRequestMeasure(req, AUDIO_MEASURE, Math.ceil(duration))
     }
   } catch (err) {
     req.log.warn({ err }, "ai-avatar: audio ffprobe failed; refusing the run")
@@ -178,14 +193,12 @@ export async function aiAvatarRoutes(app: FastifyInstance) {
   app.post(
     "/v1/ai-avatar",
     {
-      // Order matters: probe stashes __probedDurationSec on the raw body so the
-      // creditGuard's resolveAiAvatarCreditId can bucket the reserve by the
-      // ACTUAL audio duration. The probe MUST run first.
+      // Order matters: the probe records the audio's length on the request so
+      // the creditGuard's credit id can bucket the reserve by the ACTUAL audio
+      // duration. The probe MUST run first.
       preHandler: [
         probeAudioDurationPreHandler,
-        creditGuard((req) =>
-          resolveAiAvatarCreditId(req.body as Record<string, unknown> | undefined),
-        ),
+        creditGuard(aiAvatarCreditIdOfRequest),
       ],
     },
     async (req, reply) => {
@@ -243,12 +256,9 @@ export async function aiAvatarRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, error, "Failed to create job")
       }
 
-      // Resolve from the RAW body (not parsed.data) so the reserve matches the
-      // creditGuard check: Zod strips the preHandler-stashed __probedDurationSec,
-      // so resolving from parsed.data would lose the audio-probe bucket and fall
-      // back to 120s — a mismatch with the preHandler's affordance check. The
-      // raw body retains __probedDurationSec.
-      const modelId = resolveAiAvatarCreditId(req.body as Record<string, unknown> | undefined)
+      // The same id the creditGuard checked: the body's settings and the audio
+      // length the preHandler measured (never one the body carries).
+      const modelId = aiAvatarCreditIdOfRequest(req)
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelId)
       if (reply.sent) return

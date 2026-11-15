@@ -1,5 +1,5 @@
 {
-  "$comment": "Trim Video, Loop Video and Combine Videos are charged by the measured length of each clip they are given (their run probes every input before it reserves). Their quote before a run reads the one measured walk Mask Composite and Video Overlay read (measuredWireLengthSec, @nodaro/render-rules), with VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC (0.1 s) on each clip a node makes in the run, and every clip less VIDEO_UTILITY_PRICE_GRACE_SEC (0.1 s) before the node's formula (videoUtilityUnitsOf — the rule the charge counts by, so a frame past a 5-second mark is free on both): a generation at the length its model renders for its settings (Auto at its longest, a mapped length as the run resolves it), an Extend Video at its source plus what it adds, a node outside the run (or frozen) at the take it hands on, an upload or a Library clip at its measured length, and a clip nothing can size at the estimators' 8-second fallback (a minimum: the run is charged the length it measures). Each case names its step `t`; `whole` is a whole run (the editor's whole-run set, the server's estimate with no run set), `alone` is the step's own Run and its pill (the server's run of `t` alone), `partial` a run of exactly `runSet`. Units are the step's pricing units (each one unit of its own row). Held by frontend/src/lib/__tests__/video-utility-quote-parity.test.ts and backend/src/ee/billing/__tests__/video-utility-quote-parity.test.ts. The step settings: Trim keeps the whole clip (seconds mode, 0 + 0), Loop repeats twice, Combine joins by cuts with its default 1 + 2 frame trims. A case's `stepData` replaces its step's settings; a Trim is priced over the fields its run sends (trimVideoRunFields: its mode's own, an end of 0 left open, so the cut runs to the clip's end).",
+  "$comment": "Trim Video, Loop Video and Combine Videos are charged by the measured length of each clip they are given (their run probes every input before it reserves). Their quote before a run reads the one measured walk Mask Composite and Video Overlay read (measuredWireLengthSec, @nodaro/render-rules), with VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC (0.15 s) on each clip a node makes in the run (a quarter second on a Dubbing, an Audio Isolation or a PixVerse V6 extension, whose files run further past their planned length: LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC), and every clip less VIDEO_UTILITY_PRICE_GRACE_SEC (0.15 s) before the node's formula (videoUtilityUnitsOf — the rule the charge counts by, so a clip up to 0.15 s past a 5-second mark is priced as if it ended on it, on both): a generation at the length its model renders for its settings (Auto at its longest, a mapped length as the run resolves it), an Extend Video at its source plus what it adds, a node outside the run (or frozen) at the take it hands on, an upload or a Library clip at its measured length, and a clip nothing can size at the estimators' 8-second fallback (a minimum: the run is charged the length it measures). Each case names its step `t`; `whole` is a whole run (the editor's whole-run set, the server's estimate with no run set), `alone` is the step's own Run and its pill (the server's run of `t` alone), `partial` a run of exactly `runSet`. Units are the step's pricing units (each one unit of its own row). Held by frontend/src/lib/__tests__/video-utility-quote-parity.test.ts and backend/src/ee/billing/__tests__/video-utility-quote-parity.test.ts. The step settings: Trim keeps the whole clip (seconds mode, 0 + 0), Loop repeats twice, Combine joins by cuts with its default 1 + 2 frame trims, taken off only where two clips meet (decided 2026-11-14, \"charge what is cut\": the end of every clip but the last and the start of every clip but the first, n − 1 joins), cut at the rate the join conforms its clips to when the graph knows every clip's (an upload's declared `fps`: `runWireFps`), else none cut — the uncut clips, a bound (decided 2026-11-14: frame trims at the clip's real rate; the run cuts at the rate it probes). A Trim's frame trims are cut at its clip's rate the same way. A Combine's quote reads the fields a workflow run sends (combineVideosRunFields: its defaults, never per-join `transitions`, which only a request to the route carries). A case's `stepData` replaces its step's settings; a Trim is priced over the fields its run sends (trimVideoRunFields: its mode's own, an end of 0 left open, so the cut runs to the clip's end).",
   "steps": {
     "trim": {
       "type": "trim-video",
@@ -28,7 +28,7 @@
   },
   "cases": [
     {
-      "name": "1. Trim — a 5 s generation (kling-4): 5.1 s planned, less the 0.1 s grace: 5 s",
+      "name": "1. Trim — a 5 s generation (kling-4): 5.15 s planned, less the 0.15 s grace: 5 s",
       "step": "trim",
       "nodes": [
         {
@@ -53,7 +53,7 @@
       }
     },
     {
-      "name": "1b. Loop ×2 — a 5 s generation: 10.2 s",
+      "name": "1b. Loop ×2 — a 5 s generation: twice 5.15 s, less the grace: 10 s",
       "step": "loop",
       "nodes": [
         {
@@ -78,7 +78,7 @@
       }
     },
     {
-      "name": "1c. Combine — two 5 s generations: 5.1 + 5.1 s, less 3 frames each",
+      "name": "1c. Combine — two 5 s generations: 5.15 + 5.15 s, less the grace: 10 s (no rate the graph knows: no frames cut)",
       "step": "combine",
       "nodes": [
         {
@@ -116,7 +116,7 @@
       }
     },
     {
-      "name": "2. Trim — a 15 s generation (the old 8-second under-quote): 15.1 s",
+      "name": "2. Trim — a 15 s generation (the old 8-second under-quote): 15.15 s",
       "step": "trim",
       "nodes": [
         {
@@ -141,7 +141,7 @@
       }
     },
     {
-      "name": "2b. Loop ×2 — a 15 s generation: 30.2 s",
+      "name": "2b. Loop ×2 — a 15 s generation: twice 15.15 s",
       "step": "loop",
       "nodes": [
         {
@@ -204,7 +204,7 @@
       }
     },
     {
-      "name": "3. Trim — Seedance 2.5 on Auto: its longest clip, 30.1 s",
+      "name": "3. Trim — Seedance 2.5 on Auto: its longest clip, 30.15 s",
       "step": "trim",
       "nodes": [
         {
@@ -229,7 +229,7 @@
       }
     },
     {
-      "name": "3b. Loop ×2 — Seedance 2.5 on Auto: 60.2 s",
+      "name": "3b. Loop ×2 — Seedance 2.5 on Auto: twice 30.15 s",
       "step": "loop",
       "nodes": [
         {
@@ -292,7 +292,7 @@
       }
     },
     {
-      "name": "4. Trim — an Extend Video (Seedance 2.5, +5 s) of a 10 s upload: 15.1 s",
+      "name": "4. Trim — an Extend Video (Seedance 2.5, +5 s) of a 10 s upload: 15.15 s",
       "step": "trim",
       "nodes": [
         {
@@ -335,7 +335,7 @@
       }
     },
     {
-      "name": "4b. Loop ×2 — the same extension: 30.2 s",
+      "name": "4b. Loop ×2 — the same extension: twice 15.15 s",
       "step": "loop",
       "nodes": [
         {
@@ -378,7 +378,7 @@
       }
     },
     {
-      "name": "4c. Combine — the extension and the 10 s upload it extends: 15.1 + 10 s, less 3 frames each",
+      "name": "4c. Combine — the extension and the 10 s upload it extends: 15.15 + 10 s, less the grace (no rate known: no frames cut)",
       "step": "combine",
       "nodes": [
         {
@@ -426,7 +426,7 @@
       }
     },
     {
-      "name": "5. Trim — a Duration node of 15 s wired into a generation stored at 5 s: 15.1 s",
+      "name": "5. Trim — a Duration node of 15 s wired into a generation stored at 5 s: 15.15 s",
       "step": "trim",
       "nodes": [
         {
@@ -463,7 +463,7 @@
       }
     },
     {
-      "name": "5b. Loop ×2 — the same mapped 15 s: 30.2 s",
+      "name": "5b. Loop ×2 — the same mapped 15 s: twice 15.15 s",
       "step": "loop",
       "nodes": [
         {
@@ -500,7 +500,7 @@
       }
     },
     {
-      "name": "6. Trim — a generation whose duration an LLM Chat's answer sets: kling-4's longest clip, 30.1 s",
+      "name": "6. Trim — a generation whose duration an LLM Chat's answer sets: kling-4's longest clip, 30.15 s",
       "step": "trim",
       "nodes": [
         {
@@ -535,7 +535,7 @@
       }
     },
     {
-      "name": "6b. Loop ×2 — the same open duration: 60.2 s",
+      "name": "6b. Loop ×2 — the same open duration: twice 30.15 s",
       "step": "loop",
       "nodes": [
         {
@@ -570,7 +570,7 @@
       }
     },
     {
-      "name": "7. Trim — Seedance 2 Fast set to 30 s renders its longest, 15 s: 15.1 s (never the setting)",
+      "name": "7. Trim — Seedance 2 Fast set to 30 s renders its longest, 15 s: 15.15 s (never the setting)",
       "step": "trim",
       "nodes": [
         {
@@ -595,7 +595,7 @@
       }
     },
     {
-      "name": "7b. Loop ×2 — Kling Image to Video set to 7 s renders the 5 s it offers: 10.2 s",
+      "name": "7b. Loop ×2 — Kling Image to Video set to 7 s renders the 5 s it offers: twice 5.15 s",
       "step": "loop",
       "nodes": [
         {
@@ -680,7 +680,7 @@
       }
     },
     {
-      "name": "8c. Combine — two 10 s uploads: 19.75 s",
+      "name": "8c. Combine — two 10 s uploads: 19.7 s (no rate known: no frames cut)",
       "step": "combine",
       "nodes": [
         {
@@ -728,7 +728,7 @@
       }
     },
     {
-      "name": "9. Loop ×2 — a 12 s Library clip whose length was measured at upload: 24 s",
+      "name": "9. Loop ×2 — a 12 s Library clip whose length was measured at upload: twice 11.85 s, 23.7 s",
       "step": "loop",
       "nodes": [
         {
@@ -936,7 +936,7 @@
       }
     },
     {
-      "name": "12. Loop ×2 — a generation with a 5.042 s take, now set to 10 s: a whole run re-runs it (20.2 s); alone it hands on its take (10.084 s)",
+      "name": "12. Loop ×2 — a generation with a 5.042 s take, now set to 10 s: a whole run re-runs it (twice 10.15 s); alone it hands on its take (10.084 s)",
       "step": "loop",
       "nodes": [
         {
@@ -1032,7 +1032,7 @@
       }
     },
     {
-      "name": "13. Loop ×2 after a Trim of a 5 s generation (a chain): 5.1 s passed on, 10.2 s",
+      "name": "13. Loop ×2 after a Trim of a 5 s generation (a chain): 5.15 s passed on, twice it",
       "step": "loop",
       "nodes": [
         {
@@ -1154,7 +1154,7 @@
       }
     },
     {
-      "name": "15. Trim — a clean 10 s generation: 10.1 s planned, less the grace: 10 s, 2 units (a frame past the mark is free)",
+      "name": "15. Trim — a clean 10 s generation: 10.15 s planned, less the grace: 10 s, 2 units (a clip up to 0.15 s past the mark is not charged for it)",
       "step": "trim",
       "nodes": [
         {
@@ -1233,7 +1233,7 @@
       }
     },
     {
-      "name": "16. Trim — an upload measured at 10.1 s: at the edge of the grace, 2 units",
+      "name": "16. Trim — an upload measured at 10.1 s: inside the grace, 2 units",
       "step": "trim",
       "nodes": [
         {
@@ -1263,7 +1263,7 @@
       }
     },
     {
-      "name": "16b. Trim — an upload measured at 10.11 s: past the grace, 3 units",
+      "name": "16b. Trim — an upload measured at 10.15 s: at the edge of the grace, 2 units",
       "step": "trim",
       "nodes": [
         {
@@ -1274,7 +1274,37 @@
             "generatedResults": [
               {
                 "url": "https://cdn.example/u.mp4",
-                "duration": 10.11
+                "duration": 10.15
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "16c. Trim — an upload measured at 10.16 s: past the grace, 3 units",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10.16
               }
             ]
           }
@@ -1293,7 +1323,7 @@
       }
     },
     {
-      "name": "17. Trim with the node's own defaults (time, 0 to an end of 0): no end, so from 0 to the clip's end — a 10 s upload, 9.9 s, 2 units",
+      "name": "17. Trim with the node's own defaults (time, 0 to an end of 0): no end, so from 0 to the clip's end — a 10 s upload, 9.85 s, 2 units",
       "step": "trim",
       "stepData": {
         "trimMode": "time",
@@ -1328,7 +1358,7 @@
       }
     },
     {
-      "name": "17b. Trim from 3 s with no end, of a 15 s generation: 15.1 s planned, less the grace, less 3 s: 12 s, 3 units",
+      "name": "17b. Trim from 3 s with no end, of a 15 s generation: 15.15 s planned, less the grace, less 3 s: 12 s, 3 units",
       "step": "trim",
       "stepData": {
         "trimMode": "time",
@@ -1417,7 +1447,7 @@
       }
     },
     {
-      "name": "18. Combine — a Duration node of 15 s wired into a generation stored at 5 s, and a 5 s generation: 15.1 + 5.1 s, less the grace and 3 frames each: 19.75 s",
+      "name": "18. Combine — a Duration node of 15 s wired into a generation stored at 5 s, and a 5 s generation: 15.15 + 5.15 s, less the grace: 20 s, a hair under the mark",
       "step": "combine",
       "nodes": [
         {
@@ -1467,7 +1497,7 @@
       }
     },
     {
-      "name": "18b. Combine — a generation whose duration an LLM Chat's answer sets (kling-4's longest clip, 30.1 s) and a 5 s generation: 34.75 s",
+      "name": "18b. Combine — a generation whose duration an LLM Chat's answer sets (kling-4's longest clip, 30.15 s) and a 5 s generation: 35 s, a hair under the mark",
       "step": "combine",
       "nodes": [
         {
@@ -1515,7 +1545,7 @@
       }
     },
     {
-      "name": "18c. Combine — Seedance 2 Fast set to 30 s (renders its longest, 15 s) and a 5 s generation: 15.1 + 5.1 s, never the setting: 19.75 s",
+      "name": "18c. Combine — Seedance 2 Fast set to 30 s (renders its longest, 15 s) and a 5 s generation: 15.15 + 5.15 s, never the setting: 20 s, a hair under the mark",
       "step": "combine",
       "nodes": [
         {
@@ -1553,7 +1583,7 @@
       }
     },
     {
-      "name": "18d. Combine — a 12 s Library clip whose length was measured at upload, and a 10 s upload: 11.9 + 9.9 s, less 3 frames each: 21.55 s",
+      "name": "18d. Combine — a 12 s Library clip whose length was measured at upload, and a 10 s upload: 11.85 + 9.85 s: 21.7 s (no rate known: no frames cut)",
       "step": "combine",
       "nodes": [
         {
@@ -1603,7 +1633,7 @@
       }
     },
     {
-      "name": "18e. Combine — a FROZEN generation (take 5.042 s, now set to 10 s) and a 10 s upload: it never runs, so its take: 14.59 s",
+      "name": "18e. Combine — a FROZEN generation (take 5.042 s, now set to 10 s) and a 10 s upload: it never runs, so its take: 4.892 + 9.85 s, 14.742 s",
       "step": "combine",
       "nodes": [
         {
@@ -1654,7 +1684,7 @@
       }
     },
     {
-      "name": "19. Trim — a 12 s Library clip whose length was measured at upload: 11.9 s, 3 units",
+      "name": "19. Trim — a 12 s Library clip whose length was measured at upload: 11.85 s, 3 units",
       "step": "trim",
       "nodes": [
         {
@@ -1725,7 +1755,7 @@
       }
     },
     {
-      "name": "20. Trim to 0–60 s of a 15 s generation: the window ends at the clip (15.1 s planned, less the grace: 15 s), 3 units",
+      "name": "20. Trim to 0–60 s of a 15 s generation: the window ends at the clip (15.15 s planned, less the grace: 15 s), 3 units",
       "step": "trim",
       "stepData": {
         "trimMode": "time",
@@ -1852,7 +1882,7 @@
       }
     },
     {
-      "name": "21b. Loop ×2 — the same take: 30.2 s",
+      "name": "21b. Loop ×2 — the same take: twice 15.15 s",
       "step": "loop",
       "nodes": [
         {
@@ -2022,7 +2052,7 @@
       }
     },
     {
-      "name": "23. Loop ×4 after a LOSSLESS Trim of 3–8 s of a 10 s upload: a keyframe-snapped cut can start before its window and run a few frames past its end (a stream copy of 3–8 s with keyframes at 0 and 10 s measures 8.083 s), so the Trim passes on its end plus the copy's overshoot, 8.6 s, at most its input: 4 × 8.5 s, 7 units",
+      "name": "23. Loop ×4 after a LOSSLESS Trim of 3–8 s of a 10 s upload: a keyframe-snapped cut can start before its window and run a few frames past its end (a stream copy of 3–8 s with keyframes at 0 and 10 s measures 8.083 s), so the Trim passes on its end plus the copy's overshoot, 8.6 s, at most its input: 4 × 8.45 s, 7 units",
       "step": "loop",
       "stepData": {
         "mode": "repeat",
@@ -2072,7 +2102,7 @@
       }
     },
     {
-      "name": "23b. The same Trim re-encoded (Lossless off): its window, 5 s; Loop ×4 is 20 s, 4 units",
+      "name": "23b. The same Trim re-encoded (Lossless off): its window, 5 s; Loop ×4 is 4 × 4.85 s, 19.4 s, 4 units",
       "step": "loop",
       "stepData": {
         "mode": "repeat",
@@ -2121,7 +2151,7 @@
       }
     },
     {
-      "name": "24. Loop with the older `loops: 5` and no `repeatCount` (an older or API-written graph), on a 10 s upload: every run reads 5 copies, so 50 s, 10 units",
+      "name": "24. Loop with the older `loops: 5` and no `repeatCount` (an older or API-written graph), on a 10 s upload: every run reads 5 copies, so 5 × 9.85 s, 10 units",
       "step": "loop",
       "stepData": {
         "mode": "repeat",
@@ -2337,6 +2367,772 @@
       "expectedUnits": {
         "whole": 12,
         "alone": 12
+      }
+    },
+    {
+      "name": "27. Trim by frames — 60 frames off the end of a 12 s upload that declares 24 fps: 2.5 s at its rate, 11.85 − 2.5 = 9.35 s, 2 units (decided 2026-11-14: the clip's real rate)",
+      "step": "trim",
+      "stepData": {
+        "trimMode": "frames",
+        "trimStartFrames": 0,
+        "trimEndFrames": 60
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 12
+              }
+            ],
+            "fps": 24
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "27b. Trim by frames — the same cut on an upload that declares 60 fps: 1 s, 10.85 s, 3 units",
+      "step": "trim",
+      "stepData": {
+        "trimMode": "frames",
+        "trimStartFrames": 0,
+        "trimEndFrames": 60
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 12
+              }
+            ],
+            "fps": 60
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "27c. Trim by frames — the same cut on an upload with no declared rate: no frames cut, the uncut 11.85 s, 3 units (a bound: the run cuts at the rate it probes)",
+      "step": "trim",
+      "stepData": {
+        "trimMode": "frames",
+        "trimStartFrames": 0,
+        "trimEndFrames": 60
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 12
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "28. Combine — two 10 s uploads at 24 fps, 60 + 60 frames: cut once, at the one join (the end of the first clip, the start of the second), 5 s at the rate they share, 19.7 − 5 = 14.7 s, 3 units",
+      "step": "combine",
+      "stepData": {
+        "transition": "cut",
+        "transitionDuration": 0.5,
+        "trimStartFrames": 60,
+        "trimEndFrames": 60
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/a.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/a.mp4",
+                "duration": 10
+              }
+            ],
+            "fps": 24
+          }
+        },
+        {
+          "id": "b",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/b.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/b.mp4",
+                "duration": 10
+              }
+            ],
+            "fps": 24
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "b",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "28b. Combine — the same at 60 fps: 2 s at the join, 17.7 s, 4 units",
+      "step": "combine",
+      "stepData": {
+        "transition": "cut",
+        "transitionDuration": 0.5,
+        "trimStartFrames": 60,
+        "trimEndFrames": 60
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/a.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/a.mp4",
+                "duration": 10
+              }
+            ],
+            "fps": 60
+          }
+        },
+        {
+          "id": "b",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/b.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/b.mp4",
+                "duration": 10
+              }
+            ],
+            "fps": 60
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "b",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "28c. Combine — a 24 fps and a 60 fps upload: the join conforms them to the higher of a tie, 60 fps, 17.7 s, 4 units",
+      "step": "combine",
+      "stepData": {
+        "transition": "cut",
+        "transitionDuration": 0.5,
+        "trimStartFrames": 60,
+        "trimEndFrames": 60
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/a.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/a.mp4",
+                "duration": 10
+              }
+            ],
+            "fps": 24
+          }
+        },
+        {
+          "id": "b",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/b.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/b.mp4",
+                "duration": 10
+              }
+            ],
+            "fps": 60
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "b",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "28d. Combine — a 24 fps upload and one with no declared rate: the rate the join will use is not known, no frames cut, 19.7 s, 4 units",
+      "step": "combine",
+      "stepData": {
+        "transition": "cut",
+        "transitionDuration": 0.5,
+        "trimStartFrames": 60,
+        "trimEndFrames": 60
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/a.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/a.mp4",
+                "duration": 10
+              }
+            ],
+            "fps": 24
+          }
+        },
+        {
+          "id": "b",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/b.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/b.mp4",
+                "duration": 10
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "b",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "29. Combine — per-join `transitions` in the node's data: a workflow run sends none, so neither quote reads them — two 10.5 s uploads with a 1 s fade at the join, 19.7 s, 4 units (read, the cut would make it 20.7 s, 5)",
+      "step": "combine",
+      "stepData": {
+        "transition": "fade",
+        "transitionDuration": 1,
+        "trimStartFrames": 1,
+        "trimEndFrames": 2,
+        "transitions": [
+          {
+            "index": 0,
+            "transition": "cut",
+            "duration": 0
+          }
+        ]
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/a.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/a.mp4",
+                "duration": 10.5
+              }
+            ]
+          }
+        },
+        {
+          "id": "b",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/b.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/b.mp4",
+                "duration": 10.5
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "b",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "29b. Combine — a node that sets no frame trims, on two 10.2 s uploads at 24 fps: both quotes cut the workflow run's default 1 + 2 frames at the join, 20.1 − 0.125 = 19.975 s, 4 units (uncut, 20.1 s, 5)",
+      "step": "combine",
+      "stepData": {
+        "transition": "cut"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/a.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/a.mp4",
+                "duration": 10.2
+              }
+            ],
+            "fps": 24
+          }
+        },
+        {
+          "id": "b",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/b.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/b.mp4",
+                "duration": 10.2
+              }
+            ],
+            "fps": 24
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "b",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "30. Trim — a Dubbing of a 10 s upload: the dub runs further past its input, 10 s plus a quarter second, less the 0.15 s grace: 10.1 s, 3 units",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "d",
+          "type": "dubbing",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "d",
+          "targetHandle": "video"
+        },
+        {
+          "source": "d",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 3,
+        "alone": 3
+      }
+    },
+    {
+      "name": "30b. Trim — a Voice Changer of the same 10 s upload: its own slack, 10.15 s less the grace: 10 s, 2 units",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "d",
+          "type": "voice-changer",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "d",
+          "targetHandle": "video"
+        },
+        {
+          "source": "d",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 2,
+        "alone": 2
+      }
+    },
+    {
+      "name": "31. Trim — a 10 s upload extended by 5 s on PixVerse V6: 15 s plus a quarter second, less the grace: 15.1 s, 4 units (on Seedance 2.5, case 4: 3)",
+      "step": "trim",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "pixverse-v6-extend",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "31b. Combine — two 10 s uploads, each extended by 5 s on PixVerse V6: 15.1 + 15.1 s, 7 units (no rate known: no frames cut)",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "pixverse-v6-extend",
+            "duration": 5
+          }
+        },
+        {
+          "id": "v",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/v.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/v.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "y",
+          "type": "extend-video",
+          "data": {
+            "provider": "pixverse-v6-extend",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "v",
+          "target": "y",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "y",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 7,
+        "alone": 7
+      }
+    },
+    {
+      "name": "31c. Loop ×2 — the same PixVerse V6 extension: twice 15.1 s, 30.2 s, 7 units (on Seedance 2.5, case 4b: 6)",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "pixverse-v6-extend",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 7,
+        "alone": 7
+      }
+    },
+    {
+      "name": "31d. Combine — the same two uploads extended on Seedance 2.5: each step's own slack, 15 + 15 s, 6 units",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "seedance-2-5-extend",
+            "duration": 5
+          }
+        },
+        {
+          "id": "v",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/v.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/v.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "y",
+          "type": "extend-video",
+          "data": {
+            "provider": "seedance-2-5-extend",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "v",
+          "target": "y",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "y",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 6,
+        "alone": 6
       }
     }
   ]

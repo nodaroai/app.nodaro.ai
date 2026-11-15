@@ -26,6 +26,10 @@ vi.mock("../../../../providers/video/ffmpeg-utils.js", () => ({ probeVideoSource
 // The one clip reading both sides measure by (lib/video-utility-probe.ts), driven by the probe above.
 vi.mock("../../../../lib/video-utility-probe.js", () => ({
   probeClipLengthSec: async (src: string) => (await probe(src)).durationSeconds,
+  probeClipReading: async (src: string) => {
+    const p = (await probe(src)) as { durationSeconds: number; fps?: number }
+    return p.fps === undefined ? { sec: p.durationSeconds } : { sec: p.durationSeconds, fps: p.fps }
+  },
   ClipUnreadableError: class ClipUnreadableError extends Error {},
 }))
 vi.mock("../../../../lib/app-settings.js", () => ({ getAppSettings: vi.fn(async () => ({ cost_markup_percent: 0, service_margin_percent: {} })) }))

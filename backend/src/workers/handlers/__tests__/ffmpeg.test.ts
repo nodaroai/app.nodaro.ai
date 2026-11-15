@@ -124,6 +124,7 @@ vi.mock("@/lib/supabase.js", () => ({
 
 vi.mock("@/lib/video-utility-probe.js", () => ({
   probeClipLengthSec: mocks.mockProbeClipLengthSec,
+  probeClipReading: async (src: string, opts?: Record<string, unknown>) => ({ sec: await mocks.mockProbeClipLengthSec(src, opts) }),
 }))
 
 vi.mock("@/lib/storage.js", () => ({

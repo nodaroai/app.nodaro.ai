@@ -13,6 +13,7 @@
  */
 
 import { unitQuoteCreditId } from "./credit-estimators/unit-quote.js"
+import { gracedMeasuredSec } from "./priced-clip-seconds.js"
 
 /**
  * A lip-sync model charged at a per-second rate: the rate's one-second price
@@ -60,6 +61,20 @@ export function lipSyncBilledSeconds(rate: LipSyncAudioRate, measuredSec: number
   if (!Number.isFinite(measuredSec) || measuredSec <= 0) return rate.minSeconds
   return Math.max(rate.minSeconds, Math.ceil(measuredSec))
 }
+
+/**
+ * The seconds a run of a per-second-rate model is HELD and CHARGED for audio
+ * it measured at `measuredSec`: {@link lipSyncBilledSeconds} of the length less
+ * `CLIP_PRICE_GRACE_SEC` (0.05 s, decided 2026-11-14), so audio a hair past a
+ * whole second (a decoder's few hundredths at a file's end) is charged the
+ * second its length is quoted at. A quote reads the length exactly
+ * ({@link lipSyncEstimateSeconds}).
+ */
+export function lipSyncHeldSeconds(rate: LipSyncAudioRate, measuredSec: number): number {
+  if (!Number.isFinite(measuredSec) || measuredSec <= 0) return rate.minSeconds
+  return lipSyncBilledSeconds(rate, Math.max(Number.MIN_VALUE, gracedMeasuredSec(measuredSec)))
+}
+
 
 /**
  * The length the editor quotes a lip-sync run on while its audio's length is

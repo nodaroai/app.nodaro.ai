@@ -1,4 +1,5 @@
 import { readProbeSource, scanPacketEnds, type GuardedProbe, type ProbeSourceOptions } from "../providers/video/ffmpeg-utils.js"
+import { parseFrameRate } from "../providers/video/frame-rate.js"
 
 /**
  * How long a clip given to Trim Video, Loop Video or Combine Videos is: the
@@ -21,6 +22,11 @@ import { readProbeSource, scanPacketEnds, type GuardedProbe, type ProbeSourceOpt
  * line, so a recording of any length is read: only time bounds it
  * (`packetTimeoutMs`). Without it, such a file would be refused, though
  * Trim's time mode, Loop's repeat and Combine Videos render it.
+ *
+ * The same header read gives the video stream's frame rate (`r_frame_rate`,
+ * parsed as the Trim and Combine Videos workers parse it — `parseFrameRate`),
+ * the rate a frame trim is cut at (decided 2026-11-14); a rate that cannot be
+ * read is left unknown ({@link ClipReading}).
  */
 
 /** Which of a clip's header lengths a node's worker reads first (the other is the fallback). */
@@ -72,9 +78,21 @@ export interface ClipLengthOptions {
   readonly userFile?: boolean
 }
 
+/** What one read of a clip gives: its length, and its video stream's frame rate when it has a readable one. */
+export interface ClipReading {
+  readonly sec: number
+  readonly fps?: number
+}
+
+/** A clip's length in seconds ({@link probeClipReading}'s, without its rate). */
+export async function probeClipLengthSec(src: string, opts: ClipLengthOptions = {}): Promise<number> {
+  return (await probeClipReading(src, opts)).sec
+}
+
 /**
  * A clip's length in seconds (see the module note), read first from the
- * container or the video stream (`reading`, default the container). `src` is
+ * container or the video stream (`reading`, default the container), and its
+ * video stream's frame rate when it has a readable one. `src` is
  * a local path or an http(s) link, read through the probe guard
  * (`readProbeSource`): a link must pass the link guard, which throws first —
  * unless the caller already checked it (`sourceChecked`) — and every hop
@@ -85,8 +103,8 @@ export interface ClipLengthOptions {
  * length rejects with {@link ClipUnreadableError}; a file ffprobe cannot open
  * at all rejects with ffprobe's error.
  */
-export async function probeClipLengthSec(src: string, opts: ClipLengthOptions = {}): Promise<number> {
-  return readProbeSource(src, (input, probe) => readStreamLength(input, probe, opts, "video"), probeSourceOptions(opts))
+export async function probeClipReading(src: string, opts: ClipLengthOptions = {}): Promise<ClipReading> {
+  return readProbeSource(src, (input, probe) => readStream(input, probe, opts, "video"), probeSourceOptions(opts))
 }
 
 /**
@@ -100,7 +118,7 @@ export async function probeClipLengthSec(src: string, opts: ClipLengthOptions = 
  * {@link ClipUnreadableError}.
  */
 export async function probeSoundLengthSec(src: string, opts: Omit<ClipLengthOptions, "reading"> = {}): Promise<number> {
-  return readProbeSource(src, (input, probe) => readStreamLength(input, probe, opts, "audio"), probeSourceOptions(opts))
+  return readProbeSource(src, async (input, probe) => (await readStream(input, probe, opts, "audio")).sec, probeSourceOptions(opts))
 }
 
 function probeSourceOptions(opts: ClipLengthOptions): ProbeSourceOptions {
@@ -112,15 +130,18 @@ function probeSourceOptions(opts: ClipLengthOptions): ProbeSourceOptions {
   }
 }
 
-async function readStreamLength(src: string, probe: GuardedProbe, opts: ClipLengthOptions, kind: "video" | "audio"): Promise<number> {
+/** One stream's length (and, for a video stream, its frame rate) from the header, else from its packets. */
+async function readStream(src: string, probe: GuardedProbe, opts: ClipLengthOptions, kind: "video" | "audio"): Promise<ClipReading> {
   const headerMs = withinDeadline(opts.timeoutMs, opts.deadlineAt)
+  // A video stream's frame rate rides the same header read (`r_frame_rate`); a sound has none.
+  const streamEntries = kind === "video" ? "stream=index,codec_type,duration,r_frame_rate" : "stream=index,codec_type,duration"
   const out = await probe.run(
-    ["-v", "error", ...probe.inputArgs, "-select_streams", kind === "video" ? "v:0" : "a:0", "-show_entries", "stream=index,codec_type,duration:format=duration,start_time", "-of", "json", src],
+    ["-v", "error", ...probe.inputArgs, "-select_streams", kind === "video" ? "v:0" : "a:0", "-show_entries", `${streamEntries}:format=duration,start_time`, "-of", "json", src],
     { ...(headerMs !== undefined ? { timeoutMs: headerMs } : {}), ...(opts.signal ? { signal: opts.signal } : {}) },
   ).catch((err: unknown) => {
     throw opts.signal?.aborted ? Object.assign(new Error("clip reading aborted"), { aborted: true }) : err
   })
-  let header: { streams?: Array<{ index?: unknown; duration?: unknown }>; format?: { duration?: unknown; start_time?: unknown } }
+  let header: { streams?: Array<{ index?: unknown; duration?: unknown; r_frame_rate?: unknown }>; format?: { duration?: unknown; start_time?: unknown } }
   try {
     header = JSON.parse(out)
   } catch {
@@ -128,10 +149,12 @@ async function readStreamLength(src: string, probe: GuardedProbe, opts: ClipLeng
   }
   const stream = Array.isArray(header.streams) ? header.streams[0] : undefined
   if (!stream) throw new ClipUnreadableError(kind === "video" ? "no video stream" : "no audio stream")
+  const fps = kind === "video" ? parseFrameRate(stream.r_frame_rate) : undefined
+  const withRate = (length: number): ClipReading => (fps === undefined ? { sec: length } : { sec: length, fps })
   const container = positiveSec(header.format?.duration)
   const streamSec = positiveSec(stream.duration)
   const sec = opts.reading === "video-stream" ? (streamSec ?? container) : (container ?? streamSec)
-  if (sec !== undefined) return sec
+  if (sec !== undefined) return withRate(sec)
   if (typeof stream.index !== "number" || !Number.isInteger(stream.index)) throw new ClipUnreadableError("no stream index")
   const packetMs = withinDeadline(opts.packetTimeoutMs, opts.deadlineAt)
   const { maxPtsEnd, maxDtsEnd } = await scanPacketEnds(src, stream.index, {
@@ -142,5 +165,5 @@ async function readStreamLength(src: string, probe: GuardedProbe, opts: ClipLeng
   const end = maxPtsEnd ?? maxDtsEnd
   const length = end === undefined ? undefined : end - (finiteSec(header.format?.start_time) ?? 0)
   if (length === undefined || !(length > 0)) throw new ClipUnreadableError("no length")
-  return length
+  return withRate(length)
 }

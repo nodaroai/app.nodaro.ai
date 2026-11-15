@@ -164,6 +164,18 @@ describe("POST /v1/video-depth", () => {
     expect(mockQueueAdd.mock.calls[0][1]).toMatchObject({ durationSec: 10 })
   })
 
+  // The length and its row are the server's own measure, never a field a client sends (decided 2026-11-14).
+  it("a client-sent __videoDepth is ignored: the 9.2 s clip is held and stamped at the measured :10s row", async () => {
+    mockProbe.mockResolvedValue({ width: 1, height: 1, durationSeconds: 9.2, fps: 24 })
+    const res = await post({ videoUrl: "https://example.com/v.mp4", __videoDepth: { durationSec: 1, creditId: "video-depth-anything:1s" } })
+    expect(res.statusCode).toBe(200)
+    expect(guardModels).toEqual(["video-depth-anything:10s"])
+    expect(reserveCalls).toEqual([{ jobId: "job-1", model: "video-depth-anything:10s" }])
+    expect(insertedRows[0].input_data).toMatchObject({ duration_seconds: 10, bucketKey: "video-depth-anything:10s" })
+    expect(insertedRows[0].input_data).not.toHaveProperty("__videoDepth")
+    expect(mockQueueAdd.mock.calls[0][1]).not.toHaveProperty("__videoDepth")
+  })
+
   it("persists the RESOLVED provider + price row in input_data and reserves that row", async () => {
     mockProbe.mockResolvedValue({ width: 1, height: 1, durationSeconds: 20, fps: 24 })
     const res = await post({ videoUrl: "https://example.com/v.mp4", nodeId: "node-7" })

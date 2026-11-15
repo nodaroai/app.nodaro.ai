@@ -137,8 +137,8 @@ describe("the server's run estimate of a Lip Sync priced by a length bucket", ()
     })
   })
 
-  it("OmniHuman 2.0's estimate is unchanged: the wired audio's billed seconds, else the 5-minute ceiling", async () => {
+  it("OmniHuman 2.0's estimate: the wired audio's billed seconds, else the 15-second minimum (decided 2026-11-14)", async () => {
     expect(await estimate("omnihuman-2-0", 3.2)).toBe(154)
-    expect(await estimate("omnihuman-2-0", undefined)).toBe(11550)
+    expect(await estimate("omnihuman-2-0", undefined)).toBe(578)
   })
 })

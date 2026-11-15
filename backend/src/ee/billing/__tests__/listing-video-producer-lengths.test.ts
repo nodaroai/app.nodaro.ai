@@ -32,7 +32,7 @@ import {
   motionTransferCeilingSec,
 } from "../../../lib/video-output-length.js"
 import { generateVideoProLengthSec } from "../../../lib/generate-video-pro-length.js"
-import { VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC as SLACK, generatedVideoRenderedSec } from "@nodaro/render-rules"
+import { LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC as SLACK, generatedVideoRenderedSec } from "@nodaro/render-rules"
 
 type N = { id: string; type: string; data?: Record<string, unknown> }
 type E = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }
@@ -324,5 +324,32 @@ describe("the docs name the unbounded producers, and no longer Resize Video or L
         expect(text, `${rel}: ${word}`).toContain(word)
       }
     }
+  })
+})
+
+// A Dubbing's, an Audio Isolation's and a PixVerse V6 extension's files run further past their planned length than a
+// generation's, so the listing reads them, as the run estimates do, a quarter second past it
+// (`LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC`, through the one measured walk): on a 10 s recording the app's user cannot
+// replace, a Trim after a Dubbing is listed at 10.25 s less the 0.15 s grace (3 units), never below its charge.
+describe("the listing reads a Dubbing or a PixVerse V6 extension a quarter second past its planned length", () => {
+  const fixedRec: N = { id: "rec", type: "upload-video", data: { url: "https://cdn.example/rec.mp4", generatedResults: [{ url: "https://cdn.example/rec.mp4", duration: 10 }], activeResultIndex: 0 } }
+  const trim: N = { id: "op", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0 } }
+  const trimCharge = (sec: number) => staticUtilityBase("trim-video", { trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0, upstreamDuration: sec })!
+  const listedTrim = (step: N) => stepDelta([fixedRec, step], [{ source: "rec", target: "step", targetHandle: "video" }], trim, "step", [])
+
+  it.each([
+    ["a Dubbing", { id: "step", type: "dubbing", data: {} }, 3],
+    ["a Voice Changer (its own slack)", { id: "step", type: "voice-changer", data: {} }, 2],
+    ["a PixVerse V6 extension by 5 s", { id: "step", type: "extend-video", data: { provider: "pixverse-v6-extend", duration: 5 } }, 4],
+    ["a Seedance 2.5 extension by 5 s (its own slack)", { id: "step", type: "extend-video", data: { provider: "seedance-2-5-extend", duration: 5 } }, 3],
+  ] as const)("a Trim after %s of a 10 s recording is listed at %i units", (_label, step, units) => {
+    const d = listedTrim(step as N)
+    expect(d.perMinute).toBe(0)
+    expect(d.fixed).toBe(STATIC_CREDIT_COSTS["trim-video"]! * units)
+  })
+
+  it("never below the charge of the file a quarter second past its planned length", () => {
+    expect(listedTrim({ id: "step", type: "dubbing", data: {} }).fixed).toBeGreaterThanOrEqual(trimCharge(10 + LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC))
+    expect(listedTrim({ id: "step", type: "extend-video", data: { provider: "pixverse-v6-extend", duration: 5 } }).fixed).toBeGreaterThanOrEqual(trimCharge(15 + LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC))
   })
 })

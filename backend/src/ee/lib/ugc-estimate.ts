@@ -242,7 +242,10 @@ export const UGC_JOIN_NODE = {
  * the rule every Combine Videos quote reads: each clip at its planned length — its ticket's, the most a
  * finished clip runs (the finish cuts a clip to its speech and pads, a passed-through clip is its
  * ticket's render) — plus the slack for a clip made in the run, then the frame grace inside the shared units
- * rule (`plannedMadeClipSec`, the one helper the MCP planner's join quote prices each clip by too).
+ * rule (`plannedMadeClipSec`, the one helper the MCP planner's join quote prices each clip by too). A clip
+ * not made yet has no known frame rate, so its 1 + 2 frame trims are not taken off (decided 2026-11-14:
+ * frame trims at the clip's real rate, none cut where it is not known): a bound on the run's reservation,
+ * which cuts them at the rate it probes.
  */
 async function joinCredits(ticketSecs: readonly number[]): Promise<number> {
   const planned = ticketSecs.map(plannedMadeClipSec)

@@ -1,5 +1,5 @@
 // @test-watches packages/shared/src/__tests__/fixtures/measured-input-quote-parity.json
-// @test-units-by-name prices the node types its fixture names (video-sfx, video-mask, video-depth, pitch-tempo, dubbing, video-upscale, upload-video, upload-audio, generate-video, generate-video-pro, extend-video, resize-video, loop-video, text-to-speech)
+// @test-units-by-name prices the node types its fixture names (video-sfx, video-mask, video-depth, pitch-tempo, dubbing, video-upscale, upload-video, upload-audio, generate-video, generate-video-pro, extend-video, resize-video, loop-video, text-to-speech, audio-isolation, voice-changer)
 /**
  * When what reaches a Video SFX, a Video Mask, a Video Depth, a Pitch & Tempo,
  * a Dubbing or a Video Upscale (Topaz, Nodaro) is made by another node — a generation,
@@ -19,10 +19,10 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
-import { lipSyncAudioRateOf, lipSyncEstimateSeconds } from "@nodaro/shared/credits"
+import { LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS } from "@nodaro/shared/credits"
 import { CreditsService, type ChargedPriceTable } from "../credits.js"
 
-type Step = "videoSfx" | "videoMask" | "videoDepth" | "pitchTempo" | "dubbing" | "topaz" | "nodaroUpscale" | "lipSync"
+type Step = "videoSfx" | "videoMask" | "videoDepth" | "pitchTempo" | "dubbing" | "topaz" | "nodaroUpscale" | "lipSync" | "lipSyncBucket" | "transcribe" | "addCaptions"
 /** A step's figure; `null` (Lip Sync only): a length nothing knows before the run — each estimate's own unknown figure. */
 type Figures = Readonly<Partial<Record<Step, number | null>>>
 
@@ -30,6 +30,8 @@ interface ParityCase {
   readonly name: string
   readonly steps?: readonly Step[]
   readonly handles?: Readonly<Partial<Record<Step, string>>>
+  /** Settings a case adds to the step's own (`STEP[step].data`), as a node written through the API can carry them. */
+  readonly stepData?: Readonly<Partial<Record<Step, Record<string, unknown>>>>
   readonly nodes: ReadonlyArray<{ id: string; type: string; data: Record<string, unknown> }>
   readonly edges: ReadonlyArray<{ source: string; target?: string; targetHandle: string }>
   readonly expected: { readonly whole: Figures; readonly alone: Figures }
@@ -52,6 +54,11 @@ const STEP: Readonly<Record<Step, { type: string; data: Record<string, unknown>;
   nodaroUpscale: { type: "video-upscale", data: { provider: "nodaro-video-upscale", targetResolution: "1080p" }, input: "video" },
   // A Lip Sync priced by the seconds of its audio (OmniHuman 2.0): named only by the cases that list it.
   lipSync: { type: "lip-sync", data: { provider: "omnihuman-2-0" }, input: "audio" },
+  // A Lip Sync priced by a length tier (Kling Avatar): its figure is the tier's seconds. Named only by the cases that list it.
+  lipSyncBucket: { type: "lip-sync", data: { provider: "kling-avatar" }, input: "audio" },
+  // Transcribe and Add Captions on Nemotron 3.5 Transcribe (the started minutes of their file): named only by the cases that list them.
+  transcribe: { type: "transcribe", data: { provider: "nemotron-3-5-transcribe" }, input: "audio" },
+  addCaptions: { type: "add-captions", data: { style: "word-highlight", captionStyle: "word-highlight", transcribeProvider: "nemotron-3-5-transcribe" }, input: "in" },
 }
 
 /** Every row named by its size: `…:<N>s` / `…:<N>m` costs N; any other row (a per-minute or per-unit rate, an upstream node) 1, unmarked. */
@@ -65,7 +72,7 @@ const SIZED_ROWS: ChargedPriceTable = {
 
 /** The step's own line of the workflow estimate, for a whole run (`runNodeIds` absent), a run of `c` alone, or the case's partial run. */
 function stepLine(c: ParityCase, step: Step, run: "whole" | "alone" | "partial"): number | undefined {
-  const nodes = [...c.nodes, { id: "c", type: STEP[step].type, data: STEP[step].data }]
+  const nodes = [...c.nodes, { id: "c", type: STEP[step].type, data: { ...STEP[step].data, ...c.stepData?.[step] } }]
   const handle = (h: string) => (h === "@input" ? c.handles?.[step] ?? STEP[step].input : h)
   const edges = c.edges.map((e) => ({ source: e.source, target: e.target ?? "c", targetHandle: handle(e.targetHandle) }))
   let line: number | undefined
@@ -79,8 +86,8 @@ function stepLine(c: ParityCase, step: Step, run: "whole" | "alone" | "partial")
 
 const rows = F.cases.flatMap((c) => (c.steps ?? STEPS).map((step) => [`${c.name} — ${step}`, c, step] as const))
 
-/** The server's figure for a fixture value: a Lip Sync of unknown length is quoted at the most a run takes (its 300 s). */
-const want = (v: number | null | undefined): number | undefined => (v === null ? lipSyncEstimateSeconds(lipSyncAudioRateOf("omnihuman-2-0")!, undefined) : v)
+/** The server's figure for a fixture value: a Lip Sync of unknown length is quoted at the editor's minimum, the 15-second stand-in (decided 2026-11-14). */
+const want = (v: number | null | undefined): number | undefined => (v === null ? LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS : v)
 
 describe("the server's workflow estimate of the measuring steps equals the editor's quote on what another node makes", () => {
   it.each(rows)("%s — a whole run", (_name, c, step) => {

@@ -127,14 +127,17 @@ beforeEach(() => {
 })
 
 describe("an honest file runs, billed as reserved, and the model gets OUR encode", () => {
-  it("an MP3 of 10.04 s (held 11): encoded to OUR MP3 from the PCM its decode counted, never the caller's URL", async () => {
+  // 10.04 s is held and billed 10 s: the hold forgives up to 0.05 s past a whole second (decided 2026-11-14),
+  // and the copy is sent whole — the provider bills its own 11 s, which the platform pays.
+  it("an MP3 of 10.04 s (held 10, the provider billing 11): encoded to OUR MP3 from the PCM its decode counted, never the caller's URL", async () => {
     serve({ bytes: 400_000 })
     state.measures = [10.04, 10.04]
-    expect(await prepare(11)).toEqual({
+    expect(await prepare(10)).toEqual({
       url: "https://cdn.test/scratch/lip-sync-prepared.mp3",
       measuredSec: 10.04,
       measuredSamples: 442_764,
-      billedSeconds: 11,
+      billedSeconds: 10,
+      providerBilledSeconds: 11,
       sentSec: 10.04,
       sentSamples: 442_764,
       padded: false,

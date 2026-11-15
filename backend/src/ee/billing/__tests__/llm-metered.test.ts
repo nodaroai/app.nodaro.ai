@@ -93,6 +93,36 @@ describe("input bound", () => {
     expect(llmRequestInputBound(r, { mediaSeconds: 10 })).toBe(3 * 10 * 300)
   })
 
+  it("request bound: a video sampled above 1 frame per second is held for that many times its seconds", () => {
+    const video = (fps?: number): LlmRequest => ({
+      modelId: "",
+      system: "",
+      messages: [{ role: "user", content: [fps === undefined ? { type: "video", url: "https://example.com/v.mp4" } : { type: "video", url: "https://example.com/v.mp4", fps }] }],
+    })
+    expect(llmRequestInputBound(video(4))).toBe(4 * 18000)
+    expect(llmRequestInputBound(video(24), { mediaSeconds: 10 })).toBe(24 * 10 * 300)
+    // 1 frame per second or fewer, and no rate at all: held as before.
+    expect(llmRequestInputBound(video(1))).toBe(18000)
+    expect(llmRequestInputBound(video(0.5))).toBe(18000)
+    expect(llmRequestInputBound(video())).toBe(18000)
+  })
+
+  it("request bound: a frame rate weighs its own video only, never the audio or the video beside it", () => {
+    const r: LlmRequest = {
+      modelId: "",
+      system: "",
+      messages: [{
+        role: "user",
+        content: [
+          { type: "video", url: "https://example.com/v.mp4", fps: 3 },
+          { type: "video", url: "https://example.com/w.mp4" },
+          { type: "audio", url: "https://example.com/a.mp3" },
+        ],
+      }],
+    }
+    expect(llmRequestInputBound(r, { mediaSeconds: 10 })).toBe((3 + 1 + 1) * 10 * 300)
+  })
+
   it("request bound: text from system + schema + string and text-block messages; images counted once each", () => {
     const r: LlmRequest = {
       modelId: "",

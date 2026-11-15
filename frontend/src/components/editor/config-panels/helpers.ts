@@ -11,7 +11,6 @@ import {
   buildVideoCreditModelIdentifier,
   seedanceVideoEditCreditId,
   buildMotionCreditModelIdentifier,
-  resolveAiAvatarCreditId,
   resolveCinematicCreditId,
   buildVideoAnalysisCreditId,
   buildVideoAuditCreditId,
@@ -52,7 +51,7 @@ import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, transcribeNodeReturnsWords, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { aiAvatarCreditIdOf, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsPricedReferenceVideo } from "@/lib/seedance-ref-quote"
 import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
@@ -685,7 +684,8 @@ export function getModelIdentifier(
   // seeded composite, not the bare provider/type key (`heygen` / `reference-sheet`
   // are intentionally unpriced — the bare key triggered the "operator must seed"
   // warning and would 503 at Run time).
-  if (nodeType === "ai-avatar") return resolveAiAvatarCreditId(data)
+  // The server's own id (`aiAvatarCreditIdOf`): never a probed length the node's data carries.
+  if (nodeType === "ai-avatar") return aiAvatarCreditIdOf(data)
   if (nodeType === "cinematic-avatar") return resolveCinematicCreditId(data)
   if (nodeType === "reference-sheet") {
     return referenceSheetCreditId(data.flavour as { outputFormat?: string } | undefined)

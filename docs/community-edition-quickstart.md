@@ -162,7 +162,9 @@ FREECUT_URL=https://freecut.example.internal
 ```
 
 Restart the stack and the editor follows — no rebuild. Set `FREECUT_URL=off`
-to remove the Edit-video action entirely.
+(`none`, `false` and `disabled` work too) to remove the Edit video action
+everywhere: no video result on the canvas, and no video output card in a
+presentation or a published app, offers it.
 
 ## Editing audio
 

@@ -1,6 +1,7 @@
 import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
 import type { SpeakerViewClipFacts, SpeakerViewTracksResolved } from "@nodaro/render-rules"
 import { moodboardWarnings, type ResolvedUserDirection } from "../../lib/user-direction-result.js"
+import { aiAvatarCreditIdOf } from "../../lib/probed-credit-ids.js"
 import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { DUBBING_VOICE_LOCK_MESSAGE, dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { retiredEditProviderReason } from "../../lib/retired-edit-providers.js"
@@ -64,7 +65,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazTargetFpsOf, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -122,7 +123,6 @@ import {
   buildMotionCreditModelIdentifier,
   motionTransferResolution,
   lipSyncAudioRateOf,
-  resolveAiAvatarCreditId,
   resolveSwitchXCreditId,
   resolveCinematicCreditId,
   buildVideoAnalysisCreditId,
@@ -204,7 +204,6 @@ import {
   type SunoSeparateType,
   type SunoStemName,
   isTopazVideoResolution,
-  clampTopazVideoFps,
   audioSoundtrackActive,
   withoutLipSyncLeversNotTaken,
   NODARO_VIDEO_UPSCALE_PROVIDER,
@@ -2924,11 +2923,6 @@ function llmNodeCreditId(feature: string, modelId: string, tierId: () => string)
   return llmMeteredPricing() ? `${feature}:${modelId}` : tierId()
 }
 
-/** A Topaz frame rate from node data: a number or a numeric string, clamped to 15–60; anything else undefined. */
-function topazFpsOf(value: unknown): number | undefined {
-  const n = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : Number.NaN
-  return Number.isFinite(n) ? clampTopazVideoFps(n) : undefined
-}
 
 /** The plan basis an Apply EDL iteration stamps (`renderPlanBasis`, the rule
  *  the editor calls too): the plan value its row reads, as the run holds the
@@ -5858,9 +5852,10 @@ function buildPayloadOf(
         resolvedInputs.script ?? (data.script as string | undefined)
       // The node's data is the user's own record, saved as sent: a key it holds
       // under a name the server keeps its own measurements under is not one, so
-      // the length an audio-mode run is priced by is never the node's word.
+      // the length an audio-mode run is priced by is never the node's word — a
+      // workflow run measures no audio (`aiAvatarCreditIdOf`).
       const aiAvatarCreditBody = { ...withoutServerOnlyKeys(data as Record<string, unknown>), script: aiAvatarResolvedScript }
-      const aiAvatarCreditId = resolveAiAvatarCreditId(aiAvatarCreditBody)
+      const aiAvatarCreditId = aiAvatarCreditIdOf(aiAvatarCreditBody)
       const aiAvatarPayload: Record<string, unknown> = {
         jobId,
         avatarSource: (data.avatarSource as string | undefined) ?? "avatar",
@@ -6071,8 +6066,9 @@ function buildPayloadOf(
           // Topaz's: dropped like any value it does not take, so the run uses
           // its own default (1080p) or a saved legacy factor.
           ...(isTopazVideoResolution(data.targetResolution) ? { targetResolution: data.targetResolution } : {}),
-          // A number, or a numeric string (a mapped value); "source"/absent = the source's rate.
-          ...(topazFpsOf(data.targetFps) !== undefined ? { targetFps: topazFpsOf(data.targetFps) } : {}),
+          // A number, or a numeric string (a mapped value); "source"/absent = the source's rate — the one
+          // reading both quotes price (`topazTargetFpsOf`).
+          ...(topazTargetFpsOf(data.targetFps) !== undefined ? { targetFps: topazTargetFpsOf(data.targetFps) } : {}),
           upscaleFactor: data.upscaleFactor,
           provider: vuProvider,
           kieTaskId: vuTask,

@@ -3,7 +3,8 @@
 import { useT } from "@/lib/i18n"
 import { memo, useState, useRef, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ScanFace, Loader2, AlertCircle, X, Image as ImageIcon, Clapperboard, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
+import { ScanFace, Loader2, AlertCircle, X, Image as ImageIcon, Clapperboard, LayoutGrid, Expand, Download, Link, Settings } from "lucide-react"
+import { EditVideoButton } from "./edit-video-button"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidFaceSwapConnection } from "@/lib/image-producer-handles"
 import { NodeJobProgress } from "./node-job-progress"
@@ -229,14 +230,7 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
             >
               <Link className="w-3.5 h-3.5" />
             </button>
-            <button
-              type="button"
-              aria-label={t("node.editInNodarcut")}
-              className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }}
-            >
-              <Scissors className="w-3.5 h-3.5" />
-            </button>
+            <EditVideoButton onEdit={() => openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl)} tooltip={false} />
           </div>
         )}
 

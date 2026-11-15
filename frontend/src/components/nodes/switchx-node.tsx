@@ -3,7 +3,8 @@
 import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useRef, useCallback } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Wand2, Film, Image as ImageIcon, Layers, Clapperboard, Type, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link, Settings, Scissors } from "lucide-react"
+import { Wand2, Film, Image as ImageIcon, Layers, Clapperboard, Type, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link, Settings } from "lucide-react"
+import { EditVideoButton } from "./edit-video-button"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidSwitchXConnection } from "@/lib/video-producer-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
@@ -272,15 +273,7 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
             >
               <Link className="w-3.5 h-3.5" />
             </button>
-            <button
-              type="button"
-              aria-label={t("node.editInNodarcut")}
-              className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }}
-              title={t("node.editInNodarcut")}
-            >
-              <Scissors className="w-3.5 h-3.5" />
-            </button>
+            <EditVideoButton onEdit={() => openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl)} />
           </div>
         )}
 

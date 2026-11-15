@@ -21,6 +21,11 @@ describe("measureVideoSfxDuration", () => {
   it.each([
     [12.3, 13, "replicate-mmaudio:15s"],
     [30, 30, "replicate-mmaudio:30s"],
+    // A re-encoded 30 s cut measures 30.016 s: a hair past the row is forgiven (0.05 s, decided 2026-11-14)…
+    [30.016, 31, "replicate-mmaudio:30s"],
+    [30.05, 31, "replicate-mmaudio:30s"],
+    // …past it, the next row.
+    [30.06, 31, "replicate-mmaudio:60s"],
     [180, 180, "replicate-mmaudio:300s"],
   ])("a %s s clip → %i s, row %s", async (seconds, durationSec, creditId) => {
     probe.mockResolvedValue(clip(seconds))

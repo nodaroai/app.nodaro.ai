@@ -40,7 +40,7 @@ vi.mock("@/middleware/credit-guard.js", () => ({
       // the guard after the measure, so the floor check lets the request on.
       const { MEASURED_VIDEO_UTILITY_JOBS } = await import("@/lib/video-utility-credits.js")
       const { stashedVideoUtilityLength } = await import("@/lib/video-utility-length.js")
-      if (MEASURED_VIDEO_UTILITY_JOBS.has(resolve(req)) && stashedVideoUtilityLength(req.body) === undefined) return
+      if (MEASURED_VIDEO_UTILITY_JOBS.has(resolve(req)) && stashedVideoUtilityLength(req as unknown as import("fastify").FastifyRequest) === undefined) return
       guard.id = resolve(req)
       guard.base = opts?.computeCredits ? await opts.computeCredits(req.body, req) : undefined
       return reply.status(299).send({ recorded: true })
@@ -58,7 +58,11 @@ vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
   assertSafeProbeSource: vi.fn(async () => undefined),
 }))
 const clipLength = vi.hoisted(() => ({ sec: 8 }))
-vi.mock("@/lib/video-utility-probe.js", () => ({ probeClipLengthSec: vi.fn(async () => clipLength.sec), ClipUnreadableError: class ClipUnreadableError extends Error {} }))
+vi.mock("@/lib/video-utility-probe.js", () => ({
+  probeClipLengthSec: vi.fn(async () => clipLength.sec),
+  probeClipReading: vi.fn(async () => ({ sec: clipLength.sec })),
+  ClipUnreadableError: class ClipUnreadableError extends Error {},
+}))
 vi.mock("@/lib/queue.js", () => ({
   videoQueue: { add: vi.fn() },
   redis: { incr: vi.fn().mockResolvedValue(1), expire: vi.fn(), ttl: vi.fn().mockResolvedValue(60) },

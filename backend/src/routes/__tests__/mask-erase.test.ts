@@ -24,10 +24,10 @@ const reserve = vi.fn().mockResolvedValue({ usageLogId: "u-1", creditsReserved: 
 let guardedCredits: number | undefined
 let guardedId: string | undefined
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: (id: () => string, opts?: { computeCredits?: (body: unknown) => Promise<number> }) =>
+  creditGuard: (id: () => string, opts?: { computeCredits?: (body: unknown, req: unknown) => Promise<number> }) =>
     async (req: { body: unknown }) => {
       guardedId = id()
-      guardedCredits = opts?.computeCredits ? await opts.computeCredits(req.body) : undefined
+      guardedCredits = opts?.computeCredits ? await opts.computeCredits(req.body, req) : undefined
     },
   reserveCreditsForJob: (...args: unknown[]) => reserve(...args),
 }))
@@ -147,6 +147,21 @@ describe("POST /v1/mask-erase — a child step", () => {
       input_data: { type: "mask-erase", maskUrl: BODY.maskUrl, erase: [BOX], billedUnits: 3 },
     })
     expect(videoQueue.add).toHaveBeenCalledWith("mask-erase", { jobId: "job-me-1", maskUrl: BODY.maskUrl, erase: [BOX], usageLogId: "u-1" })
+  })
+
+  // Units are the server's own measure, never a field a client sends (decided 2026-11-14).
+  it("a client-sent __maskEraseUnits is ignored: priced, recorded and queued at the measured 3 units", async () => {
+    const res = await asChild({ ...BODY, __maskEraseUnits: 1 })
+    expect(res.statusCode).toBe(202)
+    expect(guardedCredits).toBe(30)
+    expect(inserted).toMatchObject({ input_data: { billedUnits: 3 } })
+    expect(videoQueue.add).toHaveBeenCalledWith("mask-erase", { jobId: "job-me-1", maskUrl: BODY.maskUrl, erase: [BOX], usageLogId: "u-1" })
+  })
+
+  it("…and a body the measure skips (a link that is not a safe URL) is checked at one unit, never the client's 99", async () => {
+    const res = await asChild({ ...BODY, maskUrl: "not-a-url", __maskEraseUnits: 99 })
+    expect(res.statusCode).toBe(400)
+    expect(guardedCredits).toBe(10)
   })
 
   it("takes keep boxes, recorded and queued with the erase boxes", async () => {

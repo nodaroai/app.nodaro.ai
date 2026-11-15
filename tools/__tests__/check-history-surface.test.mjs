@@ -7,6 +7,9 @@
 // The competitor fixture builds its string at runtime (never a literal): the
 // publish path greps FIXED private markers across every tracked file, so a test
 // that spells its own target would abort the mirror on itself.
+//
+// The private marker list (how it is read, refused and matched) has its own
+// file: check-history-surface-markers.test.mjs.
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"

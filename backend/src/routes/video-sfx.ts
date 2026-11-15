@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { VIDEO_SFX_PRICING, videoSfxCreditId } from "@nodaro/shared/credits"
 import { measureVideoSfxDuration } from "../lib/video-sfx-duration.js"
+import { dropClientMeasureFields } from "../lib/request-measure.js"
 import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 import { ROUTE_MEASURE_DEADLINE_MS } from "../lib/pre-charge-probe-bounds.js"
 import { baseCreditCostFor } from "../lib/credit-base-cost.js"
@@ -42,11 +43,13 @@ export type VideoSfxBody = z.infer<typeof VideoSfxBody>
  * Fastify preHandler: measures the input video by the rule the workflow run
  * shares (`measureVideoSfxDuration`: a probe that fails refuses the run — 503
  * when it can be retried, 400 otherwise — as does a zero-length or over-300 s
- * video), stashes ceil(duration) on
- * req.probedDuration AND mirrors it on req.body.__probedDuration so the credit
- * guard (which only sees the body) prices the right row without re-probing.
+ * video) and keeps ceil(duration) on req.probedDuration and the held row on
+ * req.probedCreditId — server-side only, so the credit guard and the handler
+ * price the row the server measured. A client field of either name is dropped
+ * first: nothing on the body is read as a price.
  */
 export async function probeDurationPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  dropClientMeasureFields(req.body, CLIENT_MEASURE_FIELDS)
   const body = req.body as VideoSfxBody | undefined
   // Only a link the route's schema takes is probed; anything else is the handler's validation_error.
   if (!safeUrlSchema.safeParse(body?.videoUrl).success) return
@@ -57,8 +60,12 @@ export async function probeDurationPreHandler(req: FastifyRequest, reply: Fastif
     return void reply.code(probeRefusalStatus(measured.code)).send({ error: measured.code, message: measured.message })
   }
   req.probedDuration = measured.durationSec
-  ;(req.body as Record<string, unknown>).__probedDuration = measured.durationSec
+  // The row the run holds: the measured length's, a hair past a row forgiven (`videoSfxHeldCreditId`).
+  req.probedCreditId = measured.creditId
 }
+
+/** Body fields a client may send named like the measure (the names the route once stashed it under): dropped, never read. */
+const CLIENT_MEASURE_FIELDS: readonly string[] = ["__probedDuration", "__probedCreditId"]
 
 /** How many versions the raw body asks for (1–4), read before validation like the price check. */
 function requestedVersions(body: unknown): number {
@@ -71,10 +78,9 @@ function videoSfxBatchAnswer(jobIds: readonly string[]): Record<string, unknown>
   return { jobIds: [...jobIds] }
 }
 
-/** The price row for the length the preHandler measured. */
-function probedCreditId(body: unknown): string {
-  const probed = (body as Record<string, unknown> | undefined)?.__probedDuration
-  return videoSfxCreditId(typeof probed === "number" ? probed : undefined)
+/** The price row for the length the preHandler measured (`req.probedCreditId`, never the body), else the fallback length's. */
+function probedCreditId(req: FastifyRequest): string {
+  return req.probedCreditId ?? videoSfxCreditId(undefined)
 }
 
 export default async function videoSfxRoutes(app: FastifyInstance): Promise<void> {
@@ -98,20 +104,20 @@ export default async function videoSfxRoutes(app: FastifyInstance): Promise<void
       // inside creditGuardImpl so checkCredits + reserveCredits agree on
       // the final number.
       creditGuard(
-        (req) => probedCreditId(req.body),
+        (req) => probedCreditId(req),
         {
           computeCredits: async (parsedBody, req) => {
             const versions = keyedBatchJobsToPrice(req) ?? requestedVersions(parsedBody)
-            return (await baseCreditCostFor(probedCreditId(parsedBody))) * versions
+            return (await baseCreditCostFor(probedCreditId(req))) * versions
           },
         },
       ),
     ],
   }, async (req, reply) => {
     // Manual Zod parse — preHandler ran first against raw body (it only reads videoUrl).
-    // Strip the preHandler-stashed __probedDuration before parsing so it doesn't leak through.
+    // Strip any measure-named field before parsing so none leaks through (the preHandler dropped them already).
     const rawBody = (req.body ?? {}) as Record<string, unknown>
-    const { __probedDuration: _stashed, ...toParse } = rawBody
+    const { __probedDuration: _stashed, __probedCreditId: _stashedId, ...toParse } = rawBody
     const parsed = VideoSfxBody.safeParse(toParse)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -139,7 +145,7 @@ export default async function videoSfxRoutes(app: FastifyInstance): Promise<void
 
     const duration = req.probedDuration ?? VIDEO_SFX_PRICING.FALLBACK_DURATION_SEC
     const versions = body.versions
-    const bucketKey = videoSfxCreditId(duration)
+    const bucketKey = probedCreditId(req)
 
     const mcpClient = extractMcpClient(req.body)
     const workflowId = extractWorkflowId(req.body)

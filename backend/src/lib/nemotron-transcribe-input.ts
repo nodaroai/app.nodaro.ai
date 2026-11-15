@@ -1,4 +1,4 @@
-import { NEMOTRON_TRANSCRIBE_ID, NEMOTRON_TRANSCRIBE_PRICING, nemotronTranscribeCreditId, nemotronTranscribeQuoteCreditId } from "@nodaro/shared/credits"
+import { NEMOTRON_TRANSCRIBE_ID, NEMOTRON_TRANSCRIBE_PRICING, nemotronTranscribeHeldCreditId, nemotronTranscribeQuoteCreditId } from "@nodaro/shared/credits"
 import { assertSafeProbeSource, probeMediaDurationAndSize } from "../providers/video/ffmpeg-utils.js"
 import { LINK_HOST_UNREACHABLE, LINK_READ_TIMED_OUT, PROBE_UNAVAILABLE, probeLinkRefusal } from "../providers/video/probe-guard.js"
 import { isAllowedSocialVideoUrl, safeUrlSchema } from "./url-validator.js"
@@ -140,9 +140,11 @@ export async function measureNemotronTranscribeInput(
     ok: true,
     ...(probed.durationSec !== undefined ? { durationSec: probed.durationSec } : {}),
     ...(probed.sizeBytes !== undefined ? { sizeBytes: probed.sizeBytes } : {}),
-    // An unread length holds the 60-minute id: the most any run can be charged.
+    // A measured length holds its minutes less the second the charge forgives (`nemotronHeldMinutes`), so a file
+    // a hair past a minute is held, and charged, at the minute it is quoted at. An unread length holds the
+    // 60-minute id: the most any run can be charged.
     creditId:
-      probed.durationSec !== undefined ? nemotronTranscribeCreditId(probed.durationSec) : nemotronTranscribeQuoteCreditId(undefined),
+      probed.durationSec !== undefined ? nemotronTranscribeHeldCreditId(probed.durationSec) : nemotronTranscribeQuoteCreditId(undefined),
   }
 }
 

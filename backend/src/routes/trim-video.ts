@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -52,7 +52,8 @@ const trimVideoBody = z.object({
 
 export async function trimVideoRoutes(app: FastifyInstance) {
   // One unit when the request was not measured yet (the floor), the measured units once it was.
-  const computeCredits = (body: unknown) => videoUtilityMeasuredBaseCredits("trim-video", stashedVideoUtilityLength(body)?.units ?? 1)
+  // The units the preHandler measured: the server-side request's, never the body's.
+  const computeCredits = (_body: unknown, req: FastifyRequest) => videoUtilityMeasuredBaseCredits("trim-video", stashedVideoUtilityLength(req)?.units ?? 1)
   const guard = creditGuard(() => "trim-video", { computeCredits })
   const measuredGuard = creditGuard(() => "trim-video", { computeCredits, dedup: false })
   app.post("/v1/trim-video", {
@@ -65,7 +66,7 @@ export async function trimVideoRoutes(app: FastifyInstance) {
       measuredGuard,
     ],
   }, async (req, reply) => {
-    const measured = stashedVideoUtilityLength(req.body)
+    const measured = stashedVideoUtilityLength(req)
     const parsed = trimVideoBody.safeParse(withoutVideoUtilityStash(req.body))
     if (!parsed.success) {
       return reply.status(400).send({

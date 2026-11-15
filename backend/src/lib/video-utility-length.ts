@@ -7,8 +7,9 @@ import { PRE_CHARGE_PROBE_TIMEOUT_MS, ROUTE_MEASURE_DEADLINE_MS } from "./pre-ch
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 import { isOwnStoredFileUrl } from "./own-storage-url.js"
 import { safeUrlSchema } from "./url-validator.js"
-import { COMBINE_VIDEOS_MAX_CLIPS, combineVideosTooManyClipsMessage, MEASURED_VIDEO_UTILITY_JOBS, videoUtilityClipReading, videoUtilityInputUrls, videoUtilityUnits, withMeasuredInputLengths } from "./video-utility-credits.js"
-import { probeClipLengthSec, type ClipLengthReading } from "./video-utility-probe.js"
+import { COMBINE_VIDEOS_MAX_CLIPS, combineVideosTooManyClipsMessage, MEASURED_VIDEO_UTILITY_JOBS, videoUtilityClipReading, videoUtilityInputUrls, videoUtilityUnits, withMeasuredInputLengths, workerClipRates } from "./video-utility-credits.js"
+import { probeClipReading, type ClipLengthReading, type ClipReading } from "./video-utility-probe.js"
+import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "./request-measure.js"
 
 /**
  * Trim Video, Loop Video and Combine Videos are charged by the measured length
@@ -81,7 +82,8 @@ export interface MeasureBounds {
 export const OWN_STORAGE_MEASURE_MAX_BYTES = OWN_STORAGE_PROBE_MAX_BYTES
 
 export type VideoUtilityLength =
-  | { readonly ok: true; readonly secs: readonly number[]; readonly units: number }
+  /** `fps`: each clip's frame rate as its worker cuts it (`workerClipRates`), what the units were counted at. */
+  | { readonly ok: true; readonly secs: readonly number[]; readonly fps: ReadonlyArray<number | undefined>; readonly units: number }
   | { readonly ok: false; readonly code: VideoUtilityRefusalCode; readonly message: string }
 
 /**
@@ -256,13 +258,13 @@ async function untilStopped<T>(work: Promise<T>, signal: AbortSignal | undefined
  * the clip cannot be read. A link the guard allows is never downloaded to be
  * measured (on Cloud, storage is public and the guard allows it).
  */
-async function clipLengthSec(
+async function clipReadingOf(
   url: string,
   reading: ClipLengthReading,
   bounds: MeasureBounds,
   /** What stops this clip's reads: its client going away, or another clip of the measure failing first. */
   readSignal: AbortSignal | undefined = bounds.signal,
-): Promise<number | ClipFailure> {
+): Promise<ClipReading | ClipFailure> {
   if (bounds.signal?.aborted) return "aborted"
   if (readSignal?.aborted) return "stopped"
   if (leftMs(bounds, Infinity) <= 0) return "timeout"
@@ -286,7 +288,7 @@ async function clipLengthSec(
   }
   if (refusal === undefined) {
     try {
-      return await probeClipLengthSec(url, { ...timeout, sourceChecked: true })
+      return await probeClipReading(url, { ...timeout, sourceChecked: true })
     } catch (err) {
       return failureOf(err, bounds, readSignal, url)
     }
@@ -300,7 +302,7 @@ async function clipLengthSec(
   if (downloadMs <= 0) return "timeout"
   try {
     // The local copy is a user's file: the container rule a link gets.
-    return await readOwnStoredCopy(url, (local) => probeClipLengthSec(local, { ...timeout, userFile: true }), {
+    return await readOwnStoredCopy(url, (local) => probeClipReading(local, { ...timeout, userFile: true }), {
       downloadTimeoutMs: downloadMs,
       ...(readSignal ? { signal: readSignal } : {}),
     })
@@ -315,31 +317,32 @@ async function clipLengthSec(
  * it (one stop for the measure, chained with its client's signal): the
  * refusal does not wait for clips it will not use.
  */
-async function probeEach(urls: readonly unknown[], reading: ClipLengthReading, bounds: MeasureBounds): Promise<{ readonly secs: number[] } | { readonly failed: number; readonly failure: ClipFailure }> {
-  const secs: number[] = new Array<number>(urls.length)
+async function probeEach(urls: readonly unknown[], reading: ClipLengthReading, bounds: MeasureBounds): Promise<{ readonly readings: ClipReading[] } | { readonly failed: number; readonly failure: ClipFailure }> {
+  const readings: ClipReading[] = new Array<ClipReading>(urls.length)
   const stop = new AbortController()
   const readSignal = bounds.signal ? AbortSignal.any([bounds.signal, stop.signal]) : stop.signal
   let failed: { readonly failed: number; readonly failure: ClipFailure } | undefined
   for (let start = 0; start < urls.length && failed === undefined; start += PROBE_CONCURRENCY) {
     const batch = urls.slice(start, start + PROBE_CONCURRENCY)
-    const read = await Promise.all(batch.map(async (url): Promise<number | ClipFailure> => {
-      const sec = typeof url === "string" && url !== "" ? await clipLengthSec(url, reading, bounds, readSignal) : "unreadable"
-      if (typeof sec !== "number" && sec !== "stopped") stop.abort()
-      return sec
+    const read = await Promise.all(batch.map(async (url): Promise<ClipReading | ClipFailure> => {
+      const got = typeof url === "string" && url !== "" ? await clipReadingOf(url, reading, bounds, readSignal) : "unreadable"
+      if (typeof got === "string" && got !== "stopped") stop.abort()
+      return got
     }))
     // The answer is a clip's own failure, never a sibling's stop.
-    read.forEach((sec, i) => {
-      if (typeof sec === "number") secs[start + i] = sec
-      else if (sec !== "stopped") failed ??= { failed: start + i, failure: sec }
+    read.forEach((got, i) => {
+      if (typeof got !== "string") readings[start + i] = got
+      else if (got !== "stopped") failed ??= { failed: start + i, failure: got }
     })
   }
-  return failed ?? { secs }
+  return failed ?? { readings }
 }
 
 /**
  * Measures the clips a Trim / Loop / Combine Videos request hands its run and
  * the units they cost (the node's own formula, `videoUtilityUnits`, at the
- * measured lengths — any length the request carried is replaced). A clip that
+ * measured lengths and frame rates — any length the request carried is
+ * replaced). A clip that
  * cannot be read is refused, and so is a Combine Videos of more than
  * {@link COMBINE_VIDEOS_MAX_CLIPS} clips, before any clip is fetched.
  */
@@ -354,8 +357,11 @@ export async function measureVideoUtilityCharge(
   }
   const probed = await probeEach(urls, videoUtilityClipReading(jobName), bounds)
   if ("failed" in probed) return refusalOf(probed.failure, probed.failed, urls.length)
-  const units = videoUtilityUnits(jobName, withMeasuredInputLengths(jobName, body, probed.secs)) ?? 1
-  return { ok: true, secs: probed.secs, units: Math.max(1, units) }
+  const secs = probed.readings.map((r) => r.sec)
+  // Frame trims at the rate the worker cuts each clip by (decided 2026-11-14), never a rate the request carried.
+  const fps = workerClipRates(jobName, probed.readings)
+  const units = videoUtilityUnits(jobName, withMeasuredInputLengths(jobName, body, secs), fps) ?? 1
+  return { ok: true, secs, fps, units: Math.max(1, units) }
 }
 
 /** BASE credits for `units` of a measured video utility: its one-unit row times the count (`unitRateBaseCredits`). */
@@ -405,12 +411,14 @@ export function videoUtilityReserveUnits(jobName: string, payload: Readonly<Reco
   return MEASURED_VIDEO_UTILITY_JOBS.has(jobName) && typeof payload.billedUnits === "number" && payload.billedUnits >= 1 ? payload.billedUnits : undefined
 }
 
-/** Where the routes' preHandler leaves its measurement for the credit guard and the handler (a client's own value is dropped first). */
+/** A body field named like the measurement (the name the routes once stashed it under): dropped, never read. */
 const STASH = "__videoUtilityMeasured"
+/** The request measure the routes' preHandler keeps for the credit guard and the handler (server-side only). */
+const MEASURE = "videoUtility"
 
-/** The measurement a route's preHandler stashed on the request body; undefined when it did not measure (the handler's parse answers). */
-export function stashedVideoUtilityLength(body: unknown): { readonly secs: readonly number[]; readonly units: number } | undefined {
-  const stash = (body as Record<string, unknown> | undefined)?.[STASH] as { secs?: unknown; units?: unknown } | undefined
+/** The measurement a route's preHandler kept on the server-side request (never the body); undefined when it did not measure (the handler's parse answers). */
+export function stashedVideoUtilityLength(req: FastifyRequest): { readonly secs: readonly number[]; readonly units: number } | undefined {
+  const stash = requestMeasure<{ secs?: unknown; units?: unknown }>(req, MEASURE)
   return stash && Array.isArray(stash.secs) && typeof stash.units === "number" && stash.units >= 1
     ? { secs: stash.secs as number[], units: stash.units }
     : undefined
@@ -428,7 +436,7 @@ export function videoUtilityClientGone(req: FastifyRequest): boolean {
   return (req as unknown as Record<symbol, AbortSignal | undefined>)[CLIENT_GONE]?.aborted === true
 }
 
-/** A request body without the preHandler's stash. */
+/** A request body without a field of the measurement's old name (dropped by the preHandler already). */
 export function withoutVideoUtilityStash(body: unknown): Record<string, unknown> {
   const { [STASH]: _stash, ...rest } = (body ?? {}) as Record<string, unknown>
   return rest
@@ -444,15 +452,17 @@ export function withoutVideoUtilityStash(body: unknown): Record<string, unknown>
  * request, refuses one that cannot be read or whose host does not exist (400
  * `invalid_video_duration`), whose reading ran out of time (503
  * `probe_timeout`) or whose host could not be looked up for now (503
- * `source_unreachable`) before anything is reserved, and stashes the lengths
- * and units for the guard (`stashedVideoUtilityLength`). A client that goes
+ * `source_unreachable`) before anything is reserved, and keeps the lengths
+ * and units on the server-side request for the guard and the handler
+ * (`stashedVideoUtilityLength`; never the body, whose field of the old stash
+ * name is dropped first). A client that goes
  * away stops the measure (`videoUtilityClientGone`), and its handler creates
  * nothing.
  */
 export function measureVideoUtilityPreHandler(jobName: string, schema: ZodTypeAny) {
   return async function measureVideoUtilityInputs(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+    dropClientMeasureFields(req.body, [STASH])
     const body = (req.body ?? {}) as Record<string, unknown>
-    delete body[STASH]
     if (!schema.safeParse(body).success) return
     const urls = videoUtilityInputUrls(jobName, body)
     if (!urls.every((url) => safeUrlSchema.safeParse(url).success)) return
@@ -468,6 +478,6 @@ export function measureVideoUtilityPreHandler(jobName: string, schema: ZodTypeAn
     if (!measured.ok) {
       return void reply.code(videoUtilityRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
     }
-    body[STASH] = { secs: measured.secs, units: measured.units }
+    setRequestMeasure(req, MEASURE, { secs: measured.secs, units: measured.units })
   }
 }

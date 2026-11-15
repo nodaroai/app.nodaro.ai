@@ -1,3 +1,5 @@
+import { LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS, lipSyncEstimateSeconds, type LipSyncAudioRate } from "@nodaro/shared/credits"
+
 /**
  * Which node's audio a Lip Sync run plays (decided 2026-11-13): the one rule
  * the server's estimate and the editor's estimate read, so an estimate prices
@@ -30,4 +32,27 @@ export function lipSyncAudioSourceId(
   const raw = (node.data as { selectedAudioNodeId?: unknown } | null | undefined)?.selectedAudioNodeId
   const selected = typeof raw === "string" && raw !== "" && nodes.some((n) => n.id === raw) ? raw : undefined
   return engine === "server" ? wired ?? selected : selected ?? wired
+}
+
+/**
+ * The length of audio a Lip Sync on a model charged per second of its audio
+ * (OmniHuman 2.0) is QUOTED on, on every estimate — the editor's, the server's
+ * run estimate, an app's listing and a continuation's credit check (decided
+ * 2026-11-14: one minimum on both sides): the length the estimate reads off the
+ * audio its run plays (`audioSec`: the measured walk, a voice made again in
+ * the run at its take, a minimum); with no audio node to play at all
+ * (`playsAudio` false), the length the node measured of its own audio at its
+ * last run (`audioDurationSec`); else `undefined` — the
+ * `LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS` stand-in `lipSyncRateQuoteSeconds`
+ * quotes, a MINIMUM: the run measures the real audio and charges it.
+ */
+export function lipSyncRateQuotedAudioSec(audioSec: number | undefined, playsAudio: boolean, data: unknown): number | undefined {
+  if (playsAudio) return audioSec
+  const own = (data as { audioDurationSec?: unknown } | null | undefined)?.audioDurationSec
+  return typeof own === "number" && Number.isFinite(own) && own > 0 ? own : undefined
+}
+
+/** The seconds that quote prices ({@link lipSyncRateQuotedAudioSec}): the billed seconds of a known length, else the 15-second stand-in, a minimum. */
+export function lipSyncRateQuoteSeconds(rate: LipSyncAudioRate, audioSec: number | undefined, playsAudio: boolean, data: unknown): number {
+  return lipSyncEstimateSeconds(rate, lipSyncRateQuotedAudioSec(audioSec, playsAudio, data), LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS)
 }

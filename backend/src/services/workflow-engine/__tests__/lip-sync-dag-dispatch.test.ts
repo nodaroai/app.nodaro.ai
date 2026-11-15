@@ -45,7 +45,7 @@ vi.mock("@/ee/billing/credits.js", () => ({
   getModelCreditBaseCost: vi.fn(async (id: string) => ({ creditCost: id === "omnihuman-2-0:per-second" ? 35 : 999, isEnabled: true, tierRestriction: null })),
 }))
 const probes = vi.hoisted(() => ({
-  audioSec: 10.04 as number,
+  audioSec: 10.1 as number,
   /** The decode reads the file only part-way (damaged, cut short). */
   damaged: false,
   /** What the payload builder built for the node. */
@@ -132,7 +132,7 @@ function makeCtx(): OrchestratorContext {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  probes.audioSec = 10.04
+  probes.audioSec = 10.1
   probes.damaged = false
   probes.built = undefined
   mockGetAppSettings.mockResolvedValue({ cost_markup_percent: 10 })
@@ -147,13 +147,13 @@ const node: SimpleNode = { id: "n1", type: "lip-sync", data: { provider: "omnihu
 describe("an OmniHuman 2.0 node in a workflow run", () => {
   it("holds the price of the audio it measured and queues the job with the held seconds", async () => {
     await expect(executeNode(node, {}, [], [], {}, makeCtx())).rejects.toThrow(/enqueue-sentinel/)
-    // 10.04 s → 11 s × 35, marked up once (10 %) = 424 — never the node's stale 3 s.
+    // 10.1 s → 11 s × 35, marked up once (10 %) = 424 — never the node's stale 3 s.
     const [, , identifier, , , opts] = mockReserveCredits.mock.calls[0] as [string, string, string, number, number, { creditOverride?: number }]
     expect(identifier).toBe("omnihuman-2-0:per-second")
     expect(opts.creditOverride).toBe(424)
     const [jobName, payload] = mockQueueAdd.mock.calls[0] as [string, Record<string, unknown>]
     expect(jobName).toBe("lip-sync")
-    expect(payload).toMatchObject({ provider: "omnihuman-2-0", audioDurationSec: 10.04, lipSyncBilledSeconds: 11, usageLogId: "usage-1" })
+    expect(payload).toMatchObject({ provider: "omnihuman-2-0", audioDurationSec: 10.1, lipSyncBilledSeconds: 11, usageLogId: "usage-1" })
   })
 
   it("audio past 300 s is refused before anything is held or queued", async () => {

@@ -88,7 +88,9 @@ describe("checkLipSyncInputs — OmniHuman 2.0", () => {
   it.each([
     [3.2, 4],
     [10, 10],
-    [10.04, 11],
+    // A hair past a whole second is forgiven (the charge grace, 0.05 s, decided 2026-11-14); past it, the next second.
+    [10.04, 10],
+    [10.06, 11],
     [15, 15],
     [60, 60],
     [300, 300],
@@ -346,8 +348,10 @@ describe("checkLipSyncInputs — the bucketed models", () => {
     }
     state.decoded = 30.03
     expect(await check({ provider: "omnihuman-1-5" })).toMatchObject({ ok: true, billedSeconds: 30 })
-    // OmniHuman 2.0 keeps its whole-second rounding, without this edge.
+    // OmniHuman 2.0 forgives the same 0.05 s on its whole seconds (the charge grace, decided 2026-11-14).
     state.decoded = 10.04
+    expect(await check()).toMatchObject({ ok: true, billedSeconds: 10 })
+    state.decoded = 10.06
     expect(await check()).toMatchObject({ ok: true, billedSeconds: 11 })
   })
 
@@ -360,10 +364,10 @@ describe("checkLipSyncInputs — the bucketed models", () => {
 
 describe("stampLipSyncInputs — the workflow run's twin", () => {
   it("stamps the length it measured over whatever the node carried, and the billed seconds (over any it carried)", async () => {
-    state.decoded = 10.04
+    state.decoded = 10.1
     const payload: Record<string, unknown> = { provider: "omnihuman-2-0", audioUrl: AUDIO, imageUrl: IMAGE, audioDurationSec: 4, lipSyncBilledSeconds: 1 }
     expect(await stampLipSyncInputs("lip-sync", payload)).toBeUndefined()
-    expect(payload).toMatchObject({ audioDurationSec: 10.04, lipSyncBilledSeconds: 11 })
+    expect(payload).toMatchObject({ audioDurationSec: 10.1, lipSyncBilledSeconds: 11 })
   })
 
   it("returns the route's refusal, and leaves no held seconds a payload carried", async () => {

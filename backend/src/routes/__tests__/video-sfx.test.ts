@@ -35,8 +35,21 @@ describe("probeDurationPreHandler", () => {
     const reply = makeReply()
     await probeDurationPreHandler(req, reply)
     expect(req.probedDuration).toBe(13)  // Math.ceil(12.3)
-    expect(req.body.__probedDuration).toBe(13)  // mirrored on body for computeCredits
+    expect(req.probedCreditId).toBe("replicate-mmaudio:15s")
+    // Server-side only: nothing is mirrored onto the body a client sends.
+    expect(req.body).not.toHaveProperty("__probedDuration")
+    expect(req.body).not.toHaveProperty("__probedCreditId")
     expect(reply.code).not.toHaveBeenCalled()
+  })
+
+  it("drops a client's own __probedDuration / __probedCreditId before measuring", async () => {
+    vi.spyOn(clipProbe, "probeClipLengthSec").mockResolvedValue(60)
+    const { probeDurationPreHandler } = await import("../video-sfx.js")
+    const req = { body: { videoUrl: "https://example.com/v.mp4", __probedDuration: 1, __probedCreditId: "replicate-mmaudio:8s" }, log: { warn: vi.fn() } } as any
+    await probeDurationPreHandler(req, makeReply())
+    expect(req.body).toEqual({ videoUrl: "https://example.com/v.mp4" })
+    expect(req.probedDuration).toBe(60)
+    expect(req.probedCreditId).toBe("replicate-mmaudio:60s")
   })
 
   it("refuses on probe failure (logs a warning) rather than price the 8s bucket", async () => {
@@ -46,6 +59,7 @@ describe("probeDurationPreHandler", () => {
     const reply = makeReply()
     await probeDurationPreHandler(req, reply)
     expect(req.probedDuration).toBeUndefined()
+    expect(req.probedCreditId).toBeUndefined()
     expect(req.log.warn).toHaveBeenCalled()
     expect(reply.code).toHaveBeenCalledWith(400)
     expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ error: "invalid_video_duration" }))
@@ -127,7 +141,8 @@ describe("POST /v1/video-sfx", () => {
     // The route handler itself calls reserveCreditsForJob per row.
     vi.doMock("../../middleware/credit-guard.js", () => ({
       creditGuard: (_resolveModel: any, opts: any) => async (req: any) => {
-        const credits = opts?.computeCredits ? await opts.computeCredits(req.body) : 0
+        // As the real guard calls it: the body and the request (the measured row lives on the request).
+        const credits = opts?.computeCredits ? await opts.computeCredits(req.body, req) : 0
         guardCredits = credits
         req.userId = "test-user"
         req.creditReservation = {
@@ -365,6 +380,24 @@ describe("POST /v1/video-sfx", () => {
     expect(res.statusCode).toBe(200)
     expect(guardCredits).toBe(credits)
     expect(reserveCalls).toEqual([{ model: row, creditOverride: credits }])
+  })
+
+  it("a client cannot pick its price row: a body naming __probedCreditId :8s and __probedDuration 1 for a 60 s video is held and charged the measured :60s row", async () => {
+    const clipProbe = await import("../../lib/video-utility-probe.js")
+    vi.mocked(clipProbe.probeClipLengthSec).mockResolvedValue(60)
+    const res = await app.inject({
+      method: "POST", url: "/v1/video-sfx",
+      payload: { videoUrl: "https://example.com/v.mp4", __probedCreditId: "replicate-mmaudio:8s", __probedDuration: 1 },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(guardCredits).toBe(30)
+    expect(reserveCalls).toEqual([{ model: "replicate-mmaudio:60s", creditOverride: 30 }])
+    const { videoQueue } = await import("../../lib/queue.js")
+    const payload = vi.mocked(videoQueue.add).mock.calls[0]?.[1] as any
+    expect(payload?.bucketKey).toBe("replicate-mmaudio:60s")
+    expect(payload?.duration_seconds).toBe(60)
+    expect(payload).not.toHaveProperty("__probedCreditId")
+    expect(payload).not.toHaveProperty("__probedDuration")
   })
 
   it("uses random seed (-1) per version when no seed provided", async () => {

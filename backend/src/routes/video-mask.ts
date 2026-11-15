@@ -26,6 +26,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { measureVideoMaskLength } from "../lib/video-mask-length.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
 import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 const zoneMargin = z.number().min(VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN).max(VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX).optional().default(0)
@@ -65,10 +66,13 @@ export const videoMaskBody = z.object({
 
 /**
  * Measures the clip before the credit guard prices it, refuses one that can't
- * be read or is over the cap (400, before anything is reserved), and stashes
- * the price row on the body for the guard.
+ * be read or is over the cap (400, before anything is reserved), and keeps
+ * the price row and the billed seconds on the server-side request
+ * (`setRequestMeasure`, never the body) for the guard and the handler; a
+ * client's own fields of those names are dropped first.
  */
 async function measureVideoMaskPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  dropClientMeasureFields(req.body, CLIENT_MEASURE_FIELDS)
   const body = (req.body ?? {}) as Record<string, unknown>
   // The URL is validated BEFORE anything probes it: a bare path or a private
   // address never reaches ffprobe (whose answer would tell a file from none).
@@ -79,21 +83,29 @@ async function measureVideoMaskPreHandler(req: FastifyRequest, reply: FastifyRep
   if (!measured.ok) {
     return void reply.code(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
-  body.__videoMaskBilledSec = measured.billedSec
-  body.__videoMaskCreditId = measured.creditId
+  setRequestMeasure(req, MEASURE, { billedSec: measured.billedSec, creditId: measured.creditId } satisfies VideoMaskMeasure)
 }
 
-const stashedCreditId = (body: unknown): string => {
-  const id = (body as Record<string, unknown> | undefined)?.__videoMaskCreditId
-  return typeof id === "string" ? id : "video-mask"
-}
+/** Body fields named like the measure (the names the route once stashed it under): dropped, never read. */
+const CLIENT_MEASURE_FIELDS: readonly string[] = ["__videoMaskBilledSec", "__videoMaskCreditId"]
+/** The request measure the preHandler keeps. */
+const MEASURE = "videoMask"
+interface VideoMaskMeasure { readonly billedSec: number; readonly creditId: string }
+
+/** The row the preHandler measured (the server-side request's), else the bare row. */
+const stashedCreditId = (req: FastifyRequest | undefined): string =>
+  (req ? requestMeasure<VideoMaskMeasure>(req, MEASURE)?.creditId : undefined) ?? "video-mask"
 
 export async function videoMaskRoutes(app: FastifyInstance) {
   app.post("/v1/video-mask", {
-    preHandler: [measureVideoMaskPreHandler, creditGuard((req) => stashedCreditId(req.body))],
+    preHandler: [measureVideoMaskPreHandler, creditGuard((req) => stashedCreditId(req))],
   }, async (req, reply) => {
     const raw = (req.body ?? {}) as Record<string, unknown>
-    const { __videoMaskBilledSec: billedSec, __videoMaskCreditId: creditId, ...toParse } = raw
+    const { __videoMaskBilledSec: _clientSec, __videoMaskCreditId: _clientId, ...toParse } = raw
+    // What the preHandler measured (server-side only); undefined when it measured nothing.
+    const measure = requestMeasure<VideoMaskMeasure>(req, MEASURE)
+    const billedSec = measure?.billedSec
+    const creditId = measure?.creditId
     const parsed = videoMaskBody.safeParse(toParse)
     if (!parsed.success) {
       return reply.status(400).send({

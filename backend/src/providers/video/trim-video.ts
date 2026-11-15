@@ -1,5 +1,6 @@
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { parseFrameRate } from "./frame-rate.js"
 import { csvFields } from "./ffprobe-csv.js"
 
 interface TrimVideoOptions {
@@ -183,7 +184,7 @@ async function probeTrimMetadata(filePath: string): Promise<{ fps: number; durat
     if (line.includes("/")) fpsExpr ??= line
     else durationStr ??= line
   }
-  const fps = parseFractionalFps(fpsExpr)
+  const fps = parseFrameRate(fpsExpr) ?? Number.NaN
   const durationSec = parseFloat(durationStr ?? "0")
   if (!Number.isFinite(fps) || fps <= 0 || !Number.isFinite(durationSec) || durationSec <= 0) {
     throw new Error(
@@ -191,13 +192,4 @@ async function probeTrimMetadata(filePath: string): Promise<{ fps: number; durat
     )
   }
   return { fps, durationSec }
-}
-
-function parseFractionalFps(expr: string | undefined): number {
-  if (!expr) return NaN
-  if (expr.includes("/")) {
-    const [num, den] = expr.split("/").map((s) => parseFloat(s))
-    return den ? num / den : NaN
-  }
-  return parseFloat(expr)
 }

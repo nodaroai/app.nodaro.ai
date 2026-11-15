@@ -1,4 +1,4 @@
-import { PITCH_TEMPO_PRICING, pitchTempoCreditId } from "@nodaro/shared/credits"
+import { PITCH_TEMPO_PRICING, pitchTempoHeldCreditId } from "@nodaro/shared/credits"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/probe-guard.js"
 
@@ -48,7 +48,8 @@ export async function measurePitchTempoDuration(
         `${PITCH_TEMPO_PRICING.MAX_DURATION_SEC} seconds (30 minutes).`,
     }
   }
-  return { ok: true, durationSec: seconds, creditId: pitchTempoCreditId(seconds) }
+  // The minutes the run holds: the measured length's, a hair past a minute forgiven (`pitchTempoHeldCreditId`).
+  return { ok: true, durationSec: seconds, creditId: pitchTempoHeldCreditId(seconds) }
 }
 
 /** The media a pitch-tempo payload names (a video takes precedence, as in the engine). */

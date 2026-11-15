@@ -11,7 +11,9 @@
  *  1. A render: the render's own estimated length (`renderLengthSec`), as
  *     today — a planner that re-runs re-plans.
  *  2. A recording (an upload, a Video link, an audio upload): the length a run
- *     forwards from it ({@link recordingLengthSec}).
+ *     forwards from it ({@link recordingLengthSec}); for a step that bills
+ *     the decoded audio by the second, its sound's decoded length
+ *     (`decodedAudioLength`: an AAC recording one frame longer).
  *  3. A node that will NOT run in this run and holds a take: it hands that take
  *     on, so its recorded length — a generation's record read with the overhang
  *     it may leave off ({@link recordedTakeSec}). None recorded: unknown, except
@@ -25,7 +27,9 @@
  *     renders for its settings, an Extend Video at its source plus the seconds
  *     it adds, a Trim / Loop / Combine Videos / Video SFX / Pitch & Tempo by the
  *     shared rule, a step that keeps its input's length at that input, every
- *     other producer by its row of `VIDEO_LENGTH_RULES`. Never a stored take.
+ *     other producer by its row of `VIDEO_LENGTH_RULES` (an audio step that
+ *     re-encodes what it is given, by its row of `AUDIO_LENGTH_RULES`). Never a
+ *     stored take.
  *  5. Anything else: unknown, which the step quotes at its cap.
  *
  * The graph is read as the run executes it, every Teleport pair bypassed
@@ -51,7 +55,12 @@
  * Every node that makes a clip in the run adds its step's slack to its planned
  * length ({@link MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC},
  * {@link VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC},
- * {@link VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC}) — a generation and every other
+ * {@link VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC}), or the node's own measured
+ * overshoot where its row declares a longer one (a Dubbing, an Audio
+ * Isolation, a PixVerse V6 extension: `LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC`,
+ * a quarter second, on every measuring step after it — but a Dubbing's and an
+ * Audio Isolation's not on a step that measures the video stream, `reading`)
+ * — a generation and every other
  * producer read by its length rule, a ceiling and a step whose length follows
  * its input (Lip Sync, Motion Transfer, …) included — added once, here, so a
  * new producer gets it by default. A row that only carries its inputs' lengths
@@ -63,6 +72,7 @@
  */
 import { isRenderNodeType, NODE_MAPPABLE_FIELDS, settingsSourceForField, withWiredSettings } from "@nodaro/shared/nodes"
 import { CONTAINER_OVERHANG_SEC } from "@nodaro/shared/video"
+import { CLIP_PRICE_GRACE_SEC } from "@nodaro/shared/media"
 import { getParameterValue, PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { ENGINE_SKIPPED_NODE_TYPES } from "./engine-skipped-types"
 import {
@@ -75,10 +85,11 @@ import {
   type EstimateGraphNode,
 } from "./apply-edl-estimate"
 import { keptLengthWire, LENGTH_KEEPING_VIDEO_TYPES } from "./kept-length"
+import { recordingDecodeOverhangSec } from "./recorded-audio-decode"
 import { LENGTH_RECORDING_VIDEO_NODE_TYPES } from "./length-following-video"
 import { bypassTeleports } from "./teleport-bypass"
 import { forwardedVideoLengthSec, knownLength, LENGTH_PRICED_UTILITY_TYPES, utilityOutputLength, type InputLength } from "./utility-wire-length"
-import { knownOutputLength, VIDEO_LENGTH_RULES, wireKindOf, type OutputWireInput } from "./video-output-length"
+import { knownOutputLength, lengthRuleOf, wireKindOf, type MeasuredFileReading, type OutputLengthNode, type OutputLengthRule, type OutputWireInput } from "./video-output-length"
 
 /**
  * The slack a Mask Composite quote adds to each clip a node makes in the run
@@ -97,27 +108,35 @@ export const MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC = 0.1
  */
 export const VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC = 1 / 24
 
-/**
- * The slack a Trim Video, Loop Video or Combine Videos quote adds to each clip
- * a node makes in the run (a PLANNED length): Mask Composite's, for the same
- * reason — their runs measure each clip's CONTAINER length before they reserve
- * (ffprobe's format duration, an audio tail included), and their price rounds
- * every started 5 seconds up with no grace at all, so one frame past a
- * boundary is a unit.
- */
-export const VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC = MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC
+/** What a Video Overlay's run measures of its base: the video stream (the reading it passes the measured walk). */
+export const VIDEO_OVERLAY_READING: MeasuredFileReading = "video-stream"
 
 /**
  * How far past a 5-second mark a clip given to Trim Video, Loop Video or
  * Combine Videos may run and still be priced as if it ended on the mark: a
- * made clip runs about a frame past its length (a 10 s generation measures
- * 10.042 s), and that frame is not charged. Taken off each clip's length — the
- * measured clip on a charge, the planned clip plus its slack on a quote, the
- * re-measured clip on the render's check — before the node's own formula
- * (`videoUtilityUnitsOf`), so it holds for every copy a Loop makes and every
- * clip a Combine Videos joins.
+ * made clip runs a little past its length (a 10 s generation measures 10.042 s;
+ * a made clip's container, up to 0.104 s), and that is not charged. Taken off
+ * each clip's length — the measured clip on a charge, the planned clip plus its
+ * slack on a quote, the re-measured clip on the render's check — before the
+ * node's own formula (`videoUtilityUnitsOf`), so it holds for every copy a Loop
+ * makes and every clip a Combine Videos joins.
  */
-export const VIDEO_UTILITY_PRICE_GRACE_SEC = 0.1
+export const VIDEO_UTILITY_PRICE_GRACE_SEC = 0.15
+
+/**
+ * The slack a Trim Video, Loop Video or Combine Videos quote adds to each clip
+ * a node makes in the run (a PLANNED length): its runs measure each clip
+ * before they reserve (Trim and Loop the CONTAINER, ffprobe's format duration,
+ * an audio tail included; Combine Videos the video stream), and a made clip's
+ * container was measured up to 0.104 s past the length it was asked for (a
+ * Seedance 2 Mini clip), past Mask Composite's 0.1 s. The grace itself
+ * ({@link VIDEO_UTILITY_PRICE_GRACE_SEC}), declared once so the two cannot
+ * part: a quote for a planned length is the units of that length, and a clip
+ * that runs up to this far past it is charged no more. The three steps read
+ * the walk as the container (after a Dubbing, a Combine Videos too: an
+ * over-quote, never under).
+ */
+export const VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC = VIDEO_UTILITY_PRICE_GRACE_SEC
 
 /** The steps whose quote reads the measured walk with a slack from {@link MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC}. */
 export type MeasuredInputStepType = "video-sfx" | "video-mask" | "video-depth" | "pitch-tempo" | "dubbing" | "video-upscale" | "lip-sync"
@@ -136,7 +155,7 @@ export type MeasuredInputStepType = "video-sfx" | "video-mask" | "video-depth" |
  *   Mask Composite's slack;
  * - the VIDEO STREAM: Topaz Video Upscale, whose hold counts the stream's
  *   frames at the target rate — Video Overlay's one frame.
- * None of them takes the 0.1 s price grace of Trim / Loop / Combine Videos
+ * None of them takes the 0.15 s price grace of Trim / Loop / Combine Videos
  * ({@link VIDEO_UTILITY_PRICE_GRACE_SEC}): their charges keep their own rules.
  */
 export const MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC: Readonly<Record<MeasuredInputStepType, number>> = {
@@ -147,6 +166,24 @@ export const MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC: Readonly<Record<MeasuredInpu
   "dubbing": MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC,
   "video-upscale": VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC,
   "lip-sync": MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC,
+}
+
+/**
+ * What each of these steps' run measures of the file it is given — the
+ * reading it passes the measured walk, beside its slack: the video stream for
+ * Video Upscale (Topaz's hold counts the stream's frames; Nodaro Video Upscale
+ * bills the stream's seconds, the container only when no stream length can be
+ * read), the container for the rest. A file whose sound alone runs past its
+ * planned length (a Dubbing's) adds its overshoot only on a container reading.
+ */
+export const MEASURED_INPUT_READING: Readonly<Record<MeasuredInputStepType, MeasuredFileReading>> = {
+  "video-sfx": "container",
+  "video-mask": "container",
+  "video-depth": "container",
+  "pitch-tempo": "container",
+  "dubbing": "container",
+  "video-upscale": "video-stream",
+  "lip-sync": "container",
 }
 
 /** The recording node types: the uploads an app exposes and the Video URL (YouTube or any link) node. */
@@ -177,6 +214,13 @@ export interface MeasuredWireLengthOptions {
   /** Seconds added to the planned length of each node that makes a clip in the run: the measuring step's own slack (the two constants above). */
   readonly plannedClipSlackSec?: number
   /**
+   * What the measuring step's run measures of the file (`container`, the
+   * default, or `video-stream`: Video Overlay, Video Upscale —
+   * {@link VIDEO_OVERLAY_READING}, {@link MEASURED_INPUT_READING}). A node's
+   * own overshoot is read on it: a Dubbing's runs in its sound only.
+   */
+  readonly reading?: MeasuredFileReading
+  /**
    * Nodes whose value the run's user sets with no bound known beforehand (a
    * published app's free-text or unbounded-number input, which a listing
    * cannot enumerate): a length-deciding field mapped from one is open, even
@@ -201,14 +245,52 @@ export interface MeasuredWireLengthOptions {
   /**
    * Read a generated voice that runs in the run ({@link GENERATED_VOICE_NODE_TYPES})
    * at the length of the take it holds — a MINIMUM: the voice is made again and
-   * has no length before its run. Only Lip Sync's quote asks for it (decided
+   * has no length before its run. Lip Sync's quote asks for it (decided
    * 2026-11-13: its price before the run starts from the earlier take, the run
-   * charges the audio it measures); every other step reads such a voice as
-   * unknown. A voice with no take stays unknown. A length the caller knows
+   * charges the audio it measures), and so do Transcribe and Add Captions on
+   * Nemotron (decided 2026-11-14, `NEMOTRON_WIRE_READ_OPTIONS`); every other
+   * step reads such a voice as unknown. A voice with no take stays unknown. A length the caller knows
    * ({@link knownLengthSec}, the listing's script reading) comes first.
    */
   readonly voiceTakeAsMinimum?: boolean
+  /**
+   * Read a recording (an upload, a Video link, an audio upload) at the length
+   * its sound DECODES to, as the step's charge reads it: an AAC recording up to
+   * one AAC frame past the container length its upload recorded
+   * (`recordingDecodeOverhangSec`), less the 0.05 s the charge forgives
+   * (`CLIP_PRICE_GRACE_SEC`) — so only a frame longer than that (a rate under
+   * about 20 kHz, or a rate not recorded) adds — carried through the steps
+   * after it. Only a step that bills every started second of the
+   * decoded audio with no grace asks for it (Lip Sync on a per-second-rate
+   * model priced by its audio's length — `LIP_SYNC_AUDIO_WIRE_READ_OPTIONS`); every other step
+   * reads the recorded length.
+   */
+  readonly decodedAudioLength?: boolean
 }
+
+/**
+ * What a Lip Sync's quote reads its `audio` wire with, on every estimate (the
+ * editor's, the server's run estimate, the app listing) and every model priced
+ * by its audio's length: a voice made again in the run at the take it holds, a
+ * minimum (decided 2026-11-13); and a recording at its decoded length (decided
+ * 2026-11-14: an AAC recording one frame, 1024 / its sample rate, past its
+ * record, less the 0.05 s each hold forgives — the per-second rate's grace and
+ * the length tiers' edge are the same `CLIP_PRICE_GRACE_SEC`). The holds read
+ * the decoded length: a 15.000 s M4A at 16 kHz decodes to 15.064 s, past the
+ * 15 s tier's edge.
+ */
+export const LIP_SYNC_AUDIO_WIRE_READ_OPTIONS: Readonly<Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum" | "decodedAudioLength">> = { voiceTakeAsMinimum: true, decodedAudioLength: true }
+
+/**
+ * How Transcribe and Add Captions on Nemotron 3.5 Transcribe read the media on
+ * their wire, on every estimate (decided 2026-11-14: one reading on both
+ * sides): the measured walk with no slack — their hold forgives a second past
+ * a minute (`nemotronHeldMinutes`), more than a made file runs past its
+ * planned length — and a voice made again in the run at the take it holds, a
+ * documented minimum (Lip Sync's rule; the run charges the minutes it
+ * measures). What the walk cannot size stays unknown: the 60-minute price.
+ */
+export const NEMOTRON_WIRE_READ_OPTIONS: Readonly<Pick<MeasuredWireLengthOptions, "plannedClipSlackSec" | "voiceTakeAsMinimum">> = { plannedClipSlackSec: 0, voiceTakeAsMinimum: true }
 
 /** The generated voices: Text to Speech and Text to Dialogue. */
 export const GENERATED_VOICE_NODE_TYPES: ReadonlySet<string> = new Set(["text-to-speech", "text-to-dialogue"])
@@ -216,6 +298,12 @@ export const GENERATED_VOICE_NODE_TYPES: ReadonlySet<string> = new Set(["text-to
 const positiveSec = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined)
 const fixed = (sec: number): InputLength => ({ fixedSec: sec, perEpisodeSec: 0 })
 const isFrozen = (n: EstimateGraphNode): boolean => (n.data as { skipped?: unknown } | null | undefined)?.skipped === true
+
+/** The nodes of a priced run that will actually run: `rerunIds` less every frozen node and every node the engine skips. */
+export function runningNodeIdsOf(nodes: readonly EstimateGraphNode[], rerunIds: ReadonlySet<string>): ReadonlySet<string> {
+  const never = new Set(nodes.filter((n) => isFrozen(n) || ENGINE_SKIPPED_NODE_TYPES.has(n.type ?? "")).map((n) => n.id))
+  return never.size === 0 ? rerunIds : new Set([...rerunIds].filter((id) => !never.has(id)))
+}
 
 /** The fields whose value decides how long a node's clip is, among those a run may map (`NODE_MAPPABLE_FIELDS`). */
 export const LENGTH_DECIDING_MAPPABLE_FIELDS: readonly string[] = ["duration", "provider"]
@@ -313,8 +401,7 @@ export function measuredWireLengthSec(
   options: MeasuredWireLengthOptions = {},
 ): number | undefined {
   const edges = bypassTeleports(nodes, drawnEdges)
-  const never = new Set(nodes.filter((n) => isFrozen(n) || ENGINE_SKIPPED_NODE_TYPES.has(n.type ?? "")).map((n) => n.id))
-  const running: ReadonlySet<string> = never.size === 0 ? rerunIds : new Set([...rerunIds].filter((id) => !never.has(id)))
+  const running = runningNodeIdsOf(nodes, rerunIds)
   const walk = (id: string | undefined, seen: ReadonlySet<string>): number | undefined => {
     const resolved = resolveGraphOrigin(nodes.find((n) => n.id === id), nodes, edges)
     if (!resolved || seen.has(resolved.id)) return undefined
@@ -325,7 +412,12 @@ export function measuredWireLengthSec(
       if (options.knownOnly) return running.has(resolved.id) ? undefined : positiveSec(activeTake(resolved.data)?.duration)
       return renderLengthSec(resolveApplyEdlEstimateLength(resolved, nodes, edges, running, options.planOutputOf))
     }
-    if (RECORDING_SOURCE_TYPES.has(resolved.type ?? "")) return recordingLengthSec(resolved)
+    if (RECORDING_SOURCE_TYPES.has(resolved.type ?? "")) {
+      const recorded = recordingLengthSec(resolved)
+      // Its sound's decoded length, when the step asks: an AAC recording plays up to a frame past its record, less
+      // the hair the step's charge forgives (`CLIP_PRICE_GRACE_SEC`), so a frame the charge already forgives adds nothing.
+      return recorded === undefined || !options.decodedAudioLength ? recorded : recorded + Math.max(0, recordingDecodeOverhangSec(resolved) - CLIP_PRICE_GRACE_SEC)
+    }
     // A node that will not run hands on its take: the length recorded with it.
     if (!running.has(resolved.id)) {
       const take = activeTake(resolved.data)
@@ -348,6 +440,25 @@ export function measuredWireLengthSec(
 }
 
 /**
+ * The slack the measured walk adds to the clip one node makes in the run: the
+ * measuring step's own (`stepSlackSec`), or the node's measured overshoot on
+ * what that step measures (`reading`) when its row declares a longer one
+ * (`plannedOvershootSec`: a Dubbing or an Audio Isolation on the container, a
+ * PixVerse V6 extension on either — `LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC`).
+ *
+ * The zero-slack rule: a step that reads with no slack at all adds none here
+ * either. That is Nemotron only — Transcribe and Add Captions on Nemotron 3.5
+ * (`NEMOTRON_WIRE_READ_OPTIONS`), whose hold and charge forgive a second past
+ * a minute, more than any producer's overshoot. Every other measuring step
+ * reads with a slack above 0; a new step that reads with none must forgive at
+ * least the longest overshoot itself (the overshoot guard test holds both).
+ */
+function madeClipSlackSec(stepSlackSec: number, rule: OutputLengthRule | undefined, node: OutputLengthNode, reading: MeasuredFileReading): number {
+  if (stepSlackSec <= 0) return 0
+  return Math.max(stepSlackSec, rule?.plannedOvershootSec?.(node, reading) ?? 0)
+}
+
+/**
  * The PLANNED length, in seconds, of the video one node hands on when it runs
  * at its settings, from the lengths of what its wires bring (`inputSec`, the
  * measured walk), or `undefined` when no rule bounds it:
@@ -358,7 +469,8 @@ export function measuredWireLengthSec(
  * - a step that keeps its input's length (`LENGTH_KEEPING_VIDEO_TYPES`): the
  *   wire `keptLengthWire` follows, plus the slack when it re-renders the clip
  *   through a provider (its row is no carrier);
- * - every other producer: its row of `VIDEO_LENGTH_RULES`, read for a
+ * - every other producer: its row of `VIDEO_LENGTH_RULES` (or, for an audio
+ *   step, `AUDIO_LENGTH_RULES`; one lookup, `lengthRuleOf`), read for a
  *   measuring step (a generation with the duration its run fills when none is
  *   set and up to a reference clip its output follows; its mapped length
  *   fields as the run resolves them, `mappedLengthFields`), never floored at
@@ -373,7 +485,7 @@ export function plannedVideoLengthSec(
   inputSec: (sourceId: string) => number | undefined,
   nodes: readonly EstimateGraphNode[],
   edges: readonly EstimateGraphEdge[],
-  options: Pick<MeasuredWireLengthOptions, "generateVideoProCapSec" | "plannedClipSlackSec" | "openSourceIds"> = {},
+  options: Pick<MeasuredWireLengthOptions, "generateVideoProCapSec" | "plannedClipSlackSec" | "openSourceIds" | "reading"> = {},
 ): number | undefined {
   const type = origin.type ?? ""
   const into = edges.filter((e) => e.target === origin.id)
@@ -382,8 +494,10 @@ export function plannedVideoLengthSec(
     if (type === "combine-videos" && secs.some((s) => s === undefined)) return undefined
     return knownLength(utilityOutputLength(origin, into, secs.map((s) => (s === undefined ? undefined : fixed(s)))))?.fixedSec
   }
-  const slack = Math.max(0, options.plannedClipSlackSec ?? 0)
-  const rule = VIDEO_LENGTH_RULES[type]
+  const stepSlack = Math.max(0, options.plannedClipSlackSec ?? 0)
+  const rule = lengthRuleOf(type)
+  const reading = options.reading ?? "container"
+  const slack = madeClipSlackSec(stepSlack, rule, { id: origin.id, type, data: origin.data }, reading)
   if (LENGTH_KEEPING_VIDEO_TYPES.has(type)) {
     const wire = keptLengthWire(origin, nodes, edges)
     const sec = wire ? inputSec(wire.source) : undefined
@@ -399,9 +513,10 @@ export function plannedVideoLengthSec(
     })
     const { node: mapped, open } = mappedLengthFields(origin, nodes, edges, options.openSourceIds)
     const ctx = { measured: true, generateVideoProCapSec: options.generateVideoProCapSec, openFields: open }
-    const sec = knownOutputLength(rule.run({ id: origin.id, type, data: mapped.data }, inputs, ctx))?.fixedSec
-    // A node that makes a clip: the slack, once. A carrier's inputs already brought theirs.
-    return sec === undefined || rule.carries ? sec : sec + slack
+    const node = { id: origin.id, type, data: mapped.data }
+    const sec = knownOutputLength(rule.run(node, inputs, ctx))?.fixedSec
+    // A node that makes a clip: the slack, once (its own overshoot when that is longer, read as its run resolves it). A carrier's inputs already brought theirs.
+    return sec === undefined || rule.carries ? sec : sec + madeClipSlackSec(stepSlack, rule, node, reading)
   }
   if (rule) return undefined
   const kept = keptLengthWire(origin, nodes, edges)

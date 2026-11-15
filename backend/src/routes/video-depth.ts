@@ -31,6 +31,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 import { measureVideoDepthInput } from "../lib/video-depth-input.js"
+import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
 import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 const videoDepthBody = z.object({
@@ -51,17 +52,22 @@ type VideoDepthBody = z.infer<typeof videoDepthBody>
 /** What the probe needs, validated before anything is fetched or priced. */
 const probeInput = videoDepthBody.pick({ videoUrl: true, provider: true })
 
+/** A body field named like the measure (the name the route once stashed it under): dropped, never read. */
 const STASH = "__videoDepth"
+/** The request measure the preHandler keeps (`setRequestMeasure`, server-side only). */
+const MEASURE = "videoDepth"
 type Stash = { durationSec: number; creditId: string }
 
 /**
  * Fastify preHandler, ahead of the credit guard: validates the URL and the
  * provider (the probe must never fetch a local path — `probeVideoSource`'s
  * guard only inspects strings with a scheme — and an unknown provider must
- * never reach a price row), measures the clip, and stashes the length and its
- * price row on the body for the guard and the handler.
+ * never reach a price row), measures the clip, and keeps the length and its
+ * price row on the server-side request (never the body) for the guard and the
+ * handler; a client's own field of the stash's name is dropped first.
  */
 async function probePreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  dropClientMeasureFields(req.body, [STASH])
   const body = (req.body ?? {}) as Record<string, unknown>
   const input = probeInput.safeParse(body)
   if (!input.success) {
@@ -78,11 +84,11 @@ async function probePreHandler(req: FastifyRequest, reply: FastifyReply): Promis
   if (!measured.ok) {
     return void reply.status(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
-  body[STASH] = { durationSec: measured.durationSec, creditId: measured.creditId } satisfies Stash
+  setRequestMeasure(req, MEASURE, { durationSec: measured.durationSec, creditId: measured.creditId } satisfies Stash)
 }
 
-const stashOf = (body: unknown): Stash | undefined =>
-  (body as Record<string, unknown> | undefined)?.[STASH] as Stash | undefined
+/** What the preHandler measured: the server-side request's, never the body's. */
+const stashOf = (req: FastifyRequest): Stash | undefined => requestMeasure<Stash>(req, MEASURE)
 
 /** The optional levers `provider` honours, with the colormap resolved for it. */
 function leversFor(d: VideoDepthBody): Partial<Pick<VideoDepthBody, "colormap" | "resolution" | "sideBySide">> {
@@ -101,7 +107,7 @@ export async function videoDepthRoutes(app: FastifyInstance) {
       probePreHandler,
       // Priced from the measured length's own row (`<provider>:<n>s`); the
       // fallback only covers a body the preHandler already refused.
-      creditGuard((req) => stashOf(req.body)?.creditId ?? VIDEO_DEPTH_PROVIDERS[0]),
+      creditGuard((req) => stashOf(req)?.creditId ?? VIDEO_DEPTH_PROVIDERS[0]),
     ],
   }, async (req, reply) => {
     // Strip the preHandler stash before parsing so it never reaches input_data.
@@ -118,7 +124,7 @@ export async function videoDepthRoutes(app: FastifyInstance) {
         error: { code: "unauthorized", message: "Authentication required" },
       })
     }
-    const stash = stashOf(req.body)
+    const stash = stashOf(req)
     if (!stash) {
       // Unreachable while probePreHandler runs first; an invariant, not a user error.
       return sendInternalError(reply, req, new Error("video-depth: probe stash missing"), "Failed to create job")

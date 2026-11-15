@@ -24,10 +24,10 @@ const reserve = vi.fn().mockResolvedValue({ usageLogId: "u-1", creditsReserved: 
 let guardedCredits: number | undefined
 let guardedId: string | undefined
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: (id: () => string, opts?: { computeCredits?: (body: unknown) => Promise<number> }) =>
+  creditGuard: (id: () => string, opts?: { computeCredits?: (body: unknown, req: unknown) => Promise<number> }) =>
     async (req: { body: unknown }) => {
       guardedId = id()
-      guardedCredits = opts?.computeCredits ? await opts.computeCredits(req.body) : undefined
+      guardedCredits = opts?.computeCredits ? await opts.computeCredits(req.body, req) : undefined
     },
   reserveCreditsForJob: (...args: unknown[]) => reserve(...args),
 }))
@@ -130,6 +130,21 @@ describe("POST /v1/mask-outline — who may call it", () => {
 })
 
 describe("POST /v1/mask-outline — a child step", () => {
+  // Units are the server's own measure, never a field a client sends (decided 2026-11-14).
+  it("a client-sent __maskOutlineUnits is ignored: priced and recorded at the measured 3 units", async () => {
+    const res = await asChild({ ...BODY, __maskOutlineUnits: 1 })
+    expect(res.statusCode).toBe(202)
+    expect(guardedCredits).toBe(30)
+    expect(inserted).toMatchObject({ input_data: { billedUnits: 3 } })
+    expect(videoQueue.add).toHaveBeenCalledWith("mask-outline", expect.not.objectContaining({ __maskOutlineUnits: expect.anything() }))
+  })
+
+  it("…and a body the measure skips (a link that is not a safe URL) is checked at one unit, never the client's 99", async () => {
+    const res = await asChild({ ...BODY, videoUrl: "not-a-url", __maskOutlineUnits: 99 })
+    expect(res.statusCode).toBe(400)
+    expect(guardedCredits).toBe(10)
+  })
+
   it("prices one unit per started 5 s of the measured clip, writes a private child job and queues it", async () => {
     const res = await asChild(BODY)
     expect(res.statusCode).toBe(202)

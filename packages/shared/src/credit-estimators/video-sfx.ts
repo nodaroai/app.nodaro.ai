@@ -10,6 +10,8 @@
  *   5 s → `:8s`,  12 s → `:15s`,  31 s → `:60s`,  180 s → `:300s`.
  */
 
+import { gracedMeasuredSec } from "../priced-clip-seconds.js"
+
 export const VIDEO_SFX_PRICING = {
   /** The longest input video a run accepts, in seconds. */
   MAX_DURATION_SEC: 300,
@@ -38,6 +40,19 @@ export function videoSfxCreditId(durationSec: number | null | undefined): string
       : VIDEO_SFX_PRICING.FALLBACK_DURATION_SEC
   const bucket = VIDEO_SFX_BUCKETS.find((b) => seconds <= b.upToSec) ?? VIDEO_SFX_BUCKETS[VIDEO_SFX_BUCKETS.length - 1]!
   return bucket.creditId
+}
+
+/**
+ * The price row a run HOLDS and is CHARGED for an input video it measured at
+ * `measuredSec` seconds: the row of the length less `CLIP_PRICE_GRACE_SEC`
+ * (0.05 s, decided 2026-11-14), so a container a hair past a row's length (a
+ * re-encoded 30 s cut measures 30.016 s) is charged that row, the one its
+ * length is quoted at ({@link videoSfxQuoteCreditId}, which reads the length
+ * exactly). Past the grace, the next row.
+ */
+export function videoSfxHeldCreditId(measuredSec: number): string {
+  // Less a float-noise hair too (`gracedMeasuredSec`): 15.05 s less 0.05 s is 15.000000000000002, not past 15 s.
+  return videoSfxCreditId(Math.max(Number.MIN_VALUE, gracedMeasuredSec(measuredSec)))
 }
 
 /**

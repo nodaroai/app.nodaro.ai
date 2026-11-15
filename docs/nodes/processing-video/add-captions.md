@@ -173,12 +173,15 @@ On `nemotron-3-5-transcribe` a render that transcribes is **one charge: the capt
 | Video length | Credits |
 |--------------|---------|
 | 0:45 | **57**<!-- credits: add-captions:kinetic:nemotron:1m --> |
-| 1:01 | **58**<!-- credits: add-captions:kinetic:nemotron:2m --> |
+| 1:01 | **57**<!-- credits: add-captions:kinetic:nemotron:1m --> |
+| 1:05 | **58**<!-- credits: add-captions:kinetic:nemotron:2m --> |
 | 10:00 | **64**<!-- credits: add-captions:kinetic:nemotron:10m --> |
 | 30:00 | **81**<!-- credits: add-captions:kinetic:nemotron:30m --> |
 | 60:00 | **105**<!-- credits: add-captions:kinetic:nemotron:60m --> |
 
-Before a run, the price shown is the length the graph knows (an upload's length, for one); when no length is known yet it is the 60-minute price. The exact figure for your account is `GET /v1/credits/model-cost?model=add-captions:kinetic:nemotron:<minutes>m`.
+**Up to a second past a minute is the minute below.** A video up to 1 second past a whole minute is held and charged as that minute: 1:00.8 is held and charged one minute, 57 credits<!-- credits: add-captions:kinetic:nemotron:1m -->. A cut or a join that is re-encoded with its sound often measures a few hundredths of a second past its length (a 60-second cut can measure 60.01 seconds), and the decoded length can differ from the file's own by as much. Past that second, the next minute starts.
+
+Before a run, the price shown — the node's price, the workflow's estimate in the editor and on the server, an app's listing — is the started minutes of the length the graph knows for the video wired in, read as [Transcribe](../ai-text/transcribe.md#credits) reads its audio (an upload at its recorded length, a video another node makes in this run at the length it will produce, a node that does not run at the result it hands on). A known length a little past a minute is shown at the next minute, and the run holds and charges the lower one. When no length is known yet it is the 60-minute price. The exact figure for your account is `GET /v1/credits/model-cost?model=add-captions:kinetic:nemotron:<minutes>m`.
 
 **What `text` does depends on the style.**
 

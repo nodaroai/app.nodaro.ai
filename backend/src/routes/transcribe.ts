@@ -26,6 +26,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
 import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 // The providers this route ACCEPTS that can also honour word timestamps —
@@ -84,8 +85,10 @@ export const transcribeBody = z.object({
   })
 })
 
-/** The request key the Nemotron preHandler stashes its measurement under, for the guard and the handler. */
+/** A body field named like the Nemotron measure (the name the route once stashed it under): dropped, never read. */
 const PROBED_KEY = "__nemotronMeasured"
+/** The request measure the Nemotron preHandler keeps (`setRequestMeasure`, server-side only). */
+const MEASURE = "nemotronMeasured"
 
 /** What the preHandler measured: the id the run holds, and the length when it could be read. */
 interface NemotronMeasured {
@@ -98,12 +101,9 @@ function withoutStash(body: unknown): Record<string, unknown> {
   return rest
 }
 
-function measuredOf(body: unknown): NemotronMeasured | undefined {
-  const stashed = (body as Record<string, unknown> | undefined)?.[PROBED_KEY]
-  if (!stashed || typeof stashed !== "object") return undefined
-  const { creditId, durationSec } = stashed as Record<string, unknown>
-  if (typeof creditId !== "string") return undefined
-  return { creditId, ...(typeof durationSec === "number" ? { durationSec } : {}) }
+/** What the Nemotron preHandler measured: the server-side request's, never the body's. */
+function measuredOf(req: FastifyRequest): NemotronMeasured | undefined {
+  return requestMeasure<NemotronMeasured>(req, MEASURE)
 }
 
 function namesNemotron(body: unknown): boolean {
@@ -116,13 +116,15 @@ function namesNemotron(body: unknown): boolean {
  * body, a link the deployment refuses, anything but an https link to a public
  * host, a video's page link and a file over 60 minutes or 200 MB are all
  * refused with nothing held; a file whose length cannot be read is held at the
- * 60-minute price. The measurement is stashed on the body so the guard holds
- * `nemotron-3-5-transcribe:<N>m` without probing again; the worker then
+ * 60-minute price. The measurement is kept on the server-side request (never
+ * the body: a client's own field of its old name is dropped first, on every
+ * engine) so the guard holds `nemotron-3-5-transcribe:<N>m` without probing again; the worker then
  * settles at the minutes KIE reports. Every other engine's request passes
  * through untouched (validated in the handler, as before). The link checks run
  * before the probe: ffprobe is an outbound fetch.
  */
 async function measureNemotronFirst(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  dropClientMeasureFields(req.body, [PROBED_KEY])
   if (!namesNemotron(req.body)) return
   const parsed = transcribeBody.safeParse(withoutStash(req.body))
   if (!parsed.success) {
@@ -142,7 +144,7 @@ async function measureNemotronFirst(req: FastifyRequest, reply: FastifyReply): P
     creditId: measured.creditId,
     ...(measured.durationSec !== undefined ? { durationSec: measured.durationSec } : {}),
   }
-  ;(req.body as Record<string, unknown>)[PROBED_KEY] = stash
+  setRequestMeasure(req, MEASURE, stash)
 }
 
 /**
@@ -152,11 +154,11 @@ async function measureNemotronFirst(req: FastifyRequest, reply: FastifyReply): P
  * not be read). One function for the guard and the reservation, so what is
  * checked is what is held.
  */
-function transcribeCreditId(body: unknown, provider: string | undefined): string {
+function transcribeCreditId(req: FastifyRequest, provider: string | undefined): string {
   if (provider === NEMOTRON_TRANSCRIBE_ID) {
     // Never unmeasured past the preHandler; the bare id (the 60-minute
     // maximum) bounds it if it ever were.
-    return measuredOf(body)?.creditId ?? NEMOTRON_TRANSCRIBE_ID
+    return measuredOf(req)?.creditId ?? NEMOTRON_TRANSCRIBE_ID
   }
   return provider ?? DEFAULT_TRANSCRIBE_PROVIDER
 }
@@ -173,11 +175,11 @@ export async function transcribeRoutes(app: FastifyInstance) {
       measureNemotronFirst,
       creditGuard((req) => {
         const body = req.body as Record<string, unknown>
-        return transcribeCreditId(body, body?.provider as string | undefined)
+        return transcribeCreditId(req, body?.provider as string | undefined)
       }, { runModel: jobRunModel("transcribe") }),
     ],
   }, async (req, reply) => {
-    const nemotronMeasured = measuredOf(req.body)
+    const nemotronMeasured = measuredOf(req)
     const parsed = transcribeBody.safeParse(withoutStash(req.body))
     if (!parsed.success) {
       return reply.status(400).send({
@@ -219,7 +221,7 @@ export async function transcribeRoutes(app: FastifyInstance) {
     }
 
     // Determine model identifier for credit reservation
-    const modelIdentifier = transcribeCreditId(req.body, provider)
+    const modelIdentifier = transcribeCreditId(req, provider)
     const mcpClient = extractMcpClient(req.body)
     // Nemotron: the measured length (when read) and the per-minute id it holds,
     // on the job (as Pitch & Tempo records them) and for the worker, which

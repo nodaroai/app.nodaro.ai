@@ -63,22 +63,22 @@ vi.mock("@/lib/url-validator.js", async () => {
 // deterministically. probeMediaDuration returns a controllable duration; the
 // default below (a short 12.3s clip) exercises the tight-bucket path.
 const mockProbeMediaDuration = vi.fn().mockResolvedValue(12.3)
+vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
+  probeMediaDuration: (...args: unknown[]) => mockProbeMediaDuration(...args),
+}))
 // The sound's length, read as Trim reads a clip (header, else a header-less recording's last packet).
 vi.mock("@/lib/video-utility-probe.js", () => ({
   probeSoundLengthSec: (...args: unknown[]) => mockProbeMediaDuration(...args),
-}))
-vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
-  probeMediaDuration: (...args: unknown[]) => mockProbeMediaDuration(...args),
 }))
 
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { aiAvatarRoutes, probeAudioDurationPreHandler } from "../ai-avatar.js"
+import { aiAvatarRoutes, measuredAiAvatarAudioSec, probeAudioDurationPreHandler } from "../ai-avatar.js"
+import { aiAvatarCreditIdOf } from "../../lib/probed-credit-ids.js"
 import { registerServerOnlyBodyKeysHook } from "../../middleware/server-only-body-keys.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
-import { resolveAiAvatarCreditId } from "@nodaro/shared/credits"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 
@@ -351,7 +351,7 @@ describe("POST /v1/ai-avatar", () => {
 //
 // The user-reported bug reserved the 900s TOP bucket for audio mode (clip
 // length unknown at reserve), holding ~4020 credits for a sub-minute clip.
-// The fix: an ffprobe preHandler stashes __probedDurationSec so the reserve
+// The fix: an ffprobe preHandler records the audio's length on the request so the reserve
 // buckets by the real duration; un-probed audio falls back to a modest 120s,
 // never 900s. These tests assert the reserve credit id is the tight bucket.
 // ---------------------------------------------------------------------------
@@ -400,6 +400,31 @@ describe("ai-avatar audio-mode reserve bucketing", () => {
       },
     })
 
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_media_duration")
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  // A length is the server's own reading, never a field a client sends (decided 2026-11-14).
+  it("a client-sent __probedDurationSec is ignored: a 5 s claim for a ~12.3 s clip is held at the measured 15 s bucket", async () => {
+    mockProbeMediaDuration.mockResolvedValueOnce(12.3)
+    mockJobInsert({ data: { id: "job-audio-claim" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/ai-avatar",
+      payload: { avatarId: "avatar-123", engine: "avatar-iv", speechMode: "audio", audioUrl: VALID_AUDIO_URL, resolution: "720p", userId: VALID_USER_ID, __probedDurationSec: 5 },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]?.[3]).toBe("heygen-avatar-iv:720p:15s")
+  })
+
+  it("…and with the probe failing, the run is refused before anything is reserved, never priced at the client's 5 s", async () => {
+    mockProbeMediaDuration.mockRejectedValueOnce(new Error("ffprobe failed"))
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/ai-avatar",
+      payload: { avatarId: "avatar-123", engine: "avatar-iv", speechMode: "audio", audioUrl: VALID_AUDIO_URL, resolution: "720p", userId: VALID_USER_ID, __probedDurationSec: 5 },
+    })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("invalid_media_duration")
     expect(reserveCreditsForJob).not.toHaveBeenCalled()
@@ -458,43 +483,57 @@ describe("ai-avatar audio-mode reserve bucketing", () => {
 
 describe("probeAudioDurationPreHandler", () => {
   const makeReq = (body: Record<string, unknown>) =>
-    ({ body, log: { warn: vi.fn() } }) as never
+    ({ body, log: { warn: vi.fn() } }) as unknown as import("fastify").FastifyRequest
   const makeReply = () => ({}) as never
 
   beforeEach(() => {
     mockProbeMediaDuration.mockReset().mockResolvedValue(12.3)
   })
 
-  it("stashes ceil(__probedDurationSec) on the body in audio mode", async () => {
+  it("records ceil(duration) on the server-side request in audio mode, never on the body", async () => {
     mockProbeMediaDuration.mockResolvedValueOnce(12.3)
     const body: Record<string, unknown> = { speechMode: "audio", audioUrl: VALID_AUDIO_URL }
-    await probeAudioDurationPreHandler(makeReq(body), makeReply())
-    expect(body.__probedDurationSec).toBe(13)
-    expect(resolveAiAvatarCreditId(body)).toBe("heygen-avatar-iv:720p:15s")
+    const req = makeReq(body)
+    await probeAudioDurationPreHandler(req, makeReply())
+    expect(measuredAiAvatarAudioSec(req)).toBe(13)
+    expect(body.__probedDurationSec).toBeUndefined()
+    expect(aiAvatarCreditIdOf(body, measuredAiAvatarAudioSec(req))).toBe("heygen-avatar-iv:720p:15s")
+  })
+
+  it("drops a client's __probedDurationSec from the body before anything reads it", async () => {
+    mockProbeMediaDuration.mockResolvedValueOnce(12.3)
+    const body: Record<string, unknown> = { speechMode: "audio", audioUrl: VALID_AUDIO_URL, __probedDurationSec: 5 }
+    const req = makeReq(body)
+    await probeAudioDurationPreHandler(req, makeReply())
+    expect(body.__probedDurationSec).toBeUndefined()
+    expect(measuredAiAvatarAudioSec(req)).toBe(13)
   })
 
   it("does NOT probe in text mode", async () => {
     const body: Record<string, unknown> = { speechMode: "text", script: "hi", voiceId: "v" }
-    await probeAudioDurationPreHandler(makeReq(body), makeReply())
+    const req = makeReq(body)
+    await probeAudioDurationPreHandler(req, makeReply())
     expect(mockProbeMediaDuration).not.toHaveBeenCalled()
-    expect(body.__probedDurationSec).toBeUndefined()
+    expect(measuredAiAvatarAudioSec(req)).toBeUndefined()
   })
 
   it("does NOT probe when audioUrl is missing", async () => {
     const body: Record<string, unknown> = { speechMode: "audio" }
-    await probeAudioDurationPreHandler(makeReq(body), makeReply())
+    const req = makeReq(body)
+    await probeAudioDurationPreHandler(req, makeReply())
     expect(mockProbeMediaDuration).not.toHaveBeenCalled()
-    expect(body.__probedDurationSec).toBeUndefined()
+    expect(measuredAiAvatarAudioSec(req)).toBeUndefined()
   })
 
-  it("refuses on probe failure, leaving nothing stashed (no 120s guess)", async () => {
+  it("refuses on probe failure, recording no length (no 120s guess)", async () => {
     mockProbeMediaDuration.mockRejectedValueOnce(new Error("boom"))
     const body: Record<string, unknown> = { speechMode: "audio", audioUrl: VALID_AUDIO_URL }
+    const req = makeReq(body)
     const sent: unknown[] = []
     const reply = { status: vi.fn(function (this: unknown) { return this }), send: vi.fn((b: unknown) => sent.push(b)) }
     reply.status.mockReturnValue(reply)
-    await probeAudioDurationPreHandler(makeReq(body), reply as never)
-    expect(body.__probedDurationSec).toBeUndefined()
+    await probeAudioDurationPreHandler(req, reply as never)
+    expect(measuredAiAvatarAudioSec(req)).toBeUndefined()
     expect(reply.status).toHaveBeenCalledWith(400)
     expect(sent[0]).toMatchObject({ error: { code: "invalid_media_duration" } })
   })

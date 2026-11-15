@@ -73,6 +73,13 @@ describe("audio dub", () => {
     expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ meteredBaseCredits: 160 }))
   })
 
+  // The delivered file's length takes the charge's grace too (decided 2026-11-14): never rounded up to a second first.
+  it("without ElevenLabs' reading, a file a hair past a minute (60.02 s) settles at that minute — 1 minute, 40", async () => {
+    mocks.probe.mockResolvedValue(60.02)
+    await deliver({ request: CEILING })
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ meteredBaseCredits: 40 }))
+  })
+
   it("with no length at all, it settles at the 2-minute last resort — never the 30-minute hold", async () => {
     mocks.probe.mockRejectedValue(new Error("unreadable"))
     await deliver({ request: CEILING })
@@ -95,6 +102,12 @@ describe("video dub", () => {
     mocks.probe.mockResolvedValue(61)
     await deliver({ videoMode: true, request: CEILING })
     expect(mocks.commit).toHaveBeenCalledWith("u-1", "job-1", null, 80, true)
+  })
+
+  it("…and a video a hair past a minute (60.02 s) settles at that minute, as the charge's grace forgives", async () => {
+    mocks.probe.mockResolvedValue(60.02)
+    await deliver({ videoMode: true, request: CEILING })
+    expect(mocks.commit).toHaveBeenCalledWith("u-1", "job-1", null, 40, true)
   })
 
   it("a measured run commits its reservation as before", async () => {

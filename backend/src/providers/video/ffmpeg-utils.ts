@@ -43,6 +43,7 @@ import {
   downloadBodyDeadlineMs,
 } from "./ffmpeg-timeouts.js"
 import { constantFrameRate, parseFrameRate } from "./frame-rate.js"
+import { UNREADABLE_CLIP_FPS } from "@nodaro/render-rules"
 
 // The frame-rate rule lives in a dependency-free leaf (see its header);
 // re-exported so every existing `ffmpeg-utils.js` import keeps working.
@@ -804,9 +805,10 @@ export async function probeAudioSampleRate(filePath: string): Promise<number | u
 }
 
 /**
- * Probe the frame rate of a local video file. Falls back to 30fps if the
- * probe fails or returns something unparseable — a missing fps shouldn't
- * abort a frame-count-based trim.
+ * Probe the frame rate of a local video file. Falls back to
+ * `UNREADABLE_CLIP_FPS` (30, @nodaro/render-rules: what Combine Videos' charge
+ * reads such a clip at) if the probe fails or returns something
+ * unparseable — a missing fps shouldn't abort a frame-count-based trim.
  */
 export async function getVideoFps(filePath: string): Promise<number> {
   try {
@@ -814,11 +816,9 @@ export async function getVideoFps(filePath: string): Promise<number> {
       "-v", "error", "-select_streams", "v:0",
       "-show_entries", "stream=r_frame_rate", "-of", "csv=p=0", filePath,
     ])
-    const [n, d] = (csvFields(out)[0] ?? "").split("/").map(Number)
-    const fps = d ? n / d : n
-    return fps && Number.isFinite(fps) && fps > 0 ? fps : 30
+    return parseFrameRate(csvFields(out)[0] ?? "") ?? UNREADABLE_CLIP_FPS
   } catch {
-    return 30
+    return UNREADABLE_CLIP_FPS
   }
 }
 

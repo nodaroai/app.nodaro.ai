@@ -39,6 +39,16 @@ You watch the workflow fill up stage-by-stage. The result is both a finished vid
 
 A 30-second short film typically takes 20-40 minutes from prompt to delivery.
 
+### Narrated films
+
+In a film with a spoken narration track (a narrated ad, an explainer, a trailer voiceover) the voice sets the timing, so the order changes: Claude asks about voiced narration at Stage 1, fits the script to a word budget (speech is at most 60% of the runtime, about 1.4 words per second of runtime), generates the voice one sentence at a time, measures it, and only then fixes the shot lengths in Stage 2. Music still comes after the picture.
+
+The skill's "Narration and audio mix" rules cover the rest: the voice is never sped up or time-stretched, every line is trimmed and level-matched, the lines are placed with pauses between them, the video clips' own audio is removed, the music is ducked under the voice, and the final mix is measured before it is merged. Before showing you the film, Claude checks it with platform tools: a transcript with word timings for the words and the pauses, level probes for the voice against the music, a language-model pass over the finished video for picture defects, and a second pass over the mix alone, as audio, whose answer is treated as a hint. Claude cannot hear the result, so it reports the measured levels and asks you to listen once before moving on to picture changes.
+
+### Video models
+
+For camera-heavy shots the skill prefers Gemini Omni Flash 1.2 (`gemini-omni-flash-1-2`), which takes any whole-second length from 3 to 15, and uses Veo 3.1 only when you ask for it. Seedance 2 shots run in multishot mode. You can name another model at any time.
+
 ## What makes this different
 
 - **Built live on your canvas.** Nodes appear as Claude works. The final state is an editable Nodaro graph — every step preserved.

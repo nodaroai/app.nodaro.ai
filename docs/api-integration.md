@@ -5308,7 +5308,7 @@ authenticated caller.
   Clips answer hands UGC Finish a finish call); the quote then has a "Finish the clips" line
   (key `finish`), charged once, at the price that job is charged. The join line (key `join`) is
   priced as the UGC template's Join clips node is quoted: its settings, and each clip at its
-  ticket's length plus about a tenth of a second, less the 0.1-second grace every Combine Videos
+  ticket's length plus 0.15 seconds, less the 0.15-second grace every Combine Videos
   clip gets. A run measures each finished clip and charges the join that length (less the same
   grace); a finished clip is at most its ticket's length and about a frame, so the join line is
   never below what the run charges for it.

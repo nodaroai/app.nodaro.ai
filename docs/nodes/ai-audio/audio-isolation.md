@@ -17,6 +17,8 @@ No additional configuration is required. The node processes the input audio auto
 
 - **Input**: `in` -- audio file containing speech mixed with background noise or music
 - **Output**: `audio` -- cleaned audio file with isolated voice (URL)
+
+A step after it that measures the audio it is given and is charged by its length (Lip Sync, Pitch & Tempo, Dubbing, …) quotes the isolated voice a quarter second past its input's length, as after a Dubbing, whose file was measured to run up to about 0.13 seconds past its input: a Lip Sync priced per second on an Audio Isolation of a 4.8-second recording is quoted as 6 seconds.
 ## Best Practices
 
 - Use this node before Voice Changer or Lip Sync to ensure the source audio is clean and free of background noise.

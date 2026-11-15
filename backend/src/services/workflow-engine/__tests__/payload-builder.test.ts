@@ -1249,6 +1249,12 @@ describe("buildPayload", () => {
       expect(result.payload).toMatchObject({ targetResolution: "4k", targetFps: 60 })
     })
 
+    it("video-upscale on Topaz reads a frame rate stored as text as both quotes do (topazTargetFpsOf)", () => {
+      const sent = (targetFps: unknown) => buildPayload(node("n1", "video-upscale", { provider: "topaz", targetFps }), jobId, { videoUrl: "https://v.mp4" }).payload
+      expect(sent("60")).toMatchObject({ targetFps: 60 })
+      expect(sent("source")).not.toHaveProperty("targetFps")
+    })
+
     it("video-upscale drops a target resolution Topaz does not offer and keeps a legacy factor", () => {
       const n = node("n1", "video-upscale", { provider: "topaz", targetResolution: "8k", upscaleFactor: "4" })
       const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4" })

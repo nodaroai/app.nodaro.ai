@@ -43,13 +43,14 @@
  * or resolution-tiered model, the fixed 8-second Seedance / MiniMax tiers) is
  * never probed, so its run is byte-identical.
  */
+import { CLIP_PRICE_GRACE_SEC } from "@nodaro/shared/media"
 import {
   buildLipSyncCreditId,
   getLipSyncMaxAudioSeconds,
   isPerSecondLipSyncProvider,
   LIP_SYNC_DURATION_BUCKETS,
   lipSyncAudioRateOf,
-  lipSyncBilledSeconds,
+  lipSyncHeldSeconds,
   pickLipSyncBucket,
   type LipSyncAudioRate,
 } from "@nodaro/shared/credits"
@@ -181,8 +182,12 @@ export function lipSyncAudioCapSec(pricing: LipSyncAudioPricing): number {
  * encoder's priming frame). Without this, such a file would be charged the
  * NEXT bucket. The copy sent is cut to exactly the bucket's length
  * (providers/kie/lip-sync-audio.ts), so what is sent is still what was priced.
+ * It IS the platform's charge grace (`CLIP_PRICE_GRACE_SEC`), the allowance the
+ * quote of an AAC recording is figured with (`LIP_SYNC_AUDIO_WIRE_READ_OPTIONS`:
+ * its decode one frame past the record, less this): one constant, so the quote
+ * and the hold cannot drift apart.
  */
-export const LIP_SYNC_BUCKET_EDGE_TOLERANCE_SEC = 0.05
+export const LIP_SYNC_BUCKET_EDGE_TOLERANCE_SEC = CLIP_PRICE_GRACE_SEC
 
 /**
  * The bucket audio of `sec` seconds is held in: the bucket it falls in
@@ -199,7 +204,7 @@ function bucketWithEdgeTolerance(sec: number): number {
 /**
  * The seconds a run is held and charged for, from its audio's decoded length —
  * THE one rule the price check (route, workflow run) and the worker read.
- * A rate model: the whole seconds (`lipSyncBilledSeconds`); undefined past its
+ * A rate model: the whole seconds, a hair past one forgiven (`lipSyncHeldSeconds`); undefined past its
  * maximum (refused). A bucketed model: the bucket the length falls in (the
  * length at most the maximum; within {@link LIP_SYNC_BUCKET_EDGE_TOLERANCE_SEC}
  * past a bucket's length, that bucket), audio past the maximum priced at it.
@@ -207,7 +212,8 @@ function bucketWithEdgeTolerance(sec: number): number {
 export function lipSyncHeldSecondsOf(pricing: LipSyncAudioPricing, length: DecodedAudioLength): number | undefined {
   if (pricing.kind === "rate") {
     if (length.overCap || length.seconds > pricing.rate.maxSeconds) return undefined
-    return lipSyncBilledSeconds(pricing.rate, length.seconds)
+    // A hair past a whole second forgiven (`lipSyncHeldSeconds`, decided 2026-11-14); the quote reads the length exactly.
+    return lipSyncHeldSeconds(pricing.rate, length.seconds)
   }
   if (length.overCap) return pickLipSyncBucket(pricing.maxSeconds)
   return bucketWithEdgeTolerance(Math.min(length.seconds, pricing.maxSeconds))

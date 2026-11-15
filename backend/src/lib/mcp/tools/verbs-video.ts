@@ -555,7 +555,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "Returns a job_id.\n\n" +
         "**Picking a model**: call `list_models { kind: \"video\", mode: \"i2v\" }` for capability sheets " +
         "and recommendations. With a start AND end frame, pick a model whose `features` includes " +
-        "`end-frame`. Default `veo3.1` is the best price/quality balance with native audio.\n\n" +
+        "`end-frame`. Prefer the newer `gemini-omni-flash-1-2` over `veo3.1`: native audio.\n\n" +
         "**Reference modes** (auto-selected from the inputs you provide): `frames` — image_url is the " +
         "first frame, end_frame_url optionally the last; `references` — reference_image_urls / " +
         "reference_video_urls / reference_audio_urls at each model's own caps (image_url and " +

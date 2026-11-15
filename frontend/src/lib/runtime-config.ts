@@ -222,6 +222,18 @@ export function runtimeFreecutUrl(): string {
   return isAbsoluteHttpUrl(configured) ? configured : DEFAULT_FREECUT_URL
 }
 
+/**
+ * Whether this install offers "Edit video" at all. False only when the editor is
+ * switched off (`FREECUT_URL=off`); then the action is not drawn anywhere, since
+ * there is no editor for it to open. Every surface that offers the action reads
+ * this through its one shared piece (`EditVideoButton` on the canvas,
+ * `resolveCardActions` on an output card), never `runtimeFreecutUrl` itself
+ * (`edit-video-action-funnel.test.ts`).
+ */
+export function videoEditorOffered(): boolean {
+  return runtimeFreecutUrl() !== ""
+}
+
 function isAbsoluteHttpUrl(value: string): boolean {
   try {
     const { protocol } = new URL(value)

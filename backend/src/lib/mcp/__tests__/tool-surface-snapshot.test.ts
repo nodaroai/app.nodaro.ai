@@ -1682,6 +1682,13 @@ const KLING_4_VIDEO_SUBJECT_BYTES = 88
 // they register in every edition). Measured by this suite: 539_375 total − 535_672 = 3_703 B,
 // the three definitions together (each far under the per-tool budget).
 const DUBBING_TOOLS_BYTES = 3_703
+// RAISED 2026-11-15 by one NEW tool, `generate_text` (verbs-generate-text.ts: Generate Text on any
+// LLM with images, videos, audio and PDFs to read, answered whole in the call's own result), and
+// nothing else. It registers in every edition, so both `all` membership sets move by exactly that
+// name. Measured by this suite on the same tree with and without it: 543_148 total − 539_408 =
+// 3_740 B, the one definition (2_060 B of it the LLM levers every LLM tool carries), far under the
+// per-tool budget; the list keeps the 28 B of headroom it had.
+const GENERATE_TEXT_TOOL_BYTES = 3_740
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES,
@@ -1894,7 +1901,8 @@ export const TOOL_WIRE_BUDGET = {
     GEMINI_DIALOGUE_BYTES +
     GEMINI_REPLICA_BYTES +
     KLING_4_VIDEO_SUBJECT_BYTES +
-    DUBBING_TOOLS_BYTES,
+    DUBBING_TOOLS_BYTES +
+    GENERATE_TEXT_TOOL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

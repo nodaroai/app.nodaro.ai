@@ -258,12 +258,23 @@ Charged **per run, by engine** — a flat amount, not metered by audio length �
 | File length | Credits |
 |-------------|---------|
 | 0:45 | **2**<!-- credits: nemotron-3-5-transcribe:1m --> |
-| 1:01 | **3**<!-- credits: nemotron-3-5-transcribe:2m --> |
+| 1:01 | **2**<!-- credits: nemotron-3-5-transcribe:1m --> |
+| 1:05 | **3**<!-- credits: nemotron-3-5-transcribe:2m --> |
 | 10:00 | **9**<!-- credits: nemotron-3-5-transcribe:10m --> |
 | 30:00 | **26**<!-- credits: nemotron-3-5-transcribe:30m --> |
 | 60:00 | **50**<!-- credits: nemotron-3-5-transcribe:60m --> |
 
-**The charge follows the audio's actual length.** The file is measured before the run and the price of that length is held; when the run is done it is charged for the length the model actually decoded, which can differ from what a file's header declares (some MP3s misstate their length). A shorter decoded length costs less than the hold and the rest is released; a longer one costs more, and the difference is taken from your balance. A file whose length could not be read up front holds the 60-minute price and is charged the same way. Before a run, the price shown is the length the graph knows (an upload's length, for one); when no length is known yet it is the 60-minute price.
+**The charge follows the audio's actual length.** The file is measured before the run and the price of that length is held; when the run is done it is charged for the length the model actually decoded, which can differ from what a file's header declares (some MP3s misstate their length). A shorter decoded length costs less than the hold and the rest is released; a longer one costs more, and the difference is taken from your balance. A file whose length could not be read up front holds the 60-minute price and is charged the same way.
+
+**Up to a second past a minute is the minute below.** A file up to 1 second past a whole minute, as measured before the run and as decoded, is held and charged as that minute: 1:00.8 is held and charged one minute, 2 credits<!-- credits: nemotron-3-5-transcribe:1m -->. A cut or a join that is re-encoded with its sound often measures a few hundredths of a second past its length (a 60-second cut can measure 60.01 seconds). Past that second, the next minute starts.
+
+Before a run, the price shown — the node's price, the workflow's estimate in the editor and on the server, an app's listing — is the started minutes of the length the graph knows for the audio wired in, read the same way everywhere:
+- an upload, or a file added from your own uploads in the Library: the length recorded for it;
+- audio or a video another node makes in this run: the length that node will produce at its settings (a Trim's window, a generation's length);
+- a node that does not run in this run: the length recorded with the result it hands on;
+- a voice made again in this run (Text to Speech, Text to Dialogue): the length of the take it holds now. That is a minimum, not the price: the new voice can be longer, and the run is charged the minutes it measures.
+
+A known length a little past a minute is shown at the next minute, and the run holds and charges the lower one. When no length is known yet (a voice with no take, a file whose length was not recorded), it is the 60-minute price.
 
 The exact figure for your account is always `GET /v1/credits/model-cost?model=<engine>` (MCP: `list_models`; for Nemotron, `nemotron-3-5-transcribe:<minutes>m`). Nothing is reserved for a request that is refused up front — `wordTimestamps: true` on `whisper` (`400`), a translation on any other engine than Nemotron or beside word timings (`400`), a Nemotron link that is not https to a public host, or a file that is too long or too large (`400`), or a workflow whose Whisper (or translating) transcript feeds Add Captions (refused before it runs; the one exception, a chain that crosses a sub-workflow boundary, is described [above](#a-whisper-transcript-wired-into-add-captions-is-refused-before-the-run)).
 

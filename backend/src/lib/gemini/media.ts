@@ -36,6 +36,7 @@ import type { GoogleGenAI, Part } from "@google/genai"
 import { safeFetch } from "../safe-fetch.js"
 import type { LlmContentBlock } from "../llm-client.js"
 import { FILE_LANE_ERROR } from "../llm/message-builders.js"
+import { LLM_VIDEO_FPS_MAX } from "../llm/types.js"
 
 /** Raw-bytes ceiling for inlining rather than uploading. See module docstring. */
 const INLINE_MAX_BYTES = 6 * 1024 * 1024
@@ -47,7 +48,7 @@ const MAX_MEDIA_BYTES = 512 * 1024 * 1024
 const FETCH_TIMEOUT_MS = 120_000
 
 /** Google's documented ceiling for `VideoMetadata.fps`. */
-const MAX_SAMPLING_FPS = 24
+const MAX_SAMPLING_FPS = LLM_VIDEO_FPS_MAX
 
 /** The ONLY container accepted as inline video bytes — exact, not a family. */
 const INLINE_VIDEO_MEDIA_TYPE = "video/mp4"

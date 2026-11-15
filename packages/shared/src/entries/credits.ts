@@ -103,6 +103,7 @@ export {
   OMNIHUMAN_2_0_PER_SECOND_CREDIT_ID,
   lipSyncAudioRateOf,
   lipSyncBilledSeconds,
+  lipSyncHeldSeconds,
   lipSyncEstimateSeconds,
   lipSyncFifteenSecondCreditId,
   LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS,

@@ -26,12 +26,25 @@ beforeEach(() => {
 
 describe("measureNemotronTranscribeInput (the route's and the workflow run's one rule)", () => {
   it("measures the file and names the per-minute id its run reserves", async () => {
+    probe.fn = async () => ({ durationSec: 61.5, sizeBytes: 1_000_000 })
     expect(await measureNemotronTranscribeInput("https://x.example/a.mp3")).toEqual({
       ok: true,
-      durationSec: 61,
+      durationSec: 61.5,
       sizeBytes: 1_000_000,
       creditId: "nemotron-3-5-transcribe:2m",
     })
+  })
+
+  // The charge forgives up to 1 s past the HELD minutes (lib/nemotron-transcribe-settle.ts), so the hold takes the
+  // same second: a file a hair past a minute — a re-encoded 60-second cut measures 60.0004–60.011 s — was held a
+  // minute above the quote of its 60 s and charged there, since the charge's grace only reads above what is held.
+  it.each([
+    [60.011, "nemotron-3-5-transcribe:1m"],
+    [61, "nemotron-3-5-transcribe:1m"],
+    [61.001, "nemotron-3-5-transcribe:2m"],
+  ])("holds a file measured at %s s at %s: up to 1 s past a minute is the minute below", async (sec, id) => {
+    probe.fn = async () => ({ durationSec: sec, sizeBytes: 1_000_000 })
+    expect(await measureNemotronTranscribeInput("https://x.example/a.mp3")).toMatchObject({ ok: true, durationSec: sec, creditId: id })
   })
 
   it("refuses what KIE would refuse, before anything is held", async () => {
@@ -99,9 +112,10 @@ describe("measureNemotronTranscribeInput (the route's and the workflow run's one
 
 describe("stampNemotronTranscribeInput (the workflow run's twin of the route's preHandler)", () => {
   it("stamps the length and the per-minute id the run reserves", async () => {
+    probe.fn = async () => ({ durationSec: 61.5, sizeBytes: 1_000_000 })
     const payload: Record<string, unknown> = { audioUrl: "https://cdn.example.com/a.mp3", provider: NEMOTRON }
     expect(await stampNemotronTranscribeInput("transcribe", payload)).toBeUndefined()
-    expect(payload).toMatchObject({ duration_seconds: 61, bucketKey: "nemotron-3-5-transcribe:2m" })
+    expect(payload).toMatchObject({ duration_seconds: 61.5, bucketKey: "nemotron-3-5-transcribe:2m" })
     expect(nemotronTranscribeReserveId("transcribe", payload)).toBe("nemotron-3-5-transcribe:2m")
   })
 

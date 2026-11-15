@@ -16,6 +16,7 @@ import { acquireStreamLane, restampProviderCallStart, type StreamLaneRefusal } f
 import { primaryProviderOfLlm } from "../lib/concurrency-lanes/provider-of.js"
 import { llmComplete, llmStream } from "../lib/llm-client.js"
 import type { LlmContentBlock, LlmRequest, LlmResponse } from "../lib/llm-client.js"
+import { LLM_VIDEO_FPS_MAX } from "../lib/llm/types.js"
 import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult, stampSyncLlmCallStart } from "../lib/llm-billing.js"
 import { abortOnClientDisconnect, addCallToSpend, billedEvidence, meteredFailureMessage, meteredTextPrecheck, recordMeteredJobOutput } from "../lib/metered-text-route.js"
 import { LLM_FILE_MODELS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, LLM_REFERENCE_FILES_MAX, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, getLlmModalityCaps, llmAcceptsFiles } from "@nodaro/shared/llm-models"
@@ -50,6 +51,11 @@ const llmChatBody = z.object({
   userPrompt: z.string().max(LLM_TEXT_INPUT_MAX).optional(),
   referenceImageUrls: z.array(z.string().url()).max(5).optional(),
   referenceVideoUrls: z.array(z.string().url()).max(3).optional(),
+  // Frames per second sampled from each reference video (the model's own
+  // default is 1): more frames of the same clip, charged per token as any
+  // input. Only the provider's own API carries a sampling rate, so it needs
+  // `advancedMode` (`videoFpsError`). It does not change how the sound is read.
+  referenceVideoFps: z.number().gt(0).max(LLM_VIDEO_FPS_MAX).optional(),
   referenceAudioUrls: z.array(z.string().url()).max(3).optional(),
   // Documents (PDF), read by a model whose caps say `file` (GPT-6.1 Terra).
   // Each is fetched, checked and its pages counted before anything is held
@@ -68,17 +74,39 @@ const llmChatBody = z.object({
 
 function buildUserContent(
   userInput: string,
-  refs: { images?: string[]; videos?: string[]; audios?: string[]; files?: LlmFileBlock[] },
+  refs: { images?: string[]; videos?: string[]; videoFps?: number; audios?: string[]; files?: LlmFileBlock[] },
 ): string | LlmContentBlock[] {
   const hasMedia = ((refs.images?.length ?? 0) + (refs.videos?.length ?? 0) + (refs.audios?.length ?? 0) + (refs.files?.length ?? 0)) > 0
   if (!hasMedia) return userInput
   const blocks: LlmContentBlock[] = []
   for (const file of refs.files ?? []) blocks.push(file)
   for (const url of refs.images ?? []) blocks.push({ type: "image", url })
-  for (const url of refs.videos ?? []) blocks.push({ type: "video", url })
+  // No rate asked: the block carries none, exactly as before the field existed.
+  for (const url of refs.videos ?? []) blocks.push(refs.videoFps === undefined ? { type: "video", url } : { type: "video", url, fps: refs.videoFps })
   for (const url of refs.audios ?? []) blocks.push({ type: "audio", url })
   blocks.push({ type: "text", text: userInput })
   return blocks
+}
+
+/**
+ * Null when the request may carry its video frame rate (or asks for none),
+ * else the refusal. A sampling rate rides only on the provider's own API
+ * (`LlmContentBlock`'s `fps`), which is what Advanced mode pins the call to;
+ * without it the model would sample at its default and the answer would look
+ * the same, so the request is refused rather than quietly run at 1 fps.
+ */
+function videoFpsError(body: { referenceVideoFps?: number; referenceVideoUrls?: string[]; advancedMode?: boolean }): { code: string; message: string } | null {
+  if (body.referenceVideoFps === undefined) return null
+  if (!body.referenceVideoUrls?.length) {
+    return { code: "video_fps_without_video", message: "referenceVideoFps sets how a reference video is sampled. Send referenceVideoUrls with it, or leave it out." }
+  }
+  if (!body.advancedMode) {
+    return {
+      code: "video_fps_needs_advanced_mode",
+      message: "A video frame rate is carried only by the provider's own API. Turn Advanced mode on (advancedMode: true) with a Gemini model, or leave referenceVideoFps out to sample 1 frame per second.",
+    }
+  }
+  return null
 }
 
 /**
@@ -248,7 +276,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         })
       }
 
-      const { systemPrompt, userInput, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, referenceFileUrls, temperature, maxTokens } = parsed.data
+      const { systemPrompt, userInput, referenceImageUrls, referenceVideoUrls, referenceVideoFps, referenceAudioUrls, referenceFileUrls, temperature, maxTokens } = parsed.data
       const userId = req.userId
 
       if (!userId) {
@@ -273,6 +301,8 @@ export async function llmChatRoutes(app: FastifyInstance) {
       }
       const advancedError = advancedModeError(parsed.data, llmModel)
       if (advancedError) return reply.status(400).send({ error: advancedError })
+      const fpsError = videoFpsError(parsed.data)
+      if (fpsError) return reply.status(400).send({ error: fpsError })
       // No job row here, so the insert funnel's gate never sees the request:
       // a restricted file (migration 581) is not sent to the model either.
       if (await restrictedInputKey({ referenceImageUrls, referenceVideoUrls, referenceAudioUrls, referenceFileUrls }, { userId })) {
@@ -287,7 +317,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       const request: LlmRequest = {
         modelId: llmModel,
         system: systemPrompt,
-        messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls, files: prepared.files }) }],
+        messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, videoFps: referenceVideoFps, audios: referenceAudioUrls, files: prepared.files }) }],
         ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
         ...cheapLanesParam(parsed.data),
         reasoningEffort: parsed.data.reasoningEffort,
@@ -453,7 +483,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         })
       }
 
-      const { systemPrompt, userInput, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, referenceFileUrls, temperature, maxTokens } = parsed.data
+      const { systemPrompt, userInput, referenceImageUrls, referenceVideoUrls, referenceVideoFps, referenceAudioUrls, referenceFileUrls, temperature, maxTokens } = parsed.data
       const userId = req.userId
 
       if (!userId) {
@@ -478,6 +508,8 @@ export async function llmChatRoutes(app: FastifyInstance) {
       }
       const advancedError = advancedModeError(parsed.data, llmModel)
       if (advancedError) return reply.status(400).send({ error: advancedError })
+      const fpsError = videoFpsError(parsed.data)
+      if (fpsError) return reply.status(400).send({ error: fpsError })
       // No job row here, so the insert funnel's gate never sees the request:
       // a restricted file (migration 581) is not sent to the model either.
       if (await restrictedInputKey({ referenceImageUrls, referenceVideoUrls, referenceAudioUrls, referenceFileUrls }, { userId })) {
@@ -504,7 +536,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       const request: LlmRequest = {
         modelId: llmModel,
         system: systemPrompt,
-        messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls, files: prepared.files }) }],
+        messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, videoFps: referenceVideoFps, audios: referenceAudioUrls, files: prepared.files }) }],
         ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
         ...cheapLanesParam(parsed.data),
         reasoningEffort: parsed.data.reasoningEffort,

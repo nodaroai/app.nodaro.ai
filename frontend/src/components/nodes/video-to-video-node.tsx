@@ -4,7 +4,8 @@ import { SeedanceDraftResultBadge } from "./seedance-draft-result-badge"
 import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Film, Type, Minus, Images, Music, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link, Settings, Scissors, Aperture } from "lucide-react"
+import { Clapperboard, Film, Type, Minus, Images, Music, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link, Settings, Aperture } from "lucide-react"
+import { EditVideoButton } from "./edit-video-button"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidVideoToVideoConnection } from "@/lib/video-producer-handles"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
@@ -311,15 +312,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
             >
               <Link className="w-3.5 h-3.5" />
             </button>
-            <button
-              type="button"
-              aria-label={t("node.editInNodarcut")}
-              className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-              onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }}
-              title={t("node.editInNodarcut")}
-            >
-              <Scissors className="w-3.5 h-3.5" />
-            </button>
+            <EditVideoButton onEdit={() => openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl)} />
           </div>
         )}
 

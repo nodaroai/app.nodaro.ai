@@ -17,6 +17,7 @@
  * what it always did and a very large one costs by its size.
  */
 import {
+  clampTopazVideoFps,
   TOPAZ_VIDEO_DEFAULT_RESOLUTION,
   TOPAZ_VIDEO_FALLBACK_FPS,
   topazVideoOutputSize,
@@ -25,6 +26,20 @@ import {
 } from "@nodaro/shared/models"
 
 // ─── Video ───────────────────────────────────────────────────────────────
+
+/**
+ * The frame rate a Topaz video upscale node asks for (its `targetFps`), as
+ * every run of it reads it: a number, or a number written as text (as a
+ * workflow written through the API or MCP can store it), clamped to 15–60.
+ * Anything else — unset, "source", an empty or non-numeric text — is
+ * `undefined`: the source's own rate. The one reading the workflow run's
+ * payload, the editor's Run and both quotes (the editor's and the server's run
+ * estimate) take, so a quote prices the rate the run renders.
+ */
+export function topazTargetFpsOf(value: unknown): number | undefined {
+  const n = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : Number.NaN
+  return Number.isFinite(n) ? clampTopazVideoFps(n) : undefined
+}
 
 /** The price row of ONE Topaz video unit — the hold and the charge are multiples of it. */
 export const TOPAZ_VIDEO_UNIT_CREDIT_ID = "topaz-video:per-unit"

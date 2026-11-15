@@ -1,5 +1,5 @@
 {
-  "$comment": "The quote before a run of the seven steps whose run measures the file it is given — Video SFX, Video Mask, Video Depth, Pitch & Tempo, Dubbing, and Video Upscale on each of its two measuring models (`topaz`, and `nodaroUpscale`, the per-second model) — read by BOTH estimates over the same graphs through the one measured walk (`measuredWireLengthSec`, @nodaro/render-rules) with each step's slack (`MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC`: 0.1 s on each clip a node makes for the five that measure the container, one 24 fps frame for both Video Upscale steps: one hold counts the video stream's frames, the other bills the clip's seconds rounded up, so any slack under a second is the same figure there): the editor's (frontend getModelIdentifier for the row steps, PRICING_UNIT_ESTIMATORS for Dubbing and both Video Upscale providers — the node's pill, its Run button, the confirm and the workflow badge) and the server's workflow estimate (CreditsService.estimateWorkflowCreditsAt, the step's own line). Each case wires its sources into the step `c`; an edge with no `target` goes into `c` on the step's input (`@input`: `video`, Pitch & Tempo's `in`; `handles` overrides it). `steps` limits a case to some steps (default every step but `lipSync`, a Lip Sync priced by the seconds of its audio, which only the cases that list it name; its figure is the billed seconds, `null` a length nothing knows before the run: the server quotes the most a run takes, the editor a 15 s estimate marked ≈). Expected figures: the row's seconds for Video SFX (`replicate-mmaudio:<N>s`), Video Mask (`<provider>-video:<N>s`) and Video Depth (`video-depth-anything:<N>s`); the started minutes for Pitch & Tempo (`pitch-tempo:<N>m`) and Dubbing (target `es`); the Topaz units (a 1080p target, 30 fps, a 16:9 frame); the seconds `nodaroUpscale` bills (at least 1): 0 for a clip the graph KNOWS is past its 60-second limit (an upload, a measured Library clip, a take's record — the run refuses it before anything is held, and no estimate prices it), and the 60 seconds a run bills at most for a PLANNED length past it, which is an upper bound and no proof the run refuses it. An input whose length nothing can tell before the run is quoted at the step's cap for Video SFX, Video Mask, Video Depth and Pitch & Tempo, and at a minimum for Dubbing (1 minute) and both Video Upscale providers (a 10-second clip) — those runs measure their input and are charged its real length. `whole` = a whole run (the editor's whole-run set, the server with no run set); `alone` = the step's own Run and its pill (editor) and a run of `c` alone (server); `partial` = exactly that run set on both sides.",
+  "$comment": "The quote before a run of the seven steps whose run measures the file it is given — Video SFX, Video Mask, Video Depth, Pitch & Tempo, Dubbing, and Video Upscale on each of its two measuring models (`topaz`, and `nodaroUpscale`, the per-second model) — read by BOTH estimates over the same graphs through the one measured walk (`measuredWireLengthSec`, @nodaro/render-rules) with each step's slack (`MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC`: 0.1 s on each clip a node makes for the five that measure the container, one 24 fps frame for both Video Upscale steps: one hold counts the video stream's frames, the other bills the clip's seconds rounded up, so any slack under a second is the same figure there; a quarter second on every step after a PixVerse V6 extension, and after a Dubbing or an Audio Isolation on every step that measures the container — `LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC`; both Video Upscale steps measure the video stream, which a dub keeps exactly, and keep their frame after one): the editor's (frontend getModelIdentifier for the row steps, PRICING_UNIT_ESTIMATORS for Dubbing and both Video Upscale providers — the node's pill, its Run button, the confirm and the workflow badge) and the server's workflow estimate (CreditsService.estimateWorkflowCreditsAt, the step's own line). Each case wires its sources into the step `c`; an edge with no `target` goes into `c` on the step's input (`@input`: `video`, Pitch & Tempo's `in`; `handles` overrides it). `steps` limits a case to some steps (default every step but `lipSync`, a Lip Sync priced by the seconds of its audio, which only the cases that list it name; its figure is the billed seconds, `null` a length nothing knows before the run: both estimates quote the 15 s stand-in, a minimum, the editor's line marked ≈). Expected figures: the row's seconds for Video SFX (`replicate-mmaudio:<N>s`), Video Mask (`<provider>-video:<N>s`) and Video Depth (`video-depth-anything:<N>s`); the started minutes for Pitch & Tempo (`pitch-tempo:<N>m`) and Dubbing (target `es`); the Topaz units (a 1080p target, 30 fps, a 16:9 frame); the seconds `nodaroUpscale` bills (at least 1): 0 for a clip the graph KNOWS is past its 60-second limit (an upload, a measured Library clip, a take's record — the run refuses it before anything is held, and no estimate prices it), and the 60 seconds a run bills at most for a PLANNED length past it, which is an upper bound and no proof the run refuses it. An input whose length nothing can tell before the run is quoted at the step's cap for Video SFX, Video Mask, Video Depth and Pitch & Tempo, and at a minimum for Dubbing (1 minute) and both Video Upscale providers (a 10-second clip) — those runs measure their input and are charged its real length. `whole` = a whole run (the editor's whole-run set, the server with no run set); `alone` = the step's own Run and its pill (editor) and a run of `c` alone (server); `partial` = exactly that run set on both sides. `stepData` adds settings to the step's own (a Topaz frame rate stored as text, as a workflow written through the API can carry it). A Lip Sync on a per-second model reads an AAC recording (an M4A, MP4 or AAC file, or the sound of an MP4 video) one AAC frame past its recorded length (1024 samples at its recorded rate, else at AAC's lowest, 7.35 kHz) less the 0.05 s its charge forgives, as the run bills the decoded audio; an MP3 or a WAV at its recorded length. `transcribe` and `addCaptions` (Nemotron 3.5 Transcribe, named only by the cases that list them) read their wire with no slack (their hold forgives a second) and a voice made again in the run at its take, a minimum; their figure is the started minutes, 60 for a length nothing knows. `topaz` also reads the wired clip's frame and declared rate as the run's resolver would (decided 2026-11-14): an upload's recorded size and `fps`, a take's size for a node outside the run, carried through Trim, Loop and a Combine Videos whose clips share it; a node made again in the run has no size; unknown, 16:9 at 30 fps.",
   "cases": [
     {
       "name": "1. Generate Video on Kling 4.0 set to 5 s, never run: 5 s planned plus the slack (5.1 s; 5.042 s on the stream for Topaz)",
@@ -1428,6 +1428,1821 @@
         },
         "alone": {
           "lipSync": null
+        }
+      }
+    },
+    {
+      "name": "34. Topaz whose frame rate is stored as text (\"60\", as a workflow written through the API or MCP can carry it) on a 10 s upload: the run renders 60 fps, so both quotes price 60 fps",
+      "steps": [
+        "topaz"
+      ],
+      "stepData": {
+        "topaz": {
+          "targetFps": "60"
+        }
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "topaz": 13
+        },
+        "alone": {
+          "topaz": 13
+        }
+      }
+    },
+    {
+      "name": "35. Topaz whose frame rate is stored as \"source\" (or any text that is no number): the source's own rate, quoted at 30 fps as before",
+      "steps": [
+        "topaz"
+      ],
+      "stepData": {
+        "topaz": {
+          "targetFps": "source"
+        }
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "topaz": 7
+        },
+        "alone": {
+          "topaz": 7
+        }
+      }
+    },
+    {
+      "name": "36. Lip Sync on a 5.000 s AAC audio upload (an M4A, codec and rate recorded, 48 kHz): its decode runs a frame (0.021 s) past the record, inside the 0.05 s the charge forgives, so 5 s, as the run charges it",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/v5.m4a",
+            "metadata": {
+              "durationSeconds": 5,
+              "codec": "aac",
+              "sampleRate": 48000
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 5
+        },
+        "alone": {
+          "lipSync": 5
+        }
+      }
+    },
+    {
+      "name": "37. Lip Sync on a 5.000 s M4A upload whose codec and rate were not recorded: its container says AAC, read at the longest frame (AAC's lowest rate) less the charge's 0.05 s grace, 6 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/v5.m4a",
+            "metadata": {
+              "durationSeconds": 5
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 6
+        },
+        "alone": {
+          "lipSync": 6
+        }
+      }
+    },
+    {
+      "name": "38. Lip Sync on a 5.000 s MP3 upload: an MP3 decodes to its recorded length, 5 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/v5.mp3",
+            "metadata": {
+              "durationSeconds": 5,
+              "codec": "mp3",
+              "sampleRate": 44100
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 5
+        },
+        "alone": {
+          "lipSync": 5
+        }
+      }
+    },
+    {
+      "name": "39. Lip Sync on a 5.000 s WAV upload whose codec was not recorded: never a frame for a WAV, 5 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/v5.wav",
+            "metadata": {
+              "durationSeconds": 5
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 5
+        },
+        "alone": {
+          "lipSync": 5
+        }
+      }
+    },
+    {
+      "name": "40. Lip Sync on the sound of a 10.000 s MP4 video upload: its recorded codec is the picture's, so the MP4's sound is read as AAC at the longest frame less the charge's grace, 11 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 11
+        },
+        "alone": {
+          "lipSync": 11
+        }
+      }
+    },
+    {
+      "name": "41. Lip Sync after a Voice Changer of a 4.9 s AAC upload at 16 kHz: the frame past the charge's grace (0.064 − 0.05 s), then the changed voice's own slack (4.9 + 0.014 + 0.1), billed as 6 s (the Voice Changer holds no take, so a run of the step alone plans it too)",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/v.m4a",
+            "metadata": {
+              "durationSeconds": 4.9,
+              "codec": "aac",
+              "sampleRate": 16000
+            }
+          }
+        },
+        {
+          "id": "v",
+          "type": "voice-changer",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "v",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "v",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 6
+        },
+        "alone": {
+          "lipSync": 6
+        }
+      }
+    },
+    {
+      "name": "42. Lip Sync on an Extract Audio of a 12 s video upload: the video's sound, a new file, 12 s plus the container slack (and the MP4's AAC frame), billed as 13 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up12.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up12.mp4",
+                "duration": 12
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extract-audio",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "in"
+        },
+        {
+          "source": "x",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 13
+        },
+        "alone": {
+          "lipSync": 13
+        }
+      }
+    },
+    {
+      "name": "43. Lip Sync on an Audio Isolation of an 8 s MP3 upload: the isolated voice is a new file, read as a Dubbing's, 8 s plus a quarter second (8.25 s), billed as 9 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/v8.mp3",
+            "metadata": {
+              "durationSeconds": 8
+            }
+          }
+        },
+        {
+          "id": "i",
+          "type": "audio-isolation",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "i",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "i",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 9
+        },
+        "alone": {
+          "lipSync": 9
+        }
+      }
+    },
+    {
+      "name": "44. Lip Sync on a Trim Audio of the 2–7 s window of a 75 s video upload: the window, 5 s plus the container slack, billed as 6 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up75.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up75.mp4",
+                "duration": 75
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "t",
+          "type": "trim-audio",
+          "data": {
+            "startTime": 2,
+            "endTime": 7
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "t",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 6
+        },
+        "alone": {
+          "lipSync": 6
+        }
+      }
+    },
+    {
+      "name": "48. Transcribe (Nemotron) on a 61.5 s audio upload: its recorded length, 2 started minutes",
+      "steps": [
+        "transcribe"
+      ],
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a62.mp3",
+            "metadata": {
+              "durationSeconds": 61.5
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "transcribe": 2
+        },
+        "alone": {
+          "transcribe": 2
+        }
+      }
+    },
+    {
+      "name": "49. Transcribe (Nemotron) on a Text to Speech holding a 50 s take: a whole run makes the voice again, read at its take as a minimum (the run charges the minutes it measures); alone, the take — 1 minute",
+      "steps": [
+        "transcribe"
+      ],
+      "nodes": [
+        {
+          "id": "t",
+          "type": "text-to-speech",
+          "data": {
+            "text": "hello there",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/t.mp3",
+                "duration": 50
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "t",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "transcribe": 1
+        },
+        "alone": {
+          "transcribe": 1
+        }
+      }
+    },
+    {
+      "name": "50. Transcribe (Nemotron) on a Text to Speech holding a 90 s take: 2 minutes, a minimum on a whole run",
+      "steps": [
+        "transcribe"
+      ],
+      "nodes": [
+        {
+          "id": "t",
+          "type": "text-to-speech",
+          "data": {
+            "text": "hello there",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/t.mp3",
+                "duration": 90
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "t",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "transcribe": 2
+        },
+        "alone": {
+          "transcribe": 2
+        }
+      }
+    },
+    {
+      "name": "51. Transcribe (Nemotron) on a Text to Speech with no take yet: a length nothing knows, the 60-minute price",
+      "steps": [
+        "transcribe"
+      ],
+      "nodes": [
+        {
+          "id": "t",
+          "type": "text-to-speech",
+          "data": {
+            "text": "hello there"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "t",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "transcribe": 60
+        },
+        "alone": {
+          "transcribe": 60
+        }
+      }
+    },
+    {
+      "name": "52. Add Captions (Nemotron) on a generation set to 10 s: its planned length, no slack (the hold forgives a second), 1 minute",
+      "steps": [
+        "addCaptions"
+      ],
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "addCaptions": 1
+        },
+        "alone": {
+          "addCaptions": 1
+        }
+      }
+    },
+    {
+      "name": "53. Add Captions (Nemotron) on a 61.5 s video upload: 2 started minutes",
+      "steps": [
+        "addCaptions"
+      ],
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up62.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up62.mp4",
+                "duration": 61.5
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "addCaptions": 2
+        },
+        "alone": {
+          "addCaptions": 2
+        }
+      }
+    },
+    {
+      "name": "54. Add Captions (Nemotron) on a Library clip with no recorded length: the 60-minute price",
+      "steps": [
+        "addCaptions"
+      ],
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/nolen.mp4"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "addCaptions": 60
+        },
+        "alone": {
+          "addCaptions": 60
+        }
+      }
+    },
+    {
+      "name": "55. Dubbing on a source link set on the node (no wire): a length nothing knows before the run, quoted at the documented minimum, 1 minute (the run measures the link and charges the span)",
+      "steps": [
+        "dubbing"
+      ],
+      "stepData": {
+        "dubbing": {
+          "sourceUrl": "https://cdn.example/talk.mp4"
+        }
+      },
+      "nodes": [],
+      "edges": [],
+      "expected": {
+        "whole": {
+          "dubbing": 1
+        },
+        "alone": {
+          "dubbing": 1
+        }
+      }
+    },
+    {
+      "name": "56. Topaz on a video link set on the node (no wire, as a workflow written through the API can carry it): the documented minimum, a 10-second clip, 7 units (the run measures the link and holds by it)",
+      "steps": [
+        "topaz",
+        "nodaroUpscale"
+      ],
+      "stepData": {
+        "topaz": {
+          "videoUrl": "https://cdn.example/clip.mp4"
+        },
+        "nodaroUpscale": {
+          "videoUrl": "https://cdn.example/clip.mp4"
+        }
+      },
+      "nodes": [],
+      "edges": [],
+      "expected": {
+        "whole": {
+          "topaz": 7,
+          "nodaroUpscale": 10
+        },
+        "alone": {
+          "topaz": 7,
+          "nodaroUpscale": 10
+        }
+      }
+    },
+    {
+      "name": "57. Topaz \"Same as source\" on a 10 s upload recorded at 2560×1080 (21:9): its known frame, wider than 16:9, 9 units",
+      "steps": [
+        "topaz"
+      ],
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up.mp4",
+                "duration": 10,
+                "width": 2560,
+                "height": 1080
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "topaz": 9
+        },
+        "alone": {
+          "topaz": 9
+        }
+      }
+    },
+    {
+      "name": "58. Topaz \"Same as source\" on a 10 s 1920×1080 upload that declares 60 fps: its known rate, 13 units",
+      "steps": [
+        "topaz"
+      ],
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up.mp4",
+                "duration": 10,
+                "width": 1920,
+                "height": 1080
+              }
+            ],
+            "activeResultIndex": 0,
+            "fps": 60
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "topaz": 13
+        },
+        "alone": {
+          "topaz": 13
+        }
+      }
+    },
+    {
+      "name": "59. Topaz at a set 30 fps on the 21:9 upload: the frame is read whatever the rate, 9 units",
+      "steps": [
+        "topaz"
+      ],
+      "stepData": {
+        "topaz": {
+          "targetFps": 30
+        }
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up.mp4",
+                "duration": 10,
+                "width": 2560,
+                "height": 1080
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "topaz": 9
+        },
+        "alone": {
+          "topaz": 9
+        }
+      }
+    },
+    {
+      "name": "60. Topaz on a saved node with only the old 2× factor, over a 10 s 1920×1080 upload: the run's resolver maps it to 4K, 25 units",
+      "steps": [
+        "topaz"
+      ],
+      "stepData": {
+        "topaz": {
+          "targetResolution": null,
+          "upscaleFactor": "2"
+        }
+      },
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up.mp4",
+                "duration": 10,
+                "width": 1920,
+                "height": 1080
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "topaz": 25
+        },
+        "alone": {
+          "topaz": 25
+        }
+      }
+    },
+    {
+      "name": "61. Topaz \"Same as source\" on a 10 s upload recorded at 1440×1080 (4:3): its known frame, narrower than 16:9, 5 units",
+      "steps": [
+        "topaz"
+      ],
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/up.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/up.mp4",
+                "duration": 10,
+                "width": 1440,
+                "height": 1080
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "topaz": 5
+        },
+        "alone": {
+          "topaz": 5
+        }
+      }
+    },
+    {
+      "name": "62. Topaz on a generation holding a 10 s 21:9 take: a whole run makes the clip again, so its frame is not known before it (the 16:9 minimum, 7 units); run alone, the take it hands on, 9 units",
+      "steps": [
+        "topaz"
+      ],
+      "nodes": [
+        {
+          "id": "g",
+          "type": "generate-video",
+          "data": {
+            "provider": "kling-4",
+            "duration": 10,
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/g.mp4",
+                "duration": 10,
+                "width": 2560,
+                "height": 1080
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "g",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "topaz": 7
+        },
+        "alone": {
+          "topaz": 9
+        }
+      }
+    },
+    {
+      "name": "63. Topaz on a Combine Videos of two 5 s 21:9 uploads: the frame both clips share, 9 units",
+      "steps": [
+        "topaz"
+      ],
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/a.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/a.mp4",
+                "duration": 5,
+                "width": 2560,
+                "height": 1080
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "b",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/b.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/b.mp4",
+                "duration": 5,
+                "width": 2560,
+                "height": 1080
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "k",
+          "type": "combine-videos",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "k",
+          "targetHandle": "videos"
+        },
+        {
+          "source": "b",
+          "target": "k",
+          "targetHandle": "videos"
+        },
+        {
+          "source": "k",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "topaz": 9
+        },
+        "alone": {
+          "topaz": 9
+        }
+      }
+    },
+    {
+      "name": "64. Topaz on a Combine Videos of a 21:9 and a 16:9 upload: no one frame, the 16:9 minimum, 7 units",
+      "steps": [
+        "topaz"
+      ],
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/a.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/a.mp4",
+                "duration": 5,
+                "width": 2560,
+                "height": 1080
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "b",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/b.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/b.mp4",
+                "duration": 5,
+                "width": 1920,
+                "height": 1080
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "k",
+          "type": "combine-videos",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "k",
+          "targetHandle": "videos"
+        },
+        {
+          "source": "b",
+          "target": "k",
+          "targetHandle": "videos"
+        },
+        {
+          "source": "k",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "topaz": 7
+        },
+        "alone": {
+          "topaz": 7
+        }
+      }
+    },
+    {
+      "name": "65. Add Captions (Nemotron) with two video wires, a 30 s and a 90 s upload: the longest, 90 s, 2 started minutes, on both sides",
+      "steps": [
+        "addCaptions"
+      ],
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/a.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/a.mp4",
+                "duration": 30
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "b",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/b.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/b.mp4",
+                "duration": 90
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        },
+        {
+          "source": "b",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "addCaptions": 2
+        },
+        "alone": {
+          "addCaptions": 2
+        }
+      }
+    },
+    {
+      "name": "66. Lip Sync on Kling Avatar (a length tier) on a 15.000 s M4A recorded at 16 kHz: its decode runs one AAC frame (0.064 s) past the record, past the tier's 0.05 s edge, so the 30 s tier its hold reads, not 15 s",
+      "steps": [
+        "lipSyncBucket"
+      ],
+      "handles": {
+        "lipSyncBucket": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.m4a",
+            "metadata": {
+              "durationSeconds": 15,
+              "codec": "aac",
+              "sampleRate": 16000
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSyncBucket": 30
+        },
+        "alone": {
+          "lipSyncBucket": 30
+        }
+      }
+    },
+    {
+      "name": "66b. Kling Avatar on a 15.000 s M4A at 44.1 kHz: its frame (0.023 s) is inside the tier's edge, the 15 s tier",
+      "steps": [
+        "lipSyncBucket"
+      ],
+      "handles": {
+        "lipSyncBucket": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.m4a",
+            "metadata": {
+              "durationSeconds": 15,
+              "codec": "aac",
+              "sampleRate": 44100
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSyncBucket": 15
+        },
+        "alone": {
+          "lipSyncBucket": 15
+        }
+      }
+    },
+    {
+      "name": "66c. Kling Avatar on a 15.000 s MP3 upload: no AAC frame, the 15 s tier",
+      "steps": [
+        "lipSyncBucket"
+      ],
+      "handles": {
+        "lipSyncBucket": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 15,
+              "codec": "mp3",
+              "sampleRate": 44100
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSyncBucket": 15
+        },
+        "alone": {
+          "lipSyncBucket": 15
+        }
+      }
+    },
+    {
+      "name": "67. A 9.85 s upload extended by 5 s on PixVerse V6: 14.85 s, plus a quarter second on every step (a PixVerse V6 extension runs further past its length): 15.1 s, past the 15 s row, second and tier on the container steps and the stream steps alike",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 9.85
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "pixverse-v6-extend",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 30,
+          "videoMask": 30,
+          "videoDepth": 16,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 10,
+          "nodaroUpscale": 16
+        },
+        "alone": {
+          "videoSfx": 30,
+          "videoMask": 30,
+          "videoDepth": 16,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 10,
+          "nodaroUpscale": 16
+        }
+      }
+    },
+    {
+      "name": "67b. The same on Seedance 2.5: each step's own slack, 14.95 s (14.89 s on the stream), inside the 15 s row, second and tier",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 9.85
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "x",
+          "type": "extend-video",
+          "data": {
+            "provider": "seedance-2-5-extend",
+            "duration": 5
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "x",
+          "targetHandle": "video"
+        },
+        {
+          "source": "x",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 15,
+          "videoMask": 15,
+          "videoDepth": 15,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 10,
+          "nodaroUpscale": 15
+        },
+        "alone": {
+          "videoSfx": 15,
+          "videoMask": 15,
+          "videoDepth": 15,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 10,
+          "nodaroUpscale": 15
+        }
+      }
+    },
+    {
+      "name": "68. Pitch & Tempo and Dubbing after a Dubbing of a 59.8 s audio upload: the dub is a new file that runs further past its input, 59.8 s plus a quarter second, 60.05 s: 2 started minutes",
+      "steps": [
+        "pitchTempo",
+        "dubbing"
+      ],
+      "handles": {
+        "dubbing": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 59.8
+            }
+          }
+        },
+        {
+          "id": "r",
+          "type": "dubbing",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "r",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "r",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "pitchTempo": 2,
+          "dubbing": 2
+        },
+        "alone": {
+          "pitchTempo": 2,
+          "dubbing": 2
+        }
+      }
+    },
+    {
+      "name": "68b. The same after an Audio Isolation: read as a Dubbing, 60.05 s, 2 started minutes",
+      "steps": [
+        "pitchTempo",
+        "dubbing"
+      ],
+      "handles": {
+        "dubbing": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 59.8
+            }
+          }
+        },
+        {
+          "id": "r",
+          "type": "audio-isolation",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "r",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "r",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "pitchTempo": 2,
+          "dubbing": 2
+        },
+        "alone": {
+          "pitchTempo": 2,
+          "dubbing": 2
+        }
+      }
+    },
+    {
+      "name": "68c. The same after a Voice Changer: the step's own slack, 59.9 s, 1 started minute",
+      "steps": [
+        "pitchTempo",
+        "dubbing"
+      ],
+      "handles": {
+        "dubbing": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 59.8
+            }
+          }
+        },
+        {
+          "id": "r",
+          "type": "voice-changer",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "r",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "r",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "pitchTempo": 1,
+          "dubbing": 1
+        },
+        "alone": {
+          "pitchTempo": 1,
+          "dubbing": 1
+        }
+      }
+    },
+    {
+      "name": "69. Lip Sync (OmniHuman 2.0) on an Audio Isolation of a 4.8 s MP3 upload: 4.8 s plus a quarter second, 5.05 s, billed as 6 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 4.8
+            }
+          }
+        },
+        {
+          "id": "r",
+          "type": "audio-isolation",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "r",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "r",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 6
+        },
+        "alone": {
+          "lipSync": 6
+        }
+      }
+    },
+    {
+      "name": "69b. Lip Sync on a Dubbing of the same 4.8 s MP3: 5.05 s, billed as 6 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 4.8
+            }
+          }
+        },
+        {
+          "id": "r",
+          "type": "dubbing",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "r",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "r",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 6
+        },
+        "alone": {
+          "lipSync": 6
+        }
+      }
+    },
+    {
+      "name": "69c. Lip Sync on a Voice Changer of the same 4.8 s MP3: the container slack, 4.9 s, billed as 5 s",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 4.8
+            }
+          }
+        },
+        {
+          "id": "r",
+          "type": "voice-changer",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "r",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "r",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 5
+        },
+        "alone": {
+          "lipSync": 5
+        }
+      }
+    },
+    {
+      "name": "70. Kling Avatar (a length tier) on a Voice Changer of a 14.9 s MP3: the container slack, 15.0 s, inside the 15 s tier's edge — unchanged, the 15 s tier",
+      "steps": [
+        "lipSyncBucket"
+      ],
+      "handles": {
+        "lipSyncBucket": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 14.9
+            }
+          }
+        },
+        {
+          "id": "r",
+          "type": "voice-changer",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "r",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "r",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSyncBucket": 15
+        },
+        "alone": {
+          "lipSyncBucket": 15
+        }
+      }
+    },
+    {
+      "name": "70b. Kling Avatar on an Audio Isolation of the same 14.9 s MP3: a quarter second, 15.15 s, past the 15 s tier's edge: the 30 s tier",
+      "steps": [
+        "lipSyncBucket"
+      ],
+      "handles": {
+        "lipSyncBucket": "audio"
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 14.9
+            }
+          }
+        },
+        {
+          "id": "r",
+          "type": "audio-isolation",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "r",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "r",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSyncBucket": 30
+        },
+        "alone": {
+          "lipSyncBucket": 30
+        }
+      }
+    },
+    {
+      "name": "71. A Dubbing of a 7.9 s video upload: Video Depth measures the container, which runs further past the input, 8.15 s, 9 s; Topaz and Nodaro Video Upscale measure the video stream, which a dub keeps exactly, so their own frame, 7.94 s: 5 units and 8 s (a quarter second would read 6 units and 9 s)",
+      "steps": [
+        "videoDepth",
+        "topaz",
+        "nodaroUpscale"
+      ],
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 7.9
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "r",
+          "type": "dubbing",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "r",
+          "targetHandle": "video"
+        },
+        {
+          "source": "r",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoDepth": 9,
+          "topaz": 5,
+          "nodaroUpscale": 8
+        },
+        "alone": {
+          "videoDepth": 9,
+          "topaz": 5,
+          "nodaroUpscale": 8
         }
       }
     }

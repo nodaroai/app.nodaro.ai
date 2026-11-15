@@ -72,13 +72,17 @@ vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
 
 // The one clip reading both sides measure by (lib/video-utility-probe.ts), driven by the probe above.
 const mockClipLength = vi.hoisted(() => ({ calls: [] as Array<[string, Record<string, unknown> | undefined]> }))
-vi.mock("@/lib/video-utility-probe.js", () => ({
-  probeClipLengthSec: async (src: string, opts?: Record<string, unknown>) => {
+vi.mock("@/lib/video-utility-probe.js", () => {
+  const probeClipLengthSec = async (src: string, opts?: Record<string, unknown>) => {
     mockClipLength.calls.push([src, opts])
     return (await mockProbe(src)).durationSeconds
-  },
-  ClipUnreadableError: class ClipUnreadableError extends Error {},
-}))
+  }
+  return {
+    probeClipLengthSec,
+    probeClipReading: async (src: string, opts?: Record<string, unknown>) => ({ sec: await probeClipLengthSec(src, opts) }),
+    ClipUnreadableError: class ClipUnreadableError extends Error {},
+  }
+})
 
 import { executeNode } from "../node-executor.js"
 import type { SimpleNode, OrchestratorContext } from "../types.js"

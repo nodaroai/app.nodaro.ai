@@ -149,10 +149,18 @@ describe("POST /v1/add-captions on Nemotron 3.5 Transcribe", () => {
 
   it("never refuses a large video: only its audio track is sent", async () => {
     mockJobInsert()
-    probe.probeMediaDurationAndSize.mockResolvedValue({ durationSec: 61, sizeBytes: 4 * 1024 * 1024 * 1024 })
+    probe.probeMediaDurationAndSize.mockResolvedValue({ durationSec: 61.5, sizeBytes: 4 * 1024 * 1024 * 1024 })
     const res = await post({ style: "karaoke", transcribe_provider: NEMOTRON })
     expect(res.statusCode).toBe(200)
     expect(guardIds).toEqual([addCaptionsNemotronMinutesId(2)])
+  })
+
+  it("holds a video measured a hair past a minute at that minute, as its charge settles it (the 1 s grace)", async () => {
+    mockJobInsert()
+    probe.probeMediaDurationAndSize.mockResolvedValue({ durationSec: 60.011 })
+    const res = await post({ style: "karaoke", transcribe_provider: NEMOTRON })
+    expect(res.statusCode).toBe(200)
+    expect(guardIds).toEqual([addCaptionsNemotronMinutesId(1)])
   })
 
   it("refuses a video over 60 minutes before anything is held", async () => {

@@ -691,6 +691,14 @@ describe("getModelIdentifier", () => {
     expect(id).toMatch(/^heygen-/)
   })
 
+  // The server's estimate never reads a probed length a node's data carries (decided 2026-11-14): nor does the chip.
+  it("ai-avatar ignores a __probedDurationSec in the node's data, as the server's estimate does", () => {
+    const audio = { label: "Avatar", provider: "heygen", speechMode: "audio", engine: "avatar-iv", resolution: "720p" }
+    const plain = getModelIdentifier(makeNode({ type: "ai-avatar", data: audio as any }))
+    expect(plain).toBe("heygen-avatar-iv:720p:120s")
+    expect(getModelIdentifier(makeNode({ type: "ai-avatar", data: { ...audio, __probedDurationSec: 5 } as any }))).toBe(plain)
+  })
+
   it("cinematic-avatar returns a seeded composite, not the bare 'heygen' key", () => {
     const node = makeNode({ type: "cinematic-avatar", data: { label: "Cinematic", provider: "heygen" } as any })
     const id = getModelIdentifier(node)

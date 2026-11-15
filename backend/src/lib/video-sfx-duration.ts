@@ -1,4 +1,4 @@
-import { VIDEO_SFX_PRICING, videoSfxCreditId } from "@nodaro/shared/credits"
+import { VIDEO_SFX_PRICING, videoSfxHeldCreditId } from "@nodaro/shared/credits"
 import { DOWNLOAD_TIMEOUT_MS } from "../providers/video/ffmpeg-timeouts.js"
 import { PRE_CHARGE_PROBE_TIMEOUT_MS } from "./pre-charge-probe-bounds.js"
 import { safeUrlSchema } from "./url-validator.js"
@@ -78,7 +78,9 @@ export async function measureVideoSfxDuration(
     }
   }
   const durationSec = Math.ceil(seconds)
-  return { ok: true, durationSec, creditId: videoSfxCreditId(durationSec) }
+  // The row is the MEASURED length's less the 0.05 s a hair past a row is forgiven (`videoSfxHeldCreditId`); the
+  // whole seconds are what the model is asked to score.
+  return { ok: true, durationSec, creditId: videoSfxHeldCreditId(seconds) }
 }
 
 /**
