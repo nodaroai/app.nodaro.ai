@@ -84,6 +84,11 @@ interface RequestLife {
   running: boolean
   /** The raw response has closed (finished, or the client left). */
   closed: boolean
+  /**
+   * The raw response closed before it finished (its `finish` never came): the
+   * client left, or the response broke off. Judged once, at the close.
+   */
+  clientLeft: boolean
   /** Created on first read of the request's client signal. */
   gone: AbortController | null
 }
@@ -124,11 +129,21 @@ function lineOfRequest(req: FastifyRequest): { userId: string; payer: PayerKey; 
 /**
  * The signal that the client went away before the response finished, made on
  * first read (most requests never wait). Already aborted when it did.
+ *
+ * It reads only the request's life, never its reply: the scope is the store
+ * every handler runs under, and a finished request's async context outlives it
+ * (a keep-alive connection that stays open keeps it), so a scope that reached
+ * the reply kept everything the reply reaches (for `/mcp`, the MCP server the
+ * request built). After the scope ended: a signal handed out before is the
+ * same object, aborted at the close when the response did not finish; one
+ * first asked for afterwards is aborted exactly when the response closed
+ * before its `finish` (the client left, or the response broke off), and never
+ * for a response that finished, an in-process (`inject`) one included.
  */
-function clientGoneSignal(life: RequestLife, reply: FastifyReply): AbortSignal {
+function clientGoneSignal(life: RequestLife): AbortSignal {
   if (!life.gone) {
     life.gone = new AbortController()
-    if (life.closed && !reply.raw.writableFinished) life.gone.abort()
+    if (life.clientLeft) life.gone.abort()
   }
   return life.gone.signal
 }
@@ -136,7 +151,7 @@ function clientGoneSignal(life: RequestLife, reply: FastifyReply): AbortSignal {
 const isOpen = (scope: HoldScope | undefined): scope is HoldScope => !!scope && !scope.closed
 
 /** Build the scope of `req`, in the async context it runs in (its caller's, for an injected request). */
-function createScope(req: FastifyRequest, reply: FastifyReply, life: RequestLife): HoldScope | null {
+function createScope(req: FastifyRequest, life: RequestLife): HoldScope | null {
   const outer = currentHoldScope()
   const open = isOpen(outer) ? outer : undefined
   const role = open?.hold.role
@@ -156,7 +171,7 @@ function createScope(req: FastifyRequest, reply: FastifyReply, life: RequestLife
   const transport = parent?.transport ?? transportOf(req)
   const state: RequestSlotState = {
     transport,
-    get signal() { return parent ? parent.signal : clientGoneSignal(life, reply) },
+    get signal() { return parent ? parent.signal : clientGoneSignal(life) },
     coordinator: undefined,
     lease: null,
     pending: null,
@@ -171,14 +186,22 @@ function createScope(req: FastifyRequest, reply: FastifyReply, life: RequestLife
 function lifeOf(req: FastifyRequest, reply: FastifyReply): RequestLife {
   let life = lives.get(req)
   if (!life) {
-    const created: RequestLife = { scope: null, running: false, closed: false, gone: null }
+    const created: RequestLife = { scope: null, running: false, closed: false, clientLeft: false, gone: null }
     life = created
     lives.set(req, created)
     if (scoped.has(req)) {
-      created.scope = createScope(req, reply, created)
+      created.scope = createScope(req, created)
+      // Whether the response finished is its `finish` event, never the
+      // `writableFinished` flag: an in-process request (`fastify.inject`, the
+      // MCP tools' way to a route) emits `finish` and then `close` but leaves
+      // that flag false, and would read as a client that left.
+      let finished = reply.raw.writableFinished
+      reply.raw.once("finish", () => {
+        finished = true
+      })
       reply.raw.once("close", () => {
         created.closed = true
-        const finished = reply.raw.writableFinished
+        created.clientLeft = !finished
         if (!finished) created.gone?.abort()
         if (!created.running) endScope(created, finished ? outcomeOf(reply) : "failed")
       })
