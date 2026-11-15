@@ -218,6 +218,8 @@ here for each one anyway.
 | `MCP_PUBLIC_URL` | `""` = the Nodaro Cloud host | Public base of the MCP host when it differs from `PUBLIC_URL`; self-hosters serving MCP on their main host set it equal to `PUBLIC_URL`. A Business/Cloud deployment with no host to spare for MCP can serve it by path instead: see [MCP by path](#mcp-by-path-no-dedicated-mcp-host) |
 | `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | `allowlist` · 14 known clients (Claude, Claude Code, Cursor, Cline, Continue, Goose, ChatGPT, OpenAI, Lovable, Gemini, Gemini CLI, Codex, MCP Inspector, mcp-inspector) | RFC 7591 dynamic client registration for MCP clients (`allowlist` · `open` · `off`), and the `client_name` allowlist consulted in `allowlist` mode — see §10 |
 | `MCP_ALLOWED_CLIENT_IDS` | `""` = no list | Comma-separated `client_id`s of developer apps (`app_…`) that may use the MCP endpoint. Set: MCP takes only tokens issued to a listed client, the sign-in refuses any other client that asks for MCP before the consent screen, and dynamic registration answers as `off`. A malformed entry (anything but `app_` + 32 hex, including a self-registered `ndr_dcr_…` id) stops every backend process at boot. See [MCP only through your own client](#mcp-only-through-your-own-client) |
+| `MCP_ASSERTION_EXCHANGE_CLIENT_IDS` | `""` = off | The listed client(s) — each also in `MCP_ALLOWED_CLIENT_IDS`, or the boot stops — that may exchange a signed assertion from the deployment's own identity provider for an MCP token for any person it names, **with no consent click** (`POST /v1/oauth/token`, the RFC 7523 jwt-bearer grant). Also needs one `EXTERNAL_SSO_PROVIDERS` entry with an `exchangeAudience` (the boot stops without one). Read the security note first: [MCP without a consent click](#mcp-without-a-consent-click-the-assertion-exchange) |
+| `MCP_ASSERTION_EXCHANGE_TOKEN_TTL_SECONDS` | `3600` | How long a token from that exchange lives, in seconds: 300 to 86400 (anything else stops the boot; blank = the default). Never the 90 days of a consent token — the application exchanges again whenever it needs one |
 | `FIGMA_PLUGIN_OAUTH_CLIENT_ID` | `""` = plugin connect off | client_id of the developer app the Figma plugin connects through; the app must list `<PUBLIC_URL>/v1/oauth/plugin/callback` in its redirect URIs and request `jobs:read`, `assets:read`, `assets:write`, `credits:read` — see the [plugin connect handshake](./oauth-flow.md#plugin-connect-handshake-figma) |
 | `COMMUNITY_CONNECT_ENABLED` | off | **Cloud side only** — accept community-instance connections |
 | `PLATFORM_OWNER_EMAIL` | `""` | Business/Cloud — the super_admin no other admin can demote; empty = none |
@@ -2668,7 +2670,9 @@ With a list set:
   working.
 
 There is no refresh grant: access tokens are 90-day bearer tokens, and a new
-one always goes through the sign-in above.
+one always goes through the sign-in above — or, for the one application you
+name for it, through the [assertion exchange](#mcp-without-a-consent-click-the-assertion-exchange)
+below.
 
 **Setting up one client for your own chat application:**
 
@@ -2693,6 +2697,114 @@ screen naming your app. Any other MCP client — Claude.ai, Cursor, a client
 someone registers — is sent back with `unauthorized_client` at its sign-in, or
 gets `403 mcp_client_not_allowed` if it already holds a token. See
 [MCP troubleshooting](./mcp/troubleshooting.md#listed-clients).
+
+### MCP without a consent click: the assertion exchange
+
+When your chat application is also the identity provider your people sign in
+with ([external SSO](./sso.md), a `kind: "assertion"` provider), its **server**
+can obtain an MCP token for any of them directly, with no consent screen: it
+signs an assertion naming the person and exchanges it at
+`POST /v1/oauth/token` (the RFC 7523 JWT-bearer grant; the request, the
+assertion and every error are in
+[OAuth flow](./oauth-flow.md#assertion-exchange)). It is **off** unless all
+three of these are set, and then it is on only for the client you name:
+
+1. **The MCP client list** (`MCP_ALLOWED_CLIENT_IDS`, above), listing the
+   application's client — a developer app created as a confidential client
+   (it has a secret; the exchange takes no PKCE-only client).
+2. **The exchange client** — `MCP_ASSERTION_EXCHANGE_CLIENT_IDS`, the
+   application's `client_id`. Every entry must also be on the MCP list, or
+   every backend process stops at boot. A second listed client does not get
+   the exchange unless you name it here too.
+3. **An exchange audience on the provider** — `exchangeAudience` on the
+   provider's entry in `EXTERNAL_SSO_PROVIDERS`, a value of its own that the
+   application puts in the `aud` of its exchange assertions
+   ([field reference](./sso.md#fields)). It must differ from the provider's
+   sign-in `audience` (the boot stops otherwise), and only one provider may
+   set it. A sign-in assertion passes through a browser's address bar, so it
+   must never be exchangeable for a token; the exchange refuses an assertion
+   whose `aud` names the sign-in audience, and the sign-in refuses one whose
+   `aud` names the exchange audience — also when `aud` lists both.
+
+With named clients and no provider that sets `exchangeAudience`, the boot
+stops. A provider with an `exchangeAudience` and no named client is simply off
+(convenient for turning the exchange off by clearing one variable).
+
+```
+MCP_ALLOWED_CLIENT_IDS=app_0123456789abcdef0123456789abcdef
+MCP_ASSERTION_EXCHANGE_CLIENT_IDS=app_0123456789abcdef0123456789abcdef
+MCP_ASSERTION_EXCHANGE_TOKEN_TTL_SECONDS=3600   # optional: 300–86400, default one hour
+EXTERNAL_SSO_PROVIDERS=@/etc/nodaro/sso-providers.json
+# in that file, the provider's entry gains:  "exchangeAudience": "nodaro-mcp-exchange"
+```
+
+Where it is off — anything above missing, or a client other than the one
+named — `POST /v1/oauth/token` answers this grant exactly as it answers any
+grant type it does not know, and the authorization-server metadata does not
+list it. Where it is on, `grant_types_supported` also names
+`urn:ietf:params:oauth:grant-type:jwt-bearer`.
+
+**What the exchange does, the same way the sign-in does.** The assertion is
+checked by the sign-in's own verifier (HS256 with the provider's secret, the
+exchange audience, expiry, `maxLifetimeSeconds`, a `jti`), each `jti` is
+accepted once across the sign-in and the exchange together, and the person is
+resolved by the sign-in's own
+[account-linking rules](./sso.md#account-linking-rules) — the billing-account
+rule and the operator-address rule included. A person who has no account yet
+gets one, exactly as on their first sign-in: when the provider asserts a
+verified email, an account is created for that address and linked to the
+provider. Until they open the app in a browser it has never had a session, so
+nothing the browser does on a first visit has happened for it yet — on Cloud
+without a `billing.payerAccount`, that includes claiming the free sign-up
+credits, so such an account has none until its first visit (a deployment
+with a `billing.payerAccount` grants nobody sign-up credits, so nothing differs
+there).
+
+**The token.** An ordinary app token for that person and the application's
+client, with the scopes it asks for — never wider than the client's
+`scopesRequested` — recorded as obtained by the exchange (the person's
+**Settings → Connected apps** shows the app as "Connected through your
+sign-in"). It lives `MCP_ASSERTION_EXCHANGE_TOKEN_TTL_SECONDS`: an hour by
+default, never the 90 days of a consent token; there is no refresh token, the
+application exchanges again. The MCP endpoint admits it like any listed
+client's token, and stops it at the next call once the client leaves the MCP
+list. If the person revokes the app in Connected apps, its tokens stop at once
+and the exchange refuses to issue a new one for them; only their own consent
+(the ordinary sign-in flow for the same client) reconnects it.
+
+**Limits and logs.** 300 exchanges a minute per network (every request naming
+the exchange client, counted before its secret is checked) and 300 per client
+(counted once its secret checks out, so nobody can use up your application's
+allowance by naming its client id); over either, `429` with `Retry-After`. The exchange needs Redis: when it cannot reach it, it
+refuses (`503`), unlike the browser sign-in. One log line per exchange names
+the client and the outcome (and the person when a token was issued) — never
+the assertion, a token or a secret.
+
+**What it means for your security — read before turning it on.** With the
+exchange on, your application obtains a token for **any person your provider
+asserts**, with no click from that person. So:
+
+- **The provider's `secret` and the client's secret are both keys to every
+  account** on the deployment that the provider can sign in. Whoever holds
+  both can act as anyone, through MCP, without them knowing. Keep both on your
+  application's server only, never in a browser or a mobile app, and rotate
+  them if either may have leaked (the client secret from **Settings →
+  Developer apps**, the provider secret in `EXTERNAL_SSO_PROVIDERS` with a
+  restart).
+- **The provider's secret already signs people in** through the browser; the
+  exchange adds a second door with the same key, one that hands out MCP
+  tokens instead of a browser session. The two audiences keep an assertion
+  meant for one door from opening the other, not a stolen secret from opening
+  both.
+- **That includes the billing account.** If your provider can sign in the
+  deployment's `billing.payerAccount` (it is matched by its linked subject, as
+  at every sign-in), the two secrets reach it through MCP too.
+- **The people never see a consent screen.** Tell them what your application
+  does with their account; the Connected apps page is the one place they see
+  it, and revoking there is the one way they can stop it on their own.
+- **Short tokens limit a leak, not the exchange.** A leaked token works until
+  it expires (an hour by default); a leaked pair of secrets works until you
+  rotate one.
 
 ### MCP by path (no dedicated MCP host)
 

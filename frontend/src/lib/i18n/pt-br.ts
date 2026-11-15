@@ -1159,6 +1159,8 @@ export const ptBR: ChromeDict = {
   "connApps.revokeTitle": "Revogar o acesso do app {name}?",
   "connApps.revokeDesc": "O app não poderá mais usar sua conta. Para usá-lo de novo, conecte-o outra vez.",
   "connApps.revoked": "Acesso revogado",
+  "connApps.viaSignIn": "Conectado pelo seu login: este app obtém acesso sem tela de consentimento.",
+  "connApps.revokeDescExchange": "O app não poderá mais usar sua conta. Ele não consegue recuperar o acesso sozinho: precisaria pedir sua aprovação.",
   "settings.connectedApps": "Apps conectados",
   "settings.connectedAppsDesc": "Veja os apps e assistentes de IA com acesso à sua conta e revogue o acesso de qualquer um deles.",
   "settings.providerKeys": "Chaves de provedor",

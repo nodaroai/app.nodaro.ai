@@ -65,6 +65,7 @@ provider name configured in the install's Supabase Auth.)
 | `kind` | all | `"assertion"`, `"oidc"`, or `"saml"`. |
 | `secret` | assertion (**required**) | The HS256 HMAC key used to verify the assertion signature. Use a **dedicated** secret — never the IdP's own session-signing secret, so a Nodaro compromise cannot forge IdP sessions. Minimum 16 characters. |
 | `audience` | assertion (**required**) | The value the assertion's `aud` claim must equal. |
+| `exchangeAudience` | assertion (optional) | The `aud` of the assertions the deployment's own application **exchanges for MCP tokens** (the [assertion exchange](./deployment.md#mcp-without-a-consent-click-the-assertion-exchange)), distinct from the sign-in `audience` above — a value equal to it (or padded with spaces) stops the boot, and only one provider may set it. The sign-in refuses an assertion whose `aud` names it, and the exchange refuses one whose `aud` names `audience`, also when `aud` is an array naming both. Absent: the provider takes no part in the exchange, and its sign-in works exactly as before. Never published by `GET /v1/sso/providers`. |
 | `claimMap` | assertion (optional) | Which JWT claims carry the email / verified-flag / subject. Defaults to `{ "email": "email", "emailVerified": "email_verified", "subject": "sub" }`. |
 | `initiateUrl` | assertion (optional) | An absolute URL. Where `GET /v1/sso/:provider` redirects (`302`) when it is hit **without** an assertion — i.e. the login button sends the user here, the IdP authenticates them, and redirects back with `?assertion=…`. Nothing else is forwarded on that hop. A sign-in started on the login page goes on to the page the login page was asked to return to (`/login?redirect=<path>`, kept in the browser across the hop) unless your IdP names another page by appending `&next=<same-origin path>` on the way back (`next=/projects`, the default, names none). Without `initiateUrl`, a button hit answers `400 no_assertion`. |
 | `initiateUrlByHost` | assertion (optional) | A map from a **bare lower-case hostname** (no port) to an absolute URL: when the button hit arrives on that host, the redirect goes there instead of `initiateUrl`, which stays the default for every other host. For a deployment that answers on more than one hostname and whose IdP must be reached on a matching host. Keys are validated at boot — a mis-cased or ported key aborts startup rather than silently falling back. The map is never published by `GET /v1/sso/providers`. The provider `id`, `secret` and `audience` do not change per host, so account linking is unaffected by which host a user arrived on. |
@@ -97,6 +98,15 @@ A failing assertion returns `401` (`invalid_signature` / `invalid_claims` /
 `expired` / `too_long_lived` / `missing_jti` / `missing_email`, or
 `assertion_replayed`); the endpoint is per-IP rate limited to 20 requests per
 60 seconds (`429 rate_limit_exceeded`, with a `Retry-After` header).
+
+**Two uses, one provider.** A provider that also sets `exchangeAudience` signs
+two kinds of assertion with the same `secret`: sign-in assertions (`aud` =
+`audience`, through the browser, here) and exchange assertions (`aud` =
+`exchangeAudience`, server to server, at `POST /v1/oauth/token` — see
+[OAuth flow](./oauth-flow.md#assertion-exchange)). Both are checked by the
+same verifier and resolved to an account by the same rules below, and a `jti`
+is redeemed once across both. Each door refuses the other's assertion
+(`invalid_claims` here), including one whose `aud` names both values.
 
 ## Account-linking rules
 
@@ -223,6 +233,10 @@ advertises the `sso` auth method **and** at least one provider is configured
   `id`, `label`, and `kind` — never the `secret`. The assertion and the minted
   one-time token are redacted from request logs.
 - **Rate limited.** The exchange endpoint is per-IP rate limited.
+- **The secret can also obtain MCP tokens** on a deployment that turns on the
+  [assertion exchange](./deployment.md#mcp-without-a-consent-click-the-assertion-exchange):
+  there, together with the application's client secret, it obtains a token for
+  anyone the provider can sign in, with no consent screen.
 - **Ordinary session.** After exchange the user is a normal Supabase user; SSO
   adds no special credential mode.
 

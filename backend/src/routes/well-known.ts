@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { mcpLaneAddresses, mcpServedPath, metadataLane, type McpLane, type McpLaneAddresses } from "../lib/mcp-lane-addresses.js"
 import { ALL_SCOPES } from "../lib/scopes.js"
+import { JWT_BEARER_GRANT, assertionExchangeAdvertised } from "../lib/mcp-assertion-exchange-settings.js"
 
 /**
  * RFC 8414 — OAuth 2.0 Authorization Server Metadata
@@ -19,7 +20,9 @@ function authorizationServerMetadata(addresses: McpLaneAddresses) {
     registration_endpoint: `${issuer}/v1/oauth/register`,
     revocation_endpoint: `${issuer}/v1/oauth/revoke`,
     response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code"],
+    // The MCP assertion exchange is named only where this deployment turned it
+    // on (lib/mcp-assertion-exchange.ts); everywhere else, as it always was.
+    grant_types_supported: assertionExchangeAdvertised() ? ["authorization_code", JWT_BEARER_GRANT] : ["authorization_code"],
     token_endpoint_auth_methods_supported: ["client_secret_post"],
     code_challenge_methods_supported: ["S256"],
     scopes_supported: [...ALL_SCOPES],

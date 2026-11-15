@@ -1193,6 +1193,8 @@ export const he: ChromeDict = {
   "connApps.revokeTitle": "לבטל את הגישה של {name}?",
   "connApps.revokeDesc": "האפליקציה לא תוכל עוד להשתמש בחשבון שלכם. כדי להשתמש בה שוב, חברו אותה מחדש.",
   "connApps.revoked": "הגישה בוטלה",
+  "connApps.viaSignIn": "מחוברת דרך הכניסה שלך: האפליקציה מקבלת גישה בלי מסך אישור.",
+  "connApps.revokeDescExchange": "האפליקציה לא תוכל עוד להשתמש בחשבון שלך. היא לא תוכל לקבל גישה מחדש בעצמה: היא תצטרך לבקש ממך לאשר אותה.",
   "settings.connectedApps": "אפליקציות מחוברות",
   "settings.connectedAppsDesc": "צפו באפליקציות ובעוזרי ה-AI שיש להם גישה לחשבון, ובטלו את הגישה של כל אחד מהם.",
   "settings.providerKeys": "מפתחות ספקים",

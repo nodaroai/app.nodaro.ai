@@ -6,10 +6,8 @@ import { redis } from "../lib/queue.js"
 import { callerKeyHash } from "./oauth-register.js"
 import { getSsoProvider, getSsoProviders, ssoPublicInfo, type SsoProviderConfig } from "../lib/sso-providers.js"
 import { isAllowedRequestHost, requestHostname } from "../lib/allowed-origins.js"
-import { verifyAssertion, SsoAssertionError } from "../lib/sso-assertion.js"
-import { claimAssertionJti } from "../lib/sso-replay.js"
-import { resolveSsoUser } from "../lib/sso-linking.js"
-import { ACCESS_BLOCKED_BODY, isUserBlocked } from "../lib/access-blocks.js"
+import { redeemAssertion } from "../lib/sso-redeem.js"
+import { ACCESS_BLOCKED_BODY } from "../lib/access-blocks.js"
 
 const ParamsSchema = z.object({ provider: z.string() })
 const QuerySchema = z.object({
@@ -177,24 +175,24 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: { code: "no_assertion" } })
     }
 
-    // 1. Verify signature / aud / exp / lifetime / jti.
-    let verified
-    try {
-      verified = await verifyAssertion(provider, assertion)
-    } catch (e) {
-      if (e instanceof SsoAssertionError) return reply.status(401).send({ error: { code: e.code } })
-      throw e
+    // 1–3. Verify signature / aud / exp / lifetime / jti, refuse a replay, and
+    // apply the account-linking rules — BEFORE minting anything. One
+    // redemption for this door and the MCP assertion exchange
+    // (lib/sso-redeem.ts), so the two can never disagree on either.
+    const link = await redeemAssertion(provider, assertion, "sign-in")
+    if (!link.ok) {
+      switch (link.reason) {
+        case "assertion":
+          return reply.status(401).send({ error: { code: link.code } })
+        case "replayed":
+          return reply.status(401).send({ error: { code: "assertion_replayed" } })
+        case "link":
+          return reply.status(403).send({ error: { code: link.code, message: link.message } })
+        case "blocked":
+          // A blocked account gets no session from this door either (lib/access-blocks.ts).
+          return reply.status(403).send(ACCESS_BLOCKED_BODY)
+      }
     }
-
-    // 2. Replay guard — one redemption per jti.
-    const fresh = await claimAssertionJti(provider.id, verified.jti, verified.expSeconds)
-    if (!fresh) return reply.status(401).send({ error: { code: "assertion_replayed" } })
-
-    // 3. Account-linking rules — reject BEFORE minting any token.
-    const link = await resolveSsoUser(provider, verified)
-    if (!link.ok) return reply.status(403).send({ error: { code: link.code, message: link.message } })
-    // A blocked account gets no session from this door either (lib/access-blocks.ts).
-    if (await isUserBlocked(link.userId)) return reply.status(403).send(ACCESS_BLOCKED_BODY)
 
     // 4. Mint a one-time Supabase login token and hand it to the /sso landing.
     const { data, error } = await supabase.auth.admin.generateLink({ type: "magiclink", email: link.email })

@@ -1,6 +1,6 @@
 import "dotenv/config"
 import { movedPagesSettingsProblem } from "./moved-pages-settings.js"
-import { mcpAllowedClientIdsProblem } from "./mcp-client-ids.js"
+import { assertionExchangeClientIdsProblem, mcpAllowedClientIdsProblem } from "./mcp-client-ids.js"
 import { z } from "zod"
 import { parseSiteCaptureEnabled } from "./site-capture-switch.js"
 import {
@@ -650,6 +650,28 @@ export const envSchema = z.object({
    */
   MCP_ALLOWED_CLIENT_IDS: z.string().default(""),
   /**
+   * The listed client(s) that may exchange a signed assertion from the
+   * deployment's own identity provider for an MCP access token, with no
+   * consent click (decided 2026-11-11): POST /v1/oauth/token with the RFC 7523
+   * jwt-bearer grant. Comma-separated developer-app `client_id`s, each also in
+   * `MCP_ALLOWED_CLIENT_IDS`, or the boot stops. Unset or blank = the exchange
+   * is off and the token endpoint answers it as any grant it does not know.
+   * Also needs one `EXTERNAL_SSO_PROVIDERS` entry with an `exchangeAudience`
+   * (checked at boot). Read through `lib/mcp-assertion-exchange.ts`.
+   */
+  MCP_ASSERTION_EXCHANGE_CLIENT_IDS: z.string().default(""),
+  /**
+   * How long an access token the assertion exchange issues lives, in seconds
+   * (decided 2026-11-11): default 3600 (one hour), 300–86400. The application
+   * exchanges again whenever it needs a token, so this is never the 90-day
+   * lifetime of a consent token. Blank = the default; anything else outside
+   * the range stops the boot.
+   */
+  MCP_ASSERTION_EXCHANGE_TOKEN_TTL_SECONDS: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.coerce.number().int().min(300).max(86400).default(3600),
+  ),
+  /**
    * client_id of the developer app the Figma plugin connects through (see
    * `routes/oauth-plugin-connect.ts`). The operator registers the app once with
    * this deployment's `/v1/oauth/plugin/callback` in its redirect_uris and the
@@ -779,6 +801,9 @@ function loadConfig() {
   // The MCP client list is sign-in policy: a value that cannot be read must stop the boot, never be ignored.
   const mcpClients = mcpAllowedClientIdsProblem(result.data)
   if (mcpClients) throw new Error(`Invalid env vars: ${mcpClients}`)
+  // So is the assertion exchange's client list: every entry must be a client the MCP list names.
+  const exchangeClients = assertionExchangeClientIdsProblem(result.data)
+  if (exchangeClients) throw new Error(`Invalid env vars: ${exchangeClients}`)
   return result.data
 }
 

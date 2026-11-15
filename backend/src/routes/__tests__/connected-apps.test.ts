@@ -11,15 +11,21 @@ const db = vi.hoisted(() => ({
   authorizations: [] as unknown[],
   tokens: [] as unknown[],
   revokeHit: true,
+  /** What a read selecting `grant_type` answers on a database without migration 651. */
+  grantTypeError: null as null | { code: string; message: string },
 }))
 
 function query(table: string) {
+  let columns = ""
   const record = (op: string, ...args: unknown[]) => {
     db.calls.push({ table, op, args })
     return chain
   }
   const chain: Record<string, unknown> = {
-    select: (...a: unknown[]) => record("select", ...a),
+    select: (...a: unknown[]) => {
+      columns = String(a[0] ?? "")
+      return record("select", ...a)
+    },
     update: (...a: unknown[]) => record("update", ...a),
     eq: (...a: unknown[]) => record("eq", ...a),
     is: (...a: unknown[]) => record("is", ...a),
@@ -32,7 +38,9 @@ function query(table: string) {
       return { data: db.revokeHit ? { id: idFilter?.args[1] } : null, error: null }
     },
     then: (resolve: (v: unknown) => unknown) =>
-      resolve({ data: table === "developer_app_tokens" ? db.tokens : db.authorizations, error: null }),
+      columns.includes("grant_type") && db.grantTypeError
+        ? resolve({ data: null, error: db.grantTypeError })
+        : resolve({ data: table === "developer_app_tokens" ? db.tokens : db.authorizations, error: null }),
   }
   return chain
 }
@@ -47,6 +55,7 @@ let app: FastifyInstance
 beforeEach(async () => {
   db.calls.length = 0
   db.revokeHit = true
+  db.grantTypeError = null
   db.authorizations = [
     {
       id: AUTH_ID,
@@ -89,6 +98,23 @@ describe("GET /v1/me/connected-apps", () => {
     const filters = db.calls.filter((c) => c.table === "developer_app_authorizations")
     expect(filters).toContainEqual({ table: "developer_app_authorizations", op: "eq", args: ["user_id", "user-1"] })
     expect(filters).toContainEqual({ table: "developer_app_authorizations", op: "is", args: ["revoked_at", null] })
+  })
+
+  it("marks a grant an app obtained through the MCP assertion exchange (no consent click), and only that one", async () => {
+    db.tokens = [{ authorization_id: AUTH_ID, last_used_at: "2026-09-25T09:30:00Z", grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer" }]
+    const res = await app.inject({ method: "GET", url: "/v1/me/connected-apps", headers: { "x-user-id": "user-1" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().apps[0]).toMatchObject({ authorizationId: AUTH_ID, grantedBy: "assertion_exchange" })
+    expect(db.calls).toContainEqual({ table: "developer_app_tokens", op: "eq", args: ["grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"] })
+  })
+
+  it("a database without the grant-type column (migration 651 not applied yet) lists every grant as before, unmarked", async () => {
+    db.tokens = [{ authorization_id: AUTH_ID, last_used_at: "2026-09-25T09:30:00Z" }]
+    db.grantTypeError = { code: "42703", message: "column developer_app_tokens.grant_type does not exist" }
+    const res = await app.inject({ method: "GET", url: "/v1/me/connected-apps", headers: { "x-user-id": "user-1" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().apps[0]).not.toHaveProperty("grantedBy")
+    expect(res.json().apps[0].lastUsedAt).toBe("2026-09-25T09:30:00Z")
   })
 
   it("refuses an app token: an app cannot list the grants it lives under", async () => {

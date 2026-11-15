@@ -9,8 +9,8 @@ import { createHash, randomUUID } from "node:crypto"
  * A test may seed any other table in `db.extra`; every table it does not seed
  * reads as empty: one row → null, a list → [].
  *
- * Filters: `eq` and `is` narrow the known tables; every other filter method is
- * accepted and ignored (no test here depends on one). `db.calls` records every
+ * Filters: `eq`, `is`, `in` and `lt` narrow the known tables; every other
+ * filter method is accepted and ignored (no test here depends on one). `db.calls` records every
  * query, so a test can prove a request read nothing. `db.failReads` makes every
  * read of the named tables answer an error.
  *
@@ -31,10 +31,16 @@ export interface OAuthMemoryDb {
   extra: Record<string, Row[]>
   calls: Array<{ table: string; op: string; eqs: Record<string, unknown> }>
   failReads: Set<string>
+  /**
+   * `table.column` names the database does not have yet (a migration that has
+   * not reached it): a write naming one, or a read selecting one, answers
+   * PostgREST's PGRST204 as the real database would.
+   */
+  missingColumns: Set<string>
 }
 
 export function newOAuthMemoryDb(): OAuthMemoryDb {
-  return { apps: [], authorizations: [], tokens: [], apiTokens: [], profiles: [], sessions: new Map(), extra: {}, calls: [], failReads: new Set() }
+  return { apps: [], authorizations: [], tokens: [], apiTokens: [], profiles: [], sessions: new Map(), extra: {}, calls: [], failReads: new Set(), missingColumns: new Set() }
 }
 
 export function sha256Hex(value: string): string {
@@ -45,7 +51,7 @@ type Op = "select" | "update" | "insert" | "upsert" | "delete"
 type Result = { data: unknown; error: { code?: string; message: string } | null; count?: number | null }
 
 const PASS_THROUGH = [
-  "order", "limit", "range", "gte", "gt", "lte", "lt", "neq", "in", "overlaps", "contains", "textSearch", "not", "or", "filter", "match", "ilike", "like",
+  "order", "limit", "range", "gte", "gt", "lte", "neq", "overlaps", "contains", "textSearch", "not", "or", "filter", "match", "ilike", "like",
 ] as const
 
 function tableRows(db: OAuthMemoryDb, table: string): Row[] | null {
@@ -66,15 +72,33 @@ class Query {
   private headCount = false
   private readonly eqs: Record<string, unknown> = {}
   private readonly nulls: Record<string, boolean> = {}
+  private readonly below: Record<string, string | number> = {}
+  private readonly within: Record<string, readonly unknown[]> = {}
 
   constructor(private readonly db: OAuthMemoryDb, private readonly table: string) {
     for (const m of PASS_THROUGH) (this as unknown as Record<string, unknown>)[m] = () => this
   }
 
-  select(_columns?: string, opts?: { count?: string; head?: boolean }): this {
-    if (this.op === "select") this.headCount = opts?.head === true
-    else this.returning = true
+  private selected = ""
+
+  select(columns?: string, opts?: { count?: string; head?: boolean }): this {
+    if (this.op === "select") {
+      this.headCount = opts?.head === true
+      this.selected = columns ?? ""
+    } else this.returning = true
     return this
+  }
+
+  /** The column a missing-column rule names in this query, if any. */
+  private missingColumn(): string | null {
+    const named = new Set<string>(this.selected.split(/[\s,()!]+/).filter(Boolean))
+    if (this.op !== "select" && this.op !== "delete") {
+      const payload = this.payload as Row | Row[]
+      for (const row of Array.isArray(payload) ? payload : [payload]) for (const k of Object.keys(row ?? {})) named.add(k)
+    }
+    for (const k of [...Object.keys(this.eqs), ...Object.keys(this.below), ...Object.keys(this.within)]) named.add(k)
+    for (const column of named) if (this.db.missingColumns.has(`${this.table}.${column}`)) return column
+    return null
   }
   update(values: unknown): this { this.op = "update"; this.payload = values; return this }
   insert(values: unknown): this { this.op = "insert"; this.payload = values; return this }
@@ -82,6 +106,9 @@ class Query {
   delete(): this { this.op = "delete"; return this }
   eq(column: string, value: unknown): this { this.eqs[column] = value; return this }
   is(column: string, value: unknown): this { this.nulls[column] = value === null; return this }
+  /** Strictly below `value` (an ISO timestamp compares as a string); a row without the column never matches. */
+  lt(column: string, value: string | number): this { this.below[column] = value; return this }
+  in(column: string, values: readonly unknown[]): this { this.within[column] = values; return this }
 
   maybeSingle(): Promise<Result> { return Promise.resolve(this.run("maybeSingle")) }
   single(): Promise<Result> { return Promise.resolve(this.run("single")) }
@@ -95,6 +122,11 @@ class Query {
       const isNull = row[k] === null || row[k] === undefined
       if (isNull !== wantsNull) return false
     }
+    for (const [k, bound] of Object.entries(this.below)) {
+      const v = row[k]
+      if (typeof v !== typeof bound || !((v as string | number) < bound)) return false
+    }
+    for (const [k, values] of Object.entries(this.within)) if (!values.includes(row[k])) return false
     return true
   }
 
@@ -103,6 +135,8 @@ class Query {
     if (this.op === "select" && this.db.failReads.has(this.table)) {
       return { data: null, error: { code: "XX000", message: `read of ${this.table} failed` } }
     }
+    const missing = this.missingColumn()
+    if (missing) return { data: null, error: { code: "PGRST204", message: `Could not find the '${missing}' column of '${this.table}' in the schema cache` } }
     const rows = tableRows(this.db, this.table)
     switch (this.op) {
       case "select": {

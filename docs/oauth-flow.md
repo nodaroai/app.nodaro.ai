@@ -263,6 +263,139 @@ such a list:
 The `resource` parameter is read only for this rule: it is never stored, and
 a token is not tied to a resource. With no list set it is ignored, as before.
 
+### The assertion exchange: tokens for a deployment's own application {#assertion-exchange}
+
+A deployment whose own application already signs its people in (its chat
+application, say, which is also the identity provider of the deployment's
+[external SSO](sso.md)) can let that application's **server** obtain an MCP
+access token for any of those people **without a consent screen**: it sends a
+signed assertion naming the person to the token endpoint and gets a token
+back (the RFC 7523 JWT-bearer grant). The operator turns it on for one listed
+client; see [the deployment guide](deployment.md#mcp-without-a-consent-click-the-assertion-exchange)
+for the settings and what they mean for the deployment's security.
+
+Where it is off — on every deployment that has not turned it on, and for every
+client but the one it was turned on for — the token endpoint answers this grant
+exactly as it answers a grant type it does not know (`400`
+`{"error":"invalid_request","error_description":"Invalid input: expected \"authorization_code\""}`),
+and `/.well-known/oauth-authorization-server` lists only `authorization_code`
+in `grant_types_supported`. Where it is on, that list also names
+`urn:ietf:params:oauth:grant-type:jwt-bearer`.
+
+**The request.** `POST /v1/oauth/token`, form-encoded (JSON works too), from
+your server only:
+
+| Parameter | |
+|-----------|-|
+| `grant_type` | `urn:ietf:params:oauth:grant-type:jwt-bearer` |
+| `assertion` | The signed assertion (below). In the body, never in the URL. |
+| `client_id`, `client_secret` | The client the exchange is on for. A confidential client: the secret is required. |
+| `resource` | The MCP endpoint the token is for, exactly as this deployment states it: `MCP_PUBLIC_URL` + `/mcp`, or on a deployment that serves [MCP by path](deployment.md#mcp-by-path-no-dedicated-mcp-host) the endpoint on the host you call the token endpoint through (`https://<host>/v1/mcp`). A trailing slash is ignored; nothing else is. |
+| `scope` | Optional, space-separated. Never wider than the client's `scopesRequested`; omitted = all of them. |
+
+A complete example, every value made up:
+
+```http
+POST /v1/oauth/token HTTP/1.1
+Host: app.example.com
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer
+&client_id=app_0123456789abcdef0123456789abcdef
+&client_secret=sec_example-not-a-real-secret
+&assertion=<the signed assertion>
+&resource=https%3A%2F%2Fmcp.example.com%2Fmcp
+&scope=jobs%3Aread%20assets%3Aread
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+Pragma: no-cache
+
+{
+  "access_token": "ndr_app_<64 hex characters>",
+  "token_type": "Bearer",
+  "scope": "jobs:read assets:read",
+  "expires_in": 3600
+}
+```
+
+The token is an ordinary app token for that person and your client: send it
+as `Authorization: Bearer …` to the MCP endpoint. It lives one hour (the
+operator may set 5 minutes to 24 hours, `expires_in` says which). There is no
+refresh token: exchange again whenever you need one — before the token
+expires, or when a call answers `401`.
+
+**The assertion.** A JWT your server signs with HS256 and the provider's
+`secret` (the same secret as the provider's sign-in assertions), carrying:
+
+| Claim | |
+|-------|-|
+| `aud` | The provider's **`exchangeAudience`** — never its sign-in `audience`. An assertion whose `aud` names the sign-in audience (alone or beside the exchange one) is refused here, and an exchange assertion is refused by the sign-in. |
+| `exp`, `iat` | A short lifetime: `exp − iat` no longer than the provider's `maxLifetimeSeconds` (default 300 seconds). A minute or two is plenty. |
+| `jti` | Unique per assertion. Each `jti` is accepted **once**, across the sign-in and the exchange alike. |
+| `email`, `email_verified`, `sub` | The person, per the provider's `claimMap`. The account is resolved by exactly the rules of the sign-in ([account-linking rules](sso.md#account-linking-rules)): a person with no account yet gets one when `email_verified` is `true`, as on their first sign-in. |
+
+Signing one in Node with `jose`:
+
+```typescript
+import { SignJWT } from "jose"
+import { randomUUID } from "node:crypto"
+
+// The provider's secret and exchangeAudience, from your server's own settings.
+const key = new TextEncoder().encode(process.env.NODARO_SSO_SECRET!)
+
+async function nodaroMcpToken(person: { id: string; email: string }) {
+  const assertion = await new SignJWT({ email: person.email, email_verified: true, sub: person.id })
+    .setProtectedHeader({ alg: "HS256" })
+    .setAudience(process.env.NODARO_EXCHANGE_AUDIENCE!)
+    .setIssuedAt()
+    .setExpirationTime("2m")
+    .setJti(randomUUID())
+    .sign(key)
+
+  const res = await fetch("https://app.example.com/v1/oauth/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      client_id: process.env.NODARO_CLIENT_ID!,
+      client_secret: process.env.NODARO_CLIENT_SECRET!,
+      assertion,
+      resource: "https://mcp.example.com/mcp",
+    }),
+  })
+  if (!res.ok) throw new Error(`exchange refused: ${res.status} ${await res.text()}`)
+  return (await res.json()) as { access_token: string; expires_in: number }
+}
+```
+
+**Errors.** RFC 6749 error bodies, `{ "error": "…", "error_description": "…" }`:
+
+| HTTP | `error` | When |
+|------|---------|------|
+| 400 | `invalid_request` | A part is missing (the `assertion`, say) |
+| 401 | `invalid_client` | No `client_secret`, or the wrong one. Checked before the assertion is read, so a refused request spends nothing. |
+| 400 | `invalid_target` | `resource` missing, or not this deployment's MCP endpoint (the description names the endpoint) |
+| 400 | `invalid_scope` | A `scope` the client may not request |
+| 400 | `invalid_grant` | The assertion: bad signature, wrong `aud`, expired, lifetime over the cap, no `jti`, no email, or already used — the description says which. Or no account: the person cannot be signed in by the provider's assertions (an unverified address with no account, an existing account the linking rules do not adopt, a blocked account), or revoked your app (below). Every account outcome has the same description, so the endpoint never tells whether an account exists. |
+| 429 | `slow_down` | Too many exchanges from your network or for your client in a minute (300 each); wait `Retry-After` seconds |
+| 503 | `temporarily_unavailable` | The exchange cannot be checked right now; try again |
+| 500 | `server_error` | The token could not be issued |
+
+There is no `unsupported_grant_type` or `unauthorized_client` here: an
+exchange that is off — on the deployment, or for your client (not named for
+it, no longer on the MCP client list, suspended) — answers as any unknown
+grant does (above).
+
+**What the person sees.** Settings → Connected apps lists your app with
+"Connected through your sign-in". If they revoke it there, its tokens stop at
+once and the exchange **does not** give you a new one for them
+(`invalid_grant`): only their own consent — the authorization-code flow above,
+for the same client — reconnects it.
+
 ## 4. Scope vocabulary
 
 There are 14 scopes total. The canonical list is `OAUTH_SCOPES` in
@@ -790,7 +923,15 @@ Where Nodaro intentionally simplifies or extends the standard:
 - **No refresh tokens.** Access tokens last 90 days. When they
   expire, re-prompt the user. The tradeoff is simplicity (one token
   type, one storage path, one expiry policy) at the cost of a
-  consent-screen interruption every quarter.
+  consent-screen interruption every quarter. (A token from the
+  [assertion exchange](#assertion-exchange) lasts an hour by default;
+  the application simply exchanges again.)
+- **The JWT-bearer grant (RFC 7523) only where a deployment turns it on,
+  and only for the client it names** — the [assertion
+  exchange](#assertion-exchange). Everywhere else it is answered as an
+  unknown grant type (`invalid_request`, as before), not
+  `unsupported_grant_type`; the assertion is HS256 with a shared secret,
+  not a public-key signature.
 - **`POST /v1/oauth/revoke` always returns 200** per RFC 7009 —
   including for tokens that don't exist. This prevents an attacker
   from probing whether a guessed token string is valid.

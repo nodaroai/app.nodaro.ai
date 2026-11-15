@@ -128,6 +128,49 @@ describe("every code and token the platform issues asks the sign-in rule", () =>
     expect(oauth.match(/\bmcpSignInRefusal\s*\(/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
     expect(calls(oauth, "consentRedirectRefusal")).toBe(true)
   })
+
+  /**
+   * The MCP assertion exchange (decided 2026-11-11) is a mint site of its own:
+   * the jwt-bearer grant, answered before the token route reads the
+   * authorization-code grant. It is counted by the census above like any
+   * issuer; here, that it asks the rule BEFORE it mints, that the token route
+   * hands it the request before the code grant's parse (so every request it
+   * declines is answered exactly as before), and that it only mints for a
+   * client the exchange's own rule — which includes `clientMayUseMcp` — admits.
+   */
+  it("the assertion exchange asks mcpSignInRefusal before it mints, for a client the exchange rule admitted", () => {
+    const exchange = SOURCES.find((s) => s.rel === "src/routes/oauth-assertion-exchange.ts")
+    expect(exchange, "the exchange's route module").toBeDefined()
+    const text = exchange!.text
+    expect(SOURCES.filter((s) => calls(s.text, "mintAppAccessToken")).map((s) => s.rel)).toContain("src/routes/oauth-assertion-exchange.ts")
+    const asks = text.search(/\bmcpSignInRefusal\s*\(/)
+    const mints = text.search(/\bmintAppAccessToken\s*\(/)
+    const admits = text.search(/\bclientMayExchange\s*\(/)
+    expect(asks, "the exchange must call mcpSignInRefusal").toBeGreaterThan(-1)
+    expect(asks, "…before mintAppAccessToken").toBeLessThan(mints)
+    expect(admits, "the exchange must ask clientMayExchange").toBeGreaterThan(-1)
+    expect(admits, "…before mintAppAccessToken").toBeLessThan(mints)
+    const rule = SOURCES.find((s) => s.rel === "src/lib/mcp-assertion-exchange.ts")!.text
+    expect(calls(rule, "clientMayUseMcp"), "the exchange rule asks the funnel's own rule").toBe(true)
+    expect(calls(rule, "mcpClientListSet"), "…and that a list is set").toBe(true)
+
+    const oauth = SOURCES.find((s) => s.rel === "src/routes/oauth.ts")!.text
+    const handsOver = oauth.search(/\banswerAssertionExchange\s*\(/)
+    expect(handsOver, "the token route asks the exchange").toBeGreaterThan(-1)
+    expect(handsOver, "…before the code grant parses the body").toBeLessThan(oauth.search(/\btokenBody\s*\.\s*safeParse\s*\(/))
+  })
+
+  it("an assertion is redeemed only through the one redemption both doors share", () => {
+    // The verifier, the single-use store and the account resolution are
+    // called in exactly one place (lib/sso-redeem.ts), so the browser sign-in
+    // and the exchange cannot drift apart on any of them.
+    for (const name of ["verifyAssertion", "claimAssertionJti", "resolveSsoUser"]) {
+      const callers = SOURCES.filter((s) => calls(s.text, name)).map((s) => s.rel)
+      expect(callers, name).toEqual(["src/lib/sso-redeem.ts"])
+    }
+    const doors = SOURCES.filter((s) => calls(s.text, "redeemAssertion")).map((s) => s.rel).sort()
+    expect(doors).toEqual(["src/routes/oauth-assertion-exchange.ts", "src/routes/sso.ts"])
+  })
 })
 
 describe("registration and the list itself", () => {
@@ -139,5 +182,10 @@ describe("registration and the list itself", () => {
   it("only the funnel and the boot check read MCP_ALLOWED_CLIENT_IDS", () => {
     const readers = SOURCES.filter((s) => /\bMCP_ALLOWED_CLIENT_IDS\b/.test(s.text)).map((s) => s.rel).sort()
     expect(readers).toEqual(["src/lib/config.ts", "src/lib/mcp-client-ids.ts", "src/lib/mcp-listed-clients.ts"])
+  })
+
+  it("only the exchange's settings and the boot check read MCP_ASSERTION_EXCHANGE_CLIENT_IDS", () => {
+    const readers = SOURCES.filter((s) => /\bMCP_ASSERTION_EXCHANGE_CLIENT_IDS\b/.test(s.text)).map((s) => s.rel).sort()
+    expect(readers).toEqual(["src/lib/config.ts", "src/lib/mcp-assertion-exchange-settings.ts", "src/lib/mcp-client-ids.ts"])
   })
 })

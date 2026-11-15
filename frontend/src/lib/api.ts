@@ -9130,6 +9130,8 @@ export interface ConnectedApp {
   scopes: string[]
   connectedAt: string
   lastUsedAt: string | null
+  /** Present when the app obtained the grant through the MCP assertion exchange: from the deployment's sign-in, with no consent screen. */
+  grantedBy?: "assertion_exchange"
 }
 
 /** Every app with access to the user's account. Browser sessions only. */

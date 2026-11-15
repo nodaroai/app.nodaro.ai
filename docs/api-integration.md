@@ -826,6 +826,15 @@ same subject), `404` (unknown provider), `400`
 assertion), `429` (per-IP rate limit). The assertion and the minted token are
 redacted from request logs.
 
+The same provider can also sign assertions the deployment's own application
+**exchanges for an MCP access token** at `POST /v1/oauth/token`
+(`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`, RFC 7523), where a
+deployment turns that on — see [the assertion exchange](./oauth-flow.md#assertion-exchange).
+Such assertions carry the provider's `exchangeAudience`; `GET /v1/sso/:provider`
+refuses them (`401 invalid_claims`), and the exchange refuses a sign-in
+assertion. A grant obtained that way is listed by `GET /v1/me/connected-apps`
+with `"grantedBy": "assertion_exchange"` (absent on every other grant).
+
 ## 4. Worked example: generate an image
 
 End-to-end bash. Assumes you've copied your token into `$TOKEN` and have

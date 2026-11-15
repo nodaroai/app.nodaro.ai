@@ -1159,6 +1159,8 @@ export const ko: ChromeDict = {
   "connApps.revokeTitle": "{name}의 접근을 취소하시겠습니까?",
   "connApps.revokeDesc": "이 앱은 더 이상 내 계정을 사용할 수 없습니다. 다시 사용하려면 다시 연결하세요.",
   "connApps.revoked": "접근이 취소되었습니다",
+  "connApps.viaSignIn": "로그인을 통해 연결됨: 이 앱은 동의 화면 없이 액세스를 얻습니다.",
+  "connApps.revokeDescExchange": "앱이 더 이상 계정을 사용할 수 없습니다. 스스로 다시 액세스할 수 없으며, 승인을 요청해야 합니다.",
   "settings.connectedApps": "연결된 앱",
   "settings.connectedAppsDesc": "내 계정에 접근할 수 있는 앱과 AI 어시스턴트를 확인하고 접근을 취소합니다.",
   "settings.providerKeys": "공급자 키",

@@ -31,6 +31,17 @@ export interface SsoProviderConfig {
   secret?: string
   /** Expected `aud` claim — REQUIRED for kind="assertion". */
   audience?: string
+  /**
+   * The `aud` an assertion carries to be EXCHANGED for an MCP access token by
+   * the deployment's own application (POST /v1/oauth/token, the RFC 7523
+   * jwt-bearer grant; decided 2026-11-11). Optional, kind="assertion" only,
+   * at most one provider, and never equal to `audience`: a sign-in assertion
+   * travels through a browser's address bar and must never be exchangeable,
+   * and an exchange assertion must never sign anyone in
+   * (`sso-assertion.ts` refuses either one at the other door). Absent: the
+   * provider takes no part in the exchange. NEVER exposed by `ssoPublicInfo`.
+   */
+  exchangeAudience?: string
   claimMap: AssertionClaimMap
   /** Where GET /v1/sso/:provider 302s when hit WITHOUT an assertion (the login
    *  button target). The IdP authenticates then redirects back with ?assertion. */
@@ -77,6 +88,7 @@ const ProviderSchema = z
     kind: z.enum(["assertion", "oidc", "saml"]),
     secret: z.string().min(16).optional(),
     audience: z.string().min(1).optional(),
+    exchangeAudience: z.string().min(1).optional(),
     claimMap: ClaimMapSchema,
     initiateUrl: z.string().url().optional(),
     initiateUrlByHost: z.record(z.string().min(1), z.string().url()).optional(),
@@ -90,6 +102,18 @@ const ProviderSchema = z
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: `provider "${p.id}": assertion kind requires "secret"` })
       if (!p.audience)
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: `provider "${p.id}": assertion kind requires "audience"` })
+    }
+    if (p.exchangeAudience !== undefined) {
+      if (p.kind !== "assertion") {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `provider "${p.id}": exchangeAudience applies only to kind "assertion"` })
+      } else if (p.exchangeAudience.trim() === (p.audience ?? "").trim() || p.exchangeAudience !== p.exchangeAudience.trim()) {
+        // Equal (or equal but for spaces, or padded at all): one assertion
+        // could then both sign a person in and be exchanged for a token.
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `provider "${p.id}": exchangeAudience must differ from its sign-in "audience" and carry no surrounding spaces`,
+        })
+      }
     }
     if ((p.kind === "oidc" || p.kind === "saml") && !p.domain && !p.supabaseProvider) {
       ctx.addIssue({
@@ -136,7 +160,22 @@ export function parseSsoProviders(raw: string | undefined): SsoProviderConfig[] 
     if (seen.has(p.id)) throw new Error(`EXTERNAL_SSO_PROVIDERS: duplicate provider id "${p.id}"`)
     seen.add(p.id)
   }
+  const exchanging = arr.data.filter((p) => p.exchangeAudience !== undefined)
+  if (exchanging.length > 1) {
+    throw new Error(
+      `EXTERNAL_SSO_PROVIDERS: only one provider may set "exchangeAudience" (${exchanging.map((p) => `"${p.id}"`).join(", ")} do)`,
+    )
+  }
   return arr.data
+}
+
+/**
+ * The one provider whose assertions the MCP assertion exchange accepts (the
+ * provider that sets `exchangeAudience`), or null when none does. The parse
+ * above refuses a list where more than one does.
+ */
+export function exchangeProvider(providers: readonly SsoProviderConfig[] = getSsoProviders()): SsoProviderConfig | null {
+  return providers.find((p) => p.kind === "assertion" && p.exchangeAudience !== undefined) ?? null
 }
 
 let cache: SsoProviderConfig[] | undefined
