@@ -13,7 +13,15 @@
  *     (`provider` / `llm`) is one the workflow lane can judge, or is listed
  *     below with the reason it needs no judging. The lane registry's own census
  *     already holds every job a worker can be handed to a lane, so a new job
- *     that runs a model cannot reach a worker without a decision here.
+ *     that runs a model cannot reach a worker without a decision here. So is
+ *     every job a node with a MODEL SETTING builds, whatever its lane: a
+ *     render or a cut that runs a model beside its own work (Add Captions'
+ *     transcription engine, on the `local` lane) is a job that runs a model.
+ *     A node's model settings are `nodeModelOptions`, and every route schema
+ *     field that accepts catalog ids is held to one of them
+ *     (src/__tests__/credit-guard-run-model-census.test.ts), so a model
+ *     setting its route validates against a list of catalog ids cannot go
+ *     unprobed here (that census states what it cannot see).
  *  2. Every dispatchable node type that builds from a wired graph with no model
  *     named, and whose job is judged, resolves a default a restriction can name
  *     — a model id, not a pricing id — so the judgement is never vacuous.
@@ -26,7 +34,8 @@ import type { ResolvedInputs, SimpleNode } from "../types.js"
 import { JOB_LANE_CLASSES, laneClassOf } from "../../../lib/concurrency-lanes/registry.js"
 import { UNIT_NODE_DESCRIPTORS, laneOf } from "../../../lib/unit-descriptors.js"
 import { __availabilityUniverseReadyForTests, GATEABLE_MODEL_IDS, GATEABLE_NODE_TYPES } from "../../../lib/availability-override.js"
-import { FIXED_MODEL_JOBS, jobRunModelOfBuild, judgesJobRunModel } from "../../../lib/run-model.js"
+import { FIXED_MODEL_JOBS, jobRunModelOfBuild, judgesJobRunModel, PAYLOAD_MODEL_OF_JOB } from "../../../lib/run-model.js"
+import { NODE_DATA_FIELDS } from "@nodaro/render-rules"
 import { RESOLVED_MODEL_OF_JOB, resolvedModelOfJob } from "../../../lib/job-resolved-model.js"
 import { T2I_TO_I2I_VARIANT } from "@nodaro/shared/models"
 import { providerIsItsModel } from "../../../lib/provider-model.js"
@@ -68,6 +77,25 @@ const JOB_JUDGE_EXEMPT: Readonly<Record<string, string>> = {
 }
 
 /**
+ * What a node is wired with when the census builds it, where `WIRED` would give
+ * it a source that makes it run no model at all — each with why.
+ */
+const INPUTS_OF: Readonly<Record<string, { readonly inputs: Record<string, unknown>; readonly why: string }>> = {
+  "add-captions": {
+    inputs: { videoUrl: "https://cdn.example.com/a.mp4" },
+    why: "a wired prompt is its static subtitle text, which transcribes nothing; wired with its video alone it transcribes on its engine",
+  },
+}
+
+/** The inputs the census wires `type` with. */
+const inputsOf = (type: string): ResolvedInputs => ({ ...(INPUTS_OF[type]?.inputs ?? WIRED) }) as ResolvedInputs
+
+/** Whether a built node of `type` on `lane` runs a model: its lane calls a provider or an LLM, or the node has a model setting. */
+function runsModels(type: string, lane: string): boolean {
+  return lane === "provider" || lane === "llm" || nodeModelOptions(type).size > 0
+}
+
+/**
  * Judged on the workflow lane, but whose default no allowlist can withhold:
  * it is outside the catalog, so only an explicit `models.deny` entry names it.
  */
@@ -77,7 +105,11 @@ const JUDGED_OUTSIDE_CATALOG: Readonly<Record<string, string>> = {
 
 // ── 1. Jobs ──────────────────────────────────────────────────────────────────
 
-/** Every job a worker runs whose lane calls an AI provider or an LLM. */
+/**
+ * Every job a worker runs whose lane calls an AI provider or an LLM, and every
+ * job a node with a model setting builds (part 3's builds: every option of
+ * every node type), whatever its lane.
+ */
 function modelRunningJobs(): string[] {
   const fromRegistry = Object.entries(JOB_LANE_CLASSES)
     .filter(([, cls]) => cls.kind === "leaf" && (cls.lane === "provider" || cls.lane === "llm"))
@@ -85,7 +117,8 @@ function modelRunningJobs(): string[] {
   const fromUnits = UNIT_NODE_DESCRIPTORS.filter((d) => d.execution.kind === "worker")
     .map((d) => d.type)
     .filter((t) => laneOf(t) === "provider" || laneOf(t) === "llm")
-  return [...new Set([...fromRegistry, ...fromUnits])].sort()
+  const fromModelSettings = options.filter((o) => nodeModelOptions(o.type).size > 0).map((o) => o.jobName)
+  return [...new Set([...fromRegistry, ...fromUnits, ...fromModelSettings])].sort()
 }
 
 describe("every job that can run a model is judged on the workflow lane, or says why not", () => {
@@ -108,6 +141,21 @@ describe("every job that can run a model is judged on the workflow lane, or says
   it("every fixed-model job is a model-running job", () => {
     const jobs = new Set(modelRunningJobs())
     expect([...FIXED_MODEL_JOBS].filter((j) => !jobs.has(j))).toEqual([])
+  })
+
+  it("sees the case it guards: Add Captions, a render on the local lane, runs its transcription engine and is judged", () => {
+    expect(laneClassOf("video-generation", "add-captions", {})).toMatchObject({ kind: "leaf", lane: "local" })
+    expect(modelRunningJobs()).toContain("add-captions")
+    expect(judgesJobRunModel("add-captions")).toBe(true)
+  })
+
+  it("every job judged on its payload's model is a model-running job", () => {
+    const jobs = new Set(modelRunningJobs())
+    expect(Object.keys(PAYLOAD_MODEL_OF_JOB).filter((j) => !jobs.has(j))).toEqual([])
+  })
+
+  it("every node wired apart from the rest builds", () => {
+    expect(Object.keys(INPUTS_OF).filter((t) => !options.some((o) => o.type === t))).toEqual([])
   })
 })
 
@@ -152,7 +200,7 @@ beforeAll(async () => {
     const node: SimpleNode = { id: `${type}-1`, type, data: { label: "My Node" } }
     let result: ReturnType<typeof buildPayload>
     try {
-      result = buildPayload(node, "job-census", { ...WIRED } as ResolvedInputs, undefined, { nodes: [node], edges: [], nodeStates: {} })
+      result = buildPayload(node, "job-census", inputsOf(type), undefined, { nodes: [node], edges: [], nodeStates: {} })
     } catch {
       // Not built by `buildPayload` (inline, sync-HTTP, source), or needs more
       // of its graph to build: its job, if it runs a model, is held by part 1.
@@ -170,16 +218,16 @@ beforeAll(async () => {
 
 describe("every dispatchable node type that names no model resolves a default a restriction can name", () => {
   it("built enough node types to mean something, the image and video nodes among them", () => {
-    const judged = built.filter((b) => (b.lane === "provider" || b.lane === "llm") && judgesJobRunModel(b.jobName))
+    const judged = built.filter((b) => runsModels(b.type, b.lane) && judgesJobRunModel(b.jobName))
     expect(judged.length).toBeGreaterThanOrEqual(30)
     expect(judged.map((b) => b.type)).toEqual(
-      expect.arrayContaining(["generate-image", "image-to-image", "modify-image", "generate-video", "image-to-video", "text-to-video"]),
+      expect.arrayContaining(["generate-image", "image-to-image", "modify-image", "generate-video", "image-to-video", "text-to-video", "add-captions"]),
     )
   })
 
   it("a judged job's default is a model id a restriction can name, or is listed with a reason", () => {
     const vacuous = built
-      .filter((b) => (b.lane === "provider" || b.lane === "llm") && judgesJobRunModel(b.jobName))
+      .filter((b) => runsModels(b.type, b.lane) && judgesJobRunModel(b.jobName))
       .filter((b) => !Object.hasOwn(JUDGED_OUTSIDE_CATALOG, b.type))
       .filter((b) => b.judged === undefined || !GATEABLE_MODEL_IDS.has(b.judged))
       .map((b) => `${b.type} (job ${b.jobName}) → ${JSON.stringify(b.judged)}`)
@@ -188,7 +236,7 @@ describe("every dispatchable node type that names no model resolves a default a 
 
   it("a built node whose job runs a model but is not judged is one part 1 exempts", () => {
     const unheld = built
-      .filter((b) => (b.lane === "provider" || b.lane === "llm") && !judgesJobRunModel(b.jobName))
+      .filter((b) => runsModels(b.type, b.lane) && !judgesJobRunModel(b.jobName))
       .filter((b) => !Object.hasOwn(JOB_JUDGE_EXEMPT, b.jobName))
       .map((b) => `${b.type} (job ${b.jobName})`)
     expect(unheld).toEqual([])
@@ -240,13 +288,13 @@ function judgedBuild(type: string, data: Record<string, unknown>): { jobName: st
   const node: SimpleNode = { id: `${type}-1`, type, data: { label: "My Node", ...data } }
   let result: ReturnType<typeof buildPayload>
   try {
-    result = buildPayload(node, "job-census", { ...WIRED } as ResolvedInputs, undefined, { nodes: [node], edges: [], nodeStates: {} })
+    result = buildPayload(node, "job-census", inputsOf(type), undefined, { nodes: [node], edges: [], nodeStates: {} })
   } catch {
     return undefined
   }
   const cls = laneClassOf(result.queueName, result.jobName, result.payload)
   const lane = cls.kind === "leaf" ? cls.lane : cls.kind
-  if (lane !== "provider" && lane !== "llm") return undefined
+  if (!runsModels(type, lane)) return undefined
   const runs = jobRunModelOfBuild(result.jobName, result.payload, result.modelIdentifier)
   const named = effectiveDispatchProvider(type, node.data, { provider: undefined })
   const judged = named && providerIsItsModel([type], named, node.data ?? {}) ? named : runs
@@ -274,7 +322,10 @@ beforeAll(async () => {
     note("(no option)", judgedBuild(type, {}))
     const fields = nodeModelOptions(type)
     for (const [field, values] of fields) for (const value of values) note(`${field}=${value}`, judgedBuild(type, { [field]: value }))
-    const echoes = ["provider", "model"].filter((field) => judgedBuild(type, { [field]: PROBE })?.runsVerbatim === PROBE)
+    // Every field the node declares (and `provider` / `model`), probed with a
+    // value no list holds: one the judge returns verbatim is a model field.
+    const probedFields = [...new Set(["provider", "model", ...(NODE_DATA_FIELDS[type]?.fields ?? [])])]
+    const echoes = probedFields.filter((field) => judgedBuild(type, { [field]: PROBE })?.runsVerbatim === PROBE)
     if (probed > 0) options.push({ type, jobName, gateable, outside, echoes, probed })
   }
 }, 120_000)
@@ -284,6 +335,9 @@ describe("every option a workflow node accepts runs a model a restriction can na
 
   it("built every option, and sees the case it guards: FLUX Fill Pro on Modify Image is a model a restriction names", () => {
     expect(options.reduce((n, o) => n + o.probed, 0)).toBeGreaterThan(300)
+    // Every transcription engine on Add Captions, a model it runs beside its render (decided 2026-11-15).
+    expect([...byType("add-captions")!.gateable].sort()).toEqual(["elevenlabs-stt", "incredibly-fast-whisper", "nemotron-3-5-transcribe", "whisper"])
+    expect(byType("add-captions")!.outside.size).toBe(0)
     for (const type of ["modify-image", "image-to-image"]) {
       expect(byType(type)!.gateable, type).toContain("flux-fill")
       expect(byType(type)!.outside.size, type).toBe(0)
@@ -363,6 +417,18 @@ const TRAINED_CHARACTER: SimpleNode = {
   },
 }
 
+/**
+ * The model a built job's handler runs: the resolved-model registry's answer
+ * (decided as its handler decides), or — for a job judged on its payload's
+ * model (`PAYLOAD_MODEL_OF_JOB`) — that model as its handler reads it (Add
+ * Captions' worker reads the same `lib/add-captions-engine.ts` rule the judge
+ * does; a plugin engine runs the `provider` its payload carries).
+ */
+function modelItRuns(jobName: string, payload: Readonly<Record<string, unknown>>): string | undefined {
+  if (Object.hasOwn(PAYLOAD_MODEL_OF_JOB, jobName)) return PAYLOAD_MODEL_OF_JOB[jobName]!(payload)
+  return resolvedModelOfJob(jobName, payload)
+}
+
 /** The model a node's build runs and the one it is judged on; undefined when it does not build or calls no model. */
 function runAndJudge(type: string, data: Record<string, unknown>, trained: boolean): { jobName: string; runs: string | undefined; judged: string | undefined } | undefined {
   const node: SimpleNode = { id: `${type}-1`, type, data: { label: "My Node", prompt: "Kira at the beach", ...data } }
@@ -370,16 +436,16 @@ function runAndJudge(type: string, data: Record<string, unknown>, trained: boole
   const edges = trained ? [{ id: "e1", source: "c1", target: node.id, sourceHandle: "character" }] : []
   let result: ReturnType<typeof buildPayload>
   try {
-    result = buildPayload(node, "job-census", (trained ? {} : { ...WIRED }) as ResolvedInputs, undefined, { nodes, edges, nodeStates: {} } as never)
+    result = buildPayload(node, "job-census", (trained ? {} : inputsOf(type)) as ResolvedInputs, undefined, { nodes, edges, nodeStates: {} } as never)
   } catch {
     return undefined
   }
   const cls = laneClassOf(result.queueName, result.jobName, result.payload)
   const lane = cls.kind === "leaf" ? cls.lane : cls.kind
-  if (lane !== "provider" && lane !== "llm") return undefined
+  if (!runsModels(type, lane)) return undefined
   return {
     jobName: result.jobName,
-    runs: resolvedModelOfJob(result.jobName, result.payload),
+    runs: modelItRuns(result.jobName, result.payload),
     judged: jobRunModelOfBuild(result.jobName, result.payload, result.modelIdentifier),
   }
 }

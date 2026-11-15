@@ -112,7 +112,11 @@ import { ownLabelModelIds } from "../lib/house-models-served.js"
 import { RESOLVED_MODEL_OF_JOB, resolvedModelOfJob } from "../lib/job-resolved-model.js"
 import { llmFeatureDefault } from "../lib/run-model.js"
 import { PLUGIN_CREDIT_GUARDED_ROUTES, routeNodeGate } from "../lib/route-node-gate.js"
-import { providerIsItsModel } from "../lib/provider-model.js"
+import { providerIsItsModel, providerModelOf } from "../lib/provider-model.js"
+import { nodeModelOptions } from "../lib/__tests__/model-option-vocabularies.js"
+import { captionEngineResolverRegistered } from "../lib/add-captions-transcription.js"
+import { SYNC_HTTP_NODES } from "../services/workflow-engine/node-executor.js"
+import { nodeRunRoute } from "@nodaro/shared/nodes"
 import { KIE_IMAGE_MODELS } from "../providers/kie/models.js"
 import { REPLICATE_IMAGE_MODEL_IDS } from "../providers/replicate/image.js"
 
@@ -768,6 +772,135 @@ describe("every option a credit-guarded route accepts runs a model a restriction
       Object.keys(fields).filter((f) => !byName(name)?.open.includes(f)).map((f) => `${name}: ${f}`),
     )
     expect(staleOpen).toEqual([])
+  })
+})
+
+// ── Every model a route's schema accepts is judged, on both lanes ────────────
+
+/**
+ * TOTALITY for "a model a deployment does not offer never runs, whatever
+ * setting names it" (decided 2026-11-15). The option census above holds the
+ * ids the guard judges to ids a restriction can name, but not that a field
+ * naming a model is judged at all: a second model setting — a transcription
+ * engine, a refine pass, a voice engine inside another node — can name a
+ * catalog model the guard never reads, and the workflow lane, whose census
+ * builds a node only with the model fields `nodeModelOptions` lists
+ * (lib/__tests__/model-option-vocabularies.ts), never sees it either. Add
+ * Captions' engine was judged on its route and ran unjudged in every workflow.
+ *
+ * Read off every route's own schema at boot (every endpoint validates its body
+ * with Zod, so a new model setting is in one):
+ *  1. ROUTE LANE: every catalog or LLM id a field accepts, sent, is judged —
+ *     the model it names (a node's engine name through its provider map).
+ *  2. WORKFLOW LANE: on the route a worker-built node runs (`nodeRunRoute`;
+ *     a sync-HTTP node runs THROUGH its route, so 1 covers it), every such id
+ *     of a field other than `provider` (judged at the top of every build) is a
+ *     value of one of the node's model fields, compared by value — the route
+ *     says `transcribe_provider`, the node `transcribeProvider` — so the
+ *     workflow census builds the node with it and judges what it runs.
+ *
+ * What it cannot see, stated rather than implied: a model field typed as any
+ * string (no enum values to read; the OPEN_MODEL_FIELDS test above sees one
+ * only where the judge returns it verbatim), a route the Cloud plugin serves
+ * (its schema is not built here), and a node with no credit-guarded run route.
+ * Known: Generate Video Pro's planner LLM (`plannerModel`, any string, the
+ * plugin's default when unset) is judged on neither lane — the workflow judge
+ * holds one model per job, and that job's is its video model.
+ */
+type ModelFieldEntry =
+  /** Judged only with these fields beside it (the only case its model runs). */
+  | { readonly judgedWith: Readonly<Record<string, unknown>>; readonly why: string }
+  /** Read from a same-stem sibling file's schema: no field of this route. */
+  | { readonly notThisRoute: string }
+  /** Not judged, and should be: what fixing it needs. Only shrinks. */
+  | { readonly awaitingFix: string }
+
+const MODEL_FIELDS: Readonly<Record<string, ModelFieldEntry>> = {
+  "POST /v1/generate-surround-continuation refineProvider": {
+    judgedWith: { refine: true },
+    why: "the refine pass runs its upscale model only when `refine` is on",
+  },
+  "POST /v1/image-overlay llmModel": {
+    notThisRoute: "image-overlay-placement.ts's schema (a same-stem sibling): POST /v1/image-overlay/suggest-placement takes it, and judges it",
+  },
+  "POST /v1/generate-video ttsProvider": {
+    awaitingFix:
+      "a voiced video's cast (`characterVoices[].ttsProvider`) speaks on a speech or dialogue model (lib/voiced-dialogue-model.ts) that `videoRunModel` does not judge; " +
+      "needs a run model over the voices' models and their defaults. Route-only: no workflow build sends a cast",
+  },
+}
+
+describe("every model a route's schema accepts is judged, on both lanes", () => {
+  const guards = () => [
+    ...attached().map((g) => ({ name: g.key, url: g.url, site: siteOf(g.key), model: g.model })),
+    ...inline().map((g) => ({ name: `INLINE ${g.site}`, url: "", site: g.site, model: g.model })),
+  ]
+  /** Every `METHOD url field` whose accepted values include catalog or LLM ids, with those ids. */
+  const modelFields = () =>
+    guards().flatMap((g) =>
+      [...schemaFieldsOf(schemaFilesOf(g.site))]
+        .map(([field, a]) => ({ g, field, a, models: [...a.values].filter((v) => GATEABLE_MODEL_IDS.has(v)) }))
+        .filter((f) => f.models.length > 0),
+    )
+
+  it("1. every model a route field accepts is judged when it is sent", () => {
+    const unjudged: string[] = []
+    for (const { g, field, a, models } of modelFields()) {
+      const key = `${g.name} ${field}`
+      const entry = MODEL_FIELDS[key]
+      if (entry && !("judgedWith" in entry)) continue
+      const gate = routeNodeGate(g.url, {})
+      const absent = models.filter((value) => {
+        const body = { ...(entry && "judgedWith" in entry ? entry.judgedWith : {}), [field]: a.inArray ? [value] : value }
+        const runs = field === "provider" && gate.kind === "node" ? providerModelOf(gate.types[0], value, body) : value
+        if (runs === null) return false
+        try {
+          return !judgedIds(g.model, g.url, body).includes(runs)
+        } catch {
+          return true
+        }
+      })
+      if (absent.length > 0) unjudged.push(`${key}: ${absent.join(", ")} — declare it in the guard's runModel`)
+    }
+    expect(unjudged).toEqual([])
+  })
+
+  it("2. every model a worker-built node's route accepts outside `provider` is one of the node's model fields", () => {
+    const missing: string[] = []
+    let held = 0
+    for (const { g, field, models } of modelFields()) {
+      if (field === "provider") continue
+      const key = `${g.name} ${field}`
+      const entry = MODEL_FIELDS[key]
+      if (entry && !("judgedWith" in entry)) continue
+      const gate = routeNodeGate(g.url, {})
+      if (gate.kind !== "node") continue
+      for (const type of gate.types) {
+        if (SYNC_HTTP_NODES.has(type) || nodeRunRoute(type) !== g.url) continue
+        held += 1
+        const onNode = new Set([...nodeModelOptions(type).values()].flat())
+        const absent = models.filter((m) => !onNode.has(m))
+        if (absent.length > 0) missing.push(`${key} → node ${type}: ${absent.join(", ")} — declare the field in model-option-vocabularies.ts`)
+      }
+    }
+    expect(held).toBeGreaterThan(0)
+    expect(missing).toEqual([])
+  })
+
+  it("the booted app hands the estimates the run's engine resolver (the estimate and the run cannot pick different engines)", () => {
+    expect(captionEngineResolverRegistered()).toBe(true)
+  })
+
+  it("sees the case it guards: Add Captions' engine, judged on its route and a model setting of its node", () => {
+    const engines = ["elevenlabs-stt", "incredibly-fast-whisper", "nemotron-3-5-transcribe", "whisper"]
+    const captions = modelFields().find((f) => f.g.name === "POST /v1/add-captions" && f.field === "transcribe_provider")
+    expect(captions?.models.sort()).toEqual(engines)
+    expect([...(nodeModelOptions("add-captions").get("transcribeProvider") ?? [])].sort()).toEqual(engines)
+  })
+
+  it("no listed entry is stale", () => {
+    const keys = new Set(modelFields().map((f) => `${f.g.name} ${f.field}`))
+    expect(Object.keys(MODEL_FIELDS).filter((k) => !keys.has(k))).toEqual([])
   })
 })
 

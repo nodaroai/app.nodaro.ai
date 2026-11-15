@@ -47,6 +47,7 @@ import {
 } from "@nodaro/shared/llm-models"
 import { buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, socialSearchCreditIdFromNode } from "@nodaro/shared/social"
 import { captionRoutesToRemotion, captionsNeedTranscription } from "@nodaro/shared/captions"
+import { addCaptionsEngineHere } from "@/lib/caption-engine"
 import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, transcribeNodeReturnsWords, withWiredSettings } from "@nodaro/shared/nodes"
@@ -392,7 +393,8 @@ export function addCaptionsCreditId(
   const rawText = typeof data.text === "string" ? data.text : undefined
   const literalText = rawText && !/\{[^{}]+\}/.test(rawText) ? rawText : undefined
   if (
-    (data.transcribeProvider ?? data.transcribe_provider) === NEMOTRON_TRANSCRIBE_ID &&
+    // A node that names no engine is priced on the one its run takes (where models are restricted, the first offered).
+    addCaptionsEngineHere(data.transcribeProvider ?? data.transcribe_provider) === NEMOTRON_TRANSCRIBE_ID &&
     !nemotron.sourceKnownWired &&
     captionsNeedTranscription({
       style: data.style as string | undefined,

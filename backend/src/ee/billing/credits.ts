@@ -73,6 +73,7 @@ import {
 } from "@nodaro/shared/media"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { pricedAsId } from "../../lib/retired-price-id.js"
+import { estimatedCaptionEngine } from "../../lib/add-captions-transcription.js"
 import { withWiredSettings, renderNodeOf, isRenderNodeType, withRunOverrides, transcribeNodeReturnsWords } from "@nodaro/shared/nodes"
 import {
   MUSIC_CREDIT_ID,
@@ -7736,7 +7737,9 @@ export function getNodeModelIdentifier(
     // that brings its own captions, transcript or static text, or one the
     // graph KNOWS is fed a transcript or a caption plan, is the plain render.
     // An unknown graph transcribes: an estimate may over-quote, never under.
-    const engine = data.transcribeProvider ?? data.transcribe_provider
+    // A node that names no engine is quoted on the one its run will take
+    // (`estimatedCaptionEngine`: where models are restricted, the first offered — the run's own resolver).
+    const engine = estimatedCaptionEngine(data.transcribeProvider ?? data.transcribe_provider)
     if (
       engine === NEMOTRON_TRANSCRIBE_ID &&
       graph.addCaptionsSourceWired !== true &&

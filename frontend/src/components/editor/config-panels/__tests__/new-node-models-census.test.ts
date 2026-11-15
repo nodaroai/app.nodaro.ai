@@ -77,6 +77,8 @@ const EXEMPT_MENUS: Readonly<Record<string, string>> = {
   "audio-configs.tsx#VoiceChangerConfig": RAW_VALUES,
   "audio-configs.tsx#VoiceChangerProConfig": RAW_VALUES,
   "prompt-helper-dialog.tsx#PromptHelperDialog": "the Prompt Helper's own model, picked in its dialog — not a field of the node",
+  "processing-configs.tsx#AddCaptionsConfig":
+    "the transcription engine: a new node stores none, and one that names none runs the first engine the deployment offers, decided at run (`captionTranscribeEngine`, `@nodaro/render-rules`) and shown by the menu — there is no default in its data to move",
 }
 
 /** Non-test sources that read a definition's `defaultData` for something other than making a node. */

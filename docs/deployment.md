@@ -901,9 +901,17 @@ optional; each array empty = "keep the default"):
   one it names. A request that names no model is judged as the default its
   route would run — the image default for its aspect ratio, a feature's
   default LLM, a route's one fixed model — and a model named outside
-  `provider` (`llmModel`, Suno's `model`, Add Captions' `transcribe_provider`)
-  is judged too, before anything is created or charged
-  (`403 model_not_available`, on the run and on `POST /v1/quote` alike). A
+  `provider` (`llmModel`, Suno's `model`, Add Captions' `transcribe_provider`,
+  a surround continuation's `refineProvider` when `refine` is on) is judged
+  too, before anything is created or charged
+  (`403 model_not_available`, on the run and on `POST /v1/quote` alike). Add
+  Captions that names no transcription engine runs the first engine the
+  deployment offers, in the order `incredibly-fast-whisper`, `elevenlabs-stt`,
+  `nemotron-3-5-transcribe`, `whisper` (its editor menu lists only those, and
+  its price follows the engine — per minute on Nemotron); one that must
+  transcribe where none of the four is listed is refused with a message
+  saying so, while one that brings its own captions, transcript or subtitle
+  text still runs. A
   `provider` that names an engine rather than a model is judged as the model
   that engine runs, never as a model that shares its name: Motion Transfer's
   Kling options as the motion-transfer models, Generate Script's legacy
@@ -914,8 +922,10 @@ optional; each array empty = "keep the default"):
   workflow run (an app run, a scheduled or webhook run, an MCP or API run)
   judges its nodes the same way: a node that names no model is judged on the
   default it would run — Generate Image's for its ratio, Image to Image's edit
-  default, a video or speech node's default, a single-model node's one model —
-  and fails with `model_not_available` before its job is charged. So list
+  default, a video or speech node's default, Generate Video Pro's and Edit
+  Video Pro's `seedance-2`, Add Captions' first offered engine, a single-model
+  node's one model — and fails with `model_not_available` before its job is
+  charged. So list
   every model the deployment runs, the LLMs behind its text features
   included: a request whose model is not listed is refused, not run on an
   unlisted default. A deployment with no `models.allow` / `models.deny` and no

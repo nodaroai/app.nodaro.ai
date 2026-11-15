@@ -20,6 +20,7 @@ import {
 } from "@nodaro/shared/ugc"
 import type { FastifyRequest } from "fastify"
 import { z } from "zod"
+import { estimatedCaptionEngine } from "../../lib/add-captions-transcription.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { llmMeteredPricing, speechLengthPricingEnabled } from "../../lib/config.js"
@@ -281,7 +282,8 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
   // (decided 2026-11-13), quoted at 60 minutes, since a quote cannot know the length (the route
   // measures the video and holds its own minutes, never more).
   add_captions: (args) =>
-    args.transcribe_provider === NEMOTRON_TRANSCRIBE_ID &&
+    // The engine the route will run: the one named, else (where models are restricted) the first offered.
+    estimatedCaptionEngine(args.transcribe_provider) === NEMOTRON_TRANSCRIBE_ID &&
     captionsNeedTranscription({
       style: str(args.style),
       text: str(args.text),

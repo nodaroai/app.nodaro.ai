@@ -90,6 +90,7 @@ const JUDGES_ROWS_ITSELF: Readonly<Record<string, string>> = {
   "components/editor/config-panels/llm-model-select.tsx": "an LLM menu: each row is an `LLM_MODELS` id, the model the node runs",
   "components/nodes/llm-chat-quick-toolbar.tsx": "an LLM menu: each row is an `LLM_MODELS` id, the model the node runs",
   "components/editor/config-panels/video-mask-config.tsx": "Video Mask's rows are `VIDEO_MASK_PROVIDERS`, catalog ids of the models a mask runs",
+  "lib/caption-engine.ts": "Add Captions' engines are `CAPTION_TRANSCRIBE_LANES`, catalog ids of the transcription models a caption run runs (its menu's rows go through `useOfferedModels`)",
   "lib/trained-character-model.ts": "judges no menu row: asks about `flux-lora-character`, the catalog id of the trained-character model a Generate Image run switches to",
 }
 

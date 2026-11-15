@@ -2124,6 +2124,7 @@ export const en = {
   "proccfg.lookHint": "A preset bundle of font, outline, casing and spoken-word color. The controls below override individual parts of it.",
   "proccfg.captionEngine": "Transcription engine",
   "proccfg.captionEngineNemotronNote": "Priced per started minute of the video, on top of the caption render.",
+  "proccfg.captionEngineNoneOffered": "This deployment offers no transcription engine, so this node cannot transcribe the video. Give it its own text, captions or a transcript.",
   "proccfg.font": "Font",
   "proccfg.fontAuto": "Auto (from look)",
   "proccfg.uppercase": "Uppercase",

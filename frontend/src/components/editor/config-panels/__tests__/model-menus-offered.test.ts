@@ -8,7 +8,8 @@
  * hidden from `GET /v1/models`, the MCP list and the quick strips, and refused
  * at run. A config panel that maps a `*_MODELS` / `*_PROVIDERS` registry
  * STRAIGHT into its `<SelectItem>`s shows it anyway: the LLM menu and most
- * audio panels did until 2026-10-29 (#2651's follow-up).
+ * audio panels did until 2026-10-29 (#2651's follow-up), and Add Captions'
+ * transcription-engine menu (`CAPTION_TRANSCRIBE_LANES`) until 2026-11-15.
  *
  * The rule: a menu renders a registry through `useOfferedModels` (or the
  * filter it wraps, `withoutDeniedModels`), under a local name, never the
@@ -35,8 +36,8 @@ const STRIPS = [LLM_STRIP, path.join(NODES, "generate-image-quick-toolbar.tsx")]
  * parameter or destructured callback, and `X.filter(…).map(` — none exist
  * today; the shape of a new menu copies a neighbour, which this census reads.
  */
-const REGISTRY_INTO_JSX = /\b([A-Z0-9_]+_(?:MODELS|PROVIDERS|MODEL_OPTIONS))\.map\(\s*\(\w+\)\s*=>\s*\(?\s*</g
-const REGISTRY_AS_OPTIONS = /\b(?:model)?[oO]ptions=\{\s*([A-Z0-9_]+_(?:MODELS|PROVIDERS|MODEL_OPTIONS))(?:\s*\}|\.map\()/g
+const REGISTRY_INTO_JSX = /\b([A-Z0-9_]+_(?:MODELS|PROVIDERS|MODEL_OPTIONS|LANES))\.map\(\s*\(\w+\)\s*=>\s*\(?\s*</g
+const REGISTRY_AS_OPTIONS = /\b(?:model)?[oO]ptions=\{\s*([A-Z0-9_]+_(?:MODELS|PROVIDERS|MODEL_OPTIONS|LANES))(?:\s*\}|\.map\()/g
 /** The raw LLM registry handed to the vendor grouper a menu renders. */
 const RAW_LLM_GROUPING = /groupLlmModelsByVendor\(\s*LLM_MODELS\s*\)/g
 
@@ -83,6 +84,8 @@ describe("config-panel model menus offer only the deployment's models", () => {
   it("the census matches the shape it guards (a sanity check on the regex)", () => {
     expect("{TTS_MODELS.map((m) => (\n  <ModelSelectOption".match(REGISTRY_INTO_JSX)).not.toBeNull()
     expect("{VIDEO_DEPTH_MODELS.map((m) => <ModelSelectOption".match(REGISTRY_INTO_JSX)).not.toBeNull()
+    // A model registry named for its engines: Add Captions' transcription lanes (until 2026-11-15 its menu listed every one).
+    expect("{CAPTION_TRANSCRIBE_LANES.map((lane) => (\n  <SelectItem".match(REGISTRY_INTO_JSX)).not.toBeNull()
     // A prefetch or an id list is not a menu.
     expect("prefetchModelCredits(TTS_MODELS.map((m) => m.value))".match(REGISTRY_INTO_JSX)).toBeNull()
     expect("{offeredTtsModels.map((m) => (<ModelSelectOption".match(REGISTRY_INTO_JSX)).toBeNull()

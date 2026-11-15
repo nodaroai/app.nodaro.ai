@@ -43,6 +43,8 @@ import { CAPTION_TRANSCRIBE_LANES, type CaptionTranscribeLane } from "@nodaro/sh
 import { CAPTION_STYLE_LABEL_KEYS } from "./caption-style-labels"
 import { splitMediaMinPartSec } from "@nodaro/render-rules"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { useOfferedModels } from "./use-offered-models"
+import { addCaptionsEngineHere } from "@/lib/caption-engine"
 import { hasCredits } from "@/lib/edition"
 import { resolveCaptionPanelLevers } from "../caption-panel-levers"
 import { isCloud } from "@/lib/edition"
@@ -458,8 +460,8 @@ export const CAPTION_STROKE_WIDTH_MAX = 40
 // no onValueChange, so without this the user couldn't switch back to plain).
 const LOOK_NONE = "__none"
 
-/** The engine a caption run transcribes on when the node names none (the worker's default lane). */
-const CAPTION_ENGINE_DEFAULT: CaptionTranscribeLane = "incredibly-fast-whisper"
+/** Add Captions' engines as menu rows, in the lanes' order; the menu offers those the deployment offers (`useOfferedModels`). */
+const CAPTION_ENGINE_ROWS: readonly { readonly value: CaptionTranscribeLane }[] = CAPTION_TRANSCRIBE_LANES.map((value) => ({ value }))
 
 /** Each Add Captions engine's name (whisper's says it gives no word timings, which the kinetic styles need). */
 const CAPTION_ENGINE_LABEL_KEYS: Readonly<Record<CaptionTranscribeLane, MessageKey>> = {
@@ -522,6 +524,13 @@ export function AddCaptionsConfig({ data, onUpdate, nodeId }: ConfigProps<AddCap
     segments: Array.isArray(data.segments) ? (data.segments as Array<{ text?: unknown; captions?: unknown[] }>) : undefined,
     auto_transcribe: data.autoTranscribe,
   })
+  // The engine the run transcribes on: the node's own, else the one the server
+  // will take (`addCaptionsEngineHere` — where the deployment restricts models,
+  // the first engine it offers). Shown, never written: an unset engine is
+  // decided at run. A stored engine the deployment withholds stays listed and
+  // shown (`keep`, every model menu's rule) and is refused at run, never swapped.
+  const shownEngine = addCaptionsEngineHere(data.transcribeProvider)
+  const offeredEngines = useOfferedModels(CAPTION_ENGINE_ROWS, { nodeType: "add-captions", field: "transcribeProvider" }, shownEngine)
 
   return (
     <div className="flex flex-col gap-3">
@@ -548,19 +557,22 @@ export function AddCaptionsConfig({ data, onUpdate, nodeId }: ConfigProps<AddCap
         <div>
           <Label>{t("proccfg.captionEngine")}</Label>
           <Select
-            value={data.transcribeProvider ?? CAPTION_ENGINE_DEFAULT}
+            value={shownEngine ?? ""}
             onValueChange={(v) => onUpdate({ transcribeProvider: v as CaptionTranscribeLane })}
           >
             <SelectTrigger aria-label={t("proccfg.captionEngine")}><SelectValue /></SelectTrigger>
             <SelectContent>
-              {CAPTION_TRANSCRIBE_LANES.map((lane) => (
+              {offeredEngines.map(({ value: lane }) => (
                 <SelectItem key={lane} value={lane}>
                   {t(CAPTION_ENGINE_LABEL_KEYS[lane])}{lane === "whisper" ? ` — ${t("audiocfg.noWordTimings")}` : ""}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {data.transcribeProvider === "nemotron-3-5-transcribe" && (
+          {shownEngine === undefined && (
+            <p className="mt-1 text-xs text-muted-foreground">{t("proccfg.captionEngineNoneOffered")}</p>
+          )}
+          {shownEngine === "nemotron-3-5-transcribe" && (
             <p className="mt-1 text-xs text-muted-foreground">{t("proccfg.captionEngineNemotronNote")}</p>
           )}
         </div>

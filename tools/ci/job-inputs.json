@@ -321,6 +321,8 @@
         "backend/src/lib/access-blocks.ts",
         "backend/src/lib/account-measure-error.ts",
         "backend/src/lib/account-measures.ts",
+        "backend/src/lib/add-captions-engine.ts",
+        "backend/src/lib/add-captions-transcription.ts",
         "backend/src/lib/admin-check.ts",
         "backend/src/lib/allowed-origins.ts",
         "backend/src/lib/anthropic.ts",
