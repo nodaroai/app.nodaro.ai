@@ -13,6 +13,7 @@ import { isSpeechLengthPriceId } from "@nodaro/shared/credits"
 import { isModelDenied, recommendationsServedHere } from "../../surface-deny.js"
 import { loadChargedPrices, type ChargedPrices } from "../../pricing/charged-prices.js"
 import { getPromptTips, getPromptDoctrine } from "@nodaro/prompts/doctrine"
+import { amountTerms, amountsNote, ownTermsActive, statedAmountFields, statedAmountRecord, statedBalance, unitFields } from "../amounts.js"
 
 const creditsReadGate: ToolGate = { required: ["credits:read"] }
 
@@ -173,6 +174,43 @@ export function answerPriceIds(ids: readonly string[], prices: ChargedPrices): R
 }
 
 /**
+ * `check_balance` on a deployment in its own terms — described as it answers
+ * there (lib/mcp/amounts.ts :: statedBalance). Built at registration, so a
+ * deployment with nothing configured keeps the description it always had.
+ */
+function CHECK_BALANCE_OWN_TERMS_DESCRIPTION(): string {
+  const unit = unitFields().unit
+  return (
+    "Return what the user has left to spend on this deployment" +
+    (unit ? `, in ${unit} (the deployment's own unit; \`unit\` names it)` : ", in credits") +
+    ": `available` is the amount (null means it could not be read just now — never 0), and `source` says where it comes from: " +
+    "`external_wallet` (a wallet the deployment keeps), `allowance` (the user's allowance: `allowance.granted`, `allowance.remaining`) or `balance`. " +
+    "Where the deployment manages the balance (`managedBy: \"deployment\"`) nothing can be topped up, bought or upgraded here: the user asks the deployment's operator. Cloud edition only."
+  )
+}
+
+/** The credit figures of a purchase-ledger row (`amount_usd` is money paid, not credits). */
+const PURCHASE_AMOUNT_KEYS = ["credits_granted"] as const
+/** The credit figures of a usage row (`lib/usage-transactions.ts`). */
+const USAGE_AMOUNT_KEYS = ["credits_used", "credits_charged", "credits_reserved"] as const
+/** The credit figures in a usage row's `metadata` (its allowlist's amounts). */
+const USAGE_METADATA_AMOUNT_KEYS = ["from_sub", "from_topup", "allowance_delta"] as const
+
+/** One usage row with every credit figure stated through the funnel (the row itself with no unit). */
+function statedUsageRow(row: Record<string, unknown>): Record<string, unknown> {
+  const out = statedAmountFields(row, USAGE_AMOUNT_KEYS)
+  const metadata = out.metadata
+  if (out === row || !metadata || typeof metadata !== "object") return out
+  return { ...out, metadata: statedAmountFields(metadata as Record<string, unknown>, USAGE_METADATA_AMOUNT_KEYS) }
+}
+
+/** A projected model's pricing rows with each `credits` stated through the funnel (unchanged with no unit). */
+function statedPricing(model: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(model.pricing)) return model
+  return { ...model, pricing: (model.pricing as Array<Record<string, unknown>>).map((row) => statedAmountFields(row, ["credits"])) }
+}
+
+/**
  * `list_models` is unscoped — model availability is public. `check_balance`
  * + `credit_transactions` are credits:read AND cloud-only (gated by
  * `hasCredits()` so self-hosted editions don't expose a 404).
@@ -191,7 +229,8 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
         "`recommendations` array — short 'best for X' " +
         "picks Claude can echo back when the user is undecided. Use this BEFORE " +
         "calling generate_image / generate_video / etc. to pick the right model + " +
-        "settings for the user's intent.",
+        "settings for the user's intent." +
+        amountsNote(),
       inputSchema: {
         kind: z
           .enum(["image", "video", "audio"])
@@ -227,8 +266,9 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
         if (!hasCredits()) {
           return { content: [{ type: "text", text: "Error: no_credit_system — this instance charges no credits, so nothing has a price." }], isError: true }
         }
-        const prices = answerPriceIds([...new Set(args.priceIds)], await loadChargedPrices())
-        return { content: [{ type: "text", text: JSON.stringify({ prices }, null, 2) }] }
+        // In the deployment's unit when it has one (lib/mcp/amounts.ts); `{}` beside it otherwise.
+        const prices = statedAmountRecord(answerPriceIds([...new Set(args.priceIds)], await loadChargedPrices()))
+        return { content: [{ type: "text", text: JSON.stringify({ prices, ...unitFields() }, null, 2) }] }
       }
       const filtered = listModels({
         kind: args.kind as ModelKind | undefined,
@@ -252,7 +292,9 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
         families: families.map(({ family, models }) => ({
           family,
           // `maker` but no `logoUrl`: GET /v1/models serves the marks to apps that draw them.
-          models: models.map((m) => projectModel(m, prices, { logos: "omit" })),
+          // The pricing rows' credits in the deployment's unit when it has one
+          // (GET /v1/models shares projectModel and keeps its own answer).
+          models: models.map((m) => statedPricing(projectModel(m, prices, { logos: "omit" }))),
         })),
       }))
 
@@ -272,7 +314,7 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
           {
             type: "text",
             text: JSON.stringify(
-              { sections, recommendations: recs, totalModels },
+              { sections, recommendations: recs, totalModels, ...unitFields() },
               null,
               2,
             ),
@@ -349,8 +391,9 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
     "check_balance",
     {
       title: "Check Credit Balance",
-      description:
-        "Return the user's current credit balance, daily-spend cap, monthly allocation, tier, effectiveTier (\"payg\" = pay-as-you-go: no subscription but purchased credits — full model access, no watermark), and period end. Cloud edition only.",
+      description: ownTermsActive()
+        ? CHECK_BALANCE_OWN_TERMS_DESCRIPTION()
+        : "Return the user's current credit balance, daily-spend cap, monthly allocation, tier, effectiveTier (\"payg\" = pay-as-you-go: no subscription but purchased credits — full model access, no watermark), and period end. Cloud edition only.",
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -358,6 +401,19 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
       const refused = payerBalanceRefusal()
       if (refused) return refused
       try {
+        // A deployment in its own terms (a unit, an external wallet, or no
+        // self-serve billing) answers what ITS balance display shows this user,
+        // in its unit (lib/mcp/amounts.ts). The billing account's own session —
+        // only first-party gets here — reads its pool in raw credits, as REST
+        // answers it (`withBalanceDisplay` sends that read no `display`).
+        const terms = amountTerms()
+        if (ownTermsActive(terms) && !(deploymentPayerActive() && session.userId === deploymentPayerId())) {
+          const { readDeploymentBalance } = await import("../../../ee/billing/deployment-balance.js")
+          const { raw, converted } = await readDeploymentBalance(session.userId)
+          return {
+            content: [{ type: "text", text: JSON.stringify({ data: statedBalance(raw, converted, terms) }, null, 2) }],
+          }
+        }
         const balance = await CreditsService.getBalance(session.userId)
         return {
           content: [{ type: "text", text: JSON.stringify({ data: balance }, null, 2) }],
@@ -381,7 +437,8 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
     {
       title: "Credit Transactions",
       description:
-        "List the user's recent credit transactions: purchases (subscriptions, top-ups, refunds) in `data`; usage in `usage`, one row per run: `credits_charged` (null while held, 0 if refunded) and `credits_reserved` (the hold). Cloud edition only.",
+        "List the user's recent credit transactions: purchases (subscriptions, top-ups, refunds) in `data`; usage in `usage`, one row per run: `credits_charged` (null while held, 0 if refunded) and `credits_reserved` (the hold). Cloud edition only." +
+        amountsNote(),
       inputSchema: {
         limit: z.number().int().min(1).max(100).optional(),
         cursor: z.string().optional(),
@@ -438,12 +495,15 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
           isError: true,
         }
       }
+      // Every amount in the deployment's unit when it has one (lib/mcp/amounts.ts).
+      const purchases = rows.map((row) => statedAmountFields(row, PURCHASE_AMOUNT_KEYS))
+      const spend = usage.items.map(statedUsageRow)
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify(
-              { data: rows, next_cursor: nextCursor, usage: { data: usage.items, next_cursor: usage.nextCursor } },
+              { data: purchases, next_cursor: nextCursor, usage: { data: spend, next_cursor: usage.nextCursor }, ...unitFields() },
               null,
               2,
             ),

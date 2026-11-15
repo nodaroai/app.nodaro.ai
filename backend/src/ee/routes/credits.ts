@@ -36,9 +36,9 @@ import { modelCostDisplay, modelCostsDisplay, withBalanceDisplay } from "../bill
 import { welcomeClaimOptions } from "../billing/welcome-offer-claim-options.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
 import { TIER_CREDITS } from "../billing/stripe-config.js"
-import { allowanceEnforcementActive, deploymentPayerActive, deploymentPayerId } from "../../lib/deployment-payer.js"
-import { allowanceFor } from "../billing/deployment-allowance-service.js"
-import { externalWalletActive, externalWalletBalance } from "../billing/external-wallet.js"
+import { deploymentPayerActive } from "../../lib/deployment-payer.js"
+import { withDeploymentBalance } from "../billing/deployment-balance.js"
+import { externalWalletActive } from "../billing/external-wallet.js"
 import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"
 import { getFreeVideoLimits } from "../lib/free-video-config.js"
 import { freeVideoLimitsApply } from "../lib/free-video-limits-for.js"
@@ -320,60 +320,10 @@ export async function creditsRoutes(app: FastifyInstance) {
         ...(welcomeOffer ? { welcomeOffer } : {}),
       }
 
-      // D12 — the per-user allowance rides ALONGSIDE the balance; `total` is
-      // never overloaded to mean it (getBalance has five non-test callers and
-      // three of them mean something else by that field).
-      //
-      // The key is ABSENT on mainline and PRESENT under a payer, where `null`
-      // is a real answer: the payer reading its own balance (D13 — it holds
-      // the real credits, not an allocation), or the figure was unavailable.
-      // It is NOT null merely because enforcement is off — under the ruling
-      // the allowance is visible from the moment a payer exists, which is what
-      // lets the sidebar stop rendering the frozen signup grant at rollout
-      // step 5. The client renders null as an em dash and falls back to
-      // `total`; it must never render it as 0.
-      //
-      // The fields are named explicitly rather than spread: `UserAllowance`
-      // also carries `spent` for the admin list, and this body is fixed at the
-      // three the sidebar, /usage and the canvas gate consume.
-      //
-      // `enforced` IS THE SWITCH, and the figures alone are not it. Under the
-      // ruling above, an allowance is VISIBLE from the moment a payer exists,
-      // while `reserve_credits` only refuses over it once `billing.allowances`
-      // is "enforce" — so a browser gating a run on `remaining` would refuse
-      // runs the payer's pool would happily have paid for, and the canvas Run
-      // would roll back on a limit the server does not apply. `billing
-      // .allowances` is stripped from /config.js by design, so this field is
-      // the browser's ONLY way to tell a displayed allowance from an enforced
-      // one; display surfaces ignore it and keep rendering the figures.
-      const wallet = dep && externalWalletActive()
-      const allowance = dep && !wallet ? await allowanceFor(userId) : null
-      // ONE null, TWO causes — and only the route can tell them apart, because
-      // only here is the payer's identity beside the requester's. The payer's
-      // own null is CORRECT (D13) and silent; anybody else's means the figure
-      // could not be read (a settings row that would not load, a PostgREST
-      // blip), and that fault is otherwise invisible: the client is forbidden
-      // to refuse on it (it gates on nothing but a PRESENT, ENFORCED
-      // allowance), so a deployment whose allowance reads are failing looks
-      // exactly like one running normally, for the 15 s of every cached
-      // balance. The wire shape does not grow a field to say so — the browser
-      // has no use for one — so the log is where it is said.
-      if (dep && !wallet && allowance === null && userId !== deploymentPayerId()) {
-        console.error("[credits] allowance unavailable under a deployment payer — sending null for user", userId)
-      }
-      const payload = dep
-        ? {
-            ...data,
-            ...(wallet ? { externalWallet: { available: await externalWalletBalance(userId) } } : {}),
-            allowance: allowance
-              ? {
-                  granted: allowance.granted,
-                  remaining: allowance.remaining,
-                  enforced: allowanceEnforcementActive(),
-                }
-              : null,
-          }
-        : data
+      // The deployment's own figures (an external wallet's amount, or the
+      // user's allowance under a single payer): one assembly, shared with MCP
+      // `check_balance` (deployment-balance.ts says what each field means).
+      const payload = await withDeploymentBalance(userId, data)
 
       setCachedBalance(userId, payload)
       return { data: withBalanceDisplay(payload, userId) }

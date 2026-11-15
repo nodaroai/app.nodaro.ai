@@ -1299,6 +1299,13 @@ optional; each array empty = "keep the default"):
     number > 0; decimals an integer in 0–4; 1 credit<!-- credits: n/a --> must not round to 0; and
     `unitRate × 10^unitDecimals` must be an integer so per-charge conversion
     sums exactly. Unset = the platform's own labels, no conversion.
+    The MCP tools follow them too: on a deployment with its own unit, an
+    external wallet or `billing.selfServe: false`, every amount a tool states
+    (the balance, what a run cost, quotes, history rows, the price hints in
+    tool descriptions) is in the unit and from the deployment's own balance,
+    never the raw credits beside it, and a refusal for want of balance says
+    the deployment manages the balance where it does
+    ([MCP: amounts on a deployment with its own unit](mcp/tools.md#deployment-unit)).
   - `billing.unitLabels` (optional, beside `unitLabel`): the unit's word per
     interface language, by locale id in the platform's spelling
     (`{ "en": "points", "he": "נקודות" }`; `pt-br` is read as `pt-BR`). A viewer

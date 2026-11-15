@@ -21,6 +21,7 @@ import { resolveAssetId } from "../asset-resolver.js"
 import { validateModelInput } from "@nodaro/shared/model-catalog"
 import { WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
 import { abandonFlowNode, commitFlowNode, flowJobFields, flowLinkText, prepareFlowNode } from "../flows/record.js"
+import { balanceRefusal } from "../amounts.js"
 
 /**
  * Path-1 structured-field input shared by the image AND video generation
@@ -226,7 +227,7 @@ function formatRouteError(statusCode: number, body: string): string {
   } catch {
     // non-JSON body — fall through to a generic message (never echoed for 5xx)
   }
-  if (statusCode === 402) return "Nodaro: insufficient credits for this generation."
+  if (statusCode === 402) return balanceRefusal("this generation", code) ?? "Nodaro: insufficient credits for this generation."
   if (statusCode === 429) return "Nodaro: rate limited — wait a moment and try again."
   if (statusCode >= 400 && statusCode < 500) {
     // Surface the structured code (a safe API-contract identifier, e.g.

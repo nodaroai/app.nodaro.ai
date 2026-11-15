@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { selectWithPerMinute } from "../../listing-per-minute-columns.js"
-import { selectWithMax } from "../../listing-max-columns.js"
+import { LISTED_COLUMNS, selectWithPerMinute } from "../../listing-per-minute-columns.js"
+import { LISTED_MAX_COLUMNS, selectWithMax } from "../../listing-max-columns.js"
 import { withListedRangeSnake } from "../../app-listing-price.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
@@ -20,6 +20,18 @@ import { hasCredits } from "../../config.js"
 import { surfaceAllowsPublicOutputs, surfaceListsPublishedApps } from "../../surface-profile.js"
 import { publishedAppWithheld } from "../../published-app-access.js"
 import { LISTING_ESTIMATE_FLAG_COLUMN, listingEstimateFlag, selectWithEstimateFlag } from "../../listing-estimate-flag-column.js"
+import { amountsNote, amountWord, balanceManagedByDeployment, balanceNextStep, balanceRefusal, statedAmount, statedAmountFields, unitFields } from "../amounts.js"
+
+/**
+ * Every listed price a listing of `published_apps` names (the "from" figures and
+ * the listed "up to", as `withListedRangeSnake` leaves them): stated in the
+ * deployment's unit when it has one (lib/mcp/amounts.ts). `list_components`
+ * lists the same columns.
+ */
+export const LISTED_APP_AMOUNT_KEYS: readonly string[] = ["estimated_credits", ...LISTED_COLUMNS.published_apps, ...LISTED_MAX_COLUMNS.published_apps]
+
+/** The Retry quote's figures. */
+const RETRY_QUOTE_AMOUNT_KEYS = ["estimatedCredits", "available", "appCreditsAllowance"] as const
 
 const appsReadGate: ToolGate = { required: ["apps:read"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -70,7 +82,8 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           'term before answering "I can\'t do that". Then call `get_app_inputs` ' +
           'on the chosen slug to learn what it needs, and `run_app` to execute.\n\n' +
           'Set `scope: "public"` (default) for the marketplace, or `scope: "mine"` ' +
-          'for the caller\'s own published apps.',
+          'for the caller\'s own published apps.' +
+          amountsNote(),
         inputSchema: {
           scope: z
             .enum(["public", "mine"])
@@ -142,7 +155,9 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
         // `estimated_credits_is_estimate: true` when the listed price holds a metered LLM estimate
         // (shown `≈N`) — only while metered pricing is on; absent otherwise.
         const rows = (data ?? []).map((row) => {
-          const { [LISTING_ESTIMATE_FLAG_COLUMN]: _stored, ...rest } = withListedRangeSnake(row)
+          const { [LISTING_ESTIMATE_FLAG_COLUMN]: _stored, ...listed } = withListedRangeSnake(row)
+          // Its listed prices in the deployment's unit when it has one (lib/mcp/amounts.ts).
+          const rest = statedAmountFields(listed, LISTED_APP_AMOUNT_KEYS)
           return listingEstimateFlag(row).estimatedCreditsIsEstimate ? { ...rest, [LISTING_ESTIMATE_FLAG_COLUMN]: true } : rest
         })
         const last = rows[rows.length - 1]
@@ -153,7 +168,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
             {
               type: "text",
               text: JSON.stringify(
-                { data: rows, scope, next_cursor: nextCursor },
+                { data: rows, scope, next_cursor: nextCursor, ...unitFields() },
                 null,
                 2,
               ),
@@ -318,10 +333,14 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           headers: idempotencyHeaders(args.client_request_id),
         })
         if (res.statusCode >= 400) {
-          const cloneNext = cloneRefusalNext(parseBody(res.body))
+          const refusedBody = parseBody(res.body)
+          const cloneNext = cloneRefusalNext(refusedBody)
+          // The route's 402 states its figures in raw credits: a deployment in its
+          // own terms is told the refusal without them (lib/mcp/amounts.ts).
+          const balance = res.statusCode === 402 ? balanceRefusal("this app run", routeCodeOf(refusedBody)) : null
           return {
             content: [
-              { type: "text", text: cloneNext ? `Error from Nodaro: ${res.statusCode}. ${cloneNext}` : `Error from Nodaro: ${res.statusCode} ${res.body}` },
+              { type: "text", text: cloneNext ? `Error from Nodaro: ${res.statusCode}. ${cloneNext}` : (balance ?? `Error from Nodaro: ${res.statusCode} ${res.body}`) },
             ],
             isError: true,
           }
@@ -390,7 +409,8 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           "Retry a FAILED published-app run from where it stopped: only the steps it did not complete run and are charged; every step it completed hands on its result. " +
           "It runs the version the run ran, with the inputs it applied (it takes none). " +
           "Without `confirm` it returns the PRICE QUOTE only (the steps it runs again; nothing is charged); with `confirm: true` — only after the user accepted the quoted credits — it runs. " +
-          "Returns an execution id: poll get_app_run. To run with other inputs, or a run that was stopped rather than failing, start over with run_app.",
+          "Returns an execution id: poll get_app_run. To run with other inputs, or a run that was stopped rather than failing, start over with run_app." +
+          amountsNote(),
         inputSchema: {
           slug: z.string().min(1).describe("The app's slug."),
           run_id: z.string().min(1).describe("The run's id (run_app's runId)."),
@@ -423,22 +443,29 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           const steps = quote.steps ?? []
           const named = steps.map((st) => st.label ?? st.nodeId).join(", ")
           const billed = typeof quote.estimatedCredits === "number" && hasCredits()
-          const price = billed ? `costs about ${quote.estimatedCredits} credits` : "is not billed in credits on this edition"
+          const price = billed ? `costs about ${statedAmount(quote.estimatedCredits as number)} ${amountWord()}` : "is not billed in credits on this edition"
           const reused = (quote.reusedClips ?? 0) > 0 ? ` (${quote.reusedClips} finished clip(s) handed back at no cost)` : ""
+          const available = typeof quote.available === "number" ? ` (${statedAmount(quote.available)} available)` : ""
+          // Nobody earns, upgrades or adds credits where the deployment manages the balance (lib/mcp/amounts.ts).
+          const managed = balanceManagedByDeployment()
           // The app credits, when they are what stops it (the route reports them); else the balance.
           const next =
             billed && quote.sufficient === false
               ? typeof quote.appCreditsAllowance === "number"
-                ? "The user has no app credits left to run apps: tell them, and run it only after they have earned app credits or upgraded — " +
-                  "until then the Retry is refused with insufficient app credits."
-                : `The user's credits cannot cover it${typeof quote.available === "number" ? ` (${quote.available} available)` : ""}: ` +
-                  "tell them, and run it only after they have added credits — until then the Retry is refused with insufficient credits."
+                ? managed
+                  ? `The user has no app credits left to run apps. ${balanceNextStep()}; run it only once they have more — until then the Retry is refused.`
+                  : "The user has no app credits left to run apps: tell them, and run it only after they have earned app credits or upgraded — " +
+                    "until then the Retry is refused with insufficient app credits."
+                : managed
+                  ? `The user's balance cannot cover it${available}. ${balanceNextStep()}; run it only once the balance covers it — until then the Retry is refused.`
+                  : `The user's ${amountWord()} cannot cover it${available}: ` +
+                    `tell them, and run it only after they have added ${amountWord()} — until then the Retry is refused with insufficient ${amountWord()}.`
               : "Present this to the user; call retry_app_run again with confirm: true once they accept."
           return {
             content: [
               { type: "text" as const, text: `The Retry runs ${steps.length} step(s) again (${named}) and ${price}${reused}. ${next}` },
             ],
-            structuredContent: { ...quote, confirmed: false },
+            structuredContent: { ...statedAmountFields(quote, RETRY_QUOTE_AMOUNT_KEYS), confirmed: false, ...unitFields() },
           }
         }
 
@@ -464,9 +491,10 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
             runId: args.run_id,
             status: "pending",
             nodeIds: Array.isArray(body.nodeIds) ? body.nodeIds : [],
-            estimatedCredits: quote.estimatedCredits ?? null,
+            estimatedCredits: statedAmount(quote.estimatedCredits ?? null),
             confirmed: true,
             ...(deduped ? { deduped } : {}),
+            ...unitFields(),
           },
         }
       },
@@ -539,17 +567,25 @@ function parseBody(raw: string): Record<string, unknown> {
   }
 }
 
+/** A route answer's error code, when it is a safe API-contract identifier. */
+function routeCodeOf(body: Record<string, unknown>): string | undefined {
+  const code = (body.error as { code?: unknown } | undefined)?.code
+  return typeof code === "string" && /^[a-z0-9_]{1,64}$/.test(code) ? code : undefined
+}
+
 /**
  * A refused Retry as a tool error: the route's code and message (a 402 keeps
  * the route's own message — which allowance, which balance — rather than the
- * generic credits line), then the way on.
+ * generic credits line), then the way on. A deployment in its own terms is told
+ * a 402 without the route's raw-credit figures (lib/mcp/amounts.ts).
  */
 function retryRefused(slug: string, runId: string, statusCode: number, raw: string) {
   const body = parseBody(raw)
   const error = body.error as { code?: unknown; message?: unknown } | undefined
   const refused =
     statusCode === 402 && typeof error?.message === "string" && error.message
-      ? `Nodaro rejected the request (402${typeof error.code === "string" ? ` ${error.code}` : ""}): ${error.message}`
+      ? (balanceRefusal("this Retry", routeCodeOf(body)) ??
+        `Nodaro rejected the request (402${typeof error.code === "string" ? ` ${error.code}` : ""}): ${error.message}`)
       : errorResult(statusCode, raw).content[0].text
   const next = retryRefusalNext(slug, runId, body)
   return { content: [{ type: "text" as const, text: next ? `${refused} ${next}` : refused }], isError: true as const }
@@ -608,6 +644,8 @@ export function retryRefusalNext(slug: string, runId: string, body: Record<strin
     return "Tell the user: their app credits cannot cover this Retry; retry it once they have more."
   }
   if (code === "insufficient_credits") {
+    // Nobody adds credits where the deployment manages the balance: the refusal said whom to ask (lib/mcp/amounts.ts).
+    if (balanceManagedByDeployment()) return "Retry it once the balance covers it."
     return "Tell the user: their balance cannot cover this Retry; retry it once they have added credits."
   }
   return null

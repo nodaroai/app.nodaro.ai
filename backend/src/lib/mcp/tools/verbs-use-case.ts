@@ -53,7 +53,8 @@ import { mcpInject } from "../internal-request.js"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { creditsOf } from "./_credit-hint.js"
+import { statedCreditsOf } from "./_credit-hint.js"
+import { amountWord, balanceRefusal } from "../amounts.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { clientRequestIdSchema, dispatchJob, errorResult, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
 import { framingSourceInputShape, framingSourcePayload } from "./verbs-use-case-framing.js"
@@ -71,7 +72,7 @@ type RegisterCtx = RegisterOpts
 /** A type's run price, as a description states it — the fee read from the static table, never typed. */
 function priceSentence(type: UseCaseNodeType): string {
   if (!hasCredits()) return ""
-  return ` Priced as its steps at their own rates plus a per-run fee of ${creditsOf(usecaseFeeCreditId(type))} credits.`
+  return ` Priced as its steps at their own rates plus a per-run fee of ${statedCreditsOf(usecaseFeeCreditId(type))} ${amountWord()}.`
 }
 
 /** "A", "A or B", "A, B or C": the labels of the use-case nodes this deployment offers. */
@@ -151,7 +152,9 @@ function refusalText(statusCode: number, body: string): string | null {
   // The use-case routes' 503s are their own words (no connection, no key, not
   // available on this server yet) — never a raw upstream body.
   if (statusCode === 503) return `Nodaro cannot run this here (503 ${code}): ${message}`
-  if (statusCode === 402) return `Nodaro: insufficient credits (${code}): ${message}`
+  // The route's message states its figures in raw credits: a deployment in its
+  // own terms is told the refusal without them (lib/mcp/amounts.ts).
+  if (statusCode === 402) return balanceRefusal("this run", code) ?? `Nodaro: insufficient credits (${code}): ${message}`
   if (statusCode !== 409) return null
   const next = NEXT_STEP[code]?.(jobId) ?? (jobId ? ` (job ${jobId})` : "")
   return `Nodaro rejected the request (409 ${code}): ${message}${next}`

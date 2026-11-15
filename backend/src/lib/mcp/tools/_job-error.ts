@@ -17,6 +17,8 @@
  * only mark non-retryable on high-confidence permanent signals so we never
  * discourage re-running a genuinely transient failure.
  */
+import { balanceManagedByDeployment, balanceNextStep } from "../amounts.js"
+
 // Content-policy / moderation (permanent for the given prompt/image). Split
 // out so the app-report rejection sweep can classify EXACTLY this subset —
 // input-shape limits are non-retryable too, but they aren't rejections.
@@ -232,6 +234,17 @@ export function failureGuidance(job: {
   // or the cap changes — so not retryable as-is, whatever the message says.
   if (hint && hint.kind === "credits") {
     const code = typeof hint.code === "string" && /^[a-z0-9_]{1,64}$/.test(hint.code) ? hint.code : null
+    // Where the deployment manages the balance, nobody tops up or raises a
+    // plan here: the user asks its operator (lib/mcp/amounts.ts).
+    if (balanceManagedByDeployment()) {
+      return {
+        retryable: false,
+        guidance:
+          "The balance ran out partway through this job" +
+          (code ? ` (${code})` : "") +
+          `, so it stopped and what it held was refunded. ${balanceNextStep()}, then run the same request again.`,
+      }
+    }
     return {
       retryable: false,
       guidance:

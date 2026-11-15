@@ -10,6 +10,7 @@ import { resumeFailedRunHint } from "./_resume-hint.js"
 import { CHILD_JOB_COLUMN, maskTrendRunError, trendRunErrorText, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 import { providerWordsShownTo, type ProviderWordsReader } from "../../provider-words.js"
 import { runJobsProviderWords, runWordsReadable } from "../../provider-words-readers.js"
+import { amountsNote, statedAmount, unitFields } from "../amounts.js"
 
 const diagnoseGate: ToolGate = { required: ["jobs:read"] }
 
@@ -198,7 +199,8 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
         "the only surface that maps an execution's nodes to their job ids — plus each failed node with " +
         "its error, a best-effort failure class " +
         "(content_policy / validation / rate_limited / timeout / post_processing / provider_error / unknown), " +
-        "a remediation hint, and the credits actually charged.",
+        "a remediation hint, and the credits actually charged." +
+        amountsNote(),
       inputSchema: {
         id: z.string().min(1).describe("A workflow execution id or a job id"),
       },
@@ -276,7 +278,8 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
             s.jobId ?? null,
             error,
             providerOf(job?.input_data),
-            withSideCharge(job?.credits_actual ?? null, job?.id, sideCharges),
+            // In the deployment's unit when it has one (lib/mcp/amounts.ts).
+            statedAmount(withSideCharge(job?.credits_actual ?? null, job?.id, sideCharges)),
             s.errorCode ?? jobErrorCode(job),
             providerReasonOf(job?.error_detail ?? s.errorDetail, job?.input_data, runReader),
           )
@@ -320,6 +323,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
                   nodes,
                   failures,
                   creditsNote: CREDITS_NOTE,
+                  ...unitFields(),
                 },
                 null,
                 2,
@@ -375,7 +379,8 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
                 j.id ?? args.id,
                 trendRunErrorText(j.error_message, j.input_data, false),
                 providerOf(j.input_data),
-                withSideCharge(j.credits_actual ?? null, j.id, sideCharges),
+                // In the deployment's unit when it has one (lib/mcp/amounts.ts).
+                statedAmount(withSideCharge(j.credits_actual ?? null, j.id, sideCharges)),
                 jobErrorCode(j),
                 providerReasonOf((j as JobRow).error_detail, j.input_data),
               ),
@@ -395,6 +400,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
                 summary,
                 failures,
                 creditsNote: CREDITS_NOTE,
+                ...unitFields(),
               },
               null,
               2,

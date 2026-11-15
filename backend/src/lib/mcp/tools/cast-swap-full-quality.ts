@@ -43,6 +43,7 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { registerTask } from "../tasks.js"
 import { isRouterNotFound } from "./_studio-helpers.js"
 import { errorResult, GET_JOB_POLL_HINT } from "./_verb-helpers.js"
+import { amountsNote, amountWord, statedAmount, statedAmountRecord, unitFields } from "../amounts.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -95,11 +96,16 @@ function quoteSentence(q: FullQualityQuote): string {
   if (q.kind === "new-take") {
     return (
       `Full Quality makes a NEW take of this run at 1080p from the same inputs (it will not match the 720p run frame for frame; the 720p run stays), ` +
-      `for about ${q.totalCredits} credits. Available until ${q.availableUntil}.`
+      `for about ${statedAmount(q.totalCredits)} ${amountWord()}. Available until ${q.availableUntil}.`
     )
   }
   const reused = q.breakdown.motionHd === 0 ? " An earlier try's 1080p render is reused, so only the finishing is charged." : ""
-  return `Finishing this draft at Full Quality (the same take at 1080p) costs about ${q.totalCredits} credits.${reused} Available until ${q.availableUntil}.`
+  return `Finishing this draft at Full Quality (the same take at 1080p) costs about ${statedAmount(q.totalCredits)} ${amountWord()}.${reused} Available until ${q.availableUntil}.`
+}
+
+/** The quote as the agent reads it: every figure in the deployment's unit when it has one (lib/mcp/amounts.ts). */
+function statedQuote(q: FullQualityQuote) {
+  return { ...q, totalCredits: statedAmount(q.totalCredits), breakdown: statedAmountRecord(q.breakdown), ...unitFields() }
 }
 
 const failure = (text: string) => ({ content: [{ type: "text" as const, text }], isError: true as const })
@@ -155,7 +161,8 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
       description:
         "Quote finishing a Nodaro Motion (cast_swap) or trend DRAFT (made with draft: true) at Full Quality (free; nothing starts): its same take re-rendered at 1080p. " +
         "A plain run and motion-pulse runs have none. " +
-        "Within 7 days of the run finishing. If its Full Quality already exists, full_quality returns it free.",
+        "Within 7 days of the run finishing. If its Full Quality already exists, full_quality returns it free." +
+        amountsNote(),
       inputSchema: {
         job_id: z.string().regex(JOB_ID_RE).describe(JOB_ID_HINT),
       },
@@ -166,7 +173,7 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
       if (q.error) return q.error
       return {
         content: [{ type: "text" as const, text: `${quoteSentence(q.quote)} Nothing was charged; full_quality starts it.` }],
-        structuredContent: { ...q.quote },
+        structuredContent: statedQuote(q.quote),
       }
     },
   )
@@ -178,7 +185,8 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
       description:
         "Finish a Nodaro Motion (cast_swap) or trend DRAFT (made with draft: true) at Full Quality, at 1080p with the clip's audio, as a new job: its same take re-rendered. " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
-        "That returns a job id (the existing one, free, if this run's Full Quality already exists): poll it with wait_for_job.",
+        "That returns a job id (the existing one, free, if this run's Full Quality already exists): poll it with wait_for_job." +
+        amountsNote(),
       inputSchema: {
         job_id: z.string().regex(JOB_ID_RE).describe(JOB_ID_HINT),
         session_id: z.string().min(1).optional().describe("A generation session to file the result in."),
@@ -199,7 +207,7 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
                 "Present this to the user; call full_quality again with confirm: true once they accept.",
             },
           ],
-          structuredContent: { ...q.quote, confirmed: false },
+          structuredContent: { ...statedQuote(q.quote), confirmed: false },
         }
       }
 

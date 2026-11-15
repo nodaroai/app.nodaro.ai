@@ -29,6 +29,10 @@ import { registerTask } from "../tasks.js"
 import { hasCredits } from "../../config.js"
 import { loadMcpWorkflow } from "./_workflow-access.js"
 import { clientRequestIdSchema, errorResult, idempotencyHeaders } from "./_verb-helpers.js"
+import { amountsNote, amountWord, balanceManagedByDeployment, balanceNextStep, statedAmount, statedAmountFields, unitFields } from "../amounts.js"
+
+/** The quote's figures: in the deployment's unit when it has one (lib/mcp/amounts.ts). */
+const QUOTE_AMOUNT_KEYS = ["estimatedCredits", "holdCredits", "available"] as const
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -64,7 +68,8 @@ export function registerRenderFinal({ server, session, fastify }: RegisterRender
         "The server picks the nodes; the Edit Plan is not run again (its plan with the user's review applied is used). " +
         "It continues the execution that stopped at the preview: every node it does not run hands on that execution's output. " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged); with `confirm: true` — only after the user accepted the quoted credits — it runs. " +
-        "Returns an execution id: read it with get_app_run.",
+        "Returns an execution id: read it with get_app_run." +
+        amountsNote(),
       inputSchema: {
         workflow_id: z.string().uuid(),
         render_node_id: z.string().min(1).describe("The id of the Apply EDL render node to finalize (get_workflow_json)."),
@@ -102,13 +107,19 @@ export function registerRenderFinal({ server, session, fastify }: RegisterRender
       if (args.confirm !== true) {
         const billed = quote.estimatedCredits !== null && hasCredits()
         const price = billed
-          ? `costs about ${quote.estimatedCreditsIsEstimate ? "≈" : ""}${quote.estimatedCredits} credits${quote.estimatedCreditsIsEstimate ? " (an estimate: its LLM calls are charged their actual usage)" : ""}`
+          ? `costs about ${quote.estimatedCreditsIsEstimate ? "≈" : ""}${statedAmount(quote.estimatedCredits)} ${amountWord()}${quote.estimatedCreditsIsEstimate ? " (an estimate: its LLM calls are charged their actual usage)" : ""}`
           : "is not billed in credits on this edition"
+        // The check reads what the run holds while it renders: named when it is more than the price.
+        const cover =
+          `${typeof quote.holdCredits === "number" && quote.holdCredits > (quote.estimatedCredits ?? 0) ? `: it holds up to about ${statedAmount(quote.holdCredits)} ${amountWord()} while it renders` : ""}` +
+          `${typeof quote.available === "number" ? ` (${statedAmount(quote.available)} available)` : ""}`
         const next =
           billed && quote.sufficient === false
-            ? // The check reads what the run holds while it renders: named when it is more than the price.
-              `The user's credits cannot cover it${typeof quote.holdCredits === "number" && quote.holdCredits > (quote.estimatedCredits ?? 0) ? `: it holds up to about ${quote.holdCredits} credits while it renders` : ""}${typeof quote.available === "number" ? ` (${quote.available} available)` : ""}: ` +
-              "tell them, and run it only after they have added credits — until then the run is refused with insufficient credits."
+            ? balanceManagedByDeployment()
+              ? // Nobody adds credits here: the deployment manages the balance (lib/mcp/amounts.ts).
+                `The user's balance cannot cover it${cover}. ${balanceNextStep()}; run it only once the balance covers it — until then the run is refused.`
+              : `The user's ${amountWord()} cannot cover it${cover}: ` +
+                `tell them, and run it only after they have added ${amountWord()} — until then the run is refused with insufficient ${amountWord()}.`
             : "Present this to the user; call render_final again with confirm: true once they accept."
         return {
           content: [
@@ -117,7 +128,7 @@ export function registerRenderFinal({ server, session, fastify }: RegisterRender
               text: `Render final of "${quote.renderNodeId}" runs ${quote.nodeIds.length} node(s) (${quote.nodeIds.join(", ")}) and ${price}. ${next}`,
             },
           ],
-          structuredContent: { ...quote, confirmed: false },
+          structuredContent: { ...statedAmountFields(quote, QUOTE_AMOUNT_KEYS), confirmed: false, ...unitFields() },
         }
       }
 
@@ -152,7 +163,7 @@ export function registerRenderFinal({ server, session, fastify }: RegisterRender
               "Read it with get_app_run(execution_id) — an EXECUTION id, not a job id: it lists every node's status and media once it completes.",
           },
         ],
-        structuredContent: { executionId, nodeIds: quote.nodeIds, estimatedCredits: quote.estimatedCredits, confirmed: true },
+        structuredContent: { executionId, nodeIds: quote.nodeIds, estimatedCredits: statedAmount(quote.estimatedCredits), confirmed: true, ...unitFields() },
       }
     },
   )

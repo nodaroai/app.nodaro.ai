@@ -108,3 +108,14 @@ When an MCP client registers with Nodaro via RFC 7591 Dynamic Client
 Registration, the client name (e.g. "Claude") is self-reported and not verified
 by Nodaro. The orange notice on the consent screen is a reminder to confirm the
 application requesting access is the one you're actually using before approving.
+
+## A balance refusal says to ask the deployment's operator {#balance-managed}
+
+On a deployment that manages its users' balance (no self-serve purchase, or an
+external wallet that holds each user's balance), a tool refused for want of
+balance answers that the balance is managed by the deployment and that the user
+can ask its operator for more, instead of telling you to top up, upgrade or
+buy: nothing can be bought from a connected client there. `check_balance` shows
+what the user has left, in the deployment's own unit when it has one; an amount
+it could not read is `null`, never `0`. See [Amounts on a deployment with its
+own unit](tools.md#deployment-unit).

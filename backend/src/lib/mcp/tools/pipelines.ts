@@ -11,6 +11,10 @@ import { FILM_PIPELINE_FEATURE } from "../../availability-override.js"
 import { deniedCapabilityForUser } from "../../availability-viewer.js"
 import { deniedNodeRejectionMessage } from "../../surface-deny.js"
 import { errorResult } from "./_verb-helpers.js"
+import { amountsNote, balanceRefusal, statedAmountFields, unitFields } from "../amounts.js"
+
+/** A pipeline's credit counters: in the deployment's unit when it has one (lib/mcp/amounts.ts). */
+const PIPELINE_AMOUNT_KEYS = ["spent_credits", "reserved_credits", "upfront_credit_estimate"] as const
 
 const executeGate: ToolGate = { required: ["pipelines:execute"] }
 const approveGate: ToolGate = { required: ["pipelines:approve"] }
@@ -215,9 +219,12 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
             billingContext: await sessionPipelinePayer(session),
           })
           if (!result.ok) {
+            // A refusal for want of balance, on a deployment in its own terms (lib/mcp/amounts.ts).
+            const balance = result.status === 402 ? balanceRefusal("this pipeline", result.code) : null
             return err(
-              `Could not start pipeline (${result.code})` +
-                (result.message ? `: ${result.message}` : ""),
+              balance ??
+                `Could not start pipeline (${result.code})` +
+                  (result.message ? `: ${result.message}` : ""),
             )
           }
           return okJson({
@@ -604,7 +611,8 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
       {
         title: "Get Pipeline Status",
         description:
-          "Get the current state of a pipeline: status (pending/running/awaiting_approval/completed/failed), current_stage, credit counters, mode, and failure_reason (set when status='failed'). Poll this after start_pipeline to track an Auto run to completion.",
+          "Get the current state of a pipeline: status (pending/running/awaiting_approval/completed/failed), current_stage, credit counters, mode, and failure_reason (set when status='failed'). Poll this after start_pipeline to track an Auto run to completion." +
+          amountsNote(),
         inputSchema: {
           pipeline_id: z.string().uuid().describe("The id of the pipeline"),
         },
@@ -623,7 +631,7 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
           return err(`Pipeline ${args.pipeline_id} not found.`)
         }
         const { user_id: _omit, ...pub } = data
-        return okJson(pub)
+        return okJson({ ...statedAmountFields(pub, PIPELINE_AMOUNT_KEYS), ...unitFields() })
       },
     )
 

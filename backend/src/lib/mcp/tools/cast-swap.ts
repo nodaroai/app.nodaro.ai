@@ -63,6 +63,7 @@ import { castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle } from "
 import { neutralBreakdown, privacyCreditsOf } from "../../nodaro-motion-quote.js"
 import { originalCdnImageUrls } from "../../cdn-original-url.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders, parseJobId } from "./_verb-helpers.js"
+import { amountsNote, amountWord, statedAmount, statedAmountRecord, unitFields } from "../amounts.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -137,7 +138,8 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id: poll it with wait_for_job. `preview: true` renders 4 s first, a cheaper check of the look. " +
         'engine picks the engine: "motion-prism" (Nodaro Motion Prism, the default; 480p, 720p, 1080p) or "motion-pulse" (Nodaro Motion Pulse; 720p default or 1080p, no draft). ' +
-        "Image and video URLs must be http(s): upload local files with the upload tools first.",
+        "Image and video URLs must be http(s): upload local files with the upload tools first." +
+        amountsNote(),
       // A LOOSE object: an argument the tool no longer lists still reaches the handler, which
       // takes an older client's `kling_length` as `motion_length` and ignores `face_masking`
       // (the payload is built field by field). Only the listed keys are in the tool list.
@@ -310,14 +312,14 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         const breakdown = neutralBreakdown(quote.breakdown)
         const privacyCredits = privacyCreditsOf(quote)
         const references = breakdown.references
-          ? ` That includes ${breakdown.references} credits to prepare the reference pictures first (prepare_references: false skips it).`
+          ? ` That includes ${statedAmount(breakdown.references)} ${amountWord()} to prepare the reference pictures first (prepare_references: false skips it).`
           : ""
         // Nodaro sets how the clip is prepared, per engine. A setting that retries a refused clip
         // quotes that retry apart (`privacyCredits`, in neither total); one that always prepares it
         // has it in the totals already, so there is nothing more to say.
         const retry =
           privacyCredits !== undefined && privacyCredits > 0
-            ? ` If the video model refuses the clip, the run is retried once, for ${privacyCredits} more credits charged only then.`
+            ? ` If the video model refuses the clip, the run is retried once, for ${statedAmount(privacyCredits)} more ${amountWord()} charged only then.`
             : ""
         // The quote's engine: absent from an older engine, which runs Nodaro Motion Prism.
         const quotedEngine = castSwapEngineFrom(quote.engine) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
@@ -326,7 +328,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         // The expected charge first, with the hold beside it (as estimate_trend words it);
         // an older engine answers only the hold, which settles lower.
         const expected = typeof quote.expectedCredits === "number" ? quote.expectedCredits : null
-        const held = expected !== null && expected !== quote.totalCredits ? ` (up to ${quote.totalCredits} held while it runs)` : ""
+        const held = expected !== null && expected !== quote.totalCredits ? ` (up to ${statedAmount(quote.totalCredits)} held while it runs)` : ""
         const lower =
           expected === null && quote.settlesLower
             ? " The video's length is left to the model, so the final charge is expected to come out lower than this quote."
@@ -336,7 +338,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
             {
               type: "text" as const,
               text:
-                `This ${engineName} ${args.preview ? "preview " : "run "}costs about ${expected ?? quote.totalCredits} credits${held}.${references}${retry}${lower} ` +
+                `This ${engineName} ${args.preview ? "preview " : "run "}costs about ${statedAmount(expected ?? quote.totalCredits)} ${amountWord()}${held}.${references}${retry}${lower} ` +
                 "Present this to the user; call cast_swap again with the same arguments and confirm: true once they accept.",
             },
           ],
@@ -344,12 +346,14 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
           structuredContent: {
             engine: publicEngine,
             engineName,
-            totalCredits: quote.totalCredits,
-            ...(expected !== null ? { expectedCredits: expected } : {}),
-            breakdown,
-            ...(privacyCredits !== undefined ? { privacyCredits } : {}),
+            // Every figure in the deployment's unit when it has one (lib/mcp/amounts.ts).
+            totalCredits: statedAmount(quote.totalCredits),
+            ...(expected !== null ? { expectedCredits: statedAmount(expected) } : {}),
+            breakdown: statedAmountRecord(breakdown),
+            ...(privacyCredits !== undefined ? { privacyCredits: statedAmount(privacyCredits) } : {}),
             settlesLower: quote.settlesLower === true,
             confirmed: false,
+            ...unitFields(),
           },
         }
       }
