@@ -29,11 +29,12 @@ const { __resetAvailabilityOverridesForTests, __availabilityUniverseReadyForTest
 const SMALL_OFFER = { nodes: { allow: ["generate-image", "generate-video", "text-to-speech", "upload-image"] }, imports: { links: false } }
 
 /**
- * The tools those four nodes run — and capture_site: Site Capture is not gated
- * by omission (NOT_OVERRIDE_GATED_NODE_TYPES), so a whitelist that leaves it
- * out still runs it, and its tool stays. Nothing else in the table needs only these.
+ * The tools those four nodes run. (Site Capture is not gated by omission —
+ * NOT_OVERRIDE_GATED_NODE_TYPES — so a whitelist that leaves it out still runs
+ * it; but every capture is of a page on another site, so capture_site needs
+ * link imports, which this offer turns off.) Nothing else in the table needs only these.
  */
-const RUN_BY_THE_SMALL_OFFER = ["animate_image", "capture_site", "generate_image", "generate_speech", "generate_video"]
+const RUN_BY_THE_SMALL_OFFER = ["animate_image", "generate_image", "generate_speech", "generate_video"]
 
 /** Studio is a world with no node of its own: offered while the profile names no worlds. */
 const STUDIO_TOOLS = Object.entries(TOOL_NEEDS)
@@ -128,7 +129,7 @@ describe("the small offer: generate-image, generate-video, text-to-speech, uploa
     ["every lane of a tool", ["modify_video", "edit_image"]],
     ["a feature (Nodaro Motion, the film pipeline, the Video Director)", ["cast_swap", "run_trend", "list_trends", "full_quality", "start_pipeline", "create_explainer"]],
     ["a node a plan or quote prepares", ["resolve_shot_sequence", "import_recast_script", "estimate_use_case"]],
-    ["link imports", ["download_youtube_audio"]],
+    ["link imports", ["download_youtube_audio", "capture_site"]],
   ])("withholds what needs %s", async (_class, tools) => {
     setProfile(SMALL_OFFER)
     const listed = await names()

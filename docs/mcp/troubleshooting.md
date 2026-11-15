@@ -15,6 +15,34 @@ the reason (`403 node_not_available`, `model_not_available`,
 `link_imports_disabled` or `world_not_available`) before anything runs or is
 charged. Refresh the client's tools, or ask the deployment's admin to offer it.
 
+## A call answers `link_imports_disabled` {#link-imports-disabled}
+
+```
+Request failed (403 link_imports_disabled): Importing media from a link to another site is turned off on this deployment. Upload the file instead.
+```
+
+The deployment you are connected to does not import media from other sites
+(`imports.links: false`), and one of the call's arguments is a link to
+something that is not a file of the deployment's own storage: a picture, clip
+or sound URL, a reference, a page, or a link inside an app's inputs, a plan or
+a workflow's nodes. The call was refused before anything ran or was charged
+([Links to other sites](tools.md#links-to-other-sites)).
+
+To go on, upload the file and pass what the upload returns:
+
+1. Have the file uploaded: `request_image_upload`, `request_video_upload` or
+   `request_audio_upload` (or an upload widget) for a file the person has, or
+   `prepare_*_upload` when your client can upload the file itself.
+2. Pass the `public_url` the upload tool returned (or the file's asset id)
+   where the link was. A file the deployment generated (a job's result), an
+   asset id, a job id and an entity id are always accepted.
+
+A link to the deployment's own storage is refused too when it is not written
+exactly as the deployment hands it out — an uppercase host, a space, a
+backslash, `..`, or an image transform of the content network: pass the link
+exactly as a result or an upload gave it to you. A link inside a prompt is text
+and never refused.
+
 ## Adding the connector to Claude.ai shows an OAuth error {#claude}
 
 1. Verify the URL is exactly `https://mcp.nodaro.ai/mcp` (no trailing slash).

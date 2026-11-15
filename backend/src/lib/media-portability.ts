@@ -99,7 +99,11 @@ interface WalkFilter {
   readonly skipTopLevel?: (key: string, nodeType?: string) => boolean
   /** Skip a URL-named field by its own name (endpoints, previews). */
   readonly skipField?: (key: string) => boolean
+  /** Which values of a URL-named field are visited (default: an `http(s)://` URL). */
+  readonly accepts?: (value: string) => boolean
 }
+
+const isHttpUrl = (value: string): boolean => HTTP_URL.test(value)
 
 /** The import half's filter: inputs only — never outputs, never endpoints. */
 const REHOST_FILTER: WalkFilter = {
@@ -121,6 +125,7 @@ function walkUrlFields(
   filter: WalkFilter,
 ): void {
   if (depth > WALK_DEPTH || !value || typeof value !== "object") return
+  const accepts = filter.accepts ?? isHttpUrl
   if (Array.isArray(value)) {
     value.forEach((item, i) => walkUrlFields(item, `${path}[${i}]`, depth + 1, visit, filter))
     return
@@ -130,10 +135,10 @@ function walkUrlFields(
     const field = path ? `${path}.${key}` : key
     if (URL_FIELD.test(key)) {
       if (filter.skipField?.(key)) continue
-      if (typeof v === "string" && HTTP_URL.test(v)) visit(field, v)
+      if (typeof v === "string" && accepts(v)) visit(field, v)
       else if (Array.isArray(v)) {
         v.forEach((item, i) => {
-          if (typeof item === "string" && HTTP_URL.test(item)) visit(`${field}[${i}]`, item)
+          if (typeof item === "string" && accepts(item)) visit(`${field}[${i}]`, item)
         })
       }
       continue
@@ -163,6 +168,22 @@ export function collectNodeMediaUrls(nodes: readonly unknown[], filter: WalkFilt
       nodeFilter,
     )
   }
+  return out
+}
+
+/**
+ * The media a graph's nodes take IN, read as the import half reads them: by
+ * field name, never a run's result and never an endpoint or a preview. The
+ * MCP lane judges a graph an agent writes by it (`lib/mcp/tool-addresses.ts`).
+ */
+export function collectNodeInputMediaUrls(nodes: readonly unknown[], accepts?: (value: string) => boolean): WorkflowMediaRef[] {
+  return collectNodeMediaUrls(nodes, accepts ? { ...REHOST_FILTER, accepts } : REHOST_FILTER)
+}
+
+/** The same reading for one object that is no node (a workflow's settings, a node preset's data): its media fields' http(s) URLs. */
+export function collectInputMediaUrls(value: unknown, accepts?: (value: string) => boolean): string[] {
+  const out: string[] = []
+  walkUrlFields(value, "", 0, (_field, url) => out.push(url), { skipField: REHOST_FILTER.skipField, ...(accepts ? { accepts } : {}) })
   return out
 }
 
@@ -207,7 +228,7 @@ function plainRef(ref: WorkflowMediaRef): WorkflowMediaRef {
  * these live beside the graph, not in it — and `nodeLabel` carries the entity's
  * name so a report reads as "Kira", not as a path.
  */
-export function collectAssetMediaUrls(assets: BundleAssets | undefined): AssetMediaRef[] {
+export function collectAssetMediaUrls(assets: BundleAssets | undefined, accepts?: (value: string) => boolean): AssetMediaRef[] {
   if (!assets) return []
   const out: AssetMediaRef[] = []
   for (const [arm, kind] of ASSET_ARMS) {
@@ -225,7 +246,7 @@ export function collectAssetMediaUrls(assets: BundleAssets | undefined): AssetMe
               : { nodeId: "", field, url, kind, assetId: entity.id },
           )
         },
-        {},
+        accepts ? { accepts } : {},
       )
     })
   }

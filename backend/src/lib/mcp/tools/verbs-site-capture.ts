@@ -8,6 +8,7 @@
 import { z } from "zod"
 import { siteCaptureEnabled } from "../../config.js"
 import { isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
+import { surfaceAllowsLinkImports } from "../../surface-profile.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { clientRequestIdSchema, dispatchJob, JOB_OUTPUT_SCHEMA } from "./_verb-helpers.js"
@@ -20,9 +21,13 @@ export const CAPTURE_STILL_KEYS = ["assetId", "url"] as const
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
-/** This install offers capture: the switch is on and no surface profile withdraws it. */
+/**
+ * This install offers capture: the switch is on, no surface profile withdraws
+ * it, and links to outside content may be imported (every capture is of a page
+ * on another site, so the tool is withheld where they may not: tool-needs.ts).
+ */
 export function siteCaptureOffered(): boolean {
-  return siteCaptureEnabled() && !isNodeDenied("site-capture", USER_VIEWER)
+  return siteCaptureEnabled() && !isNodeDenied("site-capture", USER_VIEWER) && surfaceAllowsLinkImports()
 }
 
 export function captureSiteDescription(): string {

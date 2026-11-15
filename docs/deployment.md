@@ -1055,7 +1055,8 @@ optional; each array empty = "keep the default"):
     plans or continues a run prepares;
   - the `studio` world, for the Studio production tools that make or change a
     production;
-  - link imports, for `download_youtube_audio`;
+  - link imports, for `download_youtube_audio` and `capture_site` (every call
+    of either reads another site);
   - where models are restricted, at least one Suno model, for the Suno tools
     that run one.
   Tools that read the user's own data, act on work already made, hand out
@@ -1795,7 +1796,19 @@ logo is dropped with a warning and the rest of `brand` is kept.
   through MCP (`download_youtube_audio` and the other import tools), the SDK and
   the CLI, and a private plugin's own downloads and link probes.
 
-  It does not, yet, refuse an outside URL given to a media-generation or
+  **Every MCP tool call** (decided 2026-11-11): a call whose arguments carry a
+  link to anything but a file of the deployment's own storage is refused with
+  the same `403 link_imports_disabled`, before the tool runs — before anything
+  is created, reserved, fetched or sent to a provider — whatever route or
+  service the tool reaches: a picture to edit, a reference, a clip, a sound, a
+  page, a link inside an app's inputs, a plan or an edit decision list, and the
+  input media of a workflow an agent writes or imports. The arguments that can
+  hold a link are read from each tool's own schema (`lib/mcp/tool-addresses.ts`,
+  held to every tool by a test). An upload, a generated file, an asset id, a job
+  id and an entity id stay allowed; a prompt is text, and a link inside one is
+  not judged. See [Links to other sites](mcp/tools.md#links-to-other-sites).
+
+  Outside MCP, it does not, yet, refuse an outside URL given to a media-generation or
   media-processing route as a source image, video or audio (`POST /v1/generate-video`'s
   `imageUrl`, `POST /v1/trim-video`'s `videoUrl` and the like). Nor does it
   cover the display proxy `GET /v1/image-proxy`, the scrapers and site capture
