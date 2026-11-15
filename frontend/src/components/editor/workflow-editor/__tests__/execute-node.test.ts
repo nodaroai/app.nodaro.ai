@@ -57,6 +57,12 @@ const mockSaveToStorageApi = vi.fn()
 const mockSunoMashupApi = vi.fn()
 const mockSunoReplaceSectionApi = vi.fn()
 const mockSunoStyleBoostApi = vi.fn()
+const mockSplitMediaApi = vi.fn()
+const mockDescribeToPickerApi = vi.fn()
+// The editor's blocking-dialog check (types.ts): false = no dialog for this error.
+const mockCheckStorageError = vi.fn((_err: unknown, _ctx: unknown) => false)
+// Its credits half (credits-shortfall.ts): false = no not-enough-credits dialog for this error.
+const mockPromptCreditsShortfall = vi.fn((_err: unknown, _ctx: unknown) => false)
 const mockSunoAddInstrumentalApi = vi.fn()
 const mockSunoAddVocalsApi = vi.fn()
 const mockSunoConvertWavApi = vi.fn()
@@ -116,6 +122,8 @@ vi.mock("@/lib/api", () => ({
   renderVideoWithPlan: (...args: unknown[]) =>
     mockRenderVideoWithPlan(...args),
   imageToTextApi: (...args: unknown[]) => mockImageToTextApi(...args),
+  splitMediaApi: (...args: unknown[]) => mockSplitMediaApi(...args),
+  describeToPickerApi: (...args: unknown[]) => mockDescribeToPickerApi(...args),
   generateMusicApi: vi.fn(),
   textToAudioApi: vi.fn(),
   audioIsolationApi: vi.fn(),
@@ -271,7 +279,11 @@ vi.mock("../types", () => ({
     }
   },
   MAX_CONSECUTIVE_POLL_FAILURES: 3,
-  checkStorageError: () => false,
+  checkStorageError: (err: unknown, ctx: unknown) => mockCheckStorageError(err, ctx),
+}))
+
+vi.mock("../credits-shortfall", () => ({
+  promptCreditsShortfall: (err: unknown, ctx: unknown) => mockPromptCreditsShortfall(err, ctx),
 }))
 
 // ---------------------------------------------------------------------------
@@ -5479,5 +5491,80 @@ describe("Scene3D layout scoping — canvas Run parity", () => {
     expect(options.referenceVideoCaptions).toBeUndefined()
     const prompt = mockRunTextToVideoGeneration.mock.calls[0][1] as string
     expect(prompt.match(new RegExp(SCENE3D_LAYOUT_SCOPING_MARKER, "g"))?.length).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A node's start the server refused: the credits check before any toast
+// ---------------------------------------------------------------------------
+
+/**
+ * A node's own run refused for a credits shortfall that names its figures
+ * opens the editor's not-enough-credits dialog: these executors ask the
+ * credits half of the blocking-dialog check (`promptCreditsShortfall`) with
+ * the refusal, and show their own toast only when no dialog took it — never
+ * both. They used to answer every start failure with a toast, or with nothing
+ * at all; a storage or subscription refusal still does exactly that (they do
+ * not ask `checkStorageError`).
+ */
+describe("a node's start refused: the credits check before any toast", () => {
+  const refusal = new Error("Insufficient credits. Required: 176, Available: 0")
+  const video = () => {
+    mockNodes = [makeNode("x", {}), { id: "vid1", type: "image-to-video", data: { label: "V" } }]
+    mockEdges = [{ id: "e1", source: "vid1", target: "n1", targetHandle: "in" }]
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    mockExtractNodeOutput.mockReturnValue("http://vid.mp4")
+  }
+  const cases: ReadonlyArray<{ readonly type: string; readonly data: Record<string, unknown>; readonly arrange: () => void; readonly start: ReturnType<typeof vi.fn>; readonly toasts: boolean }> = [
+    { type: "llm-chat", data: { userInput: "Write something" }, arrange: () => mockResolveNodeInputs.mockReturnValue({}), start: mockLlmChatStream, toasts: true },
+    { type: "image-to-text", data: {}, arrange: () => mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://img.png" }), start: mockImageToTextApi, toasts: true },
+    { type: "after-effects", data: { effectPrompt: "cinematic look" }, arrange: video, start: mockGenerateAfterEffects, toasts: false },
+    { type: "lottie-overlay", data: { overlayPrompt: "add sparkles" }, arrange: video, start: mockGenerateLottieOverlay, toasts: false },
+    { type: "3d-title", data: { titlePrompt: "epic 3D title" }, arrange: () => mockResolveNodeInputs.mockReturnValue({}), start: mockGenerate3DTitle, toasts: false },
+    { type: "suno-style-boost", data: {}, arrange: () => mockResolveNodeInputs.mockReturnValue({ prompt: "pop lyrics about love" }), start: mockSunoStyleBoostApi, toasts: false },
+    { type: "split-media", data: {}, arrange: () => mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" }), start: mockSplitMediaApi, toasts: false },
+    {
+      type: "video-composer",
+      data: { compositionPrompt: "compose this" },
+      arrange: () => {
+        mockResolveNodeInputs.mockReturnValue({})
+        mockCollectMediaAssets.mockReturnValue([{ id: "a1", type: "video", url: "http://vid.mp4" }])
+      },
+      start: mockGenerateSceneGraph,
+      toasts: false,
+    },
+  ]
+
+  afterEach(() => {
+    mockPromptCreditsShortfall.mockImplementation(() => false)
+  })
+
+  it.each(cases)("$type: the credits check takes the refusal, and no toast follows when it opened the dialog", async ({ type, data, arrange, start }) => {
+    arrange()
+    start.mockRejectedValue(refusal)
+    mockPromptCreditsShortfall.mockImplementation(() => true)
+    const ctx = makeCtx()
+    const promise = executeNode(makeNode(type, data), ctx)
+    promise.catch(() => {})
+    await expect(promise).rejects.toBe(refusal)
+    expect(mockPromptCreditsShortfall).toHaveBeenCalledWith(refusal, ctx)
+    expect(mockCheckStorageError).not.toHaveBeenCalled()
+    expect(mockToastError).not.toHaveBeenCalled()
+    // The node still says it did not run, in the server's words.
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({ executionStatus: "failed" }))
+  })
+
+  it.each(cases)("$type: a refusal no dialog takes keeps what it showed before", async ({ type, data, arrange, start, toasts }) => {
+    arrange()
+    start.mockRejectedValue(refusal)
+    const ctx = makeCtx()
+    const promise = executeNode(makeNode(type, data), ctx)
+    promise.catch(() => {})
+    await expect(promise).rejects.toBe(refusal)
+    expect(mockPromptCreditsShortfall).toHaveBeenCalledWith(refusal, ctx)
+    // Storage and the subscription ask are not this lane's dialogs: the whole check is never asked.
+    expect(mockCheckStorageError).not.toHaveBeenCalled()
+    // Its own toast where it had one; a node that only marked the failure still does only that.
+    expect(mockToastError).toHaveBeenCalledTimes(toasts ? 1 : 0)
   })
 })

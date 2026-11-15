@@ -2,7 +2,44 @@
 
 Every new Nodaro Cloud account gets a one-time grant of **1,500 credits**<!-- credits: n/a -->.
 Nothing to buy, nothing to enter — the credits land the first time you open
-the app after signing up.
+the app after signing up, or, while the welcome offer is switched on, as soon
+as you say yes to it (below).
+
+## When the welcome offer is on
+
+While a deployment has the welcome offer switched on, the grant waits for
+your yes: say yes to product updates and tips by email — in the welcome
+pop-up, or in the banner on the home screen — and the free credits land in
+your account at once. You can unsubscribe anytime.
+
+Closing the pop-up without answering keeps the offer open. When a run needs
+more credits than the account has, the **Insufficient Credits** dialog offers
+the free credits again, above the figures, with **Upgrade Plan** and **Buy
+Credits** below as always:
+
+- The free credits cover the run: the dialog closes. Press **Run** again —
+  nothing starts on its own.
+- The run still needs more: the dialog stays and shows the new balance. The
+  free credits bring your plan's credits up to the grant's amount; they are
+  not added on top of plan credits you already have.
+- If your balance could not be read right after the yes, the dialog shows
+  the grant's amount (or what you had, if that was more) until the balance
+  arrives, then shows it — and closes if it covers the run.
+- The grant was withheld: in place of the offer, the dialog shows the notice
+  the banner at the top of the app shows — that the free credits are added
+  with a first purchase (next section), or, when your balance says the
+  browser could not be checked, to turn off the ad blocker or privacy shield
+  and reload. If the balance could not be read just then, it shows the
+  first-purchase notice.
+
+The "Yes" in the dialog is never the first thing it focuses: pressing Enter
+right after it opens closes it instead of saying yes.
+
+The dialog opens before the whole workflow's **Run** starts. For most nodes it
+also opens when the node's own run (its ▶, or **Run This Node** in its
+settings) is refused for a credits shortfall and the refusal names the
+figures. When a credits refusal names no figures, the node shows the same
+error notice as before.
 
 ## When the grant waits for a first purchase
 

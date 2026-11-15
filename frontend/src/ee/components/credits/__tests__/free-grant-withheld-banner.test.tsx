@@ -110,6 +110,27 @@ describe("FreeGrantWithheldBanner", () => {
     }
   })
 
+  it("with the claim's own answer (grantWithheld), says it before the balance does — never for a paying account", () => {
+    const renderWithheld = () =>
+      render(React.createElement(MemoryRouter, null, React.createElement(FreeGrantWithheldBanner, { grantWithheld: true })))
+    // The read-back still says unclaimed (stale), or has not answered at all.
+    for (const data of [{ total: 0, freeGrantState: "unclaimed", effectiveTier: "free" }, undefined]) {
+      mockBalance.mockReturnValue({ data })
+      const { unmount } = renderWithheld()
+      expect(screen.getByTestId("free-grant-withheld-banner").textContent).toMatch(/first purchase/i)
+      unmount()
+    }
+    // The browser variant still wins when the balance names it.
+    mockBalance.mockReturnValue({ data: { ...withheldFree, freeGrantNotice: "browser_unmeasured" } })
+    const browser = renderWithheld()
+    expect(screen.getByTestId("free-grant-browser-banner")).toBeTruthy()
+    browser.unmount()
+    // A paying account is not in the free-grant business.
+    mockBalance.mockReturnValue({ data: { total: 8500, freeGrantState: "unclaimed", effectiveTier: "pro" } })
+    const paid = renderWithheld()
+    expect(paid.container.innerHTML).toBe("")
+  })
+
   it("sends the user to the pricing page, where packs are bought — no Stripe step of its own", () => {
     mockBalance.mockReturnValue({ data: withheldFree })
     renderAt("/projects")

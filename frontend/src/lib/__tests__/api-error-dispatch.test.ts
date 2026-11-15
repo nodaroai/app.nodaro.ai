@@ -159,6 +159,68 @@ describe("throwApiError dispatch (via editImage)", () => {
     }
   })
 
+  it("insufficient_credits carries the refusal's RAW required and balance, which sit BESIDE `error`", async () => {
+    // The figures the editor's not-enough-credits dialog shows for a node's
+    // refused Run: what the server compared, never a figure of the client's.
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(402, {
+        error: { code: "insufficient_credits", message: "Insufficient credits. Required: 176, Available: 0" },
+        required: 176,
+        balance: 0,
+      }),
+    )
+
+    try {
+      await editImage("http://img.png")
+      throw new Error("did not throw")
+    } catch (err) {
+      const e = err as InsufficientCreditsError
+      expect(e).toBeInstanceOf(InsufficientCreditsError)
+      expect(e.required).toBe(176)
+      expect(e.balance).toBe(0)
+    }
+  })
+
+  it("a deployment payer's insufficient_credits names what it needs and no balance (the payer's pool stays private)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(402, {
+        error: { code: "insufficient_credits", message: "This deployment is out of credits." },
+        required: 176,
+      }),
+    )
+
+    try {
+      await editImage("http://img.png")
+      throw new Error("did not throw")
+    } catch (err) {
+      const e = err as InsufficientCreditsError
+      expect(e.required).toBe(176)
+      expect(e.balance).toBeUndefined()
+    }
+  })
+
+  it("a figure that is not a number is not carried", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(402, {
+        error: { code: "insufficient_credits", message: "Insufficient credits" },
+        required: "176",
+        balance: null,
+      }),
+    )
+
+    try {
+      await editImage("http://img.png")
+      throw new Error("did not throw")
+    } catch (err) {
+      const e = err as InsufficientCreditsError
+      expect(e.required).toBeUndefined()
+      expect(e.balance).toBeUndefined()
+    }
+  })
+
   it("insufficient_app_credits also throws InsufficientCreditsError carrying that code", async () => {
     vi.stubGlobal(
       "fetch",

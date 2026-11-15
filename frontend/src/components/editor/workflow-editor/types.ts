@@ -1,5 +1,6 @@
 import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoProNodeData, ProbedVideoInfo } from "@/types/nodes";
 import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
+import { promptCreditsShortfall, type CreditsShortfall } from "./credits-shortfall";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes, speakerFramesEstimateBlocks } from "@/lib/apply-edl-estimate";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
@@ -1277,6 +1278,14 @@ export interface ExecutionContext {
     /** `note`: said under the figures, when `required` is what the run holds rather than its price. */
     data: { required: number; available: number; tier: string; note?: string } | null,
   ) => void;
+  /**
+   * Open the not-enough-credits dialog for a node's run the server refused for
+   * a credits shortfall, with the refusal's figures (`credits-shortfall.ts`).
+   * Set only by the editor, which mounts that dialog. Absent (the inline
+   * auto-run context, tests), such a refusal keeps its per-node toast — never
+   * a dialog nobody mounted and no word at all.
+   */
+  openCreditsDialog?: (shortfall: CreditsShortfall) => void;
   /** Spend-surface block (payg account in the studio). Optional so existing
    *  ctx mocks and non-editor callers keep working; absent → the error falls
    *  through to generic per-node handling. */
@@ -1325,10 +1334,11 @@ export interface ExecutionContext {
 // import it directly from `@/lib/idempotency-key` and tests don't need
 // per-file updates.
 
-/** Check if an error is a blocking-modal error (storage exceeded, or the payg
- *  spend-surface block) and show the matching modal. Returns true if handled —
- *  callers skip their generic per-node error handling. Kept under the original
- *  name so all 18 call sites (and their test mocks) pick this up unchanged. */
+/** Check if an error is a blocking-modal error (storage exceeded, the payg
+ *  spend-surface block, or a credits shortfall the refusal names the figures
+ *  of) and show the matching modal. Returns true if handled — callers skip
+ *  their generic per-node error handling. Kept under the original name so
+ *  every call site (and their test mocks) picks this up unchanged. */
 export function checkStorageError(
   err: unknown,
   ctx: ExecutionContext,
@@ -1346,5 +1356,5 @@ export function checkStorageError(
     ctx.setShowSubscriptionRequired(true);
     return true;
   }
-  return false;
+  return promptCreditsShortfall(err, ctx);
 }

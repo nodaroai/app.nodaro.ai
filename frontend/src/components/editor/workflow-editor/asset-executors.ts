@@ -32,6 +32,7 @@ import {
   checkStorageError,
   type ExecutionContext,
 } from "./types";
+import { promptCreditsShortfall } from "./credits-shortfall";
 import { jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { pollJobToCompletion, guardedToast, getJobStatusLeanForNode, RUN_START_RESET } from "./poll-job";
 import { shouldAbandonNode } from "./abandon-guard";
@@ -1123,11 +1124,18 @@ export async function handleGenerateCharacterAsset(
   } catch (err) {
     if (err instanceof WorkflowStaleError) return;
     updateNodeData(nodeId, { [statusKey]: "failed" });
+    // A variant refused for a credits shortfall opens the not-enough-credits
+    // dialog. The summary still shows how many the batch generated — that is
+    // not the refusal's notice — but the refusal's sentence is the dialog's,
+    // so it is not repeated under the count.
+    const creditsDialog = promptCreditsShortfall(err, ctx);
     guardedToast.error(
       tx("nodeRun.failedToGenerateCompleted", { assetType: assetTypeLabel(assetType), count: results.length, total: config.variants.length }),
-      {
-        description: err instanceof Error ? err.message : tx("lib.unknownError"),
-      },
+      creditsDialog
+        ? undefined
+        : {
+            description: err instanceof Error ? err.message : tx("lib.unknownError"),
+          },
     );
   }
 }
@@ -1234,11 +1242,18 @@ export async function handleGenerateObjectAsset(
   } catch (err) {
     if (err instanceof WorkflowStaleError) return;
     updateNodeData(nodeId, { [statusKey]: "failed" });
+    // A variant refused for a credits shortfall opens the not-enough-credits
+    // dialog. The summary still shows how many the batch generated — that is
+    // not the refusal's notice — but the refusal's sentence is the dialog's,
+    // so it is not repeated under the count.
+    const creditsDialog = promptCreditsShortfall(err, ctx);
     guardedToast.error(
       tx("nodeRun.failedToGenerateCompleted", { assetType: assetTypeLabel(assetType), count: results.length, total: config.variants.length }),
-      {
-        description: err instanceof Error ? err.message : tx("lib.unknownError"),
-      },
+      creditsDialog
+        ? undefined
+        : {
+            description: err instanceof Error ? err.message : tx("lib.unknownError"),
+          },
     );
   }
 }
@@ -1345,11 +1360,18 @@ export async function handleGenerateLocationAsset(
   } catch (err) {
     if (err instanceof WorkflowStaleError) return;
     updateNodeData(nodeId, { [statusKey]: "failed" });
+    // A variant refused for a credits shortfall opens the not-enough-credits
+    // dialog. The summary still shows how many the batch generated — that is
+    // not the refusal's notice — but the refusal's sentence is the dialog's,
+    // so it is not repeated under the count.
+    const creditsDialog = promptCreditsShortfall(err, ctx);
     guardedToast.error(
       tx("nodeRun.failedToGenerateCompleted", { assetType: assetTypeLabel(assetType), count: results.length, total: config.variants.length }),
-      {
-        description: err instanceof Error ? err.message : tx("lib.unknownError"),
-      },
+      creditsDialog
+        ? undefined
+        : {
+            description: err instanceof Error ? err.message : tx("lib.unknownError"),
+          },
     );
   }
 }

@@ -8,6 +8,7 @@ import {
 } from "@nodaro/shared/apps"
 import type { WorkflowNode, ComponentNodeData, GeneratedResult } from "@/types/nodes"
 import type { ExecutionContext } from "./types"
+import { promptCreditsShortfall } from "./credits-shortfall"
 import { updateQueueInfoIfChanged } from "./node-queue-info"
 import type { FrontendResolvedInputs } from "./node-input-resolver"
 import { shouldAbandonNode } from "./abandon-guard"
@@ -226,6 +227,8 @@ export async function executeComponent(
       currentJobProgress: undefined,
       jobConnectionLost: undefined,
     })
+    // A start refused for a credits shortfall opens the not-enough-credits dialog.
+    promptCreditsShortfall(err, ctx)
     throw err
   }
 }

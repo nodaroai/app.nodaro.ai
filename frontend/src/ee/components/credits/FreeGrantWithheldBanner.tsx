@@ -7,6 +7,7 @@ import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { useT } from "@/lib/i18n"
+import { cn } from "@/lib/utils"
 
 /**
  * The banner for an account whose free signup grant was withheld.
@@ -27,26 +28,36 @@ import { useT } from "@/lib/i18n"
  * Not at all on a deployment that gives no free credits of one's own
  * (`personalFreeCreditsShown`): there is no grant to wait for, and nothing to
  * buy with a first purchase.
+ *
+ * `className` frames it where it is not a page strip (the not-enough-credits
+ * dialog, after a "yes" to the welcome credits came back withheld).
+ * `grantWithheld`: the caller holds the server's own answer that the grant was
+ * withheld (that claim's), so the sentence shows without waiting for the
+ * balance to say so — the read-back after a claim can fail or come back from
+ * before it. A balance that names a paying account still hides it.
  */
-export function FreeGrantWithheldBanner() {
+export function FreeGrantWithheldBanner({ className, grantWithheld = false }: { readonly className?: string; readonly grantWithheld?: boolean }) {
   const t = useT()
   const { user } = useAuth()
   const { data: balance } = useUserCredits(user?.id)
   const { surface } = useBillingSurface()
 
-  if (balance?.freeGrantState !== "withheld" || balance.effectiveTier !== "free") return null
+  if (grantWithheld) {
+    // A paying account is not in the free-grant business, whatever was answered.
+    if (balance && balance.effectiveTier !== "free") return null
+  } else if (balance?.freeGrantState !== "withheld" || balance.effectiveTier !== "free") return null
   if (!personalFreeCreditsShown(surface.deploymentPayer)) return null
 
   // Withheld only because the browser could not be measured (a privacy
   // browser, an ad blocker, a slow phone): say what to do — a reload in a
   // regular browser judges the account again — instead of pointing at a
   // purchase. Still never "denied".
-  if (balance.freeGrantNotice === "browser_unmeasured") {
+  if (balance?.freeGrantNotice === "browser_unmeasured") {
     return (
       <div
         role="status"
         data-testid="free-grant-browser-banner"
-        className="flex flex-wrap items-center gap-3 border-b px-4 py-2.5 text-sm"
+        className={cn("flex flex-wrap items-center gap-3 border-b px-4 py-2.5 text-sm", className)}
         style={{ background: "var(--blg-card)", borderColor: "var(--blg-border-3)", color: "var(--blg-t1)" }}
       >
         <Sparkles className="h-4 w-4 shrink-0" style={{ color: "#ff0073" }} />
@@ -61,7 +72,7 @@ export function FreeGrantWithheldBanner() {
     <div
       role="status"
       data-testid="free-grant-withheld-banner"
-      className="flex flex-wrap items-center gap-3 border-b px-4 py-2.5 text-sm"
+      className={cn("flex flex-wrap items-center gap-3 border-b px-4 py-2.5 text-sm", className)}
       style={{ background: "var(--blg-card)", borderColor: "var(--blg-border-3)", color: "var(--blg-t1)" }}
     >
       <Sparkles className="h-4 w-4 shrink-0" style={{ color: "#ff0073" }} />

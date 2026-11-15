@@ -39,6 +39,7 @@ import { nodeRunError, nodeRunText } from "./node-run-message"
 import { jobGoneMessage, shouldStopPolling } from "./poll-connection"
 import { RUN_START_RESET, getJobStatusLeanForNode, guardedToast } from "./poll-job"
 import { WorkflowStaleError, updateProgressIfChanged, type ExecutionContext } from "./types"
+import { promptCreditsShortfall } from "./credits-shortfall"
 
 const parseMaybe = (v: unknown): unknown => {
   if (typeof v !== "string") return v
@@ -150,7 +151,7 @@ export function executeSpeakerFrames(node: WorkflowNode, inputs: SpeakerFramesIn
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : tx("lib.unknownError")
-        guardedToast.error(tx("apiErr.startSpeakerFrames"), { description: message })
+        if (!promptCreditsShortfall(err, ctx)) guardedToast.error(tx("apiErr.startSpeakerFrames"), { description: message })
         failRun(message, err)
       })
   })
