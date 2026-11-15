@@ -1300,10 +1300,16 @@ the text-to-image schema has no image field at all.
   11 prompt-mention images are refused at 11 on the route, in a workflow run
   and on the editor's request, instead of running as 10 with the 11th mention
   left as text. An unmentioned character variant still attaches
-  nothing and is not counted. Past the body's array bounds (14
-  `connectedReferences`, 16 `referenceImageUrls`), `/v1/generate-image`
-  answers with the same message (`oversizedImageArraysProblem`), counted by
-  assembling the request. MCP `generate_image` and `image_to_image` pass every
+  nothing and is not counted. `connectedReferences` and `referenceOrder` take
+  16 entries on a request whose every model has a request limit of its own, 14
+  otherwise (`structuredReferenceListLimit`, `lib/image-input-limit.ts`,
+  decided 2026-11-15; the route picks its schema by the model the request
+  runs on, `generateImageRunModelOfBody`, so a trained-character run keeps 14;
+  MCP `generate_image` checks the same, preset calls included, and holds any
+  image list it passes on whole to `MCP_IMAGE_LIST_CEILING`, 64, before a
+  lookup or an assembly). Past the body's
+  array bounds, `/v1/generate-image` answers with the same message
+  (`oversizedImageArraysProblem`), counted by assembling the request. MCP `generate_image` and `image_to_image` pass every
   `reference_image_urls` entry on for such a model (no cut at
   `requestImageLimit`), so the route's refusal answers. A request on every
   other model with a request limit of its own (Seedream 5.5, GPT Image 2.6

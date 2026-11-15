@@ -440,6 +440,7 @@
         "backend/src/lib/gemini/client.ts",
         "backend/src/lib/gemini/media.ts",
         "backend/src/lib/gemini/response-schema.ts",
+        "backend/src/lib/generate-image-run-model.ts",
         "backend/src/lib/generate-video-pro-length.ts",
         "backend/src/lib/generated-video-length.ts",
         "backend/src/lib/generation-session-error.ts",

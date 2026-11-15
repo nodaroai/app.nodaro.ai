@@ -3486,10 +3486,18 @@ the picture belongs instead of relying on the trailing auto-attach block.
   with a `400` (`validation_error`) saying how many to remove ("Seedream 5.5
   takes at most 10 input images, the source or base image included, and this
   run would send 12: remove 2."), before anything is charged. Flat
-  `referenceImageUrls`, `connectedReferences` and the base all count, and a
-  request past the lists' own limits (14 `connectedReferences`, 16
-  `referenceImageUrls`) that would send more than the model takes gets the
-  same message. `POST /v1/image-to-image`
+  `referenceImageUrls`, `connectedReferences` and the base all count. On these
+  models `connectedReferences` and `referenceOrder` take up to 16 entries, as
+  `referenceImageUrls` does, so the count that decides is the images the
+  request would send, entries that share an image counted once (15 mentions of
+  10 different images run on Seedream 5.5); a request past 16 that would send
+  more than the model takes gets the same message, and one that would not gets
+  the bare limit on the list. On every other model, and
+  on a `models` request naming any other model, `connectedReferences` and
+  `referenceOrder` keep their bound of 14 entries, as before. A request that
+  names no model is held to the model it runs on, the default for its ratio:
+  GPT Image 2.6 Sunburst at a ratio GPT Image 2 does not draw (21:9 among
+  them). `POST /v1/image-to-image`
   answers the same way, its `imageUrl` counted. A workflow run on Seedream 5.5,
   GPT Image 2.6 or MiniMax H3 Image still sends the first 10 or 16 and leaves
   the rest out; FLUX 3 Klein refuses there too.

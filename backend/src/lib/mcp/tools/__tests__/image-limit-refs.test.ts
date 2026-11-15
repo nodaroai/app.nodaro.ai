@@ -32,7 +32,7 @@ vi.mock("../../supabase.js", () => ({
 }))
 
 const { registerVerbs } = await import("../verbs.js")
-const { generateImageRequest } = await import("../../../../routes/generate-image-body.js")
+const { parseGenerateImageRequest } = await import("../../../../routes/generate-image-body.js")
 const { oversizedImageArraysProblem } = await import("../../../../routes/generate-image-plan.js")
 
 const refs = (n: number) => Array.from({ length: n }, (_, i) => `https://cdn.nodaro.ai/uploads/ref-${i}.png`)
@@ -52,7 +52,7 @@ function generateImageBodyCheck() {
   fastify.post("/v1/generate-image", async (req, reply) => {
     received.body = req.body as Record<string, unknown>
     const body = { ...received.body, userId: "00000000-0000-4000-8000-000000000001" }
-    const parsed = generateImageRequest.safeParse(body)
+    const parsed = parseGenerateImageRequest(body)
     if (!parsed.success) {
       const tooMany = oversizedImageArraysProblem(body, parsed.error, undefined)
       return reply.status(400).send({ error: tooMany ?? { code: "validation_error", message: parsed.error.issues[0]!.message } })
@@ -152,6 +152,81 @@ describe("a preset call's references and a model's image limit", () => {
   it("a preset fan-out with one request-limited model passes every reference on", async () => {
     const { body } = await run({ models: ["nano-banana-pro", "gpt-image-2-6-flare"], reference_image_urls: refs(20) })
     expect(body?.referenceImageUrls).toEqual(refs(20))
+  })
+})
+
+/**
+ * `connected_references` and `reference_order` (decided 2026-11-15). The tool
+ * used to bound both at 14 for every model; it now leaves them to the route, as
+ * it leaves `reference_image_urls`, when every model the call runs has a
+ * request image limit of its own, so 15 or 16 mentioned images run on GPT
+ * Image 2.6 Flare and 17 are told how many to remove. A call on any other model
+ * is refused past 14 before anything is sent, with exactly the answer the
+ * tool's schema gave — on a preset call too, where the preset would otherwise
+ * fold the references in and the assembler leave the extra ones out.
+ */
+describe("generate_image's structured lists and the models it runs on", () => {
+  const pills = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ id: `m${i}`, defaultName: `ref${i}`, source: "manual", url: `https://cdn.nodaro.ai/uploads/cref-${i}.png` }))
+  const order = (n: number) => Array.from({ length: n }, (_, i) => `m${i}`)
+  /** The input-validation error the tool's schema gave past 14 entries. */
+  const PAST_14 = (field: string) =>
+    "MCP error -32602: Input validation error: Invalid arguments for tool generate_image: " +
+    JSON.stringify([{ origin: "array", code: "too_big", maximum: 14, inclusive: true, path: [field], message: "Too big: expected array to have <=14 items" }], null, 2)
+
+  const call = async (args: Record<string, unknown>) => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-lists" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_image", { prompt: "a still life", ...args })
+    return { result, body: received.body as Record<string, unknown> | undefined }
+  }
+  const text = (result: Awaited<ReturnType<typeof callTool>>) => (result.content[0] as { text: string }).text
+
+  it.each([
+    ["Nano Banana Pro, 15 pills", { model: "nano-banana-pro", connected_references: pills(15) }, "connected_references"],
+    ["Nano Banana Pro, 16 pills", { model: "nano-banana-pro", connected_references: pills(16) }, "connected_references"],
+    ["the default model, 15 pills", { connected_references: pills(15) }, "connected_references"],
+    ["Nano Banana Pro, 15 reference_order ids", { model: "nano-banana-pro", connected_references: pills(2), reference_order: order(15) }, "reference_order"],
+    ["a fan-out with GPT Image 2.6 Flare, 15 pills", { models: ["nano-banana-pro", "gpt-image-2-6-flare"], connected_references: pills(15) }, "connected_references"],
+    ["a preset on Nano Banana Pro, 15 pills", { presetId: "generate-image/location-board", model: "nano-banana-pro", connected_references: pills(15) }, "connected_references"],
+    ["a preset on Nano Banana Pro, 15 reference_order ids", { presetId: "generate-image/location-board", model: "nano-banana-pro", connected_references: pills(2), reference_order: order(15) }, "reference_order"],
+    ["a preset fan-out with GPT Image 2.6 Flare, 15 pills", { presetId: "generate-image/location-board", models: ["nano-banana-pro", "gpt-image-2-6-flare"], connected_references: pills(15) }, "connected_references"],
+  ] as const)("a model held to the default limit is refused past 14, as before: %s", async (_label, args, field) => {
+    const { result, body } = await call(args)
+    expect(result.isError).toBe(true)
+    expect(text(result)).toBe(PAST_14(field))
+    expect(body).toBeUndefined()
+  })
+
+  it("passes 15 and 16 GPT Image 2.6 Flare pills on, and the route takes them", async () => {
+    for (const n of [15, 16]) {
+      _resetRegistry()
+      const { fastify, received } = generateImageBodyCheck()
+      const server = buildServer()
+      registerVerbs({ server, session: executeSession(), fastify })
+      const result = await callTool(server, "generate_image", { prompt: "a still life", model: "gpt-image-2-6-flare", connected_references: pills(n), reference_order: order(n) })
+      expect(result.isError, `${n} pills`).toBeUndefined()
+      expect(received.body?.connectedReferences).toEqual(pills(n))
+      expect(received.body?.referenceOrder).toEqual(order(n))
+    }
+  })
+
+  it("passes 17 GPT Image 2.6 Flare pills on, and the route's refusal says to remove 1", async () => {
+    const { fastify, received } = generateImageBodyCheck()
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_image", { prompt: "a still life", model: "gpt-image-2-6-flare", connected_references: pills(17) })
+    expect(received.body?.connectedReferences).toEqual(pills(17))
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain("GPT Image 2.6 Flare takes at most 16 input images, the source or base image included, and this run would send 17: remove 1.")
+  })
+
+  it("a preset on GPT Image 2.6 Flare folds all 15 pills into its references", async () => {
+    const { result, body } = await call({ presetId: "generate-image/location-board", model: "gpt-image-2-6-flare", connected_references: pills(15) })
+    expect(result.isError).toBeUndefined()
+    expect(body?.provider).toBe("gpt-image-2-6-flare")
+    expect(body?.referenceImageUrls).toEqual(pills(15).map((ref) => ref.url))
   })
 })
 

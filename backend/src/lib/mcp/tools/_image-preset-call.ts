@@ -12,9 +12,10 @@
  */
 import type { McpSession } from "../session.js"
 import { isAutoAspectToken } from "@nodaro/shared/model-catalog"
-import { refusesImagesOverLimitOn } from "@nodaro/shared/models"
+import { DEFAULT_REQUEST_IMAGE_LIMIT, refusesImagesOverLimitOn } from "@nodaro/shared/models"
 import { normalizeImageInput } from "../normalize.js"
-import { resolveRefArray } from "./_verb-helpers.js"
+import { structuredReferenceListLimit } from "../../image-input-limit.js"
+import { coerceStringArray, MCP_IMAGE_LIST_CEILING, refuseListsOver, resolveRefArray } from "./_verb-helpers.js"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import {
   buildGenerateImagePresetBody,
@@ -30,6 +31,42 @@ function toolError(text: string): ToolError {
 }
 
 /**
+ * `generate_image`'s image lists held to the models the call runs on, before
+ * any asset lookup or prompt assembly (decided 2026-11-15). The tool's schema
+ * leaves them unbounded, as it always left `reference_image_urls`:
+ *
+ * - `connected_references` and `reference_order` (`structuredReferenceListLimit`):
+ *   a call that runs on any model held to the default limit is refused past
+ *   that limit, with the answer the tool's schema gave when it held these
+ *   lists to it. A call whose every model has a request image limit of its own
+ *   is left to the route, which counts the images it would send and says how
+ *   many to remove, up to `MCP_IMAGE_LIST_CEILING` entries. A preset call
+ *   cannot leave the default limit to the route: the preset folds the
+ *   references into `referenceImageUrls` first, and the assembler would leave
+ *   the extra ones out.
+ * - `reference_image_urls`, when it is passed on whole (any model the call
+ *   runs refuses a request over its limit): up to `MCP_IMAGE_LIST_CEILING`
+ *   entries. Otherwise it is cut to the model's limit before its lookups, as
+ *   before.
+ */
+export function checkImageLists(args: Record<string, unknown>, models: readonly string[]): void {
+  const structuredMax = structuredReferenceListLimit(models) === DEFAULT_REQUEST_IMAGE_LIMIT ? DEFAULT_REQUEST_IMAGE_LIMIT : MCP_IMAGE_LIST_CEILING
+  const passedWhole = referencesPassedWhole(models)
+  refuseListsOver("generate_image", {
+    connected_references: { entries: args.connected_references as unknown[] | undefined, max: structuredMax },
+    reference_order: { entries: args.reference_order as unknown[] | undefined, max: structuredMax },
+    ...(passedWhole && args.reference_image_urls !== undefined
+      ? { reference_image_urls: { entries: coerceStringArray(args.reference_image_urls, Number.POSITIVE_INFINITY), max: MCP_IMAGE_LIST_CEILING } }
+      : {}),
+  })
+}
+
+/** True when `reference_image_urls` is passed on whole: some model the call runs refuses a request over its limit. */
+export function referencesPassedWhole(models: readonly string[]): boolean {
+  return models.some((model) => refusesImagesOverLimitOn(model, "request"))
+}
+
+/**
  * The call's explicit fields beside a preset, as the route's body names them —
  * every edit except the model / ratio / resolution / quality levers, which the
  * two preset paths coerce against different models. Only what the caller
@@ -40,13 +77,15 @@ function toolError(text: string): ToolError {
  * image limit of its own), every reference is passed on and the route refuses
  * a count over it, saying how many to remove, rather than some being left out
  * here (decided 2026-11-14); any other model's references are cut at 14, the
- * route's limit for it, as before.
+ * route's limit for it, as before. Every list is first held to the same
+ * models (`checkImageLists`).
  */
 export async function presetCallFields(
   args: Record<string, unknown>,
   session: McpSession,
   models: readonly string[],
 ): Promise<Record<string, unknown>> {
+  checkImageLists(args, models)
   const overrides: Record<string, unknown> = {}
   if (typeof args.prompt === "string" && args.prompt) overrides.prompt = args.prompt
   // Node data like the rest: folded by the preset assembly whether the prompt
@@ -62,8 +101,7 @@ export async function presetCallFields(
   if (args.strength !== undefined) overrides.strength = args.strength
   if (args.guidance_scale !== undefined) overrides.guidanceScale = args.guidance_scale
   if (args.reference_image_urls !== undefined) {
-    const passAll = models.some((m) => refusesImagesOverLimitOn(m, "request"))
-    overrides.referenceImageUrls = await resolveRefArray(args.reference_image_urls, session.userId, "image", passAll ? Number.POSITIVE_INFINITY : 14)
+    overrides.referenceImageUrls = await resolveRefArray(args.reference_image_urls, session.userId, "image", referencesPassedWhole(models) ? MCP_IMAGE_LIST_CEILING : 14)
   }
   return overrides
 }

@@ -10,6 +10,9 @@ import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE
 import {
   errorResult,
   dispatchJob,
+  coerceStringArray,
+  MCP_IMAGE_LIST_CEILING,
+  refuseListsOver,
   resolveRefArray,
   StructuredFields,
   JOB_OUTPUT_SCHEMA,
@@ -38,7 +41,7 @@ import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DUR
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { imageToImageLevers, normalizeImageInput, requestedAspectRatio, savedGenerationModel } from "../normalize.js"
 import { imageToImageAspectRatio } from "../../image-auto-aspect.js"
-import { presetImageBody } from "./_image-preset-call.js"
+import { checkImageLists, presetImageBody, referencesPassedWhole } from "./_image-preset-call.js"
 import { registerSplitIntoLayersVerb } from "./verbs-split-into-layers.js"
 import { OVERLAY_MAX_LAYERS } from "../../../providers/image/overlay-contract.js"
 import type { SuggestedPlacement } from "../../../routes/image-overlay-placement.js"
@@ -161,7 +164,10 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           structured: StructuredFields.optional().describe(
             "Path-1 structured fields composed into the final prompt.",
           ),
-          connected_references: z.array(connectedReferenceSchema).max(14).optional()
+          // No bound here, as `reference_image_urls` has none: the route bounds
+          // both lists by the models the call runs on, and the handler holds
+          // all three to them first (`checkImageLists`).
+          connected_references: z.array(connectedReferenceSchema).optional()
             .describe(
               "Advanced structured references — the editor's wired-reference shape (each needs at least " +
               "{id, defaultName, source, url}, url a public https URL). Assembled server-side into per-ref " +
@@ -175,7 +181,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
               "@image_N seat is used: each becomes a `<Name> — <description>.` line, so a name in " +
               "your prompt reaches the model as a real, described subject.",
             ),
-          reference_order: z.array(z.string()).max(14).optional()
+          reference_order: z.array(z.string()).optional()
             .describe("Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings."),
           // Plain strings on the wire (a uuid schema carries a long pattern into
           // tools/list); the handler checks the shape before calling the route.
@@ -335,6 +341,10 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           defaultImageModel("general", requestedRatio),
         )
         const { model } = normalized
+        const runModels = fanOut ? fanModels : [model]
+        // Every image list, held to the models the call runs on, before any
+        // lookup (`checkImageLists`).
+        checkImageLists(effective, runModels)
         // A fan-out's levers are only spelled here, against every model's
         // lists: the route fits them to each model and reports what it changed.
         const levers = fanOut
@@ -360,13 +370,14 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         // (`refusesImagesOverLimitOn`: every model with a request image limit
         // of its own — Seedream 5.5, GPT Image 2.6 Flare and Sunburst, MiniMax
         // H3 Image, FLUX 3 Klein) gets every reference, so the route's refusal
-        // says how many to remove instead of the extra ones being left out here.
+        // says how many to remove instead of the extra ones being left out here
+        // (up to `MCP_IMAGE_LIST_CEILING`, which `checkImageLists` held it to).
         const refUrls = await resolveRefArray(
           effective.reference_image_urls,
           session.userId,
           "image",
-          (fanOut ? fanModels : [model]).some((m) => refusesImagesOverLimitOn(m, "request"))
-            ? Number.POSITIVE_INFINITY
+          referencesPassedWhole(runModels)
+            ? MCP_IMAGE_LIST_CEILING
             : requestImageLimit(fanOut ? undefined : ((effective.model as string | undefined) ?? model)),
         )
         // "auto" keeps the shape of the photo the call sends (the base image,
@@ -767,11 +778,19 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       // refuses a request over its limit (`refusesImagesOverLimitOn`: every
       // model with a request image limit of its own), which the route refuses
       // saying how many to remove, rather than one being left out here.
+      // Passed on whole, the list is held to `MCP_IMAGE_LIST_CEILING` before
+      // any lookup.
+      const passedWhole = refusesImagesOverLimitOn(provider, "request")
+      if (passedWhole && args.reference_image_urls !== undefined) {
+        refuseListsOver("image_to_image", {
+          reference_image_urls: { entries: coerceStringArray(args.reference_image_urls, Number.POSITIVE_INFINITY), max: MCP_IMAGE_LIST_CEILING },
+        })
+      }
       const i2iRefs = await resolveRefArray(
         args.reference_image_urls,
         session.userId,
         "image",
-        refusesImagesOverLimitOn(provider, "request") ? Number.POSITIVE_INFINITY : requestImageLimit(provider) - 1,
+        passedWhole ? MCP_IMAGE_LIST_CEILING : requestImageLimit(provider) - 1,
       )
       const payload: Record<string, unknown> = {
         imageUrl,

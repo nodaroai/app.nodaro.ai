@@ -244,14 +244,17 @@ const IMAGE_ARRAY_FIELDS: ReadonlySet<string> = new Set(["connectedReferences", 
 
 /**
  * The refusal a request gets when it names more images than the body's arrays
- * take (14 `connectedReferences`, 16 `referenceImageUrls`) on a model that
- * refuses a request over its limit (`refusesImagesOverLimitOn`: every model
- * with a request image limit of its own): that model's own message, saying how
- * many to remove, instead of the bare array bound. The count is the one the
- * run would send, assembled as the handler assembles it (an unmentioned
- * character variant attaches nothing, so it is not counted). Null when
- * anything else is wrong with the body, when the count fits the model, or when
- * no model it names refuses: every other request keeps the message it gets today.
+ * take (`MAX_REQUEST_IMAGE_LIMIT` entries in each when every model it runs
+ * refuses a request over its limit, else the default limit's for
+ * `connectedReferences` and `referenceOrder`: `parseGenerateImageRequest`) on
+ * a model that refuses a request over its limit (`refusesImagesOverLimitOn`:
+ * every model with a request image limit of its own): that model's own
+ * message, saying how many to remove, instead of the bare array bound. The
+ * count is the one the run would send, assembled as the handler assembles it
+ * (an unmentioned character variant attaches nothing, so it is not counted).
+ * Null when anything else is wrong with the body, when the count fits the
+ * model, or when no model it names refuses: every other request keeps the
+ * message it gets today.
  */
 export function oversizedImageArraysProblem(
   body: unknown,

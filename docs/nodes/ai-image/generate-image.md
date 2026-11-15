@@ -184,11 +184,11 @@ and edits, from a first draft up to 4K.
   and the base. None is left out to make the run fit, so a mention never stays
   in the prompt as plain text for an image that was not sent. A wired
   character's looks that the prompt does not mention are not sent, so they do
-  not count. On the API, a request past the lists' own limits (14
-  `connectedReferences`, 16 `referenceImageUrls`) that would send more than 10
-  images gets the same message, rather than a bare limit on the list. A
-  moodboard's images fill only the seats left after your references and the
-  base, and never make a run refused.
+  not count. On the API, a request past the lists' own limits (16 entries in
+  `connectedReferences`, `referenceOrder` or `referenceImageUrls`) that would
+  send more than 10 images gets the same message, rather than a bare limit on
+  the list. A moodboard's images fill only the seats left after your
+  references and the base, and never make a run refused.
 - Seedream 5.5, GPT Image 2.6 Flare and Sunburst and MiniMax H3 Image refuse
   such a request too, but a workflow run on them leaves the extra images out:
   see [More images than a model takes](#more-images-than-a-model-takes). Every
@@ -219,13 +219,22 @@ depends on how the run was started:
   node and the base. None is left out to make it fit, so a mention never stays
   in the prompt as plain text for an image that was not sent. A moodboard's
   images fill only the seats left after yours and the base, and never make a
-  request refused.
+  request refused. On the API, `connectedReferences` and `referenceOrder` take
+  up to 16 entries on these models, so the count that decides is the images the
+  request would send, after entries that share an image are counted once: 15
+  mentions of 10 different images run on Seedream 5.5. Past 16 entries, a
+  request that would send more than the model takes gets the same message, and
+  one that would not gets the bare limit on the list. The MCP `generate_image`
+  tool passes its lists on the same way, and refuses a call with more than 64
+  entries in one of them before anything is looked up.
 - **A workflow run** keeps the rule these models have always had: it sends the
   first 10 (Seedream 5.5) or 16 (GPT Image 2.6, MiniMax H3 Image) images and
   leaves the rest out, so a saved workflow keeps running. FLUX 3 Klein refuses
   in a workflow run too ([FLUX 3 Klein](#flux-3-klein)).
 - Every other model leaves out wired and mentioned references past its reference limit, on a
-  request and in a workflow run alike, as before.
+  request and in a workflow run alike, as before. Its `connectedReferences`
+  and `referenceOrder` keep their bound of 14 entries, as before, and so does
+  a request on several models (`models`) when any of them is such a model.
 
 ### Formats: PNG, JPEG, WebP, GIF and SVG
 

@@ -15,6 +15,7 @@ import "../../routes/dubbing-read.js"
 import { creditsRoutes } from "../../ee/routes/credits.js"
 import { generateOpenApiDoc } from "../openapi-registry.js"
 import { isAnonymousRoute } from "../../middleware/auth.js"
+import { DEFAULT_REQUEST_IMAGE_LIMIT, MAX_REQUEST_IMAGE_LIMIT } from "@nodaro/shared/models"
 
 // Every Fastify call is a no-op: only the OpenAPI registrations matter here.
 const stubApp: FastifyInstance = new Proxy({} as FastifyInstance, { get: () => () => stubApp })
@@ -43,6 +44,16 @@ describe("OpenAPI document", () => {
     "/v1/oauth/app-info",
   ])("includes %s", (p) => {
     expect(doc.paths[p]).toBeDefined()
+  })
+
+  // The schema's bound is the largest limit any model has; a model held to the
+  // default limit is refused past that one, which the field says (decided 2026-11-15).
+  it.each(["connectedReferences", "referenceOrder"])("generate-image's %s says which models take how many entries", (field) => {
+    const post = (doc.paths["/v1/generate-image"] as { post: { requestBody: { content: Record<string, { schema: { properties: Record<string, { maxItems?: number; description?: string }> } }> } } }).post
+    const property = post.requestBody.content["application/json"]!.schema.properties[field]!
+    expect(property.maxItems).toBe(MAX_REQUEST_IMAGE_LIMIT)
+    expect(property.description).toContain(`At most ${MAX_REQUEST_IMAGE_LIMIT} entries when every model the request runs has a request image limit of its own`)
+    expect(property.description).toContain(`at most ${DEFAULT_REQUEST_IMAGE_LIMIT} on any other model`)
   })
 })
 

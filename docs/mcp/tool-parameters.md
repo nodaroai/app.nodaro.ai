@@ -1143,7 +1143,7 @@ Needs `workflows:execute`.
 | `structured.lens.focalLength` | string |  |  |
 | `structured.lens.aperture` | string |  |  |
 | `structured.mood` | string |  |  |
-| `connected_references` | object[] |  | Advanced structured references — the editor's wired-reference shape (each needs at least {id, defaultName, source, url}, url a public https URL). Assembled server-side into per-ref @image_N directives + {image:N} token resolution (labeled/ordered refs, unlike flat reference_image_urls). At most 14 items. |
+| `connected_references` | object[] |  | Advanced structured references — the editor's wired-reference shape (each needs at least {id, defaultName, source, url}, url a public https URL). Assembled server-side into per-ref @image_N directives + {image:N} token resolution (labeled/ordered refs, unlike flat reference_image_urls). |
 | `connected_references[].id` | string | yes |  |
 | `connected_references[].defaultName` | string | yes |  |
 | `connected_references[].source` | string | yes | One of `manual`, `wired-image`, `wired-character`, `wired-face`, `wired-object`, `wired-creature`, `wired-location`. |
@@ -1175,7 +1175,7 @@ Needs `workflows:execute`.
 | `described_references` | object[] |  | References you can NAME and DESCRIBE but have no image for — an un-bound cast role, a character that exists only in the script. No url, so nothing is attached and no @image_N seat is used: each becomes a `<Name> — <description>.` line, so a name in your prompt reaches the model as a real, described subject. At most 10 items. |
 | `described_references[].name` | string | yes | At most 80 characters. |
 | `described_references[].description` | string | yes | At most 2000 characters. |
-| `reference_order` | string[] |  | Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings. At most 14 items. |
+| `reference_order` | string[] |  | Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings. |
 | `palette_id` | string |  | Palette id (list_palettes): its colours steer the image. At most 36 characters. |
 | `moodboard_id` | string |  | Moodboard id (list_moodboards): description joins the prompt, images go as style references. At most 36 characters. |
 | `subject` | object (map of string or string[] or number) |  | Who is in the shot as catalog ids, { field: id \| [ids] }: person / styling fields, heldProp, material, animal (get_picker_catalog). |
