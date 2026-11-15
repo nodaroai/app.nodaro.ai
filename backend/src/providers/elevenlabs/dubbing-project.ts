@@ -8,6 +8,7 @@ import type { ReconcileOpts } from "../provider.interface.js"
 import type { DubbingOptions, DubbingSource, DubbingStartResult, DubbingStatus } from "./dubbing.js"
 import { mergeVideoAudio } from "../video/merge-video-audio.js"
 import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg } from "../video/ffmpeg-utils.js"
+import { mp3EncodeArgs } from "../video/mp3-encode.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import {
@@ -136,6 +137,11 @@ export async function pollDubbingProject(id: string): Promise<DubbingStatus> {
   }
 }
 
+/** The ffmpeg arguments that encode the project's lossless audio as a 192 kb/s MP3. */
+export function dubbingAudioArgs(input: string, output: string): string[] {
+  return ["-y", "-i", input, "-vn", ...mp3EncodeArgs({ bitrate: "192k" }), output]
+}
+
 /** Project output is FLAC, never an MP4/MP3 despite the input's media type.
  * Fetch a fresh signed URL each attempt, without forwarding provider credentials.
  * Reuse the production mux so video stays browser-playable and its audio is
@@ -156,7 +162,7 @@ export async function downloadDubbingProject(id: string, videoMode: boolean, sou
       const input = join(workDir, "dub.flac")
       const output = join(workDir, "dub.mp3")
       await downloadFile(audioUrl, input)
-      await runFfmpeg(["-y", "-i", input, "-vn", "-c:a", "libmp3lame", "-b:a", "192k", output])
+      await runFfmpeg(dubbingAudioArgs(input, output))
       return await readFile(output)
     } finally { await cleanupWorkDir(workDir) }
   })

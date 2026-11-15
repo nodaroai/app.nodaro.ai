@@ -27,10 +27,12 @@ vi.mock("node:fs", () => ({
 import { runFfmpegCapture } from "../../../../providers/video/ffmpeg-utils.js"
 import {
   _resetAubioDetectionForTests,
+  beatGridTrimArgs,
   estimateBPM,
   parseSilenceDetectMarkers,
   pipelineExtractBeatGrid,
 } from "../pipeline-extract-beat-grid.js"
+import { isFramedMp3Encode, mp3EncodeArgs } from "../../../../providers/video/mp3-encode.js"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -239,5 +241,26 @@ describe("pipelineExtractBeatGrid (aubio path)", () => {
     })
 
     expect(result.beatGridSeconds).toEqual([0.5, 1.0, 2.0])
+  })
+})
+
+describe("beatGridTrimArgs — the trim + fade pass is an MP3 encode built by the helper", () => {
+  it("fades out over the last stretch, detects silence, and cuts inside the MP3 chain (never -t on the output)", () => {
+    const args = beatGridTrimArgs("/w/music.mp3", "/w/trimmed.mp3", 30, 0.8)
+    expect(args).toEqual([
+      "-y", "-i", "/w/music.mp3",
+      ...mp3EncodeArgs({ filters: ["afade=t=out:st=29.200:d=0.8", "silencedetect=noise=-30dB:d=0.05"], cut: { duration: 30 }, bitrate: "192k" }),
+      "/w/trimmed.mp3",
+    ])
+    expect(args).not.toContain("-t")
+    expect(args[args.indexOf("-af") + 1]).toMatch(/,atrim=duration=30\.000000,asetnsamples=n=1152:p=0$/)
+    expect(isFramedMp3Encode(args)).toBe(true)
+  })
+
+  it("passes the args it builds to ffmpeg", async () => {
+    ;(runFfmpegCapture as ReturnType<typeof vi.fn>).mockResolvedValue({ stdout: "", stderr: "" })
+    await pipelineExtractBeatGrid({ musicUrl: "https://example.com/m.mp3", targetDurationSec: 12, userId: "u" }).catch(() => undefined)
+    const args = (runFfmpegCapture as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string[] | undefined
+    expect(args && isFramedMp3Encode(args)).toBe(true)
   })
 })

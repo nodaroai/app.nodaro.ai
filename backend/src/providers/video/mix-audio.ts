@@ -9,6 +9,7 @@ import {
   BIG_MEDIA_DOWNLOAD_LIMITS,
 } from "./ffmpeg-utils.js"
 import { resolveDuck, type MixAudioDuck, type ResolvedDuck } from "../../lib/mix-audio-duck.js"
+import { mp3GraphEncodeArgs } from "./mp3-encode.js"
 
 interface MixAudioOptions {
   readonly audioUrls: readonly string[]
@@ -139,6 +140,11 @@ export async function trackInputArgs(paths: readonly string[]): Promise<string[]
   return args
 }
 
+/** The ffmpeg arguments that encode the mix graph's `[aout]` to the MP3 `outputPath`. */
+export function mixAudioArgs(inputs: readonly string[], filterComplex: string, outputPath: string): string[] {
+  return ["-y", ...inputs, ...mp3GraphEncodeArgs(filterComplex, "[aout]"), outputPath]
+}
+
 export async function mixAudio(options: MixAudioOptions): Promise<string> {
   const { audioUrls, trackVolumes, sumTracks = false, duck, endAt } = options
   if (duck && (duck.under < 0 || duck.under >= audioUrls.length)) {
@@ -178,13 +184,7 @@ export async function mixAudio(options: MixAudioOptions): Promise<string> {
           `${mixInputs}${amix}${limit}[aout]`,
         ].join(";")
 
-    await runFfmpeg([
-      "-y",
-      ...inputs,
-      "-filter_complex", filterComplex,
-      "-map", "[aout]",
-      outputPath,
-    ])
+    await runFfmpeg(mixAudioArgs(inputs, filterComplex, outputPath))
 
     console.log(`[mixAudio] Output: ${outputPath}`)
     return outputPath

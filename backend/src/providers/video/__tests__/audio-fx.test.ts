@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
+import { mp3ChainTail } from "../mp3-encode.js"
 import {
   afirEffectiveGain,
   buildAudioFxArgs,
@@ -181,9 +182,13 @@ describe("buildReverbIr", () => {
 })
 
 describe("buildAudioFxArgs — non-reverb presets are plain -af chains", () => {
+  /** The effect chain: the `-af` less the MP3 chain's own end, which every MP3 encode closes with (mp3-encode.ts). */
   const chain = (opts: Parameters<typeof buildAudioFxArgs>[0]): string => {
     const args = buildAudioFxArgs(opts, PATHS)
-    return args[args.indexOf("-af") + 1]!
+    const af = args[args.indexOf("-af") + 1]!
+    const tail = `,${mp3ChainTail()}`
+    expect(af.endsWith(tail)).toBe(true)
+    return af.slice(0, -tail.length)
   }
 
   it("telephone band-limits via -af (no filter_complex, no IR input)", () => {

@@ -46,6 +46,7 @@ import {
   needsContainerRemux,
   remuxToMp4,
 } from "../../providers/video/ffmpeg-utils.js"
+import { mp3EncodeArgs, mp3GraphEncodeArgs } from "../../providers/video/mp3-encode.js"
 import { YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
 import { socialPostOf } from "../../providers/video/social-post-video.js"
 import { assertPluginLinkAllowed, pluginDownloadSocialPostVideo, pluginDownloadYouTubeVideo, pluginProbeSocialPostVideo, pluginYtMetadataProbe } from "./toolkit-downloads.js"
@@ -1904,6 +1905,9 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       transcodeToBrowserSafe,
       needsContainerRemux,
       remuxToMp4,
+      // The host's MP3 encode builders (mp3-encode.ts): pure, so a plugin's own MP3 encodes end as the host's do.
+      mp3EncodeArgs,
+      mp3GraphEncodeArgs,
     }, FFMPEG_MEMBER_LANES),
     media: withMemberSlots<PluginMediaToolkit>("media", {
       readPublicVideoFrame,

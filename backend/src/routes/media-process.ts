@@ -21,6 +21,7 @@ import {
   cleanupWorkDir,
   COMBINE_DELIVERY_CRF,
 } from "../providers/video/ffmpeg-utils.js"
+import { mp3EncodeArgs } from "../providers/video/mp3-encode.js"
 
 const MIME_TYPES: Record<string, string> = {
   mp4: "video/mp4",
@@ -241,6 +242,55 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
   }
 }
 
+/**
+ * The ffmpeg arguments of one process run: a seek to the trim's start on the
+ * input, then its length cut on the output, a crop (video), and the encode the
+ * output's extension names. An MP3 takes the length cut inside its chain,
+ * ahead of the encoder's frame size (mp3-encode.ts).
+ */
+export function mediaProcessArgs(opts: {
+  readonly inputPath: string
+  readonly outputPath: string
+  readonly outputExt: string
+  readonly type: "video" | "audio"
+  readonly crop?: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+  readonly trim?: { readonly startTime: number; readonly endTime: number }
+}): string[] {
+  const { inputPath, outputPath, outputExt, type, crop, trim } = opts
+  const args: string[] = ["-y"]
+  if (trim) {
+    args.push("-ss", String(trim.startTime))
+  }
+  args.push("-i", inputPath)
+  const duration = trim ? trim.endTime - trim.startTime : undefined
+  const mp3 = type === "audio" && outputExt === "mp3"
+  if (duration !== undefined && !mp3) {
+    args.push("-t", String(duration))
+  }
+
+  const vFilters: string[] = []
+  if (crop && type === "video") {
+    vFilters.push(`crop=${crop.width}:${crop.height}:${crop.x}:${crop.y}`)
+  }
+  if (vFilters.length > 0) {
+    args.push("-vf", vFilters.join(","))
+  }
+
+  if (type === "video") {
+    // Explicit CRF — without it x264 defaults to 23, a visible generation
+    // loss on every import cut (same bug class as the combine path fixed
+    // 2026-08-02; COMBINE_DELIVERY_CRF is the platform's delivery floor).
+    args.push("-c:v", "libx264", "-crf", COMBINE_DELIVERY_CRF, "-c:a", "aac", "-movflags", "+faststart")
+  } else if (mp3) {
+    args.push(...mp3EncodeArgs(duration !== undefined ? { cut: { duration } } : {}))
+  } else {
+    args.push(...(outputExt === "wav" ? ["-c:a", "pcm_s16le"] : ["-c:a", "aac"]))
+  }
+
+  args.push(outputPath)
+  return args
+}
+
 export async function mediaProcessRoutes(app: FastifyInstance) {
   app.post("/v1/media/process", async (req, reply) => {
     const userId = req.userId
@@ -276,39 +326,7 @@ export async function mediaProcessRoutes(app: FastifyInstance) {
     try {
       await downloadFile(sourceUrl, inputPath)
 
-      const args: string[] = ["-y"]
-      if (trim) {
-        args.push("-ss", String(trim.startTime))
-      }
-      args.push("-i", inputPath)
-      if (trim) {
-        args.push("-t", String(trim.endTime - trim.startTime))
-      }
-
-      const vFilters: string[] = []
-      if (crop && type === "video") {
-        vFilters.push(`crop=${crop.width}:${crop.height}:${crop.x}:${crop.y}`)
-      }
-      if (vFilters.length > 0) {
-        args.push("-vf", vFilters.join(","))
-      }
-
-      if (type === "video") {
-        // Explicit CRF — without it x264 defaults to 23, a visible generation
-        // loss on every import cut (same bug class as the combine path fixed
-        // 2026-08-02; COMBINE_DELIVERY_CRF is the platform's delivery floor).
-        args.push("-c:v", "libx264", "-crf", COMBINE_DELIVERY_CRF, "-c:a", "aac", "-movflags", "+faststart")
-      } else {
-        const audioCodecs: Record<string, string[]> = {
-          mp3: ["-c:a", "libmp3lame"],
-          wav: ["-c:a", "pcm_s16le"],
-        }
-        args.push(...(audioCodecs[outputExt] ?? ["-c:a", "aac"]))
-      }
-
-      args.push(outputPath)
-
-      await runFfmpeg(args, 300_000)
+      await runFfmpeg(mediaProcessArgs({ inputPath, outputPath, outputExt, type, crop, trim }), 300_000)
 
       const processedBuffer = await fs.readFile(outputPath)
       const fileId = randomUUID()

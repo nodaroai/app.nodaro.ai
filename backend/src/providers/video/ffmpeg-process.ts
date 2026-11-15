@@ -33,10 +33,13 @@ import {
 } from "node:child_process"
 import type { Readable, Writable } from "node:stream"
 import { ffmpegThreads, withFfmpegThreads } from "./ffmpeg-threads.js"
+import { assertFramedMp3Encode } from "./mp3-encode.js"
 
 /** The argv ffmpeg actually runs: `args` with this box's thread counts placed
- *  in it (`withFfmpegThreads`), or `args` as given when there are none. */
+ *  in it (`withFfmpegThreads`), or `args` as given when there are none. An MP3
+ *  encode is checked against the one way it is built (`mp3-encode.ts`). */
 export function ffmpegArgv(args: readonly string[]): string[] {
+  assertFramedMp3Encode(args)
   return withFfmpegThreads(args, ffmpegThreads())
 }
 

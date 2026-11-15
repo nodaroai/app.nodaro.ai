@@ -58,6 +58,19 @@ afterEach(async () => {
 const post = (payload: Record<string, unknown>) => app.inject({ method: "POST", url: "/v1/trim-audio", headers: { "x-user-id": USER }, payload })
 
 describe("POST /v1/trim-audio", () => {
+  it.each(["mp3", "wav", "aac"])("%s: an end at or before the start is a 400, before any job or hold", async (audioFormat) => {
+    for (const [startTime, endTime] of [[3, 2], [2, 2]]) {
+      const res = await post({ videoUrl: DIRECT, audioFormat, startTime, endTime })
+      expect(res.statusCode).toBe(400)
+      expect(JSON.stringify(res.json())).toContain("The end time must be after the start time.")
+    }
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+    // An end alone, or a start alone, is a range.
+    expect((await post({ videoUrl: DIRECT, endTime: 2 })).statusCode).toBe(200)
+    expect((await post({ videoUrl: DIRECT, startTime: 2 })).statusCode).toBe(200)
+  })
+
   it("a refusal by the gate is 403 and creates no job", async () => {
     mocks.requireImportAllowed.mockRejectedValueOnce(new Refusal("import_source_disabled", "This link can't be imported here."))
     const res = await post({ videoUrl: SOCIAL, confirmationId: ID })

@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { basename, dirname, extname, isAbsolute, join, resolve, sep } from "node:path"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { mp3EncodeArgs, mp3GraphEncodeArgs } from "./mp3-encode.js"
 import { AUDIO_FX_REVERB_PRESETS, type AudioFxPreset } from "@nodaro/shared/media"
 
 /** What `applyAudioFx` writes. `"mp3"` (the default, and the only format before
@@ -586,11 +587,11 @@ export interface AudioFxPaths {
  */
 export function buildAudioFxArgs(opts: AudioFxOptions, paths: AudioFxPaths, afirGain = 1): string[] {
   const p = opts.preset
-  // Empty for the default (mp3) so the vector is byte-identical to before the
-  // `format` option; ffmpeg picks the muxer from the output extension, so the
-  // only thing a WAV needs is the PCM codec pinned (its default for .wav is
-  // already pcm_s16le — pinned anyway so a future ffmpeg default can't move it).
-  const codec = opts.format === "wav" ? ["-c:a", "pcm_s16le"] : []
+  // ffmpeg picks the muxer from the output extension. A WAV pins its PCM codec
+  // (its default for .wav is already pcm_s16le — pinned anyway so a future
+  // ffmpeg default can't move it); an MP3 (the default) is encoded through
+  // mp3-encode.ts, its chain ending in the encoder's frame size.
+  const wav = opts.format === "wav"
 
   if (AUDIO_FX_REVERB_PRESETS.has(p)) {
     const r = REVERB[p] ?? REVERB.room
@@ -621,14 +622,13 @@ export function buildAudioFxArgs(opts: AudioFxOptions, paths: AudioFxPaths, afir
       "-y",
       "-i", paths.inputPath,
       "-f", "f32le", "-ar", String(IR_SAMPLE_RATE), "-ac", "1", "-i", paths.irPath,
-      "-filter_complex", complex,
-      "-map", "[out]",
-      ...codec,
+      ...(wav ? ["-filter_complex", complex, "-map", "[out]", "-c:a", "pcm_s16le"] : mp3GraphEncodeArgs(complex, "[out]")),
       paths.outputPath,
     ]
   }
 
-  return ["-y", "-i", paths.inputPath, "-af", buildAudioFxChain(opts), ...codec, paths.outputPath]
+  const chain = buildAudioFxChain(opts)
+  return ["-y", "-i", paths.inputPath, ...(wav ? ["-af", chain, "-c:a", "pcm_s16le"] : mp3EncodeArgs({ filters: [chain] })), paths.outputPath]
 }
 
 /** The non-reverb presets: plain single-input `-af` chains. Unchanged. */

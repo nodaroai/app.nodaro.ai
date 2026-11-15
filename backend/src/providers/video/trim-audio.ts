@@ -3,6 +3,9 @@ import youtubedl from "youtube-dl-exec"
 import { ytProxyOption } from "./yt-proxy.js"
 import { withYtDlpOptionsAdmission } from "./ytdlp-admission.js"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { mp3EncodeArgs } from "./mp3-encode.js"
+import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
+import { trimRangeRefusal } from "./trim-audio-range.js"
 import { isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
 import { requireImportAllowed, spendImportConfirmation, type ImportRights } from "../../lib/import-gate.js"
 import { assertLinkImportAllowed } from "../../lib/link-imports.js"
@@ -24,6 +27,30 @@ interface TrimAudioResult {
 }
 
 /**
+ * The ffmpeg arguments that cut a file's sound to [`startTime`, `endTime`) in
+ * `audioFormat`. WAV and AAC take the cut as output `-ss`/`-to`; an MP3 takes
+ * the same cut inside its chain, ahead of the encoder's frame size
+ * (`mp3-encode.ts`).
+ */
+export function trimAudioArgs(
+  videoPath: string,
+  audioPath: string,
+  audioFormat: "mp3" | "wav" | "aac",
+  startTime?: number,
+  endTime?: number,
+): string[] {
+  if (audioFormat === "mp3") {
+    const cut = { ...(startTime != null ? { start: startTime } : {}), ...(endTime != null ? { end: endTime } : {}) }
+    return ["-y", "-i", videoPath, "-vn", ...mp3EncodeArgs({ cut }), audioPath]
+  }
+  const codec = audioFormat === "wav" ? "pcm_s16le" : "aac"
+  const timeArgs: string[] = []
+  if (startTime != null) timeArgs.push("-ss", String(startTime))
+  if (endTime != null) timeArgs.push("-to", String(endTime))
+  return ["-y", "-i", videoPath, ...timeArgs, "-vn", "-acodec", codec, audioPath]
+}
+
+/**
  * The sound of a video, cut to a range. A social link is an import of a link,
  * and this is an ENGINE of the import gate (`lib/import-gate.ts`): the site's
  * policy and the content rights confirmation are checked before anything is
@@ -36,6 +63,9 @@ interface TrimAudioResult {
  */
 export async function trimAudio(options: TrimAudioOptions, rights: ImportRights): Promise<TrimAudioResult> {
   const { videoUrl, audioFormat = "mp3", startTime, endTime } = options
+  // The same refusal on every attempt: fail now, without a retry.
+  const refusal = trimRangeRefusal(startTime, endTime)
+  if (refusal) throw new DeterministicJobError(refusal)
   assertLinkImportAllowed(videoUrl)
   const social = isSocialMediaUrl(videoUrl)
   // Outside the work dir and the try below: a refusal is the gate's own error.
@@ -82,21 +112,8 @@ export async function trimAudio(options: TrimAudioOptions, rights: ImportRights)
       await downloadFile(videoUrl, videoPath)
     }
 
-    const codecMap = { mp3: "libmp3lame", wav: "pcm_s16le", aac: "aac" } as const
     const audioPath = join(workDir, `output.${audioFormat}`)
-
-    const timeArgs: string[] = []
-    if (startTime != null) timeArgs.push("-ss", String(startTime))
-    if (endTime != null) timeArgs.push("-to", String(endTime))
-
-    await runFfmpeg([
-      "-y",
-      "-i", videoPath,
-      ...timeArgs,
-      "-vn",
-      "-acodec", codecMap[audioFormat],
-      audioPath,
-    ])
+    await runFfmpeg(trimAudioArgs(videoPath, audioPath, audioFormat, startTime, endTime))
 
     console.log(`[trimAudio] Output: ${audioPath}`)
     return { audioPath }

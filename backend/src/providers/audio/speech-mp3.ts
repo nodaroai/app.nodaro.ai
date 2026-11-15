@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import type { TtsOutputFormat } from "@nodaro/shared/models"
 import { runFfmpeg, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
+import { mp3EncodeArgs } from "../video/mp3-encode.js"
 
 /**
  * The MP3 each MP3 speech format names (`codec_samplerate_bitrate`): 44.1 kHz
@@ -20,6 +21,11 @@ export function isMp3SpeechFormat(format: TtsOutputFormat): boolean {
   return Object.hasOwn(MP3_BITRATES, format)
 }
 
+/** The ffmpeg arguments that encode a WAV as a 44.1 kHz constant-`bitrate` MP3. */
+export function speechMp3Args(input: string, output: string, bitrate: string): string[] {
+  return ["-y", "-i", input, "-vn", ...mp3EncodeArgs({ sampleRate: 44100, bitrate }), output]
+}
+
 /**
  * Encode a WAV as the MP3 `format` names. ffmpeg through the shared runner
  * (its slot and memory admission); the work dir is removed either way.
@@ -32,7 +38,7 @@ export async function wavToMp3(wav: Buffer, format: TtsOutputFormat): Promise<Bu
     const input = join(workDir, "speech.wav")
     const output = join(workDir, "speech.mp3")
     await fs.writeFile(input, wav)
-    await runFfmpeg(["-y", "-i", input, "-vn", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", bitrate, output])
+    await runFfmpeg(speechMp3Args(input, output, bitrate))
     return await fs.readFile(output)
   } finally {
     await cleanupWorkDir(workDir)

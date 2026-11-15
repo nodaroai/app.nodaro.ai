@@ -15,6 +15,7 @@ import { isImportRefusal, requireImportAllowed } from "../lib/import-gate.js"
 import { importJobFields, importViaOf } from "../lib/import-via.js"
 import { linkImportRefusal } from "../lib/link-imports.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { trimRangeRefusal } from "../providers/video/trim-audio-range.js"
 
 const trimAudioBody = z.object({
   videoUrl: safeUrlSchema,
@@ -27,6 +28,10 @@ const trimAudioBody = z.object({
   // right before the fetch. Optional until `content_rights_required` is on;
   // a direct file needs none.
   confirmationId: z.string().uuid().optional(),
+}).refine((d) => trimRangeRefusal(d.startTime, d.endTime) === undefined, {
+  // An end at or before the start fails every format: refused before a job or a hold.
+  message: "The end time must be after the start time.",
+  path: ["endTime"],
 })
 
 export async function trimAudioRoutes(app: FastifyInstance) {

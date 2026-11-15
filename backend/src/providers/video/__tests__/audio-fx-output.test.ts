@@ -9,13 +9,16 @@ import {
   IR_SAMPLE_RATE,
   type AudioFxPaths,
 } from "../audio-fx.js"
+import { MP3_FRAME_FILTER, mp3ChainTail } from "../mp3-encode.js"
 
 /**
  * The additive output options on applyAudioFx: `format: "wav"` (lossless
  * 16-bit PCM), a LOCAL input (`inputPath`) and a caller-chosen LOCAL output
  * (`outputPath`). The one invariant that matters most is that a caller who
- * passes none of them is byte-identical to before — so the default arg vectors
- * are pinned here as literal arrays, not as "contains".
+ * passes none of them gets the same MP3 as before — so the default arg vectors
+ * are pinned here as literal arrays, not as "contains". The MP3 default is
+ * encoded through mp3-encode.ts: the effect chain, then the MP3 chain's own end
+ * (ffmpeg's format for the encoder, then the encoder's frame size).
  */
 
 const PATHS: AudioFxPaths = {
@@ -26,19 +29,22 @@ const PATHS: AudioFxPaths = {
 const WAV_PATHS: AudioFxPaths = { ...PATHS, outputPath: "/w/out.wav" }
 
 describe("buildAudioFxArgs — defaults are byte-identical (no new flags unless asked)", () => {
-  it("non-reverb: exactly the pre-existing vector", () => {
+  it("non-reverb: the effect chain, then the MP3 chain's end, then libmp3lame at its defaults", () => {
     expect(buildAudioFxArgs({ audioUrl: "x", preset: "telephone" }, PATHS)).toEqual([
       "-y", "-i", "/w/in.mp3",
-      "-af", "highpass=f=300,lowpass=f=3400,equalizer=f=1500:t=q:w=1.2:g=4",
+      "-af", `highpass=f=300,lowpass=f=3400,equalizer=f=1500:t=q:w=1.2:g=4,${mp3ChainTail()}`,
+      "-c:a", "libmp3lame",
       "/w/out.mp3",
     ])
   })
 
-  it("reverb: exactly the pre-existing vector", () => {
+  it("reverb: the graph's [out] chain ends with the MP3 chain's end, then libmp3lame at its defaults", () => {
     const args = buildAudioFxArgs({ audioUrl: "x", preset: "room", mix: 50 }, PATHS)
     expect(args.slice(0, 2)).toEqual(["-y", "-i"])
-    expect(args.slice(-3)).toEqual(["-map", "[out]", "/w/out.mp3"])
-    expect(args).not.toContain("-c:a")
+    expect(args.slice(-5)).toEqual(["-map", "[out]", "-c:a", "libmp3lame", "/w/out.mp3"])
+    expect(args[args.indexOf("-filter_complex") + 1]).toMatch(new RegExp(`alimiter=limit=0\\.95,${mp3ChainTail().replace(/[|.]/g, "\\$&")}\\[out\\]$`))
+    expect(args).not.toContain("-b:a")
+    expect(args).not.toContain("-q:a")
   })
 
   it("format: 'mp3' is the same vector as no format at all", () => {
@@ -57,21 +63,23 @@ describe("buildAudioFxArgs — defaults are byte-identical (no new flags unless 
 })
 
 describe("buildAudioFxArgs — format: 'wav'", () => {
-  it("non-reverb: pins 16-bit PCM right before the output path, touches nothing else", () => {
+  it("non-reverb: the same effect chain, 16-bit PCM right before the output path, no MP3 frame size", () => {
     const wav = buildAudioFxArgs({ audioUrl: "x", preset: "telephone", format: "wav" }, WAV_PATHS)
     const mp3 = buildAudioFxArgs({ audioUrl: "x", preset: "telephone" }, PATHS)
-    expect(wav.slice(-3)).toEqual(["-c:a", "pcm_s16le", "/w/out.wav"])
-    expect(wav.slice(0, -3)).toEqual(mp3.slice(0, -1))
+    expect(wav).toEqual(["-y", "-i", "/w/in.mp3", "-af", "highpass=f=300,lowpass=f=3400,equalizer=f=1500:t=q:w=1.2:g=4", "-c:a", "pcm_s16le", "/w/out.wav"])
+    expect(mp3[mp3.indexOf("-af") + 1]).toBe(`${wav[wav.indexOf("-af") + 1]},${mp3ChainTail()}`)
     // No resample / remix flag: the input's own rate and channel count survive.
     expect(wav).not.toContain("-ar")
     expect(wav).not.toContain("-ac")
   })
 
-  it("reverb: same, after -map [out]; the graph is identical to the mp3 one", () => {
+  it("reverb: same, after -map [out]; the graph is the mp3 one without the MP3 chain's end", () => {
     const wav = buildAudioFxArgs({ audioUrl: "x", preset: "hall", format: "wav" }, WAV_PATHS)
     const mp3 = buildAudioFxArgs({ audioUrl: "x", preset: "hall" }, PATHS)
     expect(wav.slice(-5)).toEqual(["-map", "[out]", "-c:a", "pcm_s16le", "/w/out.wav"])
-    expect(wav[wav.indexOf("-filter_complex") + 1]).toBe(mp3[mp3.indexOf("-filter_complex") + 1])
+    const wavGraph = wav[wav.indexOf("-filter_complex") + 1]!
+    expect(wavGraph).not.toContain(MP3_FRAME_FILTER)
+    expect(mp3[mp3.indexOf("-filter_complex") + 1]).toBe(`${wavGraph.slice(0, -"[out]".length)},${mp3ChainTail()}[out]`)
   })
 })
 

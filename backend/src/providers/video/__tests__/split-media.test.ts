@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
+import { mp3ChainTail } from "../mp3-encode.js"
 
 const fake = vi.hoisted(() => ({
   calls: [] as { args: string[]; timeoutMs?: number; peakMemoryMiB?: number }[],
@@ -240,7 +241,8 @@ describe("splitMedia — video", () => {
 describe("splitMedia — audio", () => {
   const audioProbe = { format: { duration: "23.5" }, streams: [{ index: 0, codec_type: "audio", sample_rate: "48000", channels: 1, channel_layout: "mono", duration: "23.5" }] }
 
-  for (const [format, codec] of [["mp3", "libmp3lame"], ["wav", "pcm_s16le"]] as const) {
+  // An MP3 part's chain closes with the MP3 chain's own end (mp3-encode.ts); a WAV part's is the cut alone.
+  for (const [format, codec, tail] of [["mp3", "libmp3lame", `,${mp3ChainTail()}`], ["wav", "pcm_s16le", ""]] as const) {
     it(`${format}: decoded once to PCM, each part encoded from its sample range`, async () => {
       fake.probe = audioProbe
       fake.channels = 1
@@ -249,7 +251,7 @@ describe("splitMedia — audio", () => {
       expect(fake.calls[0]!.args.join(" ")).toContain("-map 0:0 -c:a pcm_f32le -ar 48000 -ch_layout mono -f f32le")
       const parts = fake.calls.slice(1)
       expect(parts.map((c) => argOf(c.args, "-skip_initial_bytes"))).toEqual([0, 240000, 480000, 720000, 924000].map((s) => String(s * 4)))
-      expect(parts.map((c) => argOf(c.args, "-af"))).toEqual([240000, 240000, 240000, 204000, 204000].map((n) => `apad=whole_len=${n},atrim=end_sample=${n}`))
+      expect(parts.map((c) => argOf(c.args, "-af"))).toEqual([240000, 240000, 240000, 204000, 204000].map((n) => `apad=whole_len=${n},atrim=end_sample=${n}${tail}`))
       expect(parts.every((c) => argOf(c.args, "-c:a") === codec)).toBe(true)
       expect(r.audioPaths!.map((p) => p.split("/").pop())).toEqual(Array.from({ length: 5 }, (_, i) => `audio-part-0000${i}.${format}`))
       expect(r.audioPartDurationsSec).toEqual([5, 5, 5, 4.25, 4.25])

@@ -20,6 +20,7 @@ import { basename, dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { runFfmpeg, runFfprobe, probeMediaDuration } from "../ffmpeg-utils.js"
+import { mp3EncodeArgs } from "../mp3-encode.js"
 import { stillToVideo } from "../still-to-video.js"
 
 // Partial mock: fixture "downloads" copy local files; everything else —
@@ -79,7 +80,7 @@ describe.skipIf(!ffmpegAvailable)("stillToVideo (real ffmpeg)", () => {
     await runFfmpeg([
       "-y",
       "-f", "lavfi", "-i", "sine=frequency=440:duration=1.04",
-      "-c:a", "libmp3lame",
+      ...mp3EncodeArgs(),
       join(dir, "tone.mp3"),
     ])
     // The provider's contract is "duration == the audio's PROBED duration" —

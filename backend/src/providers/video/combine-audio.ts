@@ -1,5 +1,6 @@
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { mp3EncodeArgs } from "./mp3-encode.js"
 
 interface AudioSegment {
   readonly url: string
@@ -9,6 +10,11 @@ interface AudioSegment {
 
 interface CombineAudioOptions {
   readonly segments: readonly AudioSegment[]
+}
+
+/** The ffmpeg arguments that join the listed WAV segments (concat demuxer) into one MP3 (VBR quality 2). */
+export function combineAudioArgs(listPath: string, outputPath: string): string[] {
+  return ["-y", "-f", "concat", "-safe", "0", "-i", listPath, ...mp3EncodeArgs({ quality: 2 }), outputPath]
 }
 
 export async function combineAudio(options: CombineAudioOptions): Promise<string> {
@@ -47,15 +53,7 @@ export async function combineAudio(options: CombineAudioOptions): Promise<string
     await writeFile(listPath, listContent, "utf-8")
 
     const outputPath = join(workDir, "output.mp3")
-    await runFfmpeg([
-      "-y",
-      "-f", "concat",
-      "-safe", "0",
-      "-i", listPath,
-      "-c:a", "libmp3lame",
-      "-q:a", "2",
-      outputPath,
-    ])
+    await runFfmpeg(combineAudioArgs(listPath, outputPath))
 
     console.log(`[combineAudio] Output: ${outputPath}`)
     return outputPath

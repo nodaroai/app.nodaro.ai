@@ -10,6 +10,7 @@ import {
   runFfmpegCapture,
 } from "../../../providers/video/ffmpeg-utils.js"
 import { uploadBufferToR2 } from "../../../lib/storage.js"
+import { mp3EncodeArgs } from "../../../providers/video/mp3-encode.js"
 
 const execFileAsync = promisify(execFile)
 
@@ -118,6 +119,26 @@ export interface PipelineExtractBeatGridResult {
   detectedBPM: number
 }
 
+/**
+ * The ffmpeg arguments of the trim + fade-out (+ silencedetect) pass: the first
+ * `targetDurationSec` of the track, faded out over its last
+ * `fadeOutDurationSec`, as a 192 kb/s MP3. The cut sits in the MP3 chain, ahead
+ * of the encoder's frame size (mp3-encode.ts).
+ */
+export function beatGridTrimArgs(sourcePath: string, trimmedPath: string, targetDurationSec: number, fadeOutDurationSec: number): string[] {
+  const fadeStartSec = Math.max(0, targetDurationSec - fadeOutDurationSec)
+  return [
+    "-y",
+    "-i", sourcePath,
+    ...mp3EncodeArgs({
+      filters: [`afade=t=out:st=${fadeStartSec.toFixed(3)}:d=${fadeOutDurationSec}`, "silencedetect=noise=-30dB:d=0.05"],
+      cut: { duration: targetDurationSec },
+      bitrate: "192k",
+    }),
+    trimmedPath,
+  ]
+}
+
 export async function pipelineExtractBeatGrid(
   args: PipelineExtractBeatGridArgs,
 ): Promise<PipelineExtractBeatGridResult> {
@@ -142,23 +163,13 @@ export async function pipelineExtractBeatGrid(
     //    markers on stderr. We always emit silencedetect lines so the
     //    fallback path keeps working even if aubio is on PATH but fails at
     //    run-time (e.g. unsupported codec).
-    //    `-t` caps total duration; threshold `-30dB` + min duration `0.05s`
+    //    The cut caps total duration; threshold `-30dB` + min duration `0.05s`
     //    catches inter-beat low points without flooding on noise floor jitter.
-    const fadeStartSec = Math.max(0, targetDurationSec - fadeOutDurationSec)
     let beatGridSeconds: number[] = []
     const aubioAvailable = await detectAubio()
     let trimStderr = ""
     try {
-      const { stderr } = await runFfmpegCapture([
-        "-y",
-        "-i", sourcePath,
-        "-t", String(targetDurationSec),
-        "-af",
-        `afade=t=out:st=${fadeStartSec.toFixed(3)}:d=${fadeOutDurationSec},silencedetect=noise=-30dB:d=0.05`,
-        "-c:a", "libmp3lame",
-        "-b:a", "192k",
-        trimmedPath,
-      ])
+      const { stderr } = await runFfmpegCapture(beatGridTrimArgs(sourcePath, trimmedPath, targetDurationSec, fadeOutDurationSec))
       trimStderr = stderr
     } catch (err) {
       // runFfmpegCapture attaches stderr to the thrown error — save it for

@@ -1,5 +1,6 @@
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, hasAudioStream, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { extractAudioArgs } from "./extract-audio.js"
 
 /** Thrown when the source video has no audio track to revoice. The worker
  *  surfaces `message` verbatim as the job's user-facing error. */
@@ -37,7 +38,7 @@ export async function extractAudioTrack(videoUrl: string): Promise<ExtractedAudi
     }
 
     const audioPath = join(workDir, "audio.mp3")
-    await runFfmpeg(["-y", "-i", videoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", audioPath])
+    await runFfmpeg(extractAudioArgs(videoPath, audioPath))
     return { audioPath, workDir }
   } catch (err) {
     await cleanupWorkDir(workDir)

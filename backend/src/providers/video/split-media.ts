@@ -42,6 +42,7 @@ import {
   runFfprobe,
 } from "./ffmpeg-utils.js"
 import { audioPeakMemoryMiB, cameraMegapixelsOf, canvasPeakMemoryMiB, UHD_CANVAS } from "./ffmpeg-memory-model.js"
+import { mp3EncodeArgs } from "./mp3-encode.js"
 import { detectShotCuts } from "../../services/scene-cut-frames.js"
 import { shotCutsDecodeTimeoutMs } from "./shot-cuts-plan.js"
 import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
@@ -191,7 +192,7 @@ const videoStreamOf = (p: ProbedFile) => p.streams.find((s) => s.codec_type === 
 const audioStreamOf = (p: ProbedFile) => p.streams.find((s) => s.codec_type === "audio")
 
 /** How a raw PCM file's layout is told to ffmpeg, on write and on read alike. */
-interface PcmFormat {
+export interface PcmFormat {
   readonly sampleRate: number
   readonly channels: number
   /** `-ch_layout <name>` when the probe named one, else `-ac <count>`. */
@@ -521,10 +522,33 @@ async function cutPictureIntoParts(p: PictureParts): Promise<{ paths: string[]; 
  *    < 1 024 samples (under 21 ms at 48 kHz) are not in any part.
  */
 const AUDIO_FORMATS = {
-  mp3: { ext: "mp3", codec: ["-c:a", "libmp3lame"], unitSamples: 1 },
-  wav: { ext: "wav", codec: ["-c:a", "pcm_s16le"], unitSamples: 1 },
-  aac: { ext: "m4a", codec: ["-c:a", "aac"], unitSamples: AAC_FRAME_SAMPLES },
+  mp3: { ext: "mp3", encode: (filter: string) => mp3EncodeArgs({ filters: [filter] }), unitSamples: 1 },
+  wav: { ext: "wav", encode: (filter: string) => ["-af", filter, "-c:a", "pcm_s16le"], unitSamples: 1 },
+  aac: { ext: "m4a", encode: (filter: string) => ["-af", filter, "-c:a", "aac"], unitSamples: AAC_FRAME_SAMPLES },
 } as const
+
+/**
+ * The ffmpeg arguments that write one audio part: `length` samples of the PCM
+ * from sample `start`, padded with silence past its end, in `audioFormat`.
+ */
+export function splitAudioPartArgs(
+  pcmPath: string,
+  pcm: PcmFormat,
+  start: number,
+  length: number,
+  audioFormat: "mp3" | "wav" | "aac",
+  out: string,
+): string[] {
+  const format = AUDIO_FORMATS[audioFormat]
+  return [
+    ...LOG_ARGS, ...pcmPartInputArgs(pcmPath, pcm, start),
+    ...format.encode(pcmPartFilter(length)),
+    // MP4: the edit list in sample units (at the default 1 ms movie timescale
+    // a spec decoder reads up to 47 samples short), the index up front.
+    ...(format.ext === "m4a" ? ["-movie_timescale", String(pcm.sampleRate), "-movflags", "+faststart"] : []),
+    out,
+  ]
+}
 
 async function splitAudio(
   inputPath: string,
@@ -569,15 +593,11 @@ async function splitAudio(
   for (let i = 0; i < parts.length; i++) {
     const out = partPath(workDir, "audio-part", i, format.ext)
     const length = parts[i]! * unit
-    await runFfmpeg([
-      ...LOG_ARGS, ...pcmPartInputArgs(pcmPath, pcm, cuts[i]! * unit),
-      "-af", pcmPartFilter(length),
-      ...format.codec,
-      // MP4: the edit list in sample units (at the default 1 ms movie timescale
-      // a spec decoder reads up to 47 samples short), the index up front.
-      ...(format.ext === "m4a" ? ["-movie_timescale", String(pcm.sampleRate), "-movflags", "+faststart"] : []),
-      out,
-    ], splitPartTimeoutMs(unitsToSec(parts[i]!, rate)), { peakMemoryMiB: audioPeakMemoryMiB() })
+    await runFfmpeg(
+      splitAudioPartArgs(pcmPath, pcm, cuts[i]! * unit, length, audioFormat, out),
+      splitPartTimeoutMs(unitsToSec(parts[i]!, rate)),
+      { peakMemoryMiB: audioPeakMemoryMiB() },
+    )
     paths.push(out)
   }
   await fs.rm(pcmPath, { force: true })
