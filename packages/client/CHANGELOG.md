@@ -1,5 +1,26 @@
 # @nodaro/sdk
 
+## 2.73.0
+
+### Minor Changes
+
+- dbd380c: A `dubbing` resource (also `@nodaro/sdk/dubbing`) for a dub after it is made. `dubbing.get(jobId)` (`GET /v1/dubbing/:jobId`) answers its `DubbingStructure`: the original lines, every language with its lines and status, the speakers, what can be done to it now (`capabilities`) and what adding a language is charged. `dubbing.captions(jobId, { language, format })` (`GET /v1/dubbing/:jobId/captions`) answers the text of an SRT or WebVTT file for one language, or for the original speech with `language: "source"`. Both are free, and only the account that made the dub reads it. `dubbing.addLanguage(jobId, { targetLanguage, confirmationId? })` (`POST /v1/dubbing/:jobId/languages`) adds a language to the dub and answers the job that delivers it; it is charged per started minute of the dub, at the price `get()` names. `dubbing.create(input)` starts a dub: the same call as `voices.dub(input)`, which stays. A refusal is a `NodaroError` whose `code` is a `DubbingErrorCode` (`dubbing_not_ready`, `dubbing_language_not_found`, …). The dubbing types are exported from the SDK, so typing a dub needs no second dependency.
+- 1df1b24: `ModelSummary` (from `client.models.list()`, `GET /v1/models`) types `defaultResolution?: string`: the size a request that names no `resolution` lands on, where the model declares one (`"1K"` on FLUX 3 Klein, `"2K"` on Seedream 5.5 and MiniMax H3 Image, `"720p"` on PixVerse V6 Max). Absent on every other model and on an older server.
+
+### Patch Changes
+
+- b77923a: `GenerateVideoParams.characterReferences` documents that a character's `videoUrl` is priced like an image subject on both Kling 4.0 and Kling 4.0 Flash, so it adds nothing.
+- dbd380c: `TranscribeTargetLanguage`, the type of `audio.transcribe`'s `targetLanguage`, is exported from `@nodaro/sdk` and `@nodaro/sdk/audio`, beside `TranscribeProvider`.
+- acbe602: `BillingSubscription.status` can be `"incomplete_expired"`: a subscription whose first payment never arrived.
+- Updated dependencies [dbd380c]
+- Updated dependencies [2dab02e]
+- Updated dependencies [2dab02e]
+- Updated dependencies [1df1b24]
+- Updated dependencies [1df1b24]
+- Updated dependencies [b77923a]
+  - @nodaro/shared@3.66.0
+  - @nodaro/prompts@1.58.0
+
 ## 2.72.0
 
 ### Minor Changes
