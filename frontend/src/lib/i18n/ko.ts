@@ -8507,6 +8507,7 @@ export const ko: ChromeDict = {
   "freecutAi.frame.unavailable": "여기서는 'AI로 편집'을 사용할 수 없습니다.",
   "freecutAi.frame.waitingEditor": "편집기가 열리기를 기다리는 중…",
   "freecutAi.frame.editorTooOld": "이 편집기는 아직 'AI로 편집'의 편집을 받지 않습니다.",
+  "freecutAi.frame.noVideos": "'AI로 편집'은 Nodaro 라이브러리나 이 프로덕션의 동영상에서 사용할 수 있습니다. 편집기로 가져오세요. 컴퓨터에서 가져온 동영상은 아직 AI로 편집할 수 없습니다.",
   "freecutAi.status.ready": "준비됨",
   "freecutAi.status.readySub": "할 일을 고르거나, 원하는 말로 적으세요.",
   "freecutAi.status.reading": "요청을 읽는 중",

@@ -8693,6 +8693,7 @@ export const he: ChromeDict = {
   "freecutAi.frame.unavailable": "עריכה עם AI אינה זמינה כאן.",
   "freecutAi.frame.waitingEditor": "העורך עדיין נפתח…",
   "freecutAi.frame.editorTooOld": "העורך הזה עדיין לא מקבל עריכות מ״עריכה עם AI״.",
+  "freecutAi.frame.noVideos": "עריכה עם AI עובדת על סרטונים מספריית Nodaro שלכם או מההפקה הזאת: ייבאו סרטון כזה לעורך. סרטון שיובא מהמחשב עדיין לא נתמך בעריכה עם AI.",
   "freecutAi.status.ready": "מוכן",
   "freecutAi.status.readySub": "בחרו מה לעשות, או כתבו את זה במילים שלכם.",
   "freecutAi.status.reading": "קריאת הבקשה",

@@ -77,7 +77,9 @@ export default function EditWithAiFramePage() {
       ? <FrameNote text={t("freecutAi.frame.waitingEditor")} busy />
       : <FrameNote text={t("freecutAi.frame.editorTooOld")} />
   }
-  return <FrameNote text={t("freecutAi.noVideo")} />
+  // The host can give an address for none of its videos: say which videos work (a file
+  // imported from the computer has no address the run could listen to).
+  return <FrameNote text={t("freecutAi.frame.noVideos")} />
 }
 
 function FrameNote({ text, busy = false, link }: { readonly text: string; readonly busy?: boolean; readonly link?: { readonly href: string; readonly key: MessageKey } }) {

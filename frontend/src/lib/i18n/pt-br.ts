@@ -8507,6 +8507,7 @@ export const ptBR: ChromeDict = {
   "freecutAi.frame.unavailable": "O Editar com IA não está disponível aqui.",
   "freecutAi.frame.waitingEditor": "Esperando o editor abrir…",
   "freecutAi.frame.editorTooOld": "Este editor ainda não aceita edições do Editar com IA.",
+  "freecutAi.frame.noVideos": "O Editar com IA funciona com vídeos da sua biblioteca do Nodaro ou desta produção: importe um para o editor. Um vídeo importado do seu computador ainda não pode ser editado com IA.",
   "freecutAi.status.ready": "Pronto",
   "freecutAi.status.readySub": "Toque no que fazer, ou escreva com suas palavras.",
   "freecutAi.status.reading": "Lendo seu pedido",

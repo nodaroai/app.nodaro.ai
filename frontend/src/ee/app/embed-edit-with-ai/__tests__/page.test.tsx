@@ -148,10 +148,12 @@ describe("/embed/edit-with-ai", () => {
     unmount()
   })
 
-  it("asks for a video when its host has none it can give an address for", () => {
+  it("says which videos it works on when its host has none it can give an address for", () => {
     render(<EditWithAiFramePage />)
     deliver(init({ videos: [], openedVideoUrl: undefined }))
-    expect(screen.getByText("Load a video into the editor first.")).toBeTruthy()
+    // A file imported from the computer has no address the run could listen to: the note says so.
+    expect(screen.getByText(/works on videos from your Nodaro library or from this production/)).toBeTruthy()
+    expect(screen.getByText(/imported from your computer cannot be edited with AI yet/)).toBeTruthy()
   })
 
   it("says where to open it when nobody frames it, or nobody answers", () => {
