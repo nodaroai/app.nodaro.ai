@@ -13,10 +13,18 @@
  * funnel starts using is watched by construction. Tests are not product
  * readers and are not scanned. Its reach: an identifier written in source
  * (comments stripped) — not a name assembled at run time.
+ *
+ * And every entry `presetCatalog` lists reaches a reply through
+ * `factoryPresetView` (lib/presets/preset-view.ts), the one place a deployment
+ * preset's picture becomes an address — a path on its site stays a path for a
+ * reader on the site and is made absolute for any other (lib/site-picture-path.ts).
+ * The files that list the catalog and every view they make are pinned below,
+ * each view with the reader it states: a new one is a deliberate change here.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
 import { describe, expect, it } from "vitest"
+import ts from "typescript"
 
 const SRC = join(__dirname, "..", "..", "..")
 const FUNNEL = "lib/presets/app-presets.ts"
@@ -64,5 +72,45 @@ describe("presetCatalog is the one reader of the bundled factory presets", () =>
       .map((path) => relative(SRC, path).split("\\").join("/"))
       .filter((file) => file !== FUNNEL && pattern.test(withoutComments(readFileSync(join(SRC, file), "utf8"))))
     expect(readers, "read factory presets through presetCatalog (lib/presets/app-presets.ts)").toEqual([])
+  })
+})
+
+/** Every call of `name` in backend sources, as `<file> <call text>` (whitespace folded). */
+function callsOf(name: string): string[] {
+  const out: string[] = []
+  for (const path of sourceFiles(SRC)) {
+    const text = readFileSync(path, "utf8")
+    if (!text.includes(name)) continue
+    const file = relative(SRC, path).split("\\").join("/")
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === name) {
+        out.push(`${file} ${node.getText(source).replace(/\s+/g, " ")}`)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(source)
+  }
+  return out.sort()
+}
+
+describe("every factory preset reaches a reply through factoryPresetView", () => {
+  it("the files that list the catalog (a new one is listed here on purpose, and makes its views below)", () => {
+    expect([...new Set(callsOf("presetCatalog").map((c) => c.split(" ")[0]))]).toEqual([
+      "lib/mcp/tools/node-presets.ts",
+      "lib/presets/resolve-preset.ts",
+      "routes/node-presets.ts",
+    ])
+  })
+
+  it("every view, with the reader it states: the REST routes read on the site, the MCP tools off it", () => {
+    expect(callsOf("factoryPresetView")).toEqual([
+      // The MCP lane's pictures base: off the site, a path on it is made absolute there.
+      "lib/mcp/tools/node-presets.ts factoryPresetView(nodeType, p, session.addresses.picturesBase)",
+      // Its callers: the MCP tools (their pictures base) and the image preset lanes, which read only the preset's data.
+      "lib/presets/resolve-preset.ts factoryPresetView(nodeType, factory, args.picturesBase)",
+      "routes/node-presets.ts factoryPresetView(nodeType, p, appBaseUrl(), { onSite: true })",
+      "routes/node-presets.ts factoryPresetView(nodeType, p, appBaseUrl(), { onSite: true })",
+    ])
   })
 })

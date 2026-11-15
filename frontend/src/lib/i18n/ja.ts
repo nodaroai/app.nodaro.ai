@@ -705,6 +705,7 @@ export const ja: ChromeDict = {
   "auth.redirecting": "リダイレクト中…",
   "auth.signInFailed": "ログインに失敗しました",
   "auth.accessBlocked": "このアカウントへのアクセスはブロックされています。",
+  "auth.signInIncomplete": "ログインが完了しませんでした。もう一度お試しください。",
   "accessBlocked.title": "アクセスがブロックされました",
   "accessBlocked.body": "Nodaro へのアクセスはブロックされています。誤りだと思われる場合は、サポートにお問い合わせください。",
   "auth.newHere": "初めてご利用ですか？",

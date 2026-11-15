@@ -14,7 +14,7 @@ export async function pickerCatalogsRoutes(app: FastifyInstance) {
   // Directory of every parameter-picker catalog (no option payloads; each row
   // says how many of its options carry an imageUrl).
   app.get("/v1/picker-catalogs", async (_req, reply) =>
-    reply.header("Cache-Control", "public, max-age=300").send({ data: summarizePickerCatalogs({ images: pickerImageOptions() }) }),
+    reply.header("Cache-Control", "public, max-age=300").send({ data: summarizePickerCatalogs({ images: pickerImageOptions({ onSite: true }) }) }),
   )
 
   // One picker's catalog of valid values; compact by default.
@@ -35,6 +35,6 @@ export async function pickerCatalogsRoutes(app: FastifyInstance) {
     }
     return reply
       .header("Cache-Control", "public, max-age=300")
-      .send({ data: projectPickerCatalog(catalog, { ...query.data, images: pickerImageOptions({ srcSet: true }) }) })
+      .send({ data: projectPickerCatalog(catalog, { ...query.data, images: pickerImageOptions({ srcSet: true, onSite: true }) }) })
   })
 }

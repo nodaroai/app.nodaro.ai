@@ -22,6 +22,7 @@ const AUDITED: ReadonlyArray<readonly [file: string, why: string, call: RegExp]>
   ["src/layouts/dashboard-layout.tsx", "the signed-out redirect moves the visitor", /whenActivated\(\(\) =>\s*navigate\(loginPathFor\(/],
   ["src/hooks/use-auth.ts", "the signup-grant claim records the account's grant", /function maybeClaimSignupGrant\(userId: string\): void \{\s*if \(!hasCredits\(\)\) return\s*(?:\/\/[^\n]*\n\s*)*whenActivated\(/],
   ["src/app/pricing/page.tsx", "?plan= opens Stripe checkout by itself", /whenActivated\(\(\) => \{[\s\S]{0,200}handleSubscribe\(/],
+  ["src/app/(auth)/login/page.tsx", "a signed-in visitor is moved on from the sign-in page", /whenActivated\(\(\) => \{[\s\S]{0,400}followSignInRedirect\(/],
   ["src/ee/components/consent/consent-gate.tsx", "the server counts the consent read as a showing", /whenActivated\(\(\) => \{[\s\S]{0,80}fetchConsentState\(/],
   ["src/ee/components/welcome-offer/welcome-offer-popup.tsx", "the welcome popup opens by itself once", /whenActivated\(\(\) => \{[\s\S]{0,120}setOpen\(true\)/],
   ["src/ee/app/(dashboard)/billing/page.tsx", "the checkout-success toast", /whenActivated\(\(\) => \{[\s\S]{0,80}toast\.success\(/],

@@ -87,10 +87,25 @@ export async function deniedCapabilityForUser(
   userId: string | null | undefined,
   gateSince = 0,
 ): Promise<string | undefined> {
-  const hiddenFromUsers = availabilityChecksFor(hostType, data).filter((c) => isNodeDenied(c.governedBy, USER_VIEWER, gateSince))
-  if (hiddenFromUsers.length === 0) return undefined
-  const viewer = await viewerForUser(userId)
-  return hiddenFromUsers.find((c) => isNodeDenied(c.governedBy, viewer, gateSince))?.label
+  // Asked as a user first: only a capability hidden from users needs to know who is asking.
+  if (deniedCapabilityForViewer(hostType, data, USER_VIEWER, gateSince) === undefined) return undefined
+  return deniedCapabilityForViewer(hostType, data, await viewerForUser(userId), gateSince)
+}
+
+/**
+ * {@link deniedCapabilityForUser} once the viewer is known — the same rule,
+ * synchronous: the first of the node's availability questions (its own type,
+ * then the capability it hosts) that `viewer` is refused, as the label a
+ * refusal names. What an admin is refused, a user is refused too, so asking
+ * as the viewer straight away answers what the user-first form answers.
+ */
+export function deniedCapabilityForViewer(
+  hostType: string,
+  data: unknown,
+  viewer: AvailabilityViewer,
+  gateSince = 0,
+): string | undefined {
+  return availabilityChecksFor(hostType, data).find((c) => isNodeDenied(c.governedBy, viewer, gateSince))?.label
 }
 
 /**
@@ -108,6 +123,22 @@ export async function deniedRouteCapabilityForUser(
   let first: string | undefined
   for (const type of types) {
     const denied = await deniedCapabilityForUser(type, data, userId, gateSince)
+    if (denied === undefined) return undefined
+    first ??= denied
+  }
+  return first
+}
+
+/** {@link deniedRouteCapabilityForUser} once the viewer is known (see {@link deniedCapabilityForViewer}). */
+export function deniedRouteCapabilityForViewer(
+  types: readonly string[],
+  data: unknown,
+  viewer: AvailabilityViewer,
+  gateSince = 0,
+): string | undefined {
+  let first: string | undefined
+  for (const type of types) {
+    const denied = deniedCapabilityForViewer(type, data, viewer, gateSince)
     if (denied === undefined) return undefined
     first ??= denied
   }

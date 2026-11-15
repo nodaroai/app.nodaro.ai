@@ -5,6 +5,16 @@
 Likely cause: the granted scopes don't match what tools require. Re-authorize and
 make sure all scopes are granted.
 
+## A tool is missing, or answers `node_not_available` {#not-offered}
+
+The deployment you are connected to does not offer what that tool needs — a
+node, a feature, Studio, link imports or a model family — to your account, so
+the tool is left out of the list ([What a deployment offers](tools.md#what-a-deployment-offers)).
+A client that kept an older list may still call it; the call is refused with
+the reason (`403 node_not_available`, `model_not_available`,
+`link_imports_disabled` or `world_not_available`) before anything runs or is
+charged. Refresh the client's tools, or ask the deployment's admin to offer it.
+
 ## Adding the connector to Claude.ai shows an OAuth error {#claude}
 
 1. Verify the URL is exactly `https://mcp.nodaro.ai/mcp` (no trailing slash).

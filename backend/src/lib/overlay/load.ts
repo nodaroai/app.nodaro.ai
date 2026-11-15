@@ -47,6 +47,12 @@ export interface LoadOverlayOpts {
   exit?: (code: number) => never
   /** Injectable override of the env read (tests). Defaults to process.env. */
   packageName?: string
+  /**
+   * Injectable for tests: the built site's directory the pictures named as
+   * paths on the site are looked up in, or null for none. Defaults to the
+   * frontend's build beside the backend when it holds one (lib/site-picture-files.ts).
+   */
+  siteDirectory?: string | null
 }
 
 export interface LoadOverlayResult {
@@ -148,7 +154,7 @@ async function loadOverlayOnce(name: string, opts: LoadOverlayOpts): Promise<Loa
   // catalogs as the overlay's own catalog packs left them, in whatever order
   // register() made its calls. Every problem in the one message. Imported here,
   // not at the top: with no overlay set, nothing of it is even loaded.
-  const { presetPackHouseModelWarnings, presetPackProblems } = await import("../presets/preset-pack-check.js")
+  const { presetPackHouseModelWarnings, presetPackProblems, presetPackSitePictures } = await import("../presets/preset-pack-check.js")
   const presetProblems = presetPackProblems()
   if (presetProblems.length > 0) {
     return fail(
@@ -162,11 +168,29 @@ async function loadOverlayOnce(name: string, opts: LoadOverlayOpts): Promise<Loa
   // The deployment's own picker pictures, judged the same way and at the same
   // point: against the catalogs as its catalog packs left them. An option with
   // no picture is not a problem; one summary line says how many have one.
-  const { pickerPictureProblems, pickerPictureSummary } = await import("../picker-pictures-check.js")
+  const { pickerPictureProblems, pickerPictureSitePictures, pickerPictureSummary } = await import("../picker-pictures-check.js")
   const pictureProblems = pickerPictureProblems()
   if (pictureProblems.length > 0) {
     return fail(`overlay "${name}" registered picker pictures for options this deployment does not have — ${pictureProblems.join("; ")}`, exit)
   }
+
+  // Every picture named as a path on the site (picker pictures and preset
+  // pictures alike) must be a file of the built site — checked where the
+  // backend can see that build; elsewhere the deployment's own build checks it.
+  const onSite = [...pickerPictureSitePictures(), ...presetPackSitePictures()]
+  if (onSite.length > 0) {
+    const { DEFAULT_SITE_DIRECTORY, servedSiteDirectory, sitePictureFileProblems } = await import("../site-picture-files.js")
+    const dir = opts.siteDirectory !== undefined ? opts.siteDirectory : servedSiteDirectory()
+    if (dir === null) {
+      console.log(
+        `[overlay] ${name}: ${onSite.length} pictures are paths on this site; no built site at ${DEFAULT_SITE_DIRECTORY}, so their files were not checked here`,
+      )
+    } else {
+      const missing = sitePictureFileProblems(onSite, dir)
+      if (missing.length > 0) return fail(`overlay "${name}" named pictures on this site that its build does not have — ${missing.join("; ")}`, exit)
+    }
+  }
+
   const pictureSummary = pickerPictureSummary()
   if (pictureSummary) console.log(`[overlay] ${name}: ${pictureSummary}`)
 

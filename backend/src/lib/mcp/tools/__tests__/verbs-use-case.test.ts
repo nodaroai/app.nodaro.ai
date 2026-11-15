@@ -3,7 +3,7 @@ import Fastify from "fastify"
 import { USE_CASE_NODE_TYPES, usecaseContinuePath, usecaseDescriptor } from "@nodaro/render-rules"
 import type { Scope } from "../../../scopes.js"
 import { newSession } from "../../session.js"
-import { buildServer, callTool, executeSession, listTools } from "./_helpers.js"
+import { buildJudgedServer, buildServer, callTool, executeSession, judgedOffer, listTools } from "./_helpers.js"
 
 /** The node types this deployment does not offer, and a builder the use-case rows answer with, for the test at hand. */
 const h = vi.hoisted(() => ({ denied: new Set<string>(), builder: undefined as string | undefined }))
@@ -53,8 +53,9 @@ async function setup(
     })
   }
   await fastify.ready()
-  const server = buildServer()
-  registerUseCaseVerbs({ server, session: executeSession(), fastify })
+  // The offer funnel in front, as buildMcpServer installs it, and on the session it builds.
+  const server = buildJudgedServer()
+  registerUseCaseVerbs({ server, session: newSession({ userId: "u1", scopes: ["workflows:execute"] as Scope[], clientName: "Claude", offer: judgedOffer() }), fastify })
   return { server, seen }
 }
 

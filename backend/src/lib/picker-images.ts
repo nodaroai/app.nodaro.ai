@@ -2,6 +2,7 @@ import type { PickerImageOptions, PickerOwnPicture } from "@nodaro/prompts/picke
 import { isCloud } from "./config.js"
 import { appBaseUrl } from "./deployment-urls.js"
 import { hasRegisteredPickerPictures, registeredPickerPicture } from "./picker-pictures.js"
+import { sitePictureAddress } from "./site-picture-path.js"
 import { surfaceCatalogImages } from "./surface-profile.js"
 
 /**
@@ -25,7 +26,9 @@ import { surfaceCatalogImages } from "./surface-profile.js"
  *   has one. With none registered at all it is exactly `"none"` (undefined).
  *   Its enlarged picture rides as `imageLargeUrl` when `srcSet` is asked for —
  *   the same request that gets a CDN render's widths — so the REST routes carry
- *   it and the MCP tools do not.
+ *   it and the MCP tools do not. A picture registered as a path on the site
+ *   stays that path on the REST replies (`onSite`) and is absolute on the
+ *   reader's base on the MCP tools.
  *
  * The platform's pictures:
  *
@@ -39,14 +42,24 @@ import { surfaceCatalogImages } from "./surface-profile.js"
  * - with `srcSet`, each CDN picture's widths as `imageSrcSet`: the REST routes
  *   ask for it (an app draws the picture), the MCP tools do not.
  */
-export function pickerImageOptions(opts: { readonly srcSet?: boolean; readonly baseUrl?: string } = {}): PickerImageOptions | undefined {
+export function pickerImageOptions(
+  opts: { readonly srcSet?: boolean; readonly baseUrl?: string; readonly onSite?: boolean } = {},
+): PickerImageOptions | undefined {
   const pictures = shownPictures()
   // The MCP tools pass their session's pictures host (lib/mcp-lane-addresses.ts:
   // on a deployment that serves MCP by path, the host the client connected
   // through); every other caller gets the install's own public origin.
   const baseUrl = opts.baseUrl ?? appBaseUrl()
   if (pictures === "platform") return { baseUrl, lookPreviews: isCloud(), srcSet: opts.srcSet === true }
-  if (pictures === "own") return { baseUrl, srcSet: opts.srcSet === true, own: ownPicture }
+  if (pictures === "own") {
+    // A deployment's picture that is a path on its site (lib/site-picture-path.ts):
+    // as registered on a reply a browser reads on the site that served it
+    // (`onSite`, the REST routes — it resolves on whichever of the deployment's
+    // hosts the person is on, and the reply is the same on every host); absolute
+    // on `baseUrl` for every other reader (the MCP tools, off the site).
+    const reader = { onSite: opts.onSite === true, base: baseUrl }
+    return { baseUrl, srcSet: opts.srcSet === true, own: (catalogId, optionId) => ownPicture(catalogId, optionId, reader) }
+  }
   return undefined
 }
 
@@ -68,10 +81,11 @@ function shownPictures(): "platform" | "own" | "none" {
   return setting === "own" && hasRegisteredPickerPictures() ? "own" : "none"
 }
 
-function ownPicture(catalogId: string, optionId: string): PickerOwnPicture | undefined {
+function ownPicture(catalogId: string, optionId: string, reader: Parameters<typeof sitePictureAddress>[1]): PickerOwnPicture | undefined {
   const entry = registeredPickerPicture(catalogId, optionId)
   if (!entry) return undefined
-  return entry.enlargedPictureUrl ? { url: entry.pictureUrl, largeUrl: entry.enlargedPictureUrl } : { url: entry.pictureUrl }
+  const url = sitePictureAddress(entry.pictureUrl, reader)
+  return entry.enlargedPictureUrl ? { url, largeUrl: sitePictureAddress(entry.enlargedPictureUrl, reader) } : { url }
 }
 
 /**

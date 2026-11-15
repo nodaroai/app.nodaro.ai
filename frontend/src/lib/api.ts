@@ -7884,7 +7884,9 @@ export async function getSubscription(userId: string): Promise<SubscriptionInfo 
   )
   if (!res.ok) return null
   const json = await res.json()
-  return json.data ?? json ?? null
+  // An account with no subscription is answered `{ data: null, effectiveTier }`.
+  // That is "none": the answer itself is never a subscription.
+  return json.data ?? null
 }
 
 export async function getTransactions(userId: string): Promise<TransactionRecord[]> {

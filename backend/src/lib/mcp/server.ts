@@ -56,6 +56,7 @@ import { hasCredits } from "../config.js"
 import type { Scope } from "../scopes.js"
 import { supabase } from "../supabase.js"
 import { resolveSessionWorkspace } from "./workspace-session.js"
+import { installToolOffer, resolveToolOffer } from "./tool-offer.js"
 import type { McpLaneAddresses } from "../mcp-lane-addresses.js"
 
 interface BuildOpts {
@@ -149,6 +150,9 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   const workspaceId = await resolveSessionWorkspace(opts.userId)
   const { projectScope, ...sessionOpts } = opts
   if (projectScope) await assertProjectOwnership(opts.userId, projectScope.projectId)
+  // What this deployment offers the session (tool-offer.ts): undefined where
+  // it restricts nothing, and then no tool is judged.
+  const offer = await resolveToolOffer(opts.userId)
   // `firstParty` is named here rather than left to the spread: it is a
   // security flag, and a reader grepping for it must find it at every hop.
   const session = newSession({
@@ -156,6 +160,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
     workspaceId,
     scopedProjectId: projectScope?.projectId,
     firstParty: opts.firstParty,
+    offer,
   })
   const server = new McpServer(
     { name: "nodaro-mcp", version: "1.0.0" },
@@ -197,6 +202,10 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   // Register UI resource templates BEFORE tools, so tool _meta.ui.resourceUri
   // references resolve cleanly when the host calls resources/read.
   if (opts.conversation) attachUserRequest(server, session)
+  // The list follows the offer: a tool the deployment withholds from this
+  // viewer is never registered, and a call naming it gets the run's coded
+  // refusal. Installed before the first tool registers.
+  installToolOffer(server, { userId: session.userId, offer })
 
   registerWidgetResources(server, session.addresses)
 

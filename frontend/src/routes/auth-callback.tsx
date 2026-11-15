@@ -2,8 +2,8 @@ import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import type { Session } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase"
-import { DEFAULT_SIGN_IN_PATH, followSignInRedirect, takeSignInRedirect } from "@/lib/sign-in-redirect"
-import { isBlockedCallback } from "@/lib/sign-in-error"
+import { DEFAULT_SIGN_IN_PATH, failedSignInPath, followSignInRedirect, takeSignInRedirect } from "@/lib/sign-in-redirect"
+import { isBlockedCallback, isFailedCallback } from "@/lib/sign-in-error"
 import { LOGIN_POPUP_MESSAGE_TYPE } from "@/lib/popup-message"
 import { reportSignIn } from "@/lib/analytics/sign-in-events"
 
@@ -18,16 +18,27 @@ export default function AuthCallback() {
       return
     }
 
-    const supabase = createClient()
+    // Consume the saved redirect once (e.g., from /present/:shareToken, or a
+    // page of another product on this site) — a path on this site only, the
+    // way the browser would follow it (prevents an open redirect).
+    const kept = takeSignInRedirect()
+    const redirectUrl = kept ?? DEFAULT_SIGN_IN_PATH
 
     // If opened as a popup (e.g., from embedded iframe), send the session
     // to the opener via postMessage and close the window.
     const isPopup = !!window.opener
 
-    // Consume the saved redirect once (e.g., from /present/:shareToken, or a
-    // page of another product on this site) — a path on this site only, the
-    // way the browser would follow it (prevents an open redirect).
-    const redirectUrl = takeSignInRedirect() ?? DEFAULT_SIGN_IN_PATH
+    // The provider returned an error instead of a code: the person cancelled
+    // there, or the sign-in expired or was replayed. No session will come of
+    // it, so go back now, to a sign-in page that says so and still knows
+    // where the sign-in was going. Not in a pop-up: the page that opened it is
+    // waiting for this window to close, which the wait below still does.
+    if (!isPopup && isFailedCallback(window.location.search, window.location.hash)) {
+      navigate(failedSignInPath(kept), { replace: true })
+      return
+    }
+
+    const supabase = createClient()
 
     // Set below. Cleared once the sign-in goes on: a full page load keeps this
     // page mounted until the next document arrives, and the timeout must not
@@ -83,13 +94,15 @@ export default function AuthCallback() {
       }
     })
 
-    // Safety timeout — if nothing happens in 5s, go to login
+    // Safety timeout: a code that has not become a session in 5 s will not.
+    // Back to the sign-in page, which says the sign-in did not complete and
+    // keeps its destination for the next try.
     timeout = setTimeout(() => {
       if (isPopup) {
         window.close()
         return
       }
-      navigate("/login", { replace: true })
+      navigate(failedSignInPath(kept), { replace: true })
     }, 5000)
 
     return () => {

@@ -25,11 +25,18 @@ export interface ProjectedCatalogOption {
    * Cloud only) rendered look preview — on the installation's own host, or the
    * Nodaro CDN for look previews. Absent when the option has no picture. Use it
    * as given: file names carry a content hash, so it can be cached for good.
+   *
+   * On a deployment that shows its own pictures (`catalogs.images: "own"`) it
+   * is the deployment's picture: an absolute URL on its media host, or a path
+   * on the deployment's own site (`/brand/…`). Resolve a path against the
+   * address you call the API at (`new URL(imageUrl, baseUrl)`); a page served
+   * by that site can use it as it is.
    */
   imageUrl?: string
   /**
-   * Absolute URL of the option's enlarged picture: the larger version to show
-   * where your picker shows the option big (hover, zoom, a detail view).
+   * The option's enlarged picture (an absolute URL or a path on the site, like
+   * `imageUrl`): the larger version to show where your picker shows the
+   * option big (hover, zoom, a detail view).
    * Present only on a deployment that shows its own pictures (its surface
    * profile's `catalogs.images: "own"`) and gave one for this option; absent
    * everywhere else, so draw `imageUrl` there instead.

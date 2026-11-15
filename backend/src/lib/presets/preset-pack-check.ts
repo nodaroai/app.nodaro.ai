@@ -3,6 +3,7 @@ import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
 import { isModelFactoryDenied } from "../surface-deny.js"
 import { houseModelServed, isOwnLabelModel } from "../house-models-served.js"
 import { pluginServicesLoaded } from "../private-plugins/services-registry.js"
+import { isSitePath, siteBaseProblem, sitePicturePathProblem } from "../site-picture-path.js"
 import { getRegisteredPresetPacks, type PackPreset } from "./app-presets.js"
 
 /**
@@ -29,7 +30,8 @@ import { getRegisteredPresetPacks, type PackPreset } from "./app-presets.js"
  *    curation removed. Which fields hold picker ids is stated below field by
  *    field, never guessed from values: `"high"` or `"auto"` is a picker id in
  *    one catalog and a node's own setting elsewhere.
- *  - PICTURE: `previewUrl` absent, or an absolute https URL.
+ *  - PICTURE: `previewUrl` absent, a path on this site (lib/site-picture-path.ts),
+ *    or an absolute https URL.
  */
 export function presetPackProblems(): string[] {
   const packs = getRegisteredPresetPacks()
@@ -205,10 +207,30 @@ function pickerProblems(nodeType: string, preset: PackPreset, catalogs: readonly
   return out
 }
 
+/**
+ * A pack preset's picture: absent, a path on this site (the one site-path
+ * rule, lib/site-picture-path.ts, on an install whose `PUBLIC_URL` is its
+ * http(s) address), or an absolute https URL on any host, as before.
+ */
 function pictureProblems(preset: PackPreset): string[] {
   const url: unknown = preset.previewUrl
-  if (url === undefined || url === null || (typeof url === "string" && isHttpsUrl(url))) return []
-  return [`${preset.id}: previewUrl must be absent or an absolute https URL (got ${JSON.stringify(url)})`]
+  if (url === undefined || url === null) return []
+  if (isSitePath(url)) {
+    const problem = sitePicturePathProblem(url) ?? siteBaseProblem()
+    return problem === undefined ? [] : [`${preset.id}: previewUrl ${JSON.stringify(url)} ${problem}`]
+  }
+  if (typeof url === "string" && isHttpsUrl(url)) return []
+  return [`${preset.id}: previewUrl must be absent, a path on this site (/<folder>/<name>) or an absolute https URL (got ${JSON.stringify(url)})`]
+}
+
+/**
+ * Every registered pack preset's picture that is a path on this site, with
+ * where it was registered — the boot's file check (lib/site-picture-files.ts).
+ */
+export function presetPackSitePictures(): Array<{ readonly where: string; readonly path: string }> {
+  return getRegisteredPresetPacks().flatMap((pack) =>
+    pack.presets.flatMap((preset) => (isSitePath(preset.previewUrl) ? [{ where: `preset "${preset.id}" previewUrl`, path: preset.previewUrl }] : [])),
+  )
 }
 
 /** The ids a field picks: one id or a list; empty strings and non-strings are

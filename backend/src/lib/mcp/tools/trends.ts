@@ -34,7 +34,6 @@ import {
   type NodaroMotionEngine,
 } from "@nodaro/shared/models"
 import type { McpSession } from "../session.js"
-import { isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
 import { neutralBreakdown, privacyCreditsOf } from "../../nodaro-motion-quote.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -288,8 +287,8 @@ function refusal(statusCode: number, body: string) {
 // ── tools ───────────────────────────────────────────────────────────────────
 
 export function registerTrendTools({ server, session, fastify }: RegisterTrendToolsOpts): void {
-  // Every trend run is a Nodaro Motion run: not listed where cast-swap is not offered.
-  if (isNodeDenied("cast-swap", USER_VIEWER)) return
+  // Every trend run is a Nodaro Motion run: what the deployment offers decides
+  // whether they are listed (lib/mcp/tool-needs.ts).
   if (passesGate(session, readGate)) {
     server.registerTool(
       "list_trends",

@@ -9,7 +9,6 @@
 import { z } from "zod"
 import { SPEAKER_MAP_MAX_SOURCES, SPEAKER_MAP_MIN_CAMERAS } from "@nodaro/shared/edl"
 import { SPEAKER_MAP_MAX_MARGIN_DB } from "@nodaro/render-rules"
-import { isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { dispatchJob, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
 import { creditHint } from "./_credit-hint.js"
@@ -36,7 +35,7 @@ export function speakerMapDescription(): string {
 }
 
 export function registerSpeakerMapVerb({ server, session, fastify }: RegisterOpts): void {
-  if (isNodeDenied(NODE_TYPE, USER_VIEWER)) return
+  // What the deployment offers decides whether it is listed (lib/mcp/tool-needs.ts).
   server.registerTool(
     SPEAKER_MAP_TOOL,
     {

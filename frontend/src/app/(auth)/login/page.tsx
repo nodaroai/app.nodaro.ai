@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { useAuth } from "@/hooks/use-auth"
-import { isCloud } from "@/lib/edition"
+import { hasCredits, isCloud } from "@/lib/edition"
 import { surfaceAuthMethods, surfaceAuthSsoLabel, surfacePlatformLinks } from "@/lib/surface-selectors"
 import { accessibilityStatementShown } from "@/lib/accessibility-statement"
 import { AccessibilityStatementLink } from "@/components/legal/accessibility-statement-link"
@@ -21,13 +21,14 @@ import { useDocumentTitle } from "@/components/layout/page-title"
 import { formatNumber } from "@/lib/i18n/format"
 import { isBlockedSignIn } from "@/lib/sign-in-error"
 import { ssoEntryPath } from "@/lib/sibling-origin"
+import { whenActivated } from "@/lib/prerender"
 
 const PENDING_PLAN_KEY = "nodaro_pending_plan"
 
 export default function LoginPage() {
   const t = useT()
   useDocumentTitle(t("page.login"))
-  const { signInWithGoogle, signInWithEmail } = useAuth()
+  const { user, loading: authLoading, signInWithGoogle, signInWithEmail } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   // ?blocked=1: the sign-in callback saw GoTrue refuse a blocked account.
@@ -168,8 +169,73 @@ export default function LoginPage() {
     rememberSignInRedirect(searchParams.get("redirect") ?? searchParams.get("return_to"))
   }, [searchParams])
 
+  // A sign-in started on this page (the form, a provider button) goes on by
+  // its own handler. It signs the visitor in while the page is still showing,
+  // so the forward below stands down for it: the two would race for the kept
+  // destination and navigate twice.
+  const ownSignIn = useRef(false)
+
+  // A visitor who is already signed in (a "Sign in" or "Start free" link on
+  // the site, a bookmark) goes on to where the link was taking them: this page
+  // used to show its form to everyone, and they signed in a second time.
+  //
+  // Both the app's own account state and the auth server must say so. A page
+  // sent here because its session check failed has a session and no account,
+  // and going on would bounce between that page and this one for ever. A
+  // session ended elsewhere (another product, another device) still reads as
+  // signed in from the browser alone for a while: asked, the server refuses
+  // it, the account state clears, and the form stays with its destination.
+  //
+  // Not in a sign-in pop-up (it hands its session to the page that opened it,
+  // through /auth/callback), and not in the billing account's lane, which
+  // exists to sign in as someone else.
+  //
+  // Keyed on who the visitor is, never on the user object: the account state
+  // hands over the same person twice (as found in the browser, then as the
+  // server returned them), and starting over for the second kept the form on
+  // screen for another round trip.
+  const billingLane = searchParams.get("billing") === "1"
+  const signedInUserId = user?.id
+  useEffect(() => {
+    if (authLoading || !signedInUserId || billingLane || window.opener || ownSignIn.current) return
+    let cancelled = false
+    let release = () => {}
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (cancelled || !data.user || ownSignIn.current) return
+        // Once the page is shown (lib/prerender.ts): a prerendered page must not move.
+        release = whenActivated(() => {
+          if (ownSignIn.current) return
+          // The destination this page kept for the provider round trip is spent here.
+          takeSignInRedirect()
+          const plan = searchParams.get("plan")
+          followSignInRedirect(
+            navigate,
+            plan && hasCredits()
+              ? `/pricing?plan=${encodeURIComponent(plan)}`
+              : searchParams.get("redirect") ?? searchParams.get("return_to"),
+          )
+        })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      release()
+    }
+  }, [authLoading, signedInUserId, billingLane, searchParams, navigate])
+
+  // ?failed=1: the last sign-in did not complete (a cancel at the provider, an
+  // expired or replayed sign-in, a return with no session). Said only to a
+  // visitor known to be signed out, and not over a new try that is under way:
+  // one who is signed in after all (the browser's Back button replays a
+  // sign-in) is going on, above.
+  const signInIncomplete = searchParams.get("failed") === "1" && !authLoading && !user && !pending
+  const notice = error ?? (signInIncomplete ? t("auth.signInIncomplete") : null)
+
   async function handleGoogleSignIn() {
     setPending(true)
+    ownSignIn.current = true
     setError(null)
 
     // Persist plan param through the OAuth redirect
@@ -183,12 +249,14 @@ export default function LoginPage() {
     } catch (err) {
       setError(signInErrorText(err))
       setPending(false)
+      ownSignIn.current = false
     }
   }
 
   async function handleEmailSignIn(e: React.FormEvent) {
     e.preventDefault()
     setPending(true)
+    ownSignIn.current = true
     setError(null)
     try {
       await signInWithEmail(email, password)
@@ -196,11 +264,13 @@ export default function LoginPage() {
     } catch (err) {
       setError(signInErrorText(err))
       setPending(false)
+      ownSignIn.current = false
     }
   }
 
   async function handleSso(p: { id: string; kind: string }) {
     setPending(true)
+    ownSignIn.current = true
     setError(null)
     try {
       if (p.kind === "assertion") {
@@ -223,6 +293,7 @@ export default function LoginPage() {
     } catch (err) {
       setError(signInErrorText(err))
       setPending(false)
+      ownSignIn.current = false
     }
   }
 
@@ -337,8 +408,8 @@ export default function LoginPage() {
             </div>
           )}
 
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
+          {notice && (
+            <p className="text-sm text-destructive">{notice}</p>
           )}
 
           {showSelfRegistration ? (

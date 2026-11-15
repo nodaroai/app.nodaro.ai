@@ -3895,8 +3895,9 @@ generation still offers it, and a restyle that names it is still accepted.
 
 Every option that has a picture carries an **absolute** `imageUrl`, at both
 detail levels, in `options` and in `dimensions[].options` alike; an option
-without one simply has no `imageUrl`. These are the pictures the editor's
-pickers show:
+without one simply has no `imageUrl`. (The one exception is a deployment's own
+picture kept on its own site, which the REST routes give as a path: see the
+last item below.) These are the pictures the editor's pickers show:
 
 | Pickers | Picture |
 |---|---|
@@ -3936,15 +3937,25 @@ pickers show:
   draws a label when an option has no `imageUrl` needs nothing more.
 - **A deployment's own pictures (`imageLargeUrl`).** A deployment can show
   pictures of its own instead (`catalogs.images: "own"`, with pictures it
-  registered). Then an option's `imageUrl` is the deployment's picture, on the
-  deployment's own media host, and only an option it gave a picture has one;
-  `imageCount` counts those. No option carries `imageSrcSet` and no topic
-  carries an `imageUrl`. Where the deployment also gave an **enlarged**
-  picture, the REST replies carry it as `imageLargeUrl`: the larger version
-  to show where your picker shows the option big (on hover, zoomed, in a
-  detail view). Draw `imageUrl` everywhere else, and wherever an option has
-  no `imageLargeUrl`. The MCP tool leaves `imageLargeUrl` out, as it leaves
-  out `imageSrcSet`. Only such a deployment ever sends `imageLargeUrl`.
+  registered). Then an option's `imageUrl` is the deployment's picture, and
+  only an option it gave a picture has one; `imageCount` counts those. No
+  option carries `imageSrcSet` and no topic carries an `imageUrl`. Where the
+  deployment also gave an **enlarged** picture, the REST replies carry it as
+  `imageLargeUrl`: the larger version to show where your picker shows the
+  option big (on hover, zoomed, in a detail view). Draw `imageUrl` everywhere
+  else, and wherever an option has no `imageLargeUrl`. The MCP tool leaves
+  `imageLargeUrl` out, as it leaves out `imageSrcSet`. Only such a deployment
+  ever sends `imageLargeUrl`.
+- **A path on the deployment's site.** A deployment's own picture is either an
+  absolute URL on its media host or a file it ships on its own site. For the
+  latter, the REST routes (`/v1/picker-catalogs`, `/v1/catalogs`, so the SDK)
+  give `imageUrl` and `imageLargeUrl` as a **path on the site**
+  (`"/brand/style/noir.webp"`), the same on every host the deployment serves
+  the app on. A page that site serves uses it as given; any other client
+  resolves it against the address it called the API at
+  (`new URL(imageUrl, "https://studio.example.com")`). The MCP tool gives it
+  absolute, on the host the client connected through. Never send it through
+  a resize or proxy address: it is the site's own file.
 
 ```bash
 curl -s https://app.nodaro.ai/v1/picker-catalogs/person | jq '.data.sections[0], .data.dimensions[0].options[0]'
@@ -6695,8 +6706,15 @@ its negative prompt.
 **Example pictures — `previewUrl`.** For a factory preset, an absolute URL on the
 server you asked (`https://<host>/preset-previews/<nodeType>/<slug>.<hash>.webp`),
 or `null` while the preset has no picture yet. The name changes whenever the
-picture does, so a URL can be cached for good. For a preset of your own, the
-preset's own copy of the image you gave it (see Writes), or `null`.
+picture does, so a URL can be cached for good. A preset the deployment ships of
+its own carries the picture it named: an absolute URL, or a **path on the
+deployment's site** (`/brand/presets/harbor.webp`) for a file it ships there.
+The REST routes (`/factory`, `/factory/groups`'s `previewUrl` and `previewUrls`)
+give that path as it is, the same on every host the deployment serves the app
+on: a page that site serves uses it as given, any other client resolves it
+against the address it called the API at. The MCP tools give it absolute, on
+the host the client connected through. For a preset of your own, the preset's
+own copy of the image you gave it (see Writes), or `null`.
 
 **Sizes — `previewSrcSet`.** A factory preset's picture comes in two sizes: the
 tile picture (`previewUrl`, 512px wide) and a full-screen one (up to 1024px

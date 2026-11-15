@@ -968,10 +968,10 @@ optional; each array empty = "keep the default"):
     prompt policy (`PromptPolicy`), so a deployment that relies on one should
     not list `film-pipeline`.
   - `video-director` is the Video Director — `POST /v1/video-director/run`
-    (the MCP tools `create_explainer` and `create_launch_video`, which are not
-    listed where it is not offered). Its speech, alignment and render steps are
-    each gated as their own node (`text-to-speech`, `forced-alignment`,
-    `render-video`), so list those too.
+    (the MCP tools `create_explainer` and `create_launch_video`). Its speech,
+    alignment and render steps are each gated as their own node
+    (`text-to-speech`, `forced-alignment`, `render-video`), so list those too:
+    the two MCP tools are listed only where all four are offered.
 
   With `nodes.allow` set, a credit-spending route that is linked to no node is
   refused with `node_not_available` (the whitelist never allowed it) and logged
@@ -1018,8 +1018,10 @@ optional; each array empty = "keep the default"):
   - Publishing is judged as the users' view, whoever publishes: an app, a
     component or a template that contains a hidden node is refused with
     `node_not_available` until the node is removed or released.
-  - Public discovery (`GET /v1/nodes`, the MCP tool list) always shows the
-    users' view.
+  - Public discovery (`GET /v1/nodes`) always shows the users' view. The MCP
+    tool list is a signed-in session's, and shows what that session's user may
+    run: an admin's session lists a tool whose node is hidden from users (see
+    the MCP tool list below).
   - A capability that lives *inside* another node follows the dedicated node it
     duplicates. Web Scrape's **Instagram source** is the Instagram node's scraper
     behind another door, so turning the Instagram node off also withdraws that
@@ -1030,6 +1032,35 @@ optional; each array empty = "keep the default"):
     it); running it is.
   - An admin role change reaches this check within about five minutes (the
     admin lookup is cached per process).
+
+  **The MCP tool list follows the offer** (decided 2026-11-11). Where the
+  deployment restricts what it offers — `nodes.allow` / `nodes.deny`,
+  `models.allow` / `models.deny`, `worlds.allow`, `imports.links: false`, or an
+  Admin → Availability override that leaves a node off — an MCP session lists
+  a tool only when everything the tool needs is offered to that session's
+  user, judged by the checks a run is judged by:
+  - the node its route runs (the same route-to-node resolution the run's
+    refusal uses, including `cast-swap`, `film-pipeline` and `video-director`
+    and every step a call runs in sequence), or the node a tool that quotes,
+    plans or continues a run prepares;
+  - the `studio` world, for the Studio production tools that make or change a
+    production;
+  - link imports, for `download_youtube_audio`;
+  - where models are restricted, at least one Suno model, for the Suno tools
+    that run one.
+  Tools that read the user's own data, act on work already made, hand out
+  uploads, run saved workflows, apps or components (each node is judged when
+  it runs) or serve documentation are always listed. A call naming a tool
+  that is not listed answers the run's coded refusal (`403
+  node_not_available`, `model_not_available`, `link_imports_disabled`, or
+  `world_not_available`) before anything is created or reserved. The list is
+  worked out per request, so it follows an Admin → Availability change within
+  the same minute a run's refusal does. `get_node_skill` refuses a withheld
+  node the same way, and `start_workflow_editor`'s node catalog leaves it out.
+  Where none of the above is set, the tool list is unchanged. What each tool
+  needs is one table in the backend (`lib/mcp/tool-needs.ts`), held to the
+  code by a test; see [What a deployment offers](mcp/tools.md#what-a-deployment-offers)
+  for what a client sees.
 - `auth.methods`: `["email","google","sso"]` (plus `auth.ssoLabel` — `sso` is
   dropped from the list unless `ssoLabel` is set). A list that names **only**
   `sso` also turns on a server-side gate: every signed-in account must have been
@@ -1479,13 +1510,107 @@ catalog too, so it lists them; until the catalog arrives, or when it cannot be
 read, the menu shows the bundled presets the profile allows. Each pack preset
 is checked at boot: it may name only
 models this profile's `models` lists offer, only picker IDs the curated
-catalogs offer, and an https example picture or none. A deployment whose packs
-fail the check refuses to start. Design note:
+catalogs offer, and as its example picture (`previewUrl`) an https address, a
+path on the deployment's own site (see
+[A deployment's own pictures: where they live](#a-deployments-own-pictures-where-they-live)),
+or none. A deployment whose packs fail the check refuses to start. Design note:
 [`docs/design/preset-pack-seam.md`](design/preset-pack-seam.md).
 
 The editor's own brand **assets** (favicon, logo files) are overridden by a
 Docker static-asset layer, not this JSON; `brand.logo` names a logo for the
 client apps that read it.
+
+### A deployment's own pictures: where they live
+
+A deployment's own picker pictures (`registerPickerPictures`, shown under
+`catalogs.images: "own"`, see [the key](#keys-read-by-client-apps)) and its
+preset packs' example pictures (`previewUrl`) each name one of two places:
+
+- **A path on the deployment's own site**, such as
+  `/brand/pictures/style/cinematic.3f9a2c1e.webp`: a file the deployment ships
+  inside its own build, served from the app's own site under a folder of its
+  own, the way the platform serves its pictures from `/picker-art/` and
+  `/preset-previews/`. It is versioned and reviewed with the deployment's
+  release, and it is same-origin on every host the deployment serves the app
+  on.
+- **An absolute address**: for a picker picture, an `https` address on the
+  install's media host (the rule below the key); for a preset's example
+  picture, any `https` address. These are judged exactly as before.
+
+**Putting the files on the site.** In an image built on this one, copy them
+into the directory the bundled proxy serves the site from, under a folder of
+your own:
+
+```dockerfile
+FROM <this image>
+COPY brand/ /app/frontend/dist/brand/
+```
+
+Keep them in that directory: a path that a `sites.d` route
+([Serving other apps on the same host](#serving-other-apps-on-the-same-host))
+answers from another directory is refused by the file check below. A
+`sites.d` file may still add headers for the folder (for example
+`header /brand/* Access-Control-Allow-Origin "*"`).
+
+**The path rule.** One rule, for picker pictures and preset pictures alike
+(`backend/src/lib/site-picture-path.ts`). A path is accepted when:
+
+- it starts with a single `/` (not `//`, which a browser reads as another
+  host), and has no backslash, whitespace, control character, query (`?`) or
+  fragment (`#`);
+- it is valid percent-encoding, decoded once, and encodes no slash or
+  backslash (`%2F`, `%5C`) and no control character; decoded, it has no empty,
+  `.` or `..` segment (`%2e%2e` counts as `..`);
+- it names a file inside a folder (`/<folder>/…/<name>`), and that first
+  folder, compared decoded and without regard to case, is not one the
+  platform owns. Those are the folders the bundled proxy answers with anything
+  but a file of the site (`v1`, `.well-known`, `mcp`, `og`, `app`, `embed`,
+  `present`, `storage`, `supabase`, `assets`), the folders the platform's own
+  build ships (`picker-art`, `preset-previews`, `face-mesh-art`, `fonts`,
+  `notifications`, `projects`, `demo-assets`), and `cdn-cgi`, which a CDN in
+  front of the site answers itself;
+- its file name ends in `.png` or `.webp`, the formats of the platform's own
+  pictures. No clip.
+
+A path also needs `PUBLIC_URL` set to the site's own http(s) address, because
+a reader off the site (an MCP client) gets it absolute there. Anything else
+refuses the boot, naming the entry and the problem, as for any other entry
+problem.
+
+**Who checks that the file exists.** The platform cannot see a deployment's
+files in general, so it does not claim to. Where the backend sees the built
+site — the standard image puts the frontend's build (`/app/frontend/dist`,
+with its `index.html`) on the same filesystem as the backend — the overlay
+loader, once `register()` has returned and the other checks have passed,
+looks every path up there (decoded once, as the proxy does) and refuses the
+boot when one names no file, every missing file in one message. It runs in
+every process that loads the overlay and sees that directory. Where there is
+no built site there (a local development run, or a service built without the
+frontend), it checks nothing, logs one line saying so, and boots: then the
+deployment's own build must check each path it registers against the files it
+ships.
+
+**What each reader gets.**
+
+- The REST replies a browser on the site reads — `GET /v1/catalogs`,
+  `GET /v1/picker-catalogs` and `/v1/picker-catalogs/{nodeType}` (`imageUrl`,
+  `imageLargeUrl`), `GET /v1/node-presets/factory` and `/factory/groups`
+  (`previewUrl`, `previewUrls`) — carry the path as registered. It resolves
+  against whichever of the deployment's hosts the page is on, so one reply
+  works on all of them and the public cache can share it. A client on another
+  host resolves it against the address it called the API at.
+- The MCP tools (`get_picker_catalog`, `list_node_presets`,
+  `get_node_preset`) carry it absolute, on the lane's pictures base:
+  `PUBLIC_URL` on the dedicated MCP host; on a deployment that serves MCP by
+  path, the declared host the client connected through.
+- The editor takes a path only when it resolves to the page's own origin, and
+  draws it as given, never through a resize or proxy address.
+
+**Caching.** The bundled proxy sends an existing `.png` on the site with
+`Cache-Control: public, max-age=31536000, immutable`, and a `.webp` with no
+cache header of its own. Give every picture a content-hashed name (as the
+platform's are: `cinematic.3f9a2c1e.webp`), and a new name whenever it
+changes, so a replaced picture is never served stale.
 
 ### Wording and the page head (`strings`, `brand.favicon`)
 
@@ -1692,25 +1817,32 @@ logo is dropped with a warning and the rest of `brand` is kept.
     {
       catalogId: "style", // a catalog id, as GET /v1/picker-catalogs lists it
       optionId: "cinematic", // an option of that catalog
-      pictureUrl: "https://media.example.com/pictures/style/cinematic.webp",
-      // Optional: the larger version, where a picker shows the option big.
+      // A file the deployment ships on its own site…
+      pictureUrl: "/brand/pictures/style/cinematic.3f9a2c1e.webp",
+      // …or one on its media host. Optional: the larger version, where a picker shows the option big.
       enlargedPictureUrl: "https://media.example.com/pictures/style/cinematic-large.webp",
     },
   ])
   ```
 
   The platform registers none of its own. The rules:
-  - **The media host.** Every address must be an `https` address on this
-    install's own media host: the origin of `R2_PUBLIC_URL`, or the
-    `R2_PUBLIC_FALLBACK_DOMAIN` host, the same rule the platform applies to
-    its other "our own media" checks. An address on any other host, the
-    Nodaro CDN included, is refused, and so is one that names a clip (`.mp4`,
-    `.webm`, `.mov`, `.m4v`): an entry carries pictures only. Installs with
-    different media hosts (a staging and a production install, say) register
-    different addresses.
+  - **Where the pictures live.** Each address names one of two places (see
+    [A deployment's own pictures: where they live](#a-deployments-own-pictures-where-they-live),
+    which a preset pack's example pictures share):
+    - **a path on the deployment's own site** — a file the deployment ships
+      in its own build, served from the app's own site under a folder of its
+      own, the way the platform serves its pictures from `/picker-art/`; or
+    - **an `https` address on this install's own media host**: the origin of
+      `R2_PUBLIC_URL`, or the `R2_PUBLIC_FALLBACK_DOMAIN` host, the same rule
+      the platform applies to its other "our own media" checks. An address on
+      any other host, the Nodaro CDN included, is refused, and so is one that
+      names a clip (`.mp4`, `.webm`, `.mov`, `.m4v`): an entry carries
+      pictures only. Installs with different media hosts (a staging and a
+      production install, say) register different addresses.
   - **Refused at registration.** A call with an entry that is not an object, a
     missing or blank `catalogId` / `optionId`, a key an entry does not carry
-    (a misspelt one), an address that breaks the host rule, or an option
+    (a misspelt one), an address that is neither a path on the site that
+    passes the path rule nor an address on the media host, or an option
     registered twice (in that call or an earlier one) registers none of its
     entries and throws, naming every problem. The overlay loader turns that
     into a refused boot, as it does for a preset pack.
@@ -1719,7 +1851,9 @@ logo is dropped with a warning and the rest of `brand` is kept.
     option an option of that catalog as the deployment's catalog packs left
     it, whatever order `register()` made its calls in: an option a pack added
     counts, one a pack removed does not. Any other entry refuses the boot,
-    every problem in one message.
+    every problem in one message. Then, where the backend sees the built
+    site, every path on the site must name a file there (see
+    [who checks](#a-deployments-own-pictures-where-they-live)).
   - **A missing picture is not an error.** An option the deployment gave no
     picture shows none: the API sends no `imageUrl` for it, and the editor
     shows what it shows for an option without a picture. The boot logs one
@@ -1728,7 +1862,9 @@ logo is dropped with a warning and the rest of `brand` is kept.
     `"own"`). A deployment that registers none logs nothing.
   - **What shows where.** The API's `imageUrl` is the picture. The REST
     replies also carry the enlarged picture as `imageLargeUrl`; the MCP tool
-    leaves it out, as it leaves out `imageSrcSet`. In the editor, the pictures
+    leaves it out, as it leaves out `imageSrcSet`. A picture on the site is a
+    path on the REST replies and absolute on the MCP tool (see
+    [where they live](#a-deployments-own-pictures-where-they-live)). In the editor, the pictures
     replace the platform's wherever the platform's would be: the character
     pickers' photos, the look pickers' previews and the music / voice
     pickers' pictures, in the pickers, on the canvas nodes, on the app input

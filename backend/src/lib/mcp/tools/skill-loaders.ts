@@ -26,6 +26,7 @@ import { dirname, resolve, basename } from "node:path"
 import { z } from "zod"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { McpSession } from "../session.js"
+import { nodeWithheldRefusal, refusalResult } from "../tool-offer.js"
 
 /**
  * Embedded fallback for workflow-editor.md. Deliberately compact — the full
@@ -217,9 +218,27 @@ export const GET_NODE_SKILL_TOOL_DESCRIPTION =
   "node_type doesn't have a skill file the tool returns an error with the " +
   "list of valid types so you can self-correct."
 
+/**
+ * The node catalog as `session` is offered it: on a deployment that restricts
+ * what it offers, a node withheld from this viewer is not in it (its skill is
+ * refused too). Unchanged where nothing is restricted.
+ */
+export function workflowEditorContentFor(session: Pick<McpSession, "offer">, content: string = WORKFLOW_EDITOR_CONTENT): string {
+  const offer = session.offer
+  if (!offer) return content
+  return content.replace(
+    /(<!--\s*AUTO-GEN:START node-catalog\s*-->)([\s\S]*?)(<!--\s*AUTO-GEN:END node-catalog\s*-->)/,
+    (_all, start: string, body: string, end: string) =>
+      start + body.split("\n").filter((line) => {
+        const type = /^- `([a-z0-9][a-z0-9-]*)`/.exec(line)?.[1]
+        return type === undefined || offer.nodeOffered(type)
+      }).join("\n") + end,
+  )
+}
+
 export function registerSkillLoaders(
   server: McpServer,
-  _session: McpSession,
+  session: McpSession,
 ): void {
   // No scope gate — both tools are pure content delivery. The actions they
   // instruct the LLM to take (update_workflow_json, create_workflow, etc.)
@@ -238,7 +257,7 @@ export function registerSkillLoaders(
       },
     },
     async () => ({
-      content: [{ type: "text" as const, text: WORKFLOW_EDITOR_CONTENT }],
+      content: [{ type: "text" as const, text: workflowEditorContentFor(session) }],
     }),
   )
 
@@ -267,10 +286,14 @@ export function registerSkillLoaders(
       },
     },
     async (args: { node_type: string }) => {
+      // A node the deployment withholds from this viewer: the run's refusal, not its skill.
+      const withheld = nodeWithheldRefusal(session, args.node_type)
+      if (withheld) return refusalResult(withheld)
       const content = loadNodeSkillContent(args.node_type)
       if (content == null) {
-        const validList = AVAILABLE_NODE_TYPES.length
-          ? AVAILABLE_NODE_TYPES.join(", ")
+        const offered = session.offer ? AVAILABLE_NODE_TYPES.filter((t) => session.offer!.nodeOffered(t)) : AVAILABLE_NODE_TYPES
+        const validList = offered.length
+          ? offered.join(", ")
           : "(catalog unavailable — workflow-editor.md should list current types)"
         return {
           isError: true as const,

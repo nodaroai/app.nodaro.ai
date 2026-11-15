@@ -9,23 +9,12 @@ import { supabase } from "../../supabase.js"
 import { randomUUID } from "node:crypto"
 import { FILM_PIPELINE_FEATURE } from "../../availability-override.js"
 import { deniedCapabilityForUser } from "../../availability-viewer.js"
-import { deniedNodeRejectionMessage, isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
+import { deniedNodeRejectionMessage } from "../../surface-deny.js"
 import { errorResult } from "./_verb-helpers.js"
 
 const executeGate: ToolGate = { required: ["pipelines:execute"] }
 const approveGate: ToolGate = { required: ["pipelines:approve"] }
 const readGate: ToolGate = { required: ["pipelines:read"] }
-
-/**
- * Whether this deployment offers the film pipeline (`film-pipeline`, a gateable
- * feature) — asked as users get it, like the Nodaro Motion and trend tools ask
- * about `cast-swap`. Where it is withheld, the tools that start or continue a
- * pipeline's work are not listed; the read tools stay, so a pipeline made
- * before can still be followed.
- */
-function filmPipelineOffered(): boolean {
-  return !isNodeDenied(FILM_PIPELINE_FEATURE, USER_VIEWER)
-}
 
 /**
  * The refusal of a call that reached a pipeline tool where the film pipeline
@@ -100,9 +89,10 @@ function okJson(value: unknown) {
  * service helper so the route + this MCP tool share a single implementation.
  */
 export function registerPipelineTools({ server, session }: RegisterPipelineToolsOpts): void {
-  // Starting or continuing a pipeline is the film pipeline feature: not listed
-  // where the deployment withholds it (the read tools below stay).
-  if (passesGate(session, executeGate) && filmPipelineOffered()) {
+  // Starting or continuing a pipeline is the film pipeline feature: what the
+  // deployment offers decides whether these are listed (lib/mcp/tool-needs.ts;
+  // the read tools below need nothing and stay).
+  if (passesGate(session, executeGate)) {
     server.registerTool(
       "branch_pipeline",
       {
@@ -245,7 +235,7 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
   }
 
   // ── chat_pipeline_stage (pipelines:approve) ──────────────────────────────
-  if (passesGate(session, approveGate) && filmPipelineOffered()) {
+  if (passesGate(session, approveGate)) {
     server.registerTool(
       "chat_pipeline_stage",
       {

@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Scope } from "../../../scopes.js"
 import { newSession } from "../../session.js"
 import { _resetRegistry } from "../../tasks.js"
-import { buildServer, callTool, executeSession, listTools, stubRoute } from "./_helpers.js"
+import { buildJudgedServer, callTool, executeSession, listTools, stubRoute } from "./_helpers.js"
 
 const h = vi.hoisted(() => ({ denied: new Set<string>(), resolves: [] as Array<{ assetId: string; expectedKind: string }> }))
 vi.mock("../../../surface-deny.js", async (importOriginal) => ({
@@ -46,7 +46,8 @@ beforeEach(() => {
 })
 
 function serverWith(fastify?: FastifyInstance, session = executeSession()) {
-  const server = buildServer()
+  // The offer funnel in front, as buildMcpServer installs it: what is withheld is not listed.
+  const server = buildJudgedServer()
   registerVerbs({ server, session, fastify: fastify ?? (Fastify() as unknown as FastifyInstance) })
   return server
 }

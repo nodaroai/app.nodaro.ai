@@ -14,6 +14,7 @@ import { AlertCircle, ArrowUpCircle, CreditCard } from "lucide-react"
 import { creditUnits } from "@/lib/credit-units"
 import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
 import { useBillingSurface } from "@/hooks/use-billing-surface"
+import { TOPUP_SECTION_PATH } from "@/app/pricing/topup-anchor"
 import { useT } from "@/lib/i18n"
 import { formatNumber } from "@/lib/i18n/format"
 
@@ -116,7 +117,7 @@ export function InsufficientCreditsModal({
               </a>
             </Button>
             <Button variant="outline" asChild className="flex-1">
-              <a href="/credits/buy">
+              <a href={TOPUP_SECTION_PATH}>
                 <CreditCard className="w-4 h-4" />
                 {t("credits.buyCreditsCta")}
               </a>

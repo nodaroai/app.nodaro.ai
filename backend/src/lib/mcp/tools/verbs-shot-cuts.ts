@@ -9,7 +9,6 @@
  */
 import { z } from "zod"
 import { resolveAssetId } from "../asset-resolver.js"
-import { isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
 import { widgetModelOf } from "../widget-models.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import type { RegisterOpts } from "./verbs-image.js"
@@ -38,7 +37,7 @@ export function shotCutsDescription(nodeType: string): string {
 
 export function registerShotCutsVerb({ server, session, fastify }: RegisterOpts): void {
   const nodeType = widgetModelOf(SHOT_CUTS_TOOL)
-  if (isNodeDenied(nodeType, USER_VIEWER)) return
+  // What the deployment offers decides whether it is listed (lib/mcp/tool-needs.ts).
   server.registerTool(
     SHOT_CUTS_TOOL,
     {

@@ -1,6 +1,7 @@
 import { getRegisteredPickerCatalogs, type PickerCatalog } from "@nodaro/prompts/picker-catalogs"
 import { ownPickerPicturesShown } from "./picker-images.js"
 import { getRegisteredPickerPictures, type PickerPictureEntry } from "./picker-pictures.js"
+import { isSitePath } from "./site-picture-path.js"
 
 /**
  * The boot check on a deployment's own picker pictures (lib/picker-pictures.ts).
@@ -55,6 +56,19 @@ export function pickerPictureSummary(): string | undefined {
   const without = catalogs.length - perCatalog.length
   const line = `own pictures for ${shown} of ${total} picker options: ${perCatalog.join(", ")} (${without} other catalogs have none)`
   return ownPickerPicturesShown() ? line : `${line} — not shown: this deployment's catalogs.images is not "own"`
+}
+
+/**
+ * Every registered picture address that is a path on this site, with the entry
+ * it belongs to — the boot's file check (lib/site-picture-files.ts).
+ */
+export function pickerPictureSitePictures(): Array<{ readonly where: string; readonly path: string }> {
+  return getRegisteredPickerPictures().flatMap((e) =>
+    (["pictureUrl", "enlargedPictureUrl"] as const).flatMap((key) => {
+      const path = e[key]
+      return isSitePath(path) ? [{ where: `"${e.catalogId}/${e.optionId}" ${key}`, path }] : []
+    }),
+  )
 }
 
 /** Every option id of each composed catalog, across its dimensions. */

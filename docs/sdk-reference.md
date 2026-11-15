@@ -8518,7 +8518,12 @@ carries:
   Transformations, Edits and every template using `{image:N}` need at least
   one; run such a preset with that many reference images attached.
 - `previewUrl` — an example picture (an absolute URL on the server you asked),
-  or `null`. On your own presets, the image you stored with it.
+  or `null`. On your own presets, the image you stored with it. A preset the
+  deployment ships of its own may name a picture it keeps on its own site:
+  then `previewUrl` is a path on that site (`"/brand/presets/harbor.webp"`) —
+  resolve it against the address you call the API at
+  (`new URL(p.previewUrl, baseUrl)`), or use it as given on a page that site
+  serves.
 - On a factory entry, `previewSrcSet` — the same picture at its two sizes
   (512w and up to 1024w) for an `<img srcset>`; present only when it has both.
 - On a factory entry, `previewWidth` / `previewHeight` — the tile picture's
@@ -9112,10 +9117,15 @@ and any origin may load them. A deployment that turned the platform's pictures
 off (`catalogs.images` in its surface profile) returns no `imageUrl` at all, so
 draw the `label` whenever an option has none. A deployment that shows its own
 pictures (`catalogs.images: "own"`) returns its own `imageUrl` for the options
-it gave one, on its own media host, and may add **`imageLargeUrl`**
-(`PickerOption.imageLargeUrl`): the option's enlarged picture, for where your
-picker shows it big (on hover, zoomed, in a detail view). Only such a
-deployment sends it; draw `imageUrl` wherever an option has none. See
+it gave one, and may add **`imageLargeUrl`** (`PickerOption.imageLargeUrl`):
+the option's enlarged picture, for where your picker shows it big (on hover,
+zoomed, in a detail view). Only such a deployment sends it; draw `imageUrl`
+wherever an option has none. Its pictures are either absolute URLs on its media
+host or files it ships on its own site; for the latter, `imageUrl` and
+`imageLargeUrl` are a **path on the site** (`"/brand/style/noir.webp"`), so
+resolve them against the address you call the API at
+(`new URL(option.imageUrl, baseUrl)`) — a page that site serves can use them as
+given. See
 [Pictures](./api-integration.md#pictures-imageurl-sections) for the full rules.
 
 ```ts

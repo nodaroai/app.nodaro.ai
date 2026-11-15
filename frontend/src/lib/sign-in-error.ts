@@ -21,3 +21,18 @@ export function isBlockedCallback(search: string, hash: string): boolean {
   const fragment = new URLSearchParams(hash.replace(/^#/, ""))
   return query.get("error_code") === BANNED || fragment.get("error_code") === BANNED
 }
+
+/**
+ * The address a sign-in returned to carries an error of any kind (query or
+ * fragment): the person cancelled at the provider, the sign-in expired or was
+ * replayed by the browser's Back button, the provider failed. No session will
+ * come of it. A blocked account is one of these: ask `isBlockedCallback` first
+ * where it has its own notice.
+ */
+export function isFailedCallback(search: string, hash: string): boolean {
+  const query = new URLSearchParams(search)
+  const fragment = new URLSearchParams(hash.replace(/^#/, ""))
+  return [query, fragment].some(
+    (params) => params.has("error") || params.has("error_code") || params.has("error_description"),
+  )
+}

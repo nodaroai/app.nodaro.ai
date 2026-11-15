@@ -6,13 +6,14 @@
  *
  * What it refuses at registration, registering none of the call's entries
  * (the overlay loader turns the throw into a refused boot, as it does for a
- * preset pack): a malformed entry, an unknown key, an address that is not an
- * https address on this install's media host, a clip where a picture belongs,
- * and an option registered twice.
+ * preset pack): a malformed entry, an unknown key, an address that is neither
+ * a path on this site (lib/site-picture-path.ts, the one rule) nor an https
+ * address on this install's media host, a clip where a picture belongs, and an
+ * option registered twice.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const env = vi.hoisted(() => ({ publicUrl: "https://media.example.com", fallback: "" }))
+const env = vi.hoisted(() => ({ publicUrl: "https://media.example.com", fallback: "", siteUrl: "https://studio.example.com" }))
 
 vi.mock("../config.js", () => ({
   config: {
@@ -21,6 +22,9 @@ vi.mock("../config.js", () => ({
     },
     get R2_PUBLIC_FALLBACK_DOMAIN() {
       return env.fallback
+    },
+    get PUBLIC_URL() {
+      return env.siteUrl
     },
   },
 }))
@@ -44,6 +48,7 @@ function entry(overrides: Partial<Record<keyof PickerPictureEntry, unknown>> & R
 beforeEach(() => {
   env.publicUrl = "https://media.example.com"
   env.fallback = ""
+  env.siteUrl = "https://studio.example.com"
 })
 afterEach(() => resetPickerPicturesForTests())
 
@@ -94,6 +99,55 @@ describe("registering", () => {
   })
 })
 
+describe("a path on this site", () => {
+  it("is kept as registered, beside media-host addresses, for the picture and the enlarged picture alike", () => {
+    registerPickerPictures([
+      entry({ pictureUrl: "/brand/style/film-noir.webp", enlargedPictureUrl: "/brand/style/film-noir.large.webp" }),
+      entry({ optionId: "anime", pictureUrl: "/brand/style/anime.png", enlargedPictureUrl: LARGE }),
+      entry({ optionId: "cinematic", pictureUrl: PICTURE, enlargedPictureUrl: "/brand/style/cinematic.large.webp" }),
+    ])
+    expect(registeredPickerPicture("style", "film-noir")).toEqual({
+      catalogId: "style",
+      optionId: "film-noir",
+      pictureUrl: "/brand/style/film-noir.webp",
+      enlargedPictureUrl: "/brand/style/film-noir.large.webp",
+    })
+    expect(registeredPickerPicture("style", "anime")?.pictureUrl).toBe("/brand/style/anime.png")
+    expect(registeredPickerPicture("style", "cinematic")?.enlargedPictureUrl).toBe("/brand/style/cinematic.large.webp")
+  })
+
+  it("needs no media host: an install without one can still name pictures on its site", () => {
+    env.publicUrl = ""
+    registerPickerPictures([entry({ pictureUrl: "/brand/style/film-noir.webp" })])
+    expect(getRegisteredPickerPictures()).toHaveLength(1)
+  })
+
+  it("is judged by the one site-path rule, each problem named", () => {
+    const refuses = (pictureUrl: string, message: RegExp) => {
+      expect(() => registerPickerPictures([entry({ pictureUrl })])).toThrow(message)
+      expect(getRegisteredPickerPictures()).toEqual([])
+    }
+    refuses("//evil.example.org/brand/a.webp", /entry 1 \("style\/film-noir"\): pictureUrl "\/\/evil\.example\.org\/brand\/a\.webp" starts with \/\//)
+    refuses("/brand/../secret.webp", /pictureUrl .* has a \. or \.\. segment/)
+    refuses("/brand/%2e%2e/secret.webp", /has a \. or \.\. segment/)
+    refuses("/brand%2Fa.webp", /encodes a slash/)
+    refuses("/brand/a.webp?v=2", /query or a fragment/)
+    refuses("/v1/a.webp", /under \/v1\//)
+    refuses("/picker-art/a.webp", /under \/picker-art\//)
+    refuses("/brand/a.mp4", /does not name a picture/)
+    refuses("/a.webp", /names no folder/)
+    expect(() => registerPickerPictures([entry({ enlargedPictureUrl: "/brand/a.gif" })])).toThrow(/enlargedPictureUrl "\/brand\/a\.gif" does not name a picture/)
+  })
+
+  it("needs PUBLIC_URL to be the site's http(s) address (a reader off the site gets the path on it)", () => {
+    env.siteUrl = ""
+    expect(() => registerPickerPictures([entry({ pictureUrl: "/brand/style/film-noir.webp" })])).toThrow(/needs PUBLIC_URL set to the site's http\(s\) address/)
+    // A media-host address does not.
+    registerPickerPictures([entry()])
+    expect(getRegisteredPickerPictures()).toHaveLength(1)
+  })
+})
+
 describe("refused at registration", () => {
   const refuses = (entries: unknown, message: RegExp) => {
     expect(() => registerPickerPictures(entries as PickerPictureEntry[])).toThrow(message)
@@ -119,7 +173,7 @@ describe("refused at registration", () => {
     refuses([entry({ clipUrl: "https://media.example.com/a.mp4" })], /unknown key "clipUrl"/)
   })
 
-  it("no picture address", () => refuses([entry({ pictureUrl: undefined })], /pictureUrl must be an https address on this install's media host/))
+  it("no picture address", () => refuses([entry({ pictureUrl: undefined })], /pictureUrl must be a path on this site \(\/<folder>\/<name>\) or an https address on this install's media host/))
 
   it("an address that is not a URL, or not https", () => {
     refuses([entry({ pictureUrl: "pictures/a.webp" })], /pictureUrl .* is not an https address on this install's media host/)
@@ -133,9 +187,9 @@ describe("refused at registration", () => {
     refuses([entry({ enlargedPictureUrl: "https://elsewhere.example.org/a.webp" })], /enlargedPictureUrl .* is not an https address on this install's media host/)
   })
 
-  it("every address when the install has no media host configured", () => {
+  it("every absolute address when the install has no media host configured", () => {
     env.publicUrl = ""
-    refuses([entry()], /this install has no media host \(R2_PUBLIC_URL\)/)
+    refuses([entry()], /this install has no media host \(R2_PUBLIC_URL\), so only a path on this site/)
   })
 
   it("a clip where a picture belongs (clips are not part of an entry yet)", () => {

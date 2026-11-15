@@ -48,7 +48,7 @@ import {
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
 import { hasCredits } from "../../config.js"
-import { isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
+import { nodeOfferedTo } from "../tool-offer.js"
 import { mcpInject } from "../internal-request.js"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -168,13 +168,16 @@ const REGISTER_BY_BUILDER: Readonly<Record<UseCaseBuilderKey, (ctx: RegisterCtx)
 
 export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts): void {
   if (!passesGate(session, executeGate)) return
-  // A deployment that does not offer a node lists no tool for it (the routes
-  // refuse it too); continue_use_case is listed while it offers any of them.
-  const offered = USE_CASE_NODE_TYPES.filter((type) => !isNodeDenied(type, USER_VIEWER))
-  if (offered.length === 0) return
+  // What the deployment offers decides which of these are listed
+  // (lib/mcp/tool-needs.ts): a node's own verb while its node is offered,
+  // continue_use_case and estimate_use_case while any of them is. Those two
+  // name, and take, only the nodes this session is offered — every node where
+  // none is, since they are then withheld themselves.
+  const offered = USE_CASE_NODE_TYPES.filter((type) => nodeOfferedTo(session, type))
+  const named = offered.length > 0 ? offered : USE_CASE_NODE_TYPES
 
-  // Each offered node's own verb, found by its graph builder, in USE_CASE_NODE_TYPES order.
-  for (const type of offered) {
+  // Each node's own verb, found by its graph builder, in USE_CASE_NODE_TYPES order.
+  for (const type of USE_CASE_NODE_TYPES) {
     const builder = usecaseRowOf(type).builder
     const register: ((ctx: RegisterCtx) => void) | undefined = REGISTER_BY_BUILDER[builder as UseCaseBuilderKey]
     // Typecheck holds the table total over USE_CASE_SPECS; this names the gap when a built package is ahead of it.
@@ -187,9 +190,9 @@ export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts)
     {
       title: "Continue a use-case run",
       description:
-        `Continue a ${labelList(offered)} run as a NEW job (see \`mode\`): a failed run, or the final of a review preview, ` +
+        `Continue a ${labelList(named)} run as a NEW job (see \`mode\`): a failed run, or the final of a review preview, ` +
         "optionally with `edited_edl` (the reviewed edit). " +
-        reviewSentence(offered) +
+        reviewSentence(named) +
         "Pass `job_id` " +
         "(the earlier run's job). Returns the new job id. A refusal that names another job says what to do: follow a run " +
         "already under way, continue the newer failed run instead, or ask again in a moment while a failed run settles.",
@@ -210,7 +213,7 @@ export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts)
     },
     async (args) => {
       // The run names its own type: continue it on that type's route.
-      const resolved = await runTypeOfJob(fastify, session, args.job_id, offered)
+      const resolved = await runTypeOfJob(fastify, session, args.job_id, named)
       if ("error" in resolved) return resolved.error
       return dispatchJob(fastify, session, {
         url: usecaseContinuePath(resolved.type),
@@ -235,7 +238,7 @@ export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts)
   )
 
   // One quote for every offered node: its run verb's arguments, posted to its /estimate route.
-  registerEstimateUseCase({ server, session, fastify }, offered, INPUT_BY_BUILDER, refusalText)
+  registerEstimateUseCase({ server, session, fastify }, named, INPUT_BY_BUILDER, refusalText)
 }
 
 /** tighten_episode's arguments and the body they make (shared with estimate_use_case). */

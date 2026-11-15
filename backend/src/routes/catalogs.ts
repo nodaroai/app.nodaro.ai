@@ -33,6 +33,6 @@ export async function catalogsRoutes(app: FastifyInstance) {
     const version = catalogPacksVersion()
     reply.header("Cache-Control", "public, max-age=300")
     if (packs === 0 && !ownPickerPicturesShown()) return reply.send({ curated: false, packs: 0, version })
-    return reply.send({ data: projectAllCatalogs({ ...q.data, images: pickerImageOptions({ srcSet: true }) }), curated: packs > 0, packs, version })
+    return reply.send({ data: projectAllCatalogs({ ...q.data, images: pickerImageOptions({ srcSet: true, onSite: true }) }), curated: packs > 0, packs, version })
   })
 }

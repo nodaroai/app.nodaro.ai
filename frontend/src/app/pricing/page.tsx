@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { hasCredits } from "@/lib/edition"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom"
 import { useAuth } from "@/hooks/use-auth"
 import {
   PRICING_TIERS,
@@ -16,6 +16,7 @@ import { useBillingPlans, useSubscription, useChangePlanMutation } from "@/ee/ho
 import { planCheckoutPriceId, subscriptionTierId } from "@/ee/lib/plan-price-ids"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { TopupSection } from "./topup-section"
+import { TOPUP_SECTION_ID } from "./topup-anchor"
 import { useT, type MessageKey } from "@/lib/i18n"
 import { PersonalFreeCreditsOnly } from "@/components/billing/personal-free-credits-only"
 import { creditUnits } from "@/lib/credit-units"
@@ -91,6 +92,19 @@ export default function PricingPage() {
   /** A tier feature in the interface language, its numbers formatted for the locale. */
   const featureText = (f: TierFeature): string =>
     t(f.key, f.vars && Object.fromEntries(Object.entries(f.vars).map(([k, v]) => [k, typeof v === "number" ? formatNumber(v) : v])))
+
+  // Opened at the top-up section ("Buy Credits" in the not-enough-credits
+  // dialog): the page is built by script, so the browser's own jump to the
+  // fragment found nothing to jump to. Bring the section into view here.
+  // Again once the plans above it have loaded: their cards take their room
+  // then, and would push the section back out of view. Above the edition gate
+  // too: an edition with nothing to sell has no such section, and this finds
+  // none.
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (hash !== `#${TOPUP_SECTION_ID}`) return
+    document.getElementById(TOPUP_SECTION_ID)?.scrollIntoView({ block: "start" })
+  }, [hash, plansPending])
 
   // Editions without billing have nothing to sell here — and the ?plan=
   // effect below auto-starts a Stripe checkout with no click, which 404s on a
@@ -596,19 +610,22 @@ export default function PricingPage() {
           )}
 
           {/* TOP-UP CREDITS — header row from the mock; the card below keeps the
-              founder's amended design (TopupSection). */}
-          <SectionHeaderRow
-            dotColor={CYAN}
-            labelColor="var(--prc-cyan-text)"
-            label={t("pricing.topupCreditsLabel")}
-            note={t("pricing.topupCreditsNote")}
-            margin="46px 0 16px"
-          />
-          <TopupSection
-            topupBalance={user ? creditBalance?.topup : undefined}
-            loading={loadingTopup}
-            onLoad={handleLoadCredits}
-          />
+              founder's amended design (TopupSection). The wrapper is what a
+              "buy credits" link opens the page at (topup-anchor.ts). */}
+          <div id={TOPUP_SECTION_ID}>
+            <SectionHeaderRow
+              dotColor={CYAN}
+              labelColor="var(--prc-cyan-text)"
+              label={t("pricing.topupCreditsLabel")}
+              note={t("pricing.topupCreditsNote")}
+              margin="46px 0 16px"
+            />
+            <TopupSection
+              topupBalance={user ? creditBalance?.topup : undefined}
+              loading={loadingTopup}
+              onLoad={handleLoadCredits}
+            />
+          </div>
           <p className="mt-4 text-center text-xs text-muted-foreground">
             {t("pricing.topupDeveloperNotice")}
           </p>

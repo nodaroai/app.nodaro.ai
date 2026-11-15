@@ -42,7 +42,9 @@ export function captureSiteDescription(): string {
 
 export function registerSiteCaptureVerb({ server, session, fastify }: RegisterOpts): void {
   if (!passesGate(session, executeGate)) return
-  if (!siteCaptureOffered()) return
+  // The install switch: the route is not registered at all where it is off.
+  // What the deployment offers decides the rest (lib/mcp/tool-needs.ts).
+  if (!siteCaptureEnabled()) return
   server.registerTool(
     CAPTURE_SITE_TOOL,
     {

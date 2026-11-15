@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import { appBaseUrl } from "../lib/deployment-urls.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { z } from "zod"
 import { portablePresetData, presetCatalog } from "../lib/presets/app-presets.js"
@@ -226,7 +227,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
     if (!nodeType) {
       return reply.status(400).send({ error: { code: "validation_error", message: "nodeType query param is required" } })
     }
-    const data = presetCatalog(nodeType).map((p) => factoryPresetView(nodeType, p))
+    const data = presetCatalog(nodeType).map((p) => factoryPresetView(nodeType, p, appBaseUrl(), { onSite: true }))
     reply.header("Cache-Control", "public, max-age=300")
     return reply.send({ data })
   })
@@ -245,7 +246,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
     // menu that shows a few examples of a category; previewUrl stays its first.
     const PREVIEWS_PER_GROUP = 3
     const byGroup = new Map<string, { group: string; shelf: PresetShelf; count: number; previewUrl: string | null; previewUrls: string[] }>()
-    for (const preset of presetCatalog(nodeType).map((p) => factoryPresetView(nodeType, p))) {
+    for (const preset of presetCatalog(nodeType).map((p) => factoryPresetView(nodeType, p, appBaseUrl(), { onSite: true }))) {
       const group = preset.group
       if (!group) continue
       const entry = byGroup.get(group) ?? { group, shelf: presetShelf(group), count: 0, previewUrl: null, previewUrls: [] }

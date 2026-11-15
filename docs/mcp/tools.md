@@ -39,6 +39,51 @@ The workspace scopes are deliberately **not** granted to tokens issued before
 organizations existed: consenting to an app back then could not have meant
 agreeing to let it choose where your work lands. Re-authorize to grant them.
 
+## What a deployment offers
+
+A deployment can offer fewer nodes, models and features than the platform has
+(its [surface profile](../deployment.md#surface-profile-nodaro_surface_profile)
+or its admins' Availability settings). On such a deployment the tool list
+follows what it offers **you**: a tool is listed only when everything it needs
+is offered to the signed-in user.
+
+- A tool that runs a node (`generate_image`, `suno_generate`, …) is listed
+  while that node is offered. A tool with several lanes is listed while any
+  lane is: `generate_video` with only image-to-video offered still works with a
+  start frame, and a text-only call is refused by its route.
+- A tool that quotes, plans or continues a run (`estimate_trend`,
+  `resolve_shot_sequence`, `continue_use_case`) is listed while the run's node
+  is offered.
+- Nodaro Motion, the film pipeline and the Video Director are features of
+  their own: their tools are listed while the feature is offered.
+  `create_explainer` and `create_launch_video` also need the speech, alignment
+  and render nodes their run goes through.
+- The Studio production tools that make or change a production are listed
+  while the deployment offers Studio; `download_youtube_audio` while it allows
+  importing media from links; the Suno tools that run a Suno model while a
+  Suno model is offered.
+- Tools that read your own data, act on work already made (`get_job`,
+  `get_pipeline_status`, `stop_video_pro`, `list_studio_productions`), hand
+  out uploads, run your saved workflows, apps and components (each node is
+  checked when it runs), or serve documentation are always listed.
+
+`get_node_skill` answers a node the deployment does not offer you with the
+same refusal a run gives, and `start_workflow_editor`'s node catalog leaves
+such nodes out.
+
+An admin of the deployment sees what an admin may run: a node the admins have
+not released to users yet is offered to them, a node the deployment itself
+does not offer is not.
+
+The list is worked out on every request, so it follows a change the
+deployment makes within about a minute, as a run's refusal does. Clients often
+keep a tool list for a long time: a call to a tool that is no longer offered
+is answered with the refusal the run would give — `403 node_not_available`,
+`model_not_available`, `link_imports_disabled`, or `world_not_available` for
+Studio — before anything is started or charged. Ask your client to refresh
+its tools to see the current list. A deployment that restricts nothing lists
+every tool your scopes allow.
+
 ---
 
 ## Workspace tools
@@ -2823,9 +2868,12 @@ previews (Nodaro CDN) are returned on Nodaro Cloud only. On a deployment that
 turned the platform's pictures off (`catalogs.images` in its surface profile),
 no option or topic carries an `imageUrl` and every `imageCount` is `0`. On a
 deployment that shows its own pictures (`catalogs.images: "own"`), an option's
-`imageUrl` is the deployment's picture, on its own media host, only the options
-it gave one have one, and no topic does; the tool leaves out the enlarged
-picture (`imageLargeUrl`), as it leaves out `imageSrcSet`. Rules:
+`imageUrl` is the deployment's picture, only the options it gave one have one,
+and no topic does; the tool leaves out the enlarged picture (`imageLargeUrl`),
+as it leaves out `imageSrcSet`. That picture is on the deployment's media host
+or is a file it ships on its own site; the tool gives the latter absolute too,
+on the host you connected through (on the dedicated MCP host, the
+installation's public address). Rules:
 [Pictures](../api-integration.md#pictures-imageurl-sections).
 
 See [Parameter Picker Catalogs](../picker-catalogs.md) for the underlying

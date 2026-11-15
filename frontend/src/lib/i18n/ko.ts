@@ -601,6 +601,7 @@ export const ko: ChromeDict = {
   "auth.redirecting": "리디렉션 중…",
   "auth.signInFailed": "로그인에 실패했습니다",
   "auth.accessBlocked": "이 계정의 접근이 차단되었습니다.",
+  "auth.signInIncomplete": "로그인이 완료되지 않았습니다. 다시 시도하세요.",
   "accessBlocked.title": "접근 차단",
   "accessBlocked.body": "Nodaro 접근이 차단되었습니다. 잘못된 조치라고 생각되면 지원팀에 문의하세요.",
   "auth.newHere": "처음이신가요?",

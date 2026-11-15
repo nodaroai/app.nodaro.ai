@@ -146,6 +146,33 @@ describe("applyServerPickerPictures: a deployment's own pictures, from GET /v1/c
     expect(selfHostedPictures(ui)).toEqual([undefined, undefined, false])
   })
 
+  it('"own": a path on this site is taken as served, and resolves on the page\'s own host', async () => {
+    const ui = await boot(true, "own")
+    const reply = [
+      {
+        nodeType: "camera-motion",
+        catalogId: "camera-motions",
+        kind: "single",
+        options: [
+          { id: "dolly-in", label: "Dolly in", imageUrl: "/brand/camera/dolly.webp", imageLargeUrl: "/brand/camera/dolly.large.webp" },
+          // Never a path that leaves this page's host.
+          { id: "pan-left", label: "Pan left", imageUrl: "//evil.example.org/pan.webp" },
+          { id: "pan-right", label: "Pan right", imageUrl: "/\\evil.example.org/pan.webp" },
+          { id: "tilt-up", label: "Tilt up", imageUrl: "/brand/camera/tilt.webp", imageLargeUrl: "//evil.example.org/tilt.webp" },
+        ],
+      },
+      { nodeType: "person", catalogId: "person", kind: "multi", dimensions: [{ field: "type", label: "Type", options: [{ id: "man", label: "Man", imageUrl: "/brand/person/man.webp" }] }] },
+    ]
+    expect(ui.applyServerPickerPictures(reply)).toBe(3)
+    expect(ui.getLookPreviewUrl("camera-motion", "dolly-in")).toBe("/brand/camera/dolly.webp")
+    expect(ui.getLookPreviewLargeUrl("camera-motion", "dolly-in")).toBe("/brand/camera/dolly.large.webp")
+    expect(ui.getLookPreviewUrl("camera-motion", "pan-left")).toBeUndefined()
+    expect(ui.getLookPreviewUrl("camera-motion", "pan-right")).toBeUndefined()
+    expect(ui.getLookPreviewUrl("camera-motion", "tilt-up")).toBe("/brand/camera/tilt.webp")
+    expect(ui.getLookPreviewLargeUrl("camera-motion", "tilt-up")).toBeUndefined()
+    expect(ui.characterArtUrl("person", "man")).toBe("/brand/person/man.webp")
+  })
+
   for (const images of [undefined, "default", "none", "platform"]) {
     it(`${JSON.stringify(images ?? "no setting")}: takes nothing from the reply`, async () => {
       const ui = await boot(true, images)

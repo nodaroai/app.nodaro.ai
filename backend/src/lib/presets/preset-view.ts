@@ -1,5 +1,6 @@
 import { factoryPresetPreviewSize, factoryPresetPreviewSrcSet, factoryPresetPreviewUrl, presetMinReferences } from "@nodaro/prompts/presets"
 import { appBaseUrl } from "../deployment-urls.js"
+import { sitePictureAddress } from "../site-picture-path.js"
 
 /**
  * The metadata every preset carries over the API (REST, SDK, CLI, MCP), on
@@ -10,7 +11,9 @@ import { appBaseUrl } from "../deployment-urls.js"
  *     tokens; a factory preset also counts its own declaration.
  *   - `previewUrl` — an example picture: for a factory preset, its committed
  *     file on this installation's public origin (null until one is committed);
- *     for a user preset, the image the user stored with it (null when unset).
+ *     for a deployment's pack preset, the picture it registered (a path on its
+ *     site stays a path on the REST replies, see `factoryPresetView`); for a
+ *     user preset, the image the user stored with it (null when unset).
  *   - `previewSrcSet` — a factory preset's picture at its two sizes (512w and
  *     up to 1024w) for an `<img srcset>`; only when both files are committed.
  */
@@ -49,14 +52,28 @@ export interface CatalogEntry {
   readonly previewUrl?: string
 }
 
+/** Who reads a preset view (see `factoryPresetView`). */
+export interface PresetViewReader {
+  /**
+   * A browser on the site that served the reply (the REST routes): a deployment
+   * preset's picture that is a path on its site stays that path, so it resolves
+   * on whichever of the deployment's hosts the person is on and the reply is
+   * the same on every host. Absent: the reader is off the site (the MCP tools),
+   * and gets that path absolute on `baseUrl`.
+   */
+  readonly onSite?: boolean
+}
+
 /**
  * A factory preset as the API serves it (`GET /v1/node-presets/factory`).
  * `baseUrl`: where the bundled example pictures are served — the install's
  * public origin, or, for the MCP tools, their session's pictures host
  * (lib/mcp-lane-addresses.ts: on a deployment that serves MCP by path, the
- * host the client connected through).
+ * host the client connected through). A deployment preset's own picture is
+ * served as it registered it when absolute; when it is a path on its site,
+ * as `reader` says (lib/site-picture-path.ts `sitePictureAddress`).
  */
-export function factoryPresetView(nodeType: string, preset: CatalogEntry, baseUrl: string = appBaseUrl()) {
+export function factoryPresetView(nodeType: string, preset: CatalogEntry, baseUrl: string = appBaseUrl(), reader: PresetViewReader = {}) {
   return {
     id: preset.id,
     name: preset.name,
@@ -69,7 +86,10 @@ export function factoryPresetView(nodeType: string, preset: CatalogEntry, baseUr
     ...referenceFields(nodeType, preset.data, preset.minReferences),
     // A deployment preset names its own picture, at one size; a bundled one is
     // looked up among the committed files (null until one is committed).
-    previewUrl: preset.previewUrl ?? factoryPresetPreviewUrl(preset.id, baseUrl),
+    previewUrl:
+      typeof preset.previewUrl === "string"
+        ? sitePictureAddress(preset.previewUrl, { onSite: reader.onSite === true, base: baseUrl })
+        : (preset.previewUrl ?? factoryPresetPreviewUrl(preset.id, baseUrl)),
     ...(preset.previewUrl === undefined ? previewSrcSetField(preset.id, baseUrl) : {}),
     ...(preset.previewUrl === undefined ? previewSizeFields(preset.id) : {}),
   }

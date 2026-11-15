@@ -85,7 +85,7 @@ export default function TutorialPage() {
     if (!slug || !templateSlug || starting) return
     if (!user) {
       const search = searchParams.toString()
-      navigate(`/login?next=${encodeURIComponent(`/tutorials/${slug}${search ? `?${search}` : ""}`)}`)
+      navigate(`/login?redirect=${encodeURIComponent(`/tutorials/${slug}${search ? `?${search}` : ""}`)}`)
       return
     }
     setStarting(true)
