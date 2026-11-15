@@ -1263,6 +1263,8 @@ export const ja: ChromeDict = {
   "connApps.revokeTitle": "{name} のアクセスを取り消しますか？",
   "connApps.revokeDesc": "このアプリはアカウントを使用できなくなります。再び使用するには、もう一度接続してください。",
   "connApps.revoked": "アクセスを取り消しました",
+  "connApps.viaSignIn": "サインイン経由で接続済み：このアプリは同意画面なしでアクセスを取得します。",
+  "connApps.revokeDescExchange": "このアプリはあなたのアカウントを使用できなくなります。自分でアクセスを取り戻すことはできず、あなたに承認を求める必要があります。",
   "settings.connectedApps": "接続済みアプリ",
   "settings.connectedAppsDesc": "アカウントにアクセスできるアプリと AI アシスタントを確認し、アクセスを取り消せます。",
   "settings.providerKeys": "プロバイダーキー",

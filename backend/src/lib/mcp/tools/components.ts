@@ -18,6 +18,8 @@ import {
 } from "../extract-app-inputs.js"
 import { cardResultText, uiMeta, clientRequestIdSchema, idempotencyHeaders, GET_JOB_POLL_HINT } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
+import { amountsNote, balanceRefusal, statedAmountFields, unitFields } from "../amounts.js"
+import { LISTED_APP_AMOUNT_KEYS } from "./apps.js"
 
 const readGate: ToolGate = { required: ["workflows:read"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -59,7 +61,8 @@ export function registerComponents({
           'known component (face-prep, prompt-rewriter, etc.). For one-off ' +
           'requests prefer `list_apps` first — apps are the user-facing surface.\n\n' +
           'Set `scope: "public"` (default) for the marketplace, or `scope: "mine"` ' +
-          'for the caller\'s own components.',
+          'for the caller\'s own components.' +
+          amountsNote(),
         inputSchema: {
           scope: z
             .enum(["public", "mine"])
@@ -127,7 +130,9 @@ export function registerComponents({
         // `estimated_credits_is_estimate: true` when the listed price holds a metered LLM estimate
         // (shown `≈N`) — only while metered pricing is on; absent otherwise (as `list_apps`).
         const rows = (data ?? []).map((row) => {
-          const { [LISTING_ESTIMATE_FLAG_COLUMN]: _stored, ...rest } = withListedRangeSnake(row)
+          const { [LISTING_ESTIMATE_FLAG_COLUMN]: _stored, ...listed } = withListedRangeSnake(row)
+          // Its listed prices in the deployment's unit when it has one (lib/mcp/amounts.ts).
+          const rest = statedAmountFields(listed, LISTED_APP_AMOUNT_KEYS)
           return listingEstimateFlag(row).estimatedCreditsIsEstimate ? { ...rest, [LISTING_ESTIMATE_FLAG_COLUMN]: true } : rest
         })
         const last = rows[rows.length - 1]
@@ -138,7 +143,7 @@ export function registerComponents({
             {
               type: "text",
               text: JSON.stringify(
-                { data: rows, scope, next_cursor: nextCursor },
+                { data: rows, scope, next_cursor: nextCursor, ...unitFields() },
                 null,
                 2,
               ),
@@ -281,9 +286,12 @@ export function registerComponents({
           headers: idempotencyHeaders(args.client_request_id),
         })
         if (res.statusCode >= 400) {
+          // The route's 402 states its figures in raw credits: a deployment in its
+          // own terms is told the refusal without them (lib/mcp/amounts.ts).
+          const balance = res.statusCode === 402 ? balanceRefusal("this component run") : null
           return {
             content: [
-              { type: "text", text: `Error from Nodaro: ${res.statusCode} ${res.body}` },
+              { type: "text", text: balance ?? `Error from Nodaro: ${res.statusCode} ${res.body}` },
             ],
             isError: true,
           }

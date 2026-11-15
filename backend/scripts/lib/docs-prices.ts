@@ -68,6 +68,8 @@ import {
 } from "../../src/ee/billing/docs-pricing.js"
 import { applyMarkupPercent } from "../../src/ee/billing/service-margin.js"
 import { calculateLlmCost, llmRateCard } from "../../src/lib/pricing/llm-cost.js"
+// Where a figure sits is defined once, for this check and for the MCP document funnel that states served skills in a deployment's unit.
+import { PRICE_ANNOTATION as ANNOTATION, annotationCommentOf as commentOf, figureBefore, type AnnotationComment } from "../../src/lib/price-annotations.js"
 
 // The pricing half lives with the billing module, because the MCP tool hints read it at runtime too.
 export {
@@ -99,8 +101,7 @@ export type Annotation =
   | { kind: "llm"; figure: DocsLlmFigure }
   | { kind: "none" }
 
-/** Which comment an annotation is written in: `credits:`, `credits-rate:` or `credits-llm-rate:`. */
-export type AnnotationComment = "charge" | "rate" | "llm-rate"
+export type { AnnotationComment }
 
 export interface DocFigure {
   file: string
@@ -112,13 +113,8 @@ export interface DocFigure {
   annotation: Annotation
 }
 
-const ANNOTATION = /<!--\s*credits(-rate|-llm-rate)?:\s*(.*?)\s*-->/g
 const LLM_FIGURE = /^([a-z0-9][a-z0-9.-]*):(kie|direct)(?::(input|output)(:long)?|@(\d+)\/(\d+))$/
 
-/** The comment kind of an `ANNOTATION` match's first group. */
-function commentOf(group: string | undefined): AnnotationComment {
-  return group === "-rate" ? "rate" : group === "-llm-rate" ? "llm-rate" : "charge"
-}
 const PART = /^([a-z0-9][a-z0-9.:_-]*?)(?:@(\d+(?:\.\d+)?))?$/i
 const LITERAL = /^\d+(?:\.\d+)?$/
 
@@ -181,13 +177,6 @@ export function parseAnnotation(comment: AnnotationComment | boolean, expr: stri
   return { kind: "charge", charges }
 }
 
-/** The number right before `end` in `line`, past a credits word, a /unit suffix and `**`. */
-function figureBefore(line: string, end: number): { value: number; start: number; end: number; text: string } | null {
-  const before = line.slice(0, end).replace(/(?:\*\*|\s|-?credits?(?:\/[a-z]+)?|-?\bCR\b)*$/i, "")
-  const m = before.match(/(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)$/)
-  if (!m) return null
-  return { value: Number(m[1]!.replace(/,/g, "")), start: before.length - m[1]!.length, end: before.length, text: m[1]! }
-}
 
 /** Every annotated figure of one page, in order. Throws on a malformed annotation. */
 export function readDocFigures(file: string, text: string): DocFigure[] {

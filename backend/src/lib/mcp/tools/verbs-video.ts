@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { creditLadderHint, lipSyncPriceSuffix } from "./_credit-hint.js"
+import { unitFields } from "../amounts.js"
 import { MAX_LIP_SYNC_AUDIO_SEC } from "./_audio-length.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { COMBINE_VIDEOS_MAX_CLIPS, combineVideosTooManyClipsMessage } from "../../video-utility-credits.js"
@@ -84,21 +85,28 @@ const MCP_VIDEO_ANALYSIS_TIER: VideoAnalysisTier = "smart"
 // resolveVideoAnalysisModel is sentinel-aware: `smart` resolves to its own
 // engine-plan sentinel, which buildVideoAnalysisCreditId prices under the
 // `smart` credit family.
-const VIDEO_ANALYSIS_PRICING_HINT = creditLadderHint(
+// In credits it is built once per process, as it always was; on a deployment
+// with its own unit it is built at each registration, in that unit
+// (lib/mcp/amounts.ts), so the figures follow the unit.
+const onceInCredits = (build: () => string): (() => string) => {
+  let inCredits: string | undefined
+  return () => (unitFields().unit !== undefined ? build() : (inCredits ??= build()))
+}
+const videoAnalysisPricingHint = onceInCredits(() => creditLadderHint(
   VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => buildVideoAnalysisCreditId(resolveVideoAnalysisModel(MCP_VIDEO_ANALYSIS_TIER), b)),
-)
+))
 
 // Credit hint for the video_audit tool description — same derivation
-// discipline as VIDEO_ANALYSIS_PRICING_HINT above (never hand-write the
+// discipline as videoAnalysisPricingHint above (never hand-write the
 // numbers). Two families instead of per-tier: `analysis wired` (an existing
 // analysis was passed — re-audits it) and `auto-run analysis` (none passed —
 // the tool runs a fast analysis first, hence the higher price).
-const VIDEO_AUDIT_PRICING_HINT = [true, false]
+const videoAuditPricingHint = onceInCredits(() => [true, false]
   .map((analysisProvided) => {
     const familyLabel = analysisProvided ? "analysis wired" : "auto-run analysis"
     return `${familyLabel} ${creditLadderHint(VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => buildVideoAuditCreditId({ analysisProvided, durationSec: b })))}`
   })
-  .join("; ")
+  .join("; "))
 
 /**
  * How `extend_video` names the clip each Extend Video provider continues: the
@@ -3060,7 +3068,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         `**Pricing** — this tool always runs the ${VIDEO_ANALYSIS_TIER_LABELS[MCP_VIDEO_ANALYSIS_TIER]} analysis ` +
         "(the highest-accuracy tier), billed per duration bucket (" +
         `${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => `≤${b}s`).join(" / ")}): ` +
-        `${VIDEO_ANALYSIS_PRICING_HINT}.`,
+        `${videoAnalysisPricingHint()}.`,
       inputSchema: {
         video_asset_id: z.string().uuid().optional().describe("Nodaro video job id or uploaded-asset id."),
         video_url: z.string().url().optional().describe("Direct URL of a video file."),
@@ -3198,7 +3206,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "then audits that.\n\n" +
         "**Pricing** — duration-bucketed credits per family (buckets " +
         `${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => `≤${b}s`).join(" / ")}), selected by ` +
-        `whether \`analysis\` was passed: ${VIDEO_AUDIT_PRICING_HINT}.`,
+        `whether \`analysis\` was passed: ${videoAuditPricingHint()}.`,
       inputSchema: {
         video_url: z.string().url().describe("Direct URL of the video to audit."),
         analysis: z

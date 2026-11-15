@@ -57,7 +57,7 @@ The local ledger records settlement and its outbox together. Normal settlement a
 {"contract":1,"unit":"nodaro_credit","sso_subject":"customer-123","available_credits":250}
 ```
 
-Available credits exclude all outstanding holds across products. This balance may be fractional so a remainder smaller than one billable credit can still be displayed; reserve/settle amounts are whole credits. The studio converts the balance once into its configured display unit and removes the separate local allowance display. Before activation, agree the conversion and configure `billing.unitRate`/`unitLabel` to match the external product's budget, so both products show the same figure. An unavailable balance appears as unknown. The reserve operation remains authoritative when simultaneous requests race.
+Available credits exclude all outstanding holds across products. This balance may be fractional so a remainder smaller than one billable credit can still be displayed; reserve/settle amounts are whole credits. The studio converts the balance once into its configured display unit and removes the separate local allowance display. Before activation, agree the conversion and configure `billing.unitRate`/`unitLabel` to match the external product's budget, so both products show the same figure. An unavailable balance appears as unknown. Connected MCP clients read the same figure: `check_balance` answers the wallet's available amount in the display unit, and an unavailable balance as `null`, never `0` ([MCP tools](mcp/tools.md#deployment-unit)). The reserve operation remains authoritative when simultaneous requests race.
 
 ## Price discovery
 

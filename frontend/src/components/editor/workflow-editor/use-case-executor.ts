@@ -59,6 +59,7 @@ import { pollUseCaseTextJob } from "./use-case-text-poll"
 import { shouldAbandonNode } from "./abandon-guard"
 import { localizeJobLabel } from "./job-label"
 import { WorkflowStaleError, type ExecutionContext } from "./types"
+import { promptCreditsShortfall } from "./credits-shortfall"
 
 /** How long a continue answered "still settling" waits before it asks again. */
 export const USE_CASE_SETTLING_RETRY_MS = 5_000
@@ -248,7 +249,8 @@ const landText: Landing = async (nodeId, nodeType, start, ctx) => {
     })
     if (blocked) guardedToast.warning(tx("run.jobBlocked", { label }))
     else if (warning) guardedToast.warning(message)
-    else guardedToast.error(tx(jobId === undefined ? "nodeRun.failedToStart" : "nodeRun.failed", { label }), { description: message })
+    // A start refused for a credits shortfall that names its figures: the editor's dialog, instead of the toast.
+    else if (!promptCreditsShortfall(err, ctx)) guardedToast.error(tx(jobId === undefined ? "nodeRun.failedToStart" : "nodeRun.failed", { label }), { description: message })
     throw err
   }
 }

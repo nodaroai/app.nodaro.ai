@@ -119,12 +119,23 @@ export class StorageExceededError extends Error {
 export class InsufficientCreditsError extends Error {
   readonly code: string
   readonly appCreditsAllowance: number
+  /**
+   * The refusal's own figures, RAW credits, as the 402 body carries them beside
+   * `error`: what the request needs, and the balance it was compared with.
+   * Either is absent when the body names none — a deployment payer's refusal
+   * withholds `balance` (the pool is the operator's). Convert with
+   * `creditUnits` at render, never before a comparison.
+   */
+  readonly required?: number
+  readonly balance?: number
 
-  constructor(message: string, code: string, appCreditsAllowance: number) {
+  constructor(message: string, code: string, appCreditsAllowance: number, figures?: { readonly required?: number; readonly balance?: number }) {
     super(message)
     this.name = "InsufficientCreditsError"
     this.code = code
     this.appCreditsAllowance = appCreditsAllowance
+    if (figures?.required !== undefined) this.required = figures.required
+    if (figures?.balance !== undefined) this.balance = figures.balance
   }
 }
 
@@ -153,13 +164,12 @@ export class InsufficientCreditsError extends Error {
  * `creditUnits` at render, never before a comparison.
  */
 export class UserAllowanceExceededError extends InsufficientCreditsError {
-  readonly required: number
+  declare readonly required: number
   readonly remaining: number
 
   constructor(required: number, remaining: number) {
-    super(tx("credits.allowanceExceeded"), "user_allowance_exceeded", 0)
+    super(tx("credits.allowanceExceeded"), "user_allowance_exceeded", 0, { required })
     this.name = "UserAllowanceExceededError"
-    this.required = required
     this.remaining = remaining
   }
 }
@@ -315,10 +325,14 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: Messag
     )
   }
   if (errObj?.code === "insufficient_app_credits" || errObj?.code === "insufficient_credits") {
+    // `required` and `balance` sit BESIDE `error` in the body, like the
+    // allowance refusal's above; only a real number is carried.
+    const balance = typeof errJson?.balance === "number" ? errJson.balance : undefined
     throw new InsufficientCreditsError(
       message,
       errObj.code as string,
       (errObj.appCreditsAllowance as number) ?? 0,
+      { ...(required !== undefined ? { required } : {}), ...(balance !== undefined ? { balance } : {}) },
     )
   }
   if (errObj?.code === "name_taken") {
@@ -621,14 +635,12 @@ export class UgcApiError extends Error {
 
 /** A UGC call's 402 that names the route's `required` and `balance` (the buy-credits dialog's numbers): still an InsufficientCreditsError. */
 export class UgcInsufficientCreditsError extends InsufficientCreditsError {
-  readonly required: number
-  readonly balance: number
+  declare readonly required: number
+  declare readonly balance: number
 
   constructor(message: string, required: number, balance: number) {
-    super(message, "insufficient_credits", 0)
+    super(message, "insufficient_credits", 0, { required, balance })
     this.name = "UgcInsufficientCreditsError"
-    this.required = required
-    this.balance = balance
   }
 }
 
@@ -9130,6 +9142,8 @@ export interface ConnectedApp {
   scopes: string[]
   connectedAt: string
   lastUsedAt: string | null
+  /** Present when the app obtained the grant through the MCP assertion exchange: from the deployment's sign-in, with no consent screen. */
+  grantedBy?: "assertion_exchange"
 }
 
 /** Every app with access to the user's account. Browser sessions only. */

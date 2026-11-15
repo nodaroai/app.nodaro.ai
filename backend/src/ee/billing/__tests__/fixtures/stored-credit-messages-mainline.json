@@ -1,0 +1,21 @@
+{
+  "check_insufficient": "Insufficient credits. Required: 2087, Available: 1534",
+  "check_app_credits": "Insufficient app credits. You have 7 app credits but need 29. Earn app credits by running flows in the editor.",
+  "check_web_free": "Your free credits can't cover this run (need 211, free pool has 23).",
+  "check_daily": "Daily credit limit reached. Limit: 4421, Spent: 4400",
+  "run_set_insufficient": "Insufficient credits. Required: 2087, Available: 510",
+  "run_set_web_free": "Your free credits can't cover this run (need 211, free pool has 23).",
+  "reserve_insufficient": "Credit reservation failed: Insufficient credits: need 2087, have 1534",
+  "reserve_daily": "Credit reservation failed: Daily credit limit reached: limit 4421, spent today 4400, need 53",
+  "reserve_appCredits": "Credit reservation failed: Insufficient app credits: need 29, have 7. Earn app credits by running flows.",
+  "reserve_subscriptionRequired": "Credit reservation failed: SUBSCRIPTION_REQUIRED: web spending draws only free-pool credits: need 211, free pool has 23",
+  "reserve_notPositive": "Credit reservation failed: Credits must be positive, got -3",
+  "continue_estimate": "Continuing this episode is estimated at about 113 credits; your balance is 509.",
+  "llm_route_charged_1": "The model refused. Charged 1 credit: the model did billed work before it failed.",
+  "llm_route_charged_n": "The model refused. Charged 67 credits: the model did billed work before it failed.",
+  "meter_sync_charged_1": "The answer was cut off. The AI provider had already processed the request, so 1 credit was charged for the usage it billed.",
+  "meter_sync_charged_n": "The answer was cut off. The AI provider had already processed the request, so 41 credits were charged for the usage it billed.",
+  "picker_charged_unsettled": "We couldn't read anything in this photo — try a clearer photo of one person. You were charged for the model's attempt.",
+  "picker_charged_1": "We couldn't read anything in this photo — try a clearer photo of one person. You were charged 1 credit for the model's attempt.",
+  "picker_charged_n": "We couldn't read anything in this photo — try a clearer photo of one person. You were charged 17 credits for the model's attempt."
+}

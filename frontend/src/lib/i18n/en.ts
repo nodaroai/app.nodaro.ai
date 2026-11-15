@@ -1198,6 +1198,8 @@ export const en = {
   "connApps.revokeTitle": "Revoke access for {name}?",
   "connApps.revokeDesc": "The app can no longer use your account. To use it again, connect it again.",
   "connApps.revoked": "Access revoked",
+  "connApps.viaSignIn": "Connected through your sign-in: this app gets access without a consent screen.",
+  "connApps.revokeDescExchange": "The app can no longer use your account. It cannot get access again by itself: it would have to ask you to approve it.",
   "settings.connectedApps": "Connected apps",
   "settings.connectedAppsDesc": "See the apps and AI assistants with access to your account, and revoke any of them.",
   "settings.providerKeys": "Provider keys",

@@ -36,6 +36,7 @@ import {
   updateAwaitingReviewIfChanged,
   type ExecutionContext,
 } from "./types";
+import { creditsShortfallOf } from "./credits-shortfall";
 import { updateQueueInfoIfChanged } from "./node-queue-info";
 import { QueuedPollClock } from "@/lib/queued-poll-clock";
 
@@ -645,6 +646,13 @@ export function pollJobWithNodeUpdate(
         // pinned by its route's own test. A policy block is a different thing.
         const isPolicyBlock = code === "job_blocked";
         const msg = err instanceof Error ? err.message : "Unknown error";
+        // A refusal the editor answers with a dialog (credits, storage, the
+        // subscription ask) shows no toast. A credits refusal — the one this
+        // dialog newly takes — keeps the server's sentence on the node, so it
+        // still says why once the dialog is closed; storage and the
+        // subscription ask leave the node as they always did.
+        const takenByDialog = checkStorageError(err, ctx);
+        const creditsRefusal = takenByDialog && creditsShortfallOf(err) !== null;
         updateNodeData(nodeId, {
           executionStatus: "failed",
           currentJobId: undefined,
@@ -657,13 +665,13 @@ export function pollJobWithNodeUpdate(
             ? { kind: "policy-block", policyId: "", reason: msg, hookPoint: "request" }
             : undefined,
           errorDetail: undefined,
-          ...(isPolicyBlock
+          ...(isPolicyBlock || creditsRefusal
             ? { errorMessage: msg }
             : isWarning
               ? { errorMessage: msg, errorCode: code }
               : {}),
         });
-        if (!checkStorageError(err, ctx)) {
+        if (!takenByDialog) {
           if (isPolicyBlock) {
             guardedToast.warning(tx("run.jobBlocked", { label: localizeJobLabel(label) }));
           } else if (isWarning) {

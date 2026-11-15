@@ -26,7 +26,12 @@ vi.mock("@/hooks/use-workflow-store", () => ({
     }),
   },
 }))
-vi.mock("@/lib/api", () => api)
+vi.mock("@/lib/api", async (orig) => {
+  // The refusal classes stay real: the not-enough-credits dialog is opened by what the refusal is.
+  const actual = await orig<typeof import("@/lib/api")>()
+  return { ...api, InsufficientCreditsError: actual.InsufficientCreditsError, UserAllowanceExceededError: actual.UserAllowanceExceededError }
+})
+vi.mock("@/lib/edition", async (orig) => ({ ...(await orig<typeof import("@/lib/edition")>()), hasCredits: () => true }))
 vi.mock("sonner", () => ({ toast: toasts }))
 vi.mock("../poll-job", async (orig) => ({
   ...(await orig<typeof import("../poll-job")>()),
@@ -212,6 +217,25 @@ describe("Chapters on the canvas: a text result", () => {
     await expect(run(chaptersNode({ useCaseJobId: "old-run" }))).rejects.toThrow("Not enough credits")
     expect(dataNow()).toMatchObject({ executionStatus: "failed", errorMessage: "Not enough credits", useCaseJobId: undefined })
     expect(api.getJobStatusLean).not.toHaveBeenCalled()
+  })
+
+  it("a start refused for a credits shortfall opens the not-enough-credits dialog with the refusal's figures, and no toast", async () => {
+    const { InsufficientCreditsError } = await vi.importActual<typeof import("@/lib/api")>("@/lib/api")
+    api.runUseCase.mockRejectedValue(new InsufficientCreditsError("Insufficient credits. Required: 50, Available: 0", "insufficient_credits", 0, { required: 50, balance: 0 }))
+    const openCreditsDialog = vi.fn()
+    await expect(run(chaptersNode(), { ...(makeCtx() as object), openCreditsDialog } as never)).rejects.toThrow("Insufficient credits")
+    expect(openCreditsDialog).toHaveBeenCalledWith({ required: 50, available: 0 })
+    expect(toasts.error).not.toHaveBeenCalled()
+    expect(dataNow()).toMatchObject({ executionStatus: "failed" })
+  })
+
+  it("a credits refusal that names no figures keeps the toast (the episode's own estimate is not one the client may quote)", async () => {
+    const { InsufficientCreditsError } = await vi.importActual<typeof import("@/lib/api")>("@/lib/api")
+    api.runUseCase.mockRejectedValue(new InsufficientCreditsError("This episode is estimated at about 900 credits; your balance is 0.", "insufficient_credits", 0))
+    const openCreditsDialog = vi.fn()
+    await expect(run(chaptersNode(), { ...(makeCtx() as object), openCreditsDialog } as never)).rejects.toBeDefined()
+    expect(openCreditsDialog).not.toHaveBeenCalled()
+    expect(toasts.error).toHaveBeenCalledTimes(1)
   })
 
   it("Tighten Episode still lands through the episode lane", async () => {

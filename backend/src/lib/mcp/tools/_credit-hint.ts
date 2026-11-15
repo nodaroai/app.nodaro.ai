@@ -30,6 +30,7 @@ import { statedPrices } from "../../../ee/billing/stated-prices.js"
 import { LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS, isPerSecondLipSyncProvider, lipSyncAudioRateOf } from "@nodaro/shared/credits"
 import { LLM_FEATURE_DEFAULTS, getLlmModel, llmDefaultsFeature, llmPriceKey, type LlmFeature } from "@nodaro/shared/llm-models"
 import type { MeteredLlmFeature } from "../../../ee/billing/llm-typical-usage.js"
+import { amountAbbreviation, amountWord, statedAmount, unitFields } from "../amounts.js"
 
 /** Re-exported so tool files name a metered feature without importing ee/ themselves. */
 export type { MeteredLlmFeature }
@@ -43,19 +44,34 @@ export function creditsOf(id: string): number {
   return v
 }
 
-/** `n` as a description states it — with its price id attached when rendering the docs. */
+/**
+ * `n` as a description states it — in the deployment's unit when it has one
+ * (`lib/mcp/amounts.ts`, the one funnel), with its price id attached when
+ * rendering the docs. The docs are rendered in credits, so a figure in a
+ * deployment's own unit never carries a credits annotation.
+ */
 function stated(n: number, id: string): string {
+  if (unitFields().unit !== undefined) {
+    const shown = statedAmount(n)
+    return shown === null ? "?" : `${shown}`
+  }
   return process.env.NODARO_PRICE_ANNOTATIONS === "1" ? `${n}<!-- credits: ${id} -->` : `${n}`
+}
+
+/** The charged price of a credit id as a figure a sentence states (`"<n>"`, in the deployment's unit when it has one). */
+export function statedCreditsOf(id: string): string {
+  const shown = statedAmount(creditsOf(id))
+  return shown === null ? "?" : `${shown}`
 }
 
 /** `"<n> cr"` for a credit id. */
 export function creditHint(id: string): string {
-  return hasCredits() ? `${stated(creditsOf(id), id)} cr` : OFF_CLOUD
+  return hasCredits() ? `${stated(creditsOf(id), id)} ${amountAbbreviation()}` : OFF_CLOUD
 }
 
 /** `"<a>/<b>/… credits"` — one charged figure per id, in order (a duration-bucket ladder). */
 export function creditLadderHint(ids: readonly string[]): string {
-  return hasCredits() ? `${ids.map((id) => stated(creditsOf(id), id)).join("/")} credits` : OFF_CLOUD
+  return hasCredits() ? `${ids.map((id) => stated(creditsOf(id), id)).join("/")} ${amountWord()}` : OFF_CLOUD
 }
 
 /** The charged price of `units` of a per-unit rate; throws at registration on a rate priced nowhere. */
@@ -78,13 +94,14 @@ export function lipSyncPriceSuffix(id: string): string {
   if (rate) {
     const per15 = stated(rateCreditsOf(rate.rateId, LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS), `${rate.rateId}@${LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS}`)
     const least = stated(rateCreditsOf(rate.rateId, rate.minSeconds), `${rate.rateId}@${rate.minSeconds}`)
-    return ` (${per15} cr/15s, per second of audio, at least ${least} cr)`
+    const cr = amountAbbreviation()
+    return ` (${per15} ${cr}/15s, per second of audio, at least ${least} ${cr})`
   }
   const bucket = `${id}:15s`
-  if (typeof STATIC_CREDIT_COSTS[bucket] === "number" && isPerSecondLipSyncProvider(id)) return ` (${stated(creditsOf(bucket), bucket)} cr/15s)`
+  if (typeof STATIC_CREDIT_COSTS[bucket] === "number" && isPerSecondLipSyncProvider(id)) return ` (${stated(creditsOf(bucket), bucket)} ${amountAbbreviation()}/15s)`
   const tiered =
     STATIC_CREDIT_COSTS[`${id}:8s:480p`] !== undefined || STATIC_CREDIT_COSTS[`${id}:4s:480p`] !== undefined
-  if (typeof STATIC_CREDIT_COSTS[id] === "number" && !tiered) return ` (${stated(creditsOf(id), id)} cr)`
+  if (typeof STATIC_CREDIT_COSTS[id] === "number" && !tiered) return ` (${stated(creditsOf(id), id)} ${amountAbbreviation()})`
   return " (duration-tiered)"
 }
 
@@ -116,7 +133,7 @@ export function estimateHint(feature: MeteredLlmFeature, modelId: string = llmFe
   try {
     const key = llmPriceKey(feature, modelId)
     const credits = statedPrices().credits(key)
-    if (credits !== undefined) return `≈${stated(credits, key)} credits typical on ${name}`
+    if (credits !== undefined) return `≈${stated(credits, key)} ${amountWord()} typical on ${name}`
   } catch {
     // fall through to the figure-free hint
   }

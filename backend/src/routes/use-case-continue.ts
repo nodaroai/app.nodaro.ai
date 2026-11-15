@@ -21,6 +21,7 @@
  * refused, and every failure before the run starts gives the claim back. What
  * runs is worked out in lib/use-case/continuation.ts.
  */
+import { renderFinalHoldShortfallMessage } from "../lib/stated-credit-messages.js"
 import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { USE_CASE_NODE_TYPES, usecaseContinuePath, usecaseFeeCreditId, usecasePlanNodeId, usecaseRunPlan, type UseCaseNodeType } from "@nodaro/render-rules"
@@ -180,7 +181,7 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
             surface: { billingContext, webFreeMode },
           })
           if (credits && !credits.sufficient) {
-            const message = credits.message ?? `Render final can hold up to about ${credits.holdCredits} credits while it renders.`
+            const message = credits.message ?? renderFinalHoldShortfallMessage(credits.holdCredits)
             return reply.status(402).send({ error: { code: "insufficient_credits", message } })
           }
         } catch (err) {

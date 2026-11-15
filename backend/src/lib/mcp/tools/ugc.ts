@@ -11,6 +11,7 @@ import { resolveAssetId } from "../asset-resolver.js"
 import { UGC_SPENT_JOB_IDS_MAX } from "./_ugc-limits.js"
 import { internalHeaders, isRouterNotFound, textResult } from "./_studio-helpers.js"
 import { errorResult, jobResultWithWidget, parseJobId } from "./_verb-helpers.js"
+import { amountsNote, statedAmountRecord, unitFields } from "../amounts.js"
 
 /**
  * UGC video builders — `build_ugc_creator`, `build_ugc_clips`, `build_ugc_cards`.
@@ -228,7 +229,8 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
         "returns every problem at once, each with a fix to apply before calling again. A valid script returns one " +
         "ready-to-run generate_video call per clip, the call that joins them, and a credit quote for the rest of " +
         "the video (a line with `estimate: true` is a metered LLM call's estimate, and then the quote has " +
-        "`totalIsEstimate: true`: show it as ≈N). Free: it generates nothing. Used by the ugc-website recipe (get_recipe).",
+        "`totalIsEstimate: true`: show it as ≈N). Free: it generates nothing. Used by the ugc-website recipe (get_recipe)." +
+        amountsNote(),
       inputSchema: {
         plan: z.record(z.string(), z.unknown()),
         gender: z.enum(["woman", "man"]),
@@ -311,7 +313,15 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
         // The estimate and the worst case ride only an answer that asks for them (`quote` is the one the user's OK covers).
         const estimate = Array.isArray(estimateQuoteItems) ? await price(estimateQuoteItems, count(body.estimateClipCount)) : undefined
         const worstCase = (await dearest(worstCaseQuoteItemSets)) ?? (Array.isArray(worstCaseQuoteItems) ? await price(worstCaseQuoteItems, count(body.worstCaseClipCount)) : undefined)
-        return textResult({ ...rest, quote, ...(estimate ? { estimate } : {}), ...(worstCase ? { worstCase } : {}) })
+        // Each quote's figures (its lines' credits and its total; every number in a quote is one) in the
+        // deployment's unit when it has one (lib/mcp/amounts.ts) — never the plugin's own body (`rest`).
+        return textResult({
+          ...rest,
+          quote: statedAmountRecord(quote),
+          ...(estimate ? { estimate: statedAmountRecord(estimate) } : {}),
+          ...(worstCase ? { worstCase: statedAmountRecord(worstCase) } : {}),
+          ...unitFields(),
+        })
       } catch (err) {
         if (err instanceof UgcQuoteError) return refuse(err.message)
         throw err

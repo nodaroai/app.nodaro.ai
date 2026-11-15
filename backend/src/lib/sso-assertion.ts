@@ -39,15 +39,33 @@ export class SsoAssertionError extends Error {
 export const CLOCK_TOLERANCE_SEC = 5
 
 /**
+ * What an assertion is for (decided 2026-11-11): `"sign-in"` signs a person in
+ * through the browser (GET /v1/sso/:provider) and is bound to the provider's
+ * `audience`; `"exchange"` is exchanged for an MCP access token by the
+ * deployment's own application (POST /v1/oauth/token, jwt-bearer) and is
+ * bound to its `exchangeAudience`. One verifier for both, so the algorithm,
+ * the expiry, the lifetime cap and the jti rule cannot drift apart.
+ */
+export type AssertionUse = "sign-in" | "exchange"
+
+/**
  * Verify a bespoke IdP assertion (§5.6). HS256 only, audience-bound, expiry
  * enforced by jose PLUS a server-side max-lifetime cap (a stolen long-lived
  * assertion must not outlive the replay window). Requires jti so the replay
  * cache is real, and email so linking has a subject. Never trusts the IdP to
  * self-limit lifetime.
+ *
+ * The audience is the one of `use`. An assertion whose `aud` ALSO names the
+ * other use's audience is refused at both doors: jose accepts an `aud` array
+ * when any entry matches, so without this one assertion carrying both values
+ * would both sign a person in and be exchangeable. A provider with no
+ * exchange audience verifies sign-ins exactly as before.
  */
-export async function verifyAssertion(provider: SsoProviderConfig, token: string): Promise<VerifiedAssertion> {
-  if (!provider.secret || !provider.audience) {
-    // Guaranteed by parseSsoProviders for kind="assertion"; defensive.
+export async function verifyAssertion(provider: SsoProviderConfig, token: string, use: AssertionUse = "sign-in"): Promise<VerifiedAssertion> {
+  const audience = use === "exchange" ? provider.exchangeAudience : provider.audience
+  if (!provider.secret || !audience) {
+    // Guaranteed by parseSsoProviders for kind="assertion" sign-ins, and by
+    // the exchange's own decision (lib/mcp-assertion-exchange.ts); defensive.
     throw new SsoAssertionError("invalid_claims", "provider is not configured for assertion verification")
   }
   const key = new TextEncoder().encode(provider.secret)
@@ -56,7 +74,7 @@ export async function verifyAssertion(provider: SsoProviderConfig, token: string
   try {
     const result = await jwtVerify(token, key, {
       algorithms: ["HS256"],
-      audience: provider.audience,
+      audience,
       clockTolerance: CLOCK_TOLERANCE_SEC,
     })
     payload = result.payload as Record<string, unknown>
@@ -66,6 +84,13 @@ export async function verifyAssertion(provider: SsoProviderConfig, token: string
       throw new SsoAssertionError("invalid_claims", `assertion claim invalid: ${e.claim}`)
     // JWSSignatureVerificationFailed, JWSInvalid, JWTInvalid, malformed, …
     throw new SsoAssertionError("invalid_signature", "assertion signature or format invalid")
+  }
+
+  const otherAudience = use === "exchange" ? provider.audience : provider.exchangeAudience
+  if (otherAudience !== undefined) {
+    const aud = payload.aud
+    const named = Array.isArray(aud) ? aud : typeof aud === "string" ? [aud] : []
+    if (named.includes(otherAudience)) throw new SsoAssertionError("invalid_claims", "assertion claim invalid: aud")
   }
 
   const jti = typeof payload.jti === "string" ? payload.jti : ""

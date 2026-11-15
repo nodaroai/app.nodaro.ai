@@ -826,6 +826,15 @@ same subject), `404` (unknown provider), `400`
 assertion), `429` (per-IP rate limit). The assertion and the minted token are
 redacted from request logs.
 
+The same provider can also sign assertions the deployment's own application
+**exchanges for an MCP access token** at `POST /v1/oauth/token`
+(`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`, RFC 7523), where a
+deployment turns that on — see [the assertion exchange](./oauth-flow.md#assertion-exchange).
+Such assertions carry the provider's `exchangeAudience`; `GET /v1/sso/:provider`
+refuses them (`401 invalid_claims`), and the exchange refuses a sign-in
+assertion. A grant obtained that way is listed by `GET /v1/me/connected-apps`
+with `"grantedBy": "assertion_exchange"` (absent on every other grant).
+
 ## 4. Worked example: generate an image
 
 End-to-end bash. Assumes you've copied your token into `$TOKEN` and have
@@ -2888,6 +2897,14 @@ No scopes required.
 `worlds` reports a deployment's availability settings only. Whether the
 edition serves a node at all is decided where its route is registered.
 
+Before this answers, and when it cannot be read, an app can judge the
+deployment by its own lists in its runtime configuration (`surface.nodes`,
+`surface.models`, `surface.worlds`), with the rule the server applies before
+any Admin → Availability setting: `nodeListsWithhold`, `listsWithhold` and
+`worldOffered` in `@nodaro/shared/runtime-config`. The workflow editor does
+(see "Before the viewer's answer" under `nodes.allow` in
+[deployment.md](./deployment.md#surface-profile-nodaro_surface_profile)).
+
 ### Edit Plan modes
 
 `GET /v1/edit-plan/capabilities` — the [Edit Plan](./nodes/processing-video/edit-plan.md)
@@ -4774,7 +4791,9 @@ changes.
   slots. `"plan"`: a bigger plan would help — work billed to you (or to the
   account that pays for your install) on a plan below Business. It is `null`
   for a wait on the provider or the server (a bigger plan does not shorten
-  those), on Business and above, and when the plan could not be read.
+  those), on Business and above, when the plan could not be read, and always
+  on a deployment without self-serve billing (`billing.selfServe: false`, see
+  [Deployment](deployment.md)), where no plan is sold.
 
 The field carries counts only, never who else is in the line. The batch reads
 answer every waiting job of the request from one read of the line.

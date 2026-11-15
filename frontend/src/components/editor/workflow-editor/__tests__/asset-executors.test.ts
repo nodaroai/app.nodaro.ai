@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const mockGenerateCharacter = vi.fn()
 const mockGenerateCharacterAsset = vi.fn()
@@ -17,6 +17,9 @@ const mockUpdateNodeData = vi.fn()
 const mockToastInfo = vi.fn()
 const mockToastError = vi.fn()
 const mockToastSuccess = vi.fn()
+// The editor's blocking-dialog check (types.ts) and its credits half (credits-shortfall.ts).
+const mockCheckStorageError = vi.fn((_err: unknown, _ctx: unknown) => false)
+const mockPromptCreditsShortfall = vi.fn((_err: unknown, _ctx: unknown) => false)
 let mockNodes: any[] = []
 
 vi.mock("sonner", () => ({
@@ -74,7 +77,11 @@ vi.mock("../types", () => ({
     constructor() { super("Workflow changed during execution") }
   },
   MAX_CONSECUTIVE_POLL_FAILURES: 3,
-  checkStorageError: () => false,
+  checkStorageError: (err: unknown, ctx: unknown) => mockCheckStorageError(err, ctx),
+}))
+
+vi.mock("../credits-shortfall", () => ({
+  promptCreditsShortfall: (err: unknown, ctx: unknown) => mockPromptCreditsShortfall(err, ctx),
 }))
 
 vi.mock("../poll-job", () => ({
@@ -470,5 +477,76 @@ describe("handleGenerateLocationAsset", () => {
     expect(mockPollJobToCompletion).toHaveBeenCalledTimes(6)
     expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({ timeOfDayStatus: "completed" }))
     expect(mockToastSuccess).toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A batch stopped part-way by a credits shortfall
+// ---------------------------------------------------------------------------
+
+/**
+ * A batch (expressions, angles, times of day) whose third variant is refused
+ * for a credits shortfall: the not-enough-credits dialog opens (the batch asks
+ * the credits check with the refusal), and the batch's own summary still says
+ * how many it generated — that toast reports what the batch produced, not the
+ * refusal. A storage or subscription refusal is not this batch's dialog: the
+ * whole check is never asked, so it shows the summary alone, as before.
+ */
+describe("asset batches stopped part-way by a credits shortfall", () => {
+  const refusal = new Error("Insufficient credits. Required: 20, Available: 5")
+  const batches = [
+    {
+      name: "character expressions",
+      node: { id: "n1", data: { characterName: "Alice", generatedResults: [{ url: "http://portrait.png" }], activeResultIndex: 0, label: "Char" } },
+      start: mockGenerateCharacterAsset,
+      run: (ctx: unknown) => handleGenerateCharacterAsset("n1", "expressions", ctx as never),
+      total: 6,
+    },
+    {
+      name: "object angles",
+      node: { id: "n1", data: { objectName: "Chair", generatedResults: [{ url: "http://chair.png" }], activeResultIndex: 0, label: "Obj" } },
+      start: mockGenerateObjectAsset,
+      run: (ctx: unknown) => handleGenerateObjectAsset("n1", "angles", ctx as never),
+      total: 5,
+    },
+    {
+      name: "location times of day",
+      node: { id: "n1", data: { locationName: "Forest", generatedResults: [{ url: "http://forest.png" }], activeResultIndex: 0, label: "Loc" } },
+      start: mockGenerateLocationAsset,
+      run: (ctx: unknown) => handleGenerateLocationAsset("n1", "timeOfDay", ctx as never),
+      total: 6,
+    },
+  ]
+
+  afterEach(() => {
+    mockPromptCreditsShortfall.mockImplementation(() => false)
+  })
+
+  it.each(batches)("$name: the dialog opens, and the summary still says 2 of $total were generated — without the refusal's sentence", async ({ node, start, run, total }) => {
+    mockNodes = [node]
+    start.mockResolvedValueOnce({ jobId: "j1" }).mockResolvedValueOnce({ jobId: "j2" }).mockRejectedValueOnce(refusal)
+    mockPollJobToCompletion.mockResolvedValue("http://result.png")
+    mockPromptCreditsShortfall.mockImplementation(() => true)
+    const ctx = makeCtx()
+    await run(ctx)
+    expect(mockPromptCreditsShortfall).toHaveBeenCalledWith(refusal, ctx)
+    expect(mockCheckStorageError).not.toHaveBeenCalled()
+    expect(mockToastError).toHaveBeenCalledTimes(1)
+    expect(String(mockToastError.mock.calls[0]![0])).toMatch(new RegExp(`\\(2/${total} completed\\)$`))
+    // The count only: the refusal's own sentence is the dialog's, never repeated under the summary.
+    expect(mockToastError.mock.calls[0]![1]).toBeUndefined()
+  })
+
+  it.each(batches)("$name: a refusal no dialog takes shows exactly the summary it always did", async ({ node, start, run, total }) => {
+    mockNodes = [node]
+    start.mockResolvedValueOnce({ jobId: "j1" }).mockResolvedValueOnce({ jobId: "j2" }).mockRejectedValueOnce(refusal)
+    mockPollJobToCompletion.mockResolvedValue("http://result.png")
+    const ctx = makeCtx()
+    await run(ctx)
+    expect(mockCheckStorageError).not.toHaveBeenCalled()
+    expect(mockToastError).toHaveBeenCalledTimes(1)
+    expect(String(mockToastError.mock.calls[0]![0])).toMatch(new RegExp(`\\(2/${total} completed\\)$`))
+    // Exactly as before: the refusal's sentence under the summary.
+    expect(mockToastError.mock.calls[0]![1]).toEqual({ description: refusal.message })
   })
 })

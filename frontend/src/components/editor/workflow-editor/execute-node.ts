@@ -488,6 +488,9 @@ import {
   videoAuditAnalysisWired,
   type ExecutionContext,
 } from "./types";
+// The credits half of checkStorageError: the lanes that answered a refused start with a toast alone open
+// the not-enough-credits dialog for a credits shortfall, and keep their toast for storage and the subscription ask.
+import { promptCreditsShortfall } from "./credits-shortfall";
 import { jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { iterationIdempotencyKey } from "@/lib/idempotency-key";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
@@ -5320,6 +5323,7 @@ function executeNodeCore(
           executionStatus: "failed",
           errorMessage: err instanceof Error ? err.message : "Style boost failed",
         });
+        promptCreditsShortfall(err, ctx);
         throw err;
       });
   }
@@ -5724,7 +5728,7 @@ function executeNodeCore(
           executionStatus: "failed",
           errorMessage: errMsg,
         });
-        guardedToast.error(tx("nodeRun.imageDescriptionFailed"), { description: errMsg });
+        if (!promptCreditsShortfall(err, ctx)) guardedToast.error(tx("nodeRun.imageDescriptionFailed"), { description: errMsg });
         throw err;
       });
   }
@@ -5760,7 +5764,7 @@ function executeNodeCore(
       .catch((err) => {
         const errMsg = err instanceof Error ? err.message : "Unknown error";
         updateNodeData(node.id, { executionStatus: "failed", errorMessage: errMsg });
-        guardedToast.error(tx("nodeRun.imageAnalysisFailed"), { description: errMsg });
+        if (!promptCreditsShortfall(err, ctx)) guardedToast.error(tx("nodeRun.imageAnalysisFailed"), { description: errMsg });
         throw err;
       });
   }
@@ -5917,7 +5921,7 @@ function executeNodeCore(
           generatedText: lastGood?.text ?? "",
           ...(lastGood ? { activeResultIndex: 0 } : {}),
         });
-        guardedToast.error(tx("nodeRun.promptFailed", { message: err.message }));
+        if (!promptCreditsShortfall(err, ctx)) guardedToast.error(tx("nodeRun.promptFailed", { message: err.message }));
         throw err;
       });
   }
@@ -5956,7 +5960,7 @@ function executeNodeCore(
         })
         .catch((err: Error) => {
           updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || "Failed to read channel" });
-          guardedToast.error(err.message || tx("nodeRun.failedToReadChannel"));
+          if (!promptCreditsShortfall(err, ctx)) guardedToast.error(err.message || tx("nodeRun.failedToReadChannel"));
           throw err;
         }),
     );
@@ -5996,7 +6000,7 @@ function executeNodeCore(
         })
         .catch((err: Error) => {
           updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || tx("nodeRun.collectionReadFailed") });
-          guardedToast.error(err.message || tx("nodeRun.collectionReadFailed"));
+          if (!promptCreditsShortfall(err, ctx)) guardedToast.error(err.message || tx("nodeRun.collectionReadFailed"));
           throw err;
         }),
     );
@@ -6045,7 +6049,7 @@ function executeNodeCore(
         })
         .catch((err: Error) => {
           updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || tx("nodeRun.readerReadFailed") });
-          guardedToast.error(err.message || tx("nodeRun.readerReadFailed"));
+          if (!promptCreditsShortfall(err, ctx)) guardedToast.error(err.message || tx("nodeRun.readerReadFailed"));
           throw err;
         }),
     );
@@ -6120,7 +6124,7 @@ function executeNodeCore(
         })
         .catch((err: Error) => {
           updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || tx("nodeRun.collectionWriteFailed") });
-          guardedToast.error(err.message || tx("nodeRun.collectionWriteFailed"));
+          if (!promptCreditsShortfall(err, ctx)) guardedToast.error(err.message || tx("nodeRun.collectionWriteFailed"));
           throw err;
         }),
     );
@@ -6179,7 +6183,7 @@ function executeNodeCore(
         // the node, so don't overwrite it with a failure (mirrors llm-chat).
         if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
         updateNodeData(node.id, { ...applyInstagramScrapeFailure(err.message || "Scrape failed"), ...caughtErrorWords(err) });
-        guardedToast.error(tx("nodeRun.instagramFailed", { message: err.message }));
+        if (!promptCreditsShortfall(err, ctx)) guardedToast.error(tx("nodeRun.instagramFailed", { message: err.message }));
         throw err;
       });
   }
@@ -6224,7 +6228,7 @@ function executeNodeCore(
         // the node, so don't overwrite it with a failure (mirrors instagram-scrape).
         if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
         updateNodeData(node.id, { ...applySocialSearchFailure(err.message || tx("node.scrapeFailed")), ...caughtErrorWords(err) });
-        guardedToast.error(tx("nodeRun.socialSearchFailed", { message: err.message }));
+        if (!promptCreditsShortfall(err, ctx)) guardedToast.error(tx("nodeRun.socialSearchFailed", { message: err.message }));
         throw err;
       });
   }
@@ -6278,7 +6282,7 @@ function executeNodeCore(
         // the node, so don't overwrite it with a failure (mirrors instagram-scrape).
         if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
         updateNodeData(node.id, { ...applyMetaAdsScrapeFailure(err.message || "Scrape failed"), ...caughtErrorWords(err) });
-        guardedToast.error(tx("nodeRun.metaAdsFailed", { message: err.message }));
+        if (!promptCreditsShortfall(err, ctx)) guardedToast.error(tx("nodeRun.metaAdsFailed", { message: err.message }));
         throw err;
       });
   }
@@ -6328,7 +6332,7 @@ function executeNodeCore(
         if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
         // Failed runs record the outcome but never touch generatedJson.
         updateNodeData(node.id, { ...applyWebScrapeFailure(err.message || "Scrape failed"), ...caughtErrorWords(err) });
-        guardedToast.error(tx("nodeRun.webScrapeFailed", { message: err.message }));
+        if (!promptCreditsShortfall(err, ctx)) guardedToast.error(tx("nodeRun.webScrapeFailed", { message: err.message }));
         throw err;
       });
   }
@@ -8738,7 +8742,9 @@ function executeNodeCore(
         }, 2000);
         ctx.trackInterval(poll);
       }).catch((err) => {
-        updateNodeData(node.id, { executionStatus: "failed", currentJobId: undefined });
+        // A credits refusal opens its dialog; the node then keeps its sentence.
+        const creditsDialog = promptCreditsShortfall(err, ctx);
+        updateNodeData(node.id, { executionStatus: "failed", currentJobId: undefined, ...(creditsDialog && err instanceof Error ? { errorMessage: err.message } : {}) });
         reject(err);
       });
     });
@@ -9482,6 +9488,7 @@ function executeNodeCore(
           executionStatus: "failed",
           errorMessage: err instanceof Error ? err.message : String(err),
         });
+        promptCreditsShortfall(err, ctx);
         throw err;
       });
   }
@@ -9536,6 +9543,7 @@ function executeNodeCore(
           executionStatus: "failed",
           errorMessage: err instanceof Error ? err.message : String(err),
         });
+        promptCreditsShortfall(err, ctx);
         throw err;
       });
   }
@@ -9611,6 +9619,7 @@ function executeNodeCore(
           executionStatus: "failed",
           errorMessage: err instanceof Error ? err.message : String(err),
         });
+        promptCreditsShortfall(err, ctx);
         throw err;
       });
   }
@@ -9674,6 +9683,7 @@ function executeNodeCore(
           executionStatus: "failed",
           errorMessage: err instanceof Error ? err.message : String(err),
         });
+        promptCreditsShortfall(err, ctx);
         throw err;
       });
   }
@@ -9994,6 +10004,7 @@ function executeNodeCore(
           executionStatus: "failed",
           errorMessage: err instanceof Error ? err.message : String(err),
         });
+        promptCreditsShortfall(err, ctx);
         throw err;
       });
   }
@@ -10792,7 +10803,7 @@ function executeNodeCore(
           executionStatus: "failed",
           errorMessage: err.message || "Reduce failed",
         });
-        guardedToast.error(tx("nodeRun.reduceFailed", { message: err.message }));
+        if (!promptCreditsShortfall(err, ctx)) guardedToast.error(tx("nodeRun.reduceFailed", { message: err.message }));
         throw err;
       });
   }

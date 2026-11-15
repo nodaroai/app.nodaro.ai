@@ -91,6 +91,10 @@ export default function ConnectedAppsPage() {
                     <span>{t("connApps.connected", { date: formatDate(app.connectedAt) })}</span>
                     <span>{app.lastUsedAt ? t("connApps.lastUsed", { date: formatDate(app.lastUsedAt) }) : t("connApps.neverUsed")}</span>
                   </div>
+                  {app.grantedBy === "assertion_exchange" && (
+                    // The deployment's own app obtained this grant from the sign-in, with no consent screen: say so.
+                    <p className="text-xs text-muted-foreground mt-1">{t("connApps.viaSignIn")}</p>
+                  )}
                   {app.scopes.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1.5 mt-2">
                       <span className="text-xs text-muted-foreground">{t("connApps.access")}</span>
@@ -115,7 +119,9 @@ export default function ConnectedAppsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{confirming ? t("connApps.revokeTitle", { name: nameOf(confirming) }) : ""}</AlertDialogTitle>
-            <AlertDialogDescription>{t("connApps.revokeDesc")}</AlertDialogDescription>
+            <AlertDialogDescription>
+              {confirming?.grantedBy === "assertion_exchange" ? t("connApps.revokeDescExchange") : t("connApps.revokeDesc")}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>

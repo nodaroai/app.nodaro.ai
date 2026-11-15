@@ -31,6 +31,34 @@ only the clients the deployment created can sign in for MCP or call the
 endpoint — see [MCP only through your own client](../deployment.md#mcp-only-through-your-own-client)
 and the [refusals a client sees](./troubleshooting.md#listed-clients).
 
+## A deployment's own application, without a consent screen {#own-application}
+
+On a deployment that lists its MCP clients, the client it set up for its own
+application normally signs each person in once through the deployment's
+consent screen. When that application also signs the people in (it is the
+deployment's [external SSO](../sso.md) provider), the deployment can let its
+**server** skip the consent screen: it signs an assertion naming the person and
+exchanges it for an MCP access token at `POST /v1/oauth/token` with
+`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`.
+
+1. The operator turns it on for your client
+   ([MCP without a consent click](../deployment.md#mcp-without-a-consent-click-the-assertion-exchange))
+   and gives your server three values: your `client_id` and client secret, and
+   the provider's exchange audience (the provider's secret you already hold).
+2. When a person needs MCP, your server signs an assertion for them (HS256,
+   `aud` = the exchange audience, a fresh `jti`, a lifetime of a minute or two)
+   and exchanges it, naming the MCP endpoint as `resource`
+   ([the request and response](../oauth-flow.md#assertion-exchange)).
+3. Connect to the MCP endpoint with the token (`Authorization: Bearer …`):
+   `initialize`, `tools/list`, `tools/call` as with any client. It lives an
+   hour by default (`expires_in`); exchange again before then, or on a `401`.
+   There is no refresh token.
+
+Keep all of it on your server: the client secret and the provider's secret
+together obtain a token for anyone the provider can sign in. If a call answers
+something unexpected, see
+[troubleshooting the exchange](./troubleshooting.md#assertion-exchange).
+
 ## Manual registration
 
 For a long-lived integration, prefer registering once via the dashboard:

@@ -5,13 +5,11 @@
  */
 import { toast } from "sonner"
 import { UGC_CREATOR_CANDIDATES_KEY, ugcCreatorPick } from "@nodaro/shared/ugc"
-import { getCachedUserId } from "@/hooks/use-auth"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { tx } from "@/lib/i18n"
 import { ugcNodeMessageText } from "@/lib/ugc-copy"
-import { queryClient } from "@/lib/query-client"
-import { queryKeys } from "@/lib/query-keys"
 import type { ExecutionContext } from "@/components/editor/workflow-editor/types"
+import { openInsufficientCreditsDialog } from "@/lib/insufficient-credits-dialog"
 
 /**
  * A run of the node is starting (`pending`: the re-draw's save before it runs) or running. Neither
@@ -68,10 +66,7 @@ export function promptUgcCredits(
   ctx: Pick<ExecutionContext, "setInsufficientCreditsData" | "setShowInsufficientCredits">,
   s: { readonly required: number; readonly balance: number },
 ): void {
-  const userId = getCachedUserId()
-  const tier = (userId ? queryClient.getQueryData<{ tier?: string }>(queryKeys.credits.balance(userId))?.tier : undefined) ?? "free"
-  ctx.setInsufficientCreditsData({ required: s.required, available: s.balance, tier })
-  ctx.setShowInsufficientCredits(true)
+  openInsufficientCreditsDialog(ctx, { required: s.required, available: s.balance })
 }
 
 /** A UGC Creator state that failed on a credits stop and names its shortfall, if any (a server run's `ugcShortfall`). */

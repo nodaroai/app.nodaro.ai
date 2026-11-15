@@ -1893,7 +1893,10 @@ and a `guidance` sentence gives its place in line — for example
 `Still waiting — 3rd in line (your plan runs 4 at once). Call wait_for_job again to keep waiting.`
 — followed, when your own line is full and a bigger plan would help, by
 `Need more at once? Upgrade your plan.` (or, for a workspace's line,
-`Need more at once? Ask your workspace owner to upgrade.`). A job waiting
+`Need more at once? Ask your workspace owner to upgrade.`). A deployment
+without self-serve billing (`billing.selfServe: false`) sells no plan, so
+there the sentence ends at what to do next and `queue.upgradeHint` is `null`.
+A job waiting
 because the platform is busy reads
 `Waiting — busy across the platform, 3rd in line. Call wait_for_job again to keep waiting.`
 The envelope's `guidance` carries the same sentence. Jobs wait for a slot only
@@ -1948,6 +1951,10 @@ included, and `creditsReleased` (`credits_released`) what went back once every
 hold in the run settled (`null` until then). A job that held 888 and settled
 at 444 reads `credits: 888`, `creditsCharged: 444`, `creditsHeld: 888`,
 `creditsReleased: 444`.
+
+On a deployment with its own unit these figures, and the same ones in the text
+payload, are in that unit ([Amounts on a deployment with its own
+unit](#deployment-unit)); the text payload names it as `unit`.
 
 An Apply EDL render made at Preview quality (`outputData.quality` is `"proxy"`:
 the private 720p cut to review, not the final) also carries `preview: true`. A
@@ -2245,6 +2252,55 @@ that workflow's run (`run_workflow`).
 
 ## Models and credits tools
 
+### Amounts on a deployment with its own unit {#deployment-unit}
+
+A deployment can show its own unit instead of credits (`billing.unitLabel` and
+the keys beside it, see [Deployment](../deployment.md)), keep each user's
+balance in an external wallet, or turn self-serve purchase off
+(`billing.selfServe: false`). On such a deployment every amount a tool states,
+used or left, is in that deployment's terms, and never the platform's raw
+credits beside it:
+
+- **Left.** `check_balance` answers what the deployment's own balance display
+  shows the user (below).
+- **Used.** What a run held and was charged (`get_job`, `wait_for_job`,
+  `list_jobs`, `get_asset`), the usage and purchase rows of
+  `credit_transactions`, quotes and estimates, the pricing rows of
+  `list_models`, and the price hints in tool descriptions are converted into
+  the unit by the server. The field names stay as documented here (a field
+  named `credits` then holds an amount in the unit); a text reply that states
+  amounts adds `unit` (the unit's word), `unitLabels` (its word per interface
+  language, when the deployment gives one) and `decimals`. The conversion rate
+  is never sent.
+- **A refusal for want of balance** names no figure. Where the deployment
+  manages the balance (no self-serve purchase, or an external wallet), it says
+  so and tells you to have the user ask the deployment's operator, never to
+  top up, upgrade or buy.
+- **Documents.** The skills, recipes and guides the document tools serve
+  (`get_node_skill`, `get_recipe`, `start_workflow_editor`,
+  `start_video_director`, `start_film_director`, `get_studio_production_skill`,
+  `get_recast_authoring_skill`) state their figures in the unit too. A figure
+  written in credits is converted when the unit holds it exactly (one written
+  as approximate stays approximate); one it can not hold exactly, such as a
+  per-unit rate with more decimals than the unit has, is replaced by a pointer
+  to `list_models`. A node skill's **Credit cost** line names no figure: it
+  points at `list_models` (`priceIds`) and the description of the tool that
+  runs the node.
+- **A failure's message.** A run that failed for want of balance, a hold the
+  balance could not cover, and a failure that was still charged are saved with
+  their figures already in the unit, for example
+  `Insufficient balance. Required: 3 points, Available: 0.75 points`, so
+  `get_job`, `wait_for_job`, `get_app_run`, `diagnose_run` and the editor read
+  the same words. A balance that is not the user's own (a deployment payer's
+  pool) is never named. A message saved before the deployment configured its
+  unit keeps the words it was saved with.
+- **Waiting for a slot.** Without self-serve billing a waiting job's
+  `guidance` names no upgrade, and `queue.upgradeHint` is `null`.
+
+A figure that can not be read is `null`, never `0`. With none of these
+configured, every reply, document and saved message is the one documented
+below.
+
 ### `list_models`
 
 **Scope:** none (always visible)
@@ -2316,6 +2372,28 @@ visible only to the billing account's own browser session and its in-app
 Copilot, never to a connected client — with the error
 `payer_balance_jwt_only`. Every other user sees their own figures as usual.
 
+On a deployment in its own terms ([above](#deployment-unit)) the reply is what
+that deployment's balance display shows the user, once, in its unit:
+
+- `unit` (the unit's word, or `credits` on a deployment with no unit of its
+  own), `unitLabels` and `decimals` (with a unit);
+- `available`: what the user has left to spend, and `source`, where it comes
+  from: `external_wallet` (the wallet's available amount), `allowance` (the
+  user's allowance, with `allowance.granted`, `allowance.remaining` and
+  `allowance.enforced`) or `balance`. `null` means it could not be read just
+  now (a `note` says so); it is never `0`, and the platform's own balance is
+  never given in its place;
+- with `source: "balance"`, `dailySpent`, and while self-serve purchase is on
+  the plan's figures: `subscription`, `topup`, `dailyLimit`,
+  `monthlyAllocation` and `appCreditsAllowance`;
+- while self-serve purchase is on and there is no external wallet, the plan
+  itself: `tier`, `effectiveTier`, `features` and `periodEnd`;
+- where the deployment manages the balance, `managedBy: "deployment"` and a
+  `note` saying it cannot be topped up, bought or upgraded here. The plan
+  fields are then left out.
+
+The billing account's own in-app session reads its pool as before, in credits.
+
 **Input:** none
 
 ---
@@ -2343,6 +2421,12 @@ Lists both credit ledgers:
 
   A page holds at most 50 rows. `usage.next_cursor` pages them through
   `usage_cursor`.
+
+On a deployment with its own unit ([above](#deployment-unit)) `credits_granted`,
+`credits_used`, `credits_charged`, `credits_reserved` and the amounts in a usage
+row's `metadata` (`from_sub`, `from_topup`, `allowance_delta`) are in that unit,
+and the reply names it (`unit`); `amount_usd` is the money a purchase cost, as
+before.
 
 **Input:** `limit`, `cursor` (purchases), `usage_cursor` (usage)
 

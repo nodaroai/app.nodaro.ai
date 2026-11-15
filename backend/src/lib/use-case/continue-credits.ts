@@ -7,6 +7,7 @@
  * route asks it of a whole run. `null` in an edition without credits. The ee
  * billing module is reached through a dynamic import, as core must.
  */
+import { continueHoldShortfallMessage, estimateShortfallMessage } from "../stated-credit-messages.js"
 import { withRunOverrides } from "@nodaro/shared/nodes"
 import type { StoredInlineGraph } from "@nodaro/render-rules"
 import { hasCredits } from "../config.js"
@@ -72,7 +73,7 @@ export async function fromFailedCover(input: {
       input.billingContext?.payer === "deployment"
         ? DEPLOYMENT_OUT_OF_CREDITS
         : holdCredits > totalCredits
-          ? `Continuing this episode can hold up to about ${holdCredits} credits while it renders; your balance is ${cover.balance}.`
-          : `Continuing this episode is estimated at about ${totalCredits} credits; your balance is ${cover.balance}.`,
+          ? continueHoldShortfallMessage(holdCredits, cover.balance)
+          : estimateShortfallMessage("Continuing this episode is", totalCredits, cover.balance),
   }
 }

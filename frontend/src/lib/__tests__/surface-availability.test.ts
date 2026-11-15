@@ -19,13 +19,14 @@ afterEach(() => {
 })
 
 describe("surface-availability — fetched effective set with static-profile fallback", () => {
-  it("pre-fetch: falls back to the static profile's explicit deny only", () => {
+  it("pre-fetch: falls back to the static profile's own lists, by the server's rule", () => {
     window.__NODARO_RUNTIME__ = { surface: { nodes: { deny: ["suno-generate"], allow: ["generate-image"] } } }
     expect(isNodeUnavailable("suno-generate")).toBe(true)
-    // allow-inversion is deliberately NOT applied client-side pre-fetch — the
-    // gateable-universe scoping lives backend-side; a brief over-show is
-    // harmless because the backend refuses at write/run.
-    expect(isNodeUnavailable("generate-video")).toBe(false)
+    expect(isNodeUnavailable("generate-image")).toBe(false)
+    // The whitelist withholds what it does not list, as the server does…
+    expect(isNodeUnavailable("generate-video")).toBe(true)
+    // …but never a utility node by leaving it out (the server's gateable universe).
+    expect(isNodeUnavailable("sticky-note")).toBe(false)
   })
 
   it("post-fetch: the fetched effective set replaces the fallback entirely", () => {

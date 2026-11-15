@@ -241,8 +241,13 @@ it.
 
 ```ts
 const apps = await client.connectedApps()
-// [{ authorizationId, name, kind, homepageUrl, scopes, connectedAt, lastUsedAt }]
+// [{ authorizationId, name, kind, homepageUrl, scopes, connectedAt, lastUsedAt, grantedBy? }]
 ```
+
+`grantedBy` is `"assertion_exchange"` on a grant the app obtained through the
+[assertion exchange](./oauth-flow.md#assertion-exchange) — a deployment's own
+application getting MCP tokens for the user from its sign-in, with no consent
+screen — and absent on every grant the user approved.
 
 **Signature:** `connectedApps(): Promise<ConnectedApp[]>`
 
@@ -10303,7 +10308,7 @@ Every type used in a public method signature is re-exported from
 ### Client identity
 
 - `UserIdentity` — return type of `client.me()`: `{ id, email, displayName: string | null, avatarUrl: string | null, tier, isAdmin }`
-- `ConnectedApp` — an entry of `client.connectedApps()`: `{ authorizationId, name, kind, homepageUrl, scopes, connectedAt, lastUsedAt }`
+- `ConnectedApp` — an entry of `client.connectedApps()`: `{ authorizationId, name, kind, homepageUrl, scopes, connectedAt, lastUsedAt, grantedBy? }`
 - `ClientOptions` — `createClient` options: `{ baseUrl, auth, fetch?, timeoutMs?, clientLabel?, workspaceId? }`
 
 ### Organizations

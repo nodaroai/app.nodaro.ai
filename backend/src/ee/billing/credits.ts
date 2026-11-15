@@ -190,6 +190,15 @@ import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pric
 import { UNIT_PRICES } from "../nodes/_generated/prices.js"
 import { composeRecord, unitStaticCosts } from "../../lib/unit-compose.js"
 import { withRunningVideoProvider } from "../../services/workflow-engine/normalize-node-types.js"
+// Every saved sentence that names a credit figure is worded there, in the deployment's own terms where it has them.
+import {
+  appCreditsShortfallMessage,
+  dailyLimitMessage,
+  freePoolShortfallMessage,
+  freeTierDailyLimitMessage,
+  insufficientCreditsMessage,
+  reservationFailedMessage,
+} from "../../lib/stated-credit-messages.js"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
 // Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)
@@ -4145,8 +4154,8 @@ export class CreditsService {
       return {
         allowed: false,
         error: webFree
-          ? `Your free credits can't cover this run (need ${pricing.creditCost}, free pool has ${totalBalance}).`
-          : `Insufficient credits. Required: ${pricing.creditCost}, Available: ${totalBalance}`,
+          ? freePoolShortfallMessage(pricing.creditCost, totalBalance)
+          : insufficientCreditsMessage(pricing.creditCost, totalBalance, { payerPool: surface?.billingContext?.payer === "deployment" }),
         balance: totalBalance,
         required: pricing.creditCost,
         subscriptionCredits,
@@ -4166,7 +4175,7 @@ export class CreditsService {
       if (appAllowance < pricing.creditCost) {
         return {
           allowed: false,
-          error: `Insufficient app credits. You have ${appAllowance} app credits but need ${pricing.creditCost}. Earn app credits by running flows in the editor.`,
+          error: appCreditsShortfallMessage(appAllowance, pricing.creditCost),
           balance: totalBalance,
           required: pricing.creditCost,
           appCreditsAllowance: appAllowance,
@@ -4192,7 +4201,7 @@ export class CreditsService {
         if (dailySpent >= dailyCap) {
           return {
             allowed: false,
-            error: `Daily credit limit reached for free tier. Limit: ${dailyCap}, Spent today: ${dailySpent}. Upgrade for higher limits.`,
+            error: freeTierDailyLimitMessage(dailyCap, dailySpent),
             balance: totalBalance,
             required: pricing.creditCost,
             dailyLimit: dailyCap,
@@ -4247,7 +4256,7 @@ export class CreditsService {
       if (dailyLimit !== undefined && dailySpent + pricing.creditCost > dailyLimit) {
         return {
           allowed: false,
-          error: `Daily credit limit reached. Limit: ${dailyLimit}, Spent: ${dailySpent}`,
+          error: dailyLimitMessage(dailyLimit, dailySpent),
           balance: totalBalance,
           required: pricing.creditCost,
           dailyLimit,
@@ -4479,7 +4488,7 @@ export class CreditsService {
         console.error("[credits] reserve_llm_side_hold RPC failed:", sideError.message)
         const refusalPrefix = reservePrefixOf(sideError.message)
         if (refusalPrefix) throw new ReserveRpcError(refusalPrefix, sideError.message)
-        throw new Error(`Credit reservation failed: ${sideError.message}`)
+        throw new Error(reservationFailedMessage(sideError.message, { payerPool: Boolean(dep && userId !== dep.payerId) }))
       }
       const side = sideData as { usageLogId?: unknown; creditsReserved?: unknown; replayed?: unknown; ledger?: unknown } | null
       // A replay answers the hold its key already names, whatever it was reserved at (a reprice between
@@ -4550,7 +4559,7 @@ export class CreditsService {
       // any catch could match them anchored (P14 review, W3).
       const refusalPrefix = reservePrefixOf(reserveError.message)
       if (refusalPrefix) throw new ReserveRpcError(refusalPrefix, reserveError.message)
-      throw new Error(`Credit reservation failed: ${reserveError.message}`)
+      throw new Error(reservationFailedMessage(reserveError.message, { payerPool: Boolean(dep && userId !== dep.payerId) }))
     }
 
     if (options?.oncePerJob) {
@@ -8194,8 +8203,8 @@ export async function checkRunSetCredits(
     message: deployment
       ? DEPLOYMENT_OUT_OF_CREDITS
       : gates.webFree
-        ? `Your free credits can't cover this run (need ${required}, free pool has ${totalBalance}).`
-        : `Insufficient credits. Required: ${required}, Available: ${totalBalance}`,
+        ? freePoolShortfallMessage(required, totalBalance)
+        : insufficientCreditsMessage(required, totalBalance),
   }
 }
 

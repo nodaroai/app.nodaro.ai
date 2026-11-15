@@ -7,6 +7,7 @@
  * The money moves through `lib/llm-billing.ts` (reserve → spend → settle); this
  * module only shapes what those routes hand it and what the person reads.
  */
+import { chargedRouteFailureMessage } from "./stated-credit-messages.js"
 import type { ZodType } from "zod"
 import { getLlmModel } from "@nodaro/shared/llm-models"
 // From its own module, not the client facade a route test replaces: the hold
@@ -63,8 +64,7 @@ export function llmTextChars(...values: unknown[]): number {
  */
 export function chargedFailureMessage(message: string, settled: LlmSettleOutcome): string {
   if (settled.outcome !== "charged") return message
-  const credits = settled.charged === 1 ? "1 credit" : `${settled.charged} credits`
-  return `${message} Charged ${credits}: the model did billed work before it failed.`
+  return chargedRouteFailureMessage(message, settled.charged)
 }
 
 /**

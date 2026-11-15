@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { isMissingColumnError } from "../lib/postgrest-errors.js"
+import { ASSERTION_EXCHANGE_GRANT_TYPE } from "../lib/oauth-tokens.js"
 
 /**
  * Connected apps — every app the signed-in user has granted access to their
@@ -25,6 +27,30 @@ interface AuthorizationRow {
   scopes_granted: string[] | null
   created_at: string
   developer_apps: { name: string | null; kind: string | null; homepage_url: string | null } | null
+}
+
+/**
+ * The grants among `ids` that an application obtained through the MCP
+ * assertion exchange: those holding a token whose `grant_type` says so
+ * (migration 651, decided 2026-11-11). A database without that column has no
+ * such token (the exchange refuses to issue one there), so it reads as none.
+ */
+async function grantsObtainedByExchange(ids: string[]): Promise<Set<string>> {
+  const out = new Set<string>()
+  if (ids.length === 0) return out
+  const { data, error } = await supabase
+    .from("developer_app_tokens")
+    .select("authorization_id, grant_type")
+    .in("authorization_id", ids)
+    .eq("grant_type", ASSERTION_EXCHANGE_GRANT_TYPE)
+  if (error) {
+    if (isMissingColumnError(error)) return out
+    throw error
+  }
+  for (const token of (data ?? []) as Array<{ authorization_id: string; grant_type?: string | null }>) {
+    if (token.grant_type === ASSERTION_EXCHANGE_GRANT_TYPE) out.add(token.authorization_id)
+  }
+  return out
 }
 
 function refuseNonSession(req: FastifyRequest, reply: FastifyReply): boolean {
@@ -60,6 +86,7 @@ export async function connectedAppsRoutes(app: FastifyInstance) {
           if (!seen || token.last_used_at > seen) lastUsed.set(token.authorization_id, token.last_used_at)
         }
       }
+      const exchanged = await grantsObtainedByExchange(rows.map((r) => r.id))
 
       return reply.send({
         apps: rows.map((row) => ({
@@ -70,6 +97,9 @@ export async function connectedAppsRoutes(app: FastifyInstance) {
           scopes: row.scopes_granted ?? [],
           connectedAt: row.created_at,
           lastUsedAt: lastUsed.get(row.id) ?? null,
+          // Only on a grant the app obtained through the MCP assertion
+          // exchange (no consent click); absent on every other grant, as before.
+          ...(exchanged.has(row.id) ? { grantedBy: "assertion_exchange" as const } : {}),
         })),
       })
     } catch (err) {

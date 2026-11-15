@@ -26,6 +26,7 @@ import { liveSessionsOfJobs } from "../../job-sessions.js"
 import { queueInfoFor, waitingRowsOf, withoutLaneStamp, type QueueInfo } from "../../concurrency-lanes/queue-info.js"
 import { readWithLaneStamp } from "../../concurrency-lanes/columns.js"
 import { mcpQueueText } from "../../concurrency-lanes/queue-copy.js"
+import { amountsNote, statedJobRow, unitFields } from "../amounts.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
 
@@ -62,7 +63,8 @@ async function withCreditsCharged<T extends { usage_log_id?: unknown; id?: unkno
   )
   return rows.map((r) => {
     const { usage_log_id: _log, ...rest } = r
-    return { ...rest, ...publicCreditFieldsOf(jobId(r), credits) }
+    // Every figure in the deployment's unit when it has one (lib/mcp/amounts.ts).
+    return statedJobRow({ ...rest, ...publicCreditFieldsOf(jobId(r), credits) })
   })
 }
 
@@ -107,7 +109,8 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         "many credits did I burn this week\" (sum credits_charged: it " +
         "includes the run's steps; credits is the job's own hold, which it " +
         "can settle below). Your own " +
-        "jobs carry favorited and rating.",
+        "jobs carry favorited and rating." +
+        amountsNote(),
       inputSchema: {
         scope: z
           .enum(["mine", "public"])
@@ -341,7 +344,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
           // Someone else's job never carries its provider's words: they are its
           // owner's (lib/provider-words.ts), judged by `user_id` before it goes.
           .map((r) => jobRowProviderWordsFor(r, { isAdmin: false, userId: session.userId }))
-          .map(({ user_id: _owner, ...row }) => row)
+          .map(({ user_id: _owner, ...row }) => statedJobRow(row))
       } else {
         const charged = await withCreditsCharged(rows, session.userId)
         // A failed read leaves the two fields out (unknown), as GET /v1/jobs
@@ -363,7 +366,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         content: [
           {
             type: "text",
-            text: JSON.stringify({ data: shown, next_cursor: nextCursor }, null, 2),
+            text: JSON.stringify({ data: shown, next_cursor: nextCursor, ...unitFields() }, null, 2),
           },
         ],
       }
@@ -379,7 +382,8 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         "progress, jobType, assetKind, outputUrl (the finished image/video/audio; width/height in pixels when known), outputData, input (the prompt as sent), errorMessage, credits (the hold), creditsCharged (charged once settled, the run's steps included; can be lower), creditsHeld (the run's hold) and timestamps; on failed/cancelled/pending_review " +
         "also retryable, guidance and — for a safety block with a catalog fallback — suggestedProvider. " +
         "queued = waiting for a free slot: guidance gives its place in line; not a failure, do not re-run. " +
-        "Poll every 5–10 s (image: about a minute; video: 2–10 minutes), or wait_for_job (blocks up to " + WAIT_FOR_JOB_CALL_CEILING_S + " s a call; call it again while the job runs).",
+        "Poll every 5–10 s (image: about a minute; video: 2–10 minutes), or wait_for_job (blocks up to " + WAIT_FOR_JOB_CALL_CEILING_S + " s a call; call it again while the job runs)." +
+        amountsNote(),
       inputSchema: {
         job_id: z.string().min(1),
       },
@@ -481,7 +485,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
             : { data: publicData }
       const view = jobView(filled as Parameters<typeof jobView>[0])
       return {
-        content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify({ ...payload, ...unitFields() }, null, 2) }],
         // The one envelope (audit 2026-09-06 fix #2): the text keeps its
         // `{ data, … }` shape for existing clients; hosts and agents that read
         // structuredContent get the same normalised view get_asset and
@@ -517,7 +521,8 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         "(longer than that, MCP clients cut the call off). " +
         "If the job is still running then, the result is status `timeout` (not an error) with its progress: call wait_for_job again with the same job_id — it resumes, nothing is lost — and never re-run the generation. " +
         "A held job answers `pending_review` at once — do not re-run it. A job waiting for a free slot answers `timeout` with its place in line: call again. " +
-        "A video can take 2–10 minutes: expect several calls.",
+        "A video can take 2–10 minutes: expect several calls." +
+        amountsNote(),
       inputSchema: {
         job_id: z.string().min(1),
         timeout_s: z

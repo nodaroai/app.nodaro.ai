@@ -132,6 +132,21 @@ describe("a node made before the availability answer lands", () => {
     expect(providerOf(id)).toBe(FLARE)
   })
 
+  it("on a deployment that whitelists its models: starts on a row the lists offer, and the answer still decides when it lands", () => {
+    const [a, b] = MODIFY_IMAGE_MODELS.map((m) => m.value).filter((id) => id !== FLARE && MODEL_CATALOG[id]?.ownLabel !== true)
+    window.__NODARO_RUNTIME__ = { surface: { models: { allow: [a!, b!], deny: [] } } } as unknown as typeof window.__NODARO_RUNTIME__
+    try {
+      // Before the answer the lists decide: the default is not listed, so the node starts on the first listed row.
+      const id = st().addNode("modify-image", { x: 0, y: 0 })
+      expect(providerOf(id)).toBe(a)
+      // The answer withholds that row too (an admin's switch): the node moves on, as it would have at creation.
+      __resetSurfaceAvailabilityForTests({ nodes: [], models: [a!], modelsRestricted: true })
+      expect(providerOf(id)).toBe(b)
+    } finally {
+      delete window.__NODARO_RUNTIME__
+    }
+  })
+
   it("never touches a node of another workflow loaded since", () => {
     st().addNode("modify-image", { x: 0, y: 0 })
     const other = { id: "node_1", type: "modify-image", position: { x: 0, y: 0 }, data: { label: "Modify Image", provider: FLARE } } as unknown as WorkflowNode

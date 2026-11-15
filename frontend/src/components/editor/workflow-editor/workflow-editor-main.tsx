@@ -84,6 +84,7 @@ import { InsufficientCreditsModal } from "@/ee/components/credits/InsufficientCr
 import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal";
 import { SubscriptionRequiredModal } from "@/ee/components/credits/SubscriptionRequiredModal";
 import { useRunConfirm } from "./run-confirm-dialog";
+import { openInsufficientCreditsDialog } from "./credits-shortfall";
 import { handleRenderFinal } from "./render-final-handler";
 import { handleContinueFailedRun } from "./continue-failed-run";
 import { continuableFailedRun } from "./continuable-failed-run";
@@ -904,6 +905,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     setStorageExceededData,
     setShowInsufficientCredits,
     setInsufficientCreditsData,
+    // This editor mounts the not-enough-credits dialog: a node's run refused for a credits shortfall opens it.
+    openCreditsDialog: (shortfall) => openInsufficientCreditsDialog({ setInsufficientCreditsData, setShowInsufficientCredits }, shortfall),
     setShowSubscriptionRequired,
     confirmRun,
     askConfirm,

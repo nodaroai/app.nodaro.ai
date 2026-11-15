@@ -40,6 +40,7 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { registerTask } from "../tasks.js"
 import { isRouterNotFound } from "./_studio-helpers.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders } from "./_verb-helpers.js"
+import { amountsNote, amountWord, statedAmount, statedAmountFields, statedAmountRecord, unitFields } from "../amounts.js"
 
 const readGate: ToolGate = { required: ["jobs:read"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -248,10 +249,15 @@ function quoteOf(body: string): TrendQuote | null {
 }
 
 function quoteSentence(q: TrendQuote, preview: boolean | undefined): string {
-  const held = q.holdCredits !== q.expectedCredits ? ` (up to ${q.holdCredits} held while it runs)` : ""
+  const held = q.holdCredits !== q.expectedCredits ? ` (up to ${statedAmount(q.holdCredits)} held while it runs)` : ""
   const masking =
-    q.privacyCredits !== undefined && q.privacyCredits > 0 ? ` Plus ${q.privacyCredits} only if the clip is refused and the run is retried.` : ""
-  return `This trend ${preview ? "preview " : ""}run costs about ${q.expectedCredits} credits${held}.${masking}`
+    q.privacyCredits !== undefined && q.privacyCredits > 0 ? ` Plus ${statedAmount(q.privacyCredits)} only if the clip is refused and the run is retried.` : ""
+  return `This trend ${preview ? "preview " : ""}run costs about ${statedAmount(q.expectedCredits)} ${amountWord()}${held}.${masking}`
+}
+
+/** The quote as the agent reads it: every figure in the deployment's unit when it has one (lib/mcp/amounts.ts). */
+function statedQuote(q: TrendQuote) {
+  return { ...statedAmountFields(q, ["expectedCredits", "holdCredits", "privacyCredits"]), breakdown: statedAmountRecord(q.breakdown), ...unitFields() }
 }
 
 // ── errors ──────────────────────────────────────────────────────────────────
@@ -359,7 +365,8 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
     {
       title: "Estimate Trend",
       description:
-        "Quote a trend run (free; nothing starts): the credits it is expected to cost and the amount held while it runs. Takes run_trend's arguments.",
+        "Quote a trend run (free; nothing starts): the credits it is expected to cost and the amount held while it runs. Takes run_trend's arguments." +
+        amountsNote(),
       inputSchema: {
         ...trendRunShape,
       },
@@ -372,7 +379,7 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
       if (!quote) return failure("The trend quote could not be read.")
       return {
         content: [{ type: "text" as const, text: `${quoteSentence(quote, args.preview)} Nothing was charged; run_trend starts it.` }],
-        structuredContent: { ...quote },
+        structuredContent: statedQuote(quote),
       }
     },
   )
@@ -384,7 +391,8 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
       description:
         "Make a trend's video with the user's pictures. Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, " +
         "and call again with `confirm: true` only once they accept. That returns a job id: poll it with wait_for_job. " +
-        "Image URLs must be http(s): upload local files with the upload tools first. A chip a slot does not list is refused (chip_not_offered).",
+        "Image URLs must be http(s): upload local files with the upload tools first. A chip a slot does not list is refused (chip_not_offered)." +
+        amountsNote(),
       inputSchema: {
         ...trendRunShape,
         session_id: z.string().min(1).optional().describe("A generation session; accepted, not yet applied (runs are not filed into sessions yet)."),
@@ -410,7 +418,7 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
                 "Present this to the user; call run_trend again with the same arguments and confirm: true once they accept.",
             },
           ],
-          structuredContent: { ...quote, confirmed: false },
+          structuredContent: { ...statedQuote(quote), confirmed: false },
         }
       }
 

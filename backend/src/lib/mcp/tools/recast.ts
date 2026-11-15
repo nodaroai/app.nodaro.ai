@@ -8,6 +8,8 @@ import { errorResult, uiMeta } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { config } from "../../config.js"
 import { supabase } from "../../supabase.js"
+import { amountsNote, amountWord, statedAmount, statedAmountFields, statedAmountRecord, unitFields } from "../amounts.js"
+import { statedDocument } from "../served-documents.js"
 
 /**
  * RECAST AUTHORED-SCRIPT VERBS (spec 2026-08-06 §5 — P2).
@@ -70,6 +72,21 @@ function textResult(payload: unknown) {
     content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
     structuredContent: payload as Record<string, unknown>,
   }
+}
+
+/**
+ * The plugin's recast quote as the agent reads it: every figure in the
+ * deployment's unit when it has one (lib/mcp/amounts.ts). The quote is the
+ * plugin's own body, passed on whole, so its amounts are read by name: every
+ * top-level key ending in `Credits` (`totalCredits`, `candidateCredits`,
+ * `anchorCandidateCredits`, …) and the `breakdown` record. Anything else (the
+ * parts' `segmentDurations` in seconds, the render method) is not an amount and
+ * stays as it is.
+ */
+function statedRecastQuote<T extends { breakdown?: unknown }>(quote: T): T {
+  const creditKeys = Object.keys(quote).filter((k) => k.endsWith("Credits"))
+  const stated = statedAmountFields(quote, creditKeys)
+  return "breakdown" in quote ? { ...stated, breakdown: statedAmountRecord(quote.breakdown) } : stated
 }
 
 async function ensureRecastProject(userId: string): Promise<string> {
@@ -231,7 +248,8 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const parsed = JSON.parse(res.body) as { markdown?: string }
-      return { content: [{ type: "text" as const, text: parsed.markdown ?? "" }] }
+      // The guide a plugin answers, in the deployment's own terms where it has them (lib/mcp/served-documents.ts).
+      return { content: [{ type: "text" as const, text: statedDocument(parsed.markdown ?? "") }] }
     },
   )
 
@@ -364,7 +382,8 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
           "credits — it buys the plan and the render. Call it again if a run is " +
           "already in flight: it advances a `planned` run to rendering (no new " +
           "charge) and reports progress otherwise. Poll `get_recast_status` while " +
-          "rendering.",
+          "rendering." +
+          amountsNote(),
         inputSchema: {
           recast_id: z.uuid().describe("The recastId returned by import_recast_script."),
           confirm: z
@@ -485,10 +504,11 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
 
         if (args.confirm !== true) {
           return textResult({
-            quote,
+            quote: statedRecastQuote(quote),
             note:
-              `Rendering this recast costs ${quote.totalCredits ?? "?"} credits (plan + render). ` +
+              `Rendering this recast costs ${statedAmount(quote.totalCredits) ?? "?"} ${amountWord()} (plan + render). ` +
               "Present the price to the user; call start_recast again with confirm: true once they accept.",
+            ...unitFields(),
           })
         }
 
@@ -535,8 +555,9 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
         return textResult({
           recastRunId: createdRun.recastId,
           status: "planning",
-          quotedCredits: quote.totalCredits,
+          quotedCredits: statedAmount(quote.totalCredits),
           note: "Plan purchased. Call start_recast again in ~1 minute to begin rendering (get_recast_status shows when it is planned).",
+          ...unitFields(),
         })
       },
     )

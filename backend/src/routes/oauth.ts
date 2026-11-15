@@ -11,6 +11,8 @@ import { ALL_SCOPES } from "../lib/scopes.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { mcpClientListSet, mcpSignInRefusal, type McpSignInRefusal } from "../lib/mcp-listed-clients.js"
+import { assertionExchangeBootProblem, assertionExchangeClients, assertionExchangeProvider } from "../lib/mcp-assertion-exchange.js"
+import { answerAssertionExchange } from "./oauth-assertion-exchange.js"
 
 /**
  * RFC 8707 `resource`: the resource a client asks a token for. Read only by
@@ -62,7 +64,10 @@ function verifyPkce(codeVerifier: string, storedChallenge: string): boolean {
 
 openApiRegistry.registerPath({
   method: "post", path: "/v1/oauth/token",
-  description: "Exchange a one-shot authorization code (10-minute TTL) for an access token. No bearer auth — authenticates via client_id + client_secret.",
+  description:
+    "Exchange a one-shot authorization code (10-minute TTL) for an access token. No bearer auth — authenticates via client_id + client_secret. " +
+    "Where a deployment turns on the MCP assertion exchange for its own application's client, the same endpoint also takes " +
+    "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer (RFC 7523: assertion, client_id, client_secret, resource, optional scope); see docs/oauth-flow.md.",
   security: [],
   request: { body: { content: { "application/json": { schema: tokenBody } } } },
   responses: {
@@ -120,6 +125,19 @@ async function consentRedirectRefusal(query: unknown): Promise<string | null> {
 }
 
 export async function oauthRoutes(app: FastifyInstance) {
+  // Fail LOUD at BOOT on half an assertion exchange: client ids named for it
+  // with no provider whose assertions they could exchange (app.ts awaits this
+  // register). The env halves are refused earlier, in config.ts.
+  const exchangeProblem = assertionExchangeBootProblem()
+  if (exchangeProblem) throw new Error(`Invalid configuration: ${exchangeProblem}`)
+  const exchanging = assertionExchangeProvider()
+  if (exchanging) {
+    app.log.info(
+      { clients: [...(assertionExchangeClients() ?? [])], provider: exchanging.id },
+      "[oauth] the MCP assertion exchange (jwt-bearer) is on for these clients",
+    )
+  }
+
   // GET /v1/oauth/app-info?client_id=<id>[&redirect_uri=<uri>] — public, returns
   // app metadata for consent screens. With `redirect_uri` the answer also says
   // whether that exact URI is registered, so the consent screen can refuse to
@@ -269,6 +287,10 @@ export async function oauthRoutes(app: FastifyInstance) {
 
   // POST /v1/oauth/token — server-side; auth via client_id + (client_secret OR PKCE)
   app.post("/v1/oauth/token", async (req, reply) => {
+    // The MCP assertion exchange (jwt-bearer), where this deployment turned it
+    // on for the client the request names; for every other request it answers
+    // nothing and the grant below answers exactly as it always has.
+    if (await answerAssertionExchange(req, reply)) return reply
     const parsed = tokenBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({ error: "invalid_request", error_description: parsed.error.issues[0]?.message ?? "Invalid request" })

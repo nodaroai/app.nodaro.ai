@@ -17,6 +17,7 @@ import type { SiteCaptureNodeData, WorkflowNode } from "@/types/nodes"
 import type { FrontendResolvedInputs } from "./node-input-resolver"
 import { guardedToast, pollScrapeJobOutput, SCRAPE_POLL_BUDGET_MS } from "./poll-job"
 import type { ExecutionContext } from "./types"
+import { promptCreditsShortfall } from "./credits-shortfall"
 
 /** Run Site Capture: returns its first still (the `image` pip's value), or "" when it has none. */
 export async function executeSiteCapture(node: WorkflowNode, inputs: FrontendResolvedInputs, ctx: ExecutionContext): Promise<string> {
@@ -44,7 +45,7 @@ export async function executeSiteCapture(node: WorkflowNode, inputs: FrontendRes
     // Stop: the poll was aborted and the central Stop handler restored the node.
     if (error?.name === "AbortError" || ctx.signal?.aborted) return ""
     updateNodeData(node.id, { ...applySiteCaptureFailure(error.message || tx("node.captureFailed")), ...caughtErrorWords(error) })
-    guardedToast.error(tx("nodeRun.siteCaptureFailed", { message: error.message }))
+    if (!promptCreditsShortfall(err, ctx)) guardedToast.error(tx("nodeRun.siteCaptureFailed", { message: error.message }))
     throw error
   }
 }

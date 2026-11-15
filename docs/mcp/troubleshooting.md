@@ -94,6 +94,31 @@ your client: on such a deployment, connect through the app the deployment
 provides. A client that was working stops at its next call once the operator
 removes it from the list.
 
+## A deployment's own application cannot exchange an assertion for a token {#assertion-exchange}
+
+For the server of a deployment's own application using the
+[assertion exchange](../oauth-flow.md#assertion-exchange)
+(`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`). What
+`POST /v1/oauth/token` answers, and what to check:
+
+| Answer | What it means |
+|--------|---------------|
+| `400` `invalid_request` "Invalid input: expected \"authorization_code\"" | The exchange is **off** for your client: the deployment has not turned it on, or not for this `client_id` (it must be in both `MCP_ALLOWED_CLIENT_IDS` and `MCP_ASSERTION_EXCHANGE_CLIENT_IDS`, active, and a provider must set `exchangeAudience`). Ask the operator; `/.well-known/oauth-authorization-server` lists `urn:ietf:params:oauth:grant-type:jwt-bearer` in `grant_types_supported` only where it is on. |
+| `400` `invalid_request` (another description) | A part is missing — usually `assertion`, which must be in the body, not the URL |
+| `401` `invalid_client` | No `client_secret`, or the wrong one (a rotated secret your server still caches) |
+| `400` `invalid_target` | `resource` is missing or is not the MCP endpoint this deployment states for the host you called; the description names the right one |
+| `400` `invalid_scope` | You asked for a scope your client may not request; ask for fewer, or have the operator widen the client's scopes |
+| `400` `invalid_grant`, about the assertion | Its description says what: the signature (HS256, the provider's secret), the `aud` (the provider's **exchange** audience — a sign-in assertion is never accepted, nor one naming both audiences), expiry or a lifetime over the provider's `maxLifetimeSeconds` (check your server's clock), a missing `jti` or email, or a `jti` already used (by the exchange or by a sign-in) |
+| `400` `invalid_grant` "The assertion does not name a person this application can obtain a token for." | The person cannot be signed in by the provider's assertions: an unverified address with no account yet, an existing account the linking rules do not adopt, a blocked account — or they revoked your app in Connected apps, which only their own consent undoes. The answer is the same in every case on purpose; the operator's log says which (`account_…` outcomes). |
+| `429` `slow_down` | More than 300 exchanges a minute from your network or for your client; wait `Retry-After` seconds. Reuse a token for its hour instead of exchanging per request. |
+| `503` `temporarily_unavailable` | The deployment cannot check the exchange right now (its Redis); try again shortly |
+| `500` `server_error` | The token could not be issued. A deployment whose database does not have the token grant-type column yet refuses every exchange this way until its update lands |
+
+A token that worked and then gets `401` from the MCP endpoint has expired (an
+hour by default) or was revoked: exchange again. One that gets
+`403 mcp_client_not_allowed` belongs to a client the deployment no longer lists
+([above](#listed-clients)).
+
 ## "via MCP" trigger badge shows but I didn't use MCP
 
 A connected MCP client may have submitted a job on your behalf. Open
@@ -108,3 +133,14 @@ When an MCP client registers with Nodaro via RFC 7591 Dynamic Client
 Registration, the client name (e.g. "Claude") is self-reported and not verified
 by Nodaro. The orange notice on the consent screen is a reminder to confirm the
 application requesting access is the one you're actually using before approving.
+
+## A balance refusal says to ask the deployment's operator {#balance-managed}
+
+On a deployment that manages its users' balance (no self-serve purchase, or an
+external wallet that holds each user's balance), a tool refused for want of
+balance answers that the balance is managed by the deployment and that the user
+can ask its operator for more, instead of telling you to top up, upgrade or
+buy: nothing can be bought from a connected client there. `check_balance` shows
+what the user has left, in the deployment's own unit when it has one; an amount
+it could not read is `null`, never `0`. See [Amounts on a deployment with its
+own unit](tools.md#deployment-unit).

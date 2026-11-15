@@ -6,6 +6,7 @@ import { deniedNodeRejectionMessage } from "../../surface-deny.js"
 import { findDeniedNodeTypesForUser } from "../../availability-viewer.js"
 import { z } from "zod"
 import { clientRequestIdSchema, idempotencyHeaders } from "./_verb-helpers.js"
+import { balanceRefusal } from "../amounts.js"
 import type { FastifyInstance } from "fastify"
 import { stripExportContent, stripUnownedRefs, stripTransientRuntimeData, type WorkflowExport } from "@nodaro/shared/workflow"
 import { stripStudioDraftWorkflow } from "@nodaro/shared/pipeline"
@@ -1114,7 +1115,10 @@ export function registerWorkflows({
           headers: idempotencyHeaders(args.client_request_id),
         })
         if (res.statusCode >= 400) {
-          return err(`Error from Nodaro: ${res.statusCode} ${res.body}${supersededHint(res.body, args.workflow_id)}`)
+          // The route's 402 states its figures in raw credits: a deployment in its
+          // own terms is told the refusal without them (lib/mcp/amounts.ts).
+          const balance = res.statusCode === 402 ? balanceRefusal("this run") : null
+          return err(balance ?? `Error from Nodaro: ${res.statusCode} ${res.body}${supersededHint(res.body, args.workflow_id)}`)
         }
         let executionId: string | undefined
         let continuedFrom: string | undefined

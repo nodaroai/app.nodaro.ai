@@ -16,6 +16,7 @@ import { mcpInject } from "../internal-request.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { errorResult } from "./_verb-helpers.js"
 import type { UseCaseToolError, UseCaseVerbInput } from "./verbs-use-case-input.js"
+import { amountsNote, amountWord, statedAmount, statedAmountFields, unitFields } from "../amounts.js"
 
 /** What the route quotes (`data`): every figure 0 on an edition without credits. */
 interface UseCaseQuote {
@@ -53,7 +54,7 @@ function quoteSentence(label: string, tool: string, q: UseCaseQuote): string {
   }
   const approx = q.estimate ? "≈" : ""
   return (
-    `${label} is estimated at ${approx}${q.totalCredits} credits: its steps ${approx}${q.stepsCredits} plus the per-run fee ${q.feeCredits} (${length}). ` +
+    `${label} is estimated at ${approx}${statedAmount(q.totalCredits)} ${amountWord()}: its steps ${approx}${statedAmount(q.stepsCredits)} plus the per-run fee ${statedAmount(q.feeCredits)} (${length}). ` +
     `Nothing was created or charged; ${tool} starts the run.`
   )
 }
@@ -72,7 +73,8 @@ export function registerEstimateUseCase(
       description:
         "Quote a podcast use-case run before starting it: free, nothing is created or charged. `node_type` names the node and " +
         `\`input\` holds the arguments of its run tool (${offered.map((t) => inputOf(t).tool).join(", ")}), as you would send them. ` +
-        "Returns `{ totalCredits, stepsCredits, feeCredits, estimate?, durationSec }`; `estimate: true` means a step is priced at a metered estimate.",
+        "Returns `{ totalCredits, stepsCredits, feeCredits, estimate?, durationSec }`; `estimate: true` means a step is priced at a metered estimate." +
+        amountsNote(),
       inputSchema: {
         node_type: z.enum(offered as unknown as [string, ...string[]]).describe("The use-case node to quote."),
         input: z.record(z.string(), z.unknown()).describe("That node's run-tool arguments."),
@@ -106,7 +108,8 @@ export function registerEstimateUseCase(
       if (!quote) return toolError("estimate_use_case: the quote could not be read.")
       return {
         content: [{ type: "text" as const, text: quoteSentence(usecaseDescriptor(type).label, verb.tool, quote) }],
-        structuredContent: { nodeType: type, ...quote },
+        // Every figure in the deployment's unit when it has one (lib/mcp/amounts.ts).
+        structuredContent: { nodeType: type, ...statedAmountFields(quote, ["totalCredits", "stepsCredits", "feeCredits"]), ...unitFields() },
       }
     },
   )

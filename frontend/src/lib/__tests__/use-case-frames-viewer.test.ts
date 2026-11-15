@@ -12,8 +12,10 @@ vi.mock("@/lib/surface-availability", async (orig) => ({
   ...(await orig<typeof import("@/lib/surface-availability")>()),
   surfaceAvailabilityLoaded: () => avail.loaded,
   surfaceAvailabilityFailed: () => avail.failed,
-  // The answer once it is in; before it (awaited, or after a failed read) the static profile's deny list.
+  // The answer once it is in; before it (awaited, or after a failed read) the deployment's own lists.
   isNodeUnavailable: (type: string) => avail.unavailable.includes(type),
+  // A deployment that sets no node lists: no judge while the answer is awaited.
+  settledNodeJudge: () => (avail.loaded || avail.failed ? (type: string) => avail.unavailable.includes(type) : null),
 }))
 
 import { usecaseFramesOffered, usecaseFramesViewer, usecaseFramesWithheld } from "../use-case-frames-viewer"
@@ -61,7 +63,7 @@ describe("usecaseFramesViewer: the three states the panel shows", () => {
     expect(usecaseFramesViewer()).toBe("withheld")
   })
 
-  it("a read that failed: the static profile decides, never loading for the session", () => {
+  it("a read that failed: the deployment's own lists decide, never loading for the session", () => {
     avail.loaded = false
     avail.failed = true
     expect(usecaseFramesViewer()).toBe("offered")

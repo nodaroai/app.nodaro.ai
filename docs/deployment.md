@@ -218,6 +218,8 @@ here for each one anyway.
 | `MCP_PUBLIC_URL` | `""` = the Nodaro Cloud host | Public base of the MCP host when it differs from `PUBLIC_URL`; self-hosters serving MCP on their main host set it equal to `PUBLIC_URL`. A Business/Cloud deployment with no host to spare for MCP can serve it by path instead: see [MCP by path](#mcp-by-path-no-dedicated-mcp-host) |
 | `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | `allowlist` · 14 known clients (Claude, Claude Code, Cursor, Cline, Continue, Goose, ChatGPT, OpenAI, Lovable, Gemini, Gemini CLI, Codex, MCP Inspector, mcp-inspector) | RFC 7591 dynamic client registration for MCP clients (`allowlist` · `open` · `off`), and the `client_name` allowlist consulted in `allowlist` mode — see §10 |
 | `MCP_ALLOWED_CLIENT_IDS` | `""` = no list | Comma-separated `client_id`s of developer apps (`app_…`) that may use the MCP endpoint. Set: MCP takes only tokens issued to a listed client, the sign-in refuses any other client that asks for MCP before the consent screen, and dynamic registration answers as `off`. A malformed entry (anything but `app_` + 32 hex, including a self-registered `ndr_dcr_…` id) stops every backend process at boot. See [MCP only through your own client](#mcp-only-through-your-own-client) |
+| `MCP_ASSERTION_EXCHANGE_CLIENT_IDS` | `""` = off | The listed client(s) — each also in `MCP_ALLOWED_CLIENT_IDS`, or the boot stops — that may exchange a signed assertion from the deployment's own identity provider for an MCP token for any person it names, **with no consent click** (`POST /v1/oauth/token`, the RFC 7523 jwt-bearer grant). Also needs one `EXTERNAL_SSO_PROVIDERS` entry with an `exchangeAudience` (the boot stops without one). Read the security note first: [MCP without a consent click](#mcp-without-a-consent-click-the-assertion-exchange) |
+| `MCP_ASSERTION_EXCHANGE_TOKEN_TTL_SECONDS` | `3600` | How long a token from that exchange lives, in seconds: 300 to 86400 (anything else stops the boot; blank = the default). Never the 90 days of a consent token — the application exchanges again whenever it needs one |
 | `FIGMA_PLUGIN_OAUTH_CLIENT_ID` | `""` = plugin connect off | client_id of the developer app the Figma plugin connects through; the app must list `<PUBLIC_URL>/v1/oauth/plugin/callback` in its redirect URIs and request `jobs:read`, `assets:read`, `assets:write`, `credits:read` — see the [plugin connect handshake](./oauth-flow.md#plugin-connect-handshake-figma) |
 | `COMMUNITY_CONNECT_ENABLED` | off | **Cloud side only** — accept community-instance connections |
 | `PLATFORM_OWNER_EMAIL` | `""` | Business/Cloud — the super_admin no other admin can demote; empty = none |
@@ -1043,6 +1045,31 @@ optional; each array empty = "keep the default"):
   - An admin role change reaches this check within about five minutes (the
     admin lookup is cached per process).
 
+  **Before the viewer's answer.** The editor asks `GET /v1/surface/availability`
+  once a viewer is signed in, and that per-viewer answer (this profile, the
+  Admin → Availability override and the admin's model switch, with the admin
+  exception) decides what it offers. Until it arrives, when the request fails,
+  after sign-out, and on pages that never ask (a published app, a
+  presentation), a deployment that sets lists is judged by its own lists, by
+  the rule above: with `nodes.allow` set a node type it does not list is not
+  offered (utility nodes excepted), nothing `nodes.deny` names is (a denied
+  `voice-clone` takes the one-off clone with it), and `models.allow` /
+  `models.deny` and `worlds` are read the same way. So from the first paint
+  nothing the lists withhold is drawn (the node picker and sidebar, the model
+  menus, the white-label header's worlds and menus, a published app's cards,
+  an input that follows a node) and nothing they offer is hidden. What the
+  lists cannot carry shows only with the answer: a node or model an admin
+  switched off may show until it arrives, one an admin released beyond the
+  lists appears when it does, and Site Capture shows unless the profile denies
+  it, also on an install that switches it off. Two readers wait instead of
+  guessing: on a deployment that sets node lists, Web Scrape's source dropdown
+  offers only the node's current source until the answer arrives (which source
+  follows which node is the server's to say), and a use-case node's cameras
+  settings appear only with the answer, because its run reads one recording
+  until then. A deployment that sets no lists withholds nothing before the
+  answer, as before. Whatever the browser shows, the server refuses a
+  withheld node or model at write and run.
+
   **The MCP tool list follows the offer** (decided 2026-11-11). Where the
   deployment restricts what it offers — `nodes.allow` / `nodes.deny`,
   `models.allow` / `models.deny`, `worlds.allow`, `imports.links: false`, or an
@@ -1299,6 +1326,20 @@ optional; each array empty = "keep the default"):
     number > 0; decimals an integer in 0–4; 1 credit<!-- credits: n/a --> must not round to 0; and
     `unitRate × 10^unitDecimals` must be an integer so per-charge conversion
     sums exactly. Unset = the platform's own labels, no conversion.
+    The MCP tools follow them too: on a deployment with its own unit, an
+    external wallet or `billing.selfServe: false`, every amount a tool states
+    (the balance, what a run cost, quotes, history rows, the price hints in
+    tool descriptions) is in the unit and from the deployment's own balance,
+    never the raw credits beside it, and a refusal for want of balance says
+    the deployment manages the balance where it does
+    ([MCP: amounts on a deployment with its own unit](mcp/tools.md#deployment-unit)).
+    The same holds for the skills and recipes the MCP document tools serve
+    (their figures in the unit, a node skill's price line pointing at the
+    deployment's own price) and for the failure messages saved with a run (a
+    refusal for want of balance, an uncovered hold, a charged failure), which
+    are written with their figures in the unit, so the editor, the REST reads
+    and the MCP tools show the same words. A message saved before the unit was
+    configured keeps its original words.
   - `billing.unitLabels` (optional, beside `unitLabel`): the unit's word per
     interface language, by locale id in the platform's spelling
     (`{ "en": "points", "he": "נקודות" }`; `pt-br` is read as `pt-BR`). A viewer
@@ -1324,7 +1365,9 @@ optional; each array empty = "keep the default"):
     about withheld free credits, the pricing page's free tier and "Get Free
     Credits" on an app's run screen (it reads "Get credits" instead). A prepaid
     billing instance renders a **Usage & Cost** sidebar entry (`/usage`) in
-    their place.
+    their place. Nor is an upgrade offered to a job waiting for a free slot:
+    the node's queue badge, the REST `queue.upgradeHint` (`null`) and the MCP
+    job tools' waiting sentence leave it out.
   - `billing.payerAccount`: the **deployment payer** — one designated account
     (a user uuid, or the account's email) that pays for *every* action on the
     instance instead of the requester. For reseller-style deployments: the
@@ -1941,15 +1984,20 @@ logo is dropped with a warning and the rest of `brand` is kept.
     viewer by `GET /v1/surface/availability`, each at its path on the same site
     (`/image`, `/video`, `/music`, `/trends`, `/video/nodaro-motion`,
     `/voice-changer`, and the editor at `/projects`). Explore and Studio are
-    not drawn;
+    not drawn. Before that answer, and when the request fails, the profile's
+    own node lists narrow them: a world whose node types `nodes.allow` leaves
+    out or `nodes.deny` names is not drawn (see "Before the viewer's answer"
+    under `nodes.allow`);
   - in each world's menu, only what the deployment offers. Video's Translate
     (its page at `/video/translate`) is listed for a viewer offered the
-    `dubbing` node once `GET /v1/surface/availability` has answered for them,
-    and not while that answer is awaited. When the request fails, the
-    profile's own `nodes.deny` decides: Translate is listed unless it names
-    `dubbing`. Image's Presets is listed only where the deployment has
-    presets, and the menu names the deployment (`brand.productName`) as the
-    maker of its own tools;
+    `dubbing` node, as `GET /v1/surface/availability` answers for them. Before
+    that answer, and when the request fails, a deployment that sets node lists
+    is judged by them from the first paint: Translate is listed unless
+    `nodes.allow` leaves `dubbing` out or `nodes.deny` names it. Where no
+    node lists are set, Translate appears only once the answer is in (or the
+    request has failed), so it is never drawn and then taken away. Image's
+    Presets is listed only where the deployment has presets, and the menu
+    names the deployment (`brand.productName`) as the maker of its own tools;
   - the deployment's name (`brand.productName`) and logo (`brand.logo`);
   - its billing: with `billing.selfServe: false` no plans, upgrade, billing or
     welcome credits. The credit figure is the one the sidebar card shows (the
@@ -2071,6 +2119,12 @@ A typical split:
 All containers share the same Redis + Supabase + R2. They don't talk
 to each other directly — Redis (BullMQ) is the only coordination
 point.
+
+Give every container the same `NODARO_SURFACE_PROFILE` (and, with an
+external wallet, the same `DEPLOYMENT_WALLET_*` variables). The workers
+reserve each node's credits and write the failure a run is saved with, so the
+deployment payer, the models a deployment denies and the unit a saved message
+states its figures in are read where the work runs, not only by the API.
 
 **Two installs, one database**: if you point a second install (a
 staging copy, a preview environment) at the SAME Supabase project but
@@ -2661,7 +2715,9 @@ With a list set:
   working.
 
 There is no refresh grant: access tokens are 90-day bearer tokens, and a new
-one always goes through the sign-in above.
+one always goes through the sign-in above — or, for the one application you
+name for it, through the [assertion exchange](#mcp-without-a-consent-click-the-assertion-exchange)
+below.
 
 **Setting up one client for your own chat application:**
 
@@ -2686,6 +2742,114 @@ screen naming your app. Any other MCP client — Claude.ai, Cursor, a client
 someone registers — is sent back with `unauthorized_client` at its sign-in, or
 gets `403 mcp_client_not_allowed` if it already holds a token. See
 [MCP troubleshooting](./mcp/troubleshooting.md#listed-clients).
+
+### MCP without a consent click: the assertion exchange
+
+When your chat application is also the identity provider your people sign in
+with ([external SSO](./sso.md), a `kind: "assertion"` provider), its **server**
+can obtain an MCP token for any of them directly, with no consent screen: it
+signs an assertion naming the person and exchanges it at
+`POST /v1/oauth/token` (the RFC 7523 JWT-bearer grant; the request, the
+assertion and every error are in
+[OAuth flow](./oauth-flow.md#assertion-exchange)). It is **off** unless all
+three of these are set, and then it is on only for the client you name:
+
+1. **The MCP client list** (`MCP_ALLOWED_CLIENT_IDS`, above), listing the
+   application's client — a developer app created as a confidential client
+   (it has a secret; the exchange takes no PKCE-only client).
+2. **The exchange client** — `MCP_ASSERTION_EXCHANGE_CLIENT_IDS`, the
+   application's `client_id`. Every entry must also be on the MCP list, or
+   every backend process stops at boot. A second listed client does not get
+   the exchange unless you name it here too.
+3. **An exchange audience on the provider** — `exchangeAudience` on the
+   provider's entry in `EXTERNAL_SSO_PROVIDERS`, a value of its own that the
+   application puts in the `aud` of its exchange assertions
+   ([field reference](./sso.md#fields)). It must differ from the provider's
+   sign-in `audience` (the boot stops otherwise), and only one provider may
+   set it. A sign-in assertion passes through a browser's address bar, so it
+   must never be exchangeable for a token; the exchange refuses an assertion
+   whose `aud` names the sign-in audience, and the sign-in refuses one whose
+   `aud` names the exchange audience — also when `aud` lists both.
+
+With named clients and no provider that sets `exchangeAudience`, the boot
+stops. A provider with an `exchangeAudience` and no named client is simply off
+(convenient for turning the exchange off by clearing one variable).
+
+```
+MCP_ALLOWED_CLIENT_IDS=app_0123456789abcdef0123456789abcdef
+MCP_ASSERTION_EXCHANGE_CLIENT_IDS=app_0123456789abcdef0123456789abcdef
+MCP_ASSERTION_EXCHANGE_TOKEN_TTL_SECONDS=3600   # optional: 300–86400, default one hour
+EXTERNAL_SSO_PROVIDERS=@/etc/nodaro/sso-providers.json
+# in that file, the provider's entry gains:  "exchangeAudience": "nodaro-mcp-exchange"
+```
+
+Where it is off — anything above missing, or a client other than the one
+named — `POST /v1/oauth/token` answers this grant exactly as it answers any
+grant type it does not know, and the authorization-server metadata does not
+list it. Where it is on, `grant_types_supported` also names
+`urn:ietf:params:oauth:grant-type:jwt-bearer`.
+
+**What the exchange does, the same way the sign-in does.** The assertion is
+checked by the sign-in's own verifier (HS256 with the provider's secret, the
+exchange audience, expiry, `maxLifetimeSeconds`, a `jti`), each `jti` is
+accepted once across the sign-in and the exchange together, and the person is
+resolved by the sign-in's own
+[account-linking rules](./sso.md#account-linking-rules) — the billing-account
+rule and the operator-address rule included. A person who has no account yet
+gets one, exactly as on their first sign-in: when the provider asserts a
+verified email, an account is created for that address and linked to the
+provider. Until they open the app in a browser it has never had a session, so
+nothing the browser does on a first visit has happened for it yet — on Cloud
+without a `billing.payerAccount`, that includes claiming the free sign-up
+credits, so such an account has none until its first visit (a deployment
+with a `billing.payerAccount` grants nobody sign-up credits, so nothing differs
+there).
+
+**The token.** An ordinary app token for that person and the application's
+client, with the scopes it asks for — never wider than the client's
+`scopesRequested` — recorded as obtained by the exchange (the person's
+**Settings → Connected apps** shows the app as "Connected through your
+sign-in"). It lives `MCP_ASSERTION_EXCHANGE_TOKEN_TTL_SECONDS`: an hour by
+default, never the 90 days of a consent token; there is no refresh token, the
+application exchanges again. The MCP endpoint admits it like any listed
+client's token, and stops it at the next call once the client leaves the MCP
+list. If the person revokes the app in Connected apps, its tokens stop at once
+and the exchange refuses to issue a new one for them; only their own consent
+(the ordinary sign-in flow for the same client) reconnects it.
+
+**Limits and logs.** 300 exchanges a minute per network (every request naming
+the exchange client, counted before its secret is checked) and 300 per client
+(counted once its secret checks out, so nobody can use up your application's
+allowance by naming its client id); over either, `429` with `Retry-After`. The exchange needs Redis: when it cannot reach it, it
+refuses (`503`), unlike the browser sign-in. One log line per exchange names
+the client and the outcome (and the person when a token was issued) — never
+the assertion, a token or a secret.
+
+**What it means for your security — read before turning it on.** With the
+exchange on, your application obtains a token for **any person your provider
+asserts**, with no click from that person. So:
+
+- **The provider's `secret` and the client's secret are both keys to every
+  account** on the deployment that the provider can sign in. Whoever holds
+  both can act as anyone, through MCP, without them knowing. Keep both on your
+  application's server only, never in a browser or a mobile app, and rotate
+  them if either may have leaked (the client secret from **Settings →
+  Developer apps**, the provider secret in `EXTERNAL_SSO_PROVIDERS` with a
+  restart).
+- **The provider's secret already signs people in** through the browser; the
+  exchange adds a second door with the same key, one that hands out MCP
+  tokens instead of a browser session. The two audiences keep an assertion
+  meant for one door from opening the other, not a stolen secret from opening
+  both.
+- **That includes the billing account.** If your provider can sign in the
+  deployment's `billing.payerAccount` (it is matched by its linked subject, as
+  at every sign-in), the two secrets reach it through MCP too.
+- **The people never see a consent screen.** Tell them what your application
+  does with their account; the Connected apps page is the one place they see
+  it, and revoking there is the one way they can stop it on their own.
+- **Short tokens limit a leak, not the exchange.** A leaked token works until
+  it expires (an hour by default); a leaked pair of secrets works until you
+  rotate one.
 
 ### MCP by path (no dedicated MCP host)
 

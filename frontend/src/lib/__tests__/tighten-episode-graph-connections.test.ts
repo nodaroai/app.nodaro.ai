@@ -15,6 +15,8 @@ vi.mock("@/lib/surface-availability", async (orig) => ({
   ...(await orig<typeof import("@/lib/surface-availability")>()),
   surfaceAvailabilityLoaded: () => availability.loaded,
   isNodeUnavailable: (type: string) => availability.unavailable.has(type),
+  // The input pip's judge: withheld until the answer is in (a deployment without node lists).
+  isNodeUnavailableUntilKnown: (type: string) => !availability.loaded || availability.unavailable.has(type),
 }))
 import {
   MULTICAM_SPEAKER_MAP_TYPE,

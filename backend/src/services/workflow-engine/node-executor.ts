@@ -57,6 +57,7 @@ import { renderQueue } from "../../lib/render-queue.js"
 import { hasCredits, config, llmMeteredPricing } from "../../lib/config.js"
 import { speechChargeOverride } from "../../lib/speech-estimate.js"
 import { mapReserveError } from "../../lib/reserve-errors.js"
+import { holdShortfallMessage } from "../../lib/stated-credit-messages.js"
 import { CreditsService } from "../../ee/billing/credits.js"
 import { freeVideoRequestForJob } from "../../ee/billing/free-video-limits.js"
 import { refundJobCredits } from "../../workers/shared.js"
@@ -2927,7 +2928,7 @@ async function executeWorkerNode(
         // B15: a metered hold the balance cannot cover says how much the node
         // may need — the hold, as the route's 402 does (credit-guard-impl).
         if (meteredHold && preflight.balance !== undefined && preflight.balance < meteredHold.holdCredits) {
-          throw meteredReserveRefusal(`Needs up to ${meteredHold.holdCredits} credits`, "insufficient_credits")
+          throw meteredReserveRefusal(holdShortfallMessage(meteredHold.holdCredits), "insufficient_credits")
         }
         throw new Error(preflight.error ?? "Model not available on your plan or insufficient credits")
       }
@@ -2950,7 +2951,7 @@ async function executeWorkerNode(
         // B15: the balance moved between the preflight and the reserve — the
         // same sentence for a metered hold (a mapped refusal keeps its own).
         if (meteredHold && !mapReserveError(err) && err instanceof Error && /insufficient/i.test(err.message)) {
-          throw meteredReserveRefusal(`Needs up to ${meteredHold.holdCredits} credits`, "insufficient_credits")
+          throw meteredReserveRefusal(holdShortfallMessage(meteredHold.holdCredits), "insufficient_credits")
         }
         throw err
       })

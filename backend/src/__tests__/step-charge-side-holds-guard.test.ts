@@ -47,6 +47,7 @@ const NOT_STEP_CHARGE_READERS: Record<string, string> = {
   "ee/copilot/turn-runner.ts": "a Copilot turn's own job, which makes no side calls",
   "ee/pipelines/services/_poll.ts": "returns the row; its consumer (_run-worker-job.ts, checked below) adds the side holds",
   "ee/routes/admin-credit-audit.ts": "admin per-task pricing audit of each job's OWN charge against its OWN provider cost; side holds are audited per (feature, model) by the LLM mode (admin-credit-audit-llm.ts)",
+  "lib/mcp/amounts.ts": "names the field only to state a figure a job tool already assembled in the deployment's unit; it selects no row and computes no charge (the reader, lib/mcp/tools/diagnose.ts, adds the side holds first)",
   "services/workflow-engine/use-case-node.ts": "a use-case wrapper's credits_actual is its inner execution's total (finalize-wrapper), already summed by node-executor with side holds",
 }
 

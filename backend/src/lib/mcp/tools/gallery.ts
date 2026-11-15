@@ -27,6 +27,7 @@ import { countEmptyInputSkips, executionOutcome } from "@nodaro/shared/workflow"
 import { isRenderNodeType } from "@nodaro/shared/nodes"
 import type { GenericNode } from "@nodaro/shared/types"
 import { summarizeNodeStates } from "../../execution-result.js"
+import { amountsNote, statedJobRow, unitFields } from "../amounts.js"
 import type { NodeExecutionState } from "../../../services/workflow-engine/types.js"
 
 /** What `browse_gallery`'s `query` searches: the job's prompt, read as text out of its JSONB input. */
@@ -763,7 +764,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           "Fetch metadata for a single asset (job) by id, including its output URL, prompt, and provider. " +
           "Returns the user's OWN jobs (any status) AND any other user's PUBLIC + COMPLETED jobs " +
           "— the same visibility surface as `browse_gallery` so anything the user can see they can also " +
-          "fetch and reuse (e.g. the LLM passes the URL into a verb tool as image_url / video_url).",
+          "fetch and reuse (e.g. the LLM passes the URL into a verb tool as image_url / video_url)." +
+          amountsNote(),
         inputSchema: {
           job_id: z.string().min(1),
         },
@@ -853,12 +855,13 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         if (!data) return { content: [{ type: "text", text: `Asset ${args.job_id} not found` }], isError: true }
         // Someone else's job is answered without their id, as list_jobs' public scope does.
         const { user_id: owner, ...othersJob } = data
-        const shownJob = owner === session.userId ? data : othersJob
+        // Its credit figures in the deployment's unit when it has one (lib/mcp/amounts.ts).
+        const shownJob = statedJobRow(owner === session.userId ? data : othersJob)
 
         // Extract the public asset URL from output_data (varies by job_type:
         // imageUrl / videoUrl / audioUrl / outputUrl). The widget polls this
         // tool every 2s and reads structuredContent to update its preview.
-        const out = (data.output_data ?? {}) as Record<string, unknown>
+        const out = (shownJob.output_data ?? {}) as Record<string, unknown>
         const previewField = isPreviewRender(data.job_type as string | null | undefined, out.quality)
           ? { preview: true as const }
           : {}
@@ -968,7 +971,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         }
 
         return {
-          content: [{ type: "text", text: JSON.stringify({ data: shownJob }, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify({ data: shownJob, ...unitFields() }, null, 2) }],
           structuredContent: {
             jobId: data.id,
             status: data.status,

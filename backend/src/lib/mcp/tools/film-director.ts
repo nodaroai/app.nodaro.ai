@@ -34,6 +34,7 @@ import { fileURLToPath } from "node:url"
 import { dirname, resolve } from "node:path"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { McpSession } from "../session.js"
+import { statedDocument } from "../served-documents.js"
 
 /**
  * Embedded fallback — verbatim copy of SKILL.md v2.0.1. The unit test
@@ -411,7 +412,8 @@ export function registerFilmDirectorTool(
       content: [
         {
           type: "text" as const,
-          text: SKILL_CONTENT,
+          // In the deployment's own terms where it has them (lib/mcp/served-documents.ts).
+          text: statedDocument(SKILL_CONTENT),
         },
       ],
     }),

@@ -16,6 +16,7 @@ import { applyServiceMarkup } from "../billing/service-margin.js"
 import { payerProfileId } from "../billing/org-entitlements.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { ReserveRpcError, mapReserveError, reserveRefusalFor } from "../../lib/reserve-errors.js"
+import { holdShortfallMessage } from "../../lib/stated-credit-messages.js"
 import { billingService, type BillingContext } from "../../lib/billing-context.js"
 import { allowanceEnforcementActive, deploymentBillingContext, deploymentPayerActive } from "../../lib/deployment-payer.js"
 import { allowanceFor } from "../billing/deployment-allowance-service.js"
@@ -786,7 +787,7 @@ async function holdCovered(
   reply.status(402).send({
     error: {
       code: "insufficient_credits",
-      message: shortBalance ? `Needs up to ${holdCredits} credits` : check.error ?? "Insufficient credits",
+      message: shortBalance ? holdShortfallMessage(holdCredits) : check.error ?? "Insufficient credits",
     },
     required: holdCredits,
     balance: check.balance,

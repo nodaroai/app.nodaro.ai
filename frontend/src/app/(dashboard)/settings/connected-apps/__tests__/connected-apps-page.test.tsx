@@ -64,6 +64,23 @@ describe("Connected apps page", () => {
     await waitFor(() => expect(revoked).toEqual(["a-1"]))
   })
 
+  it("marks an app that got access through the sign-in (the MCP assertion exchange), and says what revoking it means", async () => {
+    apps.push({ authorizationId: "a-3", name: "Own chat", kind: "user", homepageUrl: null, scopes: ["jobs:read"], connectedAt: "2026-11-11T10:00:00Z", lastUsedAt: null, grantedBy: "assertion_exchange" })
+    renderPage()
+    await screen.findByText("Own chat")
+    expect(screen.getAllByText(en["connApps.viaSignIn"])).toHaveLength(1)
+    fireEvent.click(screen.getAllByRole("button", { name: en["connApps.revoke"] })[2]!)
+    expect(await screen.findByText(en["connApps.revokeDescExchange"])).toBeInTheDocument()
+  })
+
+  it("a consented app's revoke keeps its own wording", async () => {
+    renderPage()
+    await screen.findByText("Claude")
+    fireEvent.click(screen.getAllByRole("button", { name: en["connApps.revoke"] })[0]!)
+    expect(await screen.findByText(en["connApps.revokeDesc"])).toBeInTheDocument()
+    expect(screen.queryByText(en["connApps.viaSignIn"])).toBeNull()
+  })
+
   it("says so when no app has access", async () => {
     apps.length = 0
     renderPage()

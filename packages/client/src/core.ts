@@ -145,6 +145,13 @@ export interface ConnectedApp {
   readonly connectedAt: string
   /** The latest use of any token issued under the grant; `null` if never used. */
   readonly lastUsedAt: string | null
+  /**
+   * `"assertion_exchange"` when the app obtained this grant through the MCP
+   * assertion exchange — a deployment's own application getting tokens for
+   * the user from its sign-in, with no consent screen. Absent on every grant
+   * the user approved on a consent screen.
+   */
+  readonly grantedBy?: "assertion_exchange"
 }
 
 export class NodaroClientCore {
