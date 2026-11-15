@@ -55,7 +55,7 @@
 //   same lists. Editing either clears its finding; no pin can name them.
 
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { ruleTrippedByLine, scannablePath, RULES } from "./check-public-surface.mjs"
@@ -83,6 +83,32 @@ function git(args, cwd) {
 }
 
 /**
+ * Walks a patch, telling a file's header from its hunks. `--- ` and `+++ ` are
+ * headers only between `diff --git` and that file's first `@@`; inside a hunk,
+ * `+++ x` is the added line `++ x`, never a new path (a file whose content
+ * looks like a header can neither hide a line nor rename the file).
+ * @param {string} patch
+ * @param {(path: string | null) => void} onFile  each `+++ ` header's post-image path (null: /dev/null)
+ * @param {(line: string) => void} onHunkLine  each line inside a hunk
+ */
+function walkPatch(patch, onFile, onHunkLine) {
+  let inHeader = true // a bare patch with no `diff --git` line starts in a header too
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("diff --git ")) {
+      inHeader = true
+      onFile(null) // until the +++ header names the post-image path
+    } else if (line.startsWith("@@")) {
+      inHeader = false
+    } else if (!inHeader) {
+      onHunkLine(line)
+    } else if (line.startsWith("+++ ")) {
+      const target = line.slice(4).trim()
+      onFile(target === "/dev/null" ? null : target.replace(/^b\//, ""))
+    }
+  }
+}
+
+/**
  * The lines a patch ADDS, with the file each belongs to.
  * @param {string} patch  unified diff text (`git show -U0`, or `--remerge-diff`)
  * @returns {{path: string, text: string}[]}
@@ -90,19 +116,13 @@ function git(args, cwd) {
 export function addedLinesFromPatch(patch) {
   const added = []
   let path = null
-  for (const line of patch.split("\n")) {
-    if (line.startsWith("diff --git ")) {
-      path = null // until the +++ header names the post-image path
-      continue
-    }
-    if (line.startsWith("+++ ")) {
-      const target = line.slice(4).trim()
-      path = target === "/dev/null" ? null : target.replace(/^b\//, "")
-      continue
-    }
-    if (line.startsWith("--- ") || line.startsWith("@@")) continue
-    if (path && line.startsWith("+")) added.push({ path, text: line.slice(1) })
-  }
+  walkPatch(
+    patch,
+    (p) => (path = p),
+    (line) => {
+      if (path && line.startsWith("+")) added.push({ path, text: line.slice(1) })
+    },
+  )
   return added
 }
 
@@ -114,11 +134,11 @@ export function addedLinesFromPatch(patch) {
  */
 export function writtenPathsFromPatch(patch) {
   const paths = []
-  for (const line of patch.split("\n")) {
-    if (!line.startsWith("+++ ")) continue
-    const target = line.slice(4).trim()
-    if (target !== "/dev/null") paths.push(target.replace(/^b\//, ""))
-  }
+  walkPatch(
+    patch,
+    (p) => p && paths.push(p),
+    () => {},
+  )
   return paths
 }
 
@@ -135,6 +155,70 @@ function symbolPattern(symbols) {
   return symbols.length > 0 ? new RegExp(symbols.join("|")) : null
 }
 
+/** A word character, in a folded line: what a bounded marker edge must not touch. */
+const WORD_CHAR = /[a-z0-9_]/
+/**
+ * What a marker's term is trimmed of: Unicode White_Space (NEL and the no-break
+ * spaces included) plus U+FEFF, which String#trim also strips. A byte-order mark
+ * tucked inside a marker's edge space (word, U+FEFF, space) must not leave the
+ * term dead; one AT the edge is refused before matching (invisibleMarkers).
+ */
+const EDGE_SPACE = new RegExp(`^[\\p{White_Space}${String.fromCharCode(0xfeff)}]+|[\\p{White_Space}${String.fromCharCode(0xfeff)}]+$`, "gu")
+const SMALL_SIGMA = String.fromCharCode(0x3c3)
+const FINAL_SIGMA = String.fromCharCode(0x3c2)
+
+/**
+ * Case-folds a marker or a line the same way on both sides: one code point at
+ * a time (String#toLowerCase on a whole string lowercases a word-final capital
+ * sigma, U+03A3, to the final form U+03C2, so such a line would never contain
+ * a marker's plain sigma U+03C3), with the final sigma folded to the plain one,
+ * as git grep -i treats them alike.
+ * @param {string} s
+ */
+export function foldCase(s) {
+  if (!/[^\x00-\x7f]/.test(s)) return s.toLowerCase()
+  return [...s].map((c) => c.toLowerCase()).join("").replaceAll(FINAL_SIGMA, SMALL_SIGMA)
+}
+
+/**
+ * How this gate matches one marker, case-insensitively. Whitespace at a
+ * marker's edge (Unicode White_Space: a space, a tab, a no-break space, NEL)
+ * is a word BOUNDARY, not a literal character: with a trailing one, the marker
+ * matches its trimmed term wherever the next character is no word character
+ * ([a-z0-9_]) or the line ends ("term,", "term)", "term" at a line's end,
+ * "term x"), never inside a longer word ("termx"); a leading one bounds the
+ * character before the term the same way. Inner whitespace stays literal. The
+ * tree gate (scripts/check-private-markers.sh) matches a marker exactly as
+ * written, so every line it catches is caught here too, plus the mentions it
+ * misses: next to punctuation, at a line's edge, in paths, and in messages it
+ * never reads.
+ * @param {string} marker  one entry of parseMarkerList
+ * @returns {{term: string, matches: (foldedLine: string) => boolean}}
+ *   `term`: the folded marker without its edge whitespace (the whole folded
+ *   marker when that is all it is); `matches` takes a line already folded.
+ */
+function markerMatcher(marker) {
+  const folded = foldCase(marker)
+  const term = folded.replace(EDGE_SPACE, "")
+  // Nothing but whitespace (a no-break space, say): no term to bound, so match it exactly.
+  if (!term) return { term: folded, matches: (line) => line.includes(folded) }
+  const boundBefore = /^\p{White_Space}/u.test(folded)
+  const boundAfter = /\p{White_Space}$/u.test(folded)
+  const matches = (line) => {
+    for (let i = line.indexOf(term); i >= 0; i = line.indexOf(term, i + 1)) {
+      const end = i + term.length
+      if (boundBefore && i > 0 && WORD_CHAR.test(line[i - 1])) continue
+      if (boundAfter && end < line.length && WORD_CHAR.test(line[end])) continue
+      return true
+    }
+    return false
+  }
+  return { term, matches }
+}
+
+/** The text a finding shows in place of a line that holds a private marker. */
+export const WITHHELD = "(line withheld: it holds a private marker)"
+
 /**
  * Every never-public line, path or message ANY commit in the range added —
  * whether or not a later commit removed it again.
@@ -144,8 +228,19 @@ function symbolPattern(symbols) {
  */
 export function findHistoryViolations(commits, options = {}) {
   const checks = new Set(options.checks ?? ["surface", "internal-docs"])
-  const markers = (options.markers ?? []).map((m) => m.toLowerCase())
+  const markers = (options.markers ?? []).map(markerMatcher)
   const symbols = symbolPattern(options.symbols ?? [])
+  // Every marker that hits a line (as the tree gate reports every one), by number.
+  const markerHits = (text) => {
+    const line = foldCase(text)
+    return markers.flatMap(({ matches }, i) => (matches(line) ? [i + 1] : []))
+  }
+  // A finding never prints a line that holds a marker's term at all — boundary
+  // or not, since an in-word occurrence still spells it — nor any cut of one.
+  const shown = (text) => {
+    const line = foldCase(text)
+    return markers.some(({ term }) => line.includes(term)) ? WITHHELD : text.trim().slice(0, 160)
+  }
   const violations = []
   for (const commit of commits) {
     const found = (file, text, ruleId, why) =>
@@ -157,11 +252,11 @@ export function findHistoryViolations(commits, options = {}) {
       for (const { path, text } of lines) {
         if (!scannablePath(path)) continue
         const rule = ruleTrippedByLine(path, text)
-        if (rule) found(path, text.trim().slice(0, 160), rule.id, rule.why)
+        if (rule) found(path, shown(text), rule.id, rule.why)
       }
       for (const text of messageLines) {
         const rule = ruleTrippedByLine(MESSAGE, text)
-        if (rule) found(MESSAGE, text.trim().slice(0, 160), rule.id, rule.why)
+        if (rule) found(MESSAGE, shown(text), rule.id, rule.why)
       }
     }
     if (checks.has("internal-docs")) {
@@ -172,17 +267,13 @@ export function findHistoryViolations(commits, options = {}) {
     }
     // The two private lists: report the commit and file only, never the line.
     if (checks.has("markers") && markers.length > 0) {
-      const hit = (text) => {
-        const lower = text.toLowerCase()
-        const i = markers.findIndex((m) => lower.includes(m))
-        return i < 0 ? 0 : i + 1
-      }
       const seen = new Set()
       for (const { path, text } of [...lines, ...messageLines.map((text) => ({ path: MESSAGE, text }))]) {
-        const n = hit(text)
-        if (!n || seen.has(`${path} ${n}`)) continue
-        seen.add(`${path} ${n}`)
-        found(path, "", "private-marker", `private marker #${n}`)
+        for (const n of markerHits(text)) {
+          if (seen.has(`${path} ${n}`)) continue
+          seen.add(`${path} ${n}`)
+          found(path, "", "private-marker", `private marker #${n}`)
+        }
       }
     }
     if (checks.has("symbols") && symbols) {
@@ -303,9 +394,113 @@ export function scanRange(revs, cwd, options = {}) {
   return violations.filter((v) => !pins.has(pinKey(v)))
 }
 
-function readList(envName, file) {
-  const raw = process.env[envName]?.trim() ? process.env[envName] : existsSync(file) ? readFileSync(file, "utf8") : ""
-  return raw.split("\n").map((l) => l.trim()).filter(Boolean)
+/**
+ * The private marker list, read by the same rule as scripts/check-private-markers.sh
+ * so both gates read (and number) the same markers: one per line, exactly as
+ * written. Whitespace around a marker is kept, never trimmed: the tree gate
+ * matches it literally, and markerMatcher reads it as a word boundary, so
+ * " word " is the word on its own, not every word that contains it. Only save artifacts are
+ * dropped: a byte-order mark at the start of the list and every carriage return
+ * at the end of a line. An empty or whitespace-only line is no marker.
+ * @param {string} raw  the newline-separated list
+ * @returns {string[]}
+ */
+export function parseMarkerList(raw) {
+  return raw
+    .replace(/^\uFEFF/, "")
+    .split("\n")
+    .map((l) => l.replace(/\r+$/, ""))
+    .filter((l) => !/^[ \t\r\v\f]*$/.test(l))
+}
+
+/** The symbol list, trimmed per line as tools/check-private-leaks.mjs reads it. */
+const parseSymbolList = (raw) => raw.split("\n").map((l) => l.trim()).filter(Boolean)
+
+/** Both gates refuse a list that is not UTF-8 text with this line (and never print it). */
+export const LIST_NOT_TEXT =
+  "the private marker list is not UTF-8 text (it holds a NUL byte, or starts with a UTF-16 byte-order mark); save it as UTF-8."
+/** Both gates refuse a marker an invisible character makes dead with this line, by number only. */
+export const invisibleMarkerMessage = (n) =>
+  `private marker #${n} holds an invisible character (a carriage return inside it, or a zero-width character at an edge) and can never match; fix the list.`
+const ZERO_WIDTH = [0x200b, 0x2060, 0xfeff].map((c) => String.fromCharCode(c))
+const NUL = String.fromCharCode(0)
+const REPLACEMENT = String.fromCharCode(0xfffd)
+
+/**
+ * The numbers of the markers an invisible character makes dead, as
+ * scripts/check-private-markers.sh finds them: a carriage return inside one (a
+ * list saved with lone-CR line ends reads as one long marker), or a zero-width
+ * space, word joiner or byte-order mark at either edge (a paste from chat).
+ * @param {string[]} markers  parseMarkerList's result
+ * @returns {number[]}
+ */
+export function invisibleMarkers(markers) {
+  return markers.flatMap((m, i) => {
+    const chars = [...m]
+    const dead = m.includes("\r") || ZERO_WIDTH.includes(chars[0]) || ZERO_WIDTH.includes(chars[chars.length - 1])
+    return dead ? [i + 1] : []
+  })
+}
+
+function abortList(why) {
+  console.error(`[check-history-surface] ABORT: ${why}`)
+  process.exit(1)
+}
+
+/**
+ * The marker list from PRIVATE_LEAK_MARKERS, else from .leak-markers, read and
+ * refused by the same rules as scripts/check-private-markers.sh: a secret that
+ * yields no marker falls back to the file; a file that is there but is not a
+ * readable regular file aborts; a list that is not UTF-8 text (a NUL byte, a
+ * UTF-16 byte-order mark) aborts; a marker an invisible character makes dead
+ * aborts. Neither yielding a marker is "no list". No value is ever printed.
+ * @returns {string[]}
+ */
+function readMarkerList(env = process.env) {
+  const file = ".leak-markers"
+  const fromEnv = env.PRIVATE_LEAK_MARKERS ?? ""
+  // The environment reaches Node decoded: a UTF-16 byte-order mark (FF FE or
+  // FE FF) arrives as two U+FFFD.
+  if (fromEnv.includes(NUL) || fromEnv.startsWith(REPLACEMENT.repeat(2))) abortList(LIST_NOT_TEXT)
+  let markers = parseMarkerList(fromEnv)
+  if (markers.length === 0 && existsSync(file)) {
+    let bytes
+    try {
+      // Only a readable regular file is a list: a directory or a FIFO is not.
+      if (!statSync(file).isFile()) throw Object.assign(new Error("not a regular file"), { code: "not a regular file" })
+      bytes = readFileSync(file)
+    } catch (e) {
+      abortList(`${file} exists but cannot be read (${e.code ?? e.message}).`)
+    }
+    const bom16 = bytes.length >= 2 && ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff))
+    if (bom16 || bytes.includes(0)) abortList(LIST_NOT_TEXT)
+    markers = parseMarkerList(bytes.toString("utf8"))
+  }
+  const dead = invisibleMarkers(markers)
+  for (const n of dead) console.error(`[check-history-surface] ABORT: ${invisibleMarkerMessage(n)}`)
+  if (dead.length > 0) process.exit(1)
+  return markers
+}
+
+/**
+ * The symbol list from its secret, else from its untracked file (the marker
+ * list has its own reader, readMarkerList). A secret that yields no entry
+ * (empty, or only blank lines) is no list, so the file is read instead;
+ * neither yielding one is "no list".
+ */
+function readList(envName, file, parse) {
+  const fromEnv = parse(process.env[envName] ?? "")
+  if (fromEnv.length > 0) return fromEnv
+  if (!existsSync(file)) return []
+  // A list that is there but unreadable fails the run; it never reads as no list.
+  let raw
+  try {
+    raw = readFileSync(file, "utf8")
+  } catch (e) {
+    console.error(`[check-history-surface] ABORT: ${file} exists but cannot be read (${e.code ?? e.message}).`)
+    process.exit(1)
+  }
+  return parse(raw)
 }
 
 function hasGitleaks() {
@@ -330,8 +525,8 @@ function resolveOptions(env = process.env) {
   const checks = new Set(wanted)
   const notes = []
   const missing = []
-  const markers = readList("PRIVATE_LEAK_MARKERS", ".leak-markers")
-  const symbols = readList("PRIVATE_LEAK_SYMBOLS", ".leak-symbols")
+  const markers = readMarkerList(env)
+  const symbols = readList("PRIVATE_LEAK_SYMBOLS", ".leak-symbols", parseSymbolList)
   const inputs = [
     ["markers", markers.length > 0, "MIRROR_REQUIRE_MARKERS", "no marker list (PRIVATE_LEAK_MARKERS or .leak-markers)"],
     ["symbols", symbols.length > 0, "PRIVATE_LEAK_REQUIRE_SYMBOLS", "no symbol list (PRIVATE_LEAK_SYMBOLS or .leak-symbols)"],
