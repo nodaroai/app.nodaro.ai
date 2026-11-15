@@ -1,5 +1,20 @@
 # @nodaro/prompts
 
+## 1.58.0
+
+### Minor Changes
+
+- 1df1b24: `assembleImageInput` and `buildImagePrompt` take `runKind` (`"request"` or `"workflow"`, the default). On a request, a model with a request image limit of its own (Seedream 5.5, GPT Image 2.6 Flare and Sunburst, MiniMax H3 Image, FLUX 3 Klein) has none of its structured references (`connectedReferences`: prompt-mention images, a node's attached images) trimmed, so a caller that counts `referenceImageUrls` refuses the request at the number it names: 12 Seedream 5.5 mentions come back as 12, not 10. A workflow run keeps the trim on every model except FLUX 3 Klein, as before, and every other model is trimmed to its reference limit on both.
+
+### Patch Changes
+
+- 2dab02e: `assembleImageInput` / `buildImagePrompt` no longer trim the structured references (`connectedReferences`: prompt-mention images, a node's attached images) of a model that refuses images over its limit (`refusesImagesOverLimit` in `@nodaro/shared`: FLUX 3 Klein). Every reference the run attaches is in `referenceImageUrls`, so a caller that counts them refuses the run at the number it would really send: 11 FLUX 3 Klein mentions are refused at 11, instead of running as 10 with the 11th mention left in the prompt as plain text. A character's unmentioned looks still attach nothing. Every other model keeps its trim to its reference limit.
+- Updated dependencies [dbd380c]
+- Updated dependencies [2dab02e]
+- Updated dependencies [1df1b24]
+- Updated dependencies [b77923a]
+  - @nodaro/shared@3.66.0
+
 ## 1.57.0
 
 ### Minor Changes

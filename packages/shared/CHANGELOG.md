@@ -1,5 +1,17 @@
 # @nodaro/shared
 
+## 3.66.0
+
+### Minor Changes
+
+- dbd380c: The wire contract of a dub that is already made, through the `media` entry. `DubbingStructure` is what `GET /v1/dubbing/:jobId` answers: the original lines (`DubbingSourceSegment`), every language with its lines (`DubbingLanguage`, `DubbingLanguageStatus`, `DubbingSegment`), the speakers (`DubbingSpeaker`, `DubbingSpeakerVoice`), what can be done to the dub now (`DubbingCapabilities`) and what adding a language is charged (`DubbingAddLanguagePrice`). For the captions export (`GET /v1/dubbing/:jobId/captions`): `DubbingCaptionFormat` with `DUBBING_CAPTION_FORMATS` (`srt`, `vtt`) and `DUBBING_SOURCE_LANGUAGE` (`"source"`, the original speech). For adding a language (`POST /v1/dubbing/:jobId/languages`): `DubbingAddLanguageInput` (`targetLanguage`, and `confirmationId` for a dub made from a link) and `DubbingAddLanguageResult` (the `jobId` that delivers the language). `DubbingErrorCode` with `DUBBING_ERROR_CODES` lists the codes these calls refuse with, and `DUBBING_LANGUAGE_STATUSES` the states a language can be in.
+- 1df1b24: A request over a model's image limit is refused on every model with a request image limit of its own, and a workflow run keeps its documented trim. `hasOwnRequestImageLimit(model)` says whether a model has such a limit (Seedream 5.5, GPT Image 2.6 Flare and Sunburst, MiniMax H3 Image, FLUX 3 Klein; a text-to-image id reads its edit model's). `refusesImagesOverLimitOn(model, run)`, with `run` an `ImageRunKind` (`"request"` or `"workflow"`), says whether that kind of run is refused past the limit rather than having images left out: a request on every model with its own limit, a workflow run only on a model whose catalog entry carries `refusesImagesOverLimit` (FLUX 3 Klein). Every model held to the default limit is unchanged. All three are exported from `@nodaro/shared/models`.
+
+### Patch Changes
+
+- 2dab02e: FLUX 3 Klein (`flux-3-klein`, `flux-3-klein-i2i`) declares its default size, `defaultResolution: "1K"`, so a client reads 1K from the catalog (`defaultResolutionFor`) rather than from the order of its sizes. A catalog entry can carry `refusesImagesOverLimit: true`: a run that would send the model more input images than `requestImageLimit` allows, a base image counted, is refused with a message saying how many to remove, and no image is left out to make it fit. Both FLUX 3 Klein ids carry it; every other model, Seedream 5.5 included, is unchanged. `refusesImagesOverLimit(model)` from `@nodaro/shared/models` reads it.
+- b77923a: Kling 4.0 prices a character's video subject like an image subject, as Kling 4.0 Flash does: it adds no reference-video seconds and does not move a run onto the reference-video rate. The clip still counts toward the model's 5 videos, the videos' 30 s total and its 3–8 s limit. The `kling-4` row of `VIDEO_REF_LIMITS_BY_PROVIDER` no longer sets `videoCharactersBillAsReferenceVideo`, so no model sets it today. The field, `videoCharacterClipsBilledAsReferenceVideo` and `pricedReferenceVideoUrls` stay, for a model whose provider bills the clip as reference video.
+
 ## 3.65.0
 
 ### Minor Changes
