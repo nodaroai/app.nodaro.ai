@@ -1,4 +1,4 @@
-import { runFfprobe, assertSafeProbeSource } from "../providers/video/ffmpeg-utils.js"
+import { readProbeSource } from "../providers/video/ffmpeg-utils.js"
 
 /**
  * Resolve a video-stream frame count from a container's `nb_frames` reading,
@@ -51,9 +51,10 @@ function parseFrameRate(expr: string): number | undefined {
 /**
  * Probe a video URL (or local path) for its frame count + pixel dimensions in a
  * single ffprobe call. Accepts a remote http(s) URL OR a local path — ffprobe
- * reads both; remote URLs go through `assertSafeProbeSource` first (SSRF guard)
- * and the call is confined via `-protocol_whitelist` so a malicious manifest
- * can't pivot to file:// or other transports.
+ * reads both; a URL is read only through the probe guard (`readProbeSource`:
+ * the link guard first, every hop ffprobe makes checked, and the call confined
+ * to the source's transports so a malicious manifest can't pivot to file:// or
+ * other protocols).
  *
  * Frame count prefers the container's `nb_frames` (no decode); when that is
  * absent (common for MP4) it falls back to round(streamDuration × fps) via
@@ -63,17 +64,16 @@ function parseFrameRate(expr: string): number | undefined {
 export async function probeVideoFrames(
   srcUrlOrPath: string,
 ): Promise<{ frames: number; width: number; height: number }> {
-  await assertSafeProbeSource(srcUrlOrPath)
-  const output = await runFfprobe([
+  const output = await readProbeSource(srcUrlOrPath, (input, probe) => probe.run([
     "-v", "error",
-    // Confine ffprobe to file + http(s) transport so a malicious manifest
-    // can't pivot to other protocols. Keep `file` so local-path probes work.
-    "-protocol_whitelist", "file,http,https,tcp,tls",
+    // Confine ffprobe to the source's transports (the probe guard's input
+    // options) so a malicious manifest can't pivot to other protocols.
+    ...probe.inputArgs,
     "-select_streams", "v:0",
     "-show_entries", "stream=nb_frames,width,height,duration,r_frame_rate",
     "-of", "default=noprint_wrappers=1",
-    srcUrlOrPath,
-  ])
+    input,
+  ]))
 
   const fields: Record<string, string> = {}
   for (const line of output.trim().split(/\r?\n/)) {
@@ -113,16 +113,15 @@ export async function probeVideoFrames(
  * caller falls back to the estimate). SSRF-guarded like probeVideoFrames.
  */
 export async function exactFrameCount(srcUrlOrPath: string): Promise<number | undefined> {
-  await assertSafeProbeSource(srcUrlOrPath)
-  const output = await runFfprobe([
+  const output = await readProbeSource(srcUrlOrPath, (input, probe) => probe.run([
     "-v", "error",
-    "-protocol_whitelist", "file,http,https,tcp,tls",
+    ...probe.inputArgs,
     "-select_streams", "v:0",
     "-count_frames",
     "-show_entries", "stream=nb_read_frames",
     "-of", "default=noprint_wrappers=1:nokey=1",
-    srcUrlOrPath,
-  ])
+    input,
+  ]))
   const n = parseInt(output.trim(), 10)
   return Number.isFinite(n) && n > 0 ? n : undefined
 }

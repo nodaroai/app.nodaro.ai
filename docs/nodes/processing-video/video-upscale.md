@@ -169,6 +169,9 @@ Through the API: `POST /v1/video-upscale` with `{ "provider": "seedance-2-5-hd",
 
 **Inputs:** Video (required). With a VEO provider it must come from a VEO generation node in this workflow; with Seedance 2.5 HD, from a Seedance 2.5 node with Draft on; with Nodaro Video Upscale, any clip of up to 60 seconds and 50 MB.
 **Outputs:** Upscaled video
+
+With Topaz, a link must be an ordinary video file, not a streaming playlist (HLS, DASH): such a link is refused with a `400` before anything is charged, and a link whose host cannot be reached for now with a retryable `503` — see [media links](../../features/media-links.md). Nodaro Video Upscale refuses such a link as a video it cannot read.
+
 ## Best Practices
 
 - VEO 1080p is a good option for moderate upscaling

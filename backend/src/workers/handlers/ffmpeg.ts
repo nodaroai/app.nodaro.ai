@@ -800,6 +800,10 @@ async function dispatchKineticCaptions(
   // relay_credits on THIS row. Note what that figure then means: the relayed
   // TRANSCRIPTION only, never the locally-rendered Remotion pass, so it is not
   // the job's full cost and settlement must not read it as one.
+  // The engine the run decided (lib/add-captions-engine.ts): where the deployment
+  // restricts models, the route and the workflow build write the engine they
+  // judged into the job, so a job that carries none was dispatched where nothing
+  // was restricted and runs the default order's first engine.
   const transcribeProvider = data.transcribe_provider ?? ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER
   const localTranscribeKey = transcribeLaneKey(transcribeProvider)
   const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")

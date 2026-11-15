@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify from "fastify"
-import * as ffmpegUtils from "../../providers/video/ffmpeg-utils.js"
+import * as clipProbe from "../../lib/video-utility-probe.js"
 
 // The base price of each bucket row, as the static table lists it (the
 // mapping from a length to its row is tested in @nodaro/shared).
@@ -29,9 +29,7 @@ describe("probeDurationPreHandler", () => {
   beforeEach(() => vi.restoreAllMocks())
 
   it("stashes probedDuration on req for valid video", async () => {
-    vi.spyOn(ffmpegUtils, "probeVideoSource").mockResolvedValue({
-      width: 1920, height: 1080, durationSeconds: 12.3,
-    } as any)
+    vi.spyOn(clipProbe, "probeClipLengthSec").mockResolvedValue(12.3)
     const { probeDurationPreHandler } = await import("../video-sfx.js")
     const req = makeReq("https://example.com/v.mp4")
     const reply = makeReply()
@@ -41,22 +39,35 @@ describe("probeDurationPreHandler", () => {
     expect(reply.code).not.toHaveBeenCalled()
   })
 
-  it("falls back to 8s on probe failure (logs warning)", async () => {
-    vi.spyOn(ffmpegUtils, "probeVideoSource").mockRejectedValue(new Error("ffprobe failed"))
+  it("refuses on probe failure (logs a warning) rather than price the 8s bucket", async () => {
+    vi.spyOn(clipProbe, "probeClipLengthSec").mockRejectedValue(new Error("ffprobe failed"))
     const { probeDurationPreHandler } = await import("../video-sfx.js")
     const req = makeReq("https://example.com/v.mp4")
     const reply = makeReply()
     await probeDurationPreHandler(req, reply)
-    expect(req.probedDuration).toBe(8)
-    expect(req.body.__probedDuration).toBe(8)
+    expect(req.probedDuration).toBeUndefined()
     expect(req.log.warn).toHaveBeenCalled()
-    expect(reply.code).not.toHaveBeenCalled()
+    expect(reply.code).toHaveBeenCalledWith(400)
+    expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ error: "invalid_video_duration" }))
+  })
+
+  it("a host whose lookup failed for now, or a read that ran out of time, is the retryable 503", async () => {
+    const { probeDurationPreHandler } = await import("../video-sfx.js")
+    for (const [failure, code] of [
+      [Object.assign(new Error("probeVideoSource: blocked — DNS resolution failed for cdn.example"), { reason: "dns" }), "source_unreachable"],
+      [Object.assign(new Error("ffprobe failed: "), { killed: true, timedOut: true }), "probe_timeout"],
+    ] as const) {
+      vi.spyOn(clipProbe, "probeClipLengthSec").mockRejectedValue(failure)
+      const req = makeReq("https://example.com/v.mp4")
+      const reply = makeReply()
+      await probeDurationPreHandler(req, reply)
+      expect(reply.code).toHaveBeenCalledWith(503)
+      expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ error: code }))
+    }
   })
 
   it("rejects 400 invalid_video_duration when probed duration is 0", async () => {
-    vi.spyOn(ffmpegUtils, "probeVideoSource").mockResolvedValue({
-      width: 1, height: 1, durationSeconds: 0,
-    } as any)
+    vi.spyOn(clipProbe, "probeClipLengthSec").mockResolvedValue(0)
     const { probeDurationPreHandler } = await import("../video-sfx.js")
     const req = makeReq("https://example.com/v.mp4")
     const reply = makeReply()
@@ -68,9 +79,7 @@ describe("probeDurationPreHandler", () => {
   })
 
   it("rejects 400 video_duration_exceeds_limit when probed duration > 300", async () => {
-    vi.spyOn(ffmpegUtils, "probeVideoSource").mockResolvedValue({
-      width: 1, height: 1, durationSeconds: 305,
-    } as any)
+    vi.spyOn(clipProbe, "probeClipLengthSec").mockResolvedValue(305)
     const { probeDurationPreHandler } = await import("../video-sfx.js")
     const req = makeReq("https://example.com/v.mp4")
     const reply = makeReply()
@@ -162,11 +171,10 @@ describe("POST /v1/video-sfx", () => {
       return { videoQueue }
     })
 
-    // Stub ffmpeg probe (resetModules invalidated the top-level import)
-    vi.doMock("../../providers/video/ffmpeg-utils.js", () => ({
-      probeVideoSource: vi.fn().mockResolvedValue({
-        width: 1920, height: 1080, durationSeconds: 12,
-      }),
+    // Stub the clip reading (resetModules invalidated the top-level import)
+    vi.doMock("../../lib/video-utility-probe.js", () => ({
+      probeClipLengthSec: vi.fn().mockResolvedValue(12),
+      ClipUnreadableError: class ClipUnreadableError extends Error {},
     }))
 
     // Stub supabase jobs table: insert returns distinct ids per call.
@@ -265,7 +273,7 @@ describe("POST /v1/video-sfx", () => {
     await app.close()
     vi.doUnmock("../../middleware/credit-guard.js")
     vi.doUnmock("../../lib/queue.js")
-    vi.doUnmock("../../providers/video/ffmpeg-utils.js")
+    vi.doUnmock("../../lib/video-utility-probe.js")
     vi.doUnmock("../../lib/supabase.js")
     vi.doUnmock("../../lib/config.js")
     vi.doUnmock("../../lib/app-settings.js")
@@ -296,10 +304,8 @@ describe("POST /v1/video-sfx", () => {
   })
 
   it("inserts N jobs for versions=3 with distinct seeds when seed provided", async () => {
-    const ffmpeg = await import("../../providers/video/ffmpeg-utils.js")
-    vi.mocked(ffmpeg.probeVideoSource).mockResolvedValue({
-      width: 1920, height: 1080, durationSeconds: 30,
-    } as any)
+    const clipProbe = await import("../../lib/video-utility-probe.js")
+    vi.mocked(clipProbe.probeClipLengthSec).mockResolvedValue(30)
 
     const { videoQueue } = await import("../../lib/queue.js")
     const res = await app.inject({
@@ -323,10 +329,8 @@ describe("POST /v1/video-sfx", () => {
   })
 
   it("prices the run from the clip length's own row: the batch is checked, each take reserves one row", async () => {
-    const ffmpeg = await import("../../providers/video/ffmpeg-utils.js")
-    vi.mocked(ffmpeg.probeVideoSource).mockResolvedValue({
-      width: 1920, height: 1080, durationSeconds: 30,
-    } as any)
+    const clipProbe = await import("../../lib/video-utility-probe.js")
+    vi.mocked(clipProbe.probeClipLengthSec).mockResolvedValue(30)
 
     const res = await app.inject({
       method: "POST", url: "/v1/video-sfx",
@@ -352,10 +356,8 @@ describe("POST /v1/video-sfx", () => {
     [31, "replicate-mmaudio:60s", 30],
     [180, "replicate-mmaudio:300s", 110],
   ])("a %i s clip reserves %s (%i)", async (seconds, row, credits) => {
-    const ffmpeg = await import("../../providers/video/ffmpeg-utils.js")
-    vi.mocked(ffmpeg.probeVideoSource).mockResolvedValue({
-      width: 1920, height: 1080, durationSeconds: seconds,
-    } as any)
+    const clipProbe = await import("../../lib/video-utility-probe.js")
+    vi.mocked(clipProbe.probeClipLengthSec).mockResolvedValue(seconds)
     const res = await app.inject({
       method: "POST", url: "/v1/video-sfx",
       payload: { videoUrl: "https://example.com/v.mp4" },
@@ -366,10 +368,8 @@ describe("POST /v1/video-sfx", () => {
   })
 
   it("uses random seed (-1) per version when no seed provided", async () => {
-    const ffmpeg = await import("../../providers/video/ffmpeg-utils.js")
-    vi.mocked(ffmpeg.probeVideoSource).mockResolvedValue({
-      width: 1920, height: 1080, durationSeconds: 30,
-    } as any)
+    const clipProbe = await import("../../lib/video-utility-probe.js")
+    vi.mocked(clipProbe.probeClipLengthSec).mockResolvedValue(30)
 
     const { videoQueue } = await import("../../lib/queue.js")
     const res = await app.inject({
@@ -385,10 +385,8 @@ describe("POST /v1/video-sfx", () => {
   })
 
   it("rollback: when reservation fails on 2nd of 3 versions, every version this request made is refunded confirmed, then removed", async () => {
-    const ffmpeg = await import("../../providers/video/ffmpeg-utils.js")
-    vi.mocked(ffmpeg.probeVideoSource).mockResolvedValue({
-      width: 1920, height: 1080, durationSeconds: 8,
-    } as any)
+    const clipProbe = await import("../../lib/video-utility-probe.js")
+    vi.mocked(clipProbe.probeClipLengthSec).mockResolvedValue(8)
 
     // Reservation succeeds for call 0, fails for call 1, never reached for call 2.
     reserveBehavior = (_jobId: string, idx: number) => {

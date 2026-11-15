@@ -311,6 +311,13 @@ import { config, llmMeteredPricing } from "../../lib/config.js"
 import { resolveScriptModelId, type ScriptProvider } from "../../providers/script/script-generator.js"
 import { availabilityChecksFor, isNodeDenied, nodeNotAvailableError, isModelDenied, modelNotAvailableError, modelRestrictionConfigured, namesHouseModel, unservedHouseModelsOf, USER_VIEWER, type AvailabilityViewer } from "../../lib/surface-deny.js"
 import { jobRunModelOfBuild } from "../../lib/run-model.js"
+import {
+  addCaptionsEngine,
+  captionRenderTranscribes,
+  defaultCaptionEngineCannotServe,
+  defaultCaptionEngineCannotServeMessage,
+  noCaptionEngineOfferedError,
+} from "../../lib/add-captions-engine.js"
 import { trainedCharacterModelWithheld } from "../../lib/trained-character-model.js"
 import { servesEveryHouseModel } from "../../lib/house-models-served.js"
 import { providerIsItsModel } from "../../lib/provider-model.js"
@@ -355,7 +362,7 @@ import {
 } from "./scene3d-reference-scoping.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
 import { OVERLAY_MAX_LAYERS } from "../../providers/image/overlay-contract.js"
-import { dropNullCaptionLevers } from "../../providers/video/caption-segments.js"
+import { captionsNeedWordTimings, dropNullCaptionLevers } from "../../providers/video/caption-segments.js"
 import { editPlanModeRefusal } from "../../lib/private-plugins/edit-plan-mode-gate.js"
 import { withoutServerOnlyKeys } from "../../lib/server-only-keys.js"
 
@@ -7938,15 +7945,49 @@ function buildPayloadOf(
       // them is refused here, before the reserve. Nemotron 3.5 Transcribe is one,
       // priced by the video's length: node-executor measures the video and holds
       // the render plus its minutes (`stampAddCaptionsNemotronInput`).
-      const acTranscribeProvider = (data.transcribeProvider ?? data.transcribe_provider) as string | undefined
-      if (acTranscribeProvider && !(CAPTION_TRANSCRIBE_LANES as readonly string[]).includes(acTranscribeProvider)) {
+      const acNamedEngine = (data.transcribeProvider ?? data.transcribe_provider) as string | undefined
+      if (acNamedEngine && !(CAPTION_TRANSCRIBE_LANES as readonly string[]).includes(acNamedEngine)) {
         throw new Error(
-          `add-captions: "${acTranscribeProvider}" is not an engine Add Captions transcribes on — pick ${CAPTION_TRANSCRIBE_LANES.join(", ")}, ` +
+          `add-captions: "${acNamedEngine}" is not an engine Add Captions transcribes on — pick ${CAPTION_TRANSCRIBE_LANES.join(", ")}, ` +
             "or transcribe on a Transcribe node and wire its transcript in",
         )
       }
       const acText = !isCaptionArray ? (resolvedInputs.prompt || resolveRefs(data.text as string | undefined, refMap)) : undefined
       const acCaptions = isCaptionArray ? captionsValue : (resolvedInputs.captions ?? undefined)
+      // The engine the render transcribes on (decided 2026-11-15): the node's
+      // own, else — where the deployment restricts models — the first engine it
+      // offers, written into the job so the Nemotron hold, the model judged
+      // after the build (`refuseWithheldDefaultModel`) and the worker all see
+      // the one engine that runs; a deployment that offers none refuses the
+      // render here, before anything is reserved. A named engine is never
+      // swapped: one the deployment withholds is refused by that judge. Where
+      // nothing is restricted the payload carries the node's own value, as
+      // before, and the worker runs its default.
+      const acTranscribes = captionRenderTranscribes({
+        style: data.captionStyle ?? data.style,
+        text: acText,
+        captions: acCaptions,
+        transcript: addCaptionsTranscript,
+        segments: data.segments,
+        auto_transcribe: data.autoTranscribe ?? data.auto_transcribe,
+      })
+      let acTranscribeProvider = acNamedEngine
+      if (acTranscribes && !acNamedEngine && modelRestrictionConfigured()) {
+        acTranscribeProvider = addCaptionsEngine(undefined)
+        if (acTranscribeProvider === undefined) throw noCaptionEngineOfferedError()
+        // A default that cannot serve the render (Whisper for a kinetic style
+        // with no text to fall back to) is refused, as the route refuses it.
+        const acRender = {
+          needsWordTimings: captionsNeedWordTimings({
+            style: (data.captionStyle ?? data.style) as string | undefined,
+            segments: Array.isArray(data.segments) ? (data.segments as Array<{ style?: string; text?: string; captions?: unknown[] }>) : undefined,
+          }),
+          hasFallbackText: typeof acText === "string" && acText.trim() !== "",
+        }
+        if (defaultCaptionEngineCannotServe(acTranscribeProvider, acRender)) {
+          throw Object.assign(new Error(defaultCaptionEngineCannotServeMessage(acTranscribeProvider)), { code: "model_not_available" as const })
+        }
+      }
       // Price follows the renderer (same predicate as the route's credit id and
       // the worker's dispatch): a styled / timed / transcribed / segmented render
       // is Remotion → add-captions:kinetic; a plain-text subtitle is the cheap

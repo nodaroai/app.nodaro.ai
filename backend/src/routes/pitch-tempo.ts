@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { measurePitchTempoDuration } from "../lib/pitch-tempo-duration.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 export const PitchTempoBody = z
@@ -53,7 +54,7 @@ async function validateAndMeasure(req: FastifyRequest, reply: FastifyReply): Pro
     req.log.warn({ err }, "pitch-tempo: ffprobe failed; refusing the run")
   })
   if (!measured.ok) {
-    return void reply.status(400).send({ error: { code: measured.code, message: measured.message } })
+    return void reply.status(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
   ;(req.body as Record<string, unknown>)[PROBED_KEY] = measured.durationSec
 }

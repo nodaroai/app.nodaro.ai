@@ -1,11 +1,11 @@
-import { getVideoDuration } from "../../../providers/video/ffmpeg-utils.js"
+import { probeMediaDuration } from "../../../providers/video/ffmpeg-utils.js"
 
 /**
  * Phase 1C.3 §J1a — shared audio-duration probe helper.
  *
- * Wraps ffprobe's `format=duration` lookup (via `getVideoDuration`, which
- * works on remote URLs and any audio container — mp3/wav/m4a) and normalizes
- * the result:
+ * Wraps ffprobe's `format=duration` lookup (via `probeMediaDuration`, which
+ * reads a link through the probe guard and any audio container — mp3/wav/m4a)
+ * and normalizes the result:
  *  - returns the duration in seconds on success
  *  - returns `null` on probe failure OR if the probed value is non-finite/≤0
  *  - never throws — failures are non-fatal so callers can fall back to a
@@ -22,7 +22,7 @@ export async function probeAudioDuration(
   logTag = "pipeline-probe-audio",
 ): Promise<number | null> {
   try {
-    const duration = await getVideoDuration(audioUrl)
+    const duration = await probeMediaDuration(audioUrl)
     if (!Number.isFinite(duration) || duration <= 0) return null
     return duration
   } catch (err) {

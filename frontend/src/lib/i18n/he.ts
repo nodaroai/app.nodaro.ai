@@ -2105,6 +2105,7 @@ export const he: ChromeDict = {
   "proccfg.lookHint": "חבילת מראה מוגדרת מראש: גופן, מתאר, אותיות רישיות וצבע המילה הנאמרת. הפקדים למטה דורסים חלקים ממנה.",
   "proccfg.captionEngine": "מנוע תמלול",
   "proccfg.captionEngineNemotronNote": "מחויב לפי כל דקה שהתחילה בסרטון, נוסף על עיבוד הכתוביות.",
+  "proccfg.captionEngineNoneOffered": "אין מנוע תמלול זמין בהתקנה הזו, ולכן הרכיב לא יכול לתמלל את הסרטון. יש לתת לו טקסט, כתוביות או תמלול משלו.",
   "proccfg.font": "גופן",
   "proccfg.fontAuto": "אוטומטי (לפי המראה)",
   "proccfg.uppercase": "אותיות רישיות",

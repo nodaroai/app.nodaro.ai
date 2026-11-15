@@ -9,6 +9,7 @@ import { spawnFfmpeg } from "./ffmpeg-process.js"
 import { cameraMegapixelsOf, canvasPeakMemoryMiB, UHD_CANVAS } from "./ffmpeg-memory-model.js"
 import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
 import { YtDlpHaltError, type FetchDeadline } from "./ytdlp-process.js"
+import { unguardedProbeLinkRefusal } from "./probe-guard.js"
 
 /**
  * What ffprobe found in the downloaded file. `null` on either field means the
@@ -44,6 +45,8 @@ export function probeStreams(
 ): Promise<ProbedStreams> {
   return new Promise((resolve) => {
     const unknown: ProbedStreams = { videoCodec: null, hasAudio: null, width: null, height: null }
+    // A local file only: a link is never read here (it would be unchecked), it is simply not known.
+    if (unguardedProbeLinkRefusal([filePath], undefined)) return resolve(unknown)
     const proc = spawn("ffprobe", [
       "-v", "error",
       "-show_entries", "stream=codec_type,codec_name,width,height",

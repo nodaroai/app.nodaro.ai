@@ -37,6 +37,7 @@ import { judgedModelOfJob, resolvedModelOfJob } from "../job-resolved-model.js"
 import { resolveImageRunModel } from "../../routes/generate-image-credit-id.js"
 import { resolveImageToImageRunModel } from "../../routes/image-to-image-credit-id.js"
 import { resolveAddCaptionsRunModel } from "../../routes/add-captions.js"
+import { SURROUND_DEFAULT_REFINE_PROVIDER, surroundRunModel } from "../../routes/generate-surround-continuation.js"
 import { ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER } from "../transcribe-lane-key.js"
 import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { DEFAULT_VIDEO_PROVIDER, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES } from "@nodaro/shared/models"
@@ -197,5 +198,19 @@ describe("jobRunModelOfBuild — the model a workflow node's built job runs on",
     expect(judgedModelOfJob("image-to-video", { provider: "kling" })).toBe(resolvedModelOfJob("image-to-video", { provider: "kling" }))
     expect(judgedModelOfJob("text-to-speech", { text: "hi" })).toBe(resolvedModelOfJob("text-to-speech", { text: "hi" }))
     expect(judgedModelOfJob("not-a-job", {})).toBeUndefined()
+  })
+})
+
+describe("a surround continuation is judged on its image model, and on its refine model when it refines", () => {
+  it("the image model, named or the general default", () => {
+    expect(surroundRunModel(req({}))).toEqual([defaultImageModel("general")])
+    expect(surroundRunModel(req({ provider: "nano-banana-pro" }))).toEqual(["nano-banana-pro"])
+  })
+
+  it("with `refine` on, the refine pass's upscale model too, named or its default", () => {
+    expect(surroundRunModel(req({ refine: true }))).toEqual([defaultImageModel("general"), SURROUND_DEFAULT_REFINE_PROVIDER])
+    expect(surroundRunModel(req({ refine: true, refineProvider: "topaz-image-upscale" }))).toEqual([defaultImageModel("general"), "topaz-image-upscale"])
+    // Off, the refine model runs nothing and is not judged.
+    expect(surroundRunModel(req({ refineProvider: "topaz-image-upscale" }))).toEqual([defaultImageModel("general")])
   })
 })

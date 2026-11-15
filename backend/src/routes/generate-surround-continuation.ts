@@ -1,5 +1,5 @@
 // @registry-enumerates prices the model identifiers it is given (getModelCreditBaseCost) — credit ids, not node types, so not a @registry-lookup
-import type { FastifyInstance, FastifyReply } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -17,7 +17,7 @@ import { buildSurroundFillPrompt } from "@nodaro/prompts/assembly"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
-import { providerRunModel } from "../lib/run-model.js"
+import { rawBodyRecord, textField } from "../lib/run-model.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
 /**
@@ -44,6 +44,20 @@ function gateEdition(reply: FastifyReply): boolean {
 
 /** Image upscale/denoise providers offered for the opt-in `refine` step. */
 const REFINE_PROVIDERS = ["recraft-upscale", "topaz-image-upscale"] as const
+/** The refine pass's model when the request names none (the worker's default, workers/handlers/surround.ts). */
+export const SURROUND_DEFAULT_REFINE_PROVIDER = "recraft-upscale"
+
+/**
+ * The models this request RUNS on, for the guard's surface deny
+ * (`CreditGuardOpts.runModel`): its image model, and — with `refine` on — the
+ * upscale model its refine pass runs (decided 2026-11-15: a second model
+ * setting is judged like the first).
+ */
+export function surroundRunModel(req: FastifyRequest): readonly string[] {
+  const b = rawBodyRecord(req)
+  const image = textField(b.provider) ?? IMAGE_MODEL_ROLE_DEFAULTS.general
+  return b.refine === true ? [image, textField(b.refineProvider) ?? SURROUND_DEFAULT_REFINE_PROVIDER] : [image]
+}
 
 /**
  * Surround continuation — platform-owned seamless 360° ring-view generation.
@@ -75,7 +89,7 @@ const generateSurroundContinuationBody = z.object({
   // ring view's reference — slows the cumulative softening down a long chain.
   // recraft-upscale = 1 cr, topaz-image-upscale = 3 cr (added to the base).
   refine: z.boolean().optional().default(false),
-  refineProvider: z.enum(REFINE_PROVIDERS).optional().default("recraft-upscale"),
+  refineProvider: z.enum(REFINE_PROVIDERS).optional().default(SURROUND_DEFAULT_REFINE_PROVIDER),
   // Optional free-form scene hint woven into the fill prompt.
   userPrompt: z.string().max(8000).optional(),
   provider: z.string().optional().default(IMAGE_MODEL_ROLE_DEFAULTS.general),
@@ -94,7 +108,7 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
     "/v1/generate-surround-continuation",
     {
       preHandler: creditGuard((req) => plainEntityCreditIdentifier(extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.general), 1), {
-        runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.general),
+        runModel: surroundRunModel,
         // Add the opt-in refine upscale as a credit addon on top of the image
         // provider's base. Returns BASE credits (markup applied in creditGuard so
         // the same number is checked + reserved). Mirrors generate-character.
@@ -103,7 +117,7 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
           const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
           let credits = (await getModelCreditBaseCost(plainEntityCreditIdentifier(extractProvider(body, IMAGE_MODEL_ROLE_DEFAULTS.general), 1))).creditCost
           if (b.refine === true) {
-            const rp = typeof b.refineProvider === "string" ? b.refineProvider : "recraft-upscale"
+            const rp = typeof b.refineProvider === "string" ? b.refineProvider : SURROUND_DEFAULT_REFINE_PROVIDER
             credits += (await getModelCreditBaseCost(rp)).creditCost
           }
           return credits

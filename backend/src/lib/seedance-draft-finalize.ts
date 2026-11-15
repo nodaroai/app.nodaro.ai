@@ -9,7 +9,7 @@ import { supabase } from "./supabase.js"
 import { hasCredits } from "./config.js"
 import { probeRefVideoDurations } from "./ref-video-probe.js"
 import { draftAudioMuxForSource, type DraftAudioMux } from "./seedance-draft-audio.js"
-import { assertSafeProbeSource, getVideoStreamDuration } from "../providers/video/ffmpeg-utils.js"
+import { probeVideoStreamDurationSource } from "../providers/video/ffmpeg-utils.js"
 
 /**
  * Seedance 2.5 Draft → 1080p finalize: which draft a request points at, whether
@@ -207,10 +207,10 @@ function withAudioMux(
 }
 
 /** Video-stream length of a clip URL (never the container: an audio track a
- *  mux made longer must not lengthen the take). SSRF-guarded like every probe. */
+ *  mux made longer must not lengthen the take). Read through the probe guard
+ *  like every probe of a link (`readProbeSource`). */
 export async function videoStreamSeconds(url: string): Promise<number> {
-  await assertSafeProbeSource(url)
-  return getVideoStreamDuration(url)
+  return probeVideoStreamDurationSource(url)
 }
 
 /**

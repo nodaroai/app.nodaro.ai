@@ -527,7 +527,9 @@ describe("the step inventory the leaf charges", () => {
 
   it("a detection window: one proxy probe and one slot hold at the detector's own limit", () => {
     const detect = read("../../../services/face-detect/detect-faces.ts")
-    expect(count(detect, /\brunFfprobe\(/g)).toBe(1)
+    // The proxy's one probe, read through the probe guard (it is a link, if our own).
+    expect(count(detect, /\brunFfprobeReadingLinks\(/g)).toBe(1)
+    expect(count(detect, /\brunFfprobe\(/g)).toBe(0)
     expect(count(detect, /\bwithFfmpegSlot\(/g)).toBe(1)
     expect(count(detect, /\bspawnFfmpeg\(/g)).toBe(1)
     expect(detect).toMatch(/const timeoutMs = faceDetectTimeoutMs\(frames, described\.size\)/)

@@ -14,6 +14,7 @@ import type { FastifyRequest } from "fastify"
 import { llmFeatureDefaultModel } from "@nodaro/render-rules"
 import { applyDefaultVideoSelection } from "@nodaro/shared/models"
 import { judgedModelOfJob, RESOLVED_MODEL_OF_JOB, resolvedModelOfJob } from "./job-resolved-model.js"
+import { addCaptionsBuiltEngine } from "./add-captions-transcription.js"
 
 /** What `CreditGuardOpts.runModel` takes. */
 export type RunModelResolver = (req: FastifyRequest) => string | readonly string[] | undefined
@@ -110,9 +111,30 @@ export const FIXED_MODEL_JOBS: ReadonlySet<string> = new Set([
   "voice-design",
 ])
 
+/**
+ * Jobs the workflow lane judges on the model their BUILT payload names, as
+ * their handler reads it — kept out of `RESOLVED_MODEL_OF_JOB`, which also
+ * writes the model onto every job row it knows, so a deployment that restricts
+ * nothing sees no change. Two kinds:
+ *  - a job whose work is not a model's (a render) but that runs one on a
+ *    SETTING beside it: Add Captions' transcription engine, on the `local` lane;
+ *  - a plugin engine's job, on the `coordinator` lane, whose build fills in the
+ *    model a node that names none runs: Generate Video Pro and Edit Video Pro
+ *    on `seedance-2` (payload-builder.ts).
+ * The census (services/workflow-engine/__tests__/default-model-judge-census.test.ts)
+ * holds every job a node with a model setting builds to this table or the others.
+ */
+export const PAYLOAD_MODEL_OF_JOB: Readonly<Record<string, (payload: Readonly<Record<string, unknown>>) => string | undefined>> = Object.freeze({
+  // Its transcription engine, when the render transcribes: the one its build wrote, else the worker's default.
+  "add-captions": (payload) => addCaptionsBuiltEngine(payload),
+  // The model the build put the job on: the node's own, else the build's default.
+  "generate-video-pro": (payload) => textField(payload.provider),
+  "edit-video-pro": (payload) => textField(payload.provider),
+})
+
 /** Whether the workflow lane can tell the model a job named `jobName` runs on. */
 export function judgesJobRunModel(jobName: string): boolean {
-  return Object.hasOwn(RESOLVED_MODEL_OF_JOB, jobName) || FIXED_MODEL_JOBS.has(jobName)
+  return Object.hasOwn(RESOLVED_MODEL_OF_JOB, jobName) || FIXED_MODEL_JOBS.has(jobName) || Object.hasOwn(PAYLOAD_MODEL_OF_JOB, jobName)
 }
 
 /**
@@ -121,8 +143,9 @@ export function judgesJobRunModel(jobName: string): boolean {
  * read off the BUILT job: its payload, with every default the build filled in,
  * and the id it reserves under. A job the resolved-model registry knows answers
  * through `judgedModelOfJob` (as its handler decides, before generate-image's
- * image-to-image swap); a fixed-model job answers its reserved id; any other
- * job answers undefined.
+ * image-to-image swap); a fixed-model job answers its reserved id; a job judged
+ * on its payload's model answers it (`PAYLOAD_MODEL_OF_JOB`); any other job
+ * answers undefined.
  */
 export function jobRunModelOfBuild(
   jobName: string,
@@ -130,5 +153,6 @@ export function jobRunModelOfBuild(
   modelIdentifier: string,
 ): string | undefined {
   if (Object.hasOwn(RESOLVED_MODEL_OF_JOB, jobName)) return judgedModelOfJob(jobName, payload)
+  if (Object.hasOwn(PAYLOAD_MODEL_OF_JOB, jobName)) return PAYLOAD_MODEL_OF_JOB[jobName]!(payload)
   return FIXED_MODEL_JOBS.has(jobName) ? textField(modelIdentifier) : undefined
 }

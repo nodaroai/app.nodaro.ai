@@ -137,3 +137,25 @@ describe("stampNemotronTranscribeInput (the workflow run's twin of the route's p
     expect(probe.urls).toEqual([])
   })
 })
+
+describe("a link whose host could not be looked up for now (the probe guard's retryable refusal)", () => {
+  it("is the retryable 503 source_unreachable every measuring route answers, not a 'public host' 400", async () => {
+    probe.guard = async () => {
+      throw Object.assign(new Error("probeVideoSource: blocked — DNS resolution failed for cdn.example.com"), { reason: "dns" })
+    }
+    expect(await measureNemotronTranscribeInput("https://cdn.example.com/a.mp3")).toEqual({
+      ok: false,
+      code: "source_unreachable",
+      message: "Could not reach the link's host just now — run it again.",
+    })
+  })
+
+  it("a private address or a host that does not exist is still the 'public host' 400", async () => {
+    for (const reason of ["address", "host"]) {
+      probe.guard = async () => {
+        throw Object.assign(new Error("probeVideoSource: blocked"), { reason })
+      }
+      expect(await measureNemotronTranscribeInput("https://cdn.example.com/a.mp3")).toMatchObject({ ok: false, code: "invalid_media_url" })
+    }
+  })
+})

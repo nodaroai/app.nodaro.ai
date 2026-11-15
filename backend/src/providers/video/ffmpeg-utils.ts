@@ -7,10 +7,21 @@ import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 import { Readable, Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
-import { lookup as dnsLookup } from "node:dns/promises"
-import { isIP } from "node:net"
-import { safeFetch, isPrivateOrReservedIP } from "../../lib/safe-fetch.js"
-import { hasUrlParserHazard } from "@nodaro/shared/video"
+import { safeFetch } from "../../lib/safe-fetch.js"
+import { isOwnStoredFileUrl } from "../../lib/own-storage-url.js"
+import {
+  assertSafeProbeSource,
+  containerRefusalOf,
+  isNetworkProbeSource,
+  OWN_STORAGE_PROBE_MAX_BYTES,
+  PROBE_GUARD_OPTIONS,
+  probeInputArgs,
+  ProbeSourceBlockedError,
+  storedCopyProbeArgs,
+  unguardedProbeLinkRefusal,
+  withProbeEgress,
+  type ProbeSourceBlockReason,
+} from "./probe-guard.js"
 import { csvFields } from "./ffprobe-csv.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { watchTransferBody, type TransferRateLimits, type TransferWatch } from "../../lib/transfer-watchdog.js"
@@ -286,6 +297,9 @@ export interface FfmpegLaunchOptions {
   /** Gives up WAITING for the launch's slot and memory when it aborts (the launch then rejects with its
    *  reason); never stops a launch already admitted. `runFfmpeg` only. Omitted: waits as long as it takes. */
   readonly signal?: AbortSignal
+  /** The child's environment: the probe guard's, for a run that reads a link through its proxy
+   *  (`ffmpeg-reading-links.ts`). Omitted: this process's own. */
+  readonly env?: NodeJS.ProcessEnv
 }
 
 export { ffmpegMemoryBudgetNow }
@@ -477,9 +491,16 @@ export function ffmpegFailureMessage(stderr: string | undefined, fallback: strin
  * caller can classify without parsing text (Video Overlay: a timeout is
  * "Render exceeded the 10-minute limit"; a probe timeout stays retryable).
  */
-function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut: boolean } {
+function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut: boolean; notStarted?: true; aborted?: true } {
   const killed = error.killed === true
-  return { killed, timedOut: killed && error.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" }
+  return {
+    killed,
+    timedOut: killed && error.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
+    // The process never started (ENOENT, EAGAIN, EMFILE…: the spawn's own error): the server's failure, not the input's.
+    ...(typeof error.syscall === "string" && error.syscall.startsWith("spawn") ? { notStarted: true as const } : {}),
+    // Stopped by its caller's signal.
+    ...(error.name === "AbortError" ? { aborted: true as const } : {}),
+  }
 }
 
 /**
@@ -505,6 +526,7 @@ export async function runFfmpeg(
     const child = execFileFfmpeg(args, {
       maxBuffer: 10 * 1024 * 1024,
       timeout: limitMs,
+      ...(launch?.env ? { env: launch.env } : {}),
     }, (error, stdout, stderr) => {
       stopEscalation()
       stopWatch()
@@ -548,6 +570,7 @@ export async function runFfmpegCapture(
       const child = execFileFfmpeg(args, {
         maxBuffer: 10 * 1024 * 1024,
         timeout: limitMs,
+        ...(launch?.env ? { env: launch.env } : {}),
       }, (error, stdout, stderr) => {
         stopEscalation()
         if (error) {
@@ -691,7 +714,20 @@ export function logFfmpegVersion(tag: string): void {
   console.log(`[${tag}] ${describeFfmpegMemoryBudget(ffmpegMemoryBudgetNow())}`)
 }
 
-export function runFfprobe(args: readonly string[], opts: { readonly timeoutMs?: number; readonly signal?: AbortSignal } = {}): Promise<string> {
+// A raw ffprobe run is never handed a link outside the guard: every run below checks with
+// `unguardedProbeLinkRefusal` (probe-guard.ts) before ffprobe starts.
+
+export function runFfprobe(
+  args: readonly string[],
+  opts: {
+    readonly timeoutMs?: number
+    readonly signal?: AbortSignal
+    /** The child's environment: a guarded network probe's (`readProbeSource`, which points ffprobe at the probe guard's proxy). */
+    readonly env?: NodeJS.ProcessEnv
+  } = {},
+): Promise<string> {
+  const refused = unguardedProbeLinkRefusal(args, opts.env)
+  if (refused) return Promise.reject(refused)
   return new Promise((resolve, reject) => {
     // Watchdog: ffprobe accepts remote http(s) inputs (probeVideoSource) and
     // a stalled edge/socket would otherwise hang the worker indefinitely —
@@ -701,7 +737,7 @@ export function runFfprobe(args: readonly string[], opts: { readonly timeoutMs?:
     // `signal` kills it at once (a caller whose time is up, e.g. the
     // outside-input copy's check, or a request whose client went away).
     const timeout = Math.min(FFPROBE_TIMEOUT_MS, opts.timeoutMs ?? FFPROBE_TIMEOUT_MS)
-    execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout, ...(opts.signal ? { signal: opts.signal } : {}) }, (error, stdout, stderr) => {
+    execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout, ...(opts.signal ? { signal: opts.signal } : {}), ...(opts.env ? { env: opts.env } : {}) }, (error, stdout, stderr) => {
       if (error) {
         reject(Object.assign(new Error(`ffprobe failed: ${stderr || error.message}`), execFailureFlags(error)))
       } else {
@@ -717,6 +753,8 @@ export function runFfprobe(args: readonly string[], opts: { readonly timeoutMs?:
  * Same watchdog, same rejection (`killed` / `timedOut` flags).
  */
 export function runFfprobeCapture(args: readonly string[], opts?: { timeoutMs?: number }): Promise<{ stdout: string; stderr: string }> {
+  const refused = unguardedProbeLinkRefusal(args, undefined)
+  if (refused) return Promise.reject(refused)
   return new Promise((resolve, reject) => {
     const timeout = Math.min(FFPROBE_TIMEOUT_MS, opts?.timeoutMs ?? FFPROBE_TIMEOUT_MS)
     execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout }, (error, stdout, stderr) => {
@@ -844,78 +882,158 @@ export async function getVideoStreamDuration(filePath: string): Promise<number> 
 }
 
 /**
- * SSRF guard for probeVideoSource when handed a remote URL. ffprobe performs
- * its OWN DNS resolution + network I/O, so it bypasses safeFetch — a
- * user-supplied URL that resolves to an internal IP would let ffprobe connect
- * to internal services (a blind SSRF / port-scan / cloud-metadata oracle).
- * Validate before invoking ffprobe: reject non-http(s), reject literal
- * private/reserved IPs, and reject hostnames that resolve to any
- * private/reserved IP. Local filesystem paths (no "://") bypass this — they
- * never touch the network. The `-protocol_whitelist` on the ffprobe call
- * additionally blocks protocol pivots (e.g. an HLS/concat manifest that
- * references file://). Residual: a DNS-rebind between this resolve and
- * ffprobe's own resolve — narrow, and the probe is a blind duration oracle.
+ * `runFfprobe` for a caller that may hand it a link among its arguments (the
+ * private plugin's toolkit): the link is read through the probe guard
+ * (`readProbeSource`: the first-hop check, the proxy, the container rule and
+ * the own-storage fallback), with the guard's input options placed right
+ * before it. A caller may not set any of those options itself (refused:
+ * ffprobe keeps an option's last value wherever it sits, so placing ours
+ * alone would not hold). One link at most; without one this is `runFfprobe`.
  */
-export async function assertSafeProbeSource(src: string): Promise<void> {
-  if (!src.includes("://")) return // local filesystem path — no network I/O
-  // The host below is read the WHATWG way, but ffprobe is handed the raw
-  // string and parses it itself: a link the two would read differently (a
-  // backslash, a control character) is refused before either reads it.
-  if (hasUrlParserHazard(src)) {
-    throw new ProbeSourceBlockedError("link", "probeVideoSource: blocked — a link two URL parsers read differently")
-  }
-  let parsed: URL
-  try {
-    parsed = new URL(src)
-  } catch {
-    throw new ProbeSourceBlockedError("link", `probeVideoSource: blocked — invalid URL "${src}"`)
-  }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new ProbeSourceBlockedError("link", `probeVideoSource: blocked non-http(s) protocol ${parsed.protocol}`)
-  }
-  const host = parsed.hostname.replace(/^\[|\]$/g, "")
-  if (isIP(host)) {
-    if (isPrivateOrReservedIP(host)) {
-      throw new ProbeSourceBlockedError("address", `probeVideoSource: blocked private/reserved IP ${host}`)
-    }
-    return
-  }
-  let addrs: Array<{ address: string }>
-  try {
-    addrs = await dnsLookup(host, { all: true })
-  } catch (err) {
-    // A host that does not exist is for good; any other failure (a timeout, a resolver that failed) may pass.
-    const code = (err as { code?: unknown } | null)?.code
-    throw new ProbeSourceBlockedError(code === "ENOTFOUND" || code === "ENODATA" ? "host" : "dns", `probeVideoSource: blocked — DNS resolution failed for ${host}`)
-  }
-  if (addrs.length === 0) {
-    throw new ProbeSourceBlockedError("host", `probeVideoSource: blocked — no DNS resolution for ${host}`)
-  }
-  for (const a of addrs) {
-    if (isPrivateOrReservedIP(a.address)) {
-      throw new ProbeSourceBlockedError(
-        "address",
-        `probeVideoSource: blocked — ${host} resolves to private/reserved IP ${a.address}`,
-      )
-    }
-  }
+export async function runFfprobeReadingLinks(args: readonly string[]): Promise<string> {
+  const links = args.filter((a) => isNetworkProbeSource(a))
+  if (links.length === 0) return runFfprobe(args)
+  if (links.length > 1) throw new Error("runFfprobeReadingLinks: one link per run")
+  // ffprobe keeps the LAST value of an option wherever it sits, so a caller's own could widen the guard's: refused.
+  const own = args.find((a) => PROBE_GUARD_OPTIONS.has(a))
+  if (own) throw new Error(`runFfprobeReadingLinks: a run that reads a link cannot set the probe guard's own options (${own})`)
+  const link = links[0]!
+  return readProbeSource(link, (input, probe) => probe.run(args.flatMap((a) => (a === link ? [...probe.inputArgs, input] : [a]))))
 }
 
 /**
- * Why `assertSafeProbeSource` refused a link: `address` — it is, or its host
- * resolves to, a private or reserved address; `host` — its host does not
- * exist (no such domain, or an answer with no address); `dns` — its host
- * could not be resolved for another reason (a timeout, a failing resolver:
- * possibly for a moment, so a caller may treat it as retryable); `link` — not
- * an http(s) link both URL parsers read alike. The message and the error's
- * name are the ones the guard has always thrown, so a caller that reads only
- * those sees no difference.
+ * {@link getVideoStreamDuration} of a source that may be a LINK (a provider's
+ * result, a stored clip): the same two readings, the video stream's length
+ * and else the container's, read through the probe guard (`readProbeSource`).
  */
-export type ProbeSourceBlockReason = "address" | "host" | "dns" | "link"
+export async function probeVideoStreamDurationSource(src: string): Promise<number> {
+  return readProbeSource(src, async (input, probe) => {
+    const read = async (entries: readonly string[]) => parseFloat((await probe.run(["-v", "error", ...probe.inputArgs, ...entries, "-of", "csv=p=0", input])).trim())
+    const stream = await read(["-select_streams", "v:0", "-show_entries", "stream=duration"])
+    if (Number.isFinite(stream) && stream > 0) return stream
+    const container = await read(["-show_entries", "format=duration"])
+    if (!(Number.isFinite(container) && container > 0)) throw new Error(`Could not determine duration for: ${src}`)
+    return container
+  })
+}
 
-export class ProbeSourceBlockedError extends Error {
-  constructor(readonly reason: ProbeSourceBlockReason, message: string) {
-    super(message)
+// The probe's link guard (the first hop) and its typed refusal live in
+// `probe-guard.ts`, beside the proxy every guarded run reads through;
+// re-exported so every existing `ffmpeg-utils.js` import keeps working.
+export { assertSafeProbeSource, ProbeSourceBlockedError }
+export type { ProbeSourceBlockReason }
+
+export { OWN_STORAGE_PROBE_MAX_BYTES }
+
+/** What a probe of one source runs ffprobe with (`readProbeSource`). */
+export interface GuardedProbe {
+  /** The input options to place before the source: the protocol whitelist (and, for a link, the redirect limit). */
+  readonly inputArgs: readonly string[]
+  /** Run ffprobe under the guard: a link's run reads through the probe guard's proxy. */
+  run(args: readonly string[], opts?: { readonly timeoutMs?: number; readonly signal?: AbortSignal }): Promise<string>
+  /** The child environment a streamed scan (`scanPacketEnds`) spawns ffprobe with; undefined for a local file. */
+  readonly env?: NodeJS.ProcessEnv
+}
+
+/** How a guarded probe's own-storage fallback downloads (`readProbeSource`). */
+export interface ProbeSourceOptions {
+  /** The download's bound (default `DOWNLOAD_TIMEOUT_MS`, never above it). */
+  readonly downloadTimeoutMs?: number
+  /** Stops the download (a request whose client went away, a caller whose time is up). */
+  readonly signal?: AbortSignal
+  /** The caller already passed `src` through `assertSafeProbeSource` and it was allowed (one DNS lookup, not two). */
+  readonly sourceChecked?: boolean
+  /**
+   * `src` is a local copy of a user's file (the own-storage fallback's
+   * download): read with the container rule a link gets (`storedCopyProbeArgs`).
+   */
+  readonly userFile?: boolean
+}
+
+const localProbe: GuardedProbe = {
+  inputArgs: probeInputArgs("/local"),
+  run: (args, opts = {}) => runFfprobe(args, opts),
+}
+
+/** A local copy of a user's file: `file` only, and the container rule a link gets (a playlist fails as its typed refusal). */
+const storedCopyProbe: GuardedProbe = {
+  inputArgs: storedCopyProbeArgs(),
+  run: (args, opts = {}) => runFfprobe(args, opts).catch((err: unknown) => {
+    throw containerRefusalOf(err) ?? err
+  }),
+}
+
+/**
+ * Read a probe source the one guarded way (`probe-guard.ts`): every ffprobe
+ * that may read a link someone gave us goes through here.
+ *
+ * - A local path is read with only the `file` protocol.
+ * - A link passes the link guard (`assertSafeProbeSource`) first — unless the
+ *   caller already did (`sourceChecked`) — and ffprobe then reads it through
+ *   the guard's proxy, which checks every connection it makes (redirects,
+ *   range requests, the links a playlist names); a refused hop throws the
+ *   first hop's `ProbeSourceBlockedError`. A link is read only as an ordinary
+ *   media file (`REMOTE_PROBE_FORMATS`): a playlist or a manifest fails as a
+ *   refusal with reason `container`.
+ * - Only when the guard refuses the link's ADDRESS (reason `address`) and the
+ *   link is strictly a file of this install's own storage (`isOwnStoredFileUrl`:
+ *   a self-host's storage on a loopback or private address) is the file
+ *   downloaded instead — at most {@link OWN_STORAGE_PROBE_MAX_BYTES}, within
+ *   `downloadTimeoutMs`, through `downloadFile`'s own-storage exemption (no
+ *   redirect) — and read on disk ({@link readOwnStoredCopy}). A link the guard
+ *   allows is never downloaded to be probed: on Cloud, storage is public.
+ */
+export async function readProbeSource<T>(
+  src: string,
+  read: (input: string, probe: GuardedProbe) => Promise<T>,
+  opts: ProbeSourceOptions = {},
+): Promise<T> {
+  if (!isNetworkProbeSource(src)) return read(src, opts.userFile ? storedCopyProbe : localProbe)
+  if (!opts.sourceChecked) {
+    try {
+      await assertSafeProbeSource(src)
+    } catch (err) {
+      if (err instanceof ProbeSourceBlockedError && err.reason === "address" && isOwnStoredFileUrl(src)) {
+        return readOwnStoredCopy(src, (local) => read(local, storedCopyProbe), opts)
+      }
+      throw err
+    }
+  }
+  const inputArgs = probeInputArgs(src)
+  return withProbeEgress((egress) => read(src, {
+    inputArgs,
+    env: egress.env,
+    // A link that is not an ordinary media file (a playlist, a manifest) fails as its typed refusal.
+    run: (args, runOpts = {}) => runFfprobe(args, { ...runOpts, env: egress.env }).catch((err: unknown) => {
+      throw containerRefusalOf(err) ?? err
+    }),
+  }))
+}
+
+/**
+ * The own-storage fallback of {@link readProbeSource}, for a caller that runs
+ * the link guard itself (`video-utility-length.ts`, under a route's deadline):
+ * download `url` — strictly a file of this install's own storage, checked here
+ * again — at most {@link OWN_STORAGE_PROBE_MAX_BYTES} within `downloadTimeoutMs`
+ * (default `DOWNLOAD_TIMEOUT_MS`), then `read` the local copy, removed after.
+ */
+export async function readOwnStoredCopy<T>(
+  url: string,
+  read: (localPath: string) => Promise<T>,
+  opts: Pick<ProbeSourceOptions, "downloadTimeoutMs" | "signal"> = {},
+): Promise<T> {
+  if (!isOwnStoredFileUrl(url)) {
+    throw new ProbeSourceBlockedError("address", "probeVideoSource: blocked — only a file of this install's own storage is read from it")
+  }
+  const timeoutMs = Math.min(DOWNLOAD_TIMEOUT_MS, opts.downloadTimeoutMs ?? DOWNLOAD_TIMEOUT_MS)
+  if (!(timeoutMs > 0)) throw Object.assign(new Error(`Download timeout: no time left to read ${url}`), { name: "TimeoutError" })
+  const dir = await createWorkDir("probe-own-storage")
+  try {
+    const local = join(dir, "input")
+    await downloadFile(url, local, { maxBytes: OWN_STORAGE_PROBE_MAX_BYTES, timeoutMs, ...(opts.signal ? { signal: opts.signal } : {}) })
+    return await read(local)
+  } finally {
+    await cleanupWorkDir(dir)
   }
 }
 
@@ -1031,20 +1149,17 @@ export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
  * route and the workflow run price a run with a video layer by
  * (lib/video-overlay-length.ts), so they measure the very stream the worker's
  * {@link probeVideoOverlayBase} will (cover pictures skipped, the video
- * stream's length). Guarded like `probeVideoSource`: no private address, and
- * ffprobe confined to file and http(s). Any failure throws; the caller refuses
- * the run before anything is reserved.
+ * stream's length). Guarded like `probeVideoSource` (`readProbeSource`). Any
+ * failure throws; the caller refuses the run before anything is reserved.
  */
 export async function probeVideoOverlayBaseSource(srcUrlOrPath: string): Promise<VideoOverlayBaseProbe> {
-  await assertSafeProbeSource(srcUrlOrPath)
-  const out = await runFfprobe([
+  return readProbeSource(srcUrlOrPath, async (input, probe) => parseVideoOverlayProbe(await probe.run([
     "-v", "error",
-    "-protocol_whitelist", "file,http,https,tcp,tls",
+    ...probe.inputArgs,
     "-show_entries", VIDEO_OVERLAY_PROBE_ENTRIES,
     "-of", "json",
-    srcUrlOrPath,
-  ])
-  return parseVideoOverlayProbe(out)
+    input,
+  ])))
 }
 
 /**
@@ -1066,8 +1181,8 @@ export async function probeVideoOverlayBase(path: string): Promise<VideoOverlayB
 /**
  * Probe a video URL for dimensions + duration (+ frame rate) in a single
  * ffprobe call. Accepts a local path OR a remote http(s) URL — ffprobe reads
- * both. Remote URLs go through assertSafeProbeSource first (SSRF guard); see
- * that helper.
+ * both, a URL only through the probe guard (`readProbeSource`; `signal` also
+ * stops its own-storage download on a self-host).
  *
  * `fps` is OPTIONAL on purpose: dimensions and duration are the contract (a
  * missing one throws), but a container that reports no usable frame rate — or a
@@ -1086,17 +1201,16 @@ export async function probeVideoSource(srcUrlOrPath: string, opts: { readonly si
   fps?: number
   videoDurationSeconds?: number
 }> {
-  await assertSafeProbeSource(srcUrlOrPath)
-  const output = await runFfprobe([
+  const output = await readProbeSource(srcUrlOrPath, (input, probe) => probe.run([
     "-v", "error",
-    // Confine ffprobe to file + http(s) transport so a malicious manifest
-    // can't pivot to other protocols. Keep `file` so local-path probes work.
-    "-protocol_whitelist", "file,http,https,tcp,tls",
+    // Confine ffprobe to the source's transports (probeInputArgs) so a
+    // malicious manifest can't pivot to other protocols.
+    ...probe.inputArgs,
     "-select_streams", "v:0",
     "-show_entries", "stream=width,height,avg_frame_rate,r_frame_rate,duration:format=duration",
     "-of", "json",
-    srcUrlOrPath,
-  ], opts)
+    input,
+  ], opts), opts.signal ? { signal: opts.signal } : {})
   // CSV inserts extra fields for stream side data (including an empty field
   // on Remotion MP4s). Read named fields so metadata cannot shift dimensions.
   let metadata: {
@@ -1134,21 +1248,21 @@ export async function probeVideoSource(srcUrlOrPath: string, opts: { readonly si
  * Probe ONLY the container duration (seconds) of any media URL or path —
  * audio OR video. Unlike probeVideoSource, this does not require a video
  * stream, so it works on audio-only files (mp3/wav/m4a). Accepts a local path
- * OR a remote http(s) URL; remote URLs go through the same SSRF guard
- * (assertSafeProbeSource) before ffprobe touches the network.
+ * OR a remote http(s) URL; a URL is read only through the probe guard
+ * (`readProbeSource`). `timeoutMs` bounds the probe and, on a self-host, the
+ * own-storage download before it.
  *
  * Used by the ai-avatar AUDIO-mode reserve preHandler to bucket the credit
  * hold by the ACTUAL clip length instead of a coarse worst-case ceiling.
  */
 export async function probeMediaDuration(srcUrlOrPath: string, opts?: { timeoutMs?: number }): Promise<number> {
-  await assertSafeProbeSource(srcUrlOrPath)
-  const output = await runFfprobe([
+  const output = await readProbeSource(srcUrlOrPath, (input, probe) => probe.run([
     "-v", "error",
-    "-protocol_whitelist", "file,http,https,tcp,tls",
+    ...probe.inputArgs,
     "-show_entries", "format=duration",
     "-of", "csv=p=0",
-    srcUrlOrPath,
-  ], opts)
+    input,
+  ], opts), opts?.timeoutMs !== undefined ? { downloadTimeoutMs: opts.timeoutMs } : {})
   const duration = parseFloat(output.trim())
   if (Number.isNaN(duration) || duration <= 0) {
     throw new Error(`probeMediaDuration failed to parse: "${output.trim()}"`)
@@ -1168,14 +1282,13 @@ export async function probeMediaDuration(srcUrlOrPath: string, opts?: { timeoutM
 export async function probeMediaDurationAndSize(
   srcUrlOrPath: string,
 ): Promise<{ durationSec?: number; sizeBytes?: number }> {
-  await assertSafeProbeSource(srcUrlOrPath)
-  const output = await runFfprobe([
+  const output = await readProbeSource(srcUrlOrPath, (input, probe) => probe.run([
     "-v", "error",
-    "-protocol_whitelist", "file,http,https,tcp,tls",
+    ...probe.inputArgs,
     "-show_entries", "format=duration,size",
     "-of", "json",
-    srcUrlOrPath,
-  ])
+    input,
+  ]))
   const parsed = JSON.parse(output) as { format?: { duration?: string; size?: string } }
   const durationSec = parseFloat(parsed.format?.duration ?? "")
   const sizeBytes = Number(parsed.format?.size ?? "")
@@ -1196,14 +1309,13 @@ export async function probeMediaDurationAndSize(
 export async function probeMediaFormatAndDuration(
   srcUrlOrPath: string,
 ): Promise<{ formatNames?: string[]; durationSec?: number }> {
-  await assertSafeProbeSource(srcUrlOrPath)
-  const output = await runFfprobe([
+  const output = await readProbeSource(srcUrlOrPath, (input, probe) => probe.run([
     "-v", "error",
-    "-protocol_whitelist", "file,http,https,tcp,tls",
+    ...probe.inputArgs,
     "-show_entries", "format=format_name,duration",
     "-of", "json",
-    srcUrlOrPath,
-  ])
+    input,
+  ]))
   const parsed = JSON.parse(output) as { format?: { format_name?: string; duration?: string } }
   const formatNames = (parsed.format?.format_name ?? "").split(",").map((n) => n.trim()).filter((n) => n.length > 0)
   const durationSec = parseFloat(parsed.format?.duration ?? "")
@@ -1423,10 +1535,10 @@ export function parsePacketLine(line: string): { pts?: number; dts?: number; dur
 /** How a packet scan reads its source. Every field is optional; without them a
  *  scan reads a LOCAL file under `DEFAULT_FFMPEG_TIMEOUT_MS` (probeStreamEnds). */
 export interface PacketScanOptions {
-  /** ffprobe's `-protocol_whitelist` for a guarded http(s) source (the caller
-   *  checked the link with `assertSafeProbeSource` first, as for a header
-   *  probe): the protocols the scan may open, never a pivot to another one. */
-  readonly protocolWhitelist?: string
+  /** The guarded probe of a source read through `readProbeSource` (a link:
+   *  its input options and the proxy's environment): the scan opens what the
+   *  header probe beside it may, never more. Omitted: a LOCAL file, read as is. */
+  readonly probe?: Pick<GuardedProbe, "inputArgs" | "env">
   /** Kill the scan after this long (default `DEFAULT_FFMPEG_TIMEOUT_MS`); its
    *  rejection then carries `timedOut: true` (retryable). */
   readonly timeoutMs?: number
@@ -1450,14 +1562,19 @@ export function scanPacketEnds(
       reject(Object.assign(new Error(`probeStreamEnds: aborted before the scan of stream ${streamIndex}`), { aborted: true }))
       return
     }
+    const refused = unguardedProbeLinkRefusal([filePath], opts.probe?.env)
+    if (refused) {
+      reject(refused)
+      return
+    }
     const proc = spawn("ffprobe", [
       "-v", "error",
-      ...(opts.protocolWhitelist !== undefined ? ["-protocol_whitelist", opts.protocolWhitelist] : []),
+      ...(opts.probe?.inputArgs ?? []),
       "-select_streams", String(streamIndex),
       "-show_entries", "packet=pts_time,dts_time,duration_time,flags",
       "-of", "csv=p=0",
       filePath,
-    ], { stdio: ["ignore", "pipe", "pipe"] })
+    ], { stdio: ["ignore", "pipe", "pipe"], ...(opts.probe?.env ? { env: opts.probe.env } : {}) })
 
     const limitMs = opts.timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS
     let timedOut = false
@@ -1502,7 +1619,7 @@ export function scanPacketEnds(
     proc.on("error", (err) => {
       clearTimeout(watchdog)
       opts.signal?.removeEventListener("abort", onAbort)
-      reject(new Error(`ffprobe failed to spawn: ${err.message}`))
+      reject(Object.assign(new Error(`ffprobe failed to spawn: ${err.message}`), { notStarted: true, cause: err }))
     })
     proc.on("close", (code) => {
       clearTimeout(watchdog)
@@ -1528,6 +1645,11 @@ export function scanPacketEnds(
  *  the watchdog (a proxy segment passes its span's own, `proxySpanProbeTimeoutMs`). */
 export function probeVideoFramePtsMs(filePath: string, timeoutMs: number = DEFAULT_FFMPEG_TIMEOUT_MS): Promise<number[]> {
   return new Promise((resolve, reject) => {
+    const refused = unguardedProbeLinkRefusal([filePath], undefined)
+    if (refused) {
+      reject(refused)
+      return
+    }
     const proc = spawn("ffprobe", [
       "-v", "error",
       "-select_streams", "v:0",
@@ -1560,7 +1682,7 @@ export function probeVideoFramePtsMs(filePath: string, timeoutMs: number = DEFAU
     })
     proc.on("error", (err) => {
       clearTimeout(watchdog)
-      reject(new Error(`ffprobe failed to spawn: ${err.message}`))
+      reject(Object.assign(new Error(`ffprobe failed to spawn: ${err.message}`), { notStarted: true, cause: err }))
     })
     proc.on("close", (code) => {
       clearTimeout(watchdog)
@@ -1593,20 +1715,19 @@ export interface MediaStreams {
  * cover art has an mjpeg/png "video" stream that is a still picture, and
  * mapping it as video would be the same class of lie in the other direction.
  *
- * Accepts a local path OR a remote http(s) URL; remote URLs go through the
- * SSRF guard (assertSafeProbeSource) before ffprobe touches the network.
+ * Accepts a local path OR a remote http(s) URL; a URL is read only through
+ * the probe guard (`readProbeSource`).
  * Throws (never guesses) when ffprobe's output is not parseable — callers
  * that want a fail-open decision catch and fall back on the slot's word.
  */
 export async function probeMediaStreams(srcUrlOrPath: string): Promise<MediaStreams> {
-  await assertSafeProbeSource(srcUrlOrPath)
-  const output = await runFfprobe([
+  const output = await readProbeSource(srcUrlOrPath, (input, probe) => probe.run([
     "-v", "error",
-    "-protocol_whitelist", "file,http,https,tcp,tls",
+    ...probe.inputArgs,
     "-show_entries", "stream=codec_type:stream_disposition=attached_pic",
     "-of", "json",
-    srcUrlOrPath,
-  ])
+    input,
+  ]))
   let parsed: { streams?: unknown }
   try {
     parsed = JSON.parse(output) as { streams?: unknown }
@@ -1629,13 +1750,17 @@ export async function probeMediaStreams(srcUrlOrPath: string): Promise<MediaStre
  * Returns e.g. { codec: "h264", pixFmt: "yuv420p" }.
  */
 export async function probeVideoStream(filePath: string): Promise<{ codec: string; pixFmt: string }> {
-  const output = await runFfprobe([
-    "-v", "error",
-    "-select_streams", "v:0",
-    "-show_entries", "stream=codec_name,pix_fmt",
-    "-of", "csv=p=0",
-    filePath,
-  ])
+  return videoStreamOf(await runFfprobe([...VIDEO_STREAM_ENTRIES, filePath]))
+}
+
+/** {@link probeVideoStream} of a source that may be a LINK, read through the probe guard (`readProbeSource`). */
+export async function probeVideoStreamSource(src: string): Promise<{ codec: string; pixFmt: string }> {
+  return readProbeSource(src, async (input, probe) => videoStreamOf(await probe.run([...probe.inputArgs, ...VIDEO_STREAM_ENTRIES, input])))
+}
+
+const VIDEO_STREAM_ENTRIES = ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,pix_fmt", "-of", "csv=p=0"] as const
+
+function videoStreamOf(output: string): { codec: string; pixFmt: string } {
   // ffprobe CSV output: "h264,yuv420p" (see csvFields for the shapes a plain split misreads)
   const parts = csvFields(output.toLowerCase())
   return {
@@ -1650,10 +1775,12 @@ export async function probeVideoStream(filePath: string): Promise<{ codec: strin
  * When codec or pixel format cannot be determined, defaults to transcoding.
  */
 export async function needsTranscode(filePath: string): Promise<boolean> {
-  const { codec, pixFmt } = await probeVideoStream(filePath)
-  if (codec !== "h264") return true
-  if (pixFmt !== "yuv420p") return true
-  return false
+  return videoStreamNeedsTranscode(await probeVideoStream(filePath))
+}
+
+/** The rule of {@link needsTranscode}: anything but H.264 in yuv420p (an unknown codec or format included). */
+export function videoStreamNeedsTranscode(stream: { readonly codec: string; readonly pixFmt: string }): boolean {
+  return stream.codec !== "h264" || stream.pixFmt !== "yuv420p"
 }
 
 /** Standard browser-safe H.264 encoding args (no input/output). */
@@ -1699,16 +1826,21 @@ export async function transcodeToBrowserSafe(
   crf?: string,
 ): Promise<string> {
   if (!await needsTranscode(inputPath)) return inputPath
+  await runFfmpeg(browserSafeTranscodeArgs(inputPath, outputPath, crf))
+  return outputPath
+}
+
+/** The ffmpeg arguments of {@link transcodeToBrowserSafe}'s encode. */
+export function browserSafeTranscodeArgs(inputPath: string, outputPath: string, crf?: string): string[] {
   const videoArgs = crf === undefined
     ? BROWSER_SAFE_VIDEO_ARGS
     : BROWSER_SAFE_VIDEO_ARGS.map((arg, i, all) => (all[i - 1] === "-crf" ? crf : arg))
-  await runFfmpeg([
+  return [
     "-y", "-i", inputPath,
     ...videoArgs,
     "-c:a", "aac", "-b:a", "128k",
     outputPath,
-  ])
-  return outputPath
+  ]
 }
 
 export async function createWorkDir(prefix: string): Promise<string> {
@@ -1963,13 +2095,17 @@ export function buildRemuxArgs(input: string, output: string, audioCodec: string
  * (no network), so no SSRF guard is needed. Mirrors probeVideoStream's shape.
  */
 async function probeFirstAudioCodec(filePath: string): Promise<string | null> {
-  const output = await runFfprobe([
-    "-v", "error",
-    "-select_streams", "a:0",
-    "-show_entries", "stream=codec_name",
-    "-of", "csv=p=0",
-    filePath,
-  ])
+  return firstAudioCodecOf(await runFfprobe([...FIRST_AUDIO_CODEC_ENTRIES, filePath]))
+}
+
+/** The first audio stream's codec of a source that may be a LINK, read through the probe guard (`readProbeSource`). */
+export async function probeFirstAudioCodecSource(src: string): Promise<string | null> {
+  return readProbeSource(src, async (input, probe) => firstAudioCodecOf(await probe.run([...probe.inputArgs, ...FIRST_AUDIO_CODEC_ENTRIES, input])))
+}
+
+const FIRST_AUDIO_CODEC_ENTRIES = ["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0"] as const
+
+function firstAudioCodecOf(output: string): string | null {
   const codec = (csvFields(output.toLowerCase())[0] ?? "")
   return codec.length > 0 ? codec : null
 }

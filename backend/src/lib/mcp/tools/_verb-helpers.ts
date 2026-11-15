@@ -202,7 +202,7 @@ const BARE_ERROR_CODE = /^[a-z][a-z0-9_]*$/
  * "this model is not available", which would send it to another model or make
  * it give up on a call that only needs repeating.
  */
-const FORWARDED_503_CODES: ReadonlySet<string> = new Set(["probe_timeout", "source_unreachable"])
+const FORWARDED_503_CODES: ReadonlySet<string> = new Set(["probe_timeout", "source_unreachable", "probe_unavailable"])
 
 function formatRouteError(statusCode: number, body: string): string {
   let code: string | undefined

@@ -1,12 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { TIGHTEN_EPISODE_DEFAULTS, buildTightenEpisodeGraph } from "@nodaro/render-rules"
 import { NODARO_CONNECTION_REQUIRED_CODE, NODARO_CONNECTION_REQUIRED_MESSAGE } from "../../nodaro-connection-messages.js"
 
 const m = vi.hoisted(() => ({ credits: false, connected: false, keys: { ELEVENLABS_API_KEY: "", REPLICATE_API_TOKEN: "" }, onCloud: false }))
-vi.mock("../../config.js", () => ({ config: m.keys, hasCredits: () => m.credits }))
+// The edition helpers the surface profile asks (an Add Captions node's engine follows what the deployment offers).
+vi.mock("../../config.js", () => ({ config: m.keys, hasCredits: () => m.credits, isBusiness: () => false, isCloud: () => m.credits }))
 vi.mock("../../nodaro-connect.js", () => ({ isNodaroConnected: async () => m.connected }))
 vi.mock("../../../providers/nodaro/run-on-cloud.js", () => ({ shouldRunOnCloud: async () => m.onCloud }))
 import { usecasePreflight } from "../preflight.js"
+import { __resetAvailabilityOverridesForTests, GATEABLE_MODEL_IDS } from "../../availability-override.js"
+import { NO_CAPTION_ENGINE_OFFERED_MESSAGE } from "@nodaro/render-rules"
 
 const graph = buildTightenEpisodeGraph(TIGHTEN_EPISODE_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video" } })
 
@@ -72,6 +75,36 @@ describe("usecasePreflight — refused before any row exists", () => {
   it("an Add Captions node that reads a wired transcript needs no key", async () => {
     m.credits = true; m.keys.ELEVENLABS_API_KEY = "el-key"
     expect(await usecasePreflight(withCaptions({}))).toBeNull()
+  })
+  describe("where the deployment restricts models, a caption step's engine is judged before the fee is held", () => {
+    const withhold = (...withheld: string[]) =>
+      __resetAvailabilityOverridesForTests({ models: new Set([...GATEABLE_MODEL_IDS].filter((id) => !withheld.includes(id))) })
+    afterEach(() => __resetAvailabilityOverridesForTests())
+    const ENGINES = ["whisper", "incredibly-fast-whisper", "elevenlabs-stt", "nemotron-3-5-transcribe"]
+
+    it("a step that names a withheld engine is refused", async () => {
+      m.credits = true; m.keys.ELEVENLABS_API_KEY = "k"; m.keys.REPLICATE_API_TOKEN = "r"
+      withhold("elevenlabs-stt")
+      expect(await usecasePreflight(withCaptions({ autoTranscribe: true, transcribeProvider: "elevenlabs-stt" }))).toMatchObject({ status: 403, code: "model_not_available" })
+    })
+
+    it("a step that names none is checked on the first offered engine's key", async () => {
+      m.credits = true; m.keys.ELEVENLABS_API_KEY = "k" // no Replicate token: the default (Incredibly Fast Whisper) would need it
+      withhold("incredibly-fast-whisper")
+      expect(await usecasePreflight(withCaptions({ autoTranscribe: true }))).toBeNull()
+    })
+
+    it("a step that must transcribe where no engine is offered is refused, saying so", async () => {
+      m.credits = true; m.keys.ELEVENLABS_API_KEY = "k"
+      withhold(...ENGINES)
+      expect(await usecasePreflight(withCaptions({ autoTranscribe: true }))).toEqual({ status: 403, code: "model_not_available", message: NO_CAPTION_ENGINE_OFFERED_MESSAGE })
+    })
+
+    it("a step that reads a wired transcript is not judged", async () => {
+      m.credits = true; m.keys.ELEVENLABS_API_KEY = "k"
+      withhold(...ENGINES)
+      expect(await usecasePreflight(withCaptions({}))).toBeNull()
+    })
   })
   it("Tighten Episode's own captions read the render's transcript: its graph asks no captions key", async () => {
     m.credits = true; m.keys.ELEVENLABS_API_KEY = "el-key"

@@ -6,11 +6,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // scores the real clip and the reservation keys off the right row.
 
 const { probe } = vi.hoisted(() => ({ probe: vi.fn() }))
-vi.mock("../../providers/video/ffmpeg-utils.js", () => ({ probeVideoSource: probe }))
+// The clip reading Trim, Loop and Combine Videos measure by (header, else the packets of a header-less recording).
+vi.mock("../video-utility-probe.js", () => ({ probeClipLengthSec: probe, ClipUnreadableError: class ClipUnreadableError extends Error {} }))
 
 import { measureVideoSfxDuration, stampVideoSfxDuration, videoSfxReserveId } from "../video-sfx-duration.js"
 
-const clip = (seconds: number) => ({ width: 1920, height: 1080, durationSeconds: seconds })
+const clip = (seconds: number) => seconds
 
 beforeEach(() => {
   probe.mockReset()
@@ -26,13 +27,13 @@ describe("measureVideoSfxDuration", () => {
     expect(await measureVideoSfxDuration("https://cdn.example.com/a.mp4")).toEqual({ ok: true, durationSec, creditId })
   })
 
-  it("an unreadable clip falls back to 8 seconds and reports the failure", async () => {
+  it("an unreadable clip is refused (never priced at an 8-second guess), and the failure reported", async () => {
     probe.mockRejectedValue(new Error("ffprobe failed"))
     const onFailure = vi.fn()
     expect(await measureVideoSfxDuration("https://cdn.example.com/a.mp4", onFailure)).toEqual({
-      ok: true,
-      durationSec: 8,
-      creditId: "replicate-mmaudio:8s",
+      ok: false,
+      code: "invalid_video_duration",
+      message: "Could not read the video. The file may be corrupted or an unsupported format.",
     })
     expect(onFailure).toHaveBeenCalledOnce()
   })

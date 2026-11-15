@@ -983,6 +983,14 @@ export {
   videoUpscaleModelOf,
   type ProviderModel,
 } from "./provider-model"
+// The engine an Add Captions run transcribes on: the one named, else the first a deployment offers.
+export {
+  CAPTION_ENGINE_DEFAULT_ORDER,
+  CAPTION_ENGINE_UNRESTRICTED_DEFAULT,
+  NO_CAPTION_ENGINE_OFFERED_MESSAGE,
+  captionTranscribeEngine,
+  isCaptionTranscribeLane,
+} from "./caption-engine"
 export {
   EDIT_IMAGE_DEFAULT_PROVIDER,
   EXTEND_VIDEO_DEFAULT_PROVIDER,

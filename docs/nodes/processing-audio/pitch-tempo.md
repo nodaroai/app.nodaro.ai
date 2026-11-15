@@ -29,6 +29,8 @@ It works on **audio or video**: give it a video and it shifts the video's soundt
 
 Whether a file is audio or video is read from the file itself, so an audio-only file served as a video (or a podcast MP3 with cover art) is processed as audio.
 
+A link must be an ordinary video or audio file, not a streaming playlist (HLS, DASH): such a link is refused with a `400` before anything is charged — see [media links](../../features/media-links.md).
+
 ## Credits
 
 Priced **per started minute of the input**, up to 30 minutes:

@@ -149,6 +149,7 @@ here for each one anyway.
 | `VITE_SHARED_HEADER` | `""` | Nodaro Cloud only: `true` builds the image with the shared Nodaro site header, a private package the frontend stage installs with the `NPM_TOKEN` build arg (pin: optional `SHARED_HEADER_PKG_VERSION`), and shows Nodaro's header above the editor: the hosted header, drawn from `nodaro.ai/_header/` in the visitor's browser (if it cannot load there, the app shows its own sidebar chrome). `white-label` builds the package in for deployments of their own: the header (the npm package's white-label mode, not the hosted one) shows only where the deployment's surface profile sets [`header`](#keys-read-by-client-apps) to `"white-label"`, and Nodaro's header never does, so a deployment without that key renders exactly as without the header. Build-time, with the `ARG`+`ENV` pair in the Dockerfile. Any other edition, or a build without the package, gets a stub and the flag off — a self-hosted image is unaffected whatever it is set to; a cloud build with it on but no package is refused. With it off, a cloud build that has `NPM_TOKEN` still installs the package for the trend admin's media editor (link import, range and crop); the header stays off |
 | `PORT` / `HOST` | `8000` / `0.0.0.0` | Where the API listens (in the image the API sits on 9000 behind Caddy on 3000) |
 | `NODE_ENV` | `development` | `production` in every image |
+| `UV_THREADPOOL_SIZE` | `16` in every image (Node's own default: `4`) | The size of Node's worker threadpool, which runs every DNS lookup (each new outbound connection, and the lookups of the hosts in a media link the server measures) beside file, crypto and compression work. A lookup cannot be cancelled, so a slow resolver holds its thread until it gives up. The server's lookups of a media link's hosts hold at most a quarter of the pool, so they can never stall the rest of the process. At Node's default of 4 that is a single lookup at a time, so set this when you run the backend outside the image. Read once when a process starts. |
 | `REDIS_URL` | `redis://localhost:6379` | BullMQ queues + caches (bundled: `redis://redis:6379`) |
 | `PREVIEW_STOP_RULE_ENABLED` | off | Turns on the preview stop rule: a run [stops at an Apply EDL render set to **Preview**](nodes/processing-video/apply-edl.md#a-run-stops-at-a-preview) (or at a [Speaker View](nodes/processing-video/speaker-view.md) set to Preview, the same way), and nothing downstream of it runs until [Render final](nodes/processing-video/apply-edl.md#render-final) renders it at Final or the render is set to **Final**; a run nobody can review (a trigger, an API or MCP call, a present link, an app) that would run such a render is refused with `preview_review_required`. Only `true` or `1` enables it. The API reads it, and the same value is written into `/config.js` at boot for the editor, so one variable drives both and no rebuild is needed. Off, every surface behaves as it did before the rule: nothing is gated, refused or left out of an estimate. On or off, the price stored when an app, component or template is published is not shortened by the rule: it counts the whole workflow at its saved settings (with an app's creator fee) plus each Render final and the nodes after it (without the fee; none for a component) — see [app view modes](app-view-modes.md#render-final). It counts every run the editor's estimate counts: a node's Repeat count, each of several providers on one node, and the runs a List or Content Ideas wire fans out. It never quotes less than a run is charged with the flag off (aside from Edit Plan's pass on a server that still charges it on the length step its recording rounds up to rather than per started minute, and a step priced by its input's length on a video other than the episode whose length is not known before the run — a second recording such as an intro card, or the output of a step with no length before the run (a YouTube or other video link the user cannot replace, a GIF to Video, the output of Render Video or Manual Edit, a VEO or Runway extension, a Suno music video, a narrated step whose audio is wired in or is a generated voice whose script comes from a source the listing cannot bound (not a literal text, an input with a character limit, or a Prompt or AI Writer node), or a list or sub-workflow) — which is listed at a default length), and can quote more with it on. An input list the app's user fills is listed per further item, a Trim, Loop or Combine Videos node on the episode recording the user replaces, or on a render or another such step whose length follows it, per minute of it, and a Video SFX node on any recording the user replaces, or on a step whose length follows it, at its fixed 300-second price. On a generated video (Generate Video, Image to Video or Text to Video) each of the four is listed at the length the generation will render (its longest clip on auto) plus about a tenth of a second, since each is charged the length its run measures. On the output of any other step that delivers a video it is listed at the length that step passes on, plus about a tenth of a second for each clip a step makes: a step that keeps its input whole its input's length, a lip sync or an avatar its audio's (at most what its model takes), an extension its input plus the seconds it adds. With the flag off, an app's Render final route re-renders at Final, and its page offers Render final on a preview, as the editor does. It also decides how the built-in podcast templates (Tighten Episode, Clip Pack, Multicam Cut, Trailer + Formats, and [Vertical speaker clip](nodes/processing-video/speaker-view.md#the-vertical-speaker-clip-template), whose render is Speaker View) are written when the server syncs them at boot: on, with their render at **Preview** and the price of a run plus its Render final; off, with their render at **Final** and the price of that run, as before ([podcast templates](nodes/processing-video/apply-edl.md#podcast-templates)). Restart to apply |
 | `COLLECTIONS_MAX_PER_USER` | unset (no ceiling) | Community / Business: how many [collections](features/collections.md) one account may have. On Nodaro Cloud the caps come from the plan and this is ignored. Restart to apply |
@@ -337,6 +338,17 @@ public-read policy on first boot. Media lives in the `minio-data`
 Docker volume. Change the default credentials before exposing the
 stack to a network; when serving on a real domain, set `R2_PUBLIC_URL`
 to `https://<your-domain>/storage/nodaro-assets`.
+
+Several nodes measure their input before a run is charged (Trim, Loop
+and Combine Videos, Mask Composite, Video Overlay, Video SFX, Video
+Mask, Video Depth, Pitch & Tempo, Dubbing, the video upscalers and Lip
+Sync among them). The server reads a media link only from a public
+address: a link to a loopback or private address, or one that
+redirects to such an address, is refused. Your own storage is the one
+exception. When `R2_PUBLIC_URL` sits on such an address, as the
+bundled MinIO does, a file stored under it is downloaded (up to 2 GiB)
+and measured on disk. On a public storage host the file is measured
+where it is.
 
 **Cloudflare R2** (recommended for real deployments — zero egress):
 
@@ -889,9 +901,17 @@ optional; each array empty = "keep the default"):
   one it names. A request that names no model is judged as the default its
   route would run — the image default for its aspect ratio, a feature's
   default LLM, a route's one fixed model — and a model named outside
-  `provider` (`llmModel`, Suno's `model`, Add Captions' `transcribe_provider`)
-  is judged too, before anything is created or charged
-  (`403 model_not_available`, on the run and on `POST /v1/quote` alike). A
+  `provider` (`llmModel`, Suno's `model`, Add Captions' `transcribe_provider`,
+  a surround continuation's `refineProvider` when `refine` is on) is judged
+  too, before anything is created or charged
+  (`403 model_not_available`, on the run and on `POST /v1/quote` alike). Add
+  Captions that names no transcription engine runs the first engine the
+  deployment offers, in the order `incredibly-fast-whisper`, `elevenlabs-stt`,
+  `nemotron-3-5-transcribe`, `whisper` (its editor menu lists only those, and
+  its price follows the engine — per minute on Nemotron); one that must
+  transcribe where none of the four is listed is refused with a message
+  saying so, while one that brings its own captions, transcript or subtitle
+  text still runs. A
   `provider` that names an engine rather than a model is judged as the model
   that engine runs, never as a model that shares its name: Motion Transfer's
   Kling options as the motion-transfer models, Generate Script's legacy
@@ -902,8 +922,10 @@ optional; each array empty = "keep the default"):
   workflow run (an app run, a scheduled or webhook run, an MCP or API run)
   judges its nodes the same way: a node that names no model is judged on the
   default it would run — Generate Image's for its ratio, Image to Image's edit
-  default, a video or speech node's default, a single-model node's one model —
-  and fails with `model_not_available` before its job is charged. So list
+  default, a video or speech node's default, Generate Video Pro's and Edit
+  Video Pro's `seedance-2`, Add Captions' first offered engine, a single-model
+  node's one model — and fails with `model_not_available` before its job is
+  charged. So list
   every model the deployment runs, the LLMs behind its text features
   included: a request whose model is not listed is refused, not run on an
   unlisted default. A deployment with no `models.allow` / `models.deny` and no

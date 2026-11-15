@@ -33,6 +33,7 @@ import { createsChildJob } from "../lib/job-submission-context.js"
 import { maskEraseBoxSchema } from "../lib/cast-swap-face-masking.js"
 import { maskOutlineBaseCredits, measureMaskOutlineLength } from "../lib/mask-outline-length.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 const MAX_BOXES = CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks
 /** One outline per role of the palette (a trend's person slots). */
@@ -80,7 +81,7 @@ async function measurePreHandler(req: FastifyRequest, reply: FastifyReply): Prom
   const url = safeUrlSchema.safeParse(body.videoUrl)
   if (!url.success) return // the handler's Zod parse answers it
   const measured = await measureMaskOutlineLength(url.data)
-  if (!measured.ok) return void reply.code(400).send({ error: { code: measured.code, message: measured.message } })
+  if (!measured.ok) return void reply.code(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   body[STASH] = measured.units
 }
 

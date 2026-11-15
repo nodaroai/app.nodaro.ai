@@ -27,6 +27,8 @@ Video Depth Anything accepts up to **2,400 frames** (≈80 s at 30 fps, 100 s at
 - **Input:** Video
 - **Output:** Video (MP4)
 
+A link must be an ordinary video or audio file, not a streaming playlist (HLS, DASH): such a link is refused with a `400` before anything is charged — see [media links](../../features/media-links.md).
+
 ## Credit Cost
 
 Billed by the input clip's length. The clip is measured before the run; the chip on the node shows the most a run can cost until a video with a known length is connected.

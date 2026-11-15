@@ -1,5 +1,6 @@
 import { NEMOTRON_TRANSCRIBE_ID, NEMOTRON_TRANSCRIBE_PRICING, nemotronTranscribeCreditId, nemotronTranscribeQuoteCreditId } from "@nodaro/shared/credits"
 import { assertSafeProbeSource, probeMediaDurationAndSize } from "../providers/video/ffmpeg-utils.js"
+import { LINK_HOST_UNREACHABLE, LINK_READ_TIMED_OUT, PROBE_UNAVAILABLE, probeLinkRefusal } from "../providers/video/probe-guard.js"
 import { isAllowedSocialVideoUrl, safeUrlSchema } from "./url-validator.js"
 
 /**
@@ -19,6 +20,10 @@ import { isAllowedSocialVideoUrl, safeUrlSchema } from "./url-validator.js"
  *    guard (`assertSafeProbeSource`) reads a string without a scheme as a LOCAL
  *    path, so a workflow could otherwise make the server probe its own files
  *    (Video Depth's rule, `lib/video-depth-input.ts`);
+ *  - a link whose host could not be looked up for now (the guard's `dns`, or a
+ *    lookup that ran out of time) — the retryable 503 `source_unreachable`
+ *    every measuring route answers (`probeLinkRefusal`), so a run is tried
+ *    again rather than told its link is not public;
  *  - a link that SSRF guard blocks (`assertSafeProbeSource`, run on its own
  *    first: a public-looking host resolving to a private address, a link two
  *    URL parsers read differently, a host that does not resolve) — refused, not
@@ -48,6 +53,9 @@ export type NemotronTranscribeInput =
         | "media_duration_exceeds_limit"
         | "media_size_exceeds_limit"
         | "media_page_link_unsupported"
+        | typeof LINK_HOST_UNREACHABLE.code
+        | typeof LINK_READ_TIMED_OUT.code
+        | typeof PROBE_UNAVAILABLE.code
       readonly message: string
     }
 
@@ -94,7 +102,10 @@ export async function measureNemotronTranscribeInput(
   }
   try {
     await assertSafeProbeSource(mediaUrl)
-  } catch {
+  } catch (err) {
+    // A host that could not be looked up for now is the retryable 503 every measuring route answers.
+    const refused = probeLinkRefusal(err)
+    if (refused && refused.code !== "media_link_not_a_file") return { ok: false, code: refused.code, message: refused.message }
     return {
       ok: false,
       code: "invalid_media_url",

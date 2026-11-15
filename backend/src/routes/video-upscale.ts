@@ -52,6 +52,7 @@ import {
 } from "@nodaro/shared/models"
 import { nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { planTopazVideoUpscale, topazVideoHoldBaseCredits, TopazVideoSourceUnreadableError, TopazVideoTooLongError } from "../lib/topaz-video-plan.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 import {
   isNodaroVideoUpscaleTryAgain,
   NODARO_VIDEO_UPSCALE_NOT_SERVED_CODE,
@@ -174,7 +175,7 @@ async function topazPlanPreHandler(req: FastifyRequest, reply: FastifyReply): Pr
     req.topazVideoUpscale = await planTopazVideoUpscale(videoUrl, body)
   } catch (err) {
     if (err instanceof TopazVideoSourceUnreadableError || err instanceof TopazVideoTooLongError) {
-      return reply.status(400).send({ error: { code: err.code, message: err.message } })
+      return reply.status(probeRefusalStatus(err.code)).send({ error: { code: err.code, message: err.message } })
     }
     throw err
   }

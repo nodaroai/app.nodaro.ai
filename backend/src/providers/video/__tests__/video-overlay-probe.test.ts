@@ -123,7 +123,7 @@ describe("probeVideoOverlayBaseSource — the same probe on the base's link, bef
     exec.calls.length = 0
     exec.next = { error: null, stdout: json([video(), audio()]), stderr: "" }
   })
-  it("asks for the worker's own entries, confined to file and http(s), and parses them the worker's way", async () => {
+  it("asks for the worker's own entries, confined to the source's transports (a local file: file only), and parses them the worker's way", async () => {
     const probe = await probeVideoOverlayBaseSource("/w/input.mp4")
     expect(exec.calls).toHaveLength(1)
     const args = exec.calls[0]!
@@ -131,7 +131,7 @@ describe("probeVideoOverlayBaseSource — the same probe on the base's link, bef
       "stream=index,codec_type,codec_name,width,height,sample_aspect_ratio,r_frame_rate,avg_frame_rate,duration,start_time,nb_frames" +
         ":stream_side_data=rotation:stream_disposition=attached_pic:stream_tags=rotate:format=duration",
     )
-    expect(args[args.indexOf("-protocol_whitelist") + 1]).toBe("file,http,https,tcp,tls")
+    expect(args[args.indexOf("-protocol_whitelist") + 1]).toBe("file")
     expect(args).not.toContain("-select_streams")
     expect(probe.streamDurationSec).toBe(24.8)
   })

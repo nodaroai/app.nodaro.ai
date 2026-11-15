@@ -86,6 +86,7 @@
  */
 import { rm, stat } from "node:fs/promises"
 import { runFfmpegCapture } from "./ffmpeg-utils.js"
+import { SINGLE_FILE_DEMUXERS } from "./single-file-demuxers.js"
 import { audioPeakMemoryMiB } from "./ffmpeg-memory-model.js"
 import { adtsStrayTailBytes } from "./adts-frames.js"
 import { onlyZeroBytesFrom } from "./matroska-index.js"
@@ -126,13 +127,12 @@ const BYTES_PER_FRAME = 2 * DECODED_AUDIO_CHANNELS
  * option, and every input another demuxer opens fails with "Option
  * enable_drefs not found". None of the others opens a second file (their
  * n8.1.2 sources read; `vobsub`, which opens a .sub beside its .idx, is a
- * demuxer of its own and not listed). Before adding a name here, read its
- * demuxer for a second open (`io_open`, `avformat_open_input`).
+ * demuxer of its own and not listed). The list is `SINGLE_FILE_DEMUXERS`
+ * (single-file-demuxers.ts), the one the probe guard holds a link to as well:
+ * before adding a name there, read its demuxer for a second open (`io_open`,
+ * `avformat_open_input`).
  */
-export const CALLER_AUDIO_FORMATS: readonly string[] = [
-  "mp3", "wav", "w64", "aiff", "caf", "au", "mov", "aac", "ac3", "eac3", "amr", "ogg", "flac", "matroska", "asf", "mpegts", "avi",
-  "mpeg", "flv", "dts", "wv", "ape", "tta", "mpc", "mpc8", "loas",
-]
+export const CALLER_AUDIO_FORMATS: readonly string[] = SINGLE_FILE_DEMUXERS
 
 /**
  * What ffmpeg's command-line tool logs when the demuxer stops on an error

@@ -2050,6 +2050,7 @@ export const ko: ChromeDict = {
   "proccfg.lookHint": "글꼴, 외곽선, 대소문자, 말하는 단어의 색상을 묶은 프리셋입니다. 아래 컨트롤로 개별 요소를 덮어쓸 수 있습니다.",
   "proccfg.captionEngine": "전사 엔진",
   "proccfg.captionEngineNemotronNote": "자막 렌더링에 더해 영상의 시작된 1분마다 요금이 부과됩니다.",
+  "proccfg.captionEngineNoneOffered": "이 배포 환경에서는 사용할 수 있는 전사 엔진이 없어 이 노드가 영상을 전사할 수 없습니다. 노드에 직접 텍스트, 자막 또는 녹취록을 지정하세요.",
   "proccfg.font": "글꼴",
   "proccfg.fontAuto": "자동(룩 기준)",
   "proccfg.uppercase": "모두 대문자",

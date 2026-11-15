@@ -33,13 +33,22 @@ import {
 
 /** The lanes Add Captions may transcribe on that return word timings (named in its refusal). */
 const CAPTION_WORD_TIMED_LANES = CAPTION_TRANSCRIBE_LANES.filter((p) => TRANSCRIBE_PROVIDER_CAPABILITIES[p].wordTimestamps)
-import { captionsNeedTranscription, captionsNeedWordTimings, isStaticTextCaptionSource } from "../providers/video/caption-segments.js"
-import { ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER } from "../lib/transcribe-lane-key.js"
+import { captionsNeedWordTimings, isStaticTextCaptionSource } from "../providers/video/caption-segments.js"
+import { NO_CAPTION_ENGINE_OFFERED_MESSAGE } from "@nodaro/render-rules"
+import {
+  addCaptionsEngine,
+  addCaptionsRunModel,
+  captionRenderTranscribes,
+  defaultCaptionEngineCannotServe,
+  defaultCaptionEngineCannotServeMessage,
+} from "../lib/add-captions-engine.js"
+import { deniedModelRejectionMessage, isModelDenied, modelRestrictionConfigured } from "../lib/surface-deny.js"
 import { addCaptionsTranscribesOnNemotron, measureAddCaptionsNemotronHold, type AddCaptionsNemotronHold } from "../lib/add-captions-nemotron.js"
 import { rawBodyRecord, textField } from "../lib/run-model.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 /** Parse a stringified Transcript before normalization so this ingress behaves
  *  identically to the DAG payload-builder (which parses the stringified json
@@ -55,27 +64,54 @@ function safeParseJsonForTranscript(v: string): unknown {
 
 /**
  * The model this request RUNS on, for the guard's surface deny
- * (`CreditGuardOpts.runModel`): its transcription model — `transcribe_provider`,
- * else the default lane — when the render transcribes at all, which
- * `captionsNeedTranscription` decides for the worker too. A request that brings
- * its own captions, transcript or text runs no model.
+ * (`CreditGuardOpts.runModel`): its transcription engine — `transcribe_provider`,
+ * else the first engine this deployment offers (`addCaptionsEngine`; today's
+ * default where nothing is restricted) — when the render transcribes at all,
+ * which `captionsNeedTranscription` decides for the worker too. A request that
+ * brings its own captions, transcript or text runs no model. Where no engine is
+ * offered it answers every engine, each one withheld, so the guard refuses it.
  */
-export function resolveAddCaptionsRunModel(req: FastifyRequest): string | undefined {
-  const b = rawBodyRecord(req)
-  const segments = Array.isArray(b.segments)
-    ? b.segments
-        .filter((s): s is Record<string, unknown> => s !== null && typeof s === "object")
-        .map((s) => ({ text: s.text, captions: Array.isArray(s.captions) ? s.captions : undefined }))
-    : undefined
-  const transcribes = captionsNeedTranscription({
-    style: typeof b.style === "string" ? b.style : undefined,
-    text: typeof b.text === "string" ? b.text : undefined,
-    captions: Array.isArray(b.captions) ? b.captions : undefined,
-    transcript: b.transcript,
-    segments,
-    auto_transcribe: typeof b.auto_transcribe === "boolean" ? b.auto_transcribe : undefined,
-  })
-  return transcribes ? (textField(b.transcribe_provider) ?? ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER) : undefined
+export function resolveAddCaptionsRunModel(req: FastifyRequest): string | readonly string[] | undefined {
+  return addCaptionsRunModel(rawBodyRecord(req))
+}
+
+/**
+ * Where the deployment restricts models, the engine a transcribing request runs
+ * on is decided FIRST, before its video is measured or anything is held: an
+ * engine it names that the deployment withholds, a request that names none
+ * where no engine is offered, or one whose default cannot serve it (Whisper
+ * for a kinetic render with no text), is refused here (403
+ * `model_not_available`); a request that names none gets the first offered
+ * engine written into its body,
+ * so the Nemotron measure, the guard, the job and its row all see the engine
+ * that runs. A deployment that restricts nothing is passed through untouched.
+ */
+async function decideCaptionEngineFirst(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (!modelRestrictionConfigured()) return
+  const body = req.body
+  if (body === null || typeof body !== "object" || Array.isArray(body)) return
+  const record = body as Record<string, unknown>
+  if (!captionRenderTranscribes(record)) return
+  const named = textField(record.transcribe_provider)
+  const engine = addCaptionsEngine(named)
+  if (engine === undefined) {
+    return void reply.status(403).send({ error: { code: "model_not_available", message: NO_CAPTION_ENGINE_OFFERED_MESSAGE } })
+  }
+  if (isModelDenied(engine)) {
+    return void reply.status(403).send({ error: { code: "model_not_available", message: deniedModelRejectionMessage([engine]) } })
+  }
+  if (named !== undefined || record.transcribe_provider !== undefined) return
+  const render = {
+    needsWordTimings: captionsNeedWordTimings({
+      style: typeof record.style === "string" ? record.style : undefined,
+      segments: Array.isArray(record.segments) ? (record.segments as Array<{ style?: string; text?: string; captions?: unknown[] }>) : undefined,
+    }),
+    hasFallbackText: typeof record.text === "string" && record.text.trim() !== "",
+  }
+  if (defaultCaptionEngineCannotServe(engine, render)) {
+    return void reply.status(403).send({ error: { code: "model_not_available", message: defaultCaptionEngineCannotServeMessage(engine) } })
+  }
+  record.transcribe_provider = engine
 }
 
 function buildAddCaptionsCreditId(body: unknown): string {
@@ -280,7 +316,7 @@ async function measureNemotronCaptionsFirst(req: FastifyRequest, reply: FastifyR
     req.log.warn({ err }, "add-captions (nemotron): ffprobe could not read the length; holding 60 minutes")
   })
   if (!measured.ok) {
-    return void reply.status(400).send({ error: { code: measured.code, message: measured.message } })
+    return void reply.status(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
   nemotronHolds.set(req, measured.hold ? { hold: measured.hold } : {})
 }
@@ -293,6 +329,7 @@ function addCaptionsCreditIdOf(req: FastifyRequest, body: unknown): string {
 export async function addCaptionsRoutes(app: FastifyInstance) {
   app.post("/v1/add-captions", {
     preHandler: [
+      decideCaptionEngineFirst,
       measureNemotronCaptionsFirst,
       creditGuard((req) => addCaptionsCreditIdOf(req, req.body), { runModel: resolveAddCaptionsRunModel }),
     ],

@@ -15,6 +15,7 @@
  * (src/__tests__/credit-guard-run-model-census.test.ts).
  */
 import {
+  CAPTION_TRANSCRIBE_LANES,
   DIALOGUE_PROVIDERS,
   EXTEND_VIDEO_PROVIDERS,
   FACE_SWAP_PROVIDERS,
@@ -35,6 +36,7 @@ import {
   VIDEO_TO_VIDEO_NODE_PROVIDERS,
   VIDEO_UPSCALE_PROVIDERS,
 } from "@nodaro/shared/models"
+import { LLM_MODEL_IDS } from "@nodaro/shared/llm-models"
 import { NODE_REGISTRY } from "../node-registry.js"
 
 /** Node types the node registry lists no `providers` for, with the enum their route validates `provider` against. */
@@ -78,8 +80,20 @@ export const OTHER_PROVIDER_VOCABULARIES: Readonly<Record<string, readonly strin
   scene: IMAGE_GEN_PROVIDERS,
 }
 
-/** Model fields other than `provider`, by node type: the Suno nodes name their version in `model`. */
+/**
+ * Model fields other than `provider`, by node type: the Suno nodes name their
+ * version in `model`; Add Captions names its transcription engine, a model it
+ * runs beside its render, in `transcribeProvider`; the LLM nodes whose built
+ * job runs `llmModel` as named name it there. A route schema field that
+ * accepts catalog ids is held to a field here (or `provider`) for its node
+ * (src/__tests__/credit-guard-run-model-census.test.ts), so a node's second
+ * model setting cannot go unprobed.
+ */
 export const MODEL_FIELD_VOCABULARIES: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = {
+  "add-captions": { transcribeProvider: CAPTION_TRANSCRIBE_LANES },
+  // The LLM a 3D scene plans with, and the one a script is written by (its `provider` is an alias over it).
+  "generate-3d-scene": { llmModel: LLM_MODEL_IDS },
+  "generate-script": { llmModel: LLM_MODEL_IDS },
   "suno-generate": { model: SUNO_MODELS },
   "suno-cover": { model: SUNO_MODELS },
   "suno-extend": { model: SUNO_MODELS },

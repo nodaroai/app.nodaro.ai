@@ -5,6 +5,7 @@
  * caption render's transcription) and the use-case preflight, so the route
  * refuses exactly when the worker would have.
  */
+import { CAPTION_ENGINE_UNRESTRICTED_DEFAULT } from "@nodaro/render-rules"
 import { config } from "./config.js"
 
 export type TranscribeLaneKeyName = "ELEVENLABS_API_KEY" | "KIE_API_KEY" | "REPLICATE_API_TOKEN"
@@ -29,5 +30,10 @@ export function transcribeLaneKey(provider: string | undefined): string | undefi
   return config[transcribeLaneKeyName(provider)] as string | undefined
 }
 
-/** The lane Add Captions transcribes on when its node names none (the worker's default). */
-export const ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER = "incredibly-fast-whisper"
+/**
+ * The lane Add Captions transcribes on when its node names none and nothing is
+ * restricted: the first of the default order (`@nodaro/render-rules`
+ * `caption-engine.ts`). Where models are restricted the engine is decided per
+ * run (`lib/add-captions-engine.ts`) and written into the job.
+ */
+export const ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER = CAPTION_ENGINE_UNRESTRICTED_DEFAULT

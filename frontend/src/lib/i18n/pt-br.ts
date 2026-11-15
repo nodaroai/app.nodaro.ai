@@ -2050,6 +2050,7 @@ export const ptBR: ChromeDict = {
   "proccfg.lookHint": "Um conjunto predefinido de fonte, contorno, maiúsculas/minúsculas e cor da palavra falada. Os controles abaixo substituem partes específicas dele.",
   "proccfg.captionEngine": "Mecanismo de transcrição",
   "proccfg.captionEngineNemotronNote": "Cobrado por minuto iniciado do vídeo, além da renderização das legendas.",
+  "proccfg.captionEngineNoneOffered": "Não há mecanismo de transcrição disponível nesta implantação, então este nó não pode transcrever o vídeo. Forneça ao nó um texto, legendas ou uma transcrição.",
   "proccfg.font": "Fonte",
   "proccfg.fontAuto": "Automático (do visual)",
   "proccfg.uppercase": "Maiúsculas",

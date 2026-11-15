@@ -345,7 +345,7 @@ describe("downloadFile", () => {
 describe("runFfprobe watchdog", () => {
   it("enforces a 120s timeout so remote probes can never hang a worker", async () => {
     execFileOnce("1280,720\n4.0")
-    await runFfprobe(["-v", "error", "https://cdn.example/x.mp4"])
+    await runFfprobe(["-v", "error", "/tmp/x.mp4"])
     const opts = mocks.execFile.mock.calls[0][2] as { timeout?: number }
     expect(opts.timeout).toBe(120_000)
   })

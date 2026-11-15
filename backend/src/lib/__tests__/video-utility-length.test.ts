@@ -24,6 +24,18 @@ const m = vi.hoisted(() => ({
   downloadFile: vi.fn(async (_url: string, _dest: string, _opts?: { maxBytes?: number; timeoutMs?: number; signal?: AbortSignal }) => undefined),
   createWorkDir: vi.fn(async (_name: string) => "/tmp/measure"),
   cleanupWorkDir: vi.fn(async (_dir: string) => undefined),
+  // The probe guard's one own-storage fallback (ffmpeg-utils `readOwnStoredCopy`, tested
+  // on its own in probe-guard.e2e.test.ts), as it runs: a capped download into a work
+  // dir, the local copy read, the dir removed.
+  readOwnStoredCopy: vi.fn(async <T,>(url: string, read: (local: string) => Promise<T>, opts: { downloadTimeoutMs?: number; signal?: AbortSignal } = {}): Promise<T> => {
+    const dir = await m.createWorkDir("probe-own-storage")
+    try {
+      await m.downloadFile(url, `${dir}/input`, { maxBytes: 2 * 1024 ** 3, timeoutMs: Math.min(120_000, opts.downloadTimeoutMs ?? 120_000), ...(opts.signal ? { signal: opts.signal } : {}) })
+      return await read(`${dir}/input`)
+    } finally {
+      await m.cleanupWorkDir(dir)
+    }
+  }),
 }))
 vi.mock("../../providers/video/ffmpeg-utils.js", () => m)
 // The one clip reading both sides measure by (lib/video-utility-probe.ts), driven by the probe above.
@@ -32,7 +44,7 @@ vi.mock("../video-utility-probe.js", () => ({
   ClipUnreadableError: class ClipUnreadableError extends Error {},
 }))
 
-import { OWN_STORAGE_MEASURE_MAX_BYTES, measureVideoUtilityCharge } from "../video-utility-length.js"
+import { OWN_STORAGE_MEASURE_MAX_BYTES, measureVideoUtilityCharge, videoUtilityRefusalStatus } from "../video-utility-length.js"
 
 const SELF_HOST = "http://localhost:3000/storage/nodaro-assets"
 const CLOUD = "https://media.example.com"
@@ -150,9 +162,9 @@ describe("measuring a clip in this install's own storage (a self-host)", () => {
     expect(m.cleanupWorkDir).toHaveBeenCalledWith("/tmp/measure")
   })
 
-  it("an abort for any other reason is not out of time: unreadable", async () => {
+  it("an abort for any other reason is not out of time, and not the file's fault: the read was stopped, retryable (503 probe_unavailable)", async () => {
     m.downloadFile.mockRejectedValueOnce(Object.assign(new Error("The operation was aborted"), { name: "AbortError", cause: new Error("closed") }))
-    await expect(measureVideoUtilityCharge("trim-video", trim(OWN))).resolves.toEqual(UNREADABLE)
+    await expect(measureVideoUtilityCharge("trim-video", trim(OWN))).resolves.toMatchObject({ ok: false, code: "probe_unavailable" })
   })
 
   it("a file over the cap is refused as unreadable, its copy cleaned up", async () => {
@@ -225,9 +237,42 @@ describe("a link the guard allows is probed where it is, never downloaded", () =
     await expect(measureVideoUtilityCharge("trim-video", trim(PUBLIC))).resolves.toMatchObject({ ok: false, code: "source_unreachable" })
   })
 
+  it("a read the server could not run (its reader failed to start, or was stopped) is retryable: 503 probe_unavailable, never \"may be corrupted\"", async () => {
+    const unavailable = { ok: false, code: "probe_unavailable", message: "Could not read the video just now — run it again." }
+    for (const failure of [
+      // The runners' rejection of a spawn that failed (EAGAIN, EMFILE…), and the spawn's own error.
+      Object.assign(new Error("ffprobe failed: spawn ffprobe EAGAIN"), { killed: false, timedOut: false, notStarted: true }),
+      Object.assign(new Error("spawn ffprobe EMFILE"), { code: "EMFILE", syscall: "spawn ffprobe" }),
+      // A read stopped by its own signal, not by the client or a sibling clip.
+      Object.assign(new Error("The operation was aborted"), { name: "AbortError" }),
+    ]) {
+      m.probeVideoSource.mockRejectedValueOnce(failure)
+      await expect(measureVideoUtilityCharge("trim-video", trim(PUBLIC))).resolves.toEqual(unavailable)
+    }
+    expect(videoUtilityRefusalStatus("probe_unavailable")).toBe(503)
+  })
+
   it("a lookup failure on another host (a redirect target the guard never resolved) is not retryable: unreadable", async () => {
     m.probeVideoSource.mockRejectedValue(new Error("ffprobe failed: [tcp @ 0x1] Failed to resolve hostname dead.example: Temporary failure in name resolution"))
     await expect(measureVideoUtilityCharge("trim-video", trim(PUBLIC))).resolves.toEqual(UNREADABLE)
+  })
+
+  // The probe guard's proxy resolves every hop ffprobe makes itself and says why one
+  // failed, so a redirect target is told apart by the lookup's own answer, as the first hop is.
+  it("a hop the probe guard refused after the first (a redirect) is read the first hop's way", async () => {
+    m.probeVideoSource.mockRejectedValueOnce(new m.ProbeSourceBlockedError("dns", "probeVideoSource: blocked — DNS resolution failed for next.example"))
+    await expect(measureVideoUtilityCharge("trim-video", trim(PUBLIC))).resolves.toEqual({ ok: false, code: "source_unreachable", message: "Could not reach the video — run it again." })
+    m.probeVideoSource.mockRejectedValueOnce(new m.ProbeSourceBlockedError("host", "probeVideoSource: blocked — DNS resolution failed for dead.example"))
+    await expect(measureVideoUtilityCharge("trim-video", trim(PUBLIC))).resolves.toEqual({ ok: false, code: "invalid_video_duration", message: "Could not read the video: its host was not found. Check the link." })
+    m.probeVideoSource.mockRejectedValueOnce(new m.ProbeSourceBlockedError("address", "probeVideoSource: blocked — next.example resolves to private/reserved IP 10.0.0.7"))
+    await expect(measureVideoUtilityCharge("trim-video", trim(PUBLIC))).resolves.toEqual(UNREADABLE)
+    expect(m.downloadFile).not.toHaveBeenCalled()
+  })
+
+  it("a read that ran out of time stays retryable even when a hop was refused on the way", async () => {
+    const timeout = Object.assign(new Error("ffprobe failed: "), { killed: true, timedOut: true })
+    m.probeVideoSource.mockRejectedValueOnce(Object.assign(new m.ProbeSourceBlockedError("address", "probeVideoSource: blocked — alt.example resolves to private/reserved IP 10.0.0.7"), { cause: timeout }))
+    await expect(measureVideoUtilityCharge("trim-video", trim(PUBLIC))).resolves.toMatchObject({ ok: false, code: "probe_timeout" })
   })
 
   it("a self-host's own storage whose DNS fails is retryable too, not downloaded", async () => {

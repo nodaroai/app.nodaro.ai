@@ -30,13 +30,11 @@ import { createDurableScene3DStageJournal } from "./scene3d-stage-storage.js"
 import { ReplicateAudioSeparationProvider } from "../../providers/replicate/audio-separation.js"
 import { extractAudio } from "../../providers/video/extract-audio.js"
 import {
-  runFfmpeg,
-  runFfmpegCapture,
   createWorkDir,
   cleanupWorkDir,
   downloadFile,
   probeVideoSource,
-  runFfprobe,
+  runFfprobeReadingLinks,
   getVideoDuration,
   probeMediaDuration,
   probeMediaStreams,
@@ -44,8 +42,8 @@ import {
   transcodeToBrowserSafe,
   COMBINE_DELIVERY_CRF,
   needsContainerRemux,
-  remuxToMp4,
 } from "../../providers/video/ffmpeg-utils.js"
+import { remuxToMp4ReadingLinks, runFfmpegCaptureReadingLinks, runFfmpegReadingLinks, transcodeToBrowserSafeReadingLinks } from "../../providers/video/ffmpeg-reading-links.js"
 import { mp3EncodeArgs, mp3GraphEncodeArgs } from "../../providers/video/mp3-encode.js"
 import { YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
 import { socialPostOf } from "../../providers/video/social-post-video.js"
@@ -1887,8 +1885,9 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       downloadSocialPostVideo: pluginDownloadSocialPostVideo,
     }, PROVIDER_MEMBER_LANES),
     ffmpeg: withMemberSlots<PluginFfmpegToolkit>("ffmpeg", {
-      runFfmpeg,
-      runFfmpegCapture,
+      // A link the plugin hands ffmpeg (`-i <link>`) is read through the probe guard; local paths run as given.
+      runFfmpeg: runFfmpegReadingLinks,
+      runFfmpegCapture: runFfmpegCaptureReadingLinks,
       createWorkDir,
       cleanupWorkDir,
       downloadFile,
@@ -1897,14 +1896,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       renderEdlTimeline: renderEdlTimelineToUrl,
       trimVideo: trimVideoToUrl,
       probeVideoMeta,
-      runFfprobe,
+      // A link the plugin hands ffprobe is read through the probe guard.
+      runFfprobe: runFfprobeReadingLinks,
       getVideoDuration,
       probeMediaDuration,
       probeMediaStreams,
       needsTranscode,
-      transcodeToBrowserSafe,
+      // A link input is read through the probe guard; local paths run as given.
+      transcodeToBrowserSafe: transcodeToBrowserSafeReadingLinks,
       needsContainerRemux,
-      remuxToMp4,
+      remuxToMp4: remuxToMp4ReadingLinks,
       // The host's MP3 encode builders (mp3-encode.ts): pure, so a plugin's own MP3 encodes end as the host's do.
       mp3EncodeArgs,
       mp3GraphEncodeArgs,

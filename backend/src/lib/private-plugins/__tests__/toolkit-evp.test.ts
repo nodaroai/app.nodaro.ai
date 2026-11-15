@@ -57,6 +57,7 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   probeVideoSource: mockProbeVideoSource,
   // video-analysis toolkit members (not exercised by the evp suite):
   runFfprobe: vi.fn(),
+  runFfprobeReadingLinks: vi.fn(),
   getVideoDuration: vi.fn(),
   probeMediaDuration: vi.fn(),
   probeMediaStreams: vi.fn(),
