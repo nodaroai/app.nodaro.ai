@@ -13,11 +13,11 @@ import {
   Loader2,
   Minus,
   Music2,
-  Scissors,
   Settings,
   Type,
   X,
 } from "lucide-react"
+import { EditVideoButton } from "./edit-video-button"
 import { BaseNode } from "./base-node"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -293,18 +293,7 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
                 >
                   <Link className="w-3.5 h-3.5" />
                 </button>
-                <button
-                  type="button"
-                  aria-label={t("node.editInNodarcut")}
-                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    openFreeCut(id, activeUrl, activeResult?.freecutProjectUrl)
-                  }}
-                  title={t("node.editInNodarcut")}
-                >
-                  <Scissors className="w-3.5 h-3.5" />
-                </button>
+                <EditVideoButton onEdit={() => openFreeCut(id, activeUrl, activeResult?.freecutProjectUrl)} />
                 <SaveToLibraryButton url={activeUrl} type="video" />
               </div>
               {/* Bottom-right: settings */}

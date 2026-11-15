@@ -4,7 +4,8 @@ import { useT, tx } from "@/lib/i18n"
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
-import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Film, LayoutGrid, Expand, Download, Type, Link, Settings, Scissors, Aperture } from "lucide-react"
+import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Film, LayoutGrid, Expand, Download, Type, Link, Settings, Aperture } from "lucide-react"
+import { EditVideoButton } from "./edit-video-button"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidSpeechToVideoConnection } from "@/lib/video-producer-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
@@ -302,11 +303,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
             onClick={(e) => { e.stopPropagation(); copyToClipboard(activeUrl!, tx("apps.urlCopied")) }} title={t("cfgshared.copyUrl")}>
             <Link className="w-3.5 h-3.5" />
           </button>
-          <button type="button" aria-label={t("node.editInNodarcut")}
-            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }} title={t("node.editInNodarcut")}>
-            <Scissors className="w-3.5 h-3.5" />
-          </button>
+          <EditVideoButton onEdit={() => openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl)} />
         </div>
 
         {/* Bottom right: settings */}

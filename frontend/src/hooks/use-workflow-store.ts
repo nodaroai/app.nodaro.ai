@@ -68,7 +68,7 @@ import { migrateGenerateVideoAudioInput } from "@/lib/generate-video-audio-migra
 import { migratePersonNodes } from "@/lib/person-value-migration"
 import { migrateDescribeToPickerNodes } from "@/lib/describe-to-picker-migration"
 import { migratePickerSourceHandle, isTileGridPickerType } from "@/lib/picker-handles"
-import { runtimeFreecutUrl } from "@/lib/runtime-config"
+import { videoEditorOffered } from "@/lib/runtime-config"
 import { tx } from "@/lib/i18n"
 import { planReframeVideoFanOut } from "@/lib/reframe-macro"
 
@@ -2958,12 +2958,12 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     set({ inlinePromptMode: enabled })
   },
 
-  // Gated here rather than at each of the ten node components that offer the
-  // action: an install with no editor configured (VITE_FREECUT_URL=off) must
-  // not open a shell around a frame that cannot load. One choke point means a
-  // new node offering "Edit video" is covered without being told (#767).
+  // The backstop: on an install with the editor switched off (FREECUT_URL=off)
+  // no surface offers "Edit video" (EditVideoButton, resolveCardActions), and
+  // nothing that reaches this anyway opens a shell around a frame that cannot
+  // load (#767).
   openFreeCut: (nodeId, videoUrl, freecutProjectUrl) => {
-    if (!runtimeFreecutUrl()) return
+    if (!videoEditorOffered()) return
     set({ freecutEdit: { nodeId, videoUrl, freecutProjectUrl } })
   },
   closeFreeCut: () => set({ freecutEdit: null }),

@@ -654,6 +654,14 @@ them from its env into `/config.js` (`PUBLIC_URL`, `FRONTEND_SUPABASE_URL`
 starts. So the published image serves any port or domain after a restart;
 the `VITE_*` build args are only the fallbacks when a runtime value is unset.
 
+The embedded video editor is a runtime value the same way: `FREECUT_URL`,
+the editor behind **Edit video**. Unset or empty means the hosted editor; an
+`http(s)` URL points at your own [FreeCut](https://github.com/nodaroai/freecut).
+`off` (or `none`, `false`, `disabled`) removes the action everywhere: no video
+result on the canvas and no video output card in a presentation or a published
+app offers it. See [Editing video](./community-edition-quickstart.md#editing-video)
+for what it needs.
+
 Other build-time frontend env vars (all `VITE_*`, all inlined by Vite at
 build time):
 

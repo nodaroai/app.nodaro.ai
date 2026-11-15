@@ -185,7 +185,11 @@ export interface UnitNodeKit {
   run(): void
   /** Open its config panel, or close it when it is the one open. */
   toggleSettings(): void
-  /** Open a video result in the FreeCut editor. */
+  /**
+   * Open a video result in the FreeCut editor. Call it only from the `onEdit`
+   * of `VideoResultOverlay` or `EditVideoButton`, which offer the action where
+   * the install has an editor (`edit-video-action-funnel.test.ts`).
+   */
   openFreeCut(videoUrl: string, freecutProjectUrl?: string): void
 }
 

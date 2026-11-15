@@ -3,7 +3,8 @@
 import { useT } from "@/lib/i18n"
 import { memo, useState, useRef, useEffect, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, Film, Type, Expand, Download, Link, X, LayoutGrid, Scissors, Settings, Volume2, Image as ImageIcon } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, Film, Type, Expand, Download, Link, X, LayoutGrid, Settings, Volume2, Image as ImageIcon } from "lucide-react"
+import { EditVideoButton } from "./edit-video-button"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -220,12 +221,7 @@ function CinematicAvatarNodeComponent({ id, data, selected }: NodeProps) {
                 title={t("cfgshared.copyUrl")}>
                 <Link className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label={t("node.editInNodarcut")}
-                className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl) }}
-                title={t("node.editInNodarcut")}>
-                <Scissors className="w-3.5 h-3.5" />
-              </button>
+              <EditVideoButton onEdit={() => openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl)} />
             </div>
 
             {/* Bottom right: settings */}

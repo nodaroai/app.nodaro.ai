@@ -77,3 +77,24 @@ describe("Edit with AI beside the editor", () => {
     expect(box().className).not.toContain("absolute")
   })
 })
+
+/**
+ * Edit with AI needs the editor: it is offered only once the editor's own
+ * handshake says it can be edited from here. With the editor switched off
+ * there is no frame, so no handshake, and it is never offered.
+ */
+describe("Edit with AI with the editor switched off", () => {
+  afterEach(() => {
+    delete window.__NODARO_RUNTIME__
+    vi.unstubAllGlobals()
+  })
+
+  it("is not offered, and no panel opens, even on a wide window", () => {
+    window.__NODARO_RUNTIME__ = { freecutUrl: "off" }
+    wideWindow(true)
+    render(<FreeCutEditorModal videoUrl={VIDEO} onExportComplete={async () => {}} onClose={() => {}} />)
+    expect(document.querySelector("iframe")).toBeNull()
+    expect(screen.queryByRole("button", { name: "Edit with AI" })).toBeNull()
+    expect(screen.queryByTestId("ai-panel")).toBeNull()
+  })
+})

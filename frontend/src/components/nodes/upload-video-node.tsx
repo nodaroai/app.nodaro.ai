@@ -3,7 +3,8 @@
 import { useT } from "@/lib/i18n"
 import { memo, useEffect, useRef, useState, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Video, Upload, Link, Loader2, AlertCircle, X, Play, Expand, Download, Scissors, LayoutGrid } from "lucide-react"
+import { Video, Upload, Link, Loader2, AlertCircle, X, Play, Expand, Download, LayoutGrid } from "lucide-react"
+import { EditVideoButton } from "./edit-video-button"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
@@ -295,10 +296,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
                 }} title={t("cfgshared.copyUrl")}>
                 <Link className="w-3.5 h-3.5" />
               </button>
-              <button type="button" aria-label={t("node.editInNodarcut")} className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); openFreeCut(id, videoUrl, undefined) }} title={t("node.editInNodarcut")}>
-                <Scissors className="w-3.5 h-3.5" />
-              </button>
+              <EditVideoButton onEdit={() => openFreeCut(id, videoUrl, undefined)} />
               <SaveToLibraryButton url={videoUrl} type="video" />
             </div>
           </div>

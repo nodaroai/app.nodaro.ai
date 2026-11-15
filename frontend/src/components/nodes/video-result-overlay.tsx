@@ -2,9 +2,10 @@
 
 import { useT } from "@/lib/i18n"
 import { memo, useRef } from "react"
-import { X, Expand, Download, Link, Settings, Scissors } from "lucide-react"
+import { X, Expand, Download, Link, Settings } from "lucide-react"
 import { copyToClipboard } from "@/lib/utils"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { EditVideoButton } from "./edit-video-button"
 import { useSeamlessVideoLoop } from "@/hooks/use-seamless-video-loop"
 
 interface VideoResultOverlayProps {
@@ -25,6 +26,7 @@ interface VideoResultOverlayProps {
   onVideoLoad?: () => void
   onSettings?: () => void
   isSettingsOpen?: boolean
+  /** Offers Edit video on this result (shown only where the install has a video editor: `EditVideoButton`). */
   onEdit?: () => void
   /** Square the bottom corners — for the inline-prompt layout where the
    *  result sits flush on top of the prompt editor (card chrome below). */
@@ -128,17 +130,7 @@ function VideoResultOverlayComponent({
         >
           <Link className="w-3.5 h-3.5" />
         </button>
-        {onEdit && (
-          <button
-            type="button"
-            aria-label={t("node.editInNodarcut")}
-            className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-            onClick={(e) => { e.stopPropagation(); onEdit() }}
-            title={t("node.editInNodarcut")}
-          >
-            <Scissors className="w-3.5 h-3.5" />
-          </button>
-        )}
+        {onEdit && <EditVideoButton onEdit={onEdit} />}
       </div>
       <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
         <SaveToLibraryButton url={url} type="video" />

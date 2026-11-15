@@ -4,7 +4,8 @@ import { useT, type TFunction } from "@/lib/i18n"
 import { useLlmPrice } from "@/hooks/use-llm-price"
 import { memo, useMemo, useEffect, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Puzzle, ImageIcon, Video, AudioLines, FileText, Expand, Download, Link, Scissors, Copy, Loader2 } from "lucide-react"
+import { Puzzle, ImageIcon, Video, AudioLines, FileText, Expand, Download, Link, Copy, Loader2 } from "lucide-react"
+import { EditVideoButton } from "./edit-video-button"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -239,9 +240,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
                       <Link className="w-3.5 h-3.5" />
                     </button>
                     {isVideo && (
-                      <button aria-label={t("common.editVideo")} type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); openFreeCut(id, previewValue as string) }}>
-                        <Scissors className="w-3.5 h-3.5" />
-                      </button>
+                      <EditVideoButton onEdit={() => openFreeCut(id, previewValue as string)} wording="action" tooltip={false} />
                     )}
                     {!isImage && !isVideo && !isAudio && (
                       <button aria-label={t("common.copy")} type="button" className={BTN_CLASS} onClick={(e) => { e.stopPropagation(); copyToClipboard(previewValue as string, t("node.textCopied")) }}>

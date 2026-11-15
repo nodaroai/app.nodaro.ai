@@ -80,7 +80,7 @@ import { runtimeAudiomassUrl } from "@/lib/runtime-config"
 import { optimizedImageUrl } from "@/lib/image"
 import { responsiveColumns } from "@/lib/presentation-display"
 import { useIsMobile } from "@/hooks/use-is-mobile"
-import { StatusBadge } from "./output-cards/shared"
+import { StatusBadge, cardEditOffered } from "./output-cards/shared"
 import type { OutputCardActions } from "./output-cards/shared"
 import { HiddenNodesPill } from "./hidden-nodes-pill"
 import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, getLoopFirstMedia, areAllInputsFilled, resolveInputItems, resolveOutputItems, findExposableField, patchAsRunValues, exposedFieldValue, exposedFieldDataKey } from "./helpers"
@@ -587,8 +587,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     setIsRevealingHidden((prev) => !prev)
   }, [])
 
-  // Edit handler — fullscreen renders editors locally; tab mode delegates to workflow store
+  // Edit handler — fullscreen renders editors locally; tab mode delegates to workflow store.
+  // A video card offers Edit only where the video editor exists (resolveCardActions);
+  // the same check here is the backstop, in both modes.
   const handleEditNode = useCallback((nodeId: string, type: "image" | "video" | "audio", url: string) => {
+    if (!cardEditOffered(type)) return
     if (isFullscreen) {
       setEditState({ nodeId, type, url })
     } else {
