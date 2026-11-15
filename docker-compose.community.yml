@@ -244,7 +244,8 @@ services:
       # hosted one, so an unset value means NO audio editor — choosing Edit-audio
       # then just shows a panel explaining what to set. Point this at your own
       # AudioMass (github.com/nodaroai/audiomass, which speaks the in-browser
-      # bridge) to enable it; `off` is also accepted. Restart to apply.
+      # bridge) to enable it; `off` removes the Edit-audio action entirely.
+      # Restart to apply.
       AUDIOMASS_URL: ${AUDIOMASS_URL:-}
       # The locale a fresh visitor to this install starts in (e.g. "he", "ar",
       # "de"). A user's own saved choice always wins; an unset/blank/unknown

@@ -662,6 +662,15 @@ result on the canvas and no video output card in a presentation or a published
 app offers it. See [Editing video](./community-edition-quickstart.md#editing-video)
 for what it needs.
 
+The embedded audio editor is a runtime value too: `AUDIOMASS_URL`, the editor
+behind **Edit** on an audio output card. There is no hosted one, so unset or
+empty means no editor: the action stays, and choosing it opens a panel that
+explains what to set (in the editor's Present tab, a shared presentation and a
+published app alike). An `http(s)` URL points at your own
+[AudioMass](https://github.com/nodaroai/audiomass). `off` (or `none`, `false`,
+`disabled`) removes the action everywhere: no audio output card offers it. See
+[Editing audio](./community-edition-quickstart.md#editing-audio).
+
 Other build-time frontend env vars (all `VITE_*`, all inlined by Vite at
 build time):
 

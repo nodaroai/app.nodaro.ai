@@ -7,12 +7,11 @@ import { render, screen, fireEvent } from "@testing-library/react"
  *
  * A video card's Edit opens the embedded video editor, so it is offered only
  * where that editor is on: an install with it switched off (`FREECUT_URL=off`)
- * offers no Edit on a video card. Image and audio cards are untouched by that:
- * images use the built-in image editor, and an audio card offers Edit in every
- * state of `AUDIOMASS_URL` (nothing set, an operator's own editor, or `off`,
- * which reads the same as unset), as it always has; what an Edit with no audio
- * editor then does is the presentation view's own handling (the editor modal
- * explains what to set).
+ * offers no Edit on a video card. An audio card's Edit opens the embedded audio
+ * editor the same way: an install with it switched off (`AUDIOMASS_URL=off`)
+ * offers none, and one that sets nothing still offers it (the editor modal
+ * then explains what to set: audio-edit-action.test.tsx). Image cards use the
+ * built-in image editor and always offer it.
  */
 
 vi.mock("@/components/audio-player", () => ({ WaveformAudioPlayer: () => null }))
@@ -114,7 +113,6 @@ describe("output cards with the video editor switched off", () => {
 describe.each([
   ["nothing set (no hosted audio editor exists)", {}],
   ["an operator's own audio editor", { audiomassUrl: "https://audiomass.example.internal" }],
-  ["AUDIOMASS_URL=off (read the same as unset)", { audiomassUrl: "off" }],
 ] as const)("an audio card with %s", (_label, runtime) => {
   it("offers Edit and hands the node and its audio to the handler, as it always has", () => {
     window.__NODARO_RUNTIME__ = { ...runtime }
@@ -123,5 +121,22 @@ describe.each([
     render(<AudioOutputCard label="Voice" status="completed" url={AUDIO} nodeId="N1" actions={{ onEdit }} />)
     fireEvent.click(editButton()!)
     expect(onEdit).toHaveBeenCalledWith("N1", "audio", AUDIO)
+  })
+})
+
+describe("output cards with the audio editor switched off", () => {
+  it.each(["off", "OFF", "none", "false", "disabled"])("AUDIOMASS_URL=%j binds no Edit for audio; video and image keep it", (value) => {
+    window.__NODARO_RUNTIME__ = { audiomassUrl: value }
+    const onEdit = vi.fn()
+    expect(resolveCardActions({ onEdit }, "N1", "audio", AUDIO).onEdit).toBeUndefined()
+    expect(resolveCardActions({ onEdit }, "N1", "video", VIDEO).onEdit).toBeTypeOf("function")
+    expect(resolveCardActions({ onEdit }, "N1", "image", IMAGE).onEdit).toBeTypeOf("function")
+  })
+
+  it("an audio card shows no Edit, and keeps its other actions", () => {
+    window.__NODARO_RUNTIME__ = { audiomassUrl: "off" }
+    render(<AudioOutputCard label="Voice" status="completed" url={AUDIO} nodeId="N1" actions={{ onEdit: vi.fn(), onHide: vi.fn() }} />)
+    expect(editButton()).toBeNull()
+    expect(screen.getByRole("button", { name: /^hide$/i })).toBeTruthy()
   })
 })

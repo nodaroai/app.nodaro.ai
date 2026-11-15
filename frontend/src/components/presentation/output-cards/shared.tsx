@@ -2,7 +2,7 @@ import React from "react"
 import { Eye } from "lucide-react"
 import { toast } from "sonner"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
-import { videoEditorOffered } from "@/lib/runtime-config"
+import { audioEditorOffered, videoEditorOffered } from "@/lib/runtime-config"
 
 /** `skipped`: the run skipped the node for want of input — "nothing new this run", not a failure. */
 export type OutputStatus = "idle" | "waiting" | "running" | "completed" | "failed" | "skipped"
@@ -128,14 +128,16 @@ export function GlassCard({
 
 /**
  * Whether a card of this media type can offer Edit on this install. A video
- * opens the embedded video editor, which an install can switch off
- * (`FREECUT_URL=off`); an Edit that opens nothing is not offered there. Images
- * (the built-in image editor) and audio always offer it: an install with no
- * audio editor keeps its own handling of that (the editor modal explains what
- * to set).
+ * opens the embedded video editor and an audio result the embedded audio
+ * editor; an install can switch either off (`FREECUT_URL=off`,
+ * `AUDIOMASS_URL=off`), and there it is not offered. An install that sets no
+ * audio editor still offers it: the editor modal explains what to set. Images
+ * (the built-in image editor) always offer it.
  */
 export function cardEditOffered(mediaType: Exclude<MediaType, "text">): boolean {
-  return mediaType === "video" ? videoEditorOffered() : true
+  if (mediaType === "video") return videoEditorOffered()
+  if (mediaType === "audio") return audioEditorOffered()
+  return true
 }
 
 /**

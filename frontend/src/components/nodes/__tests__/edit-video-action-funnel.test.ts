@@ -24,12 +24,27 @@ import ts from "typescript"
  *     variable, or call it inside the `onEdit` of those two elements;
  *   - write the action's wording keys (the shared button is the only one);
  *   - read the video editor's URL, or the predicate over it, itself.
+ *
+ * "Edit" on an audio result is offered only on an output card (no node on the
+ * canvas draws one), and opens the embedded audio editor (`AUDIOMASS_URL`), so
+ * an install with it switched off (`AUDIOMASS_URL=off`) shows it nowhere:
+ *   - The card's Edit is bound by `resolveCardActions` (`cardEditOffered`,
+ *     over `audioEditorOffered`), the only caller of an output card's
+ *     `onEdit(node, type, url)`.
+ *   - The presentation view's Edit handler is the one place that mounts the
+ *     audio editor, and refuses where `cardEditOffered` does: the backstop.
+ *
+ * So, outside the files listed below, product code may not mount the audio
+ * editor (name its component or its module), call an output card's `onEdit`,
+ * or read the audio editor's URL, origin or the predicates over them.
  */
 
 const BUTTON = "components/nodes/edit-video-button.tsx"
 const CARD_ACTIONS = "components/presentation/output-cards/shared.tsx"
 const STORE = "hooks/use-workflow-store.ts"
 const RUNTIME_CONFIG = "lib/runtime-config.ts"
+const AUDIO_MODAL = "components/editor/audiomass-editor-modal.tsx"
+const PRESENTATION = "components/presentation/presentation-view.tsx"
 
 /** Elements whose `onEdit` is the action itself. */
 const ACTION_ELEMENTS = new Set(["EditVideoButton", "VideoResultOverlay"])
@@ -39,24 +54,50 @@ const OPEN_FREECUT_FILES: Readonly<Record<string, string>> = {
   [STORE]: "defines it, and refuses without an editor (the backstop)",
   "nodes/kit.ts": "declares the unit kit's binding of it (a type, no call)",
   "components/nodes/use-unit-node-kit.ts": "binds it to a unit's node; the unit hands `kit.openFreeCut` to an `onEdit` checked below",
-  "components/presentation/presentation-view.tsx": "the output cards' Edit handler, which only resolveCardActions binds, and only where cardEditOffered",
+  [PRESENTATION]: "the output cards' Edit handler, which only resolveCardActions binds, and only where cardEditOffered",
 }
 
 /** The action's wording: only the shared button writes it. */
 const WORDING_KEYS = new Set(["node.editInNodarcut", "common.editVideo"])
 
-/** Who may read the video editor's URL and the predicate over it, each with its reason. Every entry must still be used. */
+/** Who may read an editor's URL and the predicate over it, each with its reason. Every entry must still be used. */
 const CONFIG_READERS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   [RUNTIME_CONFIG]: {
     runtimeFreecutUrl: "defines it",
     videoEditorOffered: "defines it",
+    runtimeAudiomassUrl: "defines it",
+    runtimeAudiomassOrigin: "defines it",
+    audioEditorState: "defines it",
+    audioEditorOffered: "defines it",
   },
   "components/editor/freecut-editor-modal.tsx": { runtimeFreecutUrl: "frames the editor at that URL (and says so when there is none)" },
+  [AUDIO_MODAL]: {
+    runtimeAudiomassUrl: "frames the editor at that URL (and explains when there is none)",
+    runtimeAudiomassOrigin: "trusts the editor's messages from that origin only",
+  },
   [BUTTON]: { videoEditorOffered: "the canvas action: draws nothing without an editor" },
-  [CARD_ACTIONS]: { videoEditorOffered: "cardEditOffered, for every video output card's Edit" },
+  [CARD_ACTIONS]: {
+    videoEditorOffered: "cardEditOffered, for every video output card's Edit",
+    audioEditorOffered: "cardEditOffered, for every audio output card's Edit",
+  },
   [STORE]: { videoEditorOffered: "openFreeCut's backstop" },
 }
-const CONFIG_NAMES = new Set(["runtimeFreecutUrl", "videoEditorOffered"])
+const CONFIG_NAMES = new Set([
+  "runtimeFreecutUrl",
+  "videoEditorOffered",
+  "runtimeAudiomassUrl",
+  "runtimeAudiomassOrigin",
+  "audioEditorState",
+  "audioEditorOffered",
+])
+
+/** Who may name the audio editor's component or module, each with its reason. Every entry must still be used. */
+const AUDIO_EDITOR_FILES: Readonly<Record<string, string>> = {
+  [AUDIO_MODAL]: "defines it",
+  [PRESENTATION]: "the output cards' Edit handler, which only resolveCardActions binds, and only where cardEditOffered",
+}
+const AUDIO_EDITOR_NAME = "AudiomassEditorModal"
+const AUDIO_EDITOR_MODULE = /(^|\/)audiomass-editor-modal(\.tsx?)?$/
 
 const SRC = path.resolve(__dirname, "..", "..", "..")
 const SKIP_DIRS = new Set(["__tests__", "test", "node_modules"])
@@ -74,7 +115,7 @@ function productFiles(rel = "", out: string[] = []): string[] {
 interface Finding {
   readonly file: string
   readonly line: number
-  readonly kind: "action-call" | "stray-open" | "wording" | "config"
+  readonly kind: "action-call" | "stray-open" | "wording" | "config" | "audio-editor" | "card-edit-call"
   readonly name: string
 }
 
@@ -127,6 +168,13 @@ function scan(rel: string): Finding[] {
     }
     if (ts.isStringLiteralLike(node) && WORDING_KEYS.has(node.text)) out.push({ file: rel, line: at(node), kind: "wording", name: node.text })
     if (ts.isIdentifier(node) && CONFIG_NAMES.has(node.text)) out.push({ file: rel, line: at(node), kind: "config", name: node.text })
+    if (ts.isIdentifier(node) && node.text === AUDIO_EDITOR_NAME) out.push({ file: rel, line: at(node), kind: "audio-editor", name: node.text })
+    if (ts.isStringLiteralLike(node) && AUDIO_EDITOR_MODULE.test(node.text)) out.push({ file: rel, line: at(node), kind: "audio-editor", name: node.text })
+    // An output card's `onEdit(node, type, url)`: a member call with that card's three arguments.
+    if (ts.isCallExpression(node) && node.arguments.length === 3) {
+      const callee = ts.isNonNullExpression(node.expression) ? node.expression.expression : node.expression
+      if (ts.isPropertyAccessExpression(callee) && callee.name.text === "onEdit") out.push({ file: rel, line: at(node), kind: "card-edit-call", name: callee.getText() })
+    }
     ts.forEachChild(node, visit)
   }
   visit(sf)
@@ -138,7 +186,7 @@ const FILES = productFiles().filter((f) => !f.startsWith("lib/i18n/"))
 const FINDINGS = FILES.flatMap(scan)
 const show = (f: Finding) => `${f.file}:${f.line} ${f.name}`
 
-describe("Edit video is offered only through its shared button and the output cards' resolver", () => {
+describe("Edit video and Edit on audio are offered only through their shared pieces", () => {
   it("the scan sees the product (sanity: the shared pieces and the nodes offering the action are there)", () => {
     for (const file of [BUTTON, CARD_ACTIONS, STORE, RUNTIME_CONFIG, "components/nodes/video-result-overlay.tsx"]) expect(FILES).toContain(file)
     // 28 results on the shared overlay (two of them node units) + 13 nodes laying out their own buttons.
@@ -157,13 +205,24 @@ describe("Edit video is offered only through its shared button and the output ca
     expect(FINDINGS.filter((f) => f.kind === "wording" && f.file !== BUTTON).map(show)).toEqual([])
   })
 
-  it("no file reads the video editor's URL or the predicate over it, but the readers listed with their reason", () => {
+  it("no file reads an editor's URL or the predicate over it, but the readers listed with their reason", () => {
     expect(FINDINGS.filter((f) => f.kind === "config" && !CONFIG_READERS[f.file]?.[f.name]).map(show)).toEqual([])
+  })
+
+  it("no file mounts the audio editor but the presentation view's Edit handler (or a file listed with its reason)", () => {
+    expect(FINDINGS.some((f) => f.kind === "audio-editor" && f.file === PRESENTATION)).toBe(true)
+    expect(FINDINGS.filter((f) => f.kind === "audio-editor" && !AUDIO_EDITOR_FILES[f.file]).map(show)).toEqual([])
+  })
+
+  it("only resolveCardActions calls an output card's onEdit", () => {
+    expect(FINDINGS.some((f) => f.kind === "card-edit-call" && f.file === CARD_ACTIONS)).toBe(true)
+    expect(FINDINGS.filter((f) => f.kind === "card-edit-call" && f.file !== CARD_ACTIONS).map(show)).toEqual([])
   })
 
   it("the lists only shrink: each entry is still used", () => {
     const unused = [
       ...Object.keys(OPEN_FREECUT_FILES).filter((file) => !FINDINGS.some((f) => f.file === file && (f.kind === "stray-open" || f.kind === "action-call"))),
+      ...Object.keys(AUDIO_EDITOR_FILES).filter((file) => !FINDINGS.some((f) => f.file === file && f.kind === "audio-editor")),
       ...Object.entries(CONFIG_READERS).flatMap(([file, names]) =>
         Object.keys(names)
           .filter((name) => !FINDINGS.some((f) => f.file === file && f.kind === "config" && f.name === name))

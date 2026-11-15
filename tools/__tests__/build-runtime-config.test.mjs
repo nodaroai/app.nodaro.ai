@@ -502,3 +502,28 @@ test("start.sh names the settings the moved-pages keys come from", () => {
 test("CLI entry: with the move's settings blank, /config.js is byte-identical", () => {
   assert.equal(configJs({ ...NODARO_DEPLOYMENT_ENV, RUNTIME_FLOW_UI_ORIGIN: "", RUNTIME_LEGACY_UI_HOSTS: "", RUNTIME_LINK_ORIGIN: "https://app.nodaro.ai" }), NODARO_CONFIG_JS)
 })
+
+// The audio editor (AUDIOMASS_URL) in its three states. An operator's value
+// reaches /config.js as written (trimmed): an opt-out word is carried, and
+// nothing set leaves no key. So "switched off" and "nothing set" reach the
+// browser as two different /config.js files (read apart by
+// frontend/src/lib/runtime-config.ts :: audioEditorState), and an install
+// that sets nothing serves the /config.js it always has.
+test("start.sh and the community compose hand AUDIOMASS_URL to the writer as the operator wrote it, with no default", () => {
+  const dockerfile = readFileSync(resolve(dirname(ENTRY), "..", "Dockerfile"), "utf8")
+  const writerCall = dockerfile.slice(dockerfile.indexOf("RUNTIME_API_URL=\"$RUNTIME_API_URL_EFFECTIVE\""))
+  assert.match(writerCall.slice(0, writerCall.indexOf("build-runtime-config.mjs")), / RUNTIME_AUDIOMASS_URL="\$AUDIOMASS_URL" /)
+  const compose = readFileSync(resolve(dirname(ENTRY), "..", "docker-compose.community.yml"), "utf8")
+  assert.match(compose, /^\s+AUDIOMASS_URL: \$\{AUDIOMASS_URL:-\}$/m)
+})
+
+test("CLI entry: AUDIOMASS_URL switched off reaches /config.js as written; nothing set leaves no key", () => {
+  const audiomass = (value) => configJs({ ...NODARO_DEPLOYMENT_ENV, RUNTIME_AUDIOMASS_URL: value })
+  const withKey = (value) => `window.__NODARO_RUNTIME__={"apiUrl":"https://app.nodaro.ai","supabaseAnonKey":"public-anon-key","audiomassUrl":${JSON.stringify(value)}};\n`
+  // Nothing set: start.sh passes "" for an unset variable, and compose passes "" for an unset .env line.
+  for (const unset of ["", "   "]) assert.equal(audiomass(unset), NODARO_CONFIG_JS, JSON.stringify(unset))
+  for (const [value, carried] of [["off", "off"], ["OFF", "OFF"], [" none ", "none"], ["false", "false"], ["Disabled", "Disabled"]]) {
+    assert.equal(audiomass(value), withKey(carried), value)
+  }
+  assert.equal(audiomass("https://audiomass.example.internal"), withKey("https://audiomass.example.internal"))
+})

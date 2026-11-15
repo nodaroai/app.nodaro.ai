@@ -272,19 +272,53 @@ export function runtimeFreecutOrigin(): string {
  * unconfigured install has no editor: the default is "" (disabled), and the
  * modal says so instead of framing a dead `http://localhost:5175` dev server —
  * the old build-time fallback, which only ever worked on a developer's laptop.
- * Set `AUDIOMASS_URL` to a reachable editor to enable it; `off` (and the other
- * opt-out words) map to the same disabled state, for symmetry with FREECUT_URL.
- * An empty value is NOT a silent regression here the way it was for FreeCut:
- * there is nothing working to remove — no editor was ever hosted for it.
+ * Set `AUDIOMASS_URL` to a reachable editor to enable it. Without one there are
+ * two states (`audioEditorState`): nothing set keeps the Edit action, whose
+ * modal explains what to set; `off` (and the other opt-out words) removes the
+ * action everywhere, as `FREECUT_URL=off` does for video.
  */
 export const DEFAULT_AUDIOMASS_URL = ""
 
+/** The audio editor's setting as given: /config.js, else the baked build arg. */
+function configuredAudiomassUrl(): string {
+  return pick(runtime().audiomassUrl, import.meta.env.VITE_AUDIOMASS_URL as string | undefined).trim()
+}
+
 /** An absolute http(s) URL, or empty when no audio editor is configured. */
 export function runtimeAudiomassUrl(): string {
-  const configured = pick(runtime().audiomassUrl, import.meta.env.VITE_AUDIOMASS_URL as string | undefined).trim()
+  const configured = configuredAudiomassUrl()
   if (EDITOR_DISABLED_VALUES.has(configured.toLowerCase())) return ""
   if (!configured) return DEFAULT_AUDIOMASS_URL
   return isAbsoluteHttpUrl(configured) ? configured : DEFAULT_AUDIOMASS_URL
+}
+
+/**
+ * The three states of the audio editor's setting:
+ *   - `"configured"`: a usable http(s) URL, the editor `runtimeAudiomassUrl` frames;
+ *   - `"off"`: an opt-out word (`off`, `none`, `false`, `disabled`, any casing),
+ *     the operator removing the feature;
+ *   - `"unset"`: nothing set (unset or empty), or a value that is not a usable
+ *     URL. There is no editor, but the action stays and its modal says what to set.
+ *
+ * The /config.js writer carries an opt-out word as written and leaves no key
+ * when nothing is set (tools/build-runtime-config.mjs), so "off" and "unset"
+ * reach the page apart.
+ */
+export type AudioEditorState = "configured" | "unset" | "off"
+
+export function audioEditorState(): AudioEditorState {
+  if (EDITOR_DISABLED_VALUES.has(configuredAudiomassUrl().toLowerCase())) return "off"
+  return runtimeAudiomassUrl() ? "configured" : "unset"
+}
+
+/**
+ * Whether this install offers Edit on an audio result at all. False only when
+ * the audio editor is switched off (`AUDIOMASS_URL=off`). Every surface that
+ * offers it reads this through `cardEditOffered` (output-cards/shared.tsx),
+ * never itself (`edit-video-action-funnel.test.ts`).
+ */
+export function audioEditorOffered(): boolean {
+  return audioEditorState() !== "off"
 }
 
 /**
