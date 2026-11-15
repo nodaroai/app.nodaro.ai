@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom"
 import { Suspense } from "react"
+import { AI_PANEL_PATH } from "@nodaro/shared/media"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { hasAdmin, hasCredits, isCloud, isMultiUser, hasOrganizations } from "@/lib/edition"
 import { surfaceNavHidden, surfaceBillingSelfServe } from "@/lib/surface-selectors"
@@ -52,6 +53,7 @@ const AppRunnerPage = lazy(() => import("@/routes/app-runner-page"))
 const TutorialPage = lazy(() => import("@/routes/tutorial-page"))
 const EmbedPage = lazy(() => import("@/routes/embed-page"))
 const EmbedScene3DPage = lazy(() => import("@/routes/embed-scene3d-page"))
+const EditWithAiFramePage = lazy(() => import("@/ee/app/embed-edit-with-ai/page"))
 const ApiSettingsPage = lazy(() => import("@/app/(dashboard)/settings/api/page"))
 const DeveloperAppsPage = lazy(() => import("@/app/(dashboard)/settings/developer-apps/page"))
 const ConnectedAppsPage = lazy(() => import("@/app/(dashboard)/settings/connected-apps/page"))
@@ -346,6 +348,20 @@ export const router = createBrowserRouter([
     element: <SuspenseWrapper><EmbedScene3DPage /></SuspenseWrapper>,
     errorElement: <RouteErrorBoundary />,
   },
+  // Edit with AI for a product that embeds the video editor (Studio): framed
+  // beside the host's editor, which carries its edit requests on to the editor
+  // (`@nodaro/shared/media` AI_PANEL_PATH). Only on a build with credits, like
+  // the panel itself. A published app's slug always ends in a random suffix, so
+  // this name never shadows one.
+  ...(hasCredits()
+    ? [
+        {
+          path: AI_PANEL_PATH,
+          element: <SuspenseWrapper><EditWithAiFramePage /></SuspenseWrapper>,
+          errorElement: <RouteErrorBoundary />,
+        },
+      ]
+    : []),
   {
     path: "/embed/:slug",
     element: <SuspenseWrapper><EmbedPage /></SuspenseWrapper>,

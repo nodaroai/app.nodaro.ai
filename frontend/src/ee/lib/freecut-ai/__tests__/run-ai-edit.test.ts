@@ -236,7 +236,7 @@ describe("runAiEdit", () => {
     })
 
     await expect(run(fakeLink(), [], undefined, { confirmPartial })).rejects.toBeInstanceOf(RunDeclined)
-    expect(confirmPartial).toHaveBeenCalledWith(expect.objectContaining({ steps: ["pauses"], cannot: ["make the shirt blue"] }))
+    expect(confirmPartial).toHaveBeenCalledWith(expect.objectContaining({ steps: ["pauses"], cannot: ["make the shirt blue"] }), { listen: false, music: false })
     expect(transcribeApi).not.toHaveBeenCalled()
   })
 
@@ -465,6 +465,106 @@ describe("openedVideoMedia", () => {
 
   it("refuses when the opened video cannot be told apart", () => {
     expect(() => openedVideoMedia(two, media, "https://cdn.example.com/other.mp4")).toThrow(RunFailed)
+  })
+
+  // A host that loaded each video under its own name (Studio's "Shot 2.mp4") names the one to edit.
+  it("finds the video the host named among several, whatever its address says", () => {
+    expect(openedVideoMedia(two, media, "https://cdn.example.com/u/7f3a.mp4", "INTRO.mp4")?.id).toBe("m-intro")
+  })
+
+  it("refuses a named video that is no longer on the timeline, even when one other video is", () => {
+    const one = readTimelineView({ fps: 30, durationInFrames: 150, items: [{ id: "a", type: "video", trackId: "t", from: 0, durationInFrames: 150, mediaId: "m-intro" }] })!
+    expect(() => openedVideoMedia(one, media, VIDEO_URL, "take.mp4")).toThrow(expect.objectContaining({ key: "freecutAi.videoGone" }))
+    // An editor that does not say its media's names: the one video there is it.
+    expect(openedVideoMedia(one, [], VIDEO_URL, "take.mp4")?.id).toBe("m-intro")
+  })
+})
+
+describe("runAiEdit across runs on one video", () => {
+  const HEARD = { words: [{ text: "Hello", start: 1, end: 1.4 }, { text: "world.", start: 1.5, end: 1.9 }, { text: "Again", start: 3.5, end: 4 }], language: "eng" }
+
+  it("says what it heard, so a later run need not listen again", async () => {
+    const events: RunEvent[] = []
+    await run(fakeLink(), events)
+    expect(events.find((e) => e.type === "heard")).toMatchObject({ heard: { language: "en", words: [{ text: "Hello" }, { text: "world." }, { text: "Again" }] } })
+  })
+
+  it("edits from what an earlier run heard: nothing is listened to, or paid for, again", async () => {
+    const events: RunEvent[] = []
+    const summary = await run(fakeLink(), events, undefined, { heard: HEARD })
+    expect(transcribeApi).not.toHaveBeenCalled()
+    expect(events.some((e) => e.type === "heard")).toBe(false)
+    expect(summary.pausesCut).toBe(3)
+    expect(api.order).toEqual(["plan", "music"])
+  })
+
+  it("leaves out what an earlier run already did", async () => {
+    const link = fakeLink()
+    const events: RunEvent[] = []
+    await run(link, events, undefined, { heard: HEARD, done: ["pauses"] })
+    expect(events.find((e) => e.type === "plan")).toMatchObject({ plan: { steps: ["captions", "music"] } })
+    expect(link.applied.some((a) => a.ops[0]!.op === "removeSourceRanges")).toBe(false)
+    expect(link.applied.some((a) => a.ops[0]!.op === "addTranscriptCaptions")).toBe(true)
+  })
+
+  it("ends before anything paid starts when all it asks for is already done", async () => {
+    const outcome = run(fakeLink(), [], undefined, { done: ["pauses", "captions", "music"] })
+    await expect(outcome).rejects.toBeInstanceOf(RunDeclined)
+    await expect(outcome).rejects.toMatchObject({ reason: "done" })
+    expect(transcribeApi).not.toHaveBeenCalled()
+    expect(sunoGenerateApi).not.toHaveBeenCalled()
+  })
+
+  it("does not listen to the video for music alone", async () => {
+    api.plannerText = '{"steps":["music"],"musicStyle":"calm piano","reply":"Music it is."}'
+    const summary = await run(fakeLink())
+    expect(transcribeApi).not.toHaveBeenCalled()
+    expect(summary.music).toBe(true)
+    expect(api.order).toEqual(["plan", "music"])
+  })
+
+  it("asks first when the plan costs more than the price shown, and starts nothing paid on a no", async () => {
+    const asked: unknown[] = []
+    const outcome = run(fakeLink(), [], undefined, {
+      quoted: [],
+      confirmPartial: async (_plan, extra) => {
+        asked.push(extra)
+        return false
+      },
+    })
+    await expect(outcome).rejects.toBeInstanceOf(RunDeclined)
+    expect(asked).toEqual([{ listen: true, music: true }])
+    expect(transcribeApi).not.toHaveBeenCalled()
+    expect(sunoGenerateApi).not.toHaveBeenCalled()
+  })
+
+  it("does not ask when the price shown covered the plan", async () => {
+    const confirm = vi.fn(async () => true)
+    await run(fakeLink(), [], undefined, { quoted: ["pauses", "captions", "music"], confirmPartial: confirm })
+    expect(confirm).not.toHaveBeenCalled()
+  })
+
+  it("never counts listening as extra once the video was heard", async () => {
+    const confirm = vi.fn(async () => true)
+    await run(fakeLink(), [], undefined, { quoted: ["pauses"], heard: HEARD, confirmPartial: confirm })
+    expect(confirm).toHaveBeenCalledWith(expect.anything(), { listen: false, music: true })
+  })
+
+  it("leaves out of the captions the filler words an earlier run cut", async () => {
+    api.plannerText = '{"steps":["captions"],"musicStyle":null,"reply":"Captions."}'
+    const heard = { words: [{ text: "Hello", start: 1, end: 1.4 }, { text: "um,", start: 1.5, end: 1.8 }, { text: "world.", start: 2, end: 2.4 }], language: "en" }
+    const link = fakeLink()
+    await run(link, [], undefined, { heard, done: ["fillers"] })
+    const cues = link.applied.filter((a) => a.ops[0]!.op === "addTranscriptCaptions").flatMap((a) => a.ops[0]!.cues as Array<{ text: string }>)
+    expect(cues.length).toBeGreaterThan(0)
+    expect(cues.map((c) => c.text).join(" ")).not.toMatch(/um/)
+  })
+
+  it("says why a request was declined", async () => {
+    api.plannerText = '{"steps":[],"musicStyle":null,"reply":"No.","cannot":["make the shirt blue"]}'
+    await expect(run(fakeLink())).rejects.toMatchObject({ reason: "cannot" })
+    api.plannerText = '{"steps":[],"musicStyle":null,"reply":"Nothing to do."}'
+    await expect(run(fakeLink())).rejects.toMatchObject({ reason: "nothing" })
   })
 })
 

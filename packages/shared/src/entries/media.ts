@@ -6,6 +6,7 @@
  * `@nodaro/shared`.
  */
 export * from "../freecut-protocol.js"
+export * from "../freecut-ai-panel.js"
 export { describeMaskRegion } from "../inpaint-region.js"
 export type { MaskRegionDescriptor, PixelBox } from "../inpaint-region.js"
 export * from "../priced-clip-seconds.js"
