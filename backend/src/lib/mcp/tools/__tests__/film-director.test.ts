@@ -157,6 +157,61 @@ describe("start_film_director MCP tool", () => {
     expect(FALLBACK_SKILL_CONTENT).toContain("Stage 9 — Deliver")
   })
 
+  it("prefers Gemini Omni Flash 1.2 to Veo 3.1 for camera-heavy shots", () => {
+    expect(FALLBACK_SKILL_CONTENT).toContain(
+      "**Gemini Omni Flash 1.2** (`gemini-omni-flash-1-2`): when motion is camera-heavy. Prefer it over Veo 3.1",
+    )
+    expect(FALLBACK_SKILL_CONTENT).toContain("Use Veo 3.1 (`veo3.1`) only when the user asks for it.")
+    // The rule it replaces: Veo as the camera-heavy pick.
+    expect(FALLBACK_SKILL_CONTENT).not.toContain("**Veo / Veo 3.1**")
+  })
+
+  it("carries the narration and audio mix doctrine, every rule of it", () => {
+    const start = FALLBACK_SKILL_CONTENT.indexOf("## Narration and audio mix")
+    const end = FALLBACK_SKILL_CONTENT.indexOf("## Failure handling")
+    expect(start).toBeGreaterThan(0)
+    expect(end).toBeGreaterThan(start)
+    const doctrine = FALLBACK_SKILL_CONTENT.slice(start, end)
+    for (const heading of [
+      "### 1. The voice leads the timing",
+      "### 2. Script budget",
+      "### 3. Never time-stretch narration",
+      "### 4. One sentence per speech call, then measure and trim",
+      "### 5. Placement",
+      "### 6. Do not place a full voiceover with one `merge_video_audio` call",
+      "### 7. Level-match the lines",
+      "### 8. Music level and ducking",
+      "### 9. Strip the native audio from the video clips",
+      "### 10. Final merge and check",
+      "### 11. Check the result with platform tools before showing it",
+      "### 12. You cannot hear",
+    ]) {
+      expect(doctrine, `missing rule: ${heading}`).toContain(heading)
+    }
+    // The values an agent copies into its calls.
+    expect(doctrine).toContain("`threshold_db: -35`, `min_silence_ms: 150`")
+    expect(doctrine).toContain("`duck: { under: 0, ratio: 1 }`")
+    expect(doctrine).toContain("the voice at `volume: 85`, the music at `volume: 40`")
+    expect(doctrine).toContain("`duck: { under: 0, ratio: 4, threshold_db: -36, attack_ms: 20, release_ms: 700 }`")
+    expect(doctrine).toContain("`keep_original_audio: false`")
+    // The check before showing: the words, the mix, the picture, and what not to trust or use.
+    expect(doctrine).toContain("Run `transcribe` on the final video")
+    expect(doctrine).toContain("a Generate Text node (`llm-chat`) on `gemini-3.8-flash`")
+    expect(doctrine).toContain("an Upload Video node (`upload-video`) into its `references` handle")
+    expect(doctrine).toContain("Do not rely on that picture check for sound.")
+    expect(doctrine).toContain("Do not use `video_analysis` for this check.")
+  })
+
+  it("lets the voice lead the timing in a narrated film, from the principles on", () => {
+    expect(FALLBACK_SKILL_CONTENT).toContain("5. **Audio comes last, except narration.**")
+    // Stage 1 sends a narrated film to the doctrine before the shot list is locked.
+    const stage1 = FALLBACK_SKILL_CONTENT.slice(
+      FALLBACK_SKILL_CONTENT.indexOf("## Stage 1 — Story & Script"),
+      FALLBACK_SKILL_CONTENT.indexOf("## Stage 2 — Shot List"),
+    )
+    expect(stage1).toContain("**Narration and audio mix** before Stage 2")
+  })
+
   it("embedded constant matches on-disk SKILL.md (drift gate)", () => {
     // This is the sync gate: if someone edits the canonical SKILL.md
     // without updating FALLBACK_SKILL_CONTENT, this test fails locally
