@@ -12,6 +12,7 @@
  * structuredContent shape the iframe expects.
  */
 import { z } from "zod"
+import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
@@ -285,6 +286,39 @@ export function coerceStringArray(value: unknown, max: number): string[] {
     .map((v) => v.trim())
     .filter((v) => v.length > 0)
     .slice(0, max)
+}
+
+/**
+ * The most entries an MCP image tool takes in one image list
+ * (`reference_image_urls`, `connected_references`, `reference_order`) that it
+ * passes on whole, on any model (decided 2026-11-15). Such a list is passed on
+ * to a model with a request image limit of its own, for the route to count and
+ * say how many to remove, so its length is otherwise unbounded, and each entry
+ * costs an asset lookup or a pass of prompt assembly (which grows faster than
+ * the list) before the route sees it. The ceiling sits well above every
+ * model's limit (`MAX_REQUEST_IMAGE_LIMIT`), so a realistic overshoot still
+ * reaches the route and gets its "remove N"; a list past it is refused before
+ * any lookup or assembly. A list cut to a model's own limit before its lookups
+ * (a model held to the default limit) is cut as before.
+ */
+export const MCP_IMAGE_LIST_CEILING = 64
+
+/**
+ * Refuse a call any of whose lists is longer than its `max`, before anything
+ * is looked up or sent, with the answer a bound in the tool's schema gives:
+ * the SDK's input-validation error, thrown as the SDK throws it (the SDK turns
+ * it into the tool's error result).
+ */
+export function refuseListsOver(
+  tool: string,
+  lists: Readonly<Record<string, { readonly entries: readonly unknown[] | undefined; readonly max: number }>>,
+): void {
+  const names = Object.keys(lists)
+  const schema = z.object(Object.fromEntries(names.map((name) => [name, z.array(z.unknown()).max(lists[name]!.max).optional()])))
+  const checked = schema.safeParse(Object.fromEntries(names.map((name) => [name, lists[name]!.entries])))
+  if (!checked.success) {
+    throw new McpError(ErrorCode.InvalidParams, `Input validation error: Invalid arguments for tool ${tool}: ${checked.error.message}`)
+  }
 }
 
 /**

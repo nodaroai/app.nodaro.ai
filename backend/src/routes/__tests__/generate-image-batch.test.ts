@@ -487,6 +487,31 @@ describe("models — one request, several models", () => {
     expect(body.totalCredits).toBe(240)
   })
 
+  // Every model of the fan-out has a request image limit of its own, so the
+  // lists take up to 16 entries and each model's count decides (decided
+  // 2026-11-15): 15 pills, or 15 pills sharing 10 images, run on every model,
+  // each job sent and priced on its own count.
+  it.each([
+    ["GPT Image 2.6 Flare and Sunburst, 15 pills", ["gpt-image-2-6-flare", "gpt-image-2-6-sunburst"], 15, 15],
+    ["GPT Image 2.6 Flare and Seedream 5.5, 15 pills sharing 10 images", ["gpt-image-2-6-flare", "seedream-5-5"], 15, 10],
+  ] as const)("a fan-out of models with limits of their own: %s", async (_label, models, pills, distinct) => {
+    const connectedReferences = Array.from({ length: pills }, (_, i) => ({
+      id: `m${i}`,
+      defaultName: `ref${i}`,
+      source: "manual",
+      url: `https://r2.nodaro.ai/cref-${i % distinct}.png`,
+    }))
+    const urls = Array.from({ length: distinct }, (_, i) => `https://r2.nodaro.ai/cref-${i}.png`)
+    const payload = { prompt: "a still life", models: [...models], connectedReferences, userId: USER }
+    const check = resolveImageBatchCreditIdentifiers({ body: payload } as FastifyRequest)
+    const res = await post(payload, KEY)
+    expect(res.statusCode).toBe(200)
+    expect(bulk().map((j) => j.data.referenceImageUrls)).toEqual([urls, urls])
+    const debit = vi.mocked(reserveCreditsForJob).mock.calls.map((c) => c[3])
+    expect(debit.every((id) => id.endsWith(`:${distinct}ref`))).toBe(true)
+    expect(check).toEqual(debit)
+  })
+
   it("the pre-flight is asked to check every job of the fan-out", async () => {
     h.refuseBatches = true
     const res = await post({ prompt: "a lighthouse", models: ["gpt-image-2", "nano-banana-2-1"], count: 2 }, KEY)

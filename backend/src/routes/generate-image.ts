@@ -32,7 +32,7 @@ import { FLUX_LORA_CHARACTER_MODEL_ID, PROMPT_HARD_CEILING } from "@nodaro/share
 import { defaultImageModel, MODEL_INPUT_ADJUSTMENT_FIELDS, pricedSentImages } from "@nodaro/shared/model-catalog"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { generateImageBody, generateImageRequest, type GenerateImageData } from "./generate-image-body.js"
+import { generateImageBody, parseGenerateImageRequest, type GenerateImageData } from "./generate-image-body.js"
 import {
   assembleImageRequest,
   buildAssembleInput,
@@ -230,7 +230,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       creditGuard(resolveImageCreditIdentifier, { batchIdentifiers: resolveImageBatchCreditIdentifiers, runModel: resolveImageRunModel }),
     ],
   }, async (req, reply) => {
-    const parsed = generateImageRequest.safeParse(req.body)
+    const parsed = parseGenerateImageRequest(req.body)
     if (!parsed.success) {
       // More images than the body's arrays take, on a model that refuses a
       // request over its limit: its own message, saying how many to remove.

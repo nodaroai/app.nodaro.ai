@@ -13,8 +13,8 @@ import { userDirectionOf, type ResolvedUserDirection } from "../lib/user-directi
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared/models"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel, pricedSentImages } from "@nodaro/shared/model-catalog"
-import { generateImageModelOf } from "../workers/handlers/default-models.js"
-import { rawBodyRecord, textField } from "../lib/run-model.js"
+import { generateImageRunModelOfBody } from "../lib/generate-image-run-model.js"
+import { rawBodyRecord } from "../lib/run-model.js"
 import { assembledRefsForPricing, isStructuredImageMode } from "./generate-image-plan.js"
 
 /**
@@ -30,8 +30,7 @@ import { assembledRefsForPricing, isStructuredImageMode } from "./generate-image
 export function resolveImageRunModel(req: FastifyRequest): string | undefined {
   const body = rawBodyRecord(req)
   if (Array.isArray(body.models) && body.models.length > 0) return undefined
-  if ("_internalLora" in body && config.CHARACTER_LORA_ROUTING_ENABLED) return FLUX_LORA_CHARACTER_MODEL_ID
-  return generateImageModelOf({ provider: textField(body.provider), aspectRatio: textField(body.aspectRatio) }).resolvedModel
+  return generateImageRunModelOfBody(body)
 }
 
 /**

@@ -74,7 +74,7 @@ import {
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
-import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_GEN_PROVIDERS, PROMPT_HARD_CEILING, T2I_TO_I2I_VARIANT, getMaxImagePromptChars } from "@nodaro/shared/models"
+import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_GEN_PROVIDERS, MAX_REQUEST_IMAGE_LIMIT, PROMPT_HARD_CEILING, T2I_TO_I2I_VARIANT, getMaxImagePromptChars } from "@nodaro/shared/models"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import type { ConnectedReference } from "@nodaro/shared/types"
 import { assembleImageInput } from "@nodaro/prompts/assembly"
@@ -841,6 +841,15 @@ describe("POST /v1/generate-image", () => {
   describe("WI-1b structured inputs", () => {
     const VALID_UUID = "00000000-0000-4000-8000-000000000001"
 
+    /** The bare list bound's answer, as `formatZodError` writes it. */
+    const LIST_BOUND = (path: string, max: number) => ({
+      code: "validation_error",
+      message: `${path}: Too big: expected array to have <=${max} items`,
+      issues: [{ path, message: `Too big: expected array to have <=${max} items` }],
+    })
+    /** The answer a model held to the default limit always got past 14 entries. */
+    const LIST_BOUND_14 = (path: string) => LIST_BOUND(path, 14)
+
     function mkManualRefs(n: number) {
       return Array.from({ length: n }, (_, i) => ({
         id: `m${i}`,
@@ -1057,7 +1066,7 @@ describe("POST /v1/generate-image", () => {
         expect(r.queued?.referenceImageUrls).toEqual([...flat, ...mkManualRefs(12).map((ref) => ref.url)])
       })
 
-      it("past the body's 14 pills, MiniMax H3 Image says how many to remove beside 2 flat references", async () => {
+      it("MiniMax H3 Image counts 15 pills beside 2 flat references and says how many to remove", async () => {
         const r = await send("minimax-h3-image", mkManualRefs(15), {
           referenceImageUrls: Array.from({ length: 2 }, (_, i) => `https://r2.nodaro.ai/flat-${i}.png`),
         })
@@ -1081,11 +1090,19 @@ describe("POST /v1/generate-image", () => {
         expect(r.queued?.referenceImageUrls).toEqual(mkManualRefs(8).map((ref) => ref.url))
       })
 
-      it("past the body's 14 pills, FLUX 3 Klein says how many to remove instead of the bare array bound", async () => {
+      it("FLUX 3 Klein counts 15 pills and says how many to remove", async () => {
         const r = await send("flux-3-klein", mkManualRefs(15))
         expectRefusedBeforeAnything(r)
         expect(r.res.json().error.message).toBe(
           "FLUX 3 Klein takes at most 10 input images, the source or base image included, and this run would send 15: remove 5.",
+        )
+      })
+
+      it("past the body's 16 pills, FLUX 3 Klein says how many to remove instead of the bare array bound", async () => {
+        const r = await send("flux-3-klein", mkManualRefs(17))
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error.message).toBe(
+          "FLUX 3 Klein takes at most 10 input images, the source or base image included, and this run would send 17: remove 7.",
         )
       })
 
@@ -1111,33 +1128,265 @@ describe("POST /v1/generate-image", () => {
       it("past 14 pills on any other model, the array bound's message, as before", async () => {
         const r = await send("nano-banana-pro", mkManualRefs(15))
         expectRefusedBeforeAnything(r)
-        expect(r.res.json().error.message).toMatch(/^connectedReferences: /)
-        expect(r.res.json().error.message).not.toContain("remove")
+        expect(r.res.json().error).toEqual(LIST_BOUND_14("connectedReferences"))
       })
 
-      it("past 14 entries the run would not all send, the array bound's message, never an untrue count", async () => {
-        // One character and 14 unmentioned variants: the run would send its one canonical.
-        const kira = [
-          { id: "k", defaultName: "Kira", source: "wired-character", url: "https://r2.nodaro.ai/kira.png", characterSlug: "kira" },
-          ...Array.from({ length: 14 }, (_, i) => ({
-            id: `k${i}`,
-            defaultName: `Kira / look ${i}`,
-            source: "wired-character",
-            url: `https://r2.nodaro.ai/kira-${i}.png`,
-            characterSlug: "kira",
-            variantSlug: `look-${i}`,
-          })),
-        ]
-        const r = await send("flux-3-klein", kira)
+      // One character and its unmentioned variants: the run would send its one canonical.
+      const kiraWithLooks = (looks: number) => [
+        { id: "k", defaultName: "Kira", source: "wired-character", url: "https://r2.nodaro.ai/kira.png", characterSlug: "kira" },
+        ...Array.from({ length: looks }, (_, i) => ({
+          id: `k${i}`,
+          defaultName: `Kira / look ${i}`,
+          source: "wired-character",
+          url: `https://r2.nodaro.ai/kira-${i}.png`,
+          characterSlug: "kira",
+          variantSlug: `look-${i}`,
+        })),
+      ]
+
+      it("15 entries the run would not all send run on FLUX 3 Klein, counted as sent: one image", async () => {
+        const r = await send("flux-3-klein", kiraWithLooks(14))
+        expect(r.res.statusCode).toBe(200)
+        expect(r.queued?.referenceImageUrls).toEqual(["https://r2.nodaro.ai/kira.png"])
+      })
+
+      it("past 16 entries the run would not all send, the array bound's message, never an untrue count", async () => {
+        const r = await send("flux-3-klein", kiraWithLooks(16))
         expectRefusedBeforeAnything(r)
-        expect(r.res.json().error.message).toMatch(/^connectedReferences: /)
-        expect(r.res.json().error.message).not.toContain("would send")
+        expect(r.res.json().error).toEqual(LIST_BOUND("connectedReferences", 16))
       })
 
       it("a body wrong in another way keeps its own message", async () => {
         const r = await send("flux-3-klein", mkManualRefs(15), { aspectRatio: "not-a-ratio" })
         expectRefusedBeforeAnything(r)
         expect(r.res.json().error.message).not.toContain("would send")
+      })
+    })
+
+    // `connectedReferences` and `referenceOrder` used to stop at 14 entries for
+    // every model, ahead of the model's own count: 15 or 16 pills on a model
+    // that takes 16 got the bare list bound, and so did 15 entries that share
+    // images down to a count the model takes. A request whose every model has
+    // a request image limit of its own is now bounded at the largest limit any
+    // model has (`MAX_REQUEST_IMAGE_LIMIT`), and the count that decides is the
+    // model's; every other request keeps its 14, and its answer, exactly
+    // (decided 2026-11-15).
+    describe("how many entries connectedReferences and referenceOrder may carry", () => {
+      const send = async (extra: Record<string, unknown>) => {
+        vi.clearAllMocks()
+        const { jobInsert } = setupSupabaseMock({})
+        const res = await app.inject({
+          method: "POST",
+          url: "/v1/generate-image",
+          payload: { prompt: "a still life", userId: VALID_UUID, ...extra },
+        })
+        const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown> | undefined
+        return { res, jobInsert, queued }
+      }
+      const expectRefusedBeforeAnything = (r: Awaited<ReturnType<typeof send>>) => {
+        expect(r.res.statusCode).toBe(400)
+        expect(r.jobInsert).not.toHaveBeenCalled()
+        expect(reserveCreditsForJob).not.toHaveBeenCalled()
+        expect(videoQueue.add).not.toHaveBeenCalled()
+      }
+      /** `n` pills naming only `distinct` images between them. */
+      const sharedPills = (n: number, distinct: number) =>
+        Array.from({ length: n }, (_, i) => ({
+          id: `s${i}`,
+          defaultName: `shared${i}`,
+          source: "manual" as const,
+          url: `https://r2.nodaro.ai/shared-${i % distinct}.png`,
+        }))
+      const sharedUrls = (distinct: number) => Array.from({ length: distinct }, (_, i) => `https://r2.nodaro.ai/shared-${i}.png`)
+      const ids = (n: number) => Array.from({ length: n }, (_, i) => `m${i}`)
+      /** What the credit check prices for this body, before the handler runs. */
+      const checkedIdentifier = (body: Record<string, unknown>) =>
+        resolveImageCreditIdentifier({ body: { prompt: "a still life", ...body } } as FastifyRequest)
+
+      it("the lists' outer bound is the largest limit any model has", () => {
+        expect(MAX_REQUEST_IMAGE_LIMIT).toBe(16)
+        expect(generateImageBody.shape.connectedReferences.safeParse(mkManualRefs(MAX_REQUEST_IMAGE_LIMIT)).success).toBe(true)
+        expect(generateImageBody.shape.connectedReferences.safeParse(mkManualRefs(MAX_REQUEST_IMAGE_LIMIT + 1)).success).toBe(false)
+        expect(generateImageBody.shape.referenceOrder.safeParse(ids(MAX_REQUEST_IMAGE_LIMIT)).success).toBe(true)
+        expect(generateImageBody.shape.referenceOrder.safeParse(ids(MAX_REQUEST_IMAGE_LIMIT + 1)).success).toBe(false)
+      })
+
+      it.each([15, 16])("GPT Image 2.6 Flare runs %d mentioned images with every one sent and priced", async (n) => {
+        const body = { provider: "gpt-image-2-6-flare", connectedReferences: mkManualRefs(n) }
+        const r = await send(body)
+        expect(r.res.statusCode).toBe(200)
+        expect(r.queued?.provider).toBe("gpt-image-2-6-flare-i2i")
+        expect(r.queued?.referenceImageUrls).toEqual(mkManualRefs(n).map((ref) => ref.url))
+        // The credit check prices the count the reservation debits.
+        expect(vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]).toBe(`gpt-image-2-6-flare-i2i:medium:1K:${n}ref`)
+        expect(checkedIdentifier(body)).toBe(`gpt-image-2-6-flare-i2i:medium:1K:${n}ref`)
+      })
+
+      it("GPT Image 2.6 Flare refuses 17 mentioned images, saying to remove 1", async () => {
+        const r = await send({ provider: "gpt-image-2-6-flare", connectedReferences: mkManualRefs(17) })
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error).toEqual({
+          code: "validation_error",
+          message: "GPT Image 2.6 Flare takes at most 16 input images, the source or base image included, and this run would send 17: remove 1.",
+        })
+      })
+
+      it("Seedream 5.5 runs 15 pills that share 10 images, with the 10 sent and priced", async () => {
+        const body = { provider: "seedream-5-5", connectedReferences: sharedPills(15, 10) }
+        const r = await send(body)
+        expect(r.res.statusCode).toBe(200)
+        expect(r.queued?.provider).toBe("seedream-5-5-i2i")
+        expect(r.queued?.referenceImageUrls).toEqual(sharedUrls(10))
+        expect(vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]).toBe("seedream-5-5-i2i:2K:10ref")
+        expect(checkedIdentifier(body)).toBe("seedream-5-5-i2i:2K:10ref")
+      })
+
+      it("Seedream 5.5 refuses 15 pills that share 11 images, saying to remove 1", async () => {
+        const r = await send({ provider: "seedream-5-5", connectedReferences: sharedPills(15, 11) })
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error).toEqual({
+          code: "validation_error",
+          message: "Seedream 5.5 takes at most 10 input images, the source or base image included, and this run would send 11: remove 1.",
+        })
+      })
+
+      it("past 16 entries that share images down to what Seedream 5.5 takes: the list's own bound", async () => {
+        const r = await send({ provider: "seedream-5-5", connectedReferences: sharedPills(17, 10) })
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error).toEqual(LIST_BOUND("connectedReferences", 16))
+      })
+
+      it("referenceOrder takes 16 ids on GPT Image 2.6 Flare, and the references go in its order", async () => {
+        const refs = mkManualRefs(16)
+        const reversed = [...refs].reverse()
+        // A reference's stable tile id (`buildTileIdForUrl`): `wired:<id>`.
+        const r = await send({ provider: "gpt-image-2-6-flare", connectedReferences: refs, referenceOrder: reversed.map((ref) => `wired:${ref.id}`) })
+        expect(r.res.statusCode).toBe(200)
+        expect(r.queued?.referenceImageUrls).toEqual(reversed.map((ref) => ref.url))
+      })
+
+      it("referenceOrder past 16 ids on GPT Image 2.6 Flare: the list's own bound", async () => {
+        const r = await send({ provider: "gpt-image-2-6-flare", connectedReferences: mkManualRefs(2), referenceOrder: ids(17) })
+        expectRefusedBeforeAnything(r)
+        expect(r.res.json().error).toEqual(LIST_BOUND("referenceOrder", 16))
+      })
+
+      // No model named: the default at the ratio, which at a ratio GPT Image 2
+      // does not draw is GPT Image 2.6 Sunburst, a model with a limit of its own.
+      it("no model named at 21:9 runs on GPT Image 2.6 Sunburst, which takes 15 pills", async () => {
+        const r = await send({ aspectRatio: "21:9", connectedReferences: mkManualRefs(15) })
+        expect(r.res.statusCode).toBe(200)
+        expect(r.queued?.provider).toBe("gpt-image-2-6-sunburst-i2i")
+        expect(r.queued?.referenceImageUrls).toEqual(mkManualRefs(15).map((ref) => ref.url))
+      })
+
+      // A request on a model held to the default limit: exactly the answer it
+      // got before, its issues and their order included.
+      describe("a model held to the default limit keeps its 14 and its answer", () => {
+        it.each([15, 16])("Nano Banana Pro with %d pills", async (n) => {
+          const r = await send({ provider: "nano-banana-pro", connectedReferences: mkManualRefs(n) })
+          expectRefusedBeforeAnything(r)
+          expect(r.res.json().error).toEqual(LIST_BOUND_14("connectedReferences"))
+        })
+
+        it("no model named, at a ratio its default (GPT Image 2) draws, with 15 pills", async () => {
+          const r = await send({ connectedReferences: mkManualRefs(15) })
+          expectRefusedBeforeAnything(r)
+          expect(r.res.json().error).toEqual(LIST_BOUND_14("connectedReferences"))
+          const square = await send({ aspectRatio: "1:1", connectedReferences: mkManualRefs(15) })
+          expectRefusedBeforeAnything(square)
+          expect(square.res.json().error).toEqual(LIST_BOUND_14("connectedReferences"))
+        })
+
+        // The model the request runs on decides, as the credit guard judges it
+        // (`generateImageRunModelOfBody`), not the `provider` it names.
+        it("the trained-character hint runs the trained model: 15 pills beside GPT Image 2.6 Flare keep the 14", async () => {
+          vi.clearAllMocks()
+          const { jobInsert } = setupSupabaseMock({
+            charRow: { lora_training_status: "succeeded", lora_replicate_version: "v1", lora_trigger_word: "kiratok" },
+          })
+          const body = {
+            prompt: "a still life",
+            userId: VALID_UUID,
+            provider: "gpt-image-2-6-flare",
+            _internalLora: { characterId: "00000000-0000-4000-8000-0000000000c1" },
+          }
+          const res = await app.inject({ method: "POST", url: "/v1/generate-image", payload: { ...body, connectedReferences: mkManualRefs(15) } })
+          expect(res.statusCode).toBe(400)
+          expect(res.json().error).toEqual(LIST_BOUND_14("connectedReferences"))
+          expect(jobInsert).not.toHaveBeenCalled()
+          // 14 still runs, on the trained model, which is sent no references.
+          const ran = await app.inject({ method: "POST", url: "/v1/generate-image", payload: { ...body, connectedReferences: mkManualRefs(14) } })
+          expect(ran.statusCode).toBe(200)
+          const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+          expect(queued.provider).toBe(FLUX_LORA_CHARACTER_MODEL_ID)
+          expect(queued.referenceImageUrls).toEqual([])
+        })
+
+        it("a provider id the body's enum refuses keeps both issues, the list's first, as before", async () => {
+          const r = await send({ provider: "gpt-image-2-6-flare-i2i", connectedReferences: mkManualRefs(15) })
+          expectRefusedBeforeAnything(r)
+          expect(r.res.json().error).toEqual({
+            code: "validation_error",
+            message: "connectedReferences: Too big: expected array to have <=14 items (+1 more)",
+            issues: [
+              { path: "connectedReferences", message: "Too big: expected array to have <=14 items" },
+              { path: "provider", message: "Invalid input" },
+            ],
+          })
+        })
+
+        it.each([15, 16])("Nano Banana Pro with %d referenceOrder ids", async (n) => {
+          const r = await send({ provider: "nano-banana-pro", connectedReferences: mkManualRefs(2), referenceOrder: ids(n) })
+          expectRefusedBeforeAnything(r)
+          expect(r.res.json().error).toEqual(LIST_BOUND_14("referenceOrder"))
+        })
+
+        it("Nano Banana Pro with 14 pills still runs, its reference limit applied as before", async () => {
+          const r = await send({ provider: "nano-banana-pro", connectedReferences: mkManualRefs(14) })
+          expect(r.res.statusCode).toBe(200)
+          expect(r.queued?.referenceImageUrls).toEqual(mkManualRefs(8).map((ref) => ref.url))
+        })
+
+        it("15 pills and 15 flat references: both issues, in their order", async () => {
+          const r = await send({
+            provider: "nano-banana-pro",
+            connectedReferences: mkManualRefs(15),
+            referenceImageUrls: Array.from({ length: 15 }, (_, i) => `https://r2.nodaro.ai/flat-${i}.png`),
+          })
+          expectRefusedBeforeAnything(r)
+          expect(r.res.json().error).toEqual({
+            code: "validation_error",
+            message: "connectedReferences: Too big: expected array to have <=14 items (+1 more)",
+            issues: [
+              { path: "connectedReferences", message: "Too big: expected array to have <=14 items" },
+              { path: "referenceImageUrls", message: "nano-banana-pro takes at most 14 input images" },
+            ],
+          })
+        })
+
+        it("15 pills and a ratio that is not one: the list's issue first, as before", async () => {
+          const r = await send({ provider: "nano-banana-pro", connectedReferences: mkManualRefs(15), aspectRatio: "not-a-ratio" })
+          expectRefusedBeforeAnything(r)
+          const error = r.res.json().error as { message: string; issues: { path: string }[] }
+          expect(error.message).toBe("connectedReferences: Too big: expected array to have <=14 items (+1 more)")
+          expect(error.issues.map((issue) => issue.path)).toEqual(["connectedReferences", "aspectRatio"])
+        })
+
+        it("a fan-out naming one with GPT Image 2.6 Flare, with 15 pills", async () => {
+          const r = await send({ models: ["nano-banana-pro", "gpt-image-2-6-flare"], connectedReferences: mkManualRefs(15) })
+          expectRefusedBeforeAnything(r)
+          expect(r.res.json().error).toEqual(LIST_BOUND_14("connectedReferences"))
+        })
+
+        it("a fan-out naming one with Seedream 5.5, with 15 pills sharing 11 images: Seedream's count, as before", async () => {
+          const r = await send({ models: ["nano-banana-pro", "seedream-5-5"], connectedReferences: sharedPills(15, 11) })
+          expectRefusedBeforeAnything(r)
+          expect(r.res.json().error).toEqual({
+            code: "validation_error",
+            message: "Seedream 5.5 takes at most 10 input images, the source or base image included, and this run would send 11: remove 1.",
+          })
+        })
       })
     })
 
