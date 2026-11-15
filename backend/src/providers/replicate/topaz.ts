@@ -126,6 +126,10 @@ export async function runTopazImageUpscale(
   extraParams?: Record<string, unknown>,
   reconcileOpts?: ReconcileOpts,
 ): Promise<ProviderResult> {
+  // The route and the workflow run refused an outside link where link imports
+  // are off; a job queued before the switch was turned off is refused here,
+  // final, before the picture is read, re-encoded or sent.
+  assertLinkImportAllowed(imageUrl)
   const factor = String(extraParams?.upscale_factor ?? "2")
   const wireFactor = IMAGE_FACTOR_WIRE[factor] ?? "2x"
   // Same input chokepoint the KIE lane used: an AVIF/HEIC upload is re-encoded
