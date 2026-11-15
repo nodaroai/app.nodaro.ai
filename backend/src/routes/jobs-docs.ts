@@ -31,7 +31,7 @@ const JobQueue = z
     upgradeHint: z
       .enum(UPGRADE_HINTS)
       .nullable()
-      .describe("Set only when the line it waits in is full (`reason: \"user_lane\"`): a bigger plan (`plan`) or the workspace's plan (`workspace`) would let more run at once. Null otherwise — a provider or the server is busy across the platform, or the plan is already Business or above."),
+      .describe("Set only when the line it waits in is full (`reason: \"user_lane\"`): a bigger plan (`plan`) or the workspace's plan (`workspace`) would let more run at once. Null otherwise — a provider or the server is busy across the platform, the plan is already Business or above or could not be read, or the deployment sells no plans (`billing.selfServe: false`)."),
   })
   .openapi("JobQueue")
 

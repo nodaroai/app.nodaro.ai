@@ -11,6 +11,7 @@ import { supabase } from "../../lib/supabase.js"
 import { insertAppReport } from "../../lib/app-reports.js"
 import { isBillingContext, isDeploymentBillingContext, type BillingContext } from "../../lib/billing-context.js"
 import { mapReserveError } from "../../lib/reserve-errors.js"
+import { holdShortfallMessage } from "../../lib/stated-credit-messages.js"
 import { deniedModelRejectionMessage, isModelDenied } from "../../lib/surface-deny.js"
 import { isModelSwitchedOff } from "../../lib/model-switch.js"
 import { LlmSpend, type LlmSettleOutcome } from "../../lib/llm-billing.js"
@@ -114,7 +115,7 @@ export async function reserveLlmSideHoldImpl(args: LlmSideHoldReserveArgs): Prom
       return refusal("insufficient_credits", "This deployment is out of credits. Contact your administrator.", { required: holdCredits })
     }
     const shortBalance = check.balance !== undefined && check.balance < holdCredits
-    return refusal("insufficient_credits", shortBalance ? `Needs up to ${holdCredits} credits` : check.error ?? "Insufficient credits", {
+    return refusal("insufficient_credits", shortBalance ? holdShortfallMessage(holdCredits) : check.error ?? "Insufficient credits", {
       required: holdCredits,
       ...(check.balance !== undefined ? { balance: check.balance } : {}),
     })
@@ -155,7 +156,7 @@ export async function reserveLlmSideHoldImpl(args: LlmSideHoldReserveArgs): Prom
     if (detail.includes("SIDE_HOLD_CONFLICT:")) return refusal("conflict", "The hold conflicts with the job or an earlier hold")
     const mapped = mapReserveError(err)
     if (mapped) return refusal(mapped.code, mapped.message)
-    if (/insufficient/i.test(detail)) return refusal("insufficient_credits", `Needs up to ${holdCredits} credits`, { required: holdCredits })
+    if (/insufficient/i.test(detail)) return refusal("insufficient_credits", holdShortfallMessage(holdCredits), { required: holdCredits })
     console.error(`[llm-side-hold] job ${args.jobId}: the side-hold reservation failed (a hold it may have made is released by the side-hold sweep): ${detail}`)
     return refusal("reservation_failed", "Failed to reserve credits")
   }

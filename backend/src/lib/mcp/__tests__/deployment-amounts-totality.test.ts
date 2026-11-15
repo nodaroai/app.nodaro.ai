@@ -1,4 +1,4 @@
-// @test-watches backend/src/lib/mcp/**/*.ts
+// @test-watches backend/src/lib/mcp/**/*.ts backend/src/lib/concurrency-lanes/queue-copy.ts
 /**
  * TOTALITY: every amount the MCP lane states goes through ONE funnel,
  * `lib/mcp/amounts.ts` (decided 2026-11-15) — on a deployment with its own
@@ -19,6 +19,15 @@
  *     elsewhere). A new figure in any file moves its count and fails here,
  *     until someone has looked at it: through the funnel, bump the count; raw on
  *     purpose, say why.
+ *
+ * Two more, held the same way:
+ *
+ *  3. Every file that serves a DOCUMENT (a skill, a recipe, a director's
+ *     doctrine, a guide a plugin answers) states it through
+ *     `served-documents.ts`, so its figures follow the deployment's unit too.
+ *  4. Every sentence that advises a purchase (top up, upgrade, buy, add
+ *     credits) is in `PURCHASE_FILES` with its count and the switch that keeps
+ *     it off a deployment without self-serve billing.
  *
  * Comment lines (`//`, ` *`) are not scanned: they state nothing to a client.
  */
@@ -82,6 +91,7 @@ const AMOUNT_FILES: Readonly<Record<string, { count: number } & ({ funnel: true 
   "tools/diagnose.ts": { count: 10, funnel: true }, // diagnose_run's creditsActual
   "tools/pipelines.ts": { count: 6, funnel: true }, // get_pipeline_status' counters
   "tools/verbs-use-case-estimate.ts": { count: 24, funnel: true }, // estimate_use_case
+  "served-documents.ts": { count: 1, funnel: true }, // every served document's figures (the match is its credits-word pattern)
   // ── not stated raw, for the reason given ──
   "tools/_job-view.ts": {
     count: 18,
@@ -134,6 +144,47 @@ function scan(): { amounts: Record<string, number>; sentences: Record<string, nu
   return { amounts, sentences, funnelled }
 }
 
+/** A file that serves a document: it reads one off disk, or relays the markdown a route answers. */
+const SERVES_DOCUMENT = /@reads\s[^\n]*skills\/|markdownResult\(|\.markdown\b/
+const DOCUMENTS = "served-documents.ts"
+
+/**
+ * Every file that serves a document, with how many it serves through the
+ * funnel (`statedDocument(` calls) — or why it serves none itself.
+ */
+const DOCUMENT_FILES: Readonly<Record<string, { stated: number } | { stated?: undefined; why: string }>> = {
+  "tools/skill-loaders.ts": { stated: 2 }, // start_workflow_editor, get_node_skill
+  "tools/recipes.ts": { stated: 3 }, // get_recipe: the listing, a recipe, a recipe's file
+  "tools/video-director.ts": { stated: 1 }, // start_video_director
+  "tools/film-director.ts": { stated: 1 }, // start_film_director
+  "tools/recast.ts": { stated: 1 }, // get_recast_authoring_skill (a plugin's route answers it)
+  "tools/studio-production.ts": { stated: 3 }, // get_studio_production_skill: operating, authoring, catalog (the schema is types, not prose)
+  "tools/_studio-helpers.ts": { why: "defines markdownResult; the guides it wraps are stated by studio-production.ts before they reach it" },
+}
+
+/** Advice to buy: top up, upgrade, buy, purchase, add credits. Field names (`topup`, `upgradeHint`) are not words of it. */
+const PURCHASE_WORD = /\btop[ -]ups?\b|\btopped up\b|\bupgrade[ds]?\b|\bbuy\b|\bbought\b|\bpurchase[ds]?\b|\badd(?:ed)? (?:more )?(?:credits|\$\{amountWord\(\)\})/gi
+/** Outside lib/mcp, the job tools' queue sentences. */
+const QUEUE_COPY = resolve(MCP_DIR, "../concurrency-lanes/queue-copy.ts")
+
+/**
+ * Every file whose sentences name a purchase, with how many and what keeps
+ * them off a deployment without self-serve billing (`billing.selfServe:
+ * false`) or whose balance it manages (`balanceManagedByDeployment()`).
+ */
+const PURCHASE_FILES: Readonly<Record<string, { count: number; why: string }>> = {
+  "amounts.ts": { count: 4, why: "the self-serve branch of balanceNextStep, and the managed note that says nothing can be topped up, bought or upgraded" },
+  "tools/_job-error.ts": { count: 1, why: "failureGuidance's credits branch: only where balanceManagedByDeployment() is false" },
+  "tools/apps.ts": { count: 3, why: "retry_app_run's next step: each only where balanceManagedByDeployment() is false" },
+  "tools/render-final.ts": { count: 1, why: "render_final's next step: only where balanceManagedByDeployment() is false" },
+  "tools/models.ts": {
+    count: 8,
+    why: "check_balance's managed note (a negation) and its self-serve description (chosen by ownTermsActive()); credit_transactions describes the purchase history it lists",
+  },
+  "tools/recast.ts": { count: 1, why: "start_recast reports the planning step it charged (\"Plan purchased\"): a record, not advice" },
+  "../concurrency-lanes/queue-copy.ts": { count: 2, why: "the queue's upgrade hint, which queue-info.ts sets to null without self-serve billing" },
+}
+
 describe("every amount the MCP lane states goes through lib/mcp/amounts.ts", () => {
   const found = scan()
 
@@ -152,5 +203,34 @@ describe("every amount the MCP lane states goes through lib/mcp/amounts.ts", () 
       if (entry.funnel) expect(found.funnelled.has(file), `${file} is listed as funnelled but does not import amounts.js`).toBe(true)
       else expect(entry.why.length, `${file} needs a reason`).toBeGreaterThan(20)
     }
+  })
+})
+
+describe("every document the lane serves goes through lib/mcp/served-documents.ts", () => {
+  it("every file that serves one is listed, imports the funnel and calls it as often as listed (held both ways)", () => {
+    const found: Record<string, number | "none"> = {}
+    for (const path of sourceFiles(MCP_DIR)) {
+      const file = relative(MCP_DIR, path)
+      if (file === DOCUMENTS) continue
+      const raw = readFileSync(path, "utf8")
+      if (!SERVES_DOCUMENT.test(raw)) continue
+      const calls = codeOf(path).match(/\bstatedDocument\(/g)?.length ?? 0
+      found[file] = calls > 0 ? calls : "none"
+      if (calls > 0) expect(/from\s+["'](?:\.\.?\/)+served-documents\.js["']/.test(raw), `${file} imports served-documents.js`).toBe(true)
+    }
+    expect(found).toEqual(Object.fromEntries(Object.entries(DOCUMENT_FILES).map(([f, e]) => [f, e.stated ?? "none"])))
+    for (const [file, e] of Object.entries(DOCUMENT_FILES)) if (e.stated === undefined) expect(e.why.length, `${file} needs a reason`).toBeGreaterThan(20)
+  })
+})
+
+describe("no purchase advice reaches a deployment without self-serve billing", () => {
+  it("every sentence that names a purchase is listed with its count and what keeps it off such a deployment (held both ways)", () => {
+    const found: Record<string, number> = {}
+    for (const path of [...sourceFiles(MCP_DIR), QUEUE_COPY]) {
+      const n = codeOf(path).match(PURCHASE_WORD)?.length ?? 0
+      if (n > 0) found[relative(MCP_DIR, path)] = n
+    }
+    if (process.env.PRINT_AMOUNT_SCAN === "1") console.log(JSON.stringify(found, null, 2))
+    expect(found).toEqual(Object.fromEntries(Object.entries(PURCHASE_FILES).map(([f, e]) => [f, e.count])))
   })
 })

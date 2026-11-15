@@ -1,3 +1,4 @@
+import { chargedAttemptClause } from "../lib/stated-credit-messages.js"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
@@ -317,8 +318,7 @@ export const EMPTY_PICKER_READ_MESSAGE = `${EMPTY_PICKER_READ_GUIDANCE} You were
  * reconcile sweep. Exported for unit testing.
  */
 export function emptyPickerReadChargedMessage(charged?: number): string {
-  const credits = charged === undefined ? "" : charged === 1 ? " 1 credit" : ` ${charged} credits`
-  return `${EMPTY_PICKER_READ_GUIDANCE} You were charged${credits} for the model's attempt.`
+  return `${EMPTY_PICKER_READ_GUIDANCE} You were charged${chargedAttemptClause(charged)} for the model's attempt.`
 }
 
 /** A completed analysis with no picker value at all: the job fails. On the

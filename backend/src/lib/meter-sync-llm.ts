@@ -1,3 +1,4 @@
+import { chargedSyncFailureMessage } from "./stated-credit-messages.js"
 import type { FastifyReply, FastifyRequest } from "fastify"
 import { supabase } from "./supabase.js"
 import { markJobFailed } from "./job-failure.js"
@@ -179,8 +180,7 @@ export async function meterOptionalSyncLlm(
  */
 export function chargedFailureMessage(message: string, settled: LlmSettleOutcome): string {
   if (settled.outcome !== "charged") return message
-  const n = settled.charged
-  return `${message} The AI provider had already processed the request, so ${n} credit${n === 1 ? "" : "s"} ${n === 1 ? "was" : "were"} charged for the usage it billed.`
+  return chargedSyncFailureMessage(message, settled.charged)
 }
 
 /**

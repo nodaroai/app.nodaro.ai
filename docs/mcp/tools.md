@@ -1893,7 +1893,10 @@ and a `guidance` sentence gives its place in line — for example
 `Still waiting — 3rd in line (your plan runs 4 at once). Call wait_for_job again to keep waiting.`
 — followed, when your own line is full and a bigger plan would help, by
 `Need more at once? Upgrade your plan.` (or, for a workspace's line,
-`Need more at once? Ask your workspace owner to upgrade.`). A job waiting
+`Need more at once? Ask your workspace owner to upgrade.`). A deployment
+without self-serve billing (`billing.selfServe: false`) sells no plan, so
+there the sentence ends at what to do next and `queue.upgradeHint` is `null`.
+A job waiting
 because the platform is busy reads
 `Waiting — busy across the platform, 3rd in line. Call wait_for_job again to keep waiting.`
 The envelope's `guidance` carries the same sentence. Jobs wait for a slot only
@@ -2273,9 +2276,30 @@ credits beside it:
   manages the balance (no self-serve purchase, or an external wallet), it says
   so and tells you to have the user ask the deployment's operator, never to
   top up, upgrade or buy.
+- **Documents.** The skills, recipes and guides the document tools serve
+  (`get_node_skill`, `get_recipe`, `start_workflow_editor`,
+  `start_video_director`, `start_film_director`, `get_studio_production_skill`,
+  `get_recast_authoring_skill`) state their figures in the unit too. A figure
+  written in credits is converted when the unit holds it exactly (one written
+  as approximate stays approximate); one it can not hold exactly, such as a
+  per-unit rate with more decimals than the unit has, is replaced by a pointer
+  to `list_models`. A node skill's **Credit cost** line names no figure: it
+  points at `list_models` (`priceIds`) and the description of the tool that
+  runs the node.
+- **A failure's message.** A run that failed for want of balance, a hold the
+  balance could not cover, and a failure that was still charged are saved with
+  their figures already in the unit, for example
+  `Insufficient balance. Required: 3 points, Available: 0.75 points`, so
+  `get_job`, `wait_for_job`, `get_app_run`, `diagnose_run` and the editor read
+  the same words. A balance that is not the user's own (a deployment payer's
+  pool) is never named. A message saved before the deployment configured its
+  unit keeps the words it was saved with.
+- **Waiting for a slot.** Without self-serve billing a waiting job's
+  `guidance` names no upgrade, and `queue.upgradeHint` is `null`.
 
 A figure that can not be read is `null`, never `0`. With none of these
-configured, every reply is the one documented below.
+configured, every reply, document and saved message is the one documented
+below.
 
 ### `list_models`
 

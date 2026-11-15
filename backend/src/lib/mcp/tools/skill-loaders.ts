@@ -27,6 +27,7 @@ import { z } from "zod"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { McpSession } from "../session.js"
 import { nodeWithheldRefusal, refusalResult } from "../tool-offer.js"
+import { statedDocument } from "../served-documents.js"
 
 /**
  * Embedded fallback for workflow-editor.md. Deliberately compact — the full
@@ -257,7 +258,8 @@ export function registerSkillLoaders(
       },
     },
     async () => ({
-      content: [{ type: "text" as const, text: workflowEditorContentFor(session) }],
+      // Served in the deployment's own terms where it has them (lib/mcp/served-documents.ts).
+      content: [{ type: "text" as const, text: statedDocument(workflowEditorContentFor(session)) }],
     }),
   )
 
@@ -307,8 +309,9 @@ export function registerSkillLoaders(
           ],
         }
       }
+      // The skill's price line and figures in the deployment's own terms where it has them (lib/mcp/served-documents.ts).
       return {
-        content: [{ type: "text" as const, text: content }],
+        content: [{ type: "text" as const, text: statedDocument(content) }],
       }
     },
   )

@@ -761,6 +761,7 @@
         "backend/src/lib/sse.ts",
         "backend/src/lib/sso-linking.ts",
         "backend/src/lib/sso-providers.ts",
+        "backend/src/lib/stated-credit-messages.ts",
         "backend/src/lib/still-input-image.ts",
         "backend/src/lib/storage-delete.ts",
         "backend/src/lib/storage-deletes-setting.ts",

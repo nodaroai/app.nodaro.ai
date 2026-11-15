@@ -16,6 +16,7 @@
 // field carries counts only — never the payer, the user, or another user's
 // jobs.
 import { hasCredits } from "../config.js"
+import { runtimeSurfaceProfile } from "../surface-profile.js"
 import { PARALLELISM_TIERS } from "./defaults.js"
 import { withinTimeout } from "./within-timeout.js"
 import type { ConcurrencyLane, PayerKey, WaitInfo, WaitReason } from "./types.js"
@@ -35,8 +36,10 @@ export interface QueueInfo {
   /**
    * What would shorten the wait, set only when the payer's own line is full
    * (`user_lane`): a bigger plan, or the workspace's plan. Null for a wait on
-   * a provider or on the server (busy across the platform), and when the
-   * payer's plan is business or above, or cannot be read.
+   * a provider or on the server (busy across the platform), when the
+   * payer's plan is business or above, or cannot be read, and on a deployment
+   * without self-serve billing (`billing.selfServe: false`), where nobody is
+   * offered an upgrade.
    */
   upgradeHint: (typeof UPGRADE_HINTS)[number] | null
 }
@@ -84,6 +87,11 @@ export function waitingRowsOf(kind: "job" | "execution" | "pipeline", rows: read
 }
 
 async function upgradeHintOf(payer: PayerKey): Promise<QueueInfo["upgradeHint"]> {
+  // A deployment without self-serve billing sells nobody a plan (`billing.selfServe:
+  // false`, the switch every purchase surface follows): no line names an upgrade there,
+  // the user's own or a workspace's. The editor's badge, the REST `queue` field and the
+  // MCP job tools all read this one hint.
+  if (!runtimeSurfaceProfile().billing.selfServe) return null
   if (payer.startsWith("workspace:")) return "workspace"
   if (!hasCredits()) return null
   const { payerTier } = await import("./sizes.js")

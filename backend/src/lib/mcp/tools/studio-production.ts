@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 
 import type { McpSession } from "../session.js"
+import { statedDocument } from "../served-documents.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import {
   confirmMeta,
@@ -125,10 +126,13 @@ export function registerStudioProductionTools(opts: RegisterStudioProductionTool
         operating: string
       }>(res.body)
       const part = args.part ?? "operating"
+      // The JSON Schema is the plan's types and enums, not prose; the three
+      // guides are served in the deployment's own terms where it has them
+      // (lib/mcp/served-documents.ts).
       if (part === "schema") return textResult(skill.schema)
-      if (part === "catalog") return markdownResult(skill.catalog)
-      if (part === "authoring") return markdownResult(skill.skill)
-      return markdownResult(skill.operating)
+      if (part === "catalog") return markdownResult(statedDocument(skill.catalog))
+      if (part === "authoring") return markdownResult(statedDocument(skill.skill))
+      return markdownResult(statedDocument(skill.operating))
     },
   )
 

@@ -4783,7 +4783,9 @@ changes.
   slots. `"plan"`: a bigger plan would help — work billed to you (or to the
   account that pays for your install) on a plan below Business. It is `null`
   for a wait on the provider or the server (a bigger plan does not shorten
-  those), on Business and above, and when the plan could not be read.
+  those), on Business and above, when the plan could not be read, and always
+  on a deployment without self-serve billing (`billing.selfServe: false`, see
+  [Deployment](deployment.md)), where no plan is sold.
 
 The field carries counts only, never who else is in the line. The batch reads
 answer every waiting job of the request from one read of the line.

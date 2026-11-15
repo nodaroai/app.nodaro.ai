@@ -10,6 +10,7 @@
  * (its `use-case-fee:<type>` row, at the charged price) is held here and committed or refunded by
  * finalizeUseCaseWrapper when the inner run ends.
  */
+import { estimateShortfallMessage } from "../lib/stated-credit-messages.js"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import {
   USE_CASE_NODE_TYPES,
@@ -218,7 +219,7 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
         // use-case node works on an episode, so one sentence serves them all.
         const message = billingContext?.payer === "deployment"
           ? DEPLOYMENT_OUT_OF_CREDITS
-          : `This episode is estimated at about ${estimate.totalCredits} credits; your balance is ${cover.balance}.`
+          : estimateShortfallMessage("This episode is", estimate.totalCredits, cover.balance)
         return reply.status(402).send({ error: { code: "insufficient_credits", message } })
       }
       req.creditReservation = { usageLogId: "", creditsReserved: 0, watermark: false, ...req.creditReservation, creditOverride: feeCredits }

@@ -9,6 +9,7 @@ import { WIDGET_URI } from "../widgets/registrar.js"
 import { config } from "../../config.js"
 import { supabase } from "../../supabase.js"
 import { amountsNote, amountWord, statedAmount, statedAmountFields, statedAmountRecord, unitFields } from "../amounts.js"
+import { statedDocument } from "../served-documents.js"
 
 /**
  * RECAST AUTHORED-SCRIPT VERBS (spec 2026-08-06 §5 — P2).
@@ -247,7 +248,8 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const parsed = JSON.parse(res.body) as { markdown?: string }
-      return { content: [{ type: "text" as const, text: parsed.markdown ?? "" }] }
+      // The guide a plugin answers, in the deployment's own terms where it has them (lib/mcp/served-documents.ts).
+      return { content: [{ type: "text" as const, text: statedDocument(parsed.markdown ?? "") }] }
     },
   )
 

@@ -1308,6 +1308,13 @@ optional; each array empty = "keep the default"):
     never the raw credits beside it, and a refusal for want of balance says
     the deployment manages the balance where it does
     ([MCP: amounts on a deployment with its own unit](mcp/tools.md#deployment-unit)).
+    The same holds for the skills and recipes the MCP document tools serve
+    (their figures in the unit, a node skill's price line pointing at the
+    deployment's own price) and for the failure messages saved with a run (a
+    refusal for want of balance, an uncovered hold, a charged failure), which
+    are written with their figures in the unit, so the editor, the REST reads
+    and the MCP tools show the same words. A message saved before the unit was
+    configured keeps its original words.
   - `billing.unitLabels` (optional, beside `unitLabel`): the unit's word per
     interface language, by locale id in the platform's spelling
     (`{ "en": "points", "he": "נקודות" }`; `pt-br` is read as `pt-BR`). A viewer
@@ -1333,7 +1340,9 @@ optional; each array empty = "keep the default"):
     about withheld free credits, the pricing page's free tier and "Get Free
     Credits" on an app's run screen (it reads "Get credits" instead). A prepaid
     billing instance renders a **Usage & Cost** sidebar entry (`/usage`) in
-    their place.
+    their place. Nor is an upgrade offered to a job waiting for a free slot:
+    the node's queue badge, the REST `queue.upgradeHint` (`null`) and the MCP
+    job tools' waiting sentence leave it out.
   - `billing.payerAccount`: the **deployment payer** — one designated account
     (a user uuid, or the account's email) that pays for *every* action on the
     instance instead of the requester. For reseller-style deployments: the
@@ -2080,6 +2089,12 @@ A typical split:
 All containers share the same Redis + Supabase + R2. They don't talk
 to each other directly — Redis (BullMQ) is the only coordination
 point.
+
+Give every container the same `NODARO_SURFACE_PROFILE` (and, with an
+external wallet, the same `DEPLOYMENT_WALLET_*` variables). The workers
+reserve each node's credits and write the failure a run is saved with, so the
+deployment payer, the models a deployment denies and the unit a saved message
+states its figures in are read where the work runs, not only by the API.
 
 **Two installs, one database**: if you point a second install (a
 staging copy, a preview environment) at the SAME Supabase project but
