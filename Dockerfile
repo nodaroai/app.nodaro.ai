@@ -734,14 +734,8 @@ fi
 # here FLOW_PUBLIC_URL alone reaches Caddy and the writer under their name.
 export FLOW_UI_ORIGIN="${FLOW_UI_ORIGIN:-$FLOW_PUBLIC_URL}"
 
-# Start backend API server on fixed internal port
-cd /app/backend
-export BACKEND_PORT=9000
-PORT=$BACKEND_PORT node dist/server.js &
-CHILD_PIDS="$CHILD_PIDS $!"
-
-# Supervised process runner: the queue consumers below are background
-# siblings of this PID-1 script — without supervision, a crashed worker
+# Supervised process runner: the API server and the queue consumers below are
+# background siblings of this PID-1 script — without supervision, a crashed worker
 # (e.g. OOM-killed during a render burst) stays dead while /health keeps
 # serving 200 from server.js (incident 2026-06-11: orchestrator + worker
 # died at ~21:08/21:12 UTC, queues froze for 10h, container stayed green).
@@ -762,6 +756,16 @@ supervise() {
     sleep 10
   done
 }
+
+# Start backend API server on fixed internal port. Supervised like the
+# consumers: the proxy keeps answering the pages while a dead API answers 502
+# on every call, so the container stays green and nothing else brings the API
+# back (incident 2026-11-15: it ran out of heap two hours after a deploy and
+# stayed dead for nine minutes, until someone noticed).
+cd /app/backend
+export BACKEND_PORT=9000
+supervise api-server env PORT="$BACKEND_PORT" node dist/server.js &
+CHILD_PIDS="$CHILD_PIDS $!"
 
 # Start BullMQ worker (job processor)
 supervise worker node dist/worker.js &
