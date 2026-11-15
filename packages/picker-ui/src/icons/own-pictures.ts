@@ -21,9 +21,13 @@ import { useSyncExternalStore } from "react"
  * component reading them subscribes (`useOwnPickerPicturesVersion`).
  */
 export interface OwnPickerPicture {
-  /** Absolute URL of the picture. */
+  /**
+   * The picture's address: an absolute URL, or a path on the app's own site
+   * (`/brand/style/noir.webp`) that the browser resolves against the page. It
+   * is drawn as given: a path is never sent through a resize or proxy address.
+   */
   readonly url: string
-  /** Absolute URL of its enlarged version, when the deployment gave one. */
+  /** Its enlarged version, when the deployment gave one; either form, like `url`. */
   readonly largeUrl?: string
 }
 

@@ -1,5 +1,6 @@
 import { config } from "./config.js"
 import { isOurCdnUrl } from "./cdn-host.js"
+import { isSitePath, siteBaseProblem, sitePicturePathProblem } from "./site-picture-path.js"
 
 /**
  * A deployment's own pictures for picker options, shown when its surface
@@ -22,11 +23,16 @@ export interface PickerPictureEntry {
   readonly catalogId: string
   /** The option's id in that catalog, e.g. "film-noir". */
   readonly optionId: string
-  /** The option's picture: an absolute https address on this install's media host. */
+  /**
+   * The option's picture: a path on this site, for a file the deployment ships
+   * in its own build (`/brand/style/film-noir.webp`, lib/site-picture-path.ts),
+   * or an absolute https address on this install's media host.
+   */
   readonly pictureUrl: string
   /**
    * Its enlarged version, shown where a picker shows a larger picture of the
-   * option; on the same host. Optional: without one, the picture serves there too.
+   * option; either form, like the picture. Optional: without one, the picture
+   * serves there too.
    */
   readonly enlargedPictureUrl?: string
 }
@@ -67,11 +73,19 @@ function mediaHostLabel(): string {
   return hosts.join(" or ")
 }
 
-/** The problem with one address, or undefined when it is on this install's media host. */
+/**
+ * The problem with one address, or undefined when it is a path on this site
+ * (lib/site-picture-path.ts, the one rule) or an https address on this
+ * install's media host.
+ */
 function addressProblem(key: (typeof ADDRESS_KEYS)[number], value: unknown): string | undefined {
+  if (isSitePath(value)) {
+    const problem = sitePicturePathProblem(value) ?? siteBaseProblem()
+    return problem === undefined ? undefined : `${key} ${JSON.stringify(value)} ${problem}`
+  }
   const host = mediaHostLabel()
-  if (host === "") return `${key}: this install has no media host (R2_PUBLIC_URL), so no address can be registered`
-  if (typeof value !== "string") return `${key} must be an https address on this install's media host (${host})`
+  if (host === "") return `${key}: this install has no media host (R2_PUBLIC_URL), so only a path on this site (/<folder>/<name>) can be registered`
+  if (typeof value !== "string") return `${key} must be a path on this site (/<folder>/<name>) or an https address on this install's media host (${host})`
   if (!isOurCdnUrl(value, config.R2_PUBLIC_URL ?? "", config.R2_PUBLIC_FALLBACK_DOMAIN ?? "")) {
     return `${key} ${JSON.stringify(value)} is not an https address on this install's media host (${host})`
   }
@@ -107,15 +121,20 @@ function entryProblems(raw: unknown, index: number): string[] {
  *   - a list that is not an array, or an entry that is not an object;
  *   - a catalogId or optionId that is not a plain non-empty string;
  *   - a key an entry does not carry;
- *   - a picture or enlarged-picture address that is not an https address on
- *     this install's media host — the origin of `R2_PUBLIC_URL`, or the
- *     `R2_PUBLIC_FALLBACK_DOMAIN` host (lib/cdn-host.ts, the same rule as every
- *     other "our own media" check) — or that names a clip;
+ *   - a picture or enlarged-picture address that is neither of the two forms:
+ *     a path on this site (`/…`), judged by the one site-path rule
+ *     (lib/site-picture-path.ts), on an install whose `PUBLIC_URL` is its
+ *     http(s) address; or an https address on this install's media host — the
+ *     origin of `R2_PUBLIC_URL`, or the `R2_PUBLIC_FALLBACK_DOMAIN` host
+ *     (lib/cdn-host.ts, the same rule as every other "our own media" check) —
+ *     that names no clip;
  *   - an option registered twice, in this call or an earlier one.
  *
  * Whether each catalog and option exists is checked once `register()` has
  * returned, against the catalogs as the deployment's own catalog packs left
- * them (lib/picker-pictures-check.ts).
+ * them (lib/picker-pictures-check.ts), and so is, where the backend can see
+ * the built site, whether each path on the site names a file there
+ * (lib/site-picture-files.ts).
  *
  * Each entry is stored as a COPY of its known keys, so what was checked is
  * what is served, whatever the caller does with its own objects afterwards.

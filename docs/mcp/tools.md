@@ -2868,9 +2868,12 @@ previews (Nodaro CDN) are returned on Nodaro Cloud only. On a deployment that
 turned the platform's pictures off (`catalogs.images` in its surface profile),
 no option or topic carries an `imageUrl` and every `imageCount` is `0`. On a
 deployment that shows its own pictures (`catalogs.images: "own"`), an option's
-`imageUrl` is the deployment's picture, on its own media host, only the options
-it gave one have one, and no topic does; the tool leaves out the enlarged
-picture (`imageLargeUrl`), as it leaves out `imageSrcSet`. Rules:
+`imageUrl` is the deployment's picture, only the options it gave one have one,
+and no topic does; the tool leaves out the enlarged picture (`imageLargeUrl`),
+as it leaves out `imageSrcSet`. That picture is on the deployment's media host
+or is a file it ships on its own site; the tool gives the latter absolute too,
+on the host you connected through (on the dedicated MCP host, the
+installation's public address). Rules:
 [Pictures](../api-integration.md#pictures-imageurl-sections).
 
 See [Parameter Picker Catalogs](../picker-catalogs.md) for the underlying

@@ -23,6 +23,14 @@
  *    (picker-pictures-check.ts) reads them too, to judge them — and no backend
  *    file registers any: the platform ships no picture of its own there, only
  *    a deployment's overlay does.
+ * 6. A deployment picture that is a path on its site (lib/site-picture-path.ts)
+ *    reaches a reply only through `sitePictureAddress`, which only the two
+ *    reply deciders call — picker-images.ts and the preset view
+ *    (lib/presets/preset-view.ts) — so no route or tool turns one into an
+ *    address of its own; and the one path rule (`sitePicturePathProblem`, with
+ *    `siteBaseProblem`) is applied only by the two seams that take such a path:
+ *    the picture registry and the preset pack check. Every REST projection call
+ *    says `onSite: true` (pinned below): its reply is read on the site.
  *
  * Test files are not scanned: they may mock or read anything.
  */
@@ -66,7 +74,14 @@ const DECIDER_TAKES = ["PickerImageOptions", "PickerOwnPicture", "lookPreviewSti
 /** The deployment's own pictures: the registry, its readers and who may use them. */
 const REGISTRY = "src/lib/picker-pictures.ts"
 const CHECK = "src/lib/picker-pictures-check.ts"
+/** The one site-path rule and the one way a site path becomes an address (lib/site-picture-path.ts). */
+const SITE_PATH = "src/lib/site-picture-path.ts"
+const PRESET_VIEW = "src/lib/presets/preset-view.ts"
+const PRESET_CHECK = "src/lib/presets/preset-pack-check.ts"
 const REGISTRY_READERS: Readonly<Record<string, readonly string[]>> = {
+  sitePictureAddress: [SITE_PATH, DECIDER, PRESET_VIEW],
+  sitePicturePathProblem: [SITE_PATH, REGISTRY, PRESET_CHECK],
+  siteBaseProblem: [SITE_PATH, REGISTRY, PRESET_CHECK],
   registeredPickerPicture: [REGISTRY, DECIDER],
   hasRegisteredPickerPictures: [REGISTRY, DECIDER],
   getRegisteredPickerPictures: [REGISTRY, CHECK],
@@ -275,7 +290,7 @@ function scanBackend(): Map<string, Scan> {
   for (const path of [...sourceFiles(join(BACKEND, "src")), ...sourceFiles(join(BACKEND, "scripts"))]) {
     const text = readFileSync(path, "utf8")
     // Every rule below needs one of these words in the file; skip parsing the rest.
-    if (!/picker-art|@nodaro\/prompts|packages\/prompts|catalogs|surfaceCatalogImages|projectPickerCatalog|projectAllCatalogs|summarizePickerCatalogs|PickerPicture/.test(text)) continue
+    if (!/picker-art|@nodaro\/prompts|packages\/prompts|catalogs|surfaceCatalogImages|projectPickerCatalog|projectAllCatalogs|summarizePickerCatalogs|PickerPicture|sitePicture|siteBaseProblem/.test(text)) continue
     const file = relative(BACKEND, path).split(sep).join("/")
     scans.set(file, scanFile(file, text))
   }
@@ -290,6 +305,9 @@ describe("picker pictures have one decider on the server", () => {
     expect(scans.has(PROFILE)).toBe(true)
     expect(scans.has(REGISTRY)).toBe(true)
     expect(scans.has(CHECK)).toBe(true)
+    expect(scans.has(SITE_PATH)).toBe(true)
+    expect(scans.has(PRESET_VIEW)).toBe(true)
+    expect(scans.has(PRESET_CHECK)).toBe(true)
     expect(scans.has("src/routes/picker-catalogs.ts")).toBe(true)
   })
 
@@ -318,9 +336,10 @@ describe("picker pictures have one decider on the server", () => {
         `src/lib/mcp/tools/picker-catalogs.ts summarizePickerCatalogs: ${GATE}({ baseUrl: session.addresses.picturesBase })`,
         // The unknown-type error lists the valid types: no pictures asked for.
         "src/lib/mcp/tools/picker-catalogs.ts summarizePickerCatalogs: no options",
-        `src/routes/catalogs.ts projectAllCatalogs: ${GATE}({ srcSet: true })`,
-        `src/routes/picker-catalogs.ts projectPickerCatalog: ${GATE}({ srcSet: true })`,
-        `src/routes/picker-catalogs.ts summarizePickerCatalogs: ${GATE}()`,
+        // The REST replies are read on the site: a deployment's path on its site stays a path.
+        `src/routes/catalogs.ts projectAllCatalogs: ${GATE}({ srcSet: true, onSite: true })`,
+        `src/routes/picker-catalogs.ts projectPickerCatalog: ${GATE}({ srcSet: true, onSite: true })`,
+        `src/routes/picker-catalogs.ts summarizePickerCatalogs: ${GATE}({ onSite: true })`,
       ].sort(),
     )
   })
@@ -385,6 +404,16 @@ describe("the guard's own matching", () => {
     flags("src/lib/x.ts", 'import { registerPickerPictures } from "./picker-pictures.js"\nregisterPickerPictures([])', /uses registerPickerPictures: only src\/lib\/picker-pictures.ts may/)
     ok(DECIDER, 'import { hasRegisteredPickerPictures, registeredPickerPicture } from "./picker-pictures.js"')
     ok(CHECK, 'import { getRegisteredPickerPictures } from "./picker-pictures.js"')
+  })
+
+  it("flags a path on the site turned into an address, or judged, anywhere but its places", () => {
+    flags("src/routes/x.ts", 'import { sitePictureAddress } from "../lib/site-picture-path.js"\nsitePictureAddress(p, { onSite: false, base })', /uses sitePictureAddress: only src\/lib\/site-picture-path.ts \/ src\/lib\/picker-images.ts \/ src\/lib\/presets\/preset-view.ts may/)
+    flags("src/lib/mcp/tools/x.ts", 'import { sitePicturePathProblem } from "../../site-picture-path.js"', /uses sitePicturePathProblem/)
+    flags("src/lib/x.ts", 'siteBaseProblem()', /uses siteBaseProblem/)
+    ok(DECIDER, 'import { sitePictureAddress } from "./site-picture-path.js"\nsitePictureAddress(a, r)')
+    ok(PRESET_VIEW, 'import { sitePictureAddress } from "../site-picture-path.js"\nsitePictureAddress(a, r)')
+    ok(REGISTRY, 'import { siteBaseProblem, sitePicturePathProblem } from "./site-picture-path.js"')
+    ok(PRESET_CHECK, 'import { siteBaseProblem, sitePicturePathProblem } from "../site-picture-path.js"')
   })
 
   it("flags the setting read anywhere but the decider", () => {

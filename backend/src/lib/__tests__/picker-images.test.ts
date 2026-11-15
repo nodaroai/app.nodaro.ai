@@ -197,3 +197,46 @@ describe("a deployment's own pictures (registered at its composition root)", () 
     expect(pickerImageOptions({ srcSet: true })).toStrictEqual({ baseUrl: "http://localhost:3000", lookPreviews: false, srcSet: true })
   })
 })
+
+describe("a deployment's own pictures that are paths on its site", () => {
+  const registerOnSite = () =>
+    registerPickerPictures([
+      { catalogId: "style", optionId: "cinematic", pictureUrl: "/brand/style/cinematic.webp", enlargedPictureUrl: "/brand/style/cinematic.large.webp" },
+      { catalogId: "style", optionId: "anime", pictureUrl: "/brand/style/anime.webp", enlargedPictureUrl: "https://media.example.com/p/anime.large.webp" },
+      { catalogId: "person", optionId: "man", pictureUrl: "https://media.example.com/p/man.webp" },
+    ])
+
+  beforeEach(() => {
+    env.publicUrl = "https://studio.example.com"
+    setProfile(JSON.stringify({ catalogs: { images: "own" } }))
+  })
+
+  it("a reply read on the site (onSite, the REST routes) carries each path as registered", () => {
+    registerOnSite()
+    const rest = pickerImageOptions({ srcSet: true, onSite: true })!
+    expect(rest.own?.("style", "cinematic")).toEqual({ url: "/brand/style/cinematic.webp", largeUrl: "/brand/style/cinematic.large.webp" })
+    expect(rest.own?.("style", "anime")).toEqual({ url: "/brand/style/anime.webp", largeUrl: "https://media.example.com/p/anime.large.webp" })
+    expect(rest.own?.("person", "man")).toEqual({ url: "https://media.example.com/p/man.webp" })
+  })
+
+  it("any other reader (the MCP tools) gets each path absolute on its base, and the install's own origin without one", () => {
+    registerOnSite()
+    const mcp = pickerImageOptions({ baseUrl: "https://second.example.com" })!
+    expect(mcp.own?.("style", "cinematic")).toEqual({ url: "https://second.example.com/brand/style/cinematic.webp", largeUrl: "https://second.example.com/brand/style/cinematic.large.webp" })
+    expect(mcp.own?.("person", "man")).toEqual({ url: "https://media.example.com/p/man.webp" })
+    expect(pickerImageOptions()!.own?.("style", "anime")?.url).toBe("https://studio.example.com/brand/style/anime.webp")
+  })
+
+  it("onSite changes nothing but a path on the site: the platform's pictures, and media-host pictures, are the same either way", () => {
+    for (const profile of [undefined, JSON.stringify({ catalogs: { images: "default" } }), JSON.stringify({ catalogs: { images: "none" } })]) {
+      setProfile(profile)
+      each((install) => {
+        expect(pickerImageOptions({ srcSet: true, onSite: true }), install.name).toStrictEqual(pickerImageOptions({ srcSet: true }))
+        expect(pickerImageOptions({ onSite: true }), install.name).toStrictEqual(pickerImageOptions())
+      })
+    }
+    setProfile(JSON.stringify({ catalogs: { images: "own" } }))
+    registerPickerPictures([{ catalogId: "person", optionId: "man", pictureUrl: "https://media.example.com/p/man.webp" }])
+    expect(pickerImageOptions({ srcSet: true, onSite: true })!.own?.("person", "man")).toEqual(pickerImageOptions({ srcSet: true })!.own?.("person", "man"))
+  })
+})

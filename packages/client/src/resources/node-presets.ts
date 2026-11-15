@@ -55,7 +55,11 @@ export interface FactoryPresetEntry extends FactoryPreset {
   needsImage?: boolean
   /**
    * An example picture of what the preset makes — an absolute URL on the
-   * server you asked — or null while the preset has none.
+   * server you asked — or null while the preset has none. A preset a
+   * deployment ships may name its own picture instead: an absolute URL, or a
+   * path on the deployment's own site (`/brand/…`); resolve a path against the
+   * address you call the API at (`new URL(previewUrl, baseUrl)`), while a page
+   * served by that site can use it as it is.
    */
   previewUrl?: string | null
   /**
@@ -97,9 +101,9 @@ export interface FactoryPresetGroupSummary {
   shelf: string
   /** How many presets it holds. */
   count: number
-  /** The example picture of its first preset that has one, or null. */
+  /** The example picture of its first preset that has one, or null (either form `FactoryPresetEntry.previewUrl` takes). */
   previewUrl: string | null
-  /** Its first example pictures, in catalog order, each once: at most three (empty when none has one). */
+  /** Its first example pictures, in catalog order, each once: at most three (empty when none has one). Each in either form, like `previewUrl`. */
   previewUrls: string[]
 }
 

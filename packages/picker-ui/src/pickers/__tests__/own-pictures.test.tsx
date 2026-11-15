@@ -112,6 +112,22 @@ describe("drawing them", () => {
     )
   })
 
+  it("a picture that is a path on the site is drawn as given, never through a resize address", () => {
+    setPlatformPickerPictures(false)
+    registerOwnPickerPictures([
+      { catalogId: "person", pictures: { man: { url: "/brand/person/man.webp" } } },
+      { catalogId: "camera-motions", lookKey: "camera-motion", pictures: { "dolly-in": { url: "/brand/camera/dolly.webp", largeUrl: "/brand/camera/dolly.large.webp" } } },
+    ])
+    const look = render(<LookArt pickerKey="camera-motion" id="dolly-in" width={240} fallback={null} />)
+    const img = look.container.querySelector("img")!
+    expect(img.getAttribute("src")).toBe("/brand/camera/dolly.webp")
+    expect(img.getAttribute("srcset")).toBe(
+      "/brand/camera/dolly.webp 240w, /brand/camera/dolly.webp 480w, /brand/camera/dolly.large.webp 960w, /brand/camera/dolly.large.webp 1920w",
+    )
+    const photo = render(<CharacterArt family="person" id="man" fallback={null} />)
+    expect(photo.container.querySelector("img")?.getAttribute("src")).toBe("/brand/person/man.webp")
+  })
+
   it("a music picker shows the registered picture as its tile, and the label alone for the rest", () => {
     own()
     const { container } = render(<MusicGenrePicker value={{}} onChange={() => {}} />)

@@ -97,8 +97,10 @@ Examples:
   $ nodaro pickers get person --field hairColor
   $ nodaro pickers get person --json | jq '.dimensions[].options[] | {id, imageUrl}'
 
-Options that have a picture carry an absolute imageUrl; person and styling also
-return their topics (sections), each with its round picture.`,
+Options that have a picture carry an imageUrl: an absolute URL, or, for a
+picture a deployment ships on its own site, a path on that site (/brand/...),
+which is on the API address you call. Person and styling also return their
+topics (sections), each with its round picture.`,
     )
     .action(
       async (

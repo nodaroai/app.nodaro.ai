@@ -35,7 +35,8 @@ registerPresetPack({
       name: "Harbor at dawn",
       group: "Landscapes",
       data: { provider: "<model id>", prompt: "a quiet harbor at dawn", aspectRatio: "16:9", style: "watercolor" },
-      previewUrl: "https://media.example.com/presets/harbor-at-dawn.webp",
+      // A file the deployment ships on its own site, or an absolute https URL.
+      previewUrl: "/brand/presets/harbor-at-dawn.webp",
     },
   ],
 })
@@ -45,13 +46,29 @@ A pack preset is exactly a factory preset (`FactoryPreset`: `id`, `name`,
 `description`, `group`, `groupKind`, `section`, `platforms`, `data`,
 `minReferences`), plus an optional `previewUrl`. A factory preset's example
 picture is a file committed under `/preset-previews/`. A deployment's is not,
-so it names its own.
+so it names its own: a file it ships in its own build and serves from the app's
+own site under a folder of its own (a path such as
+`/brand/presets/harbor-at-dawn.webp`), or an absolute https URL.
 
 Over the API a pack preset looks like any factory preset. `minReferences` and
 `needsImage` are derived from its data the same way. `previewUrl` is the one it
 names, or null. It has no `previewSrcSet`, because it names one picture at one
-size. The SDK's `FactoryPresetEntry` already describes all of this, so clients
-need no change.
+size. The SDK's `FactoryPresetEntry` already describes all of this.
+
+A picture named as a path on the site reaches each reader in the form that
+works for it, decided in one place (`factoryPresetView`,
+`lib/presets/preset-view.ts`):
+
+- the REST routes (`GET /v1/node-presets/factory`, `/factory/groups`) give the
+  path as named. A page the site serves resolves it against the host it is on,
+  so one reply works on every host the deployment serves the app on, and the
+  public cache can share it. A client elsewhere resolves it against the address
+  it called the API at;
+- the MCP tools give it absolute, on the lane's pictures base: the
+  installation's public address on the dedicated MCP host, the declared host
+  the client connected through when MCP is served by path.
+
+An absolute URL is given as named everywhere.
 
 ## Composition
 
@@ -126,7 +143,18 @@ too. It belongs to one user, not to a deployment.
 
 ### Picture
 
-`previewUrl` must be absent or an absolute https URL.
+`previewUrl` must be absent, an absolute https URL, or a path on this site that
+passes the one site-path rule (`lib/site-picture-path.ts`, the same rule as a
+deployment's own picker pictures; [deployment.md](../deployment.md) states it).
+A path also needs `PUBLIC_URL` set to the site's own http(s) address, because a
+reader off the site gets the path absolute on it.
+
+The platform cannot see a deployment's files in general, so it does not claim
+to check that the file exists. Where the backend does see the built site (the
+standard image puts the frontend's build beside the backend's, the directory
+the bundled proxy serves), the overlay loader refuses the boot when a path
+names no file there. Anywhere else the deployment's own build must check each
+path against the files it ships.
 
 ## One funnel
 

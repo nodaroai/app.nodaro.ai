@@ -50,8 +50,9 @@ const recastFactories = [
 /**
  * A preset a deployment ships: exactly a factory preset, plus an optional example
  * picture. A factory preset's picture is a file committed under /preset-previews/;
- * a deployment's is not, so it names its own absolute https URL (checked at boot,
- * lib/presets/preset-pack-check.ts).
+ * a deployment's names its own: a path on the site for a file the deployment
+ * ships in its own build (`/brand/presets/harbor.webp`), or an absolute https URL
+ * (checked at boot, lib/presets/preset-pack-check.ts).
  */
 export interface PackPreset extends FactoryPreset {
   readonly previewUrl?: string

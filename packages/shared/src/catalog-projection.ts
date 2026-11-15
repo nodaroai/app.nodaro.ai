@@ -50,6 +50,13 @@ export interface ProjectedCatalogOption {
    * look previews, which only Nodaro Cloud serves. Absent when the option has
    * no picture. Content-hashed where self-hosted: a changed picture gets a new
    * URL, so it can be cached indefinitely.
+   *
+   * On a deployment that shows its own pictures (`catalogs.images: "own"`) it
+   * is the deployment's picture: an absolute URL on its media host, or — on
+   * the REST replies — a path on the deployment's own site (`/brand/…`), which
+   * resolves against the address the API was called at (a page on that site
+   * uses it as it is; a client elsewhere resolves it against its API base).
+   * The MCP tools give that path absolute.
    */
   imageUrl?: string
   /**
@@ -61,11 +68,11 @@ export interface ProjectedCatalogOption {
    */
   imageSrcSet?: string
   /**
-   * Absolute URL of the option's enlarged picture: the larger version to show
-   * where a picker shows the option big (hover, zoom, a detail view). Present
-   * only on a deployment that shows its own pictures (`catalogs.images:
-   * "own"`) and gave one for this option, on the REST replies; on its media
-   * host, like `imageUrl`. Absent otherwise — draw `imageUrl` there instead.
+   * The option's enlarged picture: the larger version to show where a picker
+   * shows the option big (hover, zoom, a detail view). Present only on a
+   * deployment that shows its own pictures (`catalogs.images: "own"`) and gave
+   * one for this option, on the REST replies; on its media host or a path on
+   * its site, like `imageUrl`. Absent otherwise — draw `imageUrl` there instead.
    */
   imageLargeUrl?: string
 }

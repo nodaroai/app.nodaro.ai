@@ -28,17 +28,22 @@ export interface PickerImageOptions {
    * option is pictured by what this returns for it and by nothing else — no
    * self-hosted photo, emoji or flag, no render — so an option it has nothing
    * for has no picture, and no Person / Styling topic has one (a topic is not
-   * an option). `baseUrl` and `lookPreviews` are not read. The package names no
-   * deployment picture itself: the API passes what the deployment registered.
+   * an option). `baseUrl` and `lookPreviews` are not read: the caller hands
+   * each address in the form its reader needs. The package names no deployment
+   * picture itself: the API passes what the deployment registered.
    */
   readonly own?: (catalogId: string, optionId: string) => PickerOwnPicture | undefined
 }
 
 /** A deployment's own picture for one picker option (`PickerImageOptions.own`). */
 export interface PickerOwnPicture {
-  /** Absolute URL of the picture. */
+  /**
+   * The picture's address, used as given: an absolute URL, or a path on the
+   * deployment's own site (`/brand/…`) when the caller hands the reply to a
+   * reader on that site. Never resized or rewritten here.
+   */
   readonly url: string
-  /** Absolute URL of its enlarged version, when the deployment gave one. */
+  /** Its enlarged version, when the deployment gave one; either form, like `url`. */
   readonly largeUrl?: string
 }
 

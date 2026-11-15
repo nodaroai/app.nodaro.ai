@@ -49,8 +49,8 @@ export function bootstrapLookPreviews(): void {
  * "none" nothing shows.
  *
  * They land after the first render; whatever draws them subscribes (picker-ui
- * own-pictures.ts). Only https addresses are taken (the server registers no
- * other). Returns how many options got a picture.
+ * own-pictures.ts). Only an https address or a path on this site is taken
+ * (the server registers no other). Returns how many options got a picture.
  */
 export function applyServerPickerPictures(catalogs: unknown): number {
   if (surfaceCatalogImages() !== "own") return 0
@@ -68,8 +68,8 @@ function ownPictureSets(catalogs: unknown): OwnPickerPictureSet[] {
     const options = [...listOf(raw.options), ...listOf(raw.dimensions).flatMap((d) => (isRecord(d) ? listOf(d.options) : []))]
     const pictures: Record<string, OwnPickerPicture> = {}
     for (const option of options) {
-      if (!isRecord(option) || typeof option.id !== "string" || !isHttps(option.imageUrl)) continue
-      pictures[option.id] = isHttps(option.imageLargeUrl) ? { url: option.imageUrl, largeUrl: option.imageLargeUrl } : { url: option.imageUrl }
+      if (!isRecord(option) || typeof option.id !== "string" || !isPictureAddress(option.imageUrl)) continue
+      pictures[option.id] = isPictureAddress(option.imageLargeUrl) ? { url: option.imageUrl, largeUrl: option.imageLargeUrl } : { url: option.imageUrl }
     }
     if (Object.keys(pictures).length > 0) sets.push({ catalogId: raw.catalogId, lookKey: lookKeyOf(raw.catalogId, raw.nodeType), pictures })
   }
@@ -96,10 +96,27 @@ function listOf(v: unknown): readonly unknown[] {
   return Array.isArray(v) ? v : []
 }
 
-function isHttps(v: unknown): v is string {
+/**
+ * An address the server may register: an https URL (the media host), or a path
+ * on this site (`/brand/style/noir.webp`), which the server keeps as registered
+ * on its REST replies so it resolves on whichever of the deployment's hosts
+ * this page is on (backend lib/site-picture-path.ts). A path is taken only when
+ * it resolves to this page's own origin: `//host/…` or `/\host/…` would not.
+ */
+function isPictureAddress(v: unknown): v is string {
   if (typeof v !== "string") return false
+  if (v.startsWith("/")) return isSamePagePath(v)
   try {
     return new URL(v).protocol === "https:"
+  } catch {
+    return false
+  }
+}
+
+function isSamePagePath(v: string): boolean {
+  if (typeof window === "undefined") return false
+  try {
+    return new URL(v, window.location.origin).origin === window.location.origin
   } catch {
     return false
   }

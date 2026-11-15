@@ -744,6 +744,7 @@
         "backend/src/lib/server-started-runs.ts",
         "backend/src/lib/site-asset-keys.ts",
         "backend/src/lib/site-capture-switch.ts",
+        "backend/src/lib/site-picture-path.ts",
         "backend/src/lib/sleep.ts",
         "backend/src/lib/speaker-track-upload.ts",
         "backend/src/lib/speaker-view-plan.ts",

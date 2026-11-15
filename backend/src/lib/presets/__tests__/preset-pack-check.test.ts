@@ -2,7 +2,8 @@
  * The boot check on registered preset packs (lib/presets/preset-pack-check.ts):
  * every preset names only models this deployment's surface profile offers,
  * only picker ids its COMPOSED catalogs offer (base catalogs with every
- * registered catalog pack applied), and an https example picture or none.
+ * registered catalog pack applied), and an example picture that is a path on
+ * this site, an https address, or none.
  *
  * What the loader does with the problems (exit 1, one message) is covered in
  * lib/overlay/__tests__/load-preset-packs.test.ts.
@@ -22,7 +23,8 @@ import { __resetModelSwitchForTests } from "../../model-switch.js"
 import { __resetAvailabilityOverridesForTests } from "../../availability-override.js"
 import { isModelDenied } from "../../surface-deny.js"
 import { registerPresetPack, resetPresetPacks, type PackPreset } from "../app-presets.js"
-import { DIRECTION_KEY_CATALOG, presetPackProblems, subjectKeyCatalog } from "../preset-pack-check.js"
+import { DIRECTION_KEY_CATALOG, presetPackProblems, presetPackSitePictures, subjectKeyCatalog } from "../preset-pack-check.js"
+import { config } from "../../config.js"
 
 const preset = (slug: string, data: Record<string, unknown>, extra: Partial<PackPreset> = {}): PackPreset => ({
   id: `generate-image/${slug}`,
@@ -178,17 +180,46 @@ describe("presetPackProblems — picker ids", () => {
 })
 
 describe("presetPackProblems — example picture", () => {
-  it("accepts https or none, and names anything else", () => {
+  const savedPublicUrl = config.PUBLIC_URL
+  afterEach(() => {
+    config.PUBLIC_URL = savedPublicUrl
+  })
+
+  it("accepts https, a path on this site or none, and names anything else", () => {
+    config.PUBLIC_URL = "https://studio.example.test"
     pack(
       preset("https", {}, { previewUrl: "https://media.example.test/a.webp" }),
       preset("none", {}),
+      preset("on-site", {}, { previewUrl: "/brand/presets/a.webp" }),
       preset("http", {}, { previewUrl: "http://media.example.test/a.webp" }),
-      preset("relative", {}, { previewUrl: "/preset-previews/a.webp" }),
+      preset("relative", {}, { previewUrl: "brand/presets/a.webp" }),
+      preset("platform-folder", {}, { previewUrl: "/preset-previews/a.webp" }),
+      preset("other-host", {}, { previewUrl: "//media.example.test/a.webp" }),
+      preset("climbs", {}, { previewUrl: "/brand/%2e%2e/a.webp" }),
+      preset("clip", {}, { previewUrl: "/brand/presets/a.mp4" }),
     )
     expect(presetPackProblems()).toEqual([
-      'generate-image/http: previewUrl must be absent or an absolute https URL (got "http://media.example.test/a.webp")',
-      'generate-image/relative: previewUrl must be absent or an absolute https URL (got "/preset-previews/a.webp")',
+      'generate-image/http: previewUrl must be absent, a path on this site (/<folder>/<name>) or an absolute https URL (got "http://media.example.test/a.webp")',
+      'generate-image/relative: previewUrl must be absent, a path on this site (/<folder>/<name>) or an absolute https URL (got "brand/presets/a.webp")',
+      'generate-image/platform-folder: previewUrl "/preset-previews/a.webp" is under /preset-previews/, which is not the deployment\'s own: it holds the platform\'s preset pictures',
+      'generate-image/other-host: previewUrl "//media.example.test/a.webp" starts with //, which a browser reads as another host',
+      'generate-image/climbs: previewUrl "/brand/%2e%2e/a.webp" has a . or .. segment',
+      'generate-image/clip: previewUrl "/brand/presets/a.mp4" does not name a picture (.png or .webp)',
     ])
+  })
+
+  it("a path on this site needs PUBLIC_URL to be the site's http(s) address", () => {
+    config.PUBLIC_URL = ""
+    pack(preset("on-site", {}, { previewUrl: "/brand/presets/a.webp" }), preset("https", {}, { previewUrl: "https://media.example.test/a.webp" }))
+    expect(presetPackProblems()).toEqual([
+      'generate-image/on-site: previewUrl "/brand/presets/a.webp" is a path on this site, which needs PUBLIC_URL set to the site\'s http(s) address (a reader off the site gets the path on it)',
+    ])
+  })
+
+  it("lists the pictures that are paths on this site, for the boot's file check", () => {
+    config.PUBLIC_URL = "https://studio.example.test"
+    pack(preset("on-site", {}, { previewUrl: "/brand/presets/a.webp" }), preset("https", {}, { previewUrl: "https://media.example.test/a.webp" }), preset("none", {}))
+    expect(presetPackSitePictures()).toEqual([{ where: 'preset "generate-image/on-site" previewUrl', path: "/brand/presets/a.webp" }])
   })
 })
 
