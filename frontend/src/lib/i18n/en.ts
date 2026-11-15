@@ -621,6 +621,7 @@ export const en = {
   "auth.redirecting": "Redirecting...",
   "auth.signInFailed": "Sign in failed",
   "auth.accessBlocked": "Access to this account has been blocked.",
+  "auth.signInIncomplete": "Sign-in didn't complete. Please try again.",
   "accessBlocked.title": "Access blocked",
   "accessBlocked.body": "Access to Nodaro has been blocked. If you think this is a mistake, contact support.",
   "auth.newHere": "New here?",

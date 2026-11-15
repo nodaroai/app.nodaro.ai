@@ -17,6 +17,7 @@ import DashboardLayout from "@/layouts/dashboard-layout"
 
 // Auth callback (eager — critical path)
 import AuthCallback from "@/routes/auth-callback"
+import RootRedirect from "@/routes/root-redirect"
 // External SSO landing (B6) — eager, like auth-callback: it runs the one-time
 // token exchange before the user is authenticated, so it must not wait on a
 // lazy chunk (and there is no route-level Suspense boundary here).
@@ -260,7 +261,7 @@ export const router = createBrowserRouter([
   {
     path: "/",
     errorElement: <RouteErrorBoundary />,
-    element: <Navigate to="/projects" replace />,
+    element: <RootRedirect />,
   },
   {
     path: "/auth/callback",

@@ -82,6 +82,12 @@ describe("InsufficientCreditsModal — mainline self-serve (unchanged)", () => {
     expect(purchaseCtas().length).toBe(2)
   })
 
+  it("leads both to the pricing page: the plans, and its top-up section", () => {
+    // "Buy Credits" used to point at an address no page answers.
+    open()
+    expect(purchaseCtas().map((cta) => cta.getAttribute("href"))).toEqual(["/pricing", "/pricing#topup"])
+  })
+
   it("still says how short the run is, and says nothing about an allowance", () => {
     open()
     expect(screen.getByText(en["credits.insufficientTitle"])).toBeInTheDocument()

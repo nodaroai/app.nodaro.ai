@@ -26,6 +26,23 @@ import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 /** Where a sign-in goes when nothing (or nothing safe) names a destination. */
 export const DEFAULT_SIGN_IN_PATH = "/projects"
 
+/**
+ * Everything a link to the sign-in page may carry: the names the page reads.
+ * A link that names its destination any other way still opens the page, and
+ * the destination is dropped without a word, so the list is held both ways
+ * (`__tests__/sign-in-page-params.test.ts`): no link in the app carries a name
+ * outside it, and the page reads every name on it.
+ */
+export const SIGN_IN_PAGE_PARAMS = ["redirect", "return_to", "plan", "blocked", "failed", "billing"] as const
+
+/**
+ * The sign-in page after a sign-in that did not complete: it says so
+ * (`?failed=1`), and keeps the destination for the next try.
+ */
+export function failedSignInPath(destination: string | null): string {
+  return destination === null ? "/login?failed=1" : `/login?failed=1&redirect=${encodeURIComponent(destination)}`
+}
+
 /** A site no address belongs to: a path is resolved against it, and must stay on it. */
 const NOWHERE = "https://sign-in.invalid"
 

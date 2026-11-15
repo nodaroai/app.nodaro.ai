@@ -614,6 +614,7 @@ export const he: ChromeDict = {
   "auth.redirecting": "מעביר...",
   "auth.signInFailed": "ההתחברות נכשלה",
   "auth.accessBlocked": "הגישה לחשבון הזה נחסמה.",
+  "auth.signInIncomplete": "ההתחברות לא הושלמה. נסו שוב.",
   "accessBlocked.title": "הגישה נחסמה",
   "accessBlocked.body": "הגישה ל־Nodaro נחסמה. אם נראה שזו טעות, ניתן לפנות לתמיכה.",
   "auth.newHere": "חדשים כאן?",

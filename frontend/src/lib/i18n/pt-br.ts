@@ -601,6 +601,7 @@ export const ptBR: ChromeDict = {
   "auth.redirecting": "Redirecionando…",
   "auth.signInFailed": "Falha no login",
   "auth.accessBlocked": "O acesso a esta conta foi bloqueado.",
+  "auth.signInIncomplete": "Não foi possível concluir o login. Tente novamente.",
   "accessBlocked.title": "Acesso bloqueado",
   "accessBlocked.body": "O acesso ao Nodaro foi bloqueado. Se achar que é um engano, entre em contato com o suporte.",
   "auth.newHere": "Primeira vez aqui?",

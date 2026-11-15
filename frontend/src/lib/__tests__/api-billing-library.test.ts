@@ -578,6 +578,17 @@ describe("getSubscription", () => {
 
     expect(result).toBeNull()
   })
+
+  it("returns null for an account with no subscription (the server answers with no data and the plan)", async () => {
+    // Read as a subscription, the answer itself made the billing page offer
+    // "Manage Subscription" to every free account, where it can only fail.
+    sessionWith("tok-sub")
+    vi.stubGlobal("fetch", mockFetchJson({ data: null, effectiveTier: "free" }))
+
+    const result = await getSubscription("u-free")
+
+    expect(result).toBeNull()
+  })
 })
 
 // ---------------------------------------------------------------------------
