@@ -10,7 +10,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Scope } from "../../../scopes.js"
 import { newSession } from "../../session.js"
-import { buildServer, callTool, executeSession, listTools, stubRoute } from "./_helpers.js"
+import { buildJudgedServer, callTool, executeSession, listTools, stubRoute } from "./_helpers.js"
 
 const h = vi.hoisted(() => ({ denied: new Set<string>() }))
 vi.mock("../../../surface-deny.js", async (importOriginal) => ({
@@ -46,7 +46,8 @@ const transcript = { words: [{ text: "hi", start: 0, end: 1, speaker: "speaker_0
 const offsets = { reference: "camA", offsets: [{ sourceId: "camB", offsetMs: 120, confidence: 0.9 }], notes: [] }
 
 function serverWith(fastify?: FastifyInstance, session = executeSession()) {
-  const server = buildServer()
+  // The offer funnel in front, as buildMcpServer installs it: what is withheld is not listed.
+  const server = buildJudgedServer()
   registerVerbs({ server, session, fastify: fastify ?? (Fastify() as unknown as FastifyInstance) })
   return server
 }

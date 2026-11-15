@@ -968,10 +968,10 @@ optional; each array empty = "keep the default"):
     prompt policy (`PromptPolicy`), so a deployment that relies on one should
     not list `film-pipeline`.
   - `video-director` is the Video Director — `POST /v1/video-director/run`
-    (the MCP tools `create_explainer` and `create_launch_video`, which are not
-    listed where it is not offered). Its speech, alignment and render steps are
-    each gated as their own node (`text-to-speech`, `forced-alignment`,
-    `render-video`), so list those too.
+    (the MCP tools `create_explainer` and `create_launch_video`). Its speech,
+    alignment and render steps are each gated as their own node
+    (`text-to-speech`, `forced-alignment`, `render-video`), so list those too:
+    the two MCP tools are listed only where all four are offered.
 
   With `nodes.allow` set, a credit-spending route that is linked to no node is
   refused with `node_not_available` (the whitelist never allowed it) and logged
@@ -1018,8 +1018,10 @@ optional; each array empty = "keep the default"):
   - Publishing is judged as the users' view, whoever publishes: an app, a
     component or a template that contains a hidden node is refused with
     `node_not_available` until the node is removed or released.
-  - Public discovery (`GET /v1/nodes`, the MCP tool list) always shows the
-    users' view.
+  - Public discovery (`GET /v1/nodes`) always shows the users' view. The MCP
+    tool list is a signed-in session's, and shows what that session's user may
+    run: an admin's session lists a tool whose node is hidden from users (see
+    the MCP tool list below).
   - A capability that lives *inside* another node follows the dedicated node it
     duplicates. Web Scrape's **Instagram source** is the Instagram node's scraper
     behind another door, so turning the Instagram node off also withdraws that
@@ -1030,6 +1032,35 @@ optional; each array empty = "keep the default"):
     it); running it is.
   - An admin role change reaches this check within about five minutes (the
     admin lookup is cached per process).
+
+  **The MCP tool list follows the offer** (decided 2026-11-11). Where the
+  deployment restricts what it offers — `nodes.allow` / `nodes.deny`,
+  `models.allow` / `models.deny`, `worlds.allow`, `imports.links: false`, or an
+  Admin → Availability override that leaves a node off — an MCP session lists
+  a tool only when everything the tool needs is offered to that session's
+  user, judged by the checks a run is judged by:
+  - the node its route runs (the same route-to-node resolution the run's
+    refusal uses, including `cast-swap`, `film-pipeline` and `video-director`
+    and every step a call runs in sequence), or the node a tool that quotes,
+    plans or continues a run prepares;
+  - the `studio` world, for the Studio production tools that make or change a
+    production;
+  - link imports, for `download_youtube_audio`;
+  - where models are restricted, at least one Suno model, for the Suno tools
+    that run one.
+  Tools that read the user's own data, act on work already made, hand out
+  uploads, run saved workflows, apps or components (each node is judged when
+  it runs) or serve documentation are always listed. A call naming a tool
+  that is not listed answers the run's coded refusal (`403
+  node_not_available`, `model_not_available`, `link_imports_disabled`, or
+  `world_not_available`) before anything is created or reserved. The list is
+  worked out per request, so it follows an Admin → Availability change within
+  the same minute a run's refusal does. `get_node_skill` refuses a withheld
+  node the same way, and `start_workflow_editor`'s node catalog leaves it out.
+  Where none of the above is set, the tool list is unchanged. What each tool
+  needs is one table in the backend (`lib/mcp/tool-needs.ts`), held to the
+  code by a test; see [What a deployment offers](mcp/tools.md#what-a-deployment-offers)
+  for what a client sees.
 - `auth.methods`: `["email","google","sso"]` (plus `auth.ssoLabel` — `sso` is
   dropped from the list unless `ssoLabel` is set). A list that names **only**
   `sso` also turns on a server-side gate: every signed-in account must have been

@@ -9,7 +9,7 @@ import Fastify from "fastify"
 import { USE_CASE_NODE_TYPES, usecaseDescriptor, usecaseEstimatePath, type UseCaseNodeType } from "@nodaro/render-rules"
 import type { Scope } from "../../../scopes.js"
 import { newSession } from "../../session.js"
-import { buildServer, callTool, executeSession, listTools } from "./_helpers.js"
+import { buildJudgedServer, buildServer, callTool, judgedOffer, listTools } from "./_helpers.js"
 
 const h = vi.hoisted(() => ({ denied: new Set<string>() }))
 vi.mock("../../../surface-deny.js", async (importOriginal) => ({
@@ -22,6 +22,9 @@ const { registerUseCaseVerbs } = await import("../verbs-use-case.js")
 beforeEach(() => {
   h.denied = new Set()
 })
+
+/** A workflows:execute session carrying the offer buildMcpServer resolves. */
+const offeredSession = () => newSession({ userId: "u1", scopes: ["workflows:execute"] as Scope[], clientName: "Claude", offer: judgedOffer() })
 
 const QUOTE = { totalCredits: 846, stepsCredits: 835, feeCredits: 11, durationSec: 3600 }
 
@@ -52,8 +55,9 @@ async function setup(estimate: { status: number; body: unknown } = { status: 200
     })
   }
   await fastify.ready()
-  const server = buildServer()
-  registerUseCaseVerbs({ server, session: executeSession(), fastify })
+  // The offer funnel in front, as buildMcpServer installs it, and on the session it builds.
+  const server = buildJudgedServer()
+  registerUseCaseVerbs({ server, session: offeredSession(), fastify })
   return { server, seen }
 }
 

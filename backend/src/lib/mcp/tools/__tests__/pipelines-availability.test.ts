@@ -53,6 +53,7 @@ vi.mock("../../../../ee/pipelines/branch-pipeline.js", () => ({
 
 const { registerPipelineTools } = await import("../pipelines.js")
 const { registerVideoDirectorTools } = await import("../video-director-tools.js")
+const { installToolOffer, resolveToolOffer } = await import("../../tool-offer.js")
 const { __resetSurfaceProfileCacheForTests } = await import("../../../surface-profile.js")
 const { __resetAvailabilityOverridesForTests, __availabilityUniverseReadyForTests, storedNodesEnabled } = await import(
   "../../../availability-override.js"
@@ -62,6 +63,8 @@ const { __resetDeploymentPayerForTests, __setDeploymentPayerForTests } = await i
 const PIPELINE_TOOLS_THAT_WORK = ["start_pipeline", "branch_pipeline", "chat_pipeline_stage", "apply_chat_proposal"]
 const PIPELINE_READ_TOOLS = ["get_pipeline_stage_chat", "get_pipeline_status", "pipeline_pending_approvals"]
 const DIRECTOR_TOOLS = ["create_explainer", "create_launch_video"]
+/** The nodes the Video Director's chain runs after authoring (ee/video-director/orchestrate.ts). */
+const DIRECTOR_STEPS = ["text-to-speech", "forced-alignment", "render-video"]
 const ALL_SCOPES = ["pipelines:execute", "pipelines:approve", "pipelines:read", "workflows:execute"] as Scope[]
 
 const PIPELINE_ID = "aaaaaaaa-0000-4000-8000-000000000001"
@@ -78,6 +81,8 @@ function session(extra: { workspaceId?: string } = {}) {
 
 async function listed(): Promise<string[]> {
   const server = buildServer()
+  // The funnel buildMcpServer installs, with what this deployment offers now.
+  installToolOffer(server, { userId: "u1", offer: await resolveToolOffer("u1") })
   const s = session()
   registerPipelineTools({ server, session: s })
   registerVideoDirectorTools({ server, session: s, fastify: Fastify() } as Parameters<typeof registerVideoDirectorTools>[0])
@@ -113,19 +118,20 @@ describe("the tool list follows the features", () => {
     let names = await listed()
     for (const t of PIPELINE_TOOLS_THAT_WORK) expect(names, t).toContain(t)
     for (const t of DIRECTOR_TOOLS) expect(names, t).not.toContain(t)
-    setProfile({ nodes: { allow: ["generate-image", "video-director"] } })
+    // The Video Director's chain runs speech, alignment and a render, each its own node.
+    setProfile({ nodes: { allow: ["generate-image", "video-director", ...DIRECTOR_STEPS] } })
     names = await listed()
     for (const t of PIPELINE_TOOLS_THAT_WORK) expect(names, t).not.toContain(t)
     for (const t of DIRECTOR_TOOLS) expect(names, t).toContain(t)
   })
 
   it("lists them under an override stored before they were gateable", async () => {
-    __resetAvailabilityOverridesForTests({ nodes: new Set(storedNodesEnabled(["generate-image", "cast-swap"], 1)) })
+    __resetAvailabilityOverridesForTests({ nodes: new Set(storedNodesEnabled(["generate-image", "cast-swap", ...DIRECTOR_STEPS], 1)) })
     const names = await listed()
     for (const t of [...PIPELINE_TOOLS_THAT_WORK, ...DIRECTOR_TOOLS]) expect(names, t).toContain(t)
   })
 
-  it("lists none under an override saved by this code with them off (discovery shows the users' view)", async () => {
+  it("lists none to a user under an override saved by this code with them off", async () => {
     __resetAvailabilityOverridesForTests({ nodes: new Set(storedNodesEnabled(["generate-image"])) })
     const names = await listed()
     for (const t of [...PIPELINE_TOOLS_THAT_WORK, ...DIRECTOR_TOOLS]) expect(names, t).not.toContain(t)

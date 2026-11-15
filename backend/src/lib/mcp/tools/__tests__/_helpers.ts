@@ -3,6 +3,9 @@ import Fastify, { type FastifyInstance } from "fastify"
 import { newSession, type McpSession } from "../../session.js"
 import type { Scope } from "../../../scopes.js"
 import { createMcpInvoker, type McpToolCallResult, type McpToolDef } from "../../invoke.js"
+import { installToolOffer, needRefusal, type ToolOffer } from "../../tool-offer.js"
+import { TOOL_NEEDS } from "../../tool-needs.js"
+import { USER_VIEWER, isNodeDenied, type AvailabilityViewer } from "../../../surface-deny.js"
 
 /**
  * Shared test helpers for MCP tool unit tests. In-process invocation lives in
@@ -29,6 +32,27 @@ export function buildServer(): McpServer {
     { name: "test", version: "1.0.0" },
     { capabilities: { tools: { listChanged: false } } },
   )
+}
+
+/**
+ * The offer `buildMcpServer` resolves for a restricted deployment
+ * (lib/mcp/tool-offer.ts), judged with whatever node predicates the test file
+ * mocks — so a family test can show that a tool whose node is withheld is not
+ * listed, through the very funnel production uses.
+ */
+export function judgedOffer(viewer: AvailabilityViewer = USER_VIEWER): ToolOffer {
+  return {
+    viewer,
+    refusalOf: (tool) => (Object.hasOwn(TOOL_NEEDS, tool) ? needRefusal(TOOL_NEEDS[tool]!, viewer) : undefined),
+    nodeOffered: (type) => !isNodeDenied(type, viewer),
+  }
+}
+
+/** A bare server with that offer in front of it, as `buildMcpServer` installs it. */
+export function buildJudgedServer(offer: ToolOffer = judgedOffer()): McpServer {
+  const server = buildServer()
+  installToolOffer(server, { userId: "u1", offer })
+  return server
 }
 
 /** Session with the generation-verb scope — the common case in verb tests. */

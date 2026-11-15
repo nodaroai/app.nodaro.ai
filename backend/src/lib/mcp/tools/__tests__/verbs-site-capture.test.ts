@@ -2,7 +2,7 @@ import Fastify from "fastify"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Scope } from "../../../scopes.js"
 import { newSession } from "../../session.js"
-import { buildServer, callTool, executeSession, listTools, type ListedTool } from "./_helpers.js"
+import { buildJudgedServer, callTool, executeSession, listTools, type ListedTool } from "./_helpers.js"
 
 const h = vi.hoisted(() => ({ on: true, denied: false }))
 vi.mock("../../../config.js", async (importOriginal) => ({ ...(await importOriginal<typeof import("../../../config.js")>()), siteCaptureEnabled: () => h.on }))
@@ -26,7 +26,8 @@ function routeAnswering(status: number, body: object) {
 }
 
 function serverWith(fastify = Fastify(), session = executeSession()) {
-  const server = buildServer()
+  // The offer funnel in front, as buildMcpServer installs it: what is withheld is not listed.
+  const server = buildJudgedServer()
   registerSiteCaptureVerb({ server, session, fastify })
   return server
 }

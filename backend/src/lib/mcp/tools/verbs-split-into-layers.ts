@@ -11,7 +11,6 @@
 import { z } from "zod"
 import { LAYER_SPLIT_DEFAULT_SIZE, LAYER_SPLIT_MAX_LAYERS, LAYER_SPLIT_PROMPT_MAX, LAYER_SPLIT_SIZES } from "@nodaro/render-rules"
 import { resolveAssetId } from "../asset-resolver.js"
-import { isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
 import { widgetModelOf } from "../widget-models.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import type { RegisterOpts } from "./verbs-image.js"
@@ -44,7 +43,7 @@ export function splitIntoLayersDescription(nodeType: string): string {
 
 export function registerSplitIntoLayersVerb({ server, session, fastify }: RegisterOpts): void {
   const nodeType = widgetModelOf(SPLIT_INTO_LAYERS_TOOL)
-  if (isNodeDenied(nodeType, USER_VIEWER)) return
+  // What the deployment offers decides whether it is listed (lib/mcp/tool-needs.ts).
   server.registerTool(
     SPLIT_INTO_LAYERS_TOOL,
     {

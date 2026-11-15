@@ -16,7 +16,6 @@
 import { z } from "zod"
 import { EDL_TARGET_ASPECTS, isKnownSpeakerEmphasisStyle, transcriptSpeakerLabels } from "@nodaro/shared/edl"
 import { SPEAKER_VIEW_ACCENT_PATTERN, SPEAKER_VIEW_LAYOUT_SETTINGS, SPEAKER_VIEW_MAX_TWEEN_MS, SPEAKER_VIEW_MIN_REGION, isSpeakerViewSwitchDrawn } from "@nodaro/render-rules"
-import { isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { dispatchJob, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
@@ -46,7 +45,7 @@ function parseMaybe(v: unknown): unknown {
 }
 
 export function registerSpeakerViewVerb({ server, session, fastify }: RegisterOpts): void {
-  if (isNodeDenied(NODE_TYPE, USER_VIEWER)) return
+  // What the deployment offers decides whether it is listed (lib/mcp/tool-needs.ts).
   server.registerTool(
     SPEAKER_VIEW_TOOL,
     {

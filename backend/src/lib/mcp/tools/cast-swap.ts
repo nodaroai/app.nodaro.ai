@@ -55,7 +55,6 @@ import {
   type NodaroMotionEngine,
 } from "@nodaro/shared/models"
 import type { McpSession } from "../session.js"
-import { isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { registerTask } from "../tasks.js"
@@ -125,8 +124,7 @@ function refusal(statusCode: number, body: string) {
 
 export function registerCastSwapTools({ server, session, fastify }: RegisterCastSwapToolsOpts): void {
   if (!passesGate(session, executeGate)) return
-  // Discovery shows the users' view: a deployment that does not offer Nodaro Motion lists none of its tools.
-  if (isNodeDenied("cast-swap", USER_VIEWER)) return
+  // What the deployment offers decides whether its tools are listed (lib/mcp/tool-needs.ts).
 
   server.registerTool(
     "cast_swap",

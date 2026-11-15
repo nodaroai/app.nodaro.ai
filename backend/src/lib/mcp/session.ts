@@ -1,6 +1,7 @@
 import type { Scope } from "../scopes.js"
 import type { McpConversationIdentity } from "./flows/conversation-key.js"
 import { mcpLaneAddresses, type McpLaneAddresses } from "../mcp-lane-addresses.js"
+import type { ToolOffer } from "./tool-offer.js"
 
 /**
  * Per-request MCP session state.
@@ -93,6 +94,13 @@ export interface McpSession {
    * addresses.
    */
   readonly addresses: McpLaneAddresses
+  /**
+   * What this deployment offers the session (`tool-offer.ts`), resolved once
+   * by `buildMcpServer`; absent where the deployment restricts nothing. Read
+   * through `nodeOfferedTo` by a family whose own text or subsets follow the
+   * offer (the use-case verbs).
+   */
+  readonly offer?: ToolOffer
 }
 
 export function newSession(opts: {
@@ -107,6 +115,8 @@ export function newSession(opts: {
   conversation?: McpConversationIdentity
   /** See {@link McpSession.addresses} — the install's primary addresses when omitted. */
   addresses?: McpLaneAddresses
+  /** See {@link McpSession.offer} — `buildMcpServer` only. */
+  offer?: ToolOffer
 }): McpSession {
   return {
     ...opts,
