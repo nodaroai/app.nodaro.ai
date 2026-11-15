@@ -20,6 +20,7 @@ import {
   topazVideoOutputGigapixels,
 } from "@nodaro/render-rules"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
+import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/probe-guard.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 import { linkImportRefusal } from "./link-imports.js"
 
@@ -39,9 +40,11 @@ export interface TopazVideoUpscaleAsk {
 
 /** A source the plan cannot read: refused before anything is reserved. */
 export class TopazVideoSourceUnreadableError extends Error {
-  readonly code = "video_unreadable"
-  constructor() {
-    super("Couldn't read the video to upscale. Check that the link opens a video file, then try again.")
+  readonly code: "video_unreadable" | ProbeLinkRefusalCode
+  /** `refused`: the probe's own meaning when it has one (`probeLinkRefusal`: not a media file, or retryable), said so. */
+  constructor(refused?: { readonly code: ProbeLinkRefusalCode; readonly message: string }) {
+    super(refused?.message ?? "Couldn't read the video to upscale. Check that the link opens a video file, then try again.")
+    this.code = refused?.code ?? "video_unreadable"
     this.name = "TopazVideoSourceUnreadableError"
   }
 }
@@ -66,7 +69,7 @@ export async function planTopazVideoUpscale(videoUrl: string, ask: TopazVideoUps
     source = await probeVideoSource(videoUrl)
   } catch (err) {
     console.warn(`[topaz-video-plan] source probe failed: ${err instanceof Error ? err.message : String(err)}`)
-    throw new TopazVideoSourceUnreadableError()
+    throw new TopazVideoSourceUnreadableError(probeLinkRefusal(err))
   }
   const target = resolveTopazVideoTarget({
     targetResolution: str(ask.targetResolution),
@@ -99,7 +102,7 @@ export async function topazVideoHoldBaseCredits(plan: Pick<TopazVideoUpscalePlan
 
 /** A workflow run's Topaz upscale refused before a jobs row is kept: a source it cannot read or measure, or a link the deployment does not import. */
 export interface TopazVideoRefusal {
-  readonly code: "video_unreadable" | "video_too_long" | "link_imports_disabled"
+  readonly code: "video_unreadable" | "video_too_long" | "link_imports_disabled" | ProbeLinkRefusalCode
   readonly message: string
 }
 

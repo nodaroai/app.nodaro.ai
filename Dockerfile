@@ -543,6 +543,14 @@ RUN groupadd --gid 1000 node || true \
     && useradd --uid 1000 --gid node --shell /bin/bash --create-home node || true
 
 ENV NODE_ENV=production
+# libuv's threadpool runs every dns.lookup (each new outbound connection, and
+# the probe guard's lookups of a link's hosts) beside async file, crypto and
+# zlib work. Node's default is 4 threads; a lookup cannot be cancelled, so a
+# slow resolver holds its thread. 16 threads, of which the probe guard holds at
+# most a quarter (backend/src/providers/video/probe-guard.ts), so lookups of a
+# link's hosts can never stall the rest of the process. start.sh and the
+# compose file pass the environment through unchanged.
+ENV UV_THREADPOOL_SIZE=16
 # Release version for /health, /v1/setup/status and the update check —
 # same value the frontend baked as VITE_APP_VERSION.
 ARG APP_VERSION

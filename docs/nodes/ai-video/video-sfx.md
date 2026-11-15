@@ -30,6 +30,8 @@ The Video SFX node takes an input video plus an optional text prompt and produce
 **Outputs:**
 - Video — an mp4 with the generated SFX merged in (original audio dropped).
 
+A link must be an ordinary video or audio file, not a streaming playlist (HLS, DASH): such a link is refused with a `400` before anything is charged — see [media links](../../features/media-links.md).
+
 ## Credit Cost
 
 Duration is derived automatically from the input video via ffprobe. The duration is rounded up into the next bucket; the bucket determines the cost shown in the editor and charged at run time. A single-node run, a run inside a workflow, and MCP or SDK calls all measure the clip and charge its bucket, and the whole clip is scored on every path.
@@ -55,7 +57,7 @@ For multi-version runs the cost multiplies: `versions × per-version`. Worked ex
 | 60s      | 4        | 132<!-- credits: 4*replicate-mmaudio:60s -->          |
 | 180s     | 1        | 121<!-- credits: replicate-mmaudio:300s -->          |
 
-If ffprobe fails to derive a duration, the `:8s` bucket is used as a fallback and a warning is logged.
+A recording whose header states no length (one a browser made) is measured in full, packet by packet, as Trim Video does. If the video's length cannot be read at all, the run is refused before anything is charged: a `503` (`source_unreachable`, `probe_timeout` or `probe_unavailable`) when the link's host could not be looked up for now, the read ran out of time, or the server could not read it just then, so the run can be tried again, and a `400` when the file cannot be read or is not an ordinary media file. No fallback length is priced.
 
 Before a run, the node's price, its Run button and the workflow's estimate (in the editor, and on the server: `POST /v1/credits/estimate-workflow`, MCP) read the same length for the video on the `video` wire:
 
@@ -74,7 +76,7 @@ In the price a published app or template lists, a Video SFX node on any recordin
 - Supported input formats: MP4 (H.264), MOV, WebM.
 - Maximum duration: **300 seconds** (5 minutes). Longer videos are rejected with HTTP 400 `video_duration_exceeds_limit`.
 - Maximum versions per run: **4**.
-- Several versions (2 or more) are made as one batch: with an `Idempotency-Key`, version *i* is keyed `<key>:<i>`, so repeating the request with the same key returns the same jobs (`deduped: true` once they all exist) and never charges a version twice. A key belongs to one request: repeating it on another route, or for a different request while any version still waits, answers `422 idempotency_key_reused`. The request includes the clip's measured length: if one attempt could not measure the clip (it is then charged at the 8-second bucket) and a repeat with the same key measures it while a version still waits, the repeat is a different request and answers `422 idempotency_key_reused`; send a new key.
+- Several versions (2 or more) are made as one batch: with an `Idempotency-Key`, version *i* is keyed `<key>:<i>`, so repeating the request with the same key returns the same jobs (`deduped: true` once they all exist) and never charges a version twice. A key belongs to one request: repeating it on another route, or for a different request while any version still waits, answers `422 idempotency_key_reused`. The request includes the clip's measured length: an attempt that could not measure the clip is refused, so a repeat with the same key is measured afresh.
 - If a run's versions cannot all be queued to start, `POST /v1/video-sfx` answers `500 internal_error` with `error.startedJobIds` naming the versions that did start (follow those; the list is empty when none did); the others are failed and their credits refunded, and the same request with the same key returns the started ones and starts only the rest.
 - Recommended input resolution: up to 1080p (higher resolutions are untested and increase processing time).
 

@@ -60,6 +60,7 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", () => ({
     return fn()
   },
   runFfprobe: async () => JSON.stringify({ streams: [{ width: fx.width, height: fx.height }], format: { start_time: "0.000000" } }),
+  runFfprobeReadingLinks: async () => JSON.stringify({ streams: [{ width: fx.width, height: fx.height }], format: { start_time: "0.000000" } }),
   ffmpegFailureMessage: (stderr: string | undefined, fallback: string) => `ffmpeg failed: ${stderr || fallback}`,
 }))
 

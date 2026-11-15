@@ -70,10 +70,11 @@ describe("a recording with no length in its header, read from its packets", () =
     h.spawn.mockImplementation(() => streamingProcess(text))
     const sec = await probeClipLengthSec("/tmp/long-recording.webm")
     expect(sec).toBeCloseTo(PACKETS / FPS - 1.5, 3)
-    // One streamed scan of the stream the header named, with the probe's own protocol whitelist.
+    // One streamed scan of the stream the header named, with the probe's own protocol whitelist
+    // (a local file: `file` only — a downloaded file never reaches the network).
     const [cmd, args] = h.spawn.mock.calls[0] as [string, string[]]
     expect(cmd).toBe("ffprobe")
-    expect(args).toEqual(expect.arrayContaining(["-protocol_whitelist", "file,http,https,tcp,tls", "-select_streams", "0"]))
+    expect(args).toEqual(expect.arrayContaining(["-protocol_whitelist", "file", "-select_streams", "0"]))
   })
 
   it("a scan that runs out of time is retryable (timedOut), never 'unreadable'", async () => {

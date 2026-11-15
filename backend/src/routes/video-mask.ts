@@ -26,6 +26,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { measureVideoMaskLength } from "../lib/video-mask-length.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 const zoneMargin = z.number().min(VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MIN).max(VIDEO_MASK_LIMITS.ZONE_MARGIN_PCT_MAX).optional().default(0)
 
@@ -76,7 +77,7 @@ async function measureVideoMaskPreHandler(req: FastifyRequest, reply: FastifyRep
   const videoUrl = url.data
   const measured = await measureVideoMaskLength(videoUrl, body.provider)
   if (!measured.ok) {
-    return void reply.code(400).send({ error: { code: measured.code, message: measured.message } })
+    return void reply.code(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
   body.__videoMaskBilledSec = measured.billedSec
   body.__videoMaskCreditId = measured.creditId

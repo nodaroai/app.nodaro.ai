@@ -95,6 +95,8 @@ On the canvas the **Base video** card shows where the base is:
 
 Press **Move on preview** to select the base: it can then be dragged and resized on the preview, like a layer, and the first move gives it a box of its own. Under any layout the first move turns the layout into Custom and keeps everything where it is. Unselected, the base takes no clicks on the preview — dragging the node body moves the node as before.
 
+A link must be an ordinary video or audio file, not a streaming playlist (HLS, DASH): such a link is refused with a `400` before anything is charged — see [media links](../../features/media-links.md).
+
 ## Output frame
 
 - By default the output has the video's **own display size and frame rate**: a phone clip stored sideways and tagged as rotated renders upright, non-square pixels are resolved, and odd dimensions are rounded down to even (a 1079 × 1919 source renders 1078 × 1918).

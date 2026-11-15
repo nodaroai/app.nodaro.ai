@@ -4,6 +4,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { VIDEO_SFX_PRICING, videoSfxCreditId } from "@nodaro/shared/credits"
 import { measureVideoSfxDuration } from "../lib/video-sfx-duration.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
+import { ROUTE_MEASURE_DEADLINE_MS } from "../lib/pre-charge-probe-bounds.js"
 import { baseCreditCostFor } from "../lib/credit-base-cost.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -23,8 +25,9 @@ const SEED_MAX = 2 ** 31 - 1
 
 export const VideoSfxBody = z.object({
   // safeUrlSchema (not z.string().url()): rejects literal private/reserved IPs
-  // and non-http(s) at the boundary. The DNS-rebinding case is closed at the
-  // ffprobe sink by assertSafeProbeSource in ffmpeg-utils.ts.
+  // and non-http(s) at the boundary. A host resolving to one, a redirect to
+  // one and DNS rebinding are closed at the ffprobe sink by the probe guard
+  // (providers/video/probe-guard.ts).
   videoUrl: safeUrlSchema,
   prompt: z.string().max(2000).optional(),
   negativePrompt: z.string().max(500).optional().default("music"),
@@ -37,18 +40,21 @@ export type VideoSfxBody = z.infer<typeof VideoSfxBody>
 
 /**
  * Fastify preHandler: measures the input video by the rule the workflow run
- * shares (`measureVideoSfxDuration`: 8 s when the probe fails, 400 for a
- * zero-length or over-300 s video), stashes ceil(duration) on
+ * shares (`measureVideoSfxDuration`: a probe that fails refuses the run — 503
+ * when it can be retried, 400 otherwise — as does a zero-length or over-300 s
+ * video), stashes ceil(duration) on
  * req.probedDuration AND mirrors it on req.body.__probedDuration so the credit
  * guard (which only sees the body) prices the right row without re-probing.
  */
 export async function probeDurationPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const body = req.body as VideoSfxBody
-  const measured = await measureVideoSfxDuration(body.videoUrl, (err) => {
-    req.log.warn({ err }, "video-sfx: ffprobe failed; falling back to 8s bucket")
-  })
+  const body = req.body as VideoSfxBody | undefined
+  // Only a link the route's schema takes is probed; anything else is the handler's validation_error.
+  if (!safeUrlSchema.safeParse(body?.videoUrl).success) return
+  const measured = await measureVideoSfxDuration(body!.videoUrl, (err) => {
+    req.log.warn({ err }, "video-sfx: ffprobe failed; refusing the run")
+  }, { deadlineAt: Date.now() + ROUTE_MEASURE_DEADLINE_MS })
   if (!measured.ok) {
-    return void reply.code(400).send({ error: measured.code, message: measured.message })
+    return void reply.code(probeRefusalStatus(measured.code)).send({ error: measured.code, message: measured.message })
   }
   req.probedDuration = measured.durationSec
   ;(req.body as Record<string, unknown>).__probedDuration = measured.durationSec

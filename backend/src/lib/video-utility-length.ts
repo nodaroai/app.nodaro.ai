@@ -1,8 +1,9 @@
-import { join } from "node:path"
 import type { FastifyReply, FastifyRequest } from "fastify"
 import type { ZodTypeAny } from "zod"
-import { assertSafeProbeSource, cleanupWorkDir, createWorkDir, downloadFile, ProbeSourceBlockedError } from "../providers/video/ffmpeg-utils.js"
+import { assertSafeProbeSource, ProbeSourceBlockedError, readOwnStoredCopy, type ProbeSourceBlockReason } from "../providers/video/ffmpeg-utils.js"
+import { NOT_A_MEDIA_FILE, OWN_STORAGE_PROBE_MAX_BYTES, PROBE_UNAVAILABLE, probeNotRun } from "../providers/video/probe-guard.js"
 import { DOWNLOAD_TIMEOUT_MS } from "../providers/video/ffmpeg-timeouts.js"
+import { PRE_CHARGE_PROBE_TIMEOUT_MS, ROUTE_MEASURE_DEADLINE_MS } from "./pre-charge-probe-bounds.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 import { isOwnStoredFileUrl } from "./own-storage-url.js"
 import { safeUrlSchema } from "./url-validator.js"
@@ -33,8 +34,9 @@ import { probeClipLengthSec, type ClipLengthReading } from "./video-utility-prob
  * would fail there anyway, after the reservation. A file in this install's own
  * storage that the probe's link guard refuses (a self-host's bundled storage
  * behind the app's own origin, on a loopback or private address) is measured
- * the way the render reaches it: downloaded (`downloadFile`, which exempts that
- * subtree), at most {@link OWN_STORAGE_MEASURE_MAX_BYTES}, and probed on disk.
+ * the way the render reaches it: downloaded (`readOwnStoredCopy`, the probe
+ * guard's own-storage fallback: `downloadFile`, which exempts that subtree),
+ * at most {@link OWN_STORAGE_MEASURE_MAX_BYTES}, and probed on disk.
  *
  * The work before a charge is bounded: a Combine Videos joins at most
  * {@link COMBINE_VIDEOS_MAX_CLIPS} clips (a longer list is refused before
@@ -56,15 +58,8 @@ import { probeClipLengthSec, type ClipLengthReading } from "./video-utility-prob
 
 export { COMBINE_VIDEOS_MAX_CLIPS }
 
-/** How long one clip's header read before a charge may take, on every path. */
-export const PRE_CHARGE_PROBE_TIMEOUT_MS = 30_000
-
-/**
- * How long a route may spend measuring a request's clips before its charge, all
- * clips together: below the about 100 seconds the proxy in front of the API
- * waits for an answer, so a client always gets one.
- */
-export const ROUTE_MEASURE_DEADLINE_MS = 90_000
+// The bounds every measure before a charge shares (a leaf, re-exported for the existing imports).
+export { PRE_CHARGE_PROBE_TIMEOUT_MS, ROUTE_MEASURE_DEADLINE_MS }
 
 /**
  * The bound a measure runs under. A route passes `deadlineAt` (now +
@@ -80,9 +75,10 @@ export interface MeasureBounds {
 /**
  * The most a clip of this install's own storage is downloaded to be measured
  * before a charge (only when the probe's link guard refuses its address: a
- * self-host's storage). A larger file is refused as unreadable.
+ * self-host's storage). A larger file is refused as unreadable. The probe
+ * guard's own cap (`OWN_STORAGE_PROBE_MAX_BYTES`), the same for every probe.
  */
-export const OWN_STORAGE_MEASURE_MAX_BYTES = 2 * 1024 ** 3
+export const OWN_STORAGE_MEASURE_MAX_BYTES = OWN_STORAGE_PROBE_MAX_BYTES
 
 export type VideoUtilityLength =
   | { readonly ok: true; readonly secs: readonly number[]; readonly units: number }
@@ -91,18 +87,19 @@ export type VideoUtilityLength =
 /**
  * Why a run was refused before its charge: a clip that cannot be read, a probe
  * that timed out (retryable: run it again), a link whose host could not be
- * resolved (retryable: a DNS failure can pass), more clips than one run joins.
+ * resolved (retryable: a DNS failure can pass), a read the server could not
+ * run just now (retryable), more clips than one run joins.
  */
-export type VideoUtilityRefusalCode = "invalid_video_duration" | "probe_timeout" | "source_unreachable" | "too_many_clips" | "client_closed"
+export type VideoUtilityRefusalCode = "invalid_video_duration" | "probe_timeout" | "source_unreachable" | "probe_unavailable" | "too_many_clips" | "client_closed" | "media_link_not_a_file"
 
 /**
  * The HTTP status a route answers a refusal with: a retryable one (a timed-out
- * probe, an unreachable host) 503, a request whose client went away 499 (no
+ * probe, an unreachable host, a read the server could not run) 503, a request whose client went away 499 (no
  * one reads it), the rest are the request's (400).
  */
 export function videoUtilityRefusalStatus(code: VideoUtilityRefusalCode): number {
   if (code === "client_closed") return 499
-  return code === "probe_timeout" || code === "source_unreachable" ? 503 : 400
+  return code === "probe_timeout" || code === "source_unreachable" || code === PROBE_UNAVAILABLE.code ? 503 : 400
 }
 
 /** What a route answers a request whose client went away before its charge: nothing was created or reserved. */
@@ -125,18 +122,22 @@ function refusalOf(failure: ClipFailure, index: number, count: number): VideoUti
   const which = clipName(index, count)
   if (failure === "timeout") return { ok: false, code: "probe_timeout", message: `Timed out reading ${which} — run it again.` }
   if (failure === "unreachable") return { ok: false, code: "source_unreachable", message: `Could not reach ${which} — run it again.` }
+  if (failure === "unavailable") return { ok: false, code: PROBE_UNAVAILABLE.code, message: `Could not read ${which} just now — run it again.` }
   if (failure === "nohost") return { ok: false, code: "invalid_video_duration", message: `Could not read ${which}: its host was not found. Check the link.` }
+  if (failure === "notmedia") return { ok: false, code: NOT_A_MEDIA_FILE.code, message: count > 1 ? `Clip ${index + 1} of ${count}: ${NOT_A_MEDIA_FILE.message}` : NOT_A_MEDIA_FILE.message }
   return { ok: false, code: "invalid_video_duration", message: `Could not read ${which}. The file may be corrupted or an unsupported format.` }
 }
 
 /**
  * Why one clip has no length: it cannot be read, reading it timed out, its host
  * could not be resolved for now (`unreachable`, retryable) or does not exist
- * (`nohost`, for good), or the request's client went away (`aborted`: nothing
- * is answered, created or reserved). `stopped`: another clip of the same
+ * (`nohost`, for good), the server could not run the read (`unavailable`:
+ * its reader failed to start or was stopped, retryable), or the request's client went away (`aborted`: nothing
+ * is answered, created or reserved), or the link is not an ordinary media
+ * file (`notmedia`: a streaming playlist, a manifest). `stopped`: another clip of the same
  * measure failed first, so this one's read was stopped — never the answer.
  */
-type ClipFailure = "unreadable" | "timeout" | "unreachable" | "nohost" | "aborted" | "stopped"
+type ClipFailure = "unreadable" | "timeout" | "unreachable" | "unavailable" | "nohost" | "notmedia" | "aborted" | "stopped"
 
 /** ffprobe's own lookup of a host failed; the host it names is captured. */
 const FFPROBE_LOOKUP_FAILED = /Failed to resolve hostname\s+\[?([^\s\]:]+)/i
@@ -145,6 +146,9 @@ const FFPROBE_LOOKUP_FAILED = /Failed to resolve hostname\s+\[?([^\s\]:]+)/i
  * ffprobe's lookup of the host the guard had JUST resolved failed: a passing
  * failure, retryable. A lookup failure on any other host (a redirect target
  * the guard never resolved) says nothing of the kind, so it stays unreadable.
+ * A fallback only: ffprobe reads every link through the probe guard's proxy,
+ * which resolves each hop itself and says why one failed
+ * (`ProbeSourceBlockedError`, read first by `failureOf`).
  */
 function ffprobeLookupOfGuardedHostFailed(err: unknown, url: string): boolean {
   const named = FFPROBE_LOOKUP_FAILED.exec(err instanceof Error ? err.message : String(err))?.[1]
@@ -168,12 +172,31 @@ const timedOut = (err: unknown): boolean => {
   return e?.timedOut === true || e?.name === "TimeoutError" || (e?.name === "AbortError" && e.cause?.name === "TimeoutError")
 }
 
-/** Why a failed read of `url` failed, as a measure tells it: stopped by its client or by a sibling's failure, out of time, a passing lookup failure of its host, or unreadable. */
+/**
+ * Why a failed read of `url` failed, as a measure tells it, in this order:
+ * stopped by its client or by a sibling's failure, out of time (also when a
+ * hop was refused on the way), a hop the probe guard
+ * refused (a host that could not be resolved for now is retryable, one that
+ * does not exist is not, a private address is unreadable — at the first hop
+ * or at a redirect, alike), a passing lookup failure of its host, or
+ * unreadable.
+ */
 function failureOf(err: unknown, bounds: MeasureBounds, readSignal: AbortSignal | undefined, url: string): ClipFailure {
   if (bounds.signal?.aborted) return "aborted"
   if (readSignal?.aborted) return "stopped"
-  if (timedOut(err)) return "timeout"
+  // A read that ran out of time is retryable even when a hop was refused on the way.
+  if (timedOut(err) || timedOut((err as { cause?: unknown } | null)?.cause)) return "timeout"
+  // The server could not run the read (its reader failed to start, or it was stopped): retryable.
+  if (probeNotRun(err)) return "unavailable"
+  const refused = refusalReason(err)
+  if (refused) return refused === "dns" ? "unreachable" : refused === "host" ? "nohost" : refused === "container" ? "notmedia" : "unreadable"
   return ffprobeLookupOfGuardedHostFailed(err, url) ? "unreachable" : "unreadable"
+}
+
+/** The probe guard's reason, when `err` is its refusal of a hop (`ProbeSourceBlockedError`, read by its shape). */
+function refusalReason(err: unknown): ProbeSourceBlockReason | undefined {
+  const reason = (err as { reason?: unknown } | null)?.reason
+  return err instanceof Error && (reason === "address" || reason === "host" || reason === "dns" || reason === "link" || reason === "container") ? reason : undefined
 }
 
 /** What is left of a route's deadline (ms), or the bound a path without one uses. */
@@ -218,18 +241,20 @@ async function untilStopped<T>(work: Promise<T>, signal: AbortSignal | undefined
 
 /**
  * One clip's length, or why it has none. The link is checked once by the
- * probe's link guard (`assertSafeProbeSource`) and the probe then reads it
- * itself. Only when the guard refuses the ADDRESS (a private or reserved
- * address: `ProbeSourceBlockedError` reason `address`) and the link is
- * strictly a file of this install's own storage (`isOwnStoredFileUrl`: a
- * self-host's storage on a loopback or private address, which the render
- * downloads through the same exemption) is the file downloaded — capped — and
- * probed on disk instead. A host that could not be resolved for now (reason
- * `dns`, or ffprobe's own lookup failing right after the guard's) is retryable
- * and never downloaded; a host that does not exist (reason `host`) is refused
- * for good, saying so; any other refusal or failure means the clip cannot be
- * read. A link the guard allows is never downloaded to be measured
- * (on Cloud, storage is public and the guard allows it).
+ * probe's link guard (`assertSafeProbeSource`, here under the measure's own
+ * deadline and stop) and the probe then reads it through the guard's proxy
+ * (`probeClipLengthSec` → `readProbeSource`), which checks every later hop.
+ * Only when the guard refuses the ADDRESS (a private or reserved address:
+ * `ProbeSourceBlockedError` reason `address`) and the link is strictly a file
+ * of this install's own storage (`isOwnStoredFileUrl`: a self-host's storage
+ * on a loopback or private address, which the render downloads through the
+ * same exemption) is the file downloaded — capped — and probed on disk
+ * instead (`readOwnStoredCopy`, the probe guard's one fallback). A host that
+ * could not be resolved for now (reason `dns`, at the first hop or a later
+ * one) is retryable and never downloaded; a host that does not exist (reason
+ * `host`) is refused for good, saying so; any other refusal or failure means
+ * the clip cannot be read. A link the guard allows is never downloaded to be
+ * measured (on Cloud, storage is public and the guard allows it).
  */
 async function clipLengthSec(
   url: string,
@@ -273,19 +298,14 @@ async function clipLengthSec(
   // own download bound otherwise. The storage fallback of a 404 runs under the same bound and cap.
   const downloadMs = leftMs(bounds, DOWNLOAD_TIMEOUT_MS)
   if (downloadMs <= 0) return "timeout"
-  const dir = await createWorkDir("video-utility-measure")
   try {
-    const local = join(dir, "input")
-    await downloadFile(url, local, {
-      maxBytes: OWN_STORAGE_MEASURE_MAX_BYTES,
-      timeoutMs: downloadMs,
+    // The local copy is a user's file: the container rule a link gets.
+    return await readOwnStoredCopy(url, (local) => probeClipLengthSec(local, { ...timeout, userFile: true }), {
+      downloadTimeoutMs: downloadMs,
       ...(readSignal ? { signal: readSignal } : {}),
     })
-    return await probeClipLengthSec(local, timeout)
   } catch (err) {
     return failureOf(err, bounds, readSignal, url)
-  } finally {
-    await cleanupWorkDir(dir)
   }
 }
 

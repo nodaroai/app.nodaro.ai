@@ -8,10 +8,12 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
+import { probeSoundLengthSec } from "../lib/video-utility-probe.js"
+import { PRE_CHARGE_PROBE_TIMEOUT_MS, ROUTE_MEASURE_DEADLINE_MS } from "../lib/pre-charge-probe-bounds.js"
 import { resolveAiAvatarCreditId } from "@nodaro/shared/credits"
 import { sendInternalError } from "../lib/http-errors.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { probeLinkRefusal, probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 const ttsEngineSchema = z
   .discriminatedUnion("engine_type", [
@@ -133,31 +135,42 @@ const aiAvatarBody = z
  * — a bounded ceiling, never the 900s top bucket that caused the user-reported
  * over-reservation (~4020 credits held for a ~$0.75 clip).
  *
- * The probe is best-effort: on ANY failure (probe error, missing audioUrl, not
- * audio mode) it leaves `__probedDurationSec` unset and resolveAiAvatarCreditId
- * uses its 120s fallback. It never rejects the request — a bad audioUrl is
- * surfaced later by Zod / the worker, not here. probeMediaDuration runs the
- * same SSRF guard as probeVideoSource.
+ * Without an audioUrl the route's schema takes (or outside audio mode) nothing
+ * is probed and `__probedDurationSec` stays unset: the handler's validation
+ * answers a bad one. The sound's length is read as Trim reads a clip
+ * (`probeSoundLengthSec`): from the header, and for a recording whose header
+ * carries none (a WebM a browser recorded) from its last audio packet,
+ * streamed, within the route's deadline. A probe that FAILS refuses the request
+ * before anything is reserved, rather than reserve the 120s fallback for a clip
+ * that may be longer: a host that could not be looked up for now, or a read
+ * that ran out of time, is the retryable 503 every measuring route answers
+ * (`probeLinkRefusal`); a link that is not an ordinary media file, or audio
+ * that cannot be read, is a 400. The sound is read through the probe guard.
  *
  * Mirrors `probeDurationPreHandler` in routes/video-sfx.ts.
  */
 export async function probeAudioDurationPreHandler(
   req: FastifyRequest,
-  _reply: FastifyReply,
+  reply: FastifyReply,
 ): Promise<void> {
   const body = (req.body ?? {}) as Record<string, unknown>
   if (body.speechMode !== "audio") return
   const audioUrl = body.audioUrl
-  if (typeof audioUrl !== "string" || audioUrl.length === 0) return
+  // Only a link the route's schema takes is probed; anything else is the handler's validation_error.
+  if (typeof audioUrl !== "string" || !safeUrlSchema.safeParse(audioUrl).success) return
   try {
-    const duration = await probeMediaDuration(audioUrl)
+    // Its sound's length, read as Trim reads a clip: the header, else (a recording a browser made) its last audio packet.
+    const duration = await probeSoundLengthSec(audioUrl, { timeoutMs: PRE_CHARGE_PROBE_TIMEOUT_MS, deadlineAt: Date.now() + ROUTE_MEASURE_DEADLINE_MS })
     if (Number.isFinite(duration) && duration > 0) {
       body.__probedDurationSec = Math.ceil(duration)
     }
   } catch (err) {
-    // Non-fatal: leave __probedDurationSec unset so resolveAiAvatarCreditId
-    // falls back to the modest 120s default (bounded, never 900s).
-    req.log.warn({ err }, "ai-avatar: audio ffprobe failed; falling back to 120s reserve")
+    req.log.warn({ err }, "ai-avatar: audio ffprobe failed; refusing the run")
+    const refused = probeLinkRefusal(err) ?? {
+      code: "invalid_media_duration",
+      message: "Could not read the audio's length. The file may be corrupted or an unsupported format.",
+    }
+    return void reply.status(probeRefusalStatus(refused.code)).send({ error: refused })
   }
 }
 

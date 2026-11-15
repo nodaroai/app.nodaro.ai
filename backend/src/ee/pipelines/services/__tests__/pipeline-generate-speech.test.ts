@@ -19,10 +19,10 @@ vi.mock("../../../billing/credits.js", () => ({
   },
 }))
 // ffprobe is mocked at the ffmpeg-utils boundary — the wrapper calls
-// `getVideoDuration(audioUrl)` after the worker job completes. Default mock
+// `probeMediaDuration(audioUrl)` after the worker job completes. Default mock
 // returns 3.2s; individual tests override for the failure path.
 vi.mock("../../../../providers/video/ffmpeg-utils.js", () => ({
-  getVideoDuration: vi.fn().mockResolvedValue(3.2),
+  probeMediaDuration: vi.fn().mockResolvedValue(3.2),
 }))
 // Seam 3 — the one job override (lib/speech-estimate.ts). Undefined is the
 // flag-off answer (the flat row reserves); a number is what the job reserves.
@@ -33,7 +33,7 @@ vi.mock("../../../../lib/speech-estimate.js", () => ({
 
 import { videoQueue } from "../../../../lib/queue.js"
 import { CreditsService } from "../../../billing/credits.js"
-import { getVideoDuration } from "../../../../providers/video/ffmpeg-utils.js"
+import { probeMediaDuration } from "../../../../providers/video/ffmpeg-utils.js"
 import { speechChargeOverride } from "../../../../lib/speech-estimate.js"
 import { pipelineGenerateSpeech } from "../pipeline-generate-speech.js"
 
@@ -132,7 +132,7 @@ describe("pipelineGenerateSpeech", () => {
     // surfaces the real duration. The lip-sync sub-step + Editor LLM
     // dialogue_no_cut_zone calc both read this.
     expect(result.audioDurationSec).toBe(3.2)
-    expect(getVideoDuration).toHaveBeenCalledWith("https://r2/voice.mp3")
+    expect(probeMediaDuration).toHaveBeenCalledWith("https://r2/voice.mp3")
     expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
       "u1", "tts-job-1", "elevenlabs-turbo", 0, 0, { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
     )
@@ -167,7 +167,7 @@ describe("pipelineGenerateSpeech", () => {
   })
 
   it("returns audioDurationSec=null when ffprobe fails — non-fatal fallback", async () => {
-    ;(getVideoDuration as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+    ;(probeMediaDuration as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("ffprobe: 404"),
     )
     const supabase = makeSupabaseMock({

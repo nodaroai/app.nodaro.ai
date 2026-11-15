@@ -9,7 +9,6 @@ const m = vi.hoisted(() => ({
   merge: vi.fn(),
   streams: vi.fn(),
   dur: vi.fn(),
-  assertSafe: vi.fn(),
   upload: vi.fn(),
   wmUpload: vi.fn(),
 }))
@@ -17,8 +16,8 @@ vi.mock("../../providers/video/merge-video-audio.js", () => ({ mergeVideoAudio: 
 vi.mock("../../providers/video/ffmpeg-utils.js", () => ({
   cleanupWorkDir: vi.fn(async () => {}),
   probeMediaStreams: m.streams,
-  getVideoStreamDuration: m.dur,
-  assertSafeProbeSource: m.assertSafe,
+  // The video stream's length of a link, read through the probe guard.
+  probeVideoStreamDurationSource: m.dur,
 }))
 vi.mock("../../workers/shared.js", () => ({ uploadVideoMaybeWatermark: m.upload, watermarkLocalVideoAndUpload: m.wmUpload }))
 
@@ -40,7 +39,6 @@ beforeEach(() => {
   m.merge.mockResolvedValue("/tmp/w/merged.mp4")
   m.streams.mockResolvedValue({ hasVideo: true, hasAudio: true })
   m.dur.mockResolvedValue(4.04)
-  m.assertSafe.mockResolvedValue(undefined)
   m.upload.mockResolvedValue("https://r2/hd-silent.mp4")
   m.wmUpload.mockResolvedValue("https://r2/hd-audio.mp4")
 })
@@ -116,9 +114,9 @@ describe("copying the stored draft's audio: only onto a take of the same length"
       audioTracks: [{ url: "https://r2/draft.mp4", startTime: 0, volume: 100, sourceType: "video" }],
       keepOriginalAudio: false,
     }]])
-    // Both remote probes are SSRF-checked first.
-    expect(m.assertSafe).toHaveBeenCalledWith("https://kie/hd.mp4")
-    expect(m.assertSafe).toHaveBeenCalledWith("https://r2/draft.mp4")
+    // Both remote probes are read through the probe guard (the guarded stream-length probe).
+    expect(m.dur).toHaveBeenCalledWith("https://kie/hd.mp4")
+    expect(m.dur).toHaveBeenCalledWith("https://r2/draft.mp4")
   })
 
   it("a stored clip SHORTER than the take (Smart Loop Cut, a trim): the picture silent, WITH the warning — never truncated audio", async () => {

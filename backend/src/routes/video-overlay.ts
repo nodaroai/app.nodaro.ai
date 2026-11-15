@@ -46,6 +46,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { measureVideoOverlayBase, videoOverlayBaseCredits } from "../lib/video-overlay-length.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 const B = VIDEO_OVERLAY_BOUNDS
 const seconds = z.number().finite().min(0).max(VIDEO_OVERLAY_MAX_TIME_SEC)
@@ -178,7 +179,7 @@ async function measureBasePreHandler(req: FastifyRequest, reply: FastifyReply): 
   if (!parsed.success || !videoOverlayHasVideoLayer(parsed.data.layers)) return
   const measured = await measureVideoOverlayBase(parsed.data)
   if (!measured.ok) {
-    return void reply.code(400).send({ error: { code: measured.code, message: measured.message } })
+    return void reply.code(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
   measuredUnits.set(req, measured.units)
 }

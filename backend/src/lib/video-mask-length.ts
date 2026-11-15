@@ -6,6 +6,7 @@ import {
   videoMaskCreditId,
 } from "@nodaro/shared/media"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
+import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/probe-guard.js"
 
 /**
  * Video Mask: how long the input clip is priced at, and so which price row a
@@ -21,7 +22,7 @@ export type VideoMaskLength =
   | { readonly ok: true; readonly billedSec: number; readonly creditId: string }
   | {
       readonly ok: false
-      readonly code: "invalid_video_duration" | "video_duration_exceeds_limit"
+      readonly code: "invalid_video_duration" | "video_duration_exceeds_limit" | ProbeLinkRefusalCode
       readonly message: string
     }
 
@@ -29,7 +30,9 @@ export async function measureVideoMaskLength(videoUrl: string, provider?: unknow
   let probed: { durationSeconds: number; fps?: number }
   try {
     probed = await probeVideoSource(videoUrl)
-  } catch {
+  } catch (err) {
+    const refused = probeLinkRefusal(err)
+    if (refused) return { ok: false, ...refused }
     return {
       ok: false,
       code: "invalid_video_duration",

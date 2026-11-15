@@ -31,11 +31,13 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 import { measureVideoDepthInput } from "../lib/video-depth-input.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 const videoDepthBody = z.object({
   // safeUrlSchema (not z.string().url()): rejects local paths, non-http(s) and
-  // literal private/reserved IPs at the boundary. The DNS-rebinding case is
-  // closed at the ffprobe sink by assertSafeProbeSource in ffmpeg-utils.ts.
+  // literal private/reserved IPs at the boundary. A host resolving to one, a
+  // redirect to one and DNS rebinding are closed at the ffprobe sink by the
+  // probe guard (providers/video/probe-guard.ts).
   videoUrl: safeUrlSchema,
   provider: z.enum(VIDEO_DEPTH_PROVIDERS).default("video-depth-anything"),
   modelSize: z.enum(VIDEO_DEPTH_MODEL_SIZES).default("large"),
@@ -74,7 +76,7 @@ async function probePreHandler(req: FastifyRequest, reply: FastifyReply): Promis
     req.log.warn({ err }, "video-depth: ffprobe failed")
   })
   if (!measured.ok) {
-    return void reply.status(400).send({ error: { code: measured.code, message: measured.message } })
+    return void reply.status(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
   body[STASH] = { durationSec: measured.durationSec, creditId: measured.creditId } satisfies Stash
 }

@@ -35,6 +35,8 @@ The mask is an ordinary video, so it connects anywhere a video does. Its main pa
 
 The finished job also reports `recipe`: the version of the masking algorithm that made the mask. It changes whenever the same clip and settings would give a different mask (a new cut rule or hold, for example), so a mask kept for reuse can tell it is out of date.
 
+A link must be an ordinary video or audio file, not a streaming playlist (HLS, DASH): such a link is refused with a `400` before anything is charged — see [media links](../../features/media-links.md).
+
 ## Limits
 
 - Clips up to **5 minutes at 30 fps**. A faster clip counts proportionally longer — a 60 fps clip is measured at twice its length, so up to 2½ minutes of it — because the model works frame by frame.

@@ -1,5 +1,6 @@
 import { checkVideoDepthLength, pricedClipSeconds, resolveVideoDepthProvider, videoDepthCreditId } from "@nodaro/shared/media"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
+import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/probe-guard.js"
 import { safeUrlSchema } from "./url-validator.js"
 
 /**
@@ -21,7 +22,7 @@ import { safeUrlSchema } from "./url-validator.js"
  */
 export type VideoDepthMeasure =
   | { readonly ok: true; readonly durationSec: number; readonly creditId: string }
-  | { readonly ok: false; readonly code: "video_too_long" | "video_unreadable"; readonly message: string }
+  | { readonly ok: false; readonly code: "video_too_long" | "video_unreadable" | ProbeLinkRefusalCode; readonly message: string }
 
 const UNREADABLE_MESSAGE = "Could not read the video. Check that the link is a reachable video file."
 
@@ -34,6 +35,8 @@ export async function measureVideoDepthInput(
   try {
     probe = await probeVideoSource(videoUrl)
   } catch (err) {
+    const refused = probeLinkRefusal(err)
+    if (refused) return { ok: false, ...refused }
     onProbeFailure(err)
     return { ok: false, code: "video_unreadable", message: UNREADABLE_MESSAGE }
   }

@@ -27,7 +27,7 @@
  */
 import {
   ffmpegFailureMessage,
-  runFfprobe,
+  runFfprobeReadingLinks,
   withFfmpegSlot,
 } from "../../providers/video/ffmpeg-utils.js"
 import { spawnFfmpeg } from "../../providers/video/ffmpeg-process.js"
@@ -187,7 +187,8 @@ function proxyMsOfFrame(map: ProxySpanMap, fps: number, k: number): number {
 
 /** The proxy's picture size and container start. */
 async function probeProxy(source: string): Promise<{ width: number; height: number; startMs: number }> {
-  const out = await runFfprobe([
+  // The proxy is our own stored file, but a link all the same: read through the probe guard.
+  const out = await runFfprobeReadingLinks([
     "-v", "error", "-select_streams", "v:0",
     "-show_entries", "stream=width,height:format=start_time",
     "-of", "json", source,

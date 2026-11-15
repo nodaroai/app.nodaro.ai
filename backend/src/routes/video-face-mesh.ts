@@ -40,6 +40,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { createsChildJob } from "../lib/job-submission-context.js"
 import { measureVideoFaceMeshLength } from "../lib/video-face-mesh-length.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 const L = VIDEO_FACE_MESH_LIMITS
 const facePct = z.number().min(L.FACE_HEIGHT_PCT_MIN).max(L.FACE_HEIGHT_PCT_MAX).optional().default(0)
@@ -115,7 +116,7 @@ async function measurePreHandler(req: FastifyRequest, reply: FastifyReply): Prom
   const url = safeUrlSchema.safeParse(body.videoUrl)
   if (!url.success) return // the handler's Zod parse answers it
   const measured = await measureVideoFaceMeshLength(url.data)
-  if (!measured.ok) return void reply.code(400).send({ error: { code: measured.code, message: measured.message } })
+  if (!measured.ok) return void reply.code(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   body[STASH] = { billedSec: measured.billedSec, creditId: measured.creditId } satisfies Stash
 }
 

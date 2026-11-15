@@ -40,6 +40,8 @@ It is a local, deterministic FFmpeg step — no model, no provider key — so it
 **Outputs:**
 - `video` -- the composite (H.264 MP4, AAC audio when a track is kept).
 
+A link must be an ordinary video or audio file, not a streaming playlist (HLS, DASH): such a link is refused with a `400` before anything is charged — see [media links](../../features/media-links.md).
+
 ## Limits
 
 - Foregrounds up to **300 seconds** (with Pixelate or Blur, backgrounds up to 300 seconds).

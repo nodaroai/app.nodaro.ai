@@ -40,6 +40,7 @@ import { rawBodyRecord, textField } from "../lib/run-model.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 /** Parse a stringified Transcript before normalization so this ingress behaves
  *  identically to the DAG payload-builder (which parses the stringified json
@@ -280,7 +281,7 @@ async function measureNemotronCaptionsFirst(req: FastifyRequest, reply: FastifyR
     req.log.warn({ err }, "add-captions (nemotron): ffprobe could not read the length; holding 60 minutes")
   })
   if (!measured.ok) {
-    return void reply.status(400).send({ error: { code: measured.code, message: measured.message } })
+    return void reply.status(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
   nemotronHolds.set(req, measured.hold ? { hold: measured.hold } : {})
 }

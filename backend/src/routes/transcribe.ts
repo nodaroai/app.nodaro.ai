@@ -26,6 +26,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 // The providers this route ACCEPTS that can also honour word timestamps —
 // derived from the capability table, intersected with the route's own enum so
@@ -135,7 +136,7 @@ async function measureNemotronFirst(req: FastifyRequest, reply: FastifyReply): P
     req.log.warn({ err }, "transcribe (nemotron): ffprobe could not read the length; holding 60 minutes")
   })
   if (!measured.ok) {
-    return void reply.status(400).send({ error: { code: measured.code, message: measured.message } })
+    return void reply.status(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
   const stash: NemotronMeasured = {
     creditId: measured.creditId,

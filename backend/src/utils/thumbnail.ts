@@ -7,6 +7,7 @@ import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { execFileFfmpeg } from "../providers/video/ffmpeg-process.js"
+import { unguardedProbeLinkRefusal } from "../providers/video/probe-guard.js"
 
 // ============================================================
 // Types
@@ -63,6 +64,9 @@ export async function processImage(
  * Run ffprobe to extract video metadata
  */
 function runFfprobe(filePath: string): Promise<string> {
+  // A local file only: a link handed here would be read unchecked, so it is refused.
+  const refused = unguardedProbeLinkRefusal([filePath], undefined)
+  if (refused) return Promise.reject(refused)
   return new Promise((resolve, reject) => {
     execFile(
       "ffprobe",

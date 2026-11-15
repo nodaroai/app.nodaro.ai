@@ -1,4 +1,5 @@
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
+import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/probe-guard.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 
 /**
@@ -27,13 +28,15 @@ export function maskEraseUnits(durationSec: number): number {
 
 export type MaskEraseLength =
   | { readonly ok: true; readonly durationSec: number; readonly units: number }
-  | { readonly ok: false; readonly code: "invalid_video_duration" | "video_duration_exceeds_limit"; readonly message: string }
+  | { readonly ok: false; readonly code: "invalid_video_duration" | "video_duration_exceeds_limit" | ProbeLinkRefusalCode; readonly message: string }
 
 export async function measureMaskEraseLength(url: string): Promise<MaskEraseLength> {
   let durationSec: number
   try {
     durationSec = (await probeVideoSource(url)).durationSeconds
-  } catch {
+  } catch (err) {
+    const refused = probeLinkRefusal(err)
+    if (refused) return { ok: false, ...refused }
     return { ok: false, code: "invalid_video_duration", message: "Could not read the mask video. The file may be corrupted or an unsupported format." }
   }
   if (durationSec > MASK_ERASE_MAX_DURATION_SEC) {

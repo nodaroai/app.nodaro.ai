@@ -1,6 +1,7 @@
 import { VIDEO_OVERLAY_PRICING, videoOverlayVideoUnits } from "@nodaro/shared/credits"
 import { expandVideoOverlayLayout, expandVideoOverlayPresets, videoOverlayHasVideoLayer, type VideoOverlayLayerInput } from "@nodaro/shared/video"
 import { probeVideoOverlayBaseSource } from "../providers/video/ffmpeg-utils.js"
+import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/probe-guard.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 import { videoOverlayRefusalAtLength, type VideoOverlayLengthRefusalCode } from "./video-overlay-refusal.js"
 
@@ -28,7 +29,7 @@ export type VideoOverlayLength =
   | { readonly ok: true; readonly durationSec: number; readonly units: number }
   | {
       readonly ok: false
-      readonly code: "invalid_media_duration" | VideoOverlayLengthRefusalCode
+      readonly code: "invalid_media_duration" | ProbeLinkRefusalCode | VideoOverlayLengthRefusalCode
       readonly message: string
     }
 
@@ -44,7 +45,9 @@ export async function measureVideoOverlayBase(request: VideoOverlayMeasuredReque
   let durationSec: number
   try {
     durationSec = (await probeVideoOverlayBaseSource(request.videoUrl)).streamDurationSec
-  } catch {
+  } catch (err) {
+    const refused = probeLinkRefusal(err)
+    if (refused) return { ok: false, ...refused }
     return {
       ok: false,
       code: "invalid_media_duration",

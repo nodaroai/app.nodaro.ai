@@ -37,8 +37,8 @@ vi.mock("../supabase.js", () => {
 
 const probe = vi.hoisted(() => ({ fn: (async () => 4.04) as (url: string) => Promise<number>, urls: [] as string[] }))
 vi.mock("../../providers/video/ffmpeg-utils.js", () => ({
-  assertSafeProbeSource: async () => {},
-  getVideoStreamDuration: async (url: string) => {
+  // The video stream's length of a link, read through the probe guard.
+  probeVideoStreamDurationSource: async (url: string) => {
     probe.urls.push(url)
     return probe.fn(url)
   },

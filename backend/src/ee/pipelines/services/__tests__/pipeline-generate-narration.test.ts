@@ -19,10 +19,10 @@ vi.mock("../../../billing/credits.js", () => ({
   },
 }))
 // Mock ffprobe at the ffmpeg-utils boundary — narration wrapper calls
-// getVideoDuration(audioUrl) after the worker job completes. Default mock
+// probeMediaDuration(audioUrl) after the worker job completes. Default mock
 // returns 12.5s; individual tests override for the failure path.
 vi.mock("../../../../providers/video/ffmpeg-utils.js", () => ({
-  getVideoDuration: vi.fn().mockResolvedValue(12.5),
+  probeMediaDuration: vi.fn().mockResolvedValue(12.5),
 }))
 // Seam 3 — the one job override (lib/speech-estimate.ts). Undefined is the
 // flag-off answer (the flat row reserves); a number is what the job reserves.
@@ -32,7 +32,7 @@ vi.mock("../../../../lib/speech-estimate.js", () => ({
 
 import { videoQueue } from "../../../../lib/queue.js"
 import { CreditsService } from "../../../billing/credits.js"
-import { getVideoDuration } from "../../../../providers/video/ffmpeg-utils.js"
+import { probeMediaDuration } from "../../../../providers/video/ffmpeg-utils.js"
 import { speechChargeOverride } from "../../../../lib/speech-estimate.js"
 import { pipelineGenerateNarration } from "../pipeline-generate-narration.js"
 
@@ -129,7 +129,7 @@ describe("pipelineGenerateNarration", () => {
     // ffprobe duration is surfaced so the final merge can validate the
     // narration fits inside the video.
     expect(result.audioDurationSec).toBe(12.5)
-    expect(getVideoDuration).toHaveBeenCalledWith("https://r2/narration.mp3")
+    expect(probeMediaDuration).toHaveBeenCalledWith("https://r2/narration.mp3")
     // Default model is the default speech model, ElevenLabs v4 (direct API,
     // supports [audio tags]) — reserved and run as the same model.
     expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
@@ -215,7 +215,7 @@ describe("pipelineGenerateNarration", () => {
   })
 
   it("returns audioDurationSec=null when ffprobe fails — non-fatal fallback", async () => {
-    ;(getVideoDuration as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+    ;(probeMediaDuration as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("ffprobe: 404"),
     )
     const supabase = makeSupabaseMock({

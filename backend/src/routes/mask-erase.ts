@@ -32,6 +32,7 @@ import { createsChildJob } from "../lib/job-submission-context.js"
 import { maskEraseBoxSchema } from "../lib/cast-swap-face-masking.js"
 import { maskEraseBaseCredits, measureMaskEraseLength } from "../lib/mask-erase-length.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 const MAX_BOXES = CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks
 
@@ -73,7 +74,7 @@ async function measureMaskPreHandler(req: FastifyRequest, reply: FastifyReply): 
   const url = safeUrlSchema.safeParse(body.maskUrl)
   if (!url.success) return // the handler's Zod parse answers it
   const measured = await measureMaskEraseLength(url.data)
-  if (!measured.ok) return void reply.code(400).send({ error: { code: measured.code, message: measured.message } })
+  if (!measured.ok) return void reply.code(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   body.__maskEraseUnits = measured.units
 }
 

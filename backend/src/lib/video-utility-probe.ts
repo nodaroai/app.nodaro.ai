@@ -1,4 +1,4 @@
-import { assertSafeProbeSource, runFfprobe, scanPacketEnds } from "../providers/video/ffmpeg-utils.js"
+import { readProbeSource, scanPacketEnds, type GuardedProbe, type ProbeSourceOptions } from "../providers/video/ffmpeg-utils.js"
 
 /**
  * How long a clip given to Trim Video, Loop Video or Combine Videos is: the
@@ -25,9 +25,6 @@ import { assertSafeProbeSource, runFfprobe, scanPacketEnds } from "../providers/
 
 /** Which of a clip's header lengths a node's worker reads first (the other is the fallback). */
 export type ClipLengthReading = "container" | "video-stream"
-
-/** The transports a probe may open: a file, or an http(s) link — never a pivot to another protocol. */
-const PROBE_PROTOCOLS = "file,http,https,tcp,tls"
 
 /** A clip with no video stream, or no length any reading can find: never charged, never rendered. */
 export class ClipUnreadableError extends Error {
@@ -69,26 +66,56 @@ export interface ClipLengthOptions {
   readonly deadlineAt?: number
   /** Stop reading when this aborts (a request whose client went away). */
   readonly signal?: AbortSignal
-  /** The caller already passed `src` through `assertSafeProbeSource` (one DNS lookup, not two). */
+  /** The caller already passed `src` through `assertSafeProbeSource` and it was allowed (one DNS lookup, not two). */
   readonly sourceChecked?: boolean
+  /** `src` is a local copy of a user's file (the own-storage fallback): read with the container rule a link gets. */
+  readonly userFile?: boolean
 }
 
 /**
  * A clip's length in seconds (see the module note), read first from the
  * container or the video stream (`reading`, default the container). `src` is
- * a local path or an http(s) link; a link must pass the probe's link guard
- * (`assertSafeProbeSource`), which throws first — unless the caller already
- * checked it (`sourceChecked`). A read that timed out
- * rejects with `timedOut: true` (retryable), one stopped by `signal` with
- * `aborted: true`; a clip with no video stream or no readable length rejects
- * with {@link ClipUnreadableError}; a file ffprobe cannot open at all rejects
- * with ffprobe's error.
+ * a local path or an http(s) link, read through the probe guard
+ * (`readProbeSource`): a link must pass the link guard, which throws first —
+ * unless the caller already checked it (`sourceChecked`) — and every hop
+ * ffprobe makes is checked again; a file of this install's own storage the
+ * guard refuses by its address is read from a capped download. A read that
+ * timed out rejects with `timedOut: true` (retryable), one stopped by
+ * `signal` with `aborted: true`; a clip with no video stream or no readable
+ * length rejects with {@link ClipUnreadableError}; a file ffprobe cannot open
+ * at all rejects with ffprobe's error.
  */
 export async function probeClipLengthSec(src: string, opts: ClipLengthOptions = {}): Promise<number> {
-  if (!opts.sourceChecked) await assertSafeProbeSource(src)
+  return readProbeSource(src, (input, probe) => readStreamLength(input, probe, opts, "video"), probeSourceOptions(opts))
+}
+
+/**
+ * A recording's SOUND length in seconds, by the same reading
+ * {@link probeClipLengthSec} gives a video: the container's length, else the
+ * first audio stream's, and for a file whose header carries neither (a WebM or
+ * an Ogg a browser recorded) the end of that stream's last packet, from the
+ * streamed packet scan — under the same guard and the same bounds
+ * (`timeoutMs`, `packetTimeoutMs`, `deadlineAt`, `signal`). A file with no
+ * audio stream, or no length any reading finds, rejects with
+ * {@link ClipUnreadableError}.
+ */
+export async function probeSoundLengthSec(src: string, opts: Omit<ClipLengthOptions, "reading"> = {}): Promise<number> {
+  return readProbeSource(src, (input, probe) => readStreamLength(input, probe, opts, "audio"), probeSourceOptions(opts))
+}
+
+function probeSourceOptions(opts: ClipLengthOptions): ProbeSourceOptions {
+  return {
+    ...(opts.sourceChecked ? { sourceChecked: true } : {}),
+    ...(opts.userFile ? { userFile: true } : {}),
+    ...(opts.signal ? { signal: opts.signal } : {}),
+    ...(opts.deadlineAt !== undefined ? { downloadTimeoutMs: opts.deadlineAt - Date.now() } : {}),
+  }
+}
+
+async function readStreamLength(src: string, probe: GuardedProbe, opts: ClipLengthOptions, kind: "video" | "audio"): Promise<number> {
   const headerMs = withinDeadline(opts.timeoutMs, opts.deadlineAt)
-  const out = await runFfprobe(
-    ["-v", "error", "-protocol_whitelist", PROBE_PROTOCOLS, "-select_streams", "v:0", "-show_entries", "stream=index,codec_type,duration:format=duration,start_time", "-of", "json", src],
+  const out = await probe.run(
+    ["-v", "error", ...probe.inputArgs, "-select_streams", kind === "video" ? "v:0" : "a:0", "-show_entries", "stream=index,codec_type,duration:format=duration,start_time", "-of", "json", src],
     { ...(headerMs !== undefined ? { timeoutMs: headerMs } : {}), ...(opts.signal ? { signal: opts.signal } : {}) },
   ).catch((err: unknown) => {
     throw opts.signal?.aborted ? Object.assign(new Error("clip reading aborted"), { aborted: true }) : err
@@ -100,7 +127,7 @@ export async function probeClipLengthSec(src: string, opts: ClipLengthOptions = 
     throw new ClipUnreadableError("unparseable probe")
   }
   const stream = Array.isArray(header.streams) ? header.streams[0] : undefined
-  if (!stream) throw new ClipUnreadableError("no video stream")
+  if (!stream) throw new ClipUnreadableError(kind === "video" ? "no video stream" : "no audio stream")
   const container = positiveSec(header.format?.duration)
   const streamSec = positiveSec(stream.duration)
   const sec = opts.reading === "video-stream" ? (streamSec ?? container) : (container ?? streamSec)
@@ -108,7 +135,7 @@ export async function probeClipLengthSec(src: string, opts: ClipLengthOptions = 
   if (typeof stream.index !== "number" || !Number.isInteger(stream.index)) throw new ClipUnreadableError("no stream index")
   const packetMs = withinDeadline(opts.packetTimeoutMs, opts.deadlineAt)
   const { maxPtsEnd, maxDtsEnd } = await scanPacketEnds(src, stream.index, {
-    protocolWhitelist: PROBE_PROTOCOLS,
+    probe,
     ...(packetMs !== undefined ? { timeoutMs: packetMs } : {}),
     ...(opts.signal ? { signal: opts.signal } : {}),
   })

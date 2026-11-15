@@ -706,6 +706,7 @@ describe("combine_videos verb", () => {
   it.each([
     ["probe_timeout", "Timed out reading clip 2 of 2 — run it again."],
     ["source_unreachable", "Could not reach clip 1 of 2 — run it again."],
+    ["probe_unavailable", "Could not read clip 1 of 2 just now — run it again."],
   ])("a retryable 503 %s from the measure reaches the agent as its own message, never 'model not available'", async (code, message) => {
     const fastify = Fastify()
     fastify.post("/v1/combine-videos", async (_req, reply) => reply.status(503).send({ error: { code, message } }))

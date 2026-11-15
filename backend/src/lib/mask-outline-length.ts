@@ -1,4 +1,5 @@
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
+import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/probe-guard.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 
 /**
@@ -28,13 +29,15 @@ export function maskOutlineUnits(durationSec: number): number {
 
 export type MaskOutlineLength =
   | { readonly ok: true; readonly durationSec: number; readonly units: number }
-  | { readonly ok: false; readonly code: "invalid_video_duration" | "video_duration_exceeds_limit"; readonly message: string }
+  | { readonly ok: false; readonly code: "invalid_video_duration" | "video_duration_exceeds_limit" | ProbeLinkRefusalCode; readonly message: string }
 
 export async function measureMaskOutlineLength(url: string): Promise<MaskOutlineLength> {
   let durationSec: number
   try {
     durationSec = (await probeVideoSource(url)).durationSeconds
-  } catch {
+  } catch (err) {
+    const refused = probeLinkRefusal(err)
+    if (refused) return { ok: false, ...refused }
     return { ok: false, code: "invalid_video_duration", message: "Could not read the video. The file may be corrupted or an unsupported format." }
   }
   if (durationSec > MASK_OUTLINE_MAX_DURATION_SEC) {

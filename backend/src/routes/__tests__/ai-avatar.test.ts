@@ -63,6 +63,10 @@ vi.mock("@/lib/url-validator.js", async () => {
 // deterministically. probeMediaDuration returns a controllable duration; the
 // default below (a short 12.3s clip) exercises the tight-bucket path.
 const mockProbeMediaDuration = vi.fn().mockResolvedValue(12.3)
+// The sound's length, read as Trim reads a clip (header, else a header-less recording's last packet).
+vi.mock("@/lib/video-utility-probe.js", () => ({
+  probeSoundLengthSec: (...args: unknown[]) => mockProbeMediaDuration(...args),
+}))
 vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   probeMediaDuration: (...args: unknown[]) => mockProbeMediaDuration(...args),
 }))
@@ -371,7 +375,7 @@ describe("ai-avatar audio-mode reserve bucketing", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(mockProbeMediaDuration).toHaveBeenCalledWith(VALID_AUDIO_URL)
+    expect(mockProbeMediaDuration).toHaveBeenCalledWith(VALID_AUDIO_URL, expect.objectContaining({ deadlineAt: expect.any(Number) }))
 
     // reserveCreditsForJob(req, reply, jobId, modelId) — 4th arg is the model id.
     const modelId = vi.mocked(reserveCreditsForJob).mock.calls[0]?.[3]
@@ -379,7 +383,7 @@ describe("ai-avatar audio-mode reserve bucketing", () => {
     expect(modelId).not.toBe("heygen-avatar-iv:720p:900s")
   })
 
-  it("falls back to the 120s bucket (NOT 900s) when the audio probe fails", async () => {
+  it("refuses the run when the audio probe fails, rather than reserve a 120s guess for a clip that may be longer", async () => {
     mockProbeMediaDuration.mockRejectedValueOnce(new Error("ffprobe failed"))
     mockJobInsert({ data: { id: "job-audio-fail" }, error: null })
 
@@ -396,33 +400,59 @@ describe("ai-avatar audio-mode reserve bucketing", () => {
       },
     })
 
-    expect(res.statusCode).toBe(200)
-    const modelId = vi.mocked(reserveCreditsForJob).mock.calls[0]?.[3]
-    expect(modelId).toBe("heygen-avatar-iv:720p:120s")
-    expect(modelId).not.toBe("heygen-avatar-iv:720p:900s")
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_media_duration")
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
   })
 
-  it("never prices a length the request states: a failed probe still falls back to the 120s bucket", async () => {
-    mockProbeMediaDuration.mockRejectedValueOnce(new Error("ffprobe failed"))
-    mockJobInsert({ data: { id: "job-audio-stated" }, error: null })
-
+  it("a host whose lookup failed for now is the retryable 503 every measuring route answers", async () => {
+    mockProbeMediaDuration.mockRejectedValueOnce(Object.assign(new Error("probeVideoSource: blocked — DNS resolution failed for cdn.example"), { reason: "dns" }))
     const res = await app.inject({
       method: "POST",
       url: "/v1/ai-avatar",
-      payload: {
-        avatarId: "avatar-123",
-        engine: "avatar-iv",
-        speechMode: "audio",
-        audioUrl: VALID_AUDIO_URL,
-        resolution: "720p",
-        userId: VALID_USER_ID,
-        __probedDurationSec: 1,
-      },
+      payload: { avatarId: "avatar-123", engine: "avatar-iv", speechMode: "audio", audioUrl: VALID_AUDIO_URL, resolution: "720p", userId: VALID_USER_ID },
     })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("source_unreachable")
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
 
-    expect(res.statusCode).toBe(200)
-    const modelId = vi.mocked(reserveCreditsForJob).mock.calls[0]?.[3]
-    expect(modelId).toBe("heygen-avatar-iv:720p:120s")
+  it("a probe the server could not start is the retryable 503, never \"the file may be corrupted\"", async () => {
+    mockProbeMediaDuration.mockRejectedValueOnce(Object.assign(new Error("ffprobe failed: spawn ffprobe ENOENT"), { killed: false, timedOut: false, notStarted: true }))
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/ai-avatar",
+      payload: { avatarId: "avatar-123", engine: "avatar-iv", speechMode: "audio", audioUrl: VALID_AUDIO_URL, resolution: "720p", userId: VALID_USER_ID },
+    })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("probe_unavailable")
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("never prices a length the request states: the measured length is priced, and a failed probe refuses the run rather than use it", async () => {
+    const stated = {
+      avatarId: "avatar-123",
+      engine: "avatar-iv",
+      speechMode: "audio",
+      audioUrl: VALID_AUDIO_URL,
+      resolution: "720p",
+      userId: VALID_USER_ID,
+      __probedDurationSec: 1,
+    }
+    // Read: priced by the measured 100.2 s (the 120s bucket), never the stated 1 s (the 5s bucket).
+    mockProbeMediaDuration.mockResolvedValueOnce(100.2)
+    mockJobInsert({ data: { id: "job-audio-stated" }, error: null })
+    const read = await app.inject({ method: "POST", url: "/v1/ai-avatar", payload: stated })
+    expect(read.statusCode).toBe(200)
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]?.[3]).toBe("heygen-avatar-iv:720p:120s")
+
+    // Unreadable: refused before anything is reserved; the stated length is no fallback.
+    vi.mocked(reserveCreditsForJob).mockClear()
+    mockProbeMediaDuration.mockRejectedValueOnce(new Error("ffprobe failed"))
+    const failed = await app.inject({ method: "POST", url: "/v1/ai-avatar", payload: stated })
+    expect(failed.statusCode).toBe(400)
+    expect(failed.json().error.code).toBe("invalid_media_duration")
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
   })
 })
 
@@ -457,11 +487,15 @@ describe("probeAudioDurationPreHandler", () => {
     expect(body.__probedDurationSec).toBeUndefined()
   })
 
-  it("leaves __probedDurationSec unset on probe failure (120s fallback path)", async () => {
+  it("refuses on probe failure, leaving nothing stashed (no 120s guess)", async () => {
     mockProbeMediaDuration.mockRejectedValueOnce(new Error("boom"))
     const body: Record<string, unknown> = { speechMode: "audio", audioUrl: VALID_AUDIO_URL }
-    await probeAudioDurationPreHandler(makeReq(body), makeReply())
+    const sent: unknown[] = []
+    const reply = { status: vi.fn(function (this: unknown) { return this }), send: vi.fn((b: unknown) => sent.push(b)) }
+    reply.status.mockReturnValue(reply)
+    await probeAudioDurationPreHandler(makeReq(body), reply as never)
     expect(body.__probedDurationSec).toBeUndefined()
-    expect(resolveAiAvatarCreditId(body)).toBe("heygen-avatar-iv:720p:120s")
+    expect(reply.status).toHaveBeenCalledWith(400)
+    expect(sent[0]).toMatchObject({ error: { code: "invalid_media_duration" } })
   })
 })

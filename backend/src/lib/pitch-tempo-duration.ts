@@ -1,5 +1,6 @@
 import { PITCH_TEMPO_PRICING, pitchTempoCreditId } from "@nodaro/shared/credits"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
+import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/probe-guard.js"
 
 /**
  * Pitch & Tempo: how long the input media is, and so which per-minute id a run
@@ -17,7 +18,7 @@ export type PitchTempoDuration =
   | { readonly ok: true; readonly durationSec: number; readonly creditId: string }
   | {
       readonly ok: false
-      readonly code: "invalid_media_duration" | "media_duration_exceeds_limit"
+      readonly code: "invalid_media_duration" | "media_duration_exceeds_limit" | ProbeLinkRefusalCode
       readonly message: string
     }
 
@@ -29,6 +30,8 @@ export async function measurePitchTempoDuration(
   try {
     seconds = await probeMediaDuration(mediaUrl)
   } catch (err) {
+    const refused = probeLinkRefusal(err)
+    if (refused) return { ok: false, ...refused }
     onProbeFailure(err)
     return {
       ok: false,

@@ -111,7 +111,7 @@ Examples (Avatar IV, 720p): a **30-second** clip = **990 credits**<!-- credits: 
 ### Reserve & refund
 
 - **Text mode** — the upfront hold is estimated from your script length and voice speed (slower speech reserves a bit more). You're charged for the actual generated length; the remainder is refunded.
-- **Audio mode** — the hold is sized from your uploaded clip's measured length, so a short voiceover reserves only a small amount (a few seconds' worth), not a large flat block. Audio is capped at 10 minutes (600s): a longer clip is automatically trimmed to 600s and the hold is sized at that 10-minute cap. As always, you're charged only for the real generated length and any surplus is refunded.
+- **Audio mode** — when you run the node on its own (the Run button, the API), the hold is sized from your clip's measured length, so a short voiceover reserves only a small amount (a few seconds' worth), not a large flat block. A recording whose header states no length (one a browser made) is measured in full, packet by packet. A clip that cannot be read is refused before anything is held: a `503` to retry when its link cannot be reached for now, a `400` otherwise (see [media links](../../features/media-links.md)). In a workflow run, the hold is the 120-second default. Audio is capped at 10 minutes (600s): a longer clip is automatically trimmed to 600s and the hold is sized at that 10-minute cap. As always, you're charged only for the real generated length and any surplus is refunded.
 
 ## Graceful Degradation
 

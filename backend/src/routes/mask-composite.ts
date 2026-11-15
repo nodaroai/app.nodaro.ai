@@ -39,6 +39,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { maskCompositeBaseCredits, maskCompositeLeadOf, measureMaskCompositeLength } from "../lib/mask-composite-length.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 const b = MASK_COMPOSITE_BOUNDS
 const d = MASK_COMPOSITE_DEFAULTS
@@ -75,7 +76,7 @@ async function measureLeadPreHandler(req: FastifyRequest, reply: FastifyReply): 
   if (!url.success) return // the handler's Zod parse (or its foreground check) answers it with a validation_error
   const measured = await measureMaskCompositeLength(url.data, lead)
   if (!measured.ok) {
-    return void reply.code(400).send({ error: { code: measured.code, message: measured.message } })
+    return void reply.code(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
   body.__maskCompositeUnits = measured.units
 }

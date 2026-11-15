@@ -66,7 +66,8 @@ vi.mock("../client.js", () => ({
   },
 }))
 
-vi.mock("../../video/ffmpeg-utils.js", () => ({ getVideoStreamDuration: vi.fn(async () => 29.133333) }))
+// The output is a link: its length is read through the probe guard (`probeVideoStreamDurationSource`).
+vi.mock("../../video/ffmpeg-utils.js", () => ({ probeVideoStreamDurationSource: vi.fn(async () => 29.133333) }))
 
 import { replicateLipSync } from "../lip-sync.js"
 
