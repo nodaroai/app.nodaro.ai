@@ -8,6 +8,7 @@ import {
   VOICE_CHANGER_MODEL_IDS,
   GVP_SUPPORTED_PROVIDERS,
   SEEDANCE_2_PROVIDERS,
+  isEditVideoProProvider,
   MUSIC_PROVIDERS,
   TRANSCRIBE_PROVIDERS,
   MODIFY_IMAGE_PROVIDERS,
@@ -706,7 +707,8 @@ const GVP_PROVIDER_RESOLUTIONS: Record<string, string[]> = Object.fromEntries(
 )
 // edit-video-pro stays Seedance-only (no minimax-h3: it has no v2v mode /
 // -ref pricing axis — same reasoning as the frontend's EVP_PROVIDERS subset).
-const EVP_REGISTRY_PROVIDERS = [...SEEDANCE_2_PROVIDERS]
+// Less the family members it holds back (Seedance 2.5 Flash, isEditVideoProProvider).
+const EVP_REGISTRY_PROVIDERS = [...SEEDANCE_2_PROVIDERS].filter(isEditVideoProProvider)
 
 /**
  * Hand-curated registry. Source of truth for `GET /v1/nodes`.

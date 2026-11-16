@@ -204,6 +204,6 @@ describe("totality: every surface of the lane that lists models applies the node
 })
 
 /** How many models each kind lists, before (nothing restricted) and on the small offer. */
-const UNRESTRICTED_BY_KIND = { image: 61, video: 84, audio: 31 }
-const SMALL_OFFER_BY_KIND = { image: 50, video: 45, audio: 9 }
-const IMAGE_AND_VIDEO_BY_KIND = { image: 50, video: 45 }
+const UNRESTRICTED_BY_KIND = { image: 61, video: 85, audio: 31 }
+const SMALL_OFFER_BY_KIND = { image: 50, video: 46, audio: 9 }
+const IMAGE_AND_VIDEO_BY_KIND = { image: 50, video: 46 }

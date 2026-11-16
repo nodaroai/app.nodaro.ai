@@ -2992,6 +2992,18 @@ so a value the model doesn't support is ignored, never a 400:
   `aspectRatio` is coerced to `adaptive` rather than sent. `referenceTaskType`
   says what its reference media is for (see
   [Seedance 2.5 reference task type](#seedance-25-reference-task-type)).
+- **`seedance-2-5-flash`** (Seedance 2.5 Flash) is the faster, lower-cost tier
+  of Seedance 2.5: also up to **30s in one call**, at **480p / 720p** (default
+  720p; `1080p` renders and bills 720p), with **10 images / 5 videos / 5 audio**
+  references — more is a `400 too_many_references` naming the limit, before
+  anything is reserved (a node run in the editor or a workflow run sends the
+  first ones instead). Reference audio is 2–30s a clip and 30s in total (a
+  `400` otherwise, before anything is reserved); a clip that is not WAV or MP3
+  is converted to MP3 before it is sent. A prompt with reference audio alone
+  is a valid request. A
+  start frame forces `adaptive` as on `seedance-2-5`, and `referenceTaskType`
+  works the same. It has no `draft` (ignored) and takes no seed. On
+  `POST /v1/video-to-video` it is the edit model beside `seedance-2-5`.
 - **`minimax-h3`** (MiniMax H3) takes the same reference fields with the
   same 9 / 3 / 3 caps and renders at `resolution: "2K"` (default) or `"768P"`
   (the cheaper per-second rate) — any other resolution value renders and bills

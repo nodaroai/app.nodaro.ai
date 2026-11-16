@@ -123,6 +123,9 @@ import {
   buildMotionCreditModelIdentifier,
   motionTransferResolution,
   lipSyncAudioRateOf,
+  isSeedanceLipSyncProvider,
+  referenceAudioLipSyncCreditId,
+  seedanceLipSyncResolution,
   resolveCinematicCreditId,
   buildVideoAnalysisCreditId,
   buildVideoAuditCreditId,
@@ -207,6 +210,7 @@ import {
   withoutLipSyncLeversNotTaken,
   NODARO_VIDEO_UPSCALE_PROVIDER,
   retiredLipSyncProviderMessage,
+  editVideoProProviderRefusal,
 } from "@nodaro/shared/models"
 import {
   isRenderNodeType,
@@ -5734,7 +5738,12 @@ function buildPayloadOf(
       // length rides the payload as before, read for no price: the stamp
       // replaces it with the measured one for a bucketed model.
       const lipSyncResolution = (data.resolution as string | undefined) ?? "720p"
-      const lipSyncIdentifier = provider === "infinitalk" ? `infinitalk:${lipSyncResolution}` : provider
+      // The Seedance 2 family: its plain 8-second row at the resolution the run
+      // sends (decided 2026-11-16; `seedanceLipSyncCreditId`, the route's own).
+      // MiniMax Hailuo 3 holds `minimax-h3:8s`, the route's row (decided 2026-11-16).
+      const seedanceLipSync = isSeedanceLipSyncProvider(provider)
+      const lipSyncIdentifier = referenceAudioLipSyncCreditId(provider, data.resolution)
+        ?? (provider === "infinitalk" ? `infinitalk:${lipSyncResolution}` : provider)
       return {
         jobName: "lip-sync",
         queueName: "video-generation",
@@ -5746,7 +5755,7 @@ function buildPayloadOf(
           audioUrl: resolvedInputs.audioUrl || data.audioUrl,
           prompt: applyPromptAffixes((resolvedInputs.prompt || data.prompt) as string | undefined, readPromptAffixes(data), refMap) || "A person talking naturally",
           provider,
-          resolution: data.resolution,
+          resolution: seedanceLipSync ? seedanceLipSyncResolution(provider, data.resolution) : data.resolution,
           audioDurationSec: typeof data.audioDurationSec === "number" ? data.audioDurationSec : undefined,
           guidanceScale: data.guidanceScale,
           inferenceSteps: data.inferenceSteps,
@@ -6847,6 +6856,10 @@ function buildPayloadOf(
       // node-executor's computeEditVideoProCreditOverride probes + clamps +
       // stamps proPricing on this same payload object before reserving.
       // `type: "edit-video-pro"` is the payload marker that override gates on.
+      // A model Edit Video Pro does not offer (Seedance 2.5 Flash) is refused
+      // here, before any job row or hold (a stored or imported node).
+      const evpRefusal = editVideoProProviderRefusal((data.provider as string | undefined) ?? "seedance-2")
+      if (evpRefusal) throw new Error(evpRefusal)
       return simpleResult("edit-video-pro", "edit-video-pro", {
         jobId,
         type: "edit-video-pro",

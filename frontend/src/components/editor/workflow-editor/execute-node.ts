@@ -49,6 +49,7 @@ import {
   VIDEO_INPUT_LIP_SYNC_PROVIDERS,
   FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS,
   isSeedance2Provider,
+  trimVideoReferencesToLimits,
   isSeedanceVideoEditProvider,
   isCatalogExtendProvider,
   isGrokExtendProvider,
@@ -3234,6 +3235,15 @@ function executeNodeCore(
     // node's value, with the stored ratio and length as they are — the server
     // resolves the declaration and coerces both (payload-builder sends the same).
     const i2vTaskType = listedSeedanceTaskType(nodeProvider, i2vData.referenceTaskType)
+    // A model that refuses an over-limit request (Seedance 2.5 Flash) is sent
+    // the first references up to its caps, so a node run is never refused for
+    // wires a model switch left (decided 2026-11-16); other models' lists go as they are.
+    const i2vSent = trimVideoReferencesToLimits(nodeProvider || undefined, {
+      images: i2vMergedRefs,
+      videos: referenceVideoUrls,
+      audio: referenceAudioUrls,
+      frames: (startFrameUrl ? 1 : 0) + (endFrameUrl ? 1 : 0),
+    })
     setUserPromptTemplate(i2vData.prompt?.trim() || undefined);
     return runVideoGeneration(
       node.id,
@@ -3258,14 +3268,14 @@ function executeNodeCore(
       i2vData.videoSize,
       i2vData.seed,
       i2vData.cameraFixed,
-      i2vMergedRefs?.length ? i2vMergedRefs : undefined,
+      i2vSent.images?.length ? i2vSent.images : undefined,
       isVeoRefMode ? "REFERENCE_2_VIDEO" : undefined,
       {
-        referenceVideoUrls: referenceVideoUrls?.length ? referenceVideoUrls : undefined,
+        referenceVideoUrls: i2vSent.videos?.length ? i2vSent.videos : undefined,
         // The rail-caption seat the route reads — the SAME field an API caller
         // fills. Only ships alongside the clips it captions.
-        referenceVideoCaptions: referenceVideoUrls?.length ? i2vScene3DCaptions : undefined,
-        referenceAudioUrls: referenceAudioUrls?.length ? referenceAudioUrls : undefined,
+        referenceVideoCaptions: i2vSent.videos?.length ? i2vScene3DCaptions?.slice(0, i2vSent.videos.length) : undefined,
+        referenceAudioUrls: i2vSent.audio?.length ? i2vSent.audio : undefined,
         webSearch: i2vData.webSearch,
         nsfwChecker: i2vData.nsfwChecker,
         enableTranslation: i2vData.enableTranslation,
@@ -3368,6 +3378,8 @@ function executeNodeCore(
         : Array.isArray(inputs.referenceImageUrls) ? (inputs.referenceImageUrls as string[]) : [];
       const editImageUrls = [...wiredImages, ...editMention.additionalUrls.filter((u) => !wiredImages.includes(u))];
       const editAudioUrls = inputs.referenceAudioUrls as string[] | undefined;
+      // Trimmed to the caps of a model that refuses an over-limit request (Seedance 2.5 Flash Edit).
+      const editSent = trimVideoReferencesToLimits(provider, { images: editImageUrls, audio: editAudioUrls });
       setUserPromptTemplate((typeof v2vData.prompt === "string" ? v2vData.prompt.trim() : "") || undefined);
       return runTextToVideoGeneration(
         node.id,
@@ -3384,8 +3396,8 @@ function executeNodeCore(
           generateAudio: v2vData.generateAudio,
           seed: v2vData.seed,
           referenceVideoUrls: [sourceVideoUrl],
-          referenceImageUrls: editImageUrls.length > 0 ? editImageUrls : undefined,
-          referenceAudioUrls: editAudioUrls?.length ? editAudioUrls : undefined,
+          referenceImageUrls: editSent.images?.length ? editSent.images : undefined,
+          referenceAudioUrls: editSent.audio?.length ? editSent.audio : undefined,
           // Requested as the route and the workflow run request it: the server
           // declares it once it has measured the clip (4–30 s), and it moves
           // nothing priced here (the edit shape is already its own).
@@ -3622,6 +3634,7 @@ function executeNodeCore(
     }
     const t2vRefVideos = inputs.referenceVideoUrls as string[] | undefined
     const t2vRefAudios = inputs.referenceAudioUrls as string[] | undefined
+    const t2vSent = trimVideoReferencesToLimits(t2vProvider, { images: t2vRefImages, videos: t2vRefVideos, audio: t2vRefAudios })
     // Pickers show "16:9" / "720p" as defaults but don't persist them to
     // data until the user actively picks — so an untouched Seedance 2 node
     // silently submits without aspectRatio/resolution. Fill the defaults
@@ -3672,12 +3685,13 @@ function executeNodeCore(
         ? { resolution: SEEDANCE_DRAFT_RESOLUTION, draft: true }
         : { resolution: (t2vRaw.resolution as string | undefined) ?? (isSeedance2T2V ? MODEL_CATALOG[t2vProvider]?.resolutions?.[0] : undefined) }),
       generateAudio: (t2vRaw.generateAudio as boolean | undefined) ?? (isSeedance2T2V ? true : undefined),
-      referenceImageUrls: t2vRefImages?.length ? t2vRefImages : undefined,
-      referenceVideoUrls: t2vRefVideos?.length ? t2vRefVideos : undefined,
+      // Trimmed to the caps of a model that refuses an over-limit request (see the image path above).
+      referenceImageUrls: t2vSent.images?.length ? t2vSent.images : undefined,
+      referenceVideoUrls: t2vSent.videos?.length ? t2vSent.videos : undefined,
       // The rail-caption seat the route reads — the SAME field an API caller
       // fills. Only ships alongside the clips it captions.
-      referenceVideoCaptions: t2vRefVideos?.length ? t2vScene3DCaptions : undefined,
-      referenceAudioUrls: t2vRefAudios?.length ? t2vRefAudios : undefined,
+      referenceVideoCaptions: t2vSent.videos?.length ? t2vScene3DCaptions?.slice(0, t2vSent.videos.length) : undefined,
+      referenceAudioUrls: t2vSent.audio?.length ? t2vSent.audio : undefined,
       webSearch: (t2vRaw.webSearch as boolean | undefined) ?? (isSeedance2T2V ? false : undefined),
       nsfwChecker: t2vRaw.nsfwChecker as boolean | undefined,
       // Kling 4.0: wired characters as named subjects (the same shared grouping

@@ -3040,6 +3040,42 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedance-2-5:30s:1080p", credits: 11850, note: "30s 1080p (max)" },
     ],
   },
+  // Seedance 2.5 Flash — the fast tier of Seedance 2.5, listed beside it (no
+  // default, preset or role moves to it). Its own facts, never the sibling's:
+  // 480p/720p only (no 1080p), 10 images / 5 videos / 5 audio references
+  // (SEEDANCE_2_5_FLASH_REF_LIMITS), WAV/MP3 reference audio only, a prompt plus
+  // reference audio alone is a valid request, and no draft mode or HD finalize.
+  "seedance-2-5-flash": {
+    id: "seedance-2-5-flash",
+    kind: "video",
+    // `v2v`: it edits a clip by instruction through the same Seedance reference
+    // lane as Seedance 2.5 (SEEDANCE_VIDEO_EDIT_PROVIDERS).
+    modes: ["i2v", "t2v", "v2v"] as const,
+    family: "Bytedance",
+    maker: "bytedance",
+    label: "Seedance 2.5 Flash",
+    series: "Seedance",
+    description: "Seedance 2.5 Flash — the faster, lower-cost tier of Seedance 2.5: 4–30s with native sound at 480p or 720p, from text, a first frame or first and last frames, up to 10 image / 5 video / 5 audio references (audio alone works too), and video edits by instruction.",
+    useCases: ["fast", "narrative", "long-form"],
+    features: ["end-frame", "audio", "reference-image", "video-reference", "reference-to-video"],
+    aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
+    durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 8,
+    autoDuration: true,
+    referenceTaskTypes: ["reference", "edit", "extend"],
+    resolutions: ["480p", "720p"],
+    // No seed in KIE's schema for Flash either — the provider config omits it.
+    noSeed: true,
+    pricing: [
+      { identifier: "seedance-2-5-flash", credits: 820, note: "default 8s 720p — see :Ns:res variants for exact" },
+      { identifier: "seedance-2-5-flash:8s:480p", credits: 370, note: "8s 480p" },
+      { identifier: "seedance-2-5-flash:8s:720p", credits: 820, note: "8s 720p" },
+      { identifier: "seedance-2-5-flash:8s:480p-ref", credits: 230, note: "8s 480p with reference video" },
+      { identifier: "seedance-2-5-flash:8s:720p-ref", credits: 510, note: "8s 720p with reference video" },
+      { identifier: "seedance-2-5-flash:30s:480p", credits: 1390, note: "30s 480p (max)" },
+      { identifier: "seedance-2-5-flash:30s:720p", credits: 3080, note: "30s 720p (max)" },
+    ],
+  },
 
   // ── Wan ──
   // Wan 3.0 (standard + Prime) — a NEW generation, not a tier of the 2.x ladder.

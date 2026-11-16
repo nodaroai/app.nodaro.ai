@@ -1,5 +1,5 @@
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
-import { SEEDANCE_2_CONTINUATION_REF_SEC } from "@nodaro/shared/models"
+import { SEEDANCE_2_CONTINUATION_REF_SEC, editVideoProProviderRefusal } from "@nodaro/shared/models"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError } from "./credits.js"
 import { probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 
@@ -91,6 +91,11 @@ export async function computeEditVideoProPricing(args: {
   spanEnd: number
 }): Promise<EditVideoProPricing> {
   const { provider } = args
+  // A model Edit Video Pro does not offer (Seedance 2.5 Flash, held back —
+  // `isEditVideoProProvider`) is refused before it is priced, so a direct
+  // request, an imported node or an MCP write naming it never holds credits.
+  const notOffered = editVideoProProviderRefusal(provider)
+  if (notOffered) throw new Error(notOffered)
   const maxSpanSec = Number(process.env.EDIT_VIDEO_PRO_MAX_SPAN || 120)
   const feeBase = STATIC_CREDIT_COSTS["edit-video-pro"]
   if (feeBase === undefined) throw new PriceNotConfiguredError("edit-video-pro")

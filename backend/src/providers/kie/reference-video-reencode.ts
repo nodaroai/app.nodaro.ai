@@ -30,7 +30,7 @@
  * - a QuickTime source stays a MOV (its PCM sound and 4:4:4 picture are what
  *   that container was chosen for), anything else becomes an MP4;
  * - the copy stays within the provider's size limit a reference video
- *   (`referenceVideoMaxBytes`: 200 MB on Seedance 2.5, 50 MB on the 2.0
+ *   (`referenceVideoMaxBytes`: 200 MB on Seedance 2.5 and 2.5 Flash, 50 MB on the 2.0
  *   family): a source that fits keeps its own bitrate; only one over the limit is encoded at
  *   the bitrate that fits (`SIZE_HEADROOM` below it), and a copy that two
  *   passes land just over the limit is encoded once more at that bitrate.
@@ -55,7 +55,11 @@ export const SEEDANCE_2_REF_VIDEO_MAX_BYTES = 50_000_000
 /** Seedance 2.5's largest reference video, in bytes (200 MB). */
 export const SEEDANCE_2_5_REF_VIDEO_MAX_BYTES = 200_000_000
 
-const REF_VIDEO_MAX_BYTES: Readonly<Record<string, number>> = { "seedance-2-5": SEEDANCE_2_5_REF_VIDEO_MAX_BYTES }
+// Seedance 2.5 Flash documents the same 200 MB per reference video.
+const REF_VIDEO_MAX_BYTES: Readonly<Record<string, number>> = {
+  "seedance-2-5": SEEDANCE_2_5_REF_VIDEO_MAX_BYTES,
+  "seedance-2-5-flash": SEEDANCE_2_5_REF_VIDEO_MAX_BYTES,
+}
 
 /**
  * The largest reference video `provider` takes, in bytes, as the provider

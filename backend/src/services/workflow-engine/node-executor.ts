@@ -143,7 +143,7 @@ import { pricedRefVideoInput, probeAndCheckRefVideoDurations, probeRefVideoDurat
 import { payloadReplicas, readReplica, ReplicaRecordingError, withoutReplicaLinks } from "../../lib/voice-replica.js"
 import { stampSeedanceReferenceTaskTypeForRun } from "../../lib/seedance-task-type-stamp.js"
 import { applyAudioSoundtrack } from "../../lib/audio-soundtrack.js"
-import { probeAndCheckRefAudio } from "../../lib/ref-audio-probe.js"
+import { probeAndCheckRefAudio, sentReferenceAudioUrls } from "../../lib/ref-audio-probe.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import type {
@@ -2468,7 +2468,13 @@ async function executeWorkerNode(
   // runs refuse a clip the provider would reject before anything is reserved.
   const refAudioCheck = await probeAndCheckRefAudio({
     provider: payload.provider as string | undefined,
-    referenceAudioUrls: payload.referenceAudioUrls,
+    // A Seedance Lip Sync run sends its voice line as reference audio 1.
+    referenceAudioUrls: sentReferenceAudioUrls({
+      provider: payload.provider,
+      referenceAudioUrls: payload.referenceAudioUrls,
+      audioUrl: payload.audioUrl,
+      lipSync: node.type === "lip-sync",
+    }),
   })
   if (!refAudioCheck.ok) {
     await supabase.from("jobs").delete().eq("id", jobId)

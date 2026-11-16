@@ -345,6 +345,8 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // Seedance 2.5 raises the prompt ceiling to 30000
   // (docs.kie.ai/market/bytedance/seedance-2-5).
   "seedance-2-5": 30000,
+  // Seedance 2.5 Flash — 20480 chars (docs.kie.ai/market/bytedance/seedance-2-5-flash).
+  "seedance-2-5-flash": 20480,
   "gemini-omni-video": 20000,
   // Gemini Omni Flash 1.1 — same 20000-char prompt surface as the pro sibling
   // (docs.kie.ai/market/google/gemini-omni-flash-1-1).
@@ -1175,6 +1177,7 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "seedance-2-fast",
   "seedance-2-mini",
   "seedance-2-5",
+  "seedance-2-5-flash",
   "minimax-h3",
   "hailuo-2.3-pro",
   "hailuo-2.3",
@@ -1240,6 +1243,7 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "seedance-2-fast",
   "seedance-2-mini",
   "seedance-2-5",
+  "seedance-2-5-flash",
   "minimax-h3",
   "wan",
   "hailuo-standard",
@@ -1536,7 +1540,7 @@ export type VideoToVideoProvider = typeof VIDEO_TO_VIDEO_PROVIDERS[number]
  * measured settlement, the edit-mode retry and the reconcile recovery are that
  * lane's — there is no second copy to keep in step.
  */
-export const SEEDANCE_VIDEO_EDIT_PROVIDERS = ["seedance-2-5"] as const
+export const SEEDANCE_VIDEO_EDIT_PROVIDERS = ["seedance-2-5", "seedance-2-5-flash"] as const
 export type SeedanceVideoEditProvider = typeof SEEDANCE_VIDEO_EDIT_PROVIDERS[number]
 
 export function isSeedanceVideoEditProvider(provider: string | undefined): provider is SeedanceVideoEditProvider {
@@ -1760,6 +1764,7 @@ export const LIP_SYNC_PROVIDERS = [
   "seedance-2-fast",
   "seedance-2-mini",
   "seedance-2-5",
+  "seedance-2-5-flash",
   // MiniMax Hailuo 3 — same multimodal audio-driven mechanism (r2v
   // reference_audio_urls paired with an image ref); rides the same
   // reference-audio lip-sync surface as the Seedance 2 family.
@@ -1804,6 +1809,7 @@ export const SEEDANCE_LIP_SYNC_PROVIDERS = new Set<string>([
   "seedance-2-fast",
   "seedance-2-mini",
   "seedance-2-5",
+  "seedance-2-5-flash",
   "minimax-h3",
 ])
 
@@ -2354,6 +2360,7 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   "seedance-2-fast",
   "seedance-2-mini",
   "seedance-2-5",
+  "seedance-2-5-flash",
   "minimax-h3",
   "grok-imagine-video-1.5",
   "happyhorse",
@@ -2398,10 +2405,40 @@ export const SEEDANCE_2_PROVIDERS = new Set<string>([
   // DIFFERS (30s ceiling, no 1080p/4K, wider ref caps) the difference is
   // carried by the per-provider maps, never by branching on this set.
   "seedance-2-5",
+  // Seedance 2.5 Flash — the fast tier of 2.5, same capability surface. Its
+  // own facts (480p/720p, 10/5/5 references, WAV/MP3 reference audio, no
+  // draft) live in the per-provider maps, as 2.5's do.
+  "seedance-2-5-flash",
 ])
 
 export function isSeedance2Provider(provider: string | undefined): boolean {
   return !!provider && SEEDANCE_2_PROVIDERS.has(provider)
+}
+
+/**
+ * Seedance models Edit Video Pro does not offer, although they are members of
+ * the family it is drawn from (decided 2026-11-16: Seedance 2.5 Flash ships on
+ * Generate Video, Generate Video Pro, Edit Video and Lip Sync; Edit Video Pro
+ * is a separate decision). Read through {@link isEditVideoProProvider}.
+ */
+export const EDIT_VIDEO_PRO_HELD_BACK_PROVIDERS: ReadonlySet<string> = new Set<string>(["seedance-2-5-flash"])
+
+/** Whether Edit Video Pro offers this model: a Seedance 2 family member it has not held back. */
+export function isEditVideoProProvider(provider: string | undefined): boolean {
+  return isSeedance2Provider(provider) && !EDIT_VIDEO_PRO_HELD_BACK_PROVIDERS.has(provider!)
+}
+
+/**
+ * The refusal for an Edit Video Pro run on a model it holds back
+ * ({@link EDIT_VIDEO_PRO_HELD_BACK_PROVIDERS}), or undefined: refused before
+ * anything is priced or held, on the route's pricing and the workflow run
+ * alike (a stored, imported or MCP-written node too). Any other model keeps
+ * its own handling (an unknown one is refused by its price lookup).
+ */
+export function editVideoProProviderRefusal(provider: string | undefined): string | undefined {
+  return provider !== undefined && EDIT_VIDEO_PRO_HELD_BACK_PROVIDERS.has(provider)
+    ? `${provider} is not offered on Edit Video Pro. Pick another Edit Video Pro model.`
+    : undefined
 }
 
 /**
@@ -3066,6 +3103,17 @@ export const SEEDANCE_2_5_REF_LIMITS = {
 } as const
 
 /**
+ * Seedance 2.5 Flash's reference caps (docs.kie.ai/market/bytedance/seedance-2-5-flash):
+ * 10 images, 5 videos, 5 audio clips. Its own constant: Flash is the fast tier
+ * of 2.5, but its caps are lower than 2.5's.
+ */
+export const SEEDANCE_2_5_FLASH_REF_LIMITS = {
+  images: 10,
+  videos: 5,
+  audio: 5,
+} as const
+
+/**
  * KIE r2v REFERENCE-VIDEO MINIMUM (seconds) for the Seedance 2.0 family — the
  * provider hard-rejects shorter reference clips with a 400 BEFORE generation:
  * "the parameter video duration (seconds) specified in the request must be
@@ -3127,6 +3175,9 @@ export const SEEDANCE_2_R2V_MAX_AUDIO_SEC_BY_PROVIDER: Record<string, number> = 
   // Seedance 2.5 — documented hard limit: each reference audio 2-30s, ≤15 MB
   // per file (docs.kie.ai/market/bytedance/seedance-2-5).
   "seedance-2-5": 30,
+  // Seedance 2.5 Flash — the same documented 2-30s per clip, ≤15 MB
+  // (docs.kie.ai/market/bytedance/seedance-2-5-flash).
+  "seedance-2-5-flash": 30,
   // MiniMax Hailuo 3 — documented hard limit: each reference audio segment
   // 2-15s, ≤15s total (docs.kie.ai/market/minimax-h3/reference-to-video).
   "minimax-h3": 15,
@@ -3165,8 +3216,16 @@ export function findSeedance2AudioOverLimit(
 export interface RefAudioRule {
   /** Accepted containers, as ffprobe's `format_name` spells them ("mp3"). */
   formats?: readonly string[]
+  /**
+   * A clip outside `formats` is converted to this format before it is sent,
+   * instead of refused (decided 2026-11-16 for Seedance 2.5 Flash). Its length
+   * is still checked.
+   */
+  convertsTo?: "mp3"
   minSec?: number
   maxSec?: number
+  /** The most seconds all the reference audio of a request may play, together. */
+  maxTotalSec?: number
 }
 
 /**
@@ -3186,6 +3245,13 @@ export interface RefAudioRule {
  */
 export const VIDEO_REF_AUDIO_RULES: Record<string, RefAudioRule | undefined> = {
   "vidu-q4": { formats: ["mp3"], minSec: 3, maxSec: 12 },
+  // Seedance 2.5 Flash: "Format: wav, mp3", each clip 2-30 seconds, "total
+  // duration of reference audio must not exceed 30 seconds"
+  // (docs.kie.ai/market/bytedance/seedance-2-5-flash). A clip in another format
+  // is converted to MP3 before it is sent (decided 2026-11-16); its length is
+  // still refused before anything is held. Seedance 2.5 itself also takes AAC
+  // and OGG, so it has no row here.
+  "seedance-2-5-flash": { formats: ["wav", "mp3"], convertsTo: "mp3", minSec: 2, maxSec: 30, maxTotalSec: 30 },
 }
 
 /** One probed reference-audio clip. A field the probe could not read is absent. */
@@ -3197,30 +3263,46 @@ export interface RefAudioProbe {
 
 export type RefAudioCheck =
   | { ok: true }
-  | { ok: false; code: "audio_format_unsupported" | "audio_too_short" | "audio_too_long"; message: string }
+  | { ok: false; code: "audio_format_unsupported" | "audio_too_short" | "audio_too_long" | "audio_total_too_long"; message: string }
 
 /**
  * Check probed reference-audio clips against {@link VIDEO_REF_AUDIO_RULES}.
  * An unreadable field is IGNORED, never rejected — a probe blip must not block
  * a legal run (the provider still has the final say).
  */
-export function checkRefAudioRules(provider: string | undefined, probes: readonly RefAudioProbe[]): RefAudioCheck {
+export function checkRefAudioRules(
+  provider: string | undefined,
+  probes: readonly RefAudioProbe[],
+  /**
+   * Whether a clip outside `formats` can be converted on this install
+   * (`convertsTo`). An install whose stored files no outside provider can
+   * fetch cannot send a converted copy, so there the format is refused, before
+   * anything is held, as on a rule that does not convert. Default: it can.
+   */
+  opts: { readonly canConvert?: boolean } = {},
+): RefAudioCheck {
   const rule = provider ? VIDEO_REF_AUDIO_RULES[provider] : undefined
   if (!rule) return { ok: true }
+  const converts = !!rule.convertsTo && opts.canConvert !== false
+  let totalSec = 0
   for (const [i, p] of probes.entries()) {
     const n = i + 1
-    if (rule.formats && p.formatNames && p.formatNames.length > 0 && !p.formatNames.some((f) => rule.formats!.includes(f))) {
+    if (rule.formats && !converts && p.formatNames && p.formatNames.length > 0 && !p.formatNames.some((f) => rule.formats!.includes(f))) {
       const want = rule.formats.map((f) => f.toUpperCase()).join(" or ")
       return { ok: false, code: "audio_format_unsupported", message: `Reference audio ${n} must be ${want} for this model. Convert the clip to ${want} and try again.` }
     }
     const d = p.durationSec
     if (d === undefined || !Number.isFinite(d) || d <= 0) continue
+    totalSec += d
     if (rule.minSec !== undefined && d < rule.minSec) {
       return { ok: false, code: "audio_too_short", message: `Reference audio ${n} is too short for this model: ${d.toFixed(1)}s is under the ${rule.minSec}s minimum.` }
     }
     if (rule.maxSec !== undefined && d > rule.maxSec) {
       return { ok: false, code: "audio_too_long", message: `Reference audio ${n} is too long for this model: ${d.toFixed(1)}s exceeds the ${rule.maxSec}s limit. Please use a shorter audio clip.` }
     }
+  }
+  if (rule.maxTotalSec !== undefined && totalSec > rule.maxTotalSec) {
+    return { ok: false, code: "audio_total_too_long", message: `The reference audio is too long for this model: ${totalSec.toFixed(1)}s together exceeds the ${rule.maxTotalSec}s limit. Use fewer or shorter clips.` }
   }
   return { ok: true }
 }
@@ -3246,6 +3328,15 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
     audio?: number
     characters?: number
     voices?: number
+    /**
+     * A request that sends more images, videos or audio clips than the caps
+     * above is REFUSED on the API and MCP, before anything is held, instead of
+     * sending the first ones (decided 2026-11-16 for Seedance 2.5 Flash; read
+     * through `videoReferencesOverLimitProblem`). The editor trims what its
+     * Run sends to the caps first (`trimVideoReferencesToLimits`), and a
+     * workflow run keeps the provider's trim, so neither is refused.
+     */
+    requestRefusesOverLimit?: true
     /**
      * Cap on ALL materials together (images + videos + characters + audio),
      * when the provider counts them as one budget (Kling 4.0: 15). Absent ⇒
@@ -3295,6 +3386,8 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   "seedance-2-mini": { ...SEEDANCE_2_REF_LIMITS },
   // Seedance 2.5 — wider caps than the 2.0 family (30 / 10 / 10).
   "seedance-2-5": { ...SEEDANCE_2_5_REF_LIMITS },
+  // Seedance 2.5 Flash — lower caps than 2.5 (10 / 5 / 5).
+  "seedance-2-5-flash": { ...SEEDANCE_2_5_FLASH_REF_LIMITS, requestRefusesOverLimit: true },
   // MiniMax Hailuo 3 — identical multimodal caps (9 images / 3 videos / 3
   // audio per docs.kie.ai/market/minimax-h3/reference-to-video). Note: KIE
   // bills input images beyond the first 5 (11 KIE cr each) — see the
@@ -3381,6 +3474,63 @@ export interface RefVideoDurationLimit {
   maxTotalSec?: number
 }
 
+/** How many reference images, videos and audio clips a request sends. `frames` counts a start / end frame that joins the image list when any reference is sent. */
+export interface VideoReferenceCounts {
+  images: number
+  videos: number
+  audio: number
+  frames?: number
+}
+
+/**
+ * The refusal for a request that sends more references than the model takes,
+ * on a model that refuses rather than trims (`requestRefusesOverLimit`), or
+ * undefined. A start or end frame joins the image list once any reference is
+ * sent (`resolveSeedance2Inputs`), so it counts toward the image cap then.
+ */
+export function videoReferencesOverLimitProblem(provider: string | undefined, counts: VideoReferenceCounts): string | undefined {
+  const row = provider ? VIDEO_REF_LIMITS_BY_PROVIDER[provider] : undefined
+  if (!row?.requestRefusesOverLimit) return undefined
+  const anyReference = counts.images + counts.videos + counts.audio > 0
+  const images = counts.images + (anyReference ? (counts.frames ?? 0) : 0)
+  const checks: Array<[number, number | undefined, string]> = [
+    [images, row.images, anyReference && (counts.frames ?? 0) > 0 ? "images (a start or end frame counts as one)" : "images"],
+    [counts.videos, row.videos, "videos"],
+    [counts.audio, row.audio, "audio clips"],
+  ]
+  for (const [n, cap, noun] of checks) {
+    if (cap !== undefined && n > cap) {
+      return `${provider} takes at most ${cap} reference ${noun}; this request sends ${n}. Remove ${n - cap}.`
+    }
+  }
+  return undefined
+}
+
+/**
+ * The references the editor's Run sends a model that refuses an over-limit
+ * request: the first ones, up to its caps — images less the frames that join
+ * them — so an editor run is never refused for references a model switch left
+ * wired (decided 2026-11-16). Every other model's lists come back as they are
+ * (the provider keeps its own trim).
+ */
+export function trimVideoReferencesToLimits<T>(
+  provider: string | undefined,
+  refs: { images?: readonly T[]; videos?: readonly T[]; audio?: readonly T[]; frames?: number },
+): { images?: T[]; videos?: T[]; audio?: T[] } {
+  const row = provider ? VIDEO_REF_LIMITS_BY_PROVIDER[provider] : undefined
+  const copy = (l: readonly T[] | undefined) => (l ? [...l] : undefined)
+  if (!row?.requestRefusesOverLimit) return { images: copy(refs.images), videos: copy(refs.videos), audio: copy(refs.audio) }
+  // Counted as the route counts them (`sentVideoReferenceCounts`): blank
+  // entries dropped, the images without duplicates — so what is sent is never
+  // over the caps the route judges.
+  const blank = (x: T) => typeof x === "string" && x.trim().length === 0
+  const clean = (l: readonly T[] | undefined, dedupe = false) =>
+    l ? l.filter((x, i) => !blank(x) && (!dedupe || l.indexOf(x) === i)) : undefined
+  const cut = (l: T[] | undefined, cap: number | undefined) => (l && cap !== undefined ? l.slice(0, Math.max(0, cap)) : l)
+  const imageCap = row.images === undefined ? undefined : row.images - (refs.frames ?? 0)
+  return { images: cut(clean(refs.images, true), imageCap), videos: cut(clean(refs.videos), row.videos), audio: cut(clean(refs.audio), row.audio) }
+}
+
 /**
  * Reference-video duration limits, provider-declared.
  *
@@ -3405,6 +3555,9 @@ export interface RefVideoDurationLimit {
  */
 export const VIDEO_REF_VIDEO_DURATION_LIMITS: Record<string, RefVideoDurationLimit | undefined> = {
   "seedance-2-5": { minSec: 2, maxSec: 30, maxTotalSec: 30 },
+  // Seedance 2.5 Flash — the same documented bounds: each clip 2-30s, the
+  // reference videos ≤30s together (docs.kie.ai/market/bytedance/seedance-2-5-flash).
+  "seedance-2-5-flash": { minSec: 2, maxSec: 30, maxTotalSec: 30 },
   // MiniMax Hailuo 3 — the provider states the per-clip bound in its own reject
   // text: "content[1].video_url: invalid param: video duration 52838 ms,
   // expected [2000, 15000] ms" (app-reports P4, 2 rows, the same clip retried).
@@ -3631,6 +3784,7 @@ export const NATIVE_ADAPTIVE_ASPECT: Record<string, string> = {
   "seedance-2-fast": "adaptive",
   "seedance-2-mini": "adaptive",
   "seedance-2-5": "adaptive",
+  "seedance-2-5-flash": "adaptive",
   // Wan 3.0 family: `adaptive` is the enum DEFAULT and KIE documents it as
   // "automatically selects the ratio based on the input media and intent"
   // (docs.kie.ai/market/wan/3-0-video) — i.e. match-the-input, not merely
@@ -3659,6 +3813,10 @@ export const NATIVE_ADAPTIVE_ASPECT: Record<string, string> = {
  */
 export const FRAME_MODE_ADAPTIVE_ONLY_ASPECT: ReadonlySet<string> = new Set([
   "seedance-2-5",
+  // Seedance 2.5 Flash — DOCUMENTED on its own schema: "First-frame and
+  // first-and-last-frame requests only support `adaptive`"
+  // (docs.kie.ai/market/bytedance/seedance-2-5-flash).
+  "seedance-2-5-flash",
 ])
 
 /**
@@ -3969,6 +4127,8 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   // on KIE and is cost-affecting only through the -ref/no-ref rate split,
   // which the resolution+ref composite already carries (no `:audio` suffix).
   "seedance-2-5": { mode: "audio_driven", field: "generateAudio", defaultOn: true },
+  // Seedance 2.5 Flash — the same lever, default TRUE on KIE.
+  "seedance-2-5-flash": { mode: "audio_driven", field: "generateAudio", defaultOn: true },
   // MiniMax Hailuo 3 — multimodal; lip-syncs to reference audio (r2v). The
   // KIE API exposes NO audio on/off parameter (audio is always produced), so
   // there is no toggle field — alwaysOn, like VEO.
@@ -4193,6 +4353,7 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   "seedance-2-fast": "duration+resolution+ref",
   "seedance-2-mini": "duration+resolution+ref",
   "seedance-2-5": "duration+resolution+ref",
+  "seedance-2-5-flash": "duration+resolution+ref",
   // MiniMax Hailuo 3 — per-second rate at two resolution tiers (2K default /
   // 768P). Duration + resolution form the composite (bare = 2K, ":768p"
   // appended for the cheaper tier); ref-video input seconds + extra input
@@ -4482,6 +4643,8 @@ export function maxVideoDurationSec(provider: string): number | undefined {
 export const PRICING_DEFAULT_RESOLUTION: Record<string, string> = {
   // KIE renders 720p when `resolution` is omitted (kie/models.ts extraParams).
   "seedance-2-5": "720p",
+  // Seedance 2.5 Flash — KIE's documented default is 720p too (kie/models.ts extraParams).
+  "seedance-2-5-flash": "720p",
   // Wan 3.0 family — KIE's OWN default is 1080P, but the provider layer pins
   // 720P (normalizeWan3Resolution / WAN_3_DEFAULT_RESOLUTION) so the rendered
   // tier equals the tier the bare identifier bills. This declaration is what
@@ -4665,6 +4828,8 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
     { maxSeconds: 15, suffix: "15s" },
   ],
   "seedance-2-5": SEEDANCE_2_5_DURATION_TIERS,
+  // Seedance 2.5 Flash — the same 4-30s, one tier per second.
+  "seedance-2-5-flash": SEEDANCE_2_5_DURATION_TIERS,
   "wan-3": WAN_3_DURATION_TIERS,
   "wan-3-prime": WAN_3_DURATION_TIERS,
   "vidu-q4": VIDU_Q4_DURATION_TIERS,

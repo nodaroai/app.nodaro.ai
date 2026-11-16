@@ -185,7 +185,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
   },
   "video-to-video": {
     "draft": { valueType: "boolean", fixed: false, values: [true] },
-    "provider": { valueType: "string", fixed: true, values: ["happyhorse-edit","luma-modify","runway-aleph","seedance-2-5","wan","wan-flash","wan-videoedit"] },
+    "provider": { valueType: "string", fixed: true, values: ["happyhorse-edit","luma-modify","runway-aleph","seedance-2-5","seedance-2-5-flash","wan","wan-flash","wan-videoedit"] },
     "v2vResolution": { valueType: "string", fixed: false, values: ["1080p","480p","720p"] },
   },
   "video-upscale": {

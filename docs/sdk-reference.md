@@ -3710,7 +3710,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 
 `video-to-video` takes `VideoToVideoParams`: `videoUrl` (required), `prompt`,
 `provider` (`wan`, `wan-flash`, `wan-videoedit`, `luma-modify`, `runway-aleph`,
-`happyhorse-edit` or the Seedance edit model `seedance-2-5`), `duration`
+`happyhorse-edit` or a Seedance edit model, `seedance-2-5` or `seedance-2-5-flash`), `duration`
 (`"5"` | `"10"`), `resolution`, `audio`, `multiShots`, `aspectRatio`, `seed`,
 `referenceImageUrl`, `negativePrompt`, `videoEditDuration`, `audioSetting`,
 `promptExtend`, `draft`, plus `sessionId` / `origin`. A `seedance-2-5` edit also takes

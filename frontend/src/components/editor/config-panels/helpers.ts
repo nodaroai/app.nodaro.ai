@@ -33,6 +33,7 @@ import {
   videoGenerationCreditId,
   buildLipSyncCreditId,
   isPerSecondLipSyncProvider,
+  referenceAudioLipSyncCreditId,
   lipSyncAudioRateOf,
   videoOverlayCreditId,
 } from "@nodaro/shared/credits"
@@ -933,6 +934,10 @@ export function getModelIdentifier(
     if (isPerSecondLipSyncProvider(provider)) {
       return buildLipSyncCreditId(provider, lipSyncQuotedAudioSec(node, nodes ?? [], edges ?? [], reruns))
     }
+    // The Seedance 2 family (the plain 8-second row) and MiniMax Hailuo 3
+    // (`minimax-h3:8s`): the row the run holds (decided 2026-11-16).
+    const referenceAudioId = referenceAudioLipSyncCreditId(provider, data.resolution)
+    if (referenceAudioId) return referenceAudioId
   }
 
   // Motion transfer: duration-tiered pricing

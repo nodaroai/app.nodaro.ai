@@ -11,12 +11,12 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { LIP_SYNC_DEFAULT_PROVIDER } from "../workers/handlers/default-models.js"
-import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, isMinimaxH3Provider, lipSyncLeverClearPatch, retiredLipSyncProviderMessage } from "@nodaro/shared/models"
-import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
-import { lipSyncAudioRateOf } from "@nodaro/shared/credits"
+import { LIP_SYNC_PROVIDERS, lipSyncLeverClearPatch, retiredLipSyncProviderMessage } from "@nodaro/shared/models"
+import { lipSyncAudioRateOf, referenceAudioLipSyncCreditId } from "@nodaro/shared/credits"
 import { checkLipSyncInputs, lipSyncAudioPricingOf, lipSyncHeldCreditId, lipSyncRateBaseCredits } from "../lib/lip-sync-inputs.js"
 import { lipSyncFloorRefusal } from "../lib/lip-sync-floor-check.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { probeAndCheckRefAudio, sentReferenceAudioUrls } from "../lib/ref-audio-probe.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
@@ -86,29 +86,18 @@ export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefin
   if (provider === "infinitalk") {
     return `infinitalk:${(body?.resolution as string) ?? "720p"}`
   }
-  // Seedance 2 family (incl. -mini) — billed per-second × resolution × ref. We
-  // ALWAYS pass the audio as a reference, so the identifier always ends in -ref.
-  // Default to the 8s tier for reservation; the worker decides actual duration.
-  // Clamp the requested resolution to the model's catalog resolutions (single
-  // source of truth) before interpolating — mirrors the generate-video clamp in
-  // credit-identifiers.ts. Without this, seedance-2-fast/-mini + 4k (and -mini +
-  // 1080p) emit an unseeded composite that 503s under the hard-fail credit guard.
-  // seedance-2 4k→:8s:4k-ref; -fast 4k→:8s:1080p-ref; -mini 4k|1080p→:8s:720p-ref.
   // MiniMax Hailuo 3 — same audio-as-reference mechanism. The lip-sync
   // surface's resolution enum (480p-4k) never names H3's own 768P tier, so
   // every request reserves the 2K-rate 8s composite (the top tier — KIE
   // renders 2K when the param is omitted, and the worker decides actual
   // duration). If H3 lip-sync ever exposes the 768P lever, route the id
   // through normalizeMinimaxH3Resolution like the video routes do.
-  if (isMinimaxH3Provider(provider)) {
-    return "minimax-h3:8s"
-  }
-  if (SEEDANCE_LIP_SYNC_PROVIDERS.has(provider)) {
-    const supported = MODEL_CATALOG[provider]?.resolutions ?? ["480p", "720p", "1080p"]
-    const want = (body?.resolution as string) ?? "720p"
-    const res = supported.includes(want) ? want : (supported[supported.length - 1] ?? "720p")
-    return `${provider}:8s:${res}-ref`
-  }
+  // The Seedance 2 family (an 8-second clip from a portrait and the voice as
+  // reference AUDIO, no reference video: the plain row at the resolution the
+  // run sends) and MiniMax Hailuo 3 (`minimax-h3:8s`) — decided 2026-11-16, the
+  // one rule the workflow run, the pipeline and both estimates share.
+  const referenceAudioId = referenceAudioLipSyncCreditId(provider, body?.resolution)
+  if (referenceAudioId) return referenceAudioId
   // Models priced by a length BUCKET (Kling AI Avatar, OmniHuman 1.5, HeyGen
   // Lipsync Precision, Sync Lipsync 2 Pro / v3, Volcengine): the bucket of the
   // length the measuring step measured (decided 2026-11-13) — never a length the
@@ -135,6 +124,29 @@ async function retiredLipSyncProviderPreHandler(req: FastifyRequest, reply: Fast
   const message = retiredLipSyncProviderMessage((req.body as Record<string, unknown> | null)?.provider)
   if (message) {
     return reply.status(400).send({ error: { code: "validation_error", message } })
+  }
+}
+
+/**
+ * A model that takes the voice line as reference audio and documents which
+ * audio it accepts (`VIDEO_REF_AUDIO_RULES`: Seedance 2.5 Flash, WAV or MP3,
+ * 2-30 s) is held to that rule with the same check the video routes and the
+ * workflow run use, so a clip the provider would refuse never costs a run.
+ * Runs AFTER the credit guard (its model and node doors) and before the
+ * handler's reservation, in every edition, and only on a body the handler's
+ * own schema accepts (an invalid one is left to the handler's 400). Every
+ * other model passes through unprobed.
+ */
+async function lipSyncReferenceAudioPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const parsed = lipSyncBody.safeParse(req.body)
+  if (!parsed.success) return
+  const provider = parsed.data.provider ?? LIP_SYNC_DEFAULT_PROVIDER
+  const check = await probeAndCheckRefAudio({
+    provider,
+    referenceAudioUrls: sentReferenceAudioUrls({ provider, audioUrl: parsed.data.audioUrl, lipSync: true }),
+  })
+  if (!check.ok) {
+    return reply.status(400).send({ error: { code: check.code, message: check.message } })
   }
 }
 
@@ -283,6 +295,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
         computeCredits: lipSyncComputeCredits,
         beforePricing: lipSyncInputPreHandler,
       }),
+      lipSyncReferenceAudioPreHandler,
     ],
   }, async (req, reply) => {
     const parsed = lipSyncBody.safeParse(req.body)

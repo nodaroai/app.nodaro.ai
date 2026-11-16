@@ -210,6 +210,8 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   // Seedance 2.5 spans 480p/720p/1080p on KIE (1080p accepted since the
   // 2026-08-17 re-probe; 4k still rejected), so each quality rung gets its own tier.
   "seedance-2-5":        { field: "resolution", values: { low: "480p", mid: "720p", high: "1080p" } },
+  // Seedance 2.5 Flash — 480p / 720p only, so "high" stays at 720p.
+  "seedance-2-5-flash":  { field: "resolution", values: { low: "480p", mid: "720p", high: "720p" } },
   // Wan 3.0 family — 480p / 720p / 1080p (lowercase catalog spellings; the
   // uppercase KIE wire form is produced only by normalizeWan3Resolution).
   "wan-3":               { field: "resolution", values: { low: "480p", mid: "720p", high: "1080p" } },

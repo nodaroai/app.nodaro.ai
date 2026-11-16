@@ -1,5 +1,6 @@
 import {
   SEEDANCE_2_REF_LIMITS,
+  SEEDANCE_LIP_SYNC_PROVIDERS,
   VIDEO_REF_AUDIO_RULES,
   VIDEO_REF_LIMITS_BY_PROVIDER,
   checkRefAudioRules,
@@ -7,6 +8,7 @@ import {
   type RefAudioProbe,
 } from "@nodaro/shared/models"
 import { probeMediaFormatAndDuration } from "../providers/video/ffmpeg-utils.js"
+import { providersCanFetchOwnMedia } from "./own-media-reachability.js"
 
 /**
  * Reference-audio contract check — CORE, the audio twin of `ref-video-probe.ts`.
@@ -65,5 +67,28 @@ export async function probeAndCheckRefAudio(args: {
     const fromUrl = formatFromUrl(candidates[i]!)
     return fromUrl ? { formatNames: [fromUrl] } : {}
   })
-  return checkRefAudioRules(provider, probes)
+  // A model that converts a clip in another format (Seedance 2.5 Flash) can do
+  // so only where the provider can fetch our stored copy; elsewhere (a
+  // community install with no public media host) the format is refused here,
+  // before anything is held.
+  return checkRefAudioRules(provider, probes, { canConvert: providersCanFetchOwnMedia() })
+}
+
+/**
+ * The reference-audio clips a run sends its provider: the request's own
+ * `referenceAudioUrls`, and on a Lip Sync run of a model that takes its voice
+ * line as reference audio (`SEEDANCE_LIP_SYNC_PROVIDERS`) that `audioUrl` as
+ * well — so a model's audio rule (`VIDEO_REF_AUDIO_RULES`: Seedance 2.5 Flash
+ * takes WAV or MP3 only) is checked on the Lip Sync lane too, before anything
+ * is reserved. Every other request: its reference audio, unchanged.
+ */
+export function sentReferenceAudioUrls(args: {
+  provider: unknown
+  referenceAudioUrls?: unknown
+  audioUrl?: unknown
+  lipSync: boolean
+}): unknown {
+  if (!args.lipSync || typeof args.provider !== "string" || !SEEDANCE_LIP_SYNC_PROVIDERS.has(args.provider)) return args.referenceAudioUrls
+  const refs = Array.isArray(args.referenceAudioUrls) ? args.referenceAudioUrls : []
+  return typeof args.audioUrl === "string" && args.audioUrl.length > 0 ? [args.audioUrl, ...refs] : refs
 }

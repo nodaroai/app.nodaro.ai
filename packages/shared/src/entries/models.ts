@@ -160,6 +160,9 @@ export {
   SEEDANCE_2_PROVIDERS,
   SEEDANCE_2_REF_LIMITS,
   SEEDANCE_2_5_REF_LIMITS,
+  SEEDANCE_2_5_FLASH_REF_LIMITS,
+  videoReferencesOverLimitProblem,
+  trimVideoReferencesToLimits,
   SEEDANCE_2_EXTEND_STITCH,
   SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC,
   SEEDANCE_2_CONTINUATION_REF_SEC,
@@ -191,6 +194,9 @@ export {
   videoProviderRefModeFrameSeats,
   VIDEO_PROVIDERS_WITH_SEPARATE_FRAME_CHANNEL,
   isSeedance2Provider,
+  isEditVideoProProvider,
+  editVideoProProviderRefusal,
+  EDIT_VIDEO_PRO_HELD_BACK_PROVIDERS,
   MINIMAX_H3_PROVIDERS,
   isMinimaxH3Provider,
   MINIMAX_H3_DEFAULT_RESOLUTION,
@@ -280,6 +286,7 @@ export {
 } from "../model-constants.js"
 export type { VideoStartFrameOnlyProblem } from "../model-constants.js"
 export type { ImageRunKind } from "../model-constants.js"
+export type { VideoReferenceCounts } from "../model-constants.js"
 export {
   CAST_SWAP_POST_PROMPT_MAX,
   TREND_PROMPT_LIMITS,

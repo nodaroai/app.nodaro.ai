@@ -2,6 +2,7 @@ import {
   usdToCredits,
   buildLipSyncCreditId,
   isPerSecondLipSyncProvider,
+  referenceAudioLipSyncCreditId,
   lipSyncAudioRateOf,
   lipSyncEstimateSeconds,
   TEXT_TO_AUDIO_SFX_CREDIT_IDS,
@@ -1298,6 +1299,130 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "seedance-2-5:28s:1080p-ref":  6650,
   "seedance-2-5:29s:1080p-ref":  6890,
   "seedance-2-5:30s:1080p-ref":  7130,
+  // ── Seedance 2.5 Flash — per-second billing, resolution × video-ref, 4-30s ──
+  // KIE rates (kie.ai/model/bytedance/seedance-2-5-flash), KIE cr/s:
+  //   480p 18.5 no-video-ref / 11.5 with-video-ref; 720p 41 / 25.5 (no 1080p).
+  // Nodaro = ceil(rate x duration / 4) x 10 — the Seedance 2.5 conversion, at
+  // Flash's OWN rates (every row derived from them, never scaled from 2.5's).
+  // One tier per second for the same reason as 2.5. "with video ref" rows carry
+  // the per-second rate seedance2RefVideoBaseCredits reads from the 8s `-ref`
+  // row; the billed span is input + output seconds.
+  //
+  // Base fallback = 8s/720p/no-ref, KIE's default resolution with the 8s the
+  // provider config always sends (PRICING_DEFAULT_RESOLUTION).
+  "seedance-2-5-flash": 820,
+  // 480p no video ref (/s)
+  "seedance-2-5-flash:4s:480p": 190,
+  "seedance-2-5-flash:5s:480p": 240,
+  "seedance-2-5-flash:6s:480p": 280,
+  "seedance-2-5-flash:7s:480p": 330,
+  "seedance-2-5-flash:8s:480p": 370,
+  "seedance-2-5-flash:9s:480p": 420,
+  "seedance-2-5-flash:10s:480p": 470,
+  "seedance-2-5-flash:11s:480p": 510,
+  "seedance-2-5-flash:12s:480p": 560,
+  "seedance-2-5-flash:13s:480p": 610,
+  "seedance-2-5-flash:14s:480p": 650,
+  "seedance-2-5-flash:15s:480p": 700,
+  "seedance-2-5-flash:16s:480p": 740,
+  "seedance-2-5-flash:17s:480p": 790,
+  "seedance-2-5-flash:18s:480p": 840,
+  "seedance-2-5-flash:19s:480p": 880,
+  "seedance-2-5-flash:20s:480p": 930,
+  "seedance-2-5-flash:21s:480p": 980,
+  "seedance-2-5-flash:22s:480p": 1020,
+  "seedance-2-5-flash:23s:480p": 1070,
+  "seedance-2-5-flash:24s:480p": 1110,
+  "seedance-2-5-flash:25s:480p": 1160,
+  "seedance-2-5-flash:26s:480p": 1210,
+  "seedance-2-5-flash:27s:480p": 1250,
+  "seedance-2-5-flash:28s:480p": 1300,
+  "seedance-2-5-flash:29s:480p": 1350,
+  "seedance-2-5-flash:30s:480p": 1390,
+  // 480p with video ref (/s)
+  "seedance-2-5-flash:4s:480p-ref": 120,
+  "seedance-2-5-flash:5s:480p-ref": 150,
+  "seedance-2-5-flash:6s:480p-ref": 180,
+  "seedance-2-5-flash:7s:480p-ref": 210,
+  "seedance-2-5-flash:8s:480p-ref": 230,
+  "seedance-2-5-flash:9s:480p-ref": 260,
+  "seedance-2-5-flash:10s:480p-ref": 290,
+  "seedance-2-5-flash:11s:480p-ref": 320,
+  "seedance-2-5-flash:12s:480p-ref": 350,
+  "seedance-2-5-flash:13s:480p-ref": 380,
+  "seedance-2-5-flash:14s:480p-ref": 410,
+  "seedance-2-5-flash:15s:480p-ref": 440,
+  "seedance-2-5-flash:16s:480p-ref": 460,
+  "seedance-2-5-flash:17s:480p-ref": 490,
+  "seedance-2-5-flash:18s:480p-ref": 520,
+  "seedance-2-5-flash:19s:480p-ref": 550,
+  "seedance-2-5-flash:20s:480p-ref": 580,
+  "seedance-2-5-flash:21s:480p-ref": 610,
+  "seedance-2-5-flash:22s:480p-ref": 640,
+  "seedance-2-5-flash:23s:480p-ref": 670,
+  "seedance-2-5-flash:24s:480p-ref": 690,
+  "seedance-2-5-flash:25s:480p-ref": 720,
+  "seedance-2-5-flash:26s:480p-ref": 750,
+  "seedance-2-5-flash:27s:480p-ref": 780,
+  "seedance-2-5-flash:28s:480p-ref": 810,
+  "seedance-2-5-flash:29s:480p-ref": 840,
+  "seedance-2-5-flash:30s:480p-ref": 870,
+  // 720p no video ref (/s)
+  "seedance-2-5-flash:4s:720p": 410,
+  "seedance-2-5-flash:5s:720p": 520,
+  "seedance-2-5-flash:6s:720p": 620,
+  "seedance-2-5-flash:7s:720p": 720,
+  "seedance-2-5-flash:8s:720p": 820,
+  "seedance-2-5-flash:9s:720p": 930,
+  "seedance-2-5-flash:10s:720p": 1030,
+  "seedance-2-5-flash:11s:720p": 1130,
+  "seedance-2-5-flash:12s:720p": 1230,
+  "seedance-2-5-flash:13s:720p": 1340,
+  "seedance-2-5-flash:14s:720p": 1440,
+  "seedance-2-5-flash:15s:720p": 1540,
+  "seedance-2-5-flash:16s:720p": 1640,
+  "seedance-2-5-flash:17s:720p": 1750,
+  "seedance-2-5-flash:18s:720p": 1850,
+  "seedance-2-5-flash:19s:720p": 1950,
+  "seedance-2-5-flash:20s:720p": 2050,
+  "seedance-2-5-flash:21s:720p": 2160,
+  "seedance-2-5-flash:22s:720p": 2260,
+  "seedance-2-5-flash:23s:720p": 2360,
+  "seedance-2-5-flash:24s:720p": 2460,
+  "seedance-2-5-flash:25s:720p": 2570,
+  "seedance-2-5-flash:26s:720p": 2670,
+  "seedance-2-5-flash:27s:720p": 2770,
+  "seedance-2-5-flash:28s:720p": 2870,
+  "seedance-2-5-flash:29s:720p": 2980,
+  "seedance-2-5-flash:30s:720p": 3080,
+  // 720p with video ref (/s)
+  "seedance-2-5-flash:4s:720p-ref": 260,
+  "seedance-2-5-flash:5s:720p-ref": 320,
+  "seedance-2-5-flash:6s:720p-ref": 390,
+  "seedance-2-5-flash:7s:720p-ref": 450,
+  "seedance-2-5-flash:8s:720p-ref": 510,
+  "seedance-2-5-flash:9s:720p-ref": 580,
+  "seedance-2-5-flash:10s:720p-ref": 640,
+  "seedance-2-5-flash:11s:720p-ref": 710,
+  "seedance-2-5-flash:12s:720p-ref": 770,
+  "seedance-2-5-flash:13s:720p-ref": 830,
+  "seedance-2-5-flash:14s:720p-ref": 900,
+  "seedance-2-5-flash:15s:720p-ref": 960,
+  "seedance-2-5-flash:16s:720p-ref": 1020,
+  "seedance-2-5-flash:17s:720p-ref": 1090,
+  "seedance-2-5-flash:18s:720p-ref": 1150,
+  "seedance-2-5-flash:19s:720p-ref": 1220,
+  "seedance-2-5-flash:20s:720p-ref": 1280,
+  "seedance-2-5-flash:21s:720p-ref": 1340,
+  "seedance-2-5-flash:22s:720p-ref": 1410,
+  "seedance-2-5-flash:23s:720p-ref": 1470,
+  "seedance-2-5-flash:24s:720p-ref": 1530,
+  "seedance-2-5-flash:25s:720p-ref": 1600,
+  "seedance-2-5-flash:26s:720p-ref": 1660,
+  "seedance-2-5-flash:27s:720p-ref": 1730,
+  "seedance-2-5-flash:28s:720p-ref": 1790,
+  "seedance-2-5-flash:29s:720p-ref": 1850,
+  "seedance-2-5-flash:30s:720p-ref": 1920,
   // ── Seedance 2.5 HD (from draft) — the 1080p finalize of a Seedance 2.5 draft ──
   // Per-second rows over the draft's OUTPUT length (4-30s), same conversion
   // as the generation ladder above: ceil(rate x seconds / 4) x 10. The `-ref`
@@ -7936,6 +8061,10 @@ export function getNodeModelIdentifier(
     if (rate) return rate.rateId
     const lipSyncModel = typeof data.provider === "string" && data.provider !== "" ? data.provider : LIP_SYNC_DEFAULT_PROVIDER
     if (isPerSecondLipSyncProvider(lipSyncModel)) return buildLipSyncCreditId(lipSyncModel, graph.lipSyncAudioSec)
+    // The Seedance 2 family (the plain 8-second row) and MiniMax Hailuo 3
+    // (`minimax-h3:8s`): the row the run holds (decided 2026-11-16).
+    const referenceAudioId = referenceAudioLipSyncCreditId(lipSyncModel, data.resolution)
+    if (referenceAudioId) return referenceAudioId
   }
 
   // A node naming no model whose default is priced per input image: the node-type

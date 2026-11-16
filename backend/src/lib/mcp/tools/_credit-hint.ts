@@ -27,7 +27,7 @@
 import { hasCredits } from "../../../lib/config.js"
 import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 import { statedPrices } from "../../../ee/billing/stated-prices.js"
-import { LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS, isPerSecondLipSyncProvider, lipSyncAudioRateOf } from "@nodaro/shared/credits"
+import { LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS, isPerSecondLipSyncProvider, isSeedanceLipSyncProvider, lipSyncAudioRateOf, seedanceLipSyncCreditId } from "@nodaro/shared/credits"
 import { LLM_FEATURE_DEFAULTS, getLlmModel, llmDefaultsFeature, llmPriceKey, type LlmFeature } from "@nodaro/shared/llm-models"
 import type { MeteredLlmFeature } from "../../../ee/billing/llm-typical-usage.js"
 import { amountAbbreviation, amountWord, statedAmount, unitFields } from "../amounts.js"
@@ -84,7 +84,8 @@ function rateCreditsOf(rateId: string, units: number): number {
 /**
  * The price parenthetical for one lip-sync model in a model list:
  * ` (<n> cr/15s)` for a per-second provider, ` (<n> cr)` for a flat one,
- * ` (duration-tiered)` for a tiered one, and nothing off-cloud. A model
+ * ` (duration-tiered)` for a tiered one, a Seedance model's 8-second clip at
+ * 720p, and nothing off-cloud. A model
  * charged per second of its audio at a rate (OmniHuman 2.0) states 15 seconds
  * and its minimum charge, each the whole run's charged price.
  */
@@ -96,6 +97,12 @@ export function lipSyncPriceSuffix(id: string): string {
     const least = stated(rateCreditsOf(rate.rateId, rate.minSeconds), `${rate.rateId}@${rate.minSeconds}`)
     const cr = amountAbbreviation()
     return ` (${per15} ${cr}/15s, per second of audio, at least ${least} ${cr})`
+  }
+  // A Seedance model: one 8-second clip, priced by the resolution it renders
+  // (decided 2026-11-16) — its 720p price, the default.
+  if (isSeedanceLipSyncProvider(id)) {
+    const at720 = seedanceLipSyncCreditId(id, "720p")
+    return ` (8s clip: ${stated(creditsOf(at720), at720)} ${amountAbbreviation()} at 720p, by resolution)`
   }
   const bucket = `${id}:15s`
   if (typeof STATIC_CREDIT_COSTS[bucket] === "number" && isPerSecondLipSyncProvider(id)) return ` (${stated(creditsOf(bucket), bucket)} ${amountAbbreviation()}/15s)`

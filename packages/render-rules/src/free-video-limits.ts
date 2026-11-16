@@ -7,7 +7,9 @@
  *
  *   1. No Kling (any model of the catalog's Kling series, except the ids in
  *      `FREE_OPEN_VIDEO_MODELS` — Kling 4.0 Flash, decided 2026-11-11), no
- *      Seedance 2.5 (and its HD finalizer), no video upscaling (any
+ *      Seedance 2.5 (and every `seedance-2-5-…` variant: its HD finalizer and
+ *      its extend; except the ids in `FREE_OPEN_VIDEO_MODELS` — Seedance 2.5
+ *      Flash, decided 2026-11-16), no video upscaling (any
  *      `video-upscale` model), no video extension (any `extend` model, or any
  *      request marked `extend` — an Extend Video run on a model that extends
  *      under its generation id).
@@ -52,12 +54,14 @@ export const FREE_BLOCKED_VIDEO_SERIES: readonly string[] = ["Kling"]
 export const FREE_BLOCKED_VIDEO_MODELS: readonly string[] = ["seedance-2-5"]
 /**
  * Model ids open to free credits although their SERIES is paid-only (Kling 4.0
- * Flash, decided 2026-11-11). Exact ids, never a prefix: a later variant is
- * judged by its series again. An id here still runs only within rule 2 (the
- * lowest resolution, at most `maxSeconds`), and a `FREE_BLOCKED_VIDEO_MODELS`
- * id is never opened by it.
+ * Flash, decided 2026-11-11), or although their id is a `<id>-…` variant of a
+ * `FREE_BLOCKED_VIDEO_MODELS` id (Seedance 2.5 Flash, decided 2026-11-16).
+ * Exact ids, never a prefix: a later variant is judged by its series and its
+ * blocked prefix again. An id here still runs only within rule 2 (the lowest
+ * resolution, at most `maxSeconds`), and an id LISTED in
+ * `FREE_BLOCKED_VIDEO_MODELS` itself is never opened by it.
  */
-export const FREE_OPEN_VIDEO_MODELS: readonly string[] = ["kling-4-flash"]
+export const FREE_OPEN_VIDEO_MODELS: readonly string[] = ["kling-4-flash", "seedance-2-5-flash"]
 
 /** Why an option is locked. `label` is the catalog's model name (an extension on a provider the catalog does not know: its id). */
 export type FreeVideoLock =
@@ -91,8 +95,11 @@ export function freeVideoEntry(provider: string): ModelCatalogEntry | null {
 }
 
 function isBlockedModel(entry: ModelCatalogEntry): boolean {
-  if (FREE_BLOCKED_VIDEO_MODELS.some((id) => entry.id === id || entry.id.startsWith(`${id}-`))) return true
+  // An id blocked by name stays blocked whatever else is listed.
+  if (FREE_BLOCKED_VIDEO_MODELS.includes(entry.id)) return true
+  // An exact open id wins over its series and over a blocked prefix.
   if (FREE_OPEN_VIDEO_MODELS.includes(entry.id)) return false
+  if (FREE_BLOCKED_VIDEO_MODELS.some((id) => entry.id.startsWith(`${id}-`))) return true
   return !!entry.series && FREE_BLOCKED_VIDEO_SERIES.includes(entry.series)
 }
 

@@ -53,7 +53,7 @@ import {
   getVideoAudioCapability,
   type VideoUpscaleProvider
 } from "@nodaro/shared/models"
-import { grokExtendSeconds, ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendCreditId, pixverseExtendQuality, tailExtendResolution } from "@nodaro/shared/credits"
+import { SEEDANCE_LIP_SYNC_SECONDS, isSeedanceLipSyncProvider, seedanceLipSyncResolution, grokExtendSeconds, ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendCreditId, pixverseExtendQuality, tailExtendResolution } from "@nodaro/shared/credits"
 import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
 import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
@@ -84,7 +84,7 @@ import { rawExtensionObjectId, silentVideoKey } from "../../lib/job-output-keys.
 import { discardFailedRunCopies } from "../../lib/discard-job-copies.js"
 import { seedance25OutputFormat } from "../../providers/kie/video.js"
 import { runSeedanceDraftFinalize } from "../../providers/kie/seedance-draft.js"
-import { seedance25CostUsd } from "../../providers/kie/seedance-cost.js"
+import { seedance25CostUsd, seedance25FlashCostUsd } from "../../providers/kie/seedance-cost.js"
 import { kling4CostUsd } from "../../providers/kie/kling4-cost.js"
 import { measureSeedanceDraftRenderSec, draftRenderOutputData, positiveSeconds, seedanceDraftFinalizeQueuedBilledSec } from "../../lib/seedance-draft-finalize.js"
 import { generateVideoAudioMergeRecipe, voiceTrackMuxRecipe, draftAudioMuxMergeArgs, draftAudioMuxOutputData, readDraftAudioMux, type DraftAudioMux } from "../../lib/seedance-draft-audio.js"
@@ -298,8 +298,9 @@ async function dispatchLtxIfRequested(
 /**
  * A render's result with the cost KIE billed for it, from the seconds its
  * charge was measured from (`measureSeedance2Settle`):
- *  - Seedance 2.5: those seconds — or, for a run with no reference video and a
- *    fixed duration, that duration;
+ *  - Seedance 2.5 and Seedance 2.5 Flash (each at its own rates): those
+ *    seconds — or, for a run with no reference video and a fixed duration,
+ *    that duration;
  *  - Kling 4.0 / Kling 4.0 Flash with a reference video: output + the longer
  *    of output and the reference clips, the seconds the charge bills (the
  *    runner cannot see the clips' lengths and reports only the 2 × output
@@ -331,12 +332,33 @@ function withMeasuredRenderCost<R extends { cost: number | null }>(
     if (!hasVideoRef || !seconds) return result
     return { ...result, cost: kling4CostUsd({ provider: run.provider, resolution: run.resolution, hasVideoRef, outputSec: seconds.outputSec, inputSec: seconds.inputSec }) }
   }
-  if (run.provider !== "seedance-2-5") return result
+  if (run.provider !== "seedance-2-5" && run.provider !== "seedance-2-5-flash") return result
   const fixedSec = hasVideoRef ? undefined : positiveSeconds(run.duration)
   const outputSec = run.settle.seconds?.outputSec ?? fixedSec
   if (outputSec === undefined) return result
   const inputSec = run.settle.seconds?.inputSec ?? 0
+  // Each model at its own KIE rates: Flash never reads 2.5's (and has no draft).
+  if (run.provider === "seedance-2-5-flash") {
+    return { ...result, cost: seedance25FlashCostUsd({ resolution: run.resolution, hasVideoRef, outputSec, inputSec }) }
+  }
   return { ...result, cost: seedance25CostUsd({ resolution: run.resolution, draft: run.draft === true, hasVideoRef, outputSec, inputSec }) }
+}
+
+/**
+ * The provider cost of a Seedance Lip Sync run (an 8-second clip, no reference
+ * video, at the resolution sent): Seedance 2.5 and 2.5 Flash at their own KIE
+ * rates. Any other model, a run whose adapter reported no cost (relayed), or a
+ * resolution not known keeps the adapter's figure.
+ */
+function seedanceLipSyncProviderCost(cost: number | null, provider: string, resolution: string | undefined): number | null {
+  if (typeof cost !== "number" || resolution === undefined) return cost
+  if (provider === "seedance-2-5-flash") {
+    return seedance25FlashCostUsd({ resolution, hasVideoRef: false, outputSec: SEEDANCE_LIP_SYNC_SECONDS, inputSec: 0 })
+  }
+  if (provider === "seedance-2-5") {
+    return seedance25CostUsd({ resolution, draft: false, hasVideoRef: false, outputSec: SEEDANCE_LIP_SYNC_SECONDS, inputSec: 0 })
+  }
+  return cost
 }
 
 /** VEO direct-4K generates the base at 1080p, then chains get-4k-video (see
@@ -1047,6 +1069,9 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     if (!imageUrl) {
       throw new Error(`${resolvedProvider} lip-sync requires an image (face/portrait)`)
     }
+    const seedanceLipSyncSentResolution = isSeedanceLipSyncProvider(resolvedProvider)
+      ? seedanceLipSyncResolution(resolvedProvider, resolution)
+      : undefined
     const result = await imageToVideo(
       imageUrl,
       resolvedProvider,
@@ -1055,7 +1080,11 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       undefined, // endFrameUrl — not used in lip-sync mode
       {
         referenceAudioUrls: [audioUrl],
-        resolution: resolution ?? "720p",
+        // The Seedance 2 family sends the resolution it was priced at
+        // (`seedanceLipSyncResolution`, decided 2026-11-16: a 1080p asked of
+        // Seedance 2 Fast renders 720p, as it is billed). MiniMax Hailuo 3
+        // keeps its own rule.
+        resolution: seedanceLipSyncSentResolution ?? resolution ?? "720p",
         // generateAudio: false — we already have the audio track; let
         // seedance use OUR audio as the soundtrack rather than synthesise
         // a new one. (KIE merges reference_audio_urls into output by default.)
@@ -1064,7 +1093,10 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       { onTaskCreated: lipSyncOnTaskCreated },
     )
     resultUrl = result.url
-    resultCost = result.cost
+    // Seedance 2.5 and 2.5 Flash: what KIE bills an 8-second run with no
+    // reference video, at the resolution sent (the adapter reports a nominal
+    // figure). The Seedance 2.0 models have no cost helper yet and keep it.
+    resultCost = seedanceLipSyncProviderCost(result.cost, resolvedProvider, seedanceLipSyncSentResolution)
     resultDisplayCost = result.displayCost
     resultProviderUsed = result.providerUsed
     resultMeta = result

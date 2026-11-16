@@ -65,6 +65,7 @@ import { mp3EncodeArgs } from "../video/mp3-encode.js"
 import { lipSyncRateModelOf } from "../../lib/lip-sync-inputs.js"
 import { LIP_SYNC_TRIM_MARGIN_SEC, prepareRateLipSyncAudio } from "./lip-sync-audio.js"
 import { ensureVideoFitsSize, KLING_4_REF_VIDEO_LIMIT } from "./reference-video-size.js"
+import { prepareReferenceAudioUrls } from "./reference-audio-convert.js"
 import { reencodeReferenceVideos } from "./reference-video-reencode.js"
 import { fetchOwnMedia } from "../../lib/fetch-own-media.js"
 import { withHeifDecodeFallback } from "../../utils/heif-decode.js"
@@ -1180,6 +1181,17 @@ async function reencodeSeedanceReferenceVideos(input: Record<string, unknown>, p
   const urls = input.reference_video_urls
   if (!Array.isArray(urls) || urls.length === 0) return
   input.reference_video_urls = await reencodeReferenceVideos(urls as string[], provider)
+}
+
+/**
+ * Reference audio in a format the model does not take, converted to MP3 first
+ * (Seedance 2.5 Flash: WAV or MP3 only, decided 2026-11-16 —
+ * `reference-audio-convert.ts`). Every other model's audio goes as it came.
+ */
+async function convertSeedanceReferenceAudio(input: Record<string, unknown>, provider: string): Promise<void> {
+  const urls = input.reference_audio_urls
+  if (!Array.isArray(urls) || urls.length === 0) return
+  input.reference_audio_urls = await prepareReferenceAudioUrls(provider, urls as string[])
 }
 
 /**
@@ -2793,6 +2805,7 @@ export class KieVideoProvider
       applySeedance2Params(input, seedance2Options, provider)
       // Reference videos go re-encoded, never as the file they came in.
       await reencodeSeedanceReferenceVideos(input, provider)
+      await convertSeedanceReferenceAudio(input, provider)
     }
 
     if (isMinimaxH3Provider(provider)) {
@@ -3135,6 +3148,7 @@ export class KieVideoProvider
       applySeedance2Params(input, seedance2Options, provider)
       // Reference videos go re-encoded, never as the file they came in.
       await reencodeSeedanceReferenceVideos(input, provider)
+      await convertSeedanceReferenceAudio(input, provider)
     }
 
     if (isMinimaxH3Provider(provider)) {

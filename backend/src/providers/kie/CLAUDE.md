@@ -97,6 +97,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `grok-imagine-video-1.5` | `grok-imagine-video-1-5-preview` (bespoke `runGrokVideo15`, body from `grok-video-15.ts`). Image required: no t2v entry (the t2v route answers "requires an input image"). | [grok imagine video 1.5](https://docs.kie.ai/market/grok-imagine/1-5-preview.md) |
 | `sora2-pro` | `sora-2-pro-image-to-video` | [sora2 pro i2v](https://docs.kie.ai/market/sora2/sora-2-pro-image-to-video.md) |
 | `minimax-h3` | `minimax-h3/image-to-video` (swaps to `minimax-h3/reference-to-video` when refs are wired — see `minimaxH3TaskModel`) | [minimax-h3 i2v](https://docs.kie.ai/market/minimax-h3/image-to-video.md) / [r2v](https://docs.kie.ai/market/minimax-h3/reference-to-video.md) |
+| `seedance-2-5-flash` | `bytedance/seedance-2-5-flash` (the Seedance 2 family path, `applySeedance2Params`; see "Seedance 2.5 Flash wire notes") | [seedance 2.5 flash](https://docs.kie.ai/market/bytedance/seedance-2-5-flash.md) |
 | `wan-3` | `wan/3-0-video` (bespoke `runWan3`) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
 | `wan-3-prime` | `wan/3-0-video-prime` (bespoke `runWan3`) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
 | `vidu-q4` | `vidu-q4/image-to-video` (bespoke `runViduQ4`; swaps to `vidu-q4/reference-to-video` — `VIDU_Q4_REFERENCE_MODEL` — when a reference image or audio is wired). No t2v entry: KIE has no Q4 text-to-video. | [vidu q4 i2v](https://docs.kie.ai/market/vidu-q4/image-to-video.md) / [r2v](https://docs.kie.ai/market/vidu-q4/reference-to-video.md) |
@@ -130,6 +131,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `sora2-pro` | `sora-2-pro-text-to-video` | [sora2 pro t2v](https://docs.kie.ai/market/sora2/sora-2-pro-text-to-video.md) |
 | `kling-3.0` | `kling-3.0/video` | [kling 3.0](https://docs.kie.ai/market/kling/kling-3.0.md) |
 | `minimax-h3` | `minimax-h3/text-to-video` (swaps to `minimax-h3/reference-to-video` when refs are wired) | [minimax-h3 t2v](https://docs.kie.ai/market/minimax-h3/text-to-video.md) |
+| `seedance-2-5-flash` | `bytedance/seedance-2-5-flash` (ONE KIE id serves every mode) | [seedance 2.5 flash](https://docs.kie.ai/market/bytedance/seedance-2-5-flash.md) |
 | `wan-3` | `wan/3-0-video` (ONE KIE id serves both modes) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
 | `wan-3-prime` | `wan/3-0-video-prime` (ONE KIE id serves both modes) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
 | `kling-4` | `kling-4.0/reference-to-video` (ONE KIE id serves both modes) | [kling 4.0 reference](https://docs.kie.ai/market/kling/v4-reference-to-video.md) |
@@ -520,6 +522,37 @@ afterwards (300-65536 px per side, aspect 0.4-2.5, our 2048 px cap).
   (`billsReferenceVideoSeconds`, `billedRefVideoSeconds` in
   `ee/billing/seedance2-ref-video-credits.ts`); subjects and voices are free.
 
+### Seedance 2.5 Flash wire notes (`seedance-2-5-flash`, the Seedance 2 family path)
+
+- A member of `SEEDANCE_2_PROVIDERS`: frames, references, the reference task
+  type, the reference-video re-encode (200 MB cap), reference-video billing
+  (input + output seconds) and the edit lane are the family's. Its own facts
+  live in per-provider maps, never in a branch on the family set.
+- 480p/720p only (KIE default 720p, `PRICING_DEFAULT_RESOLUTION`); a stale
+  1080p is moved to 720p by `normalizeVideoRequestParams` before it is priced
+  or sent.
+- 4-30 s. The schema has NO default duration (omitted or `-1` = the model
+  picks and bills the real length), so the config pins `duration: 8` and every
+  run sends a length.
+- References 10 images / 5 videos / 5 audio (`SEEDANCE_2_5_FLASH_REF_LIMITS`);
+  reference videos 2-30 s, ≤30 s together; reference audio 2-30 s a clip and
+  ≤30 s together (`VIDEO_REF_AUDIO_RULES`, checked on the video routes, the
+  workflow run and the Lip Sync lanes before anything is held). Reference
+  audio that is not WAV or MP3 is converted to MP3 at the provider
+  (`reference-audio-convert.ts`, after the hold; a failure fails the job and
+  refunds it). A prompt plus reference audio alone is a valid request. An
+  over-cap request is refused on the API and MCP (`requestRefusesOverLimit`);
+  the editor's Run trims, and a workflow run keeps the resolver's trim.
+- First-frame and first+last-frame requests take `adaptive` only (documented):
+  `FRAME_MODE_ADAPTIVE_ONLY_ASPECT`.
+- No `draft` (not in `SEEDANCE_DRAFT_MODELS`), no HD finalize, no `seed`
+  (`omitSeed`), and no `output_format` (mp4 only: the mov lever stays
+  Seedance 2.5's, for its child jobs).
+- Provider cost: `seedance25FlashCostUsd` (`seedance-cost.ts`), at Flash's own
+  rates (on Lip Sync too: an 8-second run with no reference video).
+- Lip Sync (the whole Seedance family): priced on the plain 8-second row at
+  the resolution sent (`seedanceLipSyncCreditId`), and sent that resolution.
+
 ### Kling 4.0 Flash wire notes (`kling-4-flash`, bespoke `runKling4`)
 
 ONE Nodaro id over two KIE endpoints, picked by `kling4FlashEndpoint`
@@ -749,7 +782,7 @@ resolved value; the i2v, t2v and voiced-video handlers pass it on as
 `ProviderOptions.referenceTaskType`. `applySeedance2Params` writes it AFTER
 `resolveSeedance2Inputs`, on the body as it will be sent, only when ALL hold:
 the model's catalog `referenceTaskTypes` lists the value
-(`listedSeedanceTaskType` — `seedance-2-5` today; never a hand-written model
+(`listedSeedanceTaskType` — `seedance-2-5` and `seedance-2-5-flash` today; never a hand-written model
 id), the body's `reference_*_urls` are the media the
 type needs (`seedanceTaskTypeFitsMedia`, the resolver's own rule: `edit` and
 `extend` need `reference_video_urls`, since both act on a reference video,
@@ -813,7 +846,7 @@ The copy keeps every frame (`-fps_mode passthrough`, no trim/scale/filter),
 the source's picture bitrate (two-pass; CRF 14 when unknown), 8-bit pixel
 format and colour tags, MOV for a QuickTime source, the sound copied when the
 container plays it (else AAC), and the model's size cap (`referenceVideoMaxBytes`:
-200 MB on `seedance-2-5`, 50 MB on the 2.0 family) only bites on a source
+200 MB on `seedance-2-5` and `seedance-2-5-flash`, 50 MB on the 2.0 family) only bites on a source
 already over it (or a two-pass overshoot past it). Clips are encoded in
 parallel, and a failure waits for every sibling to finish before it fails
 the run. A failure fails the run

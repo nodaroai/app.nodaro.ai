@@ -12,7 +12,7 @@ import {
   GVP_SUPPORTED_PROVIDERS,
   VIDEO_GEN_COLLAPSED_T2V_IDS,
   isGvpSupportedProvider,
-  isSeedance2Provider,
+  isEditVideoProProvider,
   type DialogueProvider,
   type ImageGenProvider,
   type ImageI2IProvider,
@@ -128,6 +128,7 @@ export const VIDEO_I2V_MODELS = [
   { value: "seedance-2-fast", label: "Seedance 2.0 Fast", desc: "Bytedance Fast, 4-15s, multimodal references" },
   { value: "seedance-2-mini", label: "Seedance 2.0 Mini", desc: "Bytedance budget, 4-15s, 480p/720p" },
   { value: "seedance-2-5", label: "Seedance 2.5", desc: "Bytedance latest, up to 30s in one shot, wide multimodal refs, 480p/720p/1080p" },
+  { value: "seedance-2-5-flash", label: "Seedance 2.5 Flash", desc: "Bytedance fast tier of 2.5, up to 30s in one shot, refs 10/5/5 (audio alone works), 480p/720p" },
   { value: "veo3", label: "VEO 3.1 (Quality)", desc: "Top quality, 4/6/8s with audio" },
   { value: "veo3.1", label: "VEO 3.1 (Fast)", desc: "Fast VEO, 4/6/8s with audio" },
   { value: "veo3_lite", label: "VEO 3.1 (Lite)", desc: "Cheapest VEO tier, 4/6/8s with audio" },
@@ -171,6 +172,7 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "seedance-2-fast", label: "Seedance 2.0 Fast", desc: "Bytedance Fast, 4-15s, multimodal references" },
   { value: "seedance-2-mini", label: "Seedance 2.0 Mini", desc: "Bytedance budget, 4-15s, 480p/720p" },
   { value: "seedance-2-5", label: "Seedance 2.5", desc: "Bytedance latest, up to 30s in one shot, wide multimodal refs, 480p/720p/1080p" },
+  { value: "seedance-2-5-flash", label: "Seedance 2.5 Flash", desc: "Bytedance fast tier of 2.5, up to 30s in one shot, refs 10/5/5 (audio alone works), 480p/720p" },
   { value: "veo3", label: "VEO 3.1 (Quality)", desc: "Top quality, 4/6/8s with audio" },
   { value: "veo3.1", label: "VEO 3.1 (Fast)", desc: "Fast VEO, 4/6/8s with audio" },
   { value: "veo3_lite", label: "VEO 3.1 (Lite)", desc: "Cheapest VEO tier, 4/6/8s with audio" },
@@ -238,9 +240,10 @@ export const GVP_PROVIDERS: readonly { value: VideoGenProvider; label: string; d
  *  GENERATION 2026-08-02) has no v2v mode in the catalog and its pricing has
  *  no `-ref` axis, so it stays out of EVP until separately validated. The
  *  filter derives from the shared family predicate — a future blessed
- *  Seedance SKU flows in automatically, a non-Seedance one stays out. */
+ *  Seedance SKU flows in automatically, a non-Seedance one stays out — less
+ *  the ones Edit Video Pro holds back (`isEditVideoProProvider`). */
 export const EVP_PROVIDERS: readonly { value: VideoGenProvider; label: string; desc: string }[] =
-  GVP_PROVIDERS.filter((m) => isSeedance2Provider(m.value))
+  GVP_PROVIDERS.filter((m) => isEditVideoProProvider(m.value))
 
 /**
  * Every model the Video to Video NODE offers — typed `VideoToVideoNodeProvider`,
@@ -252,6 +255,7 @@ export const EVP_PROVIDERS: readonly { value: VideoGenProvider; label: string; d
  */
 export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoNodeProvider; label: string; desc: string }[] = [
   { value: "seedance-2-5", label: "Seedance 2.5 Edit", desc: "Edit the clip by instruction — keeps its length and ratio; add image references" },
+  { value: "seedance-2-5-flash", label: "Seedance 2.5 Flash Edit", desc: "Faster, lower-cost edit by instruction — keeps its length and ratio; 480p/720p; add image references" },
   { value: "luma-modify", label: "Luma Modify", desc: "Luma video modification" },
   { value: "runway-aleph", label: "Runway Aleph", desc: "Runway AI video-to-video conversion" },
   { value: "happyhorse-edit", label: "HappyHorse Edit", desc: "Video-to-video editing, up to 60s input" },
@@ -276,7 +280,8 @@ export const LIP_SYNC_MODELS: readonly { value: LipSyncProvider; label: string; 
   { value: "seedance-2", label: "Seedance 2", desc: "Native phoneme lip sync, 8+ languages, cinematic. Premium quality." },
   { value: "seedance-2-fast", label: "Seedance 2 Fast", desc: "Same lip sync, cheaper / quicker tier" },
   { value: "seedance-2-mini", label: "Seedance 2 Mini", desc: "Same lip sync, budget tier, 480p/720p" },
-  { value: "seedance-2-5", label: "Seedance 2.5", desc: "Same lip sync, latest generation, up to 30s, 480p/720p/1080p" },
+  { value: "seedance-2-5", label: "Seedance 2.5", desc: "Same lip sync, latest generation, 8s clip, voice up to 30s, 480p/720p/1080p" },
+  { value: "seedance-2-5-flash", label: "Seedance 2.5 Flash", desc: "Same lip sync, fast tier of 2.5, 8s clip, voice up to 30s, 480p/720p" },
   { value: "kling-avatar", label: "Kling Avatar", desc: "Talking head, 720p, speech-optimized" },
   { value: "kling-avatar-pro", label: "Kling Avatar Pro", desc: "Premium talking head, 1080p" },
   { value: "infinitalk", label: "Infinitalk", desc: "KIE flexible resolution, 480p\u2013720p" },

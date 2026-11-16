@@ -36,6 +36,7 @@ describe("generate-video-pro node registry", () => {
       "seedance-2-fast",
       "seedance-2-mini",
       "seedance-2-5",
+      "seedance-2-5-flash",
       "minimax-h3",
       "veo3.1",
       "veo3_lite",
@@ -143,6 +144,8 @@ describe("generate-video-pro node registry", () => {
     const d = NODE_REGISTRY.find((n) => n.type === "edit-video-pro")
     expect(d?.providers).toEqual(["seedance-2", "seedance-2-fast", "seedance-2-mini", "seedance-2-5"])
     expect(d?.providers).not.toContain("minimax-h3")
+    // Seedance 2.5 Flash is held back from Edit Video Pro (isEditVideoProProvider).
+    expect(d?.providers).not.toContain("seedance-2-5-flash")
   })
 
   it("exposes the expected inputSchema fields", () => {

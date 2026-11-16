@@ -1697,8 +1697,28 @@ const GENERATE_TEXT_TOOL_BYTES = 3_740
 // budget); the list keeps the 28 B of headroom it had.
 const GENERATE_TEXT_HANDOFF_BYTES = 153
 
+// RAISED 2026-11-16 by Seedance 2.5 Flash (`seedance-2-5-flash`), and nothing else: the id joins the
+// catalog-derived model lists generate_video and animate_image already carry ("Recommended: …"), and
+// modify_video's model and resolution notes name it beside `seedance-2-5`. No tool was added, so the
+// fixture does NOT move. With the change this suite measures `generate_video` at 9_972 B, 18 B
+// over the earlier 9_954 B per-tool budget (the model list; its other notes were left as they were).
+const SEEDANCE_2_5_FLASH_PER_TOOL_BYTES = 18
+// RAISED 2026-11-16 (decided that day): generate_video's and animate_image's reference notes name
+// Seedance 2.5 Flash's 10 / 5 / 5 caps and that a call over them is refused rather than cut. With
+// it this suite measures `generate_video` at 10_048 B, 76 B over the per-tool budget above.
+const SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES = 76
+// The whole list grows by those notes in generate_video and animate_image, and by lip_sync's model
+// list, which now prices each Seedance model as its 8-second clip at 720p instead of "duration-tiered"
+// (decided 2026-11-16). With them this suite measures 543_783 B in all, 325 B over the 543_458 B it
+// measured before them.
+const SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_TOTAL_BYTES = 325
+// The whole list grows by the same model-list entries in generate_video, animate_image and
+// modify_video, plus modify_video's two notes. With the change this suite measures 543_458 B in
+// all; the earlier budget was 543_329 B with 28 B of headroom (543_301 B), so the change adds 157 B.
+const SEEDANCE_2_5_FLASH_TOTAL_BYTES = 157
+
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -1910,7 +1930,9 @@ export const TOOL_WIRE_BUDGET = {
     KLING_4_VIDEO_SUBJECT_BYTES +
     DUBBING_TOOLS_BYTES +
     GENERATE_TEXT_TOOL_BYTES +
-    GENERATE_TEXT_HANDOFF_BYTES,
+    GENERATE_TEXT_HANDOFF_BYTES +
+    SEEDANCE_2_5_FLASH_TOTAL_BYTES +
+    SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_TOTAL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

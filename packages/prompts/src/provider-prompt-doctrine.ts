@@ -15,7 +15,8 @@
  *     from Seedance 2.0" section is the authority for every 2.0-vs-2.5 split
  *     below (timestamps, multi-view references, aspect ratios, MOV output).
  *   - Official launch post https://seed.bytedance.com/en/blog/official-launch-of-seedance-2-0
- *   - KIE API docs https://docs.kie.ai/market/bytedance/seedance-2
+ *   - KIE API docs https://docs.kie.ai/market/bytedance/seedance-2 (and
+ *     https://docs.kie.ai/market/bytedance/seedance-2-5-flash for Flash's limits)
  *   Kling:
  *   - Official "Kling Video 2.6 Audio User Guide"
  *     https://kling.ai/quickstart/klingai-video-26-audio-user-guide
@@ -42,15 +43,15 @@ export interface ProviderPromptDoctrine {
 }
 
 const SEEDANCE_2_DOCTRINE: ProviderPromptDoctrine = {
-  providers: ["seedance-2", "seedance-2-fast", "seedance-2-mini", "seedance-2-5"],
-  heading: "Seedance 2 (seedance-2, seedance-2-fast, seedance-2-mini, seedance-2-5)",
+  providers: ["seedance-2", "seedance-2-fast", "seedance-2-mini", "seedance-2-5", "seedance-2-5-flash"],
+  heading: "Seedance 2 (seedance-2, seedance-2-fast, seedance-2-mini, seedance-2-5, seedance-2-5-flash)",
   tips: [
     "Storyboard as 'Shot 1: … Shot 2: …'. The 2.0 SKUs ignore timestamps and '(0-3s)' shots are officially unstable there; seedance-2-5 honours integer-second timestamps ('0-3s: …', 'at the 5-second mark').",
     "One camera movement per shot; describe actions per body part with degree ('slowly raises a hand'); express emotion as physical detail, never abstract words.",
     "Native multi-track audio — cue it inline: （background music）, <sound effects>, and quoted dialogue.",
     "References go by ordinal (@Image 1, Video 2) in attachment order; earlier = higher priority. Identity = ONE headshot + ONE full-body (multi-view sheets drift on 2.0; 2.5 accepts them). 4-5 assets beats maxing 9/3/3.",
     "No negative-prompt parameter — put constraints in the prompt: 'keep it subtitle-free, do not generate a watermark, do not generate a logo'.",
-    "seedance-2-5 only: one shot runs to 30s (2.0 stops at 15s) — storyboard a whole beat, not a stitch; timestamps work (gap-free, 1s units, don't overpack); refs 30/10/10 but 4-5 assets still gives the best identity.",
+    "seedance-2-5 (and -flash, 480p/720p): one shot runs to 30s (2.0 stops at 15s) — storyboard a whole beat; 2.5 timestamps work (gap-free, 1s units); refs 30/10/10 (flash 10/5/5), yet 4-5 assets give the best identity.",
     "Auto-path formula: Subject → Action → Environment → Camera → Style → Constraints in 60-100 words; ONE camera instruction (chain with 'then'); separate camera motion from subject motion; always add one lighting phrase.",
   ],
   doctrine: `Prompt structure (front-load what matters most):
@@ -68,6 +69,7 @@ precise subject → action details → scene/environment → lighting & color to
 - 2.5 also takes far more reference material (30 images / 10 videos / 10 audio vs 9/3/3). Treat that as room for COVERAGE — more distinct characters, locations and props in one shot — not as licence to pile refs onto one identity. The "ONE headshot + ONE full-body, 4-5 assets total" rule above still produces the best likeness on 2.5.
 - 2.5 renders at 480p/720p/1080p (1080p since 2026-08-17): there is no 4K tier, so route a job that needs 4K to seedance-2 (which has it) or upscale afterwards.
 - With a start frame, 2.5 always derives the output aspect from that frame — an explicit aspect ratio is rejected outright, so compose the frame at the ratio you want.
+- seedance-2-5-flash is the fast, cheaper tier of 2.5 (KIE API docs https://docs.kie.ai/market/bytedance/seedance-2-5-flash): the same 4-30s single shot and the same start-frame aspect rule, but 480p/720p only (no 1080p), up to 10 images / 5 videos / 5 audio clips, reference audio 2-30s a clip and 30s together (other formats are converted to MP3), a prompt with reference audio alone is a valid request, and no draft mode. The official 2.5 guide's timestamp and multi-view notes are written for 2.5; treat them as untested on Flash.
 - Timestamps (official 2.5 guide, "Differences from Seedance 2.0"): 2.0 does not respond to them; 2.5 supports integer-second timestamps in three forms — gap-free intervals ("0-3s: … 3-7s: … 7-15s: …" or "[1s-4s] … [4s-8s] …"; never leave a hole like "0-3s … 5-6s"), time-point control ("At the 5-second mark, …"), and relative time ("After 3 seconds, …"). Use 1-second units. Too little content in a range lets the model improvise; too much packs in extra cuts or drops beats — budget the seconds. Never use timestamps to drive high-frequency actions ("shake three times per second").
 - Multi-view subject images: not recommended on 2.0 (the views read as separate people → twins); supported on 2.5. ONE headshot + ONE full-body remains the safest default on both.
 - Transitions and camera terms on 2.5: state a transition's trigger point AND method in one sentence — "At the 5-second mark, the camera quickly transitions leftward using a left wipe combined with a natural dissolve." Basic shot and camera terms are written directly (push in / pull out / pan / track / orbit / dolly zoom / whip pan / hard cut / dissolve / one-shot / speed ramp); only niche terms need [term + descriptive explanation] — which is exactly what the pickers' compact hint mode emits versus their long hints.

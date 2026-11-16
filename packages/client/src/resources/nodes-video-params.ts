@@ -46,19 +46,19 @@ export interface VideoToVideoParams extends GenerationSessionParams {
    * Seedance edit only (refused on other models): more images the edit can use.
    * They follow `referenceImageUrl` when it is sent, so with it they are
    * `{image:2}`, `{image:3}`, …, without it `{image:1}`, `{image:2}`, ….
-   * The model's cap applies (30 images on `seedance-2-5`).
+   * The model's cap applies (30 images on `seedance-2-5`, 10 on `seedance-2-5-flash`, where a request over the cap is refused).
    */
   referenceImageUrls?: string[]
   /**
    * Seedance edit only (refused on other models): extra clips the edit can use.
    * Do not repeat `videoUrl` here: the source clip is `{video:1}`, these are
    * `{video:2}`, `{video:3}`, …. The source counts toward the model's cap
-   * (10 clips on `seedance-2-5`), and every clip's length is priced.
+   * (10 clips on `seedance-2-5`, 5 on `seedance-2-5-flash`), and every clip's length is priced.
    */
   referenceVideoUrls?: string[]
   /**
    * Seedance edit only (refused on other models): audio the edit can use,
-   * `{audio:1}`, `{audio:2}`, …. The model's cap applies (10 on `seedance-2-5`).
+   * `{audio:1}`, `{audio:2}`, …. The model's cap applies (10 on `seedance-2-5`, 5 on `seedance-2-5-flash`).
    */
   referenceAudioUrls?: string[]
   [k: string]: unknown

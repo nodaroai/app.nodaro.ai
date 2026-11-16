@@ -132,6 +132,7 @@
  "seedance-2-0-extend": "extend-video",
  "seedance-2-5": "character creature edit-video-pro generate-video generate-video-pro image-to-video lip-sync location object text-to-video video-to-video",
  "seedance-2-5-extend": "extend-video",
+ "seedance-2-5-flash": "character creature generate-video generate-video-pro image-to-video lip-sync location object text-to-video video-to-video",
  "seedance-2-5-hd": "video-upscale",
  "seedance-2-fast": "character creature edit-video-pro generate-video generate-video-pro image-to-video lip-sync location object text-to-video video-to-video",
  "seedance-2-mini": "character creature edit-video-pro generate-video generate-video-pro image-to-video lip-sync location object text-to-video video-to-video",

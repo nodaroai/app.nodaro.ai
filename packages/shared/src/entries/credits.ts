@@ -110,6 +110,14 @@ export {
 } from "../lip-sync-pricing.js"
 export type { LipSyncDurationBucket, LipSyncAudioRate } from "../lip-sync-pricing.js"
 export {
+  SEEDANCE_LIP_SYNC_SECONDS,
+  isSeedanceLipSyncProvider,
+  seedanceLipSyncResolution,
+  seedanceLipSyncCreditId,
+  MINIMAX_H3_LIP_SYNC_CREDIT_ID,
+  referenceAudioLipSyncCreditId,
+} from "../seedance-lip-sync.js"
+export {
   AI_AVATAR_MAX_DURATION_SEC,
   AI_AVATAR_MAX_AUDIO_SEC,
   AI_AVATAR_DURATION_BUCKETS,
