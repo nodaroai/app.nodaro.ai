@@ -16,13 +16,18 @@
  *     outside link there: it asks the switch, it is own-media only, the URL is
  *     no media fetch at all, or the question is open.
  *
- * The `open` lanes are the ones still awaiting a product decision (generation
- * references and processing inputs, listed for it in the PR that added this
- * guard): `open` is an explicit "not yet" with its reason, not a pass.
+ * A media INPUT given as a link (a generation's reference, a processing
+ * route's source, an entity's picture, a length probe) follows the switch
+ * through the media-input funnel (decided 2026-11-16, `lib/input-links.ts`):
+ * one hook judges every route's body before any of its own preHandlers, by
+ * the deployment's `imports.inputLinks` (allow / report / refuse). Such a file
+ * is `judged`; `input-links-census.test.ts` boots the app and holds the hook
+ * to every route. `open` is an explicit "not yet" with its reason, not a pass.
  */
 import { describe, it, expect } from "vitest"
 import ts from "typescript"
 import { readdirSync, readFileSync, statSync } from "node:fs"
+import { exemptionOf } from "../input-link-lanes.js"
 import { dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -203,33 +208,62 @@ interface Lane {
    * the reads that await the open decision instead, each with why).
    * `own`: the file only ever fetches this deployment's own storage (verified).
    * `none`: no media is fetched from the URL (stored as given, or not media at all).
+   * `judged`: a media input; the media-input funnel judges the bodies of the
+   *   routes it registers (at least one of them not exempt, verified), and they
+   *   follow `imports.inputLinks`. A file that registers no route (a shared
+   *   body schema) says which route takes it (`via`).
    * `open`: an outside URL still reaches a fetch or a provider, awaiting a decision.
    */
-  readonly kind: "asks" | "own" | "none" | "open"
+  readonly kind: "asks" | "own" | "none" | "judged" | "open"
   readonly why: string
   readonly openReads?: Readonly<Record<string, string>>
   /** An `asks` lane whose reads happen outside the file (a worker, from the job it queues after the ask): where, and why that is still behind the ask. */
   readonly readsElsewhere?: string
+  /** A `judged` file that registers no route itself: the route (or lane) whose body it is. */
+  readonly via?: string
 }
 
 const asks = (why: string, more: { openReads?: Readonly<Record<string, string>>; readsElsewhere?: string } = {}): Lane => ({ kind: "asks", why, ...more })
 const own = (why: string): Lane => ({ kind: "own", why })
 const none = (why: string): Lane => ({ kind: "none", why })
 const open = (why: string): Lane => ({ kind: "open", why })
+const judged = (why: string, via?: string): Lane => ({ kind: "judged", why, ...(via ? { via } : {}) })
 
 const GATE = asks("asks the import gate (lib/import-gate.ts), which asks the switch first")
 const SWITCH = asks("a link to outside content is refused here directly (lib/link-imports.ts)")
-const GENERATION_REFERENCE = open(
-  "a generation's reference media, which the server or the provider fetches; refusing an outside URL here changes what a generation accepts, so it awaits a product decision",
-)
-const PROCESSING_INPUT = open("a node's input media, fetched to be processed; whether an outside URL may be processed awaits a product decision")
-const ENTITY_REFERENCE = open("a reference URL stored on the entity and read by later generations; awaits the same decision as a generation's reference")
-const PROBE = open("the server reads an outside link's length without storing it; awaits a product decision")
+const GENERATION_REFERENCE = judged("a generation's reference media, which the server or the provider fetches: judged by the media-input funnel, following imports.inputLinks")
+const PROCESSING_INPUT = judged("a node's input media, fetched to be processed: judged by the media-input funnel, following imports.inputLinks")
+const ENTITY_REFERENCE = judged("a reference URL stored on the entity and read by later generations: judged where it is written, following imports.inputLinks")
+const PROBE = judged("the server reads an outside link's length before anything is held: judged by the media-input funnel first, following imports.inputLinks")
+const SCRAPE = judged("hands the page or account a caller names to a scraping or capture service and keeps what comes back: judged by the media-input funnel, following imports.inputLinks")
+/** A shared body schema: judged as the body of the route that takes it. */
+const BODY_OF = (route: string, why = "a body schema, judged as the body of the route that takes it") => judged(why, route)
 const STORED_ONLY = none("recorded as given; nothing fetches it here")
 const NOT_MEDIA = none("not media: a page, a redirect or an account configuration, never fetched as an import")
 
 /** Routes whose URL field lives in a shared schema module, so the URL-field scan cannot see them. They are counted by name. */
 const SHARED_SCHEMA_LINK_ROUTES = ["routes/web-scrape.ts", "routes/site-capture.ts", "routes/meta-ads-scrape.ts", "routes/instagram-scrape.ts"]
+
+/**
+ * Routes that take a link the URL-field scan cannot see: their fields are
+ * declared in `lib/`, as a value of any shape, or without a URL type. The
+ * media-input funnel reads their bodies by field name wherever the schema
+ * was written, so they are counted by name here.
+ */
+const FUNNEL_SEEN_LINK_ROUTES = [
+  "routes/text-to-speech.ts",
+  "routes/text-to-dialogue.ts",
+  "routes/reduce.ts",
+  "routes/saved-posts.ts",
+  "routes/collections.ts",
+  "routes/moodboards.ts",
+  "ee/routes/trends.ts",
+  "routes/use-case-run.ts",
+  "nodes/clip-pack/use-case.ts",
+  "nodes/episode-chapters/use-case.ts",
+  "nodes/speaker-layout/use-case.ts",
+  "routes/video-director.ts",
+]
 
 /**
  * Every route-like file that declares a URL field, and what it does about a
@@ -272,6 +306,7 @@ const LANES: Readonly<Record<string, Lane>> = {
   "routes/content-rights.ts": none("records a rights confirmation for a link; the gate reads it at the import"),
   "routes/developer-apps.ts": NOT_MEDIA,
   "routes/library.ts": none("records a library row for a URL it does not own as given; nothing fetches it (key-ownership judges own files)"),
+  "routes/collections.ts": none("a collection record keeps its link and media as data, fetched by nothing here; a run that uses them is judged at the node they reach"),
   "routes/media-delete.ts": none("deletes the caller's own files by URL; nothing is fetched"),
   "routes/node-presets.ts": STORED_ONLY,
   "routes/oauth-register.ts": NOT_MEDIA,
@@ -284,20 +319,34 @@ const LANES: Readonly<Record<string, Lane>> = {
   "routes/workflow-templates.ts": STORED_ONLY,
   "routes/workflows.ts": STORED_ONLY,
 
-  // Open: outside media still reaches a fetch or a provider, awaiting a decision.
-  "routes/web-scrape.ts": open("hands the page a caller names to the scraping service and keeps its text and images; awaits a product decision"),
-  "routes/site-capture.ts": open("hands the site a caller names to the capture service and stores its screenshots; awaits a product decision"),
-  "routes/meta-ads-scrape.ts": open("hands the ad page a caller names to the scraping service and copies its media; awaits a product decision"),
-  "routes/instagram-scrape.ts": open("hands the account a caller names to the scraping service and copies its media; awaits a product decision"),
+  // Judged: a media input, following imports.inputLinks (lib/input-links.ts).
+  "routes/web-scrape.ts": SCRAPE,
+  "routes/site-capture.ts": SCRAPE,
+  "routes/meta-ads-scrape.ts": SCRAPE,
+  "routes/instagram-scrape.ts": SCRAPE,
   "ee/routes/seedance-ref-estimate.ts": PROBE,
-  "nodes/episode-trailer/use-case.ts": PROCESSING_INPUT,
+  "nodes/episode-trailer/use-case.ts": BODY_OF("POST /v1/episode-trailer (routes/use-case-run.ts)"),
   "nodes/gif-to-video/route.ts": PROCESSING_INPUT,
   "nodes/remove-audio/route.ts": PROCESSING_INPUT,
   "nodes/shot-cuts/route.ts": PROCESSING_INPUT,
-  "nodes/speaker-map/payload.ts": PROCESSING_INPUT,
+  "nodes/speaker-map/payload.ts": BODY_OF("a run's Speaker Map node (services/workflow-engine/node-input-links.ts)", "a node's payload, judged with the node's inputs"),
   "nodes/speaker-map/route.ts": PROCESSING_INPUT,
-  "nodes/split-into-layers/quote.ts": PROCESSING_INPUT,
-  "nodes/tighten-episode/use-case.ts": PROCESSING_INPUT,
+  "nodes/split-into-layers/quote.ts": BODY_OF("POST /v1/split-into-layers (nodes/split-into-layers/route.ts)"),
+  "nodes/tighten-episode/use-case.ts": BODY_OF("POST /v1/tighten-episode (routes/use-case-run.ts)"),
+  "nodes/clip-pack/use-case.ts": BODY_OF("POST /v1/clip-pack (routes/use-case-run.ts)"),
+  "nodes/episode-chapters/use-case.ts": BODY_OF("POST /v1/episode-chapters (routes/use-case-run.ts)"),
+  "nodes/speaker-layout/use-case.ts": BODY_OF("POST /v1/speaker-layout (routes/use-case-run.ts)"),
+  "routes/use-case-run.ts": judged(
+    "a use-case run's recordings, measured before its fee is held: judged by the media-input funnel, following imports.inputLinks",
+    "registers POST /v1/<type> for every use-case node, at its descriptor's route",
+  ),
+  "routes/text-to-speech.ts": judged("a reference recording a voice is matched to (its fields declared in lib/): judged by the media-input funnel, following imports.inputLinks"),
+  "routes/text-to-dialogue.ts": judged("a reference recording a voice is matched to (its fields declared in lib/): judged by the media-input funnel, following imports.inputLinks"),
+  "routes/reduce.ts": judged("the items a pick chooses among (pictures, clips): judged by the media-input funnel, following imports.inputLinks"),
+  "routes/saved-posts.ts": judged("a social post saved with its media, read later as a reference: judged where it is written, following imports.inputLinks"),
+  "routes/moodboards.ts": judged("a moodboard's pictures, read by later generations: judged where they are written, following imports.inputLinks"),
+  "ee/routes/trends.ts": judged("a trend run's media: judged by the media-input funnel, following imports.inputLinks"),
+  "routes/video-director.ts": judged("a director run's reference media: judged by the media-input funnel, following imports.inputLinks"),
   "routes/3d-scene.ts": GENERATION_REFERENCE,
   "routes/add-captions.ts": PROCESSING_INPUT,
   "routes/adjust-volume.ts": PROCESSING_INPUT,
@@ -322,7 +371,7 @@ const LANES: Readonly<Record<string, Lane>> = {
     {
       openReads: {
         sourceImageForAutoAspect:
-          "a prompt edit's `auto` aspect reads the source photo's header to keep its shape: a generation reference's read, awaiting the same decision as the other generation routes that call it",
+          "a prompt edit's `auto` aspect reads the source photo's header to keep its shape: the media-input funnel judges the photo before this route runs (imports.inputLinks), the switch alone does not refuse it here",
       },
     },
   ),
@@ -340,7 +389,7 @@ const LANES: Readonly<Record<string, Lane>> = {
   "routes/generate-creature-motion.ts": GENERATION_REFERENCE,
   "routes/generate-creature.ts": GENERATION_REFERENCE,
   "routes/generate-face.ts": GENERATION_REFERENCE,
-  "routes/generate-image-body.ts": GENERATION_REFERENCE,
+  "routes/generate-image-body.ts": BODY_OF("POST /v1/generate-image (routes/generate-image.ts)"),
   "routes/generate-location-asset.ts": GENERATION_REFERENCE,
   "routes/generate-location-motion.ts": GENERATION_REFERENCE,
   "routes/generate-location.ts": GENERATION_REFERENCE,
@@ -355,7 +404,9 @@ const LANES: Readonly<Record<string, Lane>> = {
   "routes/image-critic.ts": GENERATION_REFERENCE,
   "routes/image-overlay-placement.ts": PROCESSING_INPUT,
   "routes/image-overlay.ts": PROCESSING_INPUT,
-  "routes/image-proxy.ts": open("streams an outside image or video to the viewer's browser (display only, nothing stored); whether a deployment refuses it awaits a product decision"),
+  "routes/image-proxy.ts": open(
+    "a GET that streams an outside image or video to the viewer's browser (display only, nothing stored, no media input): not a request body, so the funnel does not judge it; whether a deployment refuses it is the display question, awaiting a product decision",
+  ),
   "routes/image-to-image.ts": GENERATION_REFERENCE,
   "routes/image-to-text.ts": GENERATION_REFERENCE,
   "routes/lip-sync.ts": GENERATION_REFERENCE,
@@ -370,21 +421,21 @@ const LANES: Readonly<Record<string, Lane>> = {
   "routes/merge-video-audio.ts": PROCESSING_INPUT,
   "routes/mix-audio.ts": PROCESSING_INPUT,
   "routes/motion-transfer.ts": GENERATION_REFERENCE,
-  "routes/nodaro-exclusive.ts": open("a self-hosted install's relay to the cloud: the URL is passed on for the far end to read; awaits the same decision as the routes it relays"),
+  "routes/nodaro-exclusive.ts": judged("a self-hosted install's relay to the cloud: the URL it passes on for the far end to read is judged on the install, following imports.inputLinks"),
   "routes/objects.ts": ENTITY_REFERENCE,
   "routes/pitch-tempo.ts": PROCESSING_INPUT,
   "routes/pro-3d-render.ts": GENERATION_REFERENCE,
   "routes/prompt-helper.ts": GENERATION_REFERENCE,
   "routes/reference-board.ts": GENERATION_REFERENCE,
-  "routes/reference-sheet.schema.ts": GENERATION_REFERENCE,
+  "routes/reference-sheet.schema.ts": BODY_OF("POST /v1/reference-sheet (routes/reference-sheet.ts)"),
   "routes/render-video.ts": PROCESSING_INPUT,
   "routes/resize-video.ts": PROCESSING_INPUT,
-  "routes/scheduled-posts.ts": open("a post's media, read at publish time: outbound, and normally this deployment's own file; awaits a product decision"),
+  "routes/scheduled-posts.ts": judged("a post's media, read at publish time: judged where the post is written, following imports.inputLinks"),
   "routes/shot-sequence.ts": PROCESSING_INPUT,
   "routes/silence-detect.ts": PROCESSING_INPUT,
   "routes/slideshow.ts": PROCESSING_INPUT,
   "routes/social-media-format.ts": PROCESSING_INPUT,
-  "routes/social-publish.ts": open("a post's media, fetched to publish it: outbound, and normally this deployment's own file; awaits a product decision"),
+  "routes/social-publish.ts": judged("a post's media, fetched to publish it: judged by the media-input funnel, following imports.inputLinks"),
   "routes/speech-to-video.ts": GENERATION_REFERENCE,
   "routes/speed-ramp.ts": PROCESSING_INPUT,
   "routes/split-image.ts": PROCESSING_INPUT,
@@ -503,10 +554,12 @@ describe("every route that takes a URL is counted", () => {
   })
 
   it("no classified file is stale, and each lane says why", () => {
-    const stale = Object.keys(LANES).filter((rel) => !urlFieldFiles.includes(rel) && !SHARED_SCHEMA_LINK_ROUTES.includes(rel))
+    const stale = Object.keys(LANES).filter((rel) => !urlFieldFiles.includes(rel) && !SHARED_SCHEMA_LINK_ROUTES.includes(rel) && !FUNNEL_SEEN_LINK_ROUTES.includes(rel))
     expect(stale, "LANES lists files that no longer declare a URL field: remove them").toEqual([])
-    const missing = SHARED_SCHEMA_LINK_ROUTES.filter((rel) => !files.some((f) => f.rel === rel))
-    expect(missing, "a shared-schema link route no longer exists: remove it from SHARED_SCHEMA_LINK_ROUTES and LANES").toEqual([])
+    const missing = [...SHARED_SCHEMA_LINK_ROUTES, ...FUNNEL_SEEN_LINK_ROUTES].filter((rel) => !files.some((f) => f.rel === rel))
+    expect(missing, "a shared-schema link route no longer exists: remove it from SHARED_SCHEMA_LINK_ROUTES / FUNNEL_SEEN_LINK_ROUTES and LANES").toEqual([])
+    const unclassified = FUNNEL_SEEN_LINK_ROUTES.filter((rel) => !(rel in LANES))
+    expect(unclassified, "a route the URL scan cannot see is not classified").toEqual([])
     for (const [rel, lane] of Object.entries(LANES)) expect(lane.why.length, `${rel}: say why`).toBeGreaterThan(20)
   })
 
@@ -569,9 +622,28 @@ describe("every route that takes a URL is counted", () => {
     expect(asksLaneProblems({ "routes/x.ts": asks("asks the switch before it queues the job", { readsElsewhere: "the worker fetches it from the job queued after the ask" }) }, () => source)).toEqual([])
   })
 
-  it("a lane that starts asking the switch moves off `open`/`none`, so the census never claims less than the code does", () => {
+  it("a lane marked `judged` is one the media-input funnel judges: it registers a route with a body that is not exempt, or says which route takes it", () => {
+    const problems: string[] = []
     for (const [rel, lane] of Object.entries(LANES)) {
-      if (lane.kind !== "open" && lane.kind !== "none") continue
+      if (lane.kind !== "judged") continue
+      const source = files.find((f) => f.rel === rel)!.source
+      const routes = [...source.matchAll(/\.(post|put|patch)\(\s*["'`]([^"'`$]+)["'`]/g)].map((m) => `${m[1]!.toUpperCase()} ${m[2]}`)
+      if (routes.length === 0 && !lane.via) problems.push(`${rel}: registers no route it can see — say which route takes it (via)`)
+      if (routes.length > 0 && lane.via) problems.push(`${rel}: via is declared, but it registers ${routes[0]} — remove via`)
+      if (routes.length > 0 && routes.every((r) => exemptionOf(r) !== undefined)) problems.push(`${rel}: every route it registers is exempt from the funnel (lib/input-link-lanes.ts) — it is not judged`)
+      if (lane.via !== undefined && lane.via.length <= 10) problems.push(`${rel}: say which route takes it`)
+    }
+    expect(problems).toEqual([])
+  })
+
+  it("no lane is `open` because the funnel cannot reach it: only a route with no body to judge stays open", () => {
+    const openLanes = Object.entries(LANES).filter(([, lane]) => lane.kind === "open").map(([rel]) => rel)
+    expect(openLanes).toEqual(["routes/image-proxy.ts"])
+  })
+
+  it("a lane that starts asking the switch moves off `open`/`none`/`judged`, so the census never claims less than the code does", () => {
+    for (const [rel, lane] of Object.entries(LANES)) {
+      if (lane.kind !== "open" && lane.kind !== "none" && lane.kind !== "judged") continue
       const source = files.find((f) => f.rel === rel)!.source
       expect(ASKS_THE_SWITCH.test(source), `${rel} now asks the switch: classify it as asks`).toBe(false)
     }

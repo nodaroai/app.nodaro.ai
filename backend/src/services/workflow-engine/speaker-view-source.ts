@@ -20,6 +20,8 @@
  */
 import { speakerViewSourceRefusal, speakerViewVideoModeLive } from "@nodaro/render-rules"
 import { ClipMeasureError, measureClip, type MeasuredClip } from "../../lib/clip-measure.js"
+import { judgeInputLinks } from "../../lib/input-links.js"
+import { LINK_IMPORTS_DISABLED_MESSAGE } from "../../lib/link-imports.js"
 import { resolveNodeInputs } from "./input-resolver.js"
 import { ancestorsOf, videoFedSpeakerViews, type VideoFedSpeakerView } from "./speaker-view-source-graph.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "./types.js"
@@ -48,6 +50,11 @@ function measuredOnce(deps: SpeakerViewSourceDeps, memo: Map<string, Promise<Mea
 
 /** What the clip's facts refuse for this node, as a sentence naming it; null when it may run. */
 async function refusalFor(view: VideoFedSpeakerView, url: string, measure: (url: string) => Promise<MeasuredClip>): Promise<string | null> {
+  // The clip is downloaded to be measured: a link to another site is judged
+  // first, as the Speaker View's own inputs are (lib/input-links.ts).
+  if (judgeInputLinks({ kind: "node", name: "speaker-view" }, { videoUrl: url }).refusal) {
+    return `${LINK_IMPORTS_DISABLED_MESSAGE} (Speaker View node "${view.label}").`
+  }
   let clip: MeasuredClip
   try {
     clip = await measure(url)

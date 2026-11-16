@@ -398,6 +398,7 @@ import { nodaroExclusiveRoutes } from "./routes/nodaro-exclusive.js"
 import { providerKeysRoutes } from "./routes/provider-keys.js"
 import { openapiRoutes } from "./routes/openapi.js"
 import { registerAuthHook } from "./middleware/auth.js"
+import { registerInputLinkJudge } from "./middleware/input-links.js"
 import { registerNetworkBlockHook } from "./middleware/network-block.js"
 import { registerPluginRouteScopeHook } from "./lib/plugin-route-scopes.js"
 import { registerTokenWorkflowScopeGuard } from "./middleware/token-workflow-scope.js"
@@ -631,6 +632,11 @@ export async function buildApp() {
   // Admin network blocks: browser sessions from a blocked network (after auth,
   // so an admin is recognised and never refused). Inert without an admin panel.
   registerNetworkBlockHook(app)
+  // Media inputs given as links to other sites, where the deployment makes them
+  // follow its link-import switch (`imports.inputLinks`, lib/input-links.ts):
+  // judged before every route's own preHandlers — its credit guard, its probes,
+  // its holds. Inert (one env read) on a deployment that has not set it.
+  registerInputLinkJudge(app)
   // Who is signed in right now, for the admin list (ee/lib/presence.ts): after
   // the response, in the background, at most one note per user and surface per
   // 30 s. Only where an admin panel can show it.

@@ -6178,6 +6178,25 @@ skipped. The refusal has one body everywhere:
 { "error": { "code": "link_imports_disabled", "message": "Importing media from a link to another site is turned off on this deployment. Upload the file instead." } }
 ```
 
+**Media inputs given as links.** Such a deployment can also make the media a
+request takes in follow the same switch (`imports.inputLinks` in its surface
+profile, [deployment.md](./deployment.md#media-inputs-given-as-links-importsinputlinks)):
+a reference picture, a source clip, a sound, a mask or a page given to a
+generation, processing, entity or length-probe route as a link. Under
+`"refuse"`, a request whose body carries a link to anything but a file of the
+deployment's own storage answers the same `403 link_imports_disabled`, with
+the same body, before anything is created, reserved, fetched or sent to a
+provider (`POST /v1/generate-video`'s `imageUrl`, `POST /v1/trim-video`'s
+`videoUrl`, `POST /v1/characters`' reference pictures and the like). Fields are
+read by name (`…Url`, `…Urls`, `…image`, `…video`, `…source`, a list's items as
+the list); a prompt, an id and an endpoint the request posts to (a webhook, a
+callback) are not judged. An upload, a generated result and any other file of
+the deployment's own storage are allowed, and so is a `data:` URI. In a
+workflow run (including a published app's run, a component's and a use-case
+node's steps) the node whose input is refused fails with the error code
+`link_imports_disabled`, before its credits are held. Under `"report"`, or with
+link imports on, nothing changes for the caller.
+
 **How many imports carry a declaration.** Admin → Settings → Content rights
 shows, for the last 7, 30 or 90 days, how many imports of a link started and
 how many of them carried a confirmation (a ticked box, or one derived from a

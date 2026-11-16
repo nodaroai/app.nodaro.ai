@@ -15,7 +15,10 @@ import {
   surfaceHeaderSchema,
   surfaceImportsSchema,
   surfaceWorldsSchema,
+  type InputLinksMode,
 } from "./surface-profile-client-keys.js"
+
+export type { InputLinksMode } from "./surface-profile-client-keys.js"
 
 /**
  * Deployment surface profile (B1). Rides the runtime-config channel: env
@@ -170,7 +173,12 @@ export interface SurfaceProfile {
   catalogPolicy?: unknown // B4 (Phase 4) — carried opaque; validated loosely, never read here
   // Read by the client apps through /config.js; absent = their default.
   worlds?: SurfaceWorlds
-  imports?: { links: boolean }
+  /**
+   * `inputLinks`: what a media input given as a link to another site does while
+   * `links` is false (`surfaceInputLinksMode`). BACKEND-ONLY:
+   * surface-profile-runtime-config.ts strips it from /config.js — no page reads it.
+   */
+  imports?: { links: boolean; inputLinks?: InputLinksMode }
   header?: SurfaceHeaderMode
   /**
    * UI-string overrides, `product → locale → key → text`. Carried RAW and never
@@ -774,6 +782,25 @@ export function surfaceAllowsPublicOutputs(): boolean {
 export function surfaceAllowsLinkImports(): boolean {
   if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return true
   return runtimeSurfaceProfile().imports?.links !== false
+}
+
+/**
+ * What this deployment does with a media INPUT given as a link to another site
+ * (`imports.inputLinks`, decided 2026-11-16): `"allow"` (absent, no profile, or
+ * link imports on — exactly today's behaviour), `"report"` or `"refuse"`. Only
+ * a deployment that turned link imports off (`imports.links: false`) can
+ * answer anything but `"allow"`. The one reader of the key; `lib/input-links.ts`
+ * decides what each answer does.
+ *
+ * The unset case returns before the profile is read, as `surfaceAllowsLinkImports`
+ * does: every request on every install asks it, and a route suite that mocks the
+ * config module partially cannot break on it.
+ */
+export function surfaceInputLinksMode(): InputLinksMode {
+  if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return "allow"
+  const imports = runtimeSurfaceProfile().imports
+  if (imports?.links !== false) return "allow"
+  return imports.inputLinks ?? "allow"
 }
 
 /**

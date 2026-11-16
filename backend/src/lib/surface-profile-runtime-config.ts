@@ -71,14 +71,20 @@ export function renderSurfaceProfileForRuntimeConfig(readManifest?: ReadUiString
   // (MCP by path): the server states every MCP address itself
   // (lib/mcp-lane-addresses.ts), and no page reads it.
   //
+  // So is `imports.inputLinks` (decided 2026-11-16): what a media input given
+  // as a link does is decided by the server on every request
+  // (lib/input-links.ts), and no page reads it; `imports.links` stays.
+  //
   // Whole-object identity on mainline: with none of the three billing keys,
-  // no `jobs`, no `mcp` and no `strings` set, this is the same single
-  // JSON.stringify(profile) it has always been.
+  // no `jobs`, no `mcp`, no `imports.inputLinks` and no `strings` set, this is
+  // the same single JSON.stringify(profile) it has always been.
   const { payerAccount, defaultAllowanceUnits, allowances } = profile.billing
   const redactBilling = payerAccount !== undefined || defaultAllowanceUnits !== undefined || allowances !== undefined
-  if (!redactBilling && profile.strings === undefined && profile.jobs === undefined && profile.mcp === undefined) return JSON.stringify(profile)
+  const redactInputLinks = profile.imports?.inputLinks !== undefined
+  if (!redactBilling && !redactInputLinks && profile.strings === undefined && profile.jobs === undefined && profile.mcp === undefined) return JSON.stringify(profile)
   const { strings: rawStrings, jobs: _jobs, mcp: _mcp, ...rest } = profile
   const out: Record<string, unknown> = { ...rest }
+  if (redactInputLinks && profile.imports) out.imports = { links: profile.imports.links }
   if (redactBilling) {
     const {
       payerAccount: _payer,

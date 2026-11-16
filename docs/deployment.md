@@ -1336,6 +1336,10 @@ optional; each array empty = "keep the default"):
   `MCP_ENABLED=true` and `PUBLIC_URL` set to the deployment's http(s) address.
   See [MCP by path](#mcp-by-path-no-dedicated-mcp-host) for what a client
   sees. Backend-only: stripped from `/config.js`.
+- `imports.inputLinks`: what a media input given as a link to another site
+  does where link imports are off — see
+  [Media inputs given as links](#media-inputs-given-as-links-importsinputlinks).
+  Backend-only: stripped from `/config.js`.
 - `developerApps.manage`: who may create, change, rotate the secret of and
   delete a **developer app** (an OAuth client, `/v1/developer-apps`).
   `"owner"` (the default, and what an absent key means): every signed-in
@@ -1829,6 +1833,116 @@ out-of-credits wording):
 NODARO_SURFACE_PROFILE={"brand":{"productName":"Example Studio","description":"Workflows by Example Studio","favicon":["/brand/favicon.svg","/brand/favicon.png"]},"locale":{"default":"he","offered":["he","en"]},"strings":{"flow":{"en":{"credits.allowanceExceeded":"Your Example Studio allowance is used up. Ask your administrator for more."},"he":{"credits.allowanceExceeded":"נגמרה לכם המכסה. פנו למנהל המערכת שלכם."}}}}
 ```
 
+### Media inputs given as links (`imports.inputLinks`)
+
+A deployment that turned link imports off (`imports.links: false`, below) has
+not reviewed media from other sites, and its network may block those hosts
+for its users. With link imports off, the media a request takes IN — a
+reference picture, a source clip, a sound, a mask, a page to scrape — given as
+a link to another site can follow the same switch, in two steps:
+
+```json
+{ "imports": { "links": false, "inputLinks": "report" } }
+```
+
+- `"allow"` (the default, and what an absent key means): exactly as before —
+  the link reaches the server's fetch or the provider.
+- `"report"`: every request goes on exactly as before, and each link that
+  `"refuse"` would refuse is recorded (below).
+- `"refuse"`: refused like an import, with the same
+  `403 link_imports_disabled` and its message, before anything is created,
+  reserved, fetched or sent to a provider.
+
+Any other value reads as `"refuse"`, with a warning. The key means nothing
+while `imports.links` is not `false` (it is kept, with a warning), and nothing
+changes for a deployment that does not set it. It is backend-only: stripped
+from `/config.js`. The Community edition does not read the profile.
+
+**What is judged.** The rule is the switch's own: a link that is not a file of
+this deployment's own storage (`R2_PUBLIC_URL`, `R2_PUBLIC_FALLBACK_DOMAIN`, or
+the bundled storage path) is outside, read strictly (a form another URL reader
+could read differently, or a path through the content network's image
+transform, counts as outside). It is asked in two places:
+- **Every API request with a body**, to any route, before any of the route's
+  own steps (its credit check, its length probes, its holds): the
+  generation, processing and length-probe routes, entity writes (characters,
+  creatures, faces, locations, objects, moodboards, saved posts), the
+  scrapers, site capture and trend radar, publishing and scheduling a post, a
+  published app's run, a component's run and a self-hosted install's relay.
+  Its fields are read by name, as an MCP call's arguments are (`…Url`,
+  `…Urls`, `…image`, `…video`, `…source`; a list's items as the list). A
+  prompt, an id, a JSON text and an endpoint the request posts to (a
+  webhook, a callback, a redirect) are not judged.
+- **Every node a workflow run executes**, the runs of published apps,
+  components, use-case nodes and sub-workflows included, and again on a
+  retry or a resume that runs the node: its own media settings and what its
+  wires hand it, before anything is read or created, and what its build adds
+  from elsewhere (an entity's reference pictures) before its credits are
+  held. Under `"refuse"` the node fails with the code `link_imports_disabled`;
+  nodes of the same stage that already started finish and keep their charge,
+  nodes not yet started do not start, and the run fails.
+
+Not judged: a file of the deployment's own storage (an upload, a generated
+result), a `data:` URI, a node's own earlier results, a voice's sample saved
+on an entity (played by the browser), the post link a content recipe cites
+(never fetched), a collection record's link and media
+(kept as data, and judged at the node a run hands them to), stored graphs,
+templates and app listings (judged when they run), an administrator's routes
+(`/v1/admin/…`), calls from outside systems about their own state (webhook
+triggers, provider and payment callbacks), and any `GET` (the display proxy
+`GET /v1/image-proxy` included). MCP calls are refused by `imports.links:
+false` already, whatever this key says. The lists are held to the code by
+`backend/src/lib/__tests__/input-links-census.test.ts`.
+
+**What `"report"` records.** One server log line per judged link, with the
+route (or the workflow's node type), the field, the link's HOST only — never
+the address or its query — and the user:
+
+```
+[input-links] would-refuse route="POST /v1/trim-video" field=videoUrl host=media.example.org user=<user id>
+```
+
+and an admin report (Admin → App reports, kind `input-link-report`) at most
+once every five minutes per route or node type, field and host, with the
+number of links seen since the previous one. Under `"refuse"` the line says
+`refused` and the report's kind is `input-link-refused`.
+
+**From `"report"` to `"refuse"`.** Run `"report"` for long enough to cover the
+deployment's real use (its scheduled workflows included), then read the hosts
+the reports name. A host that is the deployment's own (an older media host, a
+second bucket) means those files are not under `R2_PUBLIC_URL`: every chain
+that uses them would be refused. Check before switching:
+- `R2_PUBLIC_URL` is set, in its normal form (lower-case host, no default port,
+  no trailing dot), and every saved result lives under it or under
+  `R2_PUBLIC_FALLBACK_DOMAIN`. A deployment that moved its media host reads
+  every result saved under the old one as another site's.
+- `"refuse"` also stops what takes links to other sites by design: the
+  scrapers, site capture, trend radar, saving a social post, and publishing a
+  post with a file from another site. That is the point of the switch, but its
+  users will notice.
+
+**Not safe to switch to `"refuse"` yet** for:
+- **The built-in tutorials** (Business edition). Their sample media lives on
+  the Nodaro CDN, which is another site for your deployment, so a tutorial's
+  first run is refused until its files are replaced with uploads. A tutorial
+  pack an operator ships (`NODARO_TUTORIAL_PACKS`) is safe when its media
+  lives on the deployment's own storage.
+- **A self-hosted install connected to the cloud** (the relay). Results the
+  cloud keeps on its own storage — a site capture where the install has no
+  storage of its own, the media of a social scrape, a Speaker View
+  thumbnail — are another site's for the install, and refused when a later
+  step uses them.
+- **Social scrapes' media** that could not be copied in (the scrape's deadline
+  or storage quota ran out, or the file could not be fetched): it stays at its
+  source and is refused when a later step uses it.
+- **Lottie overlays from the built-in catalog.** Their animations live on the
+  Nodaro CDN, another site for your deployment, so a render that uses one is
+  refused.
+- **Entities saved before the switch** with a reference picture from another
+  site: a workflow run refuses it when its build seats the picture, but a
+  direct generation route that reads the entity from the database (by its
+  id) still hands it to the provider.
+
 ### Keys read by client apps
 
 These keys are for the other products served from the same site as the
@@ -1898,16 +2012,14 @@ logo is dropped with a warning and the rest of `brand` is kept.
   id and an entity id stay allowed; a prompt is text, and a link inside one is
   not judged. See [Links to other sites](mcp/tools.md#links-to-other-sites).
 
-  Outside MCP, it does not, yet, refuse an outside URL given to a media-generation or
-  media-processing route as a source image, video or audio (`POST /v1/generate-video`'s
-  `imageUrl`, `POST /v1/trim-video`'s `videoUrl` and the like). Nor does it
-  cover the display proxy `GET /v1/image-proxy`, the scrapers and site capture
-  (`POST /v1/web-scrape`, `/v1/site-capture`, `/v1/meta-ads-scrape`,
-  `/v1/instagram-scrape`), the length probes `POST /v1/clip-length` and the
-  Seedance reference estimate, publishing or scheduling a post from an outside
-  file, or a self-hosted install's relay to the cloud. On such a deployment
-  those URLs still reach the provider or the deployment's own network, so its
-  network filter still answers for them.
+  Outside MCP, a media INPUT given as a link (a source image, video or audio
+  of a generation or processing route, an entity's reference pictures, a
+  length probe, a scraper's page, a post's media, a self-hosted install's
+  relay) follows it only where the deployment says so: see
+  [`imports.inputLinks`](#media-inputs-given-as-links-importsinputlinks).
+  Without that key those links still reach the provider or the deployment's
+  own network, so its network filter still answers for them. The display
+  proxy `GET /v1/image-proxy` is covered by neither.
 - `catalogs.images`: the pictures on picker options — `"default"` (the
   platform's), `"none"` or `"own"` (the deployment's own). Default
   `"default"`; any other value reads as `"none"`, with a warning.
