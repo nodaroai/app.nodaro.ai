@@ -1,5 +1,17 @@
 # @nodaro/prompts
 
+## 1.58.1
+
+### Patch Changes
+
+- ba63f74: Docs: `PickerOwnPicture.url` and `largeUrl` are used as given, so a caller may pass a deployment's picture as a path on its own site (`/brand/…`) for a reader on that site, as well as an absolute URL. No behaviour change.
+- Updated dependencies [edc1b7d]
+- Updated dependencies [da4cd42]
+- Updated dependencies [da4cd42]
+- Updated dependencies [da4cd42]
+- Updated dependencies [ba63f74]
+  - @nodaro/shared@3.68.0
+
 ## 1.58.0
 
 ### Minor Changes
