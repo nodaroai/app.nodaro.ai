@@ -14,6 +14,7 @@ import {
   describeErrorChain,
 } from "../llm-errors.js"
 import { callKie } from "./kie-lane.js"
+import { claimKieLaneRole, trackKieLane, type KieLaneRole } from "./kie-lane-breaker.js"
 import type { LlmRequest, LlmResponse } from "./types.js"
 
 /** KIE as a fallback leg, or `undefined` when it isn't configured or the model
@@ -132,34 +133,71 @@ export function directFallbackAllowed(ctx: LaneFallbackCtx, req: LlmRequest, err
  * Run a KIE-primary call, falling back to the direct lane on failure — unless
  * the request is kept to the cheap lanes ({@link directFallbackAllowed}).
  * The ONE way every KIE→direct leg is taken, so none can forget the rule.
+ * While KIE is not serving the model (`kie-lane-breaker.ts`) the same two
+ * lanes run in the other order: direct first, KIE as the fallback.
+ *
+ * `primary` is handed the request to send: the caller's own, or — for the one
+ * call that asks KIE again after a skip — the same request with transport
+ * retries off.
  */
 export async function withDirectFallback(
   ctx: LaneFallbackCtx,
   req: LlmRequest,
-  primary: () => Promise<LlmResponse>,
+  primary: (req: LlmRequest) => Promise<LlmResponse>,
   direct: (() => Promise<LlmResponse>) | undefined,
 ): Promise<LlmResponse> {
-  if (!direct) return primary()
+  if (!direct) return primary(req)
+  const role = kieLaneRole(ctx, req)
+  const kie = () => trackKieLane(ctx.modelId, role, () => primary(kieRequest(req, role)), laneDeadlineOf(req))
+  if (role === "fallback") return withFallback(directFirstCtx(ctx), direct, kie)
   try {
-    return await primary()
+    return await kie()
   } catch (err) {
     if (!directFallbackAllowed(ctx, req, err)) throw err
     return serveFromFallback(ctx, err, direct)
   }
 }
 
+/**
+ * The part this call's KIE leg plays for the model's breaker. A run kept to
+ * the cheap lanes has no direct leg to move to: it keeps asking KIE first,
+ * whatever the breaker says, and its failure surfaces as before.
+ */
+function kieLaneRole(ctx: LaneFallbackCtx, req: LlmRequest): KieLaneRole {
+  return req.cheapLanesOnly === true ? "first" : claimKieLaneRole(ctx.modelId)
+}
+
+/** The probe makes one attempt: its failure must not cost its caller the retry ladder. */
+function kieRequest(req: LlmRequest, role: KieLaneRole): LlmRequest {
+  return role === "probe" ? { ...req, retryStreamOnError: false } : req
+}
+
+/** A timeout is the lane's own only when the caller set no deadline of its own. */
+function laneDeadlineOf(req: LlmRequest): { laneDeadline: boolean } {
+  return { laneDeadline: req.timeoutMs === undefined }
+}
+
+/** The same two lanes in the other order, for the log lines of a direct-first call. */
+function directFirstCtx(ctx: LaneFallbackCtx): LaneFallbackCtx {
+  return { modelId: ctx.modelId, primary: ctx.fallback, fallback: ctx.primary }
+}
+
 /** Streaming twin of {@link withDirectFallback}: as {@link streamWithFallback}, only before the first token. */
 export async function streamWithDirectFallback(
   ctx: LaneFallbackCtx,
   req: LlmRequest,
-  primary: (onToken: (chunk: string) => void) => Promise<LlmResponse>,
+  primary: (req: LlmRequest, onToken: (chunk: string) => void) => Promise<LlmResponse>,
   direct: ((onToken: (chunk: string) => void) => Promise<LlmResponse>) | undefined,
   onToken: (chunk: string) => void,
 ): Promise<LlmResponse> {
-  if (!direct) return primary(onToken)
+  if (!direct) return primary(req, onToken)
+  const role = kieLaneRole(ctx, req)
+  const kie = (cb: (chunk: string) => void) =>
+    trackKieLane(ctx.modelId, role, () => primary(kieRequest(req, role), cb), laneDeadlineOf(req))
+  if (role === "fallback") return streamWithFallback(directFirstCtx(ctx), direct, kie, onToken)
   let emitted = false
   try {
-    return await primary((chunk) => { emitted = true; onToken(chunk) })
+    return await kie((chunk) => { emitted = true; onToken(chunk) })
   } catch (err) {
     if (emitted || !directFallbackAllowed(ctx, req, err)) throw err
     return serveFromFallback(ctx, err, () => direct(onToken))

@@ -26,6 +26,7 @@ import type { LlmRequest, LlmResponse } from "./types.js"
 import { claudeMustServeDirect } from "./claude-direct.js"
 import { directLaneVendor } from "./direct-vendor.js"
 import { directLaneLatch } from "../llm-platform-exhaustion.js"
+import { kieLaneSkipped } from "./kie-lane-breaker.js"
 import { withConcurrencySlot, type SlotRequest } from "../concurrency-lanes/slot.js"
 
 // The KIE Claude-proxy passthrough facts (`KIE_CLAUDE_EFFORT_VERIFIED`,
@@ -116,7 +117,7 @@ async function completeOnLanes(req: LlmRequest, model: LlmModelDef): Promise<Llm
     return withDirectFallback(
       { modelId: model.id, primary: "kie", fallback: "direct-anthropic" },
       req,
-      () => callKie(model, req),
+      (r) => callKie(model, r),
       () => callAnthropicDirect(model, req),
     )
   }
@@ -138,7 +139,7 @@ async function completeOnLanes(req: LlmRequest, model: LlmModelDef): Promise<Llm
       : withDirectFallback(
           { modelId: model.id, primary: "kie", fallback: "direct-gemini" },
           req,
-          () => callKie(model, req),
+          (r) => callKie(model, r),
           () => callGeminiDirect(model, req, deriveParams(model, req)),
         )
   }
@@ -374,7 +375,7 @@ async function streamOnLanes(
     return streamWithDirectFallback(
       { modelId: model.id, primary: "kie", fallback: "direct-anthropic" },
       req,
-      (cb) => streamKie(model, req, cb, signal),
+      (r, cb) => streamKie(model, r, cb, signal),
       (cb) => streamAnthropicDirect(model, req, cb, signal),
       onToken,
     )
@@ -393,7 +394,13 @@ async function streamOnLanes(
       return streamWithFallback({ modelId: model.id, primary: "direct-gemini", fallback: "kie" }, direct, kie, onToken)
     }
     if (!kie) return direct(onToken)
-    return streamWithDirectFallback({ modelId: model.id, primary: "kie", fallback: "direct-gemini" }, req, kie, direct, onToken)
+    return streamWithDirectFallback(
+      { modelId: model.id, primary: "kie", fallback: "direct-gemini" },
+      req,
+      (r, cb) => streamKie(model, r, cb, signal),
+      direct,
+      onToken,
+    )
   }
 
   if (config.KIE_API_KEY) {
@@ -417,7 +424,8 @@ export type LlmCallProvider = "kie" | "anthropic" | "google"
  * answers — the lane `llmComplete` / `llmStream` dispatch to first, read with
  * the same predicates and the same process state: which keys are set, and
  * whether a direct account is latched as refused (a latched lane goes straight
- * to the KIE leg). Null when the call cannot be served at all (the router
+ * to the KIE leg), and whether the model's KIE breaker has its KIE-first call
+ * start on the direct lane. Null when the call cannot be served at all (the router
  * throws before any provider request). Used to count the call against its
  * provider; `__tests__/lane-for-call-now.test.ts` drives this and both
  * entry points over the key and latch matrix.
@@ -452,10 +460,15 @@ export function laneForCallNow(model: LlmModelDef, req: LlmRequest): LlmCallProv
     if (req.requireLane === "kie") return "kie"
     return direct(directLaneVendor(model) === "google" ? "google" : "anthropic")
   }
+  // withDirectFallback / streamWithDirectFallback: while KIE is not serving the
+  // model its KIE-first call starts on the direct lane (kie-lane-breaker.ts) —
+  // never a run kept to the cheap lanes.
+  const kieFirst = (vendor: "anthropic" | "google"): LlmCallProvider =>
+    req.cheapLanesOnly !== true && kieLaneSkipped(model.id) ? vendor : "kie"
   if (model.directFallbackModel && anthropicKeySet()) {
-    return claudeDirectFirst(model, req) ? direct("anthropic") : "kie"
+    return claudeDirectFirst(model, req) ? direct("anthropic") : kieFirst("anthropic")
   }
   if (model.directOnly) return geminiDirectAvailable(model) ? "google" : null
-  if (geminiDirectAvailable(model)) return model.preferDirect || !config.KIE_API_KEY ? "google" : "kie"
+  if (geminiDirectAvailable(model)) return model.preferDirect || !config.KIE_API_KEY ? "google" : kieFirst("google")
   return config.KIE_API_KEY ? "kie" : null
 }
