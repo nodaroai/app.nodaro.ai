@@ -11,12 +11,13 @@ import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { collectKeys } from "@/ee/lib/ensure-signup-grant"
 import { claimWelcomeOffer, markWelcomeOfferSeen, type WelcomeOfferClaimResult } from "./welcome-offer-api"
 import { useWelcomeOfferStore } from "./welcome-offer-store"
+import { autoShownThisVisit, markAutoShownThisVisit } from "./welcome-popup-visit"
 import { formatNumber } from "@/lib/i18n/format"
 import { personalFreeCreditsShown } from "@/lib/surface-selectors"
 
 /**
  * Which welcome surface applies to this account, if any:
- *  - "offer"           — credits not claimed yet: the popup (once) + the banner
+ *  - "offer"           — credits not claimed yet: the popup (when due) + the banner
  *  - "consent-pending" — granted through the extension, consent still owed:
  *                        the blocking banner (and the popup on a refused create)
  *  - null              — nothing to show (offer off, the account is settled, or
@@ -26,14 +27,19 @@ export type WelcomeOfferMode = "offer" | "consent-pending" | null
 
 export interface WelcomeOffer {
   mode: WelcomeOfferMode
-  /** The popup has not been shown to this account yet (offer mode only). */
+  /**
+   * The popup should open by itself now (offer mode only): the server's
+   * `welcomeOffer.popupDue`, and not already opened by itself in this visit.
+   */
   popupDue: boolean
   /** The server's credit figure (`welcomeOffer.credits`) in the display unit, formatted for copy; "" while there is no offer. */
   credits: string
   /** "Yes, email me & add the credits" — consent + claim in one server call. */
   claim: () => Promise<WelcomeOfferClaimResult>
-  /** The popup was shown; never show it again. */
-  markSeen: () => void
+  /** The popup just opened by itself: not again in this visit, and the server counts the showing. */
+  markShown: () => void
+  /** "Maybe later": the answer; the popup does not open by itself again. */
+  answerLater: () => void
 }
 
 /**
@@ -69,7 +75,11 @@ export function useWelcomeOffer(): WelcomeOffer {
         : balance?.freeGrantState === "unclaimed" && personalFreeCreditsShown(surface.deploymentPayer)
           ? "offer"
           : null
-  const popupDue = mode === "offer" && offer?.popupSeen === false
+  // The server decides when the popup opens by itself (`popupDue`: at most
+  // once a day, three times in all, never after "Maybe later"). A balance from
+  // a server before `popupDue` only says whether it was ever seen.
+  const serverDue = offer ? (typeof offer.popupDue === "boolean" ? offer.popupDue : offer.popupSeen === false) : false
+  const popupDue = mode === "offer" && serverDue && !(userId && autoShownThisVisit(userId))
 
   const claim = useCallback(async () => {
     const keys = await collectKeys()
@@ -78,20 +88,30 @@ export function useWelcomeOffer(): WelcomeOffer {
     return result
   }, [queryClient, userId])
 
-  const markSeen = useCallback(() => {
-    if (userId) {
-      queryClient.setQueryData<UserBalance>(queryKeys.credits.balance(userId), (cur) =>
-        cur?.welcomeOffer ? { ...cur, welcomeOffer: { ...cur.welcomeOffer, popupSeen: true } } : cur,
-      )
-    }
-    void markWelcomeOfferSeen()
+  // Not due any more, at once: the server answers the same after the post.
+  const settleCachedPopup = useCallback(() => {
+    if (!userId) return
+    queryClient.setQueryData<UserBalance>(queryKeys.credits.balance(userId), (cur) =>
+      cur?.welcomeOffer ? { ...cur, welcomeOffer: { ...cur.welcomeOffer, popupDue: false, popupSeen: true } } : cur,
+    )
   }, [queryClient, userId])
+
+  const markShown = useCallback(() => {
+    if (userId) markAutoShownThisVisit(userId)
+    settleCachedPopup()
+    void markWelcomeOfferSeen("shown")
+  }, [settleCachedPopup, userId])
+
+  const answerLater = useCallback(() => {
+    settleCachedPopup()
+    void markWelcomeOfferSeen("later")
+  }, [settleCachedPopup])
 
   // The server's figure (what a claim grants), never a local copy. Empty
   // only while there is no offer to show (mode null) — nothing renders then.
   const credits = offer ? formatNumber(creditUnits(offer.credits)) : ""
 
-  return { mode, popupDue, credits, claim, markSeen }
+  return { mode, popupDue, credits, claim, markShown, answerLater }
 }
 
 /**

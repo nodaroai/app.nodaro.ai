@@ -149,10 +149,11 @@ describe("GET /v1/user/credits — welcomeOffer", () => {
 
   it("offer ON: carries the amount the claim grants, from the claim's own source", async () => {
     mockConfig.mockResolvedValue({ enabled: true })
-    mockReadWelcomeOfferState.mockResolvedValue({ popupSeen: false, consentPending: false })
+    mockReadWelcomeOfferState.mockResolvedValue({ popupDue: true, popupSeen: false, consentPending: false })
     const res = await getCredits(nextUserId())
     expect(res.statusCode).toBe(200)
     expect(res.json().data.welcomeOffer).toEqual({
+      popupDue: true,
       popupSeen: false,
       consentPending: false,
       credits: TIER_CREDITS.free,
@@ -171,6 +172,13 @@ describe("GET /v1/user/credits — welcomeOffer", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().data.welcomeOffer).toEqual({ popupSeen: true, consentPending: true, credits: 1500 })
     expect(mockGrantedFigure).toHaveBeenCalledWith(userId)
+  })
+
+  it("offer ON: the server's popupDue rides as decided, with popupSeen beside it for older clients", async () => {
+    mockConfig.mockResolvedValue({ enabled: true })
+    mockReadWelcomeOfferState.mockResolvedValue({ popupDue: false, popupSeen: true, consentPending: false })
+    const res = await getCredits(nextUserId())
+    expect(res.json().data.welcomeOffer).toMatchObject({ popupDue: false, popupSeen: true })
   })
 
   it("offer ON but the columns cannot be read (pre-migration): absent, and the balance still answers", async () => {

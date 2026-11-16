@@ -14,13 +14,17 @@ import { whenActivated } from "@/lib/prerender"
 const HOME_PATH = "/projects"
 
 /**
- * The first-visit credits popup: shown ONCE per account, above the home
- * screen, until the user claims or closes it. Closing (×, "Maybe later", the
- * scrim) stamps it as seen — it never returns; the banner stays.
+ * The welcome credits popup, above the home screen, while the account has not
+ * claimed its credits. It opens by itself when the server says it is due
+ * (`welcomeOffer.popupDue`: at most once a day, three times in all) and never
+ * twice in one visit. Only "Maybe later" answers it, and it does not open by
+ * itself again; the ×, Escape and a click outside just close it. The banner
+ * stays either way.
  *
  * It also serves an extension-granted account that still owes its consent:
  * a refused creation (`403 consent_required`) reopens it with the ask, on
- * whatever page the refusal happened.
+ * whatever page the refusal happened. That opening is the user's own doing,
+ * not a showing, and is never counted.
  *
  * Cloud-only: mounted through `WelcomeOfferPopupSlot`. Renders nothing while
  * the offer is off or the account is settled.
@@ -34,8 +38,9 @@ export function WelcomeOfferPopup() {
   const askVersion = useConsentAskVersion()
   const [open, setOpen] = useState(false)
   const autoOpened = useRef(false)
+  const { markShown } = offer
 
-  // First visit: open once, on the home screen, while the popup is still due.
+  // Due: open by itself, on the home screen, and tell the server it did.
   useEffect(() => {
     if (!offer.popupDue || pathname !== HOME_PATH || autoOpened.current) return
     // Never from a prerendered page nobody has seen yet (lib/prerender.ts).
@@ -43,8 +48,9 @@ export function WelcomeOfferPopup() {
       if (autoOpened.current) return
       autoOpened.current = true
       setOpen(true)
+      markShown()
     })
-  }, [offer.popupDue, pathname])
+  }, [offer.popupDue, pathname, markShown])
 
   // The server refused a creation for missing consent — ask right here.
   useEffect(() => {
@@ -56,9 +62,16 @@ export function WelcomeOfferPopup() {
   const pendingConsent = offer.mode === "consent-pending"
   const params = { credits: offer.credits }
 
+  // ×, Escape, a click outside: closed, not answered. It may open by itself
+  // again on a later visit, when the server says it is due.
   function close() {
     setOpen(false)
-    if (offer.mode === "offer") offer.markSeen()
+  }
+
+  // "Maybe later": the answer. It does not open by itself again.
+  function later() {
+    setOpen(false)
+    offer.answerLater()
   }
 
   async function claim() {
@@ -112,7 +125,7 @@ export function WelcomeOfferPopup() {
           {!pendingConsent && (
             <button
               type="button"
-              onClick={close}
+              onClick={later}
               className="mt-4 text-sm font-medium text-[var(--welcome-muted)] underline-offset-4 hover:text-foreground hover:underline"
             >
               {t("welcome.later")}

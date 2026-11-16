@@ -282,6 +282,8 @@
         "backend/src/ee/billing/video-pro-segment-reserve.ts",
         "backend/src/ee/billing/voice-changer-pro-credits.ts",
         "backend/src/ee/billing/voice-changer-pro-pricing.ts",
+        "backend/src/ee/billing/welcome-popup-rule.ts",
+        "backend/src/ee/billing/welcome-popup.ts",
         "backend/src/ee/billing/whole-request-quotes.ts",
         "backend/src/ee/concurrency-lanes/__tests__/history-scripts-contract.ts",
         "backend/src/ee/concurrency-lanes/__tests__/history-scripts.redis.test.ts",

@@ -10,7 +10,7 @@ import Fastify, { type FastifyInstance } from "fastify"
  * the balance cache always invalidated so the state the apps poll is fresh).
  */
 
-const { mockFrom, mockConfig, mockRecordConsent, mockSync, mockReadFreeGrant, mockRunClaim, mockGrantedFigure, mockInvalidate, mockReject } =
+const { mockFrom, mockConfig, mockRecordConsent, mockSync, mockReadFreeGrant, mockRunClaim, mockGrantedFigure, mockInvalidate, mockReject, mockShown, mockLater } =
   vi.hoisted(() => ({
     mockFrom: vi.fn(),
     mockConfig: vi.fn(),
@@ -21,9 +21,12 @@ const { mockFrom, mockConfig, mockRecordConsent, mockSync, mockReadFreeGrant, mo
     mockGrantedFigure: vi.fn(),
     mockInvalidate: vi.fn(),
     mockReject: vi.fn(),
+    mockShown: vi.fn(),
+    mockLater: vi.fn(),
   }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: (...a: unknown[]) => mockFrom(...a) } }))
+vi.mock("@/ee/billing/welcome-popup.js", () => ({ recordWelcomePopupShown: mockShown, recordWelcomePopupLater: mockLater }))
 vi.mock("@/lib/api-auth-mode.js", () => ({ rejectProgrammaticAuth: (...a: unknown[]) => mockReject(...a) }))
 vi.mock("@/ee/lib/welcome-offer-config.js", () => ({ getWelcomeOfferConfig: mockConfig }))
 vi.mock("@/ee/lib/consent-record.js", () => ({ recordConsentGrant: mockRecordConsent }))
@@ -56,6 +59,8 @@ beforeEach(async () => {
   mockReadFreeGrant.mockResolvedValue({ state: "unclaimed", createdAt: new Date() })
   mockRunClaim.mockResolvedValue({ state: "granted", granted: true, decision: null })
   mockGrantedFigure.mockResolvedValue(TIER_CREDITS.free)
+  mockShown.mockResolvedValue({ error: null, counted: true })
+  mockLater.mockResolvedValue({ error: null })
 
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
@@ -189,41 +194,78 @@ describe("POST /v1/credits/welcome-offer/claim", () => {
 })
 
 describe("POST /v1/credits/welcome-offer/seen", () => {
-  function mockSeenUpdate(error: unknown = null) {
-    const is = vi.fn().mockResolvedValue({ error })
-    const eq = vi.fn().mockReturnValue({ is })
-    const update = vi.fn().mockReturnValue({ eq })
-    mockFrom.mockReturnValue({ update })
-    return { update, eq, is }
+  // The writes themselves (the day's window, the compare-and-set, the
+  // fallback before the counting columns exist) are pinned in
+  // billing/__tests__/welcome-popup.test.ts; here, which one a body asks for.
+  function seen(payload?: string | Record<string, unknown>, userId: string | null = USER) {
+    return app.inject({
+      method: "POST",
+      url: `/v1/credits/welcome-offer/seen${userId ? `?userId=${userId}` : ""}`,
+      ...(payload === undefined
+        ? {}
+        : { payload: typeof payload === "string" ? payload : JSON.stringify(payload), headers: { "content-type": "application/json" } }),
+    })
   }
 
   it("401 without a user", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/credits/welcome-offer/seen" })
+    const res = await seen(undefined, null)
     expect(res.statusCode).toBe(401)
+    expect(mockShown).not.toHaveBeenCalled()
+    expect(mockLater).not.toHaveBeenCalled()
   })
 
-  it("409 while the offer is switched off — the column may not exist yet", async () => {
+  it("409 while the offer is switched off — the columns may not exist yet", async () => {
     mockConfig.mockResolvedValue({ enabled: false })
-    const res = await app.inject({ method: "POST", url: `/v1/credits/welcome-offer/seen?userId=${USER}` })
+    const res = await seen({ event: "shown" })
     expect(res.statusCode).toBe(409)
-    expect(mockFrom).not.toHaveBeenCalled()
+    expect(mockShown).not.toHaveBeenCalled()
+    expect(mockLater).not.toHaveBeenCalled()
   })
 
-  it("stamps the popup once — only a null column is written — and refreshes the balance", async () => {
-    const { update, eq, is } = mockSeenUpdate()
-    const res = await app.inject({ method: "POST", url: `/v1/credits/welcome-offer/seen?userId=${USER}` })
+  it('{ event: "shown" }: counts a showing and refreshes the balance', async () => {
+    const res = await seen({ event: "shown" })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ ok: true })
-    expect(mockFrom).toHaveBeenCalledWith("profiles")
-    expect(update.mock.calls[0][0]).toEqual({ welcome_offer_seen_at: expect.any(String) })
-    expect(eq).toHaveBeenCalledWith("id", USER)
-    expect(is).toHaveBeenCalledWith("welcome_offer_seen_at", null)
+    expect(mockShown).toHaveBeenCalledWith(USER)
+    expect(mockLater).not.toHaveBeenCalled()
     expect(mockInvalidate).toHaveBeenCalledWith(USER)
   })
 
-  it("500 (sanitized) when the write fails", async () => {
-    mockSeenUpdate({ message: "column does not exist" })
-    const res = await app.inject({ method: "POST", url: `/v1/credits/welcome-offer/seen?userId=${USER}` })
+  it('a showing within the day is still 200 (idempotent): the write counts nothing', async () => {
+    mockShown.mockResolvedValue({ error: null, counted: false })
+    const res = await seen({ event: "shown" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ ok: true })
+  })
+
+  it('{ event: "later" }: the answer, and the balance refreshed', async () => {
+    const res = await seen({ event: "later" })
+    expect(res.statusCode).toBe(200)
+    expect(mockLater).toHaveBeenCalledWith(USER)
+    expect(mockShown).not.toHaveBeenCalled()
+    expect(mockInvalidate).toHaveBeenCalledWith(USER)
+  })
+
+  it.each([
+    ["no body (every client released before showings were counted)", undefined],
+    ["an empty object", {}],
+    ["an unknown event", { event: "dismissed" }],
+    ["an event that is not a string", { event: 1 }],
+    ["a body that is not an object", '"shown"'],
+  ])("%s is \"later\"", async (_label, payload) => {
+    const res = await seen(payload as string | Record<string, unknown> | undefined)
+    expect(res.statusCode).toBe(200)
+    expect(mockLater).toHaveBeenCalledWith(USER)
+    expect(mockShown).not.toHaveBeenCalled()
+  })
+
+  it("500 (sanitized) when a write fails, and the balance is left alone", async () => {
+    mockShown.mockResolvedValue({ error: "statement timeout", counted: false })
+    let res = await seen({ event: "shown" })
+    expect(res.statusCode).toBe(500)
+    expect(JSON.stringify(res.json())).not.toContain("statement timeout")
+    mockLater.mockRejectedValue(new Error("db down"))
+    res = await seen({ event: "later" })
     expect(res.statusCode).toBe(500)
     expect(mockInvalidate).not.toHaveBeenCalled()
   })

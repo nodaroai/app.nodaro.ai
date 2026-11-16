@@ -22,6 +22,7 @@ vi.mock("../welcome-offer-api", () => ({
 
 import { useWelcomeOffer, useWelcomeOfferClaim } from "../use-welcome-offer"
 import { useWelcomeOfferStore } from "../welcome-offer-store"
+import { __resetWelcomePopupVisitForTests } from "../welcome-popup-visit"
 import { queryKeys } from "@/lib/query-keys"
 import type { UserBalance } from "@/lib/api"
 
@@ -52,6 +53,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.surface = {}
   useWelcomeOfferStore.setState({ claimedCredits: null, consentAskVersion: 0 })
+  __resetWelcomePopupVisitForTests()
 })
 
 afterEach(() => {
@@ -70,14 +72,33 @@ describe("useWelcomeOffer — mode from the balance", () => {
     expect(result.current.popupDue).toBe(false)
   })
 
-  it("unclaimed + popup not seen: offer, popup due", () => {
-    const { wrapper } = setup({ freeGrantState: "unclaimed", welcomeOffer: { popupSeen: false, consentPending: false, credits: 1500 } })
+  it("unclaimed + the server says due: offer, popup due", () => {
+    const { wrapper } = setup({ freeGrantState: "unclaimed", welcomeOffer: { popupDue: true, popupSeen: false, consentPending: false, credits: 1500 } })
     const { result } = renderHook(() => useWelcomeOffer(), { wrapper })
     expect(result.current.mode).toBe("offer")
     expect(result.current.popupDue).toBe(true)
   })
 
-  it("unclaimed + popup seen: offer (banner only), popup not due", () => {
+  it("unclaimed + the server says not due (shown today, or answered): offer (banner only), popup not due", () => {
+    const { wrapper } = setup({ freeGrantState: "unclaimed", welcomeOffer: { popupDue: false, popupSeen: true, consentPending: false, credits: 1500 } })
+    const { result } = renderHook(() => useWelcomeOffer(), { wrapper })
+    expect(result.current.mode).toBe("offer")
+    expect(result.current.popupDue).toBe(false)
+  })
+
+  it("the server's popupDue decides, whatever popupSeen says", () => {
+    const { wrapper } = setup({ freeGrantState: "unclaimed", welcomeOffer: { popupDue: false, popupSeen: false, consentPending: false, credits: 1500 } })
+    const { result } = renderHook(() => useWelcomeOffer(), { wrapper })
+    expect(result.current.popupDue).toBe(false)
+  })
+
+  it("a balance from a server before popupDue: due while not yet seen", () => {
+    const { wrapper } = setup({ freeGrantState: "unclaimed", welcomeOffer: { popupSeen: false, consentPending: false, credits: 1500 } })
+    const { result } = renderHook(() => useWelcomeOffer(), { wrapper })
+    expect(result.current.popupDue).toBe(true)
+  })
+
+  it("unclaimed + popup seen (server before popupDue): offer (banner only), popup not due", () => {
     const { wrapper } = setup({ freeGrantState: "unclaimed", welcomeOffer: { popupSeen: true, consentPending: false, credits: 1500 } })
     const { result } = renderHook(() => useWelcomeOffer(), { wrapper })
     expect(result.current.mode).toBe("offer")
@@ -130,13 +151,39 @@ describe("useWelcomeOffer — mode from the balance", () => {
     expect(result.current.credits).toBe("")
   })
 
-  it("markSeen flips the cached popupSeen at once and posts once", async () => {
-    const { client, wrapper } = setup({ freeGrantState: "unclaimed", welcomeOffer: { popupSeen: false, consentPending: false, credits: 1500 } })
+  it('markShown: not due at once, posts "shown" once', async () => {
+    const { client, wrapper } = setup({ freeGrantState: "unclaimed", welcomeOffer: { popupDue: true, popupSeen: false, consentPending: false, credits: 1500 } })
     const { result } = renderHook(() => useWelcomeOffer(), { wrapper })
-    act(() => result.current.markSeen())
-    expect(client.getQueryData<UserBalance>(queryKeys.credits.balance("u1"))?.welcomeOffer?.popupSeen).toBe(true)
+    act(() => result.current.markShown())
+    expect(client.getQueryData<UserBalance>(queryKeys.credits.balance("u1"))?.welcomeOffer).toMatchObject({ popupDue: false, popupSeen: true })
     await waitFor(() => expect(result.current.popupDue).toBe(false))
     expect(h.seen).toHaveBeenCalledTimes(1)
+    expect(h.seen).toHaveBeenCalledWith("shown")
+  })
+
+  it("never twice in one visit: after a showing, a balance that still says due does not reopen it", async () => {
+    const { client, wrapper } = setup({ freeGrantState: "unclaimed", welcomeOffer: { popupDue: true, popupSeen: false, consentPending: false, credits: 1500 } })
+    const { result } = renderHook(() => useWelcomeOffer(), { wrapper })
+    act(() => result.current.markShown())
+    // A poll that answered before the server heard the "shown" (or a lost post).
+    // (The figure changes too, so the re-render that reads it can be waited for.)
+    act(() => {
+      client.setQueryData<UserBalance>(queryKeys.credits.balance("u1"), (cur) =>
+        cur?.welcomeOffer ? { ...cur, welcomeOffer: { ...cur.welcomeOffer, popupDue: true, popupSeen: false, credits: 2000 } } : cur,
+      )
+    })
+    await waitFor(() => expect(result.current.credits).toBe("2,000"))
+    expect(result.current.mode).toBe("offer")
+    expect(result.current.popupDue).toBe(false)
+  })
+
+  it('answerLater: not due at once, posts "later" once', async () => {
+    const { client, wrapper } = setup({ freeGrantState: "unclaimed", welcomeOffer: { popupDue: true, popupSeen: false, consentPending: false, credits: 1500 } })
+    const { result } = renderHook(() => useWelcomeOffer(), { wrapper })
+    act(() => result.current.answerLater())
+    expect(client.getQueryData<UserBalance>(queryKeys.credits.balance("u1"))?.welcomeOffer).toMatchObject({ popupDue: false, popupSeen: true })
+    expect(h.seen).toHaveBeenCalledTimes(1)
+    expect(h.seen).toHaveBeenCalledWith("later")
   })
 
   it("claim sends the fingerprints and refreshes the balance", async () => {

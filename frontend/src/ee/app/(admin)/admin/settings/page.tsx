@@ -821,9 +821,10 @@ export default function AdminSettingsPage() {
             <div className="pr-4">
               <Label htmlFor="notify-welcome-offer">Welcome offer &amp; mailing list</Label>
               <p className="text-xs text-muted-foreground mt-0.5">
-                A line when someone accepts the welcome credits (and how long after dismissing, if they came back),
-                dismisses the popup, declines, or unsubscribes. Also checks Loops once a day for unsubscribes made
-                from the email link and mirrors them here. Off by default.
+                A line when someone accepts the welcome credits (and how long after the popup or a &quot;Maybe
+                later&quot;, if they came back), answers &quot;Maybe later&quot;, is shown the popup and gives no
+                answer, declines, or unsubscribes. Also checks Loops once a day for unsubscribes made from the
+                email link and mirrors them here. Off by default.
               </p>
             </div>
             <Switch id="notify-welcome-offer" checked={notifyWelcomeOfferEnabled} onCheckedChange={setNotifyWelcomeOfferEnabled} />

@@ -7935,7 +7935,8 @@ the deployment names its unit per interface language it also carries
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `popupSeen` | `boolean` | The one-time welcome popup was already shown ([`markWelcomeOfferSeen`](#markwelcomeofferseen)). |
+| `popupDue` | `boolean` (optional) | Open the welcome popup by itself now. The server decides: the grant is unclaimed, "Maybe later" was never answered, and the popup has opened by itself fewer than three times, none of them in the last 24 hours. Report each such opening with [`markWelcomeOfferSeen("shown")`](#markwelcomeofferseenevent), and do not open it by itself twice in one visit. A server released before this field leaves it out: open the popup then while `popupSeen` is `false` (`popupDue ?? popupSeen === false`). |
+| `popupSeen` | `boolean` | `!popupDue`, kept for apps written before `popupDue` (they open the popup while it is `false`). Read `popupDue` instead. |
 | `consentPending` | `boolean` | The account already has its credits but still owes the email consent; the web apps block creation until a claim records it. |
 | `credits` | `number` | The credits a claim grants. Name this figure in the offer instead of hard-coding one — it follows the server when the grant changes. With `consentPending`, the credits the account was granted, which can be more than a claim grants today (an earlier, larger grant is kept). |
 
@@ -8230,15 +8231,26 @@ absent. It is recorded with the consent as the language of the latest one.
 | `grant` | `FreeGrantState` | Where the grant stands after the call: `"granted"` — the grant has landed: this call topped the subscription credits up to `credits`, or it had landed before; `"withheld"` — the abuse checks refused it; `"revoked"` — the grant was taken back earlier and the claim moves nothing; `"unclaimed"` — nothing moved (treat it as a failure and let the user retry). |
 | `credits` | `number` | The grant's figure — the same as `balance().welcomeOffer.credits`. A grant tops the subscription credits up to it; it is not added on top of what is there. For an account granted before the call, what it was given, which can be more than a claim grants today. |
 
-#### `markWelcomeOfferSeen()`
+#### `markWelcomeOfferSeen(event?)`
 
 ```ts
-markWelcomeOfferSeen(): Promise<{ ok: true }>
+markWelcomeOfferSeen(event?: "shown" | "later"): Promise<{ ok: true }>
 ```
 
-`POST /v1/credits/welcome-offer/seen` → records that the one-time popup was
-shown, so `welcomeOffer.popupSeen` turns `true` in every app. Idempotent (the
-first stamp wins). A failed call only means the popup may show once more, so
+`POST /v1/credits/welcome-offer/seen` → tells the server what happened to the
+welcome popup; it decides `welcomeOffer.popupDue` from that in every app.
+
+| `event` | When | Effect |
+|---------|------|--------|
+| `"shown"` | The popup opened by itself (because `popupDue` was `true`). | Counts one of the account's three showings. Nothing is counted when the popup was not due (a second call within 24 hours, after "Maybe later", after the third showing), so a repeated call is harmless. |
+| `"later"` | The user answered "Maybe later". | The popup does not open by itself again. |
+
+A close without an answer (the ×, Escape, a click outside) is reported by not
+calling this at all: the popup may then open by itself again on a later visit,
+at most once a day and three times in all. Opening the popup from your own
+button is not a showing either. Called with no event, the method sends no
+body, which the server reads as `"later"` (what apps written before the event
+sent on any close). A failed call only means the popup may show once more, so
 callers usually ignore errors. Same rules as `claimWelcomeOffer`: browser
 session only (`403` for API keys and OAuth app tokens), `409
 welcome_offer_disabled` while the offer is off, `409 not_applicable` on a
@@ -8248,10 +8260,17 @@ deployment where one billing account pays for every run, Cloud only.
 import { collectSignupKeys } from "@nodaro/sdk/signup-signals"
 
 const { welcomeOffer } = await client.credits.balance()
-if (welcomeOffer && !welcomeOffer.popupSeen) {
+// An older server sends popupSeen alone: due while it is false.
+const due = welcomeOffer ? (welcomeOffer.popupDue ?? welcomeOffer.popupSeen === false) : false
+if (due && !openedByItselfThisVisit()) {
   showPopup({ credits: welcomeOffer.credits })            // the server's figure, never a constant
-  void client.credits.markWelcomeOfferSeen().catch(() => {})
+  rememberOpenedByItselfThisVisit()                       // e.g. a sessionStorage mark
+  void client.credits.markWelcomeOfferSeen("shown").catch(() => {})
 }
+
+// On "Maybe later":
+void client.credits.markWelcomeOfferSeen("later").catch(() => {})
+// On the ×, Escape or a click outside: close it, call nothing.
 
 // On "Yes":
 const keys = await collectSignupKeys()

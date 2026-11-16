@@ -134,7 +134,7 @@ describe("GET /v1/consent/state", () => {
   it("yields to the welcome offer for an extension-granted account that still owes consent", async () => {
     vi.mocked(getWelcomeOfferConfig).mockResolvedValue({ enabled: true })
     vi.mocked(readFreeGrantState).mockResolvedValue("granted")
-    vi.mocked(readWelcomeOfferState).mockResolvedValue({ popupSeen: false, consentPending: true })
+    vi.mocked(readWelcomeOfferState).mockResolvedValue({ popupDue: false, popupSeen: true, consentPending: true })
     const res = await app.inject({ method: "GET", url: "/v1/consent/state?userId=u1" })
     expect(res.json()).toMatchObject({ shouldShow: false, status: "welcome_offer" })
     expect(supabase.rpc).not.toHaveBeenCalled()

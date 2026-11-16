@@ -4391,18 +4391,25 @@ fields, one line per movement (numbers as numbers), and says on its last line
 when it was cut at 5,000 rows.
 
 **The welcome offer.** While a deployment has the welcome offer switched on,
-`GET /v1/user/credits` carries `welcomeOffer: { popupSeen, consentPending, credits }`
+`GET /v1/user/credits` carries `welcomeOffer: { popupDue, popupSeen, consentPending, credits }`
 beside `freeGrantState`; the key is absent while it is off (no popup, no banner,
 no block). `credits` is the number of credits a claim grants — show that figure
 rather than a constant, so the offer follows the server when the grant changes.
 With `consentPending: true` it is what the account was granted, which can be
 more than a claim grants today (an earlier, larger grant is kept).
-Two writes answer it:
+`popupDue` says whether to open the welcome popup by itself now, and the server
+decides it: the grant is unclaimed, "Maybe later" was never answered, and the
+popup has opened by itself fewer than three times, none of them in the last 24
+hours. Only "Maybe later" answers the popup; a close without an answer (the ×,
+Escape, a click outside) lets it open by itself again on a later visit, and an
+app should not open it by itself twice in one visit. The count is kept on the
+account, so every app shares it. `popupSeen` is `!popupDue`, kept for apps
+written before `popupDue`. Two writes answer it:
 
 | Method | Path | Body | Purpose |
 |---|---|---|---|
 | `POST` | `/v1/credits/welcome-offer/claim` | `{ sourceApp?, locale?, browserKey?, deviceKey? }` (all optional; a malformed value is stored as absent, never a 400) | The user's "yes": records the marketing-email consent, then claims the free signup grant with it. `locale` is the interface language the yes was given in — the id of a language Nodaro ships (`"en"`, `"ja"`, `"pt-BR"`, …), matched exactly and case-sensitively, so `"en-US"` or `"pt-br"` is stored as absent; it is recorded with the consent as the language of the latest one. Returns `{ consent: "granted", grant, credits }` — `grant` is where the free grant stands afterwards — `"granted"` (the grant has landed: this claim topped the subscription credits up to `credits`, or it had landed before), `"withheld"` (the abuse checks refused it), `"revoked"` (taken back earlier; the claim moves nothing) or `"unclaimed"` (nothing moved, e.g. the consent was not yet visible to the claim — treat it as a failure and let the user retry). `credits` is the grant's figure: a grant tops the subscription credits UP TO it, it is not added on top. An account already decided only has its consent recorded; when it was already granted, `credits` is what it was given, which can be more than a claim grants today. Rate limited to 10 a minute. |
-| `POST` | `/v1/credits/welcome-offer/seen` | — | Records that the one-time popup was shown (`welcomeOffer.popupSeen` turns `true`); the first stamp wins. Returns `{ ok: true }`. Rate limited to 10 a minute. |
+| `POST` | `/v1/credits/welcome-offer/seen` | `{ event?: "shown" \| "later" }` | What happened to the popup. `"shown"`: it opened by itself; this counts one showing while the popup is due, and nothing otherwise (a second one within 24 hours, after "Maybe later", after the third; still `200`). `"later"`: the user answered "Maybe later", and the popup does not open by itself again. No body, or an `event` that is neither, is read as `"later"`, which is what apps written before the event send on any close. A close without an answer is reported by not calling this. Returns `{ ok: true }`. Rate limited to 10 a minute. |
 
 Both are **browser session only**: the consent is a person's choice in a
 browser, so they answer a Supabase session from a first-party web app and
@@ -4412,7 +4419,7 @@ billing account pays for every run, both answer `409 not_applicable` instead and
 record nothing, not even the consent: free signup credits do not apply there
 (`GET /v1/user/credits` carries no `welcomeOffer` there either). SDK:
 `client.credits.claimWelcomeOffer(input)` and
-`client.credits.markWelcomeOfferSeen()`.
+`client.credits.markWelcomeOfferSeen(event?)`.
 
 **The monthly statement email.** A person who turns on `monthlyStatementEmail`
 (`GET` / `PATCH /v1/user/settings`, default `false`) gets, on the 1st, a short
