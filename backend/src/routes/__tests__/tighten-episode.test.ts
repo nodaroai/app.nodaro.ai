@@ -371,6 +371,8 @@ describe("POST /v1/tighten-episode", () => {
       error: { code: "insufficient_credits", message: "This episode is estimated at about 932 credits; your balance is 100." },
       required: 932,
       balance: 100,
+      // The figure is the run's estimate (the run is charged what it uses): a reader is told so.
+      estimate: true,
     })
   })
 
@@ -387,7 +389,7 @@ describe("POST /v1/tighten-episode", () => {
       expect(body.error.message).toBe(estimateShortfallMessage("This episode is", 932, 100))
       expect(body.error.message).toContain("points")
       expect(body.error.message).not.toMatch(/\b932\b|\b100\b/)
-      expect({ required: body.required, balance: body.balance }).toEqual({ required: 932, balance: 100 })
+      expect({ required: body.required, balance: body.balance, estimate: body.estimate }).toEqual({ required: 932, balance: 100, estimate: true })
     } finally {
       process.env.NODARO_SURFACE_PROFILE = before ?? ""
       __resetSurfaceProfileCacheForTests()

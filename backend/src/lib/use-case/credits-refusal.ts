@@ -18,6 +18,14 @@
  *    guard answers that with the subscription ask, never a balance;
  *  - a hold above the run's price (what a UGC clip holds while it renders):
  *    `required` would read as the run's price.
+ *
+ * Where the figures are stated, `estimate: true` rides beside them: `required`
+ * is the run's estimate, never its price, and the run is charged what its steps
+ * use. Always, for every use-case refusal, not only where a metered step makes
+ * the estimate approximate: each is a quote the run is held to start with — a
+ * render priced at the full recording, a clip at twice its target length, an
+ * unknown length at the 180-minute ceiling — and what the steps then process
+ * is what is charged. The editor's dialog says so under the figures.
  */
 
 /** A use-case route's balance refusal: its message, and the figures it states unless they are withheld. */
@@ -40,14 +48,18 @@ export function statedShortfall(
   return { message: word(required, balance), ...(withhold ? {} : { figures: { required, balance } }) }
 }
 
-/** The 402 body: `{ error: { code, message } }`, with `required` and `balance` beside it when the refusal states them. */
+/**
+ * The 402 body: `{ error: { code, message } }`, with `required`, `balance` and
+ * `estimate: true` beside it when the refusal states its figures.
+ */
 export function usecaseShortfallBody(refusal: UseCaseShortfall): {
   error: { code: "insufficient_credits"; message: string }
   required?: number
   balance?: number
+  estimate?: true
 } {
   return {
     error: { code: "insufficient_credits", message: refusal.message },
-    ...(refusal.figures ? { required: refusal.figures.required, balance: refusal.figures.balance } : {}),
+    ...(refusal.figures ? { required: refusal.figures.required, balance: refusal.figures.balance, estimate: true as const } : {}),
   }
 }

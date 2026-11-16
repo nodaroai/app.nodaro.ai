@@ -276,6 +276,7 @@ describe("render-final", () => {
       error: { code: "insufficient_credits", message: "Insufficient credits. Required: 600, Available: 100" },
       required: 600,
       balance: 100,
+      estimate: true,
     })
     nothingWritten()
   })

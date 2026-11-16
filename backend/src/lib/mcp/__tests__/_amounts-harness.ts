@@ -158,7 +158,7 @@ export const DEFAULT_TABLES: TableRows = {
 
 /** The routes the tools under test call, answered with the fixed quotes above. */
 export async function stubRoutes(
-  opts: { useCaseRefusal?: { status: number; message: string; required?: number; balance?: number } } = {},
+  opts: { useCaseRefusal?: { status: number; message: string; required?: number; balance?: number; estimate?: true } } = {},
 ): Promise<FastifyInstance> {
   const fastify = Fastify()
   const type: UseCaseNodeType = "tighten-episode"

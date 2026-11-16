@@ -41,9 +41,12 @@ settings) is refused for a credits shortfall and the refusal names the
 figures. That includes the podcast nodes (Tighten Episode, Chapters, Trailer,
 Clip Pack and Speaker Layout): their own run and their **Continue** are
 refused when the balance cannot cover the run's estimate, and the dialog shows
-that estimate. Their **Render final** runs as part of the workflow's run, so a
-refusal there shows on the node, as before. When a credits refusal names no
-figures, the node shows the same error notice as before.
+that estimate, with a note under it: the figure is the run's estimate, and the
+run is charged what it uses. Their **Render final** runs as part of the
+workflow's run. When that run also makes a UGC video, the editor checks the
+balance itself and can open the dialog before anything is sent. Otherwise a
+refusal shows on the node, as before. When a credits refusal names no figures,
+the node shows the same error notice as before.
 
 ## When the grant waits for a first purchase
 

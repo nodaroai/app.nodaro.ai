@@ -51,11 +51,13 @@ const RUN_SHORT = {
   error: { code: "insufficient_credits", message: "This episode is estimated at about 932 credits; your balance is 100." },
   required: 932,
   balance: 100,
+  estimate: true,
 }
 const CONTINUE_SHORT = {
   error: { code: "insufficient_credits", message: "Continuing this episode is estimated at about 910 credits; your balance is 100." },
   required: 910,
   balance: 100,
+  estimate: true,
 }
 const DEPLOYMENT = { error: { code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." } }
 const FREE_POOL = { error: { code: "insufficient_credits", message: "This episode is estimated at about 932 credits; your balance is 100." } }
@@ -120,7 +122,7 @@ describe("a use-case node's start refused for a credits shortfall that names its
     const { ctx, dialog } = editorCtx()
     await press(useCaseNode("tighten-episode", "Tighten Episode"), ctx)
     expect(dialog).toHaveBeenCalledTimes(1)
-    expect(dialog).toHaveBeenCalledWith({ required: 932, available: 100 })
+    expect(dialog).toHaveBeenCalledWith({ required: 932, available: 100, estimate: true })
     expect(h.toast.error).not.toHaveBeenCalled()
     expect(node().executionStatus).toBe("failed")
     expect(node().errorMessage).toBe("This episode is estimated at about 932 credits; your balance is 100.")
@@ -130,7 +132,7 @@ describe("a use-case node's start refused for a credits shortfall that names its
     serverRefuses(CONTINUE_SHORT)
     const { ctx, dialog } = editorCtx()
     await press(useCaseNode("tighten-episode", "Tighten Episode"), ctx, { mode: "from-failed", jobId: JOB })
-    expect(dialog).toHaveBeenCalledWith({ required: 910, available: 100 })
+    expect(dialog).toHaveBeenCalledWith({ required: 910, available: 100, estimate: true })
     expect(h.toast.error).not.toHaveBeenCalled()
   })
 
@@ -138,11 +140,11 @@ describe("a use-case node's start refused for a credits shortfall that names its
     serverRefuses(RUN_SHORT)
     const first = editorCtx()
     await press(useCaseNode("episode-chapters", "Chapters"), first.ctx)
-    expect(first.dialog).toHaveBeenCalledWith({ required: 932, available: 100 })
+    expect(first.dialog).toHaveBeenCalledWith({ required: 932, available: 100, estimate: true })
     serverRefuses(CONTINUE_SHORT)
     const again = editorCtx()
     await press(useCaseNode("episode-chapters", "Chapters"), again.ctx, { mode: "from-failed", jobId: JOB })
-    expect(again.dialog).toHaveBeenCalledWith({ required: 910, available: 100 })
+    expect(again.dialog).toHaveBeenCalledWith({ required: 910, available: 100, estimate: true })
     expect(h.toast.error).not.toHaveBeenCalled()
   })
 })

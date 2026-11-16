@@ -6172,6 +6172,7 @@ export const ja: ChromeDict = {
   "credits.insufficientDescription": "{required} クレジットが必要ですが、利用可能なのは {available} クレジットのみです。",
   "credits.currentBalanceLabel": "現在の残高",
   "credits.requiredLabel": "必要なクレジット",
+  "credits.estimateNote": "これは実行の見積もりです。実行には実際に使用した分が課金されます。",
   "credits.shortByLabel": "不足分",
   "credits.shortByAmount": "{n} クレジット",
   "credits.currentPlanLabel": "現在のプラン",

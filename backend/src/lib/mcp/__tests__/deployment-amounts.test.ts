@@ -97,7 +97,7 @@ const digest = (s: string) => `sha256:${createHash("sha256").update(s).digest("h
 /** Every reply the rule governs, keyed by case, as the client receives it. */
 async function replies(tables: TableRows = DEFAULT_TABLES): Promise<Record<string, string>> {
   h.tables = tables
-  const fastify = await stubRoutes({ useCaseRefusal: { status: 402, message: "This episode is estimated at about 8467 credits; your balance is 7919.", required: 8467, balance: 7919 } })
+  const fastify = await stubRoutes({ useCaseRefusal: { status: 402, message: "This episode is estimated at about 8467 credits; your balance is 7919.", required: 8467, balance: 7919, estimate: true } })
   const s = await server(fastify)
   const out: Record<string, string> = {}
   out.check_balance = serialized(await callTool(s, "check_balance", {}))
@@ -386,7 +386,7 @@ describe("a refusal for want of balance", () => {
     expect(guidance).toBe(
       "The balance ran out partway through this job (user_allowance_exceeded), so it stopped and what it held was refunded. The balance is managed by this deployment: tell the user, who can ask the deployment's operator for more (check_balance shows the balance), then run the same request again.",
     )
-    const fastify = await stubRoutes({ useCaseRefusal: { status: 402, message: "This episode is estimated at about 8467 credits; your balance is 7919.", required: 8467, balance: 7919 } })
+    const fastify = await stubRoutes({ useCaseRefusal: { status: 402, message: "This episode is estimated at about 8467 credits; your balance is 7919.", required: 8467, balance: 7919, estimate: true } })
     const refused = await callTool(await server(fastify), "tighten_episode", { media_url: "https://cdn.example/ep.mp4" })
     expect(refused.content[0]!.text).toBe(
       "Nodaro: the balance cannot cover this run (insufficient_credits). The balance is managed by this deployment: tell the user, who can ask the deployment's operator for more (check_balance shows the balance).",

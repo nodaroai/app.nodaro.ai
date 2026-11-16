@@ -53,6 +53,7 @@ describe("from-failed: the balance covers what the run still executes plus its f
       error: { code: "insufficient_credits", message: "Continuing this episode is estimated at about 910 credits; your balance is 100." },
       required: 910,
       balance: 100,
+      estimate: true,
     })
     nothingWritten()
   })

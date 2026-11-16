@@ -35,7 +35,8 @@ export function creditsShortfallOf(err: unknown): CreditsShortfall | null {
   if (err.code !== "insufficient_credits") return null
   const { required, balance } = err
   if (!isFigure(required) || !isFigure(balance) || required <= balance) return null
-  return { required, available: balance }
+  // A use-case node's figure is the run's estimate: the dialog says so under it.
+  return { required, available: balance, ...(err.estimate === true ? { estimate: true as const } : {}) }
 }
 
 /**

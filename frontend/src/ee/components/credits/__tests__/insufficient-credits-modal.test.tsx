@@ -273,6 +273,14 @@ describe("InsufficientCreditsModal — while the account's welcome credits are u
     expect(purchaseCtas().length).toBe(2)
   })
 
+  it("a figure that is the run's estimate says so in the note, and the offer on top is unchanged", () => {
+    open({ required: 932, available: 0, note: en["credits.estimateNote"] })
+    expect(screen.getByTestId("insufficient-credits-note").textContent).toBe("This is the run's estimate. The run is charged what it uses.")
+    expect(offer()).not.toBeNull()
+    expect(yes()).toBeEnabled()
+    expect(purchaseCtas().length).toBe(2)
+  })
+
   it("is today's dialog exactly when the offer is off, the grant was withheld, or the deployment gives no free credits", () => {
     const cases: Array<() => void> = [
       () => account({ freeGrantState: "unclaimed" }),

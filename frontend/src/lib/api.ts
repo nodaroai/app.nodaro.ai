@@ -128,14 +128,20 @@ export class InsufficientCreditsError extends Error {
    */
   readonly required?: number
   readonly balance?: number
+  /**
+   * `required` is the run's estimate, not its price (`estimate: true` beside
+   * the figures: a use-case node's refusal). The run is charged what it uses.
+   */
+  readonly estimate?: true
 
-  constructor(message: string, code: string, appCreditsAllowance: number, figures?: { readonly required?: number; readonly balance?: number }) {
+  constructor(message: string, code: string, appCreditsAllowance: number, figures?: { readonly required?: number; readonly balance?: number; readonly estimate?: true }) {
     super(message)
     this.name = "InsufficientCreditsError"
     this.code = code
     this.appCreditsAllowance = appCreditsAllowance
     if (figures?.required !== undefined) this.required = figures.required
     if (figures?.balance !== undefined) this.balance = figures.balance
+    if (figures?.estimate === true) this.estimate = true
   }
 }
 
@@ -328,11 +334,13 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: Messag
     // `required` and `balance` sit BESIDE `error` in the body, like the
     // allowance refusal's above; only a real number is carried.
     const balance = typeof errJson?.balance === "number" ? errJson.balance : undefined
+    // `estimate: true` beside them: `required` is the run's estimate (a use-case node's refusal).
+    const estimate = errJson?.estimate === true
     throw new InsufficientCreditsError(
       message,
       errObj.code as string,
       (errObj.appCreditsAllowance as number) ?? 0,
-      { ...(required !== undefined ? { required } : {}), ...(balance !== undefined ? { balance } : {}) },
+      { ...(required !== undefined ? { required } : {}), ...(balance !== undefined ? { balance } : {}), ...(estimate ? { estimate: true as const } : {}) },
     )
   }
   if (errObj?.code === "name_taken") {
