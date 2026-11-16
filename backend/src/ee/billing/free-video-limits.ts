@@ -2,8 +2,10 @@
 // itself is `@nodaro/render-rules` (`free-video-limits.ts`) — the editor locks
 // options with the SAME function, so the two can never disagree. This file
 // adds the backend's two pieces: reading a request body / node payload, and
-// the English refusal message.
+// the English refusal message (worded in `lib/stated-credit-messages.ts`,
+// where the advice to pay rides only where self-serve is on).
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { freeVideoLimitMessage } from "../../lib/stated-credit-messages.js"
 import {
   freeVideoEntry,
   freeVideoLock,
@@ -30,28 +32,9 @@ export interface FreeVideoRefusal {
   readonly error: string
 }
 
-const PAID = "Upgrade or buy credits to use it."
-
 /** The English refusal for a lock. */
 export function freeVideoLockMessage(lock: FreeVideoLock): string {
-  switch (lock.kind) {
-    case "model":
-      return `${lock.label} is not available on free credits. ${PAID}`
-    case "upscale":
-      return `Upscaling video is not available on free credits. ${PAID}`
-    case "extend":
-      return `Extending video is not available on free credits. ${PAID}`
-    case "shortest":
-      return `On free credits videos are at most ${lock.max} seconds, and ${lock.label}'s shortest is ${lock.shortest}. ${PAID}`
-    case "auto":
-      return `On free credits pick a length of up to ${lock.max} seconds (not Auto). ${PAID}`
-    case "duration":
-      return `On free credits videos are at most ${lock.max} seconds. ${PAID}`
-    case "resolution":
-      return `On free credits ${lock.label} runs at ${lock.lowest} only. ${PAID}`
-    case "size":
-      return `On free credits ${lock.label} runs at the standard size only. ${PAID}`
-  }
+  return freeVideoLimitMessage(lock)
 }
 
 /** Why this request cannot run on free credits, or null when it can (or is not video at all). */

@@ -12,6 +12,8 @@
 import type { ModelPricing } from "./credits.js"
 import type { EffectiveBillingGates } from "./org-entitlements.js"
 import { FREE_TIER_RESTRICTIONS } from "./stripe-config.js"
+// The refusals are worded there: the advice to upgrade only where self-serve is on.
+import { modelNeedsPaidPlanMessage, modelTierRestrictedMessage } from "../../lib/stated-credit-messages.js"
 
 // Tier order for restriction checks. payg ranks above free and below basic:
 // inert while all model_pricing.tier_restriction seeds are null, but keeps an
@@ -49,17 +51,11 @@ export function modelAvailabilityRefusal(
   if (pricing.tierRestriction) {
     const tiers: readonly string[] = TIER_ORDER
     if (tiers.indexOf(gates.tierForGates) < tiers.indexOf(pricing.tierRestriction)) {
-      return {
-        reason: "tier",
-        error: `This model requires ${pricing.tierRestriction} tier or higher. Please upgrade your plan.`,
-      }
+      return { reason: "tier", error: modelTierRestrictedMessage(pricing.tierRestriction) }
     }
   }
   if (gates.freeSemantics && isBlocklisted(modelIdentifier)) {
-    return {
-      reason: "blocked",
-      error: "This model requires a paid subscription. Upgrade to Basic or higher.",
-    }
+    return { reason: "blocked", error: modelNeedsPaidPlanMessage() }
   }
   return null
 }

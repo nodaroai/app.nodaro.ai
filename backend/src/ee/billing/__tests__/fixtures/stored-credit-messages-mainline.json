@@ -17,5 +17,17 @@
   "meter_sync_charged_n": "The answer was cut off. The AI provider had already processed the request, so 41 credits were charged for the usage it billed.",
   "picker_charged_unsettled": "We couldn't read anything in this photo — try a clearer photo of one person. You were charged for the model's attempt.",
   "picker_charged_1": "We couldn't read anything in this photo — try a clearer photo of one person. You were charged 1 credit for the model's attempt.",
-  "picker_charged_n": "We couldn't read anything in this photo — try a clearer photo of one person. You were charged 17 credits for the model's attempt."
+  "picker_charged_n": "We couldn't read anything in this photo — try a clearer photo of one person. You were charged 17 credits for the model's attempt.",
+  "storage_limit": "Storage limit reached (2.4 GB of 2.0 GB used). Delete files or upgrade your plan.",
+  "model_tier": "This model requires pro tier or higher. Please upgrade your plan.",
+  "model_blocked": "This model requires a paid subscription. Upgrade to Basic or higher.",
+  "check_free_video": "Kling 3.0 is not available on free credits. Upgrade or buy credits to use it.",
+  "free_video_model": "Kling 3.0 is not available on free credits. Upgrade or buy credits to use it.",
+  "free_video_upscale": "Upscaling video is not available on free credits. Upgrade or buy credits to use it.",
+  "free_video_extend": "Extending video is not available on free credits. Upgrade or buy credits to use it.",
+  "free_video_shortest": "On free credits videos are at most 6 seconds, and Veo 3.1's shortest is 8. Upgrade or buy credits to use it.",
+  "free_video_auto": "On free credits pick a length of up to 6 seconds (not Auto). Upgrade or buy credits to use it.",
+  "free_video_duration": "On free credits videos are at most 6 seconds. Upgrade or buy credits to use it.",
+  "free_video_resolution": "On free credits Seedance 2.0 runs at 480p only. Upgrade or buy credits to use it.",
+  "free_video_size": "On free credits Wan 2.6 runs at the standard size only. Upgrade or buy credits to use it."
 }

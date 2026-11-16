@@ -188,7 +188,7 @@ import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pric
 import { UNIT_PRICES } from "../nodes/_generated/prices.js"
 import { composeRecord, unitStaticCosts } from "../../lib/unit-compose.js"
 import { withRunningVideoProvider } from "../../services/workflow-engine/normalize-node-types.js"
-// Every saved sentence that names a credit figure is worded there, in the deployment's own terms where it has them.
+// Every saved sentence that names a credit figure, or advises a purchase, is worded there, in the deployment's own terms where it has them.
 import {
   appCreditsShortfallMessage,
   dailyLimitMessage,
@@ -196,6 +196,7 @@ import {
   freeTierDailyLimitMessage,
   insufficientCreditsMessage,
   reservationFailedMessage,
+  storageLimitMessage,
 } from "../../lib/stated-credit-messages.js"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
@@ -5055,7 +5056,7 @@ export class CreditsService {
       const limitGB = (limitBytes / (1024 * 1024 * 1024)).toFixed(1)
       return {
         allowed: false,
-        error: `Storage limit reached (${usedGB} GB of ${limitGB} GB used). Delete files or upgrade your plan.`,
+        error: storageLimitMessage(usedGB, limitGB),
         usedBytes,
         limitBytes,
       }
