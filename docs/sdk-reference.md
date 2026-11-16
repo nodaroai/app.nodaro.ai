@@ -7937,7 +7937,7 @@ the deployment names its unit per interface language it also carries
 |-------|------|-------------|
 | `popupSeen` | `boolean` | The one-time welcome popup was already shown ([`markWelcomeOfferSeen`](#markwelcomeofferseen)). |
 | `consentPending` | `boolean` | The account already has its credits but still owes the email consent; the web apps block creation until a claim records it. |
-| `credits` | `number` | The credits a claim grants. Name this figure in the offer instead of hard-coding one — it follows the server when the grant changes. |
+| `credits` | `number` | The credits a claim grants. Name this figure in the offer instead of hard-coding one — it follows the server when the grant changes. With `consentPending`, the credits the account was granted, which can be more than a claim grants today (an earlier, larger grant is kept). |
 
 ```ts
 const balance = await client.credits.balance()
@@ -8228,7 +8228,7 @@ absent. It is recorded with the consent as the language of the latest one.
 |-------|------|-------------|
 | `consent` | `"granted"` | The email consent is recorded. |
 | `grant` | `FreeGrantState` | Where the grant stands after the call: `"granted"` — the grant has landed: this call topped the subscription credits up to `credits`, or it had landed before; `"withheld"` — the abuse checks refused it; `"revoked"` — the grant was taken back earlier and the claim moves nothing; `"unclaimed"` — nothing moved (treat it as a failure and let the user retry). |
-| `credits` | `number` | The grant's figure — the same as `balance().welcomeOffer.credits`. A grant tops the subscription credits up to it; it is not added on top of what is there. |
+| `credits` | `number` | The grant's figure — the same as `balance().welcomeOffer.credits`. A grant tops the subscription credits up to it; it is not added on top of what is there. For an account granted before the call, what it was given, which can be more than a claim grants today. |
 
 #### `markWelcomeOfferSeen()`
 

@@ -12,7 +12,7 @@ import { signupCookieKey } from "../lib/signup-cookie.js"
 /**
  * Free-credit abuse gate: the claim endpoint.
  *
- * The 1,500-credit signup grant used to come from a column default, so nothing
+ * The free signup grant used to come from a column default, so nothing
  * in the application ever observed a signup. This route is the decision point
  * — it records what the account looked like, decides, and either tops the
  * balance up to the grant or withholds it. The decision itself lives in

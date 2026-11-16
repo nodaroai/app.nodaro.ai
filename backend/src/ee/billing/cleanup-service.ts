@@ -2,7 +2,7 @@ import { supabase } from "../../lib/supabase.js"
 import { isMissingColumnError, isMissingTableError } from "../../lib/postgrest-errors.js"
 import { deleteFromR2, listObjectsByPrefixWithMeta } from "../../lib/storage.js"
 import { tierColumns } from "./tier-columns.js"
-import { downgradeToEffectiveFloor, fetchLifetimeTopups } from "./downgrade-floor.js"
+import { downgradeToEffectiveFloor, endPaidPlan, fetchLifetimeTopups } from "./downgrade-floor.js"
 import { isPaygRetentionActive, PAYG_RETENTION_DAYS } from "@nodaro/shared/credits"
 /**
  * R2 prefix under which the video-analysis worker writes its transient
@@ -33,7 +33,7 @@ import { blankUrlsInEveryJobOutput, jobOutputBlankingAvailable, markJobOutputsCl
 import { judgeAssetRows, keysHeldByOtherLibraryRows, keysUserMayDelete } from "../../lib/key-ownership.js"
 import { deleteKeysRecordingFailures, publicUrlOfKey, type RecordOptions } from "../../lib/storage-delete.js"
 import { heldAmong } from "../../lib/legal-hold.js"
-import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "./stripe-config.js"
+import { TIER_STORAGE_LIMITS, TIER_CREDITS, ENDED_SUBSCRIPTION_CREDITS } from "./stripe-config.js"
 import { mediaKeptByDeploymentPayer } from "./payer-media-retention.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 import { CreditsService } from "./credits.js"
@@ -70,9 +70,13 @@ interface WarningResult {
 
 const BATCH_SIZE = 100
 const MEDIA_RETENTION_DAYS = 60
+// A former subscriber lands here: the free tier and its storage, with the
+// plan's credits ended (ENDED_SUBSCRIPTION_CREDITS, 0) — never the free grant.
+// The expiry safety net ends them through `endPaidPlan`; the 60-day reap never
+// writes credits.
 const FREE_TIER_DEFAULTS = {
   tier: "free",
-  subscription_credits: TIER_CREDITS.free,
+  subscription_credits: ENDED_SUBSCRIPTION_CREDITS,
   storage_limit_bytes: TIER_STORAGE_LIMITS.free, // 1 GB
 } as const
 
@@ -677,7 +681,14 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
   cutoffDate.setDate(cutoffDate.getDate() - MEDIA_RETENTION_DAYS)
   const cutoff = cutoffDate.toISOString()
 
-  // Find users whose grace period has expired
+  // Who this reaches: profiles whose subscription ended more than 60 days ago
+  // and whose tier is NOT free. The webhook and the expiry net set tier free
+  // in the same write that stamps subscription_ended_at, so an ordinary former
+  // subscriber never matches here (its media falls to the free-media reaper).
+  // A row matches only after something put the account back on a paid tier
+  // without clearing the stamp — an admin tier change, the admin
+  // subscription-health sync, a plan change — and one with a live
+  // subscription is skipped below.
   const { data: users, error: usersError } = await supabase
     .from("profiles")
     .select("id, tier, subscription_tier")
@@ -702,11 +713,18 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
   // verify against live subscription status; skip + self-heal the stale marker
   // rather than delete a paying customer's entire media library.
   const candidateIds = users.map((u) => u.id)
-  const { data: activeSubs } = await supabase
+  const { data: activeSubs, error: activeSubsError } = await supabase
     .from("subscriptions")
     .select("user_id")
     .in("user_id", candidateIds)
     .in("status", ["active", "trialing", "past_due"])
+  // A failed read cannot tell a paying customer from a former one: skip the
+  // whole batch (it would demote accounts and delete their media) and let the
+  // next run retry.
+  if (activeSubsError) {
+    console.error("[cleanup] Failed to read live subscriptions for the canceled-user reap:", activeSubsError.message)
+    return { filesDeleted: 0, bytesFreed: 0, errors: 1 }
+  }
   const activeUserIds = new Set((activeSubs ?? []).map((s) => (s as { user_id: string }).user_id))
   if (activeUserIds.size > 0) {
     // Clear the stale cancellation marker so they stop matching on the next run.
@@ -729,10 +747,14 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
   for (const user of users) {
     if (activeUserIds.has(user.id)) continue // active subscriber — never reap
 
+    // No credit write here or in the full downgrade below. The stamp this
+    // reap selects on is set only by the cancel webhook and the expiry net,
+    // each in the same update that ended the plan's credits; whatever the
+    // account holds now came after that (a paid tier set again, a welcome
+    // offer claimed, an admin gift) and is not this reap's to end. The reap
+    // changes tier and storage, and deletes media.
     if ((lifetimes.get(user.id) ?? 0) > 0) {
-      const { error: floorErr } = await downgradeToEffectiveFloor(user.id, {
-        subscription_credits: FREE_TIER_DEFAULTS.subscription_credits,
-      })
+      const { error: floorErr } = await downgradeToEffectiveFloor(user.id)
       if (floorErr) {
         console.error("[cleanup] payg floor downgrade failed:", user.id, floorErr.message)
         errors++
@@ -914,12 +936,11 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
       errors += batchResult.errors
     }
 
-    // Downgrade user to free tier and reset storage
+    // Downgrade user to free tier and reset storage (credits are left alone, above)
     await supabase
       .from("profiles")
       .update({
         ...tierColumns(FREE_TIER_DEFAULTS.tier),
-        subscription_credits: FREE_TIER_DEFAULTS.subscription_credits,
         storage_limit_bytes: FREE_TIER_DEFAULTS.storage_limit_bytes,
         storage_used_bytes: 0,
       })
@@ -982,13 +1003,18 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
     // not its to take). It is still marked expired below, like the rest.
     const userIds = [...new Set(rows.filter(s => s.plan_granted !== false).map(s => s.user_id))]
 
-    // Batch: fetch all affected profiles in one query
-    const { data: profiles } = userIds.length > 0
+    // Batch: fetch all affected profiles in one query. A failed read ends
+    // nothing and marks nothing expired: the next hourly run retries.
+    const { data: profiles, error: profilesError } = userIds.length > 0
       ? await supabase
         .from("profiles")
         .select("id, tier")
         .in("id", userIds)
-      : { data: [] as Array<{ id: string; tier: string | null }> }
+      : { data: [] as Array<{ id: string; tier: string | null }>, error: null }
+    if (profilesError) {
+      console.error("[cleanup] Expiry net: reading the profiles failed, retrying next run:", profilesError.message)
+      return { usersDowngraded: 0, errors: 1 }
+    }
 
     // SAFETY (billing-data guard): the subscriptions table permits multiple rows
     // per user (the partial unique index only forbids two status='active' rows —
@@ -998,12 +1024,18 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
     // status and never downgrade a user who currently has an active/trialing/
     // past_due subscription. Mirrors the live-sub re-check in
     // cleanupCanceledUserMedia. Without this, a paying re-subscriber is silently
-    // reset to free tier / 1,500 credits / 1GB on the next hourly run.
-    const { data: activeSubs } = await supabase
+    // reset to free tier / no plan credits / 1GB on the next hourly run.
+    // A failed read cannot tell a re-subscriber from a former subscriber:
+    // end nothing, mark nothing expired, and let the next hourly run retry.
+    const { data: activeSubs, error: activeSubsError } = await supabase
       .from("subscriptions")
       .select("user_id")
       .in("user_id", userIds)
       .in("status", ["active", "trialing", "past_due"])
+    if (activeSubsError) {
+      console.error("[cleanup] Expiry net: reading the live subscriptions failed, retrying next run:", activeSubsError.message)
+      return { usersDowngraded: 0, errors: 1 }
+    }
     const activeUserIds = new Set((activeSubs ?? []).map(s => (s as { user_id: string }).user_id))
 
     // Find users still on paid tiers (webhook may have already downgraded some)
@@ -1011,40 +1043,47 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
     const toDowngrade = (profiles ?? [])
       .filter(p => p.tier !== "free" && !activeUserIds.has(p.id))
       .map(p => p.id)
-    if (toDowngrade.length > 0) {
-      // Effective-floor split (design §4.5): payg-landing users (net lifetime
-      // top-ups > 0) keep the 10 GB floor; the rest drop to the free default.
-      const downLifetimes = await fetchLifetimeTopups(toDowngrade)
-      const paygIds = toDowngrade.filter(id => (downLifetimes.get(id) ?? 0) > 0)
-      const freeIds = toDowngrade.filter(id => (downLifetimes.get(id) ?? 0) === 0)
-      for (const [ids, floor] of [
-        [paygIds, TIER_STORAGE_LIMITS.payg],
-        [freeIds, FREE_TIER_DEFAULTS.storage_limit_bytes],
-      ] as const) {
-        if (ids.length === 0) continue
-        await supabase
-          .from("profiles")
-          .update({
-            ...tierColumns(FREE_TIER_DEFAULTS.tier),
-            subscription_credits: FREE_TIER_DEFAULTS.subscription_credits,
-            storage_limit_bytes: floor,
-            subscription_ended_at: now,
+    // One account at a time (`endPaidPlan`): the free tier with its storage
+    // floor (payg-landing users, net lifetime top-ups > 0, keep the 10 GB
+    // floor — design §4.5), the plan's credits ended, and a ledger line of
+    // exactly what was removed. An account the webhook already ended (on the
+    // free tier) is left alone; one whose read or write fails is counted as an
+    // error and picked up again next hour (its row is not marked expired).
+    const failedUserIds = new Set<string>()
+    for (const id of toDowngrade) {
+      try {
+        const ended = await endPaidPlan(id, { subscription_ended_at: now })
+        if (ended.status !== "ended") continue
+        usersDowngraded++
+        invalidateBalanceCache(id)
+        if (ended.removed > 0) {
+          await CreditsService.logTransaction({
+            userId: id,
+            amount: -ended.removed,
+            creditType: "subscription",
+            source: "expiry",
+            description: "Subscription ended: downgraded to free tier (plan credits ended)",
+            balanceAfter: FREE_TIER_DEFAULTS.subscription_credits,
           })
-          .in("id", ids)
+        }
+      } catch (err) {
+        console.error("[cleanup] Failed to end the plan of", id, err)
+        failedUserIds.add(id)
+        errors++
       }
-
-      usersDowngraded = toDowngrade.length
     }
 
     // Batch: mark all subscriptions as expired. Check the error — 'expired'
     // must be permitted by the subscriptions_status_check constraint
     // (migration 180); a rejected UPDATE here previously failed silently and
     // left rows re-matching every hour.
-    const subIds = rows.map(s => s.id)
-    const { error: expireErr } = await supabase
-      .from("subscriptions")
-      .update({ status: "expired", updated_at: now })
-      .in("id", subIds)
+    const subIds = rows.filter(s => !failedUserIds.has(s.user_id)).map(s => s.id)
+    const { error: expireErr } = subIds.length === 0
+      ? { error: null }
+      : await supabase
+        .from("subscriptions")
+        .update({ status: "expired", updated_at: now })
+        .in("id", subIds)
     if (expireErr) {
       console.error("[cleanup] Failed to mark subscriptions expired:", expireErr.message)
     }

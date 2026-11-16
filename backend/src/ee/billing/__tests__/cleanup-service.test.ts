@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { TIER_CREDITS, TIER_STORAGE_LIMITS } from "../stripe-config.js"
+import { ENDED_SUBSCRIPTION_CREDITS, TIER_CREDITS, TIER_STORAGE_LIMITS } from "../stripe-config.js"
 
 // ---------------------------------------------------------------------------
 // Mocks — must use vi.hoisted() for variables referenced inside vi.mock()
@@ -31,10 +31,16 @@ const { mockFrom, mockRpc, defaultRpc, tableResponses, ltCalls, setLastMatchedRe
     const chain: Record<string, unknown> = {}
     let isReadChain = false
     let selected = ""
+    // An update that asks for its rows back (a compare-and-set): it matched.
+    let isWrite = false
+    let returning = false
 
     const self = () => chain
 
-    chain.select = vi.fn((cols?: unknown) => { isReadChain = true; selected = String(cols ?? ""); return chain })
+    chain.select = vi.fn((cols?: unknown) => {
+      if (isWrite) { returning = true; return chain }
+      isReadChain = true; selected = String(cols ?? ""); return chain
+    })
     chain.eq = vi.fn(self)
     chain.neq = vi.fn(self)
     chain.or = vi.fn(self)
@@ -66,13 +72,14 @@ const { mockFrom, mockRpc, defaultRpc, tableResponses, ltCalls, setLastMatchedRe
       return { ...chain, then: (resolve: (v: unknown) => void) => resolve(resp) }
     })
     chain.insert = vi.fn(self)
-    chain.update = vi.fn(() => { isReadChain = false; return chain })
+    chain.update = vi.fn(() => { isReadChain = false; isWrite = true; return chain })
     chain.upsert = vi.fn(self)
     chain.single = vi.fn(() => Promise.resolve(shiftResponse(table)))
+    chain.maybeSingle = vi.fn(() => Promise.resolve(shiftResponse(table)))
 
     // Default thenable for write operations
     chain.then = (resolve: (v: unknown) => void) =>
-      resolve({ data: null, error: null })
+      resolve({ data: isWrite && returning ? [{ id: "row" }] : null, error: null })
 
     return chain
   }
@@ -259,7 +266,8 @@ describe("cleanup-service", () => {
         { data: [], error: null }, // live-sub re-check: none active
       ])
 
-      // Second query: profiles for those users (still on paid tiers)
+      // Then: the batch tier read, and per user the plan end's profile read
+      // and its storage-floor lifetime read (endPaidPlan).
       mockTableQueue("profiles", [
         {
           data: [
@@ -268,12 +276,19 @@ describe("cleanup-service", () => {
           ],
           error: null,
         },
+        { data: { tier: "pro", subscription_tier: "pro", subscription_credits: 3000 }, error: null },
+        { data: [{ id: "user-1", lifetime_topup_credits: 0 }], error: null },
+        { data: { tier: "basic", subscription_tier: "basic", subscription_credits: 100 }, error: null },
+        { data: [{ id: "user-2", lifetime_topup_credits: 0 }], error: null },
       ])
 
       const result = await expireSubscriptions()
 
       expect(result.usersDowngraded).toBe(2)
       expect(result.errors).toBe(0)
+      // A ledger line per account, of exactly what its plan end removed.
+      expect(mockLogTransaction).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-1", amount: -3000, source: "expiry", balanceAfter: 0 }))
+      expect(mockLogTransaction).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-2", amount: -100, source: "expiry", balanceAfter: 0 }))
     })
 
     it("does NOT downgrade a re-subscriber who has a stale canceled row AND a live active row", async () => {
@@ -283,7 +298,7 @@ describe("cleanup-service", () => {
       // period end is now in the past coexists with a fresh 'active' row, and the
       // profile is on the paid tier the re-subscribe restored. The candidate query
       // matches the STALE canceled row, so without the live-sub re-check this cron
-      // would silently reset the paying customer to free / TIER_CREDITS.free / 1GB.
+      // would silently reset the paying customer to free / no plan credits / 1GB.
       //
       // First `subscriptions` read  -> the stale canceled candidate row.
       // Second `subscriptions` read -> the live-sub re-check finds the active row.
@@ -313,6 +328,8 @@ describe("cleanup-service", () => {
       ])
       mockTableQueue("profiles", [
         { data: [{ id: "user-gone", tier: "pro" }], error: null },
+        { data: { tier: "pro", subscription_tier: "pro", subscription_credits: 50 }, error: null },
+        { data: [{ id: "user-gone", lifetime_topup_credits: 0 }], error: null },
       ])
 
       const result = await expireSubscriptions()
@@ -1921,6 +1938,180 @@ describe("cleanup-service", () => {
         (c) => c.table === "locations" && c.col === "created_at",
       )
       expect(locationCutoff).toBeDefined()
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // A former subscriber's plan credits end at 0 (decided 2026-11-16)
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("a plan that ended leaves 0 plan credits — never the free grant; the reap never writes them", () => {
+    /** Every `profiles` UPDATE payload the code under test wrote. */
+    function profileUpdatePayloads(): Array<Record<string, unknown>> {
+      return mockFrom.mock.calls
+        .map((c, i) => ({ table: c[0] as string, chain: mockFrom.mock.results[i]?.value as { update: { mock: { calls: unknown[][] } } } }))
+        .filter((r) => r.table === "profiles")
+        .flatMap((r) => r.chain.update.mock.calls.map((u) => u[0] as Record<string, unknown>))
+    }
+
+    function expectEndedCredits(): void {
+      const writes = profileUpdatePayloads().filter((u) => "subscription_credits" in u)
+      expect(writes.length).toBeGreaterThan(0)
+      for (const w of writes) expect(w.subscription_credits).toBe(0)
+      for (const w of writes) expect(w).not.toHaveProperty("topup_credits")
+    }
+
+    it("the constant is 0", () => {
+      expect(ENDED_SUBSCRIPTION_CREDITS).toBe(0)
+    })
+
+    it("expiry safety net, landing on free: subscription_credits 0", async () => {
+      mockTableQueue("subscriptions", [
+        { data: [{ id: "sub-1", user_id: "user-1", stripe_subscription_id: "ps-1" }], error: null },
+        { data: [], error: null }, // live-sub re-check: none active
+      ])
+      mockTableQueue("profiles", [
+        { data: [{ id: "user-1", tier: "pro" }], error: null },
+        { data: { tier: "pro", subscription_tier: "pro", subscription_credits: 700 }, error: null },
+        { data: [{ id: "user-1", lifetime_topup_credits: 0 }], error: null },
+      ])
+
+      const result = await expireSubscriptions()
+
+      expect(result.usersDowngraded).toBe(1)
+      expectEndedCredits()
+      expect(mockLogTransaction).toHaveBeenCalledTimes(1)
+      expect(mockLogTransaction).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-1", amount: -700, source: "expiry", balanceAfter: 0 }))
+      expect(profileUpdatePayloads()).toContainEqual(expect.objectContaining({ storage_limit_bytes: TIER_STORAGE_LIMITS.free }))
+    })
+
+    /** Every `subscriptions` UPDATE payload the code under test wrote. */
+    function subscriptionUpdatePayloads(): Array<Record<string, unknown>> {
+      return mockFrom.mock.calls
+        .map((c, i) => ({ table: c[0] as string, chain: mockFrom.mock.results[i]?.value as { update: { mock: { calls: unknown[][] } } } }))
+        .filter((r) => r.table === "subscriptions")
+        .flatMap((r) => r.chain.update.mock.calls.map((u) => u[0] as Record<string, unknown>))
+    }
+
+    it("expiry safety net: the live-subscriptions read fails — nothing ended, nothing marked expired, retried next run", async () => {
+      // The batch live read fails (this harness answers each of its two .in()
+      // calls from the queue); any later read would answer "none live".
+      mockTableQueue("subscriptions", [
+        { data: [{ id: "sub-r", user_id: "user-resub", stripe_subscription_id: "ps-r" }], error: null },
+        { data: null, error: { message: "live read failed" } },
+        { data: null, error: { message: "live read failed" } },
+        { data: [], error: null },
+      ])
+      mockTableQueue("profiles", [
+        { data: [{ id: "user-resub", tier: "pro" }], error: null },
+        { data: { tier: "pro", subscription_tier: "pro", subscription_credits: 23000 }, error: null },
+        { data: [{ id: "user-resub", lifetime_topup_credits: 0 }], error: null },
+      ])
+
+      const result = await expireSubscriptions()
+
+      expect(result).toEqual({ usersDowngraded: 0, errors: 1 })
+      expect(profileUpdatePayloads()).toEqual([])
+      expect(subscriptionUpdatePayloads()).toEqual([])
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+    })
+
+    it("expiry safety net: the profiles read fails — nothing ended, nothing marked expired, retried next run", async () => {
+      mockTableQueue("subscriptions", [{ data: [{ id: "sub-p", user_id: "user-p", stripe_subscription_id: "ps-p" }], error: null }])
+      mockTableQueue("profiles", [{ data: null, error: { message: "profiles read failed" } }])
+
+      const result = await expireSubscriptions()
+
+      expect(result).toEqual({ usersDowngraded: 0, errors: 1 })
+      expect(profileUpdatePayloads()).toEqual([])
+      expect(subscriptionUpdatePayloads()).toEqual([])
+    })
+
+    it("the cancelled-user reap: the live-subscriptions read fails — the whole batch is skipped (no demotion, no media deleted)", async () => {
+      mockTableQueue("profiles", [{ data: [{ id: "user-maybe-paying", tier: "pro", subscription_tier: null }], error: null }])
+      mockTableQueue("subscriptions", [{ data: null, error: { message: "live read failed" } }])
+
+      const result = await cleanupCanceledUserMedia()
+
+      expect(result).toEqual({ filesDeleted: 0, bytesFreed: 0, errors: 1 })
+      expect(profileUpdatePayloads()).toEqual([])
+      expect(mockBatchDeleteFromR2).not.toHaveBeenCalled()
+      expect(mockDeleteFromR2).not.toHaveBeenCalled()
+    })
+
+    it("expiry safety net: an account whose plan end fails is an error, nothing is logged, and its row stays for the next hour", async () => {
+      mockTableQueue("subscriptions", [
+        { data: [{ id: "sub-9", user_id: "user-9", stripe_subscription_id: "ps-9" }], error: null },
+        { data: [], error: null },
+      ])
+      mockTableQueue("profiles", [
+        { data: [{ id: "user-9", tier: "pro" }], error: null },
+        { data: null, error: { message: "profile read failed" } },
+      ])
+
+      const result = await expireSubscriptions()
+
+      expect(result).toEqual({ usersDowngraded: 0, errors: 1 })
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+      const subscriptionUpdates = mockFrom.mock.calls
+        .map((c, i) => ({ table: c[0] as string, chain: mockFrom.mock.results[i]?.value as { update: { mock: { calls: unknown[][] } } } }))
+        .filter((r) => r.table === "subscriptions")
+        .flatMap((r) => r.chain.update.mock.calls.map((u) => u[0] as Record<string, unknown>))
+      expect(subscriptionUpdates).not.toContainEqual(expect.objectContaining({ status: "expired" }))
+    })
+
+    it("expiry safety net, landing on pay-as-you-go: subscription_credits 0, the payg storage floor", async () => {
+      mockTableQueue("subscriptions", [
+        { data: [{ id: "sub-2", user_id: "user-2", stripe_subscription_id: "ps-2" }], error: null },
+        { data: [], error: null },
+      ])
+      mockTableQueue("profiles", [
+        { data: [{ id: "user-2", tier: "basic" }], error: null },
+        { data: { tier: "basic", subscription_tier: "basic", subscription_credits: 0 }, error: null },
+        { data: [{ id: "user-2", lifetime_topup_credits: 800 }], error: null }, // net lifetime top-ups
+      ])
+
+      await expireSubscriptions()
+
+      expectEndedCredits()
+      // Nothing was left to remove: no ledger line for nothing.
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+      expect(profileUpdatePayloads()).toContainEqual(expect.objectContaining({ storage_limit_bytes: TIER_STORAGE_LIMITS.payg }))
+    })
+
+    // The plan's credits were already ended by the webhook or the safety net
+    // (the only writers of subscription_ended_at, which the reap selects on).
+    // Writing them again 60 days on would wipe credits gained since.
+    function expectCreditsLeftAlone(): void {
+      const writes = profileUpdatePayloads()
+      expect(writes.length).toBeGreaterThan(0)
+      for (const w of writes) {
+        expect(w).not.toHaveProperty("subscription_credits")
+        expect(w).not.toHaveProperty("topup_credits")
+      }
+    }
+
+    it("the cancelled-user reap (full downgrade) leaves the credits alone", async () => {
+      mockTableQueue("profiles", [{ data: [{ id: "user-reap", tier: "pro", subscription_tier: null }], error: null }])
+      mockTableQueue("assets", [{ data: [], error: null }])
+      mockTableQueue("jobs", [{ data: [], error: null }])
+
+      await cleanupCanceledUserMedia()
+
+      expectCreditsLeftAlone()
+      expect(profileUpdatePayloads()).toContainEqual(expect.objectContaining({ tier: "free", storage_limit_bytes: TIER_STORAGE_LIMITS.free }))
+    })
+
+    it("the cancelled-user reap, landing on the payg floor (media kept), leaves the credits alone", async () => {
+      mockTableQueue("profiles", [
+        { data: [{ id: "user-payg", tier: "free", subscription_tier: null }], error: null },
+        { data: [{ id: "user-payg", lifetime_topup_credits: 500 }], error: null },
+      ])
+
+      await cleanupCanceledUserMedia()
+
+      expectCreditsLeftAlone()
+      expect(profileUpdatePayloads()).toContainEqual(expect.objectContaining({ storage_limit_bytes: TIER_STORAGE_LIMITS.payg }))
     })
   })
 })

@@ -4,9 +4,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  * Taking the free signup grant back, and restoring it (migration 458).
  *
  * What these pin:
- *  - The RPC arguments: the take-back sends the free-grant amount and the
- *    acting admin; the restore sends the account alone (it puts back exactly
- *    what `free_grant_revocations` recorded).
+ *  - The RPC arguments: the take-back sends what THIS account was given (the
+ *    sum of its `signup_grant` ledger lines — 1,500 for a grant from before
+ *    the figure became 300, 300 after; with no line, 1,500 only for an
+ *    account created before the ledger existed and today's figure otherwise;
+ *    a withheld account skips the read; a failed read refuses rather than
+ *    guesses) and the acting admin;
+ *    the restore sends the account alone (it puts back exactly what
+ *    `free_grant_revocations` recorded).
  *  - The ledger row carries the amount ACTUALLY moved — negative on a
  *    take-back, positive on a restore — as an `admin_adjustment` on the
  *    subscription pool, with the acting admin. NO row when nothing moved (a
@@ -51,12 +56,46 @@ vi.mock("@/ee/billing/signup-grant-policy.js", () => ({
 }))
 vi.mock("@/ee/lib/consent-record.js", () => ({ hasGrantedConsent: mockHasConsent }))
 
-import { reinstateSignupGrant, revokeSignupGrant, runSignupGrantClaim } from "../signup-grant.js"
+import {
+  grantedCreditsFigure,
+  reinstateSignupGrant,
+  revokeSignupGrant,
+  runSignupGrantClaim,
+  SIGNUP_GRANT_LEDGER_SINCE,
+  UNRECORDED_SIGNUP_GRANT,
+} from "../signup-grant.js"
 import { TIER_CREDITS } from "../stripe-config.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const ADMIN = "00000000-0000-4000-8000-000000000002"
 const GRANT = TIER_CREDITS.free
+
+/** The account's `signup_grant` ledger read, as `readRecordedSignupGrant` makes it. */
+const ledger = { rows: [] as Array<{ amount: number }>, error: null as unknown, filters: [] as Array<[string, unknown]> }
+/** The account's profile read (`readFreeGrant`): its grant state and creation date. A created_at after the ledger began by default. */
+const AFTER_LEDGER = "2026-10-01T00:00:00Z"
+const BEFORE_LEDGER = "2026-08-01T00:00:00Z"
+const account = { state: "granted" as string, createdAt: AFTER_LEDGER as string | null, error: null as unknown }
+function ledgerTable(table: string) {
+  if (table === "profiles") {
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      maybeSingle: async () =>
+        account.error ? { data: null, error: account.error } : { data: { free_grant_state: account.state, created_at: account.createdAt }, error: null },
+    }
+    return chain
+  }
+  if (table !== "credit_transactions") throw new Error(`unexpected table ${table}`)
+  const chain = {
+    select: (columns: string) => (ledger.filters.push(["select", columns]), chain),
+    eq: (column: string, value: unknown) => {
+      ledger.filters.push([column, value])
+      return Object.assign(Promise.resolve(ledger.error ? { data: null, error: ledger.error } : { data: ledger.rows, error: null }), chain)
+    },
+  }
+  return chain
+}
 
 function rpcRow(row: Record<string, unknown>) {
   return { data: [row], error: null }
@@ -72,7 +111,17 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("revokeSignupGrant", () => {
-  it("sends the account, the free-grant amount and the acting admin to revoke_signup_grant", async () => {
+  beforeEach(() => {
+    ledger.rows = [{ amount: GRANT }]
+    ledger.error = null
+    ledger.filters = []
+    account.state = "granted"
+    account.createdAt = AFTER_LEDGER
+    account.error = null
+    mockFrom.mockImplementation(ledgerTable)
+  })
+
+  it("sends the account, the amount it was granted and the acting admin to revoke_signup_grant", async () => {
     mockRpc.mockResolvedValue(rpcRow({ did_revoke: true, old_credits: GRANT, new_credits: 0, state: "revoked", refusal: null }))
 
     await revokeSignupGrant(USER, ADMIN)
@@ -83,6 +132,85 @@ describe("revokeSignupGrant", () => {
       p_grant_amount: GRANT,
       p_admin_id: ADMIN,
     })
+    // The account's own grant lines, and nothing else.
+    expect(ledger.filters).toEqual([["select", "amount"], ["user_id", USER], ["source", "signup_grant"]])
+  })
+
+  it("an account granted 1,500 before the grant became 300 is sent its 1,500 — not today's figure", async () => {
+    ledger.rows = [{ amount: 1500 }]
+    // 200 of the 1,500 spent: everything left of the grant goes.
+    mockRpc.mockResolvedValue(rpcRow({ did_revoke: true, old_credits: 1300, new_credits: 0, state: "revoked", refusal: null }))
+
+    const out = await revokeSignupGrant(USER, ADMIN)
+
+    expect(TIER_CREDITS.free).toBe(300)
+    expect(mockRpc).toHaveBeenCalledWith("revoke_signup_grant", expect.objectContaining({ p_grant_amount: 1500 }))
+    expect(out.credits).toBe(1300)
+  })
+
+  it("an account granted 300 is sent 300: credits it was never given as the grant are not counted", async () => {
+    ledger.rows = [{ amount: 300 }]
+    mockRpc.mockResolvedValue(rpcRow({ did_revoke: true, old_credits: 300, new_credits: 0, state: "revoked", refusal: null }))
+
+    await revokeSignupGrant(USER, ADMIN)
+
+    expect(mockRpc).toHaveBeenCalledWith("revoke_signup_grant", expect.objectContaining({ p_grant_amount: 300 }))
+  })
+
+  it("no ledger line, account created before the ledger existed (paid by the signup default): the pre-ledger 1,500", async () => {
+    ledger.rows = []
+    account.createdAt = BEFORE_LEDGER
+    mockRpc.mockResolvedValue(rpcRow({ did_revoke: true, old_credits: 900, new_credits: 0, state: "revoked", refusal: null }))
+
+    await revokeSignupGrant(USER, ADMIN)
+
+    expect(UNRECORDED_SIGNUP_GRANT).toBe(1500)
+    expect(new Date(BEFORE_LEDGER).getTime()).toBeLessThan(SIGNUP_GRANT_LEDGER_SINCE.getTime())
+    expect(mockRpc).toHaveBeenCalledWith("revoke_signup_grant", expect.objectContaining({ p_grant_amount: UNRECORDED_SIGNUP_GRANT }))
+  })
+
+  it("no ledger line, account created after the ledger began (a failed ledger write): today's figure — never 1,500 of other credits", async () => {
+    ledger.rows = []
+    account.createdAt = AFTER_LEDGER
+    mockRpc.mockResolvedValue(rpcRow({ did_revoke: true, old_credits: 300, new_credits: 0, state: "revoked", refusal: null }))
+
+    await revokeSignupGrant(USER, ADMIN)
+
+    expect(new Date(AFTER_LEDGER).getTime()).toBeGreaterThan(SIGNUP_GRANT_LEDGER_SINCE.getTime())
+    expect(mockRpc).toHaveBeenCalledWith("revoke_signup_grant", expect.objectContaining({ p_grant_amount: TIER_CREDITS.free }))
+  })
+
+  it("a failed profile read is thrown like a failed ledger read: nothing is sent, moved or written (a pre-ledger account is never revoked keeping part of its 1,500)", async () => {
+    ledger.rows = []
+    const error = { code: "XX000", message: "profile unavailable" }
+    account.error = error
+
+    await expect(revokeSignupGrant(USER, ADMIN)).rejects.toBe(error)
+    expect(mockRpc).not.toHaveBeenCalled()
+    expect(mockLogTransaction).not.toHaveBeenCalled()
+    expect(mockInvalidate).not.toHaveBeenCalled()
+  })
+
+  it("a withheld account is taken back WITHOUT reading the ledger — a failed read never blocks it (it loses 0 either way)", async () => {
+    account.state = "withheld"
+    ledger.error = { code: "XX000", message: "ledger unavailable" }
+    mockRpc.mockResolvedValue(rpcRow({ did_revoke: true, old_credits: 0, new_credits: 0, state: "revoked", refusal: null }))
+
+    const out = await revokeSignupGrant(USER, ADMIN)
+
+    expect(out).toEqual({ changed: true, state: "revoked", credits: 0, refusal: null })
+    expect(ledger.filters).toEqual([])
+    expect(mockRpc).toHaveBeenCalledWith("revoke_signup_grant", expect.objectContaining({ p_grant_amount: TIER_CREDITS.free }))
+  })
+
+  it("a failed ledger read is thrown: nothing is sent, moved, written or invalidated", async () => {
+    const error = { code: "XX000", message: "ledger unavailable" }
+    ledger.error = error
+
+    await expect(revokeSignupGrant(USER, ADMIN)).rejects.toBe(error)
+    expect(mockRpc).not.toHaveBeenCalled()
+    expect(mockLogTransaction).not.toHaveBeenCalled()
+    expect(mockInvalidate).not.toHaveBeenCalled()
   })
 
   it("a granted account: one NEGATIVE ledger row of what was removed, cache invalidated", async () => {
@@ -168,6 +296,33 @@ describe("revokeSignupGrant", () => {
     await expect(revokeSignupGrant(USER, ADMIN)).rejects.toBe(error)
     expect(mockLogTransaction).not.toHaveBeenCalled()
     expect(mockInvalidate).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// grantedCreditsFigure — the figure named to an account that has its grant
+// ---------------------------------------------------------------------------
+
+describe("grantedCreditsFigure", () => {
+  beforeEach(() => {
+    ledger.rows = []
+    ledger.error = null
+    ledger.filters = []
+    account.state = "granted"
+    account.createdAt = AFTER_LEDGER
+    account.error = null
+    mockFrom.mockImplementation(ledgerTable)
+  })
+
+  it("names what the account was given: an earlier 1,500 stays 1,500", async () => {
+    ledger.rows = [{ amount: 1500 }]
+    await expect(grantedCreditsFigure(USER)).resolves.toBe(1500)
+  })
+
+  it("no ledger line, or a failed read: today's figure — it labels, it never throws", async () => {
+    await expect(grantedCreditsFigure(USER)).resolves.toBe(TIER_CREDITS.free)
+    ledger.error = { code: "XX000", message: "ledger unavailable" }
+    await expect(grantedCreditsFigure(USER)).resolves.toBe(TIER_CREDITS.free)
   })
 })
 

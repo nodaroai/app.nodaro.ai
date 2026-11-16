@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react"
 import type { TransactionRecord, UserBalance } from "@/lib/api"
 import { AutoRechargeCard } from "@/ee/components/credits/AutoRechargeCard"
 import { BuyPacksSection } from "./BuyPacksSection"
+import { subscriptionAllocation } from "./subscription-allocation"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
 import { useT, type TFunction } from "@/lib/i18n"
@@ -175,7 +176,9 @@ function BalanceSection({
   const total = balance?.total ?? 0
   const subscriptionCredits = balance?.subscription ?? 0
   const topup = balance?.topup ?? 0
-  const allocation = balance?.monthlyAllocation ?? 0
+  // 0 on the free tiers (free, pay-as-you-go): their credits are a one-time
+  // grant, so no "resets monthly", no "x of y", no "used this cycle".
+  const allocation = subscriptionAllocation(balance)
   const usedThisCycle =
     allocation > 0 ? Math.max(0, allocation - subscriptionCredits) : null
   // Cycle start ≈ periodEnd minus one month; burn = cycle spend / days elapsed.

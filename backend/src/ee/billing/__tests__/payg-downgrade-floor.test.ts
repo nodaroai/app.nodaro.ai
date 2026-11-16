@@ -137,12 +137,16 @@ describe("writer-path + reaper text pins", () => {
     readFileSync(path.resolve(__dirname, "..", rel), "utf8")
 
   it("all three downgrade writers route through the floor helpers", () => {
+    // The webhook and the expiry safety net end a plan through endPaidPlan,
+    // which writes through downgradeToEffectiveFloor (the payg floor split).
+    const floor = read("downgrade-floor.ts")
+    expect(floor).toMatch(/export async function endPaidPlan[\s\S]*downgradeToEffectiveFloor\(/)
     const provision = read("provision-credits.ts")
-    expect(provision).toContain("downgradeToEffectiveFloor(userId")
+    expect(provision).toContain("endPaidPlan(userId")
     expect(provision).toContain("raiseStorageFloorOnActivation(userId)")
     const cleanup = read("cleanup-service.ts")
     expect(cleanup).toContain("downgradeToEffectiveFloor(user.id")
-    expect(cleanup).toContain("fetchLifetimeTopups(toDowngrade)")
+    expect(cleanup).toContain("endPaidPlan(id")
   })
 
   it("the reaper keeps BOTH legacy predicates and gains the retention filter", () => {

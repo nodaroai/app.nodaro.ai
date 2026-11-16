@@ -6,17 +6,19 @@ import Fastify, { type FastifyInstance } from "fastify"
  * decide popup / banner / block. Three rules pinned:
  *  - offer OFF: the key is ABSENT (a client renders absent as "nothing").
  *  - offer ON: the two flags and the claim's credit amount ride beside
- *    `freeGrantState`.
+ *    `freeGrantState`; an account already granted with its consent still owed
+ *    is told what it WAS given (its ledger record), not today's figure.
  *  - offer ON but the columns cannot be read (dev ahead of migration 426, or
  *    a read error): the key is absent and the balance still answers 200 —
  *    the pre-migration fail-open the whole feature relies on.
  */
 
-const { mockGetBalance, mockReadFreeGrant, mockRunSignupGrantClaim, mockReadWelcomeOfferState, mockConfig } = vi.hoisted(() => ({
+const { mockGetBalance, mockReadFreeGrant, mockRunSignupGrantClaim, mockReadWelcomeOfferState, mockGrantedFigure, mockConfig } = vi.hoisted(() => ({
   mockGetBalance: vi.fn(),
   mockReadFreeGrant: vi.fn(),
   mockRunSignupGrantClaim: vi.fn(),
   mockReadWelcomeOfferState: vi.fn(),
+  mockGrantedFigure: vi.fn(),
   mockConfig: vi.fn(),
 }))
 
@@ -27,6 +29,7 @@ vi.mock("@/ee/billing/signup-grant.js", async () => {
     readFreeGrant: mockReadFreeGrant,
     runSignupGrantClaim: mockRunSignupGrantClaim,
     readWelcomeOfferState: mockReadWelcomeOfferState,
+    grantedCreditsFigure: mockGrantedFigure,
   }
 })
 vi.mock("@/ee/lib/welcome-offer-config.js", () => ({ getWelcomeOfferConfig: mockConfig }))
@@ -101,6 +104,7 @@ beforeEach(async () => {
   mockGetBalance.mockResolvedValue(BALANCE)
   mockReadFreeGrant.mockResolvedValue({ state: "granted", createdAt: new Date(Date.now() - 86_400_000) })
   mockConfig.mockResolvedValue({ enabled: false })
+  mockGrantedFigure.mockResolvedValue(TIER_CREDITS.free)
 
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
@@ -154,6 +158,19 @@ describe("GET /v1/user/credits — welcomeOffer", () => {
       credits: TIER_CREDITS.free,
     })
     expect(TIER_CREDITS.free).toBeGreaterThan(0)
+    // Not yet granted: no reason to read what it was given.
+    expect(mockGrantedFigure).not.toHaveBeenCalled()
+  })
+
+  it("offer ON, granted with consent owed: names what the account WAS given — a grant from before the figure changed", async () => {
+    mockConfig.mockResolvedValue({ enabled: true })
+    mockReadWelcomeOfferState.mockResolvedValue({ popupSeen: true, consentPending: true })
+    mockGrantedFigure.mockResolvedValue(1500)
+    const userId = nextUserId()
+    const res = await getCredits(userId)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.welcomeOffer).toEqual({ popupSeen: true, consentPending: true, credits: 1500 })
+    expect(mockGrantedFigure).toHaveBeenCalledWith(userId)
   })
 
   it("offer ON but the columns cannot be read (pre-migration): absent, and the balance still answers", async () => {

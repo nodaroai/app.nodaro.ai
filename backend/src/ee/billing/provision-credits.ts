@@ -13,12 +13,14 @@ import {
   getTierFromPriceId,
   getTopupCredits,
   TIER_CREDITS,
+  ENDED_SUBSCRIPTION_CREDITS,
   TIER_STORAGE_LIMITS,
 } from "./stripe-config.js"
 import { tierColumns } from "./tier-columns.js"
 import { notifyPaidConversion, notifyCancellation } from "../notifications/founder-notify.js"
 import { getStripe } from "./stripe-client.js"
-import { downgradeToEffectiveFloor, raiseStorageFloorOnActivation, reapplyStorageFloorAfterClawback } from "./downgrade-floor.js"
+import { endPaidPlan, raiseStorageFloorOnActivation, reapplyStorageFloorAfterClawback } from "./downgrade-floor.js"
+import { StripeEventRetryError } from "./stripe-event-retry.js"
 import { creditsForLoadUsd } from "./load-rate.js"
 import { CreditsService } from "./credits.js"
 import { invalidateBalanceCache } from "./balance-cache.js"
@@ -480,6 +482,10 @@ export async function handleSubscriptionCanceled(
   // `canceled` no paid update can claim it any more, so this answer is final
   // (a claim that landed just before the write is seen here). A database
   // without the marker yet returns the row without it: granted, as before.
+  // The write is deliberately NOT conditional on the row's current status:
+  // a `subscription.updated` saying "canceled" can land first and mark the row
+  // without ending the plan, and this event must still end it. A repeat is
+  // made harmless below instead — by the account's tier, not the row.
   const cancelSubscription = (returning: string) =>
     supabase
       .from("subscriptions")
@@ -495,8 +501,10 @@ export async function handleSubscriptionCanceled(
     ;({ data: canceledRows, error: subError } = await cancelSubscription("id"))
   }
 
+  // Nothing written: Stripe delivers the event again.
   if (subError) {
     console.error("[stripe] subscription.canceled: update failed:", subError.message)
+    throw new StripeEventRetryError(`cancelling ${data.subscriptionId} failed: ${subError.message}`)
   }
   const canceledRow = Array.isArray(canceledRows) ? (canceledRows[0] as GrantMarker | undefined) : undefined
 
@@ -505,55 +513,77 @@ export async function handleSubscriptionCanceled(
     return
   }
 
-  // Ended before it was ever paid (an expired or abandoned Checkout): it
-  // granted nothing, so there is nothing to take back. The account stays as
-  // it was — its tier, credits and storage, and no cancellation date.
-  if (canceledRow && !planGranted(canceledRow)) {
+  // A plan ends only where one was granted: a subscription row exists (the
+  // grant is claimed by writing it) and it was paid. No row — an abandoned
+  // Checkout whose unpaid insert failed — or never paid: the account stays as
+  // it was, its tier, credits and storage, and no cancellation date.
+  if (!canceledRow) {
+    console.log(`[stripe] subscription.canceled: sub=${data.subscriptionId} user=${userId} has no stored subscription, account unchanged`)
+    return
+  }
+  if (!planGranted(canceledRow)) {
     console.log(`[stripe] subscription.canceled: sub=${data.subscriptionId} user=${userId} was never paid, account unchanged`)
     return
   }
 
-  // Get current subscription credits to cap at free tier limit (and the tier
-  // before downgrade, for the internal founder cancellation alert).
-  const { data: profile } = await supabase
+  // Another subscription still live (a late or redelivered delete for an old
+  // subscription after a re-subscribe): its plan is the account's, untouched.
+  const { data: otherLive, error: liveError } = await supabase
+    .from("subscriptions")
+    .select("stripe_subscription_id")
+    .eq("user_id", userId)
+    .in("status", [...PAID_TIER_STATUSES])
+    .neq("stripe_subscription_id", data.subscriptionId)
+  if (liveError) {
+    throw new StripeEventRetryError(`subscription.canceled: reading the live subscriptions of ${userId} failed: ${liveError.message}`)
+  }
+  if (Array.isArray(otherLive) && otherLive.length > 0) {
+    console.log(`[stripe] subscription.canceled: sub=${data.subscriptionId} user=${userId} has another live subscription, account unchanged`)
+    return
+  }
+
+  // The tier before downgrade is for the internal founder cancellation alert.
+  const { data: tierRow } = await supabase
     .from("profiles")
-    .select("subscription_credits, subscription_tier")
+    .select("subscription_tier")
     .eq("id", userId)
-    .single()
-  const priorTier = profile?.subscription_tier ?? null
+    .maybeSingle()
+  const priorTier = (tierRow as { subscription_tier?: string | null } | null)?.subscription_tier ?? null
 
-  const currentSubCredits = profile?.subscription_credits ?? 0
-  const freeCredits = TIER_CREDITS.free ?? 0
-  const cappedCredits = Math.min(currentSubCredits, freeCredits)
-
-  // Effective floor: payg-landing users (net lifetime top-ups > 0) keep the
-  // 10 GB floor; genuinely-free users drop to 1 GB. One shared helper across
-  // all three downgrade writers (design §4.5).
-  const { error: profileError } = (
-    await downgradeToEffectiveFloor(userId, {
-      subscription_credits: cappedCredits,
-      subscription_ended_at: now,
-    })
-  )
-
-  if (profileError) {
-    console.error("[stripe] subscription.canceled: profile downgrade failed:", profileError.message)
+  // End the plan: the free tier and its storage floor, the plan's remaining
+  // credits ended (ENDED_SUBSCRIPTION_CREDITS), top-ups untouched. An account
+  // already on the free tier — the plan ended before, a redelivered event —
+  // is left alone, so credits it gained since (a welcome grant claimed after
+  // cancelling) are never touched. A failed read or write throws before
+  // anything is written: Stripe delivers the event again.
+  let ended: Awaited<ReturnType<typeof endPaidPlan>>
+  try {
+    ended = await endPaidPlan(userId, { subscription_ended_at: now })
+  } catch (err) {
+    throw new StripeEventRetryError(`subscription.canceled: ${(err as Error).message}`)
+  }
+  if (ended.status !== "ended") {
+    const why = { "missing": "has no profile", "already-free": "already on the free tier", "live-subscription": "has a live subscription" }[ended.status]
+    console.log(`[stripe] subscription.canceled: sub=${data.subscriptionId} user=${userId} ${why}, account unchanged`)
+    return
   }
 
   invalidateBalanceCache(userId)
 
-  // Audit log: cancellation
-  await CreditsService.logTransaction({
-    userId,
-    amount: cappedCredits - currentSubCredits,
-    creditType: "subscription",
-    source: "expiry",
-    description: `Subscription canceled: downgraded to free tier (credits capped at ${cappedCredits})`,
-    balanceAfter: cappedCredits,
-  })
+  // Audit log: what the write actually removed, and only when it removed something.
+  if (ended.removed > 0) {
+    await CreditsService.logTransaction({
+      userId,
+      amount: -ended.removed,
+      creditType: "subscription",
+      source: "expiry",
+      description: `Subscription canceled: downgraded to free tier (plan credits ended)`,
+      balanceAfter: ENDED_SUBSCRIPTION_CREDITS,
+    })
+  }
 
   console.log(
-    `[stripe] subscription.canceled: sub=${data.subscriptionId} user=${userId} downgraded to free (credits: ${cappedCredits})`
+    `[stripe] subscription.canceled: sub=${data.subscriptionId} user=${userId} downgraded to free (plan credits ended: ${ended.removed} removed)`
   )
 
   // Internal founder milestone alert (fire-and-forget). Fires only when the

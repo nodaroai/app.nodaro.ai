@@ -35,7 +35,8 @@ vi.mock("@/lib/config.js", () => ({
 vi.mock("@/utils/file-validation.js", () => ({ updateStorageUsage: vi.fn() }))
 vi.mock("@/ee/billing/stripe-config.js", () => ({
   TIER_STORAGE_LIMITS: { free: 1073741824 },
-  TIER_CREDITS: { free: 1500 },
+  TIER_CREDITS: { free: 300 },
+  ENDED_SUBSCRIPTION_CREDITS: 0,
 }))
 vi.mock("@/ee/billing/credits.js", () => ({ CreditsService: { logTransaction: vi.fn() } }))
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: vi.fn() }))

@@ -46,7 +46,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     priceAnnual: 0,
     priceIdMonthly: null,
     priceIdAnnual: null,
-    credits: 1500,
+    credits: 300,
     llmRequests: 20,
     storage: "1 GB",
     features: [
@@ -215,7 +215,7 @@ export const TIER_PARALLELISM: Record<string, number> = {
  * so the login page advertised a tenth of the real grant. Derive, don't repeat.
  */
 export const FREE_TIER_CREDITS: number =
-  PRICING_TIERS.find((t) => t.id === "free")?.credits ?? 1500
+  PRICING_TIERS.find((t) => t.id === "free")?.credits ?? 300
 
 /**
  * One-shot Character LoRA training (Replicate flux-dev-lora-trainer, 1000 steps).

@@ -4,6 +4,7 @@ import { Calendar, Loader2 } from "lucide-react"
 import type { SubscriptionInfo, UserBalance } from "@/lib/api"
 import { PRICING_TIERS } from "@/lib/pricing-data"
 import { getScheduledCancelDate } from "@/ee/lib/subscription"
+import { isOneTimeGrantTier } from "./subscription-allocation"
 import { creditUnits } from "@/lib/credit-units"
 import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
 import { useT } from "@/lib/i18n"
@@ -85,10 +86,13 @@ export function CurrentPlanCard({
       value: periodEndsValue,
       ...(scheduledCancelDate ? { accentColor: "#f59e0b" } : {}),
     },
-    {
-      label: tr("billing.creditsPerMonth"),
-      value: formatNumber(creditUnits(balance?.monthlyAllocation ?? 0)),
-    },
+    // A paid plan states its monthly credits. The free tiers (free, pay-as-you-go)
+    // have none: their credits are the one-time signup grant, stated without a
+    // figure — a number here would read as this account's balance or due, and
+    // an account may hold an earlier, larger grant or none at all.
+    isOneTimeGrantTier(effectiveTier)
+      ? { label: tr("billing.planCredits"), value: tr("billing.planCreditsOneTime") }
+      : { label: tr("billing.creditsPerMonth"), value: formatNumber(creditUnits(balance?.monthlyAllocation ?? 0)) },
     ...(storageLimitBytes != null && storageLimitBytes > 0
       ? [{ label: tr("lib.storage"), value: formatBytes(storageLimitBytes) }]
       : []),

@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
+  ENDED_SUBSCRIPTION_CREDITS,
   STRIPE_PRODUCTS,
   TIER_CREDITS,
   TIER_STORAGE_LIMITS,
 } from "../stripe-config.js"
+import { StripeEventRetryError } from "../stripe-event-retry.js"
+import { LIVE_SUBSCRIPTION_STATUSES } from "../downgrade-floor.js"
+import { PAID_TIER_STATUSES } from "../subscription-grant.js"
 
 // ---------------------------------------------------------------------------
 // Mocks — must use vi.hoisted() for variables referenced inside vi.mock()
@@ -14,6 +18,8 @@ const {
   mockRpc,
   selectResponses,
   writeErrors,
+  writeRows,
+  listRows,
   deleteCalls,
   resetMockState,
   mockLogTransaction,
@@ -24,6 +30,11 @@ const {
   // update, upsert) default to success unless `writeErrors` overrides them.
   const selectResponses = new Map<string, Array<{ data: unknown; error: unknown }>>()
   const writeErrors = new Map<string, Array<{ code?: string; message?: string } | null>>()
+  // Rows a write returns when it asks for them (`.update(...).select(...)`):
+  // opt-in per table (peek-last like the reads); null when none is queued.
+  const writeRows = new Map<string, Array<unknown>>()
+  // Rows an awaited read (no .single()) answers with: opt-in per table, peek-last.
+  const listRows = new Map<string, Array<unknown>>()
   // Records every from(table).delete() so tests can assert rollbacks.
   const deleteCalls: Array<{ table: string }> = []
 
@@ -49,29 +60,49 @@ const {
   // - Resolves write terminals (insert/update/upsert) to success or to a
   //   queued error (via mockWriteError)
   // - Supports arbitrary .method().method() chaining
+  function shiftWriteRows(table: string): unknown {
+    const queue = writeRows.get(table)
+    if (!queue || queue.length === 0) return null
+    if (queue.length === 1) return queue[0]
+    return queue.shift()!
+  }
+
   function createChain(table: string) {
     const chain: Record<string, unknown> = {}
+    let isWrite = false
+    let returning = false
 
     const self = () => chain
+    const write = () => { isWrite = true; return chain }
 
-    chain.select = vi.fn(self)
+    chain.select = vi.fn(() => { if (isWrite) returning = true; return chain })
     chain.eq = vi.fn(self)
+    chain.neq = vi.fn(self)
+    chain.is = vi.fn(self)
     chain.in = vi.fn(self)
     chain.not = vi.fn(self)
-    chain.insert = vi.fn(self)
-    chain.update = vi.fn(self)
-    chain.upsert = vi.fn(self)
+    chain.insert = vi.fn(write)
+    chain.update = vi.fn(write)
+    chain.upsert = vi.fn(write)
     chain.delete = vi.fn(() => {
       deleteCalls.push({ table })
       return chain
     })
     chain.single = vi.fn(() => Promise.resolve(shiftResponse(table)))
+    chain.maybeSingle = vi.fn(() => Promise.resolve(shiftResponse(table)))
 
     // Make the chain "thenable" so `await supabase.from("x").update({}).eq()`
     // resolves. Default success unless a writeErrors entry is queued.
     chain.then = (resolve: (v: unknown) => void) => {
+      if (!isWrite) {
+        const queue = listRows.get(table)
+        if (queue && queue.length > 0) {
+          resolve({ data: queue.length === 1 ? queue[0] : queue.shift(), error: null })
+          return
+        }
+      }
       const error = shiftWriteError(table)
-      resolve({ data: null, error })
+      resolve({ data: isWrite && returning && !error ? shiftWriteRows(table) : null, error })
     }
 
     return chain
@@ -85,6 +116,8 @@ const {
   function resetMockState() {
     selectResponses.clear()
     writeErrors.clear()
+    writeRows.clear()
+    listRows.clear()
     deleteCalls.length = 0
     mockFrom.mockClear()
     mockRpc.mockClear()
@@ -97,6 +130,8 @@ const {
     mockRpc,
     selectResponses,
     writeErrors,
+    writeRows,
+    listRows,
     deleteCalls,
     resetMockState,
     mockLogTransaction,
@@ -182,6 +217,20 @@ function mockWriteError(table: string, error: { code?: string; message?: string 
   const queue = writeErrors.get(table) ?? []
   queue.push(error)
   writeErrors.set(table, queue)
+}
+
+/** Enqueue the rows the next awaited read (no .single()) on a table answers with. */
+function mockList(table: string, rows: unknown[]) {
+  const queue = listRows.get(table) ?? []
+  queue.push(rows)
+  listRows.set(table, queue)
+}
+
+/** Enqueue the rows the next returning write on a table answers with. */
+function mockWriteRows(table: string, rows: unknown[]) {
+  const queue = writeRows.get(table) ?? []
+  queue.push(rows)
+  writeRows.set(table, queue)
 }
 
 /** All payloads passed to from(table).update(...) across every mock chain. */
@@ -652,16 +701,30 @@ describe("provision-credits", () => {
       metadata: null as Record<string, string> | null,
     }
 
-    it("downgrades to free tier immediately", async () => {
+    /** Every `profiles` UPDATE payload this test's handler wrote. */
+    function profileUpdates(): Array<Record<string, unknown>> {
+      return updatePayloadsFor("profiles")
+    }
+
+    /**
+     * A paid subscription ending: its stored row (granted), the account on a
+     * paid tier holding `credits`, and the compare-and-set write matching.
+     */
+    function endingPlan(credits: number, profile: Record<string, unknown> = {}) {
       mockSelect("stripe_customers", { user_id: "user-001" })
-      mockSelect("profiles", { subscription_credits: 30 })
+      mockWriteRows("subscriptions", [{ plan_granted: true }])
+      mockSelect("profiles", { tier: "pro", subscription_tier: "pro", subscription_credits: credits, ...profile })
+      mockWriteRows("profiles", [{ id: "user-001" }])
+    }
+
+    it("downgrades to free tier immediately", async () => {
+      endingPlan(30)
 
       await handleSubscriptionCanceled(baseCanceledData)
 
       const calledTables = mockFrom.mock.calls.map((c: unknown[]) => c[0])
       expect(calledTables).toContain("subscriptions")
-      expect(calledTables).toContain("profiles")
-
+      expect(profileUpdates()).toContainEqual(expect.objectContaining({ tier: "free", subscription_tier: "free" }))
       expect(mockLogTransaction).toHaveBeenCalledWith(
         expect.objectContaining({
           userId: "user-001",
@@ -670,45 +733,219 @@ describe("provision-credits", () => {
           description: expect.stringContaining("canceled"),
         })
       )
-
       expect(mockInvalidateBalanceCache).toHaveBeenCalledWith("user-001")
     })
 
-    it("caps subscription_credits at min(current, the free grant)", async () => {
-      mockSelect("stripe_customers", { user_id: "user-001" })
-      // User holds more than the free grant, so cancelling must claw back down.
+    it("the plan's remaining credits end with it: 0, never the free grant, nothing added", async () => {
+      // More than the free grant: all of it ends with the plan.
       const held = TIER_CREDITS.free + 2500
-      mockSelect("profiles", { subscription_credits: held })
+      endingPlan(held)
 
       await handleSubscriptionCanceled(baseCanceledData)
 
-      const freeCredits = TIER_CREDITS.free
-      expect(mockLogTransaction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          amount: freeCredits - held, // negative (credits removed)
-          balanceAfter: freeCredits,
-        })
+      expect(ENDED_SUBSCRIPTION_CREDITS).toBe(0)
+      expect(profileUpdates()).toContainEqual(expect.objectContaining({ subscription_credits: 0 }))
+      expect(mockLogTransaction).toHaveBeenCalledTimes(1)
+      expect(mockLogTransaction).toHaveBeenCalledWith(expect.objectContaining({ amount: -held, balanceAfter: 0 }))
+    })
+
+    it("fewer than the free grant left: still 0 — a former subscriber is not topped up to the free grant", async () => {
+      endingPlan(20)
+
+      await handleSubscriptionCanceled(baseCanceledData)
+
+      expect(profileUpdates()).toContainEqual(expect.objectContaining({ subscription_credits: 0 }))
+      expect(mockLogTransaction).toHaveBeenCalledWith(expect.objectContaining({ amount: -20, balanceAfter: 0 }))
+      // Top-up credits are never part of the write.
+      for (const update of profileUpdates()) expect(update).not.toHaveProperty("topup_credits")
+    })
+
+    it("nothing left to end: the plan still ends, but no ledger line for nothing", async () => {
+      endingPlan(0)
+
+      await handleSubscriptionCanceled(baseCanceledData)
+
+      expect(profileUpdates()).toContainEqual(expect.objectContaining({ subscription_credits: 0, tier: "free" }))
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+    })
+
+    it("credits that move between the read and the write: read again, the ledger states exactly what was removed", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockWriteRows("subscriptions", [{ plan_granted: true }])
+      // The tier read, then the plan end's first read, then its second read.
+      mockSelect("profiles", { tier: "pro", subscription_tier: "pro", subscription_credits: 500 })
+      mockSelect("profiles", { tier: "pro", subscription_tier: "pro", subscription_credits: 500 })
+      mockSelect("profiles", { tier: "pro", subscription_tier: "pro", subscription_credits: 480 })
+      // The first compare-and-set matches nothing (a run settled 20 in between).
+      mockWriteRows("profiles", [])
+      mockWriteRows("profiles", [{ id: "user-001" }])
+
+      await handleSubscriptionCanceled(baseCanceledData)
+
+      expect(mockLogTransaction).toHaveBeenCalledTimes(1)
+      expect(mockLogTransaction).toHaveBeenCalledWith(expect.objectContaining({ amount: -480, balanceAfter: 0 }))
+    })
+
+    it("no stored subscription row (the unpaid insert failed): the account is left as it was", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockWriteRows("subscriptions", [])
+      mockSelect("profiles", { tier: "free", subscription_tier: "free", subscription_credits: 300 })
+
+      await handleSubscriptionCanceled(baseCanceledData)
+
+      expect(profileUpdates()).toEqual([])
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+    })
+
+    it("the cancel UPDATE fails: nothing is written to the account and Stripe is asked to deliver the event again", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockWriteError("subscriptions", { code: "XX000", message: "write failed" })
+      mockSelect("profiles", { tier: "pro", subscription_tier: "pro", subscription_credits: 9000 })
+
+      await expect(handleSubscriptionCanceled(baseCanceledData)).rejects.toBeInstanceOf(StripeEventRetryError)
+
+      expect(profileUpdates()).toEqual([])
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+    })
+
+    it("a redelivered delete after a welcome grant was claimed: the account is on the free tier, its credits are left alone", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockWriteRows("subscriptions", [{ plan_granted: true }])
+      mockSelect("profiles", { tier: "free", subscription_tier: "free", subscription_credits: TIER_CREDITS.free })
+
+      await handleSubscriptionCanceled(baseCanceledData)
+
+      expect(profileUpdates()).toEqual([])
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+    })
+
+    it("a late delete for an old subscription after a re-subscribe: the new plan's credits and tier are untouched", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockWriteRows("subscriptions", [{ plan_granted: true }])
+      mockList("subscriptions", [{ stripe_subscription_id: "sub_new" }])
+      mockSelect("profiles", { tier: "pro", subscription_tier: "pro", subscription_credits: TIER_CREDITS.pro })
+
+      await handleSubscriptionCanceled(baseCanceledData)
+
+      expect(profileUpdates()).toEqual([])
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+    })
+
+    it("a subscription that was never paid: the account is left as it was", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockWriteRows("subscriptions", [{ plan_granted: false }])
+      mockSelect("profiles", { tier: "free", subscription_tier: "free", subscription_credits: 300 })
+
+      await handleSubscriptionCanceled(baseCanceledData)
+
+      expect(profileUpdates()).toEqual([])
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+    })
+
+    it("the plan end's own live-subscription list is the paid-tier statuses", () => {
+      expect(new Set(LIVE_SUBSCRIPTION_STATUSES)).toEqual(PAID_TIER_STATUSES)
+    })
+
+    it("a plan granted while the end was retrying (re-subscribe): the retry finds it live and ends nothing", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockWriteRows("subscriptions", [{ plan_granted: true }])
+      // The webhook's own check, then attempt 1 — nothing live yet — then
+      // attempt 2: subscription B was paid and granted in between.
+      mockList("subscriptions", [])
+      mockList("subscriptions", [])
+      mockList("subscriptions", [{ stripe_subscription_id: "sub_B" }])
+      mockSelect("profiles", { tier: "pro", subscription_tier: "pro", subscription_credits: 500, credits_reset_at: "2026-01-01T00:00:00Z" })
+      // Attempt 1's compare-and-set misses: B's grant rewrote the row.
+      mockWriteRows("profiles", [])
+
+      await handleSubscriptionCanceled(baseCanceledData)
+
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+      expect(mockInvalidateBalanceCache).not.toHaveBeenCalled()
+      // One write was attempted (and matched nothing); none after B was found.
+      expect(profileUpdates()).toHaveLength(1)
+    })
+
+    it("the compare-and-set includes the credit-period stamp, so a re-grant with the same credits still misses", async () => {
+      endingPlan(500, { credits_reset_at: "2026-01-01T00:00:00Z" })
+
+      await handleSubscriptionCanceled(baseCanceledData)
+
+      const profileChains = mockFrom.mock.calls
+        .map((c: unknown[], i: number) => ({ table: c[0], chain: mockFrom.mock.results[i]!.value as { update: { mock: { calls: unknown[] } }; eq: { mock: { calls: unknown[][] } } } }))
+        .filter((r) => r.table === "profiles" && r.chain.update.mock.calls.length > 0)
+      expect(profileChains).toHaveLength(1)
+      expect(profileChains[0]!.chain.eq.mock.calls).toEqual(
+        expect.arrayContaining([["subscription_credits", 500], ["credits_reset_at", "2026-01-01T00:00:00Z"]]),
       )
     })
 
-    it("sets storage_limit to 1GB", async () => {
+    it("updated(canceled) first, then deleted, for an immediate cancellation: the plan ends exactly once", async () => {
       mockSelect("stripe_customers", { user_id: "user-001" })
-      mockSelect("profiles", { subscription_credits: 20 })
+      mockSelect("subscriptions", {
+        id: "sub-id",
+        status: "active",
+        stripe_price_id: STRIPE_PRODUCTS.pro.monthly,
+        tier: "pro",
+        current_period_start: "2026-02-01T00:00:00Z",
+        current_period_end: "2026-03-01T00:00:00Z",
+        cancel_at_period_end: false,
+        plan_granted: true,
+      })
+      mockWriteRows("subscriptions", [{ id: "sub-id", plan_granted: true }])
+      mockSelect("profiles", { tier: "pro", subscription_tier: "pro", subscription_credits: 5000 })
+      mockWriteRows("profiles", [{ id: "user-001" }])
+
+      // Stripe's `updated` saying "canceled" lands first: the row is marked, the plan is not ended.
+      await handleSubscriptionUpdated({
+        subscriptionId: "sub_001",
+        stripeCustomerId: "cus_001",
+        priceId: STRIPE_PRODUCTS.pro.monthly,
+        status: "canceled",
+        currentPeriodStart: "2026-02-01T00:00:00Z",
+        currentPeriodEnd: "2026-03-01T00:00:00Z",
+        cancelAtPeriodEnd: false,
+        cancelAt: null,
+        canceledAt: "2026-02-10T00:00:00Z",
+        metadata: null,
+      })
+      expect(profileUpdates().filter((u) => "subscription_credits" in u)).toEqual([])
+
+      // The delete then ends it: once.
+      await handleSubscriptionCanceled(baseCanceledData)
+      expect(profileUpdates().filter((u) => "subscription_credits" in u)).toEqual([expect.objectContaining({ subscription_credits: 0, tier: "free" })])
+      expect(mockLogTransaction).toHaveBeenCalledTimes(1)
+      expect(mockLogTransaction).toHaveBeenCalledWith(expect.objectContaining({ amount: -5000, source: "expiry" }))
+
+      // A redelivery of the delete finds the account on free: nothing more.
+      selectResponses.set("profiles", [{ data: { tier: "free", subscription_tier: "free", subscription_credits: 0 }, error: null }])
+      await handleSubscriptionCanceled(baseCanceledData)
+      expect(profileUpdates().filter((u) => "subscription_credits" in u)).toHaveLength(1)
+      expect(mockLogTransaction).toHaveBeenCalledTimes(1)
+    })
+
+    it("TODAY: an admin-set paid tier on a former subscriber, then a late delete of the old subscription — that tier and its credits are ended", async () => {
+      // No live subscription; the account was put on pro by an admin after its
+      // old plan ended. The late delete cannot tell that tier from the old
+      // plan's (no per-subscription "plan ended" marker yet), so it ends it.
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockWriteRows("subscriptions", [{ plan_granted: true }])
+      mockSelect("profiles", { tier: "pro", subscription_tier: "pro", subscription_credits: TIER_CREDITS.pro })
+      mockWriteRows("profiles", [{ id: "user-001" }])
 
       await handleSubscriptionCanceled(baseCanceledData)
 
-      // Verify free tier storage constant
+      expect(profileUpdates()).toContainEqual(expect.objectContaining({ tier: "free", subscription_credits: 0 }))
+      expect(mockLogTransaction).toHaveBeenCalledWith(expect.objectContaining({ amount: -TIER_CREDITS.pro }))
+    })
+
+    it("sets storage_limit to 1GB", async () => {
+      endingPlan(20)
+
+      await handleSubscriptionCanceled(baseCanceledData)
+
       expect(TIER_STORAGE_LIMITS.free).toBe(1 * 1024 * 1024 * 1024)
-
-      const calledTables = mockFrom.mock.calls.map((c: unknown[]) => c[0])
-      expect(calledTables).toContain("profiles")
-
-      // Credits already below 50, so balanceAfter should be 20
-      expect(mockLogTransaction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          balanceAfter: 20,
-        })
-      )
+      expect(profileUpdates()).toContainEqual(expect.objectContaining({ storage_limit_bytes: TIER_STORAGE_LIMITS.free }))
     })
   })
 

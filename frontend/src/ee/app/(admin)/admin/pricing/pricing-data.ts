@@ -24,7 +24,7 @@ export interface SubscriptionTier {
 // Note the top-ups are NOT the old ladder ×10. They were re-rated onto the
 // flattened curve (design §4.3), so copy them, never scale them.
 export const SUBSCRIPTION_TIERS: readonly SubscriptionTier[] = [
-  { name: "Free", priceMonthly: 0, priceAnnual: 0, credits: 1500, perCredit: null, llmRequests: "20/mo", notes: "One-time credits, 500 cr/day, VEO 3.1 blocked, watermark" },
+  { name: "Free", priceMonthly: 0, priceAnnual: 0, credits: 300, perCredit: null, llmRequests: "20/mo", notes: "One-time credits, 500 cr/day, VEO 3.1 blocked, watermark" },
   { name: "Basic", priceMonthly: 12, priceAnnual: 10, credits: 4500, perCredit: 0.0027, llmRequests: "100/mo" },
   { name: "Standard", priceMonthly: 29, priceAnnual: 24, credits: 11000, perCredit: 0.0026, llmRequests: "300/mo" },
   { name: "Pro", priceMonthly: 59, priceAnnual: 49, credits: 23000, perCredit: 0.0026, llmRequests: "1,000/mo" },

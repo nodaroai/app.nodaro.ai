@@ -58,7 +58,7 @@ export function GenerateButton({
   // number nothing debits. On a payer instance `total` is the requester's
   // FROZEN signup grant, so the billing account could grant a user 10,000
   // credits, watch the sidebar show them, and still find this button disabled
-  // for a 4,000-credit node quoting a 1,500 it cannot move; a user provisioned
+  // for a 4,000-credit node quoting a frozen grant it cannot move; a user provisioned
   // before any signup grant landed (`total: 0`) got a dead button outright.
   //
   // So on a payer instance this button gates ONLY on an allowance the server

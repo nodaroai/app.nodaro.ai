@@ -4,7 +4,7 @@ import { supabase } from "../../lib/supabase.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import { callerKeyHash } from "../../routes/oauth-register.js"
-import { readFreeGrant, runSignupGrantClaim, type FreeGrantState } from "../billing/signup-grant.js"
+import { grantedCreditsFigure, readFreeGrant, runSignupGrantClaim, type FreeGrantState } from "../billing/signup-grant.js"
 import { SIGNUP_GRANTS_NOT_APPLICABLE, signupGrantsApply } from "../billing/free-grant-scope.js"
 import { TIER_CREDITS } from "../billing/stripe-config.js"
 import { consentLocaleField } from "../lib/consent-locale.js"
@@ -108,6 +108,10 @@ export async function welcomeOfferRoutes(app: FastifyInstance): Promise<void> {
 
         const grant = await readFreeGrant(userId)
         let state: FreeGrantState = grant?.state ?? "unclaimed"
+        // Granted before this call (the extension lane, consent owed): name
+        // what it was given — possibly an earlier, larger grant — the same
+        // figure the balance's `welcomeOffer.credits` names for it.
+        const alreadyGranted = state === "granted"
         if (state === "unclaimed") {
           const outcome = await runSignupGrantClaim(
             {
@@ -130,7 +134,8 @@ export async function welcomeOfferRoutes(app: FastifyInstance): Promise<void> {
         await invalidateBalance(userId)
         void syncConsentRow(userId).catch(() => {})
 
-        const response: WelcomeOfferClaimResponse = { consent: "granted", grant: state, credits: TIER_CREDITS.free }
+        const credits = alreadyGranted ? await grantedCreditsFigure(userId) : TIER_CREDITS.free
+        const response: WelcomeOfferClaimResponse = { consent: "granted", grant: state, credits }
         return response
       } catch (err) {
         return sendInternalError(reply, req, err, "Failed to claim the welcome credits")

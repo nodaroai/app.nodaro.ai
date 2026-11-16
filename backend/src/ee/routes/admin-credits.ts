@@ -9,7 +9,7 @@ import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 import { invalidateAuthCache } from "../../middleware/auth.js"
 import { invalidateAdminCache } from "../../lib/admin-check.js"
-import { TIER_CREDITS } from "../billing/stripe-config.js"
+import { ENDED_SUBSCRIPTION_CREDITS, TIER_CREDITS } from "../billing/stripe-config.js"
 import { tierColumns, resolveTierFrom } from "../billing/tier-columns.js"
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { deploymentPayerActive, deploymentPayerId } from "../../lib/deployment-payer.js"
@@ -362,35 +362,71 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
       return reply.code(200).send({ message: "Tier unchanged", tier })
     }
 
-    const newCredits = TIER_CREDITS[tier] ?? 50
+    // This route sets the account's tier and its subscription credits, and
+    // nothing in Stripe: it cancels no subscription and changes no price.
+    // Moving to free ends the plan's credits (ENDED_SUBSCRIPTION_CREDITS),
+    // never the free grant; a paid tier sets that tier's monthly credits.
+    // Refused while a subscription is still live — that plan is being paid,
+    // so its credits must not end here: cancel the subscription instead.
+    if (tier === "free") {
+      const { data: live, error: liveError } = await supabase
+        .from("subscriptions")
+        .select("stripe_subscription_id")
+        .eq("user_id", id)
+        .in("status", ["active", "trialing", "past_due"])
+      if (liveError) return reply.code(500).send({ error: liveError.message })
+      if (Array.isArray(live) && live.length > 0) {
+        return reply.code(409).send({
+          error: {
+            code: "active_subscription",
+            message: "This account has a live subscription. Cancel the subscription instead of moving the account to free: its plan is still being paid.",
+          },
+        })
+      }
+    }
 
-    // Update tier + reset subscription credits
-    const { error: updateError } = await supabase
+    const newCredits = tier === "free" ? ENDED_SUBSCRIPTION_CREDITS : (TIER_CREDITS[tier] ?? 50)
+    const read = (profile.subscription_credits ?? null) as number | null
+    const before = read ?? 0
+
+    // Update tier + reset subscription credits — only while the balance is still
+    // the one read above (NULL matched as NULL), so the ledger line below states
+    // exactly what moved.
+    const reset = supabase
       .from("profiles")
       .update({
         ...tierColumns(tier),
         subscription_credits: newCredits,
       })
       .eq("id", id)
+    const { data: written, error: updateError } = await (read === null
+      ? reset.is("subscription_credits", null)
+      : reset.eq("subscription_credits", read)
+    ).select("id")
 
     if (updateError) {
       return reply.code(500).send({ error: updateError.message })
     }
-
-    // Log transaction for the credit reset
-    const totalAfter = newCredits + (profile.topup_credits ?? 0)
-    const creditDelta = newCredits - (profile.subscription_credits ?? 0)
-
-    try {
-      await CreditsService.adminAdjustCredits({
-        userId: id,
-        amount: 0,
-        creditType: "subscription",
-        description: `Tier changed from ${oldTier} to ${tier} (credits reset to ${newCredits})`,
-        adminUserId,
+    if (!Array.isArray(written) || written.length === 0) {
+      return reply.code(409).send({
+        error: { code: "credits_changed", message: "The account's credits changed while the tier was being set. Try again." },
       })
-    } catch {
-      // Transaction log failure is non-critical; tier already updated
+    }
+
+    const totalAfter = newCredits + (profile.topup_credits ?? 0)
+    const creditDelta = newCredits - before
+
+    // Ledger: the amount the reset actually moved (none when nothing moved).
+    if (creditDelta !== 0) {
+      await CreditsService.logTransaction({
+        userId: id,
+        amount: creditDelta,
+        creditType: "subscription",
+        source: "admin_adjustment",
+        description: `Tier changed from ${oldTier} to ${tier} (credits reset to ${newCredits})`,
+        adminUserId: adminUserId || undefined,
+        balanceAfter: newCredits,
+      })
     }
 
     invalidateBalanceCache(id)

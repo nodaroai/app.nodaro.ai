@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom"
 
 /**
  * The pricing page's free-tier strip is a promise of free credits of one's own
- * ("try everything with 1,500 free credits, no credit card"). The page can be
+ * ("try everything with 300 free credits, no credit card"). The page can be
  * reached on a deployment that sells nothing (its route is gated on
  * `nav.hide`, not on `billing.selfServe`), so the strip goes there and under
  * a deployment payer; the paid plans are not this test's business.
@@ -50,7 +50,7 @@ describe("the pricing page's free-tier strip", () => {
   it("is shown to a guest on a deployment that sells (Nodaro)", () => {
     pricingPage()
     expect(screen.getByText(STRIP)).toBeTruthy()
-    expect(document.body.textContent).toContain("1,500 free credits")
+    expect(document.body.textContent).toContain("300 free credits")
   })
 
   it("is gone where the deployment sells nothing, and the plans stay", () => {

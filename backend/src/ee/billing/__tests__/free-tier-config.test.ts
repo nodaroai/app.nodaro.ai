@@ -11,19 +11,58 @@ import { TIER_CREDITS, FREE_TIER_RESTRICTIONS } from "../stripe-config.js"
 // which the public SDK exposes via client.credits.balance().
 //
 // Migration 281 corrected the row; 287 re-seeded it for the credit
-// re-denomination. This pins the constants to the LATEST seeding migration, so
-// changing a constant without re-seeding the table fails here instead of
-// silently misreporting a user's allowance.
+// re-denomination; 652 lowered it with the grant (1,500 → 300). This pins the
+// constants to the LATEST seeding migration, so changing a constant without
+// re-seeding the table fails here instead of silently misreporting a user's
+// allowance.
 
 const MIGRATIONS_DIR = join(import.meta.dirname, "../../../../../supabase/migrations")
 
-const MIGRATION = join(MIGRATIONS_DIR, "287_credit_redenomination_tier_config.sql")
+/**
+ * Every SQL statement in the migrations that writes tier_config.monthly_credits
+ * and can reach the 'free' row: an INSERT or UPDATE naming `monthly_credits`
+ * that names 'free', or an UPDATE with no WHERE at all (every row).
+ */
+function freeMonthlyWrites(): Array<{ migration: string; statement: string }> {
+  return readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith(".sql"))
+    .sort() // NNN_ prefix sorts chronologically
+    .flatMap((f) =>
+      readFileSync(join(MIGRATIONS_DIR, f), "utf8")
+        .replace(/--.*$/gm, "") // comments may quote a statement; only code counts
+        .split(";")
+        .map((statement) => statement.trim())
+        .filter((statement) => /\b(UPDATE|INSERT\s+INTO)\s+(public\.)?tier_config\b/i.test(statement))
+        .filter((statement) => /\bmonthly_credits\b/i.test(statement))
+        .filter((statement) => /'free'/i.test(statement) || (/^UPDATE\b/i.test(statement) && !/\bWHERE\b/i.test(statement)))
+        .map((statement) => ({ migration: f, statement })),
+    )
+}
 
-function seededFreeMonthly(): number {
-  const sql = readFileSync(MIGRATION, "utf8")
-  const monthly = /monthly_credits\s*=\s*(\d+)/.exec(sql)
-  if (!monthly) throw new Error("could not parse the tier_config seeding migration")
-  return Number(monthly[1])
+/**
+ * monthly_credits for 'free' as the LATEST migration to write it leaves it.
+ * Scanned rather than pinned to one file, like the daily limit below. The
+ * latest write must be in the one form this reads — `UPDATE tier_config SET
+ * monthly_credits = N[, …] WHERE tier = 'free'` — and anything else (an
+ * INSERT … ON CONFLICT, a CASE, a bulk UPDATE) fails here by name rather than
+ * being skipped for an older, recognised one.
+ */
+function latestSeededFreeMonthly(
+  writes: ReadonlyArray<{ migration: string; statement: string }> = freeMonthlyWrites(),
+): { value: number; migration: string } {
+  const latest = writes[writes.length - 1]
+  if (!latest) throw new Error("no migration seeds the free tier monthly_credits")
+  const m = /^UPDATE\s+(public\.)?tier_config\s+SET\b[^;]*?\bmonthly_credits\s*=\s*(\d+)\b[^;]*\bWHERE\s+tier\s*=\s*'free'$/i.exec(
+    latest.statement.replace(/\s+/g, " "),
+  )
+  if (!m) {
+    throw new Error(
+      `${latest.migration} writes tier_config.monthly_credits for 'free' in a form this test cannot read: ` +
+        `"${latest.statement.replace(/\s+/g, " ")}". Write it as UPDATE tier_config SET monthly_credits = N WHERE tier = 'free', ` +
+        `or teach latestSeededFreeMonthly the new form.`,
+    )
+  }
+  return { value: Number(m[2]), migration: latest.migration }
 }
 
 /**
@@ -47,7 +86,28 @@ function latestSeededFreeDaily(): { value: number | null; migration: string } {
 
 describe("free tier_config row matches the code constants", () => {
   it("seeds monthly_credits from TIER_CREDITS.free", () => {
-    expect(seededFreeMonthly()).toBe(TIER_CREDITS.free)
+    const { value, migration } = latestSeededFreeMonthly()
+    expect(
+      value,
+      `${migration} leaves tier_config.monthly_credits for 'free' at ${value}, but TIER_CREDITS.free is ` +
+        `${TIER_CREDITS.free}. Change both together (constant + re-seed migration).`,
+    ).toBe(TIER_CREDITS.free)
+  })
+
+  it("a latest write in a form the scan cannot read fails by name — never skipped for an older one", () => {
+    const writes = [
+      ...freeMonthlyWrites(),
+      {
+        migration: "999_free_upsert.sql",
+        statement:
+          "INSERT INTO tier_config (tier, monthly_credits) VALUES ('free', 300) ON CONFLICT (tier) DO UPDATE SET monthly_credits = EXCLUDED.monthly_credits",
+      },
+    ]
+    expect(() => latestSeededFreeMonthly(writes)).toThrow(/999_free_upsert\.sql/)
+    // The recognised form, with another column beside it, still reads.
+    expect(
+      latestSeededFreeMonthly([{ migration: "998_x.sql", statement: "UPDATE tier_config SET monthly_credits = 300, daily_credit_limit = NULL WHERE tier = 'free'" }]),
+    ).toEqual({ value: 300, migration: "998_x.sql" })
   })
 
   it("seeds daily_credit_limit from FREE_TIER_RESTRICTIONS.dailyCreditCap", () => {
@@ -60,12 +120,13 @@ describe("free tier_config row matches the code constants", () => {
     ).toBe(FREE_TIER_RESTRICTIONS.dailyCreditCap)
   })
 
-  it("free tier is 1,500/month with no daily cap", () => {
+  it("free tier is a one-time 300 with no daily cap", () => {
     // Pinned explicitly: these are the numbers quoted to users, so a change
     // should be a deliberate edit here, not an incidental one elsewhere.
     // The daily cap was removed 2026-08-17 (migration 326) — the one-time
-    // 1,500 signup grant bounds free-tier exposure on its own.
-    expect(TIER_CREDITS.free).toBe(1500)
+    // signup grant bounds free-tier exposure on its own. The grant was 1,500
+    // until migration 652 lowered it to 300.
+    expect(TIER_CREDITS.free).toBe(300)
     expect(FREE_TIER_RESTRICTIONS.dailyCreditCap).toBeNull()
   })
 })
@@ -115,6 +176,6 @@ describe("profiles.subscription_credits default vs. the claim-delivered grant", 
     // Both transitions (claim and activate) pass the constant, never a literal.
     expect(src).toMatch(/p_grant_amount:\s*TIER_CREDITS\.free/)
     expect(src).not.toMatch(/p_grant_amount:\s*\d+/)
-    expect(TIER_CREDITS.free).toBe(1500)
+    expect(TIER_CREDITS.free).toBe(300)
   })
 })

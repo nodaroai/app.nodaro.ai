@@ -33,8 +33,8 @@ import {
 /**
  * Free-credit abuse gate: admin review of withheld grants.
  *
- * Read is admin; RESTORE is platform-operator, because restoring mints 1,500
- * credits — the same gate as the credit-adjust route. There is deliberately
+ * Read is admin; RESTORE is platform-operator, because restoring mints the
+ * free grant's credits — the same gate as the credit-adjust route. There is deliberately
  * no "confirm withhold" write: withheld is already the state, and the only
  * action an operator can take that changes money is to grant.
  */
