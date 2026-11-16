@@ -1,5 +1,23 @@
 # @nodaro/cli
 
+## 1.50.2
+
+### Patch Changes
+
+- ba63f74: `nodaro pickers get --help`: an option's `imageUrl` may be a path on the deployment's own site (`/brand/…`), which is on the API address you call, as well as an absolute URL.
+- Updated dependencies [edc1b7d]
+- Updated dependencies [da4cd42]
+- Updated dependencies [c0cfbcb]
+- Updated dependencies [b68bbb5]
+- Updated dependencies [da4cd42]
+- Updated dependencies [da4cd42]
+- Updated dependencies [ba63f74]
+- Updated dependencies [ba63f74]
+- Updated dependencies [ba63f74]
+  - @nodaro/shared@3.68.0
+  - @nodaro/sdk@2.74.0
+  - @nodaro/prompts@1.58.1
+
 ## 1.50.1
 
 ### Patch Changes

@@ -1,5 +1,24 @@
 # @nodaro/sdk
 
+## 2.74.0
+
+### Minor Changes
+
+- c0cfbcb: `LlmChatParams` (`nodes.run("llm-chat", …)`, `POST /v1/llm-chat/generate`) gains `referenceVideoFps`: the frames sampled per second of each reference video (above 0, up to 24; a model reads 1 frame per second when it is left out). It needs `advancedMode: true` on a Gemini model, because only the provider's own API carries a sampling rate; without it the call answers `400 video_fps_needs_advanced_mode`. More frames are more input tokens, charged at the model's rate as the rest of the prompt is.
+- b68bbb5: `ConnectedApp` (`client.connectedApps()`) gains an optional `grantedBy: "assertion_exchange"`, present on a grant an app obtained through the MCP assertion exchange — a deployment's own application getting MCP tokens for the user from its sign-in, with no consent screen (`POST /v1/oauth/token` with the `urn:ietf:params:oauth:grant-type:jwt-bearer` grant, where a deployment turns it on). Absent on every grant the user approved on a consent screen, so existing code is unaffected.
+
+### Patch Changes
+
+- ba63f74: Docs: a picker option's `imageUrl` / `imageLargeUrl` (`pickerCatalogs`, `catalogs`) and a factory preset's `previewUrl` / `previewUrls` (`presets.listFactory`, `presets.listFactoryGroups`) may be a path on the deployment's own site (`/brand/…`) when the deployment ships its own pictures there. Resolve such a path against the address you call the API at (`new URL(imageUrl, baseUrl)`); a page served by that site can use it as it is. The types are unchanged (`string`).
+- Updated dependencies [edc1b7d]
+- Updated dependencies [da4cd42]
+- Updated dependencies [da4cd42]
+- Updated dependencies [da4cd42]
+- Updated dependencies [ba63f74]
+- Updated dependencies [ba63f74]
+  - @nodaro/shared@3.68.0
+  - @nodaro/prompts@1.58.1
+
 ## 2.73.0
 
 ### Minor Changes
