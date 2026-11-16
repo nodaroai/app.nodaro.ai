@@ -4,10 +4,21 @@
  * beside `image_to_text` by `registerImageVerbs`. Unlisted while the deployment
  * does not offer the node to its users (`lib/mcp/tool-needs.ts`).
  *
- * The route answers in the same call, so the tool's result IS the answer, whole:
- * no job to poll and nothing cut. Before this tool an agent that wanted a model
- * to look at a video or listen to a recording had to build a workflow (an
- * upload node wired into a Generate Text node) and read the node's text back.
+ * The route answers in the same call, so the tool's result IS the answer, whole
+ * and uncut. Before this tool an agent that wanted a model to look at a video or
+ * listen to a recording had to build a workflow (an upload node wired into a
+ * Generate Text node) and read the node's text back.
+ *
+ * ONE CALL NEVER OUTLIVES THE CLIENT (the rule `wait_for_job` states in
+ * jobs.ts): an MCP client cuts a tool call off on its own clock, 60 s on the
+ * reference SDK, and a model reading a video can take longer than that (76 s
+ * was measured on a 30 s clip). The agent then read a failed call with no job
+ * id, while the job finished and was charged. So the tool waits
+ * `GENERATE_TEXT_INLINE_WAIT_MS` for the answer and, when the call is still
+ * running, answers with its job id instead: `wait_for_job` gives the whole
+ * answer. The route goes on after the tool has answered, exactly as it would
+ * have; the tool learns the job's id when its row is created
+ * (`mcpInject`'s `onJobCreated`).
  *
  * Media is passed by link or by a Nodaro id (a job's output or an upload),
  * resolved for the caller only (`resolveRefArray`). The route owns every rule:
@@ -26,6 +37,34 @@ import { meteredLlmPriceSentence } from "./_credit-hint.js"
 
 export const GENERATE_TEXT_TOOL = "generate_text"
 
+/**
+ * How long one call waits for the answer before it hands the job on: under the
+ * 45 s `wait_for_job` waits (`WAIT_FOR_JOB_CALL_CEILING_S`), since this call
+ * also resolves its media ids first.
+ */
+export const GENERATE_TEXT_INLINE_WAIT_MS = 40_000
+/** How much longer a call with no job yet (still waiting for its slot, or reading documents) is given to create one. */
+export const GENERATE_TEXT_START_GRACE_MS = 8_000
+
+let waits = { inlineMs: GENERATE_TEXT_INLINE_WAIT_MS, startGraceMs: GENERATE_TEXT_START_GRACE_MS }
+/** Tests only: shorter waits, or `null` for the real ones. */
+export function setGenerateTextWaitsForTesting(next: { inlineMs: number; startGraceMs: number } | null): void {
+  waits = next ?? { inlineMs: GENERATE_TEXT_INLINE_WAIT_MS, startGraceMs: GENERATE_TEXT_START_GRACE_MS }
+}
+
+/** `promise`'s value when it settles within `ms`, else `null` (it goes on). A rejection within `ms` is thrown. */
+async function settledWithin<T>(promise: Promise<T>, ms: number): Promise<{ value: T } | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms)
+  })
+  try {
+    return await Promise.race([promise.then((value) => ({ value })), late])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** The route's own per-kind limits (`llmChatBody` in `routes/llm-chat.ts`). */
 export const GENERATE_TEXT_LIMITS = { images: 5, videos: 3, audios: 3 } as const
 
@@ -41,7 +80,8 @@ const mediaList = () => z.union([z.array(z.string()), z.string()]).optional()
 export function generateTextDescription(): string {
   return (
     "Ask any LLM, with media for it to read: images, videos (picture and sound), audio and PDFs, each a link or a Nodaro id. " +
-    "The whole answer is this call's result: no job to poll, nothing cut, no workflow to build. " +
+    "The whole answer is this call's result, nothing cut, no workflow to build. " +
+    `A call still running after ${GENERATE_TEXT_INLINE_WAIT_MS / 1000} s answers with its job_id instead: \`wait_for_job\` then gives the whole answer. ` +
     "Video and audio need a Gemini model; a PDF needs a model that reads documents. " +
     "To judge sound alone, pass the recording in `audio_urls` rather than its video. " +
     meteredLlmPriceSentence("llm-chat")
@@ -71,7 +111,12 @@ export function registerGenerateTextVerb({ server, session, fastify }: RegisterO
           ),
         ...llmMcpFields("llm-chat"),
       },
-      outputSchema: { jobId: z.string(), text: z.string() },
+      outputSchema: {
+        jobId: z.string(),
+        // running: no answer yet, the job has it (the description says how to read it).
+        status: z.enum(["completed", "running"]),
+        text: z.string().optional(),
+      },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) => {
@@ -100,7 +145,49 @@ export function registerGenerateTextVerb({ server, session, fastify }: RegisterO
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await mcpInject(fastify, session, { method: "POST", url: "/v1/llm-chat/generate", payload })
+      // The job the call creates, told by the route as soon as its row exists.
+      const job: { id?: string } = {}
+      let jobCreated: () => void = () => {}
+      const created = new Promise<void>((resolve) => {
+        jobCreated = resolve
+      })
+      const call = mcpInject(fastify, session, {
+        method: "POST",
+        url: "/v1/llm-chat/generate",
+        payload,
+        onJobCreated: (id) => {
+          job.id ??= id
+          jobCreated()
+        },
+      })
+      // The call goes on after this tool has answered: its outcome is then the job's own.
+      call.catch(() => {})
+      let answered = await settledWithin(call, waits.inlineMs)
+      if (!answered && !job.id) {
+        // No job yet: the call is waiting for its slot or reading its documents. A little longer for one.
+        await settledWithin(Promise.race([call.then(() => {}), created]), waits.startGraceMs)
+        answered = await settledWithin(call, 0)
+      }
+      if (!answered) {
+        if (!job.id) {
+          return refuse(
+            "generate_text has not started yet (it is waiting for a free slot). Do not call it again: this call keeps its place and runs once. " +
+              'Find it with list_jobs { types: ["llm-chat"] }, then wait_for_job with its id for the whole answer.',
+          )
+        }
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                `Still running after ${Math.round(waits.inlineMs / 1000)} s: job ${job.id}. Call wait_for_job { job_id: "${job.id}" } (again while it runs); ` +
+                "the whole answer is its outputData.generatedText. Do not call generate_text again: this call runs once.",
+            },
+          ],
+          structuredContent: { jobId: job.id, status: "running" as const },
+        }
+      }
+      const res = answered.value
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       let answer: { jobId?: unknown; generatedText?: unknown }
       try {
@@ -112,7 +199,7 @@ export function registerGenerateTextVerb({ server, session, fastify }: RegisterO
       return {
         // The answer itself, whole: what the caller asked for is the text.
         content: [{ type: "text" as const, text: answer.generatedText }],
-        structuredContent: { jobId: answer.jobId, text: answer.generatedText },
+        structuredContent: { jobId: answer.jobId, status: "completed" as const, text: answer.generatedText },
       }
     },
   )

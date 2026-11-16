@@ -56,6 +56,14 @@ export interface McpInjectOptions {
    * the route's 404. Not with `query`: the scope matches the bare url.
    */
   sessionId?: string
+  /**
+   * Told the id of the job this request creates as soon as its row exists,
+   * before the route answers (`withJobSubmissionContext`'s `onJobCreated`):
+   * for a tool on a synchronous route that hands the job on when the answer
+   * takes longer than an MCP client waits. Only a route that announces its
+   * job calls it.
+   */
+  onJobCreated?: (jobId: string) => void
 }
 
 /**
@@ -110,6 +118,7 @@ export function mcpInject(fastify: FastifyInstance, session: McpSession, opts: M
       url: opts.url,
       grant: session.scopes,
       ...(opts.sessionId !== undefined ? { provenance: { sessionId: opts.sessionId } } : {}),
+      ...(opts.onJobCreated ? { onJobCreated: opts.onJobCreated } : {}),
     },
     () => inject(fastify, session, opts),
   )

@@ -4,6 +4,7 @@ import { maybeProxyLlmRouteToCloud, maybeProxyLlmStreamToCloud } from "../lib/cl
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { insertSyncJob, insertSyncJobIdempotent } from "../lib/insert-job.js"
+import { announceCreatedJob } from "../lib/job-submission-context.js"
 import { IDEMPOTENCY_WINNER_GONE, IdempotencyWinnerGoneError } from "../lib/idempotent-insert.js"
 import { KEYED_CHAT_COLUMNS, answerKeyedChat, claimKeyedChatCall, keyedChatCallOf, relayIdempotencyKeyOf, type KeyedChatRow } from "../lib/llm-chat-keyed.js"
 import { config } from "../lib/config.js"
@@ -360,6 +361,8 @@ export async function llmChatRoutes(app: FastifyInstance) {
         }
         job = data
       }
+      // A caller that cannot wait for the answer (an MCP tool) learns the job now.
+      announceCreatedJob(req, job.id)
 
       // Metered (the default): hold one attempt of this call. A reference
       // video/audio of unknown length is held at the 60 s default (B3).
