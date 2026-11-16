@@ -1167,19 +1167,28 @@ export async function renewSubscriptionCredits(): Promise<RenewalResult> {
 
       const newCredits = TIER_CREDITS[sub.tier] ?? TIER_CREDITS.free
 
-      const { error: resetError } = await supabase
+      // The "not reset since the period ended" check is repeated in the write
+      // itself: a paid renewal invoice (its catch-up) or the webhook can reset
+      // the pool between the read above and this write, and a second SET would
+      // refill what was spent since.
+      const periodEnd = new Date(sub.current_period_end)
+      if (Number.isNaN(periodEnd.getTime())) continue
+      const { data: resetRows, error: resetError } = await supabase
         .from("profiles")
         .update({
           subscription_credits: newCredits,
           credits_reset_at: now,
         })
         .eq("id", sub.user_id)
+        .or(`credits_reset_at.is.null,credits_reset_at.lt.${periodEnd.toISOString()}`)
+        .select("id")
 
       if (resetError) {
         console.error(`[cleanup] Failed to renew credits for user ${sub.user_id}:`, resetError.message)
         errors++
         continue
       }
+      if (Array.isArray(resetRows) && resetRows.length === 0) continue // reset by someone else meanwhile
 
       invalidateBalanceCache(sub.user_id)
 

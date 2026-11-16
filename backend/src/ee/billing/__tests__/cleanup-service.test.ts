@@ -5,7 +5,7 @@ import { ENDED_SUBSCRIPTION_CREDITS, TIER_CREDITS, TIER_STORAGE_LIMITS } from ".
 // Mocks — must use vi.hoisted() for variables referenced inside vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRpc, defaultRpc, tableResponses, ltCalls, setLastMatchedResponse, mockBatchDeleteFromR2, mockDeleteFromR2, mockUpdateStorageUsage, ownerRows } = vi.hoisted(() => {
+const { mockFrom, mockRpc, defaultRpc, tableResponses, ltCalls, setLastMatchedResponse, mockBatchDeleteFromR2, mockDeleteFromR2, mockUpdateStorageUsage, ownerRows, writesMatchNothing } = vi.hoisted(() => {
   const tableResponses = new Map<string, Array<{ data: unknown; error: unknown }>>()
   const ltCalls: Array<{ table: string; col: unknown; val: unknown }> = []
   let lastMatchedResponse: { data: unknown; error: unknown } | null = null
@@ -17,6 +17,8 @@ const { mockFrom, mockRpc, defaultRpc, tableResponses, ltCalls, setLastMatchedRe
    * turn in the `assets` queue, as the library read before it did.
    */
   const ownerRows: Array<Record<string, unknown>> = []
+  /** Tables whose compare-and-set writes match no row (another writer got there first). */
+  const writesMatchNothing = new Set<string>()
 
   function shiftResponse(table: string): { data: unknown; error: unknown } {
     const queue = tableResponses.get(table)
@@ -79,7 +81,7 @@ const { mockFrom, mockRpc, defaultRpc, tableResponses, ltCalls, setLastMatchedRe
 
     // Default thenable for write operations
     chain.then = (resolve: (v: unknown) => void) =>
-      resolve({ data: isWrite && returning ? [{ id: "row" }] : null, error: null })
+      resolve({ data: isWrite && returning ? (writesMatchNothing.has(table) ? [] : [{ id: "row" }]) : null, error: null })
 
     return chain
   }
@@ -95,6 +97,7 @@ const { mockFrom, mockRpc, defaultRpc, tableResponses, ltCalls, setLastMatchedRe
   const mockUpdateStorageUsage = vi.fn().mockResolvedValue(undefined)
 
   return {
+    writesMatchNothing,
     mockFrom,
     mockRpc,
     defaultRpc,
@@ -224,6 +227,7 @@ function markedJobOutputs(): Array<Record<string, unknown>> {
 
 function resetMocks(): void {
   tableResponses.clear()
+  writesMatchNothing.clear()
   ownerRows.length = 0
   fedJobOutputs.clear()
   ltCalls.length = 0
@@ -1669,6 +1673,22 @@ describe("cleanup-service", () => {
         })
       )
       expect(mockInvalidateBalanceCache).toHaveBeenCalledWith("user-1")
+    })
+
+    it("renews nothing when the pool was reset between its read and its write (the write re-checks the stamp)", async () => {
+      mockTableQueue("subscriptions", [
+        { data: [{ id: "sub-1", user_id: "user-1", tier: "basic", current_period_end: "2026-01-01T00:00:00Z" }], error: null },
+      ])
+      mockTableQueue("profiles", [
+        { data: [{ id: "user-1", credits_reset_at: "2025-12-01T00:00:00Z" }], error: null },
+      ])
+      // The conditional reset matches no row: a paid renewal invoice reset it meanwhile.
+      writesMatchNothing.add("profiles")
+
+      const result = await renewSubscriptionCredits()
+
+      expect(result.usersRenewed).toBe(0)
+      expect(mockLogTransaction).not.toHaveBeenCalled()
     })
 
     it("skips users already renewed (credits_reset_at >= period_end)", async () => {
