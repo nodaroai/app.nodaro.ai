@@ -122,8 +122,9 @@ describe("the text item", () => {
     expect((fields.textMotion as { in: { unit: string; staggerFrames: number } }).in).toMatchObject({ unit: "line", staggerFrames: 45 })
   })
 
-  it("a sticker's box hugs its text", () => {
-    expect(titleBox({ ...record, look: "sticker", text: "Go" }, whole, canvas).width).toBeLessThan(400)
+  it("keeps one box whatever is behind the text: the editor draws the color around the lines", () => {
+    const sticker = { ...record, look: "sticker" as const, text: "Go" }
+    expect(titleBox(sticker, whole, canvas)).toEqual(titleBox(record, whole, canvas))
   })
 
   it("takes the person’s colors: the words, the key words, and a color behind the text or none", () => {

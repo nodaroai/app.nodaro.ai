@@ -143,23 +143,13 @@ const linesOf = (record: Pick<TitleRecord, "kind" | "text" | "sub">) => (record.
 
 /**
  * The text's box inside `zone` (the part of the frame where the speaker shows),
- * as the editor's transform (x and y from the canvas's center). With a color
- * behind it the box hugs the text, so the color does not fill the frame's width.
+ * as the editor's transform (x and y from the canvas's center). The text sits
+ * at the box's top, middle or bottom, as its place asks; a color behind it is
+ * drawn by the editor around the text's own lines, not across the box.
  */
-export function titleBox(record: Pick<TitleRecord, "kind" | "text" | "sub" | "look" | "place" | "background">, zone: Rect, canvas: Canvas): { x: number; y: number; width: number; height: number } {
-  const fs = titleFontSize(zone)
-  const most = zone.w * 0.88
-  let width = most
-  let height = zone.h * 0.3
-  if (backgroundOf(record)) {
-    const pad = fs * 0.28 * 2
-    const lines = linesOf(record)
-    const big = record.kind === "number" ? 2.2 : 1
-    const longest = Math.max(...lines.map((l, i) => l.length * fs * 0.6 * (i === 0 ? big : 1)))
-    width = Math.min(most, longest + pad)
-    const wrapped = lines.reduce((sum, l, i) => sum + Math.max(1, Math.ceil((l.length * fs * 0.6 * (i === 0 ? big : 1)) / (most - pad))) * (i === 0 ? big : 1), 0)
-    height = Math.min(zone.h * 0.6, wrapped * fs * 1.2 + pad)
-  }
+export function titleBox(record: Pick<TitleRecord, "place">, zone: Rect, canvas: Canvas): { x: number; y: number; width: number; height: number } {
+  const width = zone.w * 0.88
+  const height = zone.h * 0.3
   const top = record.place === "top" ? zone.y + zone.h * 0.06 : record.place === "middle" ? zone.y + (zone.h - height) / 2 : zone.y + zone.h * 0.74 - height
   return { x: Math.round(zone.x + zone.w / 2 - canvas.width / 2), y: Math.round(top + height / 2 - canvas.height / 2), width: Math.round(width), height: Math.round(height) }
 }
@@ -194,7 +184,7 @@ export function titleFields(record: Omit<TitleRecord, "id">, zone: Rect, canvas:
     letterSpacing: 0,
     lineHeight: 1.1,
     textAlign: "center",
-    verticalAlign: behind ? "middle" : record.place === "top" ? "top" : record.place === "middle" ? "middle" : "bottom",
+    verticalAlign: record.place === "top" ? "top" : record.place === "middle" ? "middle" : "bottom",
     // Every look's own fields are named, so a change of look clears the one before.
     stroke: undefined,
     textShadow: undefined,

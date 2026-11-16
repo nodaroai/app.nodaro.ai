@@ -10,7 +10,7 @@
  * parts: there the picture fills the frame instead.
  */
 import { readTimelineView, type TimelineItemView, type TimelineView } from "../edit-plan"
-import { coverRegion, pictureSlots, slotOps, speakerCopiesOf, speakerRegion, visibleRegion, type Canvas, type PicturePlace } from "../picture-place"
+import { coverRegion, pictureSlots, slotOps, speakerCopiesOf, speakerRegion, visibleRegion, type Canvas, type PicturePlace, windowCornerRadius } from "../picture-place"
 import { motionOps, type PictureMotion } from "./broll"
 
 /** Sends edits to the editor and answers with the timeline after them. */
@@ -103,8 +103,8 @@ export async function arrangePicture(apply: ApplyOps, view: TimelineView, reques
   const now = picture()
   const size = now ? sizeOf(now) : null
   if (!now || !size) return { ok: true, place }
-  const slot = pictureSlots(canvas, place).picture
-  ops.push(...slotOps(now.id, coverRegion(size, slot), slot, size, canvas))
+  const slot = pictureSlots(canvas, place, size.width / size.height).picture
+  ops.push(...slotOps(now.id, coverRegion(size, slot), slot, size, canvas, place === "window" ? windowCornerRadius(canvas) : 0))
   const placed = await send(ops)
   if (!placed.ok) return { ok: false, reason: placed.reason }
   if (place === "full") {

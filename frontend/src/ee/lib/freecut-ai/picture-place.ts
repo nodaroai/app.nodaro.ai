@@ -12,6 +12,15 @@ import type { ItemTransform, TimelineItemView, TimelineView } from "./edit-plan"
 import { PICTURE_FILE } from "./picture-rows"
 import { slotPlacement, type Rect } from "./speaker-layout"
 
+/** The part of the frame a clip's box covers, as far as it is inside the frame. */
+export function boxOf(transform: ItemTransform, canvas: Canvas): Rect {
+  const left = Math.max(0, canvas.width / 2 + transform.x - transform.width / 2)
+  const top = Math.max(0, canvas.height / 2 + transform.y - transform.height / 2)
+  const right = Math.min(canvas.width, canvas.width / 2 + transform.x + transform.width / 2)
+  const bottom = Math.min(canvas.height, canvas.height / 2 + transform.y + transform.height / 2)
+  return { x: left, y: top, w: Math.max(0, right - left), h: Math.max(0, bottom - top) }
+}
+
 export const PICTURE_PLACES = ["split", "window", "full"] as const
 export type PicturePlace = (typeof PICTURE_PLACES)[number]
 export const DEFAULT_PICTURE_PLACE: PicturePlace = "split"
@@ -21,13 +30,27 @@ export interface Canvas {
   readonly height: number
 }
 
-/** The part of the frame the picture takes, and the speaker's part when the frame is split. */
-export function pictureSlots(canvas: Canvas, place: PicturePlace): { readonly picture: Rect; readonly speaker?: Rect } {
+/** A window's corners: a fortieth of the frame's shorter side. */
+export const windowCornerRadius = (canvas: Canvas) => Math.round(Math.min(canvas.width, canvas.height) * 0.025)
+
+/**
+ * The part of the frame the picture takes, and the speaker's part when the
+ * frame is split. A window takes the picture's own shape (`aspect`, its width
+ * over its height), as large as fits the room a window has, so nothing of it
+ * is cut and its corners can be rounded. On a tall frame it sits in the middle
+ * across, above the speaker's face.
+ */
+export function pictureSlots(canvas: Canvas, place: PicturePlace, aspect?: number): { readonly picture: Rect; readonly speaker?: Rect } {
   const { width: W, height: H } = canvas
   const wide = W >= H
   if (place === "full") return { picture: { x: 0, y: 0, w: W, h: H } }
   if (place === "window") {
-    return { picture: wide ? { x: Math.round(W * 0.06), y: Math.round(H * 0.1), w: Math.round(W * 0.5), h: Math.round(H * 0.62) } : { x: Math.round(W * 0.08), y: Math.round(H * 0.06), w: Math.round(W * 0.84), h: Math.round(H * 0.36) } }
+    // The room a window has; a picture of another shape takes the largest part of it that keeps its shape.
+    const room = wide ? { w: Math.round(W * 0.5), h: Math.round(H * 0.62) } : { w: Math.round(W * 0.84), h: Math.round(H * 0.36) }
+    const scale = aspect ? Math.min(room.w / aspect, room.h) : room.h
+    const w = aspect ? Math.round(scale * aspect) : room.w
+    const h = Math.round(scale)
+    return { picture: wide ? { x: Math.round(W * 0.06), y: Math.round(H * 0.1), w, h } : { x: Math.round((W - w) / 2), y: Math.round(H * 0.06), w, h } }
   }
   // A wide frame is split left and right; a tall one, top and bottom. The picture comes first.
   const half = wide ? Math.round(W / 2) : Math.round(H / 2)
@@ -71,9 +94,10 @@ export function coverRegion(picture: Canvas, slot: Rect): Rect {
 const clearMotion = (itemId: string) => (["x", "y", "width", "height"] as const).map((property) => ({ op: "removeKeyframes", itemId, property }))
 
 /** The edits that show `region` of a clip in `slot` of the frame, still (its earlier moves taken off). */
-export function slotOps(itemId: string, region: Rect, slot: Rect, picture: Canvas, canvas: Canvas): Array<Record<string, unknown>> {
+export function slotOps(itemId: string, region: Rect, slot: Rect, picture: Canvas, canvas: Canvas, cornerRadius = 0): Array<Record<string, unknown>> {
   const { crop, transform } = slotPlacement(region, slot, picture, canvas)
-  return [...clearMotion(itemId), { op: "updateItem", id: itemId, updates: { crop } }, { op: "setTransform", id: itemId, transform }]
+  // The corners are always named, so a picture moved out of a window loses its rounding.
+  return [...clearMotion(itemId), { op: "updateItem", id: itemId, updates: { crop } }, { op: "setTransform", id: itemId, transform: { ...transform, cornerRadius } }]
 }
 
 type View = Pick<TimelineView, "items" | "tracks" | "media">

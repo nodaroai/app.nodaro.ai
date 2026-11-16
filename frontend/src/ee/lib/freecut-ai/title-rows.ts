@@ -4,7 +4,7 @@
  * frame a text may use at its moment: never on a picture.
  */
 import type { TimelineItemView, TimelineView } from "./edit-plan"
-import { pictureSlots, placeOf } from "./picture-place"
+import { boxOf, pictureSlots, placeOf } from "./picture-place"
 import { PICTURE_FILE } from "./picture-rows"
 import type { Rect } from "./speaker-layout"
 import { DEFAULT_ENTRY, DEFAULT_TITLE_PLACE, TITLE_ID, type TitleLook, type TitleRecord } from "./title-style"
@@ -67,7 +67,7 @@ export function titleZone(view: View, from: number, to: number): Rect | null {
     if (place === "split" && slots.speaker) zone = slots.speaker
     else if (zone === whole) {
       // Beside a window on a wide frame, under it on a tall one.
-      const win = slots.picture
+      const win = picture.transform ? boxOf(picture.transform, { width: W, height: H }) : slots.picture
       zone = W >= H ? { x: win.x + win.w, y: 0, w: W - (win.x + win.w), h: H } : { x: 0, y: win.y + win.h, w: W, h: H - (win.y + win.h) }
     }
   }

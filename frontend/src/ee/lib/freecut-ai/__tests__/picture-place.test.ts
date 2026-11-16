@@ -45,6 +45,17 @@ describe("where a picture on the words shows", () => {
     expect(kept.y).toBeCloseTo(0.15)
   })
 
+  it("gives a window the picture’s own shape, so nothing of it is cut", () => {
+    // A square picture on a tall frame: as tall as a window may be, in the middle across.
+    expect(pictureSlots(TALL, "window", 1).picture).toEqual({ x: 195, y: 115, w: 691, h: 691 })
+    // On a wide frame: as tall as a window may be, at the left.
+    expect(pictureSlots(WIDE, "window", 1).picture).toMatchObject({ x: 115, w: 670, h: 670 })
+    // A wide picture on a tall frame takes the window's whole width and less of its height.
+    expect(pictureSlots(TALL, "window", 16 / 9).picture).toMatchObject({ w: 907, h: 510 })
+    // Without a shape, the window is the room itself.
+    expect(pictureSlots(TALL, "window").picture).toEqual({ x: 87, y: 115, w: 907, h: 691 })
+  })
+
   it("keeps the middle of a picture in the shape of its part", () => {
     expect(coverRegion({ width: 1000, height: 1000 }, { x: 0, y: 0, w: 960, h: 1080 })).toMatchObject({ y: 0, h: 1 })
     expect(coverRegion({ width: 1000, height: 1000 }, { x: 0, y: 0, w: 1920, h: 1080 })).toMatchObject({ x: 0, w: 1 })
@@ -112,9 +123,9 @@ describe("a picture laid beside the speaker", () => {
     expect(copies).toHaveLength(1)
     expect(copies[0]).toMatchObject({ from: 300, durationInFrames: 90, trackId: "t-copy" })
     // The speaker's copy shows the middle half of the recording in the right half of the frame.
-    expect(copies[0]!.transform).toEqual({ x: 480, y: 0, width: 1920, height: 1080 })
+    expect(copies[0]!.transform).toMatchObject({ x: 480, y: 0, width: 1920, height: 1080 })
     // The picture fills the left half.
-    expect(after.items.find((i) => i.id === "p1")!.transform).toEqual({ x: -480, y: 0, width: 1080, height: 1080 })
+    expect(after.items.find((i) => i.id === "p1")!.transform).toMatchObject({ x: -480, y: 0, width: 1080, height: 1080 })
     // The footage is cut in three and is otherwise untouched.
     const pieces = after.items.filter((i) => i.trackId === "t-video")
     expect(pieces.map((i) => [i.from, i.durationInFrames])).toEqual([[0, 300], [300, 90], [390, 2610]])
