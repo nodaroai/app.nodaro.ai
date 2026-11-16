@@ -1,5 +1,26 @@
 # @nodaro/shared
 
+## 3.68.0
+
+### Minor Changes
+
+- edc1b7d: Runtime config: how a deployment's own lists withhold what it offers, for a client to apply before the platform's per-viewer answer (`GET /v1/surface/availability`) has arrived or after it could not be read. `listsWithhold` and `listsSet` read an `allow` / `deny` pair (`surface.nodes`, `surface.models`); `nodeListsWithhold` is the node lists' rule (a whitelist never withholds a node in `ALLOW_LIST_EXEMPT_NODE_TYPES` by leaving it out, and a deny of the Voice Clone node withholds a one-off clone too); `worldOffered` says whether a world is offered by the profile's `worlds.allow` and the node types it runs. The platform applies the same rule.
+- da4cd42: `estimateCombineVideosCredits` takes an optional `trimFramesPerSecond`: the frame rate a join's frame trims are cut at, when it is known. Without it the estimate keeps its 24 fps assumption.
+
+  `estimateCombineVideosCredits` now takes the frame trims off only where two clips meet, as the join cuts them: the start of every clip but the first and the end of every clip but the last, `(trimStartFrames + trimEndFrames)` for each of the n − 1 joins, instead of for every clip. An estimate with frame trims can therefore be a little higher than before.
+
+  `estimateCombineVideosCredits` takes an optional `transitions` list (per-join overrides, as Combine Videos takes them): each join takes off its own transition's overlap, the global one where none is set, at most 90% of the shortest clip, as the join renders it.
+
+- da4cd42: The steps that measure their input and round with no grace of their own now hold and charge a measured length up to 0.05 seconds past a mark at that mark (`CLIP_PRICE_GRACE_SEC`, the same grace Mask Composite, Video Mask and Video Depth price by). New exports read it: `videoSfxHeldCreditId(measuredSec)` (Video SFX's rows), `pitchTempoHeldCreditId(measuredSec)` (Pitch & Tempo's minutes) and `lipSyncHeldSeconds(rate, measuredSec)` (a per-second-rate Lip Sync model). The quote functions (`videoSfxQuoteCreditId`, `pitchTempoQuoteCreditId`, `lipSyncEstimateSeconds`) still read a length exactly, so a quote is never below the charge of a file up to 0.05 seconds past it.
+
+  `gracedMeasuredSec` (in `@nodaro/shared/media`): a measured length less the 0.05 s grace and float noise, the one arithmetic the held rows of Video SFX, Pitch & Tempo, Dubbing and OmniHuman 2.0 read.
+
+- da4cd42: Nemotron 3.5 Transcribe: a run holds a measured file at its started minutes less one second, the same second its charge already forgives, so a file up to 1 second past a whole minute is held and charged as that minute. New exports: `NEMOTRON_UPWARD_GRACE_SEC` (1), `nemotronHeldMinutes(measuredSec)`, `nemotronTranscribeHeldCreditId(measuredSec)` and `addCaptionsNemotronHeldCreditId(measuredSec)` (Add Captions transcribing on Nemotron). The quote ids (`nemotronTranscribeQuoteCreditId`, `addCaptionsNemotronQuoteCreditId`) and the price of each per-minute id are unchanged.
+
+### Patch Changes
+
+- ba63f74: Catalog projection docs: on a deployment that shows its own pictures (`catalogs.images: "own"`), an option's `imageUrl` and `imageLargeUrl` may be a path on the deployment's own site (`/brand/…`) on the REST replies, resolved against the address the API was called at. The MCP tools give that path absolute.
+
 ## 3.67.0
 
 ### Minor Changes
