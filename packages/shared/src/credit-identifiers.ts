@@ -46,6 +46,7 @@ import {
   PIXVERSE_V6_EXTEND_PROVIDER,
   isGrokExtendProvider,
   isGrokExtendSourceModel,
+  GROK_EXTEND_SOURCE_NODE_TYPES,
   GROK_EXTEND_PROVIDER,
   type CatalogExtendProvider,
   type SeedanceExtendProvider,
@@ -1005,9 +1006,6 @@ export function grokExtendCreditId(duration?: unknown, sourceResolution?: unknow
   const resolution: GrokExtendSourceResolution = sourceResolution === "480p" ? "480p" : "720p"
   return `${GROK_EXTEND_PROVIDER}:${grokExtendSeconds(duration)}s:${resolution}`
 }
-
-/** The video node types whose run Grok Extend can extend, set to a Grok Imagine model. */
-const GROK_EXTEND_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set(["generate-video", "text-to-video", "image-to-video"])
 
 /**
  * The resolution a Grok Extend is quoted at from the clip a Grok Imagine node

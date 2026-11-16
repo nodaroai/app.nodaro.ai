@@ -1723,6 +1723,14 @@ export function isGrokExtendSourceModel(p: unknown): boolean {
   return typeof p === "string" && (GROK_EXTEND_SOURCE_MODELS as readonly string[]).includes(p)
 }
 
+/**
+ * The video node types whose run Grok Extend can continue, set to one of
+ * {@link GROK_EXTEND_SOURCE_MODELS}: a Grok Imagine text- or image-to-video
+ * node. The one list the Grok Extend quote and the result rows that carry a
+ * source's task read.
+ */
+export const GROK_EXTEND_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set(["generate-video", "text-to-video", "image-to-video"])
+
 /** Lip sync providers */
 export const LIP_SYNC_PROVIDERS = [
   "kling-avatar",

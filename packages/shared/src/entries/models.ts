@@ -101,6 +101,7 @@ export {
   isGrokExtendProvider,
   GROK_EXTEND_SOURCE_MODELS,
   isGrokExtendSourceModel,
+  GROK_EXTEND_SOURCE_NODE_TYPES,
   LIP_SYNC_PROVIDERS,
   RETIRED_LIP_SYNC_PROVIDERS,
   retiredLipSyncProviderName,

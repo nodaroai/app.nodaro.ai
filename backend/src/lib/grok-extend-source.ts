@@ -19,6 +19,7 @@ import { supabase } from "./supabase.js"
 import { TRASHED_JOB_COLUMN } from "./public-job-data.js"
 import { KIE_TEXT_TO_VIDEO_MODELS, KIE_VIDEO_MODELS, type KieModelConfig } from "../providers/kie/models.js"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
+import { taskRanOnKieHere } from "./grok-source-record.js"
 
 /** The refusal's code, on every source Grok cannot extend. */
 export const GROK_EXTEND_SOURCE_CODE = "grok_extend_source"
@@ -85,18 +86,6 @@ function isSourceProvider(p: unknown): p is GrokSourceProvider {
 
 /** The provider a job ran: the route and the workflow run both record the mode's own id (`grok` / `grok-i2v`). */
 const providerOf = (row: SourceJobRow): unknown => str(row.input_data?.provider) ?? str(row.input_data?.resolvedModel)
-
-/**
- * The task lives on this install's KIE account: not relayed through a
- * connected account (`nodaro-cloud`), nor run by another vendor. A KIE kind,
- * or none, or the pickup's `pre-task` stamp — which the task's own stamp
- * replaces best-effort, so a failed write leaves it on a finished KIE run.
- */
-function ranOnKieHere(row: SourceJobRow): boolean {
-  if (str(row.relay_job_id)) return false
-  const kind = str(row.provider_kind)
-  return kind === undefined || kind === "pre-task" || kind.startsWith("kie-")
-}
 
 /**
  * The resolution the source was rendered at — what Grok bills its extension
@@ -184,7 +173,7 @@ export async function resolveGrokExtendSource(args: { taskId: string; userId: st
 
   for (const row of (data ?? []) as SourceJobRow[]) {
     // Held here too: the answer must never rest on a filter alone.
-    if (row.user_id !== userId || row.status !== "completed" || !ranOnKieHere(row)) continue
+    if (row.user_id !== userId || row.status !== "completed" || !taskRanOnKieHere(row)) continue
     const provider = providerOf(row)
     // `grok` is also Grok Imagine's IMAGE id: only a run that made a video counts.
     const videoUrl = str(row.output_data?.videoUrl)
