@@ -56,11 +56,11 @@ import { hasCredits } from "../config.js"
 import type { Scope } from "../scopes.js"
 import { supabase } from "../supabase.js"
 import { resolveSessionWorkspace } from "./workspace-session.js"
-import { installToolOffer, resolveToolOffer } from "./tool-offer.js"
+import { installToolOffer, resolveToolOffer, type ToolOffer } from "./tool-offer.js"
 import type { McpLaneAddresses } from "../mcp-lane-addresses.js"
 import { installDeploymentName, mcpServerInfo } from "./deployment-name.js"
 
-interface BuildOpts {
+export interface McpBuildOpts {
   userId: string
   scopes: Scope[]
   clientName: string
@@ -144,7 +144,20 @@ async function assertProjectOwnership(userId: string, projectId: string): Promis
  * Note: `swap_face` is intentionally NOT registered — the underlying
  * `/v1/swap-face` route does not exist in the codebase. v1.2+ may revisit.
  */
-export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
+export async function buildMcpServer(opts: McpBuildOpts): Promise<McpServer> {
+  const { session, offer } = await resolveMcpSession(opts)
+  const server = createMcpServer()
+  registerMcpTools(server, session, { fastify: opts.fastify, conversation: Boolean(opts.conversation), offer })
+  return server
+}
+
+/**
+ * The session one MCP request is served for, and what this deployment offers
+ * it: everything about the caller, resolved before any tool registers. Both
+ * ways of serving a request start here (`buildMcpServer`, and the shared build
+ * of tools-built-once.ts), so they cannot resolve a caller differently.
+ */
+export async function resolveMcpSession(opts: McpBuildOpts): Promise<{ session: McpSession; offer: ToolOffer | undefined }> {
   // Resolved once, at session creation, and re-validated there rather than
   // trusted from the stored preference — see workspace-session.ts. Returns
   // undefined on any build without organizations.
@@ -163,9 +176,14 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
     firstParty: opts.firstParty,
     offer,
   })
+  return { session, offer }
+}
+
+/** A server with no tool registered yet, as every MCP server starts. */
+export function createMcpServer(): McpServer {
   // What the server calls itself: the deployment's own name on a deployment
   // with one (deployment-name.ts), `nodaro-mcp` otherwise.
-  const server = new McpServer(
+  return new McpServer(
     mcpServerInfo(),
     {
       // v1.2: declare `tasks` capability so the SDK accepts our `tasks/*`
@@ -201,7 +219,24 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
       },
     },
   )
+}
 
+/** What a registration is built with besides the session: never a field of the caller. */
+export interface McpRegistration {
+  fastify: FastifyInstance
+  /** Whether the request carries a conversation (the `/mcp` route's do): the mapped verbs then take `user_request`. */
+  conversation: boolean
+  /** What the deployment offers the session (`resolveMcpSession`), which decides the list. */
+  offer: ToolOffer | undefined
+}
+
+/**
+ * Every tool, resource and request handler, registered on `server` for
+ * `session`: the one registration body. Synchronous, and it reads the session
+ * only as `registration-reads-census.test.ts` allows; every other read of the
+ * caller happens inside a handler, when a tool runs.
+ */
+export function registerMcpTools(server: McpServer, session: McpSession, opts: McpRegistration): void {
   // Register UI resource templates BEFORE tools, so tool _meta.ui.resourceUri
   // references resolve cleanly when the host calls resources/read.
   if (opts.conversation) attachUserRequest(server, session)
@@ -212,7 +247,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   // The list follows the offer: a tool the deployment withholds from this
   // viewer is never registered, and a call naming it gets the run's coded
   // refusal. Installed before the first tool registers.
-  installToolOffer(server, { session, offer })
+  installToolOffer(server, { session, offer: opts.offer })
 
   registerWidgetResources(server, session.addresses)
 
@@ -314,8 +349,6 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   // re-enable the emitter once the client→server progressToken negotiation
   // is wired correctly.
   registerTaskHandlers(server, () => session.userId)
-
-  return server
 }
 
 const pingGate: ToolGate = { required: [] }

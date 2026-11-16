@@ -2452,7 +2452,7 @@ Returns your current credit balance split by pool (`subscription` vs
 purchased credits (all models unlocked, no watermark, no daily cap).
 Top-up credits are valid for 12 months from purchase; subscription
 credits reset to the plan's monthly allocation every month — on a yearly
-plan too, and unused ones do not roll over — and are spent first.
+plan too, and unused ones do not roll over — and are spent first. If a renewal payment fails, the subscription credits left for that period are put on hold; they come back when the renewal is paid.
 
 On a deployment with a billing account (`billing.payerAccount` in the
 surface profile), this tool and `credit_transactions` refuse a session that

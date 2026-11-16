@@ -27,6 +27,7 @@ import { invalidateBalanceCache } from "./balance-cache.js"
 import { activateSignupGrantOnPurchase } from "./signup-grant.js"
 import { releaseQuietStopOnPurchase } from "../lib/account-blocking.js"
 import { grantPaidPlanChange, notePlanCreditPeak, restartPlanCreditPeriod, type InvoicePriceLine } from "./plan-change-credits.js"
+import { HOLDING_STATUSES, holdRenewalCredits, settlePaidRenewal, type RenewalInvoiceLine } from "./subscription-renewal.js"
 import {
   claimSubscriptionGrant,
   ENDED_STATUS_LIST,
@@ -200,6 +201,20 @@ function billingPeriodRestarted(storedEnd: string | null | undefined, incomingSt
   return start < end - PERIOD_RESTART_MARGIN_MS
 }
 
+/**
+ * True when the profile's credits were already reset at or after this period
+ * started. An unreadable profile or stamp reads as "not reset", the renewal's
+ * behaviour before this check.
+ */
+async function periodAlreadyReset(userId: string, periodStart: string | null): Promise<boolean> {
+  const start = periodStart ? Date.parse(periodStart) : Number.NaN
+  if (Number.isNaN(start)) return false
+  const { data } = await supabase.from("profiles").select("credits_reset_at").eq("id", userId).single()
+  const stamp = (data as { credits_reset_at?: string | null } | null)?.credits_reset_at
+  const reset = stamp ? Date.parse(stamp) : Number.NaN
+  return !Number.isNaN(reset) && reset >= start
+}
+
 // ── Subscription Updated ─────────────────────────────────────────
 
 interface SubscriptionUpdatedData {
@@ -275,6 +290,15 @@ export async function handleSubscriptionUpdated(
     }
   }
 
+  // A renewal charge that failed (past_due, or unpaid once Stripe gives up):
+  // the period's remaining credits go on hold until that renewal is paid
+  // (subscription-renewal.ts). Before any other write, so a hold the database
+  // could not answer is retried on a clean redelivery, and apart from the
+  // status write below, which the CHECK refuses for `unpaid`.
+  if (!lateForEnded && planGranted(existing) && HOLDING_STATUSES.has(data.status)) {
+    await holdRenewalCredits({ userId, subscriptionId: data.subscriptionId, periodStart: data.currentPeriodStart })
+  }
+
   // A plan held before this event: its renewals, plan changes and restarts
   // follow as before. One granted by this event was just SET in full, and one
   // never granted has nothing to renew or change.
@@ -299,7 +323,10 @@ export async function handleSubscriptionUpdated(
   // A period that restarted part-way through (a monthly <-> yearly switch) is
   // not a renewal: the current period has already granted its credits.
   const isRestart = periodMoved && billingPeriodRestarted(existing.current_period_end, data.currentPeriodStart)
-  const isRenewal = periodMoved && !isRestart
+  // Only an event that says the subscription is paid up resets: a move that
+  // arrives past_due or unpaid resets nothing, and its paid renewal invoice
+  // sets the credits then (settlePaidRenewal's catch-up).
+  const isRenewal = periodMoved && !isRestart && GRANTING_STATUSES.has(data.status)
 
   if (tierChanged) {
     // A tier change moves no credits here. An upgrade's credits come with its
@@ -335,7 +362,11 @@ export async function handleSubscriptionUpdated(
     console.log(`[stripe] subscription.updated: billing period restarted (${oldTier}->${newTier}), credits unchanged until the next renewal`)
   }
 
-  if (isRenewal) {
+  // A period already reset (its paid renewal invoice caught it up first, or a
+  // redelivered move) is not reset again: that would refill what was spent.
+  const alreadyReset = isRenewal && (await periodAlreadyReset(userId, data.currentPeriodStart))
+
+  if (isRenewal && !alreadyReset) {
     // Reset subscription credits on renewal
     const { error: resetError } = await supabase
       .from("profiles")
@@ -600,24 +631,48 @@ interface InvoicePaidData {
   readonly stripeCustomerId: string
   readonly amountPaid: number
   readonly metadata: Record<string, string> | null
-  /** Stripe's `billing_reason`: `subscription_update` is a plan change. */
+  /** Stripe's `billing_reason`: `subscription_cycle` is a renewal, `subscription_update` a plan change. */
   readonly billingReason?: string | null
   /** The invoice's priced lines; read for a plan change only. */
   readonly lines?: readonly InvoicePriceLine[]
+  /** The invoice's subscription-item lines; read for a renewal only. */
+  readonly renewalLines?: readonly RenewalInvoiceLine[]
 }
 
 export async function handleInvoicePaid(
   data: InvoicePaidData
 ): Promise<void> {
+  const isRenewal = data.billingReason === "subscription_cycle"
+
   // Look up subscription to get tier info
-  const { data: sub } = await supabase
+  const { data: sub, error: subError } = await supabase
     .from("subscriptions")
     .select("tier, user_id")
     .eq("stripe_subscription_id", data.subscriptionId)
     .single()
 
   if (!sub) {
+    // A renewal is not lost to a read that failed (anything but "no such
+    // row"): nothing is written yet, so Stripe is asked for the event again.
+    if (isRenewal && subError && subError.code !== "PGRST116") {
+      throw new StripeEventRetryError(`reading the subscription of renewal invoice ${data.invoiceId} failed: ${subError.message}`)
+    }
     console.log("[stripe] invoice.paid: subscription not found, skipping", data.subscriptionId)
+    return
+  }
+
+  // A renewal paid for: recorded, and its held credits released (or, for a
+  // period never reset, granted) once, by one function whose transactions
+  // row is its claim (subscription-renewal.ts).
+  if (isRenewal) {
+    await settlePaidRenewal({
+      userId: sub.user_id,
+      subscriptionId: data.subscriptionId,
+      invoiceId: data.invoiceId,
+      amountPaidCents: data.amountPaid,
+      lines: data.renewalLines ?? [],
+      storedTier: sub.tier ?? null,
+    })
     return
   }
 

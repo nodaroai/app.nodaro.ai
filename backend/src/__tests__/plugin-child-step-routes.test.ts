@@ -70,6 +70,7 @@ const JUDGES_NODES_ITSELF: Readonly<Record<string, string>> = {
   "lib/mcp/tools/workflows.ts": "the MCP workflow write guard: a written graph's node types",
   "lib/mcp/tool-offer.ts": "the MCP tool offer: which tools a session lists, and what a call to a withheld one answers, from the node gates a run asks (no route, no plugin step)",
   "lib/mcp/tools/verbs-site-capture.ts": "whether this install offers Site Capture, for the text of tools that name it (the tool's own listing is the tool offer's)",
+  "lib/mcp/tools-built-once.ts": "which shared build of the MCP tools a request is served from (MCP_TOOLS_BUILT_ONCE): it varies by the node gates the tool offer asks, and judges no call (no route, no plugin step)",
   "lib/mcp/tools/pipelines.ts": "refuses a stale call to a pipeline tool before the services it calls directly (no route); the tools' listing is the tool offer's",
   "ee/pipelines/engine.ts": "the pipeline engine's check before each stage it runs, asked as the pipeline's owner (a worker, no route)",
   "lib/private-plugins/toolkit.ts": "`tk.pipelines.createSeeded`: a seeded pipeline is the film pipeline whoever asks for it (a toolkit method, no route)",

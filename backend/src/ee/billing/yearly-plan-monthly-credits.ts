@@ -63,6 +63,8 @@ interface YearlySubscriptionRow {
   readonly cancel_at: string | null
   /** False only on a subscription recorded unpaid and not yet granted (migration 650); absent before that column. */
   readonly plan_granted?: boolean | null
+  /** Credits on hold for a failed renewal (migration 654); absent before that column. */
+  readonly renewal_credits_held?: number | null
 }
 
 const YEARLY_SUBSCRIPTION_COLUMNS = "id, user_id, stripe_price_id, current_period_start, current_period_end, cancel_at"
@@ -147,7 +149,7 @@ export async function grantYearlyPlanMonthlyCredits(now: Date = new Date()): Pro
       if (after) query = query.gt("id", after)
       return query.order("id", { ascending: true }).limit(YEARLY_CREDITS_PAGE_SIZE)
     }
-    let { data, error } = await page(`${YEARLY_SUBSCRIPTION_COLUMNS}, plan_granted`)
+    let { data, error } = await page(`${YEARLY_SUBSCRIPTION_COLUMNS}, plan_granted, renewal_credits_held`)
     // A database without migration 650's grant marker yet: every row there
     // was granted when it was created, so the page is read without it.
     if (isMissingColumnError(error)) ({ data, error } = await page(YEARLY_SUBSCRIPTION_COLUMNS))
@@ -162,7 +164,9 @@ export async function grantYearlyPlanMonthlyCredits(now: Date = new Date()): Pro
     // marked active by a writer other than its claim) has no monthly credits
     // to set: they come with the plan's grant, once it is paid for.
     const due = rows
-      .filter((row) => row.plan_granted !== false)
+      // A failed renewal holds its credits until it is paid
+      // (subscription-renewal.ts): no monthly grant while it does.
+      .filter((row) => row.plan_granted !== false && row.renewal_credits_held == null)
       .map((row) => dueGrant(row, now))
       .filter((g): g is DueGrant => g !== null)
     const resets = await lastResets([...new Set(due.map((g) => g.row.user_id))])

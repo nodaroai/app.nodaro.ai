@@ -23,6 +23,7 @@ import {
 } from "../billing/provision-credits.js"
 import { handleOrgPackCompleted, routeClawback } from "../billing/org-customer.js"
 import { invoicePriceLines } from "../billing/plan-change-credits.js"
+import { invoiceRenewalLines, type RenewalInvoiceLine } from "../billing/subscription-renewal.js"
 import { StripeEventRetryError } from "../billing/stripe-event-retry.js"
 import { reportStripePurchase } from "../billing/analytics/report-purchase.js"
 import { config } from "../../lib/config.js"
@@ -266,8 +267,11 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
           const subDetails = invoice.parent?.subscription_details
           if (subDetails) {
             // A plan change's paid invoice sizes its grant from its lines
-            // (plan-change-credits.ts); no other invoice reads them.
+            // (plan-change-credits.ts), and a renewal's paid invoice takes its
+            // plan and period from its subscription line
+            // (subscription-renewal.ts); no other invoice reads them.
             const isPlanChange = invoice.billing_reason === "subscription_update"
+            const isRenewal = invoice.billing_reason === "subscription_cycle"
             await handleInvoicePaid({
               invoiceId: invoice.id,
               subscriptionId: subDetails.subscription as string,
@@ -276,6 +280,7 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
               metadata: subDetails.metadata ?? null,
               billingReason: invoice.billing_reason ?? null,
               lines: isPlanChange ? await invoicePriceLines(invoice) : [],
+              ...(isRenewal ? { renewalLines: await renewalLinesOf(invoice) } : {}),
             })
           }
           break
@@ -316,6 +321,19 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
     // Always return 200 to acknowledge receipt (Stripe retries on non-2xx)
     return reply.status(200).send({ received: true })
   })
+}
+
+/**
+ * A renewal invoice's subscription lines. A Stripe read that fails here comes
+ * before anything is written, so Stripe is asked for the event again rather
+ * than the renewal being acknowledged ungranted.
+ */
+async function renewalLinesOf(invoice: Stripe.Invoice): Promise<RenewalInvoiceLine[]> {
+  try {
+    return await invoiceRenewalLines(invoice)
+  } catch (err) {
+    throw new StripeEventRetryError(`reading the lines of renewal invoice ${invoice.id} failed: ${(err as Error).message}`)
+  }
 }
 
 /** Retrieve line items from a checkout session for top-up credit resolution. */

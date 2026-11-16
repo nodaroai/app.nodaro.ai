@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from "fastify"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import type { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { randomUUID } from "node:crypto"
 
 /**
@@ -21,7 +22,9 @@ import { randomUUID } from "node:crypto"
  * the request may have expired or the connection was interrupted."
  */
 export async function handleMcpRequest(
-  server: McpServer,
+  // A request's own server: built for it (`buildMcpServer`), or made from a
+  // shared build of its tools (`MCP_TOOLS_BUILT_ONCE`, tools-built-once.ts).
+  server: McpServer | Server,
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {

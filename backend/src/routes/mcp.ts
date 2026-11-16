@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { buildMcpServer } from "../lib/mcp/server.js"
+import { mcpServerForRequest } from "../lib/mcp/tools-built-once.js"
 import { handleMcpRequest } from "../lib/mcp/fastify-adapter.js"
 import { answerMcpGet, registerMcpGetStreams } from "../lib/mcp/get-stream.js"
 import { conversationIdentityFromHeaders } from "../lib/mcp/flows/conversation-key.js"
-import { config } from "../lib/config.js"
+import { config, mcpToolsBuiltOnce } from "../lib/config.js"
 import { mcpLaneAddresses, mcpServedPath, type McpLane, type McpLaneAddresses } from "../lib/mcp-lane-addresses.js"
 import { surfaceMcpPath } from "../lib/surface-profile.js"
 import { admitMcpCaller } from "../lib/mcp-listed-clients.js"
@@ -33,6 +34,9 @@ import type { Scope } from "../lib/scopes.js"
  * than caching, because each token carries a different (userId, scopes,
  * clientName) tuple and the SDK's `Server.connect()` keeps per-instance
  * transport state. Caching would leak identity and scopes across users.
+ * With MCP_TOOLS_BUILT_ONCE on (experimental, default off), the tools are
+ * built once per build shape instead, and every request still gets a server
+ * and a session of its own (lib/mcp/tools-built-once.ts says what is shared).
  */
 export async function registerMcpRoute(app: FastifyInstance): Promise<void> {
   if (!config.MCP_ENABLED) {
@@ -141,7 +145,7 @@ function mcpHandler(app: FastifyInstance, lane: McpLane) {
     // deployment-payer instance the flag is what lets the billing account's own
     // Copilot read the pool balance, so setting it here would hand that figure
     // to any token that account ever approved. Omitted ⇒ false ⇒ refused.
-    const server = await buildMcpServer({
+    const opts = {
       userId: req.userId,
       scopes,
       clientName,
@@ -152,7 +156,11 @@ function mcpHandler(app: FastifyInstance, lane: McpLane) {
       // widget's connect-src, editor / gallery links), for the host this
       // request came in on.
       addresses,
-    })
+    }
+    // MCP_TOOLS_BUILT_ONCE (experimental, default off): serve the request from
+    // tools built once per build shape, with this request's own session
+    // (lib/mcp/tools-built-once.ts). Off, every request builds its own.
+    const server = mcpToolsBuiltOnce() ? await mcpServerForRequest(opts) : await buildMcpServer(opts)
     await handleMcpRequest(server, req, reply)
   }
 }

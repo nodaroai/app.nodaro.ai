@@ -69,35 +69,43 @@ export function planChangeFromLines(lines: readonly InvoicePriceLine[]): PlanCha
   return to ? { toTier: to.tier, toCredits: to.credits, fromCredits } : null
 }
 
-function linePriceId(line: Stripe.InvoiceLineItem): string | null {
+/** The price an invoice line bills, or null when it names none. */
+export function invoiceLinePriceId(line: Stripe.InvoiceLineItem): string | null {
   const price = line.pricing?.price_details?.price
   if (!price) return null
   return typeof price === "string" ? price : price.id
 }
 
 /**
- * Every priced line of an invoice. A webhook payload carries only the first
- * page of lines; the rest are read from Stripe.
+ * Every line of an invoice. A webhook payload (and a listed invoice) carries
+ * only the first page of lines; the rest are read from Stripe, and so are all
+ * of them when the object carries none.
+ */
+export async function listInvoiceLines(invoice: Stripe.Invoice): Promise<Stripe.InvoiceLineItem[]> {
+  if (invoice.lines && !invoice.lines.has_more) return invoice.lines.data ?? []
+  const all: Stripe.InvoiceLineItem[] = []
+  let startingAfter: string | undefined
+  for (;;) {
+    const page: Stripe.ApiList<Stripe.InvoiceLineItem> = await getStripe().invoices.listLineItems(invoice.id, {
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    })
+    all.push(...page.data)
+    if (!page.has_more || page.data.length === 0) break
+    startingAfter = page.data[page.data.length - 1].id
+  }
+  return all
+}
+
+/**
+ * Every priced line of an invoice (see listInvoiceLines for the paging). An
+ * invoice object that carries no lines at all reads as none, as it always has
+ * for a plan change.
  */
 export async function invoicePriceLines(invoice: Stripe.Invoice): Promise<InvoicePriceLine[]> {
-  let lines: Stripe.InvoiceLineItem[] = invoice.lines?.data ?? []
-  if (invoice.lines?.has_more) {
-    const all: Stripe.InvoiceLineItem[] = []
-    let startingAfter: string | undefined
-    for (;;) {
-      const page: Stripe.ApiList<Stripe.InvoiceLineItem> = await getStripe().invoices.listLineItems(invoice.id, {
-        limit: 100,
-        ...(startingAfter ? { starting_after: startingAfter } : {}),
-      })
-      all.push(...page.data)
-      if (!page.has_more || page.data.length === 0) break
-      startingAfter = page.data[page.data.length - 1].id
-    }
-    lines = all
-  }
   const out: InvoicePriceLine[] = []
-  for (const line of lines) {
-    const priceId = linePriceId(line)
+  for (const line of invoice.lines ? await listInvoiceLines(invoice) : []) {
+    const priceId = invoiceLinePriceId(line)
     if (priceId) out.push({ priceId, amount: line.amount ?? 0 })
   }
   return out

@@ -4493,7 +4493,8 @@ All three routes use the same bearer-token auth as every other endpoint
 Top-up credits are **valid for 12 months** from purchase. Subscription
 credits reset to the plan's monthly allocation **every month — on a yearly
 plan too** — and unused subscription credits do not roll over into the next
-month. Spending draws subscription credits first.
+month. If a renewal payment fails, the subscription credits left for that period are put on hold; they come back when the renewal is paid. Spending draws
+subscription credits first.
 
 When a subscription ends, the plan's remaining credits end with it: the
 account moves to the free tier with **0** subscription credits, and it keeps
