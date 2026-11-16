@@ -2356,6 +2356,17 @@ credits beside it:
   the same words. A balance that is not the user's own (a deployment payer's
   pool) is never named. A message saved before the deployment configured its
   unit keeps the words it was saved with.
+- **A refusal that would advise buying.** Without self-serve purchase
+  (`billing.selfServe: false`), a run refused because the storage is full, a
+  model is above the account's plan or not open to free accounts, or a video is
+  beyond the free-credit limits is saved without the advice to upgrade or buy.
+  It ends with what the user can do there instead: `Delete files to free up
+  space.` for the storage limit, `It is not available on this account.` for a
+  model above the plan (`This model is not available on this account.` for one
+  not open to free accounts), and the limit itself for a video (for example
+  `On free credits videos are at most 4 seconds.`). `diagnose_run` and
+  `get_job` classify each failure as before. While self-serve purchase is on,
+  each one keeps its advice, whatever unit the deployment uses.
 - **Waiting for a slot.** Without self-serve billing a waiting job's
   `guidance` names no upgrade, and `queue.upgradeHint` is `null`.
 

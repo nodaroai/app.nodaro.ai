@@ -18,7 +18,8 @@ export { israelParts, startOfIsraelDayUtc }
  *   B. Milestones        — paid convert / cancel via the Stripe handlers
  *                          (notify* exports); first generation via the poll.
  *   C. Every signup      — near-immediate (~poll interval), default OFF.
- *   D. Welcome offer     — accepted / dismissed / unsubscribed, default OFF
+ *   D. Welcome offer     — accepted / "Maybe later" / shown with no answer /
+ *                          unsubscribed, default OFF
  *                          (welcome-offer-notify.ts), plus the daily Loops
  *                          unsubscribe pull (loops-unsubscribe-pull.ts).
  *   E. Credits digest    — once/day, same hour as A: yesterday's committed

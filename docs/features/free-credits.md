@@ -17,10 +17,16 @@ your yes: say yes to product updates and tips by email — in the welcome
 pop-up, or in the banner on the home screen — and the free credits land in
 your account at once. You can unsubscribe anytime.
 
-Closing the pop-up without answering keeps the offer open. When a run needs
-more credits than the account has, the **Insufficient Credits** dialog offers
-the free credits again, above the figures, with **Upgrade Plan** and **Buy
-Credits** below as always:
+The pop-up opens by itself on the home screen. Closing it without answering
+(the ×, Escape, or a click outside it) keeps the offer open, and the pop-up
+opens by itself again on a later visit: at most once a day, three times in
+all, and never twice in one visit. **Maybe later** is an answer: the pop-up
+does not open by itself again. Either way the banner stays until you say yes.
+The count belongs to your account, not to the device or the app you open.
+
+When a run needs more credits than the account has, the **Insufficient
+Credits** dialog offers the free credits again, above the figures, with
+**Upgrade Plan** and **Buy Credits** below as always:
 
 - The free credits cover the run: the dialog closes. Press **Run** again —
   nothing starts on its own.

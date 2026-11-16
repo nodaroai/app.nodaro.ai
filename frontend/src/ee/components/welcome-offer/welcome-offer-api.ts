@@ -33,11 +33,21 @@ export async function claimWelcomeOffer(keys: { browserKey?: string; deviceKey?:
   return (await res.json()) as WelcomeOfferClaimResult
 }
 
-/** The popup was shown once. Never throws — a failed stamp only means the
- *  popup may show once more on the next visit. */
-export async function markWelcomeOfferSeen(): Promise<void> {
+/**
+ * What happened to the popup: `"shown"` when it opened by itself, `"later"`
+ * on "Maybe later" (a close without an answer posts nothing). The server
+ * decides from these when it opens by itself again (`welcomeOffer.popupDue`).
+ * Never throws: a lost "shown" leaves the popup due one more time on a later
+ * visit (never twice in one), and a lost "later" leaves it to the showings
+ * left.
+ */
+export async function markWelcomeOfferSeen(event: "shown" | "later"): Promise<void> {
   try {
-    await fetch("/v1/credits/welcome-offer/seen", { method: "POST", headers: await getAuthHeaders() })
+    await fetch("/v1/credits/welcome-offer/seen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+      body: JSON.stringify({ event }),
+    })
   } catch {
     // deliberately silent
   }

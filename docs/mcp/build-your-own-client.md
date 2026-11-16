@@ -15,6 +15,17 @@ are on the host you connect to: the endpoint is `https://<host>/v1/mcp`, its
 (`https://<host>/.well-known/oauth-protected-resource/v1/mcp`), and the issuer
 and registration endpoint are on `https://<host>`.
 
+## The GET stream
+
+A Streamable HTTP client may open a `GET` on the MCP endpoint, with
+`Accept: text/event-stream`, to receive messages the server starts. Nodaro's
+server never starts one: every request is answered in its own response, so a
+client that does not open the stream misses nothing. The stream stays silent:
+nothing is sent on it after the response headers. Expect it to be closed when
+it has been idle for a while (by a proxy on the way, or when the server
+restarts), and simply reopen it. A `GET` without `text/event-stream` in its
+`Accept` header is answered `406`.
+
 ## Allowlist gate
 
 By default, dynamic registration only accepts known client names. The default

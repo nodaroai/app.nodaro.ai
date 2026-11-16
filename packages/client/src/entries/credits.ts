@@ -23,6 +23,7 @@ export type {
   WelcomeOfferState,
   WelcomeOfferClaimInput,
   WelcomeOfferClaimResult,
+  WelcomeOfferSeenEvent,
   WelcomeOfferSeenResult,
   CreditTransaction,
   CreditTransactionsPage,

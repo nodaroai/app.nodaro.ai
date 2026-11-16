@@ -1,11 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { supabase } from "../../lib/supabase.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import { callerKeyHash } from "../../routes/oauth-register.js"
 import { grantedCreditsFigure, readFreeGrant, runSignupGrantClaim, type FreeGrantState } from "../billing/signup-grant.js"
 import { SIGNUP_GRANTS_NOT_APPLICABLE, signupGrantsApply } from "../billing/free-grant-scope.js"
+import { recordWelcomePopupLater, recordWelcomePopupShown, type WelcomePopupEvent } from "../billing/welcome-popup.js"
 import { TIER_CREDITS } from "../billing/stripe-config.js"
 import { consentLocaleField } from "../lib/consent-locale.js"
 import { recordConsentGrant } from "../lib/consent-record.js"
@@ -18,7 +18,7 @@ import { signupCookieKey } from "../lib/signup-cookie.js"
  * Welcome credits opt-in — the two writes behind the popup and the banner.
  *
  *   POST /v1/credits/welcome-offer/claim  "Yes, email me & add the credits"
- *   POST /v1/credits/welcome-offer/seen   the popup was shown once
+ *   POST /v1/credits/welcome-offer/seen   the popup opened by itself, or "Maybe later"
  *
  * The claim is ONE atomic user action: record the marketing-email consent
  * (same helper the Settings toggle uses), then run the signup-grant claim
@@ -56,6 +56,12 @@ const claimBody = z.object({
   browserKey: fingerprint,
   deviceKey: fingerprint,
 })
+
+// Lenient by contract: only a known event is read. No body, an unknown event
+// or a body that is not an object is "later", which is what every client
+// released before showings were counted sends on any close, so their answer
+// keeps its meaning (the popup does not open by itself again).
+const seenBody = z.object({ event: z.enum(["shown", "later"]) })
 
 export interface WelcomeOfferClaimResponse {
   consent: "granted"
@@ -143,7 +149,10 @@ export async function welcomeOfferRoutes(app: FastifyInstance): Promise<void> {
     },
   )
 
-  // The popup was shown — once, ever. Idempotent: the first stamp wins.
+  // What happened to the popup: `{ "event": "shown" }` when it opened by
+  // itself, `{ "event": "later" }` on "Maybe later". A close without an answer
+  // (×, Escape, a click outside) posts nothing. The rule the two feed is in
+  // `welcome-popup-rule.ts`; the writes are idempotent.
   app.post(
     "/v1/credits/welcome-offer/seen",
     { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
@@ -152,7 +161,7 @@ export async function welcomeOfferRoutes(app: FastifyInstance): Promise<void> {
       if (!userId) return
       if (!signupGrantsApply()) return reply.status(409).send(SIGNUP_GRANTS_NOT_APPLICABLE)
 
-      // Same gate as the claim: the column exists only from migration 426, and
+      // Same gate as the claim: the columns exist only from migration 426, and
       // with the offer off there is no popup to have seen.
       const cfg = await getWelcomeOfferConfig()
       if (!cfg.enabled) {
@@ -161,13 +170,10 @@ export async function welcomeOfferRoutes(app: FastifyInstance): Promise<void> {
         })
       }
 
+      const event: WelcomePopupEvent = seenBody.safeParse(req.body).data?.event ?? "later"
       try {
-        const { error } = await supabase
-          .from("profiles")
-          .update({ welcome_offer_seen_at: new Date().toISOString() })
-          .eq("id", userId)
-          .is("welcome_offer_seen_at", null)
-        if (error) return sendInternalError(reply, req, new Error(error.message), "Failed to record the welcome popup")
+        const { error } = event === "shown" ? await recordWelcomePopupShown(userId) : await recordWelcomePopupLater(userId)
+        if (error) return sendInternalError(reply, req, new Error(error), "Failed to record the welcome popup")
         await invalidateBalance(userId)
         return { ok: true }
       } catch (err) {

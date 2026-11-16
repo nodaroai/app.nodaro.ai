@@ -188,7 +188,7 @@ import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pric
 import { UNIT_PRICES } from "../nodes/_generated/prices.js"
 import { composeRecord, unitStaticCosts } from "../../lib/unit-compose.js"
 import { withRunningVideoProvider } from "../../services/workflow-engine/normalize-node-types.js"
-// Every saved sentence that names a credit figure is worded there, in the deployment's own terms where it has them.
+// Every saved sentence that names a credit figure, or advises a purchase, is worded there, in the deployment's own terms where it has them.
 import {
   appCreditsShortfallMessage,
   dailyLimitMessage,
@@ -196,6 +196,7 @@ import {
   freeTierDailyLimitMessage,
   insufficientCreditsMessage,
   reservationFailedMessage,
+  storageLimitMessage,
 } from "../../lib/stated-credit-messages.js"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
@@ -547,13 +548,15 @@ export interface UserBalance {
   /**
    * Welcome-credits opt-in state. PRESENT only while the offer is switched on
    * (app_settings.welcome_offer_enabled) — absent means "no popup, no banner,
-   * no block". `popupSeen`: the one-time popup was already shown.
+   * no block". `popupDue`: the popup should open by itself now (decided by
+   * the server, `welcome-popup-rule.ts`). `popupSeen`: `!popupDue`, kept for
+   * clients released before `popupDue`.
    * `consentPending`: the account was granted through the extension and still
    * owes the email consent — the web apps block creation until it is given.
    * `credits`: what a claim grants (the signup grant's own amount, the figure
    * the claim route answers with), so no client has to hard-code it.
    */
-  welcomeOffer?: { popupSeen: boolean; consentPending: boolean; credits: number }
+  welcomeOffer?: { popupDue: boolean; popupSeen: boolean; consentPending: boolean; credits: number }
   /** Per-user deployment allowance in RAW credits; null when no allowance applies
    *  (no payer, or the caller IS the payer — which holds the real credits, not
    *  an allocation — or the figure was unavailable). NOT null merely because
@@ -5053,7 +5056,7 @@ export class CreditsService {
       const limitGB = (limitBytes / (1024 * 1024 * 1024)).toFixed(1)
       return {
         allowed: false,
-        error: `Storage limit reached (${usedGB} GB of ${limitGB} GB used). Delete files or upgrade your plan.`,
+        error: storageLimitMessage(usedGB, limitGB),
         usedBytes,
         limitBytes,
       }

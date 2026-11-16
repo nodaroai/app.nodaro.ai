@@ -4,8 +4,11 @@
  * The failure sentences that name a credit figure and are SAVED with a run
  * (`jobs.error_message`, a node's `error` in `node_states`, the execution's
  * `error_message`): what a balance check refuses with, what a reservation the
- * database refused throws, and what a charged failure says it was charged.
- * The MCP lane hands them on as saved, and so do the editor and the REST reads.
+ * database refused throws, and what a charged failure says it was charged —
+ * and the refusals saved the same way that advise a purchase where self-serve
+ * is on (the storage limit, a model the plan may not run, a video beyond the
+ * free-credit limits). The MCP lane hands them on as saved, and so do the
+ * editor and the REST reads.
  *
  * With nothing configured (no unit, no external wallet, self-serve on) every
  * one is recorded here byte for byte, from the code that writes it, and must
@@ -53,6 +56,9 @@ vi.mock("@/lib/config.js", async (importOriginal) => ({
 }))
 
 import { CreditsService, checkRunSetCredits, invalidateModelPricingCache, type CreditProfile } from "../credits.js"
+import { freeVideoLockMessage, type FreeVideoLock } from "../free-video-limits.js"
+import { classifyFailure } from "../../../lib/mcp/tools/diagnose.js"
+import { isRetryableFailure } from "../../../lib/mcp/tools/_job-error.js"
 import { chargedFailureMessage as llmRouteChargedMessage } from "../../../lib/llm-metered-route.js"
 import { chargedFailureMessage as meterSyncChargedMessage } from "../../../lib/meter-sync-llm.js"
 import { emptyPickerReadChargedMessage } from "../../../routes/describe-to-picker.js"
@@ -136,6 +142,44 @@ async function storedMessages(): Promise<Record<string, string>> {
   return out
 }
 
+const FREE: CreditProfile = { lifetime_topup_credits: 0, tier: "free", subscription_tier: null, subscription_credits: 37, topup_credits: 0, daily_spent_credits: 0, last_daily_reset: TODAY }
+
+/** Every lock the free-credit video limits refuse a run with, one per kind. */
+const FREE_VIDEO_LOCKS: readonly FreeVideoLock[] = [
+  { kind: "model", label: "Kling 3.0" },
+  { kind: "upscale", label: "Topaz Video Upscale" },
+  { kind: "extend", label: "Seedance 2.0" },
+  { kind: "shortest", label: "Veo 3.1", max: 6, shortest: 8 },
+  { kind: "auto", label: "Seedance 2.0", max: 6 },
+  { kind: "duration", label: "Seedance 2.0", max: 6 },
+  { kind: "resolution", label: "Seedance 2.0", lowest: "480p" },
+  { kind: "size", label: "Wan 2.6" },
+]
+
+/**
+ * The refusals a run is saved with that advise a purchase where self-serve is
+ * on: the storage limit (a route's 413, saved by the sync-HTTP and use-case
+ * lanes), a model above the plan's tier or on the free tier's blocklist, and a
+ * video beyond the free-credit limits (the engine's preflight saves each).
+ */
+async function storedRefusals(): Promise<Record<string, string>> {
+  const out: Record<string, string> = {}
+  const GB = 1024 * 1024 * 1024
+  out.storage_limit = CreditsService.checkStorageLimitWithProfile({ tier: "free", subscription_tier: null, lifetime_topup_credits: 0, storage_used_bytes: Math.round(2.4 * GB), storage_limit_bytes: 2 * GB } as never).error ?? "(allowed)"
+
+  invalidateModelPricingCache()
+  h.tables.set("model_pricing", { data: { credit_cost: 5, is_enabled: true, tier_restriction: "pro" }, error: null })
+  out.model_tier = (await CreditsService.checkCreditsWithProfile(USER, FREE, "flux")).error ?? "(allowed)"
+  invalidateModelPricingCache()
+  h.tables.set("model_pricing", { data: { credit_cost: 5, is_enabled: true, tier_restriction: null }, error: null })
+  out.model_blocked = (await CreditsService.checkCreditsWithProfile(USER, FREE, "veo3.1")).error ?? "(allowed)"
+
+  out.check_free_video = (await CreditsService.checkCreditsWithProfile(USER, FREE, "kling-3.0", false, undefined, { video: { provider: "kling-3.0", duration: 5, resolution: "720p" } })).error ?? "(allowed)"
+  for (const lock of FREE_VIDEO_LOCKS) out[`free_video_${lock.kind}`] = freeVideoLockMessage(lock)
+  h.tables.delete("model_pricing")
+  return out
+}
+
 beforeEach(() => {
   h.tables.clear()
   h.rpcError = null
@@ -144,7 +188,7 @@ beforeEach(() => {
 
 describe("nothing configured: every saved credit sentence exactly as before", () => {
   it("answers the recorded bytes", async () => {
-    const actual = await storedMessages()
+    const actual = { ...(await storedMessages()), ...(await storedRefusals()) }
     if (process.env.UPDATE_STORED_CREDIT_MESSAGES === "1") {
       mkdirSync(dirname(MAINLINE_FIXTURE), { recursive: true })
       writeFileSync(MAINLINE_FIXTURE, `${JSON.stringify(actual, null, 2)}\n`)
@@ -235,9 +279,69 @@ describe("a deployment with its own unit: every saved credit sentence states its
 
   it("without self-serve billing, no sentence advises an upgrade or a purchase", async () => {
     setProfile({ selfServe: false })
-    const said = await storedMessages()
+    const said = { ...(await storedMessages()), ...(await storedRefusals()) }
     for (const [key, text] of Object.entries(said)) expect(text, key).not.toMatch(/upgrade|top up|top-up|\bbuy\b|purchase/i)
     // No unit: the figures are the deployment's own credits, stated as such.
     expect(said.check_insufficient).toBe("Insufficient balance. Required: 2087 credits, Available: 1534 credits")
+  })
+})
+
+// ── the refusals that advise a purchase where self-serve is on ─────────────
+
+/** Advice to buy or upgrade (the words the purchase guard counts, `stated-credit-messages-totality.test.ts`). */
+const PURCHASE_ADVICE = /\btop[ -]ups?\b|\btopped up\b|\bupgrade[ds]?\b|\bbuy\b|\bbought\b|\bpurchase[ds]?\b|\badd(?:ed)? (?:more )?credits/i
+
+/** The verdicts the failure readers reach from a saved sentence: diagnose_run's class, get_job's retryable. */
+const verdictOf = (text: string) => ({ class: classifyFailure(text).class, retryable: isRetryableFailure(text) })
+
+describe("the refusals that advise a purchase keep it only where self-serve is on", () => {
+  afterEach(() => setProfile(null))
+  const recorded = () => JSON.parse(readFileSync(MAINLINE_FIXTURE, "utf8")) as Record<string, string>
+
+  it.each([
+    ["a unit, self-serve on", { unitLabel: "points", unitRate: 0.25, unitDecimals: 2 }],
+    ["self-serve on, said so", { selfServe: true }],
+    ["a unit, self-serve on, said so", { unitLabel: "points", unitRate: 0.25, unitDecimals: 2, selfServe: true }],
+  ])("%s: every one exactly as an install with nothing configured writes it", async (_case, billing) => {
+    setProfile(billing)
+    const said = await storedRefusals()
+    const want = recorded()
+    for (const [key, text] of Object.entries(said)) expect(text, key).toBe(want[key])
+  })
+
+  it.each([
+    ["self-serve off", { selfServe: false }],
+    ["a unit, self-serve off", { unitLabel: "points", unitRate: 0.25, unitDecimals: 2, selfServe: false }],
+  ])("%s: no advice to buy or upgrade, a true next step, and every failure reader's verdict unchanged", async (_case, billing) => {
+    setProfile(billing)
+    const said = await storedRefusals()
+    const want = recorded()
+    expect(Object.keys(said).sort()).toEqual(Object.keys(said).filter((k) => k in want).sort())
+    for (const [key, text] of Object.entries(said)) {
+      expect(text, key).not.toMatch(PURCHASE_ADVICE)
+      expect(text, key).not.toBe(want[key])
+      expect(verdictOf(text), `${key}: ${text}`).toEqual(verdictOf(want[key]!))
+    }
+    expect(said).toEqual({
+      storage_limit: "Storage limit reached (2.4 GB of 2.0 GB used). Delete files to free up space.",
+      model_tier: "This model requires pro tier or higher. It is not available on this account.",
+      model_blocked: "This model is not available on this account.",
+      check_free_video: "Kling 3.0 is not available on free credits.",
+      free_video_model: "Kling 3.0 is not available on free credits.",
+      free_video_upscale: "Upscaling video is not available on free credits.",
+      free_video_extend: "Extending video is not available on free credits.",
+      free_video_shortest: "On free credits videos are at most 6 seconds, and Veo 3.1's shortest is 8.",
+      free_video_auto: "On free credits pick a length of up to 6 seconds (not Auto).",
+      free_video_duration: "On free credits videos are at most 6 seconds.",
+      free_video_resolution: "On free credits Seedance 2.0 runs at 480p only.",
+      free_video_size: "On free credits Wan 2.6 runs at the standard size only.",
+    })
+  })
+
+  it("with nothing configured each one advises the purchase it always did", () => {
+    const want = recorded()
+    for (const key of Object.keys(want).filter((k) => k === "storage_limit" || k.startsWith("model_") || k.includes("free_video"))) {
+      expect(want[key], key).toMatch(PURCHASE_ADVICE)
+    }
   })
 })

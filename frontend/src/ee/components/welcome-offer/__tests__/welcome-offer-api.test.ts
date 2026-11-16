@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 vi.mock("@/lib/api", () => ({ getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer t" }) }))
 
-import { claimWelcomeOffer } from "../welcome-offer-api"
+import { claimWelcomeOffer, markWelcomeOfferSeen } from "../welcome-offer-api"
 import { useLocaleStore } from "@/lib/locale-store"
 import { isOfferedLocale } from "@/lib/i18n/offered-locales"
 import { LANGUAGES, type LocaleId } from "@nodaro/shared/i18n"
@@ -48,5 +48,21 @@ describe("claimWelcomeOffer", () => {
   it("throws when the claim fails, so the popup keeps its button for a retry", async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 503 })
     await expect(claimWelcomeOffer({})).rejects.toThrow("welcome offer claim failed (503)")
+  })
+})
+
+describe("markWelcomeOfferSeen", () => {
+  it.each(["shown", "later"] as const)("posts { event: %s } as JSON, with the session", async (event) => {
+    await markWelcomeOfferSeen(event)
+    expect(fetchMock.mock.calls[0][0]).toBe("/v1/credits/welcome-offer/seen")
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    expect(init.method).toBe("POST")
+    expect(init.headers).toEqual({ "Content-Type": "application/json", Authorization: "Bearer t" })
+    expect(bodyOf()).toEqual({ event })
+  })
+
+  it("never throws: a lost post only means the server did not hear it", async () => {
+    fetchMock.mockRejectedValue(new Error("offline"))
+    await expect(markWelcomeOfferSeen("shown")).resolves.toBeUndefined()
   })
 })

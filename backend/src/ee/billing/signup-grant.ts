@@ -13,6 +13,8 @@ import {
 import { compareWithPluginGate } from "./signup-gate-seam.js"
 import { signupGrantsApply } from "./free-grant-scope.js"
 import { hasGrantedConsent } from "../lib/consent-record.js"
+import { readWelcomePopupRow } from "./welcome-popup.js"
+import { welcomePopupDue } from "./welcome-popup-rule.js"
 import { isMissingColumnError, isMissingTableError } from "../../lib/postgrest-errors.js"
 import { neighbourhoodKey } from "../../lib/ip-address.js"
 import { networkHash } from "../../lib/client-address.js"
@@ -650,24 +652,28 @@ export async function readFreeGrantState(userId: string): Promise<FreeGrantState
 }
 
 /**
- * The welcome-offer columns, for the balance payload. Read ONLY while the
- * offer is on (the caller checks) — the columns arrive with migration 426 and
- * a dev deploy may run ahead of it, so a failed read is `null`, never a throw.
+ * The welcome-offer state, for the balance payload and the consent block. Read
+ * ONLY while the offer is on (the callers check), so `popupDue` is decided with
+ * the offer on. A failed read is `null`, never a throw.
+ *
+ * `popupDue` is the rule in `welcome-popup-rule.ts`. `popupSeen` is kept for
+ * clients released before it, which open the pop-up while it is false: it is
+ * `!popupDue`. Until migration 653's columns exist the pop-up keeps the rule
+ * it had before them (shown once, never again), and `popupSeen` reads
+ * `welcome_offer_seen_at` exactly as it did.
  */
 export async function readWelcomeOfferState(
   userId: string,
-): Promise<{ popupSeen: boolean; consentPending: boolean } | null> {
+  now: number = Date.now(),
+): Promise<{ popupDue: boolean; popupSeen: boolean; consentPending: boolean } | null> {
   try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("welcome_offer_seen_at, welcome_consent_pending")
-      .eq("id", userId)
-      .single()
-    if (error || !data) return null
-    const row = data as { welcome_offer_seen_at?: unknown; welcome_consent_pending?: unknown }
+    const row = await readWelcomePopupRow(userId)
+    if (!row) return null
+    const popupDue = welcomePopupDue({ offerOn: true, grantState: row.grantState, record: row.record }, now)
     return {
-      popupSeen: typeof row.welcome_offer_seen_at === "string",
-      consentPending: row.welcome_consent_pending === true,
+      popupDue,
+      popupSeen: row.record.showings === null ? row.record.seenAt !== null : !popupDue,
+      consentPending: row.consentPending,
     }
   } catch {
     return null

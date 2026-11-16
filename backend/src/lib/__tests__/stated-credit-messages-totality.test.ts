@@ -241,18 +241,23 @@ const PURCHASE_WORD = /\btop[ -]ups?\b|\btopped up\b|\bupgrade[ds]?\b|\bbuy\b|\b
 
 /**
  * The files whose sentences a balance or availability check refuses a run
- * with — saved with the run when the orchestrator's preflight refuses a node,
- * and read verbatim by the MCP job tools — with how many name a purchase and
- * what keeps each off a deployment without self-serve billing. The ones not
- * kept off yet are listed as such: a new one fails here.
+ * with — saved with the run when the orchestrator's preflight refuses a node
+ * (or a sync-HTTP / use-case node's route does), and read verbatim by the MCP
+ * job tools — with how many name a purchase and what keeps each off a
+ * deployment without self-serve billing: a new one fails here.
  */
-const LEFT = "not yet kept off a deployment without self-serve billing: saved with a run the orchestrator's preflight refuses, and read verbatim by the MCP job tools"
 const PURCHASE_IN_REFUSALS: Readonly<Record<string, { count: number; why: string }>> = {
-  "lib/stated-credit-messages.ts": { count: 2, why: "the free tier's daily cap: \"Upgrade for higher limits\" only where billing.selfServe is on" },
+  "lib/stated-credit-messages.ts": {
+    count: 7,
+    why: "the free tier's daily cap, the storage limit, a model above the plan's tier or on the free tier's blocklist, a video beyond the free-credit limits: each advice only where billing.selfServe is on (purchaseAdvised)",
+  },
   "lib/reserve-errors.ts": { count: 0, why: "fixed refusals, none of which advises a purchase" },
-  "ee/billing/credits.ts": { count: 2, why: `the storage limit and the app-credits refusal ("upgrade your plan"): ${LEFT}` },
-  "ee/billing/model-availability.ts": { count: 2, why: `a model above the plan's tier ("upgrade your plan", "Upgrade to Basic"): ${LEFT}` },
-  "ee/billing/free-video-limits.ts": { count: 2, why: `a video beyond the free limits ("Upgrade or buy credits"): ${LEFT}` },
+  "ee/billing/credits.ts": {
+    count: 1,
+    why: "the app-run allowance refusal (\"or upgrade your plan\", checkAppRunEligibility): never saved with a run — the app run, Render final and Retry routes answer it as a 402 before any execution or app run row is written, and the MCP lane answers a 402 on such a deployment with balanceRefusal instead of its words",
+  },
+  "ee/billing/model-availability.ts": { count: 0, why: "worded in lib/stated-credit-messages.ts (modelTierRestrictedMessage, modelNeedsPaidPlanMessage)" },
+  "ee/billing/free-video-limits.ts": { count: 0, why: "worded in lib/stated-credit-messages.ts (freeVideoLimitMessage)" },
 }
 
 describe("purchase advice in the refusals a run is saved with", () => {

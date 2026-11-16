@@ -15,7 +15,7 @@ export interface NotifyConfig {
   digestHour: number
   milestonesEnabled: boolean
   everySignupEnabled: boolean
-  /** Welcome-offer events (accepted / dismissed / unsubscribed) + the daily Loops unsubscribe pull. */
+  /** Welcome-offer events (accepted / "Maybe later" / shown with no answer / unsubscribed) + the daily Loops unsubscribe pull. */
   welcomeOfferEnabled: boolean
   /** Daily credits digest (per-user committed credits + USD cost + KIE balance movement), sent at `digestHour`. */
   creditsDigestEnabled: boolean

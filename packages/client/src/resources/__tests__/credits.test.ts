@@ -155,7 +155,7 @@ describe("credits — welcome offer", () => {
       ...BALANCE,
       effectiveTier: "free",
       freeGrantState: "unclaimed",
-      welcomeOffer: { popupSeen: false, consentPending: false, credits: 1500 },
+      welcomeOffer: { popupDue: true, popupSeen: false, consentPending: false, credits: 1500 },
     }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: withOffer }))
     const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
@@ -163,6 +163,7 @@ describe("credits — welcome offer", () => {
 
     expect(balance.freeGrantState).toBe("unclaimed")
     expect(balance.welcomeOffer?.credits).toBe(1500)
+    expect(balance.welcomeOffer?.popupDue).toBe(true)
     expect(balance.welcomeOffer?.popupSeen).toBe(false)
   })
 
@@ -198,13 +199,26 @@ describe("credits — welcome offer", () => {
     expect(result.grant).toBe("withheld")
   })
 
-  it("markWelcomeOfferSeen() POSTs /v1/credits/welcome-offer/seen and returns { ok }", async () => {
+  it("markWelcomeOfferSeen() with no event POSTs /v1/credits/welcome-offer/seen with no body, as before, and returns { ok }", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ ok: true }))
     const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
     const result = await c.credits.markWelcomeOfferSeen()
 
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/credits/welcome-offer/seen")
-    expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("POST")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body?: string }
+    expect(init.method).toBe("POST")
+    expect(init.body).toBeUndefined()
+    expect(result).toEqual({ ok: true })
+  })
+
+  it.each(["shown", "later"] as const)('markWelcomeOfferSeen("%s") sends { event }', async (event) => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ ok: true }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const result = await c.credits.markWelcomeOfferSeen(event)
+
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ event })
     expect(result).toEqual({ ok: true })
   })
 

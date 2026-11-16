@@ -7722,12 +7722,14 @@ export interface UserBalance {
   freeGrantNotice?: "browser_unmeasured"
   /**
    * Welcome credits opt-in. PRESENT only while the offer is switched on —
-   * absent means no popup, no banner, no block. `popupSeen`: the one-time
-   * popup was already shown. `consentPending`: granted through the Chrome
+   * absent means no popup, no banner, no block. `popupDue`: the popup should
+   * open by itself now (decided by the server; absent from a server before
+   * it, which sent `popupSeen` alone). `popupSeen`: `!popupDue`, for clients
+   * released before `popupDue`. `consentPending`: granted through the Chrome
    * extension, email consent still owed; creation is blocked until given.
    * `credits`: what a claim grants — the figure the popup and banner show.
    */
-  welcomeOffer?: { popupSeen: boolean; consentPending: boolean; credits: number }
+  welcomeOffer?: { popupDue?: boolean; popupSeen: boolean; consentPending: boolean; credits: number }
   /**
    * Track A — the requester's per-user allowance on a deployment-payer
    * instance, in RAW Nodaro credits. `total` is deliberately NOT overloaded

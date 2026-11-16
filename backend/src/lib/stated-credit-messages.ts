@@ -1,7 +1,8 @@
 /**
  * THE ONE PLACE a failure sentence that names a credit figure is worded
  * (decided 2026-11-15): a balance check's refusal, a reservation the database
- * refused, a hold the balance can not cover, a charged failure.
+ * refused, a hold the balance can not cover, a charged failure. So is a
+ * refusal saved the same way that advises a purchase (decided 2026-11-16).
  *
  * These sentences are SAVED with the run — `jobs.error_message`, a node's
  * `error` in `node_states`, the execution's `error_message` — and every reader
@@ -31,14 +32,20 @@
  *  - a sentence keeps the word "Insufficient" and names the balance, so the
  *    readers that classify a failure by its words (`diagnose_run`, the
  *    orchestrator's metered-hold catch) reach the same verdict;
- *  - no purchase advice is added, and the one sentence that carried some
- *    ("Upgrade for higher limits") keeps it only where self-serve is on.
+ *  - no purchase advice is added, and a sentence that carries some (the free
+ *    tier's daily cap, and the refusals below: the storage limit, a model the
+ *    plan may not run, a video beyond the free-credit limits) keeps it only
+ *    where self-serve is on. Without self-serve the advice is dropped, and a
+ *    sentence it would leave with no next step ends with what is true there
+ *    (delete files; the model is not available on this account). The words a
+ *    failure reader classifies by are kept, so each is classified as before.
  *
  * Core code (every edition, no `ee/` import): the producers in `ee/billing`,
  * the routes and the workflow engine all word their sentences here.
  * `__tests__/stated-credit-messages-totality.test.ts` fails a sentence that
  * names a credit figure anywhere else in the backend.
  */
+import type { FreeVideoLock } from "@nodaro/render-rules"
 import { toUnits } from "./billing-display-unit.js"
 import { amountTerms, ownTermsActive, type AmountTerms } from "./mcp/amounts.js"
 
@@ -152,6 +159,70 @@ export function chargedSyncFailureMessage(message: string, charged: number): str
     return `${message} The AI provider had already processed the request, so ${charged} credit${charged === 1 ? "" : "s"} ${charged === 1 ? "was" : "were"} charged for the usage it billed.`
   }
   return `${message} The AI provider had already processed the request, so it was charged ${s.figure(charged)} ${s.word} for the usage it billed.`
+}
+
+/**
+ * Whether a refusal may advise buying or upgrading: always with nothing
+ * configured (it is today's sentence), and on a deployment in its own terms
+ * only where self-serve purchase is on.
+ */
+function purchaseAdvised(): boolean {
+  const s = stating()
+  return !s || s.selfServe
+}
+
+/**
+ * The storage limit, reached (the credit guard's 413, saved as the node's
+ * failure by the engine's sync-HTTP and use-case lanes). `usedGB` / `limitGB`
+ * are the figures as written ("2.4"). Without self-serve, deleting files is
+ * what the user can do.
+ */
+export function storageLimitMessage(usedGB: string, limitGB: string): string {
+  const reached = `Storage limit reached (${usedGB} GB of ${limitGB} GB used).`
+  return purchaseAdvised() ? `${reached} Delete files or upgrade your plan.` : `${reached} Delete files to free up space.`
+}
+
+/** A model restricted to `tier` and up, refused below it (saved by the engine's preflight). */
+export function modelTierRestrictedMessage(tier: string): string {
+  const requires = `This model requires ${tier} tier or higher.`
+  return purchaseAdvised() ? `${requires} Please upgrade your plan.` : `${requires} It is not available on this account.`
+}
+
+/**
+ * A model on the free tier's blocklist, refused under free-tier semantics
+ * (saved by the engine's preflight). Without self-serve no subscription can be
+ * bought here, so the sentence does not name one.
+ */
+export function modelNeedsPaidPlanMessage(): string {
+  return purchaseAdvised() ? "This model requires a paid subscription. Upgrade to Basic or higher." : "This model is not available on this account."
+}
+
+/**
+ * A video request beyond the free-credit limits (saved by the engine's
+ * preflight; the credit guard answers it as `free_video_limit`). Each lock
+ * names the limit, which is the next step on its own; the advice to pay rides
+ * only where self-serve is on.
+ */
+export function freeVideoLimitMessage(lock: FreeVideoLock): string {
+  const paid = purchaseAdvised() ? " Upgrade or buy credits to use it." : ""
+  switch (lock.kind) {
+    case "model":
+      return `${lock.label} is not available on free credits.${paid}`
+    case "upscale":
+      return `Upscaling video is not available on free credits.${paid}`
+    case "extend":
+      return `Extending video is not available on free credits.${paid}`
+    case "shortest":
+      return `On free credits videos are at most ${lock.max} seconds, and ${lock.label}'s shortest is ${lock.shortest}.${paid}`
+    case "auto":
+      return `On free credits pick a length of up to ${lock.max} seconds (not Auto).${paid}`
+    case "duration":
+      return `On free credits videos are at most ${lock.max} seconds.${paid}`
+    case "resolution":
+      return `On free credits ${lock.label} runs at ${lock.lowest} only.${paid}`
+    case "size":
+      return `On free credits ${lock.label} runs at the standard size only.${paid}`
+  }
 }
 
 /** What a billed attempt was charged, as a clause after "You were charged" (empty while the charge is not settled). */

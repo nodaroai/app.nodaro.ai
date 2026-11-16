@@ -127,7 +127,21 @@ export type FreeGrantState = "unclaimed" | "granted" | "withheld" | "revoked"
 
 /** `UserBalance.welcomeOffer` — what an app needs to show the welcome offer. */
 export interface WelcomeOfferState {
-  /** The one-time popup was already shown (see `markWelcomeOfferSeen`). */
+  /**
+   * Open the welcome popup by itself now. Decided by the server: the grant is
+   * unclaimed, "Maybe later" was never answered, and the popup has opened by
+   * itself fewer than three times, none of them in the last 24 hours. When an
+   * app opens it because this is true, it reports that with
+   * `markWelcomeOfferSeen("shown")`; an app should also not open it by itself
+   * twice in one visit. Absent from a server released before this field,
+   * which sends `popupSeen` alone: open it then while `popupSeen` is false
+   * (`welcomeOffer.popupDue ?? welcomeOffer.popupSeen === false`).
+   */
+  popupDue?: boolean
+  /**
+   * `!popupDue`, kept for apps written before `popupDue`: they open the popup
+   * while it is false. Read `popupDue` instead.
+   */
   popupSeen: boolean
   /**
    * The account already has its credits (granted elsewhere) but still owes
@@ -175,6 +189,12 @@ export interface WelcomeOfferClaimResult {
    */
   credits: number
 }
+
+/**
+ * What `markWelcomeOfferSeen` reports. `"shown"`: the popup opened by itself.
+ * `"later"`: the user answered "Maybe later".
+ */
+export type WelcomeOfferSeenEvent = "shown" | "later"
 
 /** The answer of `POST /v1/credits/welcome-offer/seen`. */
 export interface WelcomeOfferSeenResult {
@@ -597,17 +617,33 @@ export class CreditsResource {
   }
 
   /**
-   * `POST /v1/credits/welcome-offer/seen` → records that the one-time welcome
-   * popup was shown, so `balance().welcomeOffer.popupSeen` turns true on every
-   * app. Idempotent (the first stamp wins); a failed call only means the popup
-   * may show once more, so callers usually ignore errors.
+   * `POST /v1/credits/welcome-offer/seen` → tells the server what happened to
+   * the welcome popup, which decides `balance().welcomeOffer.popupDue` from it
+   * on every app:
+   *
+   * - `"shown"`: the popup opened by itself (because `popupDue` was true).
+   *   Counts one of the account's three showings while the popup is due;
+   *   nothing is counted otherwise (a second call within 24 hours, after
+   *   "Maybe later", after the third), so a repeated call is harmless.
+   * - `"later"`: the user answered "Maybe later". The popup does not open by
+   *   itself again.
+   *
+   * A close without an answer (the ×, Escape, a click outside) is reported by
+   * not calling this at all. Called with no event, it sends no body, and the
+   * server reads that as `"later"` (what apps written before the event sent on
+   * any close). Both writes are idempotent; a failed call only means the
+   * popup may show once more, so callers usually ignore errors.
    *
    * **Browser session only**, like {@link claimWelcomeOffer}: 403 for an API
    * key or OAuth app token, 409 `welcome_offer_disabled` while the offer is
    * off, 404 on a self-hosted instance.
    */
-  markWelcomeOfferSeen(): Promise<WelcomeOfferSeenResult> {
-    return this.client.request<WelcomeOfferSeenResult>("POST", "/v1/credits/welcome-offer/seen")
+  markWelcomeOfferSeen(event?: WelcomeOfferSeenEvent): Promise<WelcomeOfferSeenResult> {
+    return this.client.request<WelcomeOfferSeenResult>(
+      "POST",
+      "/v1/credits/welcome-offer/seen",
+      event === undefined ? {} : { body: { event } },
+    )
   }
 
   // NOTE: no `estimate(...)` helper. The backend exposes
