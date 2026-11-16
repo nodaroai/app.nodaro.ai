@@ -803,11 +803,13 @@ if [ "$EDITION" = "cloud" ] && [ "$PLUGIN_DAEMONS_IN_CONTAINER" = "true" ]; then
   CHILD_PIDS="$CHILD_PIDS $!"
 fi
 
-# Wait for backend to be ready before accepting traffic
+# Wait for backend to be ready before accepting traffic. Each read gives up
+# after 5s: a stalled API accepts the connection and never answers, and an
+# unbounded read would keep the proxy from ever starting.
 echo "Waiting for backend on port 9000..."
 for i in $(seq 1 30); do
   if [ -n "$TERMINATING" ]; then break; fi
-  if curl -sf http://127.0.0.1:9000/health > /dev/null 2>&1; then
+  if curl -sf --max-time 5 http://127.0.0.1:9000/health > /dev/null 2>&1; then
     echo "Backend is ready"
     break
   fi

@@ -462,8 +462,37 @@ That's it. The next sections cover production hardening.
 ## 3. Reverse proxy + HTTPS
 
 The container already runs Caddy internally on port 3000 — it serves the
-frontend statics and proxies `/v1/*` to the Fastify backend on port
-9000.
+frontend statics and proxies `/v1/*` and `/health` to the Fastify backend on
+port 9000.
+
+`GET /health` on port 3000 is the container's health address, and the API
+server answers it:
+
+| The API server is | `/health` and its other spellings answer | A path under it (`/health/x`) answers |
+|---|---|---|
+| up | `200` with `{"status":"healthy","timestamp":…,"version":…}` | `401`, from the API (no route there is public) |
+| down, or restarting (it is restarted inside the container 10 seconds after it exits) | `502`, from Caddy | `502` |
+| hung: it accepts the connection and does not answer | `504`, from Caddy, after 5 seconds | `504` |
+
+It is never the app's page. The other spellings of the address read the same
+status: a trailing slash (`/health/`), `;` parameters (`/health;x`), either
+one percent-encoded (`/health%2f`), another letter case (`/HEALTH`) and dot
+segments (`//health`, `/x/../health`). Caddy hands each of them to the API as
+`/health`, keeping the query string. A path under it (`/health/x`) is not the
+address and never reads as healthy. Every answer in the table carries one
+`Cache-Control: no-store` (the API's own value is dropped), so no cache or CDN
+in front of the install keeps a "healthy". Before Caddy starts nothing answers on port
+3000: while migrations run on a self-host boot, then while `start.sh` waits
+for the API, up to 30 seconds (each of its reads gives up after 5 seconds, so
+an API that is hung at boot holds Caddy back for at most about three minutes).
+A read that succeeds is not written to the API's log; one that fails is.
+
+The bundled compose file's health check reads this address: the `nodaro`
+container turns healthy when its API first answers, and unhealthy after five
+failed reads in a row, 10 seconds apart, each given 5 seconds (failures in its
+first 60 seconds do not count). Docker does not restart a container for being
+unhealthy. Point any other health check or uptime monitor at this address too,
+with a time limit of its own.
 
 Caddy accepts the `X-Forwarded-*` headers only from peers in the private
 ranges (`127.0.0.1/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`,
@@ -583,8 +612,9 @@ handle @other_app {
 - A file holds directives of the site itself (`handle`, `redir`, …), not a
   site of its own. Caddy orders `handle` blocks by their paths, so a route
   here is answered before the editor's own catch-all.
-- Choose paths that do not overlap the editor's: the API (`/v1/*`), the auth
-  and storage proxies (`/supabase/*`, `/storage/*`), `/.well-known/*`,
+- Choose paths that do not overlap the editor's: the API (`/v1/*`, and the
+  health address `/health` with `/health/*` and `/health;*`), the auth and
+  storage proxies (`/supabase/*`, `/storage/*`), `/.well-known/*`,
   `/config.js`, `/assets/*` and the editor's own pages. Keep an app's files
   under its own path too.
 - Match a path exactly and with `/*` (`/other /other/*`), never by a bare
@@ -1681,11 +1711,12 @@ answers from another directory is refused by the file check below. A
   backslash (`%2F`, `%5C`) and no control character; decoded, it has no empty,
   `.` or `..` segment (`%2e%2e` counts as `..`);
 - it names a file inside a folder (`/<folder>/…/<name>`), and that first
-  folder, compared decoded and without regard to case, is not one the
-  platform owns. Those are the folders the bundled proxy answers with anything
-  but a file of the site (`v1`, `.well-known`, `mcp`, `og`, `app`, `embed`,
-  `present`, `storage`, `supabase`, `assets`), the folders the platform's own
-  build ships (`picker-art`, `preset-previews`, `face-mesh-art`, `fonts`,
+  folder, read up to any `;` (`/health;x` is the `health` folder), compared
+  decoded and without regard to case, is not one the platform owns. Those
+  are the folders the bundled proxy answers with anything
+  but a file of the site (`v1`, `.well-known`, `mcp`, `health`, `og`, `app`,
+  `embed`, `present`, `storage`, `supabase`, `assets`), the folders the
+  platform's own build ships (`picker-art`, `preset-previews`, `face-mesh-art`, `fonts`,
   `notifications`, `projects`, `demo-assets`), and `cdn-cgi`, which a CDN in
   front of the site answers itself;
 - its file name ends in `.png` or `.webp`, the formats of the platform's own
@@ -2244,8 +2275,9 @@ To keep a self-hosted VM install updated over SSH, copy
 [`examples/deploy-host.yml`](../examples/deploy-host.yml) into your own
 repository's `.github/workflows/`, set the `DEPLOY_HOST`, `DEPLOY_USER` and
 `DEPLOY_SSH_KEY` secrets, and dispatch it. It reuses the published community
-image tag, runs `docker compose pull && up -d`, health-gates on `/health`, then
-prunes old layers. Never trigger production deploys on a branch push, and use
+image tag, runs `docker compose pull && up -d`, health-gates on `/health` (the
+API server's own answer, so the gate passes only once the new API is up; each
+read gives up after 5 seconds), then prunes old layers. Never trigger production deploys on a branch push, and use
 separate secret names per environment. It ships as an example, not a workflow in
 this repo — there are no deploy secrets where the public mirror runs.
 

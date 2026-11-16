@@ -203,6 +203,17 @@ await check(
   { required: true },
 )
 
+await check("the health address (/health) is the API server's own answer, never the app's page", async () => {
+  // What the compose health check and any deploy gate read. The proxy's own
+  // page fallback answered it 200 whatever the API did, so the container stayed
+  // healthy through an API outage; the proxy now hands it to the API
+  // (frontend/Caddyfile), which answers JSON while it is up.
+  const { status, json, text } = await api("/health")
+  assert(status === 200, `expected 200 from /health, got ${status}`)
+  assert(json?.status === "healthy", `/health is not the API's answer: ${text.slice(0, 120)}`)
+  return `version ${json.version ?? "unknown"}`
+})
+
 await check("community serves the stock surface — no surface block in /config.js (d2)", async () => {
   // The surface profile (B1) is a business+ capability: a community install must
   // ignore NODARO_SURFACE_PROFILE entirely and emit no `surface` key, so the

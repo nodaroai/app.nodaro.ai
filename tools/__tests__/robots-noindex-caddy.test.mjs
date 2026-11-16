@@ -79,8 +79,8 @@ async function withSite(env, run) {
   }
 }
 
-// Every kind of response the site gives: an API answer, a build file, an indexable page, an un-indexed page, a 404.
-const EVERY_KIND = ["/v1/health", "/assets/index-Abc.js", "/gallery", "/projects", "/fonts/gone.woff2", "/config.js"]
+// Every kind of response the site gives: an API answer (the health address too), a build file, an indexable page, an un-indexed page, a 404.
+const EVERY_KIND = ["/v1/health", "/health", "/assets/index-Abc.js", "/gallery", "/projects", "/fonts/gone.woff2", "/config.js"]
 
 test("ROBOTS_NOINDEX=true marks every response noindex; anything else leaves the site as it was", { skip: !available }, async () => {
   await withSite({ ROBOTS_NOINDEX: "true" }, async (get) => {
@@ -94,6 +94,10 @@ test("ROBOTS_NOINDEX=true marks every response noindex; anything else leaves the
   await withSite({}, async (get) => {
     const expectations = [
       ["/v1/health", null],
+      // The API's answer, left alone like /v1/*: never an app page's noindex, whichever spelling.
+      ["/health", null],
+      ["/health/", null],
+      ["/health;x", null],
       ["/assets/index-Abc.js", null],
       ["/gallery", null],
       ["/projects", "noindex"],
