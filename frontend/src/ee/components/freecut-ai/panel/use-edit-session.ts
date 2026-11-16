@@ -28,7 +28,7 @@ import { lockedSteps, outcomesAfterStop, withoutSteps, type Phase, type RunStage
 import { RunDeclined, RunFailed, RunStopped, runAiEdit, undoAiEdit, type HeardVideo, type MadeResult, type RunEvent } from "@/ee/lib/freecut-ai/run-ai-edit"
 import { captionOps } from "@/ee/lib/freecut-ai/run/captions"
 import { JobFailed, JobTimedOut, keyOf } from "@/ee/lib/freecut-ai/run/jobs"
-import { applyPictureChange, type PictureChoice } from "@/ee/lib/freecut-ai/run/change-picture"
+import { applyPictureChange, type PictureChoice, addPictureAtPlayhead, type PictureSourceChoice } from "@/ee/lib/freecut-ai/run/change-picture"
 import type { PictureRecord, PictureRow } from "@/ee/lib/freecut-ai/picture-rows"
 import { clipNameKey } from "@/ee/lib/freecut-ai/run/layout"
 import { placeLatePicture, spanLabel } from "@/ee/lib/freecut-ai/run/picture"
@@ -510,8 +510,44 @@ export function useEditSession({ link, videos, openedVideoUrl, matchByName = fal
           }))
         }
         setNote(result.reason ? { key: "freecutAi.pictures.notMadeWhy", vars: { reason: result.reason } } : { key: "freecutAi.pictures.notMadeNote" })
+      } else if ("taken" in result) {
+        setNote({ key: "freecutAi.pictures.taken" })
       } else {
         setNote({ key: "freecutAi.editorRefusedNote", vars: { reason: result.refused ?? "" } })
+      }
+    } catch (error) {
+      setNote({ key: keyOf(error) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** A picture added by hand where the playhead is: an edit like the rest, undone with them. */
+  async function addPicture(choice: PictureSourceChoice) {
+    const editor = link()
+    if (!editor || busy || running) return
+    setBusy(true)
+    setNote(null)
+    const controller = new AbortController()
+    const url = videoUrl
+    try {
+      const userId = await getCurrentUserId()
+      if (!userId) {
+        setNote({ key: "freecutAi.signedOut" })
+        return
+      }
+      const label = t("freecutAi.pictures.addLabel")
+      const result = await addPictureAtPlayhead(editor, { label, choice, userId, signal: controller.signal, onRecorded: () => keepEntries([...recordedRef.current, { label, url, step: "broll" }]) })
+      if (result.ok) {
+        const added = result.record
+        if (added) remember(url, (m) => ({ ...m, pictures: [...(m.pictures ?? []), added] }))
+        if (result.filled) setNote({ key: "freecutAi.pictures.filledNote" })
+      } else if ("notMade" in result) {
+        setNote(result.reason ? { key: "freecutAi.pictures.notMadeWhy", vars: { reason: result.reason } } : { key: "freecutAi.pictures.notMadeNote" })
+      } else if ("taken" in result) {
+        setNote({ key: "freecutAi.pictures.taken" })
+      } else {
+        setNote(result.refused ? { key: "freecutAi.editorRefusedNote", vars: { reason: result.refused } } : { key: "freecutAi.pictures.nowhere" })
       }
     } catch (error) {
       setNote({ key: keyOf(error) })
@@ -608,6 +644,7 @@ export function useEditSession({ link, videos, openedVideoUrl, matchByName = fal
     switchFormat,
     changeShots,
     changePicture,
+    addPicture,
     changeTitle,
     forget,
     play,

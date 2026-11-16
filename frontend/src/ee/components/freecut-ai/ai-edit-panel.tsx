@@ -306,7 +306,7 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videos, opened
               {session.note ? <p className="text-xs text-white/75" role="status">{t(session.note.key, session.note.vars)}</p> : null}
               <Results made={session.current.made} onOpen={(id) => linkRef.current?.openSequence(id)} />
               {view === "edited" ? <LayoutShots link={linkOf} refreshKey={`${session.videoUrl}|${project}|${phase.kind}|${session.busy}`} faces={session.current.faces?.set} busy={session.busy} onChange={(rows, choice) => void session.changeShots(rows, choice)} /> : null}
-              {view === "edited" ? <Pictures link={linkOf} refreshKey={`${session.videoUrl}|${project}|${phase.kind}|${session.busy}`} records={session.current.pictures ?? []} busy={session.busy} price={listed.brollPicture === undefined ? undefined : t("freecutAi.price", credits(listed.brollPicture))} onChange={(row, choice) => void session.changePicture(row, choice)} /> : null}
+              {view === "edited" ? <Pictures link={linkOf} refreshKey={`${session.videoUrl}|${project}|${phase.kind}|${session.busy}`} records={session.current.pictures ?? []} busy={session.busy} price={listed.brollPicture === undefined ? undefined : t("freecutAi.price", credits(listed.brollPicture))} onChange={(row, choice) => void session.changePicture(row, choice)} onAdd={(choice) => void session.addPicture(choice)} /> : null}
               {view === "edited" ? <Titles link={linkOf} refreshKey={`${session.videoUrl}|${project}|${phase.kind}|${session.busy}`} records={session.current.titles ?? []} look={session.titleLook} busy={session.busy} onChange={(row, change) => void session.changeTitle(row, change)} /> : null}
 
               {makeOffered ? (

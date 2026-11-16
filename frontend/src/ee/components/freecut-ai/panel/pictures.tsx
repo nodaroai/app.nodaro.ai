@@ -7,13 +7,14 @@
  * Read from the editor's timeline, so it follows later cuts and an undo.
  */
 import { useEffect, useRef, useState } from "react"
-import { useT, type MessageKey } from "@/lib/i18n"
+import { Minus, Plus } from "lucide-react"
+import { formatNumber, useT, type MessageKey } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { EditorLink } from "@/ee/lib/freecut-ai/editor-link"
 import { readTimelineView, type TimelineView } from "@/ee/lib/freecut-ai/edit-plan"
 import { PICTURE_PLACES, placeOf, type PicturePlace } from "@/ee/lib/freecut-ai/picture-place"
 import { pictureCounts, pictureRows, type PictureRecord, type PictureRow, type PictureSource } from "@/ee/lib/freecut-ai/picture-rows"
-import type { PictureChoice } from "@/ee/lib/freecut-ai/run/change-picture"
+import { PICTURE_LONGEST_SECONDS, PICTURE_SHORTEST_SECONDS, type PictureChoice, type PictureSourceChoice } from "@/ee/lib/freecut-ai/run/change-picture"
 
 const NAME: Record<PictureSource, MessageKey> = {
   made: "freecutAi.pictures.made",
@@ -91,7 +92,75 @@ function PlaceGlyph({ place, tall }: { readonly place: PicturePlace; readonly ta
   )
 }
 
-function ChangePicture({ row, busy, price, place, tall, onApply }: { readonly row: PictureRow; readonly busy: boolean; readonly price?: string; readonly place?: PicturePlace; readonly tall: boolean; readonly onApply: (choice: PictureChoice) => void }) {
+/** How long a picture stays: half a second shorter or longer at a tap. */
+function PictureLength({ seconds, busy, onSeconds }: { readonly seconds: number; readonly busy: boolean; readonly onSeconds: (seconds: number) => void }) {
+  const t = useT()
+  const step = "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#2D2D2D] bg-[#141417] text-white/85 transition-colors hover:bg-white/10 disabled:opacity-40"
+  const shown = Math.round(seconds * 2) / 2
+  return (
+    <>
+      <p className="text-[11px] text-white/60">{t("freecutAi.pictures.length")}</p>
+      <div className="flex items-center gap-1.5">
+        <button type="button" aria-label={t("freecutAi.pictures.shorter")} disabled={busy || shown <= PICTURE_SHORTEST_SECONDS} onClick={() => onSeconds(shown - 0.5)} className={step}>
+          <Minus className="h-3.5 w-3.5" />
+        </button>
+        <p className="min-w-0 flex-1 text-center text-xs font-medium text-white" role="status">
+          {t("freecutAi.pictures.seconds", { n: formatNumber(shown) })}
+        </p>
+        <button type="button" aria-label={t("freecutAi.pictures.longer")} disabled={busy || shown >= PICTURE_LONGEST_SECONDS} onClick={() => onSeconds(shown + 0.5)} className={step}>
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </>
+  )
+}
+
+/** A picture added by hand where the playhead is: what it shows in words, or a picture of the person's own. */
+function AddPicture({ busy, price, onAdd }: { readonly busy: boolean; readonly price?: string; readonly onAdd: (choice: PictureSourceChoice) => void }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const [words, setWords] = useState("")
+  const file = useRef<HTMLInputElement>(null)
+  const other = "min-h-11 rounded-lg border border-white/15 px-3 text-xs font-medium text-white/85 hover:bg-white/10 disabled:opacity-50"
+  const said = words.trim()
+  const done = (choice: PictureSourceChoice) => {
+    setOpen(false)
+    setWords("")
+    onAdd(choice)
+  }
+  if (!open) {
+    return (
+      <button type="button" disabled={busy} onClick={() => setOpen(true)} className={other}>
+        {t("freecutAi.pictures.add")}
+      </button>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-2.5 rounded-lg border border-[#ff4f9a] bg-[#1E1E1E] p-3">
+      <label htmlFor="ai-picture-add-words" className="text-[11px] text-white/60">{t("freecutAi.pictures.addHint")}</label>
+      <textarea id="ai-picture-add-words" value={words} disabled={busy} rows={3} maxLength={600} dir="auto" onChange={(e) => setWords(e.target.value)} className="resize-none rounded-lg border border-[#2D2D2D] bg-[#141417] px-2.5 py-2 text-xs text-white outline-none focus:border-[#ff4f9a] disabled:opacity-50" />
+      <input
+        ref={file}
+        id="ai-picture-add-file"
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const picked = e.target.files?.[0]
+          e.target.value = ""
+          if (picked) done({ kind: "mine", file: picked })
+        }}
+      />
+      <button type="button" disabled={busy || !said} onClick={() => done({ kind: "again", prompt: said })} className="min-h-11 rounded-lg bg-cta px-3 text-xs font-semibold text-white transition-colors hover:bg-cta-hover disabled:opacity-50">
+        {price ? t("freecutAi.pictures.make", { price }) : t("freecutAi.pictures.makePlain")}
+      </button>
+      <button type="button" disabled={busy} onClick={() => file.current?.click()} className={other}>{t("freecutAi.pictures.own")}</button>
+      <button type="button" disabled={busy} onClick={() => setOpen(false)} className={other}>{t("common.cancel")}</button>
+    </div>
+  )
+}
+
+function ChangePicture({ row, busy, price, place, tall, fps, onApply }: { readonly row: PictureRow; readonly busy: boolean; readonly price?: string; readonly place?: PicturePlace; readonly tall: boolean; readonly fps: number; readonly onApply: (choice: PictureChoice) => void }) {
   const t = useT()
   const record: PictureRecord | undefined = row.record
   const [prompt, setPrompt] = useState(record?.prompt ?? "")
@@ -132,6 +201,7 @@ function ChangePicture({ row, busy, price, place, tall, onApply }: { readonly ro
           </div>
         </>
       ) : null}
+      {place ? <PictureLength seconds={(row.to - row.from) / fps} busy={busy} onSeconds={(seconds) => onApply({ kind: "length", seconds })} /> : null}
       {record?.said ? (
         <>
           <p className="text-[11px] text-white/60">{t("freecutAi.pictures.said")}</p>
@@ -186,15 +256,18 @@ export interface PicturesProps {
   /** One picture's price, in words ("11 credits"), once known. */
   readonly price?: string
   readonly onChange: (row: PictureRow, choice: PictureChoice) => void
+  /** A picture added by hand at the playhead. */
+  readonly onAdd: (choice: PictureSourceChoice) => void
 }
 
-export function Pictures({ link, refreshKey, records, busy, price, onChange }: PicturesProps) {
+export function Pictures({ link, refreshKey, records, busy, price, onChange, onAdd }: PicturesProps) {
   const t = useT()
   const view = usePicturesView(link, refreshKey)
   const [all, setAll] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
   const rows = view ? pictureRows(view, records) : []
-  if (!view || rows.length === 0) return null
+  // With a video on the timeline a picture can always be added by hand, so the section shows before any were made.
+  if (!view || !view.items.some((i) => i.type === "video")) return null
   const fps = view.fps
   const counts = pictureCounts(rows)
   const shown = all ? rows : rows.slice(0, SHOWN)
@@ -207,7 +280,7 @@ export function Pictures({ link, refreshKey, records, busy, price, onChange }: P
   return (
     <section aria-label={t("freecutAi.pictures.title")} className="flex flex-col gap-2">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-white/60">{t("freecutAi.pictures.title")}</p>
-      <div className="flex flex-col gap-2 rounded-lg border border-[#2D2D2D] bg-[#1E1E1E] px-3 py-2.5">
+      {rows.length > 0 ? <div className="flex flex-col gap-2 rounded-lg border border-[#2D2D2D] bg-[#1E1E1E] px-3 py-2.5">
         <div aria-hidden className="flex h-2 gap-0.5 overflow-hidden rounded-full">
           {SOURCES.filter((source) => counts[source] > 0).map((source) => (
             <span key={source} style={{ background: COLOR[source], width: `${(counts[source] / rows.length) * 100}%` }} />
@@ -222,7 +295,7 @@ export function Pictures({ link, refreshKey, records, busy, price, onChange }: P
             </li>
           ))}
         </ul>
-      </div>
+      </div> : null}
       <ul className="flex flex-col gap-1">
         {shown.map((row) => (
           <li key={row.key} className={cn("rounded-lg border bg-[#1E1E1E]", open === row.key ? "border-[#ff4f9a]" : row.source === "none" ? "border-dashed border-[#8a8a94]" : "border-[#2D2D2D]")}>
@@ -256,8 +329,10 @@ export function Pictures({ link, refreshKey, records, busy, price, onChange }: P
                 price={price}
                 place={placeFor(row)}
                 tall={tall}
+                fps={fps}
                 onApply={(choice) => {
-                  setOpen(null)
+                  // A change of length keeps the picture open: it is often tapped more than once.
+                  if (choice.kind !== "length") setOpen(null)
                   onChange(row, choice)
                 }}
               />
@@ -265,6 +340,7 @@ export function Pictures({ link, refreshKey, records, busy, price, onChange }: P
           </li>
         ))}
       </ul>
+      <AddPicture busy={busy} price={price} onAdd={onAdd} />
       {rows.length > SHOWN ? (
         <button type="button" onClick={() => setAll(!all)} className="min-h-11 rounded-lg border border-white/15 text-xs font-medium text-white/85 hover:bg-white/10">
           {all ? t("freecutAi.shots.showLess") : t("freecutAi.pictures.showAll", { n: rows.length })}
