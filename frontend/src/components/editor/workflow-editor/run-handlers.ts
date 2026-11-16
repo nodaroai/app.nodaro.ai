@@ -843,7 +843,7 @@ export async function checkRunBalance(ctx: ExecutionContext, run: BalanceCheckRu
     // Between those two the precheck STANDS DOWN (`gateApplies` false).
     // Falling back to `total` there was the earlier rule and it refused
     // runs the payer's pool would have paid for — a 4,000-credit run
-    // against a 1,500-credit grant the payer cannot even top up. In that
+    // against a frozen signup grant the payer cannot even top up. In that
     // window the server is the only lawful refuser: the pool now, the
     // RPC's allowance check after the flip.
     //

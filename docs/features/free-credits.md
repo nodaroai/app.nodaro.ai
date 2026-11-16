@@ -1,9 +1,14 @@
 # Free credits
 
-Every new Nodaro Cloud account gets a one-time grant of **1,500 credits**<!-- credits: n/a -->.
+Every new Nodaro Cloud account gets a one-time grant of **300 credits**<!-- credits: n/a -->.
 Nothing to buy, nothing to enter — the credits land the first time you open
 the app after signing up, or, while the welcome offer is switched on, as soon
 as you say yes to it (below).
+
+The grant used to be 1,500 credits<!-- credits: n/a -->. An account that
+received that grant keeps those credits; any grant that lands now — including
+one an older account had not claimed yet, or one added with a first purchase —
+is 300 credits<!-- credits: n/a -->.
 
 ## When the welcome offer is on
 
@@ -59,6 +64,15 @@ credits are added with your **first purchase**:
   card-on-file form.
 - A subscription brings its own monthly credits instead; the one-time grant
   does not stack on a plan.
+
+## When you subscribe, and when a subscription ends
+
+Free credits you have not spent when you subscribe move into your top-up
+credits, where they stay valid for 12 months like any top-up. When the
+subscription ends, the plan's remaining credits end with it: the account is
+back on the free tier with no subscription credits, and it keeps every top-up
+credit it holds. Ending a plan does not add free credits; a one-time grant
+the account never claimed can still be claimed afterwards.
 
 If you believe your grant should have applied and you would rather not buy
 anything, contact support from the same account and we will look into it.

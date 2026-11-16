@@ -397,11 +397,11 @@ All use **lowercase with hyphens** except VEO which uses **dot notation**: `veo3
 - `topup_credits` — valid for 12 months from grant (expiry sweep, migration 314)
 - **Deduction order:** subscription first -> then topup
 - `deduct_credits` RPC handles atomic deduction with FOR UPDATE lock
-- Free tier: **1,500** credits, 500/day cap, veo3/sora2-pro blocked, outputs watermarked
+- Free tier: **300** credits, one-time signup grant (1,500 until migration 652 — accounts granted then keep them; a take-back removes what the account's `signup_grant` ledger line says it was given), no daily cap, veo3/sora2-pro blocked, outputs watermarked
 
 ### Pricing
 - Credits are the Cloud-edition billing unit; the USD-per-credit conversion is an admin-configurable runtime setting, not a fixed rate in code
-- Tiers: Free ($0/1,500cr), Basic ($12mo/$10yr/4,500cr), Standard ($29mo/$24yr/11,000cr), Pro ($59mo/$49yr/23,000cr), Business ($129mo/$109yr/52,000cr)
+- Tiers: Free ($0/300cr once), Basic ($12mo/$10yr/4,500cr), Standard ($29mo/$24yr/11,000cr), Pro ($59mo/$49yr/23,000cr), Business ($129mo/$109yr/52,000cr)
 - Top-ups: $10/3,300cr, $25/8,500cr, $50/17,500cr, $100/36,000cr (valid 12 months)
 - **Authority is `ee/billing/stripe-config.ts`** (`TIER_CREDITS`, `TOP_UPS`) and the
   `tier_config` table — the figures above are a convenience copy. The 2026-07-30
@@ -507,7 +507,7 @@ All billing code lives under `backend/src/ee/billing/` and `backend/src/ee/route
 
 ### Cancellation Flow (CRITICAL — must downgrade immediately)
 - `customer.subscription.deleted` webhook fires for BOTH immediate and end-of-period cancellations
-- `handleSubscriptionCanceled()` ALWAYS downgrades to free tier immediately: `tier = "free"`, `subscription_credits = min(current, TIER_CREDITS.free)`, `storage_limit_bytes = 1GB`
+- `handleSubscriptionCanceled()` downgrades to free tier immediately: `tier = "free"`, `subscription_credits = ENDED_SUBSCRIPTION_CREDITS` (0 — a plan's credits end with it, decided 2026-11-16; never the free grant), `storage_limit_bytes = 1GB`. It ends a plan only when the stored subscription row exists and was granted, the account has no other live subscription, and the account is not already on the free tier (so a redelivered or late delete never touches credits gained since); a failed read or write throws `StripeEventRetryError`. The webhook and the expiry safety net both end a plan through `endPaidPlan` (`downgrade-floor.ts`, a compare-and-set, so the ledger line states exactly what was removed). An admin moving an account to free sets the same constant, and is refused (409) while a subscription is live; the 60-day cancelled-user reap writes no credits (the webhook or the safety net already ended them, and a later write would wipe credits gained since); top-up credits are never touched (the pre-subscribe free balance was moved into top-up by `grantSubscriptionPlan`)
 - `expireSubscriptions` cron is a safety net only
 - Topup credits are NOT affected by cancellation
 

@@ -25,6 +25,7 @@ import {
   fallbackClaimDue,
   isForeignOrigin,
   readClaimSignal,
+  grantedCreditsFigure,
   readFreeGrant,
   readWelcomeOfferState,
   runSignupGrantClaim,
@@ -117,13 +118,18 @@ async function settleFreeGrant(
  * read error just leaves the key out, which every client renders as "off".
  * `credits` is the signup grant's amount — the same `TIER_CREDITS.free` the
  * claim grants and the claim route answers with — so the popup can name it.
+ * An account already granted with its consent still owed ("Your N credits are
+ * active") is told what it WAS given (its ledger record): it may hold a grant
+ * from before the figure last changed.
  */
 async function welcomeOfferForBalance(userId: string): Promise<UserBalance["welcomeOffer"] | null> {
   try {
     const cfg = await getWelcomeOfferConfig()
     if (!cfg.enabled) return null
     const state = await readWelcomeOfferState(userId)
-    return state ? { ...state, credits: TIER_CREDITS.free } : null
+    if (!state) return null
+    const credits = state.consentPending ? await grantedCreditsFigure(userId) : TIER_CREDITS.free
+    return { ...state, credits }
   } catch {
     return null
   }

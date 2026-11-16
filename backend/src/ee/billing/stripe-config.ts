@@ -96,12 +96,26 @@ export const TIER_CREDITS: Record<string, number> = {
   // Tier flattening + x10 re-denomination. $/credit spread collapses 1.79x -> 1.08x.
   // MUST stay in lockstep with tier_config.monthly_credits — migrations 067 and
   // 281 are prior production incidents from updating only one of the two.
-  free: 1500,
+  // free: the one-time signup grant, 300 since migration 652 (1,500 before;
+  // an account that already holds 1,500 keeps them).
+  free: 300,
   basic: 4500,
   standard: 11000,
   pro: 23000,
   business: 52000,
 }
+
+/**
+ * An account's subscription credits once its paid plan ENDS (decided
+ * 2026-11-16): the plan's remaining credits end with it — nothing is kept and
+ * nothing is added. Every "plan ended" writer sets this: the cancel webhook,
+ * the expiry safety net, the cancelled-user reap, an admin moving an account
+ * to free. Top-up credits are never touched, including the unspent free grant
+ * a subscription moved into top-up when it began (`grantSubscriptionPlan`).
+ * Not the free grant (`TIER_CREDITS.free`): a former subscriber is not given
+ * free credits.
+ */
+export const ENDED_SUBSCRIPTION_CREDITS = 0
 
 /**
  * Max concurrent nodes per workflow execution, by tier — each tier's default
@@ -130,8 +144,8 @@ export const RETENTION_DAYS = {
 export const FREE_TIER_RESTRICTIONS = {
   // Daily spend cap for free-tier accounts (payg "web-free" spending rides it
   // too). null = no daily cap — disabled 2026-08-17; total free exposure is
-  // bounded by the one-time 1,500 signup grant (profiles.subscription_credits
-  // DEFAULT, migration 295). To re-enable, set a number AND re-seed
+  // bounded by the one-time signup grant (TIER_CREDITS.free, paid by the
+  // claim since migration 366). To re-enable, set a number AND re-seed
   // tier_config.daily_credit_limit for 'free' in a migration —
   // free-tier-config.test.ts enforces that pairing.
   dailyCreditCap: null as number | null,

@@ -16,6 +16,10 @@ const h = vi.hoisted(() => ({
   ledger: vi.fn(),
   invalidate: vi.fn(),
   filters: [] as string[],
+  /** Each account's signup_grant ledger lines. */
+  granted: new Map<string, Array<{ amount: number }>>(),
+  /** Accounts whose ledger read fails. */
+  ledgerFails: new Set<string>(),
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -45,6 +49,28 @@ vi.mock("@/lib/supabase.js", () => ({
       if (table === "admin_actions") {
         return { insert: async (values: Record<string, unknown>) => (h.inserted.push(values), { data: null, error: null }) }
       }
+      if (table === "credit_transactions") {
+        // What the sibling was given (its signup_grant ledger lines), read before the take-back.
+        let user = ""
+        const chain = {
+          select: () => chain,
+          eq: (c: string, v: unknown) => {
+            if (c === "user_id") user = String(v)
+            const answer = h.ledgerFails.has(user) ? { data: null, error: { code: "XX000", message: "ledger unavailable" } } : { data: h.granted.get(user) ?? [], error: null }
+            return Object.assign(Promise.resolve(answer), chain)
+          },
+        }
+        return chain
+      }
+      if (table === "profiles") {
+        // The sibling's grant state and age (a granted account, created after the ledger began).
+        const chain = {
+          select: () => chain,
+          eq: () => chain,
+          maybeSingle: async () => ({ data: { free_grant_state: "granted", created_at: "2026-10-01T00:00:00Z" }, error: null }),
+        }
+        return chain
+      }
       throw new Error(`unexpected table ${table}`)
     },
   },
@@ -69,6 +95,8 @@ beforeEach(() => {
   h.purchases = new Map()
   h.inserted = []
   h.filters = []
+  h.granted = new Map()
+  h.ledgerFails = new Set()
   h.rpc.mockReset()
   h.ledger.mockReset()
   h.invalidate.mockReset()
@@ -84,6 +112,8 @@ describe("takeBackFromSiblings", () => {
 
   it("takes the gift back from the earlier account on the same device/browser/address, with a ledger line and an audit entry under no admin", async () => {
     h.siblings = [{ user_id: FIRST }]
+    // Granted 1,500 before the grant became 300: what is left of ITS grant goes.
+    h.granted.set(FIRST, [{ amount: 1500 }])
     h.rpc.mockResolvedValue({ data: [{ did_revoke: true, old_credits: 708, new_credits: 0, state: "revoked", refusal: null }], error: null })
 
     await expect(takeBackFromSiblings({ ...keys, reasons: ["device_ip_match", "ip_velocity"] }, log as never)).resolves.toEqual([FIRST])
@@ -96,7 +126,7 @@ describe("takeBackFromSiblings", () => {
       "gte:decided_at",
       `or:browser_key.eq.${keys.browserKey},device_key.eq.${keys.deviceKey},ip_hash.eq.${keys.ipHash}`,
     ])
-    expect(h.rpc).toHaveBeenCalledWith("revoke_signup_grant", expect.objectContaining({ p_user_id: FIRST, p_admin_id: null }))
+    expect(h.rpc).toHaveBeenCalledWith("revoke_signup_grant", expect.objectContaining({ p_user_id: FIRST, p_grant_amount: 1500, p_admin_id: null }))
     expect(h.ledger).toHaveBeenCalledWith(expect.objectContaining({ userId: FIRST, amount: -708, description: SIBLING_TAKEBACK_REASON, adminUserId: undefined }))
     expect(h.inserted).toEqual([
       expect.objectContaining({ admin_user_id: null, action: "free_grant_revoke", target_type: "user", target_id: FIRST, reason: SIBLING_TAKEBACK_REASON }),
@@ -114,6 +144,20 @@ describe("takeBackFromSiblings", () => {
     expect(h.rpc).toHaveBeenCalledTimes(1)
     expect(h.rpc).toHaveBeenCalledWith("revoke_signup_grant", expect.objectContaining({ p_user_id: FIRST }))
     expect(h.inserted).toEqual([])
+  })
+
+  it("one sibling's failed read is a warning for that sibling alone — the others are still taken back", async () => {
+    const THIRD = "44444444-4444-4444-8444-444444444444"
+    h.siblings = [{ user_id: FIRST }, { user_id: THIRD }]
+    h.ledgerFails.add(FIRST)
+    h.granted.set(THIRD, [{ amount: 300 }])
+    h.rpc.mockResolvedValue({ data: [{ did_revoke: true, old_credits: 300, new_credits: 0, state: "revoked", refusal: null }], error: null })
+
+    await expect(takeBackFromSiblings({ ...keys, reasons: ["browser_match"] }, log as never)).resolves.toEqual([THIRD])
+    expect(h.rpc).toHaveBeenCalledTimes(1)
+    expect(h.rpc).toHaveBeenCalledWith("revoke_signup_grant", expect.objectContaining({ p_user_id: THIRD, p_grant_amount: 300 }))
+    expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ sibling: FIRST }), expect.stringMatching(/one account/))
+    expect(h.inserted).toEqual([expect.objectContaining({ target_id: THIRD })])
   })
 
   it("a claim with only an address sends only the address; a failed read is a warning, never a throw", async () => {

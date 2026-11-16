@@ -46,6 +46,7 @@ vi.mock("@/ee/billing/credits.js", () => ({
   CreditsService: {
     getBalance: vi.fn(),
     adminAdjustCredits: vi.fn(),
+    logTransaction: vi.fn().mockResolvedValue(true),
   },
   invalidateModelPricingCache: vi.fn(),
 }))
@@ -95,6 +96,8 @@ function supabaseChain(result: { data: unknown; error: unknown; count?: number }
   chain.insert = vi.fn().mockReturnValue(self())
   chain.update = vi.fn().mockReturnValue(self())
   chain.eq = vi.fn().mockReturnValue(self())
+  chain.in = vi.fn().mockReturnValue(self())
+  chain.is = vi.fn().mockReturnValue(self())
   chain.or = vi.fn().mockReturnValue(self())
   chain.order = vi.fn().mockReturnValue(self())
   chain.range = vi.fn().mockReturnValue(self())
@@ -269,8 +272,8 @@ describe("PUT /v1/admin/users/:id/tier", () => {
       data: { subscription_tier: "free", subscription_credits: 50, topup_credits: 20 },
       error: null,
     })
-    // Second call: profiles update
-    const updateChain = supabaseChain({ data: null, error: null })
+    // Second call: profiles update (returns the row it wrote)
+    const updateChain = supabaseChain({ data: [{ id: VALID_UUID }], error: null })
 
     let callCount = 0
     mockFrom.mockImplementation(() => {
@@ -293,6 +296,94 @@ describe("PUT /v1/admin/users/:id/tier", () => {
     expect(body.tier).toBe("basic")
     expect(body.subscription_credits).toBe(4500)
     expect(body.total_credits).toBe(4520)
+  })
+
+  /** Routes each table to its own chain: the profile read, the live-subscription read, the profile write. */
+  function routeTables(opts: { live: unknown[]; written?: unknown[]; credits?: number | null }) {
+    const profileRead = supabaseChain({
+      data: { subscription_tier: "pro", subscription_credits: opts.credits === undefined ? 9000 : opts.credits, topup_credits: 20 },
+      error: null,
+    })
+    const subscriptions = supabaseChain({ data: opts.live, error: null })
+    const profileWrite = supabaseChain({ data: opts.written ?? [{ id: VALID_UUID }], error: null })
+    let profileCalls = 0
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "subscriptions") return subscriptions
+      profileCalls++
+      return profileCalls === 1 ? profileRead : profileWrite
+    })
+    return { profileWrite }
+  }
+
+  it("moving a paid account to free ends its plan: subscription credits 0 (never the free grant), top-ups kept, the real amount logged", async () => {
+    const { profileWrite } = routeTables({ live: [] })
+
+    const res = await app.inject({
+      method: "PUT",
+      url: `/v1/admin/users/${VALID_UUID}/tier`,
+      headers: { "x-user-id": ADMIN_UUID },
+      payload: { tier: "free", adminUserId: ADMIN_UUID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body).toMatchObject({ tier: "free", subscription_credits: 0, total_credits: 20, credit_delta: -9000 })
+    expect(profileWrite.update).toHaveBeenCalledWith(expect.objectContaining({ subscription_credits: 0 }))
+    expect(profileWrite.update.mock.calls[0]![0]).not.toHaveProperty("topup_credits")
+    // Written only while the balance is still the one read: the logged amount is exact.
+    expect(profileWrite.eq).toHaveBeenCalledWith("subscription_credits", 9000)
+    expect(vi.mocked(CreditsService.logTransaction)).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: VALID_UUID, amount: -9000, creditType: "subscription", source: "admin_adjustment", balanceAfter: 0 }),
+    )
+    expect(vi.mocked(CreditsService.adminAdjustCredits)).not.toHaveBeenCalled()
+  })
+
+  it("refuses to move an account with a live subscription to free (409) — nothing written, nothing logged", async () => {
+    const { profileWrite } = routeTables({ live: [{ stripe_subscription_id: "sub_live" }] })
+
+    const res = await app.inject({
+      method: "PUT",
+      url: `/v1/admin/users/${VALID_UUID}/tier`,
+      headers: { "x-user-id": ADMIN_UUID },
+      payload: { tier: "free", adminUserId: ADMIN_UUID },
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toMatchObject({ code: "active_subscription", message: expect.stringMatching(/Cancel the subscription/) })
+    expect(profileWrite.update).not.toHaveBeenCalled()
+    expect(vi.mocked(CreditsService.logTransaction)).not.toHaveBeenCalled()
+  })
+
+  it("a NULL subscription balance is matched as NULL (not never): the move goes through, nothing to log", async () => {
+    const { profileWrite } = routeTables({ live: [], credits: null })
+
+    const res = await app.inject({
+      method: "PUT",
+      url: `/v1/admin/users/${VALID_UUID}/tier`,
+      headers: { "x-user-id": ADMIN_UUID },
+      payload: { tier: "free", adminUserId: ADMIN_UUID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ tier: "free", subscription_credits: 0, credit_delta: 0 })
+    expect(profileWrite.is).toHaveBeenCalledWith("subscription_credits", null)
+    expect(profileWrite.eq).not.toHaveBeenCalledWith("subscription_credits", expect.anything())
+    expect(vi.mocked(CreditsService.logTransaction)).not.toHaveBeenCalled()
+  })
+
+  it("credits that changed between the read and the write: 409, nothing logged", async () => {
+    routeTables({ live: [], written: [] })
+
+    const res = await app.inject({
+      method: "PUT",
+      url: `/v1/admin/users/${VALID_UUID}/tier`,
+      headers: { "x-user-id": ADMIN_UUID },
+      payload: { tier: "free", adminUserId: ADMIN_UUID },
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("credits_changed")
+    expect(vi.mocked(CreditsService.logTransaction)).not.toHaveBeenCalled()
   })
 })
 

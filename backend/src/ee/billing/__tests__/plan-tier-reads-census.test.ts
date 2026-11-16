@@ -89,6 +89,7 @@ const TIER_READS: Readonly<Record<string, Entry>> = {
   "ee/billing/cleanup-service.ts#expireSubscriptions": exempt(1, "the hourly expiry net writes each subscriber's own row (tier, credits, storage floor); under a payer no gate reads that row's tier"),
   "ee/billing/cleanup-service.ts#sendStorageWarnings": exempt(1, "log lines only: no gate, and no client is told"),
   "ee/billing/downgrade-floor.ts#raiseStorageFloorOnActivation": exempt(1, "writes the user's own storage floor after a top-up; storage ceilings are not enforced under a payer"),
+  "ee/billing/downgrade-floor.ts#endPaidPlan": exempt(2, "the webhook and the expiry net ending a subscriber's own plan: it reads that row's tier only to leave an account already on free alone; under a payer no gate reads it"),
   "ee/billing/downgrade-floor.ts#reapplyStorageFloorAfterClawback": exempt(1, "writes the user's own storage floor after a clawback; storage ceilings are not enforced under a payer"),
   "ee/billing/provision-credits.ts#handleSubscriptionCanceled": exempt(1, "the Stripe webhook writing the subscriber's own row on cancellation"),
   "ee/billing/subscription-grant.ts#readPreSubscribeProfile": exempt(1, "the Stripe webhook reading the subscriber's own row before it grants a subscription's plan"),

@@ -135,7 +135,11 @@ export interface WelcomeOfferState {
    * claim records it.
    */
   consentPending: boolean
-  /** The credits a claim grants. Name this figure in the offer; never hard-code it. */
+  /**
+   * The credits a claim grants. Name this figure in the offer; never hard-code
+   * it. With `consentPending`, the credits the account WAS granted, which can
+   * be more than a claim grants today (an earlier, larger grant is kept).
+   */
   credits: number
 }
 
@@ -163,7 +167,12 @@ export interface WelcomeOfferClaimResult {
   consent: "granted"
   /** Where the free grant stands after the claim — `"withheld"` when the abuse gate refused it. */
   grant: FreeGrantState
-  /** The grant's figure. A grant tops the subscription credits UP TO it (it is not added on top), so a claim that lands it leaves the subscription credits at no less than this. */
+  /**
+   * The grant's figure. A grant tops the subscription credits UP TO it (it is
+   * not added on top), so a claim that lands it leaves the subscription credits
+   * at no less than this. For an account granted before the call, what it was
+   * given, which can be more than a claim grants today.
+   */
   credits: number
 }
 

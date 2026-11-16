@@ -68,7 +68,7 @@ describe("FreeGrantWithheldBanner", () => {
     renderAt("/projects")
     const banner = screen.getByTestId("free-grant-withheld-banner")
     expect(banner.textContent).toMatch(/first purchase/i)
-    expect(banner.textContent).toMatch(/1,?500/)
+    expect(banner.textContent).toMatch(/\b300\b/)
     expect(banner.textContent).not.toMatch(/denied|blocked|abuse|fraud|nothing is charged|payment method/i)
   })
 
@@ -79,7 +79,7 @@ describe("FreeGrantWithheldBanner", () => {
     const banner = screen.getByTestId("free-grant-browser-banner")
     expect(banner.textContent).toMatch(/browser/i)
     expect(banner.textContent).toMatch(/reload/i)
-    expect(banner.textContent).toMatch(/1,?500/)
+    expect(banner.textContent).toMatch(/\b300\b/)
     expect(banner.textContent).not.toMatch(/purchase|denied|blocked|abuse|fraud/i)
     expect(screen.queryByRole("link")).toBeNull()
   })

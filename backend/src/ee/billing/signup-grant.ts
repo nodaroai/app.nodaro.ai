@@ -373,20 +373,26 @@ export async function takeBackFromSiblings(
       return []
     }
     const siblings = [...new Set(((data ?? []) as Array<{ user_id: string }>).map((r) => r.user_id))]
+    // One sibling at a time: a failure on one (a read, the RPC) is logged and
+    // the rest are still taken back.
     for (const sibling of siblings) {
-      if ((await countPurchases(sibling, log)) > 0) continue
-      const out = await revokeSignupGrant(sibling, null)
-      if (!out.changed) continue
-      taken.push(sibling)
-      await supabase.from("admin_actions").insert({
-        admin_user_id: null,
-        action: "free_grant_revoke",
-        target_type: "user",
-        target_id: sibling,
-        reason: SIBLING_TAKEBACK_REASON,
-        payload: { by: "rule-6", laterAccount: params.userId, reasons: params.reasons, credits: out.credits },
-      })
-      log.info({ userId: params.userId, sibling, credits: out.credits }, "signup grant: sibling's gift taken back")
+      try {
+        if ((await countPurchases(sibling, log)) > 0) continue
+        const out = await revokeSignupGrant(sibling, null)
+        if (!out.changed) continue
+        taken.push(sibling)
+        await supabase.from("admin_actions").insert({
+          admin_user_id: null,
+          action: "free_grant_revoke",
+          target_type: "user",
+          target_id: sibling,
+          reason: SIBLING_TAKEBACK_REASON,
+          payload: { by: "rule-6", laterAccount: params.userId, reasons: params.reasons, credits: out.credits },
+        })
+        log.info({ userId: params.userId, sibling, credits: out.credits }, "signup grant: sibling's gift taken back")
+      } catch (err) {
+        log.warn({ err, userId: params.userId, sibling }, "signup grant: sibling take-back failed for one account")
+      }
     }
   } catch (err) {
     log.warn({ err, userId: params.userId }, "signup grant: sibling take-back threw")
@@ -475,6 +481,98 @@ function asRefusal(value: unknown): GrantChangeRefusal {
 }
 
 /**
+ * The grant of an account created before the signup ledger existed
+ * (`SIGNUP_GRANT_LEDGER_SINCE`): it was paid by the signup column default,
+ * 1,500 in today's credits, and no `signup_grant` line was written for it.
+ * A recorded grant always wins over this figure.
+ */
+export const UNRECORDED_SIGNUP_GRANT = 1500
+
+/**
+ * When the signup ledger began. Migrations 365/366 — the claim path, which
+ * writes a `signup_grant` line for every grant it pays — reached production
+ * with the push to main at this instant. An account created before it was
+ * paid by the signup column default and has no ledger line; one created after
+ * it was paid by the claim path, which records what it paid, so a missing
+ * line there is a failed best-effort write, not an older grant. An account
+ * created in the minutes between that push and the migrations applying reads
+ * as "after": the take-back can only remove less for it, never more.
+ */
+export const SIGNUP_GRANT_LEDGER_SINCE = new Date("2026-09-01T20:17:34Z")
+
+/** Was this account created before the signup ledger existed? Unknown → no. */
+export function createdBeforeSignupLedger(createdAt: Date | null): boolean {
+  return createdAt !== null && !Number.isNaN(createdAt.getTime()) && createdAt.getTime() < SIGNUP_GRANT_LEDGER_SINCE.getTime()
+}
+
+/**
+ * What this account was actually given as its free grant: the sum of its
+ * `signup_grant` ledger lines (`ledgerTopUp` writes one on the claim or the
+ * activation that moved credits, with the amount that moved). Null when the
+ * account has none. Throws on a failed read — a caller moving credits must
+ * not guess the amount.
+ *
+ * The grant amount changes over time (1,500, then 300 since migration 652),
+ * so this — never `TIER_CREDITS.free` — is what a take-back removes and what
+ * an account is told it was given.
+ */
+export async function readRecordedSignupGrant(userId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("credit_transactions")
+    .select("amount")
+    .eq("user_id", userId)
+    .eq("source", "signup_grant")
+  if (error) throw error
+  const total = ((data ?? []) as Array<{ amount?: unknown }>)
+    .map((row) => Number(row.amount))
+    .filter((amount) => Number.isFinite(amount) && amount > 0)
+    .reduce((sum, amount) => sum + amount, 0)
+  return total > 0 ? total : null
+}
+
+/**
+ * The figure to NAME to an account that already has its grant ("Your N
+ * credits are active"): what it was given, which can be an earlier, larger
+ * grant. Today's figure when there is no record or the read fails — this only
+ * labels, it never moves credits, so it does not throw.
+ */
+export async function grantedCreditsFigure(userId: string): Promise<number> {
+  try {
+    return (await readRecordedSignupGrant(userId)) ?? TIER_CREDITS.free
+  } catch {
+    return TIER_CREDITS.free
+  }
+}
+
+/**
+ * The amount a take-back passes to `revoke_signup_grant`, which removes
+ * LEAST(balance, amount) from a granted account and nothing from a withheld
+ * one:
+ *  - withheld: it was given nothing and loses nothing whatever is passed, so
+ *    the ledger is not read (a failed read never blocks its take-back);
+ *  - a recorded grant: what the ledger says it was given;
+ *  - no record, created before the ledger existed: `UNRECORDED_SIGNUP_GRANT`;
+ *  - no record otherwise (a failed best-effort ledger write, or a creation
+ *    date the profile does not carry): today's figure, so the take-back never
+ *    removes more than a grant made now.
+ * Throws — and nothing moves — when the profile or the ledger cannot be read:
+ * a guessed amount would mark the account revoked for good while it keeps
+ * part of its grant. No such profile: a positive amount, and the RPC answers
+ * `not_found` itself.
+ */
+export async function signupGrantToTakeBack(userId: string): Promise<number> {
+  const { data, error } = await supabase.from("profiles").select("free_grant_state, created_at").eq("id", userId).maybeSingle()
+  if (error) throw error
+  if (!data) return TIER_CREDITS.free
+  const row = data as { free_grant_state?: unknown; created_at?: unknown }
+  if (row.free_grant_state === "withheld") return TIER_CREDITS.free
+  const recorded = await readRecordedSignupGrant(userId)
+  if (recorded !== null) return recorded
+  const createdAt = typeof row.created_at === "string" ? new Date(row.created_at) : null
+  return createdBeforeSignupLedger(createdAt) ? UNRECORDED_SIGNUP_GRANT : TIER_CREDITS.free
+}
+
+/**
  * 'granted' | 'withheld' → 'revoked': an admin takes the free grant back.
  *
  * Removes what is left of the grant (never purchased top-ups) and closes the
@@ -482,12 +580,18 @@ function asRefusal(value: unknown): GrantChangeRefusal {
  * account and while a reservation is still open (its refund would hand the
  * credits back). The ledger line carries the amount ACTUALLY removed — its
  * description is user-visible (/v1/billing/transactions), so it stays neutral.
+ *
+ * The RPC removes LEAST(balance, the amount passed), so the amount passed is
+ * what THIS account was given (`signupGrantToTakeBack`), not today's grant
+ * figure: an account granted 1,500 before the grant became 300 still loses
+ * what is left of its 1,500, and one granted 300 never loses more than 300.
  */
 /** `adminUserId` null = the platform's own rule (rule 6), recorded under no admin. */
 export async function revokeSignupGrant(userId: string, adminUserId: string | null): Promise<GrantChangeOutcome> {
+  const granted = await signupGrantToTakeBack(userId)
   const { data, error } = await supabase.rpc("revoke_signup_grant", {
     p_user_id: userId,
-    p_grant_amount: TIER_CREDITS.free,
+    p_grant_amount: granted,
     p_admin_id: adminUserId,
   })
   if (error) throw error

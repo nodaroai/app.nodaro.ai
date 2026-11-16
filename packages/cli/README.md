@@ -121,6 +121,7 @@ nodaro nodes list [--category ai|processing|input|...]
 nodaro nodes get <type>                                 # full input schema
 nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
+nodaro nodes run generate-video|text-to-video … [--reference-task-type auto|reference|edit|extend]   # what the reference media is for
 
 # Models — browse the model catalog (makers, capability sheets, credit pricing, prompt tips)
 nodaro models list [--kind video] [--mode i2v] [--family Google] [--featured]
@@ -237,6 +238,12 @@ nodaro nodes run generate-image \
 - everything else → string (preserves `=` in values, so `query=a=b=c` works)
 
 For arrays, nested objects, or any value that doesn't fit the flag form, use `--params-file body.json`. Flag values override file values for the same key.
+
+`--reference-task-type <auto|reference|edit|extend>` (`generate-video`, `text-to-video`) sets `referenceTaskType`, what the request's reference media is for; the platform decides whether the model and the request declare it. It wins over the same key in `--param` / `--params-file`, and `--param referenceTaskType=edit` still works. Any other node type refuses it, `video-to-video` included (an edit always runs as an edit there).
+
+```bash
+nodaro nodes run generate-video --params-file body.json --reference-task-type extend --watch
+```
 
 ## Output formatting
 

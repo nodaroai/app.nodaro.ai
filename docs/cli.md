@@ -180,6 +180,7 @@ nodaro nodes get <type>                                 # full input schema
 nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
 nodaro nodes run generate-image --param prompt="…" [--count 1-4] [--models <id,id,…>] [--watch]   # several images in one call
+nodaro nodes run generate-video|text-to-video … [--reference-task-type auto|reference|edit|extend]   # what the reference media is for (Seedance 2.5)
 
 # Models — browse the model catalog (makers, capability sheets, credit pricing, prompt tips)
 nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--family <vendor>] [--featured] [--json]
@@ -854,6 +855,12 @@ Several images in one call (`generate-image` only): `--count <n>` makes 1–4 im
 ```bash
 nodaro nodes run generate-image --param prompt="a lighthouse at dusk" --count 4 --watch
 nodaro nodes run generate-image --param prompt="a lighthouse at dusk" --models gpt-image-2,flux-2-max --count 2 --watch
+```
+
+What a video request's reference media is for (`generate-video`, `text-to-video`): `--reference-task-type <auto|reference|edit|extend>` sets `referenceTaskType` on the body, checked against those four values before the API is called. The platform decides whether the model and the request declare it (a model that does not take it ignores it); see [API integration — Seedance 2.5 reference task type](./api-integration.md#seedance-25-reference-task-type). The flag wins over `referenceTaskType` in `--param` or `--params-file`, and the generic form `--param referenceTaskType=edit` still works. Any other node type refuses the flag, `video-to-video` included: an edit always runs as an edit there.
+
+```bash
+nodaro nodes run generate-video --params-file body.json --reference-task-type extend --watch
 ```
 
 Who is in the shot, by catalog id (`subject` on `generate-image`, `text-to-video`): a value that starts with `{` is read as JSON, so the map fits in one `--param`. Field names and ids come from `nodaro pickers get person` (also `styling`, `held-prop`, `material`, `animal`); the platform writes the wording. See [API integration — Structured subject](./api-integration.md#structured-subject-subject).

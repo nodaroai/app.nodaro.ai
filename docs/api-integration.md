@@ -4395,11 +4395,13 @@ when it was cut at 5,000 rows.
 beside `freeGrantState`; the key is absent while it is off (no popup, no banner,
 no block). `credits` is the number of credits a claim grants — show that figure
 rather than a constant, so the offer follows the server when the grant changes.
+With `consentPending: true` it is what the account was granted, which can be
+more than a claim grants today (an earlier, larger grant is kept).
 Two writes answer it:
 
 | Method | Path | Body | Purpose |
 |---|---|---|---|
-| `POST` | `/v1/credits/welcome-offer/claim` | `{ sourceApp?, locale?, browserKey?, deviceKey? }` (all optional; a malformed value is stored as absent, never a 400) | The user's "yes": records the marketing-email consent, then claims the free signup grant with it. `locale` is the interface language the yes was given in — the id of a language Nodaro ships (`"en"`, `"ja"`, `"pt-BR"`, …), matched exactly and case-sensitively, so `"en-US"` or `"pt-br"` is stored as absent; it is recorded with the consent as the language of the latest one. Returns `{ consent: "granted", grant, credits }` — `grant` is where the free grant stands afterwards — `"granted"` (the grant has landed: this claim topped the subscription credits up to `credits`, or it had landed before), `"withheld"` (the abuse checks refused it), `"revoked"` (taken back earlier; the claim moves nothing) or `"unclaimed"` (nothing moved, e.g. the consent was not yet visible to the claim — treat it as a failure and let the user retry). `credits` is the grant's figure: a grant tops the subscription credits UP TO it, it is not added on top. An account already decided only has its consent recorded. Rate limited to 10 a minute. |
+| `POST` | `/v1/credits/welcome-offer/claim` | `{ sourceApp?, locale?, browserKey?, deviceKey? }` (all optional; a malformed value is stored as absent, never a 400) | The user's "yes": records the marketing-email consent, then claims the free signup grant with it. `locale` is the interface language the yes was given in — the id of a language Nodaro ships (`"en"`, `"ja"`, `"pt-BR"`, …), matched exactly and case-sensitively, so `"en-US"` or `"pt-br"` is stored as absent; it is recorded with the consent as the language of the latest one. Returns `{ consent: "granted", grant, credits }` — `grant` is where the free grant stands afterwards — `"granted"` (the grant has landed: this claim topped the subscription credits up to `credits`, or it had landed before), `"withheld"` (the abuse checks refused it), `"revoked"` (taken back earlier; the claim moves nothing) or `"unclaimed"` (nothing moved, e.g. the consent was not yet visible to the claim — treat it as a failure and let the user retry). `credits` is the grant's figure: a grant tops the subscription credits UP TO it, it is not added on top. An account already decided only has its consent recorded; when it was already granted, `credits` is what it was given, which can be more than a claim grants today. Rate limited to 10 a minute. |
 | `POST` | `/v1/credits/welcome-offer/seen` | — | Records that the one-time popup was shown (`welcomeOffer.popupSeen` turns `true`); the first stamp wins. Returns `{ ok: true }`. Rate limited to 10 a minute. |
 
 Both are **browser session only**: the consent is a person's choice in a
@@ -4485,6 +4487,14 @@ Top-up credits are **valid for 12 months** from purchase. Subscription
 credits reset to the plan's monthly allocation **every month — on a yearly
 plan too** — and unused subscription credits do not roll over into the next
 month. Spending draws subscription credits first.
+
+When a subscription ends, the plan's remaining credits end with it: the
+account moves to the free tier with **0** subscription credits, and it keeps
+its top-up credits. Ending a plan adds no free credits — but an account that
+never claimed its one-time free grant can still claim it afterwards. Free
+credits still unspent when the account subscribed are not lost: subscribing
+moves them into its top-up credits, where they stay valid for 12 months like
+any top-up.
 
 The plans on sale and their prices are public — see
 [§12c](#12c-plans-and-prices-cloud-edition), which also covers

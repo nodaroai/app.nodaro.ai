@@ -10,7 +10,7 @@ import Fastify, { type FastifyInstance } from "fastify"
  * the balance cache always invalidated so the state the apps poll is fresh).
  */
 
-const { mockFrom, mockConfig, mockRecordConsent, mockSync, mockReadFreeGrant, mockRunClaim, mockInvalidate, mockReject } =
+const { mockFrom, mockConfig, mockRecordConsent, mockSync, mockReadFreeGrant, mockRunClaim, mockGrantedFigure, mockInvalidate, mockReject } =
   vi.hoisted(() => ({
     mockFrom: vi.fn(),
     mockConfig: vi.fn(),
@@ -18,6 +18,7 @@ const { mockFrom, mockConfig, mockRecordConsent, mockSync, mockReadFreeGrant, mo
     mockSync: vi.fn(),
     mockReadFreeGrant: vi.fn(),
     mockRunClaim: vi.fn(),
+    mockGrantedFigure: vi.fn(),
     mockInvalidate: vi.fn(),
     mockReject: vi.fn(),
   }))
@@ -27,7 +28,11 @@ vi.mock("@/lib/api-auth-mode.js", () => ({ rejectProgrammaticAuth: (...a: unknow
 vi.mock("@/ee/lib/welcome-offer-config.js", () => ({ getWelcomeOfferConfig: mockConfig }))
 vi.mock("@/ee/lib/consent-record.js", () => ({ recordConsentGrant: mockRecordConsent }))
 vi.mock("@/ee/lib/consent-loops-sync.js", () => ({ syncConsentRow: mockSync }))
-vi.mock("@/ee/billing/signup-grant.js", () => ({ readFreeGrant: mockReadFreeGrant, runSignupGrantClaim: mockRunClaim }))
+vi.mock("@/ee/billing/signup-grant.js", () => ({
+  readFreeGrant: mockReadFreeGrant,
+  runSignupGrantClaim: mockRunClaim,
+  grantedCreditsFigure: mockGrantedFigure,
+}))
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: mockInvalidate }))
 // The leaf the consumers read from forwards to the mock above.
 vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
@@ -50,6 +55,7 @@ beforeEach(async () => {
   mockSync.mockResolvedValue(undefined)
   mockReadFreeGrant.mockResolvedValue({ state: "unclaimed", createdAt: new Date() })
   mockRunClaim.mockResolvedValue({ state: "granted", granted: true, decision: null })
+  mockGrantedFigure.mockResolvedValue(TIER_CREDITS.free)
 
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
@@ -150,6 +156,21 @@ describe("POST /v1/credits/welcome-offer/claim", () => {
     expect(mockRunClaim).not.toHaveBeenCalled()
     expect(mockRecordConsent).toHaveBeenCalledTimes(1)
     expect(mockInvalidate).toHaveBeenCalledWith(USER)
+  })
+
+  it("an account granted before the call is told what it WAS given — an earlier, larger grant included", async () => {
+    mockReadFreeGrant.mockResolvedValue({ state: "granted", createdAt: new Date() })
+    mockGrantedFigure.mockResolvedValue(1500)
+    const res = await claim({ sourceApp: "app" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ consent: "granted", grant: "granted", credits: 1500 })
+    expect(mockGrantedFigure).toHaveBeenCalledWith(USER)
+  })
+
+  it("a claim this call makes names today's figure, and never reads the ledger", async () => {
+    const res = await claim({ sourceApp: "app" })
+    expect(res.json()).toEqual({ consent: "granted", grant: "granted", credits: TIER_CREDITS.free })
+    expect(mockGrantedFigure).not.toHaveBeenCalled()
   })
 
   it("reports 'withheld' when the abuse gate refuses after consent", async () => {

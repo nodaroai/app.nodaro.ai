@@ -1,0 +1,24 @@
+-- The free plan's one-time credit grant drops from 1,500 to 300 (decided
+-- 2026-11-16).
+--
+-- tier_config DUPLICATES TIER_CREDITS.free in
+-- backend/src/ee/billing/stripe-config.ts, and getBalance reports this row as a
+-- free account's `monthlyAllocation` (the public SDK's balance carries it).
+-- Updating only one of the two caused two earlier production incidents
+-- (migrations 067 and 281), so both move in this same change;
+-- free-tier-config.test.ts holds the constant to the latest migration that
+-- sets this row.
+--
+-- Nothing else moves here, deliberately:
+--   * The grant itself is paid by claim_signup_grant / activate_signup_grant
+--     with the figure the application passes (TIER_CREDITS.free). Every claim
+--     made after the deploy pays 300 — including an account that signed up
+--     earlier and never claimed — and an account that already holds its 1,500
+--     keeps them: no balance is touched.
+--   * profiles.subscription_credits keeps DEFAULT 0 (migration 366): a new
+--     account is paid by the claim decision, never by the column.
+--   * Taking a grant back removes what that account was given (its
+--     'signup_grant' ledger line), not the new figure — see
+--     revokeSignupGrant in backend/src/ee/billing/signup-grant.ts.
+
+UPDATE tier_config SET monthly_credits = 300 WHERE tier = 'free';

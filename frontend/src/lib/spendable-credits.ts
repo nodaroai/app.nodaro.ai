@@ -26,7 +26,7 @@
  * which is why `gateApplies` exists. "Fall back to `total`" reads like the
  * conservative choice and is not one: on a payer instance `total` is that
  * frozen grant, so a payer granting 10,000 credits watched the per-node
- * Generate button stay disabled for a 4,000-credit node over a 1,500 it could
+ * Generate button stay disabled for a 4,000-credit node over the grant it could
  * not move, and a user provisioned before any signup grant landed (`total: 0`)
  * got a permanently dead button. Between "a payer exists" and "enforcement is
  * on", the server — the payer's pool now, the RPC's allowance check after the

@@ -4184,7 +4184,7 @@ export class CreditsService {
 
     // Free tier: daily credit cap (dailyCreditCap null = cap disabled, the
     // state since 2026-08-17 — total exposure is bounded by the one-time
-    // 1,500 signup grant). When a cap is set, connected community instances
+    // signup grant, TIER_CREDITS.free). When a cap is set, connected community instances
     // are exempt (founder decision D2: don't interrupt the first evening) —
     // their per-instance monthly cap guards run in the credit guard.
     if (isFree && !surface?.communityInstance) {
