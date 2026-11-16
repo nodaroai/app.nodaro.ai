@@ -8,11 +8,12 @@
  */
 import { z } from "zod"
 
-/** A spoken word, in seconds of the media. */
+/** A spoken word, in seconds of the media, with who said it when the transcript tells the voices apart. */
 export interface TimedWord {
   readonly text: string
   readonly start: number
   readonly end: number
+  readonly speaker?: string
 }
 
 export interface SecondsRange {
@@ -24,19 +25,63 @@ export interface CaptionCue {
   readonly text: string
   readonly start: number
   readonly end: number
+  /** The cue's words with their own times: the spoken word can be highlighted as it is said. */
+  readonly words?: readonly TimedWord[]
 }
 
-/** The steps an edit can take, in the order they run. */
-export const EDIT_STEPS = ["fillers", "pauses", "captions", "music"] as const
+/** Everything Edit with AI can do to a video, in the order the cards show them. */
+export const EDIT_STEPS = [
+  "pauses",
+  "fillers",
+  "mistakes",
+  "captions",
+  "music",
+  "broll",
+  "titles",
+  "picture",
+  "color",
+  "zoom",
+  "phone",
+  "layout",
+  "cameras",
+  "clips",
+  "trailer",
+  "chapters",
+] as const
 export type EditStep = (typeof EDIT_STEPS)[number]
+
+/** The color looks the Color agent knows. */
+export const LOOKS = ["warm", "cool", "vivid", "bw"] as const
+export type Look = (typeof LOOKS)[number]
+
+/** A change inside the picture: what to do, for the video model (in English), and what it touches, in the person's words. */
+export interface PictureChange {
+  readonly instruction: string
+  readonly what: string | null
+}
+
+/** What the plan's steps need beyond their names. */
+export interface PlanParams {
+  /** What the music should sound like (English, for the music model). */
+  readonly musicStyle: string | null
+  readonly picture: PictureChange | null
+  readonly look: Look
+  /** How many short clips to make. */
+  readonly clips: number
+  /** How the speakers are laid out, for the speaker layout. */
+  readonly layout: SpeakerLayoutKind
+}
+
+/** The speaker layouts: stacked, side by side, a grid, or one large with the others small. */
+export const SPEAKER_LAYOUT_KINDS = ["stacked", "side", "grid", "pip"] as const
+export type SpeakerLayoutKind = (typeof SPEAKER_LAYOUT_KINDS)[number]
 
 export interface EditPlan {
   readonly steps: readonly EditStep[]
-  /** What the music should sound like, when the plan adds music. */
-  readonly musicStyle: string | null
+  readonly params: PlanParams
   /** A short answer to the person, in the language they wrote in. Null when none. */
   readonly reply: string | null
-  /** What the request asked for that this edit cannot do yet, in the person's words. Empty when nothing. */
+  /** What the request asked for that this edit cannot do, in the person's words. Empty when nothing. */
   readonly cannot: readonly string[]
 }
 
@@ -45,7 +90,7 @@ export const DEFAULT_MUSIC_STYLE = "upbeat modern background music, light percus
 // ── the transcript ───────────────────────────────────────────────────────────
 
 const transcriptJson = z.object({
-  words: z.array(z.object({ text: z.string(), startMs: z.number(), endMs: z.number() }).passthrough()),
+  words: z.array(z.object({ text: z.string(), startMs: z.number(), endMs: z.number(), speaker: z.string().optional() }).passthrough()),
 }).passthrough()
 
 /**
@@ -56,7 +101,7 @@ export function wordsFromTranscript(json: unknown): TimedWord[] {
   const parsed = transcriptJson.safeParse(json)
   if (!parsed.success) return []
   return parsed.data.words
-    .map((w) => ({ text: w.text.trim(), start: w.startMs / 1000, end: w.endMs / 1000 }))
+    .map((w) => ({ text: w.text.trim(), start: w.startMs / 1000, end: w.endMs / 1000, ...(w.speaker ? { speaker: w.speaker } : {}) }))
     // A word can be timed with no length ("I" said fast); it is still a word to caption.
     .filter((w) => w.text.length > 0 && Number.isFinite(w.start) && Number.isFinite(w.end) && w.end >= w.start)
     .sort((a, b) => a.start - b.start)
@@ -206,81 +251,35 @@ export function captionCues(words: readonly TimedWord[], opts: CaptionOptions = 
     // Hold the caption a little past the last word, never into the next one, and
     // never shorter than a moment: a word timed with no length still gets one.
     const held = next ? Math.min(end + 0.25, next.start) : end + 0.25
-    return { text: joinWords(group), start: group[0]!.start, end: Math.max(held, end, group[0]!.start + MIN_CUE_SECONDS) }
+    return { text: joinWords(group), start: group[0]!.start, end: Math.max(held, end, group[0]!.start + MIN_CUE_SECONDS), words: group }
   })
 }
 
-// ── the request ──────────────────────────────────────────────────────────────
+/** The words spoken inside a range of the media, in order. */
+export const wordsIn = (words: readonly TimedWord[], range: SecondsRange) => words.filter((w) => w.start >= range.start - 0.01 && w.end <= range.end + 0.01)
 
-// What a request asks for, in the languages Nodaro speaks. Used when the
-// planner cannot answer: the model reads the request first.
-const INTENT_PATTERNS: Record<EditStep, RegExp> = {
-  // `\b` knows only ASCII letters, so a word with accents is bounded by lookarounds instead.
-  // Not a bare "um": in Portuguese it is the article ("coloque um fundo musical").
-  fillers: /filler|\bums\b|\bumm+s?\b|\buhs?\b|stutter|hesitat|מילות ה?מילוי|אממ|גמגו|היסוס|フィラー|えーと|言い淀|필러|군말|더듬|vícios? de linguagem|muletas?|(?<!\p{L})hã(?!\p{L})/iu,
-  pauses: /pause|silen|dead air|\bgaps?\b|tighten|שתיק|הפסק|רווח|שקט|מתים|間を|無音|沈黙|詰め|침묵|공백|쉼|pausa|silênc|silenc|respiro/iu,
-  captions: /caption|subtit|text on screen|כתובי|תמליל על|字幕|テロップ|자막|legend/iu,
-  music: /music|\bsong\b|soundtrack|\bbeat\b|\bbgm\b|מוזיק|שיר|מנגינ|פסקול|音楽|ＢＧＭ|음악|배경음|브금|música|trilha/iu,
-}
-
-/**
- * The plan a request asks for, read from its words alone. A request that names
- * nothing this edit can do gets no steps, and the run ends before anything is
- * paid for: it never falls back to an edit nobody asked for.
- */
-export function planFromRequest(request: string): EditPlan {
-  const steps = EDIT_STEPS.filter((step) => INTENT_PATTERNS[step].test(request))
-  return { steps, musicStyle: steps.includes("music") ? DEFAULT_MUSIC_STYLE : null, reply: null, cannot: [] }
-}
-
-// Only the steps decide the plan; everything else in the answer is read leniently,
-// so a long reply or an odd "cannot" never throws a good plan away.
-const modelPlan = z.object({
-  steps: z.array(z.string()),
-  musicStyle: z.unknown().optional(),
-  reply: z.unknown().optional(),
-  cannot: z.unknown().optional(),
-})
-
-/** At most this many things the request asked for that cannot be done, each this long. */
-const MAX_CANNOT = 6
-const MAX_CANNOT_CHARS = 120
-const MAX_REPLY_CHARS = 400
-const MAX_STYLE_CHARS = 300
-
-const textOf = (value: unknown, max: number): string | null => (typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null)
-
-/**
- * The planner model's answer (one JSON object, possibly in a code fence), as a
- * plan; null when it is not one. Steps it invents are dropped, and the order is
- * always the run order. An empty steps list is an answer: the request asked for
- * nothing this edit can do. A list of invented steps only is not one.
- */
-export function parseModelPlan(text: string): EditPlan | null {
-  const json = /\{[\s\S]*\}/.exec(text)?.[0]
-  if (!json) return null
-  let raw: unknown
-  try {
-    raw = JSON.parse(json)
-  } catch {
-    return null
+/** The ranges left after cutting `cuts` out of `whole`: what will still play. */
+export function keptRanges(whole: SecondsRange, cuts: readonly SecondsRange[]): SecondsRange[] {
+  const kept: SecondsRange[] = []
+  let at = whole.start
+  for (const cut of mergeRanges(cuts, 0)) {
+    if (cut.end <= at || cut.start >= whole.end) continue
+    if (cut.start > at) kept.push({ start: at, end: Math.min(cut.start, whole.end) })
+    at = Math.max(at, cut.end)
   }
-  const parsed = modelPlan.safeParse(raw)
-  if (!parsed.success) return null
-  const asked = new Set(parsed.data.steps.map((s) => s.trim().toLowerCase()))
-  const steps = EDIT_STEPS.filter((step) => asked.has(step))
-  if (asked.size > 0 && steps.length === 0) return null
-  const listed = Array.isArray(parsed.data.cannot) ? parsed.data.cannot : []
-  const cannot = [...new Set(listed.map((thing) => textOf(thing, MAX_CANNOT_CHARS)).filter((thing): thing is string => thing !== null))].slice(0, MAX_CANNOT)
-  return {
-    steps,
-    musicStyle: steps.includes("music") ? textOf(parsed.data.musicStyle, MAX_STYLE_CHARS) ?? DEFAULT_MUSIC_STYLE : null,
-    reply: textOf(parsed.data.reply, MAX_REPLY_CHARS),
-    cannot,
-  }
+  if (at < whole.end) kept.push({ start: at, end: whole.end })
+  return kept.filter((r) => r.end - r.start > 0.01)
 }
 
 // ── the timeline ─────────────────────────────────────────────────────────────
+
+/** A visual item's place on the canvas, in pixels: x and y from the canvas center. */
+export interface ItemTransform {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
 
 /** An item as the editor reports it (NODARO_GET_TIMELINE). */
 export interface TimelineItemView {
@@ -289,22 +288,75 @@ export interface TimelineItemView {
   readonly trackId: string
   readonly from: number
   readonly durationInFrames: number
+  readonly label?: string
+  /** What a text item says. */
+  readonly text?: string
   readonly mediaId?: string
   readonly sourceStart?: number
   readonly sourceEnd?: number
   readonly sourceFps?: number
   readonly speed?: number
+  readonly transform?: ItemTransform
+}
+
+export interface TrackView {
+  readonly id: string
+  readonly kind?: string
+  readonly order?: number
+  readonly syncLock?: boolean
+}
+
+export interface MediaView {
+  readonly id: string
+  readonly fileName?: string
+  readonly mimeType?: string
+  readonly duration?: number
+  readonly width?: number
+  readonly height?: number
+}
+
+export interface MarkerView {
+  readonly id: string
+  readonly frame: number
+  readonly label?: string
+  readonly color?: string
+}
+
+/** A timeline tab beside the main edit; none `active` means the main edit is open. */
+export interface SequenceView {
+  readonly id: string
+  readonly name?: string
+  readonly durationInFrames?: number
+  readonly active?: boolean
 }
 
 export interface TimelineView {
   readonly fps: number
   readonly durationInFrames: number
   readonly items: readonly TimelineItemView[]
+  /** The canvas, when the editor says it. */
+  readonly width?: number
+  readonly height?: number
+  readonly tracks?: readonly TrackView[]
+  readonly media?: readonly MediaView[]
+  /** Where the playhead is. */
+  readonly currentFrame?: number
+  readonly markers?: readonly MarkerView[]
+  readonly sequences?: readonly SequenceView[]
 }
+
+const transformView = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }).passthrough()
 
 const timelineView = z.object({
   fps: z.number().positive(),
   durationInFrames: z.number().nonnegative(),
+  width: z.number().positive().optional(),
+  height: z.number().positive().optional(),
+  tracks: z.array(z.object({ id: z.string(), kind: z.string().optional(), order: z.number().optional(), syncLock: z.boolean().optional() }).passthrough()).optional(),
+  media: z.array(z.object({ id: z.string(), fileName: z.string().optional(), mimeType: z.string().optional(), duration: z.number().optional(), width: z.number().optional(), height: z.number().optional() }).passthrough()).optional(),
+  currentFrame: z.number().optional(),
+  markers: z.array(z.object({ id: z.string(), frame: z.number(), label: z.string().optional(), color: z.string().optional() }).passthrough()).optional(),
+  sequences: z.array(z.object({ id: z.string(), name: z.string().optional(), durationInFrames: z.number().optional(), active: z.boolean().optional() }).passthrough()).optional(),
   items: z.array(
     z.object({
       id: z.string(),
@@ -312,11 +364,14 @@ const timelineView = z.object({
       trackId: z.string(),
       from: z.number(),
       durationInFrames: z.number(),
+      label: z.string().optional(),
+      text: z.string().optional(),
       mediaId: z.string().optional(),
       sourceStart: z.number().optional(),
       sourceEnd: z.number().optional(),
       sourceFps: z.number().optional(),
       speed: z.number().optional(),
+      transform: transformView.optional(),
     }).passthrough(),
   ),
 }).passthrough()

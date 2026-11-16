@@ -340,6 +340,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
             editorWindow={editorWindow}
             editorOrigin={freecutOrigin()}
             videoUrl={videoUrl}
+            capabilities={capabilities}
             onLayout={setAiWide}
             project={aiProject}
             onClose={() => setAiOpen(false)}

@@ -7360,6 +7360,35 @@ async function llmStreamGeneric(
   throw new Error(tx("apiErr.streamEndedWithoutCompletion"))
 }
 
+/**
+ * One schema-forced LLM call (`POST /v1/llm/structured`): the caller's own
+ * system prompt and JSON Schema in, the validated object out. Billed under the
+ * `llm-structured` feature at the chosen model and effort.
+ */
+export async function llmStructuredApi<T = unknown>(params: {
+  system: string
+  input: string
+  jsonSchema: Record<string, unknown>
+  schemaName?: string
+  llmModel?: string
+  reasoningEffort?: string
+  signal?: AbortSignal
+}): Promise<{ jobId: string; output: T }> {
+  const body: Record<string, unknown> = { system: params.system, input: params.input, jsonSchema: params.jsonSchema }
+  if (params.schemaName) body.schemaName = params.schemaName
+  if (params.llmModel) body.llmModel = params.llmModel
+  if (params.reasoningEffort) body.reasoningEffort = params.reasoningEffort
+  return apiJson("/v1/llm/structured", { body, workflowId: true, label: "apiErr.structuredLlm", signal: params.signal })
+}
+
+/**
+ * A use-case node's fixed fee per run (`POST /v1/use-case-fee`), for a result
+ * this client planned and built itself (Edit with AI's clips, trailer, chapters).
+ */
+export async function chargeUseCaseFee(params: { type: string }): Promise<{ jobId: string }> {
+  return apiJson("/v1/use-case-fee", { body: { type: params.type }, workflowId: true, label: "apiErr.useCaseFee" })
+}
+
 export async function generateAIWriterStream(params: {
   systemPrompt: string
   userInput: string
