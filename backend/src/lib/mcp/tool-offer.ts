@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js"
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import type { WorldId } from "@nodaro/shared/runtime-config"
 import { GATEABLE_NODE_TYPES, ROUTE_GATES_GENERATION, availabilityOverride } from "../availability-override.js"
@@ -18,6 +18,7 @@ import {
   type AvailabilityViewer,
 } from "../surface-deny.js"
 import { runtimeSurfaceProfile, surfaceAllowsLinkImports } from "../surface-profile.js"
+import { withToolDescriptionNotes } from "./offer-note.js"
 import type { McpSession } from "./session.js"
 import { outsideAddressRefusal } from "./tool-addresses.js"
 import { TOOL_NEEDS, type RouteNeed, type ToolNeed } from "./tool-needs.js"
@@ -59,6 +60,16 @@ import { errorResult } from "./tools/_verb-helpers.js"
  * (`tool-addresses.ts`): judged here, before the tool runs, whatever route,
  * plugin or service the tool would reach.
  *
+ * WHAT THE LISTED TOOLS SAY. A listed tool's description, or an argument's,
+ * can name a sibling tool the session is not listed or a model the deployment
+ * withholds (a model enum, a "one of …" list, a default). Its schema is left
+ * as registered — a model enum cannot be narrowed through one funnel without
+ * emptying the enum of a tool that stays listed (a deployment that offers no
+ * language model still lists `generate_text`, whose node it offers) — and the
+ * description ends with a generated note naming what is not offered here
+ * (`offer-note.ts`, decided 2026-11-16). A call naming a withheld model is
+ * refused by the run's model door, as before.
+ *
  * NOTHING RESTRICTED, NOTHING CHANGES. Where the deployment restricts nothing
  * no tool is judged, every registration goes through untouched, and every
  * call reaches its tool as before (`tool-list-wire.test.ts` records the whole
@@ -80,6 +91,8 @@ export interface ToolOffer {
   refusalOf(tool: string): ToolRefusal | undefined
   /** Whether this viewer is offered the node type `type` (a family's own subsets: the use-case verbs). */
   nodeOffered(type: string): boolean
+  /** Whether this deployment offers the model `id`: the run's own model door (`isModelDenied`). */
+  modelOffered(id: string): boolean
 }
 
 /**
@@ -183,6 +196,7 @@ export async function resolveToolOffer(userId: string): Promise<ToolOffer | unde
       return verdict
     },
     nodeOffered: (type) => !isNodeDenied(type, viewer),
+    modelOffered: (id) => !isModelDenied(id),
   }
 }
 
@@ -274,6 +288,12 @@ export function installToolOffer(server: McpServer, opts: { session: Pick<McpSes
   const inner = server.server as unknown as { setRequestHandler: (schema: unknown, handler: CallHandler) => void }
   const setRequestHandler = inner.setRequestHandler.bind(inner)
   inner.setRequestHandler = (schema, handler) => {
+    // The descriptions of the tools it lists say what they name that is not
+    // offered here (offer-note.ts); with no offer the list leaves as it came.
+    const offer = opts.offer
+    if (schema === ListToolsRequestSchema && offer) {
+      return setRequestHandler(schema, async (request, extra) => withToolDescriptionNotes(await handler(request, extra), offer))
+    }
     if (schema !== CallToolRequestSchema) return setRequestHandler(schema, handler)
     return setRequestHandler(schema, async (request, extra) => {
       const name = request?.params?.name

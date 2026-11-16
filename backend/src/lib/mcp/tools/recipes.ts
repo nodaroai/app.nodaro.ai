@@ -226,19 +226,19 @@ export function registerRecipeTool(server: McpServer, session: McpSession): void
       // Every recipe text is served in the deployment's own terms where it has them (lib/mcp/served-documents.ts).
       if (!args.recipe) {
         const list = listRecipes(session).map((r) => `- **${r.name}** — ${r.description}\n  triggers: ${r.triggers.join(", ")}`).join("\n")
-        return { content: [{ type: "text" as const, text: list ? statedDocument(`Available recipes:\n${list}`) : "No recipes available." }] }
+        return { content: [{ type: "text" as const, text: list ? statedDocument(`Available recipes:\n${list}`, session) : "No recipes available." }] }
       }
       if (args.file) {
         const f = loadAnyRecipe(args.recipe, args.file, { localOnly: session.firstParty })
         if (f == null) return { isError: true as const, content: [{ type: "text" as const, text: `No file '${args.file}' in recipe '${args.recipe}'.` }] }
-        return { content: [{ type: "text" as const, text: statedDocument(f) }] }
+        return { content: [{ type: "text" as const, text: statedDocument(f, session) }] }
       }
       const body = loadAnyRecipe(args.recipe, undefined, { localOnly: session.firstParty })
       if (body == null) {
         const names = listRecipes(session).map((r) => r.name).join(", ") || "(none)"
         return { isError: true as const, content: [{ type: "text" as const, text: `No recipe '${args.recipe}'. Available: ${names}.` }] }
       }
-      return { content: [{ type: "text" as const, text: statedDocument(body) }] }
+      return { content: [{ type: "text" as const, text: statedDocument(body, session) }] }
     },
   )
 }

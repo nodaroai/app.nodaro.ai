@@ -10,6 +10,7 @@ import { siteCaptureEnabled } from "../../config.js"
 import { isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
 import { surfaceAllowsLinkImports } from "../../surface-profile.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
+import type { McpSession } from "../session.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { clientRequestIdSchema, dispatchJob, JOB_OUTPUT_SCHEMA } from "./_verb-helpers.js"
 import { creditHint } from "./_credit-hint.js"
@@ -22,12 +23,18 @@ export const CAPTURE_STILL_KEYS = ["assetId", "url"] as const
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
 /**
- * This install offers capture: the switch is on, no surface profile withdraws
- * it, and links to outside content may be imported (every capture is of a page
- * on another site, so the tool is withheld where they may not: tool-needs.ts).
+ * This install offers capture to `session`: the switch is on, and the session
+ * is offered `capture_site` — judged by its offer as its viewer (an admin
+ * keeps a node the admin switch hides from users), as the tool list is
+ * (tool-offer.ts). With no offer (a deployment that restricts nothing) no
+ * surface profile withdraws it and links to outside content may be imported
+ * (every capture is of a page on another site, so the tool is withheld where
+ * they may not: tool-needs.ts), asked as before.
  */
-export function siteCaptureOffered(): boolean {
-  return siteCaptureEnabled() && !isNodeDenied("site-capture", USER_VIEWER) && surfaceAllowsLinkImports()
+export function siteCaptureOffered(session: Pick<McpSession, "offer">): boolean {
+  if (!siteCaptureEnabled()) return false
+  if (session.offer) return session.offer.refusalOf(CAPTURE_SITE_TOOL) === undefined
+  return !isNodeDenied("site-capture", USER_VIEWER) && surfaceAllowsLinkImports()
 }
 
 export function captureSiteDescription(): string {

@@ -1171,6 +1171,18 @@ optional; each array empty = "keep the default"):
   worked out per request, so it follows an Admin → Availability change within
   the same minute a run's refusal does. `get_node_skill` refuses a withheld
   node the same way, and `start_workflow_editor`'s node catalog leaves it out.
+  Every document the MCP tools serve (the film and video director guides, the
+  workflow editor, the recipes, the node skills, the Studio and Recast
+  guides) opens with a generated note where it names a tool the session is
+  not listed or a model the deployment withholds, saying exactly which; its
+  text is otherwise served as written. `list_models` lists a model only where
+  a node offered to the session runs it (which nodes run a model is derived
+  from the node registry's providers, the model catalog's kinds and modes,
+  and the models each node's route runs), and its recommendations name only
+  listed models. A listed tool whose description or arguments name a tool the
+  session is not listed or a model the deployment withholds ends its
+  description with the same kind of note; its arguments are left as they are,
+  and a call naming a withheld model is refused with `model_not_available`.
   Where none of the above is set, the tool list is unchanged. What each tool
   needs is one table in the backend (`lib/mcp/tool-needs.ts`), held to the
   code by a test; see [What a deployment offers](mcp/tools.md#what-a-deployment-offers)

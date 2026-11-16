@@ -130,9 +130,9 @@ export function registerStudioProductionTools(opts: RegisterStudioProductionTool
       // guides are served in the deployment's own terms where it has them
       // (lib/mcp/served-documents.ts).
       if (part === "schema") return textResult(skill.schema)
-      if (part === "catalog") return markdownResult(statedDocument(skill.catalog))
-      if (part === "authoring") return markdownResult(statedDocument(skill.skill))
-      return markdownResult(statedDocument(skill.operating))
+      if (part === "catalog") return markdownResult(statedDocument(skill.catalog, session))
+      if (part === "authoring") return markdownResult(statedDocument(skill.skill, session))
+      return markdownResult(statedDocument(skill.operating, session))
     },
   )
 
