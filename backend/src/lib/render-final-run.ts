@@ -109,6 +109,12 @@ export interface RenderFinalCredits {
   readonly available: number | null
   /** Why it cannot be covered; only when `sufficient` is false. */
   readonly message?: string
+  /**
+   * Refused on a web surface where a pay-as-you-go account spends its free pool
+   * only (`checkRunSetCredits`): `available` is that pool alone. Only present
+   * (true) on such a refusal.
+   */
+  readonly subscriptionRequired?: true
 }
 
 /** A continued run's seeding, for pricing a use-case node that resumes a failed attempt (lib/use-case/resume-credits.ts). */
@@ -193,6 +199,7 @@ export async function renderFinalCredits(input: {
     sufficient,
     available: check.available,
     ...(!sufficient && check.message !== undefined ? { message: check.message } : {}),
+    ...(!sufficient && check.subscriptionRequired ? { subscriptionRequired: true as const } : {}),
   }
 }
 

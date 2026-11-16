@@ -38,8 +38,12 @@ right after it opens closes it instead of saying yes.
 The dialog opens before the whole workflow's **Run** starts. For most nodes it
 also opens when the node's own run (its ▶, or **Run This Node** in its
 settings) is refused for a credits shortfall and the refusal names the
-figures. When a credits refusal names no figures, the node shows the same
-error notice as before.
+figures. That includes the podcast nodes (Tighten Episode, Chapters, Trailer,
+Clip Pack and Speaker Layout): their own run and their **Continue** are
+refused when the balance cannot cover the run's estimate, and the dialog shows
+that estimate. Their **Render final** runs as part of the workflow's run, so a
+refusal there shows on the node, as before. When a credits refusal names no
+figures, the node shows the same error notice as before.
 
 ## When the grant waits for a first purchase
 

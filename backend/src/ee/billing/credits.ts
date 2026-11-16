@@ -5284,13 +5284,16 @@ export class CreditsService {
    * pays, and the headroom is the reserve RPC's atomic job. A profile that
    * cannot be read passes (the per-node reservation refuses, as
    * `checkAppRunEligibility` does). With credits disabled it passes.
+   * A refusal on a web surface's free pool says so (`subscriptionRequired`,
+   * as `checkRunSetCredits` does): `balance` is then that pool alone, the case
+   * the credit guard answers with the subscription ask rather than a balance.
    */
   static async checkBalanceCovers(
     userId: string,
     credits: number,
     billingContext?: BillingContext,
     webFreeMode?: boolean,
-  ): Promise<{ ok: true } | { ok: false; balance: number }> {
+  ): Promise<{ ok: true } | { ok: false; balance: number; subscriptionRequired?: true }> {
     if (creditsDisabled()) return { ok: true }
 
     const { data: profile } = await supabase
@@ -5307,7 +5310,8 @@ export class CreditsService {
     if (!gates.personalBalance) return { ok: true }
 
     const balance = ((profile.subscription_credits as number | null) ?? 0) + (gates.webFree ? 0 : ((profile.topup_credits as number | null) ?? 0))
-    return balance >= credits ? { ok: true } : { ok: false, balance }
+    if (balance >= credits) return { ok: true }
+    return { ok: false, balance, ...(gates.webFree ? { subscriptionRequired: true as const } : {}) }
   }
 
   /**

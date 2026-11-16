@@ -41,6 +41,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { usecasePreflight } from "../lib/use-case/preflight.js"
 import { USE_CASE_BODIES, type UseCaseBody } from "../lib/use-case/bodies.js"
+import { statedShortfall, usecaseShortfallBody } from "../lib/use-case/credits-refusal.js"
 import {
   IDEMPOTENCY_KEY_REUSED,
   USE_CASE_MAX_DEPTH,
@@ -215,12 +216,13 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
       const cover = await CreditsService.checkBalanceCovers(userId, estimate.totalCredits, billingContext, webFreeMode)
       if (!cover.ok) {
         // A deployment's pool is the operator's: its balance is not the
-        // requester's to see, and only the operator can top it up. Every
-        // use-case node works on an episode, so one sentence serves them all.
-        const message = billingContext?.payer === "deployment"
-          ? DEPLOYMENT_OUT_OF_CREDITS
-          : estimateShortfallMessage("This episode is", estimate.totalCredits, cover.balance)
-        return reply.status(402).send({ error: { code: "insufficient_credits", message } })
+        // requester's to see (no figures either), and only the operator can
+        // top it up. Every use-case node works on an episode, so one sentence
+        // serves them all; its figures ride beside the error (credits-refusal.ts).
+        const refusal = billingContext?.payer === "deployment"
+          ? { message: DEPLOYMENT_OUT_OF_CREDITS }
+          : statedShortfall(estimate.totalCredits, cover.balance, (required, balance) => estimateShortfallMessage("This episode is", required, balance), cover.subscriptionRequired === true)
+        return reply.status(402).send(usecaseShortfallBody(refusal))
       }
       req.creditReservation = { usageLogId: "", creditsReserved: 0, watermark: false, ...req.creditReservation, creditOverride: feeCredits }
     }

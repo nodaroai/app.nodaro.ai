@@ -155,7 +155,7 @@ export const src = {
   steps: 900,
   /** What the steps hold while they render; null: their price (no UGC part). */
   stepsHold: null as number | null,
-  cover: { ok: true } as { ok: boolean; balance?: number },
+  cover: { ok: true } as { ok: boolean; balance?: number; subscriptionRequired?: true },
   coverArgs: [] as unknown[],
 }
 export const m = {

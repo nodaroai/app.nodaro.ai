@@ -57,6 +57,7 @@ import {
 import { usecaseContinueBody, usecaseReviewerPresent } from "../lib/use-case/request.js"
 import { resolveUseCaseContinuation, type UseCaseContinuation } from "../lib/use-case/continuation.js"
 import { fromFailedCover } from "../lib/use-case/continue-credits.js"
+import { usecaseShortfallBody } from "../lib/use-case/credits-refusal.js"
 import { usecaseInnerDenial } from "../lib/use-case/inner-availability.js"
 import { continuationInputOverrides } from "../services/workflow-engine/run-continuation.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
@@ -153,7 +154,7 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
             billingContext,
             webFreeMode,
           })
-          if (cover && !cover.ok) return reply.status(402).send({ error: { code: "insufficient_credits", message: cover.message } })
+          if (cover && !cover.ok) return reply.status(402).send(usecaseShortfallBody(cover))
         } catch (err) {
           // A metered LLM model with no price (R49): refused before anything runs.
           if (await replyIfLlmUnpriced(reply, err)) return reply
@@ -181,8 +182,17 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
             surface: { billingContext, webFreeMode },
           })
           if (credits && !credits.sufficient) {
+            // The check worded its message from `holdCredits` and the balance it
+            // read (`available`): those are the figures beside the error
+            // (credits-refusal.ts) — withheld for a deployment's pool (or any
+            // balance not the caller's to see), a web surface's free pool, and a
+            // hold above the run's price.
             const message = credits.message ?? renderFinalHoldShortfallMessage(credits.holdCredits)
-            return reply.status(402).send({ error: { code: "insufficient_credits", message } })
+            const balance = credits.available
+            const withhold = billingContext?.payer === "deployment" || credits.subscriptionRequired === true || credits.holdCredits > credits.estimatedCredits
+            return reply
+              .status(402)
+              .send(usecaseShortfallBody(withhold || balance === null ? { message } : { message, figures: { required: credits.holdCredits, balance } }))
           }
         } catch (err) {
           // A metered LLM model with no price (R49): refused before anything runs.

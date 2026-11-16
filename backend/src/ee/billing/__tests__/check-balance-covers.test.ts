@@ -76,7 +76,8 @@ describe("CreditsService.checkBalanceCovers", () => {
 
   it("a pay-as-you-go account on a web surface spends its free pool only, as its reservation does", async () => {
     h.profiles.set(USER, profile({ tier: "free", subscription_tier: null, lifetime_topup_credits: 500, subscription_credits: 300, topup_credits: 5000 }))
-    expect(await CreditsService.checkBalanceCovers(USER, 1000, undefined, true)).toEqual({ ok: false, balance: 300 })
+    // Said on the refusal: the balance it names is the free pool only (the credit guard answers this with the subscription ask).
+    expect(await CreditsService.checkBalanceCovers(USER, 1000, undefined, true)).toEqual({ ok: false, balance: 300, subscriptionRequired: true })
     // The same account off the web surface spends both pools.
     expect(await CreditsService.checkBalanceCovers(USER, 1000, undefined, false)).toEqual({ ok: true })
   })

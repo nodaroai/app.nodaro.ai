@@ -357,14 +357,48 @@ describe("POST /v1/tighten-episode", () => {
     m.cover = { ok: false, balance: 123456 }
     const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] })
     expect(res.statusCode).toBe(402)
-    expect(res.json().error).toEqual({ code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." })
+    // The whole body: no `required` or `balance` beside the error either.
+    expect(res.json()).toEqual({ error: { code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." } })
     expect(res.body).not.toContain("123456")
   })
 
-  it("a personal payer below the estimate is told the estimate and their balance", async () => {
+  it("a personal payer below the estimate is told the estimate and their balance, and the body carries those figures beside the error", async () => {
     m.cover = { ok: false, balance: 100 }
     const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] })
-    expect(res.json().error.message).toBe("This episode is estimated at about 932 credits; your balance is 100.")
+    expect(res.statusCode).toBe(402)
+    // The credit guard's shape: RAW credits beside `error`, the very figures the message states.
+    expect(res.json()).toEqual({
+      error: { code: "insufficient_credits", message: "This episode is estimated at about 932 credits; your balance is 100." },
+      required: 932,
+      balance: 100,
+    })
+  })
+
+  it("on a deployment with its own unit: the sentence states the figures in that unit, the fields stay RAW credits (as the credit guard's), converted once by whoever shows them", async () => {
+    const { __resetSurfaceProfileCacheForTests } = await import("@/lib/surface-profile.js")
+    const { estimateShortfallMessage } = await import("@/lib/stated-credit-messages.js")
+    const before = process.env.NODARO_SURFACE_PROFILE
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ billing: { unitLabel: "points", unitRate: 0.25, unitDecimals: 2 } })
+    __resetSurfaceProfileCacheForTests()
+    try {
+      m.cover = { ok: false, balance: 100 }
+      const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] })
+      const body = res.json()
+      expect(body.error.message).toBe(estimateShortfallMessage("This episode is", 932, 100))
+      expect(body.error.message).toContain("points")
+      expect(body.error.message).not.toMatch(/\b932\b|\b100\b/)
+      expect({ required: body.required, balance: body.balance }).toEqual({ required: 932, balance: 100 })
+    } finally {
+      process.env.NODARO_SURFACE_PROFILE = before ?? ""
+      __resetSurfaceProfileCacheForTests()
+    }
+  })
+
+  it("a pay-as-you-go account on a web surface short of its free pool: the message as before, no figures (the credit guard answers this with the subscription ask, never a balance)", async () => {
+    m.cover = { ok: false, balance: 100, subscriptionRequired: true }
+    const res = await post(await makeApp(), { mediaUrls: ["https://r2/ep.mp4"] })
+    expect(res.statusCode).toBe(402)
+    expect(res.json()).toEqual({ error: { code: "insufficient_credits", message: "This episode is estimated at about 932 credits; your balance is 100." } })
   })
 
   it("a stamp that throws after the run started never fails the wrapper or refunds the fee", async () => {

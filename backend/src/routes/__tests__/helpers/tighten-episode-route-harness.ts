@@ -18,7 +18,7 @@ export const m = {
   authKind: "jwt" as "jwt" | "internal" | "api_token",
   prepared: null as unknown,
   preflight: null as unknown,
-  cover: { ok: true } as { ok: boolean; balance?: number },
+  cover: { ok: true } as { ok: boolean; balance?: number; subscriptionRequired?: true },
   coverArgs: [] as unknown[],
   estimateCalls: 0,
   estimatedTypes: [] as Array<string | undefined>,

@@ -252,19 +252,56 @@ describe("render-final", () => {
   })
 
   it("the balance cannot cover it: 402 with the payer's own words, no row", async () => {
-    src.finalCredits = { estimatedCredits: 600, sufficient: false, available: null, message: "This deployment is out of credits. Contact your administrator." }
+    src.finalCredits = { estimatedCredits: 600, holdCredits: 600, sufficient: false, available: null, message: "This deployment is out of credits. Contact your administrator." }
     const res = await post({ jobId: ID, mode: "render-final" })
     expect(res.statusCode).toBe(402)
-    expect(res.json().error).toEqual({ code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." })
+    // The whole body: a deployment's pool is never stated, and nothing beside the error.
+    expect(res.json()).toEqual({ error: { code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." } })
     nothingWritten()
+  })
+
+  it("a deployment payer whose check named an available figure still gets none of it", async () => {
+    m.payer = { userId: USER, payer: "deployment", payerId: "00000000-0000-4000-8000-0000000000dd" }
+    src.finalCredits = { estimatedCredits: 600, holdCredits: 600, sufficient: false, available: 123456, message: "This deployment is out of credits. Contact your administrator." }
+    const res = await post({ jobId: ID, mode: "render-final" })
+    expect(res.json()).toEqual({ error: { code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." } })
+    expect(res.body).not.toContain("123456")
+  })
+
+  it("a personal payer below its price: the check's words, and the figures they state (what it was checked against and the balance) beside the error", async () => {
+    src.finalCredits = { estimatedCredits: 600, holdCredits: 600, sufficient: false, available: 100, message: "Insufficient credits. Required: 600, Available: 100" }
+    const res = await post({ jobId: ID, mode: "render-final" })
+    expect(res.statusCode).toBe(402)
+    expect(res.json()).toEqual({
+      error: { code: "insufficient_credits", message: "Insufficient credits. Required: 600, Available: 100" },
+      required: 600,
+      balance: 100,
+    })
+    nothingWritten()
+  })
+
+  it("a pay-as-you-go account on a web surface short of its free pool: the check's words, no figures", async () => {
+    src.finalCredits = {
+      estimatedCredits: 600, holdCredits: 600, sufficient: false, available: 100, subscriptionRequired: true,
+      message: "Your free credits can't cover this run (need 600, free pool has 100).",
+    }
+    const res = await post({ jobId: ID, mode: "render-final" })
+    expect(res.json()).toEqual({ error: { code: "insufficient_credits", message: "Your free credits can't cover this run (need 600, free pool has 100)." } })
   })
 
   it("no words from the payer's check: the refusal names what the run holds while it renders, the figure it was checked against", async () => {
     src.finalCredits = { estimatedCredits: 600, holdCredits: 900, sufficient: false, available: 100 }
     const res = await post({ jobId: ID, mode: "render-final" })
     expect(res.statusCode).toBe(402)
-    expect(res.json().error).toEqual({ code: "insufficient_credits", message: "Render final can hold up to about 900 credits while it renders." })
+    // A hold above the price is no price: no `required` that a reader would take for one.
+    expect(res.json()).toEqual({ error: { code: "insufficient_credits", message: "Render final can hold up to about 900 credits while it renders." } })
     nothingWritten()
+  })
+
+  it("a hold above the price, in the check's words: still no figures", async () => {
+    src.finalCredits = { estimatedCredits: 600, holdCredits: 900, sufficient: false, available: 100, message: "Insufficient credits. Required: 900, Available: 100" }
+    const res = await post({ jobId: ID, mode: "render-final" })
+    expect(res.json()).toEqual({ error: { code: "insufficient_credits", message: "Insufficient credits. Required: 900, Available: 100" } })
   })
 })
 
