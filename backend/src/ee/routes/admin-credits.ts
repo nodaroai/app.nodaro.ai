@@ -11,6 +11,7 @@ import { invalidateAuthCache } from "../../middleware/auth.js"
 import { invalidateAdminCache } from "../../lib/admin-check.js"
 import { ENDED_SUBSCRIPTION_CREDITS, TIER_CREDITS } from "../billing/stripe-config.js"
 import { tierColumns, resolveTierFrom } from "../billing/tier-columns.js"
+import { LIVE_SUBSCRIPTION_STATUSES } from "../billing/downgrade-floor.js"
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { deploymentPayerActive, deploymentPayerId } from "../../lib/deployment-payer.js"
 import { allowanceFor, allowancesFor } from "../billing/deployment-allowance-service.js"
@@ -373,7 +374,7 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
         .from("subscriptions")
         .select("stripe_subscription_id")
         .eq("user_id", id)
-        .in("status", ["active", "trialing", "past_due"])
+        .in("status", [...LIVE_SUBSCRIPTION_STATUSES])
       if (liveError) return reply.code(500).send({ error: liveError.message })
       if (Array.isArray(live) && live.length > 0) {
         return reply.code(409).send({

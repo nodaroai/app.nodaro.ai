@@ -351,13 +351,13 @@ export async function billingRoutes(app: FastifyInstance) {
 
     // One subscription per account: a plan change goes through change-plan
     // (charged now, applied when paid), never a second checkout. past_due
-    // counts — it is still the account's subscription.
+    // and unpaid count — it is still the account's subscription.
     if (checkoutMode === "subscription") {
       const { data: currentSubs, error: currentSubsError } = await supabase
         .from("subscriptions")
         .select("id, status")
         .eq("user_id", userId)
-        .in("status", ["active", "past_due"])
+        .in("status", ["active", "past_due", "unpaid"])
         .limit(1)
       if (currentSubsError) {
         console.error("[billing] checkout: subscription lookup failed:", currentSubsError.message)
@@ -720,13 +720,14 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "Invalid price ID" })
     }
 
-    // The account's newest subscription. past_due is read too, so that it is
-    // refused below rather than an older active row being changed instead.
+    // The account's newest subscription. past_due and unpaid are read too, so
+    // that it is refused below rather than an older active row being changed
+    // instead.
     const { data: sub } = await supabase
       .from("subscriptions")
       .select("stripe_subscription_id, stripe_price_id, status")
       .eq("user_id", userId)
-      .in("status", ["active", "past_due"])
+      .in("status", ["active", "past_due", "unpaid"])
       .order("created_at", { ascending: false })
       .limit(1)
       .single()

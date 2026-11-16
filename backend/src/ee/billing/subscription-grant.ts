@@ -155,7 +155,9 @@ export async function recordUnpaidSubscription(
  * Record a paid subscription and grant its plan. The insert is the claim: the
  * subscription id is unique, and the row is marked granted by the column's
  * default, so of two events recording the same subscription only the one
- * whose insert lands grants it. Answers whether it did. `duplicateExpected`:
+ * whose insert lands grants it. Answers whether it did; a grant whose write
+ * failed gives the claim back and throws StripeEventRetryError
+ * (grantSubscriptionPlan). `duplicateExpected`:
  * the caller (an update that may have outrun created) reads a row that is
  * already there as the normal race, not as a failure.
  */
@@ -218,6 +220,41 @@ export async function claimSubscriptionGrant(subscriptionId: string): Promise<bo
   return Array.isArray(data) && data.length > 0
 }
 
+/**
+ * Give back a claim whose grant could not be written: the row is marked not
+ * granted again, so the event's redelivery (or the next update that sees the
+ * subscription paid) claims it and grants it. Conditional on the marker this
+ * call's claim set: only the claim's holder reaches here, and nothing else
+ * moves the marker back. A release that fails leaves the row marked granted
+ * with nothing granted; that is logged loudly, and the caller still asks
+ * Stripe for the event again.
+ */
+async function releaseSubscriptionGrant(subscriptionId: string, event: string): Promise<void> {
+  const { error } = await supabase
+    .from("subscriptions")
+    .update({ plan_granted: false })
+    .eq("stripe_subscription_id", subscriptionId)
+    .eq("plan_granted", true)
+  if (error) {
+    console.error(
+      `[stripe] ${event}: PLAN NOT GRANTED AND ITS CLAIM NOT RELEASED: sub=${subscriptionId} is marked granted but its plan was never written; grant it by hand:`,
+      error.message,
+    )
+  }
+}
+
+/**
+ * True when the profile carries `stamp` as its reset time: the grant write
+ * that set it committed. An unreadable profile reads as not landed (the claim
+ * is then released and the event redelivered, as for any failed write).
+ */
+async function grantWriteLanded(userId: string, stamp: string): Promise<boolean> {
+  const { data, error } = await supabase.from("profiles").select("credits_reset_at").eq("id", userId).single()
+  if (error || !data) return false
+  const value = (data as { credits_reset_at?: string | null }).credits_reset_at
+  return typeof value === "string" && Date.parse(value) === Date.parse(stamp)
+}
+
 export interface PreSubscribeProfile {
   readonly subscription_credits?: number | null
   readonly topup_credits?: number | null
@@ -244,7 +281,9 @@ export async function readPreSubscribeProfile(userId: string): Promise<PreSubscr
 /**
  * The plan grant, given once per subscription by whichever event claimed it:
  * the paid tier, the plan's credits, its storage, the period end, and the
- * pre-subscribe balance moved into top-up.
+ * pre-subscribe balance moved into top-up. A grant whose write fails is never
+ * lost: the claim is released and StripeEventRetryError thrown, so the
+ * redelivered event claims and grants it.
  */
 export async function grantSubscriptionPlan(
   userId: string,
@@ -258,29 +297,47 @@ export async function grantSubscriptionPlan(
   const carryover = Math.max(0, preProfile?.subscription_credits ?? 0)
   const priorTier = preProfile?.subscription_tier ?? "free"
 
-  // Update user profile
-  const { error: profileError } = await supabase
+  // Update user profile. The stamp is kept, so a write that reports an error
+  // can be told apart from one that did not land (below).
+  const stamp = new Date().toISOString()
+  const { error: writeError } = await supabase
     .from("profiles")
     .update({
       ...tierColumns(tier),
       subscription_credits: credits,
-      credits_reset_at: new Date().toISOString(),
+      credits_reset_at: stamp,
       storage_limit_bytes: storageLimit,
       subscription_ended_at: null,
       current_period_end: data.currentPeriodEnd,
     })
     .eq("id", userId)
 
+  // Nothing of the grant landed: the claim is given back and Stripe is asked
+  // for the event again, so its redelivery claims and grants it then. Thrown
+  // before anything else is written (the carryover, the audit rows, the
+  // transaction record, the announcement), so each is done once, by the grant
+  // that lands.
+  // A write can commit and still report an error (a connection dropped after
+  // the commit). Released and redelivered, that grant would run twice: a
+  // second allocation, and the first moved into top-up as "pre-subscribe"
+  // credits. So an error is only believed when the profile does not carry
+  // this write's own stamp.
+  const profileError = writeError && !(await grantWriteLanded(userId, stamp)) ? writeError : null
+  if (writeError && !profileError) {
+    console.warn(`[stripe] ${event}: profile update reported an error but landed; continuing the grant:`, writeError.message)
+  }
   if (profileError) {
     console.error(`[stripe] ${event}: profile update failed:`, profileError.message)
+    await releaseSubscriptionGrant(data.subscriptionId, event)
+    throw new StripeEventRetryError(`granting the plan of ${data.subscriptionId} failed: ${profileError.message}`)
   }
 
   // Carry the pre-subscribe remainder into topup AFTER the grant SET succeeded
-  // (if the profile update failed, subscription_credits still holds the old
+  // (a failed SET throws above, and subscription_credits still holds the old
   // balance — granting the carryover on top would double it). The atomic RPC
   // increments topup_credits; a redelivered event can't re-run this because
   // the grant was claimed first (the insert, or claimSubscriptionGrant).
-  if (!profileError && carryover > 0) {
+  if (carryover > 0) {
     const { error: carryError } = await supabase.rpc("add_topup_credits", {
       p_user_id: userId,
       p_credits: carryover,

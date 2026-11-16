@@ -1577,6 +1577,21 @@ describe("cleanup-service", () => {
   // ════════════════════════════════════════════════════════════════════════
 
   describe("renewSubscriptionCredits", () => {
+    // These pin the conditional-update grant: what runs on a database without
+    // migration 656's function (staging ahead of main). The function's own
+    // path is pinned in "renewSubscriptionCredits — the grant is one locked
+    // database call" below.
+    beforeEach(() => {
+      mockRpc.mockImplementation((fn: string, args?: { p_ids?: unknown[] }) =>
+        fn === "renew_subscription_credits_safety_net"
+          ? Promise.resolve({ data: null, error: { code: "PGRST202", message: "Could not find the function public.renew_subscription_credits_safety_net" } })
+          : defaultRpc(fn, args),
+      )
+    })
+    afterEach(() => {
+      mockRpc.mockImplementation(defaultRpc)
+    })
+
     it("never renews a subscription whose plan was never granted (recorded unpaid, marked active by another writer)", async () => {
       mockTableQueue("subscriptions", [
         {
@@ -1757,6 +1772,89 @@ describe("cleanup-service", () => {
         { subscription_credits: TIER_CREDITS.standard, credits_reset_at: expect.any(String) },
       ])
       expect(mockRpc).not.toHaveBeenCalledWith("add_topup_credits", expect.anything())
+    })
+  })
+
+  describe("renewSubscriptionCredits — the grant is one locked database call (migration 656)", () => {
+    const STORED_END = "2026-01-01T00:00:00.123456+00:00"
+    const safetyNetCalls = () => mockRpc.mock.calls.filter((c) => c[0] === "renew_subscription_credits_safety_net")
+    const answer = (result: { data: unknown; error: unknown }) =>
+      mockRpc.mockImplementation((fn: string, args?: { p_ids?: unknown[] }) =>
+        fn === "renew_subscription_credits_safety_net" ? Promise.resolve(result) : defaultRpc(fn, args),
+      )
+    const profileWrites = () =>
+      mockFrom.mock.calls
+        .map((c, i) => ({ table: c[0] as string, chain: mockFrom.mock.results[i]?.value as { update: { mock: { calls: unknown[][] } } } }))
+        .filter((r) => r.table === "profiles")
+        .flatMap((r) => r.chain.update.mock.calls)
+
+    beforeEach(() => {
+      mockTableQueue("subscriptions", [
+        { data: [{ id: "sub-row-1", user_id: "user-1", tier: "pro", current_period_end: STORED_END, plan_granted: true, renewal_credits_held: null }], error: null },
+      ])
+      mockTableQueue("profiles", [{ data: [{ id: "user-1", credits_reset_at: "2025-12-01T00:00:00Z" }], error: null }])
+    })
+    afterEach(() => {
+      mockRpc.mockImplementation(defaultRpc)
+    })
+
+    it("hands the function the row, the plan's credits and the period end exactly as stored, and writes no profile itself", async () => {
+      answer({ data: true, error: null })
+
+      const result = await renewSubscriptionCredits()
+
+      expect(safetyNetCalls()).toEqual([
+        ["renew_subscription_credits_safety_net", { p_user_id: "user-1", p_subscription_id: "sub-row-1", p_period_end: STORED_END, p_credits: TIER_CREDITS.pro }],
+      ])
+      expect(profileWrites()).toEqual([])
+      expect(result).toEqual({ usersRenewed: 1, errors: 0 })
+      expect(mockLogTransaction).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-1", amount: TIER_CREDITS.pro, source: "subscription_renewal" }))
+      expect(mockInvalidateBalanceCache).toHaveBeenCalledWith("user-1")
+    })
+
+    it("a refusal (held, reset, moved or ended since the read) renews nothing and logs nothing", async () => {
+      answer({ data: false, error: null })
+
+      const result = await renewSubscriptionCredits()
+
+      expect(result).toEqual({ usersRenewed: 0, errors: 0 })
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+      expect(profileWrites()).toEqual([])
+    })
+
+    it("a failed call is an error and writes nothing", async () => {
+      answer({ data: null, error: { code: "57014", message: "statement timeout" } })
+
+      const result = await renewSubscriptionCredits()
+
+      expect(result).toEqual({ usersRenewed: 0, errors: 1 })
+      expect(profileWrites()).toEqual([])
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+    })
+
+    it("a database without the function falls back to the conditional update, and says so once a run", async () => {
+      mockTableQueue("subscriptions", [
+        {
+          data: [
+            { id: "sub-row-1", user_id: "user-1", tier: "pro", current_period_end: STORED_END, plan_granted: true, renewal_credits_held: null },
+            { id: "sub-row-2", user_id: "user-2", tier: "basic", current_period_end: STORED_END, plan_granted: true, renewal_credits_held: null },
+          ],
+          error: null,
+        },
+      ])
+      mockTableQueue("profiles", [
+        { data: [{ id: "user-1", credits_reset_at: null }, { id: "user-2", credits_reset_at: null }], error: null },
+      ])
+      answer({ data: null, error: { code: "PGRST202", message: "Could not find the function public.renew_subscription_credits_safety_net" } })
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+      const result = await renewSubscriptionCredits()
+
+      expect(result).toEqual({ usersRenewed: 2, errors: 0 })
+      expect(safetyNetCalls()).toHaveLength(1)
+      expect(profileWrites()).toHaveLength(2)
+      expect(warn.mock.calls.filter((c) => String(c[0]).includes("renew_subscription_credits_safety_net"))).toHaveLength(1)
+      warn.mockRestore()
     })
   })
 

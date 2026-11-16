@@ -19,7 +19,7 @@ import {
 import { tierColumns } from "./tier-columns.js"
 import { notifyPaidConversion, notifyCancellation } from "../notifications/founder-notify.js"
 import { getStripe } from "./stripe-client.js"
-import { endPaidPlan, raiseStorageFloorOnActivation, reapplyStorageFloorAfterClawback } from "./downgrade-floor.js"
+import { endPaidPlan, LIVE_SUBSCRIPTION_STATUSES, raiseStorageFloorOnActivation, reapplyStorageFloorAfterClawback } from "./downgrade-floor.js"
 import { StripeEventRetryError } from "./stripe-event-retry.js"
 import { creditsForLoadUsd } from "./load-rate.js"
 import { CreditsService } from "./credits.js"
@@ -148,14 +148,19 @@ export async function handleSubscriptionCreated(
 
   const tier = getTierFromPriceId(data.priceId)
 
-  // Idempotent: skip if subscription already exists
-  const { data: existing } = await supabase
-    .from("subscriptions")
-    .select("id")
-    .eq("stripe_subscription_id", data.subscriptionId)
-    .single()
+  // Idempotent: a subscription already recorded is a redelivered (or late)
+  // event, and grants nothing more. Except one paid at creation whose grant
+  // was claimed and then released because the grant's write failed
+  // (grantSubscriptionPlan): this redelivery claims it again and grants it.
+  const existing = await readSubscriptionRow<{ id: string; status: string }>(data.subscriptionId, "id, status")
 
   if (existing) {
+    const regrant = !planGranted(existing) && GRANTING_STATUSES.has(data.status) && !isEndedStatus(existing.status)
+    if (regrant && (await claimSubscriptionGrant(data.subscriptionId))) {
+      const preProfile = await readPreSubscribeProfile(userId)
+      await grantSubscriptionPlan(userId, tier, data, preProfile, "subscription.created")
+      return
+    }
     console.log("[stripe] subscription.created: already exists, skipping", data.subscriptionId)
     return
   }
@@ -293,8 +298,9 @@ export async function handleSubscriptionUpdated(
   // A renewal charge that failed (past_due, or unpaid once Stripe gives up):
   // the period's remaining credits go on hold until that renewal is paid
   // (subscription-renewal.ts). Before any other write, so a hold the database
-  // could not answer is retried on a clean redelivery, and apart from the
-  // status write below, which the CHECK refuses for `unpaid`.
+  // could not answer is retried on a clean redelivery. (On a database without
+  // migration 656 the status write below refuses `unpaid`, and the row keeps
+  // `past_due`; the hold does not depend on it.)
   if (!lateForEnded && planGranted(existing) && HOLDING_STATUSES.has(data.status)) {
     await holdRenewalCredits({ userId, subscriptionId: data.subscriptionId, periodStart: data.currentPeriodStart })
   }
@@ -528,7 +534,8 @@ export async function handleSubscriptionCanceled(
       .eq("stripe_subscription_id", data.subscriptionId)
       .select(returning)
   let { data: canceledRows, error: subError } = await cancelSubscription("plan_granted")
-  if (isMissingColumnError(subError)) {
+  const returnedWithoutMarker = isMissingColumnError(subError)
+  if (returnedWithoutMarker) {
     ;({ data: canceledRows, error: subError } = await cancelSubscription("id"))
   }
 
@@ -537,7 +544,26 @@ export async function handleSubscriptionCanceled(
     console.error("[stripe] subscription.canceled: update failed:", subError.message)
     throw new StripeEventRetryError(`cancelling ${data.subscriptionId} failed: ${subError.message}`)
   }
-  const canceledRow = Array.isArray(canceledRows) ? (canceledRows[0] as GrantMarker | undefined) : undefined
+  let canceledRow = Array.isArray(canceledRows) ? (canceledRows[0] as GrantMarker | undefined) : undefined
+
+  // The write was retried without returning the marker: a "no such column"
+  // error names no column, so it does not prove the marker is the one
+  // missing. The grant is decided from the marker all the same, read now
+  // that the row is `canceled` (final, as above). Only a database that really
+  // lacks the column reads as granted, as before; a read that fails is
+  // retried (the cancel write above repeats harmlessly).
+  if (returnedWithoutMarker && canceledRow) {
+    const { data: marker, error: markerError } = await supabase
+      .from("subscriptions")
+      .select("plan_granted")
+      .eq("stripe_subscription_id", data.subscriptionId)
+      .maybeSingle()
+    if (markerError && !isMissingColumnError(markerError)) {
+      console.error("[stripe] subscription.canceled: reading the grant marker failed:", markerError.message)
+      throw new StripeEventRetryError(`reading the grant marker of ${data.subscriptionId} failed: ${markerError.message}`)
+    }
+    if (!markerError && marker) canceledRow = marker as GrantMarker
+  }
 
   if (!userId) {
     console.error("[stripe] subscription.canceled: cannot resolve userId for customer", data.stripeCustomerId)
@@ -563,7 +589,7 @@ export async function handleSubscriptionCanceled(
     .from("subscriptions")
     .select("stripe_subscription_id")
     .eq("user_id", userId)
-    .in("status", [...PAID_TIER_STATUSES])
+    .in("status", [...LIVE_SUBSCRIPTION_STATUSES])
     .neq("stripe_subscription_id", data.subscriptionId)
   if (liveError) {
     throw new StripeEventRetryError(`subscription.canceled: reading the live subscriptions of ${userId} failed: ${liveError.message}`)

@@ -842,8 +842,8 @@ describe("provision-credits", () => {
       expect(mockLogTransaction).not.toHaveBeenCalled()
     })
 
-    it("the plan end's own live-subscription list is the paid-tier statuses", () => {
-      expect(new Set(LIVE_SUBSCRIPTION_STATUSES)).toEqual(PAID_TIER_STATUSES)
+    it("the plan end's own live-subscription list is the paid-tier statuses plus unpaid", () => {
+      expect(new Set(LIVE_SUBSCRIPTION_STATUSES)).toEqual(new Set([...PAID_TIER_STATUSES, "unpaid"]))
     })
 
     it("a plan granted while the end was retrying (re-subscribe): the retry finds it live and ends nothing", async () => {
