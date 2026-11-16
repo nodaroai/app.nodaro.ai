@@ -15,6 +15,7 @@ vi.mock("../../providers/video/ffmpeg-utils.js", () => ({
 }))
 
 import { measureNemotronTranscribeInput, nemotronTranscribeReserveId, stampNemotronTranscribeInput } from "../nemotron-transcribe-input.js"
+import { LINK_HOST_NOT_FOUND, LINK_NOT_PUBLIC, MEDIA_LINK_BAD_HOST } from "../../providers/video/probe-guard.js"
 
 const NEMOTRON = "nemotron-3-5-transcribe"
 
@@ -74,9 +75,9 @@ describe("measureNemotronTranscribeInput (the route's and the workflow run's one
 
   it("refuses a link the SSRF guard blocks — a public-looking host resolving to a private address — instead of holding 60 minutes", async () => {
     probe.guard = async (url) => {
-      if (url.includes("sneaky.example")) throw new Error("probeVideoSource: blocked — sneaky.example resolves to private/reserved IP 10.0.0.7")
+      if (url.includes("sneaky.example")) throw Object.assign(new Error("probeVideoSource: blocked — sneaky.example resolves to private/reserved IP 10.0.0.7"), { reason: "address" })
     }
-    expect(await measureNemotronTranscribeInput("https://sneaky.example/a.mp3")).toMatchObject({ ok: false, code: "invalid_media_url" })
+    expect(await measureNemotronTranscribeInput("https://sneaky.example/a.mp3")).toEqual({ ok: false, ...LINK_NOT_PUBLIC })
     expect(probe.urls).toEqual([])
     // A probe that fails on a link the guard passed still holds 60 minutes.
     probe.fn = async () => {
@@ -164,12 +165,24 @@ describe("a link whose host could not be looked up for now (the probe guard's re
     })
   })
 
-  it("a private address or a host that does not exist is still the 'public host' 400", async () => {
-    for (const reason of ["address", "host"]) {
+  it("a private address or a host that does not exist is the 400 media_link_bad_host every measuring route answers, at the first hop or a redirect", async () => {
+    for (const [reason, refusal] of [["address", LINK_NOT_PUBLIC], ["host", LINK_HOST_NOT_FOUND]] as const) {
       probe.guard = async () => {
         throw Object.assign(new Error("probeVideoSource: blocked"), { reason })
       }
-      expect(await measureNemotronTranscribeInput("https://cdn.example.com/a.mp3")).toMatchObject({ ok: false, code: "invalid_media_url" })
+      expect(await measureNemotronTranscribeInput("https://cdn.example.com/a.mp3")).toEqual({ ok: false, ...refusal })
+      // The same refusal at a hop the probe follows (a redirect), never the 60-minute hold.
+      probe.guard = async () => undefined
+      probe.fn = async () => {
+        throw Object.assign(new Error("probeVideoSource: blocked"), { reason })
+      }
+      expect(await measureNemotronTranscribeInput("https://cdn.example.com/a.mp3")).toEqual({ ok: false, ...refusal })
     }
+    expect(LINK_NOT_PUBLIC.code).toBe(MEDIA_LINK_BAD_HOST)
+    // A link the guard blocks for another reason (two URL parsers read it differently) keeps this engine's own 400.
+    probe.guard = async () => {
+      throw Object.assign(new Error("probeVideoSource: blocked"), { reason: "link" })
+    }
+    expect(await measureNemotronTranscribeInput("https://cdn.example.com/a.mp3")).toMatchObject({ ok: false, code: "invalid_media_url" })
   })
 })

@@ -18,7 +18,8 @@
  * it was never read.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
-import { execFileSync } from "node:child_process"
+import { execFile, execFileSync } from "node:child_process"
+import { promisify } from "node:util"
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { createServer as createHttpsServer, type Server as HttpsServer } from "node:https"
 import type { AddressInfo } from "node:net"
@@ -367,10 +368,39 @@ describe("a raw ffprobe run is never handed a link (fail closed)", () => {
       ["-v", "error", at("cdn-a.test", "/widen.m3u8"), "-protocol_whitelist", "file,http,https,tcp,tls"],
       ["-v", "error", at("cdn-a.test", "/clip.mp4"), "-enable_drefs", "1"],
       ["-v", "error", at("cdn-a.test", "/clip.mp4"), "-max_redirects", "50"],
+      // The same option with its value read from a file (ffprobe reads `-/<option> <file>` alike).
+      ["-v", "error", at("cdn-a.test", "/widen.m3u8"), "-/protocol_whitelist", "/nonexistent/whitelist.txt"],
     ]) {
       await expect(runFfprobeReadingLinks(args)).rejects.toThrow(/the probe guard's own options/)
     }
     expect(media.hits).toEqual([])
+  })
+
+  it("nor named in a file an option reads its value from (ffprobe's -/i, which ffprobe itself would open): refused before ffprobe starts, guarded runner included", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "probe-option-file-"))
+    try {
+      const named = join(dir, "input.txt")
+      // The control: ffprobe reads its input's name from the file and opens that link itself.
+      media.route("/input-from-file.mp4", { file: clip, type: "video/mp4" })
+      writeFileSync(named, `${media.origin}/input-from-file.mp4`)
+      // (Not execFileSync: the media server answers on this process's event loop.)
+      await promisify(execFile)("ffprobe", ["-v", "error", "-/i", named, "-show_entries", "format=duration", "-of", "csv=p=0"], { timeout: 30_000 })
+      expect(media.hits.map((h) => h.path)).toContain("/input-from-file.mp4")
+      media.hits.length = 0
+      writeFileSync(named, at("cdn-a.test", "/secret.mp4"))
+      // ffprobe reads such a value through its own I/O layer, so a data: link spells one no file here holds.
+      const asData = `data:text/plain;base64,${Buffer.from(`${media.origin}/secret.mp4`).toString("base64")}`
+      for (const value of [named, asData]) {
+        expect(await blockedReason(runFfprobe(["-v", "error", "-/i", value, "-show_entries", "format=duration", "-of", "csv=p=0"]))).toMatchObject({ reason: "link" })
+        expect(await blockedReason(runFfprobeCapture(["-v", "error", "-/i", value]))).toMatchObject({ reason: "link" })
+        expect(await blockedReason(runFfprobeReadingLinks(["-v", "error", "-/i", value]))).toMatchObject({ reason: "link" })
+        // Beside a link the guard reads, the file is still checked.
+        expect(await blockedReason(runFfprobeReadingLinks(["-v", "error", "-/i", value, at("cdn-a.test", "/clip.mp4")]))).toMatchObject({ reason: "link" })
+      }
+      expect(secretHits()).toEqual([])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 
@@ -518,6 +548,124 @@ describe("the private plugin's ffmpeg runs read a link through the guard", () =>
       expect(media.hits).toEqual([])
       // A movie= source naming a local file is unchanged.
       await runFfmpegReadingLinks(["-v", "error", "-y", "-f", "lavfi", "-i", `movie=${local}`, "-frames:v", "1", join(dir, "local.png")])
+      expect(media.hits).toEqual([])
+    })
+  })
+
+  it("a run that reads no link: a widened whitelist, a cache: or async: input, movie's format_opts and the lavfi device's graph file each open the links a local list names; each is refused before ffmpeg starts", async () => {
+    await withDir(async (dir) => {
+      const local = join(dir, "in.mp4")
+      writeFileSync(local, clip)
+      const out = join(dir, "o.png")
+      const playlist = (name: string, target: string) => {
+        writeFileSync(join(dir, name), `#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\n${target}\n#EXT-X-ENDLIST\n`)
+        return join(dir, name)
+      }
+      // ffmpeg's two escaping levels in a filter graph, as above: each ":" of the link written as "\\\:".
+      const escaped = (link: string) => link.replace(/:/g, "\\\\\\:")
+      const widen = "'protocol_whitelist=file\\\\\\,http\\\\\\,tcp'"
+      // The controls: the plain runner (core runFfmpeg) opens the link a local list names, each of these ways.
+      media.route("/ctl.ts", { file: clip, type: "video/mp2t" })
+      const ctl = playlist("ctl.m3u8", `${media.origin}/ctl.ts`)
+      const graphFile = join(dir, "ctl-graph.txt")
+      writeFileSync(graphFile, `movie=${escaped(`${media.origin}/ctl.ts`)}`)
+      for (const [label, args] of [
+        ["a widened whitelist", ["-protocol_whitelist", "file,http,tcp", "-i", ctl]],
+        ["a cache: input", ["-i", `cache:${ctl}`]],
+        ["an async: input", ["-i", `async:${ctl}`]],
+        ["movie's format_opts", ["-f", "lavfi", "-i", `movie=${ctl}:format_opts=${widen}`]],
+        ["the lavfi device's graph file", ["-f", "lavfi", "-graph_file", graphFile, "-i", "dummy"]],
+      ] as const) {
+        media.hits.length = 0
+        await runFfmpeg(["-v", "error", "-y", ...args, "-frames:v", "1", out]).catch(() => undefined)
+        expect(media.hits.map((h) => h.path), label).toContain("/ctl.ts")
+      }
+      media.hits.length = 0
+      const list = playlist("list.m3u8", at("cdn-a.test", "/secret.ts"))
+      const ffconcat = join(dir, "list.ffconcat")
+      writeFileSync(ffconcat, `ffconcat version 1.0\nfile '${at("cdn-a.test", "/secret.mp4")}'\n`)
+      const secretGraph = join(dir, "graph.txt")
+      writeFileSync(secretGraph, `movie=${escaped(at("cdn-a.test", "/secret.mp4"))}`)
+      const cmds = join(dir, "cmds.txt")
+      writeFileSync(cmds, `0 drawtext reinit text='${at("cdn-a.test", "/secret.mp4")}';\n`)
+      for (const args of [
+        ["-y", "-protocol_whitelist", "file,http,tcp", "-i", list, "-frames:v", "1", out],
+        ["-y", "-i", `cache:${list}`, "-frames:v", "1", out],
+        ["-y", "-i", `async:${list}`, "-frames:v", "1", out],
+        ["-y", "-f", "lavfi", "-i", `movie=${list}:format_opts=${widen}`, "-frames:v", "1", out],
+        ["-y", "-f", "lavfi", "-i", `movie=cache\\\\\\:${list}`, "-frames:v", "1", out],
+        ["-y", "-f", "lavfi", "-graph_file", secretGraph, "-i", "dummy", "-frames:v", "1", out],
+        // A local list naming a link, with nothing widened (ffmpeg's inherited whitelist would hold it too).
+        ["-y", "-i", list, "-frames:v", "1", out],
+        ["-y", "-safe", "0", "-i", ffconcat, "-frames:v", "1", out],
+        ["-y", "-i", local, "-vf", `subtitles=${list}`, "-frames:v", "1", out],
+        ["-y", "-i", local, "-vf", `sendcmd=f=${cmds},drawtext=text=x`, "-frames:v", "1", out],
+        ["-y", "-i", local, "-f", "mpegts", `unix:${join(dir, "x.sock")}`],
+      ]) {
+        expect(await blockedReason(runFfmpegReadingLinks(args)), JSON.stringify(args)).toMatchObject({ reason: "link" })
+      }
+      // ffprobe the same way: a widened whitelist (its control opens the link), a cache: input, a list.
+      media.hits.length = 0
+      await promisify(execFile)("ffprobe", ["-v", "error", "-protocol_whitelist", "file,http,tcp", ctl], { timeout: 30_000 }).catch(() => undefined)
+      expect(media.hits.map((h) => h.path)).toContain("/ctl.ts")
+      media.hits.length = 0
+      for (const args of [["-v", "error", "-protocol_whitelist", "file,http,tcp", list], ["-v", "error", `cache:${list}`], ["-v", "error", list]]) {
+        expect(await blockedReason(runFfprobeReadingLinks(args)), JSON.stringify(args)).toMatchObject({ reason: "link" })
+      }
+      expect(media.hits).toEqual([])
+      // What plugins run today still runs: a local frame list, a lut1d of their own, a local whitelist.
+      const frame = join(dir, "f_0001.png")
+      execFileSync("ffmpeg", ["-v", "error", "-y", "-i", local, "-frames:v", "1", frame])
+      const frames = join(dir, "frames.ffconcat")
+      writeFileSync(frames, "ffconcat version 1.0\nfile 'f_0001.png'\nduration 0.5\nfile 'f_0001.png'\n")
+      await runFfmpegReadingLinks(["-v", "error", "-y", "-safe", "0", "-f", "concat", "-i", frames, "-frames:v", "1", join(dir, "frames.png")])
+      const lut = join(dir, "map.cube")
+      writeFileSync(lut, "LUT_1D_SIZE 2\n0.0 0.0 0.0\n1.0 1.0 1.0\n")
+      await runFfmpegReadingLinks(["-v", "error", "-y", "-protocol_whitelist", "file,pipe", "-i", local, "-vf", `format=rgb24,lut1d=file=${lut}:interp=nearest`, "-frames:v", "1", join(dir, "lut.png")])
+      expect(media.hits).toEqual([])
+    })
+  })
+
+  it("a link in a file an option reads its value from (-/filter_complex, -/vf, -/af, -filter_complex_script) is refused before ffmpeg starts; a clean local filter file runs", async () => {
+    await withDir(async (dir) => {
+      const local = join(dir, "in.mp4")
+      writeFileSync(local, clip)
+      const out = join(dir, "o.mp4")
+      const write = (name: string, text: string) => {
+        writeFileSync(join(dir, name), text)
+        return join(dir, name)
+      }
+      // ffmpeg's two escaping levels in a filter graph, as above: each ":" of the link written as "\\\:".
+      const escaped = (link: string) => link.replace(/:/g, "\\\\\\:")
+      // The control: the plain runner reads the graph from the file and opens the link it names.
+      media.route("/option-file-control.mp4", { file: clip, type: "video/mp4" })
+      const control = write("control.txt", `movie=${escaped(`${media.origin}/option-file-control.mp4`)}[m];[0:v][m]overlay`)
+      await runFfmpeg(["-v", "error", "-y", "-i", local, "-/filter_complex", control, "-frames:v", "1", join(dir, "control.png")])
+      expect(media.hits.map((h) => h.path)).toContain("/option-file-control.mp4")
+      media.hits.length = 0
+      const link = at("cdn-a.test", "/secret.mp4")
+      const graph = write("graph.txt", `movie=${escaped(link)}[m];[0:v][m]overlay`)
+      const vf = write("vf.txt", `movie=${escaped(link)}[m];[in][m]overlay`)
+      const af = write("af.txt", `amovie=${escaped(link)}[a];[in][a]amix`)
+      const asData = `data:text/plain;base64,${Buffer.from(`movie=${escaped(link)}[m];[0:v][m]overlay`).toString("base64")}`
+      for (const args of [
+        ["-y", "-i", local, "-/filter_complex", graph, out],
+        // The older spelling the pinned 8.1.2 still has (ffmpeg 9 dropped it; refused on either before ffmpeg runs).
+        ["-y", "-i", local, "-filter_complex_script", graph, out],
+        ["-y", "-i", local, "-/vf", vf, out],
+        ["-y", "-i", local, "-/af", af, out],
+        // ffmpeg reads the value through its own I/O layer: a data: link holds a graph no file here does.
+        ["-y", "-i", local, "-/filter_complex", asData, out],
+        // A file that cannot be read cannot be checked.
+        ["-y", "-i", local, "-/filter_complex", join(dir, "missing.txt"), out],
+      ]) {
+        expect(await blockedReason(runFfmpegReadingLinks(args))).toMatchObject({ reason: "link" })
+        expect(await blockedReason(runFfmpegCaptureReadingLinks(args))).toMatchObject({ reason: "link" })
+      }
+      expect(secretHits()).toEqual([])
+      // A clean local filter file runs as given.
+      const clean = write("clean.txt", `movie=${local}[m];[0:v][m]overlay`)
+      await runFfmpegReadingLinks(["-v", "error", "-y", "-i", local, "-/filter_complex", clean, "-frames:v", "1", join(dir, "clean.png")])
       expect(media.hits).toEqual([])
     })
   })

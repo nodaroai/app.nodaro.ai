@@ -43,7 +43,7 @@ import {
   COMBINE_DELIVERY_CRF,
   needsContainerRemux,
 } from "../../providers/video/ffmpeg-utils.js"
-import { remuxToMp4ReadingLinks, runFfmpegCaptureReadingLinks, runFfmpegReadingLinks, transcodeToBrowserSafeReadingLinks } from "../../providers/video/ffmpeg-reading-links.js"
+import { remuxToMp4ReadingLinks, runFfmpegCaptureReadingLinks, runFfmpegReadingLinks, transcodeToBrowserSafeReadingLinks, withPluginLocalInput } from "../../providers/video/ffmpeg-reading-links.js"
 import { mp3EncodeArgs, mp3GraphEncodeArgs } from "../../providers/video/mp3-encode.js"
 import { YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
 import { socialPostOf } from "../../providers/video/social-post-video.js"
@@ -1898,10 +1898,11 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       probeVideoMeta,
       // A link the plugin hands ffprobe is read through the probe guard.
       runFfprobe: runFfprobeReadingLinks,
-      getVideoDuration,
+      // A local path is held to a plugin run's local-input rule (a plain file; a list naming no link).
+      getVideoDuration: withPluginLocalInput(getVideoDuration),
       probeMediaDuration,
       probeMediaStreams,
-      needsTranscode,
+      needsTranscode: withPluginLocalInput(needsTranscode),
       // A link input is read through the probe guard; local paths run as given.
       transcodeToBrowserSafe: transcodeToBrowserSafeReadingLinks,
       needsContainerRemux,

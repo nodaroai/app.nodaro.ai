@@ -1,6 +1,6 @@
 import { NEMOTRON_TRANSCRIBE_ID, NEMOTRON_TRANSCRIBE_PRICING, nemotronTranscribeHeldCreditId, nemotronTranscribeQuoteCreditId } from "@nodaro/shared/credits"
 import { assertSafeProbeSource, probeMediaDurationAndSize } from "../providers/video/ffmpeg-utils.js"
-import { LINK_HOST_UNREACHABLE, LINK_READ_TIMED_OUT, PROBE_UNAVAILABLE, probeLinkRefusal } from "../providers/video/probe-guard.js"
+import { isRetryableProbeRefusal, LINK_HOST_UNREACHABLE, LINK_READ_TIMED_OUT, MEDIA_LINK_BAD_HOST, PROBE_UNAVAILABLE, probeLinkRefusal } from "../providers/video/probe-guard.js"
 import { isAllowedSocialVideoUrl, safeUrlSchema } from "./url-validator.js"
 
 /**
@@ -24,10 +24,14 @@ import { isAllowedSocialVideoUrl, safeUrlSchema } from "./url-validator.js"
  *    lookup that ran out of time) — the retryable 503 `source_unreachable`
  *    every measuring route answers (`probeLinkRefusal`), so a run is tried
  *    again rather than told its link is not public;
- *  - a link that SSRF guard blocks (`assertSafeProbeSource`, run on its own
- *    first: a public-looking host resolving to a private address, a link two
- *    URL parsers read differently, a host that does not resolve) — refused, not
- *    held: only a probe that fails on a link the guard passed holds 60 minutes;
+ *  - a link whose host does not exist, or that is, resolves to or redirects to
+ *    a private or reserved address — the 400 `media_link_bad_host` every
+ *    measuring route answers (`probeLinkRefusal`), at the first hop
+ *    (`assertSafeProbeSource`, run on its own first) or at a redirect the
+ *    probe follows;
+ *  - any other link the guard blocks (one two URL parsers read differently) —
+ *    refused as `invalid_media_url`, not held: only a probe that fails on a
+ *    link the guard passed, for a reason of the file's own, holds 60 minutes;
  *  - a link to a video's PAGE on a social platform (its sound would only exist
  *    after the hold);
  *  - a file over KIE's 60 minutes, or over its 200 MB when the source says its
@@ -56,6 +60,7 @@ export type NemotronTranscribeInput =
         | typeof LINK_HOST_UNREACHABLE.code
         | typeof LINK_READ_TIMED_OUT.code
         | typeof PROBE_UNAVAILABLE.code
+        | typeof MEDIA_LINK_BAD_HOST
       readonly message: string
     }
 
@@ -103,9 +108,11 @@ export async function measureNemotronTranscribeInput(
   try {
     await assertSafeProbeSource(mediaUrl)
   } catch (err) {
-    // A host that could not be looked up for now is the retryable 503 every measuring route answers.
+    // A host that could not be looked up for now is the retryable 503, and a host that does not exist or a
+    // private address the 400 media_link_bad_host, that every measuring route answers.
     const refused = probeLinkRefusal(err)
-    if (refused && refused.code !== "media_link_not_a_file") return { ok: false, code: refused.code, message: refused.message }
+    if (refused && isRetryableProbeRefusal(refused)) return { ok: false, code: refused.code, message: refused.message }
+    if (refused?.code === MEDIA_LINK_BAD_HOST) return { ok: false, code: MEDIA_LINK_BAD_HOST, message: refused.message }
     return {
       ok: false,
       code: "invalid_media_url",
@@ -117,6 +124,9 @@ export async function measureNemotronTranscribeInput(
     probed = await probeMediaDurationAndSize(mediaUrl)
   } catch (err) {
     onProbeFailure(err)
+    // A redirect to a private address (or to a host that does not exist) is the same 400 as at the first hop.
+    const refused = probeLinkRefusal(err)
+    if (refused?.code === MEDIA_LINK_BAD_HOST) return { ok: false, code: MEDIA_LINK_BAD_HOST, message: refused.message }
     probed = {}
   }
   if (probed.durationSec !== undefined && probed.durationSec > NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC) {

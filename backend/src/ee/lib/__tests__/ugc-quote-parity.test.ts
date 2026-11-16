@@ -56,6 +56,11 @@ vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
   probeVideoSource: vi.fn(async () => ({ width: 1080, height: 1920, durationSeconds: 8 })),
   // The example links are public: the probe's link guard never asks DNS here.
   assertSafeProbeSource: vi.fn(async () => undefined),
+  // This mock replaces the one above (the later vi.mock of a module wins), so it carries Nemotron's probe too:
+  // the probe reads nothing, never the real network (where a host that does not resolve is a refusal, not a hold).
+  probeMediaDurationAndSize: async () => {
+    throw new Error("no probe in the parity test")
+  },
 }))
 const clipLength = vi.hoisted(() => ({ sec: 8 }))
 vi.mock("@/lib/video-utility-probe.js", () => ({

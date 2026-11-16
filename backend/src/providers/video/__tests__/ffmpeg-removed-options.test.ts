@@ -40,6 +40,28 @@ const REMOVED_IN_FFMPEG_9: Readonly<Record<string, string>> = {
   adrift_threshold: "the aresample filter's min_hard_comp option",
 }
 
+/**
+ * Files that name a removed option only to RECOGNISE or REFUSE it, never to
+ * pass it to ffmpeg, keyed `<file under src> <option>`, each with why. A
+ * private plugin's run may still pass such an option (the pinned 8.1.2 takes
+ * it), so the probe guard's checks name it in their notes; they recognise it
+ * with a pattern, never an argv token. The exemption covers COMMENT lines
+ * only: a hit in such a file's code is still a finding, and an entry that no
+ * longer matches anything fails the test (the list stays exactly what is
+ * needed).
+ */
+const RECOGNISES_ONLY: Readonly<Record<string, string>> = {
+  "providers/video/link-arguments.ts filter_complex_script":
+    "the rule that reads the file an option takes its value from names the older spelling it also reads (a plugin may still pass it)",
+  "providers/video/plugin-run-guard.ts filter_complex_script":
+    "a plugin run's checks name the option whose file they copy and check (a plugin may still pass it)",
+  "providers/video/ffmpeg-reading-links.ts filter_complex_script":
+    "the toolkit runners' note names an option whose file is checked before a plugin's run (a plugin may still pass it)",
+}
+
+/** A comment line: a JSDoc/block line (`*`) or a line comment. */
+const isCommentLine = (text: string): boolean => /^\s*(?:\*|\/\/|\/\*)/.test(text)
+
 /** A quoted argv token: the bare option or its per-stream form (`-vsync:v`). */
 const OPTION_TOKEN = new RegExp(
   `["'\`]-(${Object.keys(REMOVED_IN_FFMPEG_9).join("|")})(?::[^"'\`\\s]*)?["'\`]`,
@@ -56,11 +78,11 @@ function walk(dir: string, out: string[] = []): string[] {
   return out
 }
 
-function findRemovedOptions(source: string): Array<{ line: number; option: string }> {
-  const hits: Array<{ line: number; option: string }> = []
+function findRemovedOptions(source: string): Array<{ line: number; option: string; comment: boolean }> {
+  const hits: Array<{ line: number; option: string; comment: boolean }> = []
   source.split("\n").forEach((text, i) => {
     for (const match of text.matchAll(OPTION_TOKEN)) {
-      hits.push({ line: i + 1, option: match[1]! })
+      hits.push({ line: i + 1, option: match[1]!, comment: isCommentLine(text) })
     }
   })
   return hits
@@ -98,13 +120,28 @@ describe("ffmpeg options removed in ffmpeg 9", () => {
     expect(files.some((f) => f.endsWith(join("providers", "video", "smart-loop-cut.ts")))).toBe(true)
 
     const offenders: string[] = []
+    const exemptionsUsed = new Set<string>()
     for (const file of files) {
+      const rel = relative(SRC_DIR, file).split("\\").join("/")
       for (const hit of findRemovedOptions(readFileSync(file, "utf8"))) {
-        offenders.push(
-          `${relative(SRC_DIR, file)}:${hit.line} uses -${hit.option} — use ${REMOVED_IN_FFMPEG_9[hit.option]}`,
-        )
+        const key = `${rel} ${hit.option}`
+        if (hit.comment && key in RECOGNISES_ONLY) {
+          exemptionsUsed.add(key)
+          continue
+        }
+        offenders.push(`${rel}:${hit.line} uses -${hit.option} — use ${REMOVED_IN_FFMPEG_9[hit.option]}`)
       }
     }
     expect(offenders).toEqual([])
+    // An exemption nothing needs any more is removed, so the list stays exactly what is needed.
+    expect(Object.keys(RECOGNISES_ONLY).filter((k) => !exemptionsUsed.has(k))).toEqual([])
+  })
+
+  it("an exemption covers a file's notes only: a removed option passed in its code is still a finding", () => {
+    const hits = findRemovedOptions([
+      " *   `-/vf`, `-/af`, `-filter_complex_script`): such a file is read first and",
+      `  return runFfmpeg(["-filter_complex_script", graph, out])`,
+    ].join("\n"))
+    expect(hits.map((h) => [h.line, h.comment])).toEqual([[1, true], [2, false]])
   })
 })

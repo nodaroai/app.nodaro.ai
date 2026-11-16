@@ -153,9 +153,14 @@ direct **https** link to the file on a public host. Because it is priced by the
 audio's length, the file is measured **before** anything is held — on a
 single-node run and in a workflow run alike — and the run is then charged for
 the length the model actually decoded (see [Credits](#credits)). Refused with
-nothing charged: anything but an https link to a public host, a file over 60
+nothing charged: anything but an https link (`400 invalid_media_url`), a link
+whose host does not exist or that points to, or redirects to, a private or
+reserved address (`400 media_link_bad_host`, as on every node that measures a
+link: see [media links](../../features/media-links.md)), a file over 60
 minutes or 200 MB, and a link to a video's page on a social platform (bring
 that video's sound in first through a Video URL node, or pick another engine).
+A link whose host cannot be looked up at that moment is a retryable `503
+source_unreachable`.
 A file whose length cannot be read up front (a browser recording saved as a
 stream, a fragmented MP4) is not refused: the 60-minute price is held, and the
 run is charged for the length the model decoded. It detects the spoken language
@@ -276,7 +281,7 @@ Before a run, the price shown — the node's price, the workflow's estimate in t
 
 A known length a little past a minute is shown at the next minute, and the run holds and charges the lower one. When no length is known yet (a voice with no take, a file whose length was not recorded), it is the 60-minute price.
 
-The exact figure for your account is always `GET /v1/credits/model-cost?model=<engine>` (MCP: `list_models`; for Nemotron, `nemotron-3-5-transcribe:<minutes>m`). Nothing is reserved for a request that is refused up front — `wordTimestamps: true` on `whisper` (`400`), a translation on any other engine than Nemotron or beside word timings (`400`), a Nemotron link that is not https to a public host, or a file that is too long or too large (`400`), or a workflow whose Whisper (or translating) transcript feeds Add Captions (refused before it runs; the one exception, a chain that crosses a sub-workflow boundary, is described [above](#a-whisper-transcript-wired-into-add-captions-is-refused-before-the-run)).
+The exact figure for your account is always `GET /v1/credits/model-cost?model=<engine>` (MCP: `list_models`; for Nemotron, `nemotron-3-5-transcribe:<minutes>m`). Nothing is reserved for a request that is refused up front — `wordTimestamps: true` on `whisper` (`400`), a translation on any other engine than Nemotron or beside word timings (`400`), a Nemotron link that is not https (`400`), whose host does not exist or that points to a private address (`400 media_link_bad_host`), or a file that is too long or too large (`400`), or a workflow whose Whisper (or translating) transcript feeds Add Captions (refused before it runs; the one exception, a chain that crosses a sub-workflow boundary, is described [above](#a-whisper-transcript-wired-into-add-captions-is-refused-before-the-run)).
 
 ## Best Practices
 

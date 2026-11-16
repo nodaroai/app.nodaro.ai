@@ -1583,14 +1583,38 @@ jobs:
           node-version: 22
       - name: Check core does not import from ee/
         run: node tools/check-ee-imports.mjs
+      # The symbol check is handed a secret, so it runs the BASE branch's copy
+      # of its script, never the PR's: a PR must not be able to change code that
+      # runs with a secret (private-marker-check.yml does the same). The copy
+      # lands in an untracked subdirectory the scans never read, and is removed
+      # once the check has run.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.base_ref || github.ref_name }}
+          path: .gate-base
+          sparse-checkout: |
+            tools/check-private-leaks.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: Check for private-extraction symbol leaks
         # The symbol list is a repo secret, not a tracked file — a cleartext
         # deny-list of proprietary names IS the map of what was extracted.
         # Absent (forks / public mirror CI) the check skips loudly; the mirror
-        # publish path hard-requires it.
+        # publish path hard-requires it. Run from the PR checkout's root: the
+        # script scans the repository it is started in. Only while the base
+        # branch has no copy yet does the PR's own copy stand in, once.
         env:
           PRIVATE_LEAK_SYMBOLS: ${{ secrets.PRIVATE_LEAK_SYMBOLS }}
-        run: node tools/check-private-leaks.mjs
+        run: |
+          gate=.gate-base/tools/check-private-leaks.mjs
+          if [ ! -f "$gate" ] && [ -f tools/check-private-leaks.mjs ]; then
+            echo "::notice title=Private symbol check::The base branch has no copy of the check yet, so this PR's copy runs once."
+            gate=tools/check-private-leaks.mjs
+          fi
+          status=0
+          node "$gate" || status=$?
+          rm -rf .gate-base
+          exit "$status"
       - name: Check published package manifests declare real @nodaro/* ranges
         run: node tools/check-published-manifests.mjs
       - name: Install the image's Caddy (for the Caddyfile tests)

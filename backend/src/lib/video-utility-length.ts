@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify"
 import type { ZodTypeAny } from "zod"
 import { assertSafeProbeSource, ProbeSourceBlockedError, readOwnStoredCopy, type ProbeSourceBlockReason } from "../providers/video/ffmpeg-utils.js"
-import { NOT_A_MEDIA_FILE, OWN_STORAGE_PROBE_MAX_BYTES, PROBE_UNAVAILABLE, probeNotRun } from "../providers/video/probe-guard.js"
+import { MEDIA_LINK_BAD_HOST, NOT_A_MEDIA_FILE, OWN_STORAGE_PROBE_MAX_BYTES, PROBE_UNAVAILABLE, probeNotRun } from "../providers/video/probe-guard.js"
 import { DOWNLOAD_TIMEOUT_MS } from "../providers/video/ffmpeg-timeouts.js"
 import { PRE_CHARGE_PROBE_TIMEOUT_MS, ROUTE_MEASURE_DEADLINE_MS } from "./pre-charge-probe-bounds.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
@@ -90,9 +90,11 @@ export type VideoUtilityLength =
  * Why a run was refused before its charge: a clip that cannot be read, a probe
  * that timed out (retryable: run it again), a link whose host could not be
  * resolved (retryable: a DNS failure can pass), a read the server could not
- * run just now (retryable), more clips than one run joins.
+ * run just now (retryable), a link whose host does not exist or is a private
+ * address (`media_link_bad_host`: the link has to change), more clips than one
+ * run joins.
  */
-export type VideoUtilityRefusalCode = "invalid_video_duration" | "probe_timeout" | "source_unreachable" | "probe_unavailable" | "too_many_clips" | "client_closed" | "media_link_not_a_file"
+export type VideoUtilityRefusalCode = "invalid_video_duration" | "probe_timeout" | "source_unreachable" | "probe_unavailable" | "too_many_clips" | "client_closed" | "media_link_not_a_file" | typeof MEDIA_LINK_BAD_HOST
 
 /**
  * The HTTP status a route answers a refusal with: a retryable one (a timed-out
@@ -125,7 +127,14 @@ function refusalOf(failure: ClipFailure, index: number, count: number): VideoUti
   if (failure === "timeout") return { ok: false, code: "probe_timeout", message: `Timed out reading ${which} — run it again.` }
   if (failure === "unreachable") return { ok: false, code: "source_unreachable", message: `Could not reach ${which} — run it again.` }
   if (failure === "unavailable") return { ok: false, code: PROBE_UNAVAILABLE.code, message: `Could not read ${which} just now — run it again.` }
-  if (failure === "nohost") return { ok: false, code: "invalid_video_duration", message: `Could not read ${which}: its host was not found. Check the link.` }
+  if (failure === "nohost") return { ok: false, code: MEDIA_LINK_BAD_HOST, message: `Could not read ${which}: its host was not found. Check the link.` }
+  if (failure === "private") {
+    return {
+      ok: false,
+      code: MEDIA_LINK_BAD_HOST,
+      message: `Could not read ${which}: it points to a private or reserved address, which the server does not read. Use a link to a public host, or upload the file.`,
+    }
+  }
   if (failure === "notmedia") return { ok: false, code: NOT_A_MEDIA_FILE.code, message: count > 1 ? `Clip ${index + 1} of ${count}: ${NOT_A_MEDIA_FILE.message}` : NOT_A_MEDIA_FILE.message }
   return { ok: false, code: "invalid_video_duration", message: `Could not read ${which}. The file may be corrupted or an unsupported format.` }
 }
@@ -133,13 +142,15 @@ function refusalOf(failure: ClipFailure, index: number, count: number): VideoUti
 /**
  * Why one clip has no length: it cannot be read, reading it timed out, its host
  * could not be resolved for now (`unreachable`, retryable) or does not exist
- * (`nohost`, for good), the server could not run the read (`unavailable`:
+ * (`nohost`, for good), it is on a private or reserved address that is not
+ * this install's own storage (`private`, at the first hop or a redirect), the
+ * server could not run the read (`unavailable`:
  * its reader failed to start or was stopped, retryable), or the request's client went away (`aborted`: nothing
  * is answered, created or reserved), or the link is not an ordinary media
  * file (`notmedia`: a streaming playlist, a manifest). `stopped`: another clip of the same
  * measure failed first, so this one's read was stopped — never the answer.
  */
-type ClipFailure = "unreadable" | "timeout" | "unreachable" | "unavailable" | "nohost" | "notmedia" | "aborted" | "stopped"
+type ClipFailure = "unreadable" | "timeout" | "unreachable" | "unavailable" | "nohost" | "private" | "notmedia" | "aborted" | "stopped"
 
 /** ffprobe's own lookup of a host failed; the host it names is captured. */
 const FFPROBE_LOOKUP_FAILED = /Failed to resolve hostname\s+\[?([^\s\]:]+)/i
@@ -178,9 +189,9 @@ const timedOut = (err: unknown): boolean => {
  * Why a failed read of `url` failed, as a measure tells it, in this order:
  * stopped by its client or by a sibling's failure, out of time (also when a
  * hop was refused on the way), a hop the probe guard
- * refused (a host that could not be resolved for now is retryable, one that
- * does not exist is not, a private address is unreadable — at the first hop
- * or at a redirect, alike), a passing lookup failure of its host, or
+ * refused (a host that could not be resolved for now is retryable; one that
+ * does not exist, and a private address, are the link's to fix — at the first
+ * hop or at a redirect, alike), a passing lookup failure of its host, or
  * unreadable.
  */
 function failureOf(err: unknown, bounds: MeasureBounds, readSignal: AbortSignal | undefined, url: string): ClipFailure {
@@ -191,7 +202,7 @@ function failureOf(err: unknown, bounds: MeasureBounds, readSignal: AbortSignal 
   // The server could not run the read (its reader failed to start, or it was stopped): retryable.
   if (probeNotRun(err)) return "unavailable"
   const refused = refusalReason(err)
-  if (refused) return refused === "dns" ? "unreachable" : refused === "host" ? "nohost" : refused === "container" ? "notmedia" : "unreadable"
+  if (refused) return refused === "dns" ? "unreachable" : refused === "host" ? "nohost" : refused === "address" ? "private" : refused === "container" ? "notmedia" : "unreadable"
   return ffprobeLookupOfGuardedHostFailed(err, url) ? "unreachable" : "unreadable"
 }
 
@@ -254,8 +265,9 @@ async function untilStopped<T>(work: Promise<T>, signal: AbortSignal | undefined
  * instead (`readOwnStoredCopy`, the probe guard's one fallback). A host that
  * could not be resolved for now (reason `dns`, at the first hop or a later
  * one) is retryable and never downloaded; a host that does not exist (reason
- * `host`) is refused for good, saying so; any other refusal or failure means
- * the clip cannot be read. A link the guard allows is never downloaded to be
+ * `host`), and a private or reserved address that is not this install's own
+ * storage, are refused for good, saying so (`media_link_bad_host`); any other
+ * refusal or failure means the clip cannot be read. A link the guard allows is never downloaded to be
  * measured (on Cloud, storage is public and the guard allows it).
  */
 async function clipReadingOf(
@@ -295,7 +307,8 @@ async function clipReadingOf(
   }
   if (refusal === "dns") return "unreachable"
   if (refusal === "host") return "nohost"
-  if (refusal !== "address" || !isOwnStoredFileUrl(url)) return "unreadable"
+  if (refusal !== "address") return "unreadable"
+  if (!isOwnStoredFileUrl(url)) return "private"
   // Within what is left of a route's deadline (none left: out of time, never a negative bound); the render's
   // own download bound otherwise. The storage fallback of a 404 runs under the same bound and cap.
   const downloadMs = leftMs(bounds, DOWNLOAD_TIMEOUT_MS)
@@ -449,8 +462,9 @@ export function withoutVideoUtilityStash(body: unknown): Record<string, unknown>
  * Combine Videos, at most {@link COMBINE_VIDEOS_MAX_CLIPS} clips) — a body that
  * does not parse is left to the handler's parse, and nothing is probed — then
  * measures each clip within {@link ROUTE_MEASURE_DEADLINE_MS} for the whole
- * request, refuses one that cannot be read or whose host does not exist (400
- * `invalid_video_duration`), whose reading ran out of time (503
+ * request, refuses one that cannot be read (400 `invalid_video_duration`),
+ * whose host does not exist or is a private address (400
+ * `media_link_bad_host`), whose reading ran out of time (503
  * `probe_timeout`) or whose host could not be looked up for now (503
  * `source_unreachable`) before anything is reserved, and keeps the lengths
  * and units on the server-side request for the guard and the handler

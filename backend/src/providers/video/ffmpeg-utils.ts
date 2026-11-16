@@ -13,8 +13,9 @@ import {
   assertSafeProbeSource,
   containerRefusalOf,
   isNetworkProbeSource,
+  isProbeGuardOption,
+  namesALink,
   OWN_STORAGE_PROBE_MAX_BYTES,
-  PROBE_GUARD_OPTIONS,
   probeInputArgs,
   ProbeSourceBlockedError,
   storedCopyProbeArgs,
@@ -23,6 +24,7 @@ import {
   type ProbeSourceBlockReason,
 } from "./probe-guard.js"
 import { csvFields } from "./ffprobe-csv.js"
+import { preparePluginRun } from "./plugin-run-guard.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { watchTransferBody, type TransferRateLimits, type TransferWatch } from "../../lib/transfer-watchdog.js"
 import { currentSlotWaitLedger } from "../../lib/ffmpeg-slot-wait.js"
@@ -892,13 +894,22 @@ export async function getVideoStreamDuration(filePath: string): Promise<number> 
  */
 export async function runFfprobeReadingLinks(args: readonly string[]): Promise<string> {
   const links = args.filter((a) => isNetworkProbeSource(a))
-  if (links.length === 0) return runFfprobe(args)
   if (links.length > 1) throw new Error("runFfprobeReadingLinks: one link per run")
-  // ffprobe keeps the LAST value of an option wherever it sits, so a caller's own could widen the guard's: refused.
-  const own = args.find((a) => PROBE_GUARD_OPTIONS.has(a))
+  // ffprobe keeps the LAST value of an option wherever it sits, so a caller's own could widen the guard's: refused
+  // (also read from a file, `-/protocol_whitelist <file>`).
+  const own = links.length > 0 ? args.find((a) => isProbeGuardOption(a)) : undefined
   if (own) throw new Error(`runFfprobeReadingLinks: a run that reads a link cannot set the probe guard's own options (${own})`)
-  const link = links[0]!
-  return readProbeSource(link, (input, probe) => probe.run(args.flatMap((a) => (a === link ? [...probe.inputArgs, input] : [a]))))
+  // A plugin run's other rules (plugin-run-guard.ts): option files read once and handed over as that copy, no
+  // widened whitelist, no argument through another protocol, a local list and a lavfi graph's files checked.
+  const prepared = await preparePluginRun(args, "ffprobe", { readsLink: args.some((a) => namesALink(a)) })
+  try {
+    const run = prepared.argv
+    const link = links[0]
+    if (link === undefined) return await runFfprobe(run)
+    return await readProbeSource(link, (input, probe) => probe.run(run.flatMap((a) => (a === link ? [...probe.inputArgs, input] : [a]))))
+  } finally {
+    await prepared.cleanup()
+  }
 }
 
 /**
