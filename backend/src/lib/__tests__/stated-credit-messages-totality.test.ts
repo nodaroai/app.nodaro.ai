@@ -60,6 +60,7 @@ const NOT_A_SAVED_FAILURE: Readonly<Record<string, { count: number; why: string;
   "ee/billing/llm-fixed-plus-calls-impl.ts": { count: 2, why: "a log line and an admin note on the usage row (admin screens only)" },
   "ee/billing/plan-change-credits.ts": { count: 1, why: LOG },
   "ee/billing/provision-credits.ts": { count: 3, why: LOG },
+  "ee/billing/subscription-renewal.ts": { count: 2, why: "a log line, and the credit history's descriptions of a renewal hold and its release" },
   "ee/billing/subscription-grant.ts": { count: 3, why: "a log line, and the purchase ledger's descriptions of a self-serve subscription" },
   "ee/billing/billing-documents.ts": { count: 2, why: "the invoice / receipt line of a self-serve purchase" },
   "ee/notifications/credits-digest.ts": { count: 4, why: "the credits digest email, not a run's failure" },

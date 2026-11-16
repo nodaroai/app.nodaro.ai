@@ -1121,7 +1121,7 @@ export async function renewSubscriptionCredits(): Promise<RenewalResult> {
       .eq("status", "active")
       .lt("current_period_end", now)
       .limit(100)
-  let { data: found, error: subsError } = await activePastPeriod("id, user_id, tier, current_period_end, plan_granted")
+  let { data: found, error: subsError } = await activePastPeriod("id, user_id, tier, current_period_end, plan_granted, renewal_credits_held")
   // A database without migration 650's grant marker yet: every row there was
   // granted when it was created, so the rows are read without it.
   if (isMissingColumnError(subsError)) {
@@ -1131,8 +1131,11 @@ export async function renewSubscriptionCredits(): Promise<RenewalResult> {
   // active by a writer other than its claim) has no credits to renew: they
   // come with the plan's grant, once it is paid for.
   const subs = found
-    ? (found as unknown as Array<{ id: string; user_id: string; tier: string; current_period_end: string; plan_granted?: boolean | null }>)
-      .filter((s) => s.plan_granted !== false)
+    ? (found as unknown as Array<{ id: string; user_id: string; tier: string; current_period_end: string; plan_granted?: boolean | null; renewal_credits_held?: number | null }>)
+      // A subscription whose renewal charge failed holds its credits until it
+      // is paid (subscription-renewal.ts): the paid invoice settles it, never
+      // a date. A stale `active` event can leave such a row reading active.
+      .filter((s) => s.plan_granted !== false && s.renewal_credits_held == null)
     : found
 
   if (subsError) {

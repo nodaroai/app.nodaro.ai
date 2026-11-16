@@ -353,6 +353,16 @@ describe("grantYearlyPlanMonthlyCredits", () => {
     expect(result).toEqual({ granted: 0, refused: 0, errors: 0, awaitingMigration: false })
   })
 
+  it("never grants to a subscription whose renewal credits are on hold (a failed renewal not yet paid)", async () => {
+    queue("subscriptions", { data: [{ ...yearlySub(), plan_granted: true, renewal_credits_held: 900 }] })
+    queue("profiles", { data: [{ id: yearlySub().user_id, credits_reset_at: "2026-09-10T00:40:00+00:00" }] })
+
+    const result = await grantYearlyPlanMonthlyCredits(NOW)
+
+    expect(grantCalls()).toHaveLength(0)
+    expect(result).toEqual({ granted: 0, refused: 0, errors: 0, awaitingMigration: false })
+  })
+
   it("a database without the grant marker yet is read without it, and grants as before", async () => {
     queue(
       "subscriptions",

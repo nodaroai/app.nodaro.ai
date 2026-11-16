@@ -1588,6 +1588,21 @@ describe("cleanup-service", () => {
       expect(mockLogTransaction).not.toHaveBeenCalled()
     })
 
+    it("never renews a subscription whose renewal credits are on hold (a failed renewal not yet paid)", async () => {
+      mockTableQueue("subscriptions", [
+        {
+          data: [{ id: "sub-held", user_id: "user-1", tier: "pro", current_period_end: "2026-01-01T00:00:00Z", plan_granted: true, renewal_credits_held: 4200 }],
+          error: null,
+        },
+      ])
+      mockTableQueue("profiles", [{ data: [{ id: "user-1", credits_reset_at: "2025-12-01T00:00:00Z" }], error: null }])
+
+      const result = await renewSubscriptionCredits()
+
+      expect(result.usersRenewed).toBe(0)
+      expect(mockLogTransaction).not.toHaveBeenCalled()
+    })
+
     it("a database without the grant marker yet is read without it, and renews as before", async () => {
       mockTableQueue("subscriptions", [
         { data: null, error: { code: "42703", message: "column subscriptions.plan_granted does not exist" } },

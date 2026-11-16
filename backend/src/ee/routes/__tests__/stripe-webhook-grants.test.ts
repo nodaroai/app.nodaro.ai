@@ -6,7 +6,8 @@
  *     grants nothing (personal and organization packs alike) and is logged.
  *   - A paid pack still reaches the grant.
  *   - `invoice.paid` hands the handler the invoice's billing reason and its
- *     priced lines, which is what sizes a plan-change grant.
+ *     priced lines, which is what sizes a plan-change grant, and, for a
+ *     renewal, the subscription's own line (its plan and period).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -182,6 +183,64 @@ describe("invoice.paid hands the handler what sizes a plan-change grant", () => 
     await post({ id: "evt_3", type: "invoice.paid", data: { object: { ...invoice, lines: { has_more: true, data: invoice.lines.data.slice(0, 1) } } } })
     expect(mockStripe.invoices.listLineItems).toHaveBeenCalledWith("in_1", expect.objectContaining({ limit: 100 }))
     expect(handlers.handleInvoicePaid.mock.calls[0][0].lines).toHaveLength(3)
+  })
+})
+
+describe("invoice.paid hands a renewal invoice's subscription line to the handler", () => {
+  const renewal = {
+    id: "in_cycle_1",
+    customer: "cus_1",
+    amount_paid: 2500,
+    billing_reason: "subscription_cycle",
+    parent: { subscription_details: { subscription: "sub_1", metadata: {} } },
+    lines: {
+      has_more: false,
+      data: [
+        {
+          amount: 2500,
+          pricing: { price_details: { price: "price_pro" } },
+          parent: { type: "subscription_item_details", subscription_item_details: { subscription: "sub_1", proration: false, subscription_item: "si_1" } },
+          period: { start: 1_796_083_200, end: 1_798_761_600 },
+        },
+      ],
+    },
+  }
+
+  it("passes the billing reason and the line's plan and period", async () => {
+    await post({ id: "evt_4", type: "invoice.paid", data: { object: renewal } })
+    expect(handlers.handleInvoicePaid).toHaveBeenCalledWith(
+      expect.objectContaining({
+        invoiceId: "in_cycle_1",
+        subscriptionId: "sub_1",
+        billingReason: "subscription_cycle",
+        lines: [],
+        renewalLines: [
+          {
+            priceId: "price_pro",
+            subscriptionId: "sub_1",
+            proration: false,
+            periodStart: new Date(1_796_083_200_000).toISOString(),
+            periodEnd: new Date(1_798_761_600_000).toISOString(),
+          },
+        ],
+      }),
+    )
+  })
+
+  it("a Stripe read of the remaining lines that fails asks Stripe for the event again (nothing was written)", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    mockStripe.invoices.listLineItems.mockRejectedValueOnce(new Error("Stripe is down"))
+
+    const res = await post({ id: "evt_5", type: "invoice.paid", data: { object: { ...renewal, lines: { has_more: true, data: [] } } } })
+
+    expect(res.statusCode).toBe(500)
+    expect(handlers.handleInvoicePaid).not.toHaveBeenCalled()
+    error.mockRestore()
+  })
+
+  it("a plan change's invoice is handed no renewal lines", async () => {
+    await post({ id: "evt_6", type: "invoice.paid", data: { object: { ...renewal, billing_reason: "subscription_update" } } })
+    expect(handlers.handleInvoicePaid.mock.calls[0][0]).not.toHaveProperty("renewalLines")
   })
 })
 

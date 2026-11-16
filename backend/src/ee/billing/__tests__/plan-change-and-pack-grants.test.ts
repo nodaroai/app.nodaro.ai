@@ -362,15 +362,14 @@ describe("invoice.paid — the paid plan-change invoice grants the gap, once", (
     warn.mockRestore()
   })
 
-  it("a renewal invoice keeps today's record and grants nothing here (the renewal SETs)", async () => {
+  it("a renewal invoice is recorded by the renewal funnel, never the plan-change grant or the generic record", async () => {
     mockSelect("subscriptions", { tier: "pro", user_id: "user-001" })
+    mockRpc.mockResolvedValueOnce({ data: [{ outcome: "recorded", credits: 0, balance: null }], error: null })
 
     await handleInvoicePaid({ ...upgradeInvoice, invoiceId: "in_cycle_1", billingReason: "subscription_cycle", lines: [] })
 
-    expect(mockRpc).not.toHaveBeenCalled()
-    expect(payloadsFor("transactions", "upsert")).toEqual([
-      expect.objectContaining({ stripe_transaction_id: "in_cycle_1", type: "subscription", credits_granted: TIER_CREDITS.pro }),
-    ])
+    expect(mockRpc.mock.calls.map((c: unknown[]) => c[0])).toEqual(["release_subscription_renewal_credits"])
+    expect(payloadsFor("transactions", "upsert")).toEqual([])
   })
 })
 
