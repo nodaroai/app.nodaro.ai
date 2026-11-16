@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { buildMcpServer } from "../lib/mcp/server.js"
 import { handleMcpRequest } from "../lib/mcp/fastify-adapter.js"
+import { answerMcpGet, registerMcpGetStreams } from "../lib/mcp/get-stream.js"
 import { conversationIdentityFromHeaders } from "../lib/mcp/flows/conversation-key.js"
 import { config } from "../lib/config.js"
 import { mcpLaneAddresses, mcpServedPath, type McpLane, type McpLaneAddresses } from "../lib/mcp-lane-addresses.js"
@@ -48,8 +49,9 @@ export async function registerMcpRoute(app: FastifyInstance): Promise<void> {
   // does not have. Every other install registers exactly the route it always
   // had.
   //
-  // `app.all()` covers POST (JSON-RPC requests) and GET (SSE upgrade for
-  // server-initiated notifications). The SDK transport handles both shapes.
+  // `app.all()` covers POST (JSON-RPC requests) and GET (the stream for
+  // server-initiated messages, answered without an MCP server: get-stream.ts).
+  registerMcpGetStreams(app)
   const path = mcpServedPath()
   if (path) {
     app.all(path, mcpRouteOptions(), mcpHandler(app, "path"))
@@ -123,6 +125,9 @@ function mcpHandler(app: FastifyInstance, lane: McpLane) {
     if (!admission.ok) {
       return reply.status(admission.status).send({ error: { code: admission.code, message: admission.message } })
     }
+
+    // Nothing is ever sent on a GET stream here: answered without a server.
+    if (req.method === "GET") return answerMcpGet(app, req, reply)
 
     const scopes = (req.appAuthorization?.scopes ?? []) as Scope[]
     const clientName = req.appAuthorization
