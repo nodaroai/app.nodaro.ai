@@ -33,6 +33,7 @@ const BILLING_SESSION_ONLY = [
   "GET /v1/billing/transactions",
   "POST /v1/billing/create-checkout-session",
   "POST /v1/billing/create-load-session",
+  "GET /v1/billing/checkout-session/:sessionId",
   "GET /v1/billing/auto-recharge",
   "PUT /v1/billing/auto-recharge",
   "POST /v1/billing/manage-subscription",

@@ -4527,8 +4527,9 @@ that calls these through the SDK (`client.billing`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack: `{ priceId, mode?, embedded?, returnPath?, gaClientId?, gaSessionId? }` → `{ data: { url } }`. A plan's Checkout accepts promotion codes; a credit pack's does not, and a pack purchase that settles for nothing grants no credits. `409` for a plan while the account already has a subscription (active or past due): change it with `change-plan` instead. |
-| `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits: `{ amountUsd, embedded?, returnPath?, gaClientId?, gaSessionId? }` → `{ data: { url, credits } }`. |
+| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack: `{ priceId, mode?, embedded?, returnPath?, uiMode?, gaClientId?, gaSessionId? }` → `{ data: { url } }`. A plan's Checkout accepts promotion codes; a credit pack's does not, and a pack purchase that settles for nothing grants no credits. `409` for a plan while the account already has a subscription (active or past due): change it with `change-plan` instead. |
+| `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits: `{ amountUsd, embedded?, returnPath?, uiMode?, gaClientId?, gaSessionId? }` → `{ data: { url, credits } }`. |
+| `GET` | `/v1/billing/checkout-session/:sessionId` | The status of one of your own Checkout sessions: `{ data: { status, paymentStatus, mode, granted } }`; `status` `open` / `complete` / `expired`, `paymentStatus` `paid` / `unpaid` / `no_payment_required`, `mode` `payment` / `subscription`. `granted` is true once the purchase's credits (or the plan) have been recorded, which happens when Stripe tells the platform, usually seconds after payment and later for a payment method that settles later. After `granted`, read the balance again (a plan's `granted` can lead its credits by a moment). `404 checkout_session_not_found` for a session that is not yours or does not exist; `429` past 60 reads a minute. |
 | `POST` | `/v1/billing/change-plan` | Moves an active subscription to another plan: `{ newPriceId }` → `{ data: { subscriptionId, tier } }`. **Upgrade:** the price difference for the rest of the billing period is charged at once, and the new plan applies only when that payment succeeds; the credits added are the difference between the two plans' monthly credits, once per billing period — moving down and back up within one period adds nothing more. An upgrade invoice settled for 0 (a 100%-off coupon, or a balance that covered it) adds no credits. If the payment does not go through, the plan is unchanged and the answer is `409` with `{ error: { code: "plan_change_payment_required", message, invoiceUrl } }` — `invoiceUrl` is Stripe's page for paying that invoice, and the change applies if it is paid before it expires; the same answer comes back while an earlier change is still waiting for its payment. **Downgrade:** the unused time is credited on the next invoice and the current credits stay until the period ends. **Monthly ↔ yearly:** switching restarts the billing period but adds no credits; the next monthly credits come a month after the switch. `409` when the subscription is not active (for example a failed renewal payment); `404` with no subscription; `429` after 5 plan-change requests from one account in 24 hours (refused ones count). |
 | `POST` | `/v1/billing/manage-subscription` | A link to the Stripe Customer Portal: `{ returnPath? }` → `{ data: { url } }`. `404` before a first purchase (Stripe does not know the account yet). |
 | `GET` | `/v1/billing/auto-recharge` | The automatic top-up setting: `{ data: { enabled, thresholdCredits, amountUsd, failureCount, lastAttemptAt, hasSavedCard } }`. |
@@ -4536,6 +4537,19 @@ that calls these through the SDK (`client.billing`).
 | `GET` | `/v1/billing/transactions` | Purchase history, newest first (the latest 50): `{ data: [{ id, stripe_transaction_id, type, amount_usd, credits_granted, tier, created_at, receipt_url }] }`; `type` is `subscription`, `topup` or `refund` (`credits_granted` negative). |
 | `GET` | `/v1/billing/payment-method` | What is on file with Stripe: `{ data: { card, billingDetails } }` — `card` is `{ brand, last4, expMonth, expYear }` or `null`; `billingDetails` is `{ name, email, country }` or `null`. Never an error for an account that has not bought yet: both `null`. |
 | `GET` | `/v1/billing/invoices` | Every payment as a document, newest first (the latest 100 of each source): `{ data: [{ id, kind, number, at, amount: { amount, currency }, credits, status, description, pdfUrl, url }] }`. `kind` is `"invoice"` (a subscription payment: `number`, `pdfUrl` and the hosted `url` are Stripe's) or `"receipt"` (a credit pack or a load: `credits` granted and the hosted receipt as `url`; no PDF; a refund is a receipt with `status` `"refunded"`, `amount` and `credits` negative). `status` is `"paid"`, `"open"`, `"void"`, `"uncollectible"` or `"refunded"`. Every document Stripe writes (the invoice PDF and page, the receipt) is in English, whatever language the person paid in. |
+
+`uiMode` (checkout, load) is `"hosted"` (the default: Stripe's Checkout page)
+or `"embedded"`, which opens Stripe's embedded Checkout inside the app's own
+page instead: the answer is `{ data: { url: null, clientSecret, sessionId } }`
+(load: plus `credits`). Mount it with Stripe.js and the `stripePublishableKey`
+from `GET /v1/billing/plans`. The form never redirects (payment methods that
+need a redirect are not offered), so `returnPath` and `embedded` are not used
+(they are still validated: an invalid `returnPath` is still a `400`), and the
+purchase is granted by Stripe's webhook as usual — read
+`GET /v1/billing/checkout-session/:sessionId` for `granted`. Any other value is a
+`400`. Where the deployment has no publishable key the answer is
+`503 { error: { code: "embedded_checkout_unavailable", message } }`: use the
+page.
 
 `returnPath` (checkout, load, portal) is a path on the **calling origin**
 (`/billing`, `/settings/credits?tab=history`) that Stripe sends the person back
@@ -4708,7 +4722,8 @@ account's runs. The shape, with placeholders for the figures:
     { "id": "topup-10", "credits": <credits>, "price": { "amount": <amount>, "currency": "USD" } },
     …
   ],
-  "topUpRange": { "min": <amount>, "max": <amount>, "currency": "USD" }
+  "topUpRange": { "min": <amount>, "max": <amount>, "currency": "USD" },
+  "stripePublishableKey": "<key>" | null
 }
 ```
 
@@ -4722,6 +4737,7 @@ account's runs. The shape, with placeholders for the figures:
 | `storageBytes` | Storage for your media, in bytes. |
 | `topUps` | The credit packs, `{ id, credits, price }`, smallest first. Top-up credits are valid for 12 months. `price` is `null` when it cannot be stated right now. |
 | `topUpRange` | `{ min, max, currency }`: any whole amount in this range can be loaded as credits in the app, at the same rate as the packs. |
+| `stripePublishableKey` | The Stripe publishable key for the in-page payment form (Stripe's embedded Checkout), or `null` where the deployment has none, in which case an app sends the person to the Stripe Checkout page. |
 
 | Status | `error.code` | When |
 |---|---|---|

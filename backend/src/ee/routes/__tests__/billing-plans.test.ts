@@ -92,6 +92,8 @@ function priceAt(over: Record<string, Record<string, unknown>>) {
 }
 
 const REAL_KEY = config.STRIPE_SECRET_KEY
+const REAL_PUBLISHABLE_KEY = config.STRIPE_PUBLISHABLE_KEY
+const REAL_VITE_PUBLISHABLE_KEY = config.VITE_STRIPE_PUBLISHABLE_KEY
 const REAL_PROFILE = process.env.NODARO_SURFACE_PROFILE
 
 let app: FastifyInstance
@@ -119,6 +121,8 @@ afterEach(async () => {
   vi.useRealTimers()
   vi.restoreAllMocks()
   config.STRIPE_SECRET_KEY = REAL_KEY
+  config.STRIPE_PUBLISHABLE_KEY = REAL_PUBLISHABLE_KEY
+  config.VITE_STRIPE_PUBLISHABLE_KEY = REAL_VITE_PUBLISHABLE_KEY
   if (REAL_PROFILE === undefined) delete process.env.NODARO_SURFACE_PROFILE
   else process.env.NODARO_SURFACE_PROFILE = REAL_PROFILE
   __resetSurfaceProfileCacheForTests()
@@ -570,5 +574,29 @@ describe("a plan's parallelism follows the lane switch", () => {
     await getPlans()
     expect(h.lastMirroredEnforced).toHaveBeenCalled()
     expect(h.lanesEnforced).not.toHaveBeenCalled()
+  })
+})
+
+/** A Stripe key of a kind and mode, built at run time so no key-shaped literal sits in the source. */
+function key(kind: string, mode: string): string {
+  return [kind, mode, "0".repeat(12)].join("_")
+}
+
+describe("the publishable key for the in-page payment form", () => {
+  it("is in the answer when it is a publishable key of the secret key's mode", async () => {
+    config.STRIPE_PUBLISHABLE_KEY = key("pk", "test") // the file's STRIPE_SECRET_KEY is a test-mode key
+    expect((await getPlans()).json().stripePublishableKey).toBe(key("pk", "test"))
+  })
+
+  it("is null, never absent, when it is not set or not usable", async () => {
+    config.STRIPE_PUBLISHABLE_KEY = ""
+    config.VITE_STRIPE_PUBLISHABLE_KEY = ""
+    const body = (await getPlans()).json()
+    expect(body).toHaveProperty("stripePublishableKey", null)
+  })
+
+  it("leaves every other field of the answer as it was", async () => {
+    const { stripePublishableKey: _k, ...rest } = (await getPlans()).json()
+    expect(Object.keys(rest).sort()).toEqual(["data", "topUpRange", "topUps"])
   })
 })

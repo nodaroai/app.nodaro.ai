@@ -86,6 +86,8 @@ export interface BillingPlansResult {
   topUps: BillingTopUp[]
   /** Any whole amount in this range can be loaded as credits, at the same rate as the packs. */
   topUpRange: { min: number; max: number; currency: string }
+  /** The Stripe publishable key to mount the embedded Checkout form with (`uiMode: "embedded"`); `null` when the deployment has none: use the Checkout page. Absent on a server released before it. */
+  stripePublishableKey?: string | null
 }
 
 /** The account's latest subscription record. */
@@ -293,7 +295,17 @@ export class BillingResource {
    * plan's checkout answers `409` while the account already has a
    * subscription: use {@link BillingResource.changePlan}. `ForbiddenError`
    * with the code `self_serve_disabled` on a deployment that does not sell to
-   * its users. **Signed-in session only.**
+   * its users.
+   *
+   * With `uiMode: "embedded"` the answer is `{ url: null, clientSecret,
+   * sessionId }` for Stripe's embedded Checkout: mount it with
+   * `clientSecret` and the plans' {@link BillingPlansResult.stripePublishableKey};
+   * it never redirects, and `returnPath` / `embedded` are not used (still
+   * validated: an invalid `returnPath` is still a `400`). When it
+   * completes, poll {@link BillingResource.checkoutStatus} with `sessionId`
+   * until `granted`. A `NodaroError` with status `503` and the code
+   * `embedded_checkout_unavailable` means the deployment has no embedded
+   * form: use the page (no `uiMode`). **Signed-in session only.**
    */
   async checkout(input: BillingCheckoutInput): Promise<BillingCheckoutSession> {
     const res = await this.client.request<{ data: BillingCheckoutSession }>("POST", "/v1/billing/create-checkout-session", { body: input })
@@ -305,10 +317,30 @@ export class BillingResource {
    * a whole amount (`amountUsd`, within {@link BillingPlansResult.topUpRange})
    * as credits at the packs' rate; `credits` is what it will grant. The card
    * is saved for auto top-up. `returnPath` as in {@link checkout}.
+   *
+   * With `uiMode: "embedded"` the answer is `{ url: null, clientSecret,
+   * sessionId, credits }` for Stripe's embedded Checkout, as in
+   * {@link checkout} (mount it with the plans' `stripePublishableKey`;
+   * `returnPath` / `embedded` are not used, but still validated; a `503`
+   * `embedded_checkout_unavailable` means use the page).
    * **Signed-in session only.**
    */
   async loadCredits(input: BillingLoadInput): Promise<BillingLoadSession> {
     const res = await this.client.request<{ data: BillingLoadSession }>("POST", "/v1/billing/create-load-session", { body: input })
+    return res.data
+  }
+
+  /**
+   * `GET /v1/billing/checkout-session/:sessionId` → where one of your own
+   * Checkout sessions stands: `status`, `paymentStatus`, `mode`, and
+   * `granted` once its credits or plan are on the account. After Stripe's
+   * embedded form completes, poll it until `granted` is true, then read the
+   * balance again. A session that is not yours (or does not exist) is a
+   * `NotFoundError` with the code `checkout_session_not_found`; limited to
+   * 60 reads a minute per account. **Signed-in session only.**
+   */
+  async checkoutStatus(sessionId: string): Promise<BillingCheckoutStatus> {
+    const res = await this.client.request<{ data: BillingCheckoutStatus }>("GET", `/v1/billing/checkout-session/${encodeURIComponent(sessionId)}`)
     return res.data
   }
 
@@ -439,6 +471,9 @@ export interface BillingAutoRechargeSaved {
   amountUsd: number | null
 }
 
+/** Where a Checkout session is paid: `"hosted"` (the default) is the Stripe Checkout page; `"embedded"` is Stripe's embedded form inside your own page. */
+export type BillingUiMode = "hosted" | "embedded"
+
 /** What `billing.checkout()` sends. */
 export interface BillingCheckoutInput {
   /** A plan's monthly or yearly price id, or a credit pack's (`BillingTopUp.id`). */
@@ -449,11 +484,18 @@ export interface BillingCheckoutInput {
   returnPath?: string
   /** Set by an embedded first-party surface: return to the app's public checkout-complete page. */
   embedded?: boolean
+  /** `"embedded"` answers a session for Stripe's embedded form instead of a page (`returnPath` and `embedded` are then not used, but still validated: an invalid `returnPath` is still a `400`). Absent = `"hosted"`. */
+  uiMode?: BillingUiMode
 }
 
-/** A Stripe Checkout page to send the person to. */
+/** A Stripe Checkout page to send the person to, or (with `uiMode: "embedded"`) a session for Stripe's embedded form. */
 export interface BillingCheckoutSession {
+  /** The Checkout page; `null` for an embedded session. */
   url: string | null
+  /** An embedded session's client secret, to mount Stripe's embedded Checkout with. */
+  clientSecret?: string
+  /** An embedded session's id, for {@link BillingResource.checkoutStatus}. */
+  sessionId?: string
 }
 
 /** What `billing.loadCredits()` sends. */
@@ -463,12 +505,29 @@ export interface BillingLoadInput {
   /** As in {@link BillingCheckoutInput.returnPath}; wins over `embedded`. */
   returnPath?: string
   embedded?: boolean
+  /** As in {@link BillingCheckoutInput.uiMode}: with `"embedded"`, `returnPath` and `embedded` are not used, but still validated. */
+  uiMode?: BillingUiMode
 }
 
-/** A Stripe Checkout page for a load, and the credits it grants. */
+/** A Stripe Checkout page (or, with `uiMode: "embedded"`, an embedded session) for a load, and the credits it grants. */
 export interface BillingLoadSession {
+  /** The Checkout page; `null` for an embedded session. */
   url: string | null
+  /** An embedded session's client secret, to mount Stripe's embedded Checkout with. */
+  clientSecret?: string
+  /** An embedded session's id, for {@link BillingResource.checkoutStatus}. */
+  sessionId?: string
   credits: number
+}
+
+/** What `billing.checkoutStatus()` answers: where one of your own Checkout sessions stands. */
+export interface BillingCheckoutStatus {
+  /** `"complete"` once the form was paid (or needed no payment). */
+  status: "open" | "complete" | "expired"
+  paymentStatus: "paid" | "unpaid" | "no_payment_required"
+  mode: "payment" | "subscription"
+  /** True once the purchase's credits or plan have been granted to the account. */
+  granted: boolean
 }
 
 /** What `billing.portal()` sends. */

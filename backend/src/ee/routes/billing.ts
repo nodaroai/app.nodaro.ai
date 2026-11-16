@@ -26,6 +26,7 @@ import { createStripeCustomer, createCheckoutSession, createPortalSession } from
 import { ON_SALE_PRICE_TO_PLAN, getTierFromPriceId, TIER_CREDITS, TIER_STORAGE_LIMITS, TOP_UPS } from "../billing/stripe-config.js"
 import { creditsForLoadUsd, LOAD_CURRENCY, MIN_LOAD_USD, MAX_LOAD_USD } from "../billing/load-rate.js"
 import { readBillingPlans } from "../billing/plans.js"
+import { BILLING_UI_MODES, embeddedSessionAnswer, embeddedSessionParams, stripePublishableKey } from "../billing/embedded-checkout.js"
 import { ensureStripeCustomer } from "../billing/provision-credits.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import { rateLimitAddressKey } from "../../lib/client-address.js"
@@ -35,6 +36,7 @@ import { deploymentPayerId, payerCoverage } from "../../lib/deployment-payer.js"
 import { byNewest, invoiceDocument, paymentMethodView, receiptDocument, type PurchaseRow } from "../billing/billing-documents.js"
 import { stripeCustomerIdOf } from "../billing/stripe-customer.js"
 import { grantPaidPlanChange, invoicePriceLines, notePlanCreditPeak } from "../billing/plan-change-credits.js"
+import { billingCheckoutStatusRoutes } from "./billing-checkout-status.js"
 import { gaClientIdField, gaSessionIdField, gaVisitMetadata } from "../billing/analytics/visit-ids.js"
 
 /** Extract origin from request headers for redirect URLs. */
@@ -59,6 +61,31 @@ const RETURN_PATH = /^\/(?![/\\])[^\\\s#?]*(\?[^\\\s#]*)?$/
 const RETURN_PATH_MESSAGE = "returnPath must be a path on this origin: one leading /, no host, no #"
 const returnPathSchema = z.string().max(200).regex(RETURN_PATH, RETURN_PATH_MESSAGE).optional()
 
+/**
+ * How the Checkout is shown: Stripe's page (`"hosted"`, the default) or
+ * Stripe's embedded form inside the app's own page (`"embedded"`). An
+ * embedded session has no return address, so `returnPath` and `embedded` are
+ * not used with it, but still validated: an invalid `returnPath` is still a
+ * 400.
+ */
+const uiModeSchema = z.enum(BILLING_UI_MODES).optional()
+const UI_MODE_MESSAGE = 'uiMode must be "hosted" or "embedded"'
+
+/** Asked for the embedded form where the deployment has no publishable key to mount it with. */
+const EMBEDDED_CHECKOUT_UNAVAILABLE = {
+  error: {
+    code: "embedded_checkout_unavailable",
+    message: "The in-page payment form is not available on this deployment. Use the Stripe Checkout page.",
+  },
+}
+
+/** The body's first problem, worded: `uiMode`, then `returnPath`, else the route's own message. */
+function bodyProblem(issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey> }>, otherwise: string): string {
+  if (issues.some((issue) => issue.path[0] === "uiMode")) return UI_MODE_MESSAGE
+  if (issues.some((issue) => issue.path[0] === "returnPath")) return RETURN_PATH_MESSAGE
+  return otherwise
+}
+
 /** `returnPath` with `checkout=<outcome>` added to its query, on the calling origin. */
 function returnUrl(origin: string, returnPath: string, outcome: "success" | "cancelled"): string {
   const [path, query = ""] = returnPath.split("?", 2)
@@ -76,6 +103,7 @@ const checkoutSessionSchema = z.object({
   // bounce that tab to login, since its session lives in the parent app.
   embedded: z.boolean().optional(),
   returnPath: returnPathSchema,
+  uiMode: uiModeSchema,
   // The visit's Google Analytics ids, kept on the payment so its completion
   // is reported against this visit (billing/analytics/). A malformed value is
   // dropped, never refused.
@@ -89,7 +117,7 @@ const changePlanSchema = z.object({
 
 // Billing is a first-party UI action — block OAuth apps + personal tokens
 // (no scope authorizes changing the owner's Stripe subscription / charges).
-const BILLING_JWT_ONLY_MSG = "Billing management is only available from a logged-in session."
+export const BILLING_JWT_ONLY_MSG = "Billing management is only available from a logged-in session."
 
 /**
  * B4 — `billing.selfServe` had NO backend reader.
@@ -192,7 +220,8 @@ export async function billingRoutes(app: FastifyInstance) {
     }
     // The same for every caller only where everyone may buy; otherwise the answer depends on who asked.
     const cache = runtimeSurfaceProfile().billing.selfServe ? "public, max-age=300" : "private, max-age=300"
-    return reply.header("Cache-Control", cache).send(result.plans)
+    // The key the in-page payment form mounts with, read per answer (not cached with the prices); null = hosted page only.
+    return reply.header("Cache-Control", cache).send({ ...result.plans, stripePublishableKey: stripePublishableKey() })
   })
 
   // Get current subscription for a user
@@ -300,11 +329,10 @@ export async function billingRoutes(app: FastifyInstance) {
 
     const parsed = checkoutSessionSchema.safeParse(req.body)
     if (!parsed.success) {
-      const onReturnPath = parsed.error.issues.some((issue) => issue.path[0] === "returnPath")
-      return reply.status(400).send({ error: onReturnPath ? RETURN_PATH_MESSAGE : "priceId is required" })
+      return reply.status(400).send({ error: bodyProblem(parsed.error.issues, "priceId is required") })
     }
 
-    const { priceId, mode, embedded, returnPath, gaClientId, gaSessionId } = parsed.data
+    const { priceId, mode, embedded, returnPath, uiMode, gaClientId, gaSessionId } = parsed.data
     const checkoutMode = mode ?? (ON_SALE_PRICE_TO_PLAN[priceId] ? "subscription" : "payment")
     const visit = gaVisitMetadata({ gaClientId, gaSessionId })
 
@@ -314,6 +342,11 @@ export async function billingRoutes(app: FastifyInstance) {
     }
     if (checkoutMode === "payment" && !TOP_UPS[priceId]) {
       return reply.status(400).send({ error: "Invalid top-up price ID" })
+    }
+    // The embedded form needs the publishable key the app mounts it with.
+    // Refused before the database or Stripe is touched.
+    if (uiMode === "embedded" && stripePublishableKey() === null) {
+      return reply.status(503).send(EMBEDDED_CHECKOUT_UNAVAILABLE)
     }
 
     // One subscription per account: a plan change goes through change-plan
@@ -365,23 +398,28 @@ export async function billingRoutes(app: FastifyInstance) {
         await ensureStripeCustomer(customer.id, userId)
       }
 
-      const baseUrl = getOrigin(req)
-      // Embedded checkouts (opened in a new tab from a parent app's iframe)
-      // return to the public no-auth /checkout-complete page — the normal
-      // /billing (or /pricing) return URL would bounce that tab to login,
-      // since its session lives in the parent app, not here.
-      const successUrl = returnPath
-        ? returnUrl(baseUrl, returnPath, "success")
-        : embedded
-          ? `${baseUrl}/checkout-complete?status=success`
-          : checkoutMode === "payment"
-            ? `${baseUrl}/billing?topup=true`
-            : `${baseUrl}/billing?success=true`
-      const cancelUrl = returnPath
-        ? returnUrl(baseUrl, returnPath, "cancelled")
-        : embedded
-          ? `${baseUrl}/checkout-complete?status=cancelled`
-          : `${baseUrl}/pricing`
+      // Where a hosted Checkout returns to. An embedded form has no return
+      // address (it never redirects), so it computes none.
+      const hostedReturn = () => {
+        const baseUrl = getOrigin(req)
+        // Embedded checkouts (opened in a new tab from a parent app's iframe)
+        // return to the public no-auth /checkout-complete page — the normal
+        // /billing (or /pricing) return URL would bounce that tab to login,
+        // since its session lives in the parent app, not here.
+        const successUrl = returnPath
+          ? returnUrl(baseUrl, returnPath, "success")
+          : embedded
+            ? `${baseUrl}/checkout-complete?status=success`
+            : checkoutMode === "payment"
+              ? `${baseUrl}/billing?topup=true`
+              : `${baseUrl}/billing?success=true`
+        const cancelUrl = returnPath
+          ? returnUrl(baseUrl, returnPath, "cancelled")
+          : embedded
+            ? `${baseUrl}/checkout-complete?status=cancelled`
+            : `${baseUrl}/pricing`
+        return { success_url: successUrl, cancel_url: cancelUrl }
+      }
 
       const session = await createCheckoutSession({
         customer: stripeCustomerId ?? undefined,
@@ -398,10 +436,10 @@ export async function billingRoutes(app: FastifyInstance) {
         // price: its credits are fixed by the price, so a discount would buy
         // the same credits for less (and a 100%-off one for nothing).
         ...(checkoutMode === "subscription" ? { allow_promotion_codes: true } : {}),
-        success_url: successUrl,
-        cancel_url: cancelUrl,
+        ...(uiMode === "embedded" ? embeddedSessionParams() : hostedReturn()),
       })
 
+      if (uiMode === "embedded") return reply.send({ data: embeddedSessionAnswer(session) })
       return reply.send({ data: { url: session.url } })
     } catch (err) {
       console.error("[billing] Failed to create checkout session:", (err as Error).message)
@@ -428,17 +466,21 @@ export async function billingRoutes(app: FastifyInstance) {
         amountUsd: z.number().int().min(MIN_LOAD_USD).max(MAX_LOAD_USD),
         embedded: z.boolean().optional(),
         returnPath: returnPathSchema,
+        uiMode: uiModeSchema,
         gaClientId: gaClientIdField,
         gaSessionId: gaSessionIdField,
       })
       .safeParse(req.body)
     if (!parsed.success) {
-      const onReturnPath = parsed.error.issues.some((issue) => issue.path[0] === "returnPath")
       return reply.status(400).send({
-        error: onReturnPath ? RETURN_PATH_MESSAGE : `amountUsd must be a whole dollar amount between ${MIN_LOAD_USD} and ${MAX_LOAD_USD}`,
+        error: bodyProblem(parsed.error.issues, `amountUsd must be a whole dollar amount between ${MIN_LOAD_USD} and ${MAX_LOAD_USD}`),
       })
     }
-    const { amountUsd, embedded, returnPath, gaClientId, gaSessionId } = parsed.data
+    const { amountUsd, embedded, returnPath, uiMode, gaClientId, gaSessionId } = parsed.data
+    // Refused before the database or Stripe is touched, as on checkout.
+    if (uiMode === "embedded" && stripePublishableKey() === null) {
+      return reply.status(503).send(EMBEDDED_CHECKOUT_UNAVAILABLE)
+    }
     const credits = creditsForLoadUsd(amountUsd)
 
     try {
@@ -474,17 +516,21 @@ export async function billingRoutes(app: FastifyInstance) {
         .single()
       const loadEmail = emailRow?.email ?? null
 
-      const baseUrl = getOrigin(req)
-      const successUrl = returnPath
-        ? returnUrl(baseUrl, returnPath, "success")
-        : embedded
-          ? `${baseUrl}/checkout-complete?status=success`
-          : `${baseUrl}/billing?topup=true`
-      const cancelUrl = returnPath
-        ? returnUrl(baseUrl, returnPath, "cancelled")
-        : embedded
-          ? `${baseUrl}/checkout-complete?status=cancelled`
-          : `${baseUrl}/billing`
+      // Where a hosted Checkout returns to; an embedded form has none.
+      const hostedReturn = () => {
+        const baseUrl = getOrigin(req)
+        const successUrl = returnPath
+          ? returnUrl(baseUrl, returnPath, "success")
+          : embedded
+            ? `${baseUrl}/checkout-complete?status=success`
+            : `${baseUrl}/billing?topup=true`
+        const cancelUrl = returnPath
+          ? returnUrl(baseUrl, returnPath, "cancelled")
+          : embedded
+            ? `${baseUrl}/checkout-complete?status=cancelled`
+            : `${baseUrl}/billing`
+        return { success_url: successUrl, cancel_url: cancelUrl }
+      }
 
       const session = await createCheckoutSession({
         customer: stripeCustomerId ?? undefined,
@@ -510,10 +556,10 @@ export async function billingRoutes(app: FastifyInstance) {
           setup_future_usage: "off_session",
           ...(loadEmail ? { receipt_email: loadEmail } : {}),
         },
-        success_url: successUrl,
-        cancel_url: cancelUrl,
+        ...(uiMode === "embedded" ? embeddedSessionParams() : hostedReturn()),
       })
 
+      if (uiMode === "embedded") return reply.send({ data: { ...embeddedSessionAnswer(session), credits } })
       return reply.send({ data: { url: session.url, credits } })
     } catch (err) {
       console.error("[billing] Failed to create load session:", (err as Error).message)
@@ -905,4 +951,6 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: "Failed to fetch invoices" })
     }
   })
+
+  await billingCheckoutStatusRoutes(app)
 }

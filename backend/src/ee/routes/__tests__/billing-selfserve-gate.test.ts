@@ -62,7 +62,7 @@ vi.mock("@/ee/billing/plans.js", () => ({
 }))
 
 vi.mock("@/lib/config.js", () => ({
-  config: { EDITION: "cloud", STRIPE_SECRET_KEY: "sk_test" },
+  config: { EDITION: "cloud", STRIPE_SECRET_KEY: "sk_test", STRIPE_PUBLISHABLE_KEY: "", VITE_STRIPE_PUBLISHABLE_KEY: "" },
   isCloud: () => true,
   isCommunity: () => false,
   isBusiness: () => false,
