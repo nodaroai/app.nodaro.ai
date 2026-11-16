@@ -26,6 +26,7 @@ import { CLIENT_CLOSED, clientGoneSignal } from "../lib/client-gone.js"
 import { LLM_TEXT_INPUT_MAX } from "@nodaro/shared/models"
 import { advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
 import { LLM_CHEAP_LANES_SHAPE, cheapLanesParam } from "../lib/llm-cheap-lanes.js"
+import { MEDIA_NOT_READ_CODE, MEDIA_NOT_READ_MESSAGE, isMediaNotRead, mediaLaneParams } from "../lib/llm-media-lane.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -319,6 +320,8 @@ export async function llmChatRoutes(app: FastifyInstance) {
         modelId: llmModel,
         system: systemPrompt,
         messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, videoFps: referenceVideoFps, audios: referenceAudioUrls, files: prepared.files }) }],
+        // A video or audio reference runs where it is surely read (lib/llm-media-lane.ts). Advanced mode's own pin follows and wins.
+        ...mediaLaneParams({ modelId: llmModel, videos: referenceVideoUrls, audios: referenceAudioUrls, text: [systemPrompt, userInput], cheapLanesOnly: parsed.data.cheapLanesOnly }),
         ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
         ...cheapLanesParam(parsed.data),
         reasoningEffort: parsed.data.reasoningEffort,
@@ -375,11 +378,11 @@ export async function llmChatRoutes(app: FastifyInstance) {
         try {
           response = await llmComplete(request)
         } catch (err) {
-          const message = userFacingMessage(err, "LLM API call failed")
+          const message = isMediaNotRead(err) ? MEDIA_NOT_READ_MESSAGE : userFacingMessage(err, "LLM API call failed")
           const recorded = addCallToSpend(spend, llmModel, request, { error: err })
           await recordMeteredJobOutput(job.id, { error: message }, billedEvidence(spend, billedProviderCost(err)))
           const shown = await failMetered(job.id, reserve, spend, recorded, err, message)
-          return reply.status(502).send({ error: { code: llmErrorCode(err), message: shown } })
+          return reply.status(502).send({ error: { code: isMediaNotRead(err) ? MEDIA_NOT_READ_CODE : llmErrorCode(err), message: shown } })
         }
         // Outside the call's catch: a ledger error is never read as a provider failure.
         const recorded = addCallToSpend(spend, llmModel, request, { response })
@@ -445,7 +448,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
 
         return reply.send({ jobId: job.id, generatedText })
       } catch (err) {
-        const message = userFacingMessage(err, "LLM API call failed")
+        const message = isMediaNotRead(err) ? MEDIA_NOT_READ_MESSAGE : userFacingMessage(err, "LLM API call failed")
 
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message }, provider_cost: billedProviderCost(err) } })
 
@@ -454,7 +457,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         }
 
         return reply.status(502).send({
-          error: { code: llmErrorCode(err), message },
+          error: { code: isMediaNotRead(err) ? MEDIA_NOT_READ_CODE : llmErrorCode(err), message },
         })
       }
     },
@@ -540,6 +543,8 @@ export async function llmChatRoutes(app: FastifyInstance) {
         modelId: llmModel,
         system: systemPrompt,
         messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, videoFps: referenceVideoFps, audios: referenceAudioUrls, files: prepared.files }) }],
+        // A video or audio reference runs where it is surely read (lib/llm-media-lane.ts). Advanced mode's own pin follows and wins.
+        ...mediaLaneParams({ modelId: llmModel, videos: referenceVideoUrls, audios: referenceAudioUrls, text: [systemPrompt, userInput], cheapLanesOnly: parsed.data.cheapLanesOnly }),
         ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
         ...cheapLanesParam(parsed.data),
         reasoningEffort: parsed.data.reasoningEffort,

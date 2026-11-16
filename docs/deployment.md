@@ -494,6 +494,13 @@ first 60 seconds do not count). Docker does not restart a container for being
 unhealthy. Point any other health check or uptime monitor at this address too,
 with a time limit of its own.
 
+A platform's deploy health check must read port 3000, where Caddy listens. A
+platform that probes the port it hands the container in `PORT` (Railway does)
+finds nothing there: the image listens on 3000 whatever `PORT` says, so every
+deploy fails its check while the previous one keeps serving. Set the service
+variable `PORT=3000` on such a platform. Nothing else in the image changes
+with it: the API still listens on 9000 behind Caddy.
+
 Caddy accepts the `X-Forwarded-*` headers only from peers in the private
 ranges (`127.0.0.1/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`,
 `fd00::/8`, `::1`), and rewrites `X-Forwarded-For` to the single client

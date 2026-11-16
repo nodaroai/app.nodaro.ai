@@ -892,3 +892,71 @@ describe("Generate Text with documents — the charge never leaves them out", ()
     expect(ledgerWrite()).toMatchObject({ costUsd: 0.00005 })
   })
 })
+
+describe("Generate Text with a video or audio reference — metered: the vendor's own API", () => {
+  const withGeminiKey = async (key: string | undefined) => {
+    const { config } = (await import("../../lib/config.js")) as unknown as { config: Record<string, unknown> }
+    const before = config.GEMINI_API_KEY
+    config.GEMINI_API_KEY = key
+    return () => {
+      config.GEMINI_API_KEY = before
+    }
+  }
+  const body = (extra: Record<string, unknown>) => ({ systemPrompt: "", userInput: "describe it", llmModel: "gemini-3.8-flash", ...extra })
+  const sent = () => h.llmComplete.mock.calls[0]![0] as { requireLane?: string; minPromptTokens?: number; advancedMode?: boolean }
+
+  it("pins a Gemini call with a video to the direct lane, with no Advanced mode on it", async () => {
+    const restore = await withGeminiKey("gem")
+    try {
+      h.llmComplete.mockRejectedValue(new Error("stop here"))
+      const app = await buildApp()
+      await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body({ referenceVideoUrls: ["https://media.example/cut.mp4"] }) })
+      expect(sent().requireLane).toBe("direct")
+      expect(sent().advancedMode).toBeUndefined()
+      expect(sent().minPromptTokens).toBeUndefined()
+    } finally {
+      restore()
+    }
+  })
+
+  it("pins an audio reference the same way, and leaves a text or image call where it was", async () => {
+    const restore = await withGeminiKey("gem")
+    try {
+      h.llmComplete.mockRejectedValue(new Error("stop here"))
+      const app = await buildApp()
+      await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body({ referenceAudioUrls: ["https://media.example/mix.mp3"] }) })
+      expect(sent().requireLane).toBe("direct")
+      h.llmComplete.mockClear()
+      await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body({ referenceImageUrls: ["https://media.example/a.png"] }) })
+      expect(sent().requireLane).toBeUndefined()
+    } finally {
+      restore()
+    }
+  })
+
+  it("with no Gemini key the call keeps its lane and carries the floor instead", async () => {
+    const restore = await withGeminiKey(undefined)
+    try {
+      h.llmComplete.mockRejectedValue(new Error("stop here"))
+      const app = await buildApp()
+      await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body({ referenceVideoUrls: ["https://media.example/cut.mp4"] }) })
+      expect(sent().requireLane).toBeUndefined()
+      expect(sent().minPromptTokens).toBe(61)
+    } finally {
+      restore()
+    }
+  })
+
+  it("a run kept to the cheap lanes is never moved to the direct lane", async () => {
+    const restore = await withGeminiKey("gem")
+    try {
+      h.llmComplete.mockRejectedValue(new Error("stop here"))
+      const app = await buildApp()
+      await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body({ referenceVideoUrls: ["https://media.example/cut.mp4"], cheapLanesOnly: true }) })
+      expect(sent().requireLane).toBeUndefined()
+      expect(sent().minPromptTokens).toBe(61)
+    } finally {
+      restore()
+    }
+  })
+})

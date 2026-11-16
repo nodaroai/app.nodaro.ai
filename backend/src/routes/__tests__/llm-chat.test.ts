@@ -565,3 +565,46 @@ describe("POST /v1/llm-chat/generate — the caller learns the job before the an
     expect(jobInserts).toHaveLength(0)
   })
 })
+
+describe("POST /v1/llm-chat/generate — a video or audio the model never read (tier pricing: the floor)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    jobInserts.length = 0
+    jobUpdates.length = 0
+  })
+  const payload = (extra: Record<string, unknown>) => ({ systemPrompt: "", userInput: "describe it", llmModel: "gemini-3.8-flash", ...extra })
+
+  it("sends a call with a video its floor of prompt tokens, and keeps its lane", async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload({ referenceVideoUrls: ["https://media.example/cut.mp4"] }) })
+    expect(res.statusCode).toBe(200)
+    const request = vi.mocked(llmComplete).mock.calls[0]![0]
+    // "describe it": 1 token at 8 characters a token, plus one video.
+    expect(request.minPromptTokens).toBe(61)
+    expect(request.requireLane).toBeUndefined()
+  })
+
+  it("sends a call with no video and no audio no floor at all", async () => {
+    const app = await buildApp()
+    await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload({ referenceImageUrls: ["https://media.example/a.png"] }) })
+    const request = vi.mocked(llmComplete).mock.calls[0]![0]
+    expect(request).not.toHaveProperty("minPromptTokens")
+    expect(request).not.toHaveProperty("requireLane")
+  })
+
+  it("an answer made without the media is a 502 media_not_ingested in plain words, refunded, never a completed job", async () => {
+    vi.mocked(llmComplete).mockRejectedValueOnce(
+      new Error("media_not_ingested:gemini-3.8-flash — provider reported 11 prompt tokens, below the 61 floor for this request's media. The response describes content the model was not shown; discarding it."),
+    )
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload({ referenceVideoUrls: ["https://media.example/cut.mp4"] }) })
+    expect(res.statusCode).toBe(502)
+    const error = JSON.parse(res.body).error
+    expect(error.code).toBe("media_not_ingested")
+    expect(error.message).toBe("The model answered without reading the video or audio you sent, so the answer was discarded. Run it again, or turn Advanced mode on.")
+    expect(error.message).not.toMatch(/provider|prompt tokens/)
+    expect(credits.refundCredits).toHaveBeenCalledWith("ul-1")
+    expect(credits.commitCredits).not.toHaveBeenCalled()
+    expect(jobUpdates.some((u) => u.status === "completed")).toBe(false)
+  })
+})

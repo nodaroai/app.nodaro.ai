@@ -542,6 +542,7 @@
         "backend/src/lib/llm/direct-vendor.ts",
         "backend/src/lib/llm/exhaustion-fallback.ts",
         "backend/src/lib/llm/kie-cost.ts",
+        "backend/src/lib/llm/kie-lane-breaker.ts",
         "backend/src/lib/llm/kie-lane.ts",
         "backend/src/lib/llm/kie-usage.ts",
         "backend/src/lib/llm/lane-fallback.ts",
