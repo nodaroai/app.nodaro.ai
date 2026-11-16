@@ -22,6 +22,7 @@ import { validateModelInput } from "@nodaro/shared/model-catalog"
 import { WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
 import { abandonFlowNode, commitFlowNode, flowJobFields, flowLinkText, prepareFlowNode } from "../flows/record.js"
 import { balanceRefusal } from "../amounts.js"
+import { statedName } from "../deployment-name.js"
 
 /**
  * Path-1 structured-field input shared by the image AND video generation
@@ -443,11 +444,12 @@ export function cardResultText(opts: {
   pollHint: string
 }): string {
   const verb = opts.noun === "outputs" ? "are" : "is"
-  return (
+  // The library in the deployment's own name (deployment-name.ts).
+  return statedName(
     `${opts.started} Hosts with interactive tool cards show live progress and ` +
-    `the finished ${opts.noun} in the card — prefer the card; do not send the user to the gallery. ` +
-    `Clients without tool cards: ${opts.pollHint}. ` +
-    `The ${opts.noun} ${verb} also saved to the user's Nodaro library.`
+      `the finished ${opts.noun} in the card — prefer the card; do not send the user to the gallery. ` +
+      `Clients without tool cards: ${opts.pollHint}. ` +
+      `The ${opts.noun} ${verb} also saved to the user's Nodaro library.`,
   )
 }
 

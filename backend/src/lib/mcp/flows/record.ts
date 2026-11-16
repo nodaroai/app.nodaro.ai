@@ -3,6 +3,7 @@ import { supabase } from "../../supabase.js"
 import type { McpSession } from "../session.js"
 import { mcpFlowsEnabled } from "../user-preferences.js"
 import { laneEditorUrl, type McpLaneAddresses } from "../../mcp-lane-addresses.js"
+import { statedName } from "../deployment-name.js"
 import { flowNodeFor, type FlowNodeInput, type FlowNodeSpec, type FlowOutputKey } from "./node-mappers.js"
 import { countSteps, resolveConversation, type McpConversationSettings } from "./conversation-store.js"
 import { applyFlowDelta, loadFlow } from "./workflow-delta.js"
@@ -214,8 +215,9 @@ export const ABANDON_DELAY_MS = 60_000
 export function flowLinkText(prepared: PreparedFlowNode, addresses: McpLaneAddresses): string {
   // The flow is the source of truth: the user may pick another result or change
   // a setting there, and the next step should build on that, not on memory.
-  return (
+  // In the deployment's own name on a deployment with one (deployment-name.ts).
+  return statedName(
     `This step was added to the conversation's flow in Nodaro — open it in the editor: ${laneEditorUrl(addresses, prepared.workflowId)} (flow id ${prepared.workflowId}). ` +
-    `If the user changed the flow there, read it with get_workflow_json before the next step and build on the result selected in each node.`
+      `If the user changed the flow there, read it with get_workflow_json before the next step and build on the result selected in each node.`,
   )
 }

@@ -41,6 +41,7 @@ import { registerTask } from "../tasks.js"
 import { isRouterNotFound } from "./_studio-helpers.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders } from "./_verb-helpers.js"
 import { amountsNote, amountWord, statedAmount, statedAmountFields, statedAmountRecord, unitFields } from "../amounts.js"
+import { statedName } from "../deployment-name.js"
 
 const readGate: ToolGate = { required: ["jobs:read"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -175,7 +176,7 @@ function originalView(v: unknown): Rec | undefined {
 /** The trend's engine by its public id and name: Nodaro Motion Prism when the route names none it knows. */
 function engineView(v: unknown): { engine: NodaroMotionEngine; engineName: string } {
   const engine = castSwapEngineFrom(v) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
-  return { engine: nodaroMotionEngineOf(engine), engineName: nodaroMotionEngineName(engine) }
+  return { engine: nodaroMotionEngineOf(engine), engineName: statedName(nodaroMotionEngineName(engine)) }
 }
 
 function detailView(d: Rec): Rec {

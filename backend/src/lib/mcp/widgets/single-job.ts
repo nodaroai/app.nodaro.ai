@@ -14,6 +14,7 @@
  */
 import { uiProtocolShim } from "./_common.js"
 import { mcpLaneAddresses } from "../../mcp-lane-addresses.js"
+import { widgetJs } from "../deployment-name.js"
 
 const SHARED_CSS = `
   /* --fs-top-pad: top inset for fullscreen mode so the image clears the
@@ -421,10 +422,10 @@ ${uiProtocolShim()}
       if (sawToolResult || state.outputUrl) return;
       progEl.hidden = true;
       while (statusEl.firstChild) statusEl.removeChild(statusEl.firstChild);
-      statusEl.appendChild(document.createTextNode('Your result will appear at the top of your Nodaro library when ready. '));
+      statusEl.appendChild(document.createTextNode(${widgetJs("Your result will appear at the top of your Nodaro library when ready. ")}));
       var libLink = document.createElement('button');
       libLink.type = 'button';
-      libLink.textContent = 'Open Nodaro library';
+      libLink.textContent = ${widgetJs("Open Nodaro library")};
       libLink.addEventListener('click', function () {
         if (window.NodaroMCP && window.NodaroMCP.openLink) {
           window.NodaroMCP.openLink(${JSON.stringify(`${pagesBase}/gallery`)});
@@ -467,7 +468,7 @@ ${uiProtocolShim()}
       pollAttempt++;
       if (pollAttempt * POLL_MS > MAX_POLL_MS) {
         stopPolling();
-        statusEl.textContent = 'Still working — check Nodaro library.';
+        statusEl.textContent = ${widgetJs("Still working — check Nodaro library.")};
         return;
       }
       if (!state.jobId) return;
@@ -497,7 +498,7 @@ ${uiProtocolShim()}
         // rendered widget JS: a fatal SyntaxError that breaks the ENTIRE
         // script (card freezes on "Initializing…"). Guarded by
         // __tests__/widget-js-valid.test.ts.
-        statusEl.textContent = 'Could not load — check Nodaro library.';
+        statusEl.textContent = ${widgetJs("Could not load — check Nodaro library.")};
         return;
       }
       var sc = (data.result && data.result.structuredContent) || {};
@@ -534,7 +535,7 @@ ${uiProtocolShim()}
         // Completed but the URL field wasn't where we expected — log to console
         // so the user can inspect via DevTools, and stop polling.
         console.warn('[nodaro-widget] completed without URL; output_data=', sc.outputData);
-        statusEl.textContent = 'Done — see Nodaro library.';
+        statusEl.textContent = ${widgetJs("Done — see Nodaro library.")};
         stopPolling();
       }
     });

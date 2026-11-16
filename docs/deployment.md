@@ -1151,7 +1151,13 @@ optional; each array empty = "keep the default"):
 - `siblings.apps`: `[{ "label": "...", "url": "..." }]` — replaces the Nodaro
   family links in the product switcher
 - `brand.productName`: replaces the wordmark and the document title (absent =
-  the static `<title>` shipped in `index.html` is left untouched)
+  the static `<title>` shipped in `index.html` is left untouched). The MCP
+  server says it too: its name, its tool descriptions, its refusals, the
+  documents its tools serve and its widget pages name the deployment instead
+  of the platform, and a product named after the platform is said the way the
+  deployment's screens say it (Nodaro Motion is "Motion"). Tool names and other
+  identifiers a client stores stay as they are
+  ([MCP: a deployment's own name](mcp/tools.md#deployment-name)).
 - `brand.wordmark`: short lockup text rendered **beside your own logo mark** in
   the sidebar header — for a deployment that ships its own `/logo-*.svg` files
   and wants a tile+text lockup (e.g. productName `"Acme Studio"` with wordmark
@@ -1389,7 +1395,9 @@ optional; each array empty = "keep the default"):
     a warning, an entry with an unknown language or no word is dropped alone,
     and neither touches the unit. They reach `/config.js` and the `display`
     objects of the balance and price reads (`display.unitLabels`, for the
-    client to pick from). Unset = the one label in every language.
+    client to pick from). The MCP tools write English, so their sentences use
+    the `en` word when there is one; their `unit` field stays `unitLabel`.
+    Unset = the one label in every language.
   - `billing.costTab`: `"hidden"` keeps the canvas Cost tab off even with a
     billing provider registered (default `"inherit"`).
   - `billing.sidebarCard`: `"hidden"` removes the sidebar credit-balance card

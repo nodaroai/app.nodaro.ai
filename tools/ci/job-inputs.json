@@ -560,6 +560,7 @@
         "backend/src/lib/mcp/amounts.ts",
         "backend/src/lib/mcp/app-input-descriptions.ts",
         "backend/src/lib/mcp/asset-resolver.ts",
+        "backend/src/lib/mcp/deployment-name.ts",
         "backend/src/lib/mcp/extract-app-inputs.ts",
         "backend/src/lib/mcp/flows/conversation-store.ts",
         "backend/src/lib/mcp/flows/flow-graph.ts",

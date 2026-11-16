@@ -27,6 +27,7 @@ import { queueInfoFor, waitingRowsOf, withoutLaneStamp, type QueueInfo } from ".
 import { readWithLaneStamp } from "../../concurrency-lanes/columns.js"
 import { mcpQueueText } from "../../concurrency-lanes/queue-copy.js"
 import { amountsNote, statedJobRow, unitFields } from "../amounts.js"
+import { statedFields, statedName } from "../deployment-name.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
 
@@ -330,8 +331,9 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       // by the rule the job-status routes use (decided 2026-10-06; response only).
       // A trend run's failure text is replaced (maskTrendRunError): an MCP
       // session is never an admin one.
+      // A failed row's words are the platform's: in the deployment's own name (deployment-name.ts).
       rows = maskTrendRunErrors(redactPrivateJobData(fillJobsRenderQuality(rows)), false).map((r) =>
-        isPreviewListing(r) ? { ...r, preview: true } : r,
+        statedFields(isPreviewListing(r) ? { ...r, preview: true } : r, ["error_message"]),
       )
       // Your own jobs carry what each one was charged once settled
       // (`credits` is the hold) — the sum to read for "what did I spend" —
@@ -453,11 +455,15 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       const failed = publicData.status === "failed" || publicData.status === "cancelled"
       const payload = failed
         ? {
-            data: publicData,
-            ...failureGuidance({
-              error_message: publicData.error_message as string | null,
-              error_hint: (publicData as { error_hint?: unknown }).error_hint,
-            }),
+            // The failure's words in the deployment's own name (deployment-name.ts); the guidance is read off the words as saved.
+            data: statedFields(publicData, ["error_message"]),
+            ...statedFields(
+              failureGuidance({
+                error_message: publicData.error_message as string | null,
+                error_hint: (publicData as { error_hint?: unknown }).error_hint,
+              }),
+              ["guidance"],
+            ),
           }
         : publicData.status === "pending_review"
           ? {
@@ -600,7 +606,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       const waitedError = trendRunErrorText(waited.error, { trend: (own as { trend_run_marker?: unknown }).trend_run_marker }, false)
       const view = charged
         ? jobView(fillJobRenderQuality(charged) as Parameters<typeof jobView>[0])
-        : { jobId: args.job_id, status: waited.status, outputUrl: waited.outputUrl, ...outputSizeOf(waited.outputData), outputData: waited.outputData, errorMessage: waitedError, jobType: waited.jobType }
+        : { jobId: args.job_id, status: waited.status, outputUrl: waited.outputUrl, ...outputSizeOf(waited.outputData), outputData: waited.outputData, errorMessage: waitedError === null || waitedError === undefined ? waitedError : statedName(waitedError), jobType: waited.jobType }
       const summary =
         view.status === "completed"
           ? `Job ${args.job_id} completed${view.outputUrl ? `: ${view.outputUrl}` : ""}.`

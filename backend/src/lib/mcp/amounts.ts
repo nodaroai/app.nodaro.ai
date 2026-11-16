@@ -122,14 +122,26 @@ export function statedJobRow<T extends object>(row: T): T {
   return out as T
 }
 
-/** The word a sentence names an amount in: the unit's label, or "credits". */
-export function amountWord(): string {
-  return configuredDisplayUnit()?.label ?? "credits"
+/**
+ * The unit's word in an English sentence (decided 2026-11-16): the English word
+ * the deployment gives it (`billing.unitLabels.en`), else its label. Every
+ * sentence the lane writes is English; the fields that name the unit
+ * (`unit`, `unitLabels`) keep the label and the map as they are.
+ */
+export function unitEnglishWord(u: DisplayUnit): string {
+  return u.labels?.en ?? u.label
 }
 
-/** The short form a description states a price in: the unit's label, or "cr". */
+/** The word a sentence names an amount in: the unit's English word, or "credits". */
+export function amountWord(): string {
+  const u = configuredDisplayUnit()
+  return u === null ? "credits" : unitEnglishWord(u)
+}
+
+/** The short form a description states a price in: the unit's English word, or "cr". */
 export function amountAbbreviation(): string {
-  return configuredDisplayUnit()?.label ?? "cr"
+  const u = configuredDisplayUnit()
+  return u === null ? "cr" : unitEnglishWord(u)
 }
 
 /** `"<n> <word>"`, the converted figure in a sentence; an amount that could not be stated reads as unavailable. */
@@ -162,7 +174,7 @@ export function unitFields(): UnitFields {
  */
 export function amountsNote(): string {
   const u = configuredDisplayUnit()
-  return u === null ? "" : ` On this deployment every amount (fields named credits included) is in ${u.label}, the deployment's own unit.`
+  return u === null ? "" : ` On this deployment every amount (fields named credits included) is in ${unitEnglishWord(u)}, the deployment's own unit.`
 }
 
 /**

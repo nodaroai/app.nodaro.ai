@@ -1,3 +1,5 @@
+import { mcpServerInfo, widgetJs } from "../deployment-name.js"
+
 /**
  * Returns inline JS implementing the MCP UI client protocol over
  * window.parent.postMessage. Loaded inline in every widget HTML.
@@ -15,6 +17,7 @@
  *
  * The shim re-emits inbound notifications as DOM CustomEvents so individual
  * widget scripts can hook in without re-parsing the postMessage envelope.
+ * Its `appInfo` is the server's own name (`mcpServerInfo`, deployment-name.ts).
  */
 export function uiProtocolShim(): string {
   return `<script>
@@ -87,7 +90,7 @@ export function uiProtocolShim(): string {
           appCapabilities: {
             availableDisplayModes: ['inline', 'fullscreen']
           },
-          appInfo: { name: 'nodaro-mcp', version: '1.0.0' }
+          appInfo: { name: ${widgetJs(mcpServerInfo().name)}, version: ${widgetJs(mcpServerInfo().version)} }
         }).then(function(result) {
           window.__MCP_HOST_CONTEXT__ = (result && result.hostContext) || {};
           notify('ui/notifications/initialized', {});

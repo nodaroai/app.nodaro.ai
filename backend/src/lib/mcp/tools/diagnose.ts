@@ -11,6 +11,7 @@ import { CHILD_JOB_COLUMN, maskTrendRunError, trendRunErrorText, TRASHED_JOB_COL
 import { providerWordsShownTo, type ProviderWordsReader } from "../../provider-words.js"
 import { runJobsProviderWords, runWordsReadable } from "../../provider-words-readers.js"
 import { amountsNote, statedAmount, unitFields } from "../amounts.js"
+import { statedName } from "../deployment-name.js"
 
 const diagnoseGate: ToolGate = { required: ["jobs:read"] }
 
@@ -164,11 +165,13 @@ function buildFailure(
     nodeType,
     jobId,
     provider,
-    error,
+    // The platform's words about the failure in the deployment's own name (deployment-name.ts),
+    // classified off the words as saved.
+    error: error === null ? null : statedName(error),
     ...(errorCode ? { errorCode } : {}),
     ...(providerReason ? { providerReason } : {}),
     class: cls,
-    remediation,
+    remediation: statedName(remediation),
     creditsActual,
   }
 }
@@ -318,7 +321,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
                   status: execution.status,
                   outcome,
                   summary,
-                  executionError: execution.error_message ?? null,
+                  executionError: execution.error_message == null ? null : statedName(execution.error_message),
                   ...(resumeHint ? { resumeHint } : {}),
                   nodes,
                   failures,

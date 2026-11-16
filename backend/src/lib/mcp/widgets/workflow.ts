@@ -16,6 +16,7 @@
  */
 import { uiProtocolShim } from "./_common.js"
 import { mcpLaneAddresses } from "../../mcp-lane-addresses.js"
+import { widgetHtml, widgetJs } from "../deployment-name.js"
 
 const WF_CSS = `
   :root { color-scheme: light dark; }
@@ -54,7 +55,7 @@ ${uiProtocolShim()}
 <div class="progress" id="progress">Starting…</div>
 <div class="outputs" id="outputs"></div>
 <div class="actions">
-  <button id="btn-open">Open in Nodaro</button>
+  <button id="btn-open">${widgetHtml("Open in Nodaro")}</button>
 </div>
 <script>
   (function() {
@@ -143,7 +144,7 @@ ${uiProtocolShim()}
       pollAttempt++;
       if (pollAttempt * POLL_MS > MAX_POLL_MS) {
         stopPolling();
-        progressEl.textContent = 'Still working — check Nodaro library.';
+        progressEl.textContent = ${widgetJs("Still working — check Nodaro library.")};
         return;
       }
       if (!state.executionId) return;

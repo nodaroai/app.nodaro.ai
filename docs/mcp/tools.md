@@ -126,6 +126,44 @@ a transcript and an earlier analysis passed back as data.
 there they are not listed at all. A deployment with link imports on (the
 default) judges nothing here.
 
+### A deployment's own name {#deployment-name}
+
+A deployment can run under its own name (`brand.productName` in its
+[surface profile](../deployment.md#surface-profile-nodaro_surface_profile)).
+There, nothing the MCP server says names the platform. Its name in
+`initialize` (`serverInfo`), every tool title and description, every refusal,
+the documents the document tools serve (`get_node_skill`, `get_recipe`,
+`start_workflow_editor`, the directors' guides, the Studio and Recast guides)
+and the widget pages say the deployment's name where a name is needed:
+
+- A product named after the platform is said the way the deployment's own
+  screens say it: Nodaro Motion is "Motion" (its engines "Motion Prism" and
+  "Motion Pulse"), and the house upscalers carry the deployment's name
+  ("Example Image Upscale"). A product the screens have no word for is said
+  generically: Studio, the Video Director, the Film Director, the Workflow
+  Editor, and the Cloud edition.
+- A job or asset id is just an id ("a job id").
+- No sentence sends you to the platform's site. A mention of one of its hosts
+  is dropped, `get_recast_status` and `import_recast_script` answer
+  `appUrl: null`, and an example picture in a guide has an `example.com`
+  address. A link built from the deployment's own addresses (an editor link, an
+  upload page) is the deployment's.
+- `list_models` names the platform's own models' maker and family with the
+  deployment's name, and its `family` filter takes that name.
+- What stays as it is: identifiers a client stores or sends (tool names, none
+  of which carries the platform's name; model ids such as
+  `nodaro-image-upscale`; a maker's `id`; the widgets' resource URIs
+  `ui://nodaro/…`; error codes; package names such as `@nodaro/shared`), the
+  pictures of a picker catalog that shows the platform's pictures, and the
+  media hosts a widget may load pictures from.
+- What you wrote is never rewritten. A workflow, a prompt or a gallery row
+  that names the platform is read, and written back, exactly as it is. The
+  platform's own words saved with a run (a failed job's or run's message, its
+  guidance, `diagnose_run`'s remediation) are said in the deployment's name.
+
+A deployment that keeps the platform's name answers every reply as documented
+here.
+
 ---
 
 ## Workspace tools
@@ -2272,7 +2310,9 @@ credits beside it:
   named `credits` then holds an amount in the unit); a text reply that states
   amounts adds `unit` (the unit's word), `unitLabels` (its word per interface
   language, when the deployment gives one) and `decimals`. The conversion rate
-  is never sent.
+  is never sent. A sentence (a description's price hint, a quote, a refusal, a
+  document) states amounts with the unit's English word when the deployment
+  gives one (`unitLabels.en`), else with `unit`.
 - **A refusal for want of balance** names no figure. Where the deployment
   manages the balance (no self-serve purchase, or an external wallet), it says
   so and tells you to have the user ask the deployment's operator, never to

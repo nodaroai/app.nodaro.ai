@@ -25,6 +25,7 @@
 import { uiProtocolShim } from "./_common.js"
 import { WIDGET_MEDIA_ORIGINS } from "./csp-origins.js"
 import { mcpLaneAddresses } from "../../mcp-lane-addresses.js"
+import { widgetJs } from "../deployment-name.js"
 
 const CARD_CSS = `
   :root { color-scheme: light dark; --fs-top-pad: 90px; }
@@ -122,7 +123,8 @@ export const JOB_AUTO_TEXT_OUTPUT_KEYS = [
  * NOTE: plain ES5, no apostrophes in string literals, no template literals —
  * this string is embedded inside a TS template literal.
  */
-export const JOB_AUTO_CLASSIFY_JS = `
+function classifyJs(overflowNote: string): string {
+  return `
 function classifyJobOutput(sc, allowedOrigins) {
   sc = sc || {};
   var od = (sc.outputData && typeof sc.outputData === "object") ? sc.outputData : {};
@@ -238,11 +240,18 @@ function classifyJobOutput(sc, allowedOrigins) {
     }
   }
   if (overflow > 0) {
-    out.push({ kind: "note", value: "+" + overflow + " more in your Nodaro library" });
+    out.push({ kind: "note", value: "+" + overflow + ${overflowNote} });
   }
   return out;
 }
 `
+}
+
+/** The overflow note's words (the deployment's name on a deployment with its own, deployment-name.ts). */
+const OVERFLOW_NOTE = " more in your Nodaro library"
+
+/** The classify script as the platform's own page carries it (what the classify tests run). */
+export const JOB_AUTO_CLASSIFY_JS = classifyJs(`"${OVERFLOW_NOTE}"`)
 
 /**
  * Builds the static job-auto widget HTML. Registered once per request by the
@@ -264,7 +273,7 @@ ${uiProtocolShim()}
   <div class="outputs" id="outputs" hidden></div>
 </div>
 <script>
-  ${JOB_AUTO_CLASSIFY_JS}
+  ${classifyJs(widgetJs(OVERFLOW_NOTE, '"'))}
   (function() {
     var ALLOWED_ORIGINS = ${JSON.stringify(WIDGET_MEDIA_ORIGINS)};
     var state = { jobId: null, prompt: null, model: null, aspectRatio: null, resolution: null, done: false, imageActions: false, displayMode: 'inline' };
@@ -461,7 +470,7 @@ ${uiProtocolShim()}
       var items = classifyJobOutput(sc, ALLOWED_ORIGINS);
       if (!items.length) {
         // Rule 4 — nothing resolvable. Library pointer is the last resort.
-        showLibraryFallback('Done — saved to your Nodaro library. ');
+        showLibraryFallback(${widgetJs("Done — saved to your Nodaro library. ")});
         state.done = true;
         stopPolling();
         return;
@@ -488,7 +497,7 @@ ${uiProtocolShim()}
       statusEl.appendChild(document.createTextNode(prefixText));
       var libLink = document.createElement('button');
       libLink.type = 'button';
-      libLink.textContent = 'Open Nodaro library';
+      libLink.textContent = ${widgetJs("Open Nodaro library")};
       libLink.addEventListener('click', function() {
         if (window.NodaroMCP && window.NodaroMCP.openLink) {
           window.NodaroMCP.openLink(${JSON.stringify(`${pagesBase}/gallery`)});
@@ -538,7 +547,7 @@ ${uiProtocolShim()}
     // notification / rejected handshake), stop pretending after 15s.
     setTimeout(function() {
       if (sawToolResult || state.done) return;
-      showLibraryFallback('Your result will appear at the top of your Nodaro library when ready. ');
+      showLibraryFallback(${widgetJs("Your result will appear at the top of your Nodaro library when ready. ")});
     }, 15000);
 
     // ── Poll loop: tools/call get_asset every 2s, 15-minute cap ──
@@ -561,7 +570,7 @@ ${uiProtocolShim()}
       pollAttempt++;
       if (pollAttempt * POLL_MS > MAX_POLL_MS) {
         stopPolling();
-        statusEl.textContent = 'Still working — check Nodaro library.';
+        statusEl.textContent = ${widgetJs("Still working — check Nodaro library.")};
         return;
       }
       if (!state.jobId) return;
@@ -580,7 +589,7 @@ ${uiProtocolShim()}
       if (data.error) { return; }
       if (data.result && data.result.isError) {
         stopPolling();
-        statusEl.textContent = 'Could not load — check Nodaro library.';
+        statusEl.textContent = ${widgetJs("Could not load — check Nodaro library.")};
         return;
       }
       var sc = (data.result && data.result.structuredContent) || {};
