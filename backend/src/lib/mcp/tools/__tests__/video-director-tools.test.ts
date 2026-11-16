@@ -125,13 +125,13 @@ describe("create_launch_video", () => {
 
 describe("create_launch_video — the capture_site pointer (only where capture is offered)", () => {
   it("names capture_site in the refusal and the description while capture is offered", () => {
-    expect(urlOnlyMessage()).toBe("This tool doesn't take a URL yet — pass `brief` describing the product. To capture a live page as screenshots, use `capture_site`.")
-    expect(launchVideoDescription()).toContain("(`url` is not supported yet — describe the product in `brief`. `capture_site` captures a live page as screenshots.)")
+    expect(urlOnlyMessage({})).toBe("This tool doesn't take a URL yet — pass `brief` describing the product. To capture a live page as screenshots, use `capture_site`.")
+    expect(launchVideoDescription({})).toContain("(`url` is not supported yet — describe the product in `brief`. `capture_site` captures a live page as screenshots.)")
   })
   it("names nothing it does not list when capture is off", () => {
     offered.on = false
-    expect(urlOnlyMessage()).toBe("This tool doesn't take a URL yet — pass `brief` describing the product.")
-    expect(launchVideoDescription()).toContain("(`url` is not supported yet — describe the product in `brief`.)")
-    expect(launchVideoDescription()).not.toContain("capture_site")
+    expect(urlOnlyMessage({})).toBe("This tool doesn't take a URL yet — pass `brief` describing the product.")
+    expect(launchVideoDescription({})).toContain("(`url` is not supported yet — describe the product in `brief`.)")
+    expect(launchVideoDescription({})).not.toContain("capture_site")
   })
 })

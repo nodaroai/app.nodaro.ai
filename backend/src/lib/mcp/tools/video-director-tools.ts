@@ -5,6 +5,7 @@ import { WIDGET_URI } from "../widgets/registrar.js"
 import { brandTokensSchema } from "../../plan-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { siteCaptureOffered } from "./verbs-site-capture.js"
+import type { McpSession } from "../session.js"
 
 /**
  * One-shot "make me a video" director tools (HyperFrames Phase 1 — Unit E).
@@ -36,20 +37,20 @@ const brandParamSchema = z
 
 /** Returned when a caller passes a product `url` but no `brief`. The URL input is not
  *  wired yet — we never silently fabricate a brief from a bare URL. Where this install
- *  offers capture_site, the message points at it. */
-export function urlOnlyMessage(): string {
+ *  offers capture_site to the session, the message points at it. */
+export function urlOnlyMessage(session: Pick<McpSession, "offer">): string {
   return (
     "This tool doesn't take a URL yet — pass `brief` describing the product." +
-    (siteCaptureOffered() ? " To capture a live page as screenshots, use `capture_site`." : "")
+    (siteCaptureOffered(session) ? " To capture a live page as screenshots, use `capture_site`." : "")
   )
 }
 
-export function launchVideoDescription(): string {
+export function launchVideoDescription(session: Pick<McpSession, "offer">): string {
   return (
     "Author and render a narrated product-launch video. Pass `brief` describing the product " +
     "(what it is, who it's for, the tone). Returns a job_id; progress and the finished video " +
     "appear in the tool card. (`url` is not supported yet — describe the product in `brief`." +
-    (siteCaptureOffered() ? " `capture_site` captures a live page as screenshots." : "") +
+    (siteCaptureOffered(session) ? " `capture_site` captures a live page as screenshots." : "") +
     ")"
   )
 }
@@ -109,7 +110,7 @@ export function registerVideoDirectorTools({ server, session, fastify }: Registe
     "create_launch_video",
     {
       title: "Create Product Launch Video",
-      description: launchVideoDescription(),
+      description: launchVideoDescription(session),
       inputSchema: {
         brief: z
           .string()
@@ -130,7 +131,7 @@ export function registerVideoDirectorTools({ server, session, fastify }: Registe
     async (args) => {
       // URL-only capture is deferred — never silently fabricate a brief.
       if (args.url && !args.brief) {
-        return { content: [{ type: "text" as const, text: urlOnlyMessage() }] }
+        return { content: [{ type: "text" as const, text: urlOnlyMessage(session) }] }
       }
       // No brief at all (and no url): ask for one rather than dispatch an empty
       // brief the route's Zod would reject with a generic validation error.

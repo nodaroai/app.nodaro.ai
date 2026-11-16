@@ -72,6 +72,27 @@ is offered to the signed-in user.
 same refusal a run gives, and `start_workflow_editor`'s node catalog leaves
 such nodes out.
 
+The guides, recipes and node skills (`start_film_director`,
+`start_video_director`, `start_workflow_editor`, `get_recipe`,
+`get_node_skill`, and the Studio and Recast guides) are written for the whole
+platform, so they can name a tool or a model this deployment does not offer
+you. Where one does, it opens with a short note that names exactly those: the
+tools it mentions that are not in your tool list, and the models it mentions
+that the deployment does not offer. The rest of the document is unchanged.
+Use only the tools in your list and the models `list_models` returns, and do
+not offer the user anything the note names. A document that names nothing
+withheld has no note.
+
+The tool list says the same. A listed tool whose description, or an
+argument's description, choices or default, names a tool you are not listed
+or a model the deployment does not offer ends its description with a note
+naming exactly those (`start_film_director` names the generation tools it
+precedes; `generate_video` the video models its `model` argument recommends;
+`generate_speech` the voice models its `model` argument takes). The tool's
+arguments are left as they are: a call that names such a model is refused
+with `model_not_available` before anything is started or charged.
+`list_models` is where to pick a model.
+
 An admin of the deployment sees what an admin may run: a node the admins have
 not released to users yet is offered to them, a node the deployment itself
 does not offer is not.
@@ -2375,6 +2396,22 @@ the one asked. A model that declares the size a call naming none lands on
 carries `defaultResolution` (`1K` on FLUX 3 Klein, `2K` on Seedream 5.5 and
 MiniMax H3 Image, `720p` on PixVerse V6 Max); read it rather than taking the
 first entry of `resolutions` as the default.
+
+**On a deployment that offers less** ([What a deployment offers](#what-a-deployment-offers)),
+`list_models` lists a model only where the deployment offers it and a node
+offered to you can run it: a deployment that offers no music node lists no
+music model, and one that offers Generate Image but not Modify Image or
+Upscale Image lists no upscaler and no editor only those nodes run (it does
+list the image-to-image versions Generate Image switches to when it is given
+a picture). A model runs on a node when
+the node lists it as a provider, when the model's kind and modes make it that
+node's model, or when the node's own route runs it (an entity's sheet runs any
+text-to-image model, its motion any image-to-video one, every Suno node any
+Suno version). The few models no node is known to run (the Video Audit
+models) are listed wherever the deployment offers them. `recommendations`
+name only listed models; a pick left with none is dropped. Filters (`kind`,
+`mode`, `family`, `featuredOnly`) work as before, on what is listed. A
+deployment that restricts nothing lists every model, as before.
 
 **Input:** `kind` (`image`/`video`/`audio`), `mode`, `family`, `featuredOnly`,
 `priceIds`

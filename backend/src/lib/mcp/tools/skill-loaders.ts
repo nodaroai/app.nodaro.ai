@@ -259,7 +259,7 @@ export function registerSkillLoaders(
     },
     async () => ({
       // Served in the deployment's own terms where it has them (lib/mcp/served-documents.ts).
-      content: [{ type: "text" as const, text: statedDocument(workflowEditorContentFor(session)) }],
+      content: [{ type: "text" as const, text: statedDocument(workflowEditorContentFor(session), session) }],
     }),
   )
 
@@ -311,7 +311,7 @@ export function registerSkillLoaders(
       }
       // The skill's price line and figures in the deployment's own terms where it has them (lib/mcp/served-documents.ts).
       return {
-        content: [{ type: "text" as const, text: statedDocument(content) }],
+        content: [{ type: "text" as const, text: statedDocument(content, session) }],
       }
     },
   )

@@ -470,7 +470,7 @@ export const FILM_DIRECTOR_TOOL_DESCRIPTION =
 
 export function registerFilmDirectorTool(
   server: McpServer,
-  _session: McpSession,
+  session: McpSession,
 ): void {
   // No scope gate — pure content delivery. The tool's value is universal
   // discoverability, so it must show up in tools/list regardless of the
@@ -491,7 +491,7 @@ export function registerFilmDirectorTool(
         {
           type: "text" as const,
           // In the deployment's own terms where it has them (lib/mcp/served-documents.ts).
-          text: statedDocument(SKILL_CONTENT),
+          text: statedDocument(SKILL_CONTENT, session),
         },
       ],
     }),

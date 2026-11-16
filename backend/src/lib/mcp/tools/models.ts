@@ -15,6 +15,7 @@ import { loadChargedPrices, type ChargedPrices } from "../../pricing/charged-pri
 import { getPromptTips, getPromptDoctrine } from "@nodaro/prompts/doctrine"
 import { amountTerms, amountsNote, ownTermsActive, statedAmountFields, statedAmountRecord, statedBalance, unitFields } from "../amounts.js"
 import { statedFields, statedName } from "../deployment-name.js"
+import { modelListedTo } from "../model-run-nodes.js"
 
 /**
  * A listed model's words as this deployment says them (deployment-name.ts):
@@ -222,6 +223,20 @@ function statedUsageRow(row: Record<string, unknown>): Record<string, unknown> {
   return { ...out, metadata: statedAmountFields(metadata as Record<string, unknown>, USAGE_METADATA_AMOUNT_KEYS) }
 }
 
+/**
+ * The recommendations as a session with `listed` is offered them: each keeps
+ * only the models it lists, and one left with none is dropped. Null (nothing
+ * restricted): the recommendations themselves.
+ */
+function recommendationsListed<T extends { readonly modelIds: readonly string[] }>(recs: T[], listed: ((id: string) => boolean) | null): T[] {
+  if (listed === null) return recs
+  return recs.flatMap((rec) => {
+    const modelIds = rec.modelIds.filter(listed)
+    if (modelIds.length === rec.modelIds.length) return [rec]
+    return modelIds.length > 0 ? [{ ...rec, modelIds }] : []
+  })
+}
+
 /** A projected model's pricing rows with each `credits` stated through the funnel (unchanged with no unit). */
 function statedPricing(model: Record<string, unknown>): Record<string, unknown> {
   if (!Array.isArray(model.pricing)) return model
@@ -288,6 +303,8 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
         const prices = statedAmountRecord(answerPriceIds([...new Set(args.priceIds)], await loadChargedPrices()))
         return { content: [{ type: "text", text: JSON.stringify({ prices, ...unitFields() }, null, 2) }] }
       }
+      // Null where nothing is restricted: every model the filters below let through.
+      const listed = await modelListedTo(session.offer)
       const filtered = listModels({
         kind: args.kind as ModelKind | undefined,
         mode: args.mode as ModelMode | undefined,
@@ -300,6 +317,9 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
         .filter((m) => (args.featuredOnly ? m.featured === true : true))
         // Deployment surface deny (B1): a denied model is invisible to agents too.
         .filter((m) => !isModelDenied(m.id))
+        // On a deployment that restricts what it offers, only a model a node
+        // offered to this session can run (model-run-nodes.ts).
+        .filter((m) => listed === null || listed(m.id))
 
       // Image / Video / Audio sectioning so the agent can scan one media kind
       // at a time — each model under ITS OWN kind, then by family (the same
@@ -320,8 +340,9 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
 
       // Trim recommendations to those whose target intent matches the kind
       // filter (otherwise audio recs leak into a "kind=image" call).
-      // A house model this install does not serve is recommended nowhere.
-      const allRecs = recommendationsServedHere(MODEL_RECOMMENDATIONS)
+      // A house model this install does not serve is recommended nowhere; on a
+      // deployment that restricts what it offers, neither is a model it does not list.
+      const allRecs = recommendationsListed(recommendationsServedHere(MODEL_RECOMMENDATIONS), listed)
       const recs = (
         args.kind
           ? allRecs.filter((r) =>

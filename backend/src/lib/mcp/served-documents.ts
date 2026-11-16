@@ -29,9 +29,12 @@
  * Nothing else in the text moves for the unit. On a deployment with its own
  * name, the document then says that name instead of the platform's
  * (`deployment-name.ts`: products, hosts and ids by the same rules as every
- * other reply of the lane). WITH NOTHING CONFIGURED the text is returned as it
- * came (the same string), so every document is served byte for byte as before
- * (`__tests__/deployment-documents.test.ts`).
+ * other reply of the lane). On a deployment that restricts what it offers, a
+ * document that names a tool the session is not listed or a model the
+ * deployment withholds opens with a generated note saying so (`offer-note.ts`,
+ * decided 2026-11-16); its prose is never rewritten. WITH NOTHING CONFIGURED
+ * the text is returned as it came (the same string), so every document is
+ * served byte for byte as before (`__tests__/deployment-documents.test.ts`).
  *
  * Core code, loaded on every edition: plain text in, text out, through the
  * same conversion every other amount the lane states uses (`amounts.ts`). The
@@ -41,6 +44,8 @@ import { toUnits, type DisplayUnit } from "../billing-display-unit.js"
 import { PRICE_ANNOTATION, figureBefore } from "../price-annotations.js"
 import { amountTerms, ownTermsActive, unitEnglishWord, type AmountTerms } from "./amounts.js"
 import { statedName } from "./deployment-name.js"
+import { withOfferNote } from "./offer-note.js"
+import type { McpSession } from "./session.js"
 
 /** A credits word as a document writes it after a figure: `credits`, `credit`, `cr`, `CR`. */
 const CREDIT_WORD = String.raw`(?:credits?|cr)\b`
@@ -211,15 +216,22 @@ function statedHeaderCell(cell: string, terms: DocumentTerms): string {
 }
 
 /**
- * A served document as this deployment states it: the text itself with
- * nothing configured, and on a deployment in its own terms the same text with
- * no raw credit figure in it (see the header). A table column headed Credits,
- * Price or Cost is read as figures throughout, as the docs price check reads it.
+ * A served document as this deployment states it to `session`: the text
+ * itself with nothing configured, and on a deployment in its own terms the
+ * same text with no raw credit figure in it (see the header). A table column
+ * headed Credits, Price or Cost is read as figures throughout, as the docs
+ * price check reads it.
+ *
+ * On a deployment that restricts what it offers (`session.offer`), a document
+ * that names tools this session is not listed or models the deployment
+ * withholds opens with a generated note saying which (`offer-note.ts`): read
+ * from the text as it came, then stated with it.
  */
-export function statedDocument(text: string, t: AmountTerms = amountTerms()): string {
+export function statedDocument(text: string, session: Pick<McpSession, "offer">, t: AmountTerms = amountTerms()): string {
+  const noted = session.offer ? withOfferNote(text, session.offer) : text
   // The deployment's own name, after its own terms (deployment-name.ts): with
   // the platform's name the text is returned as it came.
-  return statedName(ownTermsActive(t) ? inOwnTerms(text, t) : text)
+  return statedName(ownTermsActive(t) ? inOwnTerms(noted, t) : noted)
 }
 
 /** A served document's figures in the deployment's own terms (see the header). */

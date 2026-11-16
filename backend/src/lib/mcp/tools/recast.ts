@@ -260,7 +260,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const parsed = JSON.parse(res.body) as { markdown?: string }
       // The guide a plugin answers, in the deployment's own terms where it has them (lib/mcp/served-documents.ts).
-      return { content: [{ type: "text" as const, text: statedDocument(parsed.markdown ?? "") }] }
+      return { content: [{ type: "text" as const, text: statedDocument(parsed.markdown ?? "", session) }] }
     },
   )
 

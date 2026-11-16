@@ -60,6 +60,8 @@ const ALLOWED_AT_REGISTRATION: Readonly<Record<string, string>> = {
     "Its presence varies per deployment state: there is an offer only where the deployment restricts what it offers (a profile, or an Availability override an admin can change while the process runs).",
   "offer.nodeOffered":
     "Varies per deployment state and per the caller's admin bit: which nodes the use-case verbs name in their descriptions.",
+  "offer.refusalOf":
+    "Varies per deployment state and per the caller's admin bit: whether the Video Director tools' descriptions name capture_site (they name it only where the session is offered it).",
   addresses: "Varies per lane and declared host: the object is handed whole to the widget registrar, which reads the fields listed below.",
   "addresses.pagesBase": "Varies per lane and declared host: the archive link in delete_app_run's description.",
   "addresses.uploadPageBase": "Varies per lane and declared host: the upload widget's allowed connection in the widget pages' policy.",

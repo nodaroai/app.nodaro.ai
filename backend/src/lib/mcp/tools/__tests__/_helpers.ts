@@ -5,7 +5,7 @@ import type { Scope } from "../../../scopes.js"
 import { createMcpInvoker, type McpToolCallResult, type McpToolDef } from "../../invoke.js"
 import { installToolOffer, needRefusal, type ToolOffer } from "../../tool-offer.js"
 import { TOOL_NEEDS } from "../../tool-needs.js"
-import { USER_VIEWER, isNodeDenied, type AvailabilityViewer } from "../../../surface-deny.js"
+import { USER_VIEWER, isModelDenied, isNodeDenied, type AvailabilityViewer } from "../../../surface-deny.js"
 
 /**
  * Shared test helpers for MCP tool unit tests. In-process invocation lives in
@@ -45,6 +45,7 @@ export function judgedOffer(viewer: AvailabilityViewer = USER_VIEWER): ToolOffer
     viewer,
     refusalOf: (tool) => (Object.hasOwn(TOOL_NEEDS, tool) ? needRefusal(TOOL_NEEDS[tool]!, viewer) : undefined),
     nodeOffered: (type) => !isNodeDenied(type, viewer),
+    modelOffered: (id) => !isModelDenied(id),
   }
 }
 
