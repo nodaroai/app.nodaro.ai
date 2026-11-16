@@ -41,6 +41,8 @@ beforeEach(async () => {
   handlerEntered = new Promise((r) => (enteredDone = r))
   scopeEnded = new Promise((r) => (seen.ended = r))
   upstream = http.createServer((_req, res) => res.end("ok"))
+  // No idle timeout: the pooled connection the tests count must not close on a slow run.
+  upstream.keepAliveTimeout = 0
   await new Promise<void>((r) => upstream.listen(0, "127.0.0.1", () => r()))
   upstreamAgent = new http.Agent({ keepAlive: true, maxSockets: 1 })
   app = Fastify()

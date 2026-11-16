@@ -76,7 +76,8 @@ describe("CreditsService.checkBalanceCovers", () => {
 
   it("a pay-as-you-go account on a web surface spends its free pool only, as its reservation does", async () => {
     h.profiles.set(USER, profile({ tier: "free", subscription_tier: null, lifetime_topup_credits: 500, subscription_credits: 300, topup_credits: 5000 }))
-    expect(await CreditsService.checkBalanceCovers(USER, 1000, undefined, true)).toEqual({ ok: false, balance: 300 })
+    // Said on the refusal: the balance it names is the free pool only (the credit guard answers this with the subscription ask).
+    expect(await CreditsService.checkBalanceCovers(USER, 1000, undefined, true)).toEqual({ ok: false, balance: 300, subscriptionRequired: true })
     // The same account off the web surface spends both pools.
     expect(await CreditsService.checkBalanceCovers(USER, 1000, undefined, false)).toEqual({ ok: true })
   })
@@ -85,7 +86,7 @@ describe("CreditsService.checkBalanceCovers", () => {
     expect(await CreditsService.checkBalanceCovers(USER, 4000, undefined, true)).toEqual({ ok: true })
   })
 
-  it("reads the deployment payer's profile, not the requester's", async () => {
+  it("reads the deployment payer's profile, not the requester's, and never hands its pool to the caller", async () => {
     h.profiles.set(PAYER, profile({ subscription_credits: 10, topup_credits: 0 }))
     const ctx = {
       payer: "deployment",
@@ -93,8 +94,18 @@ describe("CreditsService.checkBalanceCovers", () => {
       payerId: PAYER,
       entitlements: { watermark: false, dailyCapCredits: null, parallelism: 1, tierForGates: "pro" },
     } as BillingContext
-    expect(await CreditsService.checkBalanceCovers(USER, 100, ctx)).toEqual({ ok: false, balance: 10 })
+    // The pool is the operator's: the refusal says whose it is, and carries no figure a caller could state.
+    expect(await CreditsService.checkBalanceCovers(USER, 100, ctx)).toEqual({ ok: false, payerPool: true })
     expect(h.read).toEqual([PAYER])
+    // Covered is covered, as for any payer.
+    expect(await CreditsService.checkBalanceCovers(USER, 10, ctx)).toEqual({ ok: true })
+    // Held by the type too: a caller cannot read a refusal's balance before telling it apart from a deployment payer's.
+    const refused = await CreditsService.checkBalanceCovers(USER, 100, ctx)
+    if (!refused.ok) {
+      // @ts-expect-error — a deployment payer's refusal has no `balance` to state
+      expect(refused.balance).toBeUndefined()
+      if (!("payerPool" in refused)) expect.unreachable("a deployment payer's refusal is told apart by payerPool")
+    }
   })
 
   it("a workspace payer is not refused on a personal balance", async () => {

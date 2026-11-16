@@ -16,6 +16,7 @@ import { z } from "zod"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { McpSession } from "../session.js"
 import { restrictObjectSchemas } from "../../json-schema-strict.js"
+import { statedValue } from "../deployment-name.js"
 import {
   BLUEPRINT_IDS,
   BLUEPRINT_META,
@@ -193,7 +194,8 @@ export function registerShotShapeTools(
       const paramSchema = restrictObjectSchemas(
         z.toJSONSchema(schema, { target: "openapi-3.0", unrepresentable: "any", io: "input" }),
       )
-      const example = BLUEPRINT_EXAMPLES[id]
+      // The worked example names a product the way this deployment does (deployment-name.ts).
+      const example = statedValue(BLUEPRINT_EXAMPLES[id])
       return {
         content: [
           {

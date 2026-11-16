@@ -120,9 +120,13 @@ const DB_RUN_ROW = {
 let app: FastifyInstance
 /** When true, the auth-bypass hook stamps a DEGRADED personal payer (P14). */
 const stampDegradedContext = { value: false }
+/** When true, the auth-bypass hook stamps a deployment payer: one account pays for every user. */
+const stampDeploymentPayer = { value: false }
+const DEPLOYMENT_PAYER_ID = "00000000-0000-4000-8000-0000000009e1"
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  stampDeploymentPayer.value = false
   invalidateAppCache(TEST_SLUG)
 
   app = Fastify({ logger: false })
@@ -132,6 +136,9 @@ beforeEach(async () => {
     const header = req.headers["x-user-id"]
     if (stampDegradedContext.value && typeof header === "string") {
       req.billingContext = { payer: "user", userId: header, degraded: true }
+    }
+    if (stampDeploymentPayer.value && typeof header === "string") {
+      req.billingContext = { payer: "deployment", userId: header, payerId: DEPLOYMENT_PAYER_ID, entitlements: { watermark: false, dailyCapCredits: null, parallelism: 4, tierForGates: "pro" } }
     }
     if (header && typeof header === "string") {
       req.userId = header
@@ -250,6 +257,29 @@ describe("the app runner's pre-run balance check for a UGC snapshot (R25)", () =
     expect(orchestrationQueue.add).not.toHaveBeenCalled()
     expect(tables).not.toContain("workflow_executions")
     expect(tables).not.toContain("app_runs")
+  })
+
+  it("on a deployment that pays for its users, the runner is never told the operator's pool: the deployment's own words, no figure", async () => {
+    stampDeploymentPayer.value = true
+    const tables = setupApp(UGC_NODES, UGC_EDGES)
+    // What the balance check read under a deployment payer before it withheld the pool: the operator's pool.
+    covers.mockResolvedValue({ ok: false, balance: 987654 })
+    const res = await run()
+    expect(res.statusCode).toBe(402)
+    expect(res.json()).toEqual({ error: { code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." } })
+    expect(res.body).not.toContain("987654")
+    expect(covers.mock.calls[0]?.[2]).toMatchObject({ payer: "deployment" })
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+    expect(tables).not.toContain("workflow_executions")
+  })
+
+  it("a deployment payer's refusal as the balance check now answers it (no figure at all): the deployment's own words", async () => {
+    stampDeploymentPayer.value = true
+    setupApp(UGC_NODES, UGC_EDGES)
+    covers.mockResolvedValue({ ok: false, payerPool: true })
+    const res = await run()
+    expect(res.statusCode).toBe(402)
+    expect(res.json()).toEqual({ error: { code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." } })
   })
 
   it("the draft-run path (a runId) is refused the same way, before an execution row", async () => {

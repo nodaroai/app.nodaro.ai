@@ -614,6 +614,25 @@ describe("POST /v1/transcribe — Nemotron 3.5 Transcribe", () => {
     expect(videoQueue.add).not.toHaveBeenCalled()
   })
 
+  it("a file a hair past 60 minutes (a 60-minute cut that measures 3600.4 s) is refused with a 400 that asks for 60 minutes or less, before anything is held", async () => {
+    probe.probeMediaDurationAndSize.mockResolvedValue({ durationSec: 3600.4, sizeBytes: 1_000 })
+    const { mockFrom } = mockJobInsert()
+    const res = await app.inject({ method: "POST", url: "/v1/transcribe", payload: { audioUrl: FILE, provider: NEMOTRON, userId: VALID_UUID } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({
+      code: "media_duration_exceeds_limit",
+      message: "This file is 60 minutes and 0.4 seconds long. Nemotron 3.5 Transcribe takes 60 minutes or less: trim it to 60 minutes or less (a cut can come out a fraction of a second longer, so cut it a little shorter), or split it and transcribe the parts.",
+    })
+    expect(guardIds).toEqual([])
+    expect(mockFrom).not.toHaveBeenCalled()
+    // Exactly 60 minutes is taken, at its 60 minutes.
+    probe.probeMediaDurationAndSize.mockResolvedValue({ durationSec: 3600, sizeBytes: 1_000 })
+    mockJobInsert("job-n60")
+    const ok = await app.inject({ method: "POST", url: "/v1/transcribe", payload: { audioUrl: FILE, provider: NEMOTRON, userId: VALID_UUID } })
+    expect(ok.statusCode).toBe(200)
+    expect(guardIds).toEqual(["nemotron-3-5-transcribe:60m"])
+  })
+
   it("holds the 60-minute price for a file whose length cannot be read, and the worker settles at KIE's length", async () => {
     probe.probeMediaDurationAndSize.mockResolvedValue({ sizeBytes: 4_000_000 })
     const { mockInsert } = mockJobInsert("job-n4")

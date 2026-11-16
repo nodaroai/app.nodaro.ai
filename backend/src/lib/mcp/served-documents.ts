@@ -26,9 +26,12 @@
  *  - the annotations themselves are dropped (they would label a converted
  *    figure as credits).
  *
- * Nothing else in the text moves. WITH NOTHING CONFIGURED the text is returned
- * as it came (the same string), so every document is served byte for byte as
- * before (`__tests__/deployment-documents.test.ts`).
+ * Nothing else in the text moves for the unit. On a deployment with its own
+ * name, the document then says that name instead of the platform's
+ * (`deployment-name.ts`: products, hosts and ids by the same rules as every
+ * other reply of the lane). WITH NOTHING CONFIGURED the text is returned as it
+ * came (the same string), so every document is served byte for byte as before
+ * (`__tests__/deployment-documents.test.ts`).
  *
  * Core code, loaded on every edition: plain text in, text out, through the
  * same conversion every other amount the lane states uses (`amounts.ts`). The
@@ -36,7 +39,8 @@
  */
 import { toUnits, type DisplayUnit } from "../billing-display-unit.js"
 import { PRICE_ANNOTATION, figureBefore } from "../price-annotations.js"
-import { amountTerms, ownTermsActive, type AmountTerms } from "./amounts.js"
+import { amountTerms, ownTermsActive, unitEnglishWord, type AmountTerms } from "./amounts.js"
+import { statedName } from "./deployment-name.js"
 
 /** A credits word as a document writes it after a figure: `credits`, `credit`, `cr`, `CR`. */
 const CREDIT_WORD = String.raw`(?:credits?|cr)\b`
@@ -213,8 +217,14 @@ function statedHeaderCell(cell: string, terms: DocumentTerms): string {
  * Price or Cost is read as figures throughout, as the docs price check reads it.
  */
 export function statedDocument(text: string, t: AmountTerms = amountTerms()): string {
-  if (!ownTermsActive(t)) return text
-  const terms: DocumentTerms = { unit: t.unit, word: t.unit?.label ?? "credits" }
+  // The deployment's own name, after its own terms (deployment-name.ts): with
+  // the platform's name the text is returned as it came.
+  return statedName(ownTermsActive(t) ? inOwnTerms(text, t) : text)
+}
+
+/** A served document's figures in the deployment's own terms (see the header). */
+function inOwnTerms(text: string, t: AmountTerms): string {
+  const terms: DocumentTerms = { unit: t.unit, word: t.unit ? unitEnglishWord(t.unit) : "credits" }
   const lines = text.split("\n")
   let priceColumns: number[] | null = null
   return lines

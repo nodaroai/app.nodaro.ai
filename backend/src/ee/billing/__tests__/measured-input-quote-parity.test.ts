@@ -22,9 +22,13 @@ import { describe, it, expect } from "vitest"
 import { LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS } from "@nodaro/shared/credits"
 import { CreditsService, type ChargedPriceTable } from "../credits.js"
 
-type Step = "videoSfx" | "videoMask" | "videoDepth" | "pitchTempo" | "dubbing" | "topaz" | "nodaroUpscale" | "lipSync" | "lipSyncBucket" | "transcribe" | "addCaptions"
-/** A step's figure; `null` (Lip Sync only): a length nothing knows before the run — each estimate's own unknown figure. */
-type Figures = Readonly<Partial<Record<Step, number | null>>>
+type Step = "videoSfx" | "videoMask" | "videoDepth" | "pitchTempo" | "dubbing" | "topaz" | "nodaroUpscale" | "lipSync" | "lipSyncBucket" | "transcribe" | "addCaptions" | "aiAvatar"
+/**
+ * A step's figure; `null` (Lip Sync only): a length nothing knows before the run — each estimate's own unknown figure;
+ * `{ editor, server }` (AI Avatar only): the figure each engine quotes on purpose apart, since each plays other audio.
+ */
+type EngineFigures = { readonly editor: number; readonly server: number }
+type Figures = Readonly<Partial<Record<Step, number | null | EngineFigures>>>
 
 interface ParityCase {
   readonly name: string
@@ -59,6 +63,8 @@ const STEP: Readonly<Record<Step, { type: string; data: Record<string, unknown>;
   // Transcribe and Add Captions on Nemotron 3.5 Transcribe (the started minutes of their file): named only by the cases that list them.
   transcribe: { type: "transcribe", data: { provider: "nemotron-3-5-transcribe" }, input: "audio" },
   addCaptions: { type: "add-captions", data: { style: "word-highlight", captionStyle: "word-highlight", transcribeProvider: "nemotron-3-5-transcribe" }, input: "in" },
+  // AI Avatar in audio mode (its figure is the duration bucket's seconds the run holds): named only by the cases that list it.
+  aiAvatar: { type: "ai-avatar", data: { speechMode: "audio", avatarId: "a1" }, input: "audio" },
 }
 
 /** Every row named by its size: `…:<N>s` / `…:<N>m` costs N; any other row (a per-minute or per-unit rate, an upstream node) 1, unmarked. */
@@ -87,7 +93,8 @@ function stepLine(c: ParityCase, step: Step, run: "whole" | "alone" | "partial")
 const rows = F.cases.flatMap((c) => (c.steps ?? STEPS).map((step) => [`${c.name} — ${step}`, c, step] as const))
 
 /** The server's figure for a fixture value: a Lip Sync of unknown length is quoted at the editor's minimum, the 15-second stand-in (decided 2026-11-14). */
-const want = (v: number | null | undefined): number | undefined => (v === null ? LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS : v)
+const want = (v: number | null | EngineFigures | undefined): number | undefined =>
+  v === null ? LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS : typeof v === "object" ? v.server : v
 
 describe("the server's workflow estimate of the measuring steps equals the editor's quote on what another node makes", () => {
   it.each(rows)("%s — a whole run", (_name, c, step) => {

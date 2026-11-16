@@ -27,7 +27,7 @@ The output is delivered as H.264 (the provider renders HEVC; Nodaro re-encodes i
 
 Topaz is **metered**: you are charged what the upscale actually costs, in Topaz units, and never more than the amount held when the run starts.
 
-- **The hold.** Before the run, Nodaro reads the clip (length, frame size, frame rate) and holds credits for the output it will produce: **10 units per output gigapixel** (output width × height × frames ÷ 1,000,000,000), at least **3 units**. One unit is **44 credits**<!-- credits: topaz-video:per-unit -->.
+- **The hold.** Before the run, Nodaro reads the clip (length, frame size, frame rate) and holds credits for the output it will produce: **10 units per output gigapixel** (output width × height × frames ÷ 1,000,000,000), at least **3 units**. One unit is **44 credits**<!-- credits: topaz-video:per-unit -->. The length is the clip's picture: its video stream's own length, else its `DURATION` tag (a WebM or MKV states its picture's length only there), else the end of its last frame (a tag or a last frame past the whole file's length is read as that length). Only when none of those can be read is the whole file's length used, and the frames are then counted for that length less 0.15 seconds, since a made clip's sound can carry its file that far past its planned length.
 - **The charge.** When the upscale finishes, you are charged the units Topaz actually used, and the rest of the hold is refunded. In practice the charge is usually well below the hold. Long clips that keep their resolution are especially cheap, and frame-rate interpolation and 4K cost the most.
 - If the provider does not report the units it used, the hold is charged.
 - A video whose length or size cannot be read is refused before anything is held.
@@ -81,7 +81,7 @@ A resolution this provider does not take (720p, saved by another provider or sen
 
 #### Credits (Nodaro Video Upscale)
 
-Priced by the second: the clip's length, rounded up to a whole second, at the resolution's rate, rounded up once to a whole credit. The clip is measured before the run starts, and the amount held is the amount charged.
+Priced by the second: the clip's length, rounded up to a whole second, at the resolution's rate, rounded up once to a whole credit. The length is the clip's picture: its video stream's own length, else its `DURATION` tag (a WebM or MKV states its picture's length only there), else the end of its last frame (a tag or a last frame past the whole file's length is read as that length). Only when none of those can be read is the whole file's length used, and it is then billed less 0.15 seconds first, since a made clip's sound can carry its file that far past its planned length (a file of 5.15 seconds is billed as 5 seconds, one of 5.16 seconds as 6). The clip is measured before the run starts, and the amount held is the amount charged.
 
 | Resolution | Per second | 10 s clip | 60 s clip |
 |---|---:|---:|---:|

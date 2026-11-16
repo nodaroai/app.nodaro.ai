@@ -12,9 +12,17 @@ answer a link they cannot use with the refusals below:
 - Video Upscale with Topaz;
 - AI Avatar, in audio mode.
 
-When the server measures or inspects a link, it never reads a streaming
-playlist from it, for any node. Other nodes answer such a link with their
-own error, or pass it to their provider as it is.
+When the server measures or inspects a media link, on any node (the nodes
+above do it before the charge), it reads only an ordinary media file, never
+a streaming playlist, and only from a public address. So do the Cloud
+edition's plugin nodes when the server's ffmpeg reads a link for them; a
+link their runs name in a local list, in a file a filter reads or in an
+option's file is refused, and so is a local input read through any protocol
+but a plain file.
+Nodes that download a link before they work on the file, or pass it to
+their provider as it is, answer a playlist with their own error or their
+provider's. A link to a video's page on a social platform is imported with
+a downloader made for that platform, which reads its streams.
 
 ## A link must be an ordinary media file
 
@@ -46,7 +54,26 @@ refused with a `503` before anything is charged, and it can simply be
 run again. The code is `source_unreachable` for a lookup that failed,
 `probe_timeout` for a read that ran out of time, and `probe_unavailable`
 when the server could not run the read itself (nothing is wrong with the
-link). A host that does not exist is a `400`.
+link). A host that does not exist is a `400`; see below.
+
+## When a link's host cannot be used
+
+A link whose host does not exist, or that points to a private or reserved
+address (or redirects to one), is refused for good with a `400` before
+anything is charged. The code is `media_link_bad_host`, and the message
+says what to change:
+
+> Could not read the link: its host was not found. Check the link.
+
+> Could not read the link: it points to a private or reserved address,
+> which the server does not read. Use a link to a public host, or upload
+> the file.
+
+Trim Video, Loop Video and Combine Videos name the clip ("Could not read
+clip 2 of 3: its host was not found. Check the link."). Transcribe and Add
+Captions with Nemotron 3.5 Transcribe answer such a link the same way, and
+the retryable `503 source_unreachable` above for a host that cannot be
+looked up at that moment; they take an https link only.
 
 ## Addresses
 

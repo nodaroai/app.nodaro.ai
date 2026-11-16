@@ -13,8 +13,9 @@ import {
   assertSafeProbeSource,
   containerRefusalOf,
   isNetworkProbeSource,
+  isProbeGuardOption,
+  namesALink,
   OWN_STORAGE_PROBE_MAX_BYTES,
-  PROBE_GUARD_OPTIONS,
   probeInputArgs,
   ProbeSourceBlockedError,
   storedCopyProbeArgs,
@@ -23,6 +24,7 @@ import {
   type ProbeSourceBlockReason,
 } from "./probe-guard.js"
 import { csvFields } from "./ffprobe-csv.js"
+import { preparePluginRun } from "./plugin-run-guard.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { watchTransferBody, type TransferRateLimits, type TransferWatch } from "../../lib/transfer-watchdog.js"
 import { currentSlotWaitLedger } from "../../lib/ffmpeg-slot-wait.js"
@@ -892,13 +894,22 @@ export async function getVideoStreamDuration(filePath: string): Promise<number> 
  */
 export async function runFfprobeReadingLinks(args: readonly string[]): Promise<string> {
   const links = args.filter((a) => isNetworkProbeSource(a))
-  if (links.length === 0) return runFfprobe(args)
   if (links.length > 1) throw new Error("runFfprobeReadingLinks: one link per run")
-  // ffprobe keeps the LAST value of an option wherever it sits, so a caller's own could widen the guard's: refused.
-  const own = args.find((a) => PROBE_GUARD_OPTIONS.has(a))
+  // ffprobe keeps the LAST value of an option wherever it sits, so a caller's own could widen the guard's: refused
+  // (also read from a file, `-/protocol_whitelist <file>`).
+  const own = links.length > 0 ? args.find((a) => isProbeGuardOption(a)) : undefined
   if (own) throw new Error(`runFfprobeReadingLinks: a run that reads a link cannot set the probe guard's own options (${own})`)
-  const link = links[0]!
-  return readProbeSource(link, (input, probe) => probe.run(args.flatMap((a) => (a === link ? [...probe.inputArgs, input] : [a]))))
+  // A plugin run's other rules (plugin-run-guard.ts): option files read once and handed over as that copy, no
+  // widened whitelist, no argument through another protocol, a local list and a lavfi graph's files checked.
+  const prepared = await preparePluginRun(args, "ffprobe", { readsLink: args.some((a) => namesALink(a)) })
+  try {
+    const run = prepared.argv
+    const link = links[0]
+    if (link === undefined) return await runFfprobe(run)
+    return await readProbeSource(link, (input, probe) => probe.run(run.flatMap((a) => (a === link ? [...probe.inputArgs, input] : [a]))))
+  } finally {
+    await prepared.cleanup()
+  }
 }
 
 /**
@@ -1056,8 +1067,24 @@ export interface VideoOverlayBaseProbe {
   readonly sarRatio?: string
   readonly rFrameRate?: string
   readonly avgFrameRate?: string
+  /** The video stream's length, else the container's: what the render reads. */
   readonly streamDurationSec: number
   readonly startTimeSec: number
+  /**
+   * The picture's own length as the header states it, for the charge
+   * (`videoOverlayChargedSec`): the video stream's (`stream=duration`), and its
+   * `DURATION` tag (a WebM / MKV states only that). With neither, the charge
+   * scans the stream's packets (`videoStreamIndex`), then falls back to the
+   * container's (`containerSec`).
+   */
+  readonly videoStreamSec?: number
+  readonly videoTagSec?: number
+  /** The video stream's index, for a packet scan of it. */
+  readonly videoStreamIndex?: number
+  /** The container's length (`format=duration`), when it states one. */
+  readonly containerSec?: number
+  /** The file's start time (`format=start_time`), taken off a packet end. */
+  readonly formatStartTimeSec?: number
   /** The container's frame count (`nb_frames`), when it states one. */
   readonly frameCount?: number
   /** codec_name of the FIRST audio stream; null when the base is silent. */
@@ -1075,7 +1102,7 @@ export interface VideoOverlayBaseProbe {
  */
 const VIDEO_OVERLAY_PROBE_ENTRIES =
   "stream=index,codec_type,codec_name,width,height,sample_aspect_ratio,r_frame_rate,avg_frame_rate,duration,start_time,nb_frames" +
-  ":stream_side_data=rotation:stream_disposition=attached_pic:stream_tags=rotate:format=duration"
+  ":stream_side_data=rotation:stream_disposition=attached_pic:stream_tags=rotate,DURATION:format=duration,start_time"
 
 /** ffprobe's `num:den` sample aspect as its two terms; undefined when absent or unusable ("0:1", "N/A"). */
 function sampleAspectTerms(value: unknown): readonly [number, number] | undefined {
@@ -1100,7 +1127,7 @@ function parseRotation(stream: Record<string, unknown>): number {
 /** Pure: ffprobe JSON → the display-oriented probe, or DeterministicJobError("The base input is not a video"). */
 export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
   const notVideo = () => new DeterministicJobError("The base input is not a video")
-  let parsed: { streams?: unknown; format?: { duration?: unknown } }
+  let parsed: { streams?: unknown; format?: { duration?: unknown; start_time?: unknown } }
   try {
     parsed = JSON.parse(json) as typeof parsed
   } catch {
@@ -1118,6 +1145,9 @@ export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
   const streamDur = Number(video.duration)
   const formatDur = Number(parsed.format?.duration)
   const streamDurationSec = Number.isFinite(streamDur) && streamDur > 0 ? streamDur : Number.isFinite(formatDur) && formatDur > 0 ? formatDur : NaN
+  const videoTagSec = parseMatroskaDurationTag((video.tags as Record<string, unknown> | undefined)?.DURATION)
+  const videoIndex = Number(video.index)
+  const formatStart = Number(parsed.format?.start_time)
   if (!Number.isFinite(streamDurationSec)) throw notVideo()
   const rotation = parseRotation(video)
   const swap = rotation === 90 || rotation === 270
@@ -1138,6 +1168,11 @@ export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
     ...(typeof video.avg_frame_rate === "string" ? { avgFrameRate: video.avg_frame_rate } : {}),
     streamDurationSec,
     startTimeSec: Number.isFinite(start) ? start : 0,
+    ...(Number.isFinite(streamDur) && streamDur > 0 ? { videoStreamSec: streamDur } : {}),
+    ...(videoTagSec !== undefined ? { videoTagSec } : {}),
+    ...(Number.isInteger(videoIndex) && videoIndex >= 0 ? { videoStreamIndex: videoIndex } : {}),
+    ...(Number.isFinite(formatDur) && formatDur > 0 ? { containerSec: formatDur } : {}),
+    ...(Number.isFinite(formatStart) ? { formatStartTimeSec: formatStart } : {}),
     ...(Number.isInteger(frames) && frames > 0 ? { frameCount: frames } : {}),
     audioCodec: audio && typeof audio.codec_name === "string" ? audio.codec_name : null,
     ...(Number.isFinite(audioStart) ? { audioStartTimeSec: audioStart } : {}),
@@ -1178,6 +1213,14 @@ export async function probeVideoOverlayBase(path: string): Promise<VideoOverlayB
   return parseVideoOverlayProbe(out)
 }
 
+/** A Matroska `DURATION` tag (`HH:MM:SS.fffffffff`, or plain seconds) in seconds; undefined when absent or unreadable. */
+export function parseMatroskaDurationTag(value: unknown): number | undefined {
+  if (typeof value !== "string") return undefined
+  const m = /^\s*(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)\s*$/.exec(value)
+  const sec = m ? Number(m[1] ?? 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) : Number(value)
+  return Number.isFinite(sec) && sec > 0 ? sec : undefined
+}
+
 /**
  * Probe a video URL for dimensions + duration (+ frame rate) in a single
  * ffprobe call. Accepts a local path OR a remote http(s) URL — ffprobe reads
@@ -1200,6 +1243,12 @@ export async function probeVideoSource(srcUrlOrPath: string, opts: { readonly si
   durationSeconds: number
   fps?: number
   videoDurationSeconds?: number
+  /** The first video stream's `DURATION` tag: the picture's length a Matroska / WebM file states (it states no `stream=duration`). */
+  videoTagDurationSeconds?: number
+  /** That stream's index, for a packet scan of it. */
+  videoStreamIndex?: number
+  /** The file's start time (`format=start_time`). */
+  startTimeSeconds?: number
 }> {
   const output = await readProbeSource(srcUrlOrPath, (input, probe) => probe.run([
     "-v", "error",
@@ -1207,15 +1256,15 @@ export async function probeVideoSource(srcUrlOrPath: string, opts: { readonly si
     // malicious manifest can't pivot to other protocols.
     ...probe.inputArgs,
     "-select_streams", "v:0",
-    "-show_entries", "stream=width,height,avg_frame_rate,r_frame_rate,duration:format=duration",
+    "-show_entries", "stream=index,width,height,avg_frame_rate,r_frame_rate,duration:stream_tags=DURATION:format=duration,start_time",
     "-of", "json",
     input,
   ], opts), opts.signal ? { signal: opts.signal } : {})
   // CSV inserts extra fields for stream side data (including an empty field
   // on Remotion MP4s). Read named fields so metadata cannot shift dimensions.
   let metadata: {
-    streams?: Array<{ width?: unknown; height?: unknown; avg_frame_rate?: unknown; r_frame_rate?: unknown; duration?: unknown }>
-    format?: { duration?: unknown }
+    streams?: Array<{ index?: unknown; width?: unknown; height?: unknown; avg_frame_rate?: unknown; r_frame_rate?: unknown; duration?: unknown; tags?: { DURATION?: unknown } }>
+    format?: { duration?: unknown; start_time?: unknown }
   }
   try {
     metadata = JSON.parse(output)
@@ -1235,12 +1284,18 @@ export async function probeVideoSource(srcUrlOrPath: string, opts: { readonly si
   )
   const streamDuration = metadata?.streams?.[0]?.duration
   const videoDurationSeconds = streamDuration === undefined || streamDuration === null ? Number.NaN : Number(streamDuration)
+  const videoTagDurationSeconds = parseMatroskaDurationTag(metadata?.streams?.[0]?.tags?.DURATION)
+  const videoStreamIndex = Number(metadata?.streams?.[0]?.index)
+  const startTimeSeconds = Number(metadata?.format?.start_time)
   return {
     width,
     height,
     durationSeconds,
     ...(fps !== undefined ? { fps } : {}),
     ...(Number.isFinite(videoDurationSeconds) && videoDurationSeconds > 0 ? { videoDurationSeconds } : {}),
+    ...(videoTagDurationSeconds !== undefined ? { videoTagDurationSeconds } : {}),
+    ...(Number.isInteger(videoStreamIndex) && videoStreamIndex >= 0 ? { videoStreamIndex } : {}),
+    ...(Number.isFinite(startTimeSeconds) ? { startTimeSeconds } : {}),
   }
 }
 

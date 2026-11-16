@@ -6255,6 +6255,7 @@ export const en = {
   "credits.insufficientDescription": "You need {required} credits but only have {available} available.",
   "credits.currentBalanceLabel": "Current balance",
   "credits.requiredLabel": "Required",
+  "credits.estimateNote": "This is the run's estimate. The run is charged what it uses.",
   "credits.shortByLabel": "Short by",
   "credits.shortByAmount": "{n} credits",
   "credits.currentPlanLabel": "Current plan",

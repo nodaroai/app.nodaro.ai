@@ -6068,6 +6068,7 @@ export const ko: ChromeDict = {
   "credits.insufficientDescription": "{required}크레딧이 필요하지만 사용 가능한 크레딧은 {available}크레딧뿐입니다.",
   "credits.currentBalanceLabel": "현재 잔액",
   "credits.requiredLabel": "필요 크레딧",
+  "credits.estimateNote": "이 금액은 실행 예상 금액입니다. 실행에는 실제로 사용한 만큼 청구됩니다.",
   "credits.shortByLabel": "부족분",
   "credits.shortByAmount": "{n}크레딧",
   "credits.currentPlanLabel": "현재 요금제",

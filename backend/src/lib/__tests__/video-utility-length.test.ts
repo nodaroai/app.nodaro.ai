@@ -56,6 +56,13 @@ const PRIVATE = "http://127.0.0.1:9000/other/clip.mp4"
 const blocked = (src: string) => src.startsWith("http://localhost") || src.startsWith("http://127.")
 const trim = (videoUrl: string) => ({ videoUrl, trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0 })
 const UNREADABLE = { ok: false, code: "invalid_video_duration", message: "Could not read the video. The file may be corrupted or an unsupported format." }
+/** A link whose host does not exist, and one on a private address: the link's to fix, never "may be corrupted". */
+const HOST_NOT_FOUND = { ok: false, code: "media_link_bad_host", message: "Could not read the video: its host was not found. Check the link." }
+const NOT_PUBLIC = {
+  ok: false,
+  code: "media_link_bad_host",
+  message: "Could not read the video: it points to a private or reserved address, which the server does not read. Use a link to a public host, or upload the file.",
+}
 const savedStorage = process.env.R2_PUBLIC_URL
 
 beforeEach(() => {
@@ -175,8 +182,8 @@ describe("measuring a clip in this install's own storage (a self-host)", () => {
     expect(m.cleanupWorkDir).toHaveBeenCalledWith("/tmp/measure")
   })
 
-  it("a private address outside the subtree is refused, with nothing downloaded", async () => {
-    await expect(measureVideoUtilityCharge("trim-video", trim(PRIVATE))).resolves.toEqual(UNREADABLE)
+  it("a private address outside the subtree is refused as the link's to fix (media_link_bad_host), with nothing downloaded", async () => {
+    await expect(measureVideoUtilityCharge("trim-video", trim(PRIVATE))).resolves.toEqual(NOT_PUBLIC)
     expect(m.downloadFile).not.toHaveBeenCalled()
   })
 
@@ -185,8 +192,8 @@ describe("measuring a clip in this install's own storage (a self-host)", () => {
     ["an escaped backslash", `${SELF_HOST}/videos%5c..%5cclip.mp4`],
     ["a dot segment", `${SELF_HOST}/../other/clip.mp4`],
     ["a sibling prefix", `${SELF_HOST}-evil/clip.mp4`],
-  ])("%s is not strictly in the subtree: refused, never downloaded", async (_label, url) => {
-    await expect(measureVideoUtilityCharge("trim-video", trim(url))).resolves.toEqual(UNREADABLE)
+  ])("%s is not strictly in the subtree: refused as a private address, never downloaded", async (_label, url) => {
+    await expect(measureVideoUtilityCharge("trim-video", trim(url))).resolves.toEqual(NOT_PUBLIC)
     expect(m.downloadFile).not.toHaveBeenCalled()
   })
 
@@ -224,13 +231,10 @@ describe("a link the guard allows is probed where it is, never downloaded", () =
     expect(m.downloadFile).not.toHaveBeenCalled()
   })
 
-  it("a host that does not exist (a typo) is refused for good, saying so: 400, not a retryable 503, no download", async () => {
+  it("a host that does not exist (a typo) is refused for good, saying so: 400 media_link_bad_host, not a retryable 503, no download", async () => {
     m.assertSafeProbeSource.mockRejectedValue(new m.ProbeSourceBlockedError("host", "probeVideoSource: blocked — DNS resolution failed for cdn.exmaple.com"))
-    await expect(measureVideoUtilityCharge("trim-video", trim("https://cdn.exmaple.com/a.mp4"))).resolves.toEqual({
-      ok: false,
-      code: "invalid_video_duration",
-      message: "Could not read the video: its host was not found. Check the link.",
-    })
+    await expect(measureVideoUtilityCharge("trim-video", trim("https://cdn.exmaple.com/a.mp4"))).resolves.toEqual(HOST_NOT_FOUND)
+    expect(videoUtilityRefusalStatus("media_link_bad_host")).toBe(400)
     expect(m.downloadFile).not.toHaveBeenCalled()
   })
 
@@ -265,9 +269,9 @@ describe("a link the guard allows is probed where it is, never downloaded", () =
     m.probeVideoSource.mockRejectedValueOnce(new m.ProbeSourceBlockedError("dns", "probeVideoSource: blocked — DNS resolution failed for next.example"))
     await expect(measureVideoUtilityCharge("trim-video", trim(PUBLIC))).resolves.toEqual({ ok: false, code: "source_unreachable", message: "Could not reach the video — run it again." })
     m.probeVideoSource.mockRejectedValueOnce(new m.ProbeSourceBlockedError("host", "probeVideoSource: blocked — DNS resolution failed for dead.example"))
-    await expect(measureVideoUtilityCharge("trim-video", trim(PUBLIC))).resolves.toEqual({ ok: false, code: "invalid_video_duration", message: "Could not read the video: its host was not found. Check the link." })
+    await expect(measureVideoUtilityCharge("trim-video", trim(PUBLIC))).resolves.toEqual(HOST_NOT_FOUND)
     m.probeVideoSource.mockRejectedValueOnce(new m.ProbeSourceBlockedError("address", "probeVideoSource: blocked — next.example resolves to private/reserved IP 10.0.0.7"))
-    await expect(measureVideoUtilityCharge("trim-video", trim(PUBLIC))).resolves.toEqual(UNREADABLE)
+    await expect(measureVideoUtilityCharge("trim-video", trim(PUBLIC))).resolves.toEqual(NOT_PUBLIC)
     expect(m.downloadFile).not.toHaveBeenCalled()
   })
 

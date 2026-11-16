@@ -106,7 +106,10 @@ describe("OmniHuman 2.0 pricing at the 10% markup", () => {
     const edges = [{ source: "a", target: "x", targetHandle: "audio" }]
     expect(await CreditsService.estimateWorkflowCredits([upload, node], edges)).toBe(154)
     expect(await CreditsService.estimateWorkflowCredits([node], [])).toBe(578)
-    // With no audio to play, the length the node measured at its last run, as the editor reads it.
-    expect(await CreditsService.estimateWorkflowCredits([{ ...node, data: { ...node.data, audioDurationSec: 9.5 } }], [])).toBe(385)
+    // With no audio to play, the length the node measured at its last run, as the editor reads it — a field of the
+    // node's data, so never below the 15-second minimum (an API write of 1 s is quoted at 15 s), and above it as set.
+    expect(await CreditsService.estimateWorkflowCredits([{ ...node, data: { ...node.data, audioDurationSec: 9.5 } }], [])).toBe(578)
+    expect(await CreditsService.estimateWorkflowCredits([{ ...node, data: { ...node.data, audioDurationSec: 1 } }], [])).toBe(578)
+    expect(await CreditsService.estimateWorkflowCredits([{ ...node, data: { ...node.data, audioDurationSec: 20 } }], [])).toBe(770)
   })
 })

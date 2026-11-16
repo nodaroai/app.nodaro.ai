@@ -70,6 +70,17 @@ describe("planTopazVideoUpscale", () => {
     expect(plan.holdUnits).toBe(topazVideoHoldUnits({ resolution: "4k", fps: 60, durationSec: 5.08, source: { width: 1280, height: 720 } }))
   })
 
+  it("a stream whose length cannot be read: holds the container's frames less the 0.15 s a made clip's audio carries past it", async () => {
+    probe.result = { width: 1280, height: 720, durationSeconds: 5.1, fps: 24 }
+    const plan = await planTopazVideoUpscale("https://cdn.example/a.mp4", { targetResolution: "4k", targetFps: 60 })
+    expect(plan.sourceDurationSec).toBe(5.1)
+    expect(plan.holdUnits).toBe(topazVideoHoldUnits({ resolution: "4k", fps: 60, durationSec: 5.1 - 0.15, source: { width: 1280, height: 720 } }))
+    // A readable stream is held as it is, no allowance.
+    probe.result = { width: 1280, height: 720, durationSeconds: 5.1, videoDurationSeconds: 5.1, fps: 24 }
+    expect((await planTopazVideoUpscale("https://cdn.example/a.mp4", { targetResolution: "4k", targetFps: 60 })).holdUnits)
+      .toBe(topazVideoHoldUnits({ resolution: "4k", fps: 60, durationSec: 5.1, source: { width: 1280, height: 720 } }))
+  })
+
   it("\"same as source\" is the source's own rate; a legacy factor maps over its size", async () => {
     const plan = await planTopazVideoUpscale("https://cdn.example/a.mp4", { upscaleFactor: "1" })
     expect(plan).toMatchObject({ resolution: "720p", fps: 24 })

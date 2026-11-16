@@ -50,6 +50,8 @@ interface SubmissionScope {
   readonly provenance?: TrustedJobProvenance
   /** The grant of the caller this request acts for (absent = unknown). */
   readonly grant?: CallerGrant
+  /** Told the id of the job this request creates, as soon as its row exists (`announceCreatedJob`). */
+  readonly onJobCreated?: (jobId: string) => void
   active: boolean
 }
 
@@ -89,6 +91,15 @@ export async function withJobSubmissionContext<T>(request: {
    * Read through `callerGrantOf`; omit it when unknown.
    */
   readonly grant?: CallerGrant
+  /**
+   * Server-only: called with the id of the job this request creates, once,
+   * as soon as its row exists and before the route answers. A synchronous
+   * route works its job inside the request, so its caller learns the id only
+   * with the answer; a caller that cannot wait that long (an MCP tool, cut
+   * off by its client's own clock) hands the id on instead and the job is
+   * read back by it. Only a route that calls `announceCreatedJob` tells it.
+   */
+  readonly onJobCreated?: (jobId: string) => void
 }, run: () => T | PromiseLike<T>): Promise<T> {
   const provenance = request.provenance && Object.values(request.provenance).some((v) => v !== undefined)
     ? request.provenance
@@ -97,14 +108,14 @@ export async function withJobSubmissionContext<T>(request: {
   // Nested internal calls without an explicit context must not inherit one.
   if (
     !request.jobSubmission && request.parentJobId === undefined && request.trustedPluginCaller !== true &&
-    !provenance && grant === undefined
+    !provenance && grant === undefined && !request.onJobCreated
   ) {
     return scopes.run(undefined, async () => await run())
   }
   // A scope that carries a submission, a parent, provenance or a grant needs a
   // caller; the trusted plugin flag alone does not (it is matched against the
   // caller when read).
-  if ((request.jobSubmission || request.parentJobId !== undefined || provenance || grant !== undefined) && !request.userId.trim()) {
+  if ((request.jobSubmission || request.parentJobId !== undefined || provenance || grant !== undefined || request.onJobCreated) && !request.userId.trim()) {
     throw new Error("Invalid server job submission context")
   }
   if (request.parentJobId !== undefined) assertParentJobId(request.parentJobId)
@@ -125,6 +136,7 @@ export async function withJobSubmissionContext<T>(request: {
     ...(request.trustedPluginCaller === true ? { trustedPluginCaller: true as const } : {}),
     ...(provenance ? { provenance: structuredClone(provenance) } : {}),
     ...(grant !== undefined ? { grant } : {}),
+    ...(request.onJobCreated ? { onJobCreated: request.onJobCreated } : {}),
     active: true,
   }
   // Fastify's inject result is a lazy thenable. Start/await it INSIDE the
@@ -179,6 +191,23 @@ function scopeOf(req: FastifyRequest): SubmissionScope | undefined {
   const scope = scopes.getStore()
   if (!scope?.active || req.method !== scope.method || req.url !== scope.url) return undefined
   return req.userId === scope.userId ? scope : undefined
+}
+
+/**
+ * Tell the server code that made THIS very request (the same active + method
+ * + url + caller match as every other reader here) the id of the job the
+ * request created. Called by a synchronous route right after its job row
+ * exists. A request nobody is listening to, and a listener that throws, change
+ * nothing: the route goes on exactly as before.
+ */
+export function announceCreatedJob(req: FastifyRequest, jobId: string): void {
+  const listener = scopeOf(req)?.onJobCreated
+  if (!listener) return
+  try {
+    listener(jobId)
+  } catch {
+    // The caller's listener is not the route's concern.
+  }
 }
 
 /**

@@ -175,7 +175,11 @@ describe("every \"never quotes less\" sentence names only Edit Plan's step and a
       // never "any other step's output" and no longer Resize Video or Lip Sync.
       expect(s, rel).toMatch(/output of a step with no length before the run/)
       expect(s, rel).not.toMatch(/Resize Video/)
-      expect(s, rel).not.toMatch(/Lip Sync/)
+      // Lip Sync is named only for its own price on audio of unknown length (OmniHuman 2.0's 15-second minimum, as
+      // AI Avatar's 2-minute one), never as a step whose output is an exception.
+      expect(s, rel).not.toMatch(/Lip Sync(?!\]\([./a-z-]*lip-sync\.md#credit-cost\) on OmniHuman 2\.0 on such audio, which is listed at its 15-second minimum)/)
+      // AI Avatar on audio of unknown length is listed at its 2-minute minimum, below what a longer audio's run holds.
+      expect(s, rel).toMatch(/AI Avatar\]\([./a-z-]*ai-avatar\.md#reserve--refund\) on audio whose length is not known before the run(?: \([^)]*\))?, which is listed at its 2-minute minimum/)
       expect(s, rel).not.toMatch(/whose length the listing does not follow/)
       // A generated video lists at its configured duration (decided
       // 2026-10-07): no longer an exception.

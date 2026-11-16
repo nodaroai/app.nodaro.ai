@@ -6210,6 +6210,7 @@ export const he: ChromeDict = {
   "credits.insufficientDescription": "דרושים {required} קרדיטים, ויש לכם {available} בלבד.",
   "credits.currentBalanceLabel": "יתרה נוכחית",
   "credits.requiredLabel": "נדרש",
+  "credits.estimateNote": "זו הערכה של עלות ההרצה. ההרצה מחויבת לפי מה שהיא צורכת בפועל.",
   "credits.shortByLabel": "חסרים",
   "credits.shortByAmount": "{n} קרדיטים",
   "credits.currentPlanLabel": "התוכנית הנוכחית",

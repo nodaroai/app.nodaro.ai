@@ -68,6 +68,7 @@ jobs:
             scripts/check-private-markers.sh
             tools/check-history-surface.mjs
             tools/check-public-surface.mjs
+            tools/private-marker-list.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - name: Check tracked files for private markers

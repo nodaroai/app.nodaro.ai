@@ -35,7 +35,7 @@ echo "== private-marker gate (strings that must never appear in a published tree
 # marker that an invisible character makes dead (a carriage return inside it,
 # from lone-CR line ends, or a zero-width space, word joiner or byte-order mark
 # at an edge, from a paste); and a git grep that fails rather than finds nothing.
-# tools/check-history-surface.mjs (parseMarkerList, readMarkerList) reads and
+# tools/private-marker-list.mjs (parseMarkerList, readMarkerList) reads and
 # refuses the list by the same rules, so both gates number the markers alike;
 # tools/__tests__/check-private-markers.test.mjs holds them equal. That gate
 # reads edge whitespace as a word boundary instead (" word " also catches

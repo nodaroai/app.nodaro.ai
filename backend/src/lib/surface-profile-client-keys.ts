@@ -96,17 +96,40 @@ export const surfaceWorldsSchema = z
     return out
   })
 
+/**
+ * What a media INPUT given as a link to another site does where link imports
+ * are off (`imports.inputLinks`, decided 2026-11-16): `"allow"` — today, runs
+ * as before; `"report"` — runs as before, and each link that would be refused
+ * is recorded; `"refuse"` — refused like an import (`lib/input-links.ts`).
+ * Meaningful only while `imports.links` is `false`.
+ */
+export const INPUT_LINKS_MODES = ["allow", "report", "refuse"] as const
+export type InputLinksMode = (typeof INPUT_LINKS_MODES)[number]
+
+/** The lever as given, or undefined when it is absent; a value that is not a mode takes the restrictive side, loudly. */
+function inputLinksLever(v: unknown): InputLinksMode | undefined {
+  if (v === undefined) return undefined
+  const mode = typeof v === "string" ? v.trim().toLowerCase() : v
+  if ((INPUT_LINKS_MODES as readonly unknown[]).includes(mode)) return mode as InputLinksMode
+  console.warn(`[surface-profile] imports.inputLinks ${JSON.stringify(v)} is not one of ${INPUT_LINKS_MODES.join(" | ")} — using the restrictive "refuse"`)
+  return "refuse"
+}
+
 export const surfaceImportsSchema = z
   .unknown()
   .optional()
-  .transform((raw): { links: boolean } | undefined => {
+  .transform((raw): { links: boolean; inputLinks?: InputLinksMode } | undefined => {
     if (raw === undefined) return undefined
     if (!isPlainObject(raw)) {
-      console.warn("[surface-profile] imports must be an object { links } — link imports refused")
+      console.warn("[surface-profile] imports must be an object { links, inputLinks? } — link imports refused")
       return { links: false }
     }
     const links = safetyFlag("imports.links", raw.links, false)
-    return links === undefined ? undefined : { links }
+    const inputLinks = inputLinksLever(raw.inputLinks)
+    if (inputLinks === undefined) return links === undefined ? undefined : { links }
+    if (links !== false) console.warn(`[surface-profile] imports.inputLinks "${inputLinks}" has no effect while imports.links is not false`)
+    // `links` absent reads as allowed, as it does without the lever.
+    return { links: links ?? true, inputLinks }
   })
 
 /** A set header other than the two modes still says "not the platform's": white-label. */

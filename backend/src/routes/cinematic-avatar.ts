@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { videoQueue } from "../lib/queue.js"
-import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -29,7 +29,7 @@ const cinematicReference = z.object({
   url: safeUrlSchema,
 })
 
-const cinematicAvatarBody = z
+export const cinematicAvatarBody = z
   .object({
     prompt: z.string().min(1).max(CINEMATIC_PROMPT_MAX),
     avatarLooks: z.array(z.string().min(1)).min(1).max(3),
@@ -63,13 +63,22 @@ const cinematicAvatarBody = z
     }
   })
 
+/**
+ * The route's pricing chain, registered below as its preHandlers and run by
+ * `POST /v1/quote` on the same body: the exact (resolution, duration) id
+ * (`resolveCinematicCreditId`; Auto at the 15 s ceiling), the editor's and the
+ * workflow estimate's own.
+ */
+export const cinematicAvatarPricing: RoutePricing = {
+  prechecks: [],
+  modelResolver: (req) => resolveCinematicCreditId(req.body as Record<string, unknown> | undefined),
+}
+
 export async function cinematicAvatarRoutes(app: FastifyInstance) {
   app.post(
     "/v1/cinematic-avatar",
     {
-      preHandler: creditGuard((req) =>
-        resolveCinematicCreditId(req.body as Record<string, unknown> | undefined),
-      ),
+      preHandler: [...cinematicAvatarPricing.prechecks, creditGuard(cinematicAvatarPricing.modelResolver, cinematicAvatarPricing.opts)],
     },
     async (req, reply) => {
       const parsed = cinematicAvatarBody.safeParse(req.body)

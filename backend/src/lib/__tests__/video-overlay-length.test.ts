@@ -1,15 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // The base is measured with the worker's own probe (`probeVideoOverlayBaseSource`): its video stream's length.
+type BaseProbe = { streamDurationSec: number; containerSec?: number; videoStreamIndex?: number; videoStreamSec?: number; videoTagSec?: number }
 const probe = vi.hoisted(() => ({
-  fn: (async () => ({ streamDurationSec: 10 })) as (url: string) => Promise<{ streamDurationSec: number }>,
+  fn: (async () => ({ streamDurationSec: 10 })) as (url: string) => Promise<BaseProbe>,
   urls: [] as string[],
+  // The packet scan of a base whose header states no picture length (`videoTrackLengthFrom`).
+  scan: (async () => { throw new Error("ffprobe failed") }) as () => Promise<{ maxPtsEnd?: number }>,
 }))
 vi.mock("../../providers/video/ffmpeg-utils.js", () => ({
   probeVideoOverlayBaseSource: async (url: string) => {
     probe.urls.push(url)
     return probe.fn(url)
   },
+  readProbeSource: async (src: string, fn: (input: string, guarded: unknown) => Promise<unknown>) => fn(src, {}),
+  scanPacketEnds: async () => probe.scan(),
 }))
 const rows = vi.hoisted(() => ({ calls: [] as Array<[string, number]> }))
 vi.mock("../credit-base-cost.js", () => ({
@@ -37,6 +42,7 @@ const image = (over: Record<string, unknown> = {}) => ({ imageUrl: IMG, start: 0
 
 beforeEach(() => {
   probe.fn = async () => ({ streamDurationSec: 10 })
+  probe.scan = async () => { throw new Error("ffprobe failed") }
   probe.urls = []
   rows.calls = []
 })
@@ -50,6 +56,24 @@ describe("measureVideoOverlayBase — the base of a run with a video layer, befo
   it("reads the length the worker's probe reads (its video stream's) — the length the render follows", async () => {
     probe.fn = async () => ({ streamDurationSec: 59.9 })
     expect(await measureVideoOverlayBase({ videoUrl: BASE, layers: [video()] })).toEqual({ ok: true, durationSec: 59.9, units: 12 })
+  })
+
+  it("a base whose header states no picture length and whose packets cannot be read: the container less the fallback's 0.15 s (5.1 s is 1 unit, not 2)", async () => {
+    probe.fn = async () => ({ streamDurationSec: 5.1, containerSec: 5.1, videoStreamIndex: 0 })
+    expect(await measureVideoOverlayBase({ videoUrl: BASE, layers: [video()] })).toEqual({ ok: true, durationSec: 5.1, units: 1 })
+    // A scan that runs out of time is the same fallback.
+    probe.scan = async () => { throw Object.assign(new Error("slow"), { timedOut: true }) }
+    expect(await measureVideoOverlayBase({ videoUrl: BASE, layers: [video()] })).toMatchObject({ ok: true, units: 1 })
+    // Read from its packets, the picture is charged as read: no allowance (5.1 s is 2 units).
+    probe.scan = async () => ({ maxPtsEnd: 5.1 })
+    expect(await measureVideoOverlayBase({ videoUrl: BASE, layers: [video()] })).toMatchObject({ ok: true, units: 2 })
+  })
+
+  it("a WebM / MKV base is charged by its DURATION tag, held to its container", async () => {
+    probe.fn = async () => ({ streamDurationSec: 5.7, containerSec: 5.7, videoStreamIndex: 0, videoTagSec: 4.9 })
+    expect(await measureVideoOverlayBase({ videoUrl: BASE, layers: [video()] })).toMatchObject({ ok: true, durationSec: 5.7, units: 1 })
+    probe.fn = async () => ({ streamDurationSec: 5, containerSec: 5, videoStreamIndex: 0, videoTagSec: 9 })
+    expect(await measureVideoOverlayBase({ videoUrl: BASE, layers: [video()] })).toMatchObject({ ok: true, units: 1 })
   })
 
   it("60 s is 12 units; 60.04 s (a whole-second cut of a 29.97 fps clip) is still 12", async () => {

@@ -85,6 +85,28 @@ describe("every other language", () => {
     const payload: Record<string, unknown> = { targetLanguage: "fr", videoUrl: "https://r2.example/v.mp4" }
     expect(await stampDubbingDuration("dubbing", payload)).toMatchObject({ code: "media_duration_exceeds_limit" })
     expect(payload.probedDurationSec).toBeUndefined()
+    // More than the 0.05 s its hold forgives past the cap: refused.
+    mocks.probe.mockResolvedValue(1800.06)
+    expect(await stampDubbingDuration("dubbing", { targetLanguage: "fr", videoUrl: "https://r2.example/v.mp4" })).toMatchObject({ code: "media_duration_exceeds_limit" })
+  })
+
+  it("a span a hair past 30 minutes is held at 30 minutes and dubbed through a window cut to the cap", async () => {
+    mocks.probe.mockResolvedValue(1800.03)
+    const payload: Record<string, unknown> = { targetLanguage: "fr", videoUrl: "https://r2.example/v.mp4" }
+    expect(await stampDubbingDuration("dubbing", payload)).toBeUndefined()
+    expect(payload).toMatchObject({ probedDurationSec: 1800, startTime: 0, endTime: 1800 })
+    // 40 × 30 minutes = 1,200 base → 1,320.
+    expect(await projectDubbingCreditOverride("dubbing", payload)).toBe(1320)
+    // A start the request set past the hair: what is dubbed (the source less the start) is under the cap, so no window.
+    mocks.probe.mockResolvedValue(1800.03)
+    const late: Record<string, unknown> = { targetLanguage: "fr", videoUrl: "https://r2.example/v.mp4", startTime: 10 }
+    expect(await stampDubbingDuration("dubbing", late)).toBeUndefined()
+    expect(late).toMatchObject({ probedDurationSec: 1800, startTime: 10 })
+    expect(late.endTime).toBeUndefined()
+    // An end the request set past the cap: cut to the cap.
+    const open: Record<string, unknown> = { targetLanguage: "fr", videoUrl: "https://r2.example/v.mp4", endTime: 1800.5 }
+    expect(await stampDubbingDuration("dubbing", open)).toBeUndefined()
+    expect(open).toMatchObject({ probedDurationSec: 1800, startTime: 0, endTime: 1800 })
   })
 
   it("nothing is measured where credits are not charged", async () => {

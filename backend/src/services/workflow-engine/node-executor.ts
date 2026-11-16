@@ -114,6 +114,7 @@ import { getAppSettings } from "../../lib/app-settings.js"
 import { videoUtilityChargeBaseCredits } from "../../lib/video-utility-credits.js"
 import { stampVideoUtilityLength, videoUtilityMeasuredBaseCredits, videoUtilityReserveUnits } from "../../lib/video-utility-length.js"
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
+import { aiAvatarReserveId, stampAiAvatarAudioLength } from "../../lib/ai-avatar-audio-length.js"
 import { stampVideoDepthInput, videoDepthReserveId } from "../../lib/video-depth-input.js"
 import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
 import { stampNemotronTranscribeInput, nemotronTranscribeReserveId } from "../../lib/nemotron-transcribe-input.js"
@@ -169,6 +170,7 @@ import { readPollJobRow } from "./poll-job-row.js"
 import { cappedQueuedMs } from "../../lib/concurrency-lanes/queued-clock.js"
 import { GENERATE_VIDEO_PRO_DEFAULT_DURATION_SEC } from "../../lib/generate-video-pro-length.js"
 import { speakerViewDispatchGate } from "./speaker-view-source.js"
+import { judgeNodeInputLinks, judgeNodePayloadLinks, nodeInputLinkRefusal } from "./node-input-links.js"
 
 // ---------------------------------------------------------------------------
 // Sync HTTP node types — called via internal fetch
@@ -582,6 +584,15 @@ export async function executeNode(
     node = { ...node, data: settings.data }
   }
 
+  // Media inputs given as links to other sites, where the deployment makes them
+  // follow its link-import switch (`imports.inputLinks`, node-input-links.ts):
+  // judged here, on every lane a node runs on, before anything is read, created
+  // or held. Inert (one env read) on a deployment that has not set it. A node
+  // that runs nothing outside (inline, or a no-op leaf) is not judged.
+  if (!INLINE_NODES.has(node.type) && node.type !== "generative-pipeline" && node.type !== "scene") {
+    if (judgeNodeInputLinks(node, resolvedInputs, ctx.userId).refusal) throw nodeInputLinkRefusal()
+  }
+
   // Component nodes (published apps executed as sub-executions).
   // creditsUsed = the inner (separate) execution's total_credits_used, surfaced
   // via the wrapper job's credits_actual — without it the orchestrator's
@@ -903,6 +914,11 @@ async function executeSyncHttpNode(
       }, userPromptTemplate)
     : buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate, refMap, downstreamPickerTypes, authoredData)
   const body = withCheapLanesOnly(node.type, builtBody, ctx)
+
+  // What the body adds from elsewhere (a scene's entity references), judged
+  // like a worker's payload (node-input-links.ts): the route the engine calls
+  // is an internal call, which the REST hook leaves to this lane.
+  if (judgeNodePayloadLinks(node, resolvedInputs, body, ctx.userId).refusal) throw nodeInputLinkRefusal()
 
   // Polling sources (Telegram Channel Feed): the ROUTE owns the durable cursor
   // (node_cursors) since PR 2 — it reads and advances the position itself from
@@ -2380,6 +2396,15 @@ async function executeWorkerNode(
   // log — reads these two bindings, never the build's own payload or id.
   let { payload, modelIdentifier } = buildResult
 
+  // 1b. What the build added from elsewhere (an entity's reference pictures, a
+  // preset's), judged like the node's inputs were at dispatch: before the
+  // restriction gate below and the reservation, the placeholder row going with
+  // a refusal (node-input-links.ts).
+  if (judgeNodePayloadLinks(node, resolvedInputs, payload, ctx.userId).refusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    throw nodeInputLinkRefusal()
+  }
+
   // 2. The restriction gate, FIRST: a file an administrator restricted after
   // a complaint is not an input to any job, and not fetched by the steps
   // below either (the soundtrack render reads the first audio clip into a new
@@ -2507,6 +2532,18 @@ async function executeWorkerNode(
     await supabase.from("jobs").delete().eq("id", jobId)
     const err = new Error(sfxRefusal.message) as Error & { errorCode?: string }
     err.errorCode = sfxRefusal.code
+    throw err
+  }
+  // AI Avatar in audio mode: the route's own rule — measure the audio through
+  // the probe guard and stamp the duration bucket it holds — before input_data
+  // is written and before anything is reserved. Every edition, as the route's
+  // preHandler. Audio the route refuses (a link that cannot be reached for
+  // now, audio that cannot be read) leaves no jobs row.
+  const aiAvatarRefusal = await stampAiAvatarAudioLength(jobName, payload)
+  if (aiAvatarRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(aiAvatarRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = aiAvatarRefusal.code
     throw err
   }
   // Lip Sync on a model priced by its audio's length (OmniHuman 2.0's rate,
@@ -2868,6 +2905,8 @@ async function executeWorkerNode(
         meteredHold?.chargeId ??
         (await computeEditPlanReserveId(jobName, payload, editPlanPerMinute)) ??
         videoSfxReserveId(jobName, payload) ??
+        // AI Avatar in audio mode: the bucket of the audio `stampAiAvatarAudioLength` measured above.
+        aiAvatarReserveId(jobName, payload) ??
         // Lip Sync on a model priced by a length bucket: the bucket of the audio
         // `stampLipSyncInputs` measured above — the route's own row for it.
         lipSyncBucketReserveId(jobName, payload) ??

@@ -195,7 +195,10 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
   )
 }
 
-/** No editor configured (`AUDIOMASS_URL=off`, or none set). Says so instead of framing nothing. */
+/**
+ * No editor configured (nothing set). Says so instead of framing nothing. With
+ * `AUDIOMASS_URL=off` no Edit is offered, so the modal is never opened there.
+ */
 function EditorDisabled() {
   const t = useT()
   return (

@@ -29,7 +29,10 @@ describe("from-failed: the balance covers what the run still executes plus its f
     const res = await post({ jobId: ID, mode: "from-failed" })
     expect(src.coverArgs.slice(0, 2)).toEqual([USER, 1510])
     expect(res.statusCode).toBe(402)
-    expect(res.json().error.message).toBe("Continuing this episode can hold up to about 1510 credits while it renders; your balance is 1000.")
+    // A hold above the price is no price: no `required` that a reader would take for one.
+    expect(res.json()).toEqual({
+      error: { code: "insufficient_credits", message: "Continuing this episode can hold up to about 1510 credits while it renders; your balance is 1000." },
+    })
   })
 
   it("a Render final's chain: every step it had left, no fee", async () => {
@@ -42,11 +45,24 @@ describe("from-failed: the balance covers what the run still executes plus its f
     expect(src.coverArgs[1]).toBe(900)
   })
 
-  it("a personal payer below it: 402 with the estimate and their balance, no row, no hold", async () => {
+  it("a personal payer below it: 402 with the estimate and their balance, those figures beside the error, no row, no hold", async () => {
     src.cover = { ok: false, balance: 100 }
     const res = await post({ jobId: ID, mode: "from-failed" })
     expect(res.statusCode).toBe(402)
-    expect(res.json().error).toEqual({ code: "insufficient_credits", message: "Continuing this episode is estimated at about 910 credits; your balance is 100." })
+    expect(res.json()).toEqual({
+      error: { code: "insufficient_credits", message: "Continuing this episode is estimated at about 910 credits; your balance is 100." },
+      required: 910,
+      balance: 100,
+      estimate: true,
+    })
+    nothingWritten()
+  })
+
+  it("a pay-as-you-go account on a web surface short of its free pool: the message as before, no figures", async () => {
+    src.cover = { ok: false, balance: 100, subscriptionRequired: true }
+    const res = await post({ jobId: ID, mode: "from-failed" })
+    expect(res.statusCode).toBe(402)
+    expect(res.json()).toEqual({ error: { code: "insufficient_credits", message: "Continuing this episode is estimated at about 910 credits; your balance is 100." } })
     nothingWritten()
   })
 
@@ -55,7 +71,7 @@ describe("from-failed: the balance covers what the run still executes plus its f
     src.cover = { ok: false, balance: 123456 }
     const res = await post({ jobId: ID, mode: "from-failed" })
     expect(res.statusCode).toBe(402)
-    expect(res.json().error).toEqual({ code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." })
+    expect(res.json()).toEqual({ error: { code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." } })
     expect(res.body).not.toContain("123456")
     expect(src.coverArgs[2]).toEqual(m.payer)
     nothingWritten()

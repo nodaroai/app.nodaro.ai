@@ -1070,7 +1070,8 @@ describe("probeVideoSource", () => {
   it("asks ffprobe for both rates", async () => {
     execFileOnce(withRate({ avg_frame_rate: "30/1" }))
     await probeVideoSource("/tmp/v.mp4")
-    expect(execArgs()).toContain("stream=width,height,avg_frame_rate,r_frame_rate,duration:format=duration")
+    // The video stream's index and DURATION tag (a WebM / MKV states its picture's length only there) and the file's start ride the same read.
+    expect(execArgs()).toContain("stream=index,width,height,avg_frame_rate,r_frame_rate,duration:stream_tags=DURATION:format=duration,start_time")
   })
 
   it("falls back to r_frame_rate when the average is the unusable 0/0", async () => {

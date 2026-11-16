@@ -84,14 +84,17 @@ function profileShape(file: string): string[] {
 
 /**
  * Keys only the backend holds: surface-profile-runtime-config.ts strips them
- * from /config.js — the payer's billing keys, `jobs` (who reads a failed
- * job's provider words, decided by the server on every response) and `mcp`
- * (MCP by path: the server states every MCP address itself).
+ * from /config.js — the payer's billing keys, `imports.inputLinks` (what a
+ * media input given as a link does, decided by the server on every request),
+ * `jobs` (who reads a failed job's provider words, decided by the server on
+ * every response) and `mcp` (MCP by path: the server states every MCP address
+ * itself).
  */
 const BACKEND_ONLY = [
   "billing.allowances?",
   "billing.defaultAllowanceUnits?",
   "billing.payerAccount?",
+  "imports?.inputLinks?",
   "jobs?",
   "jobs?.errorDetail",
   "mcp?",

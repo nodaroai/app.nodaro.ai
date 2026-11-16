@@ -1,6 +1,6 @@
 import { NEMOTRON_TRANSCRIBE_ID, NEMOTRON_TRANSCRIBE_PRICING, nemotronTranscribeHeldCreditId, nemotronTranscribeQuoteCreditId } from "@nodaro/shared/credits"
 import { assertSafeProbeSource, probeMediaDurationAndSize } from "../providers/video/ffmpeg-utils.js"
-import { LINK_HOST_UNREACHABLE, LINK_READ_TIMED_OUT, PROBE_UNAVAILABLE, probeLinkRefusal } from "../providers/video/probe-guard.js"
+import { isRetryableProbeRefusal, LINK_HOST_UNREACHABLE, LINK_READ_TIMED_OUT, MEDIA_LINK_BAD_HOST, PROBE_UNAVAILABLE, probeLinkRefusal } from "../providers/video/probe-guard.js"
 import { isAllowedSocialVideoUrl, safeUrlSchema } from "./url-validator.js"
 
 /**
@@ -24,14 +24,21 @@ import { isAllowedSocialVideoUrl, safeUrlSchema } from "./url-validator.js"
  *    lookup that ran out of time) — the retryable 503 `source_unreachable`
  *    every measuring route answers (`probeLinkRefusal`), so a run is tried
  *    again rather than told its link is not public;
- *  - a link that SSRF guard blocks (`assertSafeProbeSource`, run on its own
- *    first: a public-looking host resolving to a private address, a link two
- *    URL parsers read differently, a host that does not resolve) — refused, not
- *    held: only a probe that fails on a link the guard passed holds 60 minutes;
+ *  - a link whose host does not exist, or that is, resolves to or redirects to
+ *    a private or reserved address — the 400 `media_link_bad_host` every
+ *    measuring route answers (`probeLinkRefusal`), at the first hop
+ *    (`assertSafeProbeSource`, run on its own first) or at a redirect the
+ *    probe follows;
+ *  - any other link the guard blocks (one two URL parsers read differently) —
+ *    refused as `invalid_media_url`, not held: only a probe that fails on a
+ *    link the guard passed, for a reason of the file's own, holds 60 minutes;
  *  - a link to a video's PAGE on a social platform (its sound would only exist
  *    after the hold);
- *  - a file over KIE's 60 minutes, or over its 200 MB when the source says its
- *    size (a source that does not is left to KIE, whose refusal is refunded).
+ *  - a file over KIE's 60 minutes — a hair over included, since the provider
+ *    reads the file by its link and nothing here trims it
+ *    (`nemotronTooLongMessage`, a 400 asking for 60 minutes or less) — or over
+ *    its 200 MB when the source says its size (a source that does not is left
+ *    to KIE, whose refusal is refunded).
  * A file whose length cannot be read at all (a browser-recorded WebM written as
  * a stream, a fragmented MP4, a source ffprobe cannot open) is NOT refused: it
  * is held at the 60-minute price, the most a run can be charged, and settles at
@@ -56,8 +63,32 @@ export type NemotronTranscribeInput =
         | typeof LINK_HOST_UNREACHABLE.code
         | typeof LINK_READ_TIMED_OUT.code
         | typeof PROBE_UNAVAILABLE.code
+        | typeof MEDIA_LINK_BAD_HOST
       readonly message: string
     }
+
+/** How a length past the cap is told: a hair past 60 minutes in seconds, anything longer in started minutes. */
+function nemotronLengthText(durationSec: number): string {
+  const overSec = durationSec - NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC
+  if (overSec >= 60) return `${Math.ceil(durationSec / 60)} minutes`
+  const over = Math.max(0.001, Number(overSec.toFixed(3)))
+  return `60 minutes and ${over} second${over === 1 ? "" : "s"}`
+}
+
+/**
+ * The refusal of a file past the 60-minute cap (a `400`, before anything is
+ * held), on every lane that measures for Nemotron 3.5 Transcribe (Transcribe,
+ * Add Captions): what it measured, and the 60 minutes or less it takes. A cut
+ * meant to be 60 minutes can measure a fraction of a second over, and is
+ * refused too: the provider reads the file by its link, so nothing trims it.
+ */
+export function nemotronTooLongMessage(durationSec: number): string {
+  return (
+    `This file is ${nemotronLengthText(durationSec)} long. Nemotron 3.5 Transcribe takes 60 minutes or less: ` +
+    "trim it to 60 minutes or less (a cut can come out a fraction of a second longer, so cut it a little shorter), " +
+    "or split it and transcribe the parts."
+  )
+}
 
 /** An https link to a public host — the only kind of file this engine measures and sends. */
 export function isNemotronMediaUrl(url: string): boolean {
@@ -103,9 +134,11 @@ export async function measureNemotronTranscribeInput(
   try {
     await assertSafeProbeSource(mediaUrl)
   } catch (err) {
-    // A host that could not be looked up for now is the retryable 503 every measuring route answers.
+    // A host that could not be looked up for now is the retryable 503, and a host that does not exist or a
+    // private address the 400 media_link_bad_host, that every measuring route answers.
     const refused = probeLinkRefusal(err)
-    if (refused && refused.code !== "media_link_not_a_file") return { ok: false, code: refused.code, message: refused.message }
+    if (refused && isRetryableProbeRefusal(refused)) return { ok: false, code: refused.code, message: refused.message }
+    if (refused?.code === MEDIA_LINK_BAD_HOST) return { ok: false, code: MEDIA_LINK_BAD_HOST, message: refused.message }
     return {
       ok: false,
       code: "invalid_media_url",
@@ -117,16 +150,15 @@ export async function measureNemotronTranscribeInput(
     probed = await probeMediaDurationAndSize(mediaUrl)
   } catch (err) {
     onProbeFailure(err)
+    // A redirect to a private address (or to a host that does not exist) is the same 400 as at the first hop.
+    const refused = probeLinkRefusal(err)
+    if (refused?.code === MEDIA_LINK_BAD_HOST) return { ok: false, code: MEDIA_LINK_BAD_HOST, message: refused.message }
     probed = {}
   }
+  // The strict cap, a hair past it included (decided: no grace here). The provider reads the file by its link,
+  // so a file a hair past 60 minutes cannot be trimmed to it the way a step that sends a copy of its own can.
   if (probed.durationSec !== undefined && probed.durationSec > NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC) {
-    return {
-      ok: false,
-      code: "media_duration_exceeds_limit",
-      message:
-        `The audio is ${Math.ceil(probed.durationSec)} seconds long. Nemotron 3.5 Transcribe accepts up to ` +
-        `${NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC} seconds (60 minutes): split it and transcribe the parts.`,
-    }
+    return { ok: false, code: "media_duration_exceeds_limit", message: nemotronTooLongMessage(probed.durationSec) }
   }
   if (opts.checkSize !== false && probed.sizeBytes !== undefined && probed.sizeBytes > NEMOTRON_TRANSCRIBE_PRICING.MAX_BYTES) {
     return {

@@ -25,6 +25,8 @@ import {
   type NodaroVideoUpscaleTier,
 } from "@nodaro/shared/models"
 import { normalizeVideoUpscaleResolution } from "@nodaro/shared/model-catalog"
+import { CONTAINER_FALLBACK_GRACE_SEC } from "./made-clip-overshoot"
+import type { MeasuredFileReading } from "./video-output-length"
 
 /** The seconds one rate row prices. */
 export const NODARO_VIDEO_UPSCALE_RATE_SECONDS = 4
@@ -47,13 +49,31 @@ export function isNodaroVideoUpscaleCreditId(id: unknown): boolean {
 }
 
 /**
- * The whole seconds a clip of `measuredSec` is billed for: its length rounded
- * up to a whole second, at least one. THE one place the rounding lives — how
- * a fraction of a second is billed is provisional until measured, and a change
- * here moves every lane (route, quote, workflow run, estimates) together.
+ * How far past a whole second a clip measured by its CONTAINER is still billed
+ * as that second: a run bills the video stream's length, and only when that
+ * cannot be read does it measure the container, which a made clip's audio can
+ * run past its planned length by up to this much (`MADE_CLIP_OVERSHOOT_SEC`).
+ * A quote reads a made clip at its planned length plus one frame, so without
+ * this a container a hair past a second would bill a second the quote did not
+ * name.
  */
-export function nodaroVideoUpscaleBilledSec(measuredSec: number): number {
-  return Math.max(1, Math.ceil(measuredSec))
+export const NODARO_VIDEO_UPSCALE_CONTAINER_GRACE_SEC = CONTAINER_FALLBACK_GRACE_SEC
+
+/** Float noise: a container length that is arithmetic can land a hair past the edge, and must not round up for it. */
+const FLOAT_NOISE_SEC = 1e-9
+
+/**
+ * The whole seconds a clip of `measuredSec` is billed for, by what was
+ * measured (`reading`): the video stream's length rounded up to a whole
+ * second, at least one; the container's (a clip whose stream length could not
+ * be read) less {@link NODARO_VIDEO_UPSCALE_CONTAINER_GRACE_SEC} first. THE one
+ * place the rounding lives — how a fraction of a second is billed is
+ * provisional until measured, and a change here moves every lane (route,
+ * quote, workflow run, estimates) together.
+ */
+export function nodaroVideoUpscaleBilledSec(measuredSec: number, reading: MeasuredFileReading = "video-stream"): number {
+  const sec = reading === "container" ? measuredSec - NODARO_VIDEO_UPSCALE_CONTAINER_GRACE_SEC - FLOAT_NOISE_SEC : measuredSec
+  return Math.max(1, Math.ceil(sec))
 }
 
 /** The units of the tier's rate row a clip billed for `billedSec` whole seconds is charged. */

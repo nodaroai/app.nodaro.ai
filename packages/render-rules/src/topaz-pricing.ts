@@ -24,6 +24,8 @@ import {
   type TopazVideoResolution,
   type TopazVideoSource,
 } from "@nodaro/shared/models"
+import { CONTAINER_FALLBACK_GRACE_SEC, containerFallbackPricedSec } from "./made-clip-overshoot"
+import type { MeasuredFileReading } from "./video-output-length"
 
 // ─── Video ───────────────────────────────────────────────────────────────
 
@@ -82,6 +84,28 @@ export function topazVideoOutputGigapixels(input: TopazVideoHoldInput): number {
   const { width, height } = topazVideoOutputSize(input.resolution, input.source)
   const frames = Math.ceil(Math.max(0, input.durationSec) * input.fps)
   return (width * height * frames) / 1e9
+}
+
+/**
+ * How far past a frame a clip measured by its CONTAINER is still held as the
+ * frames before it: a run holds the video stream's frames, and only when the
+ * stream's length cannot be read does it count the container's, which a made
+ * clip's audio can carry up to this far past its planned length
+ * (`CONTAINER_FALLBACK_GRACE_SEC`). A quote reads a made clip at its planned length
+ * plus one frame, so without this the fallback could hold a unit the quote did
+ * not name. Nodaro Video Upscale's container fallback takes the same allowance.
+ */
+export const TOPAZ_VIDEO_CONTAINER_GRACE_SEC = CONTAINER_FALLBACK_GRACE_SEC
+
+/**
+ * The source seconds a run holds frames for, by what was measured
+ * (`reading`): the video stream's length; the container's (a clip whose
+ * stream length could not be read) less {@link TOPAZ_VIDEO_CONTAINER_GRACE_SEC},
+ * never below 0. The hold is the most a run is charged, so the charge is
+ * capped there too.
+ */
+export function topazVideoHoldSourceSec(measuredSec: number, reading: MeasuredFileReading = "video-stream"): number {
+  return containerFallbackPricedSec(measuredSec, reading)
 }
 
 /** The units a run holds: its output gigapixels at the hold rate, at least the minimum. */

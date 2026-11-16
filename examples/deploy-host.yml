@@ -29,9 +29,12 @@ jobs:
             export NODARO_IMAGE="$NODARO_IMAGE"
             docker compose pull
             docker compose up -d
-            # health-gate: wait up to 90s for the app to answer /health
+            # health-gate: 18 reads of /health, 5s apart, until the app's API
+            # answers. Each read gives up after 5s (a stalled API never
+            # answers), so the gate fails after about 90s when the API is down
+            # and after at most 3 minutes when it is stalled.
             for i in $(seq 1 18); do
-              if curl -fsS http://localhost:3000/health >/dev/null; then echo "healthy"; break; fi
+              if curl -fsS --max-time 5 http://localhost:3000/health >/dev/null; then echo "healthy"; break; fi
               sleep 5
               if [ "$i" = "18" ]; then echo "health check failed"; exit 1; fi
             done

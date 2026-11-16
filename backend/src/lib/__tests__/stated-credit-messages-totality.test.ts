@@ -34,12 +34,22 @@ const FUNNEL = "lib/stated-credit-messages.ts"
 /** A figure interpolated into a sentence about credits. */
 const CREDIT_FIGURE = /\$\{[^}]*\}\s*(?:app )?(?:credits?\b|credit\(s\)|cr\b)|\b(?:Required|Available|need|have|Spent(?: today)?|Limit|balance is|free pool has|Charged|headroom):? \$\{/g
 
+/**
+ * A figure interpolated where a sentence states what a payer HAS (`your balance
+ * is ${…}`, `Available: ${…}`, `have ${…}`, `free pool has ${…}`). Under a
+ * deployment that pays for its users that figure is the operator's pool, which
+ * is never its users' to read: the funnel drops it (`BalanceSeen.payerPool`),
+ * and a file outside the funnel that states one says, in `balance`, whose
+ * balance it is and why it is never that pool.
+ */
+const BALANCE_FIGURE = /\b(?:Available|have|balance is|free pool has):? \$\{/g
+
 const LOG = "log lines (console / alert text for operators), never saved with a run"
 /**
  * Every file outside the funnel whose code matches, with its count and why
  * its sentence is not a saved failure a deployment's user reads.
  */
-const NOT_A_SAVED_FAILURE: Readonly<Record<string, { count: number; why: string }>> = {
+const NOT_A_SAVED_FAILURE: Readonly<Record<string, { count: number; why: string; balance?: string }>> = {
   "ee/billing/auto-recharge.ts": { count: 1, why: LOG },
   "ee/billing/cleanup-cron.ts": { count: 1, why: LOG },
   "ee/billing/cleanup-service.ts": { count: 1, why: LOG },
@@ -65,18 +75,22 @@ const NOT_A_SAVED_FAILURE: Readonly<Record<string, { count: number; why: string 
   "scripts/cleanup-stuck-pipelines.ts": { count: 1, why: "an operator script's output" },
   "lib/reconcile/cancelled-metered-holds.ts": { count: 1, why: LOG },
   "workers/shared.ts": { count: 1, why: LOG },
-  "lib/character-lora.ts": { count: 1, why: "a count of reference photos, not credits" },
-  "lib/llm-files.ts": { count: 1, why: "a count of pages, not credits" },
-  "lib/mcp/tools/collections.ts": { count: 1, why: "the names of the user's collections, not credits" },
-  "lib/mcp/tools/recipes.ts": { count: 1, why: "the names of the recipes, not credits" },
+  "lib/character-lora.ts": { count: 1, why: "a count of reference photos, not credits", balance: "not a balance: the photos the user has" },
+  "lib/llm-files.ts": { count: 1, why: "a count of pages, not credits", balance: "not a balance: the pages the files have" },
+  "lib/mcp/tools/collections.ts": { count: 1, why: "the names of the user's collections, not credits", balance: "not a balance: the user's collection names" },
+  "lib/mcp/tools/recipes.ts": { count: 1, why: "the names of the recipes, not credits", balance: "not a balance: the names of the recipes on offer" },
   "middleware/rate-limit.ts": { count: 1, why: "a request rate, not credits" },
   "routes/app-runner.ts": {
     count: 7,
     why: "the app run's 402 replies, answered over HTTP before any execution or app run row is written and saved nowhere (an MCP caller is told them through balanceRefusal)",
+    balance:
+      "the payer's balance from checkBalanceCovers, stated through appRunShortfall: a deployment payer's refusal carries no balance (payerPool) and is answered in the deployment's own words",
   },
   "routes/app-run-resume.ts": {
     count: 2,
     why: "the retry's 402 reply, answered over HTTP before the execution is written and saved nowhere (an MCP caller is told it through balanceRefusal)",
+    balance:
+      "only when checkRunSetCredits sent no sentence of its own (it always does on a refusal); its `available` is null for a deployment payer, whose refusal is the deployment's own words",
   },
 }
 
@@ -109,6 +123,18 @@ describe("a saved failure that names a credit figure is worded only in lib/state
     if (process.env.PRINT_CREDIT_FIGURE_SCAN === "1") console.log(JSON.stringify(found, null, 2))
     expect(found).toEqual(Object.fromEntries(Object.entries(NOT_A_SAVED_FAILURE).map(([f, e]) => [f, e.count])))
     for (const [file, e] of Object.entries(NOT_A_SAVED_FAILURE)) expect(e.why.length, `${file} needs a reason`).toBeGreaterThan(20)
+  })
+
+  it("every other file whose sentences state what a payer HAS says whose balance it is and why it is never a deployment payer's pool (held both ways)", () => {
+    const states: string[] = []
+    for (const path of sourceFiles(SRC)) {
+      const file = relative(SRC, path)
+      if (file !== FUNNEL && BALANCE_FIGURE.test(codeOf(path))) states.push(file)
+      BALANCE_FIGURE.lastIndex = 0
+    }
+    const declared = Object.entries(NOT_A_SAVED_FAILURE).filter(([, e]) => e.balance !== undefined).map(([f]) => f)
+    expect(states.sort(), "state whose balance it is in the entry's `balance`, and never a deployment payer's pool").toEqual(declared.sort())
+    for (const file of declared) expect(NOT_A_SAVED_FAILURE[file]!.balance!.length, `${file} needs a reason`).toBeGreaterThan(20)
   })
 })
 

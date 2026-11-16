@@ -1689,6 +1689,13 @@ const DUBBING_TOOLS_BYTES = 3_703
 // 3_740 B, the one definition (2_060 B of it the LLM levers every LLM tool carries), far under the
 // per-tool budget; the list keeps the 28 B of headroom it had.
 const GENERATE_TEXT_TOOL_BYTES = 3_740
+// RAISED 2026-11-16 by `generate_text` handing a slow call on, and nothing else: one sentence of
+// its description (a call still running after 40 s answers with its job id, `wait_for_job` then
+// gives the answer) and `status` in its output, with `text` no longer required there. No tool was
+// added, so the fixture does NOT move. Measured by this suite on the same tree with and without
+// the change: 543_301 total − 543_148 = 153 B (generate_text 3_740 → 3_893 B, under the per-tool
+// budget); the list keeps the 28 B of headroom it had.
+const GENERATE_TEXT_HANDOFF_BYTES = 153
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES,
@@ -1902,7 +1909,8 @@ export const TOOL_WIRE_BUDGET = {
     GEMINI_REPLICA_BYTES +
     KLING_4_VIDEO_SUBJECT_BYTES +
     DUBBING_TOOLS_BYTES +
-    GENERATE_TEXT_TOOL_BYTES,
+    GENERATE_TEXT_TOOL_BYTES +
+    GENERATE_TEXT_HANDOFF_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

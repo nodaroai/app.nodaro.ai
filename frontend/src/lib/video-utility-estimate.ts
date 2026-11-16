@@ -22,10 +22,10 @@ import {
   videoOverlayVideoUnits,
 } from "@nodaro/shared/credits"
 import { maskCompositeUnits } from "@nodaro/shared/media"
-import { combineVideosRunFields, fanInClipCount, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, loopVideoRunFields, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, maskCompositeLeadSec, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_READING, measuredWireLengthSec, runWireFps, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_OVERLAY_READING, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, trimVideoRunFields, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, videoUtilityUnitsOf, type MeasuredInputStepType, type MeasuredWireLengthOptions } from "@nodaro/render-rules"
+import { combineVideosRunFields, fanInClipCount, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, loopVideoRunFields, maskCompositeLeadSec, measuredWireLengthSec, runWireFps, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, VIDEO_UTILITY_READING, trimVideoRunFields, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, videoUtilityUnitsOf, type MeasuredInputStepType, type MeasuredWireLengthOptions, type VideoUtilityStepType, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId } from "@nodaro/render-rules"
 import { NODARO_VIDEO_UPSCALE_PROVIDER, type TopazVideoResolution } from "@nodaro/shared/models"
 import { withWiredSettings } from "@nodaro/shared/nodes"
-import { lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuotedAudioSec, NEMOTRON_WIRE_READ_OPTIONS, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, topazLegacyFactorOf, topazQuotedTarget, topazVideoQuoteUnits, topazWiredSource, type TopazWiredSource } from "@nodaro/render-rules"
+import { aiAvatarAudioSourceId, aiAvatarPlaysAudio, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuotedAudioSec, NEMOTRON_WIRE_READ_OPTIONS, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, topazLegacyFactorOf, topazQuotedTarget, topazVideoQuoteUnits, topazWiredSource, type TopazWiredSource } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { getCombineUpstreamDurations, getUpstreamDuration, type WireDurationReader } from "@/lib/upstream-duration"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
@@ -53,16 +53,18 @@ function measuredWireReader(
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string>,
-  plannedClipSlackSec: number,
-  /** What one step's reading adds (Lip Sync: a re-run voice at its earlier take, a minimum; on a per-second model, a recording at its decoded length; a step that measures the video stream: its `reading`). */
-  extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum" | "decodedAudioLength" | "reading">,
+  /** The measuring step: its slack and its reading are its row's (`measuringStepReadOptions`), the only way a step reads the walk. */
+  step: MeasuringStepId,
+  /** What one step's reading adds (Lip Sync: a re-run voice at its earlier take, a minimum; on a per-second model, a recording at its decoded length). */
+  extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum" | "decodedAudioLength">,
 ): WireDurationReader {
   return (sourceId) =>
     measuredWireLengthSec(sourceId, nodes, edges, rerunIds, {
       planOutputOf: readPlan,
       generateVideoProCapSec: GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC,
-      plannedClipSlackSec,
       ...extra,
+      // The step's row last: nothing a caller passes sets a slack or a reading.
+      ...measuringStepReadOptions(step),
     })
 }
 
@@ -82,8 +84,10 @@ function measuredInputReader(
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string>,
   extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum" | "decodedAudioLength">,
+  /** Video Upscale's model (its row: Topaz, else Nodaro Video Upscale). */
+  provider?: unknown,
 ): WireDurationReader {
-  return measuredWireReader(nodes, edges, rerunIds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC[type], { reading: MEASURED_INPUT_READING[type], ...extra })
+  return measuredWireReader(nodes, edges, rerunIds, measuredInputStepId(type, provider), extra)
 }
 
 /**
@@ -144,7 +148,7 @@ export function pitchTempoQuotedSec(
 
 /** Transcribe and Add Captions on Nemotron read their wire as the server's estimate does (`NEMOTRON_WIRE_READ_OPTIONS`). */
 function nemotronWireReader(nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>, rerunIds: ReadonlySet<string>): WireDurationReader {
-  return measuredWireReader(nodes, edges, rerunIds, NEMOTRON_WIRE_READ_OPTIONS.plannedClipSlackSec ?? 0, { voiceTakeAsMinimum: NEMOTRON_WIRE_READ_OPTIONS.voiceTakeAsMinimum })
+  return measuredWireReader(nodes, edges, rerunIds, "nemotron", { voiceTakeAsMinimum: NEMOTRON_WIRE_READ_OPTIONS.voiceTakeAsMinimum })
 }
 
 /**
@@ -280,7 +284,7 @@ export function videoDepthQuotedSec(
  * measured walk ({@link measuredWireReader}, the reading the server's workflow
  * estimate and the app listing share): a clip another node makes in this run
  * at the length that node will produce plus
- * {@link VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC} for each clip made on the way, a
+ * `VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC` for each clip made on the way, a
  * node outside the run at the take it hands on, an upload at its measured
  * length. A clip nothing can size before the run stands at the estimators'
  * 8-second fallback — a minimum, since the run is charged the length it
@@ -302,7 +306,9 @@ export function estimateVideoUtilityBaseCredits(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | undefined {
   const data = node.data as Record<string, unknown>
-  const durationOf = measuredWireReader(nodes, edges, rerunIds, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC)
+  // Each clip as the node's run measures it (its row: Combine Videos the video stream, Trim and Loop the container).
+  const step: MeasuringStepId = Object.hasOwn(VIDEO_UTILITY_READING, node.type) ? (node.type as VideoUtilityStepType) : "trim-video"
+  const durationOf = measuredWireReader(nodes, edges, rerunIds, step)
   // Each wire's frame rate, read in the same order as its length.
   const fpsOf = (sourceId: string) => runWireFps(sourceId, nodes, edges)
   const credits = (units: number | undefined) => (units === undefined ? undefined : units * VIDEO_UTIL_PRICING.CREDIT_UNIT)
@@ -360,7 +366,7 @@ export function videoUtilityPricingUnits(
  * ({@link measuredWireReader}, `maskCompositeLeadSec`), exactly the server's
  * workflow estimate's reading on every graph. A video another node makes in
  * this run is quoted at the length that node will produce, with
- * {@link MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC} on each clip a node makes (the run
+ * `MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC` on each clip a node makes (the run
  * charges the container's length); a node that does not run, at the take it
  * hands on. The run is always charged the length it measures. No fallback to a
  * length the upstream node merely stores (metadata with no result row for its
@@ -375,7 +381,7 @@ export function maskCompositeQuotedSec(
 ): number | null {
   const data = (node.data ?? {}) as Record<string, unknown>
   const inputs = edges.filter((e) => e.target === node.id)
-  const lengthOf = measuredWireReader(nodes, edges, rerunIds, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC)
+  const lengthOf = measuredWireReader(nodes, edges, rerunIds, "mask-composite")
   return maskCompositeLeadSec(data, inputs, inputs.map((e) => lengthOf(e.source))) ?? null
 }
 
@@ -413,7 +419,7 @@ export function videoOverlayQuotesVideoOf(
  * as the measured walk reads it ({@link measuredWireReader},
  * `videoOverlayBaseSec`) — exactly the server's workflow estimate's reading. A
  * video another node makes in this run is quoted at the length that node will
- * produce, with {@link VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC} on each generated
+ * produce, with `VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC` on each generated
  * clip (the run charges the video stream's length). No fallback to a length the
  * upstream node merely stores (an upload's earlier file): the server does not
  * read one, and a quote below the run, or one that differs between paths, is
@@ -426,7 +432,7 @@ export function videoOverlayQuotedSec(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | null {
   const inputs = edges.filter((e) => e.target === node.id)
-  const lengthOf = measuredWireReader(nodes, edges, rerunIds, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, { reading: VIDEO_OVERLAY_READING })
+  const lengthOf = measuredWireReader(nodes, edges, rerunIds, "video-overlay")
   return videoOverlayBaseSec(inputs, inputs.map((e) => lengthOf(e.source))) ?? null
 }
 
@@ -442,7 +448,7 @@ export function videoOverlayWireBaseSec(
   edges: ReadonlyArray<WorkflowEdge>,
 ): number | null {
   const inputs = edges.filter((e) => e.target === node.id)
-  const lengthOf = measuredWireReader(nodes, edges, new Set(), VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, { reading: VIDEO_OVERLAY_READING })
+  const lengthOf = measuredWireReader(nodes, edges, new Set(), "video-overlay")
   return videoOverlayBaseWireSec(inputs, inputs.map((e) => lengthOf(e.source))) ?? null
 }
 
@@ -617,6 +623,26 @@ export function lipSyncQuotedAudioSec(
 ): number | undefined {
   const source = lipSyncAudioSourceId(node, nodes, edges, "editor")
   return source === undefined ? undefined : measuredInputReader("lip-sync", nodes, edges, rerunIds, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS)(source)
+}
+
+/**
+ * The length, in seconds, of the audio an AI Avatar in audio mode is QUOTED
+ * on, or `undefined` when it is not known (the 120-second default, a minimum):
+ * the audio the editor's own Run of the node plays (`aiAvatarAudioSourceId`:
+ * its last wired `audio`) as the measured walk reads it, with the step's
+ * slack (`AI_AVATAR_PLANNED_CLIP_SLACK_SEC`) — the server's estimate reads the
+ * same walk for the audio its run plays. Never a length the node carries. The
+ * run measures the real audio before it holds.
+ */
+export function aiAvatarQuotedAudioSec(
+  node: Pick<WorkflowNode, "id" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | undefined {
+  if (!aiAvatarPlaysAudio(node.data)) return undefined
+  const source = aiAvatarAudioSourceId(node, nodes, edges, "editor")
+  return source === undefined ? undefined : measuredWireReader(nodes, edges, rerunIds, "ai-avatar")(source)
 }
 
 /**

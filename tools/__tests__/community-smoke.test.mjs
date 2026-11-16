@@ -15,7 +15,7 @@
  * engine) and assert the matching contract goes FAIL.
  *
  * Scope on purpose: this file asserts the Scene3D, Video Overlay, Speaker Map, Site Capture,
- * Tighten Episode, Chapters, Trailer, Clip Pack, Speaker Layout and concurrency lanes contracts only. The stub is faithful enough for the
+ * Tighten Episode, Chapters, Trailer, Clip Pack, Speaker Layout, concurrency lanes and health address contracts only. The stub is faithful enough for the
  * probe to reach them, not a second implementation of the platform — the
  * other contracts are asserted against the real image by
  * `.github/workflows/community-e2e.yml`.
@@ -63,6 +63,9 @@ const SPEAKER_LAYOUT = "Speaker Layout on an unconnected install: hidden from di
 
 /** The concurrency lanes contract name, spelled exactly as the probe records it. */
 const LANES = "concurrency lanes report the env sizes and are not enforced on a fresh install"
+
+/** The health address contract name, spelled exactly as the probe records it. */
+const HEALTH = "the health address (/health) is the API server's own answer, never the app's page"
 
 /** The entity search contract name, spelled exactly as the probe records it. */
 const ENTITY_SEARCH = "a character search (?q=) matches every word literally, in any order and any case"
@@ -216,6 +219,12 @@ function communityShape() {
       status: 200,
       body: { data: { enforced: false, lines: [{ payer: "user:u_1", current: true, sizes: { provider: 12, llm: 24, local: 24, run: 12 } }] } },
     },
+    // GET /health on the public port: the API server's own answer (backend/src/routes/health.ts).
+    health: {
+      status: 200,
+      type: "application/json; charset=utf-8",
+      body: { status: "healthy", timestamp: "2026-11-16T00:00:00.000Z", version: "1.2.3" },
+    },
   }
 }
 
@@ -261,6 +270,7 @@ function stubServer(shape) {
     req.on("data", (chunk) => { raw += chunk })
     req.on("end", () => {
       if (path === "/v1/setup/status") return send(200, setupStatus())
+      if (path === "/health") return send(shape.health.status, shape.health.body, shape.health.type)
       if (path === "/config.js") return send(200, 'window.__NODARO_RUNTIME__ = {"apiUrl":"http://127.0.0.1"};\n', "text/javascript")
       if (path === "/supabase/auth/v1/signup") {
         state.hasUsers = true
@@ -946,6 +956,34 @@ test("an unregistered lanes route fails the concurrency lanes contract", async (
     shape.lanes = { status: 404, body: { error: { code: "not_found", message: "not found" } } }
   })
   assertContract(out, LANES, "FAIL")
+})
+
+test("a health address answered by the API passes the health address contract", async () => {
+  const { out } = await probeWith()
+  assertContract(out, HEALTH, "PASS")
+})
+
+test("a health address answered with the app's page fails the health address contract", async () => {
+  // What every install answered before: the proxy's single-page fallback, 200 whatever the API does.
+  const { out, code } = await probeWith((shape) => {
+    shape.health = { status: 200, type: "text/html; charset=utf-8", body: "<!doctype html><title>Nodaro.ai</title>" }
+  })
+  assertContract(out, HEALTH, "FAIL")
+  assert.notEqual(code, 0, "the probe must exit non-zero when a contract fails")
+})
+
+test("a health address the proxy answers 502 (the API is down) fails the health address contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.health = { status: 502, type: "text/plain", body: "" }
+  })
+  assertContract(out, HEALTH, "FAIL")
+})
+
+test("a health address answering JSON that is not the API's fails the health address contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.health = { status: 200, type: "application/json", body: { ok: true } }
+  })
+  assertContract(out, HEALTH, "FAIL")
 })
 
 const HOUSE_MODELS = "discovery offers no house model without the deployment's service"

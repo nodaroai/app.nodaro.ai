@@ -60,6 +60,9 @@ describe("the path rule", () => {
     "/brand/v1/x.webp",
     "/editor/x.webp",
     "/gallery/x.webp",
+    // A `;` in the first folder starts its parameters; the folder before it is the deployment's own.
+    "/brand;v2/x.webp",
+    "/healthy/x.webp",
   ]
   for (const path of accepted) {
     it(`accepts ${path}`, () => {
@@ -102,6 +105,11 @@ describe("the path rule", () => {
     ["/%76%31/x.webp", /under \/v1\//],
     ["/.well-known/x.png", /under \/\.well-known\//],
     ["/mcp/x.webp", /under \/mcp\//],
+    ["/health/x.webp", /under \/health\/.*the API/],
+    // The proxy hands /health;… to the API too (frontend/Caddyfile): the folder is read up to its `;`.
+    ["/health;x/a.png", /under \/health;x\/.*the API/],
+    ["/HEALTH;v=1/a.png", /under \/HEALTH;v=1\//],
+    ["/v1;x/a.png", /under \/v1;x\//],
     ["/og/x.webp", /under \/og\//],
     ["/app/x.webp", /under \/app\//],
     ["/embed/x.webp", /under \/embed\//],
@@ -225,7 +233,8 @@ function caddyFolders(): Set<string> {
   for (const pattern of patterns) {
     if (!pattern.startsWith("/")) continue
     const segments = pattern.slice(1).split("/")
-    const first = segments[0]!
+    // A `;` starts the segment's parameters (`/health;*`): the folder is what comes before it.
+    const first = segments[0]!.split(";")[0]!
     if (first === "" || first === "*") continue
     const rootFile = segments.length === 1 && /^[^.].*\.[a-z0-9]+$/i.test(first)
     if (!rootFile) folders.add(first.toLowerCase())

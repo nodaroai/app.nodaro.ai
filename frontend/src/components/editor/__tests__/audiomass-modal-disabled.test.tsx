@@ -4,12 +4,12 @@ import { render, screen } from "@testing-library/react"
 import { AudiomassEditorModal } from "../audiomass-editor-modal"
 
 /**
- * The presentation / app-runner surface mounts this modal from its own state and
- * never goes through the tab-mode guard in handleEditNode. An `<iframe src="">`
- * loads the PARENT document — the app rendering itself inside its own editor —
- * so the guard has to live in the modal too, where every caller passes through
- * (mirrors FreeCutEditorModal, #767 review). With no hosted default, an
- * unconfigured install is the DISABLED state by default.
+ * The presentation / app-runner surface mounts this modal from its own state
+ * whenever no audio editor is set, so it can show the panel that explains what
+ * to set. An `<iframe src="">` loads the PARENT document — the app rendering
+ * itself inside its own editor — so the guard has to live in the modal, where
+ * every caller passes through (mirrors FreeCutEditorModal, #767 review). With
+ * no hosted default, an unconfigured install is the DISABLED state by default.
  */
 // The modal renders through createPortal, so it lands in document.body and never
 // in the RTL container — querying the container would make these vacuous.

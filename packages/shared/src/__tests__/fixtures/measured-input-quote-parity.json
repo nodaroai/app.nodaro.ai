@@ -1,5 +1,5 @@
 {
-  "$comment": "The quote before a run of the seven steps whose run measures the file it is given — Video SFX, Video Mask, Video Depth, Pitch & Tempo, Dubbing, and Video Upscale on each of its two measuring models (`topaz`, and `nodaroUpscale`, the per-second model) — read by BOTH estimates over the same graphs through the one measured walk (`measuredWireLengthSec`, @nodaro/render-rules) with each step's slack (`MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC`: 0.1 s on each clip a node makes for the five that measure the container, one 24 fps frame for both Video Upscale steps: one hold counts the video stream's frames, the other bills the clip's seconds rounded up, so any slack under a second is the same figure there; a quarter second on every step after a PixVerse V6 extension, and after a Dubbing or an Audio Isolation on every step that measures the container — `LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC`; both Video Upscale steps measure the video stream, which a dub keeps exactly, and keep their frame after one): the editor's (frontend getModelIdentifier for the row steps, PRICING_UNIT_ESTIMATORS for Dubbing and both Video Upscale providers — the node's pill, its Run button, the confirm and the workflow badge) and the server's workflow estimate (CreditsService.estimateWorkflowCreditsAt, the step's own line). Each case wires its sources into the step `c`; an edge with no `target` goes into `c` on the step's input (`@input`: `video`, Pitch & Tempo's `in`; `handles` overrides it). `steps` limits a case to some steps (default every step but `lipSync`, a Lip Sync priced by the seconds of its audio, which only the cases that list it name; its figure is the billed seconds, `null` a length nothing knows before the run: both estimates quote the 15 s stand-in, a minimum, the editor's line marked ≈). Expected figures: the row's seconds for Video SFX (`replicate-mmaudio:<N>s`), Video Mask (`<provider>-video:<N>s`) and Video Depth (`video-depth-anything:<N>s`); the started minutes for Pitch & Tempo (`pitch-tempo:<N>m`) and Dubbing (target `es`); the Topaz units (a 1080p target, 30 fps, a 16:9 frame); the seconds `nodaroUpscale` bills (at least 1): 0 for a clip the graph KNOWS is past its 60-second limit (an upload, a measured Library clip, a take's record — the run refuses it before anything is held, and no estimate prices it), and the 60 seconds a run bills at most for a PLANNED length past it, which is an upper bound and no proof the run refuses it. An input whose length nothing can tell before the run is quoted at the step's cap for Video SFX, Video Mask, Video Depth and Pitch & Tempo, and at a minimum for Dubbing (1 minute) and both Video Upscale providers (a 10-second clip) — those runs measure their input and are charged its real length. `whole` = a whole run (the editor's whole-run set, the server with no run set); `alone` = the step's own Run and its pill (editor) and a run of `c` alone (server); `partial` = exactly that run set on both sides. `stepData` adds settings to the step's own (a Topaz frame rate stored as text, as a workflow written through the API can carry it). A Lip Sync on a per-second model reads an AAC recording (an M4A, MP4 or AAC file, or the sound of an MP4 video) one AAC frame past its recorded length (1024 samples at its recorded rate, else at AAC's lowest, 7.35 kHz) less the 0.05 s its charge forgives, as the run bills the decoded audio; an MP3 or a WAV at its recorded length. `transcribe` and `addCaptions` (Nemotron 3.5 Transcribe, named only by the cases that list them) read their wire with no slack (their hold forgives a second) and a voice made again in the run at its take, a minimum; their figure is the started minutes, 60 for a length nothing knows. `topaz` also reads the wired clip's frame and declared rate as the run's resolver would (decided 2026-11-14): an upload's recorded size and `fps`, a take's size for a node outside the run, carried through Trim, Loop and a Combine Videos whose clips share it; a node made again in the run has no size; unknown, 16:9 at 30 fps.",
+  "$comment": "The quote before a run of the seven steps whose run measures the file it is given — Video SFX, Video Mask, Video Depth, Pitch & Tempo, Dubbing, and Video Upscale on each of its two measuring models (`topaz`, and `nodaroUpscale`, the per-second model) — read by BOTH estimates over the same graphs through the one measured walk (`measuredWireLengthSec`, @nodaro/render-rules) with each step's slack (`MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC`: on each clip a node makes, 0.15 s for Video Mask and Video Depth, which measure the container and forgive the same 0.05 s on the quote and the charge, 0.1 s for Video SFX, Pitch & Tempo and Dubbing, which measure the container, quote the length exactly and forgive 0.05 s on the charge, one 24 fps frame for both Video Upscale steps: one hold counts the video stream's frames, the other bills the clip's seconds rounded up, so any slack under a second is the same figure there; a quarter second on every step after a PixVerse V6 extension, and after a Dubbing or an Audio Isolation on every step that measures the container — `LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC`; both Video Upscale steps measure the video stream, which a dub keeps exactly, and keep their frame after one): the editor's (frontend getModelIdentifier for the row steps, PRICING_UNIT_ESTIMATORS for Dubbing and both Video Upscale providers — the node's pill, its Run button, the confirm and the workflow badge) and the server's workflow estimate (CreditsService.estimateWorkflowCreditsAt, the step's own line). Each case wires its sources into the step `c`; an edge with no `target` goes into `c` on the step's input (`@input`: `video`, Pitch & Tempo's `in`; `handles` overrides it). `steps` limits a case to some steps (default every step but `lipSync`, a Lip Sync priced by the seconds of its audio, which only the cases that list it name; its figure is the billed seconds, `null` a length nothing knows before the run: both estimates quote the 15 s stand-in, a minimum, the editor's line marked ≈); an `{ \"editor\", \"server\" }` pair is a figure the two engines quote on purpose apart, an AI Avatar with nothing wired: the server plays the node picked in its settings, the editor's own Run only a wired audio). Expected figures: the row's seconds for Video SFX (`replicate-mmaudio:<N>s`), Video Mask (`<provider>-video:<N>s`) and Video Depth (`video-depth-anything:<N>s`); the started minutes for Pitch & Tempo (`pitch-tempo:<N>m`) and Dubbing (target `es`); the Topaz units (a 1080p target, 30 fps, a 16:9 frame); the seconds `nodaroUpscale` bills (at least 1): 0 for a clip the graph KNOWS is past its 60-second limit (an upload, a measured Library clip, a take's record — the run refuses it before anything is held, and no estimate prices it), and the 60 seconds a run bills at most for a PLANNED length past it, which is an upper bound and no proof the run refuses it. An input whose length nothing can tell before the run is quoted at the step's cap for Video SFX, Video Mask, Video Depth and Pitch & Tempo, and at a minimum for Dubbing (1 minute) and both Video Upscale providers (a 10-second clip) — those runs measure their input and are charged its real length. `whole` = a whole run (the editor's whole-run set, the server with no run set); `alone` = the step's own Run and its pill (editor) and a run of `c` alone (server); `partial` = exactly that run set on both sides. `stepData` adds settings to the step's own (a Topaz frame rate stored as text, as a workflow written through the API can carry it). A Lip Sync on a per-second model reads an AAC recording (an M4A, MP4 or AAC file, or the sound of an MP4 video) one AAC frame past its recorded length (1024 samples at its recorded rate, else at AAC's lowest, 7.35 kHz) less the 0.05 s its charge forgives, as the run bills the decoded audio; an MP3 or a WAV at its recorded length. `transcribe` and `addCaptions` (Nemotron 3.5 Transcribe, named only by the cases that list them) read their wire with no slack (their hold forgives a second) and a voice made again in the run at its take, a minimum; their figure is the started minutes, 60 for a length nothing knows. `topaz` also reads the wired clip's frame and declared rate as the run's resolver would (decided 2026-11-14): an upload's recorded size and `fps`, a take's size for a node outside the run, carried through Trim, Loop and a Combine Videos whose clips share it; a node made again in the run has no size; unknown, 16:9 at 30 fps.",
   "cases": [
     {
       "name": "1. Generate Video on Kling 4.0 set to 5 s, never run: 5 s planned plus the slack (5.1 s; 5.042 s on the stream for Topaz)",
@@ -3243,6 +3243,542 @@
           "videoDepth": 9,
           "topaz": 5,
           "nodaroUpscale": 8
+        }
+      }
+    },
+    {
+      "name": "72. A Face Swap of a 9.92 s video upload: a new clip, read at its input plus each step's slack — Video Mask and Video Depth (the container, their quote and charge forgiving the same 0.05 s) the whole 0.15 s a made clip's container can run past, 10.07 s: the 15 s row and 11 s; Video SFX, Pitch & Tempo and Dubbing (the container, the quote reading the length exactly, the charge forgiving 0.05 s) a tenth, 10.02 s: the 15 s row, 1 minute, 1 minute; both Video Upscale steps (the video stream) one frame, 9.96 s: 7 Topaz units and 10 s",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 9.92
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "f",
+          "type": "face-swap",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "f",
+          "targetHandle": "video"
+        },
+        {
+          "source": "f",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "videoSfx": 15,
+          "videoMask": 15,
+          "videoDepth": 11,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 10
+        },
+        "alone": {
+          "videoSfx": 15,
+          "videoMask": 15,
+          "videoDepth": 11,
+          "pitchTempo": 1,
+          "dubbing": 1,
+          "topaz": 7,
+          "nodaroUpscale": 10
+        }
+      }
+    },
+    {
+      "name": "73. Lip Sync on OmniHuman 2.0 with no audio wired, its data carrying audioDurationSec 9.5 (a length the node measured at its last run, or one an API or MCP write set): a field of the node's data, so never below the 15 s minimum: 15 s",
+      "steps": [
+        "lipSync"
+      ],
+      "stepData": {
+        "lipSync": {
+          "audioDurationSec": 9.5
+        }
+      },
+      "nodes": [],
+      "edges": [],
+      "expected": {
+        "whole": {
+          "lipSync": 15
+        },
+        "alone": {
+          "lipSync": 15
+        }
+      }
+    },
+    {
+      "name": "73b. The same with audioDurationSec 1 (an API write): 15 s, the minimum — never the 4 s the field alone would quote",
+      "steps": [
+        "lipSync"
+      ],
+      "stepData": {
+        "lipSync": {
+          "audioDurationSec": 1
+        }
+      },
+      "nodes": [],
+      "edges": [],
+      "expected": {
+        "whole": {
+          "lipSync": 15
+        },
+        "alone": {
+          "lipSync": 15
+        }
+      }
+    },
+    {
+      "name": "73c. The same with audioDurationSec 20: above the minimum, as set: 20 s",
+      "steps": [
+        "lipSync"
+      ],
+      "stepData": {
+        "lipSync": {
+          "audioDurationSec": 20
+        }
+      },
+      "nodes": [],
+      "edges": [],
+      "expected": {
+        "whole": {
+          "lipSync": 20
+        },
+        "alone": {
+          "lipSync": 20
+        }
+      }
+    },
+    {
+      "name": "73d. A wired 4 s MP3 upload with the node's data carrying audioDurationSec 1: the wired audio is what plays, read as it is, unfloored: 4 s (the model's own minimum)",
+      "steps": [
+        "lipSync"
+      ],
+      "handles": {
+        "lipSync": "audio"
+      },
+      "stepData": {
+        "lipSync": {
+          "audioDurationSec": 1
+        }
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a4.mp3",
+            "metadata": {
+              "durationSeconds": 4
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "lipSync": 4
+        },
+        "alone": {
+          "lipSync": 4
+        }
+      }
+    },
+    {
+      "name": "74. AI Avatar in audio mode on a 10 s MP3 upload: the audio its run plays, at the length recorded for it — the 10 s bucket its run holds",
+      "steps": [
+        "aiAvatar"
+      ],
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 10
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "aiAvatar": 10
+        },
+        "alone": {
+          "aiAvatar": 10
+        }
+      }
+    },
+    {
+      "name": "74b. The same on a 300 s upload: the 360 s bucket",
+      "steps": [
+        "aiAvatar"
+      ],
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 300
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "aiAvatar": 360
+        },
+        "alone": {
+          "aiAvatar": 360
+        }
+      }
+    },
+    {
+      "name": "74c. The same on a 700 s upload: the 600 s bucket, the most a run holds (the worker trims the audio to 600 s)",
+      "steps": [
+        "aiAvatar"
+      ],
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 700
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "aiAvatar": 600
+        },
+        "alone": {
+          "aiAvatar": 600
+        }
+      }
+    },
+    {
+      "name": "74d. The same on an upload whose length was not recorded: nothing knows it before the run, so the 120 s default, a minimum",
+      "steps": [
+        "aiAvatar"
+      ],
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "aiAvatar": 120
+        },
+        "alone": {
+          "aiAvatar": 120
+        }
+      }
+    },
+    {
+      "name": "74e. The same on a Text to Speech made in the run: a voice made again has no length before the run, so the 120 s default, a minimum",
+      "steps": [
+        "aiAvatar"
+      ],
+      "nodes": [
+        {
+          "id": "t",
+          "type": "text-to-speech",
+          "data": {
+            "text": "Hello there."
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "t",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "aiAvatar": 120
+        },
+        "alone": {
+          "aiAvatar": 120
+        }
+      }
+    },
+    {
+      "name": "74f. A Voice Changer of a 9.9 s recording, made in the run: its planned length plus the 0.15 s a made file can run past it (AI Avatar holds every started second, no grace): 10.05 s, 11 s, the 15 s bucket",
+      "steps": [
+        "aiAvatar"
+      ],
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 9.9
+            }
+          }
+        },
+        {
+          "id": "v",
+          "type": "voice-changer",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "v",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "v",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "aiAvatar": 15
+        },
+        "alone": {
+          "aiAvatar": 15
+        }
+      }
+    },
+    {
+      "name": "74g. A Dubbing of a 9.7 s recording: a dub runs a quarter second past its input, 9.95 s, the 10 s bucket",
+      "steps": [
+        "aiAvatar"
+      ],
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 9.7
+            }
+          }
+        },
+        {
+          "id": "d",
+          "type": "dubbing",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "d",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "d",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "aiAvatar": 10
+        },
+        "alone": {
+          "aiAvatar": 10
+        }
+      }
+    },
+    {
+      "name": "74h. A Dubbing of a 9.8 s recording: 10.05 s, the 15 s bucket",
+      "steps": [
+        "aiAvatar"
+      ],
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 9.8
+            }
+          }
+        },
+        {
+          "id": "d",
+          "type": "dubbing",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "target": "d",
+          "targetHandle": "audio"
+        },
+        {
+          "source": "d",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "aiAvatar": 15
+        },
+        "alone": {
+          "aiAvatar": 15
+        }
+      }
+    },
+    {
+      "name": "74i. Text mode with an audio wired: priced by its script as before (600 characters: about 50 s, the 60 s bucket), the audio not read",
+      "steps": [
+        "aiAvatar"
+      ],
+      "stepData": {
+        "aiAvatar": {
+          "speechMode": "text",
+          "script": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "voiceId": "v1"
+        }
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 300
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "a",
+          "targetHandle": "@input"
+        }
+      ],
+      "expected": {
+        "whole": {
+          "aiAvatar": 60
+        },
+        "alone": {
+          "aiAvatar": 60
+        }
+      }
+    },
+    {
+      "name": "74j. Audio mode with no audio node to play (its own link): nothing knows its length before the run, the 120 s default, a minimum",
+      "steps": [
+        "aiAvatar"
+      ],
+      "stepData": {
+        "aiAvatar": {
+          "audioUrl": "https://cdn.example/own.mp3"
+        }
+      },
+      "nodes": [],
+      "edges": [],
+      "expected": {
+        "whole": {
+          "aiAvatar": 120
+        },
+        "alone": {
+          "aiAvatar": 120
+        }
+      }
+    },
+    {
+      "name": "74k. Nothing wired, the 300 s upload picked in the node's settings: the engines play different audio — a workflow, app or API run (the server) plays the picked node, at its 360 s bucket; the editor's own Run plays only a wired audio, so its figure is the 120 s default, a minimum (the run measures what it plays)",
+      "steps": [
+        "aiAvatar"
+      ],
+      "stepData": {
+        "aiAvatar": {
+          "selectedAudioNodeId": "a"
+        }
+      },
+      "nodes": [
+        {
+          "id": "a",
+          "type": "upload-audio",
+          "data": {
+            "url": "https://cdn.example/a.mp3",
+            "metadata": {
+              "durationSeconds": 300
+            }
+          }
+        }
+      ],
+      "edges": [],
+      "expected": {
+        "whole": {
+          "aiAvatar": {
+            "editor": 120,
+            "server": 360
+          }
+        },
+        "alone": {
+          "aiAvatar": {
+            "editor": 120,
+            "server": 360
+          }
         }
       }
     }

@@ -132,6 +132,11 @@ vi.mock("@/lib/storage.js", () => ({
   uploadFileToR2: mocks.mockUploadFileToR2,
 }))
 
+const pitchTempoProbe = vi.hoisted(() => ({
+  streams: vi.fn(async (_path: string) => ({ hasAudio: true, hasVideo: false })),
+  pictureSec: vi.fn(async (_path: string): Promise<number | undefined> => undefined),
+}))
+
 vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   createWorkDir: mocks.mockCreateWorkDir,
   downloadFile: mocks.mockDownloadFile,
@@ -139,6 +144,10 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   cleanupWorkDir: mocks.mockCleanupWorkDir,
   probeVideoSource: mocks.mockProbeVideoSource,
   BROWSER_SAFE_VIDEO_ARGS: mocks.BROWSER_SAFE_VIDEO_ARGS,
+  // Pitch & Tempo runs its real engine here (only ffmpeg is a mock): its file's streams and picture length.
+  BIG_MEDIA_DOWNLOAD_LIMITS: {},
+  probeMediaStreams: pitchTempoProbe.streams,
+  getVideoStreamDuration: pitchTempoProbe.pictureSec,
   // Real values (re-exported from the pure `ffmpeg-timeouts.ts`; apply-edl's
   // liveness budget reads that leaf directly, so this mock cannot skew it).
   DEFAULT_FFMPEG_TIMEOUT_MS: 10 * 60 * 1000,
@@ -1630,6 +1639,29 @@ describe("transcode-video handler", () => {
 
     const args = mocks.mockRunFfmpeg.mock.calls[0][0]
     expect(args[args.indexOf("-b:a") + 1]).toBe("128k")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// pitch-tempo
+// ---------------------------------------------------------------------------
+
+describe("pitch-tempo handler: the length the run was held for", () => {
+  const handler = ffmpegHandlers["pitch-tempo"]
+
+  it("an input measured a hair past the 30-minute cap (1800.03 s) is cut to the cap: -t 1800 in the render", async () => {
+    const job = makeJob("pitch-tempo", { audioUrl: "https://cdn.example.com/talk.mp3", semitones: 2, duration_seconds: 1800.03 })
+    await handler(job as never, makeCtx())
+    const args = mocks.mockRunFfmpeg.mock.calls[0]![0] as string[]
+    expect(args.slice(args.indexOf("-t"), args.indexOf("-t") + 2)).toEqual(["-t", "1800"])
+  })
+
+  it("an input within the cap, or a job with no measured length, is rendered whole: no -t", async () => {
+    for (const data of [{ duration_seconds: 1800 }, {}]) {
+      mocks.mockRunFfmpeg.mockClear()
+      await handler(makeJob("pitch-tempo", { audioUrl: "https://cdn.example.com/talk.mp3", semitones: 2, ...data }) as never, makeCtx())
+      expect(mocks.mockRunFfmpeg.mock.calls[0]![0]).not.toContain("-t")
+    }
   })
 })
 

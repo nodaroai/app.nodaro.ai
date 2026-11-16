@@ -18,7 +18,7 @@
  * itself, so an administrator's retune moves the quote and the charge together.
  */
 import { VIDEO_UTIL_PRICING, assembleNarratedVideoCredits } from "@nodaro/shared/credits"
-import { combineVideosRunFields, loopVideoRunFields, trimVideoRunFields, UNREADABLE_CLIP_FPS, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, videoUtilityUnitsOf } from "@nodaro/render-rules"
+import { combineVideosRunFields, loopVideoRunFields, trimVideoRunFields, UNREADABLE_CLIP_FPS, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_READING, videoUtilityUnitsOf, type VideoUtilityStepType } from "@nodaro/render-rules"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 import type { ClipLengthReading } from "./video-utility-probe.js"
 
@@ -109,10 +109,11 @@ export function combineVideosTooManyClipsMessage(count: number): string {
  * The length a measured video-utility job reads each clip at — the one its
  * worker joins or cuts by: Combine Videos each clip's video stream
  * (`getVideoStreamDuration`, where it joins), Trim and Loop the container. The
- * charge before a run and the render's check read the same.
+ * charge before a run and the render's check read the same, and so does the
+ * quote before a run: one table (`VIDEO_UTILITY_READING`, @nodaro/render-rules).
  */
 export function videoUtilityClipReading(jobName: string): ClipLengthReading {
-  return jobName === "combine-videos" ? "video-stream" : "container"
+  return Object.hasOwn(VIDEO_UTILITY_READING, jobName) ? VIDEO_UTILITY_READING[jobName as VideoUtilityStepType] : "container"
 }
 
 /** The clips a measured video-utility request hands its run, in order: Trim and Loop its `videoUrl`, Combine Videos its `videoUrls`. */

@@ -13,6 +13,7 @@ import { DIRECTION_KEYS, getRegisteredSubjectKeys } from "@nodaro/prompts/prompt
 import { redactPrivateJobData, redactPrivateJobOutput } from "../../public-job-data.js"
 import { jobRowProviderWords } from "../../provider-words.js"
 import { failureGuidance } from "./_job-error.js"
+import { statedName } from "../deployment-name.js"
 import { isPreviewRender } from "../../preview-render.js"
 
 /** The public asset URL of a job's output — whichever per-type key it used. */
@@ -203,7 +204,8 @@ export function jobView(row: JobRowLike): JobView {
     ...outputSizeOf(out),
     outputData: out,
     input: jobInputView(row.input_data),
-    errorMessage: row.error_message ?? null,
+    // The platform's words about the failure, in the deployment's own name (deployment-name.ts).
+    errorMessage: row.error_message == null ? null : statedName(row.error_message),
     // The provider's words as an MCP reader (never an admin one) may read them:
     // null where the deployment keeps them for its admins (lib/provider-words.ts).
     errorDetail: jobRowProviderWords(row, false).error_detail ?? null,
@@ -219,7 +221,7 @@ export function jobView(row: JobRowLike): JobView {
   if (status === "failed" || status === "cancelled") {
     const g = failureGuidance({ error_message: row.error_message ?? null, error_hint: row.error_hint })
     view.retryable = g.retryable
-    view.guidance = g.guidance
+    view.guidance = statedName(g.guidance)
     if (g.suggestedProvider) view.suggestedProvider = g.suggestedProvider
   } else if (status === "pending_review") {
     view.retryable = false

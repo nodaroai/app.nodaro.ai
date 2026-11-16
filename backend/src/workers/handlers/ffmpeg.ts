@@ -611,14 +611,16 @@ const handleAudioFx: HandlerFn = async function handleAudioFx(job, ctx) {
 // refusal (no audio track, ffmpeg without librubberband) is a
 // DeterministicJobError: failed and refunded once, never retried.
 const handlePitchTempo: HandlerFn = async function handlePitchTempo(job, ctx) {
-  const { audioUrl, videoUrl, semitones, tempo, preserveFormants } = job.data as {
-    jobId: string; audioUrl?: string; videoUrl?: string; semitones?: number; tempo?: number; preserveFormants?: boolean
+  const { audioUrl, videoUrl, semitones, tempo, preserveFormants, duration_seconds: measuredSec } = job.data as {
+    jobId: string; audioUrl?: string; videoUrl?: string; semitones?: number; tempo?: number; preserveFormants?: boolean; duration_seconds?: number
   }
   console.log(`[worker] pitch-tempo ${ctx.jobId} (semitones=${semitones ?? 0}, tempo=${tempo ?? 1})`)
   const { outputPath, inputType } = await pitchTempo({
     audioUrl,
     videoUrl,
     ...normalizePitchTempoSettings({ semitones, tempo, preserveFormants }),
+    // The length the run was held for: one a hair past the cap is cut to it.
+    ...(typeof measuredSec === "number" && Number.isFinite(measuredSec) ? { measuredSec } : {}),
   })
   await setJobProgress(job, ctx.jobId, 80)
   const r2Url = await uploadFileToR2(outputPath, ctx.jobId, inputType, ctx.jobUserId)

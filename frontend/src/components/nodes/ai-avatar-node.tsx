@@ -21,7 +21,8 @@ import { CachedImage } from "@/components/ui/cached-image"
 import type { AiAvatarData } from "@/types/nodes"
 import { isValidAiAvatarConnection } from "@/lib/video-producer-handles"
 import { isVisualPickerType } from "@/lib/parameter-picker-types"
-import { aiAvatarCreditIdOf } from "@nodaro/render-rules"
+import { aiAvatarQuoteCreditId } from "@nodaro/render-rules"
+import { useAiAvatarQuotedAudioSec } from "@/hooks/use-ai-avatar-quote"
 import { AiAvatarSetupBody } from "./ai-avatar/ai-avatar-setup-body"
 import { AiAvatarNewRunToggle } from "./ai-avatar/new-run-toggle"
 
@@ -72,11 +73,14 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
     useResultAspectRatio(id, results, activeIndex)
 
   // Exact-bucket reserve id from the shared single source of truth (mirrors
-  // cinematic-avatar-node), the server's own (`aiAvatarCreditIdOf`): it always
+  // cinematic-avatar-node), the server's own (`aiAvatarQuoteCreditId`): it always
   // returns a seeded id (∈ AI_AVATAR_RESERVE_IDS), so the cost preview never
   // hits the 503 price-not-configured trap the old hand-built `:max` id caused,
-  // and never reads a probed length the node's data carries.
-  const creditModelId = aiAvatarCreditIdOf(nodeData as unknown as Record<string, unknown>)
+  // and never reads a probed length the node's data carries. In audio mode, the
+  // bucket of the audio the Run plays as the editor knows it, else the
+  // 120-second default (a minimum): the Run button's rule (`getModelIdentifier`).
+  const quotedAudioSec = useAiAvatarQuotedAudioSec(id)
+  const creditModelId = aiAvatarQuoteCreditId(nodeData as unknown as Record<string, unknown>, quotedAudioSec)
   const credits = useModelCredits(creditModelId, 9)
 
   useEffect(() => {

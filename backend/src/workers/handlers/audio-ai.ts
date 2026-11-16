@@ -48,6 +48,8 @@ import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import { classifyMediaSource, isVideoMode } from "../../providers/video/media-source.js"
 import { startDubbing, waitForDubbing, pollDubbingStatus, downloadDubbedMedia, DUBBING_MAX_DURATION_SEC } from "../../providers/elevenlabs/dubbing.js"
+import { withinCapGrace } from "../../lib/measured-cap-grace.js"
+import { CLIP_PRICE_GRACE_SEC } from "@nodaro/shared/media"
 import { deliverDubbedMedia } from "../../lib/dubbing-delivery.js"
 import { startDubbingProjectLanguage } from "../../providers/elevenlabs/dubbing-project.js"
 import { effectiveDubbedSeconds } from "../../lib/dubbing-span.js"
@@ -1218,8 +1220,10 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
       videoMode = meta.content_type.startsWith("video/")
     }
     if (typeof meta?.duration === "number" && meta.duration > 0 && !d.probedDurationSec) {
-      const effective = effectiveDubbedSeconds(Math.ceil(meta.duration), d.startTime, d.endTime) ?? Math.ceil(meta.duration)
-      if (effective > DUBBING_MAX_DURATION_SEC) {
+      // The span as read, unrounded: a hair past the cap (the 0.05 s the hold forgives) is the cap's, as before the
+      // run (`dubbingSpanAtCap`) — the dub has started, so nothing is cut; it is settled to what was dubbed.
+      const effective = effectiveDubbedSeconds(meta.duration, d.startTime, d.endTime) ?? meta.duration
+      if (!withinCapGrace(effective, DUBBING_MAX_DURATION_SEC, CLIP_PRICE_GRACE_SEC)) {
         throw new Error(
           `The span to dub is ${Math.ceil(effective / 60)} minutes; the maximum is ${DUBBING_MAX_DURATION_SEC / 60} minutes. ` +
           `Trim the clip, or set a start/end window to dub part of it.`,

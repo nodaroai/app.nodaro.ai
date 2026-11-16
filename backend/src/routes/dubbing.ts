@@ -14,6 +14,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { hasCredits } from "../lib/config.js"
 import { dubbingBaseCredits, dubbingReservePlan, effectiveDubbedSeconds, measureDubbingSourceSec } from "../lib/dubbing-duration.js"
+import { dubbingSpanAtCap } from "../lib/dubbing-span.js"
 import { isImportRefusal, requireImportAllowed } from "../lib/import-gate.js"
 import { importJobFields, importViaOf } from "../lib/import-via.js"
 import { dubbingSourceIsImport } from "../lib/dubbing-source.js"
@@ -27,7 +28,7 @@ import { rawBodyRecord } from "../lib/run-model.js"
 // the length actually dubbed at delivery (lib/dubbing-duration.ts).
 import { DUBBING_MAX_DURATION_SEC, DUBBING_FALLBACK_SECONDS } from "../providers/elevenlabs/dubbing.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
-import { dropClientMeasureFields } from "../lib/request-measure.js"
+import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
 
 export { DUBBING_MAX_DURATION_SEC, DUBBING_FALLBACK_SECONDS }
 
@@ -182,7 +183,11 @@ export async function probeDubbingDurationPreHandler(req: FastifyRequest, reply:
     return void reply.code(422).send({ error: { code: "unreadable_dubbing_source", message: "Could not read the video duration. Import the source again before dubbing into Hebrew." } })
   }
   const effective = effectiveDubbedSeconds(probedSec, startTime, endTime)
-  if (effective != null && effective > DUBBING_MAX_DURATION_SEC) {
+  // A span a hair past the cap (the grace its hold forgives) is held at 30 minutes and dubbed through a window cut
+  // to the cap; a language dubbed as a project takes no window, so it keeps the strict cap.
+  const projectLane = typeof body.targetLanguage === "string" && usesDubbingProject(body.targetLanguage)
+  const capped = effective == null ? undefined : dubbingSpanAtCap(effective, startTime, endTime, projectLane)
+  if (effective != null && !capped) {
     return void reply.code(413).send({
       error: {
         code: "media_duration_exceeds_limit",
@@ -191,8 +196,14 @@ export async function probeDubbingDurationPreHandler(req: FastifyRequest, reply:
       },
     })
   }
-  if (effective != null) req.probedDuration = effective
+  if (capped) {
+    req.probedDuration = capped.spanSec
+    if (capped.window) setRequestMeasure(req, DUBBING_CAP_WINDOW, capped.window)
+  }
 }
+
+/** The request measure the window cutting a span a hair past the cap is kept under (server-side only). */
+const DUBBING_CAP_WINDOW = "dubbingCapWindow"
 
 /** A body field named like the measured span (the name the route once stashed it under): dropped, never read. */
 const DUBBING_SPAN_FIELD = "__probedDurationSec"
@@ -252,6 +263,8 @@ export async function submitDubbing(
   }
 
   const mcpClient = extractMcpClient(req.body)
+  // A span a hair past the cap: the window the preHandler cut it to (server-side, never the body's).
+  const capWindow = requestMeasure<{ readonly startTime: number; readonly endTime: number }>(req, DUBBING_CAP_WINDOW)
 
   const { data: job, error } = await insertJob(req, {
       workflow_id: extractWorkflowId(req.body),
@@ -265,6 +278,7 @@ export async function submitDubbing(
       // ceiling, to be settled to the length actually dubbed.
       input_data: {
         ...buildJobInputData(parsed.data, "dubbing"),
+        ...(capWindow ? { startTime: capWindow.startTime, endTime: capWindow.endTime } : {}),
         ...extraInput,
         ...(typeof stashedDuration === "number" ? { probedDurationSec: stashedDuration } : { reservedCeiling: true }),
       },
@@ -289,8 +303,8 @@ export async function submitDubbing(
     numSpeakers,
     disableVoiceCloning,
     dropBackgroundAudio,
-    startTime,
-    endTime,
+    startTime: capWindow?.startTime ?? startTime,
+    endTime: capWindow?.endTime ?? endTime,
     highestResolution,
     useProfanityFilter,
     targetAccent,

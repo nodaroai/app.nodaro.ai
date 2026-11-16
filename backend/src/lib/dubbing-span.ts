@@ -18,6 +18,8 @@ import { DUBBING_MAX_DURATION_SEC } from "../providers/elevenlabs/dubbing.js"
 import { baseCreditCostFor } from "./credit-base-cost.js"
 import { dubbingModelIdentifier } from "./dubbing-model.js"
 import { dubbingHeldMinutes } from "@nodaro/render-rules"
+import { CLIP_PRICE_GRACE_SEC } from "@nodaro/shared/media"
+import { withinCapGrace } from "./measured-cap-grace.js"
 
 // The span and its whole minutes: ONE rule with the server's run estimate and
 // the editor, which quote a dub before it runs (`@nodaro/render-rules`).
@@ -28,6 +30,41 @@ export { effectiveDubbedSeconds, dubbingHeldMinutes, dubbingMinutes } from "@nod
 export interface DubbingReservePlan {
   readonly seconds: number
   readonly ceiling: boolean
+}
+
+/** A measured span held to the 30-minute cap: what the run holds, and the window that cuts it to the cap. */
+export interface DubbingSpanAtCap {
+  /** The span the run holds and dubs: at most the cap. */
+  readonly spanSec: number
+  /** A span a hair past the cap: the window that cuts it to the cap (never wider than one the request set). */
+  readonly window?: { readonly startTime: number; readonly endTime: number }
+}
+
+/**
+ * A measured span (`effectiveDubbedSeconds`) held to the 30-minute cap
+ * ({@link DUBBING_MAX_DURATION_SEC}): up to the 0.05 s its hold and charge
+ * forgive past a minute (`CLIP_PRICE_GRACE_SEC`) past the cap, accepted —
+ * held at 30 minutes, the top of its quote — and, when what would be dubbed
+ * runs past the cap, dubbed through a window that cuts it to the cap (the
+ * start, or 0, to that plus the cap, never past an end the request set).
+ * Further past the cap: `undefined`, the route's refusal. A dub into a
+ * language dubbed as a project takes no window, so it keeps the strict cap
+ * (`strict`).
+ *
+ * What is dubbed, from the span `effectiveDubbedSeconds` read (the source's
+ * whole length unless the request set both ends): a full window's span; from
+ * a start only, the source less that start; to an end only, up to that end.
+ */
+export function dubbingSpanAtCap(spanSec: number, startTime: number | undefined, endTime: number | undefined, strict = false): DubbingSpanAtCap | undefined {
+  if (spanSec <= DUBBING_MAX_DURATION_SEC) return { spanSec }
+  if (strict || !withinCapGrace(spanSec, DUBBING_MAX_DURATION_SEC, CLIP_PRICE_GRACE_SEC)) return undefined
+  const dubbedSec = startTime != null && endTime != null ? spanSec
+    : startTime != null ? spanSec - startTime
+    : endTime != null ? Math.min(endTime, spanSec)
+    : spanSec
+  if (dubbedSec <= DUBBING_MAX_DURATION_SEC) return { spanSec: DUBBING_MAX_DURATION_SEC }
+  const start = startTime ?? 0
+  return { spanSec: DUBBING_MAX_DURATION_SEC, window: { startTime: start, endTime: Math.min(endTime ?? Number.POSITIVE_INFINITY, start + DUBBING_MAX_DURATION_SEC) } }
 }
 
 export function dubbingReservePlan(spanSec: number | undefined): DubbingReservePlan {

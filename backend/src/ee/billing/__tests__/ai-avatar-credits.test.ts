@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { STATIC_CREDIT_COSTS, CREDIT_COSTS } from "../credits.js"
+import { STATIC_CREDIT_COSTS, CREDIT_COSTS, CreditsService, getNodeModelIdentifier } from "../credits.js"
 import { AI_AVATAR_RESERVE_IDS, AI_AVATAR_DURATION_BUCKETS, type AiAvatarEngine, type AiAvatarResolution } from "@nodaro/shared/credits"
 import { CREDIT_BASE_USD } from "@nodaro/shared/models"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits, aiAvatarUsdCost } from "../../../lib/pricing/ai-avatar-cost.js"
@@ -57,6 +57,27 @@ describe("CREDIT_COSTS[ai-avatar]", () => {
   it("is defined (required for workflow estimation by node type)", () => {
     expect(CREDIT_COSTS["ai-avatar"]).toBeDefined()
     expect(typeof CREDIT_COSTS["ai-avatar"]).toBe("function")
+  })
+
+  it("is the id the server's run estimate prices the node on: the bucket its run holds, never the bare node type (priced nowhere: 0)", () => {
+    const prices = { base: (id: string) => STATIC_CREDIT_COSTS[id], charge: (_id: string, base: number) => base }
+    const lineOf = (data: Record<string, unknown>) => {
+      let line: number | undefined
+      CreditsService.estimateWorkflowCreditsAt(prices as never, [{ id: "c", type: "ai-avatar", data }], [], undefined, (id, credits) => { if (id === "c") line = credits })
+      return line
+    }
+    for (const data of [
+      { speechMode: "audio", engine: "avatar-iv", resolution: "720p" },
+      { speechMode: "audio", engine: "avatar-v", resolution: "1080p" },
+      { speechMode: "text", script: "x".repeat(600), engine: "avatar-iv", resolution: "720p" },
+      {},
+    ]) {
+      expect(getNodeModelIdentifier({ type: "ai-avatar", data })).toBe(CREDIT_COSTS["ai-avatar"]!(data))
+      expect(lineOf(data)).toBe(STATIC_CREDIT_COSTS[CREDIT_COSTS["ai-avatar"]!(data)])
+      expect(lineOf(data)).toBeGreaterThan(0)
+    }
+    // Audio mode, nothing measured before the run: the 120-second hold.
+    expect(getNodeModelIdentifier({ type: "ai-avatar", data: { speechMode: "audio" } })).toBe("heygen-avatar-iv:720p:120s")
   })
 })
 

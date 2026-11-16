@@ -242,6 +242,31 @@ describe("the editor's dialog for it", () => {
     openInsufficientCreditsDialog({ setInsufficientCreditsData, setShowInsufficientCredits: vi.fn() }, { required: 176, available: 0 })
     expect(setInsufficientCreditsData).toHaveBeenCalledWith({ required: 176, available: 0, tier: "free" })
   })
+
+  it("a refusal whose figure is the run's estimate says so under the figures, in the dialog's note", () => {
+    const setInsufficientCreditsData = vi.fn()
+    openInsufficientCreditsDialog({ setInsufficientCreditsData, setShowInsufficientCredits: vi.fn() }, { required: 932, available: 100, estimate: true })
+    expect(setInsufficientCreditsData).toHaveBeenCalledWith({
+      required: 932,
+      available: 100,
+      tier: "free",
+      note: "This is the run's estimate. The run is charged what it uses.",
+    })
+  })
+
+  it("the server's estimate flag reaches the dialog: read off the refusal, beside its figures", async () => {
+    serverAnswers(402, { error: { code: "insufficient_credits", message: "This episode is estimated at about 932 credits; your balance is 100." }, required: 932, balance: 100, estimate: true })
+    const { ctx, dialog } = editorCtx()
+    await runNode(ctx)
+    expect(dialog).toHaveBeenCalledWith({ required: 932, available: 100, estimate: true })
+  })
+
+  it("a flag that is not exactly true is no estimate", async () => {
+    serverAnswers(402, { error: { code: "insufficient_credits", message: "Insufficient credits" }, required: 176, balance: 0, estimate: "yes" })
+    const { ctx, dialog } = editorCtx()
+    await runNode(ctx)
+    expect(dialog).toHaveBeenCalledWith({ required: 176, available: 0 })
+  })
 })
 
 /**

@@ -6068,6 +6068,7 @@ export const ptBR: ChromeDict = {
   "credits.insufficientDescription": "Você precisa de {required} créditos, mas só tem {available}.",
   "credits.currentBalanceLabel": "Saldo atual",
   "credits.requiredLabel": "Necessário",
+  "credits.estimateNote": "Este valor é uma estimativa da execução. A execução é cobrada pelo que usar de fato.",
   "credits.shortByLabel": "Faltam",
   "credits.shortByAmount": "{n} créditos",
   "credits.currentPlanLabel": "Plano atual",

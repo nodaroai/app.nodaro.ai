@@ -126,6 +126,44 @@ a transcript and an earlier analysis passed back as data.
 there they are not listed at all. A deployment with link imports on (the
 default) judges nothing here.
 
+### A deployment's own name {#deployment-name}
+
+A deployment can run under its own name (`brand.productName` in its
+[surface profile](../deployment.md#surface-profile-nodaro_surface_profile)).
+There, nothing the MCP server says names the platform. Its name in
+`initialize` (`serverInfo`), every tool title and description, every refusal,
+the documents the document tools serve (`get_node_skill`, `get_recipe`,
+`start_workflow_editor`, the directors' guides, the Studio and Recast guides)
+and the widget pages say the deployment's name where a name is needed:
+
+- A product named after the platform is said the way the deployment's own
+  screens say it: Nodaro Motion is "Motion" (its engines "Motion Prism" and
+  "Motion Pulse"), and the house upscalers carry the deployment's name
+  ("Example Image Upscale"). A product the screens have no word for is said
+  generically: Studio, the Video Director, the Film Director, the Workflow
+  Editor, and the Cloud edition.
+- A job or asset id is just an id ("a job id").
+- No sentence sends you to the platform's site. A mention of one of its hosts
+  is dropped, `get_recast_status` and `import_recast_script` answer
+  `appUrl: null`, and an example picture in a guide has an `example.com`
+  address. A link built from the deployment's own addresses (an editor link, an
+  upload page) is the deployment's.
+- `list_models` names the platform's own models' maker and family with the
+  deployment's name, and its `family` filter takes that name.
+- What stays as it is: identifiers a client stores or sends (tool names, none
+  of which carries the platform's name; model ids such as
+  `nodaro-image-upscale`; a maker's `id`; the widgets' resource URIs
+  `ui://nodaro/…`; error codes; package names such as `@nodaro/shared`), the
+  pictures of a picker catalog that shows the platform's pictures, and the
+  media hosts a widget may load pictures from.
+- What you wrote is never rewritten. A workflow, a prompt or a gallery row
+  that names the platform is read, and written back, exactly as it is. The
+  platform's own words saved with a run (a failed job's or run's message, its
+  guidance, `diagnose_run`'s remediation) are said in the deployment's name.
+
+A deployment that keeps the platform's name answers every reply as documented
+here.
+
 ---
 
 ## Workspace tools
@@ -867,7 +905,7 @@ prompt with no questions round-trip.
 | `image_overlay` | Place 1–12 layers on a base image, pixel-exactly — local, deterministic, no AI. Base as `image_url` or `image_asset_id`; each `layers[]` item has a `kind` (`image` — `url` or `asset_id`; `text` — a `text` object: content, `fontId`, `fontWeight`, `fontSize` as % of base height, colour, align, outline, background box; `qr` — a `qr` object; `shape` — a `shape` object: rect / rounded / pill / circle / ribbon / triangle / diamond / hexagon / star / burst / arrow) plus `anchor` (9 positions, default `center`), `x` / `y` (offset in % of the base width / height; negative on a right / bottom anchor moves inward), `width` (% of base width, default 25; height follows the layer's aspect unless `height` is set), `opacity`, `rotation` (degrees), `blend` (`over` / `multiply` / `screen`), `fit`, `shadow`, `rounded_corners`, `z_index` (stacking order; default = array order). Optional `canvas` (`width`, `height`, `background_color`) + `base_fit` change the output size; `variants` renders extra platform sizes (any of the 12 platform ids, all at once if you like; 2.2 credits<!-- credits-rate: image-overlay@0.2 --> each on top of the 11-credit<!-- credits-rate: image-overlay --> base, priced as one charge) and the job's output carries them as `variants[]` (`{ id, label, width, height, url }`); `qr_text` fills every QR layer with `qr.fromInput: true` (the node's QR link handle — a List column gives one code per row); `mask_mode` (`around` default / `layers` / `outside` / `none`) + `mask_spread` shape the mask the job also emits as `maskUrl` (white = may change — the ring an AI finish repaints); the output also carries `width` / `height`; `output_format` `png` (default) / `jpg` / `webp`. SVG logos are rasterised crisp at the target size. |
 | `suggest_overlay_placement` | Ask a vision model WHERE one overlay layer should sit on a base image (`image_url` or `image_asset_id`): it reads the picture and keeps the element off the faces, the subject and the busiest texture. Answers `anchor`, `x` / `y` and `width` in `image_overlay`'s own percent units plus a one-sentence `reason` — apply it by passing those values on a layer to `image_overlay`; nothing is composited here. Optional `intent` (what the element is, in words), `layer_aspect` (its width / height, 1 = square) and `safe_area` (`x`, `y`, `w`, `h` as fractions of the canvas — a platform preset's always-visible region, which the placement is kept inside). Billed as one image-to-text call. |
 | `image_to_text` | Extract a text description (caption/transcription) from an image using a vision model. Accepts `llmModel`, `reasoning_effort`, and the Advanced-mode trio (`advanced_mode` / `temperature` / `max_tokens`) — the call is charged per token at the model's rate (≈6 credits<!-- credits: image-to-text:claude-sonnet-5.5 --> typical on the default Claude Sonnet 5.5; [LLM model rates](../pricing/llm-models.md)), and Advanced mode (Gemini and Claude models) at the provider's own API rate. |
-| `generate_text` | Ask any LLM, with media for it to read: `image_urls` (up to 5), `video_urls` (up to 3, read with their sound), `audio_urls` (up to 3) and `file_urls` (PDF links). An image, video or audio entry is a link or a Nodaro id (a job's output or an upload). The answer comes back whole in the tool's own result (`{ jobId, text }`): no job to poll, nothing cut, no workflow to build. Video and audio need a Gemini model; a PDF needs a model that reads documents. To have a model judge sound alone, pass the recording in `audio_urls` rather than its video. `video_fps` (above 0, up to 24; 1 when left out) samples more frames of each video and needs `advanced_mode: true` on a Gemini model. Accepts `system_prompt`, `llmModel`, `reasoning_effort` and the Advanced-mode trio (`advanced_mode` / `temperature` / `max_tokens`); the call is charged per token at the model's rate ([LLM model rates](../pricing/llm-models.md)). It runs the [Generate Text node](../nodes/ai-text/llm-chat.md)'s route, `POST /v1/llm-chat/generate`. |
+| `generate_text` | Ask any LLM, with media for it to read: `image_urls` (up to 5), `video_urls` (up to 3, read with their sound), `audio_urls` (up to 3) and `file_urls` (PDF links). An image, video or audio entry is a link or a Nodaro id (a job's output or an upload). The answer comes back whole in the tool's own result (`{ jobId, status: "completed", text }`), nothing cut, no workflow to build. A call still running after 40 s answers `{ jobId, status: "running" }` instead, because an MCP client cuts a longer call off: `wait_for_job` with that id then gives the whole answer in `outputData.generatedText`. The call keeps running and is charged once, so it is never to be sent again. Video and audio need a Gemini model; a PDF needs a model that reads documents. To have a model judge sound alone, pass the recording in `audio_urls` rather than its video. `video_fps` (above 0, up to 24; 1 when left out) samples more frames of each video and needs `advanced_mode: true` on a Gemini model. Accepts `system_prompt`, `llmModel`, `reasoning_effort` and the Advanced-mode trio (`advanced_mode` / `temperature` / `max_tokens`); the call is charged per token at the model's rate ([LLM model rates](../pricing/llm-models.md)). It runs the [Generate Text node](../nodes/ai-text/llm-chat.md)'s route, `POST /v1/llm-chat/generate`. |
 | `generate_script` | Generate a short video script from a prompt (LLM-backed; outputs scene-by-scene copy). Optional `scene_count` (1–20, default 5), `tone` (≤ 200 characters), `target_duration` (5–600 s, default 60), `style_guide` (how the script should read and look: voice, visual style, pacing — sent to the model with the prompt) and `model` (`gemini` default, `claude`, `gpt`). |
 | `save_image_defaults` | Persist preferred `model`, `aspect_ratio`, `resolution` and `quality` on your account as the defaults of later `generate_image`, `modify_image` and `image_to_image` calls. A value the call names wins; a saved one fills in what the call leaves out (a saved `aspect_ratio: "auto"` works as a named one); with neither, the tool's own default applies. There is one saved image `model` for all three, and the in-card star saves whichever model made the picture: an edit (`modify_image`, `image_to_image`) uses it only when it is a model an edit runs, and `generate_image` only when it is a model that generates (so after a star on an edit's result, `generate_image` runs its own default). A `presetId` call does not read them. Pass `null` for a field to clear it. |
 
@@ -2272,7 +2310,9 @@ credits beside it:
   named `credits` then holds an amount in the unit); a text reply that states
   amounts adds `unit` (the unit's word), `unitLabels` (its word per interface
   language, when the deployment gives one) and `decimals`. The conversion rate
-  is never sent.
+  is never sent. A sentence (a description's price hint, a quote, a refusal, a
+  document) states amounts with the unit's English word when the deployment
+  gives one (`unitLabels.en`), else with `unit`.
 - **A refusal for want of balance** names no figure. Where the deployment
   manages the balance (no self-serve purchase, or an external wallet), it says
   so and tells you to have the user ask the deployment's operator, never to

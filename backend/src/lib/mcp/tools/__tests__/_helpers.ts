@@ -51,7 +51,7 @@ export function judgedOffer(viewer: AvailabilityViewer = USER_VIEWER): ToolOffer
 /** A bare server with that offer in front of it, as `buildMcpServer` installs it. */
 export function buildJudgedServer(offer: ToolOffer = judgedOffer()): McpServer {
   const server = buildServer()
-  installToolOffer(server, { userId: "u1", offer })
+  installToolOffer(server, { session: { userId: "u1" }, offer })
   return server
 }
 

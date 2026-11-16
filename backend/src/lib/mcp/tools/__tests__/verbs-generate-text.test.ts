@@ -1,10 +1,13 @@
 /**
  * generate_text (POST /v1/llm-chat/generate): Generate Text with media to
- * read, answered whole in the call's own result. Listed beside image_to_text,
- * unlisted while the deployment does not offer the Generate Text node.
+ * read, answered whole in the call's own result. A call still running after
+ * its wait answers with its job id instead (an MCP client cuts a longer call
+ * off), and the route goes on. Listed beside image_to_text, unlisted while the
+ * deployment does not offer the Generate Text node.
  */
 import Fastify, { type FastifyInstance } from "fastify"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { announceCreatedJob } from "../../../job-submission-context.js"
 import { _resetRegistry } from "../../tasks.js"
 import { buildJudgedServer, callTool, executeSession, listTools, stubRoute } from "./_helpers.js"
 
@@ -34,12 +37,14 @@ vi.mock("../../supabase.js", () => ({
 }))
 
 const { registerVerbs } = await import("../verbs.js")
+const { GENERATE_TEXT_INLINE_WAIT_MS, setGenerateTextWaitsForTesting } = await import("../verbs-generate-text.js")
 
 beforeEach(() => {
   _resetRegistry()
   h.denied = new Set()
   h.resolves = []
 })
+afterEach(() => setGenerateTextWaitsForTesting(null))
 
 function serverWith(fastify?: FastifyInstance, session = executeSession()) {
   // The offer funnel in front, as buildMcpServer installs it: what is withheld is not listed.
@@ -57,7 +62,7 @@ describe("generate_text", () => {
     const result = await callTool(serverWith(fastify), "generate_text", { prompt: "Two plus two?" })
     expect(result.isError).toBeUndefined()
     expect(result.content).toEqual([{ type: "text", text: "Four." }])
-    expect(result.structuredContent).toEqual({ jobId: "j-text", text: "Four." })
+    expect(result.structuredContent).toEqual({ jobId: "j-text", status: "completed", text: "Four." })
     expect(received.body).toEqual({
       systemPrompt: "",
       userInput: "Two plus two?",
@@ -154,6 +159,118 @@ describe("generate_text", () => {
     const { fastify } = stubRoute("POST", "/v1/llm-chat/generate", { jobId: "j-empty" })
     const result = await callTool(serverWith(fastify), "generate_text", { prompt: "p" })
     expect(result.isError).toBe(true)
+  })
+
+  describe("a call that outlasts the wait", () => {
+    /**
+     * A Generate Text route that creates "j-slow" and answers only when
+     * released. `announceAfterMs`: when it tells its caller the job (0 = at
+     * once, null = never, as a call still waiting for its slot).
+     */
+    function slowRoute(announceAfterMs: number | null) {
+      let release: () => void = () => {}
+      const held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const state = { finished: false }
+      const fastify = Fastify()
+      fastify.addHook("preHandler", async (req) => {
+        ;(req as { userId?: string }).userId = req.headers["x-internal-user-id"] as string
+      })
+      fastify.post("/v1/llm-chat/generate", async (req) => {
+        if (announceAfterMs !== null) {
+          if (announceAfterMs > 0) await new Promise((r) => setTimeout(r, announceAfterMs))
+          announceCreatedJob(req, "j-slow")
+        }
+        await held
+        state.finished = true
+        return { jobId: "j-slow", generatedText: "The late answer." }
+      })
+      return { fastify: fastify as unknown as FastifyInstance, release: () => release(), state }
+    }
+
+    it("waits 40 s for the answer in production", () => {
+      // Under the 45 s wait_for_job waits, itself under the 60 s an MCP client gives a call.
+      expect(GENERATE_TEXT_INLINE_WAIT_MS).toBe(40_000)
+    })
+
+    it("answers with the job id while the call is still running, and the route goes on to finish", async () => {
+      setGenerateTextWaitsForTesting({ inlineMs: 40, startGraceMs: 40 })
+      const { fastify, release, state } = slowRoute(0)
+      const result = await callTool(serverWith(fastify), "generate_text", { prompt: "List every defect.", video_urls: ["https://cdn.example/cut.mp4"] })
+      expect(result.isError).toBeUndefined()
+      expect(result.structuredContent).toEqual({ jobId: "j-slow", status: "running" })
+      const text = result.content[0]?.text ?? ""
+      expect(text).toContain('wait_for_job { job_id: "j-slow" }')
+      expect(text).toContain("outputData.generatedText")
+      expect(text).toContain("Do not call generate_text again")
+      // The tool has answered; the call it made is still the route's to finish.
+      expect(state.finished).toBe(false)
+      release()
+      await expect.poll(() => state.finished).toBe(true)
+    })
+
+    it("an answer inside the wait is still the whole answer, with no hand-off", async () => {
+      setGenerateTextWaitsForTesting({ inlineMs: 2_000, startGraceMs: 40 })
+      const { fastify, release } = slowRoute(0)
+      setTimeout(release, 30)
+      const result = await callTool(serverWith(fastify), "generate_text", { prompt: "p" })
+      expect(result.structuredContent).toEqual({ jobId: "j-slow", status: "completed", text: "The late answer." })
+      expect(result.content).toEqual([{ type: "text", text: "The late answer." }])
+    })
+
+    it("a job created after the wait, inside the grace, is handed on", async () => {
+      setGenerateTextWaitsForTesting({ inlineMs: 30, startGraceMs: 2_000 })
+      const { fastify, release } = slowRoute(80)
+      const result = await callTool(serverWith(fastify), "generate_text", { prompt: "p" })
+      expect(result.isError).toBeUndefined()
+      expect(result.structuredContent).toEqual({ jobId: "j-slow", status: "running" })
+      release()
+    })
+
+    it("an answer that arrives inside the grace is returned whole", async () => {
+      setGenerateTextWaitsForTesting({ inlineMs: 30, startGraceMs: 2_000 })
+      const { fastify, release } = slowRoute(null)
+      setTimeout(release, 80)
+      const result = await callTool(serverWith(fastify), "generate_text", { prompt: "p" })
+      expect(result.structuredContent).toEqual({ jobId: "j-slow", status: "completed", text: "The late answer." })
+    })
+
+    it("no job by the end of the grace: says the call has not started and runs once, never an empty success", async () => {
+      setGenerateTextWaitsForTesting({ inlineMs: 30, startGraceMs: 30 })
+      const { fastify, release, state } = slowRoute(null)
+      const result = await callTool(serverWith(fastify), "generate_text", { prompt: "p" })
+      expect(result.isError).toBe(true)
+      expect(result.structuredContent).toBeUndefined()
+      const text = result.content[0]?.text ?? ""
+      expect(text).toContain("has not started yet")
+      expect(text).toContain("Do not call it again")
+      expect(text).toContain('list_jobs { types: ["llm-chat"] }')
+      release()
+      await expect.poll(() => state.finished).toBe(true)
+    })
+
+    it("a refusal that arrives after the hand-off harms nothing: the job carries its own outcome", async () => {
+      setGenerateTextWaitsForTesting({ inlineMs: 30, startGraceMs: 30 })
+      let fail: () => void = () => {}
+      const held = new Promise<void>((resolve) => {
+        fail = resolve
+      })
+      const fastify = Fastify()
+      fastify.addHook("preHandler", async (req) => {
+        ;(req as { userId?: string }).userId = req.headers["x-internal-user-id"] as string
+      })
+      fastify.post("/v1/llm-chat/generate", async (req, reply) => {
+        announceCreatedJob(req, "j-fails")
+        await held
+        return reply.status(502).send({ error: { code: "llm_error", message: "The model did not answer." } })
+      })
+      const result = await callTool(serverWith(fastify as unknown as FastifyInstance), "generate_text", { prompt: "p" })
+      expect(result.structuredContent).toEqual({ jobId: "j-fails", status: "running" })
+      fail()
+      // Nothing to assert on the late 502 but that it throws nowhere: a tick for it to land.
+      await new Promise((r) => setTimeout(r, 20))
+    })
   })
 
   it("is listed with its media inputs, and unlisted where the deployment does not offer Generate Text", async () => {

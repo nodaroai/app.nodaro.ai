@@ -1,5 +1,6 @@
 import { normalizeObjectSchema } from "@modelcontextprotocol/sdk/server/zod-compat.js"
 import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js"
+import { asJsonText, fieldFormByName, judgedSubtreeValues, readsAsAddress, stringsIn, type AddressForm } from "../address-fields.js"
 import { linkImportRefusal } from "../link-imports.js"
 import { collectAssetMediaUrls, collectInputMediaUrls, collectNodeInputMediaUrls, type BundleAssets } from "../media-portability.js"
 
@@ -36,7 +37,8 @@ import { collectAssetMediaUrls, collectInputMediaUrls, collectNodeInputMediaUrls
  * ways and proves every judged argument refused.
  */
 
-export type AddressForm = "address" | "text" | "subtree" | "json"
+export type { AddressForm } from "../address-fields.js"
+export { readsAsAddress } from "../address-fields.js"
 
 export interface AddressArgument {
   /** Where it sits: `a.b`, `a[]` (each item), `a.*` (each value of a record); "" is the arguments themselves. */
@@ -104,20 +106,8 @@ export const ADDRESS_JUDGMENTS: Readonly<Record<string, Readonly<Record<string, 
 
 // ── Deriving the arguments from a schema ───────────────────────────────────
 
-/** A name's last word, as snake_case or camelCase writes it, a trailing number skipped (`audio_url_1` → `url`). */
-function lastWord(name: string): string {
-  const words = name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .split(/[_\-\s]+/)
-    .filter((w) => w && !/^\d+$/.test(w))
-  return (words.at(-1) ?? "").toLowerCase()
-}
-
-const ADDRESS_WORDS = new Set(["url", "urls", "uri", "uris", "href", "link", "links", "website", "homepage"])
-const MEDIA_WORDS = new Set([
-  "image", "images", "photo", "photos", "picture", "pictures", "video", "videos", "audio", "audios", "clip", "clips",
-  "media", "logo", "logos", "avatar", "avatars", "poster", "posters", "thumbnail", "thumbnails", "source", "sources", "file", "files",
-])
+// The name rule (`fieldFormByName`) and which values are judged (`readsAsAddress`)
+// live in `lib/address-fields.ts`, shared with the media-input funnel.
 const MENTIONS_ADDRESS = /\bURLs?\b|\blinks?\b|https?:/i
 /** String formats that can never hold an address. */
 const NOT_AN_ADDRESS_FORMAT = new Set(["uuid", "date-time", "date", "time", "email", "duration", "ipv4", "ipv6"])
@@ -152,10 +142,10 @@ export function addressArguments(schema: unknown): AddressArgument[] {
       if (Array.isArray(branches)) for (const b of branches) if (isSchema(b)) visit(b, path, name, desc)
     }
     if (stringTypes(s) && s.enum === undefined && s.const === undefined && !NOT_AN_ADDRESS_FORMAT.has(String(s.format))) {
-      const word = lastWord(name)
-      if (s.format === "uri" || ADDRESS_WORDS.has(word)) add(path, "address")
-      else if (word === "json") add(path, "json")
-      else if (MEDIA_WORDS.has(word) || MENTIONS_ADDRESS.test(desc)) add(path, "text")
+      const byName = fieldFormByName(name)
+      if (s.format === "uri" || byName === "address") add(path, "address")
+      else if (byName === "json") add(path, "json")
+      else if (byName === "text" || MENTIONS_ADDRESS.test(desc)) add(path, "text")
     }
     // An item keeps its array's name and description.
     if (isSchema(s.items)) visit(s.items, `${path}[]`, name, desc)
@@ -170,23 +160,6 @@ export function addressArguments(schema: unknown): AddressArgument[] {
   }
   if (isSchema(schema)) visit(schema, "", "", "")
   return [...found.values()].sort((a, b) => a.path.localeCompare(b.path) || a.form.localeCompare(b.form))
-}
-
-// ── Which values are judged ────────────────────────────────────────────────
-
-const FETCHED_SCHEME = /^(?:https?|wss?|ftp|file):/i
-const SCHEMELESS_HOST = /^(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}\.?|\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?(?:[/?#\\]|$)/i
-
-/** The value as a URL parser starts reading it: tabs and line breaks dropped, leading spaces and controls skipped. */
-function asParsed(value: string): string {
-  return value.replace(/[\t\n\r]/g, "").replace(/^[\u0000- ]+/, "")
-}
-
-/** Whether a string value of an argument of this form reads as a web address, and is judged. */
-export function readsAsAddress(value: string, form: AddressForm): boolean {
-  const v = asParsed(value)
-  if (FETCHED_SCHEME.test(v)) return true
-  return form === "address" && (/^[\\/]{2}/.test(v) || SCHEMELESS_HOST.test(v))
 }
 
 // ── Judging a call ─────────────────────────────────────────────────────────
@@ -210,37 +183,6 @@ function valuesAt(args: unknown, path: string): unknown[] {
     current = next
   }
   return current
-}
-
-/**
- * The value a string holds when a tool may read it as JSON — an array or an
- * object written as text (a reference list, an edit decision list); undefined
- * when it is not one.
- */
-function asJsonText(value: string): unknown {
-  const t = value.trim()
-  if (!t.startsWith("[") && !t.startsWith("{")) return undefined
-  try {
-    return JSON.parse(t) as unknown
-  } catch {
-    return undefined
-  }
-}
-
-/** Every string anywhere inside `value`, the value itself included, and inside any JSON text among them. */
-function stringsIn(value: unknown): string[] {
-  const out: string[] = []
-  const stack: unknown[] = [value]
-  while (stack.length > 0) {
-    const v = stack.pop()
-    if (typeof v === "string") {
-      out.push(v)
-      const parsed = asJsonText(v)
-      if (parsed !== undefined) stack.push(parsed)
-    } else if (Array.isArray(v)) stack.push(...v)
-    else if (isSchema(v)) stack.push(...Object.values(v))
-  }
-  return out
 }
 
 /** A media field's value is judged as an address argument's is (schemeless and `//` forms included), not only an `http(s)://` one. */
@@ -283,7 +225,7 @@ function argumentRefusal(arg: AddressArgument, judgment: AddressJudgment | undef
       judgment && "reader" in judgment
         ? readAddresses(judgment.reader, value)
         : arg.form === "subtree"
-          ? stringsIn(value).filter((s) => readsAsAddress(s, "text"))
+          ? judgedSubtreeValues(value)
           : typeof value === "string"
             ? // A list or an object the tool reads from text (`coerceStringArray`) is judged inside too.
               [value, ...stringsIn(asJsonText(value))].filter((s) => readsAsAddress(s, arg.form))

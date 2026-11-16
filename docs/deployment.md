@@ -151,7 +151,7 @@ here for each one anyway.
 | `NODE_ENV` | `development` | `production` in every image |
 | `UV_THREADPOOL_SIZE` | `16` in every image (Node's own default: `4`) | The size of Node's worker threadpool, which runs every DNS lookup (each new outbound connection, and the lookups of the hosts in a media link the server measures) beside file, crypto and compression work. A lookup cannot be cancelled, so a slow resolver holds its thread until it gives up. The server's lookups of a media link's hosts hold at most a quarter of the pool, so they can never stall the rest of the process. At Node's default of 4 that is a single lookup at a time, so set this when you run the backend outside the image. Read once when a process starts. |
 | `REDIS_URL` | `redis://localhost:6379` | BullMQ queues + caches (bundled: `redis://redis:6379`) |
-| `PREVIEW_STOP_RULE_ENABLED` | off | Turns on the preview stop rule: a run [stops at an Apply EDL render set to **Preview**](nodes/processing-video/apply-edl.md#a-run-stops-at-a-preview) (or at a [Speaker View](nodes/processing-video/speaker-view.md) set to Preview, the same way), and nothing downstream of it runs until [Render final](nodes/processing-video/apply-edl.md#render-final) renders it at Final or the render is set to **Final**; a run nobody can review (a trigger, an API or MCP call, a present link, an app) that would run such a render is refused with `preview_review_required`. Only `true` or `1` enables it. The API reads it, and the same value is written into `/config.js` at boot for the editor, so one variable drives both and no rebuild is needed. Off, every surface behaves as it did before the rule: nothing is gated, refused or left out of an estimate. On or off, the price stored when an app, component or template is published is not shortened by the rule: it counts the whole workflow at its saved settings (with an app's creator fee) plus each Render final and the nodes after it (without the fee; none for a component) — see [app view modes](app-view-modes.md#render-final). It counts every run the editor's estimate counts: a node's Repeat count, each of several providers on one node, and the runs a List or Content Ideas wire fans out. It never quotes less than a run is charged with the flag off (aside from Edit Plan's pass on a server that still charges it on the length step its recording rounds up to rather than per started minute, and a step priced by its input's length on a video other than the episode whose length is not known before the run — a second recording such as an intro card, or the output of a step with no length before the run (a YouTube or other video link the user cannot replace, a GIF to Video, the output of Render Video or Manual Edit, a VEO or Runway extension, a Suno music video, a narrated step whose audio is wired in or is a generated voice whose script comes from a source the listing cannot bound (not a literal text, an input with a character limit, or a Prompt or AI Writer node), or a list or sub-workflow) — which is listed at a default length), and can quote more with it on. An input list the app's user fills is listed per further item, a Trim, Loop or Combine Videos node on the episode recording the user replaces, or on a render or another such step whose length follows it, per minute of it, and a Video SFX node on any recording the user replaces, or on a step whose length follows it, at its fixed 300-second price. On a generated video (Generate Video, Image to Video or Text to Video) each of the four is listed at the length the generation will render (its longest clip on auto) plus 0.15 seconds (a Video SFX, 0.1 seconds), since each is charged the length its run measures. On the output of any other step that delivers a video it is listed at the length that step passes on, plus the same for each clip a step makes (a quarter second for a Dubbing, an Audio Isolation or a PixVerse V6 extension): a step that keeps its input whole its input's length, a lip sync or an avatar its audio's (at most what its model takes), an extension its input plus the seconds it adds. With the flag off, an app's Render final route re-renders at Final, and its page offers Render final on a preview, as the editor does. It also decides how the built-in podcast templates (Tighten Episode, Clip Pack, Multicam Cut, Trailer + Formats, and [Vertical speaker clip](nodes/processing-video/speaker-view.md#the-vertical-speaker-clip-template), whose render is Speaker View) are written when the server syncs them at boot: on, with their render at **Preview** and the price of a run plus its Render final; off, with their render at **Final** and the price of that run, as before ([podcast templates](nodes/processing-video/apply-edl.md#podcast-templates)). Restart to apply |
+| `PREVIEW_STOP_RULE_ENABLED` | off | Turns on the preview stop rule: a run [stops at an Apply EDL render set to **Preview**](nodes/processing-video/apply-edl.md#a-run-stops-at-a-preview) (or at a [Speaker View](nodes/processing-video/speaker-view.md) set to Preview, the same way), and nothing downstream of it runs until [Render final](nodes/processing-video/apply-edl.md#render-final) renders it at Final or the render is set to **Final**; a run nobody can review (a trigger, an API or MCP call, a present link, an app) that would run such a render is refused with `preview_review_required`. Only `true` or `1` enables it. The API reads it, and the same value is written into `/config.js` at boot for the editor, so one variable drives both and no rebuild is needed. Off, every surface behaves as it did before the rule: nothing is gated, refused or left out of an estimate. On or off, the price stored when an app, component or template is published is not shortened by the rule: it counts the whole workflow at its saved settings (with an app's creator fee) plus each Render final and the nodes after it (without the fee; none for a component) — see [app view modes](app-view-modes.md#render-final). It counts every run the editor's estimate counts: a node's Repeat count, each of several providers on one node, and the runs a List or Content Ideas wire fans out. It never quotes less than a run is charged with the flag off (aside from Edit Plan's pass on a server that still charges it on the length step its recording rounds up to rather than per started minute, and a step priced by its input's length on a video other than the episode whose length is not known before the run — a second recording such as an intro card, or the output of a step with no length before the run (a YouTube or other video link the user cannot replace, a GIF to Video, the output of Render Video or Manual Edit, a VEO or Runway extension, a Suno music video, a narrated step whose audio is wired in or is a generated voice whose script comes from a source the listing cannot bound (not a literal text, an input with a character limit, or a Prompt or AI Writer node), or a list or sub-workflow) — which is listed at a default length, an [AI Avatar](nodes/ai-video/ai-avatar.md#reserve--refund) on audio whose length is not known before the run, which is listed at its 2-minute minimum, and a [Lip Sync](nodes/ai-video/lip-sync.md#credit-cost) on OmniHuman 2.0 on such audio, which is listed at its 15-second minimum, since a run of either measures the audio and is charged for its length), and can quote more with it on. An input list the app's user fills is listed per further item, a Trim, Loop or Combine Videos node on the episode recording the user replaces, or on a render or another such step whose length follows it, per minute of it, and a Video SFX node on any recording the user replaces, or on a step whose length follows it, at its fixed 300-second price. On a generated video (Generate Video, Image to Video or Text to Video) each of the four is listed at the length the generation will render (its longest clip on auto) plus 0.15 seconds (a Video SFX, 0.1 seconds), since each is charged the length its run measures. On the output of any other step that delivers a video it is listed at the length that step passes on, plus the same for each clip a step makes (a quarter second for a PixVerse V6 extension, and for a Dubbing or an Audio Isolation except on a Combine Videos, which measures the picture a dub keeps): a step that keeps its input whole its input's length, a lip sync or an avatar its audio's (at most what its model takes), an extension its input plus the seconds it adds. With the flag off, an app's Render final route re-renders at Final, and its page offers Render final on a preview, as the editor does. It also decides how the built-in podcast templates (Tighten Episode, Clip Pack, Multicam Cut, Trailer + Formats, and [Vertical speaker clip](nodes/processing-video/speaker-view.md#the-vertical-speaker-clip-template), whose render is Speaker View) are written when the server syncs them at boot: on, with their render at **Preview** and the price of a run plus its Render final; off, with their render at **Final** and the price of that run, as before ([podcast templates](nodes/processing-video/apply-edl.md#podcast-templates)). Restart to apply |
 | `COLLECTIONS_MAX_PER_USER` | unset (no ceiling) | Community / Business: how many [collections](features/collections.md) one account may have. On Nodaro Cloud the caps come from the plan and this is ignored. Restart to apply |
 | `COLLECTIONS_MAX_RECORDS_PER_COLLECTION` | unset (no ceiling) | Community / Business: how many records one collection may hold; past it the oldest records are removed after each write. On Nodaro Cloud the caps come from the plan and this is ignored. Restart to apply |
 | `SCENE3D_ADVANCED_ENABLED` | disabled | Enables an installed Advanced scene-authoring engine in Cloud, and with it the [3D Render Pro](nodes/composition/pro-3d-render.md) node. Only `true` or `1` enables it; an absent engine — or one that does not implement the Pro operation — remains unavailable regardless. Community and Business have no engine to enable, so the flag changes nothing there: `GET /v1/nodes` omits `pro-3d-render`, `GET /v1/3d-scene/capabilities` reports `advanced: null` and `pro.available: false`, and a request sent anyway is refused with `503 SCENE_CAPABILITY_UNAVAILABLE` rather than quietly served by the Basic lane. The Basic 3D nodes are unaffected on every edition. 3D Render Pro additionally requires a configured credit price for `pro-3d-render`; without one the route answers `503 price_not_configured` before reserving anything. |
@@ -462,8 +462,37 @@ That's it. The next sections cover production hardening.
 ## 3. Reverse proxy + HTTPS
 
 The container already runs Caddy internally on port 3000 — it serves the
-frontend statics and proxies `/v1/*` to the Fastify backend on port
-9000.
+frontend statics and proxies `/v1/*` and `/health` to the Fastify backend on
+port 9000.
+
+`GET /health` on port 3000 is the container's health address, and the API
+server answers it:
+
+| The API server is | `/health` and its other spellings answer | A path under it (`/health/x`) answers |
+|---|---|---|
+| up | `200` with `{"status":"healthy","timestamp":…,"version":…}` | `401`, from the API (no route there is public) |
+| down, or restarting (it is restarted inside the container 10 seconds after it exits) | `502`, from Caddy | `502` |
+| hung: it accepts the connection and does not answer | `504`, from Caddy, after 5 seconds | `504` |
+
+It is never the app's page. The other spellings of the address read the same
+status: a trailing slash (`/health/`), `;` parameters (`/health;x`), either
+one percent-encoded (`/health%2f`), another letter case (`/HEALTH`) and dot
+segments (`//health`, `/x/../health`). Caddy hands each of them to the API as
+`/health`, keeping the query string. A path under it (`/health/x`) is not the
+address and never reads as healthy. Every answer in the table carries one
+`Cache-Control: no-store` (the API's own value is dropped), so no cache or CDN
+in front of the install keeps a "healthy". Before Caddy starts nothing answers on port
+3000: while migrations run on a self-host boot, then while `start.sh` waits
+for the API, up to 30 seconds (each of its reads gives up after 5 seconds, so
+an API that is hung at boot holds Caddy back for at most about three minutes).
+A read that succeeds is not written to the API's log; one that fails is.
+
+The bundled compose file's health check reads this address: the `nodaro`
+container turns healthy when its API first answers, and unhealthy after five
+failed reads in a row, 10 seconds apart, each given 5 seconds (failures in its
+first 60 seconds do not count). Docker does not restart a container for being
+unhealthy. Point any other health check or uptime monitor at this address too,
+with a time limit of its own.
 
 Caddy accepts the `X-Forwarded-*` headers only from peers in the private
 ranges (`127.0.0.1/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`,
@@ -583,8 +612,9 @@ handle @other_app {
 - A file holds directives of the site itself (`handle`, `redir`, …), not a
   site of its own. Caddy orders `handle` blocks by their paths, so a route
   here is answered before the editor's own catch-all.
-- Choose paths that do not overlap the editor's: the API (`/v1/*`), the auth
-  and storage proxies (`/supabase/*`, `/storage/*`), `/.well-known/*`,
+- Choose paths that do not overlap the editor's: the API (`/v1/*`, and the
+  health address `/health` with `/health/*` and `/health;*`), the auth and
+  storage proxies (`/supabase/*`, `/storage/*`), `/.well-known/*`,
   `/config.js`, `/assets/*` and the editor's own pages. Keep an app's files
   under its own path too.
 - Match a path exactly and with `/*` (`/other /other/*`), never by a bare
@@ -661,6 +691,15 @@ the editor behind **Edit video**. Unset or empty means the hosted editor; an
 result on the canvas and no video output card in a presentation or a published
 app offers it. See [Editing video](./community-edition-quickstart.md#editing-video)
 for what it needs.
+
+The embedded audio editor is a runtime value too: `AUDIOMASS_URL`, the editor
+behind **Edit** on an audio output card. There is no hosted one, so unset or
+empty means no editor: the action stays, and choosing it opens a panel that
+explains what to set (in the editor's Present tab, a shared presentation and a
+published app alike). An `http(s)` URL points at your own
+[AudioMass](https://github.com/nodaroai/audiomass). `off` (or `none`, `false`,
+`disabled`) removes the action everywhere: no audio output card offers it. See
+[Editing audio](./community-edition-quickstart.md#editing-audio).
 
 Other build-time frontend env vars (all `VITE_*`, all inlined by Vite at
 build time):
@@ -1142,7 +1181,13 @@ optional; each array empty = "keep the default"):
 - `siblings.apps`: `[{ "label": "...", "url": "..." }]` — replaces the Nodaro
   family links in the product switcher
 - `brand.productName`: replaces the wordmark and the document title (absent =
-  the static `<title>` shipped in `index.html` is left untouched)
+  the static `<title>` shipped in `index.html` is left untouched). The MCP
+  server says it too: its name, its tool descriptions, its refusals, the
+  documents its tools serve and its widget pages name the deployment instead
+  of the platform, and a product named after the platform is said the way the
+  deployment's screens say it (Nodaro Motion is "Motion"). Tool names and other
+  identifiers a client stores stay as they are
+  ([MCP: a deployment's own name](mcp/tools.md#deployment-name)).
 - `brand.wordmark`: short lockup text rendered **beside your own logo mark** in
   the sidebar header — for a deployment that ships its own `/logo-*.svg` files
   and wants a tile+text lockup (e.g. productName `"Acme Studio"` with wordmark
@@ -1321,6 +1366,10 @@ optional; each array empty = "keep the default"):
   `MCP_ENABLED=true` and `PUBLIC_URL` set to the deployment's http(s) address.
   See [MCP by path](#mcp-by-path-no-dedicated-mcp-host) for what a client
   sees. Backend-only: stripped from `/config.js`.
+- `imports.inputLinks`: what a media input given as a link to another site
+  does where link imports are off — see
+  [Media inputs given as links](#media-inputs-given-as-links-importsinputlinks).
+  Backend-only: stripped from `/config.js`.
 - `developerApps.manage`: who may create, change, rotate the secret of and
   delete a **developer app** (an OAuth client, `/v1/developer-apps`).
   `"owner"` (the default, and what an absent key means): every signed-in
@@ -1380,7 +1429,9 @@ optional; each array empty = "keep the default"):
     a warning, an entry with an unknown language or no word is dropped alone,
     and neither touches the unit. They reach `/config.js` and the `display`
     objects of the balance and price reads (`display.unitLabels`, for the
-    client to pick from). Unset = the one label in every language.
+    client to pick from). The MCP tools write English, so their sentences use
+    the `en` word when there is one; their `unit` field stays `unitLabel`.
+    Unset = the one label in every language.
   - `billing.costTab`: `"hidden"` keeps the canvas Cost tab off even with a
     billing provider registered (default `"inherit"`).
   - `billing.sidebarCard`: `"hidden"` removes the sidebar credit-balance card
@@ -1660,11 +1711,12 @@ answers from another directory is refused by the file check below. A
   backslash (`%2F`, `%5C`) and no control character; decoded, it has no empty,
   `.` or `..` segment (`%2e%2e` counts as `..`);
 - it names a file inside a folder (`/<folder>/…/<name>`), and that first
-  folder, compared decoded and without regard to case, is not one the
-  platform owns. Those are the folders the bundled proxy answers with anything
-  but a file of the site (`v1`, `.well-known`, `mcp`, `og`, `app`, `embed`,
-  `present`, `storage`, `supabase`, `assets`), the folders the platform's own
-  build ships (`picker-art`, `preset-previews`, `face-mesh-art`, `fonts`,
+  folder, read up to any `;` (`/health;x` is the `health` folder), compared
+  decoded and without regard to case, is not one the platform owns. Those
+  are the folders the bundled proxy answers with anything
+  but a file of the site (`v1`, `.well-known`, `mcp`, `health`, `og`, `app`,
+  `embed`, `present`, `storage`, `supabase`, `assets`), the folders the
+  platform's own build ships (`picker-art`, `preset-previews`, `face-mesh-art`, `fonts`,
   `notifications`, `projects`, `demo-assets`), and `cdn-cgi`, which a CDN in
   front of the site answers itself;
 - its file name ends in `.png` or `.webp`, the formats of the platform's own
@@ -1812,6 +1864,116 @@ out-of-credits wording):
 NODARO_SURFACE_PROFILE={"brand":{"productName":"Example Studio","description":"Workflows by Example Studio","favicon":["/brand/favicon.svg","/brand/favicon.png"]},"locale":{"default":"he","offered":["he","en"]},"strings":{"flow":{"en":{"credits.allowanceExceeded":"Your Example Studio allowance is used up. Ask your administrator for more."},"he":{"credits.allowanceExceeded":"נגמרה לכם המכסה. פנו למנהל המערכת שלכם."}}}}
 ```
 
+### Media inputs given as links (`imports.inputLinks`)
+
+A deployment that turned link imports off (`imports.links: false`, below) has
+not reviewed media from other sites, and its network may block those hosts
+for its users. With link imports off, the media a request takes IN — a
+reference picture, a source clip, a sound, a mask, a page to scrape — given as
+a link to another site can follow the same switch, in two steps:
+
+```json
+{ "imports": { "links": false, "inputLinks": "report" } }
+```
+
+- `"allow"` (the default, and what an absent key means): exactly as before —
+  the link reaches the server's fetch or the provider.
+- `"report"`: every request goes on exactly as before, and each link that
+  `"refuse"` would refuse is recorded (below).
+- `"refuse"`: refused like an import, with the same
+  `403 link_imports_disabled` and its message, before anything is created,
+  reserved, fetched or sent to a provider.
+
+Any other value reads as `"refuse"`, with a warning. The key means nothing
+while `imports.links` is not `false` (it is kept, with a warning), and nothing
+changes for a deployment that does not set it. It is backend-only: stripped
+from `/config.js`. The Community edition does not read the profile.
+
+**What is judged.** The rule is the switch's own: a link that is not a file of
+this deployment's own storage (`R2_PUBLIC_URL`, `R2_PUBLIC_FALLBACK_DOMAIN`, or
+the bundled storage path) is outside, read strictly (a form another URL reader
+could read differently, or a path through the content network's image
+transform, counts as outside). It is asked in two places:
+- **Every API request with a body**, to any route, before any of the route's
+  own steps (its credit check, its length probes, its holds): the
+  generation, processing and length-probe routes, entity writes (characters,
+  creatures, faces, locations, objects, moodboards, saved posts), the
+  scrapers, site capture and trend radar, publishing and scheduling a post, a
+  published app's run, a component's run and a self-hosted install's relay.
+  Its fields are read by name, as an MCP call's arguments are (`…Url`,
+  `…Urls`, `…image`, `…video`, `…source`; a list's items as the list). A
+  prompt, an id, a JSON text and an endpoint the request posts to (a
+  webhook, a callback, a redirect) are not judged.
+- **Every node a workflow run executes**, the runs of published apps,
+  components, use-case nodes and sub-workflows included, and again on a
+  retry or a resume that runs the node: its own media settings and what its
+  wires hand it, before anything is read or created, and what its build adds
+  from elsewhere (an entity's reference pictures) before its credits are
+  held. Under `"refuse"` the node fails with the code `link_imports_disabled`;
+  nodes of the same stage that already started finish and keep their charge,
+  nodes not yet started do not start, and the run fails.
+
+Not judged: a file of the deployment's own storage (an upload, a generated
+result), a `data:` URI, a node's own earlier results, a voice's sample saved
+on an entity (played by the browser), the post link a content recipe cites
+(never fetched), a collection record's link and media
+(kept as data, and judged at the node a run hands them to), stored graphs,
+templates and app listings (judged when they run), an administrator's routes
+(`/v1/admin/…`), calls from outside systems about their own state (webhook
+triggers, provider and payment callbacks), and any `GET` (the display proxy
+`GET /v1/image-proxy` included). MCP calls are refused by `imports.links:
+false` already, whatever this key says. The lists are held to the code by
+`backend/src/lib/__tests__/input-links-census.test.ts`.
+
+**What `"report"` records.** One server log line per judged link, with the
+route (or the workflow's node type), the field, the link's HOST only — never
+the address or its query — and the user:
+
+```
+[input-links] would-refuse route="POST /v1/trim-video" field=videoUrl host=media.example.org user=<user id>
+```
+
+and an admin report (Admin → App reports, kind `input-link-report`) at most
+once every five minutes per route or node type, field and host, with the
+number of links seen since the previous one. Under `"refuse"` the line says
+`refused` and the report's kind is `input-link-refused`.
+
+**From `"report"` to `"refuse"`.** Run `"report"` for long enough to cover the
+deployment's real use (its scheduled workflows included), then read the hosts
+the reports name. A host that is the deployment's own (an older media host, a
+second bucket) means those files are not under `R2_PUBLIC_URL`: every chain
+that uses them would be refused. Check before switching:
+- `R2_PUBLIC_URL` is set, in its normal form (lower-case host, no default port,
+  no trailing dot), and every saved result lives under it or under
+  `R2_PUBLIC_FALLBACK_DOMAIN`. A deployment that moved its media host reads
+  every result saved under the old one as another site's.
+- `"refuse"` also stops what takes links to other sites by design: the
+  scrapers, site capture, trend radar, saving a social post, and publishing a
+  post with a file from another site. That is the point of the switch, but its
+  users will notice.
+
+**Not safe to switch to `"refuse"` yet** for:
+- **The built-in tutorials** (Business edition). Their sample media lives on
+  the Nodaro CDN, which is another site for your deployment, so a tutorial's
+  first run is refused until its files are replaced with uploads. A tutorial
+  pack an operator ships (`NODARO_TUTORIAL_PACKS`) is safe when its media
+  lives on the deployment's own storage.
+- **A self-hosted install connected to the cloud** (the relay). Results the
+  cloud keeps on its own storage — a site capture where the install has no
+  storage of its own, the media of a social scrape, a Speaker View
+  thumbnail — are another site's for the install, and refused when a later
+  step uses them.
+- **Social scrapes' media** that could not be copied in (the scrape's deadline
+  or storage quota ran out, or the file could not be fetched): it stays at its
+  source and is refused when a later step uses it.
+- **Lottie overlays from the built-in catalog.** Their animations live on the
+  Nodaro CDN, another site for your deployment, so a render that uses one is
+  refused.
+- **Entities saved before the switch** with a reference picture from another
+  site: a workflow run refuses it when its build seats the picture, but a
+  direct generation route that reads the entity from the database (by its
+  id) still hands it to the provider.
+
 ### Keys read by client apps
 
 These keys are for the other products served from the same site as the
@@ -1881,16 +2043,14 @@ logo is dropped with a warning and the rest of `brand` is kept.
   id and an entity id stay allowed; a prompt is text, and a link inside one is
   not judged. See [Links to other sites](mcp/tools.md#links-to-other-sites).
 
-  Outside MCP, it does not, yet, refuse an outside URL given to a media-generation or
-  media-processing route as a source image, video or audio (`POST /v1/generate-video`'s
-  `imageUrl`, `POST /v1/trim-video`'s `videoUrl` and the like). Nor does it
-  cover the display proxy `GET /v1/image-proxy`, the scrapers and site capture
-  (`POST /v1/web-scrape`, `/v1/site-capture`, `/v1/meta-ads-scrape`,
-  `/v1/instagram-scrape`), the length probes `POST /v1/clip-length` and the
-  Seedance reference estimate, publishing or scheduling a post from an outside
-  file, or a self-hosted install's relay to the cloud. On such a deployment
-  those URLs still reach the provider or the deployment's own network, so its
-  network filter still answers for them.
+  Outside MCP, a media INPUT given as a link (a source image, video or audio
+  of a generation or processing route, an entity's reference pictures, a
+  length probe, a scraper's page, a post's media, a self-hosted install's
+  relay) follows it only where the deployment says so: see
+  [`imports.inputLinks`](#media-inputs-given-as-links-importsinputlinks).
+  Without that key those links still reach the provider or the deployment's
+  own network, so its network filter still answers for them. The display
+  proxy `GET /v1/image-proxy` is covered by neither.
 - `catalogs.images`: the pictures on picker options — `"default"` (the
   platform's), `"none"` or `"own"` (the deployment's own). Default
   `"default"`; any other value reads as `"none"`, with a warning.
@@ -2115,8 +2275,9 @@ To keep a self-hosted VM install updated over SSH, copy
 [`examples/deploy-host.yml`](../examples/deploy-host.yml) into your own
 repository's `.github/workflows/`, set the `DEPLOY_HOST`, `DEPLOY_USER` and
 `DEPLOY_SSH_KEY` secrets, and dispatch it. It reuses the published community
-image tag, runs `docker compose pull && up -d`, health-gates on `/health`, then
-prunes old layers. Never trigger production deploys on a branch push, and use
+image tag, runs `docker compose pull && up -d`, health-gates on `/health` (the
+API server's own answer, so the gate passes only once the new API is up; each
+read gives up after 5 seconds), then prunes old layers. Never trigger production deploys on a branch push, and use
 separate secret names per environment. It ships as an example, not a workflow in
 this repo — there are no deploy secrets where the public mirror runs.
 

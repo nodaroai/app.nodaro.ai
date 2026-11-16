@@ -63,6 +63,7 @@ import { probeImageSource } from "./image-source-probe.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 import { LIP_SYNC_MEASURE_SLOT_WAIT_MS, LIP_SYNC_RUN_MEASURE_SLOT_WAIT_MS, lipSyncMeasureSlots } from "./lip-sync-download-slots.js"
 import { safeUrlSchema } from "./url-validator.js"
+import { withinCapGrace } from "./measured-cap-grace.js"
 
 /**
  * The most bytes an audio file given to a per-second-rate lip-sync model may
@@ -169,9 +170,22 @@ export function lipSyncAudioPricingOf(provider: unknown): LipSyncAudioPricing | 
   return undefined
 }
 
-/** The longest audio a model's price check decodes: past it the audio is too long (a rate model) or priced at it (a bucketed one). */
+/** A model's audio cap: past it the audio is too long (a rate model, but for the hair below) or priced at it and trimmed to it (a bucketed one). */
 export function lipSyncAudioCapSec(pricing: LipSyncAudioPricing): number {
   return pricing.kind === "rate" ? pricing.rate.maxSeconds : pricing.maxSeconds
+}
+
+/**
+ * The longest audio a model's price check, and the worker, decode: its cap —
+ * for a rate model plus the 0.05 s its hold forgives past a whole second
+ * (`CLIP_PRICE_GRACE_SEC`): audio up to that past its maximum is held at the
+ * maximum, the top of its quote, and trimmed to it before it is sent
+ * (decided with the bucketed lane's trim). Past it, the decode stops
+ * (`overCap`): a rate model's audio is too long, a bucketed one's is priced at
+ * its cap. Both decodes read the same cap, so they bill the same bytes alike.
+ */
+export function lipSyncAudioDecodeCapSec(pricing: LipSyncAudioPricing): number {
+  return pricing.kind === "rate" ? pricing.rate.maxSeconds + CLIP_PRICE_GRACE_SEC : pricing.maxSeconds
 }
 
 /**
@@ -211,7 +225,8 @@ function bucketWithEdgeTolerance(sec: number): number {
  */
 export function lipSyncHeldSecondsOf(pricing: LipSyncAudioPricing, length: DecodedAudioLength): number | undefined {
   if (pricing.kind === "rate") {
-    if (length.overCap || length.seconds > pricing.rate.maxSeconds) return undefined
+    // A hair past the maximum (the grace its hold forgives) is held at the maximum, and trimmed to it before it is sent.
+    if (length.overCap || !withinCapGrace(length.seconds, pricing.rate.maxSeconds, CLIP_PRICE_GRACE_SEC)) return undefined
     // A hair past a whole second forgiven (`lipSyncHeldSeconds`, decided 2026-11-14); the quote reads the length exactly.
     return lipSyncHeldSeconds(pricing.rate, length.seconds)
   }
@@ -450,7 +465,7 @@ export async function checkLipSyncInputs(args: {
   return pricing.kind === "rate" ? checkRateModelInputs(pricing, label, args) : checkBucketModelAudio(pricing, label, args)
 }
 
-/** A per-second-rate model (OmniHuman 2.0): its image and its audio, refused past its maximum. */
+/** A per-second-rate model (OmniHuman 2.0): its image and its audio, refused past its maximum (a hair past it, the grace its hold forgives, is held at the maximum and trimmed to it). */
 async function checkRateModelInputs(
   pricing: Extract<LipSyncAudioPricing, { kind: "rate" }>,
   label: string,
@@ -473,7 +488,7 @@ async function checkRateModelInputs(
 
   const [image, audio] = await Promise.all([
     imageRefusal(label, rule, imageUrl),
-    measureAudio(audioUrl, rate.maxSeconds, rule, args.userId, args.slotWaitMs ?? LIP_SYNC_MEASURE_SLOT_WAIT_MS),
+    measureAudio(audioUrl, lipSyncAudioDecodeCapSec(pricing), rule, args.userId, args.slotWaitMs ?? LIP_SYNC_MEASURE_SLOT_WAIT_MS),
   ])
   if (image) return image
   if (audio.kind !== "measured") return audioRefusal(label, rule, audio)
@@ -509,7 +524,7 @@ async function checkBucketModelAudio(
   const unsafe = unsafeLinkRefusal(label, "audioUrl", args.audioUrl)
   if (unsafe) return unsafe
 
-  const audio = await measureAudio(args.audioUrl, pricing.maxSeconds, pricing.rule, args.userId, args.slotWaitMs ?? LIP_SYNC_MEASURE_SLOT_WAIT_MS)
+  const audio = await measureAudio(args.audioUrl, lipSyncAudioDecodeCapSec(pricing), pricing.rule, args.userId, args.slotWaitMs ?? LIP_SYNC_MEASURE_SLOT_WAIT_MS)
   if (audio.kind !== "measured") return audioRefusal(label, pricing.rule, audio)
   const { length } = audio
   return {

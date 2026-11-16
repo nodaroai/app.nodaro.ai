@@ -92,12 +92,40 @@ jobs:
         env:
           SHARED_HEADER_TESTS_REQUIRE_VITE: "1"
         run: node --test tools/__tests__/shared-header-resolver-build.test.mjs
+      # The install is handed a secret (NPM_TOKEN), so it runs the BASE
+      # branch's copy of its script, never the PR's: a PR must not be able to
+      # change code that runs with a secret (private-marker-check.yml does the
+      # same). The copy lands in an untracked subdirectory and is removed once
+      # the install has run.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.base_ref || github.ref_name }}
+          path: .gate-base
+          sparse-checkout: |
+            frontend/src/ee/shell/install-package.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: Install the pinned header (same script as the Dockerfile)
         env:
           VITE_EDITION: cloud
           VITE_SHARED_HEADER: "true"
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: sh frontend/src/ee/shell/install-package.sh "$GITHUB_WORKSPACE"
+        # The version is the PR's own pin, READ (never run) from its copy of
+        # the script, so a PR that moves the pin is checked against the header
+        # it pins; the base copy refuses anything but an exact version. Only
+        # while the base branch has no copy yet does the PR's own copy stand
+        # in, once. npm runs with --ignore-scripts inside it.
+        run: |
+          gate=.gate-base/frontend/src/ee/shell/install-package.sh
+          if [ ! -f "$gate" ] && [ -f frontend/src/ee/shell/install-package.sh ]; then
+            echo "::notice title=Shared header install::The base branch has no copy of the install script yet, so this PR's copy runs once."
+            gate=frontend/src/ee/shell/install-package.sh
+          fi
+          pin=$(sed -n 's/^PIN="\(.*\)"$/\1/p' frontend/src/ee/shell/install-package.sh)
+          status=0
+          SHARED_HEADER_PKG_VERSION="$pin" sh "$gate" "$GITHUB_WORKSPACE" || status=$?
+          rm -rf .gate-base
+          exit "$status"
       - name: The app's header props fit the package
         run: npx tsc -p frontend/src/ee/shell/contract/tsconfig.json
       # The app's own accessibility menu saves through the package's cookie

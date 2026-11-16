@@ -10,6 +10,7 @@ import { config } from "../../config.js"
 import { supabase } from "../../supabase.js"
 import { amountsNote, amountWord, statedAmount, statedAmountFields, statedAmountRecord, unitFields } from "../amounts.js"
 import { statedDocument } from "../served-documents.js"
+import { deploymentName } from "../deployment-name.js"
 
 /**
  * RECAST AUTHORED-SCRIPT VERBS (spec 2026-08-06 §5 — P2).
@@ -56,6 +57,16 @@ const GUIDED_MARKER_VERSION = 1
  *  URL (fleet convention: staging is `next.<domain>`). Prod fallback. */
 function recastAppOrigin(): string {
   return config.PUBLIC_URL.includes("next.") ? "https://next.recast.nodaro.ai" : "https://recast.nodaro.ai"
+}
+
+/**
+ * The recast's page in the Recast app, or null on a deployment with its own
+ * name (deployment-name.ts): the app lives on the platform's site, which such a
+ * deployment's users are never sent to, and the lane knows no address of the
+ * deployment's own for it.
+ */
+function recastAppUrl(recastId: string): string | null {
+  return deploymentName() === null ? `${recastAppOrigin()}/recast/${recastId}` : null
 }
 
 /**
@@ -362,7 +373,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
           recastId: workflowId,
           jobId: imported.jobId,
           warnings: imported.warnings,
-          appUrl: `${recastAppOrigin()}/recast/${workflowId}`,
+          appUrl: recastAppUrl(workflowId),
           next: "Call start_recast with this recastId for a price quote; call again with confirm: true to render.",
         })
       },
@@ -677,7 +688,7 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
         const loaded = await readRecastSettings(args.recast_id, session.userId)
         if (!loaded) return errorResult(404, JSON.stringify({ error: "recast not found" }))
         const { settings, recast } = loaded
-        const appUrl = `${recastAppOrigin()}/recast/${args.recast_id}`
+        const appUrl = recastAppUrl(args.recast_id)
         const run = recast.run as
           | { recastId?: string; status?: string; gvpJobId?: string; analysisJobId?: string }
           | undefined

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildPitchTempoArgs, buildRubberbandFilter, isMissingRubberbandError, normalizePitchTempoSettings, PitchTempoInputError } from "../pitch-tempo.js"
+import { buildPitchTempoArgs, buildRubberbandFilter, isMissingRubberbandError, normalizePitchTempoSettings, PitchTempoInputError, pitchTempoInputCutSec } from "../pitch-tempo.js"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 
 describe("buildRubberbandFilter", () => {
@@ -41,6 +41,19 @@ describe("buildPitchTempoArgs", () => {
       "-movflags", "+faststart",
       "/w/out.mp4",
     ])
+  })
+
+  it("an input a hair past the 30-minute cap is read only to the cap (its price check accepted it at the top row); without a cut the arguments are as they always were", () => {
+    expect(buildPitchTempoArgs({ inputPath: "/w/in.wav", outputPath: "/w/out.mp3", lane: "audio", filter, cutSec: 1800 }).slice(0, 5)).toEqual(["-y", "-t", "1800", "-i", "/w/in.wav"])
+    const video = buildPitchTempoArgs({ inputPath: "/w/in.mp4", outputPath: "/w/out.mp4", lane: "video", filter, sourceSec: 1800, cutSec: 1800 })
+    expect(video.slice(0, 5)).toEqual(["-y", "-t", "1800", "-i", "/w/in.mp4"])
+    expect(video).toContain(`${filter},apad,atrim=end=1800`)
+    expect(buildPitchTempoArgs({ inputPath: "/w/in.wav", outputPath: "/w/out.mp3", lane: "audio", filter })).not.toContain("-t")
+    // The cut follows the length the run was held for: only past the cap.
+    expect(pitchTempoInputCutSec(1800.03)).toBe(1800)
+    expect(pitchTempoInputCutSec(1800)).toBeUndefined()
+    expect(pitchTempoInputCutSec(61)).toBeUndefined()
+    expect(pitchTempoInputCutSec(undefined)).toBeUndefined()
   })
 
   it("video lane refuses to run without the picture's length", () => {

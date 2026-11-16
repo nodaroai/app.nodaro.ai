@@ -6,6 +6,7 @@ import { llmComplete } from "../../lib/llm-client.js"
 import { LlmContentRefusalError, LlmOutputTruncatedError } from "../../lib/llm-errors.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
+import { withJobSubmissionContext } from "../../lib/job-submission-context.js"
 
 const { jobUpdates, jobInserts, credits } = vi.hoisted(() => ({
   jobUpdates: [] as Array<Record<string, unknown>>,
@@ -522,5 +523,45 @@ describe("POST /v1/llm-chat/generate — a video frame rate (referenceVideoFps)"
     const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate-stream", payload: payload({ referenceVideoFps: 4 }) })
     expect(res.statusCode).toBe(400)
     expect(JSON.parse(res.body).error.code).toBe("video_fps_needs_advanced_mode")
+  })
+})
+
+describe("POST /v1/llm-chat/generate — the caller learns the job before the answer", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    jobInserts.length = 0
+  })
+  const call = { userId: "u1", method: "POST", url: "/v1/llm-chat/generate" }
+
+  it("tells a listening caller the job's id once the row exists, before the model is called", async () => {
+    const app = await buildApp()
+    const heard: string[] = []
+    let heardAtModelCall: string[] | null = null
+    vi.mocked(llmComplete).mockImplementationOnce(async () => {
+      heardAtModelCall = [...heard]
+      return { text: "ok", usage: { inputTokens: 1, outputTokens: 1 } } as Awaited<ReturnType<typeof llmComplete>>
+    })
+    const res = await withJobSubmissionContext({ ...call, onJobCreated: (id) => heard.push(id) }, () =>
+      app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: { systemPrompt: "", userInput: "hello" } }),
+    )
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.body)).toEqual({ jobId: "job-1", generatedText: "ok" })
+    expect(heard).toEqual(["job-1"])
+    expect(heardAtModelCall).toEqual(["job-1"])
+  })
+
+  it("tells nobody about a request refused before its job exists", async () => {
+    const app = await buildApp()
+    const heard: string[] = []
+    const res = await withJobSubmissionContext({ ...call, onJobCreated: (id) => heard.push(id) }, () =>
+      app.inject({
+        method: "POST",
+        url: "/v1/llm-chat/generate",
+        payload: { systemPrompt: "", userInput: "describe this", referenceVideoUrls: ["https://x/y.mp4"], llmModel: "claude-sonnet-4.6" },
+      }),
+    )
+    expect(res.statusCode).toBe(400)
+    expect(heard).toEqual([])
+    expect(jobInserts).toHaveLength(0)
   })
 })

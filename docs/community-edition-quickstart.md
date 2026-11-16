@@ -168,13 +168,14 @@ presentation or a published app, offers it.
 
 ## Editing audio
 
-Audio results have an **Edit audio** action that opens the AudioMass editor the
-same way — the bytes are handed to the editor inside your browser, nothing is
-uploaded to it.
+An audio output card in a presentation or a published app has an **Edit**
+action that opens the AudioMass editor the same way — the bytes are handed to
+the editor inside your browser, nothing is uploaded to it.
 
 Unlike the video editor there is **no public hosted AudioMass**, so this action
-is **inert until you configure it**: with nothing set, choosing **Edit audio**
-opens a panel that explains what to set rather than an editor. Run your own
+is **inert until you configure it**: with nothing set, choosing **Edit** opens a
+panel that explains what to set rather than an editor, in the editor's Present
+tab as in a shared presentation and a published app. Run your own
 [AudioMass](https://github.com/nodaroai/audiomass) — Nodaro's fork speaks the
 in-browser bridge the editor needs (vanilla AudioMass does not) — and point this
 install at it:
@@ -183,8 +184,10 @@ install at it:
 AUDIOMASS_URL=https://audiomass.example.internal
 ```
 
-Restart the stack and the editor follows — no rebuild. `AUDIOMASS_URL=off`
-behaves the same as leaving it unset.
+Restart the stack and the editor follows — no rebuild. Set `AUDIOMASS_URL=off`
+(`none`, `false` and `disabled` work too) to remove the Edit action from audio
+everywhere: no audio output card in the Present tab, a shared presentation or a
+published app offers it, and nobody sees the panel.
 
 ## 3D scenes
 

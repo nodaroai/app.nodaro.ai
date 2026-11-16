@@ -22,10 +22,10 @@ const CADDY = process.env.CADDY_BIN ?? "caddy"
 const available = spawnSync(CADDY, ["version"]).status === 0
 const listen = (server) => new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server.address().port)))
 
-/** Not documents: the API and the proxies. None may carry the header. */
-const NOT_DOCUMENTS = ["/v1/anything", "/supabase/rest/v1/x", "/storage/x", "/mcp", "/og/x", "/.well-known/oauth-authorization-server"]
+/** Not documents: the API (its health address too) and the proxies. None may carry the header. */
+const NOT_DOCUMENTS = ["/v1/anything", "/health", "/health/", "/health;x", "/supabase/rest/v1/x", "/storage/x", "/mcp", "/og/x", "/.well-known/oauth-authorization-server"]
 const DOCUMENTS = ["/", "/projects", "/projects/abc/workflows/def", "/editor/abc", "/index.html", "/login"]
-const EXCLUDED_PREFIXES = ["/assets/*", "/v1/*", "/.well-known/*", "/storage/*", "/supabase/*", "/og/*", "/mcp*"]
+const EXCLUDED_PREFIXES = ["/assets/*", "/v1/*", "/health", "/health/*", "/health;*", "/.well-known/*", "/storage/*", "/supabase/*", "/og/*", "/mcp*"]
 
 test("the Caddyfile sends it from a documents-only matcher that leaves the API and the proxies out", () => {
   const caddyfile = readFileSync(new URL("../../frontend/Caddyfile", import.meta.url), "utf8")

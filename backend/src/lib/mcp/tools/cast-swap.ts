@@ -64,6 +64,7 @@ import { neutralBreakdown, privacyCreditsOf } from "../../nodaro-motion-quote.js
 import { originalCdnImageUrls } from "../../cdn-original-url.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders, parseJobId } from "./_verb-helpers.js"
 import { amountsNote, amountWord, statedAmount, statedAmountRecord, unitFields } from "../amounts.js"
+import { statedName } from "../deployment-name.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -324,7 +325,8 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         // The quote's engine: absent from an older engine, which runs Nodaro Motion Prism.
         const quotedEngine = castSwapEngineFrom(quote.engine) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
         const publicEngine: NodaroMotionEngine = nodaroMotionEngineOf(quotedEngine)
-        const engineName = nodaroMotionEngineName(quotedEngine)
+        // The engine as the deployment names it ("Motion Prism" on one with its own name, deployment-name.ts).
+        const engineName = statedName(nodaroMotionEngineName(quotedEngine))
         // The expected charge first, with the hold beside it (as estimate_trend words it);
         // an older engine answers only the hold, which settles lower.
         const expected = typeof quote.expectedCredits === "number" ? quote.expectedCredits : null
@@ -374,7 +376,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
       }
       registerTask({ taskId: jobId, userId: session.userId, kind: "video" })
       return {
-        content: [{ type: "text" as const, text: `Nodaro Motion started (job ${jobId}). To follow it, ${GET_JOB_POLL_HINT}.` }],
+        content: [{ type: "text" as const, text: statedName(`Nodaro Motion started (job ${jobId}). To follow it, ${GET_JOB_POLL_HINT}.`) }],
         structuredContent: { jobId, confirmed: true },
       }
     },

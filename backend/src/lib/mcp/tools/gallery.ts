@@ -28,6 +28,7 @@ import { isRenderNodeType } from "@nodaro/shared/nodes"
 import type { GenericNode } from "@nodaro/shared/types"
 import { summarizeNodeStates } from "../../execution-result.js"
 import { amountsNote, statedJobRow, unitFields } from "../amounts.js"
+import { statedName } from "../deployment-name.js"
 import type { NodeExecutionState } from "../../../services/workflow-engine/types.js"
 
 /** What `browse_gallery`'s `query` searches: the job's prompt, read as text out of its JSONB input. */
@@ -942,13 +943,15 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             error_message: reason,
             error_hint: (data as { error_hint?: unknown }).error_hint,
           })
+          // The failure's words in the deployment's own name (deployment-name.ts); read off the words as saved.
+          const statedReason = reason === null ? null : statedName(reason)
           return {
             content: [
               {
                 type: "text",
                 text:
                   `Job ${data.id} ${data.status}. ` +
-                  `Reason: ${reason ?? "no reason recorded"}. ${guidance}`,
+                  `Reason: ${statedReason ?? "no reason recorded"}. ${statedName(guidance)}`,
               },
             ],
             structuredContent: {
@@ -959,7 +962,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
               assetKind,
               jobType: data.job_type,
               completedAt: data.completed_at,
-              errorMessage: reason,
+              errorMessage: statedReason,
               // The provider's own words, for the owner to read beside the sentence.
               errorDetail: providerWords,
               retryable,
@@ -1250,7 +1253,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           status: s.status,
           nodeType: s.nodeType,
           ...(s.skipReason ? { skipReason: s.skipReason } : {}),
-          ...(s.error ? { error: s.error } : {}),
+          // A node's failure in the deployment's own name (deployment-name.ts); its text is the run's own.
+          ...(s.error ? { error: statedName(s.error) } : {}),
           ...(s.jobId ? { jobId: s.jobId } : {}),
           ...(s.text !== undefined ? { text: s.text } : {}),
           ...(s.textTruncated ? { textTruncated: true } : {}),
@@ -1316,7 +1320,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           skipped: summaries.filter((s) => s.status === "skipped").length,
           skippedForEmptyInput: countEmptyInputSkips(ns),
         }
-        const errorMessage = (data.error_message as string | null | undefined) ?? null
+        const savedError = (data.error_message as string | null | undefined) ?? null
+        const errorMessage = savedError === null ? null : statedName(savedError)
         // A failed run of a saved workflow, or an app run, can be continued where it stopped.
         const resumeHint = await resumeFailedRunHint(data, session)
         const run = {

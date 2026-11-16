@@ -12,8 +12,10 @@ import { withRunOverrides } from "@nodaro/shared/nodes"
 import type { StoredInlineGraph } from "@nodaro/render-rules"
 import { hasCredits } from "../config.js"
 import type { BillingContext } from "../billing-context.js"
+import { statedShortfall, type UseCaseShortfall } from "./credits-refusal.js"
 
-export type ContinueCover = { readonly ok: true; readonly totalCredits: number } | { readonly ok: false; readonly message: string }
+/** Covered, with the run's price; or refused, with the message and the figures it states (credits-refusal.ts). */
+export type ContinueCover = { readonly ok: true; readonly totalCredits: number } | ({ readonly ok: false } & UseCaseShortfall)
 
 /**
  * What the steps a continue-from-failed still runs are priced at: the run-set
@@ -66,14 +68,17 @@ export async function fromFailedCover(input: {
   const cover = await CreditsService.checkBalanceCovers(input.userId, holdCredits, input.billingContext, input.webFreeMode)
   if (cover.ok) return { ok: true, totalCredits }
   // A deployment's pool is the operator's: its balance is not the
-  // requester's to see, and only the operator can top it up.
+  // requester's to see (no figures either), and only the operator can top it up.
+  if (input.billingContext?.payer === "deployment" || "payerPool" in cover) return { ok: false, message: DEPLOYMENT_OUT_OF_CREDITS }
+  // A hold above the price is said as a hold, with no figures: `required` would read as the price.
+  if (holdCredits > totalCredits) return { ok: false, message: continueHoldShortfallMessage(holdCredits, cover.balance) }
   return {
     ok: false,
-    message:
-      input.billingContext?.payer === "deployment"
-        ? DEPLOYMENT_OUT_OF_CREDITS
-        : holdCredits > totalCredits
-          ? continueHoldShortfallMessage(holdCredits, cover.balance)
-          : estimateShortfallMessage("Continuing this episode is", totalCredits, cover.balance),
+    ...statedShortfall(
+      totalCredits,
+      cover.balance,
+      (required, balance) => estimateShortfallMessage("Continuing this episode is", required, balance),
+      cover.subscriptionRequired === true,
+    ),
   }
 }

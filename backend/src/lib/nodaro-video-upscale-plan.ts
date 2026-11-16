@@ -37,6 +37,8 @@ import {
   nodaroVideoUpscaleUnits,
 } from "@nodaro/render-rules"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
+import { PRE_CHARGE_PROBE_TIMEOUT_MS } from "./pre-charge-probe-bounds.js"
+import { guardedPacketScan, videoTrackHeaderOf, videoTrackLengthFrom, type VideoTrackLength } from "./video-track-length.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 import { houseModelServed } from "./house-models-served.js"
 import {
@@ -147,7 +149,19 @@ export interface NodaroVideoUpscalePlanContext {
   readonly signal?: AbortSignal
 }
 
-type Source = Awaited<ReturnType<typeof probeVideoSource>>
+/** The probe of the clip, and its picture's length (`videoTrackLengthFrom`: the stream's, its tag, its packets, else the container's). */
+type Source = Awaited<ReturnType<typeof probeVideoSource>> & { readonly track?: VideoTrackLength }
+
+/** Probe the clip at `src` (a local copy or a stored clip) and read its picture's length while it is there. */
+async function measureClip(src: string, signal?: AbortSignal): Promise<Source> {
+  const probed = await probeVideoSource(src, signal ? { signal } : {})
+  const track = await videoTrackLengthFrom(
+    videoTrackHeaderOf(probed),
+    guardedPacketScan(src, { timeoutMs: PRE_CHARGE_PROBE_TIMEOUT_MS, ...(signal ? { signal } : {}) }),
+    signal,
+  )
+  return track ? { ...probed, track } : probed
+}
 
 /** The clip's length held to the limit: judged on the LONGER of the container's and the picture's (a soundtrack can run past the last frame, and either is over the limit this model takes). */
 function withinLength(source: Source): Source {
@@ -194,7 +208,7 @@ export async function planNodaroVideoUpscale(
 ): Promise<NodaroVideoUpscalePlan> {
   // An outside clip is measured from its local copy, the probe killed when the copy's time is up.
   const inspect = async (localPath: string, signal: AbortSignal): Promise<Source> =>
-    withinLength(await probeVideoSource(localPath, { signal }))
+    withinLength(await measureClip(localPath, signal))
   const common = { kind: "video" as const, maxBytes: NODARO_VIDEO_UPSCALE_MAX_BYTES, userId: ctx.userId, ...(ctx.signal ? { signal: ctx.signal } : {}) }
   let stored: { url: string; bytes: number; inspected?: Source }
   try {
@@ -213,7 +227,7 @@ export async function planNodaroVideoUpscale(
   let source = stored.inspected
   if (!source) {
     try {
-      source = await probeVideoSource(stored.url, ctx.signal ? { signal: ctx.signal } : {})
+      source = await measureClip(stored.url, ctx.signal)
     } catch (err) {
       if (ctx.signal?.aborted) throw err
       if (isBoxFailure(err)) throw new NodaroVideoUpscaleTryAgainError("input_failed")
@@ -223,13 +237,16 @@ export async function planNodaroVideoUpscale(
     withinLength(source)
   }
   const tier = nodaroVideoUpscaleTierOf(targetResolution)
-  const sourceDurationSec = source.videoDurationSeconds ?? source.durationSeconds
+  // The picture's length: the stream's, its DURATION tag (a WebM / MKV), its packets; only when all three fail, the
+  // container's — billed less its allowance.
+  const track = source.track ?? { sec: source.durationSeconds, reading: "container" as const }
+  const sourceDurationSec = track.sec
   return {
     tier,
     creditId: nodaroVideoUpscaleCreditId(tier),
     videoUrl: stored.url,
     sourceDurationSec,
-    billedSec: nodaroVideoUpscaleBilledSec(sourceDurationSec),
+    billedSec: nodaroVideoUpscaleBilledSec(sourceDurationSec, track.reading),
     sourceSizeBytes: stored.bytes,
   }
 }

@@ -71,7 +71,7 @@ import {
 } from "@nodaro/shared/media"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { pricedAsId } from "../../lib/retired-price-id.js"
-import { aiAvatarCreditIdOf, switchXCreditIdOf } from "../../lib/probed-credit-ids.js"
+import { aiAvatarCreditIdOf, switchXQuoteCreditId } from "../../lib/probed-credit-ids.js"
 import { estimatedCaptionEngine } from "../../lib/add-captions-transcription.js"
 import { withWiredSettings, renderNodeOf, isRenderNodeType, withRunOverrides, transcribeNodeReturnsWords } from "@nodaro/shared/nodes"
 import {
@@ -118,7 +118,7 @@ import { generateVideoProCapSec as generateVideoProCapSecOfEnv } from "../../lib
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, NEMOTRON_WIRE_READ_OPTIONS, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuoteSeconds, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_READING, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_OVERLAY_READING, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, measuredWireLengthSec, type MeasuredWireLengthOptions, type MeasuredFileReading, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, withoutMediaShape, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoQuoteUnits, topazWiredSource, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER } from "@nodaro/render-rules"
+import { AI_AVATAR_PLANNED_CLIP_SLACK_SEC, aiAvatarAudioSourceId, aiAvatarPlaysAudio, aiAvatarQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, NEMOTRON_WIRE_READ_OPTIONS, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuoteSeconds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, withoutMediaShape, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoQuoteUnits, topazWiredSource, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId, type VideoUtilityStepType } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -3159,10 +3159,11 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // (resolution, duration) id, same logic the creditGuard preHandler uses.
   "cinematic-avatar": (data) => resolveCinematicCreditId(data),
 
-  // Beeble SwitchX relight: the `beeble-switchx:<tier>f:<res>p` composite the
-  // creditGuard holds (`switchXCreditIdOf`); an estimate probes no frames, so the
-  // top tier, and never a count the node's data carries.
-  "switchx": (data) => switchXCreditIdOf(data),
+  // Beeble SwitchX relight: the `beeble-switchx:<tier>f:<res>p` composite; an
+  // estimate probes no frames, so the top tier at the node's frame size, as a
+  // workflow run holds it (`switchXQuoteCreditId`), never a count the node's
+  // data carries.
+  "switchx": (data) => switchXQuoteCreditId(data),
 
   // Render Video: a 3D scene render is priced by FRAME SIZE, so the id depends
   // on the plan the node carries. Same `renderVideoCreditId` the route guard
@@ -5283,13 +5284,20 @@ export class CreditsService {
    * pays, and the headroom is the reserve RPC's atomic job. A profile that
    * cannot be read passes (the per-node reservation refuses, as
    * `checkAppRunEligibility` does). With credits disabled it passes.
+   * A refusal on a web surface's free pool says so (`subscriptionRequired`,
+   * as `checkRunSetCredits` does): `balance` is then that pool alone, the case
+   * the credit guard answers with the subscription ask rather than a balance.
+   * A deployment payer's refusal carries NO balance (`payerPool`): the pool is
+   * the operator's, and a caller that is never handed it cannot state it to the
+   * requester (`checkRunSetCredits` withholds it as `available: null`, the
+   * credit guard as `DEPLOYMENT_OUT_OF_CREDITS`).
    */
   static async checkBalanceCovers(
     userId: string,
     credits: number,
     billingContext?: BillingContext,
     webFreeMode?: boolean,
-  ): Promise<{ ok: true } | { ok: false; balance: number }> {
+  ): Promise<{ ok: true } | { ok: false; balance: number; subscriptionRequired?: true } | { ok: false; payerPool: true }> {
     if (creditsDisabled()) return { ok: true }
 
     const { data: profile } = await supabase
@@ -5306,7 +5314,9 @@ export class CreditsService {
     if (!gates.personalBalance) return { ok: true }
 
     const balance = ((profile.subscription_credits as number | null) ?? 0) + (gates.webFree ? 0 : ((profile.topup_credits as number | null) ?? 0))
-    return balance >= credits ? { ok: true } : { ok: false, balance }
+    if (balance >= credits) return { ok: true }
+    if (billingContext?.payer === "deployment") return { ok: false, payerPool: true }
+    return { ok: false, balance, ...(gates.webFree ? { subscriptionRequired: true as const } : {}) }
   }
 
   /**
@@ -5882,9 +5892,10 @@ type WireFpsOf = (sourceId: string | undefined) => number | undefined
  */
 type MeasuredWireSecOf = (
   sourceId: string | undefined,
-  plannedClipSlackSec: number,
-  /** What one step's reading adds (Lip Sync: a re-run voice at its earlier take, a minimum; on a per-second model, a recording at its decoded length; a step that measures the video stream: its `reading`). */
-  extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum" | "decodedAudioLength" | "reading">,
+  /** The measuring step: its slack and its reading are its row's (`measuringStepReadOptions`), the only way a step reads the walk. */
+  step: MeasuringStepId,
+  /** What one step's reading adds (Lip Sync: a re-run voice at its earlier take, a minimum; on a per-second model, a recording at its decoded length). */
+  extra?: Pick<MeasuredWireLengthOptions, "voiceTakeAsMinimum" | "decodedAudioLength">,
 ) => number | undefined
 
 /** How a run estimate reads the video on a wire: its length, its measured length, the length the graph knows, and its frame rate. */
@@ -5944,7 +5955,8 @@ function measuredWireLengthOf(
   const gateNodes = listingGateNodes(nodes)
   const gateEdges = listingGateEdges(edges)
   const generateVideoProCapSec = generateVideoProCapSecOfEnv()
-  return (sourceId, plannedClipSlackSec, extra) => measuredWireLengthSec(sourceId, gateNodes, gateEdges, rerunIds, { generateVideoProCapSec, plannedClipSlackSec, openSourceIds, ...extra })
+  // The step's row last: nothing a caller passes sets a slack or a reading.
+  return (sourceId, step, extra) => measuredWireLengthSec(sourceId, gateNodes, gateEdges, rerunIds, { generateVideoProCapSec, openSourceIds, ...extra, ...measuringStepReadOptions(step) })
 }
 
 /** The length the graph KNOWS a wire's clip is (a recording, a take's record), over the same graph as {@link measuredWireLengthOf}; nothing planned. */
@@ -6040,6 +6052,19 @@ function fanInClipWires(
     .flatMap((e) => Array.from({ length: e.source === undefined ? 1 : fanInClipCount({ ...e, source: e.source }, gateNodes, gateEdges, rerunIds) }, () => e))
 }
 
+/**
+ * The length of the audio an AI Avatar's run plays (`aiAvatarAudioSourceId`:
+ * the last wired `audio`, else the selected node), as the measured walk reads
+ * it with the step's slack (`AI_AVATAR_PLANNED_CLIP_SLACK_SEC`) — the editor's
+ * reading — or undefined: not in audio mode, no audio node, or a length
+ * nothing knows before the run (the 120-second default, a minimum).
+ */
+function aiAvatarAudioSecOf(node: EstimateNode, nodes: ReadonlyArray<EstimateNode>, edges: ReadonlyArray<EstimateEdge> | undefined, measuredSec: MeasuredWireSecOf): number | undefined {
+  if (!aiAvatarPlaysAudio(node.data)) return undefined
+  const source = aiAvatarAudioSourceId(node, nodes, edges, "server")
+  return source === undefined ? undefined : measuredSec(source, "ai-avatar")
+}
+
 /** One node's estimate, priced as a run of it would be (`sumEstimatedNodes`' term). */
 function estimateNodeCredits(
   node: EstimateNode,
@@ -6055,8 +6080,8 @@ function estimateNodeCredits(
   // The steps whose run measures its input before it reserves (Video SFX, Video
   // Mask, Video Depth, Pitch & Tempo, Dubbing, Topaz): each wire through the
   // measured walk the editor's quote reads, with that step's slack.
-  const measuredFor = (type: MeasuredInputStepType): WireSecOf => (sourceId) => wires.measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC[type], { reading: MEASURED_INPUT_READING[type] })
-  const nemotronWireSec: WireSecOf = (sourceId) => wires.measuredSec(sourceId, NEMOTRON_WIRE_READ_OPTIONS.plannedClipSlackSec ?? 0, { voiceTakeAsMinimum: NEMOTRON_WIRE_READ_OPTIONS.voiceTakeAsMinimum })
+  const measuredFor = (type: MeasuredInputStepType): WireSecOf => (sourceId) => wires.measuredSec(sourceId, measuredInputStepId(type, node.data?.provider))
+  const nemotronWireSec: WireSecOf = (sourceId) => wires.measuredSec(sourceId, "nemotron", { voiceTakeAsMinimum: NEMOTRON_WIRE_READ_OPTIONS.voiceTakeAsMinimum })
   // A parameter node (Provider, Duration, a picker) is read, never run: no
   // job, no charge. A Provider's data names a model ("veo3"), which the
   // lookups below would otherwise price as a run of that model. The editor's
@@ -6125,7 +6150,7 @@ function estimateNodeCredits(
     // at its take, an upload at its measured length). A clip nothing can size
     // stands at the estimators' 8-second fallback, a minimum.
     const secs = clipWires.map((e) =>
-      MEASURED_VIDEO_UTILITY_JOBS.has(node.type) ? wires.measuredSec(e.source, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC) : wireSec(e.source))
+      MEASURED_VIDEO_UTILITY_JOBS.has(node.type) ? wires.measuredSec(e.source, node.type as VideoUtilityStepType) : wireSec(e.source))
     const body = secs.some((sec) => sec !== undefined) ? withUpstreamLengths(node.type, utilityBody, secs) : utilityBody
     // Frame trims at each clip's rate where the graph knows it (`runWireFps`), else none cut: the bound (decided 2026-11-14).
     const units = videoUtilityUnits(node.type, body, clipWires.map((e) => wires.trimFps(e.source)))
@@ -6170,9 +6195,11 @@ function estimateNodeCredits(
     videoSfxSec: node.type === "video-sfx" ? videoSfxClipSecOf(node, edges, measuredFor("video-sfx")) : undefined,
     videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, nodes, edges, measuredFor("video-depth"), prices) : undefined,
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, measuredFor("pitch-tempo")) : undefined,
+    // AI Avatar in audio mode: the audio its run plays (`aiAvatarAudioSourceId`, the server's engine) by the measured walk, with its slack.
+    aiAvatarAudioSec: node.type === "ai-avatar" ? aiAvatarAudioSecOf(priced, nodes, edges, wires.measuredSec) : undefined,
     // Lip Sync on a model priced by a length bucket: its audio wire as OmniHuman 2.0's is read (graphPricingUnits), an AAC recording at its decoded length.
     lipSyncAudioSec: node.type === "lip-sync"
-      ? lipSyncAudioWireSecOf(node, nodes, edges, (sourceId) => wires.measuredSec(sourceId, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"], LIP_SYNC_AUDIO_WIRE_READ_OPTIONS))
+      ? lipSyncAudioWireSecOf(node, nodes, edges, (sourceId) => wires.measuredSec(sourceId, "lip-sync", LIP_SYNC_AUDIO_WIRE_READ_OPTIONS))
       : undefined,
     // Transcribe and Add Captions on Nemotron 3.5: their wire as the editor reads it, the measured walk with no slack
     // (the hold forgives a second) and a voice made again in the run at its take, a minimum (NEMOTRON_WIRE_READ_OPTIONS).
@@ -6377,7 +6404,7 @@ function videoOverlayVideoCredits(
   const self = { id: node.id ?? "", type: node.type, data: node.data }
   if (!videoOverlayQuotesVideo(self, listingGateNodes(nodes), listingGateEdges(edges ?? []))) return undefined
   const inputs = node.id === undefined ? [] : (edges ?? []).filter((e) => e.target === node.id)
-  const units = videoOverlayVideoUnits(videoOverlayBaseSec(inputs, inputs.map((e) => measuredSec(e.source, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, { reading: VIDEO_OVERLAY_READING }))))
+  const units = videoOverlayVideoUnits(videoOverlayBaseSec(inputs, inputs.map((e) => measuredSec(e.source, "video-overlay"))))
   return chargedCredits(prices, VIDEO_OVERLAY_PRICING.VIDEO_CREDIT_ID, units)
 }
 
@@ -6413,7 +6440,7 @@ function maskCompositeLeadSecOf(
 ): number | undefined {
   if (node.id === undefined || !edges) return undefined
   const inputs = edges.filter((e) => e.target === node.id)
-  return maskCompositeLeadSec(node.data, inputs, inputs.map((e) => measuredSec(e.source, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC)))
+  return maskCompositeLeadSec(node.data, inputs, inputs.map((e) => measuredSec(e.source, "mask-composite")))
 }
 
 /**
@@ -6735,30 +6762,26 @@ function listingUtilityWireSecOf(
     SPEECH_NODE_TYPES.has(origin.type ?? "")
       ? knownLength(listedVoiceLength({ id: origin.id, type: origin.type ?? "", data: origin.data as Record<string, unknown> | undefined }, nodes, edges, speechTextCaps))?.fixedSec
       : undefined
-  return (sourceId, plannedClipSlackSec, extra) =>
+  return (sourceId, step, extra) =>
     measuredWireLengthSec(sourceId, gateNodes, gateEdges, rerunIds, {
       generateVideoProCapSec,
-      plannedClipSlackSec,
       openSourceIds,
       knownLengthSec,
       ...extra,
+      // The step's row last: nothing a caller passes sets a slack or a reading.
+      ...measuringStepReadOptions(step),
     })
 }
 
 /**
- * The slack a listed step whose run measures its clips reads them with
- * (`VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC` for Trim, Loop and Combine Videos;
- * `MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC` for Video SFX, Pitch & Tempo and
- * Dubbing), or undefined for a step the listing reads by its own rule.
+ * The measuring step a listed step whose run measures its clips reads them as
+ * (Trim, Loop and Combine Videos; Video SFX, Pitch & Tempo and Dubbing: its
+ * row of `MEASURING_STEP_ALLOWANCES`, slack and reading), or undefined for a
+ * step the listing reads by its own rule.
  */
-function listingMeasuredSlackOf(type: string): number | undefined {
-  if (MEASURED_VIDEO_UTILITY_JOBS.has(type)) return VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC
-  return Object.hasOwn(MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type) ? MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC[type as MeasuredInputStepType] : undefined
-}
-
-/** What a listed step whose run measures its clips measures of them (`MEASURED_INPUT_READING`; Trim, Loop and Combine Videos read as the container). */
-function listingMeasuredReadingOf(type: string): MeasuredFileReading {
-  return Object.hasOwn(MEASURED_INPUT_READING, type) ? MEASURED_INPUT_READING[type as MeasuredInputStepType] : "container"
+function listingMeasuringStepOf(type: string): MeasuringStepId | undefined {
+  if (MEASURED_VIDEO_UTILITY_JOBS.has(type)) return type as VideoUtilityStepType
+  return Object.hasOwn(MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type) ? measuredInputStepId(type as MeasuredInputStepType) : undefined
 }
 
 /**
@@ -6794,15 +6817,15 @@ function utilityListingParts(
   // One entry per clip that reaches it (a Bundle from a fanned-out source counts each clip), as the run estimate reads it.
   const incoming = fanInClipWires(node, nodes, edges, rerunIds)
   const episodeIds = episodeRecordingIds(nodes, edges, replacedMediaIds)
-  const slack = listingMeasuredSlackOf(node.type)
+  const step = listingMeasuringStepOf(node.type)
   // A video-utility job (Trim, Loop, Combine Videos): where the measured walk cannot size a clip, the listing's
   // own reading takes a Video to Video Seedance edit at the most it can make (`chargedVideoOutputLength`).
   const chargedByLength = videoUtilityEstimateBody(node, incoming) !== undefined
   const wires = incoming.map((e): WireLength => {
     const listed = wireInputLength(e.source, nodes, edges, replacedMediaIds, episodeIds, rerunIds, speechTextCaps, chargedByLength)
     // A length that follows the episode is listed per minute of it, as before.
-    if (!measuredSec || slack === undefined || (knownLength(listed)?.perEpisodeSec ?? 0) > 0) return listed
-    const sec = measuredSec(e.source, slack, { reading: listingMeasuredReadingOf(node.type) })
+    if (!measuredSec || step === undefined || (knownLength(listed)?.perEpisodeSec ?? 0) > 0) return listed
+    const sec = measuredSec(e.source, step)
     return sec !== undefined ? { fixedSec: sec, perEpisodeSec: 0 } : listed
   })
   const videoWire = incoming.findIndex((e) => e.targetHandle === "video")
@@ -6907,7 +6930,7 @@ function dubbingListingParts(
   if (!wire) return undefined
   const listed = wireInputLength(wire.source, nodes, edges, replacedMediaIds, episodeRecordingIds(nodes, edges, replacedMediaIds), rerunIds, speechTextCaps)
   // A length that follows the episode is listed per minute of it; any other the measured walk sizes is read by it.
-  const walked = measuredSec && (knownLength(listed)?.perEpisodeSec ?? 0) === 0 ? measuredSec(wire.source, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC.dubbing) : undefined
+  const walked = measuredSec && (knownLength(listed)?.perEpisodeSec ?? 0) === 0 ? measuredSec(wire.source, "dubbing") : undefined
   const length: WireLength = walked !== undefined ? { fixedSec: walked, perEpisodeSec: 0 } : listed
   if (length === undefined) return undefined
   const rate = dubbingModelIdentifier(data.targetLanguage)
@@ -7072,9 +7095,8 @@ export function graphPricingUnits(
   // measures the real clip before it reserves (lib/topaz-video-plan.ts).
   if (node.type === "video-upscale" && isTopazVideoUpscaleNode(node)) {
     const wired = withWiredSettings(node, nodes, edges ?? [])
-    const slack = MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["video-upscale"]
     const sec = edges && node.id
-      ? edges.filter((e) => e.target === node.id).map((e) => measuredSec(e.source, slack, { reading: MEASURED_INPUT_READING["video-upscale"] })).find((v) => v !== undefined)
+      ? edges.filter((e) => e.target === node.id).map((e) => measuredSec(e.source, "video-upscale:topaz")).find((v) => v !== undefined)
       : undefined
     const source = edges && node.id ? topazWiredSource(node.id, listingGateNodes(nodes), listingGateEdges(edges), rerunIds, replacedMediaIds) : {}
     return topazVideoQuoteUnits(wired.data ?? {}, sec, source)
@@ -7095,7 +7117,7 @@ export function graphPricingUnits(
     const rate = lipSyncAudioRateOf(wired.data?.provider)
     if (rate) {
       const source = lipSyncAudioSourceId(node, nodes, edges, "server")
-      const sec = source === undefined ? undefined : measuredSec(source, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"], LIP_SYNC_AUDIO_WIRE_READ_OPTIONS)
+      const sec = source === undefined ? undefined : measuredSec(source, "lip-sync", LIP_SYNC_AUDIO_WIRE_READ_OPTIONS)
       return lipSyncRateQuoteSeconds(rate, sec, source !== undefined, node.data)
     }
   }
@@ -7108,8 +7130,7 @@ export function graphPricingUnits(
   // graph knows is past the limit is left out by `estimateNodeCredits` before
   // it asks for units.
   if (node.type === "video-upscale" && isNodaroVideoUpscaleNode(node)) {
-    const slack = MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["video-upscale"]
-    return nodaroVideoUpscaleEstimateUnits(videoUpscaleWireSec(node, edges, (sourceId) => measuredSec(sourceId, slack, { reading: MEASURED_INPUT_READING["video-upscale"] })))
+    return nodaroVideoUpscaleEstimateUnits(videoUpscaleWireSec(node, edges, (sourceId) => measuredSec(sourceId, "video-upscale:nodaro")))
   }
   // Extend Video on Seedance 2.5: (seconds sent + seconds added) ÷ 2 of its
   // two-second row — the source's last 10 s at the length the graph knows it
@@ -7555,6 +7576,8 @@ export function getNodeModelIdentifier(
     videoSfxSec?: number
     /** Lip Sync: the length of the audio its `audio` wire gives a run estimate (undefined = not known). */
     lipSyncAudioSec?: number
+    /** AI Avatar in audio mode: the length of the audio its run plays, as a run estimate reads it (undefined = not known: the 120-second default). */
+    aiAvatarAudioSec?: number
     /** A render: the id its graph prices it on (`renderEstimateCreditId`). */
     renderCreditId?: string
     /** Video Depth: the input clip's length a run estimate knows (undefined = an unmeasured clip). */
@@ -7665,6 +7688,22 @@ export function getNodeModelIdentifier(
   // strategy's; the AI judge its model's tier). The bare node type is priced
   // nowhere, so a judge used to be estimated at 0 while its run billed the tier.
   if (nodeType === "reduce") return CREDIT_COSTS["reduce"]!(data)
+
+  // AI Avatar (HeyGen): the bucket its run holds (`aiAvatarQuoteCreditId`, the
+  // editor's own id): the script's estimated length in text mode; in audio
+  // mode the bucket of the audio its run plays as the measured walk reads it
+  // (`aiAvatarAudioSec`), else the 120-second default, a minimum. The bare
+  // node type is priced nowhere, so its run estimate, the credit check before
+  // a run and an app's listing used to price it at 0.
+  if (nodeType === "ai-avatar") return aiAvatarQuoteCreditId(data, graph.aiAvatarAudioSec)
+  // Cinematic Avatar (HeyGen): the exact (resolution, duration) id its run holds
+  // (`resolveCinematicCreditId`, the editor's own; Auto at the 15 s ceiling).
+  // SwitchX (Beeble): the 240-frame worst-case tier at its frame size
+  // (`switchXQuoteCreditId`, the editor's own and the workflow run's hold; the
+  // route measures the clip and holds its own tier, at most this). The bare
+  // node types are priced nowhere, so both used to be estimated at 0.
+  if (nodeType === "cinematic-avatar") return CREDIT_COSTS["cinematic-avatar"]!(data)
+  if (nodeType === "switchx") return CREDIT_COSTS["switchx"]!(data)
 
   // Content Recipe / Content Ideas: the same ids the plugin route and the
   // orchestrator reserve — the EFFECTIVE model's tier (an unset model is the

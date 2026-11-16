@@ -1,6 +1,8 @@
 import { VIDEO_OVERLAY_PRICING, videoOverlayVideoUnits } from "@nodaro/shared/credits"
 import { expandVideoOverlayLayout, expandVideoOverlayPresets, videoOverlayHasVideoLayer, type VideoOverlayLayerInput } from "@nodaro/shared/video"
 import { probeVideoOverlayBaseSource } from "../providers/video/ffmpeg-utils.js"
+import { PRE_CHARGE_PROBE_TIMEOUT_MS } from "./pre-charge-probe-bounds.js"
+import { videoOverlayChargedSec } from "./video-track-length.js"
 import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/probe-guard.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 import { videoOverlayRefusalAtLength, type VideoOverlayLengthRefusalCode } from "./video-overlay-refusal.js"
@@ -43,8 +45,14 @@ export interface VideoOverlayMeasuredRequest {
 /** Measure the base of a request with a video layer, and what its length decides. */
 export async function measureVideoOverlayBase(request: VideoOverlayMeasuredRequest): Promise<VideoOverlayLength> {
   let durationSec: number
+  let pricedSec: number
   try {
-    durationSec = (await probeVideoOverlayBaseSource(request.videoUrl)).streamDurationSec
+    const probe = await probeVideoOverlayBaseSource(request.videoUrl)
+    durationSec = probe.streamDurationSec
+    // The units: the picture's length (the stream's, its DURATION tag, its packets); only when all three fail, the
+    // container's less its fallback allowance (`videoOverlayChargedSec`, which the render's check reads too). The
+    // refusals read the length the render reads.
+    pricedSec = await videoOverlayChargedSec(probe, request.videoUrl, { timeoutMs: PRE_CHARGE_PROBE_TIMEOUT_MS })
   } catch (err) {
     const refused = probeLinkRefusal(err)
     if (refused) return { ok: false, ...refused }
@@ -58,7 +66,7 @@ export async function measureVideoOverlayBase(request: VideoOverlayMeasuredReque
   const expanded = expandVideoOverlayLayout({ layout: request.layout, layers: expandVideoOverlayPresets(request.layers) })
   const refusal = videoOverlayRefusalAtLength(expanded, durationSec)
   if (refusal) return { ok: false, ...refusal }
-  return { ok: true, durationSec, units: videoOverlayVideoUnits(durationSec) }
+  return { ok: true, durationSec, units: videoOverlayVideoUnits(pricedSec) }
 }
 
 /** BASE credits for `units` pricing units: the `video-overlay:video` row (one unit) times the count (`unitRateBaseCredits`). */

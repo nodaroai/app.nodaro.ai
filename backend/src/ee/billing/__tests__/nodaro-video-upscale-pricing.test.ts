@@ -43,6 +43,11 @@ describe("Nodaro Video Upscale pricing", () => {
   it("rounds the clip up to a whole second, and never rounds per second before multiplying", () => {
     // 10.01 s is billed as 11 s.
     expect(nodaroVideoUpscaleBilledSec(10.01)).toBe(11)
+    expect(nodaroVideoUpscaleBilledSec(10.01, "video-stream")).toBe(11)
+    // A container's length (a clip whose stream length could not be read) less its 0.15 s allowance first.
+    expect(nodaroVideoUpscaleBilledSec(10.15, "container")).toBe(10)
+    expect(nodaroVideoUpscaleBilledSec(10.16, "container")).toBe(11)
+    expect(nodaroVideoUpscaleBilledSec(0.1, "container")).toBe(1)
     expect(charged("1080p", 10.01)).toBe(charged("1080p", 11))
     // 5 s at 1080p: 18.75 → 19 base → 21 charged (rounding each second first would give 20 → 22).
     expect(charged("1080p", 5)).toBe(21)

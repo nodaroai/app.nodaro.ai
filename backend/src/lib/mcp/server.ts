@@ -58,6 +58,7 @@ import { supabase } from "../supabase.js"
 import { resolveSessionWorkspace } from "./workspace-session.js"
 import { installToolOffer, resolveToolOffer } from "./tool-offer.js"
 import type { McpLaneAddresses } from "../mcp-lane-addresses.js"
+import { installDeploymentName, mcpServerInfo } from "./deployment-name.js"
 
 interface BuildOpts {
   userId: string
@@ -162,8 +163,10 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
     firstParty: opts.firstParty,
     offer,
   })
+  // What the server calls itself: the deployment's own name on a deployment
+  // with one (deployment-name.ts), `nodaro-mcp` otherwise.
   const server = new McpServer(
-    { name: "nodaro-mcp", version: "1.0.0" },
+    mcpServerInfo(),
     {
       // v1.2: declare `tasks` capability so the SDK accepts our `tasks/*`
       // request handlers. Without this, `Server.assertRequestHandlerCapability`
@@ -202,10 +205,14 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   // Register UI resource templates BEFORE tools, so tool _meta.ui.resourceUri
   // references resolve cleanly when the host calls resources/read.
   if (opts.conversation) attachUserRequest(server, session)
+  // On a deployment with its own name, every list, resource and refusal leaves
+  // in that name (deployment-name.ts). Installed before the offer, so the
+  // offer's refusals leave through it too; inert with the platform's name.
+  installDeploymentName(server)
   // The list follows the offer: a tool the deployment withholds from this
   // viewer is never registered, and a call naming it gets the run's coded
   // refusal. Installed before the first tool registers.
-  installToolOffer(server, { userId: session.userId, offer })
+  installToolOffer(server, { session, offer })
 
   registerWidgetResources(server, session.addresses)
 

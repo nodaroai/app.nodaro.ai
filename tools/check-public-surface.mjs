@@ -26,6 +26,7 @@
 
 import { readFileSync } from "node:fs"
 import { execFileSync } from "node:child_process"
+import { foldCase, LINES_NOT_SHOWN, printableTerms, readMarkerList, WITHHELD, withheldLine } from "./private-marker-list.mjs"
 
 const SKIP_DIRS = ["node_modules/", "dist/", "build/", ".git/"]
 // Binary and lockfile-ish things a prose check has nothing to say about.
@@ -179,8 +180,10 @@ function excepted(file, ruleId) {
 }
 
 /**
- * Scan every tracked file, per line and de-wrapped.
- * @returns {{file: string, line: number, rule: Rule, text: string}[]}
+ * Scan every tracked file, per line and de-wrapped. `text` is the whole line
+ * (cut only when printed, so the withholding reads all of it); `context`, for
+ * a de-wrapped hit, is the de-wrapped text around the match.
+ * @returns {{file: string, line: number, rule: Rule, text: string, context?: string}[]}
  */
 function scanTrackedFiles() {
   const found = []
@@ -203,17 +206,19 @@ function scanTrackedFiles() {
         const line = lines[i]
         if (!rule.pattern.test(line)) continue
         if (rule.allow?.some((a) => a.test(line))) continue
-        hit = { line: i + 1, text: line.trim().slice(0, 160) }
+        hit = { line: i + 1, text: line }
         break
       }
       if (!hit) {
         // Nothing per-line: try the de-wrapped view for a phrase split across lines.
         const m = joined.match(rule.pattern)
         if (m && !rule.allow?.some((a) => a.test(joined))) {
-          hit = { line: 0, text: `…${m[0]}… (wrapped across lines)` }
+          // The match with a margin as long as the longest marker each side: a marker straddling its edge is one too.
+          const margin = 256
+          hit = { line: 0, text: `…${m[0]}… (wrapped across lines)`, context: joined.slice(Math.max(0, m.index - margin), m.index + m[0].length + margin) }
         }
       }
-      if (hit) found.push({ file, line: hit.line, rule, text: hit.text })
+      if (hit) found.push({ file, line: hit.line, rule, text: hit.text, ...(hit.context !== undefined ? { context: hit.context } : {}) })
     }
   }
   return found
@@ -248,10 +253,31 @@ export function ruleTrippedByLine(file, line) {
   return null
 }
 
+/**
+ * What a finding prints of its line: nothing when `terms` is null (in CI with
+ * no marker list loaded: nothing rules out that the line holds one), the
+ * withheld note when the line, or the text around a de-wrapped match, holds a
+ * marker's term, else the line cut to 160 characters
+ * (tools/private-marker-list.mjs, as the history gate prints its findings).
+ * @param {{text: string, context?: string}} finding
+ * @param {string[] | null} terms  printableTerms: each marker's term, [] with no list outside CI, null in CI with none
+ * @returns {string | undefined}
+ */
+export function printedText(finding, terms) {
+  if (terms === null) return undefined
+  if (finding.context !== undefined && terms.some((term) => foldCase(finding.context).includes(term))) return WITHHELD
+  return withheldLine(finding.text, terms)
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
+  // The private marker list (a local .leak-markers, or PRIVATE_LEAK_MARKERS on the publish path), read as the
+  // history gate reads it; in CI with no list, no line is printed.
+  const markers = readMarkerList(process.env, "check-public-surface")
+  const terms = printableTerms(markers, process.env)
   const offenders = scanTrackedFiles()
   if (offenders.length > 0) {
     console.error(`Public-surface check FAILED — ${offenders.length} finding(s) in tracked files:\n`)
+    if (terms === null) console.error(`  ${LINES_NOT_SHOWN}\n`)
     const byRule = new Map()
     for (const o of offenders) {
       if (!byRule.has(o.rule.id)) byRule.set(o.rule.id, [])
@@ -259,7 +285,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     }
     for (const [id, list] of byRule) {
       console.error(`  [${id}] ${list[0].rule.why}`)
-      for (const o of list) console.error(`    ${o.file}:${o.line}\n      ${o.text}`)
+      for (const o of list) {
+        const text = printedText(o, terms)
+        console.error(`    ${o.line > 0 ? `${o.file}:${o.line}` : `${o.file} (wrapped across lines)`}`)
+        if (text !== undefined) console.error(`      ${text}`)
+      }
       console.error("")
     }
     console.error("Every tracked file ships inside the public release tarball. Reword the")

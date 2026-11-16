@@ -128,7 +128,7 @@ export const LIP_SYNC_MAX_AUDIO_SECONDS: Record<string, number> = {
   "sync-lipsync-v3": 300,
   // Volcengine (KIE) — video-to-video dubbing, per-second, 5-min ceiling.
   "volcengine-lipsync": 300,
-  // The per-second-rate models: their own maximum (longer audio is refused, never trimmed).
+  // The per-second-rate models: their own maximum (longer audio is refused; up to the 0.05 s its hold forgives past it, held at the maximum and cut to it).
   ...Object.fromEntries(Object.entries(LIP_SYNC_AUDIO_RATES).map(([provider, rate]) => [provider, rate.maxSeconds])),
 }
 

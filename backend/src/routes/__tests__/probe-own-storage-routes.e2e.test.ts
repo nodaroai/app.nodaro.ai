@@ -81,7 +81,7 @@ import { maskCompositeRoutes } from "../mask-composite.js"
 import { pitchTempoRoutes } from "../pitch-tempo.js"
 import { execFileSync } from "node:child_process"
 import { measureVideoUtilityCharge } from "../../lib/video-utility-length.js"
-import { NOT_A_MEDIA_FILE } from "../../providers/video/probe-guard.js"
+import { MEDIA_LINK_BAD_HOST, NOT_A_MEDIA_FILE } from "../../providers/video/probe-guard.js"
 
 /** The demuxers the installed ffprobe has (Homebrew's has no `dash`). */
 const DEMUXERS = new Set(
@@ -170,7 +170,8 @@ describe("a self-host's own storage, on a private address, is measured on every 
     // strictly a stored file (another reader may decode it), so it is never downloaded.
     const res = await app.inject({ method: "POST", url: "/v1/pitch-tempo", payload: { audioUrl: own("/audio/voice%2Emp3"), semitones: 2 } })
     expect(res.statusCode).toBe(400)
-    expect(res.json().error.code).toBe("invalid_media_duration")
+    // Read as any other link on a private address: the link's to fix.
+    expect(res.json().error.code).toBe(MEDIA_LINK_BAD_HOST)
     expect(state.inserts).toEqual([])
     expect(media.hits).toEqual([])
   })

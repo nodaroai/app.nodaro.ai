@@ -23,6 +23,7 @@ import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { SwitchXAttribution } from "@/components/switchx-attribution"
 import { isInputWarningCode } from "@/lib/input-warning-codes"
 import type { SwitchXData } from "@/types/nodes"
+import { switchXMaxResolutionOf, switchXQuoteCreditId } from "@nodaro/render-rules"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_VIDEO      = (t: string) => isValidSwitchXConnection("video", t, isPickerType)
@@ -60,8 +61,8 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
   // resolution: a SAFE UPPER bound the charge can never exceed, exact for ~8s
   // clips. MUST match getModelIdentifier("switchx") so the run-button pill, the
   // run-confirm gate (>100cr) and the precheck all show ONE consistent number.
-  const estRes = nodeData.maxResolution === 720 ? 720 : 1080
-  const credits = useModelCredits(`beeble-switchx:240f:${estRes}p`, estRes === 720 ? 40 : 120)
+  const estRes = switchXMaxResolutionOf(nodeData as unknown as Record<string, unknown>)
+  const credits = useModelCredits(switchXQuoteCreditId(nodeData as unknown as Record<string, unknown>), estRes === 720 ? 40 : 120)
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
 

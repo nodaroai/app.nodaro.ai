@@ -3636,7 +3636,7 @@ export class KieVideoProvider
     // A model charged per second of its audio at a rate (OmniHuman 2.0): the
     // audio is downloaded once under the byte cap, its decoded length held to
     // the seconds the run was priced at, ALWAYS encoded to MP3 (padded to the
-    // minimum when shorter — never trimmed), the encode measured and held too,
+    // minimum when shorter, cut to the maximum when a hair past it), the encode measured and held too,
     // and the model is sent OUR stored encode, never the caller's URL
     // (lip-sync-audio.ts: price and send the same bytes). A model priced by a
     // length bucket arrives with its audio already prepared the same way by

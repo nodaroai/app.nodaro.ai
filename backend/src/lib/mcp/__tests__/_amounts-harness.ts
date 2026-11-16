@@ -157,13 +157,19 @@ export const DEFAULT_TABLES: TableRows = {
 }
 
 /** The routes the tools under test call, answered with the fixed quotes above. */
-export async function stubRoutes(opts: { useCaseRefusal?: { status: number; message: string } } = {}): Promise<FastifyInstance> {
+export async function stubRoutes(
+  opts: { useCaseRefusal?: { status: number; message: string; required?: number; balance?: number; estimate?: true } } = {},
+): Promise<FastifyInstance> {
   const fastify = Fastify()
   const type: UseCaseNodeType = "tighten-episode"
   fastify.post(usecaseEstimatePath(type), async () => ({ data: USE_CASE_QUOTE }))
   fastify.post("/v1/tighten-episode", async (_req, reply) => {
     const refusal = opts.useCaseRefusal
-    if (refusal) return reply.code(refusal.status).send({ error: { code: "insufficient_credits", message: refusal.message } })
+    if (refusal) {
+      // The route's body: its message, and the RAW figures it states beside the error (lib/use-case/credits-refusal.ts).
+      const { status, message, ...figures } = refusal
+      return reply.code(status).send({ error: { code: "insufficient_credits", message }, ...figures })
+    }
     return reply.code(202).send({ jobId: JOB_ID, executionId: EXECUTION_ID })
   })
   fastify.post(`/v1/workflows/${WORKFLOW_ID}/render-final/estimate`, async () => ({ data: RENDER_FINAL_QUOTE }))

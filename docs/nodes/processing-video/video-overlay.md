@@ -172,7 +172,7 @@ A successful run's output carries `warnings[]` — `{ layer?, slot?, code, detai
 ## Credit Cost
 
 - **Image-only run: 22 credits**<!-- credits: video-overlay --> per run, whatever the number of layers or the video's length. The base is not measured for the price.
-- **A run with any video layer: 11 credits<!-- credits-rate: video-overlay:video --> per started 5 seconds of the output** — the base video's length, which is the output's. Up to 0.05 s past a whole second is ignored first, so a 10.01 s base is 2 units, not 3.
+- **A run with any video layer: 11 credits<!-- credits-rate: video-overlay:video --> per started 5 seconds of the output** — the base video's length, which is the output's. Up to 0.05 s past a whole second is ignored first, so a 10.01 s base is 2 units, not 3. The length is the base's picture: its video stream's own length, else its `DURATION` tag (a WebM or MKV states its picture's length only there), else the end of its last frame (a tag or a last frame past the whole file's length is read as that length). Only when none of those can be read is the whole file's length used, less 0.15 seconds first, since a made clip's sound can carry its file that far past its picture.
 
 | Base video | Units | Credits |
 |---|---|---|

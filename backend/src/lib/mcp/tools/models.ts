@@ -14,6 +14,24 @@ import { isModelDenied, recommendationsServedHere } from "../../surface-deny.js"
 import { loadChargedPrices, type ChargedPrices } from "../../pricing/charged-prices.js"
 import { getPromptTips, getPromptDoctrine } from "@nodaro/prompts/doctrine"
 import { amountTerms, amountsNote, ownTermsActive, statedAmountFields, statedAmountRecord, statedBalance, unitFields } from "../amounts.js"
+import { statedFields, statedName } from "../deployment-name.js"
+
+/**
+ * A listed model's words as this deployment says them (deployment-name.ts):
+ * its label, description and maker's name. Its id, maker id and every figure
+ * stay as they are.
+ */
+function statedModelWords(row: Record<string, unknown>): Record<string, unknown> {
+  const out = statedFields(row, ["label", "description"])
+  const maker = out.maker as { id: string; name: string } | undefined
+  return out === row || !maker ? out : { ...out, maker: { ...maker, name: statedName(maker.name) } }
+}
+
+/** The catalog family a client names, as this deployment names it or as the catalog does. */
+function catalogFamilyOf(family: string): string {
+  const named = Object.values(MODEL_CATALOG).find((m) => statedName(m.family).toLowerCase() === family.toLowerCase())
+  return named?.family ?? family
+}
 
 const creditsReadGate: ToolGate = { required: ["credits:read"] }
 
@@ -273,7 +291,8 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
       const filtered = listModels({
         kind: args.kind as ModelKind | undefined,
         mode: args.mode as ModelMode | undefined,
-        family: args.family,
+        // A family as this deployment names it (deployment-name.ts) filters as the catalog's own.
+        family: args.family === undefined ? undefined : catalogFamilyOf(args.family),
       })
         // Drop legacy versions from MCP output — keeps Claude focused on the
         // current generation. Frontend pickers ignore mcpHidden.
@@ -290,11 +309,12 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
       const sections = groupByKindAndFamily(filtered).map(({ kind, families }) => ({
         kind,
         families: families.map(({ family, models }) => ({
-          family,
+          // The catalog's words in the deployment's own name (deployment-name.ts).
+          family: statedName(family),
           // `maker` but no `logoUrl`: GET /v1/models serves the marks to apps that draw them.
           // The pricing rows' credits in the deployment's unit when it has one
           // (GET /v1/models shares projectModel and keeps its own answer).
-          models: models.map((m) => statedPricing(projectModel(m, prices, { logos: "omit" }))),
+          models: models.map((m) => statedModelWords(statedPricing(projectModel(m, prices, { logos: "omit" })))),
         })),
       }))
 
@@ -302,11 +322,13 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
       // filter (otherwise audio recs leak into a "kind=image" call).
       // A house model this install does not serve is recommended nowhere.
       const allRecs = recommendationsServedHere(MODEL_RECOMMENDATIONS)
-      const recs = args.kind
-        ? allRecs.filter((r) =>
-            r.modelIds.some((id) => MODEL_CATALOG[id]?.kind === args.kind),
-          )
-        : allRecs
+      const recs = (
+        args.kind
+          ? allRecs.filter((r) =>
+              r.modelIds.some((id) => MODEL_CATALOG[id]?.kind === args.kind),
+            )
+          : allRecs
+      ).map((r) => statedFields(r, ["intent", "note"]))
 
       const totalModels = filtered.length
       return {

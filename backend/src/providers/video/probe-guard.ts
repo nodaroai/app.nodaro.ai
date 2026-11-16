@@ -41,6 +41,7 @@ import { lookup as dnsLookup } from "node:dns/promises"
 import { isPrivateOrReservedIP } from "@nodaro/shared/workflow"
 import { hasUrlParserHazard } from "@nodaro/shared/video"
 import { SINGLE_FILE_DEMUXERS } from "./single-file-demuxers.js"
+import { isNetworkProbeSource, namesALink, optionFileProblem } from "./link-arguments.js"
 
 /**
  * Why a probe link was refused: `address` — it is, or its host resolves to, a
@@ -314,9 +315,25 @@ export async function checkProbeHost(rawHost: string): Promise<readonly ProbeAdd
   return allowed
 }
 
-/** A probe input that names a network source (a local path never does). */
-export function isNetworkProbeSource(src: string): boolean {
-  return src.includes("://")
+// How an argv names a link (as written, in filter escaping, or in a file an option reads): `link-arguments.ts`.
+export { isNetworkProbeSource, namesALink }
+
+/**
+ * The refusal (reason `link`) of a run whose option reads its value from a
+ * file that names a link, or from anything this check cannot read as a plain
+ * local file (`optionFileProblem`); undefined when there is none. Checked
+ * before the run starts, by the toolkit's ffmpeg runners and by every raw
+ * ffprobe run (`unguardedProbeLinkRefusal`).
+ */
+export function optionFileLinkRefusal(args: readonly string[], tool: "ffmpeg" | "ffprobe"): ProbeSourceBlockedError | undefined {
+  const found = optionFileProblem(args)
+  if (!found) return undefined
+  return new ProbeSourceBlockedError(
+    "link",
+    found.problem === "names a link"
+      ? `${tool}: blocked — the file ${found.option} reads names a link; a link may only be read as an input (-i <link>)`
+      : `${tool}: blocked — ${found.option} reads its value from something that is not a readable local file, so it cannot be checked for links`,
+  )
 }
 
 /**
@@ -391,6 +408,11 @@ export function probeInputArgs(src: string): string[] {
  * guard's proxy.
  */
 export const PROBE_GUARD_OPTIONS: ReadonlySet<string> = new Set(["-protocol_whitelist", "-protocol_blacklist", "-format_whitelist", "-enable_drefs", "-max_redirects", "-http_proxy"])
+
+/** Whether `arg` sets one of {@link PROBE_GUARD_OPTIONS}, also with its value read from a file (`-/protocol_whitelist <file>`). */
+export function isProbeGuardOption(arg: string): boolean {
+  return PROBE_GUARD_OPTIONS.has(arg.startsWith("-/") ? `-${arg.slice(2)}` : arg)
+}
 
 /**
  * The input options an ffmpeg run places right before a link's `-i`
@@ -503,8 +525,28 @@ export const PROBE_UNAVAILABLE = Object.freeze({
   message: "Could not read the link just now — run it again.",
 })
 
+/**
+ * What a measuring route answers a link whose host it will not read (a 400:
+ * the link has to change): {@link LINK_HOST_NOT_FOUND} for a host that does
+ * not exist (reason `host`), {@link LINK_NOT_PUBLIC} for one that is, resolves
+ * to, or redirects to a private or reserved address (reason `address`).
+ */
+export const MEDIA_LINK_BAD_HOST = "media_link_bad_host" as const
+
+/** A link whose host does not exist: its own 400, never "the file may be corrupted". */
+export const LINK_HOST_NOT_FOUND = Object.freeze({
+  code: MEDIA_LINK_BAD_HOST,
+  message: "Could not read the link: its host was not found. Check the link.",
+})
+
+/** A link on (or redirecting to) a private or reserved address, which the server never reads: its own 400. */
+export const LINK_NOT_PUBLIC = Object.freeze({
+  code: MEDIA_LINK_BAD_HOST,
+  message: "Could not read the link: it points to a private or reserved address, which the server does not read. Use a link to a public host, or upload the file.",
+})
+
 /** The codes {@link probeLinkRefusal} answers. */
-export type ProbeLinkRefusalCode = typeof NOT_A_MEDIA_FILE.code | typeof LINK_HOST_UNREACHABLE.code | typeof LINK_READ_TIMED_OUT.code | typeof PROBE_UNAVAILABLE.code
+export type ProbeLinkRefusalCode = typeof NOT_A_MEDIA_FILE.code | typeof LINK_HOST_UNREACHABLE.code | typeof LINK_READ_TIMED_OUT.code | typeof PROBE_UNAVAILABLE.code | typeof MEDIA_LINK_BAD_HOST
 
 /** `err` and the errors it was caused by, nearest first (a few levels: a guard refusal wraps the run's failure). */
 function causeChain(err: unknown): unknown[] {
@@ -535,26 +577,41 @@ export function probeNotRun(err: unknown): boolean {
  *   later one) → 503 {@link LINK_HOST_UNREACHABLE}, `source_unreachable`;
  * - a read that ran out of time → 503 {@link LINK_READ_TIMED_OUT}, `probe_timeout`;
  * - a read the server could not run (its reader failed to start, or it was
- *   stopped) → 503 {@link PROBE_UNAVAILABLE}, `probe_unavailable`.
- * Undefined for anything else (a host that does not exist, a private address,
- * a file ffprobe cannot read): the route's own "could not read" refusal (400).
- * The 503 codes are the ones Trim, Loop and Combine Videos answer, and the
- * ones MCP passes on with their message. Read by shape, so a test's stand-in
- * error class reads the same.
+ *   stopped) → 503 {@link PROBE_UNAVAILABLE}, `probe_unavailable`;
+ * - a host that does not exist (reason `host`) → 400 {@link LINK_HOST_NOT_FOUND},
+ *   and a private or reserved address, at the first hop or any later one
+ *   (reason `address`) → 400 {@link LINK_NOT_PUBLIC}: both `media_link_bad_host`.
+ * Undefined for anything else (a file ffprobe cannot read): the route's own
+ * "could not read" refusal (400). Trim, Loop and Combine Videos answer the same
+ * codes. MCP passes the 400s on with their message as it does every 400, and
+ * the 503s by name. Read by shape, so a test's stand-in error class reads the
+ * same.
  */
 export function probeLinkRefusal(err: unknown): { readonly code: ProbeLinkRefusalCode; readonly message: string } | undefined {
   const notMedia = notAMediaFileRefusal(err)
   if (notMedia) return notMedia
-  if ((err as { reason?: unknown } | null)?.reason === "dns") return LINK_HOST_UNREACHABLE
+  const reason = (err as { reason?: unknown } | null)?.reason
+  if (reason === "dns") return LINK_HOST_UNREACHABLE
   // Out of time anywhere in the chain (a stop whose cause is a timeout is a timeout).
   if (causeChain(err).some((c) => (c as { timedOut?: unknown }).timedOut === true || (c as { name?: unknown }).name === "TimeoutError")) return LINK_READ_TIMED_OUT
   if (probeNotRun(err)) return PROBE_UNAVAILABLE
+  if (reason === "host") return LINK_HOST_NOT_FOUND
+  if (reason === "address") return LINK_NOT_PUBLIC
   return undefined
+}
+
+/** The retryable codes a measuring route answers (503): run it again. */
+export type RetryableProbeRefusalCode = typeof LINK_HOST_UNREACHABLE.code | typeof LINK_READ_TIMED_OUT.code | typeof PROBE_UNAVAILABLE.code
+const RETRYABLE_PROBE_REFUSAL_CODES: ReadonlySet<string> = new Set<RetryableProbeRefusalCode>([LINK_HOST_UNREACHABLE.code, LINK_READ_TIMED_OUT.code, PROBE_UNAVAILABLE.code])
+
+/** Whether a measuring route's refusal is a retryable one ({@link probeRefusalStatus} 503). */
+export function isRetryableProbeRefusal<T extends { readonly code: string }>(refusal: T): refusal is T & { readonly code: RetryableProbeRefusalCode } {
+  return RETRYABLE_PROBE_REFUSAL_CODES.has(refusal.code)
 }
 
 /** The HTTP status of a measuring route's refusal code: 503 for a retryable one, 400 for the rest. */
 export function probeRefusalStatus(code: string): 400 | 503 {
-  return code === LINK_HOST_UNREACHABLE.code || code === LINK_READ_TIMED_OUT.code || code === PROBE_UNAVAILABLE.code ? 503 : 400
+  return RETRYABLE_PROBE_REFUSAL_CODES.has(code) ? 503 : 400
 }
 
 /**
@@ -620,13 +677,17 @@ export function isProbeGuardEnv(env: NodeJS.ProcessEnv | undefined): boolean {
 
 /**
  * FAIL CLOSED: a raw ffprobe run is never handed a link. A run whose arguments
- * name one (anything with "://") must carry a guarded run's environment
- * (`readProbeSource` gives it); otherwise this is the error it is refused
- * with, before ffprobe starts. Every place that starts ffprobe itself checks
- * its arguments with it (the probe guard census holds that).
+ * name one (`namesALink`: "://" as written, or in filter escaping) must carry a
+ * guarded run's environment (`readProbeSource` gives it); otherwise this is the
+ * error it is refused with, before ffprobe starts. A link in a file an option
+ * reads its value from (`-/i <file>`) is refused in every run, guarded or not
+ * (`optionFileLinkRefusal`). Every place that starts ffprobe itself checks its
+ * arguments with it (the probe guard census holds that).
  */
 export function unguardedProbeLinkRefusal(args: readonly string[], env: NodeJS.ProcessEnv | undefined): Error | undefined {
-  if (isProbeGuardEnv(env) || !args.some((a) => isNetworkProbeSource(a))) return undefined
+  const fromFile = optionFileLinkRefusal(args, "ffprobe")
+  if (fromFile) return fromFile
+  if (isProbeGuardEnv(env) || !args.some((a) => namesALink(a))) return undefined
   return new Error("ffprobe was handed a link outside the probe guard: read a link with readProbeSource or a guarded probe")
 }
 

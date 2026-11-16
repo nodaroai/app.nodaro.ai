@@ -18,7 +18,7 @@ export const m = {
   authKind: "jwt" as "jwt" | "internal" | "api_token",
   prepared: null as unknown,
   preflight: null as unknown,
-  cover: { ok: true } as { ok: boolean; balance?: number },
+  cover: { ok: true } as { ok: boolean; balance?: number; subscriptionRequired?: true },
   coverArgs: [] as unknown[],
   estimateCalls: 0,
   estimatedTypes: [] as Array<string | undefined>,
@@ -140,6 +140,8 @@ export async function makeApp(): Promise<FastifyInstance> {
     req.authKind = m.authKind
     if (m.payer) req.billingContext = m.payer as never
   })
+  // The input-link judge, as app.ts registers it (inert unless a test sets the lever).
+  ;(await import("../../../middleware/input-links.js")).registerInputLinkJudge(app)
   // Loaded on first use, once the state the mocks read exists.
   const { usecaseRunRoutes } = await import("../../use-case-run.js")
   await app.register(usecaseRunRoutes)

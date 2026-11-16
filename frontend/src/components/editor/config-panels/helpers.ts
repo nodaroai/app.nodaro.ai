@@ -51,7 +51,7 @@ import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, transcribeNodeReturnsWords, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
-import { aiAvatarCreditIdOf, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { aiAvatarQuoteCreditId, switchXQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsPricedReferenceVideo } from "@/lib/seedance-ref-quote"
 import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
@@ -61,7 +61,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { addCaptionsQuotedSec, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { addCaptionsQuotedSec, aiAvatarQuotedAudioSec, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
@@ -684,8 +684,9 @@ export function getModelIdentifier(
   // seeded composite, not the bare provider/type key (`heygen` / `reference-sheet`
   // are intentionally unpriced — the bare key triggered the "operator must seed"
   // warning and would 503 at Run time).
-  // The server's own id (`aiAvatarCreditIdOf`): never a probed length the node's data carries.
-  if (nodeType === "ai-avatar") return aiAvatarCreditIdOf(data)
+  // The server's own id (`aiAvatarQuoteCreditId`): in audio mode the bucket of the audio the editor's Run plays as
+  // the measured walk reads it, else the 120-second default, a minimum — never a probed length the node's data carries.
+  if (nodeType === "ai-avatar") return aiAvatarQuoteCreditId(data, aiAvatarQuotedAudioSec(node, nodes ?? [], edges ?? [], reruns))
   if (nodeType === "cinematic-avatar") return resolveCinematicCreditId(data)
   if (nodeType === "reference-sheet") {
     return referenceSheetCreditId(data.flavour as { outputFormat?: string } | undefined)
@@ -696,10 +697,9 @@ export function getModelIdentifier(
   // run-confirm gate, precheck) is one consistent SAFE UPPER bound — the real
   // reserve is always ≤ this, and it matches exactly for ~8s clips. (Bare
   // `beeble-switchx` is the resolution-blind 1080p worst-case — never use it for
-  // a 720p node.) Must match the id in switchx-node.tsx's run-button pill.
-  if (nodeType === "switchx") {
-    return `beeble-switchx:240f:${data.maxResolution === 720 ? 720 : 1080}p`
-  }
+  // a 720p node.) The one id the server's estimate, the workflow run's hold and
+  // switchx-node.tsx's run-button pill read (`switchXQuoteCreditId`).
+  if (nodeType === "switchx") return switchXQuoteCreditId(data)
 
   // Video nodes with duration/audio-based variable pricing or T2V cost overrides.
   // generate-video uses i2v as the FE display default — the backend

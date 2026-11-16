@@ -311,6 +311,13 @@ describe("renderVideoOverlay — video layers: fetch, probe, order", () => {
     expect(err.message).toBe("The base video is 11 seconds, longer than the 10 seconds this run was priced for — run it again")
   })
 
+  it("checks the charge by the length the charge read: an MKV of 4.9 s of picture and 5.7 s of sound, charged 1 unit, renders", async () => {
+    // Read by its container (5.7 s, past the half-second slack and the 5 s unit), the same run would be refused.
+    m.probeVideoOverlayBase.mockImplementationOnce(async () => ({ ...PROBE, streamDurationSec: 5.7, containerSec: 5.7, videoStreamIndex: 0, videoTagSec: 4.9 }))
+    await renderVideoOverlay(payload({ billedUnits: 1, layers: [{ videoUrl: V, start: 0 }] }), WORK)
+    expect(m.runFfmpeg).toHaveBeenCalledTimes(1)
+  })
+
   it("a base no longer than it was priced for renders (5 s, 1 unit)", async () => {
     await renderVideoOverlay(payload({ billedUnits: 1, layers: [{ videoUrl: V, start: 0 }] }), WORK)
     expect(m.runFfmpeg).toHaveBeenCalledTimes(1)

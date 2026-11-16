@@ -70,6 +70,41 @@
 		}
 	}
 
+	# The container's health address is the API server's own: 200 with the
+	# API's answer while it is up, this proxy's 502 while it is down or still
+	# starting, its 504 when the API has not answered within 5 s (a stalled
+	# process). The app's page answered it before, 200 whenever this proxy was
+	# up, so the container stayed green while every API call failed (incident
+	# 2026-11-15). Every spelling of the address itself (a trailing slash, `;`
+	# parameters, either one percent-encoded, another letter case, dot
+	# segments; matched on the cleaned path) is rewritten to the literal /health,
+	# query kept, so a monitor typed any of those ways reads the same real
+	# status. A path under it (/health/x) is not the address: it goes to the API
+	# as sent, which refuses it (401, no route there is public). The rewrite
+	# names no other path, so it cannot reach any other API route. Every host
+	# this site serves answers it the same; it is left out of the page rules
+	# below (@spa_document, @spa_noindex) like the rest of the API. The 5 s
+	# limit is this rule's alone: /v1/* carries event streams that stay open for
+	# minutes. No answer of this rule is ever stored (a CDN keeping "healthy"
+	# would hide an outage): one Cache-Control, no-store, set before the
+	# hand-off so it is on this proxy's own 502 and 504 too, replacing the
+	# no-cache @html adds to a dot-less path, with the API's own value dropped.
+	@health_address path /health /health/* /health;*
+	handle @health_address {
+		@health_spelling path /health /health/ /health;*
+		rewrite @health_spelling /health
+		header Cache-Control "no-store"
+		request_header -X-Internal-Orchestrator
+		request_header -X-Internal-Orchestrator-Secret
+		reverse_proxy 127.0.0.1:9000 {
+			import client_ip_header
+			header_down -Cache-Control
+			transport http {
+				response_header_timeout 5s
+			}
+		}
+	}
+
 	# OAuth discovery endpoints (RFC 8414 + RFC 9728) MUST be served by the
 	# backend, not the SPA fallback. Without this, MCP clients (Claude.ai etc.)
 	# probing app.nodaro.ai/.well-known/oauth-authorization-server get HTML
@@ -439,7 +474,7 @@
 	# actually prerenders this one.
 	@spa_document {
 		path_regexp spa_doc ^([^.]*|/.*\.html)$
-		not path /assets/* /v1/* /.well-known/* /storage/* /supabase/* /og/* /mcp*
+		not path /assets/* /v1/* /health /health/* /health;* /.well-known/* /storage/* /supabase/* /og/* /mcp*
 	}
 	header @spa_document Supports-Loading-Mode "credentialed-prerender"
 
@@ -466,7 +501,7 @@
 	@spa_noindex {
 		path_regexp spa_route ^([^.]*|/.*\.html)$
 		not path / /login /signup /gallery /app/* /tutorials/*
-		not path /v1/* /.well-known/* /storage/* /supabase/* /og/*
+		not path /v1/* /health /health/* /health;* /.well-known/* /storage/* /supabase/* /og/*
 	}
 	header @spa_noindex X-Robots-Tag "noindex"
 }

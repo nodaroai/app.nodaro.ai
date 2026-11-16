@@ -21,6 +21,7 @@ import {
   resolveVideoOverlayGeometry,
   validateVideoOverlayRequest,
   videoOverlayCanvas,
+  videoOverlayHasVideoLayer,
   videoOverlayLayerLabel,
   type VideoOverlayBox,
   type VideoOverlayBoxInput,
@@ -32,6 +33,7 @@ import {
 } from "@nodaro/shared/video"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { videoOverlayRefusalAtLength, videoOverlayRefusalForCharge } from "../../lib/video-overlay-refusal.js"
+import { videoOverlayChargedSec } from "../../lib/video-track-length.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { downloadFile, probeVideoOverlayBase, runFfmpeg, withFfmpegSlot, type VideoOverlayBaseProbe } from "./ffmpeg-utils.js"
 import { DEFAULT_FFMPEG_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
@@ -164,7 +166,10 @@ export async function renderVideoOverlay(payload: VideoOverlayJobPayload, workDi
   // route and the workflow run refused it with before charging; then that the
   // run was charged for this length (the base may have changed since its price
   // was measured). Refused before anything is fetched, and refunded.
-  const lengthRefusal = videoOverlayRefusalAtLength(request, probe.streamDurationSec) ?? videoOverlayRefusalForCharge(layers, payload.billedUnits, probe.streamDurationSec)
+  // The charge's check reads the length the charge read: the base's picture (`videoOverlayChargedSec`), never
+  // the container a WebM / MKV's longer sound runs to. Read only for a run with a video layer.
+  const chargedSec = videoOverlayHasVideoLayer(layers) ? await videoOverlayChargedSec(probe, inputPath) : probe.streamDurationSec
+  const lengthRefusal = videoOverlayRefusalAtLength(request, probe.streamDurationSec) ?? videoOverlayRefusalForCharge(layers, payload.billedUnits, chargedSec)
   if (lengthRefusal) throw new DeterministicJobError(lengthRefusal.message)
   const { kept, warnings } = clampVideoOverlayLayers(layers, probe.streamDurationSec)
   const firstVideo = firstVideoLayerIndex(layers)

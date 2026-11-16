@@ -82,7 +82,7 @@ function session(extra: { workspaceId?: string } = {}) {
 async function listed(): Promise<string[]> {
   const server = buildServer()
   // The funnel buildMcpServer installs, with what this deployment offers now.
-  installToolOffer(server, { userId: "u1", offer: await resolveToolOffer("u1") })
+  installToolOffer(server, { session: { userId: "u1" }, offer: await resolveToolOffer("u1") })
   const s = session()
   registerPipelineTools({ server, session: s })
   registerVideoDirectorTools({ server, session: s, fastify: Fastify() } as Parameters<typeof registerVideoDirectorTools>[0])
