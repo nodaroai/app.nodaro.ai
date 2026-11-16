@@ -1,84 +1,44 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest"
-import { costOf, doneSteps, outcomesAfterRun, outcomesAfterStop, statusOf, stepsOfEntry, withAgentEvent, withoutSteps, type StatusInput } from "../panel-model"
+import { PAID_STEPS, costOf, doneSteps, lockedSteps, outcomesAfterStop, statusOf, withoutSteps, type StatusInput } from "../panel-model"
+import { DEFAULT_PARAMS } from "../request-reading"
+import { EMPTY_SUMMARY } from "../run/types"
 
-const SUMMARY = { fromSeconds: 26.3, toSeconds: 12.4, pausesCut: 7, fillersCut: 1, captions: 19, music: true }
+const SUMMARY = { ...EMPTY_SUMMARY, fromSeconds: 182, toSeconds: 151, pausesCut: 23, captions: 148, music: true, bpm: 112 }
+const plan = (steps: Parameters<typeof costOf>[0], cannot: string[] = []) => ({ steps, params: DEFAULT_PARAMS, reply: null, cannot })
 
-describe("the cards during a run", () => {
-  it("the Cutter's state is the pauses' and the filler words' alike, for the steps the plan has", () => {
-    const working = withAgentEvent({}, "cutter", ["pauses", "fillers", "music"], { state: "working", key: "freecutAi.cutting", vars: { done: 2, total: 8 }, progress: 0.25 })
-    expect(working.pauses).toEqual({ state: "working", key: "freecutAi.cutting", vars: { done: 2, total: 8 }, progress: 0.25 })
-    expect(working.fillers).toEqual(working.pauses)
-    expect(working.music).toBeUndefined()
-    expect(withAgentEvent({}, "cutter", ["pauses"], { state: "working", key: "freecutAi.cutting" }).fillers).toBeUndefined()
-  })
-
-  it("the Assistant's state belongs to no card", () => {
-    expect(withAgentEvent({}, "lead", ["pauses", "captions"], { state: "working", key: "freecutAi.listening" })).toEqual({})
-  })
-
-  it("a failed step keeps the provider's own words", () => {
-    const next = withAgentEvent({}, "sound", ["music"], { state: "failed", key: "freecutAi.musicFailed", detail: "Suno refused the prompt" })
-    expect(next.music).toEqual({ state: "failed", key: "freecutAi.musicFailed", vars: undefined, progress: undefined, detail: "Suno refused the prompt" })
-  })
-})
-
-describe("the cards after a run", () => {
-  it("each done step says what it did on its own", () => {
-    const done = { state: "done" as const, key: "freecutAi.cutDone" as const }
-    const after = outcomesAfterRun({ pauses: done, fillers: done, captions: { state: "done", key: "freecutAi.captionsDone" }, music: { state: "done", key: "freecutAi.musicDone" } }, SUMMARY, ["pauses", "fillers", "captions", "music"])
-    expect(after.pauses).toEqual({ state: "done", key: "freecutAi.summaryPauses", vars: { n: 7 } })
-    expect(after.fillers).toEqual({ state: "done", key: "freecutAi.summaryFillersOne" })
-    expect(after.captions).toEqual({ state: "done", key: "freecutAi.summaryCaptions", vars: { n: 19 } })
-    expect(after.music).toEqual({ state: "done", key: "freecutAi.musicDone" })
-  })
-
-  it("filler words asked for and none found is still done, and says so", () => {
-    const after = outcomesAfterRun({ fillers: { state: "done", key: "freecutAi.cutDone" } }, { ...SUMMARY, fillersCut: 0 }, ["fillers"])
-    expect(after.fillers).toEqual({ state: "done", key: "freecutAi.noFillers" })
-  })
-
-  it("a step that failed or was skipped is not done, so it can be asked for again", () => {
-    const outcomes = { pauses: { state: "done" as const, key: "freecutAi.cutDone" as const }, music: { state: "failed" as const, key: "freecutAi.musicFailed" as const }, captions: { state: "skipped" as const, key: "freecutAi.noSpeech" as const } }
-    expect(doneSteps(outcomesAfterRun(outcomes, SUMMARY, ["pauses", "music", "captions"]))).toEqual(["pauses"])
-  })
-
-  it("a card an earlier run finished keeps what it said", () => {
-    // Run 1 added captions; run 2 adds only music, so its summary counts no captions.
-    const before = { captions: { state: "done" as const, key: "freecutAi.summaryCaptions" as const, vars: { n: 19 } }, fillers: { state: "done" as const, key: "freecutAi.summaryFillersOne" as const }, music: { state: "done" as const, key: "freecutAi.musicDone" as const } }
-    const after = outcomesAfterRun(before, { ...SUMMARY, captions: 0, fillersCut: 0, pausesCut: 0 }, ["music"])
-    expect(after.captions).toEqual(before.captions)
-    expect(after.fillers).toEqual(before.fillers)
-  })
-
-  it("an undo entry stands for the steps its run did: a cut for that run's pauses and filler words", () => {
-    const labels = { pauses: "Cut the pauses", fillers: "Remove filler words", captions: "Add captions", music: "Add music" }
-    expect(stepsOfEntry("Cut the pauses", labels, ["fillers", "pauses", "music"])).toEqual(["fillers", "pauses"])
-    expect(stepsOfEntry("Remove filler words", labels, ["fillers"])).toEqual(["fillers"])
-    expect(stepsOfEntry("Add captions", labels, ["captions"])).toEqual(["captions"])
-    expect(stepsOfEntry("Add music", labels, ["music"])).toEqual(["music"])
-    expect(stepsOfEntry("by hand", labels, ["music"])).toEqual([])
-    expect(withoutSteps({ captions: { state: "done", key: "freecutAi.captionsDone" }, music: { state: "done", key: "freecutAi.musicDone" } }, ["captions"])).toEqual({ music: { state: "done", key: "freecutAi.musicDone" } })
-  })
-
-  it("after a stop, what was at work or waiting did not finish", () => {
+describe("the cards", () => {
+  it("after a stop, what was at work or waiting did not finish and can be asked for again", () => {
     const after = outcomesAfterStop({ pauses: { state: "done", key: "freecutAi.cutDone" }, captions: { state: "working", key: "freecutAi.captioning", progress: 0.4 }, music: { state: "waiting", key: "freecutAi.waiting" } })
     expect(after.pauses?.state).toBe("done")
     expect(after.captions).toMatchObject({ state: "skipped", key: "freecutAi.notFinished", progress: undefined })
     expect(after.music).toMatchObject({ state: "skipped", key: "freecutAi.notFinished" })
+    expect(doneSteps(after)).toEqual(["pauses"])
+  })
+
+  it("an undone step is forgotten, so its card can be asked for again", () => {
+    expect(withoutSteps({ captions: { state: "done", key: "freecutAi.captionsDone" }, music: { state: "done", key: "freecutAi.musicDone" } }, ["captions"])).toEqual({ music: { state: "done", key: "freecutAi.musicDone" } })
+  })
+
+  it("a done step with no 'again' is locked; one that is redone or made again is not", () => {
+    const done = { state: "done" as const, key: "freecutAi.cutDone" as const }
+    const outcomes = { pauses: done, phone: done, captions: done, clips: done, chapters: done, music: { state: "failed" as const, key: "freecutAi.musicFailed" as const } }
+    expect(lockedSteps(outcomes).sort()).toEqual(["pauses", "phone"])
+    expect(doneSteps(outcomes)).not.toContain("music")
   })
 })
 
 describe("the status line", () => {
-  const base: StatusInput = { phase: { kind: "idle" }, view: "edited", listening: false, planSteps: [], outcomes: {}, working: "", elapsed: "" }
+  const base: StatusInput = { phase: { kind: "idle" }, stage: "reading", waiting: false, view: "edited", planSteps: [], outcomes: {}, working: "", elapsed: "" }
+  const running = { ...base, phase: { kind: "running" as const, startedAt: 0 } }
 
   it("says it is ready, then reading, listening, and how far the work is", () => {
     expect(statusOf(base)).toMatchObject({ kind: "ready", title: "freecutAi.status.ready" })
-    const running = { ...base, phase: { kind: "running" as const, startedAt: 0 } }
     expect(statusOf(running)).toMatchObject({ kind: "busy", title: "freecutAi.status.reading" })
-    expect(statusOf({ ...running, planSteps: ["pauses", "captions"], listening: true })).toMatchObject({ kind: "busy", title: "freecutAi.status.listening" })
+    expect(statusOf({ ...running, stage: "listening", planSteps: ["pauses", "captions"] })).toMatchObject({ kind: "busy", title: "freecutAi.status.listening" })
     const midway = statusOf({
       ...running,
+      stage: "working",
       planSteps: ["pauses", "captions"],
       outcomes: { pauses: { state: "done", key: "freecutAi.cutDone" }, captions: { state: "working", key: "freecutAi.captioning", progress: 0.5 } },
       working: "Captions",
@@ -88,17 +48,19 @@ describe("the status line", () => {
     expect(midway.bar).toBeCloseTo(0.75)
   })
 
+  it("says when the run waits for a free slot on the account", () => {
+    expect(statusOf({ ...running, stage: "working", planSteps: ["music"], waiting: true })).toMatchObject({ title: "freecutAi.status.waitingSlot" })
+  })
+
   it("says when it is done, stopped, undone, asked to choose, or when nothing ran", () => {
     expect(statusOf({ ...base, phase: { kind: "done", summary: SUMMARY } })).toMatchObject({ kind: "ok", title: "freecutAi.status.done" })
     expect(statusOf({ ...base, phase: { kind: "stopped" } })).toMatchObject({ kind: "warn", title: "freecutAi.status.stopped" })
     expect(statusOf({ ...base, phase: { kind: "undone" } })).toMatchObject({ title: "freecutAi.status.undone" })
-    const leftOut = { steps: ["pauses" as const], musicStyle: null, reply: null, cannot: ["make the shirt blue"] }
-    expect(statusOf({ ...base, phase: { kind: "confirming", plan: leftOut, extra: { listen: false, music: false } } })).toMatchObject({ kind: "warn", title: "freecutAi.confirmTitle" })
-    expect(statusOf({ ...base, phase: { kind: "confirming", plan: { ...leftOut, cannot: [] }, extra: { listen: true, music: true } } })).toMatchObject({ kind: "warn", title: "freecutAi.confirmCostTitle" })
-    const plan = { steps: [], musicStyle: null, reply: null, cannot: ["make the shirt blue"] }
-    expect(statusOf({ ...base, phase: { kind: "declined", plan, reason: "cannot" } })).toMatchObject({ title: "freecutAi.declinedTitle", sub: "freecutAi.nothingEdited" })
-    expect(statusOf({ ...base, phase: { kind: "declined", plan, reason: "nothing" } })).toMatchObject({ title: "freecutAi.declinedNothing" })
-    expect(statusOf({ ...base, phase: { kind: "declined", plan, reason: "done" } })).toMatchObject({ kind: "ready", title: "freecutAi.status.alreadyDone" })
+    expect(statusOf({ ...base, phase: { kind: "confirming", plan: plan(["pauses"], ["make the shirt blue"]), extra: { listen: false, steps: [] } } })).toMatchObject({ kind: "warn", title: "freecutAi.confirmTitle" })
+    expect(statusOf({ ...base, phase: { kind: "confirming", plan: plan(["music"]), extra: { listen: true, steps: ["music"] } } })).toMatchObject({ kind: "warn", title: "freecutAi.confirmCostTitle" })
+    expect(statusOf({ ...base, phase: { kind: "declined", plan: plan([], ["fly"]), reason: "cannot" } })).toMatchObject({ title: "freecutAi.declinedTitle", sub: "freecutAi.nothingEdited" })
+    expect(statusOf({ ...base, phase: { kind: "declined", plan: plan([]), reason: "nothing" } })).toMatchObject({ title: "freecutAi.declinedNothing" })
+    expect(statusOf({ ...base, phase: { kind: "declined", plan: plan([]), reason: "done" } })).toMatchObject({ kind: "ready", title: "freecutAi.status.alreadyDone" })
   })
 
   it("says the original is showing, whatever else is going on", () => {
@@ -107,18 +69,38 @@ describe("the status line", () => {
 })
 
 describe("what a request is charged", () => {
-  const prices = { read: 1, listen: 22, music: 33 }
+  const prices = { read: 1, listen: 22, choose: 2, steps: { music: 33, broll: 30, mistakes: 6, phone: 12, layout: 12, clips: 40, chapters: 15, trailer: 25, picture: 120, cameras: 18 } }
 
-  it("reading always, listening once per video for a step that reads the words, and the music", () => {
-    expect(costOf(["pauses", "captions"], { heard: false, prices })).toEqual({ total: 23, parts: [{ key: "freecutAi.cost.read", credits: 1 }, { key: "freecutAi.cost.listen", credits: 22 }] })
-    expect(costOf(["pauses", "captions"], { heard: true, prices }).total).toBe(1)
-    expect(costOf(["music"], { heard: false, prices }).total).toBe(34)
-    expect(costOf(["fillers", "music"], { heard: false, prices }).total).toBe(56)
-    expect(costOf([], { heard: false, prices }).total).toBe(1)
+  it("editing on the timeline is free: cutting pauses and laying captions pay only the listening", () => {
+    expect(costOf(["pauses", "captions"], { heard: false, read: false, prices })).toEqual({ total: 22, parts: [{ key: "freecutAi.cost.listen", credits: 22 }] })
+    expect(costOf(["pauses", "captions", "color"], { heard: true, read: false, prices }).total).toBe(0)
+  })
+
+  it("reading is paid only for a request in the person's own words", () => {
+    expect(costOf(["color"], { heard: false, read: true, prices }).total).toBe(1)
+    expect(costOf(["color"], { heard: false, read: false, prices }).total).toBe(0)
+  })
+
+  it("listens once per video, only for a step that reads the words", () => {
+    expect(costOf(["music"], { heard: false, read: false, prices }).total).toBe(33)
+    expect(costOf(["fillers", "music"], { heard: false, read: false, prices }).total).toBe(55)
+    expect(costOf(["fillers", "music"], { heard: true, read: false, prices }).total).toBe(33)
+  })
+
+  it("the creative pass is paid once for b-roll and zoom together", () => {
+    const cost = costOf(["broll", "zoom"], { heard: true, read: false, prices })
+    expect(cost.parts.map((p) => p.key)).toEqual(["freecutAi.cost.choose", "freecutAi.cost.broll"])
+    expect(cost.total).toBe(32)
+  })
+
+  it("every paid step has its own line", () => {
+    const cost = costOf([...PAID_STEPS], { heard: true, read: false, prices })
+    expect(cost.parts.map((p) => p.key)).toEqual(["freecutAi.cost.choose", ...PAID_STEPS.map((s) => `freecutAi.cost.${s}`)])
+    expect(cost.total).toBe(2 + 33 + 30 + 6 + 12 + 12 + 40 + 15 + 25 + 120 + 18)
   })
 
   it("has no figure while a price it needs is unknown", () => {
-    expect(costOf(["music"], { heard: false, prices: { read: 1, listen: 22 } }).total).toBeUndefined()
-    expect(costOf(["pauses"], { heard: true, prices: { read: 1 } }).total).toBe(1)
+    expect(costOf(["music"], { heard: false, read: false, prices: { read: 1, listen: 22, steps: {} } }).total).toBeUndefined()
+    expect(costOf(["pauses"], { heard: true, read: true, prices: { read: 1, steps: {} } }).total).toBe(1)
   })
 })

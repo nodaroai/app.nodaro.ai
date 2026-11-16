@@ -205,6 +205,8 @@ const REFINE_POLL =
   "inside `pollImageRefineToNode`, which marks the node `running` (the run-start reset) before its create request"
 const UNMOUNTED = "the legacy scene editor: nothing renders `SceneEditorModal`"
 const SCENE_EDITOR = "components/editor/scene-editor-modal"
+const EDIT_WITH_AI =
+  "Edit with AI in the video editor: what it pays for lands in the editor's own timeline (the FreeCut modal, or a host's framed editor), never on a canvas node, and the run cancels its jobs when the editor closes"
 
 /** Every other file with a paid call outside the wrapper, why it needs no mark, and how many it holds. */
 const ALLOWED: ReadonlyMap<string, Allowed> = new Map<string, Allowed>([
@@ -238,7 +240,16 @@ const ALLOWED: ReadonlyMap<string, Allowed> = new Map<string, Allowed>([
   ["hooks/queries/use-competitors-queries.ts", { refs: 1, why: "Competitors: a page of its own, with no canvas" }],
   ["ee/hooks/queries/use-admin-queries.ts", { refs: 3, why: "Admin → Trends' test run, its face mask and its upscales to 720p / 1080p: an admin page of its own, with no canvas; the test run's job is read back into the trend's test-run list, the face mask's into the face masking section, an upscale's into its example card or the source clip section" }],
   ["ee/app/(admin)/admin/trends/components/SlotDefaultImages.tsx", { refs: 1, why: "Admin → Trends' default-image upscale: an admin page of its own, with no canvas; the upscaled picture replaces the slot's default image in the trend draft" }],
-  ["ee/lib/freecut-ai/run-ai-edit.ts", { refs: 3, why: "Edit with AI in the video editor: the transcription, the planner call and the music land in the editor's own timeline (the FreeCut modal), never on a canvas node, and the run is cancelled with its jobs when the editor closes" }],
+  ["ee/lib/freecut-ai/run-ai-edit.ts", { refs: 1, why: `${EDIT_WITH_AI} (the planner's reading of the request)` }],
+  ["ee/lib/freecut-ai/run/listen.ts", { refs: 1, why: `${EDIT_WITH_AI} (the transcription)` }],
+  ["ee/lib/freecut-ai/run/cut.ts", { refs: 1, why: `${EDIT_WITH_AI} (the mistakes' edit plan)` }],
+  ["ee/lib/freecut-ai/run/creative.ts", { refs: 1, why: `${EDIT_WITH_AI} (the creative pass: b-roll moments, zoom lines, a trailer's moments)` }],
+  ["ee/lib/freecut-ai/run/music.ts", { refs: 1, why: `${EDIT_WITH_AI} (the music)` }],
+  ["ee/lib/freecut-ai/run/broll.ts", { refs: 1, why: `${EDIT_WITH_AI} (the b-roll images)` }],
+  ["ee/lib/freecut-ai/run/picture.ts", { refs: 2, why: `${EDIT_WITH_AI} (the shot's trim and its picture change)` }],
+  ["ee/lib/freecut-ai/run/layout.ts", { refs: 1, why: `${EDIT_WITH_AI} (the face tracking)` }],
+  ["ee/lib/freecut-ai/run/cameras.ts", { refs: 1, why: `${EDIT_WITH_AI} (the camera switching)` }],
+  ["ee/lib/freecut-ai/run/make.ts", { refs: 2, why: `${EDIT_WITH_AI} (the clips', trailer's and chapters' edit plans, and the fee of what is made)` }],
   ["routes/video-director-page.tsx", { refs: 1, why: "the Video Director: a page of its own, with no canvas" }],
   ["components/editor/scene-editor-modal.tsx", { refs: 2, why: UNMOUNTED, check: importedOnlyBy(SCENE_EDITOR, []) }],
   ["components/editor/scene-config.tsx", { refs: 1, why: UNMOUNTED, check: importedOnlyBy("components/editor/scene-config", [`${SCENE_EDITOR}.tsx`]) }],

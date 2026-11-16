@@ -22,6 +22,8 @@ export interface FreeCutAiSlotProps {
   readonly editorWindow: () => Window | null | undefined
   readonly editorOrigin: string
   readonly videoUrl: string
+  /** What the editor says it can do (`FREECUT_READY.capabilities`). */
+  readonly capabilities?: readonly string[]
   readonly onClose: () => void
   /** The panel asks for the whole editor area (`true`, while it shows the original video) or its side column. */
   readonly onLayout?: (wide: boolean) => void

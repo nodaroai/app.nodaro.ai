@@ -121,6 +121,7 @@ export const OTHER_JOB_TYPES: ReadonlySet<string> = composeSet("OTHER_JOB_TYPES"
   "motion-graphics-lottie", // the Lottie step of motion-graphics: an animation document
   "edit-plan", // an edit decision list (JSON)
   "camera-switch", // a switched edit decision list (JSON)
+  "use-case-fee", // a use-case node's per-run fee alone (Edit with AI built the result in the editor)
   "speaker-frames", // a face-track file (JSON)
   "character-lora-training", // trains a character model; makes no media
 ]), UNIT_NODE_DEFINITIONS.filter((u) => u.execution.kind === "worker" && nodeKindOf(u.type) === null).map((u) => u.type))

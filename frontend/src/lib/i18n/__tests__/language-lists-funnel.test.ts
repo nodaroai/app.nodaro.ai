@@ -25,6 +25,7 @@ const EXEMPT: Record<string, string> = {
   "lib/i18n/index.ts": "defines registeredChromeLocales (and re-exports the funnel)",
   "lib/surface-selectors.ts": "defines the locale.offered selector the funnel reads",
   "lib/locale-store.ts": "matches a saved or detected tag against the registry; lists nothing",
+  "ee/components/freecut-ai/panel/use-edit-session.ts": "collects Edit with AI's card phrases in every language the product speaks, so a request made of them in any language starts without the planner; lists nothing",
 }
 /** The operator's own screens: per-language CONTENT authoring (a trend's text in every language), not the interface language. */
 const EXEMPT_DIRS = ["ee/app/(admin)/"]

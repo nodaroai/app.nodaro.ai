@@ -183,6 +183,7 @@ import { generateLocationAssetRoutes } from "./routes/generate-location-asset.js
 import { generateSurroundContinuationRoutes } from "./routes/generate-surround-continuation.js"
 import { generateLocationMotionRoutes } from "./routes/generate-location-motion.js"
 import { adminSettingsRoutes } from "./ee/routes/admin-settings.js"
+import { useCaseFeeRoutes } from "./ee/routes/use-case-fee.js"
 import { adminImportSourcesRoutes } from "./ee/routes/admin-import-sources.js"
 import { adminImportShareRoutes } from "./ee/routes/admin-import-share.js"
 import { adminContentRestrictionsRoutes } from "./ee/routes/admin-content-restrictions.js"
@@ -821,6 +822,7 @@ export async function buildApp() {
   if (hasCredits() && !config.LLM_TIER_PRICING_ROLLBACK) warmLlmMeteredSchemaGate()
   if (hasCredits()) await app.register(creditsRoutes)
   if (hasCredits()) await app.register(ugcQuoteRoutes)
+  if (hasCredits()) await app.register(useCaseFeeRoutes)
   if (hasCredits()) await registerCreditsBalanceRoutes(app)
   if (hasCredits()) await registerCopilotRoutes(app)
   if (hasCredits()) await app.register(claimSignupGrantRoutes)

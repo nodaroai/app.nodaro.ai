@@ -154,6 +154,8 @@ const RUN_MODEL_EXEMPT: Readonly<Record<string, string>> = {
   "POST /v1/clip-pack/continue": USE_CASE,
   "POST /v1/speaker-layout": USE_CASE,
   "POST /v1/speaker-layout/continue": USE_CASE,
+  // A use-case node's per-run fee alone: its steps ran (and were judged) on their own routes.
+  "POST /v1/use-case-fee": NO_MODEL,
   // Pipelines (no node).
   "POST /v1/video-director/run": PIPELINE,
   "POST /v1/pipelines/:id/stages/script/regenerate-scene": PIPELINE,
