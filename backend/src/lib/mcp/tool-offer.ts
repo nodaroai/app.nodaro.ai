@@ -259,9 +259,10 @@ type CallHandler = (request: { params: { name: string; arguments?: unknown } }, 
  * register, from `opts.offer`: the offer for the viewer this server was built
  * for. A tool withheld then is refused for every later call on this server,
  * whoever makes it, and `tools/list` is that viewer's list. That is exact while
- * each request builds its own server (one caller per server, as today). A
- * server built once and used by many callers would have to decide the list and
- * `withheld` per caller instead: this is the part such a build must change.
+ * each request builds its own server (one caller per server). It is as exact
+ * for tools built once and used by many callers (`tools-built-once.ts`): such
+ * a build is shared only by callers whose offer decides the same list and the
+ * same `withheld` (its build shape includes every tool's refusal).
  * What IS read per call: a tool that registered is judged again for the user
  * making the call (`session.userId`, read when the call arrives), which is how
  * an override saved since the build is honoured.

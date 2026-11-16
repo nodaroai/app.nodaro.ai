@@ -580,6 +580,15 @@ export const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
+  /** Experimental: the MCP endpoint builds its tools once per build shape and
+   *  serves each request from that shared build with its own session, instead
+   *  of building every tool for every request (lib/mcp/tools-built-once.ts).
+   *  Default OFF, which serves exactly as before. Strict parsing like
+   *  MCP_ENABLED. Read through mcpToolsBuiltOnce(). */
+  MCP_TOOLS_BUILT_ONCE: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
   /** Kill switch for the in-app Workflow Copilot (cloud). Unset/false = the
    *  routes answer 503 feature_disabled. Strict parsing like MCP_ENABLED; the
    *  admin `copilot_enabled` app setting can additionally pause it at runtime. */
@@ -766,6 +775,11 @@ export function scheduleTriggersEnabled(): boolean {
 
 /** Site Capture is offered on this install (the SITE_CAPTURE_ENABLED switch; default on). */
 export { parseSiteCaptureEnabled }
+
+/** The MCP endpoint serves requests from tools built once per build shape (MCP_TOOLS_BUILT_ONCE; default off). */
+export function mcpToolsBuiltOnce(): boolean {
+  return config.MCP_TOOLS_BUILT_ONCE
+}
 
 export function siteCaptureEnabled(): boolean {
   return config.SITE_CAPTURE_ENABLED

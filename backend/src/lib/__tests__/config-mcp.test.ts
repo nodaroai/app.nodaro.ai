@@ -57,6 +57,39 @@ describe("MCP_ENABLED strict parsing", () => {
   })
 })
 
+describe("MCP_TOOLS_BUILT_ONCE strict parsing", () => {
+  const ORIGINAL = process.env.MCP_TOOLS_BUILT_ONCE
+
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    if (ORIGINAL === undefined) delete process.env.MCP_TOOLS_BUILT_ONCE
+    else process.env.MCP_TOOLS_BUILT_ONCE = ORIGINAL
+  })
+
+  it.each([
+    ["true", true],
+    ["1", true],
+    ["false", false],
+    ["0", false],
+    ["", false],
+  ])("parses %j as %s", async (value, expected) => {
+    process.env.MCP_TOOLS_BUILT_ONCE = value
+    const { config, mcpToolsBuiltOnce } = await import("../config.js")
+    expect(config.MCP_TOOLS_BUILT_ONCE).toBe(expected)
+    expect(mcpToolsBuiltOnce()).toBe(expected)
+  })
+
+  it("is off when unset (every request builds its own tools, as before)", async () => {
+    delete process.env.MCP_TOOLS_BUILT_ONCE
+    const { config, mcpToolsBuiltOnce } = await import("../config.js")
+    expect(config.MCP_TOOLS_BUILT_ONCE).toBe(false)
+    expect(mcpToolsBuiltOnce()).toBe(false)
+  })
+})
+
 describe("MCP_ALLOWED_CLIENT_IDS at boot", () => {
   const ORIGINAL = process.env.MCP_ALLOWED_CLIENT_IDS
 

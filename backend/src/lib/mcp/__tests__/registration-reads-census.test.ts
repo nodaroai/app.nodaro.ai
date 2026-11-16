@@ -44,7 +44,9 @@
  *    session: the server's own build options, among them the offer the offer
  *    funnel decides the list with (`installToolOffer(server, { session, offer })`
  *    in server.ts), and run-time state (an admin switch) read through something
- *    other than the session.
+ *    other than the session. The shared build's shape includes each of these
+ *    explicitly (`buildShapeOf` in tools-built-once.ts), one test per input in
+ *    tools-built-once.test.ts.
  *
  * The allowed list only shrinks: an entry no registration reads any more fails
  * this test until it is removed. A new entry needs its reason.
@@ -53,19 +55,12 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import Fastify from "fastify"
 import { ALL_SCOPES } from "../../scopes.js"
 
-/** Each path a registration may read, and what it varies by (a shared build would have to be keyed on every one). */
-const ALLOWED_AT_REGISTRATION: Readonly<Record<string, string>> = {
-  scopes: "Varies per token: the scopes granted decide which tools are listed (each family's scope gate).",
-  offer:
-    "Its presence varies per deployment state: there is an offer only where the deployment restricts what it offers (a profile, or an Availability override an admin can change while the process runs).",
-  "offer.nodeOffered":
-    "Varies per deployment state and per the caller's admin bit: which nodes the use-case verbs name in their descriptions.",
-  "offer.refusalOf":
-    "Varies per deployment state and per the caller's admin bit: whether the Video Director tools' descriptions name capture_site (they name it only where the session is offered it).",
-  addresses: "Varies per lane and declared host: the object is handed whole to the widget registrar, which reads the fields listed below.",
-  "addresses.pagesBase": "Varies per lane and declared host: the archive link in delete_app_run's description.",
-  "addresses.uploadPageBase": "Varies per lane and declared host: the upload widget's allowed connection in the widget pages' policy.",
-}
+/**
+ * Each path a registration may read, and what it varies by. Declared beside the
+ * shared build (`MCP_TOOLS_BUILT_ONCE`), which answers these at registration,
+ * refuses every other, and varies its build shape by each of them.
+ */
+const { READ_AT_REGISTRATION: ALLOWED_AT_REGISTRATION } = await import("../tools-built-once.js")
 
 const h = vi.hoisted(() => {
   /** Fields whose value is looked into while building: what is read inside them is recorded by path. */

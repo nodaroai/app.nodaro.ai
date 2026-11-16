@@ -76,9 +76,27 @@ describe("every MCP server a caller can reach asks the listed-clients funnel", (
       kind: "in-process",
       why: "gen:skills builds a server at build time only to read the registered tools' schemas; it serves nobody.",
     },
+    "src/lib/mcp/tools-built-once.ts": {
+      kind: "definition",
+      why:
+        "Defines mcpServerForRequest — the other way a request's server is made (MCP_TOOLS_BUILT_ONCE) — and serves nothing itself. " +
+        "Every file that calls it is a door named here, and the public endpoint asks before it calls it (both held below).",
+    },
+    "scripts/compare-mcp-built-once.ts": {
+      kind: "in-process",
+      why:
+        "A staging-only, read-only comparison: it builds a server both ways in-process and reads their listings over an in-memory transport. " +
+        "It serves nobody and calls no tool.",
+    },
   }
 
-  const isDoor = (text: string) => calls(text, "buildMcpServer") || calls(text, "handleMcpRequest") || /\bnew\s+McpServer\s*\(/.test(text)
+  /** Each way a request's server gets made: one built for it, or one made from the shared build. */
+  const MAKES_A_SERVER = ["buildMcpServer", "mcpServerForRequest"]
+  /** The pieces a server is assembled from; a file that calls one is building a server by hand. */
+  const ASSEMBLES_A_SERVER = ["createMcpServer", "registerMcpTools"]
+
+  const isDoor = (text: string) =>
+    [...MAKES_A_SERVER, ...ASSEMBLES_A_SERVER, "handleMcpRequest"].some((name) => calls(text, name)) || /\bnew\s+McpServer\s*\(/.test(text)
 
   it("names every file that builds or serves an MCP server", () => {
     const found = SOURCES.filter((s) => isDoor(s.text)).map((s) => s.rel).sort()
@@ -90,10 +108,20 @@ describe("every MCP server a caller can reach asks the listed-clients funnel", (
       if (door.kind !== "asks") continue
       const text = SOURCES.find((s) => s.rel === rel)!.text
       const asks = text.search(/\badmitMcpCaller\s*\(/)
-      const builds = text.search(/\bbuildMcpServer\s*\(/)
       expect(asks, `${rel} must call admitMcpCaller`).toBeGreaterThan(-1)
-      expect(asks, `${rel} must ask admitMcpCaller BEFORE buildMcpServer`).toBeLessThan(builds)
+      // Before EITHER way of making the server: the first call of any of them.
+      const makes = MAKES_A_SERVER.map((name) => text.search(new RegExp(`\\b${name}\\s*\\(`))).filter((at) => at > -1)
+      expect(makes.length, `${rel} must make its server`).toBeGreaterThan(0)
+      expect(asks, `${rel} must ask admitMcpCaller BEFORE it makes a server`).toBeLessThan(Math.min(...makes))
     }
+  })
+
+  it("only the definitions assemble a server by hand", () => {
+    // Everyone else gets a whole server from one of MAKES_A_SERVER, so no file
+    // can serve tools it registered itself past what the two definitions do.
+    const assemblers = SOURCES.filter((s) => ASSEMBLES_A_SERVER.some((name) => calls(s.text, name))).map((s) => s.rel).sort()
+    const definitions = Object.entries(DOORS).filter(([, door]) => door.kind === "definition").map(([rel]) => rel).sort()
+    expect(assemblers).toEqual(definitions)
   })
 })
 

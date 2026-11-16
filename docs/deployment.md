@@ -237,6 +237,7 @@ here for each one anyway.
 | `HEADER_VERSIONS_PRODUCTS` · `HEADER_VERSIONS_GITHUB_TOKEN` | `""` (the page lists nothing, and explains the setup) | Cloud only — the admin panel's **Header versions** page: which version of the shared header each product's live and test site serves, beside the newest release, and what each newer release brought. In order: the products, a JSON array of `{ "id", "label", "repo", "production", "staging", "source", "icon"? }` (`repo` as `owner/name`, the two hosts bare, `source` `lockfile` — the version is the deployed commit's lockfile — or `site-file` — the site publishes it at `/shell-version.json`, as this app's cloud build does; `icon`, optional, names the product's picture on the page — one of the names in `frontend/src/ee/app/(admin)/admin/header-versions/product-icon.tsx`, else its first letter is drawn); and a read-only fine-grained GitHub token with **Contents** and **Deployments** read access to those repositories and the header's own. The server reads each environment's last successful deployment and the version that commit installs, and each newer release's merged changes between its tag and the one before (said in plain words by a model once per release, a platform cost). It also shows the header repository's own explanations of how the header works, read from its default branch, and asks each of the header's world links what it answers. Where each site's worlds row leads comes from the file the site publishes at `/shell-worlds.json` (`{ "worldsRow": true, "worldHrefs": { "<world>": "https://…" or "/path" } }`), and every address a site leads to is asked too, once per check; a site without the file (this app's own, whose hosted header holds its links itself) is shown as not reported. Without the token only the sites' own files answer |
 | `ORGS_ENABLED` | off | Cloud only — multi-tenant organizations (schools / teams) rollout gate. Ships dark; the schema migrations run in every edition regardless |
 | `MCP_ENABLED` | off | Serve the MCP endpoint (§10) |
+| `MCP_TOOLS_BUILT_ONCE` | off | **Experimental.** Build the MCP endpoint's tools once per kind of request instead of on every request; see [Building the MCP tools once](#experimental-building-the-mcp-tools-once) |
 | `SPEECH_LENGTH_PRICING_ENABLED` | off | Cloud only — price Text to Speech and Text to Dialogue by length (every started 100 characters, with a minimum per request) instead of a flat amount per request. On at `app.nodaro.ai` and `next.app.nodaro.ai` since 2026-10-08. See the Credits section of each node's page |
 | `LLM_TIER_PRICING_ROLLBACK` | unset | Cloud only — a rollback switch. Unset, LLM nodes and helpers are charged for the tokens each call actually used on the model that ran it: a small hold is reserved before the call, and the settled charge is the call's real cost (which can be above the hold). `true` or `1` returns every LLM call to the earlier pricing by model tier, and the model pickers then show no per-model price; every live estimate surface (workflow and node estimates, `GET /v1/nodes`, the listing flags `estimatedCreditsIsEstimate`) answers with the tier figures and no estimate mark. Stored listings keep the figure they were published with: run `npm run backfill:llm-listing-prices -- --allow-rollback --include-templates --apply` (in `backend/`, with the switch set) to restore their tier figures. Text generated into the repository does NOT follow the switch: the node skills' `**Credit cost:**` lines (gen:skills) state the hosted default — a metered LLM node's `≈N` estimate — even while a deployment runs rolled back, and the built-in templates' seeded prices are their metered listings. Any other value is ignored. Community and Business have no credits, so it changes nothing there |
 | `COPILOT_ENABLED` | off | Cloud only — the in-app [Workflow Copilot](./features/workflow-copilot.md). Needs `ANTHROPIC_API_KEY`; admins can also pause it at runtime from Settings |
@@ -3125,6 +3126,45 @@ Things to know:
   documents describe the path endpoint of the host asked.
 - Off (the default), every MCP answer on every host is exactly what it was
   before the key existed.
+
+### Experimental: building the MCP tools once
+
+`MCP_TOOLS_BUILT_ONCE=true` changes how the MCP endpoint prepares a request,
+not what it answers. Off (the default), every request builds the whole set of
+tools, with their schemas and descriptions, for itself, and holds it until it
+has answered. On, the tools are built once for each kind of request and kept.
+A kind of request is: the scopes its token grants, whether the client sends the
+headers that identify its conversation, the address it came in on, and what
+the deployment offers that caller. At most six such sets are kept for each
+server that serves the endpoint, the least recently used dropped first; the
+backend's API process serves it from one server, so that is six per API
+process. Each request still gets a server and a session of its own, which run
+those tools for that caller alone. A change that alters what the tools look
+like while the backend runs (an Availability change in the admin panel, a
+model switched off, for example) makes the next request build a fresh set.
+The answers are the same either way; what changes is the memory and time a
+request costs. The setting is read at boot: restart or redeploy after changing
+it, and set it back to `false` to return to building the tools for every
+request.
+
+While it is on, the API logs a `[mcp-built-once] shared builds` line whenever
+a set is built or fails, and at most every ten minutes otherwise, counting the
+requests served from a kept set, the sets built, the failures, the requests
+that got a set of their own, the sets dropped and the kinds of request seen.
+A set whose build fails is never shared: its kind of request goes back to
+building per request until the API restarts. The failure is logged once as a
+warning (`[mcp-built-once] a shared build failed…`) and filed once to the admin
+panel's App Reports (kind `mcp-shared-build-failed`).
+
+For anyone writing an MCP tool: with this setting on, a tool's session answers
+the caller of the request the code is running for, which is found from where
+the code runs. A tool may read its session anywhere in its handler, but never
+inside a callback that runs later for whoever triggers it: an event listener,
+a callback kept in a list, map or set, a subscription, or an interval. Such a
+callback runs where whatever fired it runs, so with the tools shared it would
+read the caller who fired it rather than the one who set it up. Read the value
+before setting up the callback and pass it in; a test in the MCP code fails on
+the common forms of this mistake.
 
 The MCP server is fully shipped with 123+ tools across ~20 tool files,
 covering all generation verbs (image, video, audio, character, location,
