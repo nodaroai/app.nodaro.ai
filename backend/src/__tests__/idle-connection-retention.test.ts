@@ -108,6 +108,8 @@ let upstream: http.Server
 
 beforeAll(async () => {
   upstream = http.createServer((_req, res) => res.end("ok"))
+  // No idle timeout: the pooled connections the second case counts must not close on a slow run.
+  upstream.keepAliveTimeout = 0
   await new Promise<void>((r) => upstream.listen(0, "127.0.0.1", () => r()))
   const { buildApp } = await import("@/app.js")
   app = await buildApp()

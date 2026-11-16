@@ -36,7 +36,7 @@ const BACKEND_SRC = join(HERE, "..", "..")
 /** Store types that hold a request and say where they let it go. Paths from backend/src. */
 const RELEASED_HOLDERS: Readonly<Record<string, string>> = {
   "lib/request-user-scope.ts":
-    "holds the request while it is live and drops it when the raw response closes, keeping only a weak reference to it and the user id it had then",
+    "holds the request while it is live and drops it when the raw response closes, keeping the user id it had then and, only when the client left before the reply was sent (its hooks may still run), a weak reference to it",
 }
 
 const REQUEST_TYPES = ["FastifyRequest", "FastifyReply", "IncomingMessage", "ServerResponse", "RawRequestDefaultExpression", "RawReplyDefaultExpression"]

@@ -85,8 +85,10 @@ interface RequestLife {
   /** The raw response has closed (finished, or the client left). */
   closed: boolean
   /**
-   * The raw response closed before it finished (its `finish` never came): the
-   * client left, or the response broke off. Judged once, at the close.
+   * The raw response's `finish` had not come by its close: the client left, or
+   * the response broke off. Judged once, at the close (a `finish` that comes
+   * later, from a handler that ends the response after the client left, does
+   * not change it).
    */
   clientLeft: boolean
   /** Created on first read of the request's client signal. */
@@ -136,9 +138,10 @@ function lineOfRequest(req: FastifyRequest): { userId: string; payer: PayerKey; 
  * the reply kept everything the reply reaches (for `/mcp`, the MCP server the
  * request built). After the scope ended: a signal handed out before is the
  * same object, aborted at the close when the response did not finish; one
- * first asked for afterwards is aborted exactly when the response closed
- * before its `finish` (the client left, or the response broke off), and never
- * for a response that finished, an in-process (`inject`) one included.
+ * first asked for afterwards is aborted exactly when the response's `finish`
+ * had not come by its close (the client left, or the response broke off), and
+ * never for a response that finished first, an in-process (`inject`) one
+ * included.
  */
 function clientGoneSignal(life: RequestLife): AbortSignal {
   if (!life.gone) {

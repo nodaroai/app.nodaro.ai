@@ -5,11 +5,17 @@
  *
  * What it must keep answering: inside the handler after the body was parsed, in
  * a reply the handler hijacks, in a streamed reply, and in work the handler
- * started that goes on after the response ended. After the response closed it
- * answers from the request as it stands for as long as the request is alive (a
- * client that left during sign-in gets the user sign-in set later; a user
- * taken off the request afterwards is gone from the answer too), and with the
- * user the request was last seen with once it is not.
+ * started that goes on after the response ended.
+ *
+ * After the response closed, two cases. When its reply was already sent (the
+ * response ended, or the handler took it over), Fastify starts none of the
+ * hooks before the handler, and not the handler, for it any more, and no later
+ * hook writes the user, so nothing can change who it is: the answer is the
+ * user it had at the close. When the client left before that, sign-in and the
+ * other hooks may still run: the answer is the request as it stands for as long
+ * as the request is alive (a client that left during sign-in gets the user
+ * sign-in set later; a user taken off the request afterwards is gone from the
+ * answer too), and the user it was last seen with once it is not.
  *
  * What it must not do: keep the request (or anything it reaches, such as the
  * MCP server a `/mcp` request built) alive after the response. A keep-alive
@@ -20,7 +26,7 @@
  * pooled.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import Fastify, { type FastifyInstance } from "fastify"
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
 import http from "node:http"
 import { Readable } from "node:stream"
 import { registerRequestUserScope, currentRequestUserId } from "../request-user-scope.js"
@@ -38,6 +44,7 @@ let afterResponseDone: () => void
 let inSignIn: { promise: Promise<void>; resolve: () => void }
 let handlerRan: { promise: Promise<void>; resolve: () => void }
 let readNow: { promise: Promise<void>; resolve: () => void }
+let askedLater: { promise: Promise<void>; resolve: () => void }
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
@@ -54,7 +61,10 @@ beforeEach(async () => {
   inSignIn = deferred()
   handlerRan = deferred()
   readNow = deferred()
+  askedLater = deferred()
   upstream = http.createServer((_req, res) => res.end("ok"))
+  // No idle timeout: the pooled connection the tests count must not close on a slow run.
+  upstream.keepAliveTimeout = 0
   await new Promise<void>((r) => upstream.listen(0, "127.0.0.1", () => r()))
   upstreamAgent = new http.Agent({ keepAlive: true, maxSockets: 1 })
   app = Fastify()
@@ -146,6 +156,37 @@ beforeEach(async () => {
     handlerRan.resolve()
     return { ok: true }
   })
+  // Work the handler leaves running, which keeps the request alive and asks
+  // after the close; the user is changed on the request in between. Nothing in
+  // the app changes it then (only hooks before the handler do), but if
+  // something did, the answer for a reply already sent is the one it had at its close.
+  const askAfterAChange = (req: FastifyRequest, raw: http.ServerResponse) => {
+    void (async () => {
+      await closeOf(raw)
+      await new Promise((r) => setImmediate(r))
+      req.userId = "changed-after-the-close"
+      seen.askedLater = currentRequestUserId()
+      askedLater.resolve()
+    })()
+  }
+  app.post("/ended-then-changed", async (req, reply) => {
+    askAfterAChange(req, reply.raw)
+    return { ok: true }
+  })
+  app.post("/hijacked-ended-then-changed", async (req, reply) => {
+    askAfterAChange(req, reply.raw)
+    reply.hijack()
+    reply.raw.writeHead(200, { "content-type": "application/json" })
+    reply.raw.end("{}")
+  })
+  // A stream the handler writes itself (as GET /mcp and server-sent events do), which the client leaves.
+  app.get("/hijacked-stream-then-changed", async (req, reply) => {
+    askAfterAChange(req, reply.raw)
+    reply.hijack()
+    reply.raw.writeHead(200, { "content-type": "text/event-stream" })
+    reply.raw.write("data: first\n\n")
+    await closeOf(reply.raw)
+  })
   await app.listen({ port: 0, host: "127.0.0.1" })
   port = (app.server.address() as { port: number }).port
 })
@@ -224,6 +265,28 @@ describe("who the request is", () => {
     await afterResponse
     c.close()
     expect(seen.afterCollected).toBe("user-12")
+  })
+
+  it.each([
+    ["a JSON answer over a connection", "socket", "POST", "/ended-then-changed"],
+    ["a JSON answer made in-process", "inject", "POST", "/ended-then-changed"],
+    ["a hijacked reply the handler ended", "socket", "POST", "/hijacked-ended-then-changed"],
+    ["a hijacked stream the client left", "leave", "GET", "/hijacked-stream-then-changed"],
+  ] as const)("after %s, is the user the request had at its close, even while the request is alive and changed later", async (_name, how, method, path) => {
+    const headers = { "x-user": "user-14" }
+    if (how === "inject") {
+      await app.inject({ method, url: path, headers, payload: {} })
+    } else if (how === "socket") {
+      const c = keepAliveConnection(port)
+      await c.request({ method, path, headers, body: "{}" })
+      c.close()
+    } else {
+      const req = http.request({ host: "127.0.0.1", port, path, method, headers }, (res) => res.once("data", () => req.destroy()))
+      req.on("error", () => undefined)
+      req.end()
+    }
+    await askedLater.promise
+    expect(seen.askedLater).toBe("user-14")
   })
 
   it("is nobody outside a request", () => {
