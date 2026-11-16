@@ -1,4 +1,6 @@
 import { VIDEO_SFX_PRICING, videoSfxHeldCreditId } from "@nodaro/shared/credits"
+import { CLIP_PRICE_GRACE_SEC } from "@nodaro/shared/media"
+import { withinCapGrace } from "./measured-cap-grace.js"
 import { DOWNLOAD_TIMEOUT_MS } from "../providers/video/ffmpeg-timeouts.js"
 import { PRE_CHARGE_PROBE_TIMEOUT_MS } from "./pre-charge-probe-bounds.js"
 import { safeUrlSchema } from "./url-validator.js"
@@ -27,8 +29,9 @@ import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/
  * that could not be looked up for now, or a read that ran out of time, is the
  * retryable 503 every measuring route answers (`probeLinkRefusal`); a link that
  * is not an ordinary media file, or a file that cannot be read, is a 400. A
- * measured length of zero, or one over the 300-second cap, is refused with the
- * route's own error codes.
+ * measured length of zero, or one over the 300-second cap (more than the
+ * 0.05 s its charge forgives past it: such a file is scored for the cap, at
+ * the top row), is refused with the route's own error codes.
  */
 export type VideoSfxDuration =
   | { readonly ok: true; readonly durationSec: number; readonly creditId: string }
@@ -68,7 +71,8 @@ export async function measureVideoSfxDuration(
       message: "Video has no detectable duration. The file may be corrupted or an unsupported format.",
     }
   }
-  if (seconds > VIDEO_SFX_PRICING.MAX_DURATION_SEC) {
+  // A hair past the cap (its charge's grace) is accepted at the top row, and the model is asked to score the cap.
+  if (!withinCapGrace(seconds, VIDEO_SFX_PRICING.MAX_DURATION_SEC, CLIP_PRICE_GRACE_SEC)) {
     return {
       ok: false,
       code: "video_duration_exceeds_limit",
@@ -77,9 +81,10 @@ export async function measureVideoSfxDuration(
         `${VIDEO_SFX_PRICING.MAX_DURATION_SEC} seconds (5 minutes) for SFX generation.`,
     }
   }
-  const durationSec = Math.ceil(seconds)
+  const durationSec = Math.min(Math.ceil(seconds), VIDEO_SFX_PRICING.MAX_DURATION_SEC)
   // The row is the MEASURED length's less the 0.05 s a hair past a row is forgiven (`videoSfxHeldCreditId`); the
-  // whole seconds are what the model is asked to score.
+  // whole seconds are what the model is asked to score — at most the cap. A file a hair past the cap is cut to it by
+  // the worker before it is sent (`capVideoSfxSource`).
   return { ok: true, durationSec, creditId: videoSfxHeldCreditId(seconds) }
 }
 

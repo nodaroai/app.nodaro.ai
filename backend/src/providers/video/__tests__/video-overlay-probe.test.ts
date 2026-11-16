@@ -39,7 +39,18 @@ describe("parseVideoOverlayProbe", () => {
     expect(parseVideoOverlayProbe(json([video(), audio(), audio("mp3")]))).toEqual({
       width: 1080, height: 1920, rotation: 0, sar: 1, rFrameRate: "30/1", avgFrameRate: "30/1",
       streamDurationSec: 24.8, startTimeSec: 0, audioCodec: "aac",
+      // The charge's reading: the picture's length, its stream index, the container's.
+      videoStreamSec: 24.8, videoStreamIndex: 0, containerSec: 24.823,
     })
+  })
+  it("reads a WebM / MKV picture's length from its DURATION tag (its stream states none); the render's length stays the container's", () => {
+    const p = parseVideoOverlayProbe(json([video({ duration: undefined, tags: { DURATION: "00:00:05.000000000" } })], { duration: "5.323000", start_time: "0.000000" }))
+    expect(p).toMatchObject({ streamDurationSec: 5.323, videoTagSec: 5, containerSec: 5.323, formatStartTimeSec: 0 })
+    expect(p).not.toHaveProperty("videoStreamSec")
+    // Neither: no picture length; the charge scans the packets, then falls back to the container.
+    const neither = parseVideoOverlayProbe(json([video({ duration: undefined })], { duration: "3.5" }))
+    expect(neither).not.toHaveProperty("videoStreamSec")
+    expect(neither).not.toHaveProperty("videoTagSec")
   })
   it("reads the first audio stream's start time when it states one (a video layer keeps its picture/sound offset), and leaves it out otherwise", () => {
     const withStart = { ...audio(), start_time: "0.000000" }
@@ -129,7 +140,7 @@ describe("probeVideoOverlayBaseSource — the same probe on the base's link, bef
     const args = exec.calls[0]!
     expect(args[args.indexOf("-show_entries") + 1]).toBe(
       "stream=index,codec_type,codec_name,width,height,sample_aspect_ratio,r_frame_rate,avg_frame_rate,duration,start_time,nb_frames" +
-        ":stream_side_data=rotation:stream_disposition=attached_pic:stream_tags=rotate:format=duration",
+        ":stream_side_data=rotation:stream_disposition=attached_pic:stream_tags=rotate,DURATION:format=duration,start_time",
     )
     expect(args[args.indexOf("-protocol_whitelist") + 1]).toBe("file")
     expect(args).not.toContain("-select_streams")

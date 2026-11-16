@@ -174,6 +174,17 @@ describe("POST /v1/add-captions on Nemotron 3.5 Transcribe", () => {
     expect(vi.mocked(videoQueue.add)).not.toHaveBeenCalled()
   })
 
+  it("refuses a video a hair past 60 minutes (3600.4 s) with a 400 that asks for 60 minutes or less, before anything is held", async () => {
+    mockJobInsert()
+    probe.probeMediaDurationAndSize.mockResolvedValue({ durationSec: 3600.4 })
+    const res = await post({ style: "karaoke", transcribe_provider: NEMOTRON })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("media_duration_exceeds_limit")
+    expect(res.json().error.message).toMatch(/^This file is 60 minutes and 0\.4 seconds long\. Nemotron 3\.5 Transcribe takes 60 minutes or less/)
+    expect(guardIds).toEqual([])
+    expect(vi.mocked(reserveCreditsForJob)).not.toHaveBeenCalled()
+  })
+
   it("holds 60 minutes for a video whose length cannot be read", async () => {
     mockJobInsert()
     probe.probeMediaDurationAndSize.mockRejectedValue(new Error("ffprobe: invalid data"))

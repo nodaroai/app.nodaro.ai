@@ -293,7 +293,10 @@ export { ENGINE_SKIPPED_NODE_TYPES } from "./engine-skipped-types"
 export { combineTargetFps, combineVideosRunFields, GRACED_VIDEO_UTILITY_TYPES, UNREADABLE_CLIP_FPS, trimVideoBranches, trimVideoCutsFixedWindow, trimVideoRunFields, videoUtilityPricedClipSec, videoUtilityUnitsOf, type TrimVideoBranch } from "./video-utility-units"
 export { lipSyncAudioSourceId, lipSyncRateQuoteSeconds, lipSyncRateQuotedAudioSec, type LipSyncRunEngine } from "./lip-sync-audio-source"
 export { AAC_FRAME_SAMPLES, AAC_LOWEST_SAMPLE_RATE_HZ, recordingDecodeOverhangSec } from "./recorded-audio-decode"
-export { GENERATED_VOICE_NODE_TYPES, LENGTH_DECIDING_MAPPABLE_FIELDS, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_READING, VIDEO_OVERLAY_READING, RECORDING_SOURCE_TYPES, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, mappedLengthFields, NEMOTRON_WIRE_READ_OPTIONS, recordedTakeSec, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PRICE_GRACE_SEC, measuredWireLengthSec, plannedVideoLengthSec, recordingLengthSec, type MeasuredInputStepType, type MeasuredWireLengthOptions } from "./measured-wire-length"
+export { EXACT_QUOTE_PLANNED_CLIP_SLACK_SEC, GENERATED_VOICE_NODE_TYPES, LENGTH_DECIDING_MAPPABLE_FIELDS, MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, MEASURED_INPUT_READING, VIDEO_OVERLAY_READING, RECORDING_SOURCE_TYPES, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, mappedLengthFields, NEMOTRON_WIRE_READ_OPTIONS, recordedTakeSec, VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC, VIDEO_UTILITY_PRICE_GRACE_SEC, VIDEO_UTILITY_READING, measuredWireLengthSec, plannedVideoLengthSec, recordingLengthSec, type MeasuredInputStepType, type MeasuredWireLengthOptions, type VideoUtilityStepType } from "./measured-wire-length"
+// Every measuring step's allowances past a planned length, declared together (the overshoot guard holds them to the made clip's overshoot).
+export { CONTAINER_FALLBACK_GRACE_SEC, containerFallbackPricedSec, MADE_CLIP_OVERSHOOT_SEC } from "./made-clip-overshoot"
+export { MEASURING_STEP_ALLOWANCES, measuredInputStepId, measuringStepReadOptions, type MeasuringStepAllowance, type MeasuringStepId } from "./measured-step-allowances"
 export {
   UGC_CREATOR_NO_IMAGE_MESSAGE,
   UGC_SPEND_REFUSAL_CODES,
@@ -880,6 +883,7 @@ export {
   nodaroVideoUpscaleCreditId,
   isNodaroVideoUpscaleCreditId,
   nodaroVideoUpscaleBilledSec,
+  NODARO_VIDEO_UPSCALE_CONTAINER_GRACE_SEC,
   nodaroVideoUpscaleUnits,
   nodaroVideoUpscaleEstimateUnits,
   nodaroVideoUpscaleRefusesLength,
@@ -913,6 +917,8 @@ export {
   topazVideoMaxSourceSec,
   topazVideoOutputGigapixels,
   topazVideoHoldUnits,
+  topazVideoHoldSourceSec,
+  TOPAZ_VIDEO_CONTAINER_GRACE_SEC,
   topazVideoEstimateUnits,
   topazTargetFpsOf,
   TOPAZ_IMAGE_UNIT_CREDIT_ID,
@@ -1038,4 +1044,6 @@ export { GVP_GENERATE_AUDIO_DEFAULT, gvpSegmentAudio, pluginVideoAudioRequest } 
 export { gvpAnchorChoicesFor } from "./gvp-anchor-choices"
 export { RUN_OUTPUT_TASK_FIELD, handedOnTaskOf, ownTaskInputOf, recordedRunOutputTaskOf, runOutputTaskFields, runResultTaskFields, upstreamTaskFits, type UpstreamTaskGraph, type UpstreamTaskNode } from "./upstream-task"
 // AI Avatar's and SwitchX's credit ids from a server-side measure only (never a probed length a body or a node carries).
-export { AI_AVATAR_PROBED_FIELD, aiAvatarCreditIdOf, SWITCHX_PROBED_FIELD, SWITCHX_TRIM_FIELD, switchXCreditIdOf } from "./probed-credit-ids.js"
+export { AI_AVATAR_PROBED_FIELD, aiAvatarCreditIdOf, SWITCHX_PROBED_FIELD, SWITCHX_TRIM_FIELD, switchXCreditIdOf, switchXMaxResolutionOf, switchXQuoteCreditId } from "./probed-credit-ids.js"
+// AI Avatar in audio mode: the audio its run plays, quoted at the bucket its run holds (unknown: the 120-second default, a minimum).
+export { AI_AVATAR_PLANNED_CLIP_SLACK_SEC, aiAvatarAudioSourceId, aiAvatarPlaysAudio, aiAvatarQuoteCreditId } from "./ai-avatar-audio"

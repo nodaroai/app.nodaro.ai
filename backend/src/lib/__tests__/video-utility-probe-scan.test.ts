@@ -100,6 +100,43 @@ describe("a recording with no length in its header, read from its packets", () =
   })
 })
 
+describe("Combine Videos' reading (the video stream) on its container fallback", () => {
+  /** The header read: a video stream at index 0 that states no length and no tag, in a 5.1 s container. */
+  function containerOnly() {
+    h.execFile.mockImplementation((_cmd: string, _args: string[], _opts: unknown, cb: (e: null, out: string, err: string) => void) => {
+      cb(null, JSON.stringify({ streams: [{ index: 0, codec_type: "video" }], format: { duration: "5.1" } }), "")
+      return {}
+    })
+  }
+
+  it("a scan that fails: the container less the fallback's 0.15 s (4.95 s), never the whole 5.1 s", async () => {
+    containerOnly()
+    h.spawn.mockImplementation(() => {
+      const proc = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill: vi.fn() })
+      setImmediate(() => proc.emit("close", 1))
+      return proc
+    })
+    expect((await probeClipReading("/tmp/clip.flv", { reading: "video-stream" })).sec).toBeCloseTo(4.95, 9)
+    // Trim and Loop (the container reading) read the whole file, as before.
+    expect((await probeClipReading("/tmp/clip.flv")).sec).toBe(5.1)
+  })
+
+  it("a scan that runs out of time: the same 4.95 s", async () => {
+    containerOnly()
+    h.spawn.mockImplementation(() => {
+      const proc = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill: vi.fn(() => setImmediate(() => proc.emit("close", null))) })
+      return proc
+    })
+    expect((await probeClipReading("/tmp/clip.flv", { reading: "video-stream", packetTimeoutMs: 20 })).sec).toBeCloseTo(4.95, 9)
+  })
+
+  it("a scan that reads the packets: the picture as read, no allowance", async () => {
+    containerOnly()
+    h.spawn.mockImplementation(() => streamingProcess("0.000000,0.000000,0.033333,K__\n5.066667,5.066667,0.033333,___\n"))
+    expect((await probeClipReading("/tmp/clip.flv", { reading: "video-stream" })).sec).toBeCloseTo(5.1, 3)
+  })
+})
+
 describe("the frame rate read with the length (decided 2026-11-14: frame trims are cut at it)", () => {
   /** The header read: a video stream with a length and `r_frame_rate`. */
   function header(rFrameRate: string | undefined) {

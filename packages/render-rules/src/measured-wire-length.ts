@@ -90,14 +90,30 @@ import { LENGTH_RECORDING_VIDEO_NODE_TYPES } from "./length-following-video"
 import { bypassTeleports } from "./teleport-bypass"
 import { forwardedVideoLengthSec, knownLength, LENGTH_PRICED_UTILITY_TYPES, utilityOutputLength, type InputLength } from "./utility-wire-length"
 import { knownOutputLength, lengthRuleOf, wireKindOf, type MeasuredFileReading, type OutputLengthNode, type OutputLengthRule, type OutputWireInput } from "./video-output-length"
+import { MADE_CLIP_OVERSHOOT_SEC } from "./made-clip-overshoot"
 
 /**
  * The slack a Mask Composite quote adds to each clip a node makes in the run
- * (a PLANNED length): one frame plus an audio tail. Its run charges the
- * CONTAINER's length (ffprobe's format duration), which a made clip's audio track can carry past the
- * video (a 5 s clip measured 5.088 s), and its price rounds up past 0.05 s.
+ * (a PLANNED length): how far a made clip's CONTAINER can run past it
+ * ({@link MADE_CLIP_OVERSHOOT_SEC}, 0.15 s: a clip was measured up to 0.104 s
+ * past it, its audio track carried past the video). Its run charges the
+ * container's length (ffprobe's format duration), and its price forgives the
+ * same 0.05 s past a whole second on the quote and on the charge
+ * (`pricedClipSeconds`), so the slack alone must cover the whole overshoot.
+ * Video Mask and Video Depth price the same way and read it too
+ * ({@link MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC}).
  */
-export const MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC = 0.1
+export const MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC = MADE_CLIP_OVERSHOOT_SEC.container
+
+/**
+ * The slack the steps whose quote reads a length exactly, and whose hold and
+ * charge forgive `CLIP_PRICE_GRACE_SEC` (0.05 s) past a mark, add to each clip
+ * a node makes in the run: Video SFX's rows, Pitch & Tempo's and Dubbing's
+ * minutes, Lip Sync's tiers and OmniHuman 2.0's seconds. A tenth of a second:
+ * with the 0.05 s their charge forgives, a clip up to 0.15 s past its planned
+ * length ({@link MADE_CLIP_OVERSHOOT_SEC}) is charged no more than its quote.
+ */
+export const EXACT_QUOTE_PLANNED_CLIP_SLACK_SEC = 0.1
 
 /**
  * The slack a Video Overlay quote adds to each clip a node makes in the run
@@ -126,46 +142,67 @@ export const VIDEO_UTILITY_PRICE_GRACE_SEC = 0.15
 /**
  * The slack a Trim Video, Loop Video or Combine Videos quote adds to each clip
  * a node makes in the run (a PLANNED length): its runs measure each clip
- * before they reserve (Trim and Loop the CONTAINER, ffprobe's format duration,
- * an audio tail included; Combine Videos the video stream), and a made clip's
+ * before they reserve ({@link VIDEO_UTILITY_READING}), and a made clip's
  * container was measured up to 0.104 s past the length it was asked for (a
- * Seedance 2 Mini clip), past Mask Composite's 0.1 s. The grace itself
+ * Seedance 2 Mini clip). The grace itself
  * ({@link VIDEO_UTILITY_PRICE_GRACE_SEC}), declared once so the two cannot
  * part: a quote for a planned length is the units of that length, and a clip
- * that runs up to this far past it is charged no more. The three steps read
- * the walk as the container (after a Dubbing, a Combine Videos too: an
- * over-quote, never under).
+ * that runs up to this far past it is charged no more.
  */
 export const VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC = VIDEO_UTILITY_PRICE_GRACE_SEC
+
+/** The video-utility steps that measure their clips before they reserve. */
+export type VideoUtilityStepType = "trim-video" | "loop-video" | "combine-videos"
+
+/**
+ * What each of Trim Video, Loop Video and Combine Videos' runs measures of the
+ * clips it is given — the length its worker cuts or joins by, the charge
+ * before a run and the render's check read the same: Trim and Loop the
+ * CONTAINER (an audio tail included), Combine Videos each clip's VIDEO STREAM
+ * (where it joins). The reading each passes the measured walk: a Dubbing's or
+ * an Audio Isolation's file runs further past its input in its sound only (a
+ * dub keeps its input's picture exactly), so after one a Combine Videos keeps
+ * its own slack, and Trim and Loop read the quarter second.
+ */
+export const VIDEO_UTILITY_READING: Readonly<Record<VideoUtilityStepType, MeasuredFileReading>> = {
+  "trim-video": "container",
+  "loop-video": "container",
+  "combine-videos": "video-stream",
+}
 
 /** The steps whose quote reads the measured walk with a slack from {@link MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC}. */
 export type MeasuredInputStepType = "video-sfx" | "video-mask" | "video-depth" | "pitch-tempo" | "dubbing" | "video-upscale" | "lip-sync"
 
 /**
  * The slack a quote of each of these steps adds to each clip a node makes in
- * the run (a PLANNED length), by what its run measures before it reserves —
- * the one table the editor's quote, the server's estimate and the app listing
- * read:
- * - the CONTAINER (ffprobe's format duration, an audio tail included): Video
- *   SFX (`ceil` of it, no grace, against its 8 / 15 / 30 / 60 / 120 / 300 s
- *   rows), Video Mask and Video Depth (at most 0.05 s past a whole second is
- *   ignored, less than a frame plus a tail), Pitch & Tempo and Dubbing (every
- *   started minute, no grace), and a Lip Sync priced by the seconds of its
- *   audio (OmniHuman 2.0: `ceil` of them, at least its minimum, no grace) —
- *   Mask Composite's slack;
- * - the VIDEO STREAM: Topaz Video Upscale, whose hold counts the stream's
- *   frames at the target rate — Video Overlay's one frame.
- * None of them takes the 0.15 s price grace of Trim / Loop / Combine Videos
- * ({@link VIDEO_UTILITY_PRICE_GRACE_SEC}): their charges keep their own rules.
+ * the run (a PLANNED length), by what its run measures before it reserves and
+ * what its price forgives past a mark — the one table the editor's quote, the
+ * server's estimate and the app listing read:
+ * - the CONTAINER (ffprobe's format duration, an audio tail included), the
+ *   quote and the charge forgiving the same 0.05 s past a whole second: Video
+ *   Mask and Video Depth — Mask Composite's slack, the whole 0.15 s a made
+ *   clip's container can run past its planned length;
+ * - the CONTAINER, the quote reading the length exactly and the hold and the
+ *   charge forgiving 0.05 s: Video SFX (its 8 / 15 / 30 / 60 / 120 / 300 s
+ *   rows), Pitch & Tempo and Dubbing (every started minute), and Lip Sync (a
+ *   length tier, or OmniHuman 2.0's started seconds, at least its minimum) —
+ *   {@link EXACT_QUOTE_PLANNED_CLIP_SLACK_SEC}, a tenth of a second;
+ * - the VIDEO STREAM: Video Upscale, whose run (Topaz's hold counts the
+ *   stream's frames, Nodaro Video Upscale bills its seconds) reads it — Video
+ *   Overlay's one frame.
+ * Each step's slack and graces are declared together in
+ * `MEASURING_STEP_ALLOWANCES`, which the overshoot guard holds to the made
+ * clip's overshoot. None of them takes the 0.15 s price grace of Trim / Loop /
+ * Combine Videos ({@link VIDEO_UTILITY_PRICE_GRACE_SEC}).
  */
 export const MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC: Readonly<Record<MeasuredInputStepType, number>> = {
-  "video-sfx": MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC,
+  "video-sfx": EXACT_QUOTE_PLANNED_CLIP_SLACK_SEC,
   "video-mask": MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC,
   "video-depth": MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC,
-  "pitch-tempo": MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC,
-  "dubbing": MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC,
+  "pitch-tempo": EXACT_QUOTE_PLANNED_CLIP_SLACK_SEC,
+  "dubbing": EXACT_QUOTE_PLANNED_CLIP_SLACK_SEC,
   "video-upscale": VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC,
-  "lip-sync": MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC,
+  "lip-sync": EXACT_QUOTE_PLANNED_CLIP_SLACK_SEC,
 }
 
 /**

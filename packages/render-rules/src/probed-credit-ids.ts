@@ -45,3 +45,20 @@ export function switchXCreditIdOf(body: Readonly<Record<string, unknown>> | unde
   const settings = without(body, [SWITCHX_PROBED_FIELD, SWITCHX_TRIM_FIELD])
   return resolveSwitchXCreditId(measuredFrames === undefined ? settings : { ...settings, [SWITCHX_PROBED_FIELD]: measuredFrames })
 }
+
+/** The frame size a SwitchX node runs at, as every lane reads its `maxResolution`: 720 only for 720, else the 1080 default. */
+export function switchXMaxResolutionOf(data: Readonly<Record<string, unknown>> | undefined): 720 | 1080 {
+  return data?.maxResolution === 720 ? 720 : 1080
+}
+
+/**
+ * The id a SwitchX node is quoted at before its run (the editor's chip and
+ * Run button, the server's run estimate, the credit check before a run, an
+ * app's listing) and a workflow run holds — no frames are counted before the
+ * run, so the 240-frame worst-case tier at the node's frame size, the most a
+ * run can hold. The route measures the clip and holds its own tier, at most
+ * this.
+ */
+export function switchXQuoteCreditId(data: Readonly<Record<string, unknown>> | undefined): string {
+  return switchXCreditIdOf({ maxResolution: switchXMaxResolutionOf(data) })
+}

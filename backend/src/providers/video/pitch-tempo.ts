@@ -1,5 +1,5 @@
 import { join } from "node:path"
-import { PITCH_TEMPO_LIMITS, semitonesToPitchRatio } from "@nodaro/shared/credits"
+import { PITCH_TEMPO_LIMITS, PITCH_TEMPO_PRICING, semitonesToPitchRatio } from "@nodaro/shared/credits"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { mp3EncodeArgs } from "./mp3-encode.js"
 import {
@@ -58,6 +58,13 @@ export type PitchTempoOptions = PitchTempoSettings & {
    * the node's ±12 (`PITCH_TEMPO_LIMITS`), exactly as before.
    */
   readonly maxSemitones?: number
+  /**
+   * The input's length as the run measured it before it was held
+   * (`duration_seconds`). One a hair past the 30-minute cap (the 0.05 s its
+   * charge forgives, which the price check accepts at the top row) is cut to
+   * the cap; any other input is rendered whole, exactly as before.
+   */
+  readonly measuredSec?: number
 }
 
 export interface PitchTempoResult {
@@ -125,7 +132,9 @@ export function buildRubberbandFilter(settings: PitchTempoSettings): string {
 /**
  * The ffmpeg arguments for one lane. The video lane copies the first picture
  * stream, shifts the first audio stream and pads/trims it to `sourceSec` (the
- * picture's length).
+ * picture's length). With `cutSec`, the input is read only that far (an
+ * input a hair past the cap, cut to it); without it the arguments are as they
+ * always were.
  */
 export function buildPitchTempoArgs(opts: {
   readonly inputPath: string
@@ -133,17 +142,20 @@ export function buildPitchTempoArgs(opts: {
   readonly lane: "audio" | "video"
   readonly filter: string
   readonly sourceSec?: number
+  readonly cutSec?: number
 }): string[] {
+  const cut = opts.cutSec !== undefined && opts.cutSec > 0 ? ["-t", num(opts.cutSec)] : []
   if (opts.lane === "audio") {
     // Rubber Band emits frames of uneven length: the MP3 encode re-cuts them
     // into the encoder's own frames (mp3-encode.ts).
-    return ["-y", "-i", opts.inputPath, "-vn", ...mp3EncodeArgs({ filters: [opts.filter], bitrate: "192k" }), opts.outputPath]
+    return ["-y", ...cut, "-i", opts.inputPath, "-vn", ...mp3EncodeArgs({ filters: [opts.filter], bitrate: "192k" }), opts.outputPath]
   }
   if (opts.sourceSec === undefined || !(opts.sourceSec > 0)) {
     throw new Error("buildPitchTempoArgs: the video lane needs the picture's length")
   }
   return [
     "-y",
+    ...cut,
     "-i", opts.inputPath,
     "-map", "0:v:0",
     "-map", "0:a:0",
@@ -154,6 +166,17 @@ export function buildPitchTempoArgs(opts: {
     "-movflags", "+faststart",
     opts.outputPath,
   ]
+}
+
+/**
+ * How far a run reads its input (`-t`): the 30-minute cap for an input its
+ * price check measured past it (a hair past, within the 0.05 s its charge
+ * forgives, accepted at the top row); `undefined` — the whole input — for any
+ * other, or when the run carries no measured length.
+ */
+export function pitchTempoInputCutSec(measuredSec: number | undefined): number | undefined {
+  const cap = PITCH_TEMPO_PRICING.MAX_DURATION_SEC
+  return measuredSec !== undefined && Number.isFinite(measuredSec) && measuredSec > cap ? cap : undefined
 }
 
 /** The ffmpeg failure a build without librubberband reports. */
@@ -191,10 +214,13 @@ export async function pitchTempo(options: PitchTempoOptions): Promise<PitchTempo
     const settings = normalizePitchTempoSettings(options, options.maxSemitones)
     const filter = buildRubberbandFilter({ ...settings, tempo: lane === "video" ? 1 : settings.tempo })
     const outputPath = join(workDir, lane === "video" ? "output.mp4" : "output.mp3")
-    const sourceSec = lane === "video" ? await getVideoStreamDuration(inputPath) : undefined
+    // An input a hair past the cap (accepted at the top row) is cut to the cap; any other is rendered whole.
+    const cutSec = pitchTempoInputCutSec(options.measuredSec)
+    const pictureSec = lane === "video" ? await getVideoStreamDuration(inputPath) : undefined
+    const sourceSec = pictureSec !== undefined && cutSec !== undefined ? Math.min(pictureSec, cutSec) : pictureSec
 
     try {
-      await runFfmpeg(buildPitchTempoArgs({ inputPath, outputPath, lane, filter, sourceSec }))
+      await runFfmpeg(buildPitchTempoArgs({ inputPath, outputPath, lane, filter, sourceSec, ...(cutSec !== undefined ? { cutSec } : {}) }))
     } catch (err) {
       if (isMissingRubberbandError(err)) throw new PitchTempoInputError(NO_RUBBERBAND_MESSAGE, { cause: err })
       throw err

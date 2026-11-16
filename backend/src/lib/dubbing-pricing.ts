@@ -5,7 +5,7 @@ import { DUBBING_MAX_DURATION_SEC } from "../providers/elevenlabs/dubbing.js"
 import { getAppSettings } from "./app-settings.js"
 import { hasCredits } from "./config.js"
 import { dubbingBaseCredits, dubbingReservePlan, effectiveDubbedSeconds, measureDubbingSourceSec } from "./dubbing-duration.js"
-import { dubbingHeldMinutes } from "./dubbing-span.js"
+import { dubbingHeldMinutes, dubbingSpanAtCap } from "./dubbing-span.js"
 
 /** A dub the route would refuse, refused before a workflow run reserves anything. */
 export interface DubbingRefusal {
@@ -25,7 +25,9 @@ export interface DubbingRefusal {
  * The caller must run it BEFORE writing input_data: the reconcile lane, which
  * delivers long dubs, reads the stamp from the jobs row. Only where credits are
  * charged — the length prices the run. Returns the route's refusal for a span
- * past 30 minutes; undefined otherwise, and for any other job.
+ * past 30 minutes (by more than the 0.05 s its hold forgives: such a span is
+ * held at 30 minutes and dubbed through a window cut to the cap); undefined
+ * otherwise, and for any other job.
  */
 export async function stampDubbingDuration(
   jobName: string,
@@ -45,7 +47,11 @@ export async function stampDubbingDuration(
     typeof payload.startTime === "number" ? payload.startTime : undefined,
     typeof payload.endTime === "number" ? payload.endTime : undefined,
   )
-  if (span != null && span > DUBBING_MAX_DURATION_SEC) {
+  const startTime = typeof payload.startTime === "number" ? payload.startTime : undefined
+  const endTime = typeof payload.endTime === "number" ? payload.endTime : undefined
+  // A span a hair past the cap (the grace its hold forgives) is held at 30 minutes and dubbed through a window cut to it.
+  const capped = span == null ? undefined : dubbingSpanAtCap(span, startTime, endTime)
+  if (span != null && !capped) {
     return {
       code: "media_duration_exceeds_limit",
       message:
@@ -53,8 +59,13 @@ export async function stampDubbingDuration(
         `Trim the clip, or set a start/end window to dub part of it.`,
     }
   }
-  if (span != null) payload.probedDurationSec = span
-  else payload.reservedCeiling = true
+  if (capped) {
+    payload.probedDurationSec = capped.spanSec
+    if (capped.window) {
+      payload.startTime = capped.window.startTime
+      payload.endTime = capped.window.endTime
+    }
+  } else payload.reservedCeiling = true
   return undefined
 }
 

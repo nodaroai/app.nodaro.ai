@@ -353,3 +353,21 @@ describe("the listing reads a Dubbing or a PixVerse V6 extension a quarter secon
     expect(listedTrim({ id: "step", type: "extend-video", data: { provider: "pixverse-v6-extend", duration: 5 } }).fixed).toBeGreaterThanOrEqual(trimCharge(15 + LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC))
   })
 })
+
+describe("AI Avatar in audio mode: listed at the hold for the audio its run plays", () => {
+  const avatar: N = { id: "avatar", type: "ai-avatar", data: { speechMode: "audio", avatarId: "a1" } }
+  const delta = (audio: N, replaced: string[]) => {
+    const wire: E = { source: audio.id, target: "avatar", targetHandle: "audio" }
+    return listingOf([audio, avatar], [wire], replaced).preview - listingOf([audio], [], replaced).preview
+  }
+
+  it("an audio the app's user cannot replace, at its recorded length: its bucket (10 s)", () => {
+    const fixed: N = { id: "voice", type: "upload-audio", data: { url: "https://cdn.example/v.mp3", metadata: { durationSeconds: 10 } } }
+    expect(delta(fixed, [])).toBe(STATIC_CREDIT_COSTS["heygen-avatar-iv:720p:10s"])
+  })
+
+  it("an audio the app's user replaces: its length is not known before the run, the 120 s default, a minimum", () => {
+    const replaced: N = { id: "voice", type: "upload-audio", data: { url: "https://cdn.example/v.mp3", metadata: { durationSeconds: 10 } } }
+    expect(delta(replaced, ["voice"])).toBe(STATIC_CREDIT_COSTS["heygen-avatar-iv:720p:120s"])
+  })
+})

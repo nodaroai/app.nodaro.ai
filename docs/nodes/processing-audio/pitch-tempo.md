@@ -50,7 +50,7 @@ credits = 22 × max(1, ceil(input seconds ÷ 60))
 The input is measured before anything is charged, on a single-node run and in a workflow run alike, and the same input always costs the same. The price depends only on the input's length — not on the pitch, the tempo, or a longer output from slowing it down.
 
 - **A hair past a minute is that minute.** An input that measures up to 0.05 seconds past a whole minute is held and charged that minute: a 60-second cut that measures 60.011 seconds (a re-encoded file often runs a few hundredths past its length) is 1 minute, 22 credits<!-- credits: pitch-tempo:1m -->. The price before a run reads the length exactly, so it is never below the charge.
-- An input **longer than 30 minutes** is refused before any charge (`media_duration_exceeds_limit`).
+- An input **longer than 30 minutes** is refused before any charge (`media_duration_exceeds_limit`). One up to 0.05 seconds longer (a 30-minute cut can measure a few hundredths more) is accepted at the 30-minute price and processed for its first 30 minutes.
 - An input whose length **cannot be read** (a corrupted or unsupported file) is refused before any charge (`invalid_media_duration`). A link whose host does not exist, or that points to a private or reserved address, is refused the same way with `media_link_bad_host`, and a host that cannot be reached for now with a retryable `503` — see [media links](../../features/media-links.md). There is no fallback length.
 - Before a run, the editor, the server's run estimate (MCP, the SDK, published apps) and the Render final balance check quote the input's started minutes when its length is known:
   - an uploaded file's recorded length (an audio upload's too), or a file added from your own uploads in the Library;

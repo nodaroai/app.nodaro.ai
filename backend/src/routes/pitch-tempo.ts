@@ -108,7 +108,7 @@ export async function pitchTempoRoutes(app: FastifyInstance) {
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
-      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("pitch-tempo", { jobId: job.id, ...settings, usageLogId }))
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("pitch-tempo", { jobId: job.id, ...settings, duration_seconds: durationSec, usageLogId }))
       if (reply.sent) return
       return { jobId: job.id }
     },

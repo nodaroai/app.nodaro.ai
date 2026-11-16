@@ -16,10 +16,13 @@ import {
   TOPAZ_VIDEO_MAX_OUTPUT_GIGAPIXELS,
   TOPAZ_VIDEO_UNIT_CREDIT_ID,
   topazVideoHoldUnits,
+  topazVideoHoldSourceSec,
   topazVideoMaxSourceSec,
   topazVideoOutputGigapixels,
 } from "@nodaro/render-rules"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
+import { PRE_CHARGE_PROBE_TIMEOUT_MS } from "./pre-charge-probe-bounds.js"
+import { guardedPacketScan, videoTrackHeaderOf, videoTrackLengthFrom } from "./video-track-length.js"
 import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/probe-guard.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 import { linkImportRefusal } from "./link-imports.js"
@@ -77,18 +80,23 @@ export async function planTopazVideoUpscale(videoUrl: string, ask: TopazVideoUps
     upscaleFactor: str(ask.upscaleFactor),
     source,
   })
-  const sourceDurationSec = source.videoDurationSeconds ?? source.durationSeconds
+  // The picture's length: the stream's, its DURATION tag (a WebM / MKV), its packets; only when all three fail, the
+  // container's — held less its allowance (`topazVideoHoldSourceSec`).
+  const track = (await videoTrackLengthFrom(videoTrackHeaderOf(source), guardedPacketScan(videoUrl, { timeoutMs: PRE_CHARGE_PROBE_TIMEOUT_MS })))
+    ?? { sec: source.durationSeconds, reading: "container" as const }
+  const sourceDurationSec = track.sec
   const shape = { resolution: target.resolution, fps: target.fps, source }
   if (topazVideoOutputGigapixels({ ...shape, durationSec: sourceDurationSec }) > TOPAZ_VIDEO_MAX_OUTPUT_GIGAPIXELS) {
     throw new TopazVideoTooLongError(topazVideoMaxSourceSec(shape), target.resolution, target.fps)
   }
+  const heldSec = topazVideoHoldSourceSec(track.sec, track.reading)
   return {
     resolution: target.resolution,
     fps: target.fps,
     holdUnits: topazVideoHoldUnits({
       resolution: target.resolution,
       fps: target.fps,
-      durationSec: sourceDurationSec,
+      durationSec: heldSec,
       source,
     }),
     sourceDurationSec,

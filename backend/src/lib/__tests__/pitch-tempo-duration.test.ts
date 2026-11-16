@@ -35,6 +35,16 @@ describe("stampPitchTempoDuration (the workflow run's twin of the route's preHan
     expect(await stampPitchTempoDuration("pitch-tempo", { audioUrl: "https://x/a.mp3" })).toMatchObject({ code: "invalid_media_duration" })
     probe.fn = async () => 1801
     expect(await stampPitchTempoDuration("pitch-tempo", { audioUrl: "https://x/a.mp3" })).toMatchObject({ code: "media_duration_exceeds_limit" })
+    // More than the 0.05 s its charge forgives past the cap: refused.
+    probe.fn = async () => 1800.06
+    expect(await stampPitchTempoDuration("pitch-tempo", { audioUrl: "https://x/a.mp3" })).toMatchObject({ code: "media_duration_exceeds_limit" })
+  })
+
+  it("a file a hair past the 30-minute cap is accepted at 30 minutes, the top of its quote (the render cuts it to the cap)", async () => {
+    probe.fn = async () => 1800.03
+    const payload: Record<string, unknown> = { audioUrl: "https://x/a.mp3" }
+    expect(await stampPitchTempoDuration("pitch-tempo", payload)).toBeUndefined()
+    expect(payload).toMatchObject({ duration_seconds: 1800.03, bucketKey: "pitch-tempo:30m" })
   })
 
   it("leaves every other job alone", async () => {

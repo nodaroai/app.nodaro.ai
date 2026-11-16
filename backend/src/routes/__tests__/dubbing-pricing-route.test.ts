@@ -177,6 +177,23 @@ describe("POST /v1/dubbing — priced per minute of the dubbed span", () => {
     expect(res.statusCode).toBe(413)
     expect(mocks.guardCalls).toEqual([])
   })
+
+  it("an upload a hair past 30 minutes (within the 0.05 s its hold forgives) is held at 30 minutes and dubbed through a window cut to the cap; past that, refused", async () => {
+    mocks.probe.mockResolvedValue(1800.03)
+    const res = await post({ videoUrl: "https://cdn.example.com/v.mp4" })
+    expect(res.statusCode).toBe(200)
+    // 40 × 30 minutes = 1,200 base.
+    expect(mocks.guardCalls).toEqual([1200])
+    expect(inserted().input_data).toMatchObject({ probedDurationSec: 1800, startTime: 0, endTime: 1800 })
+    expect(queued()).toMatchObject({ probedDurationSec: 1800, startTime: 0, endTime: 1800 })
+  })
+
+  it("an upload 0.06 s past 30 minutes is refused before anything is reserved", async () => {
+    mocks.probe.mockResolvedValue(1800.06)
+    const res = await post({ videoUrl: "https://cdn.example.com/v.mp4" })
+    expect(res.statusCode).toBe(413)
+    expect(mocks.guardCalls).toEqual([])
+  })
 })
 
 describe("POST /v1/dubbing — a sourceUrl is an import of someone else's link", () => {

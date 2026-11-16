@@ -6,7 +6,7 @@ import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
-import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middleware/credit-guard.js"
 import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
 import { SWITCHX_PROBED_FIELD, SWITCHX_TRIM_FIELD, switchXCreditIdOf } from "../lib/probed-credit-ids.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -29,7 +29,7 @@ const MAX_FRAMES = 240
 const AUTO_TRIM_MAX = 270
 const MAX_PIXELS = 2_770_000
 
-const switchXBody = z
+export const switchXBody = z
   .object({
     videoUrl: safeUrlSchema,
     referenceImageUrl: safeUrlSchema.optional(),
@@ -94,7 +94,8 @@ export async function switchXPreflight(req: FastifyRequest, reply: FastifyReply)
   const record = (m: SwitchXMeasure) => setRequestMeasure(req, MEASURE, m)
   const body = (req.body ?? {}) as Record<string, unknown>
   const url = body.videoUrl
-  if (typeof url !== "string" || url.length === 0) return // Zod will 400 on the missing/invalid url
+  // A link the run refuses (the body's own `safeUrlSchema`) is never probed: its handler, or the quote, answers it with the 400.
+  if (typeof url !== "string" || !safeUrlSchema.safeParse(url).success) return
   try {
     const { frames, width, height } = await probeVideoFrames(url)
     // Pixel cap is a hard reject — frame-trimming can't shrink an oversize frame.
@@ -142,6 +143,17 @@ export async function switchXPreflight(req: FastifyRequest, reply: FastifyReply)
   }
 }
 
+/**
+ * The route's pricing chain, registered below as its preHandlers and run by
+ * `POST /v1/quote` on the same body: the preflight measures the clip's frames
+ * (the worst-case 240-frame tier when it cannot), then the tier's id at the
+ * node's frame size (`switchXCreditIdOfRequest`).
+ */
+export const switchXPricing: RoutePricing = {
+  prechecks: [switchXPreflight],
+  modelResolver: (req) => switchXCreditIdOfRequest(req),
+}
+
 export async function switchXRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     "/v1/switchx",
@@ -149,10 +161,7 @@ export async function switchXRoutes(app: FastifyInstance): Promise<void> {
       // Order matters: the preflight records the frame count on the request so
       // the creditGuard's credit id can bucket the reserve by the ACTUAL frame
       // count. The probe MUST run first.
-      preHandler: [
-        switchXPreflight,
-        creditGuard(switchXCreditIdOfRequest),
-      ],
+      preHandler: [...switchXPricing.prechecks, creditGuard(switchXPricing.modelResolver, switchXPricing.opts)],
     },
     async (req, reply) => {
       const parsed = switchXBody.safeParse(req.body)

@@ -3731,7 +3731,8 @@ body you would pass to `run`: the platform prices it with the run route's own
 code — validation, measuring reference clips or a picture, the credit id and
 the amount — and starts nothing. Typed for `text-to-video`, `generate-video`,
 `video-to-video`, `video-upscale` (a Seedance 2.5 draft's 1080p finalize is
-priced from the draft) and `edit-image`; `split-into-layers` is quotable too and
+priced from the draft) and `edit-image`; `ai-avatar`, `cinematic-avatar` and
+`switchx` take their run bodies as-is, and `split-into-layers` is quotable too and
 takes the body `client.media.splitIntoLayers` takes. Those are the types the
 platform can quote today (any other rejects with `400 quote_unsupported`). It
 rejects with the run's own `400` / `403` for a body, model or node the run would

@@ -48,6 +48,16 @@ describe("measureVideoSfxDuration", () => {
     expect(await measureVideoSfxDuration("u")).toMatchObject({ ok: false, code: "invalid_video_duration" })
     probe.mockResolvedValue(clip(301))
     expect(await measureVideoSfxDuration("u")).toMatchObject({ ok: false, code: "video_duration_exceeds_limit" })
+    // More than the 0.05 s its charge forgives past the cap: refused.
+    probe.mockResolvedValue(clip(300.06))
+    expect(await measureVideoSfxDuration("u")).toMatchObject({ ok: false, code: "video_duration_exceeds_limit" })
+  })
+
+  it("a clip a hair past the 300 s cap (a re-encoded 300 s cut, 300.016 s) is accepted at the top row, and the model is asked to score the cap", async () => {
+    for (const seconds of [300.016, 300.03, 300.05]) {
+      probe.mockResolvedValue(clip(seconds))
+      expect(await measureVideoSfxDuration("u")).toEqual({ ok: true, durationSec: 300, creditId: "replicate-mmaudio:300s" })
+    }
   })
 })
 

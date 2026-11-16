@@ -1258,6 +1258,25 @@ describe("dubbing handler — modes, parking, post-hoc cap", () => {
     expect(mocks.mockDownloadDubbedMedia).toHaveBeenCalledWith("dub-id", "de", true, undefined)
   })
 
+  it("sourceUrl: the service's own length a hair past the 30-minute cap (1800.03 s) is the cap's, and the dub proceeds; 1800.06 s fails before the long wait", async () => {
+    mocks.mockPollDubbingStatus.mockResolvedValueOnce({
+      dubbing_id: "dub-id", status: "dubbing",
+      media_metadata: { content_type: "video/mp4", duration: 1800.03 },
+    })
+    await handler(makeJob("dubbing", { sourceUrl: "https://youtube.com/watch?v=x", targetLanguage: "de" }) as never, makeCtx())
+    expect(mocks.mockWaitForDubbing).toHaveBeenCalled()
+    expect(mocks.mockDownloadDubbedMedia).toHaveBeenCalledWith("dub-id", "de", true, undefined)
+
+    mocks.mockWaitForDubbing.mockClear()
+    mocks.mockPollDubbingStatus.mockResolvedValueOnce({
+      dubbing_id: "dub-id", status: "dubbing",
+      media_metadata: { content_type: "video/mp4", duration: 1800.06 },
+    })
+    await expect(handler(makeJob("dubbing", { sourceUrl: "https://youtube.com/watch?v=x", targetLanguage: "de" }) as never, makeCtx()))
+      .rejects.toThrow(/maximum is 30 minutes/)
+    expect(mocks.mockWaitForDubbing).not.toHaveBeenCalled()
+  })
+
   it("sourceUrl: an import of someone else's link — read again and its confirmation spent right before the service is asked", async () => {
     const confirmationId = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
     const job = makeJob("dubbing", { sourceUrl: "https://youtube.com/watch?v=x", targetLanguage: "de", confirmationId, importVia: "api" })

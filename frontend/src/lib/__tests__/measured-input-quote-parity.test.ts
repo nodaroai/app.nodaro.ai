@@ -26,9 +26,13 @@ import { LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS } from "@nodaro/shared/credits"
 import { NODARO_VIDEO_UPSCALE_RATE_SECONDS, nodaroVideoUpscaleCreditId } from "@nodaro/render-rules"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
-type Step = "videoSfx" | "videoMask" | "videoDepth" | "pitchTempo" | "dubbing" | "topaz" | "nodaroUpscale" | "lipSync" | "lipSyncBucket" | "transcribe" | "addCaptions"
-/** A step's figure; `null` (Lip Sync only): a length nothing knows before the run — each estimate's own unknown figure. */
-type Figures = Readonly<Partial<Record<Step, number | null>>>
+type Step = "videoSfx" | "videoMask" | "videoDepth" | "pitchTempo" | "dubbing" | "topaz" | "nodaroUpscale" | "lipSync" | "lipSyncBucket" | "transcribe" | "addCaptions" | "aiAvatar"
+/**
+ * A step's figure; `null` (Lip Sync only): a length nothing knows before the run — each estimate's own unknown figure;
+ * `{ editor, server }` (AI Avatar only): the figure each engine quotes on purpose apart, since each plays other audio.
+ */
+type EngineFigures = { readonly editor: number; readonly server: number }
+type Figures = Readonly<Partial<Record<Step, number | null | EngineFigures>>>
 
 interface ParityCase {
   readonly name: string
@@ -64,6 +68,8 @@ const STEP: Readonly<Record<Step, { type: string; data: Record<string, unknown>;
   // Transcribe and Add Captions on Nemotron 3.5 Transcribe (the started minutes of their file): named only by the cases that list them.
   transcribe: { type: "transcribe", data: { provider: "nemotron-3-5-transcribe" }, input: "audio" },
   addCaptions: { type: "add-captions", data: { style: "word-highlight", captionStyle: "word-highlight", transcribeProvider: "nemotron-3-5-transcribe" }, input: "in" },
+  // AI Avatar in audio mode (its figure is the duration bucket's seconds the run holds): named only by the cases that list it.
+  aiAvatar: { type: "ai-avatar", data: { speechMode: "audio", avatarId: "a1" }, input: "audio" },
 }
 
 function graph(c: ParityCase, step: Step): { node: WorkflowNode; nodes: WorkflowNode[]; edges: WorkflowEdge[] } {
@@ -110,7 +116,8 @@ const rows = F.cases.flatMap((c) => (c.steps ?? STEPS).map((step) => [`${c.name}
  * its run-set check quote too (decided 2026-11-14): the run measures the audio
  * before it holds.
  */
-const want = (v: number | null | undefined): number | undefined => (v === null ? LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS : v)
+const want = (v: number | null | EngineFigures | undefined): number | undefined =>
+  v === null ? LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS : typeof v === "object" ? v.editor : v
 
 describe("the editor's quote of the measuring steps equals the server's workflow estimate on what another node makes", () => {
   it("covers the cases the shared rule was written for", () => {
@@ -120,7 +127,11 @@ describe("the editor's quote of the measuring steps equals the server's workflow
       // `null`: a Lip Sync of unknown length (each estimate's own unknown figure), the only step that names one.
       for (const v of [c.expected.whole[step], c.expected.alone[step]]) {
         if (v === null) expect(step, c.name).toBe("lipSync")
-        else expect(v, `${c.name} — ${step}`).toBeTypeOf("number")
+        else if (typeof v === "object") {
+          // An engine split, AI Avatar's only: both figures stated.
+          expect(step, c.name).toBe("aiAvatar")
+          expect([typeof v.editor, typeof v.server], c.name).toEqual(["number", "number"])
+        } else expect(v, `${c.name} — ${step}`).toBeTypeOf("number")
       }
     }
   })

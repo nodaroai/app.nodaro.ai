@@ -157,10 +157,25 @@ describe("planNodaroVideoUpscale", () => {
     expect(probe.calls.map((c) => c.src)).toEqual([OWN])
   })
 
-  it("bills the container's length when the picture reports none, and a sliver one second", async () => {
+  it("bills the container's length when the picture reports none, less the 0.15 s a made clip's container can run past it, and a sliver one second", async () => {
     probe.source = { width: 1280, height: 720, durationSeconds: 7.5 }
     expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(8)
+    // A 5 s clip's container measured 5.1 s: billed 5 s, as its quote (5 s plus a frame) names; past the allowance, 6.
+    probe.source = { width: 1280, height: 720, durationSeconds: 5.1 }
+    expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(5)
+    probe.source = { width: 1280, height: 720, durationSeconds: 5.15 }
+    expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(5)
+    probe.source = { width: 1280, height: 720, durationSeconds: 5.16 }
+    expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(6)
+    // A WebM / MKV states its picture's length only in its DURATION tag: billed by it, as the stream's, no allowance.
+    probe.source = { width: 1280, height: 720, durationSeconds: 5.4, videoTagDurationSeconds: 5.1, videoStreamIndex: 0 }
+    expect(await planNodaroVideoUpscale(URL, "1080p", USER)).toMatchObject({ sourceDurationSec: 5.1, billedSec: 6 })
+    // The picture's length, when read, is billed as it is: no allowance (5.1 s is 6 s).
+    probe.source = { width: 1280, height: 720, durationSeconds: 5.1, videoDurationSeconds: 5.1 }
+    expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(6)
     probe.source = { width: 1280, height: 720, durationSeconds: 0.2, videoDurationSeconds: 0.2 }
+    expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(1)
+    probe.source = { width: 1280, height: 720, durationSeconds: 0.1 }
     expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(1)
   })
 

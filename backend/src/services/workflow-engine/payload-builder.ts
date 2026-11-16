@@ -1,7 +1,7 @@
 import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
 import type { SpeakerViewClipFacts, SpeakerViewTracksResolved } from "@nodaro/render-rules"
 import { moodboardWarnings, type ResolvedUserDirection } from "../../lib/user-direction-result.js"
-import { aiAvatarCreditIdOf } from "../../lib/probed-credit-ids.js"
+import { aiAvatarCreditIdOf, switchXQuoteCreditId } from "../../lib/probed-credit-ids.js"
 import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { DUBBING_VOICE_LOCK_MESSAGE, dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { retiredEditProviderReason } from "../../lib/retired-edit-providers.js"
@@ -65,7 +65,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazTargetFpsOf, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, switchXMaxResolutionOf, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazTargetFpsOf, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -123,7 +123,6 @@ import {
   buildMotionCreditModelIdentifier,
   motionTransferResolution,
   lipSyncAudioRateOf,
-  resolveSwitchXCreditId,
   resolveCinematicCreditId,
   buildVideoAnalysisCreditId,
   buildVideoAuditCreditId,
@@ -5586,13 +5585,13 @@ function buildPayloadOf(
         : Array.isArray(resolvedInputs.referenceImageUrls)
           ? resolvedInputs.referenceImageUrls[0]
           : undefined) as string | undefined
-      const sxMaxRes = data.maxResolution === 720 ? 720 : 1080
+      const sxMaxRes = switchXMaxResolutionOf(data as Record<string, unknown>)
       return {
         jobName: "switchx",
         queueName: "video-generation",
         // No ffprobe in the orchestrator path → reserve the worst-case frame tier
-        // for the resolution (resolveSwitchXCreditId defaults to 240f). Over-reserve is safe.
-        modelIdentifier: resolveSwitchXCreditId({ maxResolution: sxMaxRes }),
+        // for the resolution: the id every estimate quotes (`switchXQuoteCreditId`). Over-reserve is safe.
+        modelIdentifier: switchXQuoteCreditId(data as Record<string, unknown>),
         payload: {
           jobId,
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,

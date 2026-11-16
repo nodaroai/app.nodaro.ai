@@ -63,7 +63,7 @@ Per 30-frame block: **55 credits<!-- credits: beeble-switchx:30f:720p --> at 720
 | ≤ 210 frames (~7s) | 385<!-- credits: beeble-switchx:210f:720p --> | 1,155<!-- credits: beeble-switchx:210f:1080p --> |
 | ≤ 240 frames (~8s) | 440<!-- credits: beeble-switchx:240f:720p --> | 1,320<!-- credits: beeble-switchx:240f:1080p --> |
 
-A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 1080p clip spans 5 blocks → 825 credits<!-- credits: beeble-switchx:150f:1080p -->. The editor shows a typical-length estimate; the exact charge is computed from the clip's real frame count when the job runs.
+A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 1080p clip spans 5 blocks → 825 credits<!-- credits: beeble-switchx:150f:1080p -->. **The price before a run** — the node's price, its Run button, the workflow's estimate in the editor and on the server, the credit check before a run and an app's listed price — is the 240-frame price at the node's resolution (440 credits<!-- credits: beeble-switchx:240f:720p --> at 720p, 1,320<!-- credits: beeble-switchx:240f:1080p --> at 1080p), the most a run can cost: no frames are counted before the run. A workflow run holds that too. A run of the node on its own (the Run button, the API) measures the clip first and holds its own tier, and `POST /v1/quote` with `type: "switchx"` and the run's body measures the clip the same way and answers that tier. The exact charge is computed from the clip's real frame count when the job runs.
 
 ## Best Practices
 

@@ -205,6 +205,7 @@ const SCRATCH_CALL_SITES: Readonly<Record<string, string>> = {
   "workers/handlers/video-ai.ts :: \"extend-tail\"": "a Seedance extend's source tail: `ctx.jobId`",
   "workers/handlers/video-ai.ts :: \"extend-last-frame\"": "a Seedance extend's last frame: `ctx.jobId`",
   "workers/handlers/video-ai.ts :: \"extend-chain-tail\"": "a chained Seedance 2.5 extend's reference, the last seconds of the previous extension's raw mov: `ctx.jobId`",
+  "workers/handlers/video-sfx-cap.ts :: \"video-sfx-cap\"": "Video SFX's clip cut to the 300-second cap (what MMAudio is sent): `jobId` is the SFX handler's `ctx.jobId`",
   "workers/handlers/video-mask.ts :: `mask-src-c${chunk.index}`": "Video Mask's chunk of a long clip (what SAM 3 is sent): `ctx.jobId`",
   "workers/handlers/video-mask.ts :: \"mask-src-c0\"": "Video Mask's re-encoded source of a one-request clip (what SAM 3 is sent): `ctx.jobId`",
   "workers/handlers/video-mask.ts :: rleCacheName(value.chunk.index)": "Video Mask's kept chunk segmentation, so a retry after the model answered never pays it again: `jobId` is the handler's `ctx.jobId`",

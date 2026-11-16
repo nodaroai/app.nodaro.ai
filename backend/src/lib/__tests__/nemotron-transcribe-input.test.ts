@@ -50,7 +50,12 @@ describe("measureNemotronTranscribeInput (the route's and the workflow run's one
 
   it("refuses what KIE would refuse, before anything is held", async () => {
     probe.fn = async () => ({ durationSec: 3600.5 })
-    expect(await measureNemotronTranscribeInput("https://x.example/a.mp3")).toMatchObject({ ok: false, code: "media_duration_exceeds_limit" })
+    expect(await measureNemotronTranscribeInput("https://x.example/a.mp3")).toMatchObject({ ok: false, code: "media_duration_exceeds_limit", message: expect.stringMatching(/^This file is 60 minutes and 0\.5 seconds long\. Nemotron 3\.5 Transcribe takes 60 minutes or less/) })
+    // A hair past the cap too: the provider reads the file by its link, so nothing trims it (decided).
+    probe.fn = async () => ({ durationSec: 3600.01 })
+    expect(await measureNemotronTranscribeInput("https://x.example/a.mp3")).toMatchObject({ ok: false, code: "media_duration_exceeds_limit", message: expect.stringContaining("60 minutes and 0.01 seconds") })
+    probe.fn = async () => ({ durationSec: 4000 })
+    expect(await measureNemotronTranscribeInput("https://x.example/a.mp3")).toMatchObject({ ok: false, message: expect.stringMatching(/^This file is 67 minutes long\./) })
     probe.fn = async () => ({ durationSec: 3600, sizeBytes: 200 * 1024 * 1024 + 1 })
     expect(await measureNemotronTranscribeInput("https://x.example/a.mp3")).toMatchObject({ ok: false, code: "media_size_exceeds_limit" })
     // A size over the limit is refused even when the length cannot be read.

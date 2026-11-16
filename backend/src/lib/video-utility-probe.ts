@@ -1,5 +1,12 @@
-import { readProbeSource, scanPacketEnds, type GuardedProbe, type ProbeSourceOptions } from "../providers/video/ffmpeg-utils.js"
+import { parseMatroskaDurationTag, readProbeSource, scanPacketEnds, type GuardedProbe, type ProbeSourceOptions } from "../providers/video/ffmpeg-utils.js"
 import { parseFrameRate } from "../providers/video/frame-rate.js"
+import { videoTrackLengthFrom, videoTrackPricedSec } from "./video-track-length.js"
+
+/** A DURATION tag as the header the track reading takes. */
+const tagOf = (value: unknown): { readonly tagSec?: number } => {
+  const tagSec = parseMatroskaDurationTag(value)
+  return tagSec !== undefined ? { tagSec } : {}
+}
 
 /**
  * How long a clip given to Trim Video, Loop Video or Combine Videos is: the
@@ -135,13 +142,15 @@ async function readStream(src: string, probe: GuardedProbe, opts: ClipLengthOpti
   const headerMs = withinDeadline(opts.timeoutMs, opts.deadlineAt)
   // A video stream's frame rate rides the same header read (`r_frame_rate`); a sound has none.
   const streamEntries = kind === "video" ? "stream=index,codec_type,duration,r_frame_rate" : "stream=index,codec_type,duration"
+  // The video stream's reading also asks for its DURATION tag: a Matroska / WebM file states its picture's length only there.
+  const tagEntries = kind === "video" && opts.reading === "video-stream" ? ":stream_tags=DURATION" : ""
   const out = await probe.run(
-    ["-v", "error", ...probe.inputArgs, "-select_streams", kind === "video" ? "v:0" : "a:0", "-show_entries", `${streamEntries}:format=duration,start_time`, "-of", "json", src],
+    ["-v", "error", ...probe.inputArgs, "-select_streams", kind === "video" ? "v:0" : "a:0", "-show_entries", `${streamEntries}${tagEntries}:format=duration,start_time`, "-of", "json", src],
     { ...(headerMs !== undefined ? { timeoutMs: headerMs } : {}), ...(opts.signal ? { signal: opts.signal } : {}) },
   ).catch((err: unknown) => {
     throw opts.signal?.aborted ? Object.assign(new Error("clip reading aborted"), { aborted: true }) : err
   })
-  let header: { streams?: Array<{ index?: unknown; duration?: unknown; r_frame_rate?: unknown }>; format?: { duration?: unknown; start_time?: unknown } }
+  let header: { streams?: Array<{ index?: unknown; duration?: unknown; r_frame_rate?: unknown; tags?: { DURATION?: unknown } }>; format?: { duration?: unknown; start_time?: unknown } }
   try {
     header = JSON.parse(out)
   } catch {
@@ -153,6 +162,20 @@ async function readStream(src: string, probe: GuardedProbe, opts: ClipLengthOpti
   const withRate = (length: number): ClipReading => (fps === undefined ? { sec: length } : { sec: length, fps })
   const container = positiveSec(header.format?.duration)
   const streamSec = positiveSec(stream.duration)
+  if (opts.reading === "video-stream" && container !== undefined) {
+    // The picture's own length: the stream's, its tag, its packets — only when all fail, the container less the
+    // fallback's allowance (`videoTrackLengthFrom`). A file with no length anywhere is scanned below, as before.
+    const index = typeof stream.index === "number" && Number.isInteger(stream.index) ? stream.index : undefined
+    const track = await videoTrackLengthFrom(
+      { ...(streamSec !== undefined ? { streamSec } : {}), ...tagOf(stream.tags?.DURATION), ...(index !== undefined ? { streamIndex: index } : {}), startTimeSec: finiteSec(header.format?.start_time) ?? 0, containerSec: container },
+      (i) => {
+        const packetMs = withinDeadline(opts.packetTimeoutMs, opts.deadlineAt)
+        return scanPacketEnds(src, i, { probe, ...(packetMs !== undefined ? { timeoutMs: packetMs } : {}), ...(opts.signal ? { signal: opts.signal } : {}) })
+      },
+      opts.signal,
+    )
+    if (track) return withRate(videoTrackPricedSec(track))
+  }
   const sec = opts.reading === "video-stream" ? (streamSec ?? container) : (container ?? streamSec)
   if (sec !== undefined) return withRate(sec)
   if (typeof stream.index !== "number" || !Number.isInteger(stream.index)) throw new ClipUnreadableError("no stream index")

@@ -1,5 +1,5 @@
 {
-  "$comment": "Trim Video, Loop Video and Combine Videos are charged by the measured length of each clip they are given (their run probes every input before it reserves). Their quote before a run reads the one measured walk Mask Composite and Video Overlay read (measuredWireLengthSec, @nodaro/render-rules), with VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC (0.15 s) on each clip a node makes in the run (a quarter second on a Dubbing, an Audio Isolation or a PixVerse V6 extension, whose files run further past their planned length: LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC), and every clip less VIDEO_UTILITY_PRICE_GRACE_SEC (0.15 s) before the node's formula (videoUtilityUnitsOf — the rule the charge counts by, so a clip up to 0.15 s past a 5-second mark is priced as if it ended on it, on both): a generation at the length its model renders for its settings (Auto at its longest, a mapped length as the run resolves it), an Extend Video at its source plus what it adds, a node outside the run (or frozen) at the take it hands on, an upload or a Library clip at its measured length, and a clip nothing can size at the estimators' 8-second fallback (a minimum: the run is charged the length it measures). Each case names its step `t`; `whole` is a whole run (the editor's whole-run set, the server's estimate with no run set), `alone` is the step's own Run and its pill (the server's run of `t` alone), `partial` a run of exactly `runSet`. Units are the step's pricing units (each one unit of its own row). Held by frontend/src/lib/__tests__/video-utility-quote-parity.test.ts and backend/src/ee/billing/__tests__/video-utility-quote-parity.test.ts. The step settings: Trim keeps the whole clip (seconds mode, 0 + 0), Loop repeats twice, Combine joins by cuts with its default 1 + 2 frame trims, taken off only where two clips meet (decided 2026-11-14, \"charge what is cut\": the end of every clip but the last and the start of every clip but the first, n − 1 joins), cut at the rate the join conforms its clips to when the graph knows every clip's (an upload's declared `fps`: `runWireFps`), else none cut — the uncut clips, a bound (decided 2026-11-14: frame trims at the clip's real rate; the run cuts at the rate it probes). A Trim's frame trims are cut at its clip's rate the same way. A Combine's quote reads the fields a workflow run sends (combineVideosRunFields: its defaults, never per-join `transitions`, which only a request to the route carries). A case's `stepData` replaces its step's settings; a Trim is priced over the fields its run sends (trimVideoRunFields: its mode's own, an end of 0 left open, so the cut runs to the clip's end).",
+  "$comment": "Trim Video, Loop Video and Combine Videos are charged by the measured length of each clip they are given (their run probes every input before it reserves). Their quote before a run reads the one measured walk Mask Composite and Video Overlay read (measuredWireLengthSec, @nodaro/render-rules), with VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC (0.15 s) on each clip a node makes in the run (a quarter second on a Dubbing, an Audio Isolation or a PixVerse V6 extension, whose files run further past their planned length: LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC — but a Dubbing's or an Audio Isolation's not on a Combine Videos, which measures each clip's video stream, which a dub keeps exactly: VIDEO_UTILITY_READING), and every clip less VIDEO_UTILITY_PRICE_GRACE_SEC (0.15 s) before the node's formula (videoUtilityUnitsOf — the rule the charge counts by, so a clip up to 0.15 s past a 5-second mark is priced as if it ended on it, on both): a generation at the length its model renders for its settings (Auto at its longest, a mapped length as the run resolves it), an Extend Video at its source plus what it adds, a node outside the run (or frozen) at the take it hands on, an upload or a Library clip at its measured length, and a clip nothing can size at the estimators' 8-second fallback (a minimum: the run is charged the length it measures). Each case names its step `t`; `whole` is a whole run (the editor's whole-run set, the server's estimate with no run set), `alone` is the step's own Run and its pill (the server's run of `t` alone), `partial` a run of exactly `runSet`. Units are the step's pricing units (each one unit of its own row). Held by frontend/src/lib/__tests__/video-utility-quote-parity.test.ts and backend/src/ee/billing/__tests__/video-utility-quote-parity.test.ts. The step settings: Trim keeps the whole clip (seconds mode, 0 + 0), Loop repeats twice, Combine joins by cuts with its default 1 + 2 frame trims, taken off only where two clips meet (decided 2026-11-14, \"charge what is cut\": the end of every clip but the last and the start of every clip but the first, n − 1 joins), cut at the rate the join conforms its clips to when the graph knows every clip's (an upload's declared `fps`: `runWireFps`), else none cut — the uncut clips, a bound (decided 2026-11-14: frame trims at the clip's real rate; the run cuts at the rate it probes). A Trim's frame trims are cut at its clip's rate the same way. A Combine's quote reads the fields a workflow run sends (combineVideosRunFields: its defaults, never per-join `transitions`, which only a request to the route carries). A case's `stepData` replaces its step's settings; a Trim is priced over the fields its run sends (trimVideoRunFields: its mode's own, an end of 0 left open, so the cut runs to the clip's end).",
   "steps": {
     "trim": {
       "type": "trim-video",
@@ -3133,6 +3133,117 @@
       "expectedUnits": {
         "whole": 6,
         "alone": 6
+      }
+    },
+    {
+      "name": "32. Combine — a Dubbing of each of two 10 s uploads: Combine measures each clip's video stream, which a dub keeps exactly, so each clip takes the step's own slack, not the quarter second: 10.15 + 10.15 s less the grace, 20 s, 4 units (Trim and Loop measure the container: cases 30, 32b)",
+      "step": "combine",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "d",
+          "type": "dubbing",
+          "data": {}
+        },
+        {
+          "id": "v",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/v.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/v.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "e",
+          "type": "dubbing",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "d",
+          "targetHandle": "video"
+        },
+        {
+          "source": "v",
+          "target": "e",
+          "targetHandle": "video"
+        },
+        {
+          "source": "d",
+          "target": "t",
+          "targetHandle": "in"
+        },
+        {
+          "source": "e",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 4,
+        "alone": 4
+      }
+    },
+    {
+      "name": "32b. Loop ×2 — a Dubbing of a 10 s upload: Loop measures the container, which runs further past the input: twice 10 s plus a quarter second less the grace, 20.2 s, 5 units",
+      "step": "loop",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 10
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "d",
+          "type": "dubbing",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "d",
+          "targetHandle": "video"
+        },
+        {
+          "source": "d",
+          "target": "t",
+          "targetHandle": "in"
+        }
+      ],
+      "expectedUnits": {
+        "whole": 5,
+        "alone": 5
       }
     }
   ]

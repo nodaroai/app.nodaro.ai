@@ -31,6 +31,7 @@ import {
   type HandlerFn,
 } from "../shared.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
+import { capVideoSfxSource } from "./video-sfx-cap.js"
 
 /**
  * Shape of `jobs.input_data` written by the route at
@@ -99,6 +100,9 @@ const handleVideoSfx: HandlerFn = async function handleVideoSfx(job, ctx) {
   // row covers the crash window BEFORE this callback fires.
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, "replicate-prediction")
 
+  // A clip a hair past the cap (accepted at the top row) is cut to it before it is sent.
+  const sentVideoUrl = await capVideoSfxSource(videoUrl, durationSeconds, ctx.jobId)
+
   // Wrap the Replicate call in a progress ramp so the widget bar moves
   // during the long wait. MMAudio runs ~3-10s per second of input video;
   // a 60s clip can take 1-2 min. Without the ramp the bar sits at 0%.
@@ -108,7 +112,7 @@ const handleVideoSfx: HandlerFn = async function handleVideoSfx(job, ctx) {
     { start: 5, cap: 45 },
     () => generateVideoSfx(
       {
-        videoUrl,
+        videoUrl: sentVideoUrl,
         prompt,
         negativePrompt,
         duration: durationSeconds,

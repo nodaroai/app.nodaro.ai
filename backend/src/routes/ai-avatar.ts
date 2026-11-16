@@ -4,17 +4,17 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
-import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middleware/credit-guard.js"
 import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
 import { AI_AVATAR_PROBED_FIELD, aiAvatarCreditIdOf } from "../lib/probed-credit-ids.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { probeSoundLengthSec } from "../lib/video-utility-probe.js"
-import { PRE_CHARGE_PROBE_TIMEOUT_MS, ROUTE_MEASURE_DEADLINE_MS } from "../lib/pre-charge-probe-bounds.js"
+import { measureAiAvatarAudio } from "../lib/ai-avatar-audio-length.js"
+import { ROUTE_MEASURE_DEADLINE_MS } from "../lib/pre-charge-probe-bounds.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
-import { probeLinkRefusal, probeRefusalStatus } from "../providers/video/probe-guard.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 const ttsEngineSchema = z
   .discriminatedUnion("engine_type", [
@@ -41,7 +41,7 @@ const ttsEngineSchema = z
   ])
   .optional()
 
-const aiAvatarBody = z
+export const aiAvatarBody = z
   .object({
     // Visual source. "avatar" (default) animates a catalog avatar look (needs
     // avatarId + engine); "image" animates a raw image (needs imageUrl, no engine).
@@ -173,20 +173,27 @@ export async function probeAudioDurationPreHandler(
   const audioUrl = body.audioUrl
   // Only a link the route's schema takes is probed; anything else is the handler's validation_error.
   if (typeof audioUrl !== "string" || !safeUrlSchema.safeParse(audioUrl).success) return
-  try {
-    // Its sound's length, read as Trim reads a clip: the header, else (a recording a browser made) its last audio packet.
-    const duration = await probeSoundLengthSec(audioUrl, { timeoutMs: PRE_CHARGE_PROBE_TIMEOUT_MS, deadlineAt: Date.now() + ROUTE_MEASURE_DEADLINE_MS })
-    if (Number.isFinite(duration) && duration > 0) {
-      setRequestMeasure(req, AUDIO_MEASURE, Math.ceil(duration))
-    }
-  } catch (err) {
+  // Its sound's length, read as Trim reads a clip (the header, else — a recording a browser made — its last audio
+  // packet): the one rule the workflow run's stamp reads too (`measureAiAvatarAudio`).
+  const measured = await measureAiAvatarAudio(audioUrl, { deadlineAt: Date.now() + ROUTE_MEASURE_DEADLINE_MS }, (err) => {
     req.log.warn({ err }, "ai-avatar: audio ffprobe failed; refusing the run")
-    const refused = probeLinkRefusal(err) ?? {
-      code: "invalid_media_duration",
-      message: "Could not read the audio's length. The file may be corrupted or an unsupported format.",
-    }
-    return void reply.status(probeRefusalStatus(refused.code)).send({ error: refused })
+  })
+  if (!measured.ok) {
+    return void reply.status(probeRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
+  if (measured.sec !== undefined) setRequestMeasure(req, AUDIO_MEASURE, measured.sec)
+}
+
+/**
+ * The route's pricing chain, registered below as its preHandlers and run by
+ * `POST /v1/quote` on the same body: the probe measures an audio-mode run's
+ * audio (refusing one it cannot read), then the duration bucket of the measured
+ * seconds, or of the script's estimated length in text mode
+ * (`aiAvatarCreditIdOfRequest`).
+ */
+export const aiAvatarPricing: RoutePricing = {
+  prechecks: [probeAudioDurationPreHandler],
+  modelResolver: (req) => aiAvatarCreditIdOfRequest(req),
 }
 
 export async function aiAvatarRoutes(app: FastifyInstance) {
@@ -196,10 +203,7 @@ export async function aiAvatarRoutes(app: FastifyInstance) {
       // Order matters: the probe records the audio's length on the request so
       // the creditGuard's credit id can bucket the reserve by the ACTUAL audio
       // duration. The probe MUST run first.
-      preHandler: [
-        probeAudioDurationPreHandler,
-        creditGuard(aiAvatarCreditIdOfRequest),
-      ],
+      preHandler: [...aiAvatarPricing.prechecks, creditGuard(aiAvatarPricing.modelResolver, aiAvatarPricing.opts)],
     },
     async (req, reply) => {
       const parsed = aiAvatarBody.safeParse(req.body)

@@ -1,0 +1,132 @@
+{
+  "$comment": "The id a node that its run prices from a server-side measure (or not at all before the run) is QUOTED at, on BOTH estimates over the same node: the editor's (frontend getModelIdentifier — the node's pill, its Run button, the confirm and the workflow badge) and the server's run estimate (CreditsService.estimateWorkflowCreditsAt — also the credit check before a run and an app's listing), which used to name the bare node type (priced nowhere: 0). Cinematic Avatar: the exact (resolution, duration) id its run holds, Auto at the 15 s ceiling, a duration clamped to 4–15 s (resolveCinematicCreditId). SwitchX: the 240-frame worst-case tier at the node's frame size, the most a run holds and what a workflow run holds (switchXQuoteCreditId: maxResolution 720 only for the number 720) — never a frame count the node's data carries. AI Avatar with no audio wired: the script's bucket in text mode, else the 120 s default (aiAvatarQuoteCreditId). `expected` is the credit id; the server's line is that id's price, above 0. Held by frontend/src/lib/__tests__/probed-node-quote-parity.test.ts and backend/src/ee/billing/__tests__/probed-node-quote-parity.test.ts.",
+  "cases": [
+    {
+      "name": "1. Cinematic Avatar at 720p for 10 s",
+      "node": {
+        "type": "cinematic-avatar",
+        "data": {
+          "resolution": "720p",
+          "duration": 10
+        }
+      },
+      "expected": "cinematic-avatar:720p:10s"
+    },
+    {
+      "name": "1b. Cinematic Avatar at 1080p for 4 s",
+      "node": {
+        "type": "cinematic-avatar",
+        "data": {
+          "resolution": "1080p",
+          "duration": 4
+        }
+      },
+      "expected": "cinematic-avatar:1080p:4s"
+    },
+    {
+      "name": "1c. Cinematic Avatar on Auto: the 15 s ceiling (the length is the model's, known only after the run)",
+      "node": {
+        "type": "cinematic-avatar",
+        "data": {
+          "resolution": "1080p",
+          "autoDuration": true
+        }
+      },
+      "expected": "cinematic-avatar:1080p:15s"
+    },
+    {
+      "name": "1d. Cinematic Avatar with a duration past its range (an API write): clamped to 15 s, as the run holds it",
+      "node": {
+        "type": "cinematic-avatar",
+        "data": {
+          "resolution": "720p",
+          "duration": 30
+        }
+      },
+      "expected": "cinematic-avatar:720p:15s"
+    },
+    {
+      "name": "1e. Cinematic Avatar with no settings: its defaults",
+      "node": {
+        "type": "cinematic-avatar",
+        "data": {}
+      },
+      "expected": "cinematic-avatar:720p:10s"
+    },
+    {
+      "name": "2. SwitchX at its default 1080p: the 240-frame worst-case tier",
+      "node": {
+        "type": "switchx",
+        "data": {}
+      },
+      "expected": "beeble-switchx:240f:1080p"
+    },
+    {
+      "name": "2b. SwitchX at 720p",
+      "node": {
+        "type": "switchx",
+        "data": {
+          "maxResolution": 720
+        }
+      },
+      "expected": "beeble-switchx:240f:720p"
+    },
+    {
+      "name": "2c. SwitchX whose data carries a frame count (a client's word): still the worst-case tier",
+      "node": {
+        "type": "switchx",
+        "data": {
+          "maxResolution": 720,
+          "__probedFrameCount": 30
+        }
+      },
+      "expected": "beeble-switchx:240f:720p"
+    },
+    {
+      "name": "2d. SwitchX with maxResolution written as text (an API write): 1080p, as a workflow run holds it",
+      "node": {
+        "type": "switchx",
+        "data": {
+          "maxResolution": "720"
+        }
+      },
+      "expected": "beeble-switchx:240f:1080p"
+    },
+    {
+      "name": "3. AI Avatar in audio mode with nothing wired: the 120 s default, a minimum",
+      "node": {
+        "type": "ai-avatar",
+        "data": {
+          "speechMode": "audio",
+          "avatarId": "a1"
+        }
+      },
+      "expected": "heygen-avatar-iv:720p:120s"
+    },
+    {
+      "name": "3b. AI Avatar in text mode: its script's bucket (600 characters, about 50 s)",
+      "node": {
+        "type": "ai-avatar",
+        "data": {
+          "speechMode": "text",
+          "script": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "voiceId": "v1",
+          "engine": "avatar-v",
+          "resolution": "1080p"
+        }
+      },
+      "expected": "heygen-avatar-v:1080p:60s"
+    },
+    {
+      "name": "3c. AI Avatar whose data carries a probed length (a client's word): never read",
+      "node": {
+        "type": "ai-avatar",
+        "data": {
+          "speechMode": "audio",
+          "__probedDurationSec": 4
+        }
+      },
+      "expected": "heygen-avatar-iv:720p:120s"
+    }
+  ]
+}

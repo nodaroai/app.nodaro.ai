@@ -16,6 +16,9 @@ import { generateVideoBody, generateVideoPricing } from "../../routes/generate-v
 import { videoToVideoBody, videoToVideoPricing } from "../../routes/video-to-video.js"
 import { videoUpscaleBody, videoUpscalePricing } from "../../routes/video-upscale.js"
 import { editImageBody, editImagePricing } from "../../routes/edit-image.js"
+import { aiAvatarBody, aiAvatarPricing } from "../../routes/ai-avatar.js"
+import { cinematicAvatarBody, cinematicAvatarPricing } from "../../routes/cinematic-avatar.js"
+import { switchXBody, switchXPricing } from "../../routes/switchx.js"
 
 const ROUTE = "/v1/quote"
 
@@ -40,6 +43,12 @@ export const QUOTABLE_NODE_TYPES: Readonly<Record<string, QuotableNode>> = {
   // Every edit-image model: the upscalers (Nodaro Image Upscale measured from
   // the picture, nothing stored), background removal and the prompt edits.
   "edit-image": { schema: () => editImageBody, pricing: editImagePricing },
+  // HeyGen's AI Avatar: its duration bucket, an audio-mode run's audio measured as the run measures it.
+  "ai-avatar": { schema: () => aiAvatarBody, pricing: aiAvatarPricing },
+  // HeyGen's Cinematic Avatar: its exact (resolution, duration) hold.
+  "cinematic-avatar": { schema: () => cinematicAvatarBody, pricing: cinematicAvatarPricing },
+  // Beeble SwitchX: its frame-block tier, the clip's frames measured as the run measures them.
+  "switchx": { schema: () => switchXBody, pricing: switchXPricing },
 }
 
 /** What a quote prices `type` with: a hand-written row, else the node unit's quote.ts; undefined when it cannot be quoted. */

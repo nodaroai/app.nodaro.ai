@@ -114,6 +114,7 @@ import { getAppSettings } from "../../lib/app-settings.js"
 import { videoUtilityChargeBaseCredits } from "../../lib/video-utility-credits.js"
 import { stampVideoUtilityLength, videoUtilityMeasuredBaseCredits, videoUtilityReserveUnits } from "../../lib/video-utility-length.js"
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
+import { aiAvatarReserveId, stampAiAvatarAudioLength } from "../../lib/ai-avatar-audio-length.js"
 import { stampVideoDepthInput, videoDepthReserveId } from "../../lib/video-depth-input.js"
 import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
 import { stampNemotronTranscribeInput, nemotronTranscribeReserveId } from "../../lib/nemotron-transcribe-input.js"
@@ -2533,6 +2534,18 @@ async function executeWorkerNode(
     err.errorCode = sfxRefusal.code
     throw err
   }
+  // AI Avatar in audio mode: the route's own rule — measure the audio through
+  // the probe guard and stamp the duration bucket it holds — before input_data
+  // is written and before anything is reserved. Every edition, as the route's
+  // preHandler. Audio the route refuses (a link that cannot be reached for
+  // now, audio that cannot be read) leaves no jobs row.
+  const aiAvatarRefusal = await stampAiAvatarAudioLength(jobName, payload)
+  if (aiAvatarRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(aiAvatarRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = aiAvatarRefusal.code
+    throw err
+  }
   // Lip Sync on a model priced by its audio's length (OmniHuman 2.0's rate,
   // the bucketed models — Kling AI Avatar, OmniHuman 1.5, the dubbing models):
   // the route's own rule — measure the audio (and a rate model's image),
@@ -2892,6 +2905,8 @@ async function executeWorkerNode(
         meteredHold?.chargeId ??
         (await computeEditPlanReserveId(jobName, payload, editPlanPerMinute)) ??
         videoSfxReserveId(jobName, payload) ??
+        // AI Avatar in audio mode: the bucket of the audio `stampAiAvatarAudioLength` measured above.
+        aiAvatarReserveId(jobName, payload) ??
         // Lip Sync on a model priced by a length bucket: the bucket of the audio
         // `stampLipSyncInputs` measured above — the route's own row for it.
         lipSyncBucketReserveId(jobName, payload) ??

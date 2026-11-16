@@ -42,14 +42,17 @@ export function lipSyncAudioSourceId(
  * audio its run plays (`audioSec`: the measured walk, a voice made again in
  * the run at its take, a minimum); with no audio node to play at all
  * (`playsAudio` false), the length the node measured of its own audio at its
- * last run (`audioDurationSec`); else `undefined` — the
- * `LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS` stand-in `lipSyncRateQuoteSeconds`
- * quotes, a MINIMUM: the run measures the real audio and charges it.
+ * last run (`audioDurationSec`), never below the
+ * `LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS` minimum — a field of the node's
+ * data, which an API or MCP write (or an app's sample) can set to anything, so
+ * it can raise the quote and never lower it below the minimum; else
+ * `undefined` — that stand-in, which `lipSyncRateQuoteSeconds` quotes, a
+ * MINIMUM: the run measures the real audio and charges it.
  */
 export function lipSyncRateQuotedAudioSec(audioSec: number | undefined, playsAudio: boolean, data: unknown): number | undefined {
   if (playsAudio) return audioSec
   const own = (data as { audioDurationSec?: unknown } | null | undefined)?.audioDurationSec
-  return typeof own === "number" && Number.isFinite(own) && own > 0 ? own : undefined
+  return typeof own === "number" && Number.isFinite(own) && own > 0 ? Math.max(own, LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS) : undefined
 }
 
 /** The seconds that quote prices ({@link lipSyncRateQuotedAudioSec}): the billed seconds of a known length, else the 15-second stand-in, a minimum. */

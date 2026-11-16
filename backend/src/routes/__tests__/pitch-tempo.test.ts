@@ -90,7 +90,8 @@ describe("POST /v1/pitch-tempo", () => {
     expect(state.queued).toEqual([
       {
         name: "pitch-tempo",
-        data: { jobId: "job-1", audioUrl: "https://cdn.example.com/a.mp3", semitones: 3, tempo: 1, preserveFormants: true, usageLogId: "ulog-1" },
+        // The measured length rides the queue too: the render cuts an input a hair past the cap to it.
+        data: { jobId: "job-1", audioUrl: "https://cdn.example.com/a.mp3", semitones: 3, tempo: 1, preserveFormants: true, duration_seconds: 190, usageLogId: "ulog-1" },
       },
     ])
     expect(JSON.stringify(state.queued)).not.toContain("__probedDuration")

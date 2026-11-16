@@ -50,6 +50,12 @@ describe("the seconds a Lip Sync is quoted at", () => {
     expect(lipSyncPricingUnits(x, [x], [])).toBe(60)
   })
 
+  it("that length is a field of the node's data (an API or MCP write can set it): never below the 15 s minimum", () => {
+    expect(lipSyncPricingUnits(node("x", "lip-sync", { provider: "omnihuman-2-0", audioDurationSec: 9.5 }), [], [])).toBe(15)
+    expect(lipSyncPricingUnits(node("x", "lip-sync", { provider: "omnihuman-2-0", audioDurationSec: 1 }), [], [])).toBe(15)
+    expect(lipSyncPricingUnits(node("x", "lip-sync", { provider: "omnihuman-2-0", audioDurationSec: 20 }), [], [])).toBe(20)
+  })
+
   it("a wired audio of unknown length never falls back to the last run's length: 15 s, an estimate", () => {
     const x = node("x", "lip-sync", { provider: "omnihuman-2-0", audioDurationSec: 59.2 })
     const noLength = node("a", "upload-audio", { url: "https://m.test/nolen.mp3" })

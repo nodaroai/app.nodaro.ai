@@ -17,7 +17,8 @@
  *     give the same samples; never the container's declared length) and bill
  *     it with the one function the hold used (`lipSyncHeldSecondsOf`: a rate
  *     model's whole seconds, a bucketed model's bucket). A rate model's audio
- *     past its maximum, or more seconds than the run was held for, is refused
+ *     past its maximum by more than the 0.05 s its hold forgives (a hair past
+ *     it is cut to it, step 3), or more seconds than the run was held for, is refused
  *     as deterministic — the job fails and is refunded, nothing is sent
  *     upstream — and so is a file the decoder could not read to its end
  *     (`AudioReadStoppedError`, the price check's own refusal).
@@ -52,6 +53,7 @@ import {
   audioReadStoppedMessage,
   downloadLipSyncAudio,
   lipSyncAudioCapSec,
+  lipSyncAudioDecodeCapSec,
   lipSyncHeldSecondsOf,
   type LipSyncAudioPricing,
   type LipSyncInputRule,
@@ -124,7 +126,7 @@ export interface PreparedLipSyncAudio {
   readonly sentSamples: number
   /** Whether it was padded to the minimum. */
   readonly padded: boolean
-  /** Whether it was trimmed under the maximum (a bucketed model only). */
+  /** Whether it was trimmed: a bucketed model's under its maximum, a rate model's a hair past its maximum to it. */
   readonly trimmed: boolean
 }
 
@@ -188,6 +190,8 @@ export async function prepareLipSyncAudio(
     throw new DeterministicJobError(`${label}: this run was not priced from its audio, so it was not sent. Run it again.`)
   }
   const capSec = lipSyncAudioCapSec(pricing)
+  // The price check's own decode cap: a rate model's maximum plus the hair its hold forgives (trimmed to it below).
+  const decodeCapSec = lipSyncAudioDecodeCapSec(pricing)
   const { rule } = pricing
   let workDir: string | undefined
   try {
@@ -198,7 +202,7 @@ export async function prepareLipSyncAudio(
     }
 
     const pcmPath = join(workDir, "decoded.pcm")
-    const source = await decodeSource(inputPath, pcmPath, capSec, label)
+    const source = await decodeSource(inputPath, pcmPath, decodeCapSec, label)
     const changed = (now: string) =>
       new DeterministicJobError(
         `${label}: the audio changed between the price check and the run — it is now ${now}, ` +
@@ -258,7 +262,8 @@ export async function prepareLipSyncAudio(
       measuredSec,
       measuredSamples: source.overCap ? Math.round(capSec * DECODED_AUDIO_RATE_HZ) : source.samples,
       billedSeconds,
-      providerBilledSeconds: pricing.kind === "rate" && !source.overCap ? lipSyncBilledSeconds(pricing.rate, source.seconds) : billedSeconds,
+      // What is sent: a rate model's audio past its maximum is trimmed to it.
+      providerBilledSeconds: pricing.kind === "rate" && !source.overCap ? lipSyncBilledSeconds(pricing.rate, Math.min(source.seconds, pricing.rate.maxSeconds)) : billedSeconds,
       sentSec: sent.seconds,
       sentSamples: sent.samples,
       padded,
@@ -271,7 +276,8 @@ export async function prepareLipSyncAudio(
 
 /**
  * How the copy sent plays against what was measured: a rate model's audio
- * under its minimum padded to exactly it. A bucketed model's audio past its
+ * under its minimum padded to exactly it, and a hair past its maximum (the
+ * grace its hold forgives) cut to exactly it. A bucketed model's audio past its
  * maximum less `LIP_SYNC_TRIM_MARGIN_SEC` cut at that; audio held in the bucket
  * below the one it falls in (at most `LIP_SYNC_BUCKET_EDGE_TOLERANCE_SEC` past
  * that bucket's length) cut to exactly that bucket's `billedSeconds`, so what
@@ -279,7 +285,10 @@ export async function prepareLipSyncAudio(
  */
 function sendShape(pricing: LipSyncAudioPricing, source: DecodedAudioLength, billedSeconds: number): { readonly padToSec?: number; readonly trimToSec?: number } {
   if (pricing.kind === "rate") {
-    return !source.overCap && source.seconds < pricing.rate.minSeconds ? { padToSec: pricing.rate.minSeconds + LIP_SYNC_PAD_MARGIN_SEC } : {}
+    if (source.overCap) return {}
+    if (source.seconds < pricing.rate.minSeconds) return { padToSec: pricing.rate.minSeconds + LIP_SYNC_PAD_MARGIN_SEC }
+    // A hair past the maximum (held at it): cut to exactly the maximum, so the provider bills no second past it.
+    return source.seconds > pricing.rate.maxSeconds ? { trimToSec: pricing.rate.maxSeconds } : {}
   }
   const underMax = pricing.maxSeconds - LIP_SYNC_TRIM_MARGIN_SEC
   if (source.overCap || source.seconds > underMax) return { trimToSec: underMax }

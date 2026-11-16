@@ -103,7 +103,15 @@ describe("checkLipSyncInputs — OmniHuman 2.0", () => {
     expect(await check()).toMatchObject({ ok: true })
     expect(state.downloads).toEqual([{ url: AUDIO, opts: { limits: LIP_SYNC_AUDIO_DOWNLOAD_LIMITS, maxBytes: 99_999_999 } }])
     expect(LIP_SYNC_AUDIO_DOWNLOAD_LIMITS).toMatchObject({ responseMs: 15_000, windowMs: 10_000, minBytesPerWindow: 262_144, floorBytesPerSec: 262_144, maxMs: 120_000, maxBytes: 100_000_000 })
-    expect(state.measureCaps).toEqual([300])
+    // Decoded up to the maximum plus the 0.05 s its hold forgives: audio a hair past it is held at the maximum.
+    expect(state.measureCaps).toEqual([300.05])
+  })
+
+  it("a hair past 300 s (within the 0.05 s its hold forgives) is accepted and held at 300 s, the top of its quote; past that, refused", async () => {
+    state.decoded = 300.03
+    expect(await check()).toEqual({ ok: true, audioSec: 300.03, billedSeconds: 300 })
+    state.decoded = 300.06
+    expect(await check()).toMatchObject({ ok: false, code: "audio_too_long" })
   })
 
   it("past 300 s is refused before anything is held — measured, or stopped at the cap (no length to quote)", async () => {

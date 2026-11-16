@@ -25,6 +25,7 @@ import {
   PASS_THROUGH_VIDEO_TYPES,
   longestModelClipSec,
   videoProviderRenderedSec,
+  EXACT_QUOTE_PLANNED_CLIP_SLACK_SEC,
   MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC,
   MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC,
   VIDEO_LENGTH_RULES,
@@ -51,7 +52,8 @@ const upload = (id: string, sec: number): N => ({ id, type: "upload-video", data
 const take = (sec: number | undefined, url = "https://cdn.example/take.mp4") => ({ generatedResults: [{ url, ...(sec === undefined ? {} : { duration: sec }) }], activeResultIndex: 0 })
 const wire = (source: string, target: string, targetHandle = "video"): EstimateGraphEdge => ({ source, target, targetHandle })
 const gen = (id: string, data: Record<string, unknown>): N => ({ id, type: "generate-video", data })
-const MC = MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC
+/** A container step's slack whose quote reads the length exactly (Video SFX, Pitch & Tempo, Dubbing, Lip Sync): the walk's mechanics are read at it. */
+const TENTH = EXACT_QUOTE_PLANNED_CLIP_SLACK_SEC
 const LIP = MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC["lip-sync"]
 const VO = VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC
 
@@ -60,8 +62,9 @@ const read = (id: string, nodes: N[], edges: EstimateGraphEdge[], slack = 0, run
   measuredWireLengthSec(id, nodes, edges, new Set(run), { plannedClipSlackSec: slack })
 
 describe("the slack constants: one per measuring step", () => {
-  it("Mask Composite charges the container (a frame plus an audio tail); Video Overlay the stream (one 24 fps frame)", () => {
-    expect(MC).toBe(0.1)
+  it("Mask Composite charges the container, its quote and charge forgiving the same 0.05 s: the whole made-clip overshoot, 0.15 s; the steps whose quote reads exactly, a tenth; Video Overlay the stream (one 24 fps frame)", () => {
+    expect(MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC).toBe(0.15)
+    expect(TENTH).toBe(0.1)
     expect(VO).toBeCloseTo(1 / 24, 12)
   })
 })
@@ -69,19 +72,19 @@ describe("the slack constants: one per measuring step", () => {
 describe("recordings and takes", () => {
   it("an upload is read at its recorded length, with no slack", () => {
     const u = upload("u", 23)
-    expect(read("u", [u], [], MC)).toBe(23)
+    expect(read("u", [u], [], TENTH)).toBe(23)
     expect(recordingLengthSec(u)).toBe(23)
   })
 
   it("a node that will not run hands on its take — its recorded length, no slack; a video generation's take with none recorded at its planned length, any other unknown", () => {
     const g = gen("g", { provider: "kling-4", duration: 10, ...take(5.042) })
-    expect(read("g", [g], [], MC, [])).toBe(5.042)
+    expect(read("g", [g], [], TENTH, [])).toBe(5.042)
     // A run that follows its own length records it, so a generation's take with none was made at its settings: its Duration plus the slack.
-    expect(read("g", [gen("g", { provider: "kling-4", duration: 10, ...take(undefined) })], [], MC, [])).toBeCloseTo(10 + MC, 9)
-    expect(read("g", [{ id: "g", type: "image-to-video", data: { provider: "kling-4", duration: 5, ...take(undefined) } }], [], MC, [])).toBeCloseTo(5 + MC, 9)
+    expect(read("g", [gen("g", { provider: "kling-4", duration: 10, ...take(undefined) })], [], TENTH, [])).toBeCloseTo(10 + TENTH, 9)
+    expect(read("g", [{ id: "g", type: "image-to-video", data: { provider: "kling-4", duration: 5, ...take(undefined) } }], [], TENTH, [])).toBeCloseTo(5 + TENTH, 9)
     // Any other node's take with none recorded: unknown.
     const resize: N = { id: "r", type: "resize-video", data: { ...take(undefined) } }
-    expect(read("r", [upload("u", 10), resize], [wire("u", "r")], MC, [])).toBeUndefined()
+    expect(read("r", [upload("u", 10), resize], [wire("u", "r")], TENTH, [])).toBeUndefined()
   })
 
   it("a node that will run is read at its planned length, never at its stored take (longer or shorter)", () => {
@@ -91,13 +94,13 @@ describe("recordings and takes", () => {
   })
 
   it("a node that holds no take is read at its planned length even when it does not run (what reaches the step is a fresh run)", () => {
-    expect(read("g", [gen("g", { provider: "kling-4", duration: 5 })], [], MC, [])).toBeCloseTo(5 + MC, 9)
+    expect(read("g", [gen("g", { provider: "kling-4", duration: 5 })], [], TENTH, [])).toBeCloseTo(5 + TENTH, 9)
   })
 
   it("a frozen node never runs: in the run set or not, it hands on its take", () => {
     const g = gen("g", { provider: "kling-4", duration: 10, skipped: true, ...take(5.042) })
-    expect(read("g", [g], [], MC, ["g"])).toBe(5.042)
-    expect(read("g", [g], [], MC, [])).toBe(5.042)
+    expect(read("g", [g], [], TENTH, ["g"])).toBe(5.042)
+    expect(read("g", [g], [], TENTH, [])).toBe(5.042)
   })
 
   it("a step that keeps its input's length: re-run, its input; not run, its own take", () => {
@@ -150,7 +153,7 @@ describe("the slack: once on each clip a node makes in the run, carried on by th
   const g5 = gen("g", { provider: "kling-4", duration: 5 })
 
   it("a generation gets its step's slack", () => {
-    expect(read("g", [g5], [], MC)).toBeCloseTo(5.1, 9)
+    expect(read("g", [g5], [], TENTH)).toBeCloseTo(5.1, 9)
     expect(read("g", [g5], [], VO)).toBeCloseTo(5 + 1 / 24, 9)
   })
 
@@ -159,22 +162,22 @@ describe("the slack: once on each clip a node makes in the run, carried on by th
     expect(read("l", [g5, loop], [wire("g", "l")], VO)).toBeCloseTo(2 * (5 + 1 / 24), 9)
     const g2 = gen("h", { provider: "kling-4", duration: 5 })
     const combine: N = { id: "m", type: "combine-videos", data: {} }
-    expect(read("m", [g5, g2, combine], [wire("g", "m", "in"), wire("h", "m", "in")], MC)).toBeCloseTo(10.2, 9)
+    expect(read("m", [g5, g2, combine], [wire("g", "m", "in"), wire("h", "m", "in")], TENTH)).toBeCloseTo(10.2, 9)
   })
 
   it("an Extend Video adds it on the seconds it adds, over its source's own", () => {
     const tail: N = { id: "x", type: "extend-video", data: { provider: "seedance-2-5-extend", duration: 5 } }
-    expect(read("x", [upload("u", 10), tail], [wire("u", "x")], MC)).toBeCloseTo(15.1, 9)
-    expect(read("x", [g5, tail], [wire("g", "x")], MC)).toBeCloseTo(5.1 + 5.1, 9)
+    expect(read("x", [upload("u", 10), tail], [wire("u", "x")], TENTH)).toBeCloseTo(15.1, 9)
+    expect(read("x", [g5, tail], [wire("g", "x")], TENTH)).toBeCloseTo(5.1 + 5.1, 9)
     const ltx: N = { id: "x", type: "extend-video", data: { provider: "ltx-2.3-pro", duration: 6 } }
-    expect(read("x", [upload("u", 10), ltx], [wire("u", "x")], MC)).toBeCloseTo(10 + ltxExtendDurationSec(6) + MC, 9)
+    expect(read("x", [upload("u", 10), ltx], [wire("u", "x")], TENTH)).toBeCloseTo(10 + ltxExtendDurationSec(6) + TENTH, 9)
   })
 
   it("a fixed Trim window, an upload and a take get none", () => {
     const trim: N = { id: "t", type: "trim-video", data: { trimMode: "time", startTime: 0, endTime: 10 } }
-    expect(read("t", [g5, trim], [wire("g", "t")], MC)).toBe(10)
-    expect(read("u", [upload("u", 10)], [], MC)).toBe(10)
-    expect(read("g", [gen("g", { provider: "kling-4", duration: 5, ...take(5.4) })], [], MC, [])).toBe(5.4)
+    expect(read("t", [g5, trim], [wire("g", "t")], TENTH)).toBe(10)
+    expect(read("u", [upload("u", 10)], [], TENTH)).toBe(10)
+    expect(read("g", [gen("g", { provider: "kling-4", duration: 5, ...take(5.4) })], [], TENTH, [])).toBe(5.4)
   })
 
   it("knownOnly: only a length the graph knows — a recording, a take's record; nothing planned", () => {
@@ -202,35 +205,35 @@ describe("the slack: once on each clip a node makes in the run, carried on by th
     const trim = (data: Record<string, unknown>): N => ({ id: "t", type: "trim-video", data: { ...data, losslessKeyframe: true } })
     const O = LOSSLESS_TRIM_OVERSHOOT_SEC
     // A 3–8 s stream copy of a 10 s clip whose keyframes sit at 0 and 10 s measures 8.083 s, not the 5 s window.
-    expect(read("t", [upload("u", 10), trim({ trimMode: "time", startTime: 3, endTime: 8 })], [wire("u", "t")], MC)).toBeCloseTo(8 + O, 9)
-    expect(read("t", [upload("u", 10), { id: "t", type: "trim-video", data: { trimMode: "time", startTime: 3, endTime: 8 } }], [wire("u", "t")], MC)).toBe(5)
+    expect(read("t", [upload("u", 10), trim({ trimMode: "time", startTime: 3, endTime: 8 })], [wire("u", "t")], TENTH)).toBeCloseTo(8 + O, 9)
+    expect(read("t", [upload("u", 10), { id: "t", type: "trim-video", data: { trimMode: "time", startTime: 3, endTime: 8 } }], [wire("u", "t")], TENTH)).toBe(5)
     // Never past its input.
-    expect(read("t", [upload("u", 10), trim({ trimMode: "time", startTime: 0, endTime: 60 })], [wire("u", "t")], MC)).toBe(10)
-    expect(read("t", [upload("u", 10), trim({ trimMode: "keep-first-seconds", keepFirstSeconds: 4 })], [wire("u", "t")], MC)).toBeCloseTo(4 + O, 9)
+    expect(read("t", [upload("u", 10), trim({ trimMode: "time", startTime: 0, endTime: 60 })], [wire("u", "t")], TENTH)).toBe(10)
+    expect(read("t", [upload("u", 10), trim({ trimMode: "keep-first-seconds", keepFirstSeconds: 4 })], [wire("u", "t")], TENTH)).toBeCloseTo(4 + O, 9)
     // Seconds mode: the input less what it trims off the end, plus the overshoot.
-    expect(read("t", [upload("u", 20), trim({ trimMode: "seconds", trimStartSeconds: 2, trimEndSeconds: 5 })], [wire("u", "t")], MC)).toBeCloseTo(15 + O, 9)
+    expect(read("t", [upload("u", 20), trim({ trimMode: "seconds", trimStartSeconds: 2, trimEndSeconds: 5 })], [wire("u", "t")], TENTH)).toBeCloseTo(15 + O, 9)
     // A cut that runs to the clip's end, or whose tail is in frames: the input.
-    expect(read("t", [upload("u", 20), trim({ trimMode: "keep-last-seconds", keepLastSeconds: 4 })], [wire("u", "t")], MC)).toBe(20)
-    expect(read("t", [upload("u", 20), trim({ trimMode: "frames", trimStartFrames: 24, trimEndFrames: 48 })], [wire("u", "t")], MC)).toBe(20)
+    expect(read("t", [upload("u", 20), trim({ trimMode: "keep-last-seconds", keepLastSeconds: 4 })], [wire("u", "t")], TENTH)).toBe(20)
+    expect(read("t", [upload("u", 20), trim({ trimMode: "frames", trimStartFrames: 24, trimEndFrames: 48 })], [wire("u", "t")], TENTH)).toBe(20)
     // The smart loop cut never snaps: read as it always was, its input's length.
-    expect(read("t", [upload("u", 20), trim({ trimMode: "smart-loop-cut" })], [wire("u", "t")], MC)).toBe(20)
+    expect(read("t", [upload("u", 20), trim({ trimMode: "smart-loop-cut" })], [wire("u", "t")], TENTH)).toBe(20)
   })
 
   it("a lossless Trim of an input of unknown length: the end of its cut plus the overshoot when the cut has an end; the last N seconds at N, a minimum; else unknown", () => {
     const unknown: N = { id: "u", type: "upload-video", data: { url: "https://cdn.example/nolen.mp4" } }
     const trim = (data: Record<string, unknown>): N => ({ id: "t", type: "trim-video", data: { ...data, losslessKeyframe: true } })
-    expect(read("t", [unknown, trim({ trimMode: "time", startTime: 0, endTime: 60 })], [wire("u", "t")], MC)).toBeCloseTo(60 + LOSSLESS_TRIM_OVERSHOOT_SEC, 9)
-    expect(read("t", [unknown, trim({ trimMode: "keep-first-seconds", keepFirstSeconds: 12 })], [wire("u", "t")], MC)).toBeCloseTo(12 + LOSSLESS_TRIM_OVERSHOOT_SEC, 9)
-    expect(read("t", [unknown, trim({ trimMode: "time", startTime: 5 })], [wire("u", "t")], MC)).toBeUndefined()
+    expect(read("t", [unknown, trim({ trimMode: "time", startTime: 0, endTime: 60 })], [wire("u", "t")], TENTH)).toBeCloseTo(60 + LOSSLESS_TRIM_OVERSHOOT_SEC, 9)
+    expect(read("t", [unknown, trim({ trimMode: "keep-first-seconds", keepFirstSeconds: 12 })], [wire("u", "t")], TENTH)).toBeCloseTo(12 + LOSSLESS_TRIM_OVERSHOOT_SEC, 9)
+    expect(read("t", [unknown, trim({ trimMode: "time", startTime: 5 })], [wire("u", "t")], TENTH)).toBeUndefined()
     // The last N seconds: at least N (an earlier keyframe can only add) — a minimum, as with Lossless off, never unknown.
-    expect(read("t", [unknown, trim({ trimMode: "keep-last-seconds", keepLastSeconds: 4 })], [wire("u", "t")], MC)).toBe(4)
+    expect(read("t", [unknown, trim({ trimMode: "keep-last-seconds", keepLastSeconds: 4 })], [wire("u", "t")], TENTH)).toBe(4)
   })
 
   it("a Trim that does not run again hands on its take at the length its run recorded: exact, with no allowance", () => {
     const recorded: N = { id: "t", type: "trim-video", data: { trimMode: "time", startTime: 3, endTime: 8, losslessKeyframe: true, ...take(8.083) } }
-    expect(read("t", [upload("u", 10), recorded], [wire("u", "t")], MC, [])).toBe(8.083)
+    expect(read("t", [upload("u", 10), recorded], [wire("u", "t")], TENTH, [])).toBe(8.083)
     const whole: N = { id: "t", type: "trim-video", data: { trimMode: "time", startTime: 0, endTime: 5, ...take(5) } }
-    expect(read("t", [upload("u", 10), whole], [wire("u", "t")], MC, [])).toBe(5)
+    expect(read("t", [upload("u", 10), whole], [wire("u", "t")], TENTH, [])).toBe(5)
   })
 
   it("a generation's take: the length its run recorded, a whole-second record with the quarter second it may leave off", () => {
@@ -239,20 +242,20 @@ describe("the slack: once on each clip a node makes in the run, carried on by th
     expect(recordedTakeSec("generate-video", 5)).toBe(5.25)
     expect(recordedTakeSec("generate-video", 5.4)).toBe(5.4)
     expect(recordedTakeSec("upload-video", 5)).toBe(5)
-    expect(read("g", [gen("g", { provider: "seedance-2-5", duration: -1, ...take(5) })], [], MC, [])).toBe(5.25)
-    expect(read("g", [gen("g", { provider: "seedance-2-5", duration: -1, ...take(undefined) })], [], MC, [])).toBeCloseTo(pricedOutputDurationSec("seedance-2-5", -1) + MC, 9)
+    expect(read("g", [gen("g", { provider: "seedance-2-5", duration: -1, ...take(5) })], [], TENTH, [])).toBe(5.25)
+    expect(read("g", [gen("g", { provider: "seedance-2-5", duration: -1, ...take(undefined) })], [], TENTH, [])).toBeCloseTo(pricedOutputDurationSec("seedance-2-5", -1) + TENTH, 9)
   })
 
   it("a step whose length follows its input makes a clip: it adds the slack (Lip Sync of a known audio, Video to Video of an upload)", () => {
     const audio: N = { id: "a", type: "upload-audio", data: { url: "https://cdn.example/a.mp3", metadata: { durationSeconds: 9 } } }
     const lip: N = { id: "s", type: "lip-sync", data: { provider: "kling-avatar" } }
-    expect(read("s", [audio, lip], [wire("a", "s", "audio")], MC)).toBeCloseTo(9 + MC, 9)
+    expect(read("s", [audio, lip], [wire("a", "s", "audio")], TENTH)).toBeCloseTo(9 + TENTH, 9)
     const v2v: N = { id: "v", type: "video-to-video", data: { provider: "wan" } }
     expect(read("v", [upload("u", 12), v2v], [wire("u", "v")], VO)).toBeCloseTo(12 + VO, 9)
   })
 
   it("a ceiling that reads no setting is a planned clip too (3D Render Pro, UGC Clip)", () => {
-    expect(read("p", [{ id: "p", type: "pro-3d-render", data: {} }], [], MC)).toBeCloseTo(60 + MC, 9)
+    expect(read("p", [{ id: "p", type: "pro-3d-render", data: {} }], [], TENTH)).toBeCloseTo(60 + TENTH, 9)
     expect(read("k", [{ id: "k", type: "ugc-clip", data: {} }], [], VO)).toBeCloseTo(30 + VO, 9)
   })
 
@@ -260,10 +263,10 @@ describe("the slack: once on each clip a node makes in the run, carried on by th
     const audio: N = { id: "a", type: "upload-audio", data: { url: "https://cdn.example/a.mp3", metadata: { durationSeconds: 10 } } }
     const lip: N = { id: "s", type: "lip-sync", data: { provider: "kling-avatar" } }
     const motion: N = { id: "m", type: "motion-transfer", data: {} }
-    expect(read("m", [audio, lip, motion], [wire("a", "s", "audio"), wire("s", "m")], MC)).toBeCloseTo(10 + 2 * MC, 9)
+    expect(read("m", [audio, lip, motion], [wire("a", "s", "audio"), wire("s", "m")], TENTH)).toBeCloseTo(10 + 2 * TENTH, 9)
     const resize: N = { id: "r", type: "resize-video", data: {} }
     const fade: N = { id: "f", type: "fade-video", data: {} }
-    expect(read("f", [audio, lip, resize, fade], [wire("a", "s", "audio"), wire("s", "r"), wire("r", "f")], MC)).toBeCloseTo(10 + MC, 9)
+    expect(read("f", [audio, lip, resize, fade], [wire("a", "s", "audio"), wire("s", "r"), wire("r", "f")], TENTH)).toBeCloseTo(10 + TENTH, 9)
   })
 
   it("every row that only carries its inputs says so; every producer that makes a clip does not", () => {
@@ -276,15 +279,15 @@ describe("the slack: once on each clip a node makes in the run, carried on by th
   it("Voice Changer, Voice Changer Pro and Adjust Volume make a new file of what they are given: its length plus the slack", () => {
     const audio: N = { id: "a", type: "upload-audio", data: { url: "https://cdn.example/a.mp3", metadata: { durationSeconds: 8 } } }
     for (const type of ["voice-changer", "voice-changer-pro", "adjust-volume"]) {
-      expect(read("n", [audio, { id: "n", type, data: {} }], [wire("a", "n", "audio")], MC), type).toBeCloseTo(8 + MC, 9)
-      expect(read("n", [upload("u", 10), { id: "n", type, data: {} }], [wire("u", "n")], MC), type).toBeCloseTo(10 + MC, 9)
+      expect(read("n", [audio, { id: "n", type, data: {} }], [wire("a", "n", "audio")], TENTH), type).toBeCloseTo(8 + TENTH, 9)
+      expect(read("n", [upload("u", 10), { id: "n", type, data: {} }], [wire("u", "n")], TENTH), type).toBeCloseTo(10 + TENTH, 9)
     }
   })
 
   it("a Dubbing's file runs further past its input: its length plus a quarter second, whatever the step's own slack", () => {
     expect(LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC).toBe(0.25)
     const audio: N = { id: "a", type: "upload-audio", data: { url: "https://cdn.example/a.mp3", metadata: { durationSeconds: 8 } } }
-    for (const slack of [MC, VO, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC]) {
+    for (const slack of [TENTH, VO, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC]) {
       expect(read("n", [audio, { id: "n", type: "dubbing", data: {} }], [wire("a", "n", "audio")], slack), String(slack)).toBeCloseTo(8.25, 9)
       expect(read("n", [upload("u", 10), { id: "n", type: "dubbing", data: {} }], [wire("u", "n")], slack), String(slack)).toBeCloseTo(10.25, 9)
     }
@@ -294,15 +297,15 @@ describe("the slack: once on each clip a node makes in the run, carried on by th
     expect(stream([upload("u", 10), { id: "n", type: "audio-isolation", data: {} }], [wire("u", "n", "audio")])).toBeCloseTo(10 + VO, 9)
     // Once, on the file it makes: a Trim after it carries it on, and a step that reads with no slack (Nemotron) adds none.
     const chain: N[] = [upload("u", 10), { id: "n", type: "dubbing", data: {} }, { id: "t", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0 } }]
-    expect(read("t", chain, [wire("u", "n"), wire("n", "t", "in")], MC)).toBeCloseTo(10.25, 9)
+    expect(read("t", chain, [wire("u", "n"), wire("n", "t", "in")], TENTH)).toBeCloseTo(10.25, 9)
     expect(read("n", [upload("u", 10), { id: "n", type: "dubbing", data: {} }], [wire("u", "n")], 0)).toBe(10)
     // A Dubbing that does not run hands on its take; its row records no length, so it is unknown (the step's cap or minimum).
-    expect(read("n", [upload("u", 10), { id: "n", type: "dubbing", data: { ...take(undefined) } }], [wire("u", "n")], MC, ["u"])).toBeUndefined()
+    expect(read("n", [upload("u", 10), { id: "n", type: "dubbing", data: { ...take(undefined) } }], [wire("u", "n")], TENTH, ["u"])).toBeUndefined()
   })
 
   it("a PixVerse V6 extension's file runs further past its source plus the seconds it adds: a quarter second; every other extend model, the step's slack", () => {
     const ext = (provider: string): N => ({ id: "e", type: "extend-video", data: { provider, duration: 5 } })
-    for (const slack of [MC, VO, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC]) {
+    for (const slack of [TENTH, VO, VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC]) {
       expect(read("e", [upload("u", 10), ext("pixverse-v6-extend")], [wire("u", "e")], slack), String(slack)).toBeCloseTo(15.25, 9)
       expect(read("e", [upload("u", 10), ext("seedance-2-5-extend")], [wire("u", "e")], slack), String(slack)).toBeCloseTo(15 + slack, 9)
     }
@@ -327,9 +330,9 @@ describe("the slack: once on each clip a node makes in the run, carried on by th
   it("a provider step that keeps its input's length re-renders the clip: it adds the slack once; a local one adds none", () => {
     expect([...CLIP_REMAKING_KEPT_LENGTH_TYPES].sort()).toEqual(["face-swap", "switchx", "video-depth", "video-mask", "video-retake", "video-upscale"])
     for (const type of CLIP_REMAKING_KEPT_LENGTH_TYPES) {
-      expect(read("n", [upload("u", 10), { id: "n", type, data: {} }], [wire("u", "n")], MC), type).toBeCloseTo(10 + MC, 9)
+      expect(read("n", [upload("u", 10), { id: "n", type, data: {} }], [wire("u", "n")], TENTH), type).toBeCloseTo(10 + TENTH, 9)
     }
-    expect(read("n", [upload("u", 10), { id: "n", type: "resize-video", data: {} }], [wire("u", "n")], MC)).toBe(10)
+    expect(read("n", [upload("u", 10), { id: "n", type: "resize-video", data: {} }], [wire("u", "n")], TENTH)).toBe(10)
     // The listing's pass-through set is unchanged: the same length rule.
     for (const type of CLIP_REMAKING_KEPT_LENGTH_TYPES) expect(PASS_THROUGH_VIDEO_TYPES).toContain(type)
   })
@@ -435,7 +438,7 @@ describe("a value the run's user types with no bound (openSourceIds, a listing's
 describe("the run engine's skipped types never run", () => {
   it("a Manual Edit in the run set hands on its take (the engine never executes it)", () => {
     const edit: N = { id: "e", type: "manual-edit", data: take(7.5, "https://cdn.example/e.mp4") }
-    expect(read("e", [edit], [], MC, ["e"])).toBe(7.5)
+    expect(read("e", [edit], [], TENTH, ["e"])).toBe(7.5)
     expect(ENGINE_SKIPPED_NODE_TYPES.has("manual-edit")).toBe(true)
   })
 })

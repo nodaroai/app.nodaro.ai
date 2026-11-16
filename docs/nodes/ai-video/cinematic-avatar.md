@@ -54,6 +54,8 @@ A 4-second 720p draft is the cheapest combination (reserve hold 330 credits<!-- 
 
 **Auto Duration:** when **Auto Duration** is on, HeyGen chooses the clip length, so the final duration is unknown until the job completes. To make sure your balance always covers the result, the upfront hold is reserved at the **maximum 15-second** rate for the selected resolution (1,238 credits<!-- credits: cinematic-avatar:720p:15s --> at 720p, 1,815<!-- credits: cinematic-avatar:1080p:15s --> at 1080p). The final charge still reflects the real generated length, and the surplus is refunded automatically on completion.
 
+**The price before a run** — the node's price, its Run button, the workflow's estimate in the editor and on the server, the credit check before a run, an app's listed price and `POST /v1/quote` with `type: "cinematic-avatar"` — is this hold: the selected resolution and duration (a duration outside 4–15 seconds is held at the nearest end), or the 15-second hold on Auto Duration.
+
 > **Estimate notice:** The Cinematic Avatar rate is an **estimate** for the generative Seedance pipeline and has not yet been calibrated against a paid run. The credit cost shown in the editor before you run is authoritative, and the final charge always reflects the real clip length. Pricing may be adjusted after the first paid generations.
 
 ## Graceful Degradation

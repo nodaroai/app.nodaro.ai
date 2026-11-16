@@ -1,5 +1,5 @@
 {
-  "$comment": "Mask Composite's and Video Overlay's quote before a run when what reaches them is made by another node — read by BOTH estimates over the same graphs, through the one measured walk (`measuredWireLengthSec`, @nodaro/render-rules): the editor's (frontend maskCompositePricingUnits / videoOverlayPricingUnits — the node's pill, its Run button, the confirm and the workflow badge) and the server's workflow estimate (CreditsService.estimateWorkflowCreditsAt, the composite's own line). Each case wires its sources into the step `c` (an edge with no `target` goes into `c`), which is a Mask Composite with default settings, or a Video Overlay with one stored video layer (so it quotes on its video row) and the case's `video` wire as its base. `expectedUnits` holds the 5-second units both quote, for two run sets (and, where a case gives `partial`, a third: exactly its `runSet`, passed as the editor's run set and the server's `runNodeIds`): `whole` (the editor's whole-run badge and confirm, which pass every executable node, frozen ones included; the server's estimate with no run set, which leaves frozen nodes out) and `alone` (the step's own Run and its pill on the editor; a server run of only `c`). Mask Composite's cap is 60 units (300 s), Video Overlay's 12 (60 s). A video made in the run is read at its planned length plus each step's slack once for every clip a node makes on the way (0.1 s on Mask Composite, which charges the container; 1/24 s on Video Overlay, which charges the video stream; a quarter second on both after a PixVerse V6 extension, whose file runs further past its planned length, picture and sound; after a Dubbing or an Audio Isolation a quarter second on Mask Composite only, since a dub keeps its input's video stream exactly and Video Overlay charges the stream) — a step that only passes its input on adds none; a node that does not run hands on its take, at the length recorded with it.",
+  "$comment": "Mask Composite's and Video Overlay's quote before a run when what reaches them is made by another node — read by BOTH estimates over the same graphs, through the one measured walk (`measuredWireLengthSec`, @nodaro/render-rules): the editor's (frontend maskCompositePricingUnits / videoOverlayPricingUnits — the node's pill, its Run button, the confirm and the workflow badge) and the server's workflow estimate (CreditsService.estimateWorkflowCreditsAt, the composite's own line). Each case wires its sources into the step `c` (an edge with no `target` goes into `c`), which is a Mask Composite with default settings, or a Video Overlay with one stored video layer (so it quotes on its video row) and the case's `video` wire as its base. `expectedUnits` holds the 5-second units both quote, for two run sets (and, where a case gives `partial`, a third: exactly its `runSet`, passed as the editor's run set and the server's `runNodeIds`): `whole` (the editor's whole-run badge and confirm, which pass every executable node, frozen ones included; the server's estimate with no run set, which leaves frozen nodes out) and `alone` (the step's own Run and its pill on the editor; a server run of only `c`). Mask Composite's cap is 60 units (300 s), Video Overlay's 12 (60 s). A video made in the run is read at its planned length plus each step's slack once for every clip a node makes on the way (0.15 s on Mask Composite, which charges the container and forgives the same 0.05 s on its quote and its charge; 1/24 s on Video Overlay, which charges the video stream; a quarter second on both after a PixVerse V6 extension, whose file runs further past its planned length, picture and sound; after a Dubbing or an Audio Isolation a quarter second on Mask Composite only, since a dub keeps its input's video stream exactly and Video Overlay charges the stream) — a step that only passes its input on adds none; a node that does not run hands on its take, at the length recorded with it.",
   "cases": [
     {
       "name": "1. Generate Video on Kling 4.0 set to 5 s, never run: 5 s planned, plus the slack",
@@ -664,6 +664,51 @@
         },
         {
           "source": "d",
+          "targetHandle": "video"
+        }
+      ],
+      "expectedUnits": {
+        "whole": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        },
+        "alone": {
+          "maskComposite": 3,
+          "videoOverlay": 2
+        }
+      }
+    },
+    {
+      "name": "2k. A Face Swap of a 9.92 s video upload: a new clip, read at its input plus each step's slack — Mask Composite (the container, its quote and charge forgiving the same 0.05 s) the whole 0.15 s a made clip's container can run past: 10.07 s, 3 units; Video Overlay (the video stream) its frame, 9.96 s, 2 units",
+      "nodes": [
+        {
+          "id": "u",
+          "type": "upload-video",
+          "data": {
+            "url": "https://cdn.example/u.mp4",
+            "generatedResults": [
+              {
+                "url": "https://cdn.example/u.mp4",
+                "duration": 9.92
+              }
+            ],
+            "activeResultIndex": 0
+          }
+        },
+        {
+          "id": "f",
+          "type": "face-swap",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "u",
+          "target": "f",
+          "targetHandle": "video"
+        },
+        {
+          "source": "f",
           "targetHandle": "video"
         }
       ],

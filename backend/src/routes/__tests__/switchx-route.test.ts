@@ -131,6 +131,18 @@ const VALID_REF_URL = "https://example.com/style.png"
 // ---------------------------------------------------------------------------
 
 describe("POST /v1/switchx", () => {
+  it("never probes a link the body refuses: the 400 comes first, nothing measured or queued", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/switchx",
+      payload: { videoUrl: "not a link", prompt: "neon", alphaMode: "auto", userId: VALID_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(mockProbeVideoFrames).not.toHaveBeenCalled()
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
   it("returns 400 MISSING_ALPHA when alphaMode is 'select' without a maskUrl", async () => {
     const res = await app.inject({
       method: "POST",

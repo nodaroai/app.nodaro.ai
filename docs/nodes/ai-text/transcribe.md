@@ -159,6 +159,11 @@ reserved address (`400 media_link_bad_host`, as on every node that measures a
 link: see [media links](../../features/media-links.md)), a file over 60
 minutes or 200 MB, and a link to a video's page on a social platform (bring
 that video's sound in first through a Video URL node, or pick another engine).
+The 60 minutes are exact: the model reads the file from its link, so nothing
+can trim it, and a cut meant to be 60 minutes that comes out a fraction of a
+second longer is refused too, with a `400` (`media_duration_exceeds_limit`)
+that asks for 60 minutes or less. Cut it a little shorter.
+
 A link whose host cannot be looked up at that moment is a retryable `503
 source_unreachable`.
 A file whose length cannot be read up front (a browser recording saved as a

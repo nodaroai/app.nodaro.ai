@@ -1,4 +1,6 @@
 import { PITCH_TEMPO_PRICING, pitchTempoHeldCreditId } from "@nodaro/shared/credits"
+import { CLIP_PRICE_GRACE_SEC } from "@nodaro/shared/media"
+import { withinCapGrace } from "./measured-cap-grace.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/probe-guard.js"
 
@@ -12,7 +14,8 @@ import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/
  *
  * Unlike Video SFX there is NO fallback length (decided 2026-10-12): a length
  * that cannot be read is refused before anything is charged, and so is one over
- * the 30-minute cap.
+ * the 30-minute cap by more than the 0.05 s its charge forgives (a file within
+ * that is held at 30 minutes and trimmed to the cap by the render).
  */
 export type PitchTempoDuration =
   | { readonly ok: true; readonly durationSec: number; readonly creditId: string }
@@ -39,7 +42,8 @@ export async function measurePitchTempoDuration(
       message: "Couldn't read the length of the input media. The file may be unreachable, corrupted or in an unsupported format.",
     }
   }
-  if (seconds > PITCH_TEMPO_PRICING.MAX_DURATION_SEC) {
+  // A hair past the cap (its charge's grace) is accepted at the top row; the render trims the input to the cap.
+  if (!withinCapGrace(seconds, PITCH_TEMPO_PRICING.MAX_DURATION_SEC, CLIP_PRICE_GRACE_SEC)) {
     return {
       ok: false,
       code: "media_duration_exceeds_limit",

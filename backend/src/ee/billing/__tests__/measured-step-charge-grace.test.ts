@@ -7,8 +7,13 @@
  * length a quote reads and every overhang up to the grace, the quote is never
  * below the charge — `quote(planned) ≥ charge(planned + overhang)`.
  *
- * Nemotron (Transcribe, Add Captions) forgives a whole second the same way
- * (`nemotronHeldMinutes`). The steps with a grace of their own on both quote
+ * At each step's cap the same holds: a file up to the grace past the cap is
+ * accepted, held at the top row its quote names, and trimmed to the cap before
+ * it is sent on (`withinCapGrace`). Nemotron (Transcribe, Add Captions)
+ * forgives a whole second the same way (`nemotronHeldMinutes`), but keeps its
+ * strict 60-minute cap by decision: the provider reads the file by its link,
+ * so there is nothing to trim, and a file past it is a 400 asking for 60
+ * minutes or less. The steps with a grace of their own on both quote
  * and charge (Mask Composite, Video Mask, Video Depth, Video Overlay; Trim,
  * Loop and Combine Videos' 0.1 s) keep their rule.
  */
@@ -35,20 +40,39 @@ import {
   VIDEO_SFX_PRICING,
 } from "@nodaro/shared/credits"
 import { dubbingHeldMinutes, dubbingQuotedMinutes, DUBBING_MAX_SPAN_MINUTES, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, measuredWireLengthSec } from "@nodaro/render-rules"
+import { NEMOTRON_TRANSCRIBE_PRICING } from "@nodaro/shared/credits"
+import { dubbingSpanAtCap } from "../../../lib/dubbing-span.js"
+import { withinCapGrace } from "../../../lib/measured-cap-grace.js"
 import { pickLipSyncBucket } from "@nodaro/shared/credits"
 import { LIP_SYNC_BUCKET_EDGE_TOLERANCE_SEC, lipSyncAudioCapSec, lipSyncAudioPricingOf, lipSyncHeldSecondsOf } from "../../../lib/lip-sync-inputs.js"
 
 const SFX_ROWS = ["replicate-mmaudio:8s", "replicate-mmaudio:15s", "replicate-mmaudio:30s", "replicate-mmaudio:60s", "replicate-mmaudio:120s", "replicate-mmaudio:300s"]
 const OMNI = lipSyncAudioRateOf("omnihuman-2-0")!
 
-/** Each step: the rank of the row its quote names for a known length, and of the row its run holds and charges for a measured one, within the lengths the run accepts. */
-const STEPS: ReadonlyArray<{ readonly name: string; readonly maxSec: number; readonly quote: (sec: number) => number; readonly charge: (sec: number) => number }> = [
-  { name: "Video SFX (its rows)", maxSec: VIDEO_SFX_PRICING.MAX_DURATION_SEC, quote: (s) => SFX_ROWS.indexOf(videoSfxQuoteCreditId(s)), charge: (s) => SFX_ROWS.indexOf(videoSfxHeldCreditId(s)) },
-  { name: "Pitch & Tempo (started minutes)", maxSec: PITCH_TEMPO_PRICING.MAX_DURATION_SEC, quote: (s) => parsePitchTempoCreditId(pitchTempoQuoteCreditId(s))!.minutes, charge: (s) => parsePitchTempoCreditId(pitchTempoHeldCreditId(s))!.minutes },
-  { name: "Dubbing (started minutes of the span)", maxSec: DUBBING_MAX_SPAN_MINUTES * 60, quote: (s) => dubbingQuotedMinutes({}, s), charge: (s) => dubbingHeldMinutes(s) },
-  { name: "Lip Sync on OmniHuman 2.0 (started seconds)", maxSec: OMNI.maxSeconds, quote: (s) => lipSyncEstimateSeconds(OMNI, s), charge: (s) => lipSyncHeldSeconds(OMNI, s) },
-  { name: "Nemotron Transcribe (started minutes, a 1 s grace)", maxSec: 3600, quote: (s) => parseNemotronTranscribeCreditId(nemotronTranscribeQuoteCreditId(s))!.minutes, charge: (s) => parseNemotronTranscribeCreditId(nemotronTranscribeHeldCreditId(s))!.minutes },
-  { name: "Add Captions on Nemotron (started minutes, a 1 s grace)", maxSec: 3600, quote: (s) => parseAddCaptionsNemotronCreditId(addCaptionsNemotronQuoteCreditId(s))!.minutes, charge: (s) => parseAddCaptionsNemotronCreditId(addCaptionsNemotronHeldCreditId(s))!.minutes },
+const OMNI_PRICING = lipSyncAudioPricingOf("omnihuman-2-0")!
+
+/** Nemotron's decided exception: the strict 60-minute cap, a hair past it refused. */
+const NEMOTRON_STRICT_CAP = "decided: the provider reads the file by its link, so there is nothing to trim"
+/** Nemotron's own acceptance, as its measure reads a length (`measureNemotronTranscribeInput`: past 3600 s, refused). */
+const measureAccepts = (s: number) => s <= NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC
+const decodedAt = (seconds: number) => ({ overCap: false as const, samples: Math.round(seconds * 48_000), seconds })
+
+/**
+ * Each step: the rank of the row its quote names for a known length, and of
+ * the row its run holds and charges for a measured one; its cap, and whether
+ * its run ACCEPTS a measured length (its own rule: a file up to the grace past
+ * the cap is accepted at the top row and trimmed to the cap, decided with the
+ * bucketed Lip Sync lane's trim). `strictCap`: a step whose run keeps the
+ * strict cap by decision, with the reason — a file past it is refused (a 400,
+ * before anything is held), never accepted at the top row.
+ */
+const STEPS: ReadonlyArray<{ readonly name: string; readonly maxSec: number; readonly accepts: (sec: number) => boolean; readonly strictCap?: string; readonly quote: (sec: number) => number; readonly charge: (sec: number) => number }> = [
+  { name: "Video SFX (its rows)", maxSec: VIDEO_SFX_PRICING.MAX_DURATION_SEC, accepts: (s) => withinCapGrace(s, VIDEO_SFX_PRICING.MAX_DURATION_SEC, CLIP_PRICE_GRACE_SEC), quote: (s) => SFX_ROWS.indexOf(videoSfxQuoteCreditId(s)), charge: (s) => SFX_ROWS.indexOf(videoSfxHeldCreditId(s)) },
+  { name: "Pitch & Tempo (started minutes)", maxSec: PITCH_TEMPO_PRICING.MAX_DURATION_SEC, accepts: (s) => withinCapGrace(s, PITCH_TEMPO_PRICING.MAX_DURATION_SEC, CLIP_PRICE_GRACE_SEC), quote: (s) => parsePitchTempoCreditId(pitchTempoQuoteCreditId(s))!.minutes, charge: (s) => parsePitchTempoCreditId(pitchTempoHeldCreditId(s))!.minutes },
+  { name: "Dubbing (started minutes of the span)", maxSec: DUBBING_MAX_SPAN_MINUTES * 60, accepts: (s) => dubbingSpanAtCap(s, undefined, undefined) !== undefined, quote: (s) => dubbingQuotedMinutes({}, s), charge: (s) => dubbingHeldMinutes(dubbingSpanAtCap(s, undefined, undefined)?.spanSec ?? s) },
+  { name: "Lip Sync on OmniHuman 2.0 (started seconds)", maxSec: OMNI.maxSeconds, accepts: (s) => lipSyncHeldSecondsOf(OMNI_PRICING, decodedAt(s)) !== undefined, quote: (s) => lipSyncEstimateSeconds(OMNI, s), charge: (s) => lipSyncHeldSecondsOf(OMNI_PRICING, decodedAt(s))! },
+  { name: "Nemotron Transcribe (started minutes, a 1 s grace)", maxSec: 3600, strictCap: NEMOTRON_STRICT_CAP, accepts: (s) => measureAccepts(s), quote: (s) => parseNemotronTranscribeCreditId(nemotronTranscribeQuoteCreditId(s))!.minutes, charge: (s) => parseNemotronTranscribeCreditId(nemotronTranscribeHeldCreditId(s))!.minutes },
+  { name: "Add Captions on Nemotron (started minutes, a 1 s grace)", maxSec: 3600, strictCap: NEMOTRON_STRICT_CAP, accepts: (s) => measureAccepts(s), quote: (s) => parseAddCaptionsNemotronCreditId(addCaptionsNemotronQuoteCreditId(s))!.minutes, charge: (s) => parseAddCaptionsNemotronCreditId(addCaptionsNemotronHeldCreditId(s))!.minutes },
 ]
 
 /** Lengths a quote reads: the marks of every step, just under and just past them, and lengths in between. */
@@ -61,13 +85,32 @@ describe("the charge grace (CLIP_PRICE_GRACE_SEC)", () => {
     expect(CLIP_PRICE_GRACE_SEC).toBe(0.05)
   })
 
-  it.each(STEPS)("$name: the quote of a length is never below the charge of a file up to the grace past it", ({ maxSec, quote, charge }) => {
+  it.each(STEPS)("$name: the quote of a length is never below the charge of a file up to the grace past it — at the cap too, where the run accepts the file and trims it", ({ maxSec, accepts, strictCap, quote, charge }) => {
     for (const known of KNOWN.filter((k) => k > 0 && k <= maxSec)) {
       for (const over of OVERHANG) {
-        const measured = Math.min(known + over, maxSec)
+        const measured = known + over
+        // Past the cap on a step that keeps the strict cap by decision: refused, nothing charged.
+        if (strictCap && measured > maxSec) {
+          expect(accepts(measured), `${known} + ${over}`).toBe(false)
+          continue
+        }
+        expect(accepts(measured), `${known} + ${over}`).toBe(true)
         expect(charge(measured), `${known} + ${over}`).toBeLessThanOrEqual(quote(known))
       }
     }
+  })
+
+  it.each(STEPS.filter((s) => s.strictCap))("$name keeps the strict cap ($strictCap): a hair past it is refused, exactly the cap taken", ({ maxSec, accepts, quote }) => {
+    expect(accepts(maxSec)).toBe(true)
+    expect(quote(maxSec)).toBe(60)
+    expect(accepts(maxSec + 0.01)).toBe(false)
+  })
+
+  it.each(STEPS.filter((s) => !s.strictCap))("$name: a file up to the grace past the cap is accepted at the top row; past it, refused", ({ maxSec, accepts, quote, charge }) => {
+    expect(accepts(maxSec + 0.03)).toBe(true)
+    expect(charge(maxSec + 0.03)).toBe(quote(maxSec))
+    expect(accepts(maxSec + CLIP_PRICE_GRACE_SEC)).toBe(true)
+    expect(accepts(maxSec + 0.06)).toBe(false)
   })
 
   it.each(STEPS.filter((s) => !s.name.startsWith("Nemotron") && !s.name.startsWith("Add Captions")))("$name: a file a hair past a mark is charged the mark; past the grace, the next one", ({ charge, quote }) => {

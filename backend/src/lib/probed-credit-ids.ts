@@ -4,4 +4,4 @@
  * the editor; re-exported here for the routes, the workflow run and the
  * estimate.
  */
-export { AI_AVATAR_PROBED_FIELD, aiAvatarCreditIdOf, SWITCHX_PROBED_FIELD, SWITCHX_TRIM_FIELD, switchXCreditIdOf } from "@nodaro/render-rules"
+export { AI_AVATAR_PROBED_FIELD, aiAvatarCreditIdOf, SWITCHX_PROBED_FIELD, SWITCHX_TRIM_FIELD, switchXCreditIdOf, switchXQuoteCreditId } from "@nodaro/render-rules"

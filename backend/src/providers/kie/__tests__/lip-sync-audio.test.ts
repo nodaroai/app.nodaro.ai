@@ -151,9 +151,9 @@ describe("an honest file runs, billed as reserved, and the model gets OUR encode
     // Neither padded nor cut: the audio chain is the MP3 encode's own end, nothing before it.
     expect(audioChain(encode)).toBe(mp3ChainTail())
     expect(state.uploaded).toEqual([{ name: "lip-sync-prepared", ext: "mp3", type: "audio/mpeg" }])
-    // The source is decoded up to the rate's maximum, as any container the lane takes; the encode
-    // is measured just past it, as the MP3 it is.
-    expect(state.measureCaps).toEqual([300, 301])
+    // The source is decoded up to the rate's maximum plus the 0.05 s its hold forgives, as the price
+    // check decodes it; the encode is measured just past the maximum, as the MP3 it is.
+    expect(state.measureCaps).toEqual([300.05, 301])
     expect(state.measureFormats).toEqual([undefined, ["mp3"]])
   })
 
@@ -216,6 +216,15 @@ describe("a file that is not the one priced is refused — deterministic, nothin
     const err = await new KieVideoProvider().lipSync("https://cdn.test/face.png", URL_, "hi", "omnihuman-2-0", undefined, 3.2, undefined, { billedSeconds: 4 }).catch((e: unknown) => e)
     expect(isDeterministicJobError(err)).toBe(true)
     expect(state.kieInputs).toEqual([])
+  })
+
+  it("a hair past 300 s (within the 0.05 s its hold forgives): held at 300 s, cut to exactly 300 s, the provider billed 300", async () => {
+    serve({ bytes: 5_000_000 })
+    state.measures = [300.03, 300]
+    expect(await prepare(300)).toMatchObject({ measuredSec: 300.03, billedSeconds: 300, providerBilledSeconds: 300, sentSec: 300, padded: false, trimmed: true })
+    expect(state.ffmpegArgs).toHaveLength(1)
+    // The cut is the encode's own: exactly the maximum.
+    expect(state.ffmpegArgs[0]).toEqual(lipSyncAudioEncodeArgs(state.ffmpegArgs[0]![state.ffmpegArgs[0]!.indexOf("-i") + 1]!, state.ffmpegArgs[0]!.at(-1)!, undefined, 300))
   })
 
   it("past 300 s, whatever was held — measured, or stopped at the cap", async () => {
